@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.16-task069
+// @version     0.5.18-task079b
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -2548,7 +2548,9 @@ const emitter = util.emitter;
         this.toggleClass('is-otherDomain', location.host !== 'www.nicovideo.jp');
         this.toggleClass('is-firefox', util.isFirefox());
 
-        MylistPocket.external.observe({
+        // Task 079: 念のため、連携部品がまだ無い時は飛ばす（初期化の失敗で
+        // 情報パネル全体が開けなくなるのを防ぐ）。
+        MylistPocket.external && MylistPocket.external.observe({
           query: 'a.videoLink',
           container: this._hostDom.querySelector('.description'),
         });
@@ -2823,6 +2825,7 @@ const emitter = util.emitter;
         const videoTags = this._rootDom.querySelector('.video-tags');
         videoTags.innerHTML = '';
         videoTags.appendChild(df);
+        this._updateNicodicMarks(videoInfo.tags, videoTags);
 
         Array.prototype.forEach.call(this._rootDom.querySelectorAll('.command-watch-id'), elm => {
           elm.setAttribute('data-param', videoInfo.watchId);
@@ -2886,6 +2889,30 @@ const emitter = util.emitter;
           link.dataset.videoId = watchId;
           link.classList.add('watch');
         });
+      }
+
+      /**
+       * Task 079b: タグの「？」を、大百科の記事があるタグだけ別の色にする。
+       * ZenzaWatch本体のタグ欄（TagListView._updateNicodicIcons, Task 044〜047）と
+       * 同じ仕組み。記事の有無は ZenzaWatch が公開している NicodicArticleLoader
+       * （大百科の記事ページのHTTPステータスで判定・1日キャッシュ）に問い合わせ、
+       * 分かったものから <zenza-tag-item-menu> の data-has-nicodic を書き換える
+       * （この要素は属性の変化を拾って見た目を変える）。ZenzaWatch が無い時は何もしない。
+       */
+      _updateNicodicMarks(tags = [], container = null) {
+        const loader = window.ZenzaWatch && window.ZenzaWatch.api &&
+          window.ZenzaWatch.api.NicodicArticleLoader;
+        if (!loader || !container || !tags.length) { return; }
+        const generation = (this._nicodicGeneration = (this._nicodicGeneration || 0) + 1);
+        const names = tags.map(tag => tag.text).filter(name => name);
+        Promise.resolve(loader.checkAll(names, (name, hasDic) => {
+          if (generation !== this._nicodicGeneration || !hasDic) { return; }
+          for (const item of container.querySelectorAll('.tag-container')) {
+            if (item.getAttribute('data-tag') !== name) { continue; }
+            const menu = item.querySelector('.tagItemMenu');
+            if (menu) { menu.dataset.hasNicodic = '1'; }
+          }
+        })).catch(e => window.console.warn('MylistPocket: 大百科の有無を調べられませんでした', e));
       }
 
       _bindFail(videoInfo) {
@@ -3721,6 +3748,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
+      window.console.log('%cMylistPocket 0.5.18-task079b', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -3734,8 +3762,14 @@ const emitter = util.emitter;
       hoverMenu.on('info', (watchId) => {
         hoverMenu.isBusy = true;
 
-        dispatcher('info', watchId)
-          .then(() => { hoverMenu.isBusy = false; });
+        // Task 079: 以前は成功時(.then)だけ is-busy を外していたため、情報パネルの
+        // 表示処理が例外や失敗で終わると、ホバーメニューが透明・クリック不可の
+        // まま二度と戻らなかった（「？を押すと消えて、それ以降現れない」の正体）。
+        // 成功・失敗・同期例外のどれでも必ず外す。
+        Promise.resolve()
+          .then(() => dispatcher('info', watchId))
+          .catch(err => { window.console.error('MylistPocket: 動画情報の表示に失敗', err); })
+          .finally(() => { hoverMenu.isBusy = false; });
       });
       hoverMenu.on('deflist-add', (watchId, src) => {
         dispatcher('deflist-add', watchId, src);
@@ -3755,7 +3789,14 @@ const emitter = util.emitter;
       }
 
       if (document.querySelector('a[data-anchor-page^="ranking_"]') != null) {
-        for (const tagName of ngConfig.props.tag.trim().split(/[\r\n]/)) {
+        // Task 079: NG機能がOFFの時（や対象外のページ）は initNg() が ngConfig を
+        // 返さない。以前はここで ngConfig.props を読んで例外になり、直後の
+        // initExternal() まで届かず MylistPocket.external が作られなかった。
+        // その結果、ランキングページで「？」を押すと VideoInfoView の初期化が
+        // MylistPocket.external.observe で落ちていた。
+        const ngTag = (ngConfig && ngConfig.props && ngConfig.props.tag) || '';
+        for (const tagName of ngTag.trim().split(/[\r\n]/)) {
+          if (!tagName.trim()) { continue; }
           util.addStyle(hideTagCss(tagName));
         }
         if (config.props.responsive.matrix) {

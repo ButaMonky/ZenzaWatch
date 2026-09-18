@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.22-kphrx-patch.5
+// @version        0.0.24-task079b
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@latest
 // @run-at         document-start
@@ -31,7 +31,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:13Z 807b380
+// build: 2026-09-18 16:57Z f821f46
 /* eslint-disable */
 
 
@@ -653,6 +653,13 @@ const workerUtil = (() => {
       startLevel: -1, // undefined, // used by level-controller
       capLevelOnFPSDrop: false, // used by fps-controller
       capLevelToPlayerSize: false, // used by cap-level-controller
+      // Task 079b: hls.js 1.5以降は、ブラウザの MediaCapabilities.decodingInfo() が
+      // smooth:false と答えた画質を「自動」の候補から外す。GPUのドライバーが無い／
+      // ハードウェアアクセラレーションが無効な環境では、Chromeが60fpsの480p・720p等を
+      // 一律 smooth:false と答えるため、回線が十分速くても360p(30fps)に固定されていた
+      // （2026-09-19、ユーザーのChrome〔Microsoft Basic Render Driver〕で実測）。
+      // CPUでも十分再生できる場合が多いので、この判定を使わない。
+      useMediaCapabilities: false, // used by abr-controller
       maxBufferLength: 30, // used by stream-controller
       maxBufferSize: 60 * 1000 * 1000, // used by stream-controller
       maxMaxBufferLength: 600, //600, // used by stream-controller
@@ -2049,14 +2056,18 @@ const workerUtil = (() => {
           }
 
           if (hls.levels.length > 1 && level && typeof level.bitrate === 'number') {
-            this._hls.config.abrEwmaDefaultEstimate =
-              this.hlsConfig.abrEwmaDefaultEstimate = Math.round(level.bitrate * 0.8);
-
+            // Task 079: 以前はここで「切り替わった画質のビットレート×0.8」を
+            // abrEwmaDefaultEstimate（次回の最初の画質を決める推定回線速度）へ
+            // 書き戻していた。hls.jsは推定速度×0.95以下の画質から始めるため、
+            // 次の動画は必ず今回より1段低い画質から始まり、回を重ねるごとに
+            // 360p等の低画質へ落ちていく（自動なのに常に低画質になる原因）。
+            // 実際に測った回線速度(hls.bandwidthEstimate)を渡す形に変えた。
             this.dispatchEvent(new CustomEvent('levelswitched', {detail: {
               level: hls.currentLevel,
               width: this._video.videoWidth,
               height: this._video.videoHeight,
-              bitrate: level.bitrate
+              bitrate: level.bitrate,
+              bandwidth: hls.bandwidthEstimate
             }}));
           }
         }
@@ -2166,6 +2177,16 @@ const workerUtil = (() => {
         }
 
         _onHLSJSFragLoaded() {
+          // Task 079: 実測の回線速度を数秒おきに知らせる（次回の最初の画質に使う）
+          const hls = this._hls;
+          if (!hls || this.dataset.usecase === 'capture') { return; }
+          const now = Date.now();
+          if (now - (this._lastBandwidthNotify || 0) < 5000) { return; }
+          this._lastBandwidthNotify = now;
+          const bandwidth = hls.bandwidthEstimate;
+          if (typeof bandwidth === 'number' && isFinite(bandwidth) && bandwidth > 0) {
+            this.dispatchEvent(new CustomEvent('bandwidthestimate', {detail: {bandwidth}}));
+          }
         }
 
         _onHLSJSBufferEOS() {
@@ -2982,14 +3003,35 @@ const workerUtil = (() => {
     };
 
     const init = () => {
-      console.log('%cinit ZenzaWatch HLS', 'background: cyan');
+      console.log('%cinit ZenzaWatch HLS 0.0.24-task079b', 'background: cyan');
 
       const hlsConfig = Object.assign({}, Config.raw);
-      Config.on('update', (key, value) => {
-        hlsConfig[key] = value;
+      // Task 079: Config は emit('update', {key, value}) の形で知らせるので、
+      // 以前の (key, value) => … では hlsConfig が一度も更新されていなかった。
+      Config.on('update', ({key, value} = {}) => {
+        if (key) { hlsConfig[key] = value; }
       });
 
       let lastLevel = -1;
+      // Task 079: 次回の最初の画質は「実際に測った回線速度」から決める。
+      // （旧実装の「画質のビットレート×0.8」は回を重ねるごとに下がっていく）
+      const saveBandwidthEstimate = bandwidth => {
+        if (!Config.get('autoAbrEwmaDefaultEstimate')) { return; }
+        if (typeof bandwidth !== 'number' || !isFinite(bandwidth) || bandwidth <= 0) { return; }
+        Config.set('abrEwmaDefaultEstimate', Math.round(Math.min(bandwidth, 50 * 1000 * 1000)));
+      };
+      // 旧実装で下がりきった保存値を一度だけ戻す
+      try {
+        const RESET_KEY = 'ZenzaWatch_video.hls._task079EstimateReset';
+        if (!localStorage[RESET_KEY]) {
+          localStorage[RESET_KEY] = '1';
+          if (Config.get('abrEwmaDefaultEstimate') < 5 * 1000 * 1000) {
+            Config.set('abrEwmaDefaultEstimate', 5 * 1000 * 1000);
+          }
+        }
+      } catch (e) {
+        console.warn('ZenzaHLS: estimate reset failed', e);
+      }
       const createVideoElement = usecase => {
         if (!window.customElements) {
           return document.createElement('video');
@@ -2999,7 +3041,9 @@ const workerUtil = (() => {
           //return null;
           // 静止画キャプチャ用なのにどんどんバッファするのは無駄なので抑える
           video.setAttribute('data-usecase', 'capture');
-          video.hlsConfig = Object.assign(hlsConfig, {
+          // Task 079: 以前は Object.assign(hlsConfig, …) で、本編の動画と共有している
+          // 設定オブジェクトそのものを書き換えていた（キャプチャ用の設定が本編に混ざる）。
+          video.hlsConfig = Object.assign({}, hlsConfig, {
             autoStartLoad: false,
             // maxBufferSize: 0,
             // maxBufferLength: 5,
@@ -3028,10 +3072,10 @@ const workerUtil = (() => {
             //  kbps
             //);
             lastLevel = detail.level;
-            if (Config.get('autoAbrEwmaDefaultEstimate')) {
-              ZenzaWatch.debug.hlsConfig.abrEwmaDefaultEstimate =
-                Math.round(detail.bitrate * 0.8);
-            }
+            saveBandwidthEstimate(detail.bandwidth);
+          });
+          video.addEventListener('bandwidthestimate', e => {
+            saveBandwidthEstimate(e.detail.bandwidth);
           });
           primaryVideo = video;
         }

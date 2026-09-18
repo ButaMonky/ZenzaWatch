@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.18-task078
+// @version        2.7.19-task079b
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:13Z 807b380
+// build: 2026-09-18 16:57Z f821f46
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.18-task078';
+    var VER = '2.7.19-task079b';
     const ENV = 'DEV';
 
-    var BUILD = '2026-09-18 16:13Z 807b380';
+    var BUILD = '2026-09-18 16:57Z f821f46';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -9537,7 +9537,9 @@ Object.assign(ZenzaWatch.api, {
   NicoRssLoader,
   MatrixRankingLoader,
   NicoSearchApiV2Loader,
-  TagSuggestLoader
+  TagSuggestLoader,
+  // Task 079b: MylistPocket の動画情報パネルのタグにも大百科の有無を反映するため公開
+  NicodicArticleLoader
 });
 ZenzaWatch.init.playlistApiLoader = PlaylistApiLoader;
 ZenzaWatch.init.mylistApiLoader = MylistApiLoader;
@@ -14686,6 +14688,11 @@ class Storyboard extends Emitter {
 				$dq.removeClass('selected');
 				$select.find('.select-dmc-' + value).addClass('selected');
 			};
+			const videoQualityLabel = (type, info) => {
+				const label = (info && info.video && info.video.label) || '';
+				const setting = type === 'dmc' ? config.props.dmcVideoQuality : config.props.domandVideoQuality;
+				return setting === 'auto' && label ? `自動（最大${label}）` : label;
+			};
 			const onVideoServerType = (type, videoSessionInfo) => {
 				$button.raf.removeClass('is-domand-playing is-dmc-playing')
 					.raf.addClass(`is-${type === 'dmc' ? 'dmc' : 'domand'}-playing`);
@@ -14693,7 +14700,7 @@ class Storyboard extends Emitter {
 				const $selectServer = $select.find(`.select-server-${type === 'dmc' ? 'dmc' : 'domand'}`);
 				$selectServer.addClass('selected');
 				$selectServer.find('.currentVideoQuality')
-					.raf.text(videoSessionInfo.video.label);
+					.raf.text(videoQualityLabel(type, videoSessionInfo));
 			};
 			updateDomandVideoQuality(config.props.domandVideoQuality);
 			updateDmcVideoQuality(config.props.dmcVideoQuality);

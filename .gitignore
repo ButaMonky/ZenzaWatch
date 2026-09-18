@@ -1,0 +1,17 @@
+setting.json
+*cp.sh*
+.jshintrc
+*.swp
+*.bk
+*.lnk
+./test.js
+ZenzaWatch.user\ *.js
+.DS_Store
+*.lnk
+node_modules/
+.gitkeep
+session/*
+.idea/*
+./lib/*
+./botsu/*
+package-lock.json

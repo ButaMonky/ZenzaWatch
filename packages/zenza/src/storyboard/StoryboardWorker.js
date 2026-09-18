@@ -1,0 +1,703 @@
+import {workerUtil} from '../../../lib/src/infra/workerUtil';
+import {StoryboardInfoModel} from './StoryboardInfoModel';
+//===BEGIN===
+
+const StoryboardWorker = (() => {
+  const func = function(self) {
+    const SCROLL_BAR_WIDTH = 8;
+    const BLANK_SRC = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAE0lEQVQoU2NkYGD4z4AHMI4MBQCFZAgB+jxHYAAAAABJRU5ErkJggg==';
+    let BLANK_IMG;
+    const items = {};
+    const getCanvas = (width, height) => {
+      if (self.OffscreenCanvas) {
+        return new OffscreenCanvas(width, height);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      return canvas;
+    };
+    // ArrayBuffer -> DataURL
+    const a2d = (arrayBuffer, type = 'image/jpeg') => {
+      return new Promise((ok, ng) => {
+        const reader = new FileReader();
+        reader.onload = () => ok(reader.result);
+        reader.onerror = ng;
+        reader.readAsDataURL(new Blob([arrayBuffer], {type}));
+      });
+    };
+    /**
+     * @param {ArrayBuffer|string} src
+     */
+    const loadImage = async src => {
+      try {
+        if (self.createImageBitmap) {
+          return await createImageBitmap(
+            src instanceof ArrayBuffer ?
+              new Blob([src], {type: 'image/jpeg'}) :
+              (await fetch(src, {credentials: 'omit'}).then(r => {
+                if (!r.ok) { throw new Error(`HTTP ${r.status}`); }
+                return r.blob();
+              }))
+            );
+        } else {
+          const img = new Image();
+          img.src = src instanceof ArrayBuffer ? (await a2d(src)) : src;
+          await img.decode();
+          return img;
+        }
+      } catch(e) {
+        console.warn('load image fail', e);
+        return null;
+      }
+    };
+    loadImage(BLANK_SRC).then(img => BLANK_IMG = img);
+
+    // Task 070: 同じページを同時に要求された時に二重に取得・デコードしないよう、Promiseをキャッシュする。
+    // 失敗したページはキャッシュしない（次のシークで取り直す）。
+    const ImageCacheMap = new class {
+      constructor() {
+        this.map = new Map();
+      }
+      async get(src) {
+        let cache = this.map.get(src);
+        if (!cache) {
+          cache = {ref: 0, promise: loadImage(src), image: null};
+          this.map.set(src, cache);
+          cache.promise.then(image => {
+            cache.image = image;
+            if (!image && this.map.get(src) === cache) {
+              this.map.delete(src);
+            }
+          });
+        }
+        cache.ref++;
+        cache.updated = Date.now();
+        this.gc(src);
+        return (await cache.promise) || BLANK_IMG;
+      }
+      release(src) {
+        const cache = this.map.get(src);
+        if (!cache) {
+          return;
+        }
+        cache.ref--;
+        if (cache.ref <= 0) {
+          cache.promise.then(image => image && image.close && image.close());
+          this.map.delete(src);
+        }
+      }
+      gc(except) {
+        const MAX = 8;
+        const map = this.map;
+        if (map.size <= MAX) {
+          return;
+        }
+        const sorted = [...map].filter(([src]) => src !== except)
+          .sort((a, b) => a[1].updated - b[1].updated);
+        while (map.size > MAX && sorted.length) {
+          const [src, cache] = sorted.shift();
+          map.delete(src);
+          cache.promise.then(image => image && image.close && image.close());
+        }
+      }
+      has(src) {
+        return this.map.has(src);
+      }
+    };
+
+    class BoardView {
+      constructor({canvas, info, name}) {
+        this.canvas = canvas;
+        this.name = name;
+        this._currentTime = -1;
+        this._scrollLeft = 0;
+        this._info = null;
+        this.lastPos = {};
+        this.ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
+        this.bitmapCtx = canvas.getContext('bitmaprenderer');
+        this.bufferCanvas = getCanvas(canvas.width, canvas.height);
+        this.bufferCtx = this.bufferCanvas.getContext('2d', {alpha: false, desynchronized: true});
+        this.images = ImageCacheMap;
+        this.totalWidth = 0;
+        this.isReady = false;
+        this.boards = [];
+        this.isAnimating = false;
+        this.cls();
+        if (info) {
+          this.isInitialized = this.setInfo(info);
+        } else {
+          this.isInitialized = Promise.resolve();
+        }
+      }
+      get info() { return this._info; }
+
+      set info(infoRawData) { this.setInfo(infoRawData); }
+
+      async setInfo(infoRawData) {
+        this.isReady = false;
+        this.info ? this._info.update(infoRawData) : (this._info = new StoryboardInfoModel(infoRawData));
+
+        const info = this.info;
+        if (!info.isAvailable) {
+          return this.cls();
+        }
+        console.time('BoardView setInfo');
+        const cols = info.cols;
+        const rows = info.rows;
+        const pageWidth  = info.pageWidth;
+        const boardWidth = pageWidth * rows;
+        const cellWidth  = info.cellWidth;
+        const cellHeight = info.cellHeight;
+
+        this.height = cellHeight;
+        this.totalWidth = Math.ceil(info.duration * 1000 / info.cellIntervalMs) * cellWidth;
+        // info.cellCount * info.cellWidth;
+
+        this.boards.forEach(board => board.image && board.image.close && board.image.close());
+        this.boards = (await Promise.all(info.images.map(async (url, idx) => {
+          const image = await this.images.get(url);
+          const boards = [];
+          for (let row = 0; row < rows; row++) {
+            const canvas = getCanvas(pageWidth, cellHeight);
+            const ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
+            ctx.beginPath();
+            const sy = row * cellHeight;
+            image && ctx.drawImage(image,
+              0, sy, pageWidth, cellHeight,
+              0,  0, pageWidth, cellHeight
+            );
+            ctx.strokeStyle = 'rgb(128, 128, 128)';
+            ctx.shadowColor = 'rgb(192, 192, 192)';
+            ctx.shadowOffsetX = -1;
+            for (let col = 0; col < cols; col++) {
+              const x = col * cellWidth;
+              ctx.strokeRect(x, 1, cellWidth - 1 , cellHeight + 2);
+            }
+
+            boards.push({
+              image: canvas, //.transferToImageBitmap ? canvas.transferToImageBitmap() : canvas, // ImageBitmapじゃないほうが速い？気のせい？
+              left:  idx * boardWidth + row * pageWidth,
+              right: idx * boardWidth + row * pageWidth + pageWidth,
+              width: pageWidth
+            });
+          }
+          this.images.release(url);
+          return boards;
+        }))).flat();
+
+        this.height = info.cellHeight;
+        this._currentTime = -1;
+        this.cls();
+        console.timeEnd('BoardView setInfo');
+        this.isReady = true;
+        this.reDraw();
+      }
+      reDraw() {
+        const left = this._scrollLeft;
+        this._scrollLeft = -1;
+        this.scrollLeft = left;
+      }
+      get scrollLeft() {
+        return this._scrollLeft;
+      }
+      set scrollLeft(left) {
+        left = Math.max(0, Math.min(this.totalWidth - this.width, left));
+        if (this._scrollLeft === left) {
+          return;
+        }
+        this._scrollLeft = left;
+        if (!this.info || !this.info.isAvailable || !this.isReady) {
+          return;
+        }
+        const width =  this.width;
+        const height = this.height;
+        const totalWidth = this.totalWidth;
+        const right = left + width;
+
+        const bctx = this.bufferCtx;
+        bctx.beginPath();
+        for (const board of this.boards) {
+          if (board.right < left) { continue; }
+          if (board.left > right) { break; }
+          const dx = board.left - left;
+          bctx.drawImage(board.image,
+            0,  0, board.width, height,
+            dx, 0, board.width, height
+          );
+        }
+        const scrollBarLength = width * width / totalWidth;
+        if (scrollBarLength < width) {
+          const scrollBarLeft = width * left / totalWidth;
+          bctx.fillStyle = 'rgba(240, 240, 240, 0.8)';
+          bctx.fillRect(scrollBarLeft, height - SCROLL_BAR_WIDTH, scrollBarLength, SCROLL_BAR_WIDTH);
+        }
+        if (this.isAnimating && this._currentTime >= 0) {
+          bctx.fillStyle = 'rgba(255, 255, 144, 0.5)';
+          const cellWidth = this.info.cellWidth;
+          const cellIndex = this._currentTime * 1000 / this.info.cellIntervalMs;
+          const pointerLeft = cellWidth * cellIndex - left - cellWidth / 2;
+          bctx.fillRect(pointerLeft, 0, cellWidth, height);
+        }
+
+        if (this.bufferCanvas.transferToImageBitmap && this.bitmapCtx && this.bitmapCtx.transferFromImageBitmap) {
+          const bitmap = this.bufferCanvas.transferToImageBitmap();
+          this.bitmapCtx.transferFromImageBitmap(bitmap);
+        } else {
+          this.ctx.beginPath();
+          this.ctx.drawImage(this.bufferCanvas, 0, 0, width, height,0, 0, width, height);
+        }
+      }
+
+      cls() {
+        this.bufferCtx.clearRect(0, 0, this.width, this.height);
+        this.ctx.clearRect(0, 0, this.width, this.height);
+      }
+      get currentTime() {
+        const center = this._scrollLeft + this.width / 2;
+        return this.duration * (center / this.totalWidth);
+      }
+      set currentTime(time) { this.setCurrentTime(time); }
+      get width() {return this.canvas.width;}
+      get height() {return this.canvas.height;}
+      set width(width) {
+        this.canvas.width = width;
+        this.bufferCanvas.width = width;
+      }
+      set height(height) {
+        this.canvas.height = height;
+        this.bufferCanvas.height = height;
+      }
+      setCurrentTime(sec) {
+        this._currentTime = sec;
+        const duration = Math.max(1, this.info.duration);
+        const per = sec / duration;
+        const intervalMs = this.info.cellIntervalMs;
+        const totalWidth = this.totalWidth;
+        const innerWidth = this.width;
+        const cellWidth = this.info.cellWidth;
+        const cellIndex = this._currentTime * 1000 / intervalMs;
+        const scrollLeft = Math.min(Math.max(cellWidth * cellIndex - innerWidth * per, 0), totalWidth - innerWidth);
+//        const scrollLeft = Math.min(Math.max(totalWidth * r - innerWidth * per, 0), totalWidth - innerWidth);
+        this.scrollLeft = scrollLeft;
+      }
+
+      resize({width, height}) {
+        width && (this.width = width);
+        height && (this.height = height);
+        if (this.isReady) {
+          this.reDraw();
+        } else {
+          this.cls();
+        }
+      }
+
+      sharedMemory({buffer, MAP}) {
+        const view = new Float32Array(buffer);
+        const iview = new Int32Array(buffer);
+        this.buffer = {
+          get currentTime() {
+            return view[MAP.currentTime];
+          },
+          get timestamp() {
+            return iview[MAP.timestamp];
+          },
+          wait() {
+            const tm = Atomics.load(iview, MAP.timestamp);
+            Atomics.wait(iview, MAP.timestamp, tm, 3000);
+            return Atomics.load(iview, MAP.timestamp);
+          },
+          get duration() {
+            return view[MAP.duration];
+          },
+          get playbackRate() {
+            return view[MAP.playbackRate];
+          },
+          get paused() {
+            return iview[MAP.paused] !== 0;
+          }
+        };
+      }
+
+      async execAnimation() { // SharedArrayBufferで遊びたかっただけ. 最適化の余地はありそう
+        this.isAnimating = true;
+        const buffer = this.buffer;
+        while (this.isAnimating) {
+          while (!this.isReady) {
+            await new Promise(res => setTimeout(res, 500));
+          }
+          while (this.isReady && this.isAnimating && !buffer.paused) {
+            buffer.wait();
+            this.currentTime = this.buffer.currentTime;
+            await new Promise(res => requestAnimationFrame(res)); // 結局raf安定だった
+          }
+          if (!this.isAnimating) { return; }
+          await new Promise(res => setTimeout(res, 1000));
+        }
+      }
+      startAnimation() {
+        if (!this.buffer || this.isAnimating) { return; }
+        this.currentTime = this.buffer.currentTime;
+        this.execAnimation();
+      }
+      async stopAnimation() {
+        this.isAnimating = false;
+        await new Promise(res => requestAnimationFrame(res));
+        this.reDraw();
+      }
+
+      dispose() {
+        this.stopAnimation();
+        this.isReady = false;
+        this.boards.length = 0;
+      }
+    }
+
+    class ThumbnailView {
+      constructor({canvas, info, name}) {
+        this.canvas = canvas;
+        this.name = name;
+        this._currentTime = -1;
+        this._info = new StoryboardInfoModel(info);
+        this.lastPos = {};
+        this.ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
+        this.images = ImageCacheMap;
+        this.cls();
+        this.isInitialized = Promise.resolve();
+        this.isAnimating = false;
+      }
+      get info() { return this._info; }
+
+      set info(info) {
+        this.isReady = false;
+        this.info && this.info.images.forEach(url => this.images.release(url));
+
+        this._info.update(info);
+        this._currentTime = -1;
+        this.lastPos = {};
+        this.cls();
+        if (!this._info.isAvailable) {
+          return;
+        }
+        this.isReady = true;
+      }
+      async setInfo(info) {
+        this.info = info;
+      }
+      cls() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+      }
+      get currentTime() { return this.currentTime; }
+      set currentTime(time) { this.setCurrentTime(time); }
+      get width() {return this.canvas.width;}
+      get height() {return this.canvas.height;}
+      set width(width) {this.canvas.width = width;}
+      set height(height) {this.canvas.height = height;}
+
+      async setCurrentTime(time) {
+        time > this.info.duration && (time = this.info.duration);
+        time < 0 && (time = 0);
+        if (this._currentTime === time) {
+          return;
+        }
+        const pos = this.info.getThumbnailPosition(time * 1000);
+        if (Object.keys(pos).every(key => pos[key] === this.lastPos[key])) { return; }
+        this.lastPos = pos;
+        this._currentTime = time;
+        const {url, row, col, page} = pos;
+        const cellWidth = this.info.cellWidth;
+        const cellHeight = this.info.cellHeight;
+        const seq = this._drawSeq = (this._drawSeq || 0) + 1;
+        const image = await this.images.get(url);
+        // Task 070: 取得を待っている間に別の位置へ移動していたら古い絵は描かない
+        if (seq !== this._drawSeq || !image) {
+          return;
+        }
+        // 隣のページを先に読んでおく（URLの場合のみ。シークバーを動かした時に待たないように）
+        this.prefetch(page - 1);
+        this.prefetch(page + 1);
+        const imageLeft = col * cellWidth;
+        const imageTop = row * cellHeight;
+        const scale = Math.min(this.width / cellWidth, this.height / cellHeight);
+        try {
+          this.cls();
+          this.ctx.drawImage(
+            image,
+            imageLeft, imageTop, cellWidth, cellHeight,
+            (this.width  - cellWidth * scale) / 2,
+            (this.height - cellHeight * scale) / 2,
+            cellWidth * scale, cellHeight * scale
+          );
+        } catch (e) {
+          // gcで閉じられた直後のImageBitmapなど。次の移動で描き直される
+          this.lastPos = {};
+        }
+      }
+      prefetch(page) {
+        if (!this.info || page < 0 || page >= this.info.pageCount) {
+          return;
+        }
+        const src = this.info.getPage(page);
+        if (typeof src !== 'string' || this.images.has(src)) {
+          return;
+        }
+        this.images.get(src).catch(() => {});
+      }
+      resize({width, height}) {
+        this.width = width;
+        this.height = height;
+        this.cls();
+      }
+
+      dispose() {
+        this.info && this.info.images.forEach(url => this.images.release(url));
+        this.info = null;
+      }
+      sharedMemory() {}
+
+      async execAnimation() {
+        while (this.isAnimating) {
+          while (!this.isReady) {
+            await new Promise(res => setTimeout(res, 500));
+          }
+          await this.setCurrentTime((this.currentTime + this.info.interval / 1000) % this.info.duration);
+          if (!this.isAnimating) { return; }
+          await new Promise(res => setTimeout(res, 1000));
+        }
+      }
+      startAnimation() {
+        if (this.isAnimating) { return; }
+        this.isAnimating = true;
+        this.execAnimation();
+      }
+      stopAnimation() {
+        this.isAnimating = false;
+      }
+    }
+
+    const getId = function() {return `Storyboard-${this.id++}`;}.bind({id: 0});
+
+    const createView = async ({canvas, info, name}, type = 'thumbnail') => {
+      const id = getId();
+      const view = type === 'thumbnail' ?
+        new ThumbnailView({canvas, info, name}) :
+        new BoardView({canvas, info, name});
+      items[id] = view;
+      await view.isInitialized;
+      return {status: 'ok', id};
+    };
+
+    const info = async ({id, info}) => {
+      const item = items[id];
+      if (!item) { throw new Error(`unknown id:${id}`); }
+      await item.setInfo(info);
+      return {status: 'ok'};
+    };
+
+    const currentTime = ({id, currentTime}) => {
+      const item = items[id];
+      if (!item) { throw new Error(`unknown id:${id}`); }
+      item.setCurrentTime(currentTime);
+      return {status: 'ok'};
+    };
+
+    const scrollLeft = ({id, scrollLeft}) => {
+      const item = items[id];
+      if (!item) { throw new Error(`unknown id:${id}`); }
+      item.scrollLeft = scrollLeft;
+      return {status: 'ok'};
+    };
+
+    const resize = (params) => {
+      const item = items[params.id];
+      if (!item) { throw new Error(`unknown id:${params.id}`); }
+      item.resize(params);
+      return {status: 'ok'};
+    };
+
+    const cls = (params) => {
+      const item = items[params.id];
+      if (!item) { throw new Error(`unknown id:${params.id}`); }
+      item.cls();
+      return {status: 'ok'};
+    };
+
+    const dispose = ({id}) => {
+      const item = items[id];
+      if (!item) { return; }
+      item.dispose();
+      delete items[id];
+      return {status: 'ok'};
+    };
+
+    const sharedMemory = ({id, buffer, MAP}) => {
+      const item = items[id];
+      if (!item) { throw new Error(`unknown id:${id}`); }
+      item.sharedMemory({buffer, MAP});
+      return {status: 'ok'};
+    };
+
+    const startAnimation = ({id, interval}) => {
+      const item = items[id];
+      if (!item) { throw new Error(`unknown id:${id}`); }
+      item.startAnimation();
+      return {status: 'ok'};
+    };
+
+    const stopAnimation = ({id, interval}) => {
+      const item = items[id];
+      if (!item) { throw new Error(`unknown id:${id}`); }
+      item.stopAnimation();
+      return {status: 'ok'};
+    };
+
+    self.onmessage = async ({command, params}) => {
+      switch (command) {
+        case 'createThumbnail':
+          return createView(params, 'thumbnail');
+        case 'createBoard':
+          return createView(params, 'board');
+        case 'info':
+          return info(params);
+        case 'currentTime':
+          return currentTime(params);
+        case 'scrollLeft':
+          return scrollLeft(params);
+        case 'resize':
+          return resize(params);
+        case 'cls':
+          return cls(params);
+        case 'dispose':
+          return dispose(params);
+        case 'sharedMemory':
+          return sharedMemory(params);
+        case 'startAnimation':
+          return startAnimation(params);
+        case 'stopAnimation':
+          return stopAnimation(params);
+        }
+    };
+  };
+
+  const isOffscreenCanvasAvailable = !!HTMLCanvasElement.prototype.transferControlToOffscreen;
+
+  const NAME = 'StoryboardWorker';
+
+  let worker;
+  const initWorker = async () => {
+    if (worker) { return worker; }
+    if (!isOffscreenCanvasAvailable) {
+      if (!worker) {
+        worker = {
+          name: NAME,
+          onmessage: () => {},
+          post: ({command, params}) => worker.onmessage({command, params})
+        };
+        func(worker);
+      }
+    } else {
+      worker = worker || workerUtil.createCrossMessageWorker(func, {name: NAME, inject: StoryboardInfoModel.toString()});
+    }
+    return worker;
+  };
+
+  const createView = ({container, canvas, info, ratio, name, style}, type = 'thumbnail') => {
+    style = style || {};
+    ratio = ratio || window.devicePixelRatio || 1;
+    name = name || 'Storyboard';
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      Object.assign(canvas.style, {
+        width: '100%',
+        height: '100%'
+      });
+      container && container.append(canvas);
+      style.widthPx &&  (canvas.width = Math.max(style.widthPx));
+      style.heightPx && (canvas.height = Math.max(style.heightPx));
+    }
+    canvas.dataset.name = name;
+    canvas.classList.add('is-loading');
+
+    // const worker = await ;
+
+    const layer = isOffscreenCanvasAvailable ? canvas.transferControlToOffscreen() : canvas;
+
+    const promiseSetup = (async () => {
+      const worker = await initWorker();
+      const result = await worker.post(
+        {command:
+          type === 'thumbnail' ? 'createThumbnail' : 'createBoard',
+          params: {canvas: layer, info, style, name}},
+        {transfer: [layer]}
+      );
+      canvas.classList.remove('is-loading');
+      return result.id;
+    })();
+    let currentTime = -1, scrollLeft = -1, isAnimating = false;
+
+    const post = async ({command, params}, transfer = {}) => {
+      const id = await promiseSetup;
+      params = params || {};
+      params.id = id;
+      return worker.post({command, params}, transfer);
+    };
+
+    const result = {
+      container,
+      canvas,
+      setInfo(info) {
+        currentTime = -1;
+        scrollLeft = -1;
+        canvas.classList.add('is-loading');
+        return post({command: 'info', params: {info}})
+          .then(() => canvas.classList.remove('is-loading'));
+      },
+      resize({width, height}) {
+        scrollLeft = -1;
+        return post({command: 'resize', params: {width, height}});
+      },
+      get scrollLeft() {
+        return scrollLeft;
+      },
+      set scrollLeft(left) {
+        if (scrollLeft === left) { return; }
+        scrollLeft = left;
+        post({command: 'scrollLeft', params: {scrollLeft}});
+      },
+      get currentTime() {
+        return currentTime;
+      },
+      set currentTime(time) {
+        if (currentTime === time) { return; }
+        currentTime = time;
+        post({command: 'currentTime', params: {currentTime}});
+      },
+      dispose() {
+        post({command: 'dispose', params: {}});
+      },
+      sharedMemory({MAP, buffer}) {
+        post({command: 'sharedMemory', params: {MAP, buffer}});
+      },
+      startAnimation() {
+        isAnimating = true;
+        post({command: 'startAnimation', params: {}});
+      },
+      stopAnimation() {
+        isAnimating = false;
+        post({command: 'stopAnimation', params: {}});
+      },
+      get isAnimating() {
+        return isAnimating;
+      }
+    };
+    return result;
+  };
+  return {
+    initWorker,
+    createThumbnail: args => createView(args, 'thumbnail'),
+    createBoard:     args => createView(args, 'board')
+  };
+})();
+
+//===END===
+export {StoryboardWorker};

@@ -1,0 +1,440 @@
+{
+  "_format": "html5watchApi",
+  "watchApiData": {
+    "videoDetail": {
+      "v": "sm46772778",
+      "id": "sm46772778",
+      "title": "ヴァンパイア☆",
+      "description": "クッキー☆音MAD結構伸びないことを知ったゾ~<br>初投稿二回目",
+      "postedAt": "2026-09-07T15:55:37+09:00",
+      "thumbnail": "https://nicovideo.cdn.nimg.jp/thumbnails/46772778/46772778.70266941",
+      "largeThumbnail": "https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46772778/46772778.70266941.original/a960x540l?key=7792be79d15f7f3047faaa1a9ac8bfc3670fd205c76ead9abd62e9288dd16de7",
+      "length": 98,
+      "commons_tree_exists": true,
+      "isChannel": null,
+      "isMymemory": false,
+      "communityId": null,
+      "isLiked": false,
+      "channelId": null,
+      "commentCount": 21,
+      "likeCount": 3,
+      "mylistCount": 1,
+      "viewCount": 30,
+      "tagList": [
+        {
+          "_data": {
+            "name": "クッキー☆",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": true
+          },
+          "isLocked": true,
+          "isNicodicArticleExists": false,
+          "name": "クッキー☆"
+        },
+        {
+          "_data": {
+            "name": "音MAD",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": true
+          },
+          "isLocked": true,
+          "isNicodicArticleExists": false,
+          "name": "音MAD"
+        },
+        {
+          "_data": {
+            "name": "クッキー☆音MADリンク",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": true
+          },
+          "isLocked": true,
+          "isNicodicArticleExists": false,
+          "name": "クッキー☆音MADリンク"
+        },
+        {
+          "_data": {
+            "name": "例のアレ",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": true
+          },
+          "isLocked": true,
+          "isNicodicArticleExists": false,
+          "name": "例のアレ"
+        },
+        {
+          "_data": {
+            "name": "ヴァンパイア(deco*27)",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": true
+          },
+          "isLocked": true,
+          "isNicodicArticleExists": false,
+          "name": "ヴァンパイア(deco*27)"
+        },
+        {
+          "_data": {
+            "name": "MGR姉貴",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": true
+          },
+          "isLocked": true,
+          "isNicodicArticleExists": false,
+          "name": "MGR姉貴"
+        },
+        {
+          "_data": {
+            "name": "真夏の夜の淫夢",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": false
+          },
+          "isLocked": false,
+          "isNicodicArticleExists": false,
+          "name": "真夏の夜の淫夢"
+        },
+        {
+          "_data": {
+            "name": "まさゆきロイド",
+            "isCategory": false,
+            "isCategoryCandidate": false,
+            "isNicodicArticleExists": false,
+            "isLocked": false
+          },
+          "isLocked": false,
+          "isNicodicArticleExists": false,
+          "name": "まさゆきロイド"
+        }
+      ],
+      "tagEdit": {
+        "isEditable": true,
+        "uneditableReason": null,
+        "editKey": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJqdGkiOiI2YTllNzMwZDFhYWZmIiwiZXhwIjoxNzg4NzcwODM3LjEwOTI4MzkyNDEwMjc4MzIwMzEyNSwidHlwIjoiVGFnLUVkaXQtS2V5IiwidmlkIjoic200Njc3Mjc3OCIsInRpZCI6IjE3ODg3NjQxMzciLCJ1aWQiOjMxNzQ4OTQ3fQ.druXpW-uNU9duUebXfihXXQgebL1WtYZZxh5PGlR29IlvkU0zZZOE-rWloW_o6N2lZvTMNjw279ReY7rQ43-1w"
+      }
+    },
+    "viewerInfo": {
+      "id": 2525,
+      "isPremium": false
+    },
+    "channelInfo": null,
+    "uploaderInfo": null,
+    "clientTrackId": "qfe4JtLy6G_1788769037065"
+  },
+  "domandInfo": {
+    "videos": [
+      {
+        "id": "video-h264-720p",
+        "isAvailable": true,
+        "label": "720p",
+        "bitRate": 2021026,
+        "width": 1280,
+        "height": 720,
+        "qualityLevel": 3,
+        "recommendedHighestAudioQualityLevel": 1
+      },
+      {
+        "id": "video-h264-480p",
+        "isAvailable": true,
+        "label": "480p",
+        "bitRate": 1609937,
+        "width": 854,
+        "height": 480,
+        "qualityLevel": 2,
+        "recommendedHighestAudioQualityLevel": 1
+      },
+      {
+        "id": "video-h264-360p",
+        "isAvailable": true,
+        "label": "360p",
+        "bitRate": 610538,
+        "width": 640,
+        "height": 360,
+        "qualityLevel": 1,
+        "recommendedHighestAudioQualityLevel": 1
+      },
+      {
+        "id": "video-h264-144p",
+        "isAvailable": true,
+        "label": "144p",
+        "bitRate": 154107,
+        "width": 256,
+        "height": 144,
+        "qualityLevel": 0,
+        "recommendedHighestAudioQualityLevel": 1
+      }
+    ],
+    "audios": [
+      {
+        "id": "audio-aac-128kbps",
+        "isAvailable": true,
+        "bitRate": 119579,
+        "samplingRate": 44100,
+        "integratedLoudness": -17.700705,
+        "truePeak": -4.121978,
+        "qualityLevel": 1,
+        "loudnessCollection": [
+          {
+            "type": "video",
+            "value": 1
+          },
+          {
+            "type": "pureAdPreroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "houseAdPreroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "networkAdPreroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "pureAdMidroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "houseAdMidroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "networkAdMidroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "pureAdPostroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "houseAdPostroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "networkAdPostroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "nicoadVideoIntroduce",
+            "value": 0.6530775427230373
+          },
+          {
+            "type": "nicoadBillboard",
+            "value": 1
+          },
+          {
+            "type": "marquee",
+            "value": 0.8221759144061226
+          }
+        ],
+        "label": {
+          "quality": "標準音質",
+          "bitrate": "128kbps"
+        }
+      },
+      {
+        "id": "audio-aac-64kbps",
+        "isAvailable": true,
+        "bitRate": 68443,
+        "samplingRate": 44100,
+        "integratedLoudness": -17.700705,
+        "truePeak": -4.121978,
+        "qualityLevel": 0,
+        "loudnessCollection": [
+          {
+            "type": "video",
+            "value": 1
+          },
+          {
+            "type": "pureAdPreroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "houseAdPreroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "networkAdPreroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "pureAdMidroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "houseAdMidroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "networkAdMidroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "pureAdPostroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "houseAdPostroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "networkAdPostroll",
+            "value": 0.5187579316492618
+          },
+          {
+            "type": "nicoadVideoIntroduce",
+            "value": 0.6530775427230373
+          },
+          {
+            "type": "nicoadBillboard",
+            "value": 1
+          },
+          {
+            "type": "marquee",
+            "value": 0.8221759144061226
+          }
+        ],
+        "label": {
+          "quality": "低音質",
+          "bitrate": "64kbps"
+        }
+      }
+    ],
+    "isStoryboardAvailable": true,
+    "accessRightKey": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJqdGkiOiI2YTllNzMwZDJhMTYxIiwiZXhwIjoxNzg4NzY5NjM3LjA5MDIwMzA0Njc5ODcwNjA1NDY4NzUsInR5cCI6IkFjY2Vzcy1SaWdodC1LZXkiLCJ2aWQiOiJzbTQ2NzcyNzc4IiwicmlkIjoibmljb3ZpZGVvLXNtNDY3NzI3NzgiLCJmaWQiOjYsInVpZCI6IjMxNzQ4OTQ3IiwiZCI6OTgsInYiOlsidmlkZW8taDI2NC03MjBwIiwidmlkZW8taDI2NC00ODBwIiwidmlkZW8taDI2NC0zNjBwIiwidmlkZW8taDI2NC0xNDRwIl0sImEiOlsiYXVkaW8tYWFjLTEyOGticHMiLCJhdWRpby1hYWMtNjRrYnBzIl0sInMiOnRydWUsInNoIjpmYWxzZX0.6sceg9xB6z2nGwyJqtFAxDqwWBZiypyWMlJisXQqSQy_1gpuS3NMzsc6pbPVDN0MT7khHgzsnTaHQil-_zj4OA"
+  },
+  "dmcInfo": null,
+  "msgInfo": {
+    "server": "",
+    "threadId": 1788764137,
+    "duration": 98,
+    "videoId": "sm46772778",
+    "userId": 2525,
+    "isNeedKey": false,
+    "optionalThreadId": "",
+    "userKey": "",
+    "hasOwnerThread": null,
+    "when": null,
+    "frontendId": 6,
+    "frontendVersion": 0
+  },
+  "playlist": {
+    "playlist": []
+  },
+  "isPlayable": true,
+  "isDomand": true,
+  "isDmc": false,
+  "thumbnailUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46772778/46772778.70266941",
+  "csrfToken": null,
+  "watchAuthKey": null,
+  "series": {
+    "id": 556064,
+    "title": "クッキー☆音MAD",
+    "description": "",
+    "thumbnailUrl": "https://resource.video.nimg.jp/web/img/series/no_thumbnail.png",
+    "video": {
+      "prev": null,
+      "next": {
+        "type": "essential",
+        "id": "sm46138032",
+        "contentType": "long",
+        "title": "いますぐ輪廻☆",
+        "registeredAt": "2026-04-06T17:22:04+09:00",
+        "count": {
+          "view": 617,
+          "comment": 19,
+          "mylist": 2,
+          "like": 43
+        },
+        "thumbnail": {
+          "url": "https://nicovideo.cdn.nimg.jp/thumbnails/46138032/46138032.97814640",
+          "middleUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46138032/46138032.97814640.M",
+          "largeUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46138032/46138032.97814640.L",
+          "listingUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46138032/46138032.97814640.M",
+          "nHdUrl": "https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46138032/46138032.97814640.original/r640x360l?key=3a9ec304ede272494f4da8dce3130132d3a0a0f538a6c10d75ed29e1e5403748",
+          "shortUrl": null
+        },
+        "duration": 66,
+        "shortDescription": "初投稿です。 音MAD作るの初めてなんで下手です← すいません許してください、何でもしますから！",
+        "latestCommentSummary": "やったぜ。 ん？ 一転攻勢 ん？ ん？ やったぜ。 よしハラダァ、ほんへ三周だ！ やったぜ。 ビッグバン！ ん？ BABYLON STAGE 22 誰かが僕を狙ってる 第一章「誰かが僕を狙ってる」 ぺぺ☆流行らせコラ！ 悲しいなぁ… こんなの廻らなく...",
+        "isChannelVideo": false,
+        "isPaymentRequired": false,
+        "playbackPosition": null,
+        "owner": {
+          "ownerType": "user",
+          "type": "user",
+          "visibility": "visible",
+          "id": "141623922",
+          "name": "やまかぜ",
+          "iconUrl": "https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg"
+        },
+        "requireSensitiveMasking": false,
+        "videoLive": null,
+        "isMuted": false,
+        "9d091f87": false,
+        "acf68865": false
+      },
+      "first": {
+        "type": "essential",
+        "id": "sm46772778",
+        "contentType": "long",
+        "title": "ヴァンパイア☆",
+        "registeredAt": "2026-09-07T15:55:37+09:00",
+        "count": {
+          "view": 30,
+          "comment": 21,
+          "mylist": 1,
+          "like": 3
+        },
+        "thumbnail": {
+          "url": "https://nicovideo.cdn.nimg.jp/thumbnails/46772778/46772778.70266941",
+          "middleUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46772778/46772778.70266941.M",
+          "largeUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46772778/46772778.70266941.L",
+          "listingUrl": "https://nicovideo.cdn.nimg.jp/thumbnails/46772778/46772778.70266941.M",
+          "nHdUrl": "https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46772778/46772778.70266941.original/r640x360l?key=2959252f0ec64d52b7558dc0c2f0540bbff8e8afb5e8bacb8ea18d9f31c17ab2",
+          "shortUrl": null
+        },
+        "duration": 98,
+        "shortDescription": "クッキー☆音MAD結構伸びないことを知ったゾ~初投稿二回目",
+        "latestCommentSummary": "してはいけない（戒め） このほんへはなんなんですかね うわでた きたない 指マドラー嫌い なんだこのおっさん！?（驚愕） やったぜ。 これは夢なのか、現実なのか⋯。暑い真夏の夜　加熱した欲望は、ついに危険な領域へと突入する。 これは夢なのか、現実なの...",
+        "isChannelVideo": false,
+        "isPaymentRequired": false,
+        "playbackPosition": 10,
+        "owner": {
+          "ownerType": "user",
+          "type": "user",
+          "visibility": "visible",
+          "id": "141623922",
+          "name": "やまかぜ",
+          "iconUrl": "https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg"
+        },
+        "requireSensitiveMasking": false,
+        "videoLive": null,
+        "isMuted": false,
+        "9d091f87": false,
+        "acf68865": false
+      }
+    }
+  },
+  "genreKey": "r18",
+  "ngFilters": [],
+  "isMemberFree": false,
+  "isNeedPayment": false,
+  "isPremiumFree": false,
+  "linkedChannelVideo": null,
+  "resumeInfo": {
+    "initialPlaybackType": "",
+    "initialPlaybackPosition": 0
+  }
+}

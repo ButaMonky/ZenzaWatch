@@ -1,0 +1,3767 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>CommentLayer</title>
+<style type="text/css" id="layoutCss">
+body {
+  marign: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.default  {}
+.gothic  {font-family: 'ＭＳ Ｐゴシック'; }
+.mincho  {font-family: Simsun, Osaka-mono, 'ＭＳ ゴシック', monospace; }
+.gulim   {font-family: Gulim,  Osaka-mono, 'ＭＳ ゴシック', monospace; }
+.mingLiu {font-family: PmingLiu, mingLiu, Osaka-mono, 'ＭＳ ゴシック', monospace; }
+.han_group { font-family: Arial; }
+
+  /*
+  .ue .mincho  , .shita .mincho {font-family: Simsun, monospace; }
+  .ue .gulim   , .shita .gulim  {font-family: Gulim,  monospace; }
+  .ue .mingLiu , .shita .mingLiu{font-family: PmingLiu, mingLiu, monospace; }
+  */
+
+.nicoChat {
+  position: absolute;
+  padding: 1px;
+
+  font-family: 'ＭＳ Ｐゴシック';
+  letter-spacing: 1px;
+  margin: 2px 1px 1px 1px;
+  white-space: pre;
+  font-weight: bolder;
+
+}
+
+  .nicoChat.big {
+    line-height: 47.5px;
+  }
+    .nicoChat.big.noScale {
+      line-height: 45px;
+    }
+
+  .nicoChat.medium {
+    line-height: 30px;
+  }
+    .nicoChat.medium.noScale {
+      line-height: 29px;
+    }
+
+  .nicoChat.small {
+    line-height: 20px;
+  }
+    .nicoChat.small.noScale {
+      line-height: 18px;
+    }
+
+  .nicoChat .zero_space {
+  }
+    .nicoChat .zen_space.type115A {
+    }
+
+  .type2001 {
+  }
+
+  .arial.type2001 {
+    font-family: Arial;}
+  }
+  /* フォント変化のあったグループの下にいるということは、
+     半角文字に挟まれていないはずである。
+   */
+  
+    .gothic > .type2001 {
+      font-family: 'ＭＳ Ｐゴシック';
+    }
+    .mincho > .type2001 {
+      font-family: Simsun;
+    }
+    .gulim > .type2001 {
+      font-family: Gulim;
+    }
+    .mingLiu > .type2001 {
+      font-family: PmingLiu, mingLiu;
+    }
+  
+
+
+
+  /*
+    空白文字の幅をWindowsと同等にしたい。調査中
+    等幅フォントを縮めることで環境差異のない幅を確保するという狙いだが・・・。
+  */
+
+  .gothic > .type3000 {
+    font-family: Osaka-mono, 'ＭＳ ゴシック', monospace;
+    letter-spacing: -0.33595em;
+  }
+  
+/*
+  .type0020,
+  .type00A0 {
+    font-family: Osaka-mono, 'ＭＳ ゴシック', monospace;
+    letter-spacing: -0.2223em;
+  }
+*/
+.backslash {
+  font-family: Arial;
+}
+
+
+  </style>
+<style type="text/css">
+
+
+body.saved {
+  pointer-events: auto;
+}
+
+.debug .mincho  { background: rgba(128, 0, 0, 0.3); }
+.debug .gulim   { background: rgba(0, 128, 0, 0.3); }
+.debug .mingLiu { background: rgba(0, 0, 128, 0.3); }
+
+
+
+.commentLayerOuter {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 672px;
+  padding: 0 64px;
+  height: 385px;
+  right: 0;
+  bottom: 0;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  background: #333;
+}
+
+.saved .commentLayerOuter {
+  background: #333;
+}
+
+.commentLayer {
+  position: relative;
+  width: 544px;
+  height: 385px;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.debug .commentLayer {
+  border: 1px dotted #800;
+}
+
+.nicoChat {
+  line-height: 1.235;
+  opacity: 0;
+  text-shadow:
+     1px  1px 0 #000;
+  transform-origin: 0% 0%;
+  animation-timing-function: linear;
+}
+
+
+.nicoChat.black {
+  text-shadow: -1px -1px 0 #888, 1px  1px 0 #888;
+}
+
+.nicoChat.overflow {
+}
+
+.nicoChat.ue,
+.nicoChat.shita {
+  display: inline-block;
+  text-shadow: 0 0 3px #000;
+}
+.nicoChat.ue.black,
+.nicoChat.shita.black {
+  text-shadow: 0 0 3px #fff;
+}
+
+.nicoChat .type0655,
+.nicoChat .zero_space {
+  text-shadow: none;
+  opacity: 0;
+}
+
+.nicoChat .han_space,
+.nicoChat .zen_space {
+  text-shadow: none;
+  opacity: 0;
+}
+
+.debug .nicoChat .han_space,
+.debug .nicoChat .zen_space {
+  text-shadow: none;
+  color: yellow;
+  background: #fff;
+  opacity: 0.3;
+  mix-blend-mode: lighten;
+}
+
+.debug .nicoChat .tab_space {
+  text-shadow: none;
+  background: #ff0;
+  opacity: 0.3;
+}
+
+.nicoChat .invisible_code {
+  text-shadow: none;
+  opacity: 0;
+}
+
+.nicoChat .zero_space {
+  text-shadow: none;
+  opacity: 0;
+}
+
+.debug .nicoChat .zero_space {
+  display: inline;
+  position: absolute;
+}
+
+.nicoChat .fill_space {
+  text-shadow: none;
+  background: currentColor;
+}
+
+.nicoChat .block_space {
+  text-shadow: none;
+}
+
+.debug .nicoChat.ue {
+  text-decoration: overline;
+}
+
+.debug .nicoChat.shita {
+  text-decoration: underline;
+}
+
+.nicoChat.mine {
+  border: 1px solid yellow;
+}
+
+.nicoChat.updating {
+  border: 1px dotted;
+}
+
+@keyframes spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(3600deg); }
+}
+
+.nicoChat.updating::before {
+  content: '❀'; /* 砂時計にしたい */
+  opacity: 0.8;
+  color: #f99;
+  display: inline-block;
+  text-align: center;
+  animation-name: spin;
+  animation-iteration-count: infinite;
+  animation-duration: 10s;
+}
+
+.nicoChat.updating::after {
+  content: ' 通信中...';
+  color: #ff9;
+  font-size: 50%;
+  opacity: 0.8;
+  color: #ccc;
+}
+
+.nicoChat.updating::after {
+  animation-direction: alternate;
+}
+
+.nicoChat.fail {
+  border: 1px dotted red;
+  text-decoration: line-through;
+}
+
+.nicoChat.fail:after {
+  content: ' 投稿失敗...';
+  text-decoration: none;
+  color: #ff9;
+  font-size: 80%;
+  opacity: 0.8;
+  color: #ccc;
+}
+
+.debug .nicoChat {
+  border: 1px outset;
+}
+
+.stalled .nicoChat,
+.paused  .nicoChat {
+  animation-play-state: paused !important;
+}
+
+</style>
+<style id="nicoChatAnimationDefinition">
+ @keyframes idouchat1002070 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-2253.2px, 0px) ;}
+ }
+ #chat1002070 {
+  z-index: 72460;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:39px;
+  animation-name: idouchat1002070;
+  animation-duration: 4.3793974732750245s;
+  animation-delay: 72.27030126336248s;
+ }
+
+
+
+
+ @keyframes idouchat1002071 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1477.2px, 0px) ;}
+ }
+ #chat1002071 {
+  z-index: 72560;
+  top:51px;
+  left:641.6px;
+  color:#FFC000;
+  font-size:39px;
+  animation-name: idouchat1002071;
+  animation-duration: 4.6090483619344775s;
+  animation-delay: 72.25547581903277s;
+ }
+
+
+
+
+ @keyframes idouchat1002072 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1195.2px, 0px) ;}
+ }
+ #chat1002072 {
+  z-index: 72900;
+  top:147px;
+  left:641.6px;
+  color:#00FF00;
+  font-size:24px;
+  animation-name: idouchat1002072;
+  animation-duration: 4.7808s;
+  animation-delay: 72.5096s;
+ }
+
+
+
+
+ @keyframes idouchat1002073 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1187.2px, 0px) ;}
+ }
+ #chat1002073 {
+  z-index: 73030;
+  top:269px;
+  left:641.6px;
+  color:#FFFF00;
+  font-size:39px;
+  animation-name: idouchat1002073;
+  animation-duration: 4.787096774193548s;
+  animation-delay: 72.63645161290323s;
+ }
+
+
+
+
+ @keyframes idouchat1002074 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-2047.2px, 0px) ;}
+ }
+ #chat1002074 {
+  z-index: 73580;
+  top:124px;
+  left:641.6px;
+  color:#FF8080;
+  font-size:39px;
+  animation-name: idouchat1002074;
+  animation-duration: 4.421598272138229s;
+  animation-delay: 73.36920086393089s;
+ }
+
+
+
+
+ @keyframes idouchat1002075 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1200.2px, 0px) ;}
+ }
+ #chat1002075 {
+  z-index: 73870;
+  top:159px;
+  left:641.6px;
+  color:#00FFFF;
+  font-size:24px;
+  animation-name: idouchat1002075;
+  animation-duration: 4.776915422885573s;
+  animation-delay: 73.48154228855722s;
+ }
+
+
+
+
+ @keyframes idouchat1002076 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-2253.2px, 0px) ;}
+ }
+ #chat1002076 {
+  z-index: 74730;
+  top:310px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:39px;
+  animation-name: idouchat1002076;
+  animation-duration: 4.3793974732750245s;
+  animation-delay: 74.5403012633625s;
+ }
+
+
+
+
+ @keyframes idouchat1002077 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1230.2px, 0px) ;}
+ }
+ #chat1002077 {
+  z-index: 74890;
+  top:51px;
+  left:641.6px;
+  color:#0000FF;
+  font-size:24px;
+  animation-name: idouchat1002077;
+  animation-duration: 4.754396135265701s;
+  animation-delay: 74.51280193236715s;
+ }
+
+
+
+
+ @keyframes idouchat1002078 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1187.2px, 0px) ;}
+ }
+ #chat1002078 {
+  z-index: 74290;
+  top:9px;
+  left:641.6px;
+  color:#FFF;
+  font-size:39px;
+  animation-name: idouchat1002078;
+  animation-duration: 4.787096774193548s;
+  animation-delay: 73.89645161290323s;
+ }
+
+
+
+
+ @keyframes idouchat1002079 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-2047.2px, 0px) ;}
+ }
+ #chat1002079 {
+  z-index: 75120;
+  top:160px;
+  left:641.6px;
+  color:#C000FF;
+  font-size:39px;
+  animation-name: idouchat1002079;
+  animation-duration: 4.421598272138229s;
+  animation-delay: 74.90920086393089s;
+ }
+
+
+
+
+ @keyframes idouchat1002080 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1237.2px, 0px) ;}
+ }
+ #chat1002080 {
+  z-index: 75430;
+  top:244px;
+  left:641.6px;
+  color:#00FF00;
+  font-size:24px;
+  animation-name: idouchat1002080;
+  animation-duration: 4.749328214971209s;
+  animation-delay: 75.0553358925144s;
+ }
+
+
+
+
+ @keyframes idouchat1002081 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1426.2px, 0px) ;}
+ }
+ #chat1002081 {
+  z-index: 74890;
+  top:80px;
+  left:641.6px;
+  color:#FFFF00;
+  font-size:39px;
+  animation-name: idouchat1002081;
+  animation-duration: 4.634281072298944s;
+  animation-delay: 74.57285946385053s;
+ }
+
+
+
+
+ @keyframes idouchat1002239 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-966.2px, 0px) ;}
+ }
+ #chat1002239 {
+  z-index: 21270;
+  top:35px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002239;
+  animation-duration: 5.012710765239948s;
+  animation-delay: 20.763644617380024s;
+ }
+
+
+
+
+ @keyframes idouchat1002243 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-816.2px, 0px) ;}
+ }
+ #chat1002243 {
+  z-index: 80650;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002243;
+  animation-duration: 5.257326892109501s;
+  animation-delay: 80.02133655394526s;
+ }
+
+
+
+
+ @keyframes idouchat1002245 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1116.2px, 0px) ;}
+ }
+ #chat1002245 {
+  z-index: 78690;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002245;
+  animation-duration: 4.847774158523344s;
+  animation-delay: 78.26611292073832s;
+ }
+
+
+
+
+ @keyframes idouchat1002246 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1066.2px, 0px) ;}
+ }
+ #chat1002246 {
+  z-index: 110140;
+  top:35px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002246;
+  animation-duration: 4.896440872560276s;
+  animation-delay: 109.69177956371986s;
+ }
+
+
+
+
+ @keyframes idouchat1002247 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-751.2px, 0px) ;}
+ }
+ #chat1002247 {
+  z-index: 75330;
+  top:173px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002247;
+  animation-duration: 5.40431654676259s;
+  animation-delay: 74.6278417266187s;
+ }
+
+
+
+
+ @keyframes idouchat1002248 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1091.2px, 0px) ;}
+ }
+ #chat1002248 {
+  z-index: 13800;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002248;
+  animation-duration: 4.871428571428572s;
+  animation-delay: 13.364285714285716s;
+ }
+
+
+
+
+ @keyframes idouchat1002249 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-966.2px, 0px) ;}
+ }
+ #chat1002249 {
+  z-index: 53250;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002249;
+  animation-duration: 5.012710765239948s;
+  animation-delay: 52.74364461738003s;
+ }
+
+
+
+
+ @keyframes idouchat1002250 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-941.2px, 0px) ;}
+ }
+ #chat1002250 {
+  z-index: 94040;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002250;
+  animation-duration: 5.046648793565684s;
+  animation-delay: 93.51667560321717s;
+ }
+
+
+
+
+ @keyframes idouchat1002252 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1018.2px, 0px) ;}
+ }
+ #chat1002252 {
+  z-index: 7810.000000000001;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002252;
+  animation-duration: 4.948724179829891s;
+  animation-delay: 7.335637910085055s;
+ }
+
+
+
+
+ @keyframes idouchat1002253 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1366.2px, 0px) ;}
+ }
+ #chat1002253 {
+  z-index: 46430;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002253;
+  animation-duration: 4.666780529461999s;
+  animation-delay: 46.096609735269s;
+ }
+
+
+
+
+ @keyframes idouchat1002254 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-1166.2px, 0px) ;}
+ }
+ #chat1002254 {
+  z-index: 38690;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:24px;
+  animation-name: idouchat1002254;
+  animation-duration: 4.804119464469619s;
+  animation-delay: 38.28794026776519s;
+ }
+
+
+
+
+ @keyframes idouchat1002255 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-777.2px, 0px) ;}
+ }
+ #chat1002255 {
+  z-index: 99570;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002255;
+  animation-duration: 5.341580756013746s;
+  animation-delay: 98.89920962199312s;
+ }
+
+
+
+
+ @keyframes idouchat1002256 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-782.2px, 0px) ;}
+ }
+ #chat1002256 {
+  z-index: 106150;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002256;
+  animation-duration: 5.33015332197615s;
+  animation-delay: 105.48492333901193s;
+ }
+
+
+
+
+ @keyframes idouchat1002257 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-761.2px, 0px) ;}
+ }
+ #chat1002257 {
+  z-index: 109030;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002257;
+  animation-duration: 5.379505300353357s;
+  animation-delay: 108.34024734982333s;
+ }
+
+
+
+
+ @keyframes idouchat1002258 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-782.2px, 0px) ;}
+ }
+ #chat1002258 {
+  z-index: 112760;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002258;
+  animation-duration: 5.33015332197615s;
+  animation-delay: 112.09492333901193s;
+ }
+
+
+
+
+ @keyframes idouchat1002259 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-775.2px, 0px) ;}
+ }
+ #chat1002259 {
+  z-index: 118650;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002259;
+  animation-duration: 5.346206896551724s;
+  animation-delay: 117.97689655172414s;
+ }
+
+
+
+
+ @keyframes idouchat1002260 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-782.2px, 0px) ;}
+ }
+ #chat1002260 {
+  z-index: 11540;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002260;
+  animation-duration: 5.33015332197615s;
+  animation-delay: 10.874923339011923s;
+ }
+
+
+
+
+ @keyframes idouchat1002261 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-777.2px, 0px) ;}
+ }
+ #chat1002261 {
+  z-index: 16890;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002261;
+  animation-duration: 5.341580756013746s;
+  animation-delay: 16.219209621993127s;
+ }
+
+
+
+
+ @keyframes idouchat1002262 {
+    0%  {opacity: 1; transform: translate(0px, 0px) ;}
+  100%  {opacity: 1; transform: translate(-782.2px, 0px) ;}
+ }
+ #chat1002262 {
+  z-index: 20600;
+  top:0px;
+  left:641.6px;
+  color:#FF0000;
+  font-size:24px;
+  animation-name: idouchat1002262;
+  animation-duration: 5.33015332197615s;
+  animation-delay: 19.934923339011927s;
+ }
+
+
+
+
+ @keyframes idouchat1002263 {
+    0%  {opacity: 1; transform: translate(0px, 0px)  scale(0.5);}
+  100%  {opacity: 1; transform: translate(-960.2px, 0px)  scale(0.5);}
+ }
+ #chat1002263 {
+  z-index: 59920;
+  top:0px;
+  left:641.6px;
+  color:#FFF;
+  font-size:39px;
+  animation-name: idouchat1002263;
+  animation-duration: 5.020653594771242s;
+  animation-delay: 59.40967320261438s;
+ }
+
+
+
+ @keyframes fixedchat1002241 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002241 {
+  z-index: 3640;
+  top:362px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:15px;
+  width:357px;
+ transform: translate(-50%, 0);  animation-name: fixedchat1002241;
+  animation-duration: 3s;
+  animation-delay: 3.64s;
+ }
+
+
+
+
+ @keyframes fixedchat1002242 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002242 {
+  z-index: 3640;
+  top:338px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:15px;
+  width:196px;
+ transform: translate(-50%, 0);  animation-name: fixedchat1002242;
+  animation-duration: 3s;
+  animation-delay: 3.64s;
+ }
+
+
+
+
+ @keyframes fixedchat1002244 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002244 {
+  z-index: 4280;
+  top:290px;
+  left: 50% ;
+  color:#FFF;
+  font-size:15px;
+  width:178px;
+ transform: translate(-50%, 0);  animation-name: fixedchat1002244;
+  animation-duration: 3s;
+  animation-delay: 4.28s;
+ }
+
+
+
+
+ @keyframes fixedchat1002251 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002251 {
+  z-index: 3900;
+  top:314px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:15px;
+  width:274px;
+ transform: translate(-50%, 0);  animation-name: fixedchat1002251;
+  animation-duration: 3s;
+  animation-delay: 3.9s;
+ }
+
+
+
+ @keyframes fixedchat1002082 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002082 {
+  z-index: 78420;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7938464016753252);  animation-name: fixedchat1002082;
+  animation-duration: 3s;
+  animation-delay: 78.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002083 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002083 {
+  z-index: 78420;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7981374633060027);  animation-name: fixedchat1002083;
+  animation-duration: 3s;
+  animation-delay: 78.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002084 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002084 {
+  z-index: 78420;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7938464016753252);  animation-name: fixedchat1002084;
+  animation-duration: 3s;
+  animation-delay: 78.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002085 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002085 {
+  z-index: 78420;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7981374633060027);  animation-name: fixedchat1002085;
+  animation-duration: 3s;
+  animation-delay: 78.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002086 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002086 {
+  z-index: 81290;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7981374633060027);  animation-name: fixedchat1002086;
+  animation-duration: 3s;
+  animation-delay: 81.29s;
+ }
+
+
+
+
+ @keyframes fixedchat1002087 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002087 {
+  z-index: 81290;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7981374633060027);  animation-name: fixedchat1002087;
+  animation-duration: 3s;
+  animation-delay: 81.29s;
+ }
+
+
+
+
+ @keyframes fixedchat1002088 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002088 {
+  z-index: 81290;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7981374633060027);  animation-name: fixedchat1002088;
+  animation-duration: 3s;
+  animation-delay: 81.29s;
+ }
+
+
+
+
+ @keyframes fixedchat1002089 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002089 {
+  z-index: 81290;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:885.9325842696629px;
+ transform: translate(-50%, 0) scale(0.7981374633060027);  animation-name: fixedchat1002089;
+  animation-duration: 3s;
+  animation-delay: 81.29s;
+ }
+
+
+
+
+ @keyframes fixedchat1002090 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002090 {
+  z-index: 16270;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002090;
+  animation-duration: 3s;
+  animation-delay: 16.27s;
+ }
+
+
+
+
+ @keyframes fixedchat1002091 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002091 {
+  z-index: 18050;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002091;
+  animation-duration: 3s;
+  animation-delay: 18.05s;
+ }
+
+
+
+
+ @keyframes fixedchat1002092 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002092 {
+  z-index: 18050;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002092;
+  animation-duration: 3s;
+  animation-delay: 18.05s;
+ }
+
+
+
+
+ @keyframes fixedchat1002093 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002093 {
+  z-index: 19280;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002093;
+  animation-duration: 3s;
+  animation-delay: 19.28s;
+ }
+
+
+
+
+ @keyframes fixedchat1002094 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002094 {
+  z-index: 22230;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002094;
+  animation-duration: 3s;
+  animation-delay: 22.23s;
+ }
+
+
+
+
+ @keyframes fixedchat1002095 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002095 {
+  z-index: 22230;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002095;
+  animation-duration: 3s;
+  animation-delay: 22.23s;
+ }
+
+
+
+
+ @keyframes fixedchat1002096 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002096 {
+  z-index: 22860;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002096;
+  animation-duration: 3s;
+  animation-delay: 22.86s;
+ }
+
+
+
+
+ @keyframes fixedchat1002097 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002097 {
+  z-index: 22860;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002097;
+  animation-duration: 3s;
+  animation-delay: 22.86s;
+ }
+
+
+
+
+ @keyframes fixedchat1002098 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002098 {
+  z-index: 23670;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002098;
+  animation-duration: 3s;
+  animation-delay: 23.67s;
+ }
+
+
+
+
+ @keyframes fixedchat1002099 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002099 {
+  z-index: 25500;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:952.2705314009662px;
+ transform: translate(-50%, 0) scale(0.7962128188971289);  animation-name: fixedchat1002099;
+  animation-duration: 3s;
+  animation-delay: 25.5s;
+ }
+
+
+
+
+ @keyframes fixedchat1002100 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002100 {
+  z-index: 25500;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002100;
+  animation-duration: 3s;
+  animation-delay: 25.5s;
+ }
+
+
+
+
+ @keyframes fixedchat1002101 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002101 {
+  z-index: 28370;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:1024px;
+ transform: translate(-50%, 0) scale(0.7431059506531205);  animation-name: fixedchat1002101;
+  animation-duration: 3s;
+  animation-delay: 28.37s;
+ }
+
+
+
+
+ @keyframes fixedchat1002102 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002102 {
+  z-index: 28370;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002102;
+  animation-duration: 3s;
+  animation-delay: 28.37s;
+ }
+
+
+
+
+ @keyframes fixedchat1002103 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002103 {
+  z-index: 29880;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002103;
+  animation-duration: 3s;
+  animation-delay: 29.88s;
+ }
+
+
+
+
+ @keyframes fixedchat1002104 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002104 {
+  z-index: 29880;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002104;
+  animation-duration: 3s;
+  animation-delay: 29.88s;
+ }
+
+
+
+
+ @keyframes fixedchat1002105 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002105 {
+  z-index: 31350;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002105;
+  animation-duration: 3s;
+  animation-delay: 31.35s;
+ }
+
+
+
+
+ @keyframes fixedchat1002106 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002106 {
+  z-index: 31740;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002106;
+  animation-duration: 3s;
+  animation-delay: 31.74s;
+ }
+
+
+
+
+ @keyframes fixedchat1002107 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002107 {
+  z-index: 31900;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002107;
+  animation-duration: 3s;
+  animation-delay: 31.9s;
+ }
+
+
+
+
+ @keyframes fixedchat1002108 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002108 {
+  z-index: 32470;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002108;
+  animation-duration: 3s;
+  animation-delay: 32.47s;
+ }
+
+
+
+
+ @keyframes fixedchat1002109 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002109 {
+  z-index: 32470;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002109;
+  animation-duration: 3s;
+  animation-delay: 32.47s;
+ }
+
+
+
+
+ @keyframes fixedchat1002110 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002110 {
+  z-index: 32810;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8085315832649713);  animation-name: fixedchat1002110;
+  animation-duration: 3s;
+  animation-delay: 32.81s;
+ }
+
+
+
+
+ @keyframes fixedchat1002111 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002111 {
+  z-index: 32810;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002111;
+  animation-duration: 3s;
+  animation-delay: 32.81s;
+ }
+
+
+
+
+ @keyframes fixedchat1002112 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002112 {
+  z-index: 34250;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8085315832649713);  animation-name: fixedchat1002112;
+  animation-duration: 3s;
+  animation-delay: 34.25s;
+ }
+
+
+
+
+ @keyframes fixedchat1002113 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002113 {
+  z-index: 34250;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002113;
+  animation-duration: 3s;
+  animation-delay: 34.25s;
+ }
+
+
+
+
+ @keyframes fixedchat1002114 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002114 {
+  z-index: 34250;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002114;
+  animation-duration: 3s;
+  animation-delay: 34.25s;
+ }
+
+
+
+
+ @keyframes fixedchat1002115 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002115 {
+  z-index: 35710;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8085315832649713);  animation-name: fixedchat1002115;
+  animation-duration: 3s;
+  animation-delay: 35.71s;
+ }
+
+
+
+
+ @keyframes fixedchat1002116 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002116 {
+  z-index: 35710;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002116;
+  animation-duration: 3s;
+  animation-delay: 35.71s;
+ }
+
+
+
+
+ @keyframes fixedchat1002117 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002117 {
+  z-index: 35710;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002117;
+  animation-duration: 3s;
+  animation-delay: 35.71s;
+ }
+
+
+
+
+ @keyframes fixedchat1002118 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002118 {
+  z-index: 37220;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002118;
+  animation-duration: 3s;
+  animation-delay: 37.22s;
+ }
+
+
+
+
+ @keyframes fixedchat1002119 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002119 {
+  z-index: 39480;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002119;
+  animation-duration: 3s;
+  animation-delay: 39.48s;
+ }
+
+
+
+
+ @keyframes fixedchat1002120 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002120 {
+  z-index: 39480;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.8071278825995807);  animation-name: fixedchat1002120;
+  animation-duration: 3s;
+  animation-delay: 39.48s;
+ }
+
+
+
+
+ @keyframes fixedchat1002121 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002121 {
+  z-index: 40420;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.7988069765933995);  animation-name: fixedchat1002121;
+  animation-duration: 3s;
+  animation-delay: 40.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002122 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002122 {
+  z-index: 40420;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002122;
+  animation-duration: 3s;
+  animation-delay: 40.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002123 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002123 {
+  z-index: 40420;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.7988069765933995);  animation-name: fixedchat1002123;
+  animation-duration: 3s;
+  animation-delay: 40.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002124 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002124 {
+  z-index: 40420;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002124;
+  animation-duration: 3s;
+  animation-delay: 40.42s;
+ }
+
+
+
+
+ @keyframes fixedchat1002125 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002125 {
+  z-index: 41280;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8085315832649713);  animation-name: fixedchat1002125;
+  animation-duration: 3s;
+  animation-delay: 41.28s;
+ }
+
+
+
+
+ @keyframes fixedchat1002126 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002126 {
+  z-index: 41280;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002126;
+  animation-duration: 3s;
+  animation-delay: 41.28s;
+ }
+
+
+
+
+ @keyframes fixedchat1002127 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002127 {
+  z-index: 41280;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002127;
+  animation-duration: 3s;
+  animation-delay: 41.28s;
+ }
+
+
+
+
+ @keyframes fixedchat1002128 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002128 {
+  z-index: 42820;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002128;
+  animation-duration: 3s;
+  animation-delay: 42.82s;
+ }
+
+
+
+
+ @keyframes fixedchat1002129 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002129 {
+  z-index: 42820;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002129;
+  animation-duration: 3s;
+  animation-delay: 42.82s;
+ }
+
+
+
+
+ @keyframes fixedchat1002130 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002130 {
+  z-index: 42820;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002130;
+  animation-duration: 3s;
+  animation-delay: 42.82s;
+ }
+
+
+
+
+ @keyframes fixedchat1002131 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002131 {
+  z-index: 43810;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002131;
+  animation-duration: 3s;
+  animation-delay: 43.81s;
+ }
+
+
+
+
+ @keyframes fixedchat1002132 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002132 {
+  z-index: 44310;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002132;
+  animation-duration: 3s;
+  animation-delay: 44.31s;
+ }
+
+
+
+
+ @keyframes fixedchat1002133 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002133 {
+  z-index: 44310;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002133;
+  animation-duration: 3s;
+  animation-delay: 44.31s;
+ }
+
+
+
+
+ @keyframes fixedchat1002134 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002134 {
+  z-index: 45880;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002134;
+  animation-duration: 3s;
+  animation-delay: 45.88s;
+ }
+
+
+
+
+ @keyframes fixedchat1002135 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002135 {
+  z-index: 45880;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002135;
+  animation-duration: 3s;
+  animation-delay: 45.88s;
+ }
+
+
+
+
+ @keyframes fixedchat1002136 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002136 {
+  z-index: 47230;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:906.2988505747127px;
+ transform: translate(-50%, 0) scale(0.8006173591649405);  animation-name: fixedchat1002136;
+  animation-duration: 3s;
+  animation-delay: 47.23s;
+ }
+
+
+
+
+ @keyframes fixedchat1002137 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002137 {
+  z-index: 47230;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:906.2988505747127px;
+ transform: translate(-50%, 0) scale(0.8020343810395687);  animation-name: fixedchat1002137;
+  animation-duration: 3s;
+  animation-delay: 47.23s;
+ }
+
+
+
+
+ @keyframes fixedchat1002138 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002138 {
+  z-index: 47230;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002138;
+  animation-duration: 3s;
+  animation-delay: 47.23s;
+ }
+
+
+
+
+ @keyframes fixedchat1002139 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002139 {
+  z-index: 47370;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002139;
+  animation-duration: 3s;
+  animation-delay: 47.37s;
+ }
+
+
+
+
+ @keyframes fixedchat1002140 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002140 {
+  z-index: 47430;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002140;
+  animation-duration: 3s;
+  animation-delay: 47.43s;
+ }
+
+
+
+
+ @keyframes fixedchat1002141 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002141 {
+  z-index: 47730;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002141;
+  animation-duration: 3s;
+  animation-delay: 47.73s;
+ }
+
+
+
+
+ @keyframes fixedchat1002142 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002142 {
+  z-index: 47940;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002142;
+  animation-duration: 3s;
+  animation-delay: 47.94s;
+ }
+
+
+
+
+ @keyframes fixedchat1002143 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002143 {
+  z-index: 48150;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002143;
+  animation-duration: 3s;
+  animation-delay: 48.15s;
+ }
+
+
+
+
+ @keyframes fixedchat1002144 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002144 {
+  z-index: 48310;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002144;
+  animation-duration: 3s;
+  animation-delay: 48.31s;
+ }
+
+
+
+
+ @keyframes fixedchat1002145 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002145 {
+  z-index: 48750;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002145;
+  animation-duration: 3s;
+  animation-delay: 48.75s;
+ }
+
+
+
+
+ @keyframes fixedchat1002146 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002146 {
+  z-index: 48620;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002146;
+  animation-duration: 3s;
+  animation-delay: 48.62s;
+ }
+
+
+
+
+ @keyframes fixedchat1002147 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002147 {
+  z-index: 49510;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002147;
+  animation-duration: 3s;
+  animation-delay: 49.51s;
+ }
+
+
+
+
+ @keyframes fixedchat1002148 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002148 {
+  z-index: 49510;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002148;
+  animation-duration: 3s;
+  animation-delay: 49.51s;
+ }
+
+
+
+
+ @keyframes fixedchat1002149 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002149 {
+  z-index: 49510;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002149;
+  animation-duration: 3s;
+  animation-delay: 49.51s;
+ }
+
+
+
+
+ @keyframes fixedchat1002150 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002150 {
+  z-index: 49590;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002150;
+  animation-duration: 3s;
+  animation-delay: 49.59s;
+ }
+
+
+
+
+ @keyframes fixedchat1002151 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002151 {
+  z-index: 52040;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002151;
+  animation-duration: 3s;
+  animation-delay: 52.04s;
+ }
+
+
+
+
+ @keyframes fixedchat1002152 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002152 {
+  z-index: 53030;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002152;
+  animation-duration: 3s;
+  animation-delay: 53.03s;
+ }
+
+
+
+
+ @keyframes fixedchat1002154 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002154 {
+  z-index: 84490;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002154;
+  animation-duration: 3s;
+  animation-delay: 84.49s;
+ }
+
+
+
+
+ @keyframes fixedchat1002155 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002155 {
+  z-index: 85840;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002155;
+  animation-duration: 3s;
+  animation-delay: 85.84s;
+ }
+
+
+
+
+ @keyframes fixedchat1002156 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002156 {
+  z-index: 87330;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002156;
+  animation-duration: 3s;
+  animation-delay: 87.33s;
+ }
+
+
+
+
+ @keyframes fixedchat1002157 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002157 {
+  z-index: 88040;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002157;
+  animation-duration: 3s;
+  animation-delay: 88.04s;
+ }
+
+
+
+
+ @keyframes fixedchat1002158 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002158 {
+  z-index: 88690;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002158;
+  animation-duration: 3s;
+  animation-delay: 88.69s;
+ }
+
+
+
+
+ @keyframes fixedchat1002159 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002159 {
+  z-index: 88770;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002159;
+  animation-duration: 3s;
+  animation-delay: 88.77s;
+ }
+
+
+
+
+ @keyframes fixedchat1002160 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002160 {
+  z-index: 89550;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002160;
+  animation-duration: 3s;
+  animation-delay: 89.55s;
+ }
+
+
+
+
+ @keyframes fixedchat1002161 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002161 {
+  z-index: 90260;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:1024px;
+ transform: translate(-50%, 0) scale(0.7175893482831114);  animation-name: fixedchat1002161;
+  animation-duration: 3s;
+  animation-delay: 90.26s;
+ }
+
+
+
+
+ @keyframes fixedchat1002162 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002162 {
+  z-index: 90260;
+  top:5px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:1024px;
+ transform: translate(-50%, 0) scale(0.7834736036725325);  animation-name: fixedchat1002162;
+  animation-duration: 3s;
+  animation-delay: 90.26s;
+ }
+
+
+
+
+ @keyframes fixedchat1002163 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002163 {
+  z-index: 90260;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002163;
+  animation-duration: 3s;
+  animation-delay: 90.26s;
+ }
+
+
+
+
+ @keyframes fixedchat1002164 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002164 {
+  z-index: 93260;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002164;
+  animation-duration: 3s;
+  animation-delay: 93.26s;
+ }
+
+
+
+
+ @keyframes fixedchat1002165 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002165 {
+  z-index: 93260;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002165;
+  animation-duration: 3s;
+  animation-delay: 93.26s;
+ }
+
+
+
+
+ @keyframes fixedchat1002166 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002166 {
+  z-index: 93260;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002166;
+  animation-duration: 3s;
+  animation-delay: 93.26s;
+ }
+
+
+
+
+ @keyframes fixedchat1002167 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002167 {
+  z-index: 95380;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:906.2988505747126px;
+ transform: translate(-50%, 0) scale(0.8013252436558025);  animation-name: fixedchat1002167;
+  animation-duration: 3s;
+  animation-delay: 95.38s;
+ }
+
+
+
+
+ @keyframes fixedchat1002168 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002168 {
+  z-index: 96550;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:906.2988505747126px;
+ transform: translate(-50%, 0) scale(0.807752986251972);  animation-name: fixedchat1002168;
+  animation-duration: 3s;
+  animation-delay: 96.55s;
+ }
+
+
+
+
+ @keyframes fixedchat1002169 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002169 {
+  z-index: 96500;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:906.2988505747126px;
+ transform: translate(-50%, 0) scale(0.807752986251972);  animation-name: fixedchat1002169;
+  animation-duration: 3s;
+  animation-delay: 96.5s;
+ }
+
+
+
+
+ @keyframes fixedchat1002170 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002170 {
+  z-index: 96370;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:906.2988505747126px;
+ transform: translate(-50%, 0) scale(0.807752986251972);  animation-name: fixedchat1002170;
+  animation-duration: 3s;
+  animation-delay: 96.37s;
+ }
+
+
+
+
+ @keyframes fixedchat1002171 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002171 {
+  z-index: 95350;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:906.2988505747126px;
+ transform: translate(-50%, 0) scale(0.8013252436558025);  animation-name: fixedchat1002171;
+  animation-duration: 3s;
+  animation-delay: 95.35s;
+ }
+
+
+
+
+ @keyframes fixedchat1002172 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002172 {
+  z-index: 96440;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:906.2988505747126px;
+ transform: translate(-50%, 0) scale(0.807752986251972);  animation-name: fixedchat1002172;
+  animation-duration: 3s;
+  animation-delay: 96.44s;
+ }
+
+
+
+
+ @keyframes fixedchat1002173 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002173 {
+  z-index: 97310;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002173;
+  animation-duration: 3s;
+  animation-delay: 97.31s;
+ }
+
+
+
+
+ @keyframes fixedchat1002174 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002174 {
+  z-index: 98690;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002174;
+  animation-duration: 3s;
+  animation-delay: 98.69s;
+ }
+
+
+
+
+ @keyframes fixedchat1002175 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002175 {
+  z-index: 98690;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002175;
+  animation-duration: 3s;
+  animation-delay: 98.69s;
+ }
+
+
+
+
+ @keyframes fixedchat1002176 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002176 {
+  z-index: 99470;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002176;
+  animation-duration: 3s;
+  animation-delay: 99.47s;
+ }
+
+
+
+
+ @keyframes fixedchat1002177 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002177 {
+  z-index: 100520;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002177;
+  animation-duration: 3s;
+  animation-delay: 100.52s;
+ }
+
+
+
+
+ @keyframes fixedchat1002178 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002178 {
+  z-index: 100520;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.7994938269602038);  animation-name: fixedchat1002178;
+  animation-duration: 3s;
+  animation-delay: 100.52s;
+ }
+
+
+
+
+ @keyframes fixedchat1002179 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002179 {
+  z-index: 101560;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002179;
+  animation-duration: 3s;
+  animation-delay: 101.56s;
+ }
+
+
+
+
+ @keyframes fixedchat1002180 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002180 {
+  z-index: 102500;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002180;
+  animation-duration: 3s;
+  animation-delay: 102.5s;
+ }
+
+
+
+
+ @keyframes fixedchat1002181 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002181 {
+  z-index: 103340;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002181;
+  animation-duration: 3s;
+  animation-delay: 103.34s;
+ }
+
+
+
+
+ @keyframes fixedchat1002182 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002182 {
+  z-index: 104650;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7287191961612114);  animation-name: fixedchat1002182;
+  animation-duration: 3s;
+  animation-delay: 104.65s;
+ }
+
+
+
+
+ @keyframes fixedchat1002183 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002183 {
+  z-index: 104650;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002183;
+  animation-duration: 3s;
+  animation-delay: 104.65s;
+ }
+
+
+
+
+ @keyframes fixedchat1002184 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002184 {
+  z-index: 104650;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:934.218009478673px;
+ transform: translate(-50%, 0) scale(0.7292880636055215);  animation-name: fixedchat1002184;
+  animation-duration: 3s;
+  animation-delay: 104.65s;
+ }
+
+
+
+
+ @keyframes fixedchat1002185 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002185 {
+  z-index: 104650;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.8113207547169px;
+ transform: translate(-50%, 0) scale(0.6636768884758865);  animation-name: fixedchat1002185;
+  animation-duration: 3s;
+  animation-delay: 104.65s;
+ }
+
+
+
+
+ @keyframes fixedchat1002186 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002186 {
+  z-index: 107130;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002186;
+  animation-duration: 3s;
+  animation-delay: 107.13s;
+ }
+
+
+
+
+ @keyframes fixedchat1002187 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002187 {
+  z-index: 107130;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002187;
+  animation-duration: 3s;
+  animation-delay: 107.13s;
+ }
+
+
+
+
+ @keyframes fixedchat1002188 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002188 {
+  z-index: 107130;
+  top:0px;
+  left: 50% ;
+  color:#00FF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002188;
+  animation-duration: 3s;
+  animation-delay: 107.13s;
+ }
+
+
+
+
+ @keyframes fixedchat1002189 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002189 {
+  z-index: 108120;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002189;
+  animation-duration: 3s;
+  animation-delay: 108.12s;
+ }
+
+
+
+
+ @keyframes fixedchat1002190 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002190 {
+  z-index: 108120;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002190;
+  animation-duration: 3s;
+  animation-delay: 108.12s;
+ }
+
+
+
+
+ @keyframes fixedchat1002191 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002191 {
+  z-index: 109040;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002191;
+  animation-duration: 3s;
+  animation-delay: 109.04s;
+ }
+
+
+
+
+ @keyframes fixedchat1002192 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002192 {
+  z-index: 109530;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002192;
+  animation-duration: 3s;
+  animation-delay: 109.53s;
+ }
+
+
+
+
+ @keyframes fixedchat1002193 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002193 {
+  z-index: 109530;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002193;
+  animation-duration: 3s;
+  animation-delay: 109.53s;
+ }
+
+
+
+
+ @keyframes fixedchat1002194 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002194 {
+  z-index: 109530;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002194;
+  animation-duration: 3s;
+  animation-delay: 109.53s;
+ }
+
+
+
+
+ @keyframes fixedchat1002195 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002195 {
+  z-index: 109530;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002195;
+  animation-duration: 3s;
+  animation-delay: 109.53s;
+ }
+
+
+
+
+ @keyframes fixedchat1002196 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002196 {
+  z-index: 110450;
+  top:0px;
+  left: 50% ;
+  color:#0000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002196;
+  animation-duration: 3s;
+  animation-delay: 110.45s;
+ }
+
+
+
+
+ @keyframes fixedchat1002197 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002197 {
+  z-index: 110810;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002197;
+  animation-duration: 3s;
+  animation-delay: 110.81s;
+ }
+
+
+
+
+ @keyframes fixedchat1002198 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002198 {
+  z-index: 111230;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002198;
+  animation-duration: 3s;
+  animation-delay: 111.23s;
+ }
+
+
+
+
+ @keyframes fixedchat1002199 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002199 {
+  z-index: 111390;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002199;
+  animation-duration: 3s;
+  animation-delay: 111.39s;
+ }
+
+
+
+
+ @keyframes fixedchat1002200 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002200 {
+  z-index: 112430;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002200;
+  animation-duration: 3s;
+  animation-delay: 112.43s;
+ }
+
+
+
+
+ @keyframes fixedchat1002201 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002201 {
+  z-index: 112430;
+  top:0px;
+  left: 50% ;
+  color:#00FFFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002201;
+  animation-duration: 3s;
+  animation-delay: 112.43s;
+ }
+
+
+
+
+ @keyframes fixedchat1002202 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002202 {
+  z-index: 111510;
+  top:0px;
+  left: 50% ;
+  color:#0000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002202;
+  animation-duration: 3s;
+  animation-delay: 111.51s;
+ }
+
+
+
+
+ @keyframes fixedchat1002203 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002203 {
+  z-index: 111960;
+  top:0px;
+  left: 50% ;
+  color:#FFF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002203;
+  animation-duration: 3s;
+  animation-delay: 111.96s;
+ }
+
+
+
+
+ @keyframes fixedchat1002204 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002204 {
+  z-index: 113450;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002204;
+  animation-duration: 3s;
+  animation-delay: 113.45s;
+ }
+
+
+
+
+ @keyframes fixedchat1002205 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002205 {
+  z-index: 114970;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002205;
+  animation-duration: 3s;
+  animation-delay: 114.97s;
+ }
+
+
+
+
+ @keyframes fixedchat1002206 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002206 {
+  z-index: 116270;
+  top:0px;
+  left: 50% ;
+  color:#C000FF;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002206;
+  animation-duration: 3s;
+  animation-delay: 116.27s;
+ }
+
+
+
+
+ @keyframes fixedchat1002207 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002207 {
+  z-index: 116270;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.7994938269602038);  animation-name: fixedchat1002207;
+  animation-duration: 3s;
+  animation-delay: 116.27s;
+ }
+
+
+
+
+ @keyframes fixedchat1002208 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002208 {
+  z-index: 117470;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.7994938269602038);  animation-name: fixedchat1002208;
+  animation-duration: 3s;
+  animation-delay: 117.47s;
+ }
+
+
+
+
+ @keyframes fixedchat1002209 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002209 {
+  z-index: 117470;
+  top:0px;
+  left: 50% ;
+  color:#FFC000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002209;
+  animation-duration: 3s;
+  animation-delay: 117.47s;
+ }
+
+
+
+
+ @keyframes fixedchat1002210 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002210 {
+  z-index: 119750;
+  top:0px;
+  left: 50% ;
+  color:#FF8080;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002210;
+  animation-duration: 3s;
+  animation-delay: 119.75s;
+ }
+
+
+
+
+ @keyframes fixedchat1002211 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002211 {
+  z-index: 122360;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.7994938269602038);  animation-name: fixedchat1002211;
+  animation-duration: 3s;
+  animation-delay: 122.36s;
+ }
+
+
+
+
+ @keyframes fixedchat1002212 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002212 {
+  z-index: 122360;
+  top:0px;
+  left: 50% ;
+  color:#FFFF00;
+  font-size:39px;
+  width:929.811320754717px;
+ transform: translate(-50%, 0) scale(0.8001818595135258);  animation-name: fixedchat1002212;
+  animation-duration: 3s;
+  animation-delay: 122.36s;
+ }
+
+
+
+
+ @keyframes fixedchat1002240 {
+    0% {opacity: 1;}
+   90% {opacity: 1;}
+  100% {opacity: 0.5;}
+ }
+ #chat1002240 {
+  z-index: 300;
+  top:0px;
+  left: 50% ;
+  color:#FF0000;
+  font-size:39px;
+  width:442px;
+ transform: translate(-50%, 0);  animation-name: fixedchat1002240;
+  animation-duration: 3s;
+  animation-delay: 0.3s;
+ }
+
+
+
+
+</style>
+</head>
+<body class="saved">
+<h2>ZenzaWatchでHTMLに変換されたコメントアート</h2>
+<div>
+コンソールで
+<div style="font-weight: bolder; color: blue; padding: 8px;">
+  console.log(ZenzaWatch.debug.css3Player.toString());
+</div>
+を叩くと、今見てる動画のコメントがHTMLとして出力される。<br>
+<button 
+  onclick="document.body.className = document.body.className !== 'debug' ? 'debug' : '';return false;">
+デバッグON/OFF
+</button>
+
+このファイルはMac版Chromeで作成しました。
+<br>
+<br>
+<a href="http://www.nicovideo.jp/watch/1235882895">素晴らしい元動画はこちら</a><br>
+
+
+<div class="commentLayerOuter">
+<div class="commentLayer" id="commentLayer"><span id="chat1002070" class="nicoChat normal big noScale"><group class="gothic">❊<span class="zen_space type3000">　　　　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　　</span>❀<span class="zen_space type3000">　　　　　　　　　　</span>❂<span class="zen_space type3000">　　　　　　　　　</span>✺<span class="zen_space type3000">　　　　　　　　　　　　</span>✲</group></span>
+<span id="chat1002071" class="nicoChat normal big noScale"><group class="gothic">❊<span class="zen_space type3000">　　　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　</span>✼</group><br><group class="gothic"><span class="zen_space type3000">　　　　　　　</span>❊<span class="zen_space type3000">　　　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　</span>✼</group></span>
+<span id="chat1002072" class="nicoChat normal medium noScale"><group class="gothic">✺<span class="zen_space type3000">　　　　　　　　　　</span>✲<span class="zen_space type3000">　　　　　　　　　　</span>✻</group><br><br><br><group class="gothic"><span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　　　　　　</span>✲<span class="zen_space type3000">　　　　　　　　　　</span>✻</group></span>
+<span id="chat1002073" class="nicoChat normal big noScale"><group class="gothic">✻<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>✻</group><br><group class="gothic"><span class="zen_space type3000">　　　　　　　　</span>✺</group></span>
+<span id="chat1002074" class="nicoChat normal big noScale overflow"><group class="gothic">✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺</group></span>
+<span id="chat1002075" class="nicoChat normal medium noScale overflow"><group class="gothic">✻<span class="zen_space type3000">　　　　　　　　　　　　　</span>❀<span class="zen_space type3000">　　　　　　　　　　　　</span>✻</group><br><br><br><group class="gothic"><span class="zen_space type3000">　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　　　　　</span>❀</group></span>
+<span id="chat1002076" class="nicoChat normal big noScale overflow"><group class="gothic">❊<span class="zen_space type3000">　　　　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　　</span>❀<span class="zen_space type3000">　　　　　　　　　　</span>❂<span class="zen_space type3000">　　　　　　　　　</span>✺<span class="zen_space type3000">　　　　　　　　　　　　</span>✲</group></span>
+<span id="chat1002077" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　　　　　　　　　　　　　　</span>✿</group><br><br><br><group class="gothic">✻<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　　　　　　　　　</span>❀</group></span>
+<span id="chat1002078" class="nicoChat normal big noScale overflow"><group class="gothic">✻<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>✻</group><br><group class="gothic"><span class="zen_space type3000">　　　　　　　　</span>✺</group></span>
+<span id="chat1002079" class="nicoChat normal big noScale overflow"><group class="gothic">✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺<span class="zen_space type3000">　　　　　</span>✲<span class="zen_space type3000">　　　　　</span>✺</group></span>
+<span id="chat1002080" class="nicoChat normal medium noScale"><group class="gothic">✿<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　　　　　　　　　</span>❀</group><br><br><br><group class="gothic"><span class="zen_space type3000">　　　　　　　　　　　　　　</span>✻</group></span>
+<span id="chat1002081" class="nicoChat normal big noScale overflow"><group class="gothic">❊<span class="zen_space type3000">　　　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　</span>✼</group><br><group class="gothic"><span class="zen_space type3000">　　　　　</span>❊<span class="zen_space type3000">　　　　　　　　　</span>✻<span class="zen_space type3000">　　　　　　　　　</span>✼</group></span>
+<span id="chat1002239" class="nicoChat normal medium noScale"><group class="gothic">どんだけだよｗｗｗ</group></span>
+<span id="chat1002243" class="nicoChat normal medium noScale"><group class="gothic">うおお</group></span>
+<span id="chat1002245" class="nicoChat normal medium noScale"><group class="gothic">職人すげえええええええええええ</group></span>
+<span id="chat1002246" class="nicoChat normal medium noScale"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>下駄鳴らして</group></span>
+<span id="chat1002247" class="nicoChat normal medium noScale"><han_group>*</han_group></span>
+<span id="chat1002248" class="nicoChat normal medium noScale"><group class="gothic">マイメモリーで問題ないだろ。</group></span>
+<span id="chat1002249" class="nicoChat normal medium noScale"><group class="gothic">かっこいいぃ・・・</group></span>
+<span id="chat1002250" class="nicoChat normal medium noScale"><group class="gothic">すごいいぃ・・・</group></span>
+<span id="chat1002252" class="nicoChat normal medium noScale"><han_group>watch/1214570733</han_group></span>
+<span id="chat1002253" class="nicoChat normal medium noScale"><group class="gothic">自分が作画したわけじゃないのにコメ自重ってなに？ｗ</group></span>
+<span id="chat1002254" class="nicoChat normal medium noScale"><group class="gothic">自重といわれたらコメがしたくなるｗ</group></span>
+<span id="chat1002255" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>❁</group></span>
+<span id="chat1002256" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>❀</group></span>
+<span id="chat1002257" class="nicoChat normal medium noScale"><group class="gothic">❁</group></span>
+<span id="chat1002258" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>✿</group></span>
+<span id="chat1002259" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>✾</group></span>
+<span id="chat1002260" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>✿</group></span>
+<span id="chat1002261" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>❁</group></span>
+<span id="chat1002262" class="nicoChat normal medium noScale"><group class="gothic"><span class="zen_space type3000">　</span>❀</group></span>
+<span id="chat1002263" class="nicoChat normal big half"><group class="gulim fontChanged"><span class="invisible_code">ㅤ</span></group><br><br><br><group class="gulim fontChanged"><span class="invisible_code">ㅤ</span></group><br><br><br><group class="gulim fontChanged">もののけの<span class="invisible_code">ㅤ</span>を為すのは</group><br><br><br><group class="gulim fontChanged"><span class="invisible_code">ㅤ</span></group><br><br><br><group class="gulim fontChanged"><span class="invisible_code">ㅤ</span></group><br><br><br><group class="gulim fontChanged"><span class="invisible_code">ㅤ</span></group></span><span id="chat1002241" class="nicoChat shita small noScale"><han_group>mylist/11308302<span class="han_space type0020"> </span></han_group><group class="gothic">花職人コメだけにマイメモ</group></span>
+<span id="chat1002242" class="nicoChat shita small noScale"><group class="gothic">↓</group><han_group>7</han_group><group class="gothic">期収録<span class="zen_space type3000">　</span>ロング</group><han_group>2</han_group><group class="gothic">期収録</group></span>
+<span id="chat1002244" class="nicoChat shita small noScale"><group class="gothic">マイリストマジサンクス</group></span>
+<span id="chat1002251" class="nicoChat shita small noScale"><group class="gothic">職人の技術の変動をまとめたマイメモ</group></span><span id="chat1002082" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✿✹✜✻❉✿✹✜✻❉✿✹✜✻❉✿✹✜<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002083" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>❀❅✲✺❊❀❅✲✺❊❀❅✲✺❊❀❅✲<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002084" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✿✹✜✻❉✿✹✜✻❉✿✹✜✻❉✿✹✜<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002085" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>❀❅✲✺❊❀❅✲✺❊❀❅✲✺❊❀❅✲<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002086" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✿❂❉✻✲✿❂❉✻✲✿❂❉✻✲✿❂❉<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002087" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✿❂❉✻✲✿❂❉✻✲✿❂❉✻✲✿❂❉<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002088" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>❀✺❊❆✡❀✺❊❆✡❀✺❊❆✡❀✺❊<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002089" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>❀✺❊❆✡❀✺❊❆✡❀✺❊❆✡❀✺❊<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002090" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>つま先であやす<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002091" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　</span>月<span class="zen_space type3000">　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group></span>
+<span id="chat1002092" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>の<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group></span>
+<span id="chat1002093" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>兎は踊り<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><han_group>d</han_group></span>
+<span id="chat1002094" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>星<span class="zen_space type3000">　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002095" class="nicoChat ue big overflow"><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>の<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><han_group>d</han_group></span>
+<span id="chat1002096" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>間<span class="zen_space type3000">　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002097" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>を<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><han_group>d</han_group></span>
+<span id="chat1002098" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>飛<span class="zen_space type3000">　</span>び<span class="zen_space type3000">　</span>回<span class="zen_space type3000">　</span>る<span class="zen_space type3000">　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002099" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span><span class="gothic">ﾟ</span></group><han_group><span class="han_space type0020"> </span></han_group><group class="gothic fontChanged">゜･</group><han_group>*:.</han_group><group class="mincho">｡❀✺✿✻｡</group><han_group>.:*</han_group><group class="gothic fontChanged">･゜ﾟ</group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002100" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>口笛吹き<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002101" class="nicoChat ue big"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✺。⋄<span class="gothic">ﾟ･⋄｡⋄･ﾟ<span class="zen_space type3000">　</span>✺･<span class="zen_space type3000">　</span></span></group><han_group>*</han_group><group class="mincho fontChanged">｡<span class="zen_space type3000">　</span>⋄<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002102" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>飛沫上がる<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002103" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>＜＜＜＜＜＜＜＜<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002104" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>私駆ける！<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002105" class="nicoChat ue big overflow"><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>追<span class="zen_space type3000">　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002106" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>い<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002107" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>か<span class="zen_space type3000">　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002108" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>け<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002109" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>る<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group></span>
+<span id="chat1002110" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho"><span class="zen_space type3000">　　　　　　　　　</span>星<span class="zen_space type3000">　　　　　　　　　　</span></group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002111" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>は<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002112" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho"><span class="zen_space type3000">　　　　　　　　　　</span>回<span class="zen_space type3000">　　　　　　　　　　</span></group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002113" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span>わ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002114" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>る<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002115" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho"><span class="zen_space type3000">　　　　　　　　　　　　　　　</span>回<span class="zen_space type3000">　　　　　　</span></group><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002116" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>わ<span class="zen_space type3000">　　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002117" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>る<span class="zen_space type3000">　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002118" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ちいさな蕾<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><han_group>d</han_group></span>
+<span id="chat1002119" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>咲いて咲いて<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002120" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>✿❉✿❉✿❉✿❉✿❉<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002121" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>❀❊❀❊❀❊❀❊❀❊<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002122" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>咲いて咲いて<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002123" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>❀❊❀❊❀❊❀❊❀❊<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002124" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>咲いて咲いて<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002125" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✿❀❊✲✺❀❀❊✲❊❊<span class="zen_space type3000">　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002126" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>月<span class="zen_space type3000">　　</span>願<span class="zen_space type3000">　　　　　　　</span>ˋ</group></span>
+<span id="chat1002127" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>にお<span class="zen_space type3000">　</span>い<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002128" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>穏<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002129" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　</span>や</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>か<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002130" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>な</group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>に<span class="zen_space type3000">　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group></span>
+<span id="chat1002131" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span>影<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002132" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　</span>薄<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002133" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>化</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>粧<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002134" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>知</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>知<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002135" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　</span>らず</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>らず<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002136" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　</span>❁❂✱❁❂✱❁❂<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>❂✱❁❂✱❁❂✱</group></span>
+<span id="chat1002137" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　</span>❀✺✲❀✺✲❀✺<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>✺✲❀✺✲❀✺✲</group></span>
+<span id="chat1002138" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>え</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　</span>え<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002139" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>い</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>い<span class="zen_space type3000">　　　　　　　</span>ˋ</group></span>
+<span id="chat1002140" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>や</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>や<span class="zen_space type3000">　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002141" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　</span>と</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>と<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002142" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>投</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>投<span class="zen_space type3000">　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002143" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>げ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>げ<span class="zen_space type3000">　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002144" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span>た</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　</span>た<span class="zen_space type3000">　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002145" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>は蕾<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>蕾は</group></span>
+<span id="chat1002146" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>は蕾<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>dd</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>蕾は</group></span>
+<span id="chat1002147" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>れ知方行<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>行方知れ</group></span>
+<span id="chat1002148" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>れ知方行<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>dd</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>行方知れ</group></span>
+<span id="chat1002149" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>れ知方行<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>行方知れ</group></span>
+<span id="chat1002150" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>れ知方行<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>dd</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>行方知れ</group></span>
+<span id="chat1002151" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　</span>ず<span class="zen_space type3000">　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span>ず</group></span>
+<span id="chat1002152" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>ままの</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>のまま<span class="zen_space type3000">　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002154" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>弧を描き<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002155" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>影は伸びる<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002156" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　</span>陽<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>陽</group></span>
+<span id="chat1002157" class="nicoChat ue big overflow"><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>炎<span class="zen_space type3000">　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>炎</group><br><han_group>d</han_group></span>
+<span id="chat1002158" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>の<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>の</group><br><br><han_group>d</han_group></span>
+<span id="chat1002159" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>先<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　</span>先</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002160" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>に<span class="zen_space type3000">　　　　　　　　　　</span>ˋ</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>に</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002161" class="nicoChat ue big"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span><span class="gothic">･゜<span class="zen_space type3000">　</span>ﾟ･</span></group><han_group><span class="han_space type0020"> </span>*:.</han_group><group class="mincho">｡❊｡</group><han_group>.:*</han_group><group class="mincho fontChanged">･゜❀<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span><span class="mincho">ˋ</span></group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002162" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>f</han_group><br><br><br><han_group>f</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span>❀゜<span class="gothic">･<span class="zen_space type3000">　</span>ﾟ･</span></group><han_group><span class="han_space type0020"> </span>*:.</han_group><group class="mincho">｡❊｡</group><han_group>.:*</han_group><group class="mincho fontChanged">･゜<span class="zen_space type3000">　　　　　　　　　</span><span class="mincho">ˋ</span></group></span>
+<span id="chat1002163" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>咲いた</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>あった！<span class="zen_space type3000">　　　　　　　</span>ˋ</group></span>
+<span id="chat1002164" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>●●●●●●<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002165" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>〇〇〇〇〇〇<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002166" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>まぁるい花が<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002167" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　</span>✱❋✿咲いた✱❋✿✺✿✱❋咲いた✿✺✱<span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002168" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　</span>✲❊❀咲いた✲❊❀❉❀✲❊咲いた❀❉✲<span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002169" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　</span>✲❊❀咲いた✲❊❀❉❀✲❊咲いた❀❉✲<span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>dd</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002170" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　</span>✲❊❀咲いた✲❊❀❉❀✲❊咲いた❀❉✲<span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002171" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　</span>✱❋✿咲いた✱❋✿✺✿✱❋咲いた✿✺✱<span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002172" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　</span>✲❊❀咲いた✲❊❀❉❀✲❊咲いた❀❉✲<span class="zen_space type3000">　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002173" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>星の欠片が<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002174" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>月<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002175" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>の</group><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>で<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002176" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>裏<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>側</group><br><han_group>d</han_group><br><br><han_group>d</han_group></span>
+<span id="chat1002177" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>泣いていた<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002178" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020">  </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　　　　　　　　　　　</span>泣いていた<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002179" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>気<span class="zen_space type3000">　</span>付<span class="zen_space type3000">　</span>かぬ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002180" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　</span>うちに<span class="zen_space type3000">　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002181" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>隠れ<span class="zen_space type3000">　</span>て<span class="zen_space type3000">　</span>た<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002182" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>兎<span class="zen_space type3000">　　　　　　　　　　　　　　</span>く<span class="zen_space type3000">　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002183" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>も<span class="zen_space type3000">　　　　　　　　　　　　</span>描<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002184" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>ま<span class="zen_space type3000">　　　　　　　　</span>弧<span class="zen_space type3000">　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><han_group>d</han_group></span>
+<span id="chat1002185" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>た<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><han_group>d</han_group></span>
+<span id="chat1002186" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>咲<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002187" class="nicoChat ue big overflow"><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>い<span class="zen_space type3000">　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002188" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　</span>て<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002189" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>咲<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group></span>
+<span id="chat1002190" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>い</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　</span>た<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002191" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　</span>風<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>ˋ</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>に</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002192" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　　</span>揺<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002193" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　　</span>ら<span class="zen_space type3000">　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group></span>
+<span id="chat1002194" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　　</span>れ<span class="zen_space type3000">　　　　　　　　</span>ˋ</group><br><han_group>d</han_group></span>
+<span id="chat1002195" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>て<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002196" class="nicoChat ue big overflow"><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>穏<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002197" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>や<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002198" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>か<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002199" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>な<span class="zen_space type3000">　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002200" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>薄<span class="zen_space type3000">　　　　　　　　　　　　　</span>ˋ</group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>化</group><br><br><han_group>d</han_group></span>
+<span id="chat1002201" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　</span>粧<span class="zen_space type3000">　　　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group></span>
+<span id="chat1002202" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>坂<span class="zen_space type3000">　　　　　　　　　　　</span>ˋ</group><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002203" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>は<span class="zen_space type3000">　　　　　　　　　　　</span>ˋ</group><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002204" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>下駄鳴らして<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002205" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>口笛合わせ<span class="zen_space type3000">　　　　　　</span>ˋ</group></span>
+<span id="chat1002206" class="nicoChat ue big overflow"><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>凛として<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002207" class="nicoChat ue big overflow"><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020">  </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>凛として<span class="zen_space type3000">　　　　　　</span>ˋ</group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group></span>
+<span id="chat1002208" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020">  </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　</span>はんなり<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002209" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　</span>はんなり<span class="zen_space type3000">　　　　　　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002210" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　</span>の<span class="zen_space type3000">　　　　　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002211" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group><span class="han_space type0020"> </span></han_group><group class="mincho fontChanged">ˋ</group><han_group><span class="han_space type0020">  </span></han_group><group class="mincho fontChanged"><span class="zen_space type3000">　　　　　　　　　　</span>心<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002212" class="nicoChat ue big overflow"><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><han_group>d</han_group><br><br><br><group class="mincho fontChanged">ˋ<span class="zen_space type3000">　　　　　　　　　　　</span>心<span class="zen_space type3000">　　　　　　　　　　　　　　　</span>ˋ</group></span>
+<span id="chat1002240" class="nicoChat ue big noScale"><group class="gothic">※コメ自重注意報発令！</group></span></div>
+</div>
+</body></html>
+

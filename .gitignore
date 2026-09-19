@@ -15,3 +15,6 @@ session/*
 ./lib/*
 ./botsu/*
 package-lock.json
+# 開発用の内部ツール・公開状態の記録は公開しない
+/tools/
+/.publish-state/

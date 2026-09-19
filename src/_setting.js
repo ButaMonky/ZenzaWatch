@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.18-task078
+// @version     0.3.19-task080
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -180,11 +180,8 @@ const $ = uq;
           設定は全部の動画で共通で、次に開いた時も残ります。
           動画を見ながら調整したい時は、再生画面の下のバーにある「きらめき（✦）」のボタンから専用パネルを開けます。
         </div>
-        <div class="screenFilterEnableControl control toggle">
-          <label>
-            <input type="checkbox" class="checkbox" data-setting-name="screenFilter.enable">
-            画面フィルターを使う（OFFにすると元の映像に戻ります。調整した値は残ります）
-          </label>
+        <div class="settingNote">
+          プリセット「標準」の時がOFF（何も処理しません）で、それ以外を選ぶと自動でONになります。
         </div>
         <div class="control">
           <div>かんたん設定（プリセット）: 押すと下の値がまとめて切り替わります</div>
@@ -337,11 +334,6 @@ const $ = uq;
               input.value = v;
             }
           });
-          if (!config.props['screenFilter.enable']) {
-            config.props['screenFilter.enable'] = true;
-            const enable = $panel.find('[data-setting-name="screenFilter.enable"]')[0];
-            enable && (enable.checked = true);
-          }
         });
 
         $panel.find('.zenzaAdvancedSetting-close').on('mousedown', e => {
@@ -903,7 +895,9 @@ const $ = uq;
       <option value="deflistAdd">とりあえずマイリスト</option>
       <option value="picture-in-picture">picture-in-picture</option>
       <option value="picture-in-picture-comment">picture-in-picture(コメント付き)</option>
-      <option value="toggle-screenFilter.enable">画面フィルター ON/OFF</option>
+      <option value="toggle-screenFilter.enable">エフェクト ON/OFF（今の設定 ⇔ 標準）</option>
+      <option value="toggle-screenFilter.split">エフェクトを左右で見比べる ON/OFF</option>
+      <option value="toggle-supporterCredit.enable">動画の最後の提供画面 ON/OFF</option>
       <option value="toggle-screenFilterPanel">画面フィルターのパネルを開く/閉じる</option>
     `).trim();
 
@@ -1014,6 +1008,36 @@ const $ = uq;
               ニコニコが動画ごとに測った音の大きさをもとに、音が大きい動画だけ音量を下げます（音量を上げる方向には働きません）。
               OFFにすると動画の音をそのまま再生します。
             </div>
+          </div>
+
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.enable">
+              動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
+            </label>
+            <div class="settingNote">
+              本家と同じく、動画が最後まで再生されたあとに提供音声の長さ（約10秒）だけ表示し、
+              その間もコメントは流れ続けます。一時停止・シークもできます（シークすると動画に戻ります）。
+              右下の「スキップ」で飛ばせます。リピート再生中は表示しません。
+            </div>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.voice">
+              提供画面の音声（提供読み上げ）を鳴らす
+            </label>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.gift">
+              提供画面でギフトが落ちてくる演出を表示する
+            </label>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.skipInPlaylist">
+              連続再生中は提供画面を表示しない（すぐ次の動画へ進む）
+            </label>
           </div>
 
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>

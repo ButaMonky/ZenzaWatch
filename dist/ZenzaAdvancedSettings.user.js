@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.18-task078
+// @version     0.3.19-task080
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:13Z 807b380
+// build: 2026-09-19 06:22Z 7c252d9
 /* eslint-disable */
 
 ((window) => { const self = window;
@@ -1097,10 +1097,40 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'picture-in-picture-comment'},
 	{id: 'TOGGLE_AUDIO_AUTO_ADJUST', category: 'その他', label: '音声の自動調整のON/OFF',
 		defaultKey: 0, command: 'toggle-audio.autoAdjust'},
+	{id: 'TOGGLE_SUPPORTER_CREDIT', category: 'その他', label: '動画の最後の「提供」画面の表示 ON/OFF',
+		defaultKey: 0, command: 'toggle-supporterCredit.enable'},
+	{id: 'PLAYBACK_RATE_10', category: '再生速度', label: '再生速度: 10倍',
+		defaultKey: 0, command: 'playbackRate', param: 10},
+	{id: 'PLAYBACK_RATE_5', category: '再生速度', label: '再生速度: 5倍',
+		defaultKey: 0, command: 'playbackRate', param: 5},
+	{id: 'PLAYBACK_RATE_4', category: '再生速度', label: '再生速度: 4倍',
+		defaultKey: 0, command: 'playbackRate', param: 4},
+	{id: 'PLAYBACK_RATE_3', category: '再生速度', label: '再生速度: 3倍',
+		defaultKey: 0, command: 'playbackRate', param: 3},
+	{id: 'PLAYBACK_RATE_2', category: '再生速度', label: '再生速度: 2倍',
+		defaultKey: 0, command: 'playbackRate', param: 2},
+	{id: 'PLAYBACK_RATE_1_75', category: '再生速度', label: '再生速度: 1.75倍',
+		defaultKey: 0, command: 'playbackRate', param: 1.75},
+	{id: 'PLAYBACK_RATE_1_5', category: '再生速度', label: '再生速度: 1.5倍',
+		defaultKey: 0, command: 'playbackRate', param: 1.5},
+	{id: 'PLAYBACK_RATE_1_25', category: '再生速度', label: '再生速度: 1.25倍',
+		defaultKey: 0, command: 'playbackRate', param: 1.25},
+	{id: 'PLAYBACK_RATE_1', category: '再生速度', label: '再生速度: 標準速度(x1)',
+		defaultKey: 0, command: 'playbackRate', param: 1},
+	{id: 'PLAYBACK_RATE_0_75', category: '再生速度', label: '再生速度: 0.75倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.75},
+	{id: 'PLAYBACK_RATE_0_5', category: '再生速度', label: '再生速度: 0.5倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.5},
+	{id: 'PLAYBACK_RATE_0_25', category: '再生速度', label: '再生速度: 0.25倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.25},
+	{id: 'PLAYBACK_RATE_0_1', category: '再生速度', label: '再生速度: 0.1倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.1},
 	{id: 'OPEN_SCREEN_FILTER_PANEL', category: '画面フィルター', label: '画面フィルターのパネルを開く/閉じる',
 		defaultKey: 0, command: 'toggle-screenFilterPanel'},
-	{id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: '画面フィルター ON/OFF（元の映像と見比べる）',
+	{id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: 'エフェクト ON/OFF（今の設定 ⇔ 標準）',
 		defaultKey: 0, command: 'toggle-screenFilter.enable'},
+	{id: 'TOGGLE_SCREEN_FILTER_SPLIT', category: '画面フィルター', label: '左右で見比べる（左半分に元の映像）ON/OFF',
+		defaultKey: 0, command: 'toggle-screenFilter.split'},
 	{id: 'SCREEN_FILTER_NEXT_PRESET', category: '画面フィルター', label: 'プリセットを順番に切り替える',
 		defaultKey: 0, command: 'screenFilter-nextPreset'},
 	{id: 'SCREEN_FILTER_RESET', category: '画面フィルター', label: 'すべて標準に戻す',
@@ -1299,7 +1329,12 @@ const Config = (() => {
 		'videoHeader.position': 'auto',
 		'uaa.enable': true,
 		'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
-		'screenFilter.enable': true,        // フィルター全体のON/OFF（OFFでも調整した値は残る）
+		'supporterCredit.enable': true,       // 提供画面を表示する
+		'supporterCredit.voice': true,        // 提供音声（期間ごとに変わる読み上げ）を鳴らす
+		'supporterCredit.gift': true,         // ギフトが落ちてくる演出を表示する
+		'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
+		'screenFilter.enable': true,
+		'screenFilter.saved': '',
 		'screenFilter.brightness': 100,     // 明るさ(%)
 		'screenFilter.contrast': 100,       // コントラスト(%)
 		'screenFilter.saturate': 100,       // 彩度(%)
@@ -2169,6 +2204,12 @@ const cssUtil = css;
 * スクリーンショット・コメント付きPiP は canvas に描き直しているため、
 * drawVideo() / processCanvas() で同じ加工を canvas にも掛ける（ctx.filter）。
 * 通常の P in P はブラウザが <video> をそのまま小窓に出すので加工できない。
+*
+* Task 080: 「使う」ON/OFF を廃止した。プリセット「標準」（全部が既定値）の時が OFF、
+* それ以外は自動で ON。標準の時は filter: none・SVGなし・タイマーなし・影の要素なしで、
+* 何も処理しない（077c で確認済みの作りのまま）。以前「使う」を OFF にしていた人は、
+* 初回に値を「標準」へ戻し、元の値は ON/OFF ショートカット用に保存しておく（移行）。
+* 「押している間だけ元の映像」は廃止し、画面の左半分だけ元の映像を重ねる比較モードにした。
 */
 const ScreenFilter = (() => {
 	const PREFIX = 'screenFilter.';
@@ -2362,10 +2403,7 @@ const ScreenFilter = (() => {
 		PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
 		return values;
 	};
-	const isEnabled = () => {
-		const v = prop('enable');
-		return v === undefined ? true : !!v;
-	};
+	const isEnabled = () => true;
 	const isDefaultValue = (key, value) => {
 		const p = PARAM_MAP[key];
 		if (p.type === 'boolean') { return !!value === !!p.def; }
@@ -2704,13 +2742,41 @@ const ScreenFilter = (() => {
 		return {param: p, value: next};
 	};
 	const onOff = v => v ? 'ON' : 'OFF';
+	const isStandard = (values = read()) => PARAMS.every(p => isDefaultValue(p.key, values[p.key]));
+	const saveValues = values => {
+		try { setProp('saved', JSON.stringify(values)); } catch (e) { /* 保存できなくても動作は続ける */ }
+	};
+	const loadSaved = () => {
+		const raw = prop('saved');
+		if (!raw) { return null; }
+		try {
+			const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+			return v && typeof v === 'object' ? v : null;
+		} catch (e) {
+			return null;
+		}
+	};
 	const execCommand = (command, param) => {
 		switch (command) {
 			case 'toggle-screenFilter.enable': {
-				const v = !isEnabled();
-				setProp('enable', v);
+				const values = read();
+				if (!isStandard(values)) {
+					saveValues(values);
+					applyPreset('standard');
+					return 'エフェクト: OFF（標準に戻しました。もう一度押すと元の設定に戻ります）';
+				}
+				const saved = loadSaved();
+				if (!saved) { return 'エフェクト: 標準のままです（戻す設定がありません）'; }
+				PARAMS.forEach(p => {
+					setProp(p.key, normalize(p.key, saved[p.key] !== undefined ? saved[p.key] : p.def));
+				});
 				scheduleApply();
-				return `画面フィルター: ${onOff(v)}`;
+				const preset = PRESET_MAP[detectPreset()];
+				return `エフェクト: ON（${preset ? preset.label : '手動で調整した設定'}）`;
+			}
+			case 'toggle-screenFilter.split': {
+				const v = setSplit(!split.on);
+				return v ? '画面フィルター: 左半分に元の映像を表示' : '画面フィルター: 比較表示をやめました';
 			}
 			case 'toggle-screenFilter.flipH': {
 				const v = !prop('flipH');
@@ -2727,18 +2793,15 @@ const ScreenFilter = (() => {
 				const key = command.replace('toggle-screenFilter.', '');
 				const v = !normalize(key, prop(key));
 				set(key, v);
-				!isEnabled() && setProp('enable', true);
 				return `${PARAM_MAP[key].label}: ${onOff(v)}`;
 			}
 			case 'screenFilter-preset': {
 				const preset = applyPreset(param);
 				if (!preset) { return null; }
-				!isEnabled() && setProp('enable', true);
 				return `画面フィルター: ${preset.label}`;
 			}
 			case 'screenFilter-nextPreset': {
 				const preset = nextPreset();
-				!isEnabled() && setProp('enable', true);
 				return preset ? `画面フィルター: ${preset.label}` : null;
 			}
 			case 'screenFilter-reset':
@@ -2747,7 +2810,6 @@ const ScreenFilter = (() => {
 			case 'screenFilter-adjust': {
 				const result = adjust(param);
 				if (!result) { return null; }
-				!isEnabled() && setProp('enable', true);
 				return `${result.param.label}: ${formatValue(result.param.key, result.value)}`;
 			}
 		}
@@ -2797,9 +2859,100 @@ const ScreenFilter = (() => {
 		drawVideo(ctx, canvas, 0, 0, canvas.width, canvas.height, {target});
 		return out;
 	};
+	const SPLIT_CLASS = 'zenzaScreenFilterSplit';
+	const split = {on: false, raf: 0, canvas: null, ctx: null, lastKey: ''};
+	const hideSplitCanvas = () => {
+		if (split.canvas) { split.canvas.style.display = 'none'; }
+		split.lastKey = '';
+	};
+	const drawSplit = () => {
+		split.raf = 0;
+		if (!split.on || typeof document === 'undefined') { return; }
+		split.raf = requestAnimationFrame(drawSplit);
+		const video = document.querySelector('.zenzaWatchVideoElement');
+		const src = video && (video.drawableElement || video);
+		const parent = video && video.parentNode;
+		if (!src || !parent || !src.videoWidth || src.readyState < 2 || isStandard()) {
+			hideSplitCanvas();
+			return;
+		}
+		let canvas = split.canvas;
+		if (!canvas || canvas.parentNode !== parent) {
+			canvas = split.canvas || document.createElement('canvas');
+			canvas.className = SPLIT_CLASS;
+			canvas.style.cssText = 'position:absolute;z-index:7;pointer-events:none;';
+			video.after(canvas);
+			split.canvas = canvas;
+			split.ctx = canvas.getContext('2d');
+		}
+		const vw = src.videoWidth, vh = src.videoHeight;
+		const ew = video.offsetWidth, eh = video.offsetHeight;
+		if (!ew || !eh) { hideSplitCanvas(); return; }
+		const scale = Math.min(ew / vw, eh / vh);
+		const cw = vw * scale, ch = vh * scale;
+		const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
+		const flipH = !!prop('flipH'), flipV = !!prop('flipV');
+		const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
+		if (key === split.lastKey && canvas.style.display !== 'none') { return; }
+		split.lastKey = key;
+		const dpr = Math.min(window.devicePixelRatio || 1, 2);
+		const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
+		const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
+		if (canvas.width !== w || canvas.height !== h) {
+			canvas.width = w;
+			canvas.height = h;
+		}
+		Object.assign(canvas.style, {
+			display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
+		});
+		const ctx = split.ctx;
+		const half = Math.round(w / 2);
+		ctx.clearRect(0, 0, w, h);
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(0, 0, half, h);
+		ctx.clip();
+		ctx.translate(flipH ? w : 0, flipV ? h : 0);
+		ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+		ctx.drawImage(src, 0, 0, w, h);
+		ctx.restore();
+		ctx.fillStyle = 'rgba(255,255,255,0.85)';
+		ctx.fillRect(half - 1, 0, 2, h);
+		const fs = Math.max(11, Math.round(h / 30));
+		ctx.font = `bold ${fs}px sans-serif`;
+		ctx.textBaseline = 'top';
+		const label = (text, x, align) => {
+			ctx.textAlign = align;
+			ctx.lineWidth = Math.max(2, fs / 5);
+			ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+			ctx.strokeText(text, x, fs * 0.6);
+			ctx.fillStyle = '#fff';
+			ctx.fillText(text, x, fs * 0.6);
+		};
+		label('元の映像', half - fs * 0.6, 'right');
+		label('エフェクト', half + fs * 0.6, 'left');
+	};
+	const setSplit = v => {
+		split.on = !!v;
+		if (split.on) {
+			!split.raf && (split.raf = requestAnimationFrame(drawSplit));
+		} else {
+			split.raf && cancelAnimationFrame(split.raf);
+			split.raf = 0;
+			hideSplitCanvas();
+		}
+		emitChange();
+		return split.on;
+	};
 	const initialize = playerConfig => {
 		if (config === playerConfig) { return; }
 		config = playerConfig;
+		if (prop('enable') === false) {
+			const values = read();
+			if (!isStandard(values)) { saveValues(values); }
+			PARAMS.forEach(p => setProp(p.key, p.def));
+			setProp('enable', true);
+		}
 		setProp('flipH', false);
 		setProp('flipV', false);
 		if (config && typeof config.on === 'function') {
@@ -2840,6 +2993,9 @@ const ScreenFilter = (() => {
 		drawVideo,
 		processCanvas,
 		isEnabled,
+		isStandard,
+		setSplit,
+		get isSplit() { return split.on; },
 		resetAutoLevels,
 		get autoLevelsAvailable() { return auto.available; },
 		get flipH() { return !!prop('flipH'); },
@@ -2864,6 +3020,7 @@ const ScreenFilter = (() => {
 			auto.white = 1;
 			auto.available = true;
 			listeners.clear();
+			split.on = false;
 		}
 	};
 })();
@@ -2901,7 +3058,45 @@ const ScreenFilterPanel = (() => {
 			font-family: 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif;
 			user-select: none;
 		}
-		.zenzaScreenFilterPanel.is-open { display: block; }
+		.zenzaScreenFilterPanel.is-open {
+			display: block;
+			/* Task 080: 開く時のアニメーション。右下（エフェクトボタンの方向）から、
+				少し縮んだ状態でふわっと広がる */
+			transform-origin: var(--sf-origin, 100% 100%);
+			animation: zenzaScreenFilterPanelIn 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+		}
+		.zenzaScreenFilterPanel.is-open.is-closing {
+			pointer-events: none;
+			animation: zenzaScreenFilterPanelOut 0.16s ease-in both;
+		}
+		@keyframes zenzaScreenFilterPanelIn {
+			from { opacity: 0; transform: translate(12px, 18px) scale(0.86); filter: blur(2px); }
+			to   { opacity: 1; transform: none; filter: none; }
+		}
+		@keyframes zenzaScreenFilterPanelOut {
+			from { opacity: 1; transform: none; }
+			to   { opacity: 0; transform: translate(8px, 12px) scale(0.92); }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.zenzaScreenFilterPanel.is-open,
+			.zenzaScreenFilterPanel.is-open.is-closing { animation-duration: 0.01s; }
+		}
+		.zenzaScreenFilterPanel .sfSection {
+			animation: zenzaScreenFilterSectionIn 0.3s ease-out both;
+		}
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(2) { animation-delay: 0.03s; }
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(3) { animation-delay: 0.06s; }
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(4) { animation-delay: 0.09s; }
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(5) { animation-delay: 0.12s; }
+		@keyframes zenzaScreenFilterSectionIn {
+			from { opacity: 0; transform: translateY(6px); }
+			to   { opacity: 1; transform: none; }
+		}
+		.zenzaScreenFilterPanel button.is-on {
+			background: #2d6a3e;
+			border-color: #5fbf78;
+			color: #fff;
+		}
 		.zenzaScreenFilterPanel * { box-sizing: border-box; }
 		.zenzaScreenFilterPanel .sfHead {
 			display: flex;
@@ -3059,14 +3254,12 @@ const ScreenFilterPanel = (() => {
 	const TEMPLATE = () => `
 		<div class="sfHead">
 			<span class="sfTitle">画面フィルター</span>
-			<label class="sfCheck" title="OFFにすると元の映像に戻ります（調整した値は残ります）">
-				<input type="checkbox" data-setting="enable"> 使う
-			</label>
 			<button type="button" class="sfClose" data-action="close" title="閉じる">×</button>
 		</div>
 		<div class="sfIntro">
 			動画の映像だけに効きます（コメントやボタンには効きません）。
 			設定は全部の動画で共通で、次に開いた時も残ります。
+			プリセット「標準」の時がOFFです（何も処理しません）。それ以外を選ぶと自動でONになります。
 		</div>
 		<div class="sfSection">
 			<div class="sfSectionTitle">かんたん設定（プリセット）</div>
@@ -3099,7 +3292,7 @@ const ScreenFilterPanel = (() => {
 			<div class="sfSectionTitle">変形（反転）</div>
 			<label class="sfCheck"><input type="checkbox" data-setting="flipH"> 左右反転（鏡のように左右を入れ替える）</label>
 			<label class="sfCheck"><input type="checkbox" data-setting="flipV"> 上下反転（上下をさかさまにする）</label>
-			<div class="sfDesc">反転はページを開き直すと元に戻ります。「使う」をOFFにしても反転はそのままです。</div>
+			<div class="sfDesc">反転はページを開き直すと元に戻ります。「標準に戻す」をしても反転はそのままです。</div>
 		</div>
 		<div class="sfSection">
 			<div class="sfSectionTitle">フィルターを反映する場所</div>
@@ -3111,7 +3304,7 @@ const ScreenFilterPanel = (() => {
 		</div>
 		<div class="sfFoot">
 			<button type="button" data-action="reset" title="すべての調整を標準に戻します（反転はそのまま）">すべて標準に戻す</button>
-			<button type="button" data-action="compare" title="押している間だけ、フィルターを外した元の映像を表示します">押している間だけ元の映像</button>
+			<button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる（左: 元の映像）</button>
 		</div>
 	`;
 	class Panel {
@@ -3175,15 +3368,24 @@ const ScreenFilterPanel = (() => {
 					ScreenFilter.reset();
 				} else if (action === 'close') {
 					this.close();
+				} else if (action === 'split') {
+					ScreenFilter.setSplit(!ScreenFilter.isSplit);
 				}
 			});
-			const compare = view.querySelector('[data-action="compare"]');
-			const bypassOn = e => { e.preventDefault(); ScreenFilter.setBypass(true); };
-			const bypassOff = () => ScreenFilter.bypass && ScreenFilter.setBypass(false);
-			compare.addEventListener('mousedown', bypassOn);
-			compare.addEventListener('touchstart', bypassOn, {passive: false});
-			['mouseup', 'mouseleave', 'touchend', 'touchcancel', 'blur']
-				.forEach(name => compare.addEventListener(name, bypassOff));
+			this._onOutsidePointerDown = e => {
+				if (!this.isOpen || this.view.classList.contains('is-closing')) { return; }
+				const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+				if (path.includes(this.view)) { return; }
+				if (path.some(el => el && el.classList && el.classList.contains('screenFilterSwitch'))) { return; }
+				const onVideo = path.some(el => el && el.classList &&
+					(el.classList.contains('videoPlayer') || el.classList.contains('commentLayerFrame')));
+				this.close();
+				if (onVideo) {
+					const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+					window.addEventListener('click', swallow, {capture: true, once: true});
+					setTimeout(() => window.removeEventListener('click', swallow, {capture: true}), 600);
+				}
+			};
 			ScreenFilter.onChange(this._refresh);
 			document.addEventListener('fullscreenchange', this._onFullscreenChange);
 			document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
@@ -3233,7 +3435,8 @@ const ScreenFilterPanel = (() => {
 				autoRow.classList.toggle('is-unavailable', !ScreenFilter.autoLevelsAvailable);
 				autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
 			}
-			this.view.classList.toggle('is-disabled', !ScreenFilter.isEnabled());
+			const splitButton = this.view.querySelector('[data-action="split"]');
+			splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
 		}
 		_getParentNode() {
 			const fs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -3247,7 +3450,8 @@ const ScreenFilterPanel = (() => {
 			}
 		}
 		get isOpen() {
-			return !!(this.view && this.view.classList.contains('is-open'));
+			return !!(this.view && this.view.classList.contains('is-open') &&
+				!this.view.classList.contains('is-closing'));
 		}
 		open() {
 			this._initializeDom();
@@ -3255,12 +3459,37 @@ const ScreenFilterPanel = (() => {
 			if (this.view.parentNode !== parent) {
 				parent.append(this.view);
 			}
+			clearTimeout(this._closeTimer);
+			this.view.classList.remove('is-closing');
+			this._updateOrigin();
+			this.view.classList.remove('is-open');
+			void this.view.offsetWidth;
 			this.view.classList.add('is-open');
 			this._refresh();
+			window.addEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
+		}
+		_updateOrigin() {
+			const button = document.querySelector('.screenFilterSwitch');
+			const rect = button && button.getBoundingClientRect();
+			if (!rect || !rect.width) {
+				this.view.style.removeProperty('--sf-origin');
+				return;
+			}
+			const vw = window.innerWidth, vh = window.innerHeight;
+			const panelW = Math.min(380, vw - 32);
+			const panelLeft = vw - 16 - panelW;
+			const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
+			const y = rect.top > vh / 2 ? 100 : 0;
+			this.view.style.setProperty('--sf-origin', `${x.toFixed(1)}% ${y}%`);
 		}
 		close() {
-			if (!this.view) { return; }
-			this.view.classList.remove('is-open');
+			if (!this.view || !this.isOpen) { return; }
+			window.removeEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
+			this.view.classList.add('is-closing');
+			clearTimeout(this._closeTimer);
+			this._closeTimer = setTimeout(() => {
+				this.view.classList.remove('is-open', 'is-closing');
+			}, 170);
 			ScreenFilter.bypass && ScreenFilter.setBypass(false);
 		}
 		toggle() {
@@ -3417,11 +3646,8 @@ const ScreenFilterPanel = (() => {
           設定は全部の動画で共通で、次に開いた時も残ります。
           動画を見ながら調整したい時は、再生画面の下のバーにある「きらめき（✦）」のボタンから専用パネルを開けます。
         </div>
-        <div class="screenFilterEnableControl control toggle">
-          <label>
-            <input type="checkbox" class="checkbox" data-setting-name="screenFilter.enable">
-            画面フィルターを使う（OFFにすると元の映像に戻ります。調整した値は残ります）
-          </label>
+        <div class="settingNote">
+          プリセット「標準」の時がOFF（何も処理しません）で、それ以外を選ぶと自動でONになります。
         </div>
         <div class="control">
           <div>かんたん設定（プリセット）: 押すと下の値がまとめて切り替わります</div>
@@ -3574,11 +3800,6 @@ const ScreenFilterPanel = (() => {
               input.value = v;
             }
           });
-          if (!config.props['screenFilter.enable']) {
-            config.props['screenFilter.enable'] = true;
-            const enable = $panel.find('[data-setting-name="screenFilter.enable"]')[0];
-            enable && (enable.checked = true);
-          }
         });
 
         $panel.find('.zenzaAdvancedSetting-close').on('mousedown', e => {
@@ -4140,7 +4361,9 @@ const ScreenFilterPanel = (() => {
       <option value="deflistAdd">とりあえずマイリスト</option>
       <option value="picture-in-picture">picture-in-picture</option>
       <option value="picture-in-picture-comment">picture-in-picture(コメント付き)</option>
-      <option value="toggle-screenFilter.enable">画面フィルター ON/OFF</option>
+      <option value="toggle-screenFilter.enable">エフェクト ON/OFF（今の設定 ⇔ 標準）</option>
+      <option value="toggle-screenFilter.split">エフェクトを左右で見比べる ON/OFF</option>
+      <option value="toggle-supporterCredit.enable">動画の最後の提供画面 ON/OFF</option>
       <option value="toggle-screenFilterPanel">画面フィルターのパネルを開く/閉じる</option>
     `).trim();
 
@@ -4251,6 +4474,36 @@ const ScreenFilterPanel = (() => {
               ニコニコが動画ごとに測った音の大きさをもとに、音が大きい動画だけ音量を下げます（音量を上げる方向には働きません）。
               OFFにすると動画の音をそのまま再生します。
             </div>
+          </div>
+
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.enable">
+              動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
+            </label>
+            <div class="settingNote">
+              本家と同じく、動画が最後まで再生されたあとに提供音声の長さ（約10秒）だけ表示し、
+              その間もコメントは流れ続けます。一時停止・シークもできます（シークすると動画に戻ります）。
+              右下の「スキップ」で飛ばせます。リピート再生中は表示しません。
+            </div>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.voice">
+              提供画面の音声（提供読み上げ）を鳴らす
+            </label>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.gift">
+              提供画面でギフトが落ちてくる演出を表示する
+            </label>
+          </div>
+          <div class="supporterCreditControl control toggle">
+            <label>
+              <input type="checkbox" class="checkbox" data-setting-name="supporterCredit.skipInPlaylist">
+              連続再生中は提供画面を表示しない（すぐ次の動画へ進む）
+            </label>
           </div>
 
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>

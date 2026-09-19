@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.19-task079b
+// @version        2.7.21-task081
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // ==/UserScript==
@@ -58,6 +58,7 @@ import {boot} from './boot';
 import {YouTubeWrapper} from '../packages/zenza/src/videoPlayer/YouTubeWrapper';
 import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';
 import {ScreenFilter, ScreenFilterPanel} from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';
 import {NicoVideoPlayer} from './NicoVideoPlayer';
 import {StoryBoardModel} from './StoryBoard';
 import {VideoControlBar} from './VideoControlBar';
@@ -263,6 +264,7 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 
 //@require AudioAdjuster
 //@require ScreenFilter
+//@require SupporterCredit
 //@require NicoVideoPlayer
 
 //@require StoryBoardModel

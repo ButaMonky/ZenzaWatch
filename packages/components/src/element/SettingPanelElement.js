@@ -126,6 +126,33 @@ const {SettingPanelElement} = (() => {
         <div class="control">
           <label>
             <input type="checkbox" class="checkbox"
+              data-setting-name="supporterCredit.enable"
+              ?checked=${conf['supporterCredit.enable']}>
+              動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
+          </label>
+          <label>
+            <input type="checkbox" class="checkbox"
+              data-setting-name="supporterCredit.voice"
+              ?checked=${conf['supporterCredit.voice']}>
+              提供画面の音声（提供読み上げ）を鳴らす
+          </label>
+          <label>
+            <input type="checkbox" class="checkbox"
+              data-setting-name="supporterCredit.gift"
+              ?checked=${conf['supporterCredit.gift']}>
+              提供画面でギフトが落ちてくる演出を表示する
+          </label>
+          <label>
+            <input type="checkbox" class="checkbox"
+              data-setting-name="supporterCredit.skipInPlaylist"
+              ?checked=${conf['supporterCredit.skipInPlaylist']}>
+              連続再生中は提供画面を表示しない
+          </label>
+        </div>
+
+        <div class="control">
+          <label>
+            <input type="checkbox" class="checkbox"
               data-setting-name="enableAutoMylistComment"
               ?checked=${conf.enableAutoMylistComment}>
               マイリストコメントに投稿者名を入れる
@@ -391,12 +418,9 @@ const {SettingPanelElement} = (() => {
           </p>
         </div>
         <div class="control">
-          <label>
-            <input type="checkbox" class="checkbox"
-              data-setting-name="screenFilter.enable"
-              ?checked=${conf['screenFilter.enable']}>
-              画面フィルターを使う（OFFにすると元の映像に戻ります。調整した値は残ります）
-          </label>
+          <p class="setting-note">
+            プリセット「標準」の時がOFF（何も処理しません）で、それ以外を選ぶと自動でONになります。
+          </p>
         </div>
         <div class="control">
           <h3>かんたん設定（プリセット）</h3>

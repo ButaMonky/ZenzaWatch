@@ -147,8 +147,13 @@ const RootDispatcher = (() => {
         case 'toggle-enableCommentPreview':
         // Task 074: 音声の自動調整
         case 'toggle-audio.autoAdjust':
+        // Task 080: 動画の最後の「提供」画面
+        case 'toggle-supporterCredit.enable':
           command = command.replace(/^toggle-/, '');
           config.props[command] = !config.props[command];
+          if (command === 'supporterCredit.enable') {
+            PopupMessage.notify(`提供画面の表示: ${config.props[command] ? 'ON' : 'OFF'}`);
+          }
           break;
         case 'baseFontFamily':
         case 'baseChatScale':

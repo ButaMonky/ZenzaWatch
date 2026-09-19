@@ -93,13 +93,34 @@ describe('ScreenFilter', function() {
     assert.equal(ScreenFilter.detectPreset(), 'custom');
   });
 
-  it('フィルターをOFFにすると何も掛けない（値は残る）', function() {
+  it('ON/OFF は「今の設定 ⇔ 標準」を行き来する（Task 080: 「使う」は廃止）', function() {
     const config = makeConfig({'screenFilter.saturate': 0});
     ScreenFilter.initialize(config);
     assert.equal(ScreenFilter.buildFilter(), 'url(#zenzaScreenFilterSvg)');
-    assert.equal(ScreenFilter.execCommand('toggle-screenFilter.enable'), '画面フィルター: OFF');
+    assert.ok(ScreenFilter.execCommand('toggle-screenFilter.enable').startsWith('エフェクト: OFF'));
     assert.equal(ScreenFilter.buildFilter(), 'none');
+    assert.equal(config.props['screenFilter.saturate'], 100);
+    assert.ok(ScreenFilter.isStandard());
+    assert.ok(ScreenFilter.execCommand('toggle-screenFilter.enable').startsWith('エフェクト: ON'));
     assert.equal(config.props['screenFilter.saturate'], 0);
+    assert.equal(ScreenFilter.buildFilter(), 'url(#zenzaScreenFilterSvg)');
+  });
+
+  it('以前「使う」をOFFにしていた人は、標準に戻して値を保存しておく（移行）', function() {
+    const config = makeConfig({'screenFilter.enable': false, 'screenFilter.brightness': 130});
+    ScreenFilter.initialize(config);
+    assert.equal(config.props['screenFilter.brightness'], 100);
+    assert.equal(config.props['screenFilter.enable'], true);
+    assert.equal(ScreenFilter.buildFilter(), 'none');
+    ScreenFilter.execCommand('toggle-screenFilter.enable');
+    assert.equal(config.props['screenFilter.brightness'], 130);
+  });
+
+  it('標準の時は何も掛けない（処理しない）', function() {
+    ScreenFilter.initialize(makeConfig());
+    assert.ok(ScreenFilter.isStandard());
+    assert.ok(!ScreenFilter.isActive());
+    assert.equal(ScreenFilter.execCommand('toggle-screenFilter.enable'), 'エフェクト: 標準のままです（戻す設定がありません）');
   });
 
   it('ぼかしは CSS の blur() で、最大20pxまで強くできる', function() {

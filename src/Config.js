@@ -178,9 +178,19 @@ const Config = (() => {
     // （視聴JSONの音量倍率を、ユーザーが決めた音量に掛ける）
     'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
 
+    // Task 080: 動画の最後に流れる「提供」画面（ニコニ広告・ギフトの支援者クレジット）
+    // （packages/zenza/src/videoPlayer/SupporterCredit.js）
+    'supporterCredit.enable': true,       // 提供画面を表示する
+    'supporterCredit.voice': true,        // 提供音声（期間ごとに変わる読み上げ）を鳴らす
+    'supporterCredit.gift': true,         // ギフトが落ちてくる演出を表示する
+    'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
+
     // Task 077: 画面フィルター（packages/zenza/src/videoPlayer/ScreenFilter.js）。
     // 全部の動画で共通の設定（動画ごとには覚えない）。値の意味・範囲は ScreenFilter.PARAMS 参照。
-    'screenFilter.enable': true,        // フィルター全体のON/OFF（OFFでも調整した値は残る）
+    // Task 080: 「使う」は廃止（標準＝OFF、それ以外は自動でON）。旧設定の移行にだけ使う
+    'screenFilter.enable': true,
+    // Task 080: ON/OFFショートカットで「標準」にした時の、直前の値（JSON）
+    'screenFilter.saved': '',
     'screenFilter.brightness': 100,     // 明るさ(%)
     'screenFilter.contrast': 100,       // コントラスト(%)
     'screenFilter.saturate': 100,       // 彩度(%)

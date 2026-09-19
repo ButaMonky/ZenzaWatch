@@ -146,7 +146,7 @@ class NicoChat {
   }
 
   constructor(data, options = {}) {
-    options = Object.assign({videoDuration: 0x7FFFFF, mainThreadId: 0, format: ''}, options);
+    options = Object.assign({videoDuration: 0x7FFFFF, creditDuration: 0, mainThreadId: 0, format: ''}, options);
     const props = this.props = {};
     props.id = `chat${NicoChat.id++}`;
     props.currentTime = 0;
@@ -200,6 +200,15 @@ class NicoChat {
       NicoChat.parseCmd(cmd, props.fork > 0, props);
     }
 
+    // Task 081: 動画の後ろの「提供」画面の間に書かれたコメント（動画の長さ＋1秒より後ろ）は、
+    // 提供画面を表示する設定の時は詰めずに、提供画面の間に流す（本家と同じ）
+    const creditSec = options.creditDuration || 0;
+    if (creditSec > 0 && !props.isNicoScript &&
+      props.vpos > (options.videoDuration + 1) * 100 &&
+      props.vpos <= (options.videoDuration + creditSec) * 100) {
+      props.isCreditComment = true;
+      return;
+    }
     // durationを超える位置にあるコメントを詰める vposはセンチ秒なので気をつけ
     const maxv =
       props.isNicoScript ?

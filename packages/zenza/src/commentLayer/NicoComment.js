@@ -94,6 +94,7 @@ class NicoComment extends Emitter {
     const videoDuration = this._duration = parseInt(options.duration || 0x7FFFFF);
     const maxCommentsByDuration = this.constructor.getMaxCommentsByDuration(videoDuration);
     const mainThreadId = options.mainThreadId || 0;
+    const creditDuration = options.creditDuration || 0;
     let nicoChats = [];
 
     const top = [], bottom = [], naka = [];
@@ -101,7 +102,7 @@ class NicoComment extends Emitter {
     for (let i = 0, len = Math.min(chatsData.length, MAX_COMMENT); i < len; i++) {
       const chat = chatsData[i];
 
-      const nicoChat = create(chat, {videoDuration, mainThreadId});
+      const nicoChat = create(chat, {videoDuration, creditDuration, mainThreadId});
       if (nicoChat.isDeleted) {
         continue;
       }

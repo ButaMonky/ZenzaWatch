@@ -3514,6 +3514,8 @@ class NicoVideoPlayerDialog extends Emitter {
     let options = {
       replacement: this._videoInfo.replacementWords,
       duration: this._videoInfo.duration,
+      // Task 081: 提供画面を出す設定なら、動画の後ろ（提供画面の間）のコメントを詰めない
+      creditDuration: this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
       mainThreadId: result.threadInfo.threadId,
       format: result.format
     };

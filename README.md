@@ -46,6 +46,15 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 各スクリプトの詳しい役割については
 [SCRIPTS.md](/SCRIPTS.md) を参照してください。
 
+## 本家からの変更点
+
+現在のニコニコ動画環境への対応を含め、
+多数の修正・機能追加を行っています。
+
+詳しくは
+[本家ZenzaWatchからの変更点](./CHANGES_FROM_UPSTREAM.md)
+を参照してください。
+
 ## 変更履歴
 
 詳しい変更内容は [CHANGELOG.md](/CHANGELOG.md) を参照してください。

@@ -307,13 +307,48 @@ const SHORTCUT_ACTIONS = [
   {id: 'TOGGLE_AUDIO_AUTO_ADJUST', category: 'その他', label: '音声の自動調整のON/OFF',
     defaultKey: 0, command: 'toggle-audio.autoAdjust'},
 
+  // ---- ここから新規(Task 080 提供画面)。既定キーは未設定(0)。 ----
+  {id: 'TOGGLE_SUPPORTER_CREDIT', category: 'その他', label: '動画の最後の「提供」画面の表示 ON/OFF',
+    defaultKey: 0, command: 'toggle-supporterCredit.enable'},
+
+  // ---- ここから新規(Task 080 再生速度)。本家の再生速度メニューと同じ13段階。既定キーは未設定(0)。 ----
+  {id: 'PLAYBACK_RATE_10', category: '再生速度', label: '再生速度: 10倍',
+    defaultKey: 0, command: 'playbackRate', param: 10},
+  {id: 'PLAYBACK_RATE_5', category: '再生速度', label: '再生速度: 5倍',
+    defaultKey: 0, command: 'playbackRate', param: 5},
+  {id: 'PLAYBACK_RATE_4', category: '再生速度', label: '再生速度: 4倍',
+    defaultKey: 0, command: 'playbackRate', param: 4},
+  {id: 'PLAYBACK_RATE_3', category: '再生速度', label: '再生速度: 3倍',
+    defaultKey: 0, command: 'playbackRate', param: 3},
+  {id: 'PLAYBACK_RATE_2', category: '再生速度', label: '再生速度: 2倍',
+    defaultKey: 0, command: 'playbackRate', param: 2},
+  {id: 'PLAYBACK_RATE_1_75', category: '再生速度', label: '再生速度: 1.75倍',
+    defaultKey: 0, command: 'playbackRate', param: 1.75},
+  {id: 'PLAYBACK_RATE_1_5', category: '再生速度', label: '再生速度: 1.5倍',
+    defaultKey: 0, command: 'playbackRate', param: 1.5},
+  {id: 'PLAYBACK_RATE_1_25', category: '再生速度', label: '再生速度: 1.25倍',
+    defaultKey: 0, command: 'playbackRate', param: 1.25},
+  {id: 'PLAYBACK_RATE_1', category: '再生速度', label: '再生速度: 標準速度(x1)',
+    defaultKey: 0, command: 'playbackRate', param: 1},
+  {id: 'PLAYBACK_RATE_0_75', category: '再生速度', label: '再生速度: 0.75倍',
+    defaultKey: 0, command: 'playbackRate', param: 0.75},
+  {id: 'PLAYBACK_RATE_0_5', category: '再生速度', label: '再生速度: 0.5倍',
+    defaultKey: 0, command: 'playbackRate', param: 0.5},
+  {id: 'PLAYBACK_RATE_0_25', category: '再生速度', label: '再生速度: 0.25倍',
+    defaultKey: 0, command: 'playbackRate', param: 0.25},
+  {id: 'PLAYBACK_RATE_0_1', category: '再生速度', label: '再生速度: 0.1倍',
+    defaultKey: 0, command: 'playbackRate', param: 0.1},
+
   // ---- ここから新規(Task 077 画面フィルター)。既定キーは全て未設定(0)。 ----
   // 処理は RootDispatcher.js → ScreenFilter.execCommand()（toggle-screenFilter.* / screenFilter-*）
   // と、NicoVideoPlayerDialog.js の 'toggle-screenFilterPanel' / 'toggle-flipH' / 'toggle-flipV'。
   {id: 'OPEN_SCREEN_FILTER_PANEL', category: '画面フィルター', label: '画面フィルターのパネルを開く/閉じる',
     defaultKey: 0, command: 'toggle-screenFilterPanel'},
-  {id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: '画面フィルター ON/OFF（元の映像と見比べる）',
+  // Task 080: 「使う」を廃止したので、「今の設定 ⇔ 標準」を行き来するショートカットにした
+  {id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: 'エフェクト ON/OFF（今の設定 ⇔ 標準）',
     defaultKey: 0, command: 'toggle-screenFilter.enable'},
+  {id: 'TOGGLE_SCREEN_FILTER_SPLIT', category: '画面フィルター', label: '左右で見比べる（左半分に元の映像）ON/OFF',
+    defaultKey: 0, command: 'toggle-screenFilter.split'},
   {id: 'SCREEN_FILTER_NEXT_PRESET', category: '画面フィルター', label: 'プリセットを順番に切り替える',
     defaultKey: 0, command: 'screenFilter-nextPreset'},
   {id: 'SCREEN_FILTER_RESET', category: '画面フィルター', label: 'すべて標準に戻す',

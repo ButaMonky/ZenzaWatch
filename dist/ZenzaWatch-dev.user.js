@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.19-task079b
+// @version        2.7.21-task081
 // @run-at         document-body
 // @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:57Z f821f46
+// build: 2026-09-19 06:48Z 80e7200
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.19-task079b';
+    var VER = '2.7.21-task081';
     const ENV = 'DEV';
 
-    var BUILD = '2026-09-18 16:57Z f821f46';
+    var BUILD = '2026-09-19 06:48Z 80e7200';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -963,10 +963,40 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'picture-in-picture-comment'},
 	{id: 'TOGGLE_AUDIO_AUTO_ADJUST', category: 'その他', label: '音声の自動調整のON/OFF',
 		defaultKey: 0, command: 'toggle-audio.autoAdjust'},
+	{id: 'TOGGLE_SUPPORTER_CREDIT', category: 'その他', label: '動画の最後の「提供」画面の表示 ON/OFF',
+		defaultKey: 0, command: 'toggle-supporterCredit.enable'},
+	{id: 'PLAYBACK_RATE_10', category: '再生速度', label: '再生速度: 10倍',
+		defaultKey: 0, command: 'playbackRate', param: 10},
+	{id: 'PLAYBACK_RATE_5', category: '再生速度', label: '再生速度: 5倍',
+		defaultKey: 0, command: 'playbackRate', param: 5},
+	{id: 'PLAYBACK_RATE_4', category: '再生速度', label: '再生速度: 4倍',
+		defaultKey: 0, command: 'playbackRate', param: 4},
+	{id: 'PLAYBACK_RATE_3', category: '再生速度', label: '再生速度: 3倍',
+		defaultKey: 0, command: 'playbackRate', param: 3},
+	{id: 'PLAYBACK_RATE_2', category: '再生速度', label: '再生速度: 2倍',
+		defaultKey: 0, command: 'playbackRate', param: 2},
+	{id: 'PLAYBACK_RATE_1_75', category: '再生速度', label: '再生速度: 1.75倍',
+		defaultKey: 0, command: 'playbackRate', param: 1.75},
+	{id: 'PLAYBACK_RATE_1_5', category: '再生速度', label: '再生速度: 1.5倍',
+		defaultKey: 0, command: 'playbackRate', param: 1.5},
+	{id: 'PLAYBACK_RATE_1_25', category: '再生速度', label: '再生速度: 1.25倍',
+		defaultKey: 0, command: 'playbackRate', param: 1.25},
+	{id: 'PLAYBACK_RATE_1', category: '再生速度', label: '再生速度: 標準速度(x1)',
+		defaultKey: 0, command: 'playbackRate', param: 1},
+	{id: 'PLAYBACK_RATE_0_75', category: '再生速度', label: '再生速度: 0.75倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.75},
+	{id: 'PLAYBACK_RATE_0_5', category: '再生速度', label: '再生速度: 0.5倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.5},
+	{id: 'PLAYBACK_RATE_0_25', category: '再生速度', label: '再生速度: 0.25倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.25},
+	{id: 'PLAYBACK_RATE_0_1', category: '再生速度', label: '再生速度: 0.1倍',
+		defaultKey: 0, command: 'playbackRate', param: 0.1},
 	{id: 'OPEN_SCREEN_FILTER_PANEL', category: '画面フィルター', label: '画面フィルターのパネルを開く/閉じる',
 		defaultKey: 0, command: 'toggle-screenFilterPanel'},
-	{id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: '画面フィルター ON/OFF（元の映像と見比べる）',
+	{id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: 'エフェクト ON/OFF（今の設定 ⇔ 標準）',
 		defaultKey: 0, command: 'toggle-screenFilter.enable'},
+	{id: 'TOGGLE_SCREEN_FILTER_SPLIT', category: '画面フィルター', label: '左右で見比べる（左半分に元の映像）ON/OFF',
+		defaultKey: 0, command: 'toggle-screenFilter.split'},
 	{id: 'SCREEN_FILTER_NEXT_PRESET', category: '画面フィルター', label: 'プリセットを順番に切り替える',
 		defaultKey: 0, command: 'screenFilter-nextPreset'},
 	{id: 'SCREEN_FILTER_RESET', category: '画面フィルター', label: 'すべて標準に戻す',
@@ -1165,7 +1195,12 @@ const Config = (() => {
 		'videoHeader.position': 'auto',
 		'uaa.enable': true,
 		'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
-		'screenFilter.enable': true,        // フィルター全体のON/OFF（OFFでも調整した値は残る）
+		'supporterCredit.enable': true,       // 提供画面を表示する
+		'supporterCredit.voice': true,        // 提供音声（期間ごとに変わる読み上げ）を鳴らす
+		'supporterCredit.gift': true,         // ギフトが落ちてくる演出を表示する
+		'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
+		'screenFilter.enable': true,
+		'screenFilter.saved': '',
 		'screenFilter.brightness': 100,     // 明るさ(%)
 		'screenFilter.contrast': 100,       // コントラスト(%)
 		'screenFilter.saturate': 100,       // 彩度(%)
@@ -5766,6 +5801,32 @@ const {SettingPanelElement} = (() => {
 				<div class="control">
 					<label>
 						<input type="checkbox" class="checkbox"
+							data-setting-name="supporterCredit.enable"
+							?checked=${conf['supporterCredit.enable']}>
+							動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
+					</label>
+					<label>
+						<input type="checkbox" class="checkbox"
+							data-setting-name="supporterCredit.voice"
+							?checked=${conf['supporterCredit.voice']}>
+							提供画面の音声（提供読み上げ）を鳴らす
+					</label>
+					<label>
+						<input type="checkbox" class="checkbox"
+							data-setting-name="supporterCredit.gift"
+							?checked=${conf['supporterCredit.gift']}>
+							提供画面でギフトが落ちてくる演出を表示する
+					</label>
+					<label>
+						<input type="checkbox" class="checkbox"
+							data-setting-name="supporterCredit.skipInPlaylist"
+							?checked=${conf['supporterCredit.skipInPlaylist']}>
+							連続再生中は提供画面を表示しない
+					</label>
+				</div>
+				<div class="control">
+					<label>
+						<input type="checkbox" class="checkbox"
 							data-setting-name="enableAutoMylistComment"
 							?checked=${conf.enableAutoMylistComment}>
 							マイリストコメントに投稿者名を入れる
@@ -6013,12 +6074,9 @@ const {SettingPanelElement} = (() => {
 					</p>
 				</div>
 				<div class="control">
-					<label>
-						<input type="checkbox" class="checkbox"
-							data-setting-name="screenFilter.enable"
-							?checked=${conf['screenFilter.enable']}>
-							画面フィルターを使う（OFFにすると元の映像に戻ります。調整した値は残ります）
-					</label>
+					<p class="setting-note">
+						プリセット「標準」の時がOFF（何も処理しません）で、それ以外を選ぶと自動でONになります。
+					</p>
 				</div>
 				<div class="control">
 					<h3>かんたん設定（プリセット）</h3>
@@ -10519,6 +10577,12 @@ AudioAdjuster.register({
 * スクリーンショット・コメント付きPiP は canvas に描き直しているため、
 * drawVideo() / processCanvas() で同じ加工を canvas にも掛ける（ctx.filter）。
 * 通常の P in P はブラウザが <video> をそのまま小窓に出すので加工できない。
+*
+* Task 080: 「使う」ON/OFF を廃止した。プリセット「標準」（全部が既定値）の時が OFF、
+* それ以外は自動で ON。標準の時は filter: none・SVGなし・タイマーなし・影の要素なしで、
+* 何も処理しない（077c で確認済みの作りのまま）。以前「使う」を OFF にしていた人は、
+* 初回に値を「標準」へ戻し、元の値は ON/OFF ショートカット用に保存しておく（移行）。
+* 「押している間だけ元の映像」は廃止し、画面の左半分だけ元の映像を重ねる比較モードにした。
 */
 const ScreenFilter = (() => {
 	const PREFIX = 'screenFilter.';
@@ -10712,10 +10776,7 @@ const ScreenFilter = (() => {
 		PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
 		return values;
 	};
-	const isEnabled = () => {
-		const v = prop('enable');
-		return v === undefined ? true : !!v;
-	};
+	const isEnabled = () => true;
 	const isDefaultValue = (key, value) => {
 		const p = PARAM_MAP[key];
 		if (p.type === 'boolean') { return !!value === !!p.def; }
@@ -11054,13 +11115,41 @@ const ScreenFilter = (() => {
 		return {param: p, value: next};
 	};
 	const onOff = v => v ? 'ON' : 'OFF';
+	const isStandard = (values = read()) => PARAMS.every(p => isDefaultValue(p.key, values[p.key]));
+	const saveValues = values => {
+		try { setProp('saved', JSON.stringify(values)); } catch (e) { /* 保存できなくても動作は続ける */ }
+	};
+	const loadSaved = () => {
+		const raw = prop('saved');
+		if (!raw) { return null; }
+		try {
+			const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+			return v && typeof v === 'object' ? v : null;
+		} catch (e) {
+			return null;
+		}
+	};
 	const execCommand = (command, param) => {
 		switch (command) {
 			case 'toggle-screenFilter.enable': {
-				const v = !isEnabled();
-				setProp('enable', v);
+				const values = read();
+				if (!isStandard(values)) {
+					saveValues(values);
+					applyPreset('standard');
+					return 'エフェクト: OFF（標準に戻しました。もう一度押すと元の設定に戻ります）';
+				}
+				const saved = loadSaved();
+				if (!saved) { return 'エフェクト: 標準のままです（戻す設定がありません）'; }
+				PARAMS.forEach(p => {
+					setProp(p.key, normalize(p.key, saved[p.key] !== undefined ? saved[p.key] : p.def));
+				});
 				scheduleApply();
-				return `画面フィルター: ${onOff(v)}`;
+				const preset = PRESET_MAP[detectPreset()];
+				return `エフェクト: ON（${preset ? preset.label : '手動で調整した設定'}）`;
+			}
+			case 'toggle-screenFilter.split': {
+				const v = setSplit(!split.on);
+				return v ? '画面フィルター: 左半分に元の映像を表示' : '画面フィルター: 比較表示をやめました';
 			}
 			case 'toggle-screenFilter.flipH': {
 				const v = !prop('flipH');
@@ -11077,18 +11166,15 @@ const ScreenFilter = (() => {
 				const key = command.replace('toggle-screenFilter.', '');
 				const v = !normalize(key, prop(key));
 				set(key, v);
-				!isEnabled() && setProp('enable', true);
 				return `${PARAM_MAP[key].label}: ${onOff(v)}`;
 			}
 			case 'screenFilter-preset': {
 				const preset = applyPreset(param);
 				if (!preset) { return null; }
-				!isEnabled() && setProp('enable', true);
 				return `画面フィルター: ${preset.label}`;
 			}
 			case 'screenFilter-nextPreset': {
 				const preset = nextPreset();
-				!isEnabled() && setProp('enable', true);
 				return preset ? `画面フィルター: ${preset.label}` : null;
 			}
 			case 'screenFilter-reset':
@@ -11097,7 +11183,6 @@ const ScreenFilter = (() => {
 			case 'screenFilter-adjust': {
 				const result = adjust(param);
 				if (!result) { return null; }
-				!isEnabled() && setProp('enable', true);
 				return `${result.param.label}: ${formatValue(result.param.key, result.value)}`;
 			}
 		}
@@ -11147,9 +11232,100 @@ const ScreenFilter = (() => {
 		drawVideo(ctx, canvas, 0, 0, canvas.width, canvas.height, {target});
 		return out;
 	};
+	const SPLIT_CLASS = 'zenzaScreenFilterSplit';
+	const split = {on: false, raf: 0, canvas: null, ctx: null, lastKey: ''};
+	const hideSplitCanvas = () => {
+		if (split.canvas) { split.canvas.style.display = 'none'; }
+		split.lastKey = '';
+	};
+	const drawSplit = () => {
+		split.raf = 0;
+		if (!split.on || typeof document === 'undefined') { return; }
+		split.raf = requestAnimationFrame(drawSplit);
+		const video = document.querySelector('.zenzaWatchVideoElement');
+		const src = video && (video.drawableElement || video);
+		const parent = video && video.parentNode;
+		if (!src || !parent || !src.videoWidth || src.readyState < 2 || isStandard()) {
+			hideSplitCanvas();
+			return;
+		}
+		let canvas = split.canvas;
+		if (!canvas || canvas.parentNode !== parent) {
+			canvas = split.canvas || document.createElement('canvas');
+			canvas.className = SPLIT_CLASS;
+			canvas.style.cssText = 'position:absolute;z-index:7;pointer-events:none;';
+			video.after(canvas);
+			split.canvas = canvas;
+			split.ctx = canvas.getContext('2d');
+		}
+		const vw = src.videoWidth, vh = src.videoHeight;
+		const ew = video.offsetWidth, eh = video.offsetHeight;
+		if (!ew || !eh) { hideSplitCanvas(); return; }
+		const scale = Math.min(ew / vw, eh / vh);
+		const cw = vw * scale, ch = vh * scale;
+		const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
+		const flipH = !!prop('flipH'), flipV = !!prop('flipV');
+		const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
+		if (key === split.lastKey && canvas.style.display !== 'none') { return; }
+		split.lastKey = key;
+		const dpr = Math.min(window.devicePixelRatio || 1, 2);
+		const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
+		const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
+		if (canvas.width !== w || canvas.height !== h) {
+			canvas.width = w;
+			canvas.height = h;
+		}
+		Object.assign(canvas.style, {
+			display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
+		});
+		const ctx = split.ctx;
+		const half = Math.round(w / 2);
+		ctx.clearRect(0, 0, w, h);
+		ctx.save();
+		ctx.beginPath();
+		ctx.rect(0, 0, half, h);
+		ctx.clip();
+		ctx.translate(flipH ? w : 0, flipV ? h : 0);
+		ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+		ctx.drawImage(src, 0, 0, w, h);
+		ctx.restore();
+		ctx.fillStyle = 'rgba(255,255,255,0.85)';
+		ctx.fillRect(half - 1, 0, 2, h);
+		const fs = Math.max(11, Math.round(h / 30));
+		ctx.font = `bold ${fs}px sans-serif`;
+		ctx.textBaseline = 'top';
+		const label = (text, x, align) => {
+			ctx.textAlign = align;
+			ctx.lineWidth = Math.max(2, fs / 5);
+			ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+			ctx.strokeText(text, x, fs * 0.6);
+			ctx.fillStyle = '#fff';
+			ctx.fillText(text, x, fs * 0.6);
+		};
+		label('元の映像', half - fs * 0.6, 'right');
+		label('エフェクト', half + fs * 0.6, 'left');
+	};
+	const setSplit = v => {
+		split.on = !!v;
+		if (split.on) {
+			!split.raf && (split.raf = requestAnimationFrame(drawSplit));
+		} else {
+			split.raf && cancelAnimationFrame(split.raf);
+			split.raf = 0;
+			hideSplitCanvas();
+		}
+		emitChange();
+		return split.on;
+	};
 	const initialize = playerConfig => {
 		if (config === playerConfig) { return; }
 		config = playerConfig;
+		if (prop('enable') === false) {
+			const values = read();
+			if (!isStandard(values)) { saveValues(values); }
+			PARAMS.forEach(p => setProp(p.key, p.def));
+			setProp('enable', true);
+		}
 		setProp('flipH', false);
 		setProp('flipV', false);
 		if (config && typeof config.on === 'function') {
@@ -11190,6 +11366,9 @@ const ScreenFilter = (() => {
 		drawVideo,
 		processCanvas,
 		isEnabled,
+		isStandard,
+		setSplit,
+		get isSplit() { return split.on; },
 		resetAutoLevels,
 		get autoLevelsAvailable() { return auto.available; },
 		get flipH() { return !!prop('flipH'); },
@@ -11214,6 +11393,7 @@ const ScreenFilter = (() => {
 			auto.white = 1;
 			auto.available = true;
 			listeners.clear();
+			split.on = false;
 		}
 	};
 })();
@@ -11251,7 +11431,45 @@ const ScreenFilterPanel = (() => {
 			font-family: 'Hiragino Sans', 'Yu Gothic UI', 'Meiryo', sans-serif;
 			user-select: none;
 		}
-		.zenzaScreenFilterPanel.is-open { display: block; }
+		.zenzaScreenFilterPanel.is-open {
+			display: block;
+			/* Task 080: 開く時のアニメーション。右下（エフェクトボタンの方向）から、
+				少し縮んだ状態でふわっと広がる */
+			transform-origin: var(--sf-origin, 100% 100%);
+			animation: zenzaScreenFilterPanelIn 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+		}
+		.zenzaScreenFilterPanel.is-open.is-closing {
+			pointer-events: none;
+			animation: zenzaScreenFilterPanelOut 0.16s ease-in both;
+		}
+		@keyframes zenzaScreenFilterPanelIn {
+			from { opacity: 0; transform: translate(12px, 18px) scale(0.86); filter: blur(2px); }
+			to   { opacity: 1; transform: none; filter: none; }
+		}
+		@keyframes zenzaScreenFilterPanelOut {
+			from { opacity: 1; transform: none; }
+			to   { opacity: 0; transform: translate(8px, 12px) scale(0.92); }
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.zenzaScreenFilterPanel.is-open,
+			.zenzaScreenFilterPanel.is-open.is-closing { animation-duration: 0.01s; }
+		}
+		.zenzaScreenFilterPanel .sfSection {
+			animation: zenzaScreenFilterSectionIn 0.3s ease-out both;
+		}
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(2) { animation-delay: 0.03s; }
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(3) { animation-delay: 0.06s; }
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(4) { animation-delay: 0.09s; }
+		.zenzaScreenFilterPanel .sfSection:nth-of-type(5) { animation-delay: 0.12s; }
+		@keyframes zenzaScreenFilterSectionIn {
+			from { opacity: 0; transform: translateY(6px); }
+			to   { opacity: 1; transform: none; }
+		}
+		.zenzaScreenFilterPanel button.is-on {
+			background: #2d6a3e;
+			border-color: #5fbf78;
+			color: #fff;
+		}
 		.zenzaScreenFilterPanel * { box-sizing: border-box; }
 		.zenzaScreenFilterPanel .sfHead {
 			display: flex;
@@ -11409,14 +11627,12 @@ const ScreenFilterPanel = (() => {
 	const TEMPLATE = () => `
 		<div class="sfHead">
 			<span class="sfTitle">画面フィルター</span>
-			<label class="sfCheck" title="OFFにすると元の映像に戻ります（調整した値は残ります）">
-				<input type="checkbox" data-setting="enable"> 使う
-			</label>
 			<button type="button" class="sfClose" data-action="close" title="閉じる">×</button>
 		</div>
 		<div class="sfIntro">
 			動画の映像だけに効きます（コメントやボタンには効きません）。
 			設定は全部の動画で共通で、次に開いた時も残ります。
+			プリセット「標準」の時がOFFです（何も処理しません）。それ以外を選ぶと自動でONになります。
 		</div>
 		<div class="sfSection">
 			<div class="sfSectionTitle">かんたん設定（プリセット）</div>
@@ -11449,7 +11665,7 @@ const ScreenFilterPanel = (() => {
 			<div class="sfSectionTitle">変形（反転）</div>
 			<label class="sfCheck"><input type="checkbox" data-setting="flipH"> 左右反転（鏡のように左右を入れ替える）</label>
 			<label class="sfCheck"><input type="checkbox" data-setting="flipV"> 上下反転（上下をさかさまにする）</label>
-			<div class="sfDesc">反転はページを開き直すと元に戻ります。「使う」をOFFにしても反転はそのままです。</div>
+			<div class="sfDesc">反転はページを開き直すと元に戻ります。「標準に戻す」をしても反転はそのままです。</div>
 		</div>
 		<div class="sfSection">
 			<div class="sfSectionTitle">フィルターを反映する場所</div>
@@ -11461,7 +11677,7 @@ const ScreenFilterPanel = (() => {
 		</div>
 		<div class="sfFoot">
 			<button type="button" data-action="reset" title="すべての調整を標準に戻します（反転はそのまま）">すべて標準に戻す</button>
-			<button type="button" data-action="compare" title="押している間だけ、フィルターを外した元の映像を表示します">押している間だけ元の映像</button>
+			<button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる（左: 元の映像）</button>
 		</div>
 	`;
 	class Panel {
@@ -11525,15 +11741,24 @@ const ScreenFilterPanel = (() => {
 					ScreenFilter.reset();
 				} else if (action === 'close') {
 					this.close();
+				} else if (action === 'split') {
+					ScreenFilter.setSplit(!ScreenFilter.isSplit);
 				}
 			});
-			const compare = view.querySelector('[data-action="compare"]');
-			const bypassOn = e => { e.preventDefault(); ScreenFilter.setBypass(true); };
-			const bypassOff = () => ScreenFilter.bypass && ScreenFilter.setBypass(false);
-			compare.addEventListener('mousedown', bypassOn);
-			compare.addEventListener('touchstart', bypassOn, {passive: false});
-			['mouseup', 'mouseleave', 'touchend', 'touchcancel', 'blur']
-				.forEach(name => compare.addEventListener(name, bypassOff));
+			this._onOutsidePointerDown = e => {
+				if (!this.isOpen || this.view.classList.contains('is-closing')) { return; }
+				const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+				if (path.includes(this.view)) { return; }
+				if (path.some(el => el && el.classList && el.classList.contains('screenFilterSwitch'))) { return; }
+				const onVideo = path.some(el => el && el.classList &&
+					(el.classList.contains('videoPlayer') || el.classList.contains('commentLayerFrame')));
+				this.close();
+				if (onVideo) {
+					const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
+					window.addEventListener('click', swallow, {capture: true, once: true});
+					setTimeout(() => window.removeEventListener('click', swallow, {capture: true}), 600);
+				}
+			};
 			ScreenFilter.onChange(this._refresh);
 			document.addEventListener('fullscreenchange', this._onFullscreenChange);
 			document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
@@ -11583,7 +11808,8 @@ const ScreenFilterPanel = (() => {
 				autoRow.classList.toggle('is-unavailable', !ScreenFilter.autoLevelsAvailable);
 				autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
 			}
-			this.view.classList.toggle('is-disabled', !ScreenFilter.isEnabled());
+			const splitButton = this.view.querySelector('[data-action="split"]');
+			splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
 		}
 		_getParentNode() {
 			const fs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -11597,7 +11823,8 @@ const ScreenFilterPanel = (() => {
 			}
 		}
 		get isOpen() {
-			return !!(this.view && this.view.classList.contains('is-open'));
+			return !!(this.view && this.view.classList.contains('is-open') &&
+				!this.view.classList.contains('is-closing'));
 		}
 		open() {
 			this._initializeDom();
@@ -11605,12 +11832,37 @@ const ScreenFilterPanel = (() => {
 			if (this.view.parentNode !== parent) {
 				parent.append(this.view);
 			}
+			clearTimeout(this._closeTimer);
+			this.view.classList.remove('is-closing');
+			this._updateOrigin();
+			this.view.classList.remove('is-open');
+			void this.view.offsetWidth;
 			this.view.classList.add('is-open');
 			this._refresh();
+			window.addEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
+		}
+		_updateOrigin() {
+			const button = document.querySelector('.screenFilterSwitch');
+			const rect = button && button.getBoundingClientRect();
+			if (!rect || !rect.width) {
+				this.view.style.removeProperty('--sf-origin');
+				return;
+			}
+			const vw = window.innerWidth, vh = window.innerHeight;
+			const panelW = Math.min(380, vw - 32);
+			const panelLeft = vw - 16 - panelW;
+			const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
+			const y = rect.top > vh / 2 ? 100 : 0;
+			this.view.style.setProperty('--sf-origin', `${x.toFixed(1)}% ${y}%`);
 		}
 		close() {
-			if (!this.view) { return; }
-			this.view.classList.remove('is-open');
+			if (!this.view || !this.isOpen) { return; }
+			window.removeEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
+			this.view.classList.add('is-closing');
+			clearTimeout(this._closeTimer);
+			this._closeTimer = setTimeout(() => {
+				this.view.classList.remove('is-open', 'is-closing');
+			}, 170);
 			ScreenFilter.bypass && ScreenFilter.setBypass(false);
 		}
 		toggle() {
@@ -11618,6 +11870,680 @@ const ScreenFilterPanel = (() => {
 		}
 	}
 	return Panel;
+})();
+/*
+* Task 080: 動画の最後に流れる「提供」画面（ニコニ広告・ギフトの支援者クレジット）
+*
+* 本家プレイヤー（nvpc_next）を解析して、同じ情報・同じ流れで再現したもの。
+* 詳しい解析結果は docs/design-pack/89_TASK_080_*.md の2章。
+*
+* 【使う API（どれも認証不要。www.nicovideo.jp 以外のサブドメインからも読める）】
+*   GET https://api.nicoad.nicovideo.jp/v2/contents/video/{動画ID}/pickup_supporters?tags={タグをカンマ区切り}
+*     → data.supporters.{adTopSupporter, adRecentSupporter, giftTopSupporter, giftRecentSupporter}
+*        （それぞれ supporterName, userId, auxiliary.bgColor など。adTopSupporter.message がある事も）
+*       data.logoImageUrl / infoText / infoUrl … 画面上部の帯（ニコニ貢献の案内）
+*       data.voiceUrl … 提供音声の mp3。期間ごとに変わる（例: .../credit/Lasttykiss_2026_1st.mp3、約11.5秒）
+*       data.banner … 期間限定の左右のバナー（{left:{imageUrl,linkUrl}, right:{...}}。無いことが多い）
+*   GET https://api.nicoad.nicovideo.jp/v1/nage_video/{動画ID}/gift/effects
+*     → data.effects[] … 落ちてくるギフト。imageUrl（絵）, assetUrl（大きさ等のJSON）, point, supporterName, message
+*       assetUrl の JSON: {imageGridRow: 横のマス数, imageGridColumn: 縦のマス数, message*…}
+*
+* 【本家の流れ】
+*   - 動画本編の後ろに「提供」のコンテンツがつながっていて、提供音声（mp3）の長さだけ流れる。
+*     時間は音声の再生位置で進む（音声が終われば提供画面も終わる）。コメントもその間流れ続ける。
+*   - 1280×720 の画面。背景は adTopSupporter.auxiliary.bgColor（無ければ #00f）。
+*     bgVideoPosition がある時は、その位置の動画の場面を背景に使う（Zenza では最後の場面で代用）。
+*   - 「提　供」の下に、ニコニ広告のトップ支援者・最新の支援者（NEW!）。
+*     ギフトもある時は 5秒 で左へ 0.3秒 かけてスライドし、ギフトのトップ・最新の支援者に切り替わる。
+*   - ギフトは 1000×562.5 の仮想画面に 50px のマス目で下から積み上がるように落ちてくる（1.25秒、3乗の加速）。
+*     300pt 以上のギフトは、着地後 2.25秒 だけ支援者名と「+ポイント」を表示。
+*   - 本家のロゴ（ニコニ広告・ギフト・NEW!）は本家のSVGだが、ここでは文字で描く（本家の素材は同梱しない）。
+*/
+const SupporterCredit = (() => {
+	const NICOAD_API = 'https://api.nicoad.nicovideo.jp';
+	const CANVAS_W = 1280, CANVAS_H = 720;
+	const DEFAULT_DURATION = 11.5;   // 音声が読めない時の長さ（本家の音声は約11.5秒）
+	const MAX_DURATION = 30;         // 本家も30秒で描画を止める
+	const PAGE_SWITCH_SEC = 5, PAGE_SWITCH_DUR = 0.3;
+	const DEFAULT_BG = '#00f';
+	const TEXT_FONT = 'YuGothic,"YuGothic M","Hiragino Kaku Gothic ProN",Meiryo,Arial,sans-serif';
+	const GIFT_FONT = 'Avenir,Lato,BlinkMacSystemFont,"Helvetica Neue","Hiragino Kaku Gothic ProN",Meiryo,sans-serif';
+	const GIFT = {
+		CELL: 50, VIEW_W: 1000, VIEW_H: 1000 * 9 / 16, FALL_SEC: 1.25, SPREAD_SEC: 5.75,
+		SHOW_NAME_POINT: 300, NAME_SEC: 2.25, NAME_IN_SEC: 0.25, SCROLL_RATIO: 0.6
+	};
+	const easeInCubic = t => t < 0 ? 0 : t > 1 ? 1 : t * t * t;
+	const easeOutCubic = t => t < 0 ? 0 : t > 1 ? 1 : 1 - (1 - t) ** 3;
+	const withTimeout = (promise, ms = 10000) =>
+		Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+	const fetchJson = (url, signal) =>
+		withTimeout(fetch(url, {credentials: 'include', signal}).then(r => r.ok ? r.json() : null))
+			.catch(() => null);
+	const loadImage = url => withTimeout(new Promise((resolve, reject) => {
+		const img = new Image();
+		img.crossOrigin = 'anonymous';
+		img.onload = () => resolve(img);
+		img.onerror = reject;
+		img.src = url;
+	}));
+	const load = async ({videoId, tags = [], signal = null}) => {
+		if (!videoId) { return null; }
+		const id = encodeURIComponent(videoId);
+		const q = tags.length ? `?tags=${encodeURIComponent(tags.join(','))}` : '';
+		const [sup, gift] = await Promise.all([
+			fetchJson(`${NICOAD_API}/v2/contents/video/${id}/pickup_supporters${q}`, signal),
+			fetchJson(`${NICOAD_API}/v1/nage_video/${id}/gift/effects`, signal)
+		]);
+		const data = sup && sup.data;
+		const supporters = data && data.supporters;
+		if (!supporters || (!supporters.adTopSupporter && !supporters.giftTopSupporter)) {
+			return null;
+		}
+		return {
+			videoId,
+			supporters,
+			logoImageUrl: data.logoImageUrl || '',
+			infoText: data.infoText || '',
+			infoUrl: data.infoUrl || '',
+			voiceUrl: data.voiceUrl || '',
+			banner: data.banner && data.banner.left && data.banner.right ? data.banner : null,
+			gifts: (gift && gift.data && Array.isArray(gift.data.effects)) ? gift.data.effects : []
+		};
+	};
+	/*
+	* ギフトの絵と大きさのJSONを読む（失敗したものは外す）。
+	* ギフトの種類（期間限定・新しいギフト）は API の imageUrl / assetUrl で決まるので、
+	* 種類の一覧は持たない。同じ絵・JSON は1回だけ読む（同じ動画内の重複・連続再生の次の動画でも使い回す）。
+	*/
+	const assetCache = new Map();
+	const cached = (key, create) => {
+		if (assetCache.has(key)) { return assetCache.get(key); }
+		const p = create();
+		p.catch(() => assetCache.delete(key));
+		assetCache.set(key, p);
+		if (assetCache.size > 400) { assetCache.delete(assetCache.keys().next().value); }
+		return p;
+	};
+	const loadGiftAssets = async gifts => {
+		const loaded = await Promise.all(gifts.map(async gift => {
+			try {
+				const [image, assetData] = await Promise.all([
+					cached(`img:${gift.imageUrl}`, () => loadImage(gift.imageUrl)),
+					cached(`json:${gift.assetUrl}`, () => withTimeout(fetch(gift.assetUrl).then(r => r.json())))
+				]);
+				if (!assetData || !assetData.imageGridRow || !assetData.imageGridColumn) { return null; }
+				return Object.assign({}, gift, {image, assetData});
+			} catch (e) {
+				return null;
+			}
+		}));
+		return loaded.filter(g => !!g);
+	};
+	const drawText = (ctx, text, {x, y, width, fontSize, lineHeight = 1, align = 'center',
+		fill = '#fff', stroke = '#000', strokeWidth = 5, font = TEXT_FONT, weight = 800, overflow = 'ellipsis'}) => {
+		if (!text) { return y; }
+		ctx.save();
+		ctx.font = `${weight} ${fontSize}px ${font}`;
+		ctx.lineJoin = 'round';
+		ctx.textAlign = align;
+		ctx.textBaseline = 'middle';
+		let lines = [String(text)];
+		if (overflow === 'ellipsis' && width && ctx.measureText(lines[0]).width > width) {
+			let s = lines[0];
+			while (s.length > 1 && ctx.measureText(`${s}...`).width > width) { s = s.slice(0, -1); }
+			lines = [`${s}...`];
+		} else if (overflow === 'wrap' && width) {
+			lines = [];
+			let line = '';
+			Array.from(String(text)).forEach(ch => {
+				if (ctx.measureText(line + ch).width > width && line) { lines.push(line); line = ch; } else { line += ch; }
+			});
+			lines.push(line);
+		}
+		const lh = fontSize * lineHeight;
+		const ox = align === 'left' ? 0 : align === 'right' ? width : width / 2;
+		lines.forEach((line, i) => {
+			const ty = y + lh * i + (lh - fontSize) / 2 + fontSize / 2;
+			if (stroke) {
+				ctx.lineWidth = strokeWidth;
+				ctx.strokeStyle = stroke;
+				ctx.strokeText(line, x + ox, ty);
+			}
+			ctx.fillStyle = fill;
+			ctx.fillText(line, x + ox, ty);
+		});
+		ctx.restore();
+		return y + lh * lines.length;
+	};
+	const drawNewBadge = (ctx, cx, cy, scale = 1) => {
+		ctx.save();
+		ctx.translate(cx, cy);
+		ctx.rotate(-12 * Math.PI / 180);
+		ctx.font = `italic 900 ${Math.round(26 * scale)}px ${GIFT_FONT}`;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.lineJoin = 'round';
+		ctx.lineWidth = 6 * scale;
+		ctx.strokeStyle = '#000';
+		ctx.strokeText('NEW!', 0, 0);
+		ctx.fillStyle = '#FFD700';
+		ctx.fillText('NEW!', 0, 0);
+		ctx.restore();
+	};
+	const drawHeading = (ctx, text, cx, top, height, accent) => {
+		ctx.save();
+		ctx.font = `900 ${Math.round(height * 0.95)}px ${TEXT_FONT}`;
+		ctx.textAlign = 'center';
+		ctx.textBaseline = 'middle';
+		ctx.lineJoin = 'round';
+		ctx.lineWidth = 7;
+		ctx.strokeStyle = '#000';
+		const y = top + height / 2;
+		ctx.strokeText(text, cx, y);
+		ctx.fillStyle = '#fff';
+		ctx.fillText(text, cx, y);
+		const w = Math.min(ctx.measureText(text).width + 24, 360);
+		ctx.fillStyle = accent;
+		ctx.fillRect(cx - w / 2, top + height + 4, w, 4);
+		ctx.restore();
+	};
+	class SupportersPage {
+		constructor(supporters) {
+			this.supporters = supporters;
+			this.base = document.createElement('canvas');
+			this.base.width = CANVAS_W;
+			this.base.height = CANVAS_H;
+			this.pages = document.createElement('canvas');
+			this.pages.width = CANVAS_W * 2;
+			this.pages.height = CANVAS_H;
+			this.contentWidth = 730;
+			this._render();
+		}
+		_textArea(offsetX = 0) {
+			return {x: offsetX + (CANVAS_W - this.contentWidth) / 2, width: this.contentWidth};
+		}
+		_render() {
+			const s = this.supporters;
+			const base = this.base.getContext('2d');
+			const bottom = drawText(base, '提　供', Object.assign(this._textArea(), {y: 140, fontSize: 52, lineHeight: 1.4}));
+			const ctx = this.pages.getContext('2d');
+			const renderPage = (offsetX, heading, accent, top, recent, message) => {
+				if (!top) { return; }
+				const cx = offsetX + CANVAS_W / 2;
+				let y = bottom + 12;
+				drawHeading(ctx, heading, cx, y, 37, accent);
+				y = drawText(ctx, top.supporterName, Object.assign(this._textArea(offsetX), {y: y + 90, fontSize: 40, lineHeight: 1.5}));
+				if (message) {
+					y = drawText(ctx, message, Object.assign(this._textArea(offsetX), {y: y + 5, fontSize: 28, lineHeight: 1.2}));
+				}
+				y += 70;
+				if (recent && recent.supporterName) {
+					drawText(ctx, recent.supporterName, Object.assign(this._textArea(offsetX), {y, fontSize: 37, lineHeight: 1.2}));
+					ctx.save();
+					ctx.font = `800 32px ${TEXT_FONT}`;
+					const w = Math.min(ctx.measureText(recent.supporterName).width, this.contentWidth);
+					ctx.restore();
+					drawNewBadge(ctx, cx - w / 2 - 34, y - 10);
+				}
+			};
+			renderPage(0, 'ニコニ広告', '#ffcc00', s.adTopSupporter, s.adRecentSupporter,
+				s.adTopSupporter && s.adTopSupporter.message);
+			renderPage(CANVAS_W, 'ギフト', '#ff6fa8', s.giftTopSupporter, s.giftRecentSupporter, null);
+		}
+		render(ctx, t) {
+			const s = this.supporters;
+			ctx.drawImage(this.base, 0, 0);
+			let x = 0;
+			if (s.adTopSupporter && s.giftTopSupporter) {
+				if (t >= PAGE_SWITCH_SEC) {
+					x = -CANVAS_W * easeInCubic(Math.min((t - PAGE_SWITCH_SEC) / PAGE_SWITCH_DUR, 1));
+				}
+			} else if (!s.adTopSupporter && s.giftTopSupporter) {
+				x = -CANVAS_W;
+			}
+			ctx.drawImage(this.pages, x, 0);
+		}
+	}
+	class GiftGrid {
+		constructor(maxCol) {
+			this.maxCol = Math.max(1, maxCol);
+			this.map = [];
+			this.rowSize = 0;
+			this.topBaseLine = 0;
+			this.items = [];
+		}
+		_get(col, row) { return this.map[row] ? (this.map[row][col] || null) : null; }
+		_vacant(col, row, w, h) {
+			for (let i = 0; i < w; i++) {
+				for (let j = 0; j < h; j++) {
+					if (this._get(col + i, row + j) !== null) { return false; }
+				}
+			}
+			return true;
+		}
+		add(data, w, h) {
+			const lastCol = Math.max(this.maxCol - w + 1, 1);
+			for (let row = 0; row < 1000; row++) {
+				for (let col = 0; col < lastCol; col++) {
+					if (!this._vacant(col, row, w, h)) { continue; }
+					for (let i = 0; i < w; i++) {
+						for (let j = 0; j < h; j++) {
+							(this.map[row + j] = this.map[row + j] || [])[col + i] = true;
+						}
+					}
+					this.items.push({data, col, row});
+					this.rowSize = Math.max(this.rowSize, row + h);
+					this.topBaseLine = Math.max(this.topBaseLine, row + 1);
+					return;
+				}
+			}
+		}
+	}
+	class GiftLayer {
+		constructor(gifts, {paddingInline = 0} = {}) {
+			const usable = GIFT.VIEW_W - GIFT.VIEW_W * paddingInline;
+			const grid = new GiftGrid(Math.floor(usable / GIFT.CELL));
+			gifts.forEach(g => grid.add(g, g.assetData.imageGridRow, g.assetData.imageGridColumn));
+			const totalH = grid.rowSize * GIFT.CELL;
+			const floor = Math.max(totalH, GIFT.VIEW_H);
+			this.items = grid.items.map(({data, col, row}) => {
+				const w = data.assetData.imageGridRow * GIFT.CELL, h = data.assetData.imageGridColumn * GIFT.CELL;
+				const start = (GIFT.SPREAD_SEC / Math.max(1, grid.topBaseLine)) * (row + Math.random());
+				const land = start + GIFT.FALL_SEC;
+				return {
+					gift: data,
+					x: (GIFT.VIEW_W - usable) / 2 + col * GIFT.CELL,
+					y: floor - row * GIFT.CELL - h,
+					w, h, start, land,
+					showName: data.point >= GIFT.SHOW_NAME_POINT
+				};
+			});
+			this.scroll = null;
+			if (totalH >= GIFT.VIEW_H) {
+				const limit = totalH - GIFT.VIEW_H * GIFT.SCROLL_RATIO;
+				let s = 0, e = 0;
+				this.items.forEach(item => {
+					if (item.y < limit) { s = s ? Math.min(s, item.land) : item.land; }
+					e = Math.max(e, item.land);
+				});
+				this.scroll = {start: s, end: e, before: totalH - GIFT.VIEW_H, after: -100};
+			}
+		}
+		_scrollY(t) {
+			const sc = this.scroll;
+			if (!sc) { return 0; }
+			if (t <= sc.start) { return sc.before; }
+			if (t >= sc.end) { return sc.after; }
+			return sc.before - (t - sc.start) / Math.max(0.001, sc.end - sc.start) * (sc.before - sc.after);
+		}
+		render(ctx, t) {
+			const zoom = CANVAS_W / GIFT.VIEW_W;
+			const sy = this._scrollY(t);
+			const fall = item => {
+				if (t <= item.start) { return -GIFT.VIEW_H; }
+				if (t >= item.land) { return 0; }
+				return -GIFT.VIEW_H + GIFT.VIEW_H * easeInCubic((t - item.start) / GIFT.FALL_SEC);
+			};
+			this.items.forEach(item => {
+				if (t < item.start) { return; }
+				const y = item.y + fall(item) - sy;
+				if (y > GIFT.VIEW_H) { return; }
+				ctx.drawImage(item.gift.image, item.x * zoom, y * zoom, item.w * zoom, item.h * zoom);
+				this._renderMessage(ctx, item, y, zoom);
+			});
+			this.items.forEach(item => {
+				if (!item.showName || t < item.land || t > item.land + GIFT.NAME_SEC) { return; }
+				const lift = 100 - 100 * easeOutCubic((t - item.land) / GIFT.NAME_IN_SEC);
+				const y = item.y + lift - sy;
+				if (y > GIFT.VIEW_H) { return; }
+				ctx.save();
+				ctx.globalAlpha = 0.8;
+				drawText(ctx, item.gift.supporterName, {
+					x: item.x * zoom, y: (y - 50) * zoom, width: item.w * zoom, fontSize: 25 * zoom,
+					strokeWidth: 4 * zoom, font: GIFT_FONT
+				});
+				drawText(ctx, `+${item.gift.point}`, {
+					x: (item.x + (item.w - 200) / 2) * zoom, y: (y - 20) * zoom, width: 200 * zoom,
+					fontSize: 37.5 * zoom, strokeWidth: 4 * zoom, font: GIFT_FONT, overflow: 'nowrap'
+				});
+				ctx.restore();
+			});
+		}
+		_renderMessage(ctx, item, y, zoom) {
+			const a = item.gift.assetData, message = item.gift.message;
+			if (!message || !a.messageFieldX || !a.messageFieldY || !a.messageFieldWidth || !a.messageFontSize) { return; }
+			drawText(ctx, message, {
+				x: (item.x + a.messageFieldX) * zoom, y: (y + a.messageFieldY) * zoom,
+				width: a.messageFieldWidth * zoom, fontSize: a.messageFontSize * zoom,
+				lineHeight: a.messageLineHeight || 1.2, align: a.messageAlign || 'center',
+				fill: a.messageFillColor || '#fff', stroke: a.messageStrokeColor || null,
+				strokeWidth: 4 * zoom, font: GIFT_FONT, overflow: 'wrap'
+			});
+		}
+	}
+	const CSS = `
+		.zenzaSupporterCredit {
+			position: absolute;
+			inset: 0;
+			z-index: 8;
+			display: none;
+			opacity: 0;
+			transition: opacity 0.4s ease;
+			container-type: size;
+			background: #000;
+			pointer-events: none;
+		}
+		.zenzaSupporterCredit.is-show { display: block; }
+		.zenzaSupporterCredit.is-visible { opacity: 1; }
+		.zenzaSupporterCredit .scBox {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			width: min(100cqw, calc(100cqh * 16 / 9));
+			height: min(100cqh, calc(100cqw * 9 / 16));
+			transform: translate(-50%, -50%);
+		}
+		.zenzaSupporterCredit canvas.scCanvas {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+		}
+		.zenzaSupporterCredit .scHeader {
+			box-sizing: border-box;
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			height: 8%;
+			padding: 0 1%;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 1em;
+			background: rgba(0, 0, 0, 0.5);
+			color: #fff;
+			font-size: 4cqh;
+			pointer-events: auto;
+			overflow: hidden;
+			white-space: nowrap;
+		}
+		.zenzaSupporterCredit .scHeader img { height: 80%; }
+		.zenzaSupporterCredit .scHeader a {
+			color: inherit;
+			text-decoration: underline;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			cursor: pointer;
+		}
+		.zenzaSupporterCredit .scHeader a:hover { opacity: 0.9; }
+		.zenzaSupporterCredit .scBanners {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		.zenzaSupporterCredit .scBanners a {
+			display: block;
+			height: 100%;
+			aspect-ratio: 4 / 11;
+			pointer-events: auto;
+		}
+		.zenzaSupporterCredit .scBanners img { width: 100%; height: 100%; object-fit: contain; display: block; }
+		.zenzaSupporterCredit .scSkip {
+			position: absolute;
+			right: 1.5%;
+			bottom: 3%;
+			padding: 0.4em 1em;
+			font-size: max(12px, 2.4cqh);
+			color: #fff;
+			background: rgba(0, 0, 0, 0.55);
+			border: 1px solid rgba(255, 255, 255, 0.5);
+			border-radius: 2em;
+			cursor: pointer;
+			pointer-events: auto;
+			opacity: 0.75;
+			transition: opacity 0.2s;
+		}
+		.zenzaSupporterCredit .scSkip:hover { opacity: 1; }
+	`;
+	class CreditView {
+		constructor({parentNode}) {
+			this.parentNode = parentNode;
+			this.view = null;
+			this.data = null;
+			this.state = 'idle'; // idle / playing / paused
+			this._raf = 0;
+			this._clockBase = 0;
+			this._clockStart = 0;
+			this._draw = this._draw.bind(this);
+			this.onEnd = null;
+			this.onSkip = null;
+		}
+		_initializeDom() {
+			if (this.view) { return; }
+			if (!document.getElementById('zenzaSupporterCreditStyle')) {
+				const style = document.createElement('style');
+				style.id = 'zenzaSupporterCreditStyle';
+				style.textContent = CSS;
+				(document.head || document.documentElement).append(style);
+			}
+			const view = this.view = document.createElement('div');
+			view.className = 'zenzaSupporterCredit';
+			view.innerHTML = `
+				<div class="scBox">
+					<canvas class="scCanvas" width="${CANVAS_W}" height="${CANVAS_H}"></canvas>
+					<div class="scBanners"></div>
+					<div class="scHeader"></div>
+					<button type="button" class="scSkip" title="提供画面を飛ばす">スキップ ▶▶</button>
+				</div>`;
+			this.canvas = view.querySelector('canvas');
+			this.ctx = this.canvas.getContext('2d');
+			['click', 'mousedown', 'pointerdown', 'dblclick', 'contextmenu'].forEach(name => {
+				view.querySelector('.scSkip').addEventListener(name, e => e.stopPropagation());
+				view.querySelector('.scHeader').addEventListener(name, e => e.stopPropagation());
+				view.querySelector('.scBanners').addEventListener(name, e => {
+					e.target.closest('a') && e.stopPropagation();
+				});
+			});
+			view.querySelector('.scSkip').addEventListener('click', e => {
+				e.preventDefault();
+				this.onSkip && this.onSkip();
+			});
+			this.parentNode.append(view);
+		}
+		async prepare(data, {gift = true} = {}) {
+			this.dispose();
+			this.data = data;
+			this._initializeDom();
+			const s = data.supporters;
+			const bg = s.adTopSupporter;
+			this.bgColor = (bg && bg.auxiliary && bg.auxiliary.bgColor) || DEFAULT_BG;
+			this.useVideoBackground = !!(bg && bg.auxiliary && typeof bg.auxiliary.bgVideoPosition === 'number');
+			this.page = new SupportersPage(s);
+			const header = this.view.querySelector('.scHeader');
+			header.textContent = '';
+			if (data.logoImageUrl) {
+				const img = document.createElement('img');
+				img.src = data.logoImageUrl;
+				img.alt = '';
+				header.append(img);
+			}
+			if (data.infoText) {
+				const a = document.createElement('a');
+				a.textContent = data.infoText;
+				a.href = data.infoUrl || 'https://koken.nicovideo.jp';
+				a.target = '_blank';
+				a.rel = 'noopener';
+				header.append(a);
+			}
+			header.style.display = header.childNodes.length ? '' : 'none';
+			const banners = this.view.querySelector('.scBanners');
+			banners.textContent = '';
+			const hasBanner = !!data.banner && !this.useVideoBackground;
+			if (hasBanner) {
+				['left', 'right'].forEach(side => {
+					const b = data.banner[side];
+					const a = document.createElement('a');
+					a.href = b.linkUrl || '#';
+					a.target = '_blank';
+					a.rel = 'noopener';
+					const img = document.createElement('img');
+					img.src = b.imageUrl;
+					img.alt = side === 'left' ? '左側のバナー' : '右側のバナー';
+					a.append(img);
+					banners.append(a);
+				});
+			}
+			this.audio = null;
+			if (data.voiceUrl) {
+				const audio = this.audio = new Audio();
+				audio.preload = 'auto';
+				audio.src = data.voiceUrl;
+			}
+			this.giftLayer = null;
+			if (gift && data.gifts.length) {
+				const gifts = await loadGiftAssets(data.gifts);
+				if (this.data === data && gifts.length) {
+					this.giftLayer = new GiftLayer(gifts, {paddingInline: hasBanner ? 0.45 : 0});
+				}
+			}
+		}
+		get isReady() { return !!(this.data && this.page); }
+		get isActive() { return this.state !== 'idle'; }
+		get isPlaying() { return this.state === 'playing'; }
+		get duration() {
+			const d = this.audio && this.audio.duration;
+			return Math.min(MAX_DURATION, (d && isFinite(d) && d > 0) ? d : DEFAULT_DURATION);
+		}
+		get currentTime() {
+			if (this._audioOk && this.audio) { return this.audio.currentTime; }
+			if (this.state === 'playing') {
+				return this._clockBase + (performance.now() - this._clockStart) / 1000;
+			}
+			return this._clockBase;
+		}
+		_captureBackground(videoElement) {
+			this.bgCanvas = null;
+			if (!this.useVideoBackground || !videoElement || !videoElement.videoWidth) { return; }
+			try {
+				const c = document.createElement('canvas');
+				c.width = CANVAS_W;
+				c.height = CANVAS_H;
+				const ctx = c.getContext('2d');
+				ctx.fillStyle = '#000';
+				ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+				const vw = videoElement.videoWidth, vh = videoElement.videoHeight;
+				const scale = Math.min(CANVAS_W / vw, CANVAS_H / vh);
+				ctx.drawImage(videoElement, (CANVAS_W - vw * scale) / 2, (CANVAS_H - vh * scale) / 2, vw * scale, vh * scale);
+				this.bgCanvas = c;
+			} catch (e) {
+				this.bgCanvas = null;
+			}
+		}
+		start({volume = 1, muted = false, voice = true, videoElement = null} = {}) {
+			if (!this.isReady) { return false; }
+			this._captureBackground(videoElement);
+			this.view.classList.add('is-show');
+			void this.view.offsetWidth;
+			this.view.classList.add('is-visible');
+			this._clockBase = 0;
+			this._audioOk = false;
+			this.state = 'playing';
+			this._clockStart = performance.now();
+			if (this.audio) {
+				this.audio.currentTime = 0;
+				this.setVolume(volume, muted || !voice);
+				this.audio.onended = () => this._finish();
+				this.audio.play().then(() => {
+					if (this.state === 'idle') { this.audio.pause(); return; }
+					this._audioOk = true;
+					this.state === 'paused' && this.audio.pause();
+				}).catch(e => {
+					window.console.warn('提供音声を再生できませんでした（時計で進めます）', e && e.name);
+					this._audioOk = false;
+				});
+			}
+			this._schedule();
+			return true;
+		}
+		setVolume(volume, muted) {
+			if (!this.audio) { return; }
+			this.audio.volume = Math.max(0, Math.min(1, volume));
+			this.audio.muted = !!muted;
+		}
+		pause() {
+			if (this.state !== 'playing') { return; }
+			this._clockBase = this.currentTime;
+			this.state = 'paused';
+			this.audio && this._audioOk && this.audio.pause();
+		}
+		resume() {
+			if (this.state !== 'paused') { return; }
+			this.state = 'playing';
+			this._clockStart = performance.now();
+			if (this.audio && this._audioOk) {
+				this.audio.play().catch(() => { this._audioOk = false; });
+			}
+			this._schedule();
+		}
+		stop() {
+			if (this.state === 'idle') { return; }
+			this.state = 'idle';
+			this._raf && cancelAnimationFrame(this._raf);
+			this._raf = 0;
+			if (this.audio) {
+				this.audio.onended = null;
+				this.audio.pause();
+			}
+			if (this.view) {
+				this.view.classList.remove('is-visible');
+				setTimeout(() => {
+					this.state === 'idle' && this.view && this.view.classList.remove('is-show');
+				}, 400);
+			}
+		}
+		_finish() {
+			if (this.state === 'idle') { return; }
+			this.stop();
+			this.onEnd && this.onEnd();
+		}
+		_schedule() {
+			if (!this._raf) { this._raf = requestAnimationFrame(this._draw); }
+		}
+		_draw() {
+			this._raf = 0;
+			if (this.state === 'idle') { return; }
+			const t = this.currentTime;
+			const ctx = this.ctx;
+			if (this.bgCanvas) {
+				ctx.drawImage(this.bgCanvas, 0, 0);
+			} else {
+				ctx.fillStyle = this.bgColor;
+				ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+			}
+			this.giftLayer && this.giftLayer.render(ctx, t);
+			this.page && this.page.render(ctx, t);
+			if (t >= this.duration + 0.05) {
+				this._finish();
+				return;
+			}
+			this.state === 'playing' && this._schedule();
+		}
+		dispose() {
+			this.stop();
+			if (this.audio) {
+				this.audio.removeAttribute('src');
+				this.audio = null;
+			}
+			this.data = null;
+			this.page = null;
+			this.giftLayer = null;
+			this.bgCanvas = null;
+		}
+	}
+	return {load, loadGiftAssets, CreditView, GiftLayer, GiftGrid, CANVAS_W, CANVAS_H};
 })();
 class NicoVideoPlayer extends Emitter {
 	constructor(params) {
@@ -11680,6 +12606,7 @@ class NicoVideoPlayer extends Emitter {
 			this.appendTo(params.node);
 		}
 		this._initializeEvents();
+		this._initializeSupporterCredit();
 		this._onTimer = this._onTimer.bind(this);
 		this._beginTimer();
 		global.debug.nicoVideoPlayer = this;
@@ -11732,7 +12659,128 @@ class NicoVideoPlayer extends Emitter {
 	_onVolumeChange(vol, mute) {
 		this._playerConfig.props.volume = vol;
 		this._playerConfig.props.mute = mute;
+		this._supporterCredit && this._supporterCredit.setVolume(vol,
+			mute || !this._playerConfig.props['supporterCredit.voice']);
 		this.emit('volumeChange', vol, mute);
+	}
+	/*
+	* Task 080: 動画の最後に流れる「提供」画面（SupporterCredit.js）。
+	* 動画が最後まで再生された時（ended）に、提供音声の長さだけ表示してから、
+	* 本来の ended（連続再生の次の動画へ進む等）を出す。
+	*   - その間もコメントは流れ続ける（コメントの時刻 = 動画の長さ + 提供画面の経過時間）
+	*   - 一時停止・再開は提供画面に効く。シーク・別の動画・閉じる時は提供画面をやめる
+	*   - リピート再生中（video.loop）は ended 自体が来ないので出ない。YouTube では出さない
+	*/
+	_initializeSupporterCredit() {
+		const credit = this._supporterCredit =
+			new SupporterCredit.CreditView({parentNode: this._videoPlayer._body});
+		credit.onEnd = () => {
+			this._creditCommentHold = {
+				videoTime: this._videoPlayer.currentTime,
+				commentTime: this._creditBaseTime + credit.duration
+			};
+			this._emitEnded();
+		};
+		credit.onSkip = () => {
+			if (!credit.isActive) { return; }
+			credit.stop();
+			credit.onEnd();
+		};
+		this._creditData = null;
+		this._creditAbort = null;
+		this._playerConfig.onkey('supporterCredit.enable', v => {
+			if (!v) {
+				this._cancelSupporterCredit();
+			} else if (this.videoInfo && !this._creditData) {
+				this._loadSupporterCredit(this.videoInfo);
+			}
+		});
+	}
+	/*
+	* Task 081: 読み込みは動画を開いた時ではなく「残りが CREDIT_PRELOAD_SEC 秒になった時」に始める。
+	* （開いた直後は動画・コメントの読み込みと取り合って、Zenza の表示が遅くなっていたため）
+	* ここでは何を読むかを覚えておくだけ。実際の読み込みは _kickSupporterCreditLoad。
+	*/
+	_loadSupporterCredit(videoInfo) {
+		this._cancelSupporterCredit();
+		this._creditAbort && this._creditAbort.abort();
+		this._creditAbort = null;
+		this._creditData = null;
+		this._creditLoading = null;
+		this._creditRequest = null;
+		const props = this._playerConfig.props;
+		if (!videoInfo || !props['supporterCredit.enable']) { return; }
+		const videoId = videoInfo.videoId;
+		if (!videoId || !/^[a-z]{2}\d+$/.test(videoId)) { return; }
+		const tags = (videoInfo.tagList || [])
+			.map(t => t && (t.name || t.tag || t.text)).filter(t => typeof t === 'string' && t);
+		this._creditRequest = {videoId, tags};
+	}
+	_kickSupporterCreditLoad() {
+		if (this._creditLoading) { return this._creditLoading; }
+		const req = this._creditRequest;
+		if (!req) { return null; }
+		this._creditRequest = null;
+		const props = this._playerConfig.props;
+		const abort = this._creditAbort = new AbortController();
+		const credit = this._supporterCredit;
+		const loading = this._creditLoading = SupporterCredit.load({videoId: req.videoId, tags: req.tags, signal: abort.signal})
+			.then(async data => {
+				if (abort.signal.aborted || !data) { return; }
+				await credit.prepare(data, {gift: !!props['supporterCredit.gift']});
+				if (!abort.signal.aborted) {
+					this._creditData = data;
+				}
+			}).catch(e => window.console.warn('提供画面の情報を読めませんでした', e))
+			.finally(() => {
+				if (this._creditLoading === loading) { this._creditLoading = null; }
+			});
+		return loading;
+	}
+	_checkSupporterCreditPreload() {
+		if (!this._creditRequest) { return; }
+		const duration = this._videoPlayer.duration;
+		if (!isFinite(duration) || duration <= 0) { return; }
+		if (duration - this._videoPlayer.currentTime <= NicoVideoPlayer.CREDIT_PRELOAD_SEC) {
+			this._kickSupporterCreditLoad();
+		}
+	}
+	_tryStartSupporterCredit() {
+		const credit = this._supporterCredit;
+		const props = this._playerConfig.props;
+		if (!credit || credit.isActive || !this._creditData || !credit.isReady ||
+			!props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
+			return false;
+		}
+		if (props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) {
+			return false;
+		}
+		const duration = this._videoPlayer.duration;
+		this._creditBaseTime = isFinite(duration) && duration > 0 ? duration : this._videoPlayer.currentTime;
+		this._creditCommentHold = null;
+		const video = this.drawableVideoElement;
+		const ok = credit.start({
+			volume: this._videoPlayer.volume,
+			muted: this._videoPlayer.muted,
+			voice: !!props['supporterCredit.voice'],
+			videoElement: video && (video.drawableElement || video)
+		});
+		if (!ok) { return false; }
+		this._isPlaying = true;
+		this._isEnded = false;
+		typeof this._state.setPlaying === 'function' && this._state.setPlaying();
+		return true;
+	}
+	_cancelSupporterCredit() {
+		const credit = this._supporterCredit;
+		this._creditCommentHold = null;
+		this._creditWaiting = null;
+		if (!credit || !credit.isActive) { return false; }
+		credit.stop();
+		return true;
+	}
+	get isSupporterCreditActive() {
+		return !!(this._supporterCredit && this._supporterCredit.isActive);
 	}
 	_onPlayerStateUpdate(key, value) {
 		switch (key) {
@@ -11783,7 +12831,22 @@ class NicoVideoPlayer extends Emitter {
 		this._videoPlayer.volume =  v * r;
 	}
 	_onTimer() {
-		this._commentPlayer.currentTime = this._videoPlayer.currentTime;
+		this._checkSupporterCreditPreload();
+		const credit = this._supporterCredit;
+		if (credit && credit.isActive) {
+			this._commentPlayer.currentTime = this._creditBaseTime + credit.currentTime;
+			return;
+		}
+		const videoTime = this._videoPlayer.currentTime;
+		const hold = this._creditCommentHold;
+		if (hold) {
+			if (videoTime === hold.videoTime) {
+				this._commentPlayer.currentTime = hold.commentTime;
+				return;
+			}
+			this._creditCommentHold = null;
+		}
+		this._commentPlayer.currentTime = videoTime;
 	}
 	_onAspectRatioFix(ratio) {
 		this._commentPlayer.setAspectRatio(ratio);
@@ -11825,6 +12888,28 @@ class NicoVideoPlayer extends Emitter {
 		this.emit('pause');
 	}
 	_onEnded() {
+		if (this._tryStartSupporterCredit()) {
+			return;
+		}
+		const props = this._playerConfig.props;
+		const loading = props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
+			!(props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) &&
+			this._kickSupporterCreditLoad();
+		if (loading) {
+			const token = this._creditWaiting = {videoTime: this._videoPlayer.currentTime};
+			Promise.race([loading, new Promise(r => setTimeout(r, NicoVideoPlayer.CREDIT_WAIT_MS))]).then(() => {
+				if (this._creditWaiting !== token) { return; } // その間にシーク・別の動画など
+				this._creditWaiting = null;
+				if (Math.abs(this._videoPlayer.currentTime - token.videoTime) > 0.5) { return; } // 待っている間に最初から再生し直した
+				if (!this._tryStartSupporterCredit()) {
+					this._emitEnded();
+				}
+			});
+			return;
+		}
+		this._emitEnded();
+	}
+	_emitEnded() {
 		this._isPlaying = false;
 		this._isEnded = true;
 		this.emit('ended');
@@ -11845,6 +12930,7 @@ class NicoVideoPlayer extends Emitter {
 		}
 	}
 	setVideo(url) {
+		this._cancelSupporterCredit();
 		let e = {src: url, url: null, promise: null};
 		global.emitter.emit('beforeSetVideo', e);
 		if (e.url) {
@@ -11864,24 +12950,57 @@ class NicoVideoPlayer extends Emitter {
 		this._videoPlayer.thumbnail = url;
 	}
 	play() {
+		if (this.isSupporterCreditActive) {
+			this._supporterCredit.resume();
+			this._isPlaying = true;
+			typeof this._state.setPlaying === 'function' && this._state.setPlaying();
+			return Promise.resolve();
+		}
 		return this._videoPlayer.play();
 	}
 	pause() {
+		if (this.isSupporterCreditActive) {
+			this._supporterCredit.pause();
+			this._isPlaying = false;
+			return Promise.resolve();
+		}
 		this._videoPlayer.pause();
 		return Promise.resolve();
 	}
 	togglePlay() {
+		if (this.isSupporterCreditActive) {
+			return this._supporterCredit.isPlaying ? this.pause() : this.play();
+		}
 		return this._videoPlayer.togglePlay();
+	}
+	_beforeSeek() {
+		const wasPlaying = this.isSupporterCreditActive && this._supporterCredit.isPlaying;
+		if (this._cancelSupporterCredit()) {
+			this._isEnded = false;
+			wasPlaying && Promise.resolve().then(() => this._videoPlayer.play()).catch(() => {});
+		}
 	}
 	setPlaybackRate(playbackRate) {
 		playbackRate = Math.max(0, Math.min(playbackRate, 10));
 		this._videoPlayer.playbackRate = playbackRate;
 		this._commentPlayer.setPlaybackRate(playbackRate);
 	}
-	fastSeek(t) {this._videoPlayer.fastSeek(Math.max(0, t));}
-	set currentTime(t) {this._videoPlayer.currentTime = Math.max(0, t);}
+	fastSeek(t) {
+		this._beforeSeek();
+		this._videoPlayer.fastSeek(Math.max(0, t));
+	}
+	set currentTime(t) {
+		this._beforeSeek();
+		this._videoPlayer.currentTime = Math.max(0, t);
+	}
 	get currentTime() { return this._videoPlayer.currentTime;}
-	get vpos() { return this.currentTime * 100; }
+	get vpos() {
+		const credit = this._supporterCredit;
+		if (credit && credit.isActive) {
+			return (this._creditBaseTime + credit.currentTime) * 100;
+		}
+		return this.currentTime * 100;
+	}
 	get duration() {return this._videoPlayer.duration;}
 	get chatList() {return this._commentPlayer.chatList;}
 	get nonFilteredChatList() {return this._commentPlayer.nonFilteredChatList;}
@@ -11892,6 +13011,8 @@ class NicoVideoPlayer extends Emitter {
 		this._commentPlayer.appendTo(node);
 	}
 	close() {
+		this._cancelSupporterCredit();
+		this._creditAbort && this._creditAbort.abort();
 		this._videoPlayer.close();
 		this._commentPlayer.close();
 	}
@@ -11981,13 +13102,18 @@ class NicoVideoPlayer extends Emitter {
 	set audioGain(v) { this._videoPlayer.audioGain = v; }
 	getDuration() {return this._videoPlayer.duration;}
 	getChatList() {return this._commentPlayer.chatList;}
-	getVpos() {return Math.floor(this._videoPlayer.currentTime * 100);}
+	getVpos() {return Math.floor(this.vpos);}
 	setComment(xmlText, options) {this._commentPlayer.setComment(xmlText, options);}
 	getNonFilteredChatList() {return this._commentPlayer.nonFilteredChatList;}
 	getBufferedRange() {return this._videoPlayer.bufferedRange;}
-	setVideoInfo(v) { this.videoInfo = v; }
+	setVideoInfo(v) {
+		this.videoInfo = v;
+		this._loadSupporterCredit(v);
+	}
 	getVideoInfo() { return this.videoInfo; }
 }
+NicoVideoPlayer.CREDIT_PRELOAD_SEC = 45;
+NicoVideoPlayer.CREDIT_WAIT_MS = 5000;
 class ContextMenu extends BaseViewComponent {
 	constructor({parentNode, playerState}) {
 		super({
@@ -12343,7 +13469,6 @@ ContextMenu.__tpl__ = (`
 				<li class="command" data-command="picture-in-picture">P in P</li>
 				<li class="command" data-command="picture-in-picture-comment">P in P(コメント付き)</li>
 				<hr class="separator">
-				<li class="command" data-config="screenFilter.enable" data-command="toggle-screenFilter.enable">画面フィルターを使う</li>
 				<li class="command toggle-flipH" data-config="screenFilter.flipH" data-command="toggle-flipH">左右反転</li>
 				<li class="command toggle-flipV" data-config="screenFilter.flipV" data-command="toggle-flipV">上下反転</li>
 				<hr class="separator">
@@ -17764,7 +18889,7 @@ class NicoChat {
 		}
 	}
 	constructor(data, options = {}) {
-		options = Object.assign({videoDuration: 0x7FFFFF, mainThreadId: 0, format: ''}, options);
+		options = Object.assign({videoDuration: 0x7FFFFF, creditDuration: 0, mainThreadId: 0, format: ''}, options);
 		const props = this.props = {};
 		props.id = `chat${NicoChat.id++}`;
 		props.currentTime = 0;
@@ -17810,6 +18935,13 @@ class NicoChat {
 		const cmd = props.cmd;
 		if (cmd.length > 0 && cmd.trim() !== '184') {
 			NicoChat.parseCmd(cmd, props.fork > 0, props);
+		}
+		const creditSec = options.creditDuration || 0;
+		if (creditSec > 0 && !props.isNicoScript &&
+			props.vpos > (options.videoDuration + 1) * 100 &&
+			props.vpos <= (options.videoDuration + creditSec) * 100) {
+			props.isCreditComment = true;
+			return;
 		}
 		const maxv =
 			props.isNicoScript ?
@@ -19365,12 +20497,13 @@ class NicoComment extends Emitter {
 		const videoDuration = this._duration = parseInt(options.duration || 0x7FFFFF);
 		const maxCommentsByDuration = this.constructor.getMaxCommentsByDuration(videoDuration);
 		const mainThreadId = options.mainThreadId || 0;
+		const creditDuration = options.creditDuration || 0;
 		let nicoChats = [];
 		const top = [], bottom = [], naka = [];
 		const create = options.format !== 'xml' ? NicoChat.create : NicoChat.createFromChatElement;
 		for (let i = 0, len = Math.min(chatsData.length, MAX_COMMENT); i < len; i++) {
 			const chat = chatsData[i];
-			const nicoChat = create(chat, {videoDuration, mainThreadId});
+			const nicoChat = create(chat, {videoDuration, creditDuration, mainThreadId});
 			if (nicoChat.isDeleted) {
 				continue;
 			}
@@ -29229,6 +30362,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		let options = {
 			replacement: this._videoInfo.replacementWords,
 			duration: this._videoInfo.duration,
+			creditDuration: this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
 			mainThreadId: result.threadInfo.threadId,
 			format: result.format
 		};
@@ -31125,8 +32259,12 @@ const RootDispatcher = (() => {
 				case 'toggle-removeNgMatchedUser':
 				case 'toggle-enableCommentPreview':
 				case 'toggle-audio.autoAdjust':
+				case 'toggle-supporterCredit.enable':
 					command = command.replace(/^toggle-/, '');
 					config.props[command] = !config.props[command];
+					if (command === 'supporterCredit.enable') {
+						PopupMessage.notify(`提供画面の表示: ${config.props[command] ? 'ON' : 'OFF'}`);
+					}
 					break;
 				case 'baseFontFamily':
 				case 'baseChatScale':

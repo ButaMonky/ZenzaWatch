@@ -11,6 +11,7 @@ import {bounce} from '../packages/lib/src/infra/bounce';
 import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';
 
 //===BEGIN===
 
@@ -91,6 +92,7 @@ class NicoVideoPlayer extends Emitter {
     }
 
     this._initializeEvents();
+    this._initializeSupporterCredit();
 
     this._onTimer = this._onTimer.bind(this);
     this._beginTimer();
@@ -149,7 +151,132 @@ class NicoVideoPlayer extends Emitter {
   _onVolumeChange(vol, mute) {
     this._playerConfig.props.volume = vol;
     this._playerConfig.props.mute = mute;
+    this._supporterCredit && this._supporterCredit.setVolume(vol,
+      mute || !this._playerConfig.props['supporterCredit.voice']);
     this.emit('volumeChange', vol, mute);
+  }
+  /*
+   * Task 080: 動画の最後に流れる「提供」画面（SupporterCredit.js）。
+   * 動画が最後まで再生された時（ended）に、提供音声の長さだけ表示してから、
+   * 本来の ended（連続再生の次の動画へ進む等）を出す。
+   *   - その間もコメントは流れ続ける（コメントの時刻 = 動画の長さ + 提供画面の経過時間）
+   *   - 一時停止・再開は提供画面に効く。シーク・別の動画・閉じる時は提供画面をやめる
+   *   - リピート再生中（video.loop）は ended 自体が来ないので出ない。YouTube では出さない
+   */
+  _initializeSupporterCredit() {
+    const credit = this._supporterCredit =
+      new SupporterCredit.CreditView({parentNode: this._videoPlayer._body});
+    credit.onEnd = () => {
+      this._creditCommentHold = {
+        videoTime: this._videoPlayer.currentTime,
+        commentTime: this._creditBaseTime + credit.duration
+      };
+      this._emitEnded();
+    };
+    credit.onSkip = () => {
+      if (!credit.isActive) { return; }
+      credit.stop();
+      credit.onEnd();
+    };
+    this._creditData = null;
+    this._creditAbort = null;
+    this._playerConfig.onkey('supporterCredit.enable', v => {
+      if (!v) {
+        this._cancelSupporterCredit();
+      } else if (this.videoInfo && !this._creditData) {
+        this._loadSupporterCredit(this.videoInfo);
+      }
+    });
+  }
+  /*
+   * Task 081: 読み込みは動画を開いた時ではなく「残りが CREDIT_PRELOAD_SEC 秒になった時」に始める。
+   * （開いた直後は動画・コメントの読み込みと取り合って、Zenza の表示が遅くなっていたため）
+   * ここでは何を読むかを覚えておくだけ。実際の読み込みは _kickSupporterCreditLoad。
+   */
+  _loadSupporterCredit(videoInfo) {
+    this._cancelSupporterCredit();
+    this._creditAbort && this._creditAbort.abort();
+    this._creditAbort = null;
+    this._creditData = null;
+    this._creditLoading = null;
+    this._creditRequest = null;
+    const props = this._playerConfig.props;
+    if (!videoInfo || !props['supporterCredit.enable']) { return; }
+    const videoId = videoInfo.videoId;
+    if (!videoId || !/^[a-z]{2}\d+$/.test(videoId)) { return; }
+    const tags = (videoInfo.tagList || [])
+      .map(t => t && (t.name || t.tag || t.text)).filter(t => typeof t === 'string' && t);
+    this._creditRequest = {videoId, tags};
+  }
+  /** 提供画面の情報・絵・音声を読み始める（1本の動画につき1回）。読み込み中の Promise を返す */
+  _kickSupporterCreditLoad() {
+    if (this._creditLoading) { return this._creditLoading; }
+    const req = this._creditRequest;
+    if (!req) { return null; }
+    this._creditRequest = null;
+    const props = this._playerConfig.props;
+    const abort = this._creditAbort = new AbortController();
+    const credit = this._supporterCredit;
+    const loading = this._creditLoading = SupporterCredit.load({videoId: req.videoId, tags: req.tags, signal: abort.signal})
+      .then(async data => {
+        if (abort.signal.aborted || !data) { return; }
+        await credit.prepare(data, {gift: !!props['supporterCredit.gift']});
+        if (!abort.signal.aborted) {
+          this._creditData = data;
+        }
+      }).catch(e => window.console.warn('提供画面の情報を読めませんでした', e))
+      .finally(() => {
+        if (this._creditLoading === loading) { this._creditLoading = null; }
+      });
+    return loading;
+  }
+  /** 残り時間が少なくなったら読み込みを始める（_onTimer から呼ぶ） */
+  _checkSupporterCreditPreload() {
+    if (!this._creditRequest) { return; }
+    const duration = this._videoPlayer.duration;
+    if (!isFinite(duration) || duration <= 0) { return; }
+    if (duration - this._videoPlayer.currentTime <= NicoVideoPlayer.CREDIT_PRELOAD_SEC) {
+      this._kickSupporterCreditLoad();
+    }
+  }
+  /** 提供画面を出せる状態なら出す。出したら true */
+  _tryStartSupporterCredit() {
+    const credit = this._supporterCredit;
+    const props = this._playerConfig.props;
+    if (!credit || credit.isActive || !this._creditData || !credit.isReady ||
+      !props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
+      return false;
+    }
+    if (props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) {
+      return false;
+    }
+    const duration = this._videoPlayer.duration;
+    this._creditBaseTime = isFinite(duration) && duration > 0 ? duration : this._videoPlayer.currentTime;
+    this._creditCommentHold = null;
+    const video = this.drawableVideoElement;
+    const ok = credit.start({
+      volume: this._videoPlayer.volume,
+      muted: this._videoPlayer.muted,
+      voice: !!props['supporterCredit.voice'],
+      videoElement: video && (video.drawableElement || video)
+    });
+    if (!ok) { return false; }
+    this._isPlaying = true;
+    this._isEnded = false;
+    typeof this._state.setPlaying === 'function' && this._state.setPlaying();
+    return true;
+  }
+  /** 提供画面を途中でやめる（ended は出さない）。表示中だったら true */
+  _cancelSupporterCredit() {
+    const credit = this._supporterCredit;
+    this._creditCommentHold = null;
+    this._creditWaiting = null;
+    if (!credit || !credit.isActive) { return false; }
+    credit.stop();
+    return true;
+  }
+  get isSupporterCreditActive() {
+    return !!(this._supporterCredit && this._supporterCredit.isActive);
   }
   _onPlayerStateUpdate(key, value) {
     switch (key) {
@@ -200,7 +327,24 @@ class NicoVideoPlayer extends Emitter {
     this._videoPlayer.volume =  v * r;
   }
   _onTimer() {
-    this._commentPlayer.currentTime = this._videoPlayer.currentTime;
+    this._checkSupporterCreditPreload();
+    // Task 080: 提供画面の間も、動画の続きの時刻としてコメントを流し続ける
+    const credit = this._supporterCredit;
+    if (credit && credit.isActive) {
+      this._commentPlayer.currentTime = this._creditBaseTime + credit.currentTime;
+      return;
+    }
+    const videoTime = this._videoPlayer.currentTime;
+    const hold = this._creditCommentHold;
+    if (hold) {
+      // 提供画面が終わった直後は、動画の位置が変わるまでコメントの時刻を戻さない（巻き戻りの再描画を防ぐ）
+      if (videoTime === hold.videoTime) {
+        this._commentPlayer.currentTime = hold.commentTime;
+        return;
+      }
+      this._creditCommentHold = null;
+    }
+    this._commentPlayer.currentTime = videoTime;
   }
   _onAspectRatioFix(ratio) {
     this._commentPlayer.setAspectRatio(ratio);
@@ -243,6 +387,30 @@ class NicoVideoPlayer extends Emitter {
     this.emit('pause');
   }
   _onEnded() {
+    // Task 080: 提供画面を出す時は、終わってから ended を出す
+    if (this._tryStartSupporterCredit()) {
+      return;
+    }
+    // Task 081: 最後へ一気にシークした時などで読み込みが間に合っていなければ、少しだけ待つ
+    const props = this._playerConfig.props;
+    const loading = props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
+      !(props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) &&
+      this._kickSupporterCreditLoad();
+    if (loading) {
+      const token = this._creditWaiting = {videoTime: this._videoPlayer.currentTime};
+      Promise.race([loading, new Promise(r => setTimeout(r, NicoVideoPlayer.CREDIT_WAIT_MS))]).then(() => {
+        if (this._creditWaiting !== token) { return; } // その間にシーク・別の動画など
+        this._creditWaiting = null;
+        if (Math.abs(this._videoPlayer.currentTime - token.videoTime) > 0.5) { return; } // 待っている間に最初から再生し直した
+        if (!this._tryStartSupporterCredit()) {
+          this._emitEnded();
+        }
+      });
+      return;
+    }
+    this._emitEnded();
+  }
+  _emitEnded() {
     this._isPlaying = false;
     this._isEnded = true;
     this.emit('ended');
@@ -263,6 +431,7 @@ class NicoVideoPlayer extends Emitter {
     }
   }
   setVideo(url) {
+    this._cancelSupporterCredit();
     let e = {src: url, url: null, promise: null};
     // デバッグ用
     global.emitter.emit('beforeSetVideo', e);
@@ -283,24 +452,59 @@ class NicoVideoPlayer extends Emitter {
     this._videoPlayer.thumbnail = url;
   }
   play() {
+    if (this.isSupporterCreditActive) {
+      this._supporterCredit.resume();
+      this._isPlaying = true;
+      typeof this._state.setPlaying === 'function' && this._state.setPlaying();
+      return Promise.resolve();
+    }
     return this._videoPlayer.play();
   }
   pause() {
+    if (this.isSupporterCreditActive) {
+      this._supporterCredit.pause();
+      this._isPlaying = false;
+      return Promise.resolve();
+    }
     this._videoPlayer.pause();
     return Promise.resolve();
   }
   togglePlay() {
+    if (this.isSupporterCreditActive) {
+      return this._supporterCredit.isPlaying ? this.pause() : this.play();
+    }
     return this._videoPlayer.togglePlay();
+  }
+  /** Task 080: 提供画面の最中にシークされたら、提供画面をやめて動画へ戻る */
+  _beforeSeek() {
+    const wasPlaying = this.isSupporterCreditActive && this._supporterCredit.isPlaying;
+    if (this._cancelSupporterCredit()) {
+      this._isEnded = false;
+      wasPlaying && Promise.resolve().then(() => this._videoPlayer.play()).catch(() => {});
+    }
   }
   setPlaybackRate(playbackRate) {
     playbackRate = Math.max(0, Math.min(playbackRate, 10));
     this._videoPlayer.playbackRate = playbackRate;
     this._commentPlayer.setPlaybackRate(playbackRate);
   }
-  fastSeek(t) {this._videoPlayer.fastSeek(Math.max(0, t));}
-  set currentTime(t) {this._videoPlayer.currentTime = Math.max(0, t);}
+  fastSeek(t) {
+    this._beforeSeek();
+    this._videoPlayer.fastSeek(Math.max(0, t));
+  }
+  set currentTime(t) {
+    this._beforeSeek();
+    this._videoPlayer.currentTime = Math.max(0, t);
+  }
   get currentTime() { return this._videoPlayer.currentTime;}
-  get vpos() { return this.currentTime * 100; }
+  get vpos() {
+    // Task 081: 提供画面の間に投稿したコメントは、本家と同じく「動画の長さ＋経過時間」の位置に付ける
+    const credit = this._supporterCredit;
+    if (credit && credit.isActive) {
+      return (this._creditBaseTime + credit.currentTime) * 100;
+    }
+    return this.currentTime * 100;
+  }
   get duration() {return this._videoPlayer.duration;}
   get chatList() {return this._commentPlayer.chatList;}
   get nonFilteredChatList() {return this._commentPlayer.nonFilteredChatList;}
@@ -311,6 +515,8 @@ class NicoVideoPlayer extends Emitter {
     this._commentPlayer.appendTo(node);
   }
   close() {
+    this._cancelSupporterCredit();
+    this._creditAbort && this._creditAbort.abort();
     this._videoPlayer.close();
     this._commentPlayer.close();
   }
@@ -416,13 +622,19 @@ class NicoVideoPlayer extends Emitter {
   set audioGain(v) { this._videoPlayer.audioGain = v; }
   getDuration() {return this._videoPlayer.duration;}
   getChatList() {return this._commentPlayer.chatList;}
-  getVpos() {return Math.floor(this._videoPlayer.currentTime * 100);}
+  getVpos() {return Math.floor(this.vpos);}
   setComment(xmlText, options) {this._commentPlayer.setComment(xmlText, options);}
   getNonFilteredChatList() {return this._commentPlayer.nonFilteredChatList;}
   getBufferedRange() {return this._videoPlayer.bufferedRange;}
-  setVideoInfo(v) { this.videoInfo = v; }
+  setVideoInfo(v) {
+    this.videoInfo = v;
+    this._loadSupporterCredit(v);
+  }
   getVideoInfo() { return this.videoInfo; }
 }
+// Task 081: 提供画面の読み込みを始める残り秒数と、最後に間に合わなかった時に待つ時間
+NicoVideoPlayer.CREDIT_PRELOAD_SEC = 45;
+NicoVideoPlayer.CREDIT_WAIT_MS = 5000;
 
 
 class ContextMenu extends BaseViewComponent {
@@ -813,7 +1025,6 @@ ContextMenu.__tpl__ = (`
         <li class="command" data-command="picture-in-picture-comment">P in P(コメント付き)</li>
         <hr class="separator">
 
-        <li class="command" data-config="screenFilter.enable" data-command="toggle-screenFilter.enable">画面フィルターを使う</li>
         <li class="command toggle-flipH" data-config="screenFilter.flipH" data-command="toggle-flipH">左右反転</li>
         <li class="command toggle-flipV" data-config="screenFilter.flipV" data-command="toggle-flipV">上下反転</li>
 

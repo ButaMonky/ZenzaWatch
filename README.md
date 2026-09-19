@@ -3,32 +3,62 @@
 [segabito/ZenzaWatch](https://github.com/segabito/ZenzaWatch) をベースに、
 現在のニコニコ動画環境向けの修正・機能追加を行っている非公式Forkです。
 
-Ginzaから独立して単体で動くHTML5版ニコニコ動画プレイヤーです。
-Userscriptとして動作します。
+Ginzaから独立して単体で動作するHTML5版ニコニコ動画プレイヤーです。
+TampermonkeyなどのUserscriptマネージャー上で動作します。
 
 ## インストール
 
-最新版は [dist](/dist) にあります。
+### かんたんインストール
 
-通常使用する主なスクリプト:
+TampermonkeyなどのUserscriptマネージャーをインストールした状態で、
+以下のリンクをクリックしてください。
 
-- `ZenzaWatch-dev.user.js` — ZenzaWatch本体
-- `ZenzaHLS.user.js` — HLS / domand再生
-- `MylistPocket.user.js` — サムネイルの動画情報・とりマイ等
-- `ZenzaAdvancedSettings.user.js` — 上級者向け設定
-- `ZenzaBlogPartsButton.user.js` — 外部サイトのニコニコ大百科に Zenza 起動ボタンを追加
-GitHubで対象の `.user.js` を開き、**Raw** を押すと
-Tampermonkey等からインストールできます。
+#### 基本
+
+- **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
+  - 動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+
+- **[ZenzaHLS をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)**
+  - HLS / domand動画の再生や自動画質切り替えを担当します。
+
+基本的には上の2つをインストールしてください。
+
+#### オプション
+
+- [MylistPocket をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js)
+  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。
+
+- [ZenzaAdvancedSettings をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js)
+  - ショートカット、画面フィルター、NGなどの上級者向け設定。
+
+- [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
+  - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。
 
 > [!IMPORTANT]
 > 現在の改良内容は `ZenzaWatch-dev.user.js` に反映されています。
-> `ZenzaWatch.user.js` は古い版のため、両方を同時に有効にしないでください。
+>
+> 古い `ZenzaWatch.user.js` と `ZenzaWatch-dev.user.js` を同時に有効にすると、
+> 二重に動作する可能性があります。
+> 現在は `ZenzaWatch-dev.user.js` を使用してください。
 
-各スクリプトの詳しい役割については [SCRIPTS.md](/SCRIPTS.md) を参照してください。
+すべてのスクリプトは [dist](/dist) から確認できます。
+
+各スクリプトの詳しい役割については
+[SCRIPTS.md](/SCRIPTS.md) を参照してください。
 
 ## 変更履歴
 
-[CHANGELOG.md](/CHANGELOG.md) を参照してください。
+詳しい変更内容は [CHANGELOG.md](/CHANGELOG.md) を参照してください。
+
+## オリジナル版について
+
+このリポジトリは
+[segabito/ZenzaWatch](https://github.com/segabito/ZenzaWatch)
+をベースにした非公式Forkです。
+
+ニコニコ動画側の仕様変更、ブラウザ環境の変化、
+長期間の更新停止によって動作しなくなった機能などを中心に、
+修正・機能追加を行っています。
 
 ## ライセンス
 
@@ -49,7 +79,10 @@ READMEに記載されています。
 
 ## フィードバック
 
-気軽な質問・感想・相談は **Discussions** へどうぞ。
+気軽な質問・感想・使い方の相談などは
+[Discussions](https://github.com/ButaMonky/ZenzaWatch/discussions)
+へどうぞ。
 
-再現手順が分かる不具合や、原因・修正案が分かっている場合は
-**Issues** を開いてください。
+不具合報告や、再現手順・原因・修正案が分かっている場合は
+[Issues](https://github.com/ButaMonky/ZenzaWatch/issues)
+を利用してください。

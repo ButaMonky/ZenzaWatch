@@ -1,6 +1,6 @@
 import {uq} from '../../../lib/src/uQuery';
 import {textUtil} from '../../../lib/src/text/textUtil';
-import {cssUtil} from '../../../lib/src/css';
+import {cssUtil} from '../../../lib/src/css/css';
 import {nicoUtil} from '../../../lib/src/nico/nicoUtil';
 
 //===BEGIN===

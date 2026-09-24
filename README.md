@@ -59,6 +59,20 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 
 詳しい変更内容は [CHANGELOG.md](/CHANGELOG.md) を参照してください。
 
+## 開発者向け（ソースからのビルド）
+
+配布物（`dist/*.user.js`）は `src/` と `packages/*/src/` から `build.js` で作ります。
+
+```
+npm ci          # package-lock.json どおりに依存を入れる
+npm test        # テスト
+npm run build   # dist/ の10個の配布物を作り直す（node ./build.js --dev と同じ）
+```
+
+- Node.js は `package.json` の `engines` の範囲（22.22.2 以上の 22 系、24.15.0 以上の 24 系、または 26 以上）を使ってください。
+- ビルドは入力の欠け・構文エラー・書き込み失敗があると終了コード1で止まり、`dist/` を書き換えません。
+- 作り直した配布物は、ビルド識別子の行（`// build: …` と `var BUILD = …`）以外は `dist/` のものと同じになります。
+
 ## オリジナル版について
 
 このリポジトリは

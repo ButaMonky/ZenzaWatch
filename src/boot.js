@@ -1,4 +1,4 @@
-import GateAPI from 'loader/GateAPI';
+import {GateAPI} from '../packages/lib/src/nico/GateAPI';
 import {AntiPrototypeJs} from '../packages/lib/src/infra/AntiPrototype-js';
 
 //===BEGIN===

@@ -2,7 +2,7 @@ import {ZenzaWatch, global} from './ZenzaWatchIndex';
 import {CONSTANT} from './constant';
 import {Config} from './Config';
 import {UaaLoader} from '../packages/lib/src/nico/loader';
-import {RelatedVideoList} from './VideoList';
+import {RelatedVideoList} from '../packages/zenza/src/Playlist/RelatedVideoList';
 import {TagListView} from './TagListView';
 import {parseVideoSearchSortValue, NicoSearchApiV2Loader} from '../packages/lib/src/nico/VideoSearch';
 import {TagSuggestLoader} from '../packages/lib/src/nico/TagSuggestLoader';

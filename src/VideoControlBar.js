@@ -242,6 +242,14 @@ import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
         $select.find('.select-dmc-' + value).addClass('selected');
       };
 
+      // Task 079b: 画質「自動」の時、以前は用意された中で一番上の画質名（例: 720p）を
+      // そのまま出していたため、実際は360pで再生していても「720p」と表示されていた。
+      // 自動の時は「自動（最大720p）」と、実際に選ばれる上限であることが分かる表記にする。
+      const videoQualityLabel = (type, info) => {
+        const label = (info && info.video && info.video.label) || '';
+        const setting = type === 'dmc' ? config.props.dmcVideoQuality : config.props.domandVideoQuality;
+        return setting === 'auto' && label ? `自動（最大${label}）` : label;
+      };
       const onVideoServerType = (type, videoSessionInfo) => {
         $button.raf.removeClass('is-domand-playing is-dmc-playing')
           .raf.addClass(`is-${type === 'dmc' ? 'dmc' : 'domand'}-playing`);
@@ -249,7 +257,7 @@ import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
         const $selectServer = $select.find(`.select-server-${type === 'dmc' ? 'dmc' : 'domand'}`);
         $selectServer.addClass('selected');
         $selectServer.find('.currentVideoQuality')
-          .raf.text(videoSessionInfo.video.label);
+          .raf.text(videoQualityLabel(type, videoSessionInfo));
       };
 
       updateDomandVideoQuality(config.props.domandVideoQuality);

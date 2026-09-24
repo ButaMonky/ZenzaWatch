@@ -4,7 +4,7 @@ import * as lit from '../../../../node_modules/lit/html.js';
 // import * as lit from 'https://esm.run/lit';
 // const {html, render} = lit;
 const dll = {lit};
-import {util} from '../util/util.js';
+import {util} from '../../../../src/util.js';
 //===BEGIN===
 
 class BaseCommandElement extends HTMLElement {

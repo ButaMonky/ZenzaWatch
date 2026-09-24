@@ -28,13 +28,17 @@ var BUILD_ID = (() => {
   } catch (e) { /* gitが無い環境でもビルドは通す */ }
   return hash ? `${t} ${hash}` : t;
 })();
+// 監視モード（--watch）で見るディレクトリ。ビルドの入力（src と packages/*/src）と一致させる。
+// 以前は存在しない ./packages/navi/src が含まれていて、その監視登録の例外で後ろの
+// lib・zenza が監視されていなかった（監査v2 ZW-009、Task 085 で削除）。
 var watchDirs = [
   srcDir,
   './packages/components/src',
-  './packages/navi/src',
   './packages/lib/src',
   './packages/zenza/src',
 ];
+// 今回のビルドで読んだ入力ファイル（監視対象から漏れていないかの確認用。Task 085）
+const BUILD_INPUTS = new Set();
 
 var templates = [
   { src: '_template.js', dist: 'dist/ZenzaWatch.user.js',            dev: true  },
@@ -145,6 +149,8 @@ async function writeIfModified(file, newData, callback) {
 }
 
 async function notify(title, message, options = {timeout: 3, subtitle: undefined}) {
+  // テストなどでデスクトップ通知を出したくない時は ZENZA_BUILD_NO_NOTIFY=1（Task 084）
+  if (process.env.ZENZA_BUILD_NO_NOTIFY) { return; }
   const notifier = require('node-notifier');
   let {timeout, subtitle} = options;
   notifier.notify({title, message, timeout, subtitle});
@@ -169,13 +175,16 @@ function requireFile(srcDir, file, params, parent = '') {
   }
   REQMAP[fullpath] = REQMAP[fullpath] || [];
   REQMAP[fullpath].push(parent || 1);
+  BUILD_INPUTS.add(fullpath);
   try {
     fs.statSync(srcFile);
   } catch (e) {
     console.error('*** Error: %s\n\t   "%s"', e.message || e, srcFile);
     console.log(` required by "${parent}"`);
-    notify('build error', `${e.message}\n${file}`);
-    return `fild not exist "${srcFile}"\nfrom "${parent}"`;
+    // 以前は「fild not exist ...」という JavaScript でない文字列を生成物に埋め込んで
+    // ビルドを続け、終了コード0で「成功」していた（監査v2 ZW-002）。
+    // 入力が欠けたら例外にしてビルド全体を失敗させ、dist は書き換えない（Task 084）。
+    throw new Error(`入力ファイルがありません: "${srcFile}"（required by "${parent}"）`);
   }
   fs.readFileSync(srcFile, 'utf-8').split('\n').some(function(line) {
     let lt = line.trim();
@@ -282,6 +291,7 @@ function loadTemplateFile(srcDir, indexFile, outFile, params) {
   var ver = null;
   const imports = {};
   const srcFile = path.join(srcDir, indexFile);
+  BUILD_INPUTS.add(path.resolve(srcFile));
 
   fs.readFileSync(srcFile, 'utf-8').split('\n').some(function(line) {
     if (line.trim().match(/^import\s+\{?(.+)\}?\s+from\s+['"](.+)['"]/)) {
@@ -343,17 +353,74 @@ function loadTemplateFile(srcDir, indexFile, outFile, params) {
     lines.push(line);
   });
 
-  writeIfModified(outFile, lines.join('\n'), function(err, newData) {
-    err && console.log(err);
-    if (newData) {
-      console.log(`\n>>>>>>update "${outFile}" (${lines.join('\n').split('\n').length} lines)`);
-      deploy(outFile);
-    }
-  });
+  // ここでは書き込まない。全配布物の生成と構文検査が済んでから commitOutputs() が
+  // まとめて書き込む（1つでも失敗したら dist を1つも書き換えないため。Task 084 / ZW-002）
+  return {outFile, content: lines.join('\n')};
 }
 
+// 生成物が JavaScript として読めるか（@babel/parser、Task 037 以来の構文検査の方法）
+function checkSyntax(outputs) {
+  const errors = [];
+  let parser;
+  try {
+    parser = require('@babel/parser');
+  } catch (e) {
+    // 検査できない状態を「問題なし」とは扱わない
+    return [`構文検査用の @babel/parser を読み込めません（npm install が必要です）: ${e.message}`];
+  }
+  outputs.forEach(({outFile, content}) => {
+    try {
+      parser.parse(content, {sourceType: 'script'});
+    } catch (e) {
+      errors.push(`${outFile}: 生成物が JavaScript として不正です: ${e.message}`);
+    }
+  });
+  return errors;
+}
+
+// 生成物を dist へ書き込む。先に全ての書き込み先を確認し、一時ファイルへ書いてから
+// 置き換えるので、途中で失敗しても（まれな置き換え失敗を除き）古い dist が残る。
+function commitOutputs(outputs) {
+  const fs = require('fs');
+  const changed = outputs.filter(({outFile, content}) => {
+    try {
+      return fs.readFileSync(outFile, 'utf-8') !== content;
+    } catch (e) {
+      return true; // まだ無い・読めない（書き込み可否は次で確かめる）
+    }
+  });
+  for (const {outFile} of changed) {
+    if (fs.existsSync(outFile)) {
+      if (!fs.statSync(outFile).isFile()) {
+        throw new Error(`${outFile}: 書き込み先がファイルではありません`);
+      }
+      fs.accessSync(outFile, fs.constants.W_OK);
+    }
+  }
+  const temps = [];
+  try {
+    for (const {outFile, content} of changed) {
+      const tmp = `${outFile}.tmp-${process.pid}`;
+      fs.writeFileSync(tmp, content);
+      temps.push([tmp, outFile, content]);
+    }
+  } catch (e) {
+    temps.forEach(([tmp]) => { try { fs.unlinkSync(tmp); } catch (_) { /* 後片付けのみ */ } });
+    throw e;
+  }
+  for (const [tmp, outFile, content] of temps) {
+    fs.renameSync(tmp, outFile);
+    console.log(`\n>>>>>>update "${outFile}" (${content.split('\n').length} lines)`);
+    deploy(outFile);
+  }
+}
+
+// 失敗（入力欠損・構文不正・書き込み不可）があれば dist を書き換えず false を返し、
+// 終了コードを1にする（Task 084 / 監査v2 ZW-002）
 function build(params) {
   var path = require('path');
+  const outputs = [];
+  const errors = [];
   templates.forEach(template => {
     var _params = {...params};
     var templateFile = template.src;
@@ -364,8 +431,30 @@ function build(params) {
     }
     console.log('\n>>>>>>build: %s', path.basename(outFile));
     REQMAP = {};
-    loadTemplateFile(srcDir, templateFile, outFile, _params);
+    try {
+      outputs.push(loadTemplateFile(srcDir, templateFile, outFile, _params));
+    } catch (e) {
+      errors.push(`${outFile}: ${e.message || e}`);
+    }
   });
+  if (!errors.length) {
+    errors.push(...checkSyntax(outputs));
+  }
+  if (!errors.length) {
+    try {
+      commitOutputs(outputs);
+    } catch (e) {
+      errors.push(`書き込みに失敗しました: ${e.message || e}`);
+    }
+  }
+  if (errors.length) {
+    console.error('\n*** BUILD FAILED（%d件）。dist は書き換えていません（書き込み中の失敗を除く）:', errors.length);
+    errors.forEach(e => console.error('  - %s', e));
+    notify('build error', errors.join('\n'));
+    process.exitCode = 1;
+    return false;
+  }
+  return true;
 }
 const _build = debounce(build, 1000);
 
@@ -385,7 +474,28 @@ function watch(srcDir, params) {
     }
   };
 
-  fs.watch(srcDir, {recursive: true}, onChange);
+  return fs.watch(srcDir, {recursive: true}, onChange);
+}
+
+// 監視を始める前に、監視対象がすべて存在し、ビルドの入力がすべて監視対象の中にあるかを確かめる。
+// 一部だけ監視して動き続ける（変更しても再ビルドされないファイルがある）状態にはしない（Task 085 / ZW-009）。
+function checkWatchTargets() {
+  const fs = require('fs');
+  const path = require('path');
+  const errors = [];
+  const roots = watchDirs.map(dir => path.resolve(dir));
+  roots.forEach((root, i) => {
+    let ok = false;
+    try { ok = fs.statSync(root).isDirectory(); } catch (e) { /* 無い */ }
+    if (!ok) { errors.push(`監視対象のディレクトリがありません: ${watchDirs[i]}`); }
+  });
+  const uncovered = Array.from(BUILD_INPUTS).filter(file =>
+    !roots.some(root => {
+      const rel = path.relative(root, file);
+      return rel && !rel.startsWith('..') && !path.isAbsolute(rel);
+    }));
+  uncovered.slice(0, 20).forEach(file => errors.push(`監視対象の外にあるビルド入力: ${path.relative(process.cwd(), file)}`));
+  return errors;
 }
 
 function run() {
@@ -399,10 +509,30 @@ function run() {
   });
 
   console.log(params);
-  build(params);
+  const ok = build(params);
+  if (!ok && !params.watch) {
+    return;
+  }
   if (params.watch) {
+    const errors = checkWatchTargets();
+    if (errors.length) {
+      console.error('\n*** 監視モードを開始できません（一部だけの監視はしません）:');
+      errors.forEach(e => console.error('  - %s', e));
+      process.exitCode = 1;
+      return;
+    }
+    const watchers = [];
+    try {
+      watchDirs.forEach(dir => { watchers.push(watch(dir, params)); });
+    } catch (e) {
+      watchers.forEach(w => { try { w.close(); } catch (_) { /* 後片付けのみ */ } });
+      console.error('\n*** 監視を登録できませんでした: %s', e.message || e);
+      process.exitCode = 1;
+      return;
+    }
+    console.log('\n監視しています（%d か所）:', watchDirs.length);
+    watchDirs.forEach(dir => console.log('  %s', dir));
     notify('watch start', new Date().toLocaleString());
-    watchDirs.forEach(dir => { watch(dir, params); });
   }
 }
 
@@ -412,6 +542,7 @@ try {
   console.error('error', e);
   console.trace();
   notify('error', `${e.message || e}`);
+  process.exitCode = 1; // 例外でも「成功」で終わらせない（Task 084 / ZW-002）
 }
 
 

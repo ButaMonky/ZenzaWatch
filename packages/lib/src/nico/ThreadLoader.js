@@ -1,5 +1,5 @@
-import {PopupMessage} from '../util';
-import {sleep} from '../../packages/lib/src/infra/sleep';
+import {PopupMessage} from '../ui/PopupMessage';
+import {sleep} from '../infra/sleep';
 import {netUtil} from '../../../lib/src/infra/netUtil';
 
 const debug = {};

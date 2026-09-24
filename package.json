@@ -51,6 +51,9 @@
     "webpack-cli": "^3.1.2",
     "webpack-dev-server": "^3.1.10"
   },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
   "directories": {
     "test": "test/"
   },
@@ -72,8 +75,8 @@
     "url": "git://github.com/segabito/ZenzaWatch.git"
   },
   "scripts": {
-    "build": "cross-env NODE_ENV=development babel src --out-dir lib --compilers js:@babel/register --source-maps",
-    "watch": "cross-env NODE_ENV=development babel src --out-dir lib --compilers js:@babel/register --source-maps inline --watch",
+    "build": "node ./build.js --dev",
+    "watch": "node ./build.js --dev --watch",
     "test": "cross-env NODE_ENV=test mocha --require ./test/setup.js test/**/unit/*.js",
     "test:browser": "webpack-dev-server --inline",
     "build:production": "node ./build.js",

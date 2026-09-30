@@ -22,13 +22,13 @@ const ThumbInfoCacheDb = (() => {
   const open = async () => {
     db = db || await IndexedDbStorage.open(THUMB_INFO);
     const cacheDb = db['cache'];
-    cacheDb.gc(90 * 24 * 60 * 60 * 1000);
+    cacheDb.gc(90 * 24 * 60 * 60 * 1000).catch(() => console.warn('Thumbnail cache cleanup failed'));
     return {
       /**
        * @params {string} xmlText
        * @params {ThumbInfoData?}
        */
-      put: (xml, thumbInfo = null) => {
+      put: async (xml, thumbInfo = null) => {
         thumbInfo = thumbInfo || parseThumbInfo(xml);
         if (thumbInfo.status !== 'ok') {
           return;
@@ -45,7 +45,7 @@ const ThumbInfoCacheDb = (() => {
           xml,
           thumbInfo
         };
-        cacheDb.put(record);
+        await cacheDb.put(record);
         return {watchId, updatedAt};
       },
       get: watchId => cacheDb.updateTime({key: watchId}),

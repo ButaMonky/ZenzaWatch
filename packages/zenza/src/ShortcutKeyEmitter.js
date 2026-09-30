@@ -84,14 +84,23 @@ class ShortcutKeyEmitter {
       });
     }
 
-    const onKeyDown = e => {
-      const target = (e.path && e.path[0]) ? e.path[0] : e.target;
+    const isInputEvent = e => {
+      if (e.defaultPrevented || e.isComposing) { return true; }
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+      const nodes = path.length ? path : [e.target];
+      return nodes.some(node => {
+        for (let target = node; target; target = target.parentElement) {
+          if (['SELECT', 'INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) { return true; }
+          const editable = target.getAttribute && target.getAttribute('contenteditable');
+          if (editable !== null && editable !== undefined &&
+              ['', 'true', 'plaintext-only'].includes(editable.toLowerCase())) { return true; }
+        }
+        return false;
+      });
+    };
 
-      if (target.tagName === 'SELECT' ||
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA') {
-        return;
-      }
+    const onKeyDown = e => {
+      if (isInputEvent(e)) { return; }
 
       const keyCode = e.keyCode +
         (e.metaKey ? 0x1000000 : 0) +
@@ -122,22 +131,16 @@ class ShortcutKeyEmitter {
           param = 0;
           break;
         case map.SEEK_LEFT:
-        case 37: // LEFT
-          if (e.shiftKey || isVerySlow) {
-            key = 'SEEK_BY';
-            param = isVerySlow ? -0.5 : -5;
-          }
+          key = 'SEEK_BY';
+          param = isVerySlow ? -0.5 : -5;
           break;
 
         case map.VOL_UP:
           key = 'VOL_UP';
           break;
         case map.SEEK_RIGHT:
-        case 39: // RIGHT
-          if (e.shiftKey || isVerySlow) {
-            key = 'SEEK_BY';
-            param = isVerySlow ? 0.5 : 5;
-          }
+          key = 'SEEK_BY';
+          param = isVerySlow ? 0.5 : 5;
           break;
         case map.SEEK_PREV_FRAME:
           key = 'SEEK_PREV_FRAME';
@@ -247,18 +250,18 @@ class ShortcutKeyEmitter {
           break;
         }
       }
+      if (!key && isVerySlow && (keyCode === 37 || keyCode === 39) &&
+          !Object.values(map).includes(keyCode) && !dynamicMap[keyCode]) {
+        key = 'SEEK_BY';
+        param = keyCode === 37 ? -0.5 : 0.5;
+      }
       if (key) {
         emitter.emit('keyDown', key, e, param);
       }
     };
 
     const onKeyUp = e => {
-      const target = (e.path && e.path[0]) ? e.path[0] : e.target;
-      if (target.tagName === 'SELECT' ||
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA') {
-        return;
-      }
+      if (isInputEvent(e)) { return; }
 
       let key = '';
       const keyCode = e.keyCode +

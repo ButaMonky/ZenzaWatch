@@ -2,7 +2,7 @@ import {Emitter} from '../../../lib/src/Emitter';
 import {SlotLayoutWorker} from './SlotLayoutWorker';
 import {NicoChatGroupViewModel} from './NicoChatGroupViewModel';
 import {NicoChat} from './NicoChat';
-import {Config} from '../../../../src/ZenzaWatchIndex';
+import {Config} from '../../../../src/Config';
 import {NicoComment} from './NicoComment';
 //===BEGIN===
 

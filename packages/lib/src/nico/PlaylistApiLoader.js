@@ -111,3 +111,5 @@ const PlaylistApiLoader = (() => {
 })();
 
 //===END===
+
+export {PlaylistApiLoader};

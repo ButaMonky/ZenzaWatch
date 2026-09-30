@@ -1,10 +1,14 @@
 import {PopupMessage} from '../ui/PopupMessage';
 import {sleep} from '../infra/sleep';
 import {netUtil} from '../../../lib/src/infra/netUtil';
+import {logSafe} from '../infra/logSafe';
 
 const debug = {};
 
 //===BEGIN===
+
+// Task 088（監査v2 ZW-056）: 送信内容・キー・本文・ユーザーID をログに出す時は logSafe.redact を通す
+//@require logSafe
 
 const {ThreadLoader} = (() => {
   const FRONT_ID = '6';
@@ -130,7 +134,7 @@ const {ThreadLoader} = (() => {
 
       if (options.retrying) {
         const info = await this.getThreadKey(msgInfo.videoId, options);
-        console.log('threadKey (retry): ', msgInfo.videoId, info);
+        console.log('threadKey (retry): ', msgInfo.videoId, logSafe.redact(info));
         packet.threadKey = info.threadKey;
       }
 
@@ -149,7 +153,7 @@ const {ThreadLoader} = (() => {
       }
 
       const url = new URL('/v1/threads', server);
-      console.log('load threads...', url, packet);
+      console.log('load threads...', url, logSafe.redact(packet));
       try {
         const { meta, data } = await netUtil.fetch(url, {
           method: 'POST',
@@ -173,7 +177,7 @@ const {ThreadLoader} = (() => {
         // ネストせず1行で status / errorCode を出す（Task B-5）。
         window.console.error(
           `_load threads fail: videoId=${msgInfo.videoId} status=${result && result.status} errorCode=${result && result.errorCode}`,
-          result
+          logSafe.redact(result)
         );
         throw {
           result,
@@ -215,8 +219,19 @@ const {ThreadLoader} = (() => {
         } catch (e) {
           lastError = e;
           console.timeEnd(timeKey);
+          const failure = e && e.result || e;
+          if (failure && failure.name === 'AbortError') { throw failure; }
+          const status = Number(failure && failure.status);
+          const invalidLanguage = failure && failure.errorCode === 'INVALID_PARAMETER';
+          const serverLanguage = msgInfo.nvComment && msgInfo.nvComment.params && msgInfo.nvComment.params.language;
+          const canFallback = invalidLanguage && !loadOptions.useServerDefaultLanguage &&
+            serverLanguage && msgInfo.language && msgInfo.language !== serverLanguage;
+          if (!canFallback && (invalidLanguage ||
+              (status > 400 && status < 500 && status !== 408 && status !== 429))) {
+            break;
+          }
           const label = isRetry ? `リトライ${attempt}回目` : '1回目';
-          window.console.error(`loadComment fail (${label}): `, e);
+          window.console.error(`loadComment fail (${label}): `, logSafe.redact(e));
 
           const delay = RETRY_DELAYS_MS[attempt];
           if (delay != null) {
@@ -227,7 +242,7 @@ const {ThreadLoader} = (() => {
       }
 
       if (lastError) {
-        window.console.error('loadComment fail finally: ', lastError);
+        window.console.error('loadComment fail finally: ', logSafe.redact(lastError));
         throw {
           message: 'コメントサーバーの通信失敗',
           result: lastError.result
@@ -274,11 +289,15 @@ const {ThreadLoader} = (() => {
 
       msgInfo.threadInfo = threadInfo;
 
-      console.log('threadInfo: ', threadInfo);
+      console.log('threadInfo: ', logSafe.redact(threadInfo));
       return {threadInfo, body: result, format: 'threads'};
     }
 
-    async postChat(msgInfo, text, cmd, vpos, retrying = false) {
+    async postChat(msgInfo, text, cmd, vpos) {
+      return this._postChat(msgInfo, text, cmd, vpos);
+    }
+
+    async _postChat(msgInfo, text, cmd, vpos, retrying = false) {
       const {
         videoId,
         threadId,
@@ -294,7 +313,7 @@ const {ThreadLoader} = (() => {
         postKey,
         videoId,
       });
-      console.log('post packet: ', packet);
+      console.log('post packet: ', logSafe.redact(packet));
       try {
         const { no, id } = await this._post(url, packet);
         return {
@@ -321,7 +340,7 @@ const {ThreadLoader} = (() => {
           };
         }
         await sleep(3000);
-        return await this.postChat(msgInfo, text, cmd, vpos, true)
+        return await this._postChat(msgInfo, text, cmd, vpos, true)
       }
     }
 
@@ -366,7 +385,7 @@ const {ThreadLoader} = (() => {
         }],
         videoId,
       });
-      console.log('put packet: ', packet);
+      console.log('put packet: ', logSafe.redact(packet));
       try {
         await this._delete(url, packet);
         return {
@@ -420,7 +439,7 @@ const {ThreadLoader} = (() => {
         nicoruKey,
         videoId,
       });
-      console.log('post packet: ', packet);
+      console.log('post packet: ', logSafe.redact(packet));
       try {
         const { nicoruId, nicoruCount } = await this._post(url, packet);
         return {

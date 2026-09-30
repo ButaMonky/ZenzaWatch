@@ -3,18 +3,18 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.19-task080
+// @version     0.3.26-task152
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
 // @noframes
-// @require     https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
+// @require     https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-09-19 06:22Z 7c252d9
+// build: 2026-09-30 15:36Z
 /* eslint-disable */
 
 ((window) => { const self = window;
@@ -31,25 +31,17 @@ class Handler { //extends Array {
 		return this._list.length;
 	}
 	exec(...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member.apply(this._list, args); }
 		}
 	}
 	execMethod(name, ...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0][name](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i][name](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member[name](...args); }
 		}
 	}
 	add(member) {
@@ -158,7 +150,11 @@ const {Emitter} = (() => {
 			} else if (!callback) {
 				this._events.delete(name);
 			} else {
-				e.remove(callback);
+				for (const listener of e) {
+					if (listener === callback || listener._original === callback) {
+						e.remove(listener);
+					}
+				}
 				if (e.isEmpty) {
 					this._events.delete(name);
 				}
@@ -170,9 +166,9 @@ const {Emitter} = (() => {
 		}
 		once(name, func) {
 			const wrapper = (...args) => {
-				func(...args);
 				this.off(name, wrapper);
 				wrapper._original = null;
+				func(...args);
 			};
 			wrapper._original = func;
 			return this.on(name, wrapper);
@@ -375,15 +371,21 @@ const Observable = (() => {
 			}
 			return new this(onNext || {});
 		}
-		constructor({start, next, error, complete} = {start:nop, next:nop, error:nop, complete:nop}) {
-			this.callbacks = {start, next, error, complete};
+		constructor({start, next, error, complete, closed} = {}) {
+			this.callbacks = {
+				start: typeof start === 'function' ? start : nop,
+				next: typeof next === 'function' ? next : nop,
+				error: typeof error === 'function' ? error : nop,
+				complete: typeof complete === 'function' ? complete : nop,
+				closed: typeof closed === 'function' ? closed : () => false
+			};
 		}
 		start(arg) {this.callbacks.start(arg);}
 		next(arg) {this.callbacks.next(arg);}
 		error(arg) {this.callbacks.error(arg);}
 		complete(arg) {this.callbacks.complete(arg);}
 		get closed() {
-			return this._callbacks.closed ? this._callbacks.closed() : false;
+			return this.callbacks.closed();
 		}
 	}
 	Subscriber.nop = {start: nop, next: nop, error: nop, complete: nop, closed: nop};
@@ -832,18 +834,19 @@ class DataStorage {
 	}
 	namespace(name) {
 		const namespace = name ? `${name}.` : '';
-		const origin = Symbol(`${namespace}`);
+		const updateListeners = new Map();
 		const result = {
 			getValue: key => this.getValue(`${namespace}${key}`),
 			setValue: (key, value) => this.setValue(`${namespace}${key}`, value),
 			on: (key, func) => {
 				if (key === 'update') {
+					if (updateListeners.has(func)) { return result; }
 					const onUpdate = (key, value) => {
 						if (key.startsWith(namespace)) {
-							func(key.slice(namespace.length + 1), value);
+							func(key.slice(namespace.length), value);
 						}
 					};
-					onUpdate[origin] = func;
+					updateListeners.set(func, onUpdate);
 					this.on('update', onUpdate);
 					return result;
 				}
@@ -851,8 +854,15 @@ class DataStorage {
 			},
 			off: (key, func) => {
 				if (key === 'update') {
-					func = func[origin] || func;
-					this.off('update', func);
+					if (!func) {
+						for (const listener of updateListeners.values()) {
+							this.off('update', listener);
+						}
+						updateListeners.clear();
+					} else if (updateListeners.has(func)) {
+						this.off('update', updateListeners.get(func));
+						updateListeners.delete(func);
+					}
 					return result;
 				}
 				return this.offkey(`${namespace}${key}`, func);
@@ -1427,14 +1437,18 @@ Config.exportConfig = () => Config.export();
 Config.importConfig = v => Config.import(v);
 Config.exportToFile = () => {
 	const json = Config.exportJson();
-	const blob = new Blob([json], {'type': 'text/html'});
+	const blob = new Blob([json], {type: 'application/json'});
 	const url = URL.createObjectURL(blob);
-	const a = Object.assign(document.createElement('a'), {
-		download: `${new Date().toLocaleString().replace(/[:/]/g, '_')}_ZenzaWatch.config.json`,
-		rel: 'noopener',
-		href: url
-	});
-	a.click();
+	try {
+		const a = Object.assign(document.createElement('a'), {
+			download: `${new Date().toLocaleString().replace(/[:/]/g, '_')}_ZenzaWatch.config.json`,
+			rel: 'noopener',
+			href: url
+		});
+		a.click();
+	} finally {
+		setTimeout(() => URL.revokeObjectURL(url), 2000);
+	}
 };
 const NaviConfig = Config;
 await Config.promise('restore');
@@ -3850,7 +3864,7 @@ const ScreenFilterPanel = (() => {
         switch (settingName) {
           case 'wordRegFilter':
             try {
-              const reg = new RegExp(val);
+              const reg = new RegExp(val, this._playerConfig.props.wordRegFilterFlags);
               $target.addClass('update');
             } catch(err) {
               $target.addClass('error');
@@ -3860,7 +3874,7 @@ const ScreenFilterPanel = (() => {
             break;
           case 'wordRegFilterFlags': {
             try {
-              const reg = new RegExp(/./, val);
+              const reg = new RegExp(this._playerConfig.props.wordRegFilter, val);
               $target.addClass('update');
             } catch(err) {
               $target.addClass('error');

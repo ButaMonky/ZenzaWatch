@@ -123,7 +123,7 @@ import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
       updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
       this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
       global.emitter.on('heatMapUpdate',
-        heatMap => WatchInfoCacheDb.put(this.player.watchId, {heatMap}));
+        heatMap => WatchInfoCacheDb.putBestEffort(this.player.watchId, {heatMap}));
 
       this.storyboard = new Storyboard({
         playerConfig: config,
@@ -1571,6 +1571,10 @@ util.addStyle(`
   }
   .controlItemContainer.right {
     top: auto;
+    z-index: 310;
+  }
+  .videoControlBar.is-menuOpen .controlItemContainer.right {
+    z-index: 320;
   }
 
 `, {className: 'screenMode for-screen-full videoControlBar', disabled: true});
@@ -1897,7 +1901,7 @@ util.addStyle(`
       const view = this._view;
       const command = target ? target.dataset.command : '';
       const nicoChatElement = e.target.closest('.nicoChat');
-      const uniqNo = parseInt(nicoChatElement.dataset.nicochatUniqNo, 10);
+      const uniqNo = nicoChatElement.dataset.nicochatUniqNo;
       const nicoChat  = this._model.getItemByUniqNo(uniqNo);
 
       if (command && nicoChat) {

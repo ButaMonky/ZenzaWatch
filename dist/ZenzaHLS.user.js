@@ -22,21 +22,28 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.24-task079b
+// @version        0.0.30-task155
 // @noframes
-// @require        https://cdn.jsdelivr.net/npm/hls.js@latest
+// @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:57Z f821f46
+// build: 2026-09-30 16:26Z
 /* eslint-disable */
 
 
+// Task 088（監査v2 ZW-011）: hls.js は動作を確かめた完全な版に固定する（以前は @latest で、hls.js 側の更新だけで挙動が変わり得た）。
+// 上の @require・読み込み失敗時の代わり（下の HLSJS_Loader）・プレイヤーが読む URL を、この1つにそろえる。
+// 版を変える時は @require の行も同じ版にし、test/unit/DependencyPinTest.js を通すこと。
+const HLS_JS_VERSION = '1.7.3';
+const HLS_JS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.3';
+
 const MODULES = `
-const ZenzaHLSmodules = {ErrorEvent, MediaError, HTMLDialogElement: window.HTMLDialogElement || HTMLDivElement, DOMException};
+const ZenzaHLSmodules = {ErrorEvent, MediaError, HTMLDialogElement: window.HTMLDialogElement || HTMLDivElement, DOMException,
+  HLS_JS_VERSION: ${JSON.stringify(HLS_JS_VERSION)}, HLS_JS_URL: ${JSON.stringify(HLS_JS_URL)}};
 `;
 // hls.js@latest だと再生が始まらない動画がたまにある。 0.8.9ならok
 
@@ -75,7 +82,7 @@ AntiPrototypeJs();
 
 AntiPrototypeJs().then(() => {
   const PRODUCT = 'ZenzaWatchHLS';
-  const monkey = (PRODUCT, {ErrorEvent, MediaError, HTMLDialogElement, DOMException}) => {
+  const monkey = (PRODUCT, {ErrorEvent, MediaError, HTMLDialogElement, DOMException, HLS_JS_VERSION, HLS_JS_URL}) => {
     const window = globalThis ? globalThis.window : window;
     const console = window.console;
     const VER = '0.0.1';
@@ -95,25 +102,17 @@ class Handler { //extends Array {
 		return this._list.length;
 	}
 	exec(...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member.apply(this._list, args); }
 		}
 	}
 	execMethod(name, ...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0][name](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i][name](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member[name](...args); }
 		}
 	}
 	add(member) {
@@ -222,7 +221,11 @@ const {Emitter} = (() => {
 			} else if (!callback) {
 				this._events.delete(name);
 			} else {
-				e.remove(callback);
+				for (const listener of e) {
+					if (listener === callback || listener._original === callback) {
+						e.remove(listener);
+					}
+				}
 				if (e.isEmpty) {
 					this._events.delete(name);
 				}
@@ -234,9 +237,9 @@ const {Emitter} = (() => {
 		}
 		once(name, func) {
 			const wrapper = (...args) => {
-				func(...args);
 				this.off(name, wrapper);
 				wrapper._original = null;
+				func(...args);
 			};
 			wrapper._original = func;
 			return this.on(name, wrapper);
@@ -321,10 +324,12 @@ const {Handler, PromiseHandler, Emitter} = EmitterInitFunc();
 const workerUtil = (() => {
 	let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
 	let global = null, external = null;
+	const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
 	const isAvailable = !!(window.Blob && window.Worker && window.URL);
 	const messageWrapper = function(self) {
 		const _onmessage = self.onmessage || (() => {});
 		const promises = {};
+		let requestSeq = 0;
 		const onMessage = async function(self, type, e) {
 			const {body, sessionId, status} = e.data;
 			const {command, params} = body;
@@ -348,7 +353,9 @@ const workerUtil = (() => {
 						const port = e.ports[0];
 						portMap[params.name] = port;
 						port.addEventListener('message', onMessage.bind({}, port, params.name));
+						port.start && port.start();
 						bindFunc(port, 'MessageChannel');
+						result = {name: params.name};
 						if (params.ping) {
 							console.time('ping:' + sessionId);
 							port.ping().then(result => {
@@ -360,7 +367,7 @@ const workerUtil = (() => {
 							});
 						}
 					}
-						return;
+						break;
 					case 'broadcast': {
 						if (!BroadcastChannel) { return; }
 						const channel = new BroadcastChannel(`${params.name}`);
@@ -376,12 +383,14 @@ const workerUtil = (() => {
 						result = await _onmessage({command, params}, type, PID);
 						break;
 					}
+				if (sessionId === undefined || sessionId === null) { return; }
 				self.postMessage({body:
 					{command: 'commandResult', params:
 						{command, result}}, sessionId, TYPE: type, PID, status: 'ok'
 					});
 			} catch(err) {
 				console.error('failed', {err, command, params, sessionId, TYPE: type, PID, data: e.data});
+				if (sessionId === undefined || sessionId === null) { return; }
 				self.postMessage({body:
 						{command: 'commandResult', params: {command, result: err.message || null}},
 						sessionId, TYPE: type, PID, status: err.status || 'fail'
@@ -396,7 +405,7 @@ const workerUtil = (() => {
 		};
 		const bindFunc = (self, type = 'Worker') => {
 			const post = function(self, body, options = {}) {
-				const sessionId = `recv:${NAME}:${type}:${this.sessionId++}`;
+				const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
 				return new Promise((resolve, reject) => {
 					promises[sessionId] = {resolve, reject};
 					self.postMessage({body, sessionId, PID}, options.transfer);
@@ -472,9 +481,10 @@ const workerUtil = (() => {
 			let cache = this.urlMap.get(func);
 			const name = options.name || 'Worker';
 			if (!cache) {
+				const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
 				const src = `
-				const PID = '${window && window.name || 'self'}:${location.href.replace(/\'/g, '\\\'')}:${name}:${Date.now().toString(16).toUpperCase()}';
-				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', '${PRODUCT}', location.origin);
+				const PID = ${JSON.stringify(pid)};
+				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
 				const blob = new Blob([src], {type: 'text/javascript'});
@@ -490,12 +500,26 @@ const workerUtil = (() => {
 			return new Worker(cache, options);
 		}.bind({urlMap: new Map(), workerMap: new Map()}),
 		createCrossMessageWorker: function(func, options = {}) {
-			const promises = this.promises;
+			const promises = {};
+			const instanceId = this.instanceSeq++;
+			let requestSeq = 0;
 			const name = options.name || 'Worker';
+			let state = 'starting';
+			const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
+			const rpcError = (reason, message) =>
+				Object.assign(new Error(message || reason), {name: 'WorkerRpcError', status: 'fail', reason, workerName: name});
+			const rejectAll = (reason, message) => {
+				for (const id of Object.keys(promises)) {
+					const p = promises[id];
+					delete promises[id];
+					p.reject(rpcError(reason, message));
+				}
+			};
+			const closables = [];
 			const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
 			const _func = `
 			function (self) {
-			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = decodeURI('${encodeURI(name)}'), bcast = {}, portMap = {};
+			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = ${JSON.stringify(String(name))}, bcast = {}, portMap = {};
 			const {Handler, PromiseHandler, Emitter} = (${EmitterInitFunc.toString()})();
 			${options.inject ?? ''}
 			(${func.toString()})(self);
@@ -507,6 +531,8 @@ const workerUtil = (() => {
 			const self = options.type === 'SharedWorker' ? worker.port : worker;
 			self.name = name;
 			const onMessage = async function(self, e) {
+				if (state === 'disposed') { return; }
+				if (state === 'starting' || state === 'failed') { state = 'ready'; }
 				const {body, sessionId, status} = e.data;
 				const {command, params} = body;
 				try {
@@ -545,25 +571,36 @@ const workerUtil = (() => {
 							self.oncommand && (result = await self.oncommand({command, params}));
 							break;
 					}
+					if (sessionId === undefined || sessionId === null) { return; }
 					self.postMessage({body: {command: 'commandResult', params: {command, result}}, sessionId, status: 'ok'}, transfer);
 				} catch (err) {
 					console.error('failed', {err, command, params, sessionId});
+					if (sessionId === undefined || sessionId === null) { return; }
 					self.postMessage({body: {command: 'commandResult', params: {command, result: err.message || null}}, sessionId, status: err.status || 'fail'});
 				}
 			};
 			const bindFunc = (self, type = 'Worker') => {
 				const post = function(self, body, options = {}) {
-					const sessionId = `send:${name}:${type}:${this.sessionId++}`;
+					if (state === 'failed' || state === 'disposed') {
+						return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
+					}
+					const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
+					const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
+					let timer = null;
 					return new Promise((resolve, reject) => {
 							promises[sessionId] = {resolve, reject};
 							self.postMessage({body, sessionId, TYPE: type, PID}, options.transfer);
-							if (typeof options.timeout === 'number') {
-								setTimeout(() => {
-									reject({status: 'fail', message: 'timeout'});
+							if (timeout > 0 && timeout < Infinity) {
+								timer = setTimeout(() => {
+									if (!promises[sessionId]) { return; }
 									delete promises[sessionId];
-								}, options.timeout);
+									reject(rpcError('timeout', 'timeout'));
+								}, timeout);
 							}
-						}).finally(() => { delete promises[sessionId]; });
+						}).finally(() => {
+							timer && clearTimeout(timer);
+							delete promises[sessionId];
+						});
 				};
 				const ping = async function(self, options = {}) {
 					const timekey = `PING "${self.name}" total time`;
@@ -581,13 +618,33 @@ const workerUtil = (() => {
 					return result;
 				};
 				self.post = post.bind({sessionId: 0}, self);
+				self.send = (body, transfer) => self.postMessage({body, TYPE: type, PID}, transfer);
 				self.ping = ping.bind({}, self);
 				self.addEventListener('message', onMessage.bind({sessionId: 0}, self));
+				self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
 				self.start && self.start();
 			};
 			bindFunc(self);
+			worker.addEventListener('error', e => {
+				if (state === 'disposed') { return; }
+				if (state === 'starting') { state = 'failed'; }
+				rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
+			});
+			if (self === worker && typeof worker.terminate === 'function') {
+				const terminate = worker.terminate.bind(worker);
+				self.terminate = () => {
+					if (state === 'disposed') { return; }
+					state = 'disposed';
+					rejectAll('terminated', `worker terminated: ${name}`);
+					for (const c of closables.splice(0)) {
+						try { c.close(); } catch (e) { /* 閉じられなくても続ける */ }
+					}
+					terminate();
+				};
+			}
+			self.getRpcState = () => ({id: instanceId, name, state, pending: Object.keys(promises).length});
 			if (config) {
-				self.post({
+				self.send({
 					command: 'env',
 					params: {config: config.export(true), TOKEN, PRODUCT, CONSTANT}
 				});
@@ -597,30 +654,28 @@ const workerUtil = (() => {
 				return self.post({command: 'port', params: {port, name}}, {transfer: [port]});
 			};
 			const channel = new MessageChannel();
-			self.addPort(channel.port2);
-			bindFunc(channel.port1, {name: 'MessageChannel'});
+			self.addPort(channel.port2).catch(() => {});
+			bindFunc(channel.port1, 'MessageChannel');
+			closables.push(channel.port1);
 			self.bridge = async (worker, options = {}) => {
 				const name = options.name || 'MessageChannelBridge';
 				const channel = new MessageChannel();
 				await self.addPort(channel.port1, {name: worker.name || name});
 				await worker.addPort(channel.port2, {name: self.name || name});
-				console.log('ping self -> other', await channel.port1.ping());
-				console.log('ping other -> self', await channel.port2.ping());
 			};
 			self.BroadcastChannel = basename => {
 				const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
-				self.post({command: 'broadcast', params: {basename, name}});
+				self.send({command: 'broadcast', params: {basename, name}});
 				const channel = new BroadcastChannel(name);
-				channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
 				bindFunc(channel, 'BroadcastChannel');
+				closables.push(channel);
 				return name;
 			};
 			self.ping()
 				.catch(result => console.warn('FAIL', result));
 			return self;
 		}.bind({
-			sessionId: 0,
-			promises: {}
+			instanceSeq: 0
 		})
 	};
 	return workerUtil;
@@ -632,7 +687,7 @@ const workerUtil = (() => {
       use_native_hls: true,   // SafariなどブラウザがHLS対応だったらそっちを使う
       show_video_label: false, //
       autoAbrEwmaDefaultEstimate: true,
-      hls_js_ver: 'latest',
+      hls_js_ver: HLS_JS_VERSION, // 表示用。読み込む版は HLS_JS_URL に固定（保存された古い値は使わない）
 
       enable_db_cache: !true,
       cache_expire_time: 6 * 60 * 60 * 1000,
@@ -1658,6 +1713,9 @@ const workerUtil = (() => {
           const video = this._video = root.querySelector('video');
           this._label = root.querySelector('.label');
 
+          // Register before bridged player listeners so recoverable native errors stay local.
+          video.addEventListener('error', event => this._onNativeHLSError(event));
+
           video.addEventListener('playing', () => {
             root.classList.add('is-playing');
             this.label = `${this.playerMode}: ${this._video.videoWidth}x${this._video.videoHeight}`;
@@ -1932,9 +1990,28 @@ const workerUtil = (() => {
           this._bufferStats = [];
         }
 
+        _onNativeHLSError(event) {
+          const code = this._video.error?.code;
+          if (this.playerMode !== PLAYER_MODE.HLS_NATIVE ||
+              ![3, 4].includes(code) || this._video.currentTime !== 0 || !Hls.isSupported()) {
+            return false;
+          }
+          // canPlayType is only a hint: some browsers reject the actual HLS stream.
+          // Switching mode before initialization permits one fallback per source.
+          this.playerMode = PLAYER_MODE.HLS_JS;
+          this._resetPlayingStatus();
+          try {
+            this._initHLSJS(this._src);
+          } catch (_) {
+            return false;
+          }
+          event.stopImmediatePropagation();
+          return true;
+        }
+
         get _useNativeHLS() {
           return !!this._video.canPlayType('application/x-mpegURL') &&
-            this.getAttribute('use-native-hls') === 'no';
+            this.getAttribute('use-native-hls') === 'yes';
         }
 
         set playerMode(v) {
@@ -2206,7 +2283,7 @@ const workerUtil = (() => {
           Hls = window.Hls;
           console.info('hls.js loaded:', window.Hls.version);
         };
-        s.src = `https://cdn.jsdelivr.net/npm/hls.js@${Config.get('hls_js_ver')}`;
+        s.src = HLS_JS_URL;
         // console.info('load hls.js from', s.src);
         (document.head || document.documentElement).append(s);
       } else {
@@ -3003,7 +3080,7 @@ const workerUtil = (() => {
     };
 
     const init = () => {
-      console.log('%cinit ZenzaWatch HLS 0.0.24-task079b', 'background: cyan');
+      console.log('%cinit ZenzaWatch HLS 0.0.30-task155', 'background: cyan');
 
       const hlsConfig = Object.assign({}, Config.raw);
       // Task 079: Config は emit('update', {key, value}) の形で知らせるので、
@@ -3127,7 +3204,7 @@ const workerUtil = (() => {
     if (window && !window.Hls) {
       const hlsjs = document.createElement('script');
       hlsjs.id = 'HLSJS_Loader';
-      hlsjs.src = 'https://cdn.jsdelivr.net/npm/hls.js@latest';
+      hlsjs.src = HLS_JS_URL;
       hlsjs.onerror = e => {
         const div = document.createElement('div');
         div.innerHTML = `

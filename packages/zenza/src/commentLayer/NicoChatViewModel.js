@@ -82,6 +82,7 @@ class NicoChatViewModel {
     } else {
       this._setupMarqueeMode();
     }
+    this.recalcBeginEndTiming(this._speedRate);
   }
 
   setType(type) {
@@ -163,6 +164,16 @@ class NicoChatViewModel {
       this._endLeftTiming = this._endRightTiming;
       this._beginRightTiming = this._beginLeftTiming;
     }
+  }
+
+  resetLayoutForSpeedChange() {
+    const screenHeight = CommentLayer.SCREEN.HEIGHT;
+    this._isOverflow =
+      this._height >= screenHeight - this._fontSizePixel / 2;
+    this._y =
+      this._type === NicoChat.TYPE.BOTTOM ?
+        screenHeight - this._height : 0;
+    this._isLayouted = false;
   }
 
   recalcBeginEndTiming(speedRate = 1) {
@@ -425,6 +436,7 @@ class NicoChatViewModel {
   get lineHeight() {return this._cssLineHeight;}
   get isLineResized() {return this._isLineResized;}
   get isDoubleResized() {return this._isDoubleResized;}
+  get threadId() {return this._nicoChat.threadId;}
   get no() {return this._nicoChat.no;}
   get uniqNo() {return this._nicoChat.uniqNo;}
   get layerId() {return this._nicoChat.layerId;}

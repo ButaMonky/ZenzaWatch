@@ -46,7 +46,7 @@ class NicoChat {
       date: parseInt(elm.getAttribute('date'), 10) || Math.floor(Date.now() / 1000),
       cmd: elm.getAttribute('mail') || '',
       isPremium: elm.getAttribute('premium') === '1',
-      userId: elm.getAttribute('user_id'),
+      user_id: elm.getAttribute('user_id'),
       vpos: parseInt(elm.getAttribute('vpos'), 10),
       deleted: elm.getAttribute('deleted') === '1',
       isMine: elm.getAttribute('mine') === '1',
@@ -136,12 +136,19 @@ class NicoChat {
     return props;
   }
 
+  // Identity is an opaque tuple, not a packed number. Numeric strings from XML
+  // and JSON represent the same component; no modulo compression is allowed.
+  static identity(data) {
+    return JSON.stringify([data.thread * 1, data.fork * 1, data.no * 1]);
+  }
+
   static SORT_FUNCTION(a, b) {
     const av = a.vpos, bv = b.vpos;
     if (av !== bv) {
       return av - bv;
     } else {
-      return a.uniqNo < b.uniqNo ? -1 : 1;
+      // Preserve numeric thread/fork/no ordering rather than sorting tuple text.
+      return (a.threadId - b.threadId) || (a.fork - b.fork) || (a.no - b.no);
     }
   }
 
@@ -153,12 +160,14 @@ class NicoChat {
 
     Object.assign(props, data);
     if (options.format === 'bulk') {
+      props.uniqNo = NicoChat.identity(props);
       return;
     }
     props.userId = data.user_id;
     props.fork = data.fork * 1;
     props.thread = data.thread * 1;
-    props.isPremium = data.premium ? '1' : '0';
+    const premium = data.premium === undefined ? data.isPremium : data.premium;
+    props.isPremium = (premium === true || premium === 1 || premium === '1') ? '1' : '0';
     props.isSubThread = (options.mainThreadId && props.thread !== options.mainThreadId);
     if (typeof data.layerId === 'number') {
       props.layerId = data.layerId;
@@ -168,10 +177,7 @@ class NicoChat {
     } else {
       props.layerId = props.fork;
     }
-    props.uniqNo =
-      (data.no                 %   10000) +
-      (data.fork               *  100000) +
-      ((data.thread % 1000000) * 1000000);
+    props.uniqNo = NicoChat.identity(props);
     props.color = null;
     props.size = NicoChat.SIZE.MEDIUM;
     props.type = NicoChat.TYPE.NAKA;
@@ -278,13 +284,17 @@ class NicoChat {
   get dateUsec() {return this.props.date_usec;}
   get lastNicoruDate() {return this.props.lastNicoruDate;}
   get cmd() {return this.props.cmd;}
-  get isPremium() {return !!this.props.isPremium;}
+  get isPremium() {
+    const value = this.props.isPremium;
+    return value === true || value === 1 || value === '1';
+  }
   get isEnder() {return !!this.props.isEnder;}
   get isFull() {return !!this.props.isFull;}
   get isMine() {return !!this.props.isMine;}
   get isInvisible() {return this.props.isInvisible;}
   get isNicoScript() {return this.props.isNicoScript;}
   get isPatissier() {return this.props.isPatissier;}
+  get isCA() {return !!this.props.isCA;}
   get isSubThread() {return this.props.isSubThread;}
   get hasColorCommand() {return !!this.props.hasColorCommand;}
   get hasSizeCommand() {return !!this.props.hasSizeCommand;}
@@ -310,10 +320,7 @@ class NicoChat {
   set no(no) {
     const props = this.props;
     props.no = no;
-    props.uniqNo =
-      (no     %  100000) +
-      (props.fork   *  1000000) +
-      (props.thread * 10000000);
+    props.uniqNo = NicoChat.identity(props);
   }
   get uniqNo() {return this.props.uniqNo;}
   get layerId() {return this.props.layerId;}

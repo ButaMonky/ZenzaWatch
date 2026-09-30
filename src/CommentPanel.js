@@ -2,7 +2,9 @@ import _ from 'lodash';
 import {global} from './ZenzaWatchIndex';
 import {BaseViewComponent} from './util';
 import {FrameLayer} from '../packages/zenza/src/parts/FrameLayer';
-import {CONSTANT, NICORU} from './constant';
+import {CONSTANT} from './constant';
+// NICORU（ニコるアイコンの data URL）は src/_template.js の monkey 内で const として定義され、
+// 連結ビルドで同じスコープに入る。どのモジュールも export していないため import では表せない（Task 087 / ZW-007）
 import {Emitter} from './baselib';
 import {bounce, throttle} from '../packages/lib/src/infra/bounce';
 import {textUtil} from '../packages/lib/src/text/textUtil';
@@ -59,7 +61,7 @@ class CommentListModel extends Emitter {
     if (!target) {
       return;
     }
-    this._items = this._items.filter(item => item !== target);
+    this.removeItem(target);
   }
   get length() {
     return this._items.length;
@@ -86,6 +88,8 @@ class CommentListModel extends Emitter {
     this._items = this._items.filter(i => i !== item); //_.pull(this._items, item);
     const afterLen = this._items.length;
     if (beforeLen !== afterLen) {
+      this._positions = this._items.map(item => item.vpos / 100).sort((a, b) => a - b);
+      this._currentIndex = -1;
       this.emit('update', this._items);
     }
   }
@@ -110,6 +114,7 @@ class CommentListModel extends Emitter {
     }
     this._currentSortKey = key;
     this._isDesc = isDesc;
+    this._currentIndex = -1;
     this.onUpdate(true);
   }
   sort() {
@@ -122,7 +127,8 @@ class CommentListModel extends Emitter {
     this.emitAsync('update', this._items, replaceAll);
   }
   getInViewIndex(sec) {
-    return Math.max(0, _.sortedLastIndex(this._positions, sec + 1) - 1);
+    const index = Math.max(0, _.sortedLastIndex(this._positions, sec + 1) - 1);
+    return this._isDesc ? Math.max(0, this._positions.length - 1 - index) : index;
   }
   set currentTime(sec) {
     if (this._currentTime !== sec && typeof sec === 'number') {
@@ -159,8 +165,14 @@ class CommentListView extends Emitter {
     this._innerHeight = 100;
 
     this._model = params.model;
+    this._modelUpdateVersion = 0;
+    this._isModelUpdatePending = false;
     if (this._model) {
-      this._model.on('update', _.debounce(this._onModelUpdate.bind(this), 500));
+      const update = _.debounce(this._onModelUpdate.bind(this), 500);
+      this._model.on('update', (items, replaceAll) => {
+        this._isModelUpdatePending = true;
+        update(items, replaceAll, ++this._modelUpdateVersion);
+      });
     }
 
     // this.syncScrollTop = throttle.raf(this.syncScrollTop.bind(this));
@@ -208,9 +220,7 @@ class CommentListView extends Emitter {
     this.frameLayer.frame.addEventListener('visibilitychange', e => {
       const {isVisible} = e.detail;
       if (!isVisible) { return; }
-      if (this.isAutoScroll) {
-        this.setScrollTop(this.timeScrollTop);
-      }
+      this._refreshCurrentPoint();
       this._refreshInviewElements();
     });
 
@@ -252,16 +262,18 @@ class CommentListView extends Emitter {
       Array.from(doc.querySelectorAll('.commentListItem'));
     this.emitResolve('frame-ready');
   }
-  async _onModelUpdate(itemList, replaceAll) {
+  async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
+    this._clearSelectedItem();
     if (!this._isFrameReady) {
       await this.promise('frame-ready');
     }
+    if (revision !== this._modelUpdateVersion) { return; }
     this._isFrameReady = true;
 
     window.console.time('update commentlistView');
     this.addClass('updating');
     itemList = Array.isArray(itemList) ? itemList : [itemList];
-    this.isActive = false;
+    // Preserve manual browsing while the list is rebuilt.
 
     if (replaceAll) {
       this._scrollTop = this._container ? this._container.scrollTop : 0;
@@ -271,19 +283,23 @@ class CommentListView extends Emitter {
       new this._ItemView({item: item, index: i, height: CommentListView.ITEM_HEIGHT})
     );
 
-    this._itemViews = itemViews;
-
     await cssUtil.setProps([this.body, '--list-height',
       Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
 
-    if (!this._list) { return; }
+    if (revision !== this._modelUpdateVersion || !this._list) { return; }
+    this._itemViews = itemViews;
+    this._isModelUpdatePending = false;
+    this.newItems.length = 0;
+    this.removedItems.length = 0;
     this._list.textContent = '';
     this._inviewItemList.clear();
     this._$menu.removeClass('show');
+    this._refreshCurrentPoint();
     this._refreshInviewElements();
     this.hideItemDetail();
 
     window.setTimeout(() => {
+      if (revision !== this._modelUpdateVersion) { return; }
       this.removeClass('updating');
       this.emit('update');
     }, 100);
@@ -349,6 +365,20 @@ class CommentListView extends Emitter {
     }
     this.emit('command', command, param, itemId);
   }
+  _clearSelectedItem() {
+    if (this._selectedItem) {
+      this._selectedItem.classList.remove('is-active');
+      this._selectedItem = null;
+    }
+  }
+  _selectItem(item) {
+    if (!item || this._selectedItem === item) {
+      return;
+    }
+    this._clearSelectedItem();
+    this._selectedItem = item;
+    item.classList.add('is-active');
+  }
   _onDblClick(e) {
     e.stopPropagation();
     const item = e.target.closest('.commentListItem');
@@ -357,6 +387,7 @@ class CommentListView extends Emitter {
     }
     e.preventDefault();
 
+    this._selectItem(item);
     const itemId = item.dataset.itemId;
     this.emit('command', 'select', null, itemId);
   }
@@ -494,7 +525,8 @@ class CommentListView extends Emitter {
     }
   }
   setScrollTop(v) {
-    if (!this.contentWindow) {
+    if (!this.contentWindow || this._isModelUpdatePending || this.isActive ||
+        this.isAutoScroll === false || (this._model && this._model.currentSortKey !== 'vpos')) {
       return;
     }
     this._scrollTop = v;
@@ -505,8 +537,14 @@ class CommentListView extends Emitter {
     this._container.scrollTop = v;
     // this._container.addEventListener('scroll', this._onScroll, {passive: true});
   }
+  _refreshCurrentPoint() {
+    const model = this._model;
+    if (!model || model.currentSortKey !== 'vpos') { return; }
+    this.setCurrentPoint(model.currentTime, model.getInViewIndex(model.currentTime), this.isAutoScroll);
+  }
   setCurrentPoint(sec, idx, isAutoScroll) {
-    if (!this.contentWindow || !this._itemViews || !this.frameLayer.isVisible) {
+    this.isAutoScroll = isAutoScroll;
+    if (!this.contentWindow || !this._itemViews || this._isModelUpdatePending) {
       return;
     }
     const innerHeight = this._innerHeight;
@@ -514,6 +552,8 @@ class CommentListView extends Emitter {
     const len = itemViews.length;
     const view = itemViews[idx];
     if (len < 1 || !view) {
+      this.timeScrollTop = 0;
+      if (!this.isActive && isAutoScroll) { this.setScrollTop(0); }
       return;
     }
 
@@ -1391,6 +1431,8 @@ class CommentPanelView extends Emitter {
   }
   _onCommentPanelStatusUpdate() {
     const commentPanel = this.commentPanel;
+    this._listView.isAutoScroll = commentPanel.isAutoScroll;
+    this._listView._refreshCurrentPoint();
     const $view = this.toggleClass('autoScroll', commentPanel.isAutoScroll);
 
     const langClass = `lang-${commentPanel.getLanguage()}`;
@@ -1581,8 +1623,15 @@ class CommentPanel extends Emitter {
   }
   _onCommand(command, param, itemId) {
     let item;
-    if (itemId) {
+    const hasItemId = itemId !== undefined && itemId !== null;
+    if (hasItemId) {
       item = this._model.findByItemId(itemId);
+    }
+    const needsItem = ['select', 'clipBoard', 'removeComment',
+      'addUserIdFilter', 'addWordFilter', 'nicoru', 'itemDetailRequest'].includes(command);
+    // A menu event can outlive its row after a reload, filter, or video change.
+    if (!item && (hasItemId || needsItem)) {
+      return;
     }
     switch (command) {
       case 'toggleScroll':

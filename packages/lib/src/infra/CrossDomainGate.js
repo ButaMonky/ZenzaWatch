@@ -69,8 +69,10 @@ class CrossDomainGate extends Emitter {
         return;
       }
       // window.console.info(`%c2. CrossDomainGate onInitialMessage [${this.name} ${PRODUCT}]`, 'background: orange; color: green; font-size: 120%');
-      window.removeEventListener('message', onInitialMessage);
       this._onMessage(event);
+      if (this._initializeStatus === 'done') {
+        window.removeEventListener('message', onInitialMessage, {capture: true});
+      }
     };
     window.addEventListener('message', onInitialMessage, {capture: true});
     this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
@@ -79,8 +81,9 @@ class CrossDomainGate extends Emitter {
     const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
     const {id, type, token, sessionId, body} = data;
     if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
+      // Task 088（監査v2 ZW-056）: 受け取ったトークン・自分のトークンの値はログに出さない（一致したかだけ）
       console.warn('invalid token:',
-        {id, PRODUCT, type, _type: this._type, token, TOKEN});
+        {id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN});
       return;
     }
 
@@ -196,20 +199,19 @@ class CrossDomainGate extends Emitter {
     await this._initializeFrame();
     sessionId = sessionId || (`gate:${Math.random()}`);
     const {params} = body;
-    return this._sessions[sessionId] =
-      new PromiseHandler((resolve, reject) => {
-        try {
-          this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
-          if (!usePromise) {
-            delete this._sessions[sessionId];
-            resolve();
-          }
-        } catch (error) {
-          console.log('%cException!', 'background: red;', {error, body});
-          delete this._sessions[sessionId];
-          reject(error);
-        }
-    });
+    if (!usePromise) {
+      this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
+      return;
+    }
+    const session = new PromiseHandler();
+    this._sessions[sessionId] = session;
+    try {
+      this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
+    } catch (error) {
+      delete this._sessions[sessionId];
+      session.reject(error);
+    }
+    return session;
   }
   postMessage(body, promise = true) {
     return this._postMessage(body, promise);

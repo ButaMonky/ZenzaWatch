@@ -138,7 +138,7 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
   });
 
   it('公開してよいパスの決まり: 今の公開用ファイル構成は通り、禁止の種類は通らない', function() {
-    const allowed = ['README.md', 'LICENSE', 'package.json', 'package-lock.json', '.gitignore', 'build.js',
+    const allowed = ['README.md', 'LICENSE', 'package.json', 'package-lock.json', '.gitignore', 'build.js', 'dist-manifest.json',
       'src/_template.js', 'src/_jshintrc', 'src/yomi/YomiPage.js', 'packages/lib/src/nico/ThreadLoader.js',
       'packages/components/src/template.txt', 'packages/components/mock/config.js', 'packages/components/dist/main.js',
       'dist/ZenzaWatch-dev.user.js', 'test/unit/utilTest.js', 'test/fixtures/VideoInfoRawData.json',

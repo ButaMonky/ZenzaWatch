@@ -10,30 +10,45 @@ const netUtil = {
     }
     return $.ajax(params);
   },
-  abortableFetch: (url, params) => {
+  abortableFetch: async (url, params = {}) => {
     params = params || {};
+    const options = {...params};
+    const callerSignal = options.signal;
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+      Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+    const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
     const racers = [];
     let timer;
-    const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-    if (timeout > 0) {
-      racers.push(new Promise((resolve, reject) =>
-        timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-      );
+    let onAbort;
+    try {
+      if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+      if (controller) { options.signal = controller.signal; }
+      if (callerSignal) {
+        racers.push(new Promise((resolve, reject) => {
+          onAbort = () => {
+            const reason = abortReason();
+            reject(reason);
+            if (controller) { controller.abort(reason); }
+          };
+          callerSignal.addEventListener('abort', onAbort, {once: true});
+        }));
+      }
+      if (timeout > 0) {
+        racers.push(new Promise((resolve, reject) => {
+          timer = setTimeout(() => {
+            const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+            reject(error);
+            if (controller) { controller.abort(error); }
+          }, timeout);
+        }));
+      }
+      racers.push(fetch(url, options));
+      return await Promise.race(racers);
+    } finally {
+      if (timer !== undefined) { clearTimeout(timer); }
+      if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
     }
-    const controller = window.AbortController ? (new AbortController()) : null;
-    if (controller) {
-      params.signal = controller.signal;
-    }
-    racers.push(fetch(url, params));
-    return Promise.race(racers)
-      .catch(err => {
-        if (err.name === 'timeout') {
-          if (controller) {
-            controller.abort();
-          }
-        }
-        return Promise.reject(err.message || err);
-      }).finally(() => timer = null);
   },
   fetch(url, params) {
     if (location.host !== 'www.nicovideo.jp') {

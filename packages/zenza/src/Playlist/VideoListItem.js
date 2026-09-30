@@ -1,6 +1,16 @@
 import {bounce, throttle} from '../../../lib/src/infra/bounce';
 import {textUtil} from '../../../lib/src/text/textUtil';
 //===BEGIN===
+/*
+ * Task 093: プレイリストの1件。3種類の identity を混同しないこと。
+ *  - watchId: 今その動画を再生・検索・重複判定に使う正規の動画ID（sm〜・so〜・ss〜・スレッドIDの数字）。
+ *             後から変わることがある（例: 数字のIDで入れたチャンネル動画が so〜 と分かった時。
+ *             MylistPocket の情報で item.watchId = … と書き換える外部のコードもある）。
+ *             変わった時は所属する model（groupList）へすぐ知らせ、findByWatchId が新しいIDで見つかるようにする。
+ *  - uniqId:  item が最初に持った安定した identity（動画を開いた時の contextWatchId 等）。watchId が変わっても変えない。
+ *             保存形式では uniq_id（以前から serialize が書いていた名前）。読む時は uniqId・uniq_id のどちらも受け付ける。
+ *  - itemId:  実行中の item object ごとの番号（保存しない。復元すると新しい番号になる）。
+ */
 class VideoListItem {
   static createByThumbInfo(info) {
     return new this({
@@ -135,10 +145,18 @@ class VideoListItem {
       timestamp: performance.now(),
       adDecoration: null, // 広告装飾('normal'/'silver'/'gold')。未取得はnull(Task 054)
     };
-    this._uniq_id = rawData.uniqId || this.watchId;
+    // Task 093: 以前は rawData.uniqId だけを読んでいたが、作る側（createBy…）と serialize は uniq_id と書くため、
+    // 保存して読み戻すと uniqId が失われていた。どちらの名前も読む。
+    const uniqId = rawData.uniqId != null && rawData.uniqId !== '' ? rawData.uniqId :
+      (rawData.uniq_id != null && rawData.uniq_id !== '' ? rawData.uniq_id : this._watchId);
+    this._uniq_id = uniqId.toString();
     rawData.first_retrieve = textUtil.dateToString(rawData.first_retrieve);
 
     this.notifyUpdate = throttle.raf(this.notifyUpdate.bind(this));
+    this._updateSortTitle();
+  }
+
+  _updateSortTitle() {
     this._sortTitle = textUtil.convertKansuEi(this.title)
       .replace(/([0-9]{1,9})/g, m => m.padStart(10, '0')).replace(/([０-９]{1,9})/g, m => m.padStart(10, '０'));
   }
@@ -166,8 +184,12 @@ class VideoListItem {
 
   get watchId() { return this._watchId; }
   set watchId(v) {
-    if (v === this._watchId) { return; }
+    v = (v == null ? '' : v).toString();
+    if (!v || v === this._watchId) { return; }
+    const oldWatchId = this._watchId;
     this._watchId = v;
+    // Task 093: 所属する model の watchId の Map をすぐに直す（重複する時は model が片方を外す）
+    this._groupList && this._groupList.onItemWatchIdChange && this._groupList.onItemWatchIdChange(this, oldWatchId);
     this.notifyUpdate();
   }
 
@@ -268,7 +290,8 @@ class VideoListItem {
       last_activated: this.state.lastActivated || 0,
       played: this.isPlayed,
       uniq_id: this._uniq_id,
-      id: this._rawData.id,
+      // Task 093: 以前は rawData.id（最初のID）を書いていたため、watchId を変えた後に保存・復元すると古いIDに戻っていた
+      id: this._watchId,
       title: this._rawData.title,
       length_seconds: this._rawData.length_seconds,
       num_res: this._rawData.num_res,
@@ -278,7 +301,14 @@ class VideoListItem {
       first_retrieve: this._rawData.first_retrieve,
     };
   }
+  /**
+   * 動画情報（VideoInfoModel）で件数・サムネイル・投稿日を更新する（普通の item の軽い更新）。
+   * Task 093: 情報不明（blank）の item なら、同じ object のまま完全な情報にする（upgradeByVideoInfo）。
+   */
   updateByVideoInfo(videoInfo) {
+    if (this.isBlankData) {
+      return this.upgradeByVideoInfo(videoInfo);
+    }
     const before = JSON.stringify(this.serialize());
     const rawData = this._rawData;
     const count = videoInfo.count;
@@ -293,6 +323,62 @@ class VideoListItem {
     if (JSON.stringify(this.serialize()) !== before) {
       this.notifyUpdate();
     }
+  }
+  /**
+   * Task 093: 情報不明（createBlankInfo）の item を、同じ object のまま完全な情報にする。
+   * itemId・プレイリストの中の位置・再生中・再生済み・ドラッグ等の表示の状態は変えない。
+   * watchId が変わる時（チャンネル動画の so〜 等）は setter を通すので、model の Map も直る。
+   */
+  upgradeByVideoInfo(videoInfo) {
+    const count = videoInfo.count || {};
+    return this._applyFullData({
+      _format: 'videoInfo',
+      watchId: videoInfo.watchId,
+      title: videoInfo.title,
+      length_seconds: videoInfo.duration,
+      num_res: count.comment,
+      mylist_counter: count.mylist,
+      view_counter: count.view,
+      thumbnail_url: videoInfo.thumbnail,
+      first_retrieve: videoInfo.postedAt,
+      owner: videoInfo.owner
+    });
+  }
+  /**
+   * Task 093: 別の item（同じ動画の完全な情報）の内容で、情報不明の item を完全にする（model の重複の処理から使う）。
+   */
+  upgradeFromItem(item) {
+    const raw = item._rawData || {};
+    return this._applyFullData({
+      _format: raw._format || 'upgraded',
+      watchId: item.watchId,
+      title: raw.title,
+      length_seconds: raw.length_seconds,
+      num_res: raw.num_res,
+      mylist_counter: raw.mylist_counter,
+      view_counter: raw.view_counter,
+      thumbnail_url: raw.thumbnail_url,
+      first_retrieve: raw.first_retrieve,
+      owner: raw.owner
+    });
+  }
+  _applyFullData(data) {
+    const rawData = this._rawData;
+    for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner']) {
+      if (data[key] !== undefined && data[key] !== null) {
+        rawData[key] = data[key];
+      }
+    }
+    if (data.first_retrieve) {
+      rawData.first_retrieve = textUtil.dateToString(data.first_retrieve);
+    }
+    rawData._format = data._format;
+    this._updateSortTitle();
+    if (data.watchId) {
+      this.watchId = data.watchId;
+    }
+    this.notifyUpdate();
+    return true;
   }
 }
 VideoListItem._itemId = 1;

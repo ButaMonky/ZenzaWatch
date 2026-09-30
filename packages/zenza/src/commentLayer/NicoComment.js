@@ -5,7 +5,8 @@ import {NicoChatGroupViewModel} from './NicoChatGroupViewModel';
 import {NicoChat} from './NicoChat';
 import {NicoChatGroup} from './NicoChatGroup';
 import {NicoScripter} from './NicoScripter';
-import {global, Config} from '../../../../src/ZenzaWatchIndex';
+import {global} from '../../../../src/ZenzaWatchIndex';
+import {Config} from '../../../../src/Config';
 import {sleep} from '../../../lib/src/infra/sleep';
 import {textUtil} from '../../../lib/src/text/textUtil';
 import {CommentLayer} from './CommentLayer';
@@ -86,6 +87,7 @@ class NicoComment extends Emitter {
     window.console.time('コメントのパース処理');
     const nicoScripter = this.nicoScripter;
     if (!options.append) {
+      this._nicoScriptGeneration = (this._nicoScriptGeneration || 0) + 1;
       this.topGroup.reset();
       this.nakaGroup.reset();
       this.bottomGroup.reset();
@@ -115,10 +117,10 @@ class NicoComment extends Emitter {
     nicoChats = []
       .concat(... // fork0 通常のコメント fork1 投稿者コメント fork2 かんたんコメント
         nicoChats.filter(c => (c.isPatissier || c.isCA) && c.fork !== 1 && c.isSubThread)
-          .splice(maxCommentsByDuration))
+          .slice(0, maxCommentsByDuration))
       .concat(...
         nicoChats.filter(c => (c.isPatissier || c.isCA) && c.fork !== 1 && !c.isSubThread)
-          .splice(maxCommentsByDuration))
+          .slice(0, maxCommentsByDuration))
       .concat(...nicoChats.filter(c => !(c.isPatissier || c.isCA) || c.fork === 1));
       window.console.timeLog && window.console.timeLog('コメントのパース処理', 'NicoChat created');
     nicoChats.filter(chat => chat.fork === 2).forEach(chat => chat.size = NicoChat.SIZE.SMALL);
@@ -157,7 +159,12 @@ class NicoComment extends Emitter {
       const nextVideo = nicoScripter.getNextVideo();
       window.console.info('nextVideo', nextVideo);
       if (nextVideo) {
-        this.emitAsync('command', 'nextVideo', nextVideo);
+        const generation = this._nicoScriptGeneration;
+        setTimeout(() => {
+          if (generation === this._nicoScriptGeneration) {
+            this.emit('command', 'nextVideo', nextVideo);
+          }
+        }, 0);
       }
     }
 
@@ -315,6 +322,8 @@ class NicoComment extends Emitter {
     this.topGroup.reset();
     this.nakaGroup.reset();
     this.bottomGroup.reset();
+    this._nicoScriptGeneration = (this._nicoScriptGeneration || 0) + 1;
+    this.nicoScripter.reset();
     this.emit('clear');
   }
   get currentTime() {

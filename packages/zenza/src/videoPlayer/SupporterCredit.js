@@ -382,7 +382,7 @@ const SupporterCredit = (() => {
     .zenzaSupporterCredit {
       position: absolute;
       inset: 0;
-      z-index: 8;
+      z-index: 11;
       display: none;
       opacity: 0;
       transition: opacity 0.4s ease;

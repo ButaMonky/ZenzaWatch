@@ -16,7 +16,8 @@ const MediaSessionApi = (() => {
       title,
       artist,
       album,
-      artwork
+      // Optional artwork must not abort playback when an image URL is missing.
+      artwork: (artwork || []).filter(image => typeof image?.src === 'string' && image.src.trim())
     });
 
     const nm = navigator.mediaSession;

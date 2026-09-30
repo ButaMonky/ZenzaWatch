@@ -33,6 +33,8 @@ class PlayList extends VideoList {
     this._isLoop = params.loop;
 
     this.model = new PlayListModel({});
+    // Task 093: item の watchId の変更で model が重複を外した時も、再生位置（_index）を再生中の item に合わせる
+    this.model.on('item-removed', () => this._refreshIndex());
 
     // Task 054: プレイリストの動画に広告(ニコニ広告)の金冠・銀冠枠を表示する。
     // 実装は基底クラスVideoList側にある（RelatedVideoList等とも共通化する
@@ -57,8 +59,8 @@ class PlayList extends VideoList {
     };
   }
   unserialize(data) {
-    if (!data) {
-      return;
+    if (!data || !Array.isArray(data.items)) {
+      return false;
     }
     this._initializeView();
     console.log('unserialize: ', data);
@@ -66,7 +68,24 @@ class PlayList extends VideoList {
     this._isEnable = data.enable;
     this._isLoop = data.loop;
     this.emit('update');
-    this.setIndex(data.index);
+    // Task 093: 保存した位置が無い・範囲外なら、再生中の item 無し（-1）にする（以前は NaN が入ることがあった）
+    const index = PlayList.normalizeRestoredIndex(data.index, this.model.length, -1);
+    this.setIndex(index, true);
+    return true;
+  }
+  /**
+   * Task 093: 保存・書き出したプレイリストの index を、今の件数の範囲に収める。
+   * 数値でない・無い・負の数は fallback、件数以上は最後の item、小数は切り捨て。件数0なら -1。
+   */
+  static normalizeRestoredIndex(index, length, fallback = 0) {
+    if (!(length > 0)) {
+      return -1;
+    }
+    const n = typeof index === 'number' ? Math.floor(index) : parseInt(index, 10);
+    if (!isFinite(n) || n < 0) {
+      return Math.min(fallback, length - 1);
+    }
+    return Math.min(n, length - 1);
   }
   restoreFromSession() {
     this.unserialize(PlayListSession.restore());
@@ -97,7 +116,7 @@ class PlayList extends VideoList {
         this.shuffle();
         break;
       case 'reverse':
-        this.model.reverse();
+        this.reverse();
         break;
       case 'sortBy': {
         let [key, order] = param.split(':');
@@ -150,7 +169,8 @@ class PlayList extends VideoList {
 
     const data = JSON.stringify(this.serialize(), null, 2);
 
-    const blob = new Blob([data], {'type': 'text/html'});
+    // Task 093: 中身は JSON（以前は text/html にしていた）
+    const blob = new Blob([data], {'type': 'application/json'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     Object.assign(a, {
@@ -167,12 +187,18 @@ class PlayList extends VideoList {
       return;
     }
 
+    // Task 093: 以前は JSON.parse した結果ではなく元の文字列（fileData）から index を読んでいたため、
+    // 保存した位置が復元されず、いつも先頭の動画を開いていた。1回だけ parse して、その結果を使う。
+    const data = JSON.parse(fileData);
+    if (!data || !Array.isArray(data.items)) {
+      return;
+    }
     this.emit('command', 'pause');
     this.emit('command', 'notify', 'プレイリストを復元');
-    this.unserialize(JSON.parse(fileData));
+    this.unserialize(data);
 
     window.setTimeout(() => {
-      const index = Math.max(0, fileData.index || 0);
+      const index = PlayList.normalizeRestoredIndex(data.index, this.model.length, 0);
       const item = this.model.getItemByIndex(index);
       if (item) {
         this.setIndex(index, true);
@@ -215,11 +241,17 @@ class PlayList extends VideoList {
   // 「プレイリストに追加しました」と表示され、利用者からは
   // 「何も起きない・動画が入らない」としか分からない状態だった。
   // 呼び出し側で件数を見て、メッセージを正しく出し分けられるようにする。
+  // Task 093: 以前は「件数の増え方」で数えていたため、上限（maxItems）で古い分が落ちると、
+  // 新しく入っても 0件（全部登録済み）と表示されていた。「渡した item のうち、追加後に一覧にある新しい item」を数える。
+  _countNewlyAdded(videoListItems, beforeItemIds) {
+    return videoListItems.filter(item =>
+      item && !beforeItemIds.has(item.itemId) && this.model.findByItemId(item.itemId) === item).length;
+  }
   _appendAll(videoListItems, options) {
     options = options || {};
-    const before = this.model.items.length;
+    const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
     this.model.appendItem(videoListItems);
-    const added = this.model.items.length - before;
+    const added = this._countNewlyAdded(videoListItems, beforeItemIds);
     const item = this.model.findByWatchId(options.watchId);
     if (item) {
       item.isActive = true;
@@ -232,11 +264,11 @@ class PlayList extends VideoList {
   _insertAll(videoListItems, options) {
     options = options || {};
 
-    const before = this.model.items.length;
+    const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
     this.model.insertItem(
       videoListItems,
       this.getIndex() + 1);
-    const added = this.model.items.length - before;
+    const added = this._countNewlyAdded(videoListItems, beforeItemIds);
     const item = this.model.findByWatchId(options.watchId);
     if (item) {
       item.isActive = true;
@@ -475,17 +507,20 @@ class PlayList extends VideoList {
   insertCurrentVideo(videoInfo) {
     this._initializeView();
 
-    if (this._activeItem &&
-      !this._activeItem.isBlankData &&
-      this._activeItem.watchId === videoInfo.watchId) {
+    // Task 093: 情報不明（blank）の item も、同じ object のまま完全な情報にする（updateByVideoInfo が blank なら完全化する）。
+    // 以前は blank を除外して完全な item を新しく入れようとし、重複で弾かれて「動画情報不明」が残り続けていた。
+    // チャンネル動画は、数字のID（contextWatchId）で入れた item が so〜（watchId）になるので、両方で探す。
+    const ids = [videoInfo.watchId, videoInfo.contextWatchId].filter(Boolean).map(id => id.toString());
+    const matches = item => item && ids.includes(item.watchId);
+    if (this._activeItem && matches(this._activeItem) && this.model.indexOf(this._activeItem) >= 0) {
       this._activeItem.updateByVideoInfo(videoInfo);
       this._activeItem.isPlayed = true;
       this.scrollToActiveItem();
       return;
     }
 
-    let currentItem = this.model.findByWatchId(videoInfo.watchId);
-    if (currentItem && !currentItem.isBlankData) {
+    let currentItem = ids.map(id => this.model.findByWatchId(id)).find(Boolean);
+    if (currentItem) {
       currentItem.updateByVideoInfo(videoInfo);
       currentItem.isPlayed = true;
       this.setIndex(this.model.indexOf(currentItem));
@@ -499,7 +534,7 @@ class PlayList extends VideoList {
       this._activeItem.isActive = false;
     }
     this.model.insertItem(item, this._index + 1);
-    this._activeItem = this.model.findByItemId(item.itemId);
+    this._activeItem = this.model.findByItemId(item.itemId) || this.model.findByWatchId(videoInfo.watchId) || null;
     this._refreshIndex(true);
   }
   removeItemByWatchId(watchId) {
@@ -588,6 +623,11 @@ class PlayList extends VideoList {
   toggleLoop() {
     this._isLoop = !this._isLoop;
     this.emit('update');
+  }
+  // Task 093: 並びを逆にした後、再生位置（_index）を再生中の item の新しい位置に直して update を出す（保存にも反映）
+  reverse() {
+    this.model.reverse();
+    this._refreshIndex();
   }
   shuffle() {
     this.model.shuffle();

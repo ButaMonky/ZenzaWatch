@@ -15,6 +15,7 @@ class NicoChatGroupViewModel {
 
     // メンバーをvposでソートした物. 計算効率改善用
     this._vSortedMembers = [];
+    this._maxInViewDuration = 0;
 
     this._initWorker();
 
@@ -47,50 +48,47 @@ class NicoChatGroupViewModel {
     window.console.timeEnd('_onChange');
   }
   async _execCommentLayoutWorker() {
-    if (this._members.length < 1) {
-      return;
-    }
+    const requestId = ++this._lastUpdate;
+    if (this._members.length < 1) { return; }
     const type = this._members[0].type;
-    // this._workerRequestId = `id:${type}-${Math.random()}`;
-
-    const result = await this._layoutWorker.post({
-      command: 'layout',
-      params: {
-        type,
-        members: this.bulkLayoutData,
-        lastUpdate: this._lastUpdate,
-        // requestId: this._workerRequestId
+    const data = this.bulkLayoutData;
+    const members = this._vSortedMembers;
+    try {
+      const result = await this._layoutWorker.post({
+        command: 'layout',
+        params: {type, members: data, lastUpdate: requestId}
+      });
+      if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return; }
+      // Apply to the exact order sent to the worker, not a later sorted array.
+      for (let i = 0; i < members.length; i++) {
+        members[i].bulkLayoutData = result.members[i];
       }
-    });
-    if (result.lastUpdate !== this._lastUpdate) {
-      console.warn('group changed', this._lastUpdate, result.lastUpdate);
-      return;
+    } catch (err) {
+      if (requestId === this._lastUpdate) { console.warn('comment layout failed', err); }
     }
-    this.bulkLayoutData = result.members;
   }
   async addChatArray(nicoChatArray) {
+    const members = this._members;
     for (let i = 0, len = nicoChatArray.length; i < len; i++) {
+      if (members !== this._members) { return; }
       const nicoChat = nicoChatArray[i];
       const nc = NicoChatViewModel.create(nicoChat, this._offScreen);
-      this._members.push(nc);
+      members.push(nc);
+      ++this._lastUpdate;
       if (i % 100 === 99) {
         await new Promise(r => setTimeout(r, 10));
       }
     }
 
-    if (this._members.length < 1) {
-      return;
-    }
-
-    this._lastUpdate = Date.now();
+    if (members !== this._members || members.length < 1) { return; }
     this._execCommentLayoutWorker();
   }
   _onCommentSpeedRateUpdate() {
     this.changeSpeed(NicoChatViewModel.SPEED_RATE);
   }
   changeSpeed(speedRate = 1) {
-    // TODO: y座標と弾幕判定はリセットしないといけない気がする
     for (const member of this._members) {
+      member.resetLayoutForSpeedChange();
       member.recalcBeginEndTiming(speedRate);
     }
     this._execCommentLayoutWorker();
@@ -109,7 +107,7 @@ class NicoChatGroupViewModel {
     window.console.time(timeKey);
     let nc = NicoChatViewModel.create(nicoChat, this._offScreen);
 
-    this._lastUpdate = Date.now();
+    ++this._lastUpdate;
 
     // 内部処理効率化の都合上、
     // 自身を追加する前に判定を行っておくこと
@@ -129,7 +127,8 @@ class NicoChatGroupViewModel {
 
     this._members = [];
     this._vSortedMembers = [];
-    this._lastUpdate = Date.now();
+    this._maxInViewDuration = 0;
+    ++this._lastUpdate;
   }
   get currentTime() {return this._nicoChatGroup.currentTime;}
   get type() {return this._nicoChatGroup.type;}
@@ -207,8 +206,37 @@ class NicoChatGroupViewModel {
    * vposでソートされたメンバーを生成. 計算効率改善用
    */
   _createVSortedMembers() {
-    this._vSortedMembers = this._members.concat().sort(NicoChat.SORT_FUNCTION);
-    return this._vSortedMembers;
+    const members =
+      this._vSortedMembers =
+        this._members.concat().sort(NicoChat.SORT_FUNCTION);
+
+    let maxDuration = 0;
+    for (const member of members) {
+      const duration = member.endRightTiming - member.beginLeftTiming;
+      if (Number.isFinite(duration) && duration > maxDuration) {
+        maxDuration = duration;
+      }
+    }
+    this._maxInViewDuration = maxDuration;
+
+    return members;
+  }
+
+  _findInViewStartIndex(sec) {
+    const members = this._vSortedMembers;
+    const minBegin = sec - (this._maxInViewDuration || 0);
+    let low = 0;
+    let high = members.length;
+
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (members[mid].beginLeftTiming < minBegin) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    return low;
   }
 
   get members() {return this._members;}
@@ -224,18 +252,21 @@ class NicoChatGroupViewModel {
    * secの時点で表示状態のメンバーのみを返す
    */
   getInViewMembersBySecond(sec) {
-    // TODO: もっと効率化
-    //var maxDuration = NicoChatViewModel.DURATION.NAKA;
+    const result = [];
+    const members = this._vSortedMembers;
+    const len = members.length;
+    const futureLimit = sec + 1;
+    const startIndex = this._findInViewStartIndex(sec);
 
-    let result = [], m = this._vSortedMembers, len = m.length;
-    for (let i = 0; i < len; i++) {
-      let chat = m[i]; //, s = m.getBeginLeftTiming();
-      //if (sec - s > maxDuration) { break; }
+    for (let i = startIndex; i < len; i++) {
+      const chat = members[i];
+      if (chat.beginLeftTiming > futureLimit) {
+        break;
+      }
       if (chat.isInViewBySecond(sec)) {
         result.push(chat);
       }
     }
-    //console.log('inViewMembers.length: ', result.length, sec);
     return result;
   }
   getInViewMembersByVpos(vpos) {

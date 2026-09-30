@@ -15,8 +15,109 @@ const debug = {};
 const VideoInfoLoader = (function () {
   const cacheStorage = new CacheStorage(sessionStorage);
 
-  const parseWatchApiData = function (json) {
-    const _data = json.data.response;
+  // Task153: adapt watch v4 at the boundary; keep the existing player contract.
+  const normalizeWatchV4 = async (response, requestedWatchId) => {
+    const data = response?.$watchV4?.data;
+    if (!data || response.errorCode) return response;
+    if (data.errorCode || !data.client) return data;
+
+    // Lazy keys are bound to the requested ID (including numeric channel IDs).
+    // Optional owner/series metadata must not make otherwise playable media fail.
+    let lazy = {};
+    if (data.lazy?.authKey) {
+      try {
+        const result = await netUtil.fetch(
+          `https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
+            method: 'POST', credentials: 'include', timeout: 5000,
+            headers: {
+              'Content-Type': 'application/json', 'X-Frontend-Id': '6',
+              'X-Frontend-Version': '0', 'X-Request-With': 'https://www.nicovideo.jp'
+            },
+            body: JSON.stringify({actionTrackId: data.client.watchTrackId, keyToken: data.lazy.authKey})
+          }).then(res => res.json());
+        if (result.meta?.status === 200) lazy = result.data || {};
+      } catch (_) {
+        window.console.warn('watch v4 optional metadata unavailable');
+      }
+    }
+    const owner = lazy.owner;
+    const comment = data.comment;
+    const media = data.media;
+    return {
+      ...data,
+      channel: owner?.type === 'channel' ? owner : null,
+      owner: owner?.type === 'user' ? {...owner, iconUrl: owner.icon?.url} : null,
+      series: lazy.series ?? null,
+      external: {commons: {hasContentTree: false}},
+      tag: data.tags,
+      video: {
+        ...data.video,
+        thumbnail: {
+          ...data.video.thumbnail,
+          url: data.video.thumbnail?.normal ?? data.video.thumbnail?.url,
+          middleUrl: data.video.thumbnail?.middle ?? data.video.thumbnail?.middleUrl,
+          largeUrl: data.video.thumbnail?.large ?? data.video.thumbnail?.largeUrl
+        },
+        viewer: {like: {isLiked: data.video.isLikedByViewer === true}}
+      },
+      comment: {
+        ...comment, keys: {}, server: {url: comment.nvComment?.server},
+        ng: {...comment.ng, channel: comment.ng?.channel || [], owner: comment.ng?.owner || []},
+        threads: comment.threads.map(thread => ({...thread, isDefaultPostTarget: thread.isPostTarget})),
+        layers: comment.layers.map(layer => ({...layer,
+          threadIds: layer.components.map(({threadId, fork}) => ({id: threadId, fork}))
+        }))
+      },
+      media: {delivery: null, domand: media?.accessRightKey && media.contents ? {
+        ...media.contents, accessRightKey: media.accessRightKey,
+        isStoryboardAvailable: media.isStoryboardAvailable
+      } : null},
+      payment: {video: {
+        isAdmission: data.payment?.admission?.isEnabled === true,
+        isPpv: data.payment?.ppv?.isEnabled === true,
+        isPremium: data.payment?.premium?.isEnabled === true
+      }}
+    };
+  };
+
+  const parseWatchApiData = async function (json, requestedWatchId) {
+    const response = await normalizeWatchV4(json?.data?.response, requestedWatchId);
+    if (!response) {
+      return null;
+    }
+
+    // Task 091: 削除済み・不存在などの watch API エラー応答は、通常動画の
+    // client/comment/media 等を持たない。通常動画として分割代入すると、本来の
+    // errorCode を読む前に TypeError になり、連続再生の「次へ」判定にも届かない。
+    if (response.errorCode || !response.client) {
+      const statusCode = response.statusCode || null;
+      const errorCode = response.errorCode || null;
+      const reasonCode = response.reasonCode || null;
+      const isNotFound = errorCode === 'NOT_FOUND';
+      const isForbidden = errorCode === 'FORBIDDEN';
+      let message = response.deletedMessage || '';
+      if (!message) {
+        if (reasonCode === 'ADMINISTRATOR_DELETE_VIDEO') {
+          message = 'この動画は削除されています';
+        } else if (isNotFound) {
+          message = '動画が見つかりません';
+        } else if (isForbidden) {
+          message = 'この動画は視聴できません';
+        } else {
+          message = '動画情報の取得に失敗しました';
+        }
+      }
+      return {
+        reject: true,
+        reason: isNotFound ? 'not found' : (isForbidden ? 'forbidden' : 'watch api'),
+        message,
+        statusCode,
+        errorCode,
+        reasonCode
+      };
+    }
+
+    const _data = response;
     const {
       // ads,
       // category,
@@ -339,8 +440,8 @@ const VideoInfoLoader = (function () {
       setTimeout(r, 1000);
     }).then(() => netUtil.fetch(url, {credentials: 'include'}))
       .then(res => res.json())
-      .then(json => {
-        const data = parseWatchApiData(json);
+      .then(async json => {
+        const data = await parseWatchApiData(json, videoId);
         //window.console.info('linkedChannelData', data);
         originalData.dmcInfo = data.dmcInfo;
         originalData.domandInfo = data.domandInfo;
@@ -427,7 +528,7 @@ const VideoInfoLoader = (function () {
   };
 
   const onLoadPromise = async (watchId, options, isRetry, resp) => {
-    const data = parseWatchApiData(resp);
+    const data = await parseWatchApiData(resp, watchId);
     debug.watchApiData = data;
     if (!data) {
       throw {
@@ -525,8 +626,8 @@ const VideoInfoLoader = (function () {
           });
         }
 
-        if (err.reason === 'forbidden') {
-          return Promise.reject(err);
+        if (err.reason === 'forbidden' || err.reason === 'not found') {
+          return Promise.reject({...err, watchId});
         } else if (err.reason === 'network') {
           return createSleep(5000).then(() => {
             window.console.warn('network error & retry');

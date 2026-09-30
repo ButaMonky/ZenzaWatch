@@ -18,8 +18,10 @@ class NicoChatGroup extends Emitter {
   reset() {
     this._members = [];
     this._filteredMembers = [];
+    this._filteredMembersValid = false;
   }
   addChatArray(nicoChatArray) {
+    this._filteredMembersValid = false;
     let members = this._members;
     let newMembers = [];
     for (const nicoChat of nicoChatArray) {
@@ -28,18 +30,26 @@ class NicoChatGroup extends Emitter {
       nicoChat.group = this;
     }
 
+    if (nicoChatArray.length && this._nicoChatFilter.removeNgMatchedUser) {
+      this.onChange(null);
+      return;
+    }
     newMembers = this._nicoChatFilter.applyFilter(nicoChatArray);
     if (newMembers.length > 0) {
-      this._filteredMembers = this._filteredMembers.concat(newMembers);
       this.emit('addChatArray', newMembers);
     }
   }
   addChat(nicoChat) {
+    this._filteredMembersValid = false;
     this._members.push(nicoChat);
     nicoChat.group = this;
 
+    // 投稿者まとめてNGでは、追加分が同じ投稿者の既存コメントも隠しうるため全体を通知する。
+    if (this._nicoChatFilter.removeNgMatchedUser) {
+      this.onChange(null);
+      return;
+    }
     if (this._nicoChatFilter.isSafe(nicoChat)) {
-      this._filteredMembers.push(nicoChat);
       this.emit('addChat', nicoChat);
     }
   }
@@ -48,25 +58,30 @@ class NicoChatGroup extends Emitter {
   }
   removeChat(nicoChat) {
     const getChat = this._getChat(nicoChat);
-    this._members.splice(this._members.findIndex(getChat), 1);
+    const index = this._members.findIndex(getChat);
+    if (index < 0) { return; }
+    this._filteredMembersValid = false;
+    this._members.splice(index, 1);
     nicoChat.group = this;
 
-    if (this._nicoChatFilter.isSafe(nicoChat)) {
-      this._filteredMembers.splice(this._filteredMembers.findIndex(getChat), 1);
+    // 投稿者まとめてNGでは、非表示コメントの削除でも同じ投稿者の既存コメントが復帰しうる。
+    if (this._nicoChatFilter.removeNgMatchedUser || this._nicoChatFilter.isSafe(nicoChat)) {
       this.onChange(null);
     }
   }
   get type() {return this._type;}
   get members() {
-    if (this._filteredMembers.length > 0) {
-      return this._filteredMembers;
+    if (!this._filteredMembersValid) {
+      this._filteredMembers = this._nicoChatFilter.applyFilter(this._members);
+      this._filteredMembersValid = true;
     }
-    return this._filteredMembers = this._nicoChatFilter.applyFilter(this._members);
+    return this._filteredMembers;
   }
   get nonFilteredMembers() { return this._members; }
   onChange(e) {
     console.log('NicoChatGroup.onChange: ', e);
     this._filteredMembers = [];
+    this._filteredMembersValid = false;
     this.emit('change', {
       chat: e,
       group: this

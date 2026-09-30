@@ -5,16 +5,21 @@
 // @include     https://www.youtube.com/*
 // @include     https://www.youtube.com/embed/*
 // @include     https://youtube.com/*
-// @version     0.0.11
+// @version     0.0.15-task152
 // @grant       none
 // @license     public domain
 // ==/UserScript==
 
 import {workerUtil} from '../packages/lib/src/infra/workerUtil';
 import {cssUtil} from '../packages/lib/src/css/css';
+import {EmitterInitFunc} from '../packages/lib/src/Emitter';
+import {throttle} from '../packages/lib/src/infra/bounce';
 
 (() => {
   const PRODUCT = 'CapTube';
+  const global = {PRODUCT};
+//@require EmitterInitFunc
+//@require throttle
 //@require cssUtil
 //@require workerUtil
   let previewContainer = null, meterContainer = null;
@@ -48,20 +53,21 @@ import {cssUtil} from '../packages/lib/src/css/css';
         console.time('bitmap to ObjectURL');
         ctx.drawImage(bitmap, 0, 0);
         const blob = canvas.convertToBlob ?
-          (await canvas.convertToBlob({type, quality})) : canvas.toDataURL(type, quality);
+          (await canvas.convertToBlob({type, quality})) :
+          (await fetch(canvas.toDataURL(type, quality)).then(response => response.blob()));
         const url = URL.createObjectURL(blob);
         console.timeEnd('bitmap to ObjectURL');
         setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
-        return {status: 'ok', command: 'commandResult', params: {url}};
+        return {url};
       };
 
       const fromDataURL = async ({dataURL}) => {
         console.time('dataURL to objectURL');
-        const blob = fetch(dataURL).then(r => r.blob());
+        const blob = await fetch(dataURL).then(r => r.blob());
         const url = URL.createObjectURL(blob);
         console.timeEnd('dataURL to objectURL');
         setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
-        return {status: 'ok', command: 'commandResult', params: {url}};
+        return {url};
       };
 
       self.onmessage = async ({command, params}) => {

@@ -233,18 +233,19 @@ class DataStorage {
 
   namespace(name) {
     const namespace = name ? `${name}.` : '';
-    const origin = Symbol(`${namespace}`);
+    const updateListeners = new Map();
     const result = {
       getValue: key => this.getValue(`${namespace}${key}`),
       setValue: (key, value) => this.setValue(`${namespace}${key}`, value),
       on: (key, func) => {
         if (key === 'update') {
+          if (updateListeners.has(func)) { return result; }
           const onUpdate = (key, value) => {
             if (key.startsWith(namespace)) {
-              func(key.slice(namespace.length + 1), value);
+              func(key.slice(namespace.length), value);
             }
           };
-          onUpdate[origin] = func;
+          updateListeners.set(func, onUpdate);
           this.on('update', onUpdate);
           return result;
         }
@@ -252,8 +253,15 @@ class DataStorage {
       },
       off: (key, func) => {
         if (key === 'update') {
-          func = func[origin] || func;
-          this.off('update', func);
+          if (!func) {
+            for (const listener of updateListeners.values()) {
+              this.off('update', listener);
+            }
+            updateListeners.clear();
+          } else if (updateListeners.has(func)) {
+            this.off('update', updateListeners.get(func));
+            updateListeners.delete(func);
+          }
           return result;
         }
         return this.offkey(`${namespace}${key}`, func);

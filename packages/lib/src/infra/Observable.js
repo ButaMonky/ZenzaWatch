@@ -65,15 +65,21 @@ const Observable = (() => {
       }
       return new this(onNext || {});
     }
-    constructor({start, next, error, complete} = {start:nop, next:nop, error:nop, complete:nop}) {
-      this.callbacks = {start, next, error, complete};
+    constructor({start, next, error, complete, closed} = {}) {
+      this.callbacks = {
+        start: typeof start === 'function' ? start : nop,
+        next: typeof next === 'function' ? next : nop,
+        error: typeof error === 'function' ? error : nop,
+        complete: typeof complete === 'function' ? complete : nop,
+        closed: typeof closed === 'function' ? closed : () => false
+      };
     }
     start(arg) {this.callbacks.start(arg);}
     next(arg) {this.callbacks.next(arg);}
     error(arg) {this.callbacks.error(arg);}
     complete(arg) {this.callbacks.complete(arg);}
     get closed() {
-      return this._callbacks.closed ? this._callbacks.closed() : false;
+      return this.callbacks.closed();
     }
   }
   Subscriber.nop = {start: nop, next: nop, error: nop, complete: nop, closed: nop};

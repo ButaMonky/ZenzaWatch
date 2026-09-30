@@ -43,7 +43,7 @@ const StoryboardCacheDb = (() => {
           updatedAt: Date.now(),
           sbInfo
         };
-        cacheDb.put(record);
+        await cacheDb.put(record);
         return record;
       },
       async get(watchId) {
@@ -55,7 +55,7 @@ const StoryboardCacheDb = (() => {
       close() { return cacheDb.close(); },
       gc(expireTime) { return cacheDb.gc(expireTime); }
     };
-    instance.gc(7 * 24 * 60 * 60 * 1000);
+    instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
     return instance;
   };
   const put = (watchId, sbInfo = {}) => open().then(db => db.put(watchId, sbInfo));

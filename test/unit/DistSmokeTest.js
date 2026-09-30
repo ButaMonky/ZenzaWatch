@@ -35,7 +35,6 @@ const WORKER_INJECTED = ['PID', 'bcast', 'portMap', 'EmitterInitFunc'];
 
 // 既知の「定義されていない参照」（Task 085 時点。コード確認のみ・実行経路での再現は未確認のものを含む）
 const KNOWN_UNDEFINED = {
-  'CapTube.user.js': ['throttle', 'global'], // throttle: 監査 ZW-051（起動直後に停止）。global: 要調査
   'MaskedWatch.user.js': ['PromiseHandler', 'global'], // 要調査（Task 085 で新たに検出）
   'HeatSync.user.js': ['_'], // lodash の @require が無い。要調査（Task 085 で新たに検出）
   'MylistPocket.user.js': ['$', 'NicoVideoApi', 'BroadcastEmitter'], // 要調査（Task 085 で新たに検出）
@@ -44,7 +43,6 @@ const KNOWN_UNDEFINED = {
 };
 // 既知の起動直後の例外
 const KNOWN_STARTUP_ERRORS = {
-  'CapTube.user.js': [/ReferenceError: throttle is not defined/] // 監査 ZW-051
 };
 
 function freeIdentifiers(src, {hasLodash}) {
@@ -149,6 +147,8 @@ describe('配布物の検査（ZW-008）', function() {
 // ESLint の更新は依存の大きな変更になるため Task 085 では行わず、
 // まず全ソースが現在の構文として解析できることを @babel/parser（ビルド・テストで使っているもの）で確かめる。
 describe('ソースの構文（ZW-008）', function() {
+  // 約300ファイルを続けて解析する。空のフォルダで npm ci した直後の Windows では、mocha の既定の2秒を超えた（Task 087 の clean_env）。
+  this.timeout(60000);
   it('src と packages/*/src の全 .js が構文エラー無く解析できる', function() {
     const parser = require('@babel/parser');
     const walk = d => fs.readdirSync(d, {withFileTypes: true}).flatMap(e =>

@@ -26,17 +26,17 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.18-task079b
+// @version     0.5.34-task156
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
-// @require     https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.5/lodash.min.js
+// @require     https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:57Z f821f46
+// build: 2026-09-30 16:35Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -1383,7 +1383,7 @@ AntiPrototypeJs().then(() => {
             padding: 2px 4px;
             text-shadow: none;
             font-weight: normal;
-            pointer-evnets: none !important;
+            pointer-events: none !important;
           }
           .is-ng-enable .is-ng .add-ng-button:hover::after,
           .is-ng-enable .is-ng .add-fav-button:hover::after {
@@ -1797,46 +1797,232 @@ AntiPrototypeJs().then(() => {
         root.appendChild(node);
         return root;
       };
-      util.httpLink = function(html) {
-        let links = {}, keyCount = 0;
-        const getTmpKey = function() { return ` <!--${keyCount++}--> `; };
-        html = html.replace(/@([a-zA-Z0-9_]+)/g,
-          (g, id) => {
-            const tmpKey = getTmpKey();
-            links[tmpKey] =
-              ` <a href="https://twitter.com/${id}" class="twitterLink" rel="noopener" target="_blank">@${id}</a> `;
-            return tmpKey;
-          });
-
-
-        html = html.replace(/(https?:\/\/seiga\.nicovideo\.jp\/seiga\/)?im(\d+)/g,
-          ' <a href="//seiga.nicovideo.jp/seiga/im$2" class="seigaLink" rel="noopener" target="_blank">$1im$2</a> ');
-        html = html.replace(/(https?:\/\/com\.nicovideo\.jp\/community\/)?co(\d+)/g,
-          ' <a href="//com.nicovideo.jp/community/co$2" class="communityLink" rel="noopener" target="_blank">$1co$2</a> ');
-        html = html.replace(/(https?:\/\/www\.nicovideo\.jp\/)?(watch|shorts|mylist|series|user)\/(\d+)/g,
-          ' <a href="https://www.nicovideo.jp/$2/$3" rel="noopener" class="videoLink target-change">$1$2/$3</a> ');
-        html = html.replace(/(https?:\/\/www\.nicovideo\.jp\/watch\/)?(sm|nm|so|ss)(\d+)/g,
-          ' <a href="https://www.nicovideo.jp/watch/$2$3" rel="noopener" class="videoLink target-change">$1$2$3</a> ');
-        html = html.replace(/(https?:\/\/www\.nicovideo\.jp\/shorts\/)?ss(\d+)/g,
-          ' <a href="https://www.nicovideo.jp/shorts/ss$2" rel="noopener" class="videoLink target-change">$1ss$2</a> ');
-
-        let linkmatch = /<a.*?<\/a>/, n;
-        html = html.split('<br />').join(' <br /> ');
-        while ((n = linkmatch.exec(html)) !== null) {
-          let tmpKey = getTmpKey();
-          links[tmpKey] = n;
-          html = html.replace(n, tmpKey);
+      /*
+       * Task 092: 動画の参照（sm/nm/so/ss の ID・/watch/・/shorts/・www./sp. の URL・nico.ms）の「解析」を1か所にまとめ、
+       * 説明文の「リンク化」（httpLink）と、ページ上のリンクからの解決（resolveNicoVideoLink、HoverMenu 等）で同じものを使う。
+       * 以前の httpLink は、sm〜 等を正規表現で <a> にする置換を何回も重ねた後で、既存の <a> を退避していたため、
+       * フルURL・/shorts/ss〜・nico.ms・既にリンクの文字列を混ぜると、二重のリンク化や href の中の置換が起きていた
+       * （例: https://www.nicovideo.jp/shorts/ss123 の中の ss123 が <a> になり、その href の中の ss123 がさらに <a> になる）。
+       * 今は、HTML を一度 DOM（<template> の中なので画像の読み込み等は起きない）にしてから、
+       * <a> の外の文字だけを順に見てリンクにする。文字列の置換で HTML を組み立てることはしない。
+       * ZenzaWatch 本体の説明文（VideoInfoPanel）の Task 074・088 の処理とは別物（MylistPocket の中だけで使う）。
+       */
+      const NICO_VIDEO_ID = /^(?:sm|nm|so|ss)[0-9]+$/;
+      const NICO_VIDEO_HOSTS = ['www.nicovideo.jp', 'sp.nicovideo.jp'];
+      const toVideoReference = (watchId, source) => {
+        const type = watchId.startsWith('ss') ? 'shorts' : 'watch';
+        return {watchId, type, source, canonicalUrl: `https://www.nicovideo.jp/${type}/${watchId}`};
+      };
+      /**
+       * sm123・/watch/sm123・/shorts/ss123・https://(www|sp).nicovideo.jp/(watch|shorts)/…・https://nico.ms/… を解析する。
+       * 動画でなければ null。ss〜 の正規の URL は、今の本家に合わせて /shorts/ss〜。
+       * /watch/ の後ろが数字だけ（スレッドID）のものも、以前と同じく動画として扱う。
+       * @param {string} value
+       * @returns {{watchId: string, type: 'watch'|'shorts', source: string, canonicalUrl: string}|null}
+       */
+      util.parseNicoVideoReference = function(value) {
+        if (typeof value !== 'string') { return null; }
+        const v = value.trim();
+        if (NICO_VIDEO_ID.test(v)) { return toVideoReference(v, 'id'); }
+        let url, source;
+        try {
+          if (/^\/(?:watch|shorts)\//.test(v)) {
+            url = new URL(v, 'https://www.nicovideo.jp/');
+            source = 'path';
+          } else if (/^https?:\/\//i.test(v)) {
+            url = new URL(v);
+            source = 'url';
+          } else {
+            return null;
+          }
+        } catch (e) {
+          return null;
         }
+        const host = url.hostname.toLowerCase();
+        const path = url.pathname;
+        let m;
+        if (host === 'nico.ms') {
+          m = /^\/((?:sm|nm|so|ss)[0-9]+)\/?$/.exec(path);
+          return m ? toVideoReference(m[1], 'nico.ms') : null;
+        }
+        if (!NICO_VIDEO_HOSTS.includes(host)) { return null; }
+        if ((m = /^\/watch\/((?:sm|nm|so|ss)?[0-9]+)\/?$/.exec(path))) { return toVideoReference(m[1], source); }
+        if ((m = /^\/shorts\/(ss[0-9]+)\/?$/.exec(path))) { return toVideoReference(m[1], source); }
+        return null;
+      };
 
-        html = html.replace(/\((https?:\/\/[\x21-\x3b\x3d-\x7e]+)\)/gi, '( $1 )');
-        html = html.replace(/(https?:\/\/[\x21-\x3b\x3d-\x7e]+)http/gi, '$1 http');
-        html = html.replace(/(https?:\/\/[\x21-\x3b\x3d-\x7e]+)/gi, '<a href="$1" rel="noopener" target="_blank" class="otherSite">$1</a>');
-        Object.keys(links).forEach(tmpKey => {
-          html = html.replace(tmpKey, links[tmpKey]);
-        });
+      // Google のリダイレクト用のリンク（https://www.google.com/url?…&url=… または ?q=…）。1段だけ解く
+      const GOOGLE_HOST = /^(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?$/;
+      const unwrapGoogleRedirect = absoluteUrl => {
+        let url;
+        try { url = new URL(absoluteUrl); } catch (e) { return null; }
+        if (!GOOGLE_HOST.test(url.hostname.toLowerCase()) || url.pathname !== '/url') { return null; }
+        const target = url.searchParams.get('url') || url.searchParams.get('q');
+        return target && /^https?:\/\//i.test(target) ? target : null;
+      };
+      const toAbsoluteUrl = href => {
+        try {
+          return new URL(href, document.baseURI || location.href).href;
+        } catch (e) {
+          return null;
+        }
+      };
+      const parseAbsoluteVideoUrl = absoluteUrl => {
+        const ref = absoluteUrl ? util.parseNicoVideoReference(absoluteUrl) : null;
+        return ref && (ref.source === 'url' || ref.source === 'nico.ms') ? ref : null;
+      };
+      /**
+       * ページ上のリンク（または URL の文字列）の最終的なリンク先が、www./sp.nicovideo.jp・nico.ms の動画なら、その解析結果。
+       * data-href → href の順に見る。Google のリダイレクト用リンクは、中の URL が上の3つのホストの時だけ解く
+       * （任意のサイトへのリダイレクトは対象にしない）。
+       * @param {HTMLAnchorElement|Element|string} link
+       */
+      util.resolveNicoVideoLink = function(link) {
+        if (!link) { return null; }
+        const candidates = typeof link === 'string' ? [link] :
+          (link.getAttribute ? [link.getAttribute('data-href'), link.getAttribute('href')] : []);
+        for (const candidate of candidates) {
+          if (!candidate) { continue; }
+          const absoluteUrl = toAbsoluteUrl(candidate);
+          const ref = parseAbsoluteVideoUrl(absoluteUrl) || parseAbsoluteVideoUrl(unwrapGoogleRedirect(absoluteUrl));
+          if (ref) { return ref; }
+        }
+        return null;
+      };
 
-        html = html.split(' <br /> ').join('<br />');
-        return html;
+      // Task 088（ZenzaWatch 本体の説明文）と同じ方針: スクリプトとして動き得るものだけを取り除く
+      const UNSAFE_ELEMENTS = 'script,iframe,frame,object,embed,base,meta,link,form,style';
+      const UNSAFE_URL = /^[\s\u0000-\u001f]*(javascript|data|vbscript):/i;
+      const sanitizeFragment = root => {
+        for (const e of root.querySelectorAll(UNSAFE_ELEMENTS)) {
+          e.remove();
+        }
+        for (const e of root.querySelectorAll('*')) {
+          for (const {name, value} of [...e.attributes]) {
+            const n = name.toLowerCase();
+            if (n.startsWith('on') ||
+              (['href', 'src', 'action', 'formaction', 'xlink:href'].includes(n) && UNSAFE_URL.test(value))) {
+              e.removeAttribute(name);
+            }
+          }
+        }
+      };
+
+      const createLink = (href, text, className, isNewWindow) => {
+        const a = document.createElement('a');
+        a.setAttribute('href', href);
+        a.setAttribute('rel', 'noopener');
+        if (isNewWindow) { a.setAttribute('target', '_blank'); }
+        a.setAttribute('class', className);
+        a.textContent = text;
+        return a;
+      };
+      const VIDEO_LINK_CLASS = 'videoLink target-change';
+      // URL の直後に付きがちな句読点・閉じ括弧（対応する開き括弧が URL の中に無いもの）を外す
+      const trimUrl = url => {
+        const count = (s, c) => s.split(c).length - 1;
+        for (;;) {
+          const last = url.slice(-1);
+          if ('.,:;!?\'"'.includes(last) ||
+            (last === ')' && count(url, '(') < count(url, ')')) ||
+            (last === ']' && count(url, '[') < count(url, ']'))) {
+            url = url.slice(0, -1);
+            continue;
+          }
+          return url;
+        }
+      };
+      const linkForUrl = url => {
+        const ref = util.parseNicoVideoReference(url);
+        if (ref) { return createLink(ref.canonicalUrl, url, VIDEO_LINK_CLASS, false); }
+        let m;
+        if ((m = /^https?:\/\/seiga\.nicovideo\.jp\/seiga\/(im[0-9]+)$/i.exec(url))) {
+          return createLink(`https://seiga.nicovideo.jp/seiga/${m[1]}`, url, 'seigaLink', true);
+        }
+        if ((m = /^https?:\/\/com\.nicovideo\.jp\/community\/(co[0-9]+)$/i.exec(url))) {
+          return createLink(`https://com.nicovideo.jp/community/${m[1]}`, url, 'communityLink', true);
+        }
+        if (/^https?:\/\/www\.nicovideo\.jp\/(?:mylist|series|user)\/[0-9]/i.test(url)) {
+          return createLink(url, url, VIDEO_LINK_CLASS, false);
+        }
+        return createLink(url, url, 'otherSite', true);
+      };
+      const linkForWord = word => {
+        if (word.startsWith('@')) {
+          return createLink(`https://twitter.com/${word.slice(1)}`, word, 'twitterLink', true);
+        }
+        if (/^im[0-9]+$/.test(word)) {
+          return createLink(`https://seiga.nicovideo.jp/seiga/${word}`, word, 'seigaLink', true);
+        }
+        if (/^co[0-9]+$/.test(word)) {
+          return createLink(`https://com.nicovideo.jp/community/${word}`, word, 'communityLink', true);
+        }
+        const ref = util.parseNicoVideoReference(word);
+        if (ref) { return createLink(ref.canonicalUrl, word, VIDEO_LINK_CLASS, false); }
+        return createLink(`https://www.nicovideo.jp/${word}`, word, VIDEO_LINK_CLASS, false);
+      };
+      // URL・@ID・watch/数字 等・sm/nm/so/ss/im/co + 数字
+      const TOKEN = /(https?:\/\/[\x21-\x3b\x3d\x3f-\x7e]+)|(@[A-Za-z0-9_]+|(?:watch|shorts|mylist|series|user)\/[0-9]+|(?:sm|nm|so|ss|im|co)[0-9]+)/g;
+      const WORD_CHAR = /[A-Za-z0-9_]/;
+      const linkifyText = text => {
+        const frag = document.createDocumentFragment();
+        let pos = 0, m;
+        TOKEN.lastIndex = 0;
+        while ((m = TOKEN.exec(text)) !== null) {
+          let token = m[0], node;
+          if (m[1]) {
+            const next = token.slice(1).search(/https?:\/\//i);
+            token = trimUrl(next >= 0 ? token.slice(0, next + 1) : token);
+            node = linkForUrl(token);
+          } else {
+            const before = text.charAt(m.index - 1), after = text.charAt(m.index + token.length);
+            if ((before && WORD_CHAR.test(before)) || (after && WORD_CHAR.test(after))) {
+              TOKEN.lastIndex = m.index + 1;
+              continue;
+            }
+            node = linkForWord(token);
+          }
+          if (m.index > pos) { frag.append(text.slice(pos, m.index)); }
+          frag.append(node);
+          pos = m.index + token.length;
+          TOKEN.lastIndex = pos;
+        }
+        if (pos === 0) { return null; }
+        if (pos < text.length) { frag.append(text.slice(pos)); }
+        return frag;
+      };
+
+      /**
+       * 説明文（ニコニコが返す文字列。<a>・<br> を含むこともある）を、リンクを付けた DocumentFragment にする。
+       * 既存の <a> の中は触らない（href も変えない。動画へのリンクなら videoLink の印だけ付ける）。
+       */
+      util.httpLinkFragment = function(html) {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = html === undefined || html === null ? '' : String(html);
+        const root = tpl.content;
+        sanitizeFragment(root);
+        for (const a of root.querySelectorAll('a')) {
+          if (util.resolveNicoVideoLink(a)) {
+            a.classList.add('videoLink', 'target-change');
+          }
+        }
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const texts = [];
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (node.parentElement && node.parentElement.closest('a')) { continue; }
+          texts.push(node);
+        }
+        for (const node of texts) {
+          const frag = linkifyText(node.data);
+          if (frag) { node.replaceWith(frag); }
+        }
+        return root;
+      };
+      util.httpLink = function(html) {
+        const div = document.createElement('div');
+        div.append(util.httpLinkFragment(html));
+        return div.innerHTML;
       };
 
       util.getSleepPromise = function(sleepTime, label = 'sleep') {
@@ -2167,30 +2353,45 @@ const netUtil = {
 		}
 		return $.ajax(params);
 	},
-	abortableFetch: (url, params) => {
+	abortableFetch: async (url, params = {}) => {
 		params = params || {};
+		const options = {...params};
+		const callerSignal = options.signal;
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+			Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
 		const racers = [];
 		let timer;
-		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-		if (timeout > 0) {
-			racers.push(new Promise((resolve, reject) =>
-				timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-			);
+		let onAbort;
+		try {
+			if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+			if (controller) { options.signal = controller.signal; }
+			if (callerSignal) {
+				racers.push(new Promise((resolve, reject) => {
+					onAbort = () => {
+						const reason = abortReason();
+						reject(reason);
+						if (controller) { controller.abort(reason); }
+					};
+					callerSignal.addEventListener('abort', onAbort, {once: true});
+				}));
+			}
+			if (timeout > 0) {
+				racers.push(new Promise((resolve, reject) => {
+					timer = setTimeout(() => {
+						const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+						reject(error);
+						if (controller) { controller.abort(error); }
+					}, timeout);
+				}));
+			}
+			racers.push(fetch(url, options));
+			return await Promise.race(racers);
+		} finally {
+			if (timer !== undefined) { clearTimeout(timer); }
+			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
 		}
-		const controller = window.AbortController ? (new AbortController()) : null;
-		if (controller) {
-			params.signal = controller.signal;
-		}
-		racers.push(fetch(url, params));
-		return Promise.race(racers)
-			.catch(err => {
-				if (err.name === 'timeout') {
-					if (controller) {
-						controller.abort();
-					}
-				}
-				return Promise.reject(err.message || err);
-			}).finally(() => timer = null);
 	},
 	fetch(url, params) {
 		if (location.host !== 'www.nicovideo.jp') {
@@ -2614,15 +2815,21 @@ const Observable = (() => {
 			}
 			return new this(onNext || {});
 		}
-		constructor({start, next, error, complete} = {start:nop, next:nop, error:nop, complete:nop}) {
-			this.callbacks = {start, next, error, complete};
+		constructor({start, next, error, complete, closed} = {}) {
+			this.callbacks = {
+				start: typeof start === 'function' ? start : nop,
+				next: typeof next === 'function' ? next : nop,
+				error: typeof error === 'function' ? error : nop,
+				complete: typeof complete === 'function' ? complete : nop,
+				closed: typeof closed === 'function' ? closed : () => false
+			};
 		}
 		start(arg) {this.callbacks.start(arg);}
 		next(arg) {this.callbacks.next(arg);}
 		error(arg) {this.callbacks.error(arg);}
 		complete(arg) {this.callbacks.complete(arg);}
 		get closed() {
-			return this._callbacks.closed ? this._callbacks.closed() : false;
+			return this.callbacks.closed();
 		}
 	}
 	Subscriber.nop = {start: nop, next: nop, error: nop, complete: nop, closed: nop};
@@ -2962,18 +3169,19 @@ class DataStorage {
 	}
 	namespace(name) {
 		const namespace = name ? `${name}.` : '';
-		const origin = Symbol(`${namespace}`);
+		const updateListeners = new Map();
 		const result = {
 			getValue: key => this.getValue(`${namespace}${key}`),
 			setValue: (key, value) => this.setValue(`${namespace}${key}`, value),
 			on: (key, func) => {
 				if (key === 'update') {
+					if (updateListeners.has(func)) { return result; }
 					const onUpdate = (key, value) => {
 						if (key.startsWith(namespace)) {
-							func(key.slice(namespace.length + 1), value);
+							func(key.slice(namespace.length), value);
 						}
 					};
-					onUpdate[origin] = func;
+					updateListeners.set(func, onUpdate);
 					this.on('update', onUpdate);
 					return result;
 				}
@@ -2981,8 +3189,15 @@ class DataStorage {
 			},
 			off: (key, func) => {
 				if (key === 'update') {
-					func = func[origin] || func;
-					this.off('update', func);
+					if (!func) {
+						for (const listener of updateListeners.values()) {
+							this.off('update', listener);
+						}
+						updateListeners.clear();
+					} else if (updateListeners.has(func)) {
+						this.off('update', updateListeners.get(func));
+						updateListeners.delete(func);
+					}
 					return result;
 				}
 				return this.offkey(`${namespace}${key}`, func);
@@ -3108,26 +3323,35 @@ class DataStorage {
           this.gc = bounce.time(this.gc.bind(this), 100);
         }
 
+        _readItem(key) {
+          let item;
+          try {
+            item = JSON.parse(this._storage[key]);
+          } catch (e) {
+            delete this._memory[key];
+            this._storage.removeItem(key);
+            return null;
+          }
+          if (!item || typeof item !== 'object' || Array.isArray(item) ||
+              !Object.prototype.hasOwnProperty.call(item, 'data') ||
+              !(item.expiredAt === '' ||
+                (typeof item.expiredAt === 'number' && Number.isFinite(item.expiredAt)))) {
+            delete this._memory[key];
+            this._storage.removeItem(key);
+            return null;
+          }
+          return item;
+        }
+
         gc(now = -1) {
           const storage = this._storage;
           now = now >= 0 ? now : Date.now();
-          Object.keys(storage).forEach((key, index) => {
-            if (key.indexOf(PREFIX) === 0) {
-              let item;
-              try {
-                item = JSON.parse(this._storage[key]);
-              } catch(e) {
-                storage.removeItem(key);
-              }
-              //console.info(
-              //  `${index}, key: ${key}, expiredAt: ${new Date(item.expiredAt).toLocaleString()}, now: ${new Date(now).toLocaleString()}`);
-              if (item.expiredAt === '' || item.expiredAt > now) {
-                //console.info('not expired: ', key);
-                return;
-              }
-              //console.info('cache expired: ', key, item.expiredAt);
-              storage.removeItem(key);
-            }
+          Object.keys(storage).forEach(key => {
+            if (key.indexOf(PREFIX) !== 0) { return; }
+            const item = this._readItem(key);
+            if (!item || item.expiredAt === '' || item.expiredAt > now) { return; }
+            delete this._memory[key];
+            storage.removeItem(key);
           });
         }
 
@@ -3143,13 +3367,22 @@ class DataStorage {
           };
 
           this._memory[key] = cacheData;
+          let serialized;
           try {
-            this._storage[key] = JSON.stringify(cacheData);
+            serialized = JSON.stringify(cacheData);
+            this._storage[key] = serialized;
             this.gc();
           } catch (e) {
             if (e.name === 'QuotaExceededError' ||
                 e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-              this.gc(0);
+              try {
+                // bounce.time is deferred and has no cancel/flush API.
+                CacheStorage.prototype.gc.call(this);
+                this._storage[key] = serialized;
+                this.gc();
+              } catch (retryError) {
+                // Preserve best-effort persistence and the existing memory envelope.
+              }
             }
           }
         }
@@ -3159,14 +3392,8 @@ class DataStorage {
           if (!(this._storage.hasOwnProperty(key) || this._storage[key] !== undefined)) {
             return null;
           }
-          let item = null;
-          try {
-            item = JSON.parse(this._storage[key]);
-          } catch(e) {
-            delete this._memory[key];
-            this._storage.removeItem(key);
-            return null;
-          }
+          const item = this._readItem(key);
+          if (!item) { return null; }
 
           if (item.expiredAt === '' || item.expiredAt > Date.now()) {
             return item.data;
@@ -3175,10 +3402,8 @@ class DataStorage {
         }
 
         removeItem(key) {
-          if (this._memory.hasOwnProperty(key)) {
-            delete this._memory[key];
-          }
           key = PREFIX + key;
+          delete this._memory[key];
           if (this._storage.hasOwnProperty(key) || this._storage[key] !== undefined) {
             this._storage.removeItem(key);
           }
@@ -3296,8 +3521,10 @@ class CrossDomainGate extends Emitter {
 			if (event.source !== this._loaderWindow) {
 				return;
 			}
-			window.removeEventListener('message', onInitialMessage);
 			this._onMessage(event);
+			if (this._initializeStatus === 'done') {
+				window.removeEventListener('message', onInitialMessage, {capture: true});
+			}
 		};
 		window.addEventListener('message', onInitialMessage, {capture: true});
 		this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
@@ -3307,7 +3534,7 @@ class CrossDomainGate extends Emitter {
 		const {id, type, token, sessionId, body} = data;
 		if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
 			console.warn('invalid token:',
-				{id, PRODUCT, type, _type: this._type, token, TOKEN});
+				{id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN});
 			return;
 		}
 		if (!this.port && body.command === 'initialized') {
@@ -3412,20 +3639,19 @@ class CrossDomainGate extends Emitter {
 		await this._initializeFrame();
 		sessionId = sessionId || (`gate:${Math.random()}`);
 		const {params} = body;
-		return this._sessions[sessionId] =
-			new PromiseHandler((resolve, reject) => {
-				try {
-					this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
-					if (!usePromise) {
-						delete this._sessions[sessionId];
-						resolve();
-					}
-				} catch (error) {
-					console.log('%cException!', 'background: red;', {error, body});
-					delete this._sessions[sessionId];
-					reject(error);
-				}
-		});
+		if (!usePromise) {
+			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
+			return;
+		}
+		const session = new PromiseHandler();
+		this._sessions[sessionId] = session;
+		try {
+			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
+		} catch (error) {
+			delete this._sessions[sessionId];
+			session.reject(error);
+		}
+		return session;
 	}
 	postMessage(body, promise = true) {
 		return this._postMessage(body, promise);
@@ -3683,7 +3909,7 @@ const MylistApiLoader = (() => {
 			if (!token) {
 				token = cacheStorage.getItem('csrfToken');
 				if (token) {
-					console.log('cached token exists', token);
+					console.log('cached token exists'); // Task 088: トークンの値はログに出さない
 				}
 			}
 		}
@@ -3702,7 +3928,7 @@ const MylistApiLoader = (() => {
 				}
 				token = cacheStorage.getItem('csrfToken');
 				if (token) {
-						console.log('cached token exists', token);
+						console.log('cached token exists'); // Task 088: トークンの値はログに出さない
 				}else{
 						const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
 						const result = await netUtil.fetch( tokenUrl, {
@@ -4082,16 +4308,16 @@ const MylistApiLoader = (() => {
         const target =
           e.target.tagName === 'A' ? e.target : e.target.closest('a');
         if (!target || this._hoverElement !== target) { return; }
-        const href = target.getAttribute('data-href') || target.getAttribute('href');
-        const watchId = target.dataset.nicoVideoId || util.getWatchId(href);
+        // Task 092: data-href・href・Google のリダイレクト用リンクから、最終的なリンク先の動画を解決する
+        const ref = util.resolveNicoVideoLink(target);
+        if (!ref) { return; }
+        const watchId = target.dataset.nicoVideoId || ref.watchId;
         const offset = target.getBoundingClientRect();
         //const bodyOffset = document.body.getBoundingClientRect();
         const scrollTop  = document.documentElement.scrollTop  || document.body.scrollTop  || 0;
         const scrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft || 0;
         const left = offset.left + scrollLeft;
         const top  = offset.top  + scrollTop;
-        const host = target.hostname;
-        if (host !== 'www.nicovideo.jp' && host !== 'nico.ms' && host !== 'sp.nicovideo.jp') { return; }
 
         if (target.classList.contains('noHoverMenu')) { return; }
         if (!watchId || !watchId.match(/^[a-z0-9]+$/)) { return; }
@@ -4118,9 +4344,9 @@ const MylistApiLoader = (() => {
         const target =
           e.target.tagName === 'A' ? e.target : e.target.closest('a');
         if (!target) { return false; }
-        const href = target.href || '';
-        if (!/((watch|shorts)\/[a-z0-9]+|nico\.ms\/[a-z0-9]+)/.test(href)) { return false; }
-        return target;
+        // Task 092: 以前は href の文字列のどこかに watch/〜・shorts/〜・nico.ms/〜 があれば対象にしていた
+        // （Google の検索リンクの q= の中などでも当たる）。リンク先のホストとパスで判定する
+        return util.resolveNicoVideoLink(target) ? target : false;
       }
 
       set isBusy(v) {
@@ -4534,14 +4760,15 @@ const MylistApiLoader = (() => {
       }
 
       _createDescription(elm, data) {
-        elm.innerHTML = util.httpLink(data);
-        const watchReg = /(watch|shorts)\/([a-z0-9]+)/;
+        // Task 092: 文字列の innerHTML ではなく、リンクを付けた DOM をそのまま入れる
+        elm.textContent = '';
+        elm.append(util.httpLinkFragment(data));
         const isZenzaReady = this._isZenzaReady;
         //if (util.isFirefox()) { return; }
-        Array.from(elm.querySelectorAll('.videoLink[href*="watch/"],.videoLink[href*="shorts/"]')).forEach((link) => {
-          const href = link.getAttribute('href');
-          if (!watchReg.test(href)) { return; }
-          const watchId = RegExp.$2;
+        Array.from(elm.querySelectorAll('a.videoLink')).forEach((link) => {
+          const ref = util.resolveNicoVideoLink(link);
+          if (!ref) { return; }
+          const watchId = ref.watchId;
           if (isZenzaReady) {
             link.classList.add('noHoverMenu');
             link.classList.add('command');
@@ -5106,16 +5333,39 @@ const MylistApiLoader = (() => {
     };
 
 
+    /*
+     * Task 092: 同時に読み込む数を本当に MAX_LOAD（6）件以下にする。
+     * 以前は6個の Promise の配列を Promise.race で待っていたため、完了時間がばらつくと、
+     * 「どれか1つが終わった」ことで待っていた多くの要求が同時に動き始め、6件を超えていた
+     * （再現試験で最大13〜16件）。今は、動いている数を数えて、空いた分だけ待ち行列の先頭から始める（先に来た順）。
+     * 1件の成功後の50ms・失敗後の1000msの待ちは、以前と同じくその枠の中で待つ。
+     * 1件が失敗・例外になっても枠は必ず戻し、残りの要求は止めない。
+     */
     const QueueLoader = (() => {
-      let lastPromise = null;
-      let count = 0;
       const MAX_LOAD = 6;
-      const promises = [];
+      const waiting = [];
+      let active = 0;
+
+      const startNext = () => {
+        while (active < MAX_LOAD && waiting.length > 0) {
+          const {run, resolve, reject} = waiting.shift();
+          active++;
+          let promise;
+          try {
+            promise = Promise.resolve(run());
+          } catch (e) {
+            promise = Promise.reject(e);
+          }
+          promise
+            .then(resolve, reject)
+            .then(() => {
+              active--;
+              startNext();
+            });
+        }
+      };
 
       const load = function(watchId, item) {
-        count = (count + 1) % MAX_LOAD;
-        lastPromise = promises[count];
-
         const onLoad = info => {
           if (item) {
             watchId = info.watchId;
@@ -5127,23 +5377,24 @@ const MylistApiLoader = (() => {
         };
         const onFail = util.getSleepPromise(1000, 'fail-'    + watchId);
 
-        if (!lastPromise) {
-          if (item) { item.classList.add('is-ng-current'); }
-          lastPromise = ThumbInfoLoader.load(watchId).then(onLoad, onFail);
-        } else {
-          //lastPromise = Promise.all([lastPromise]).then(() => {
-          lastPromise = Promise.race(promises).then(() => {
-            if (item) { item.classList.add('is-ng-current'); }
-            return ThumbInfoLoader.load(watchId).then(onLoad, onFail);
+        return new Promise((resolve, reject) => {
+          waiting.push({
+            run: () => {
+              if (item) { item.classList.add('is-ng-current'); }
+              return ThumbInfoLoader.load(watchId).then(onLoad, onFail);
+            },
+            resolve,
+            reject
           });
-        }
-
-        promises[count] = lastPromise;
-        return lastPromise;
+          startNext();
+        });
       };
 
       return {
-        load
+        load,
+        MAX_LOAD,
+        get activeCount() { return active; },
+        get waitingCount() { return waiting.length; }
       };
     })();
 
@@ -5276,7 +5527,7 @@ const MylistApiLoader = (() => {
         }
 
         if (!watchId) {
-          item.classList.add('.no-watch-id');
+          item.classList.add('no-watch-id');
           return ignore();
         }
 
@@ -5432,7 +5683,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.18-task079b', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.34-task156', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -5502,25 +5753,17 @@ class Handler { //extends Array {
 		return this._list.length;
 	}
 	exec(...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member.apply(this._list, args); }
 		}
 	}
 	execMethod(name, ...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0][name](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i][name](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member[name](...args); }
 		}
 	}
 	add(member) {
@@ -5629,7 +5872,11 @@ const {Emitter} = (() => {
 			} else if (!callback) {
 				this._events.delete(name);
 			} else {
-				e.remove(callback);
+				for (const listener of e) {
+					if (listener === callback || listener._original === callback) {
+						e.remove(listener);
+					}
+				}
 				if (e.isEmpty) {
 					this._events.delete(name);
 				}
@@ -5641,9 +5888,9 @@ const {Emitter} = (() => {
 		}
 		once(name, func) {
 			const wrapper = (...args) => {
-				func(...args);
 				this.off(name, wrapper);
 				wrapper._original = null;
+				func(...args);
 			};
 			wrapper._original = func;
 			return this.on(name, wrapper);
@@ -5819,10 +6066,12 @@ function parseThumbInfo(xmlText) {
 const workerUtil = (() => {
 	let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
 	let global = null, external = null;
+	const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
 	const isAvailable = !!(window.Blob && window.Worker && window.URL);
 	const messageWrapper = function(self) {
 		const _onmessage = self.onmessage || (() => {});
 		const promises = {};
+		let requestSeq = 0;
 		const onMessage = async function(self, type, e) {
 			const {body, sessionId, status} = e.data;
 			const {command, params} = body;
@@ -5846,7 +6095,9 @@ const workerUtil = (() => {
 						const port = e.ports[0];
 						portMap[params.name] = port;
 						port.addEventListener('message', onMessage.bind({}, port, params.name));
+						port.start && port.start();
 						bindFunc(port, 'MessageChannel');
+						result = {name: params.name};
 						if (params.ping) {
 							console.time('ping:' + sessionId);
 							port.ping().then(result => {
@@ -5858,7 +6109,7 @@ const workerUtil = (() => {
 							});
 						}
 					}
-						return;
+						break;
 					case 'broadcast': {
 						if (!BroadcastChannel) { return; }
 						const channel = new BroadcastChannel(`${params.name}`);
@@ -5874,12 +6125,14 @@ const workerUtil = (() => {
 						result = await _onmessage({command, params}, type, PID);
 						break;
 					}
+				if (sessionId === undefined || sessionId === null) { return; }
 				self.postMessage({body:
 					{command: 'commandResult', params:
 						{command, result}}, sessionId, TYPE: type, PID, status: 'ok'
 					});
 			} catch(err) {
 				console.error('failed', {err, command, params, sessionId, TYPE: type, PID, data: e.data});
+				if (sessionId === undefined || sessionId === null) { return; }
 				self.postMessage({body:
 						{command: 'commandResult', params: {command, result: err.message || null}},
 						sessionId, TYPE: type, PID, status: err.status || 'fail'
@@ -5894,7 +6147,7 @@ const workerUtil = (() => {
 		};
 		const bindFunc = (self, type = 'Worker') => {
 			const post = function(self, body, options = {}) {
-				const sessionId = `recv:${NAME}:${type}:${this.sessionId++}`;
+				const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
 				return new Promise((resolve, reject) => {
 					promises[sessionId] = {resolve, reject};
 					self.postMessage({body, sessionId, PID}, options.transfer);
@@ -5970,9 +6223,10 @@ const workerUtil = (() => {
 			let cache = this.urlMap.get(func);
 			const name = options.name || 'Worker';
 			if (!cache) {
+				const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
 				const src = `
-				const PID = '${window && window.name || 'self'}:${location.href.replace(/\'/g, '\\\'')}:${name}:${Date.now().toString(16).toUpperCase()}';
-				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', '${PRODUCT}', location.origin);
+				const PID = ${JSON.stringify(pid)};
+				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
 				const blob = new Blob([src], {type: 'text/javascript'});
@@ -5988,12 +6242,26 @@ const workerUtil = (() => {
 			return new Worker(cache, options);
 		}.bind({urlMap: new Map(), workerMap: new Map()}),
 		createCrossMessageWorker: function(func, options = {}) {
-			const promises = this.promises;
+			const promises = {};
+			const instanceId = this.instanceSeq++;
+			let requestSeq = 0;
 			const name = options.name || 'Worker';
+			let state = 'starting';
+			const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
+			const rpcError = (reason, message) =>
+				Object.assign(new Error(message || reason), {name: 'WorkerRpcError', status: 'fail', reason, workerName: name});
+			const rejectAll = (reason, message) => {
+				for (const id of Object.keys(promises)) {
+					const p = promises[id];
+					delete promises[id];
+					p.reject(rpcError(reason, message));
+				}
+			};
+			const closables = [];
 			const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
 			const _func = `
 			function (self) {
-			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = decodeURI('${encodeURI(name)}'), bcast = {}, portMap = {};
+			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = ${JSON.stringify(String(name))}, bcast = {}, portMap = {};
 			const {Handler, PromiseHandler, Emitter} = (${EmitterInitFunc.toString()})();
 			${options.inject ?? ''}
 			(${func.toString()})(self);
@@ -6005,6 +6273,8 @@ const workerUtil = (() => {
 			const self = options.type === 'SharedWorker' ? worker.port : worker;
 			self.name = name;
 			const onMessage = async function(self, e) {
+				if (state === 'disposed') { return; }
+				if (state === 'starting' || state === 'failed') { state = 'ready'; }
 				const {body, sessionId, status} = e.data;
 				const {command, params} = body;
 				try {
@@ -6043,25 +6313,36 @@ const workerUtil = (() => {
 							self.oncommand && (result = await self.oncommand({command, params}));
 							break;
 					}
+					if (sessionId === undefined || sessionId === null) { return; }
 					self.postMessage({body: {command: 'commandResult', params: {command, result}}, sessionId, status: 'ok'}, transfer);
 				} catch (err) {
 					console.error('failed', {err, command, params, sessionId});
+					if (sessionId === undefined || sessionId === null) { return; }
 					self.postMessage({body: {command: 'commandResult', params: {command, result: err.message || null}}, sessionId, status: err.status || 'fail'});
 				}
 			};
 			const bindFunc = (self, type = 'Worker') => {
 				const post = function(self, body, options = {}) {
-					const sessionId = `send:${name}:${type}:${this.sessionId++}`;
+					if (state === 'failed' || state === 'disposed') {
+						return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
+					}
+					const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
+					const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
+					let timer = null;
 					return new Promise((resolve, reject) => {
 							promises[sessionId] = {resolve, reject};
 							self.postMessage({body, sessionId, TYPE: type, PID}, options.transfer);
-							if (typeof options.timeout === 'number') {
-								setTimeout(() => {
-									reject({status: 'fail', message: 'timeout'});
+							if (timeout > 0 && timeout < Infinity) {
+								timer = setTimeout(() => {
+									if (!promises[sessionId]) { return; }
 									delete promises[sessionId];
-								}, options.timeout);
+									reject(rpcError('timeout', 'timeout'));
+								}, timeout);
 							}
-						}).finally(() => { delete promises[sessionId]; });
+						}).finally(() => {
+							timer && clearTimeout(timer);
+							delete promises[sessionId];
+						});
 				};
 				const ping = async function(self, options = {}) {
 					const timekey = `PING "${self.name}" total time`;
@@ -6079,13 +6360,33 @@ const workerUtil = (() => {
 					return result;
 				};
 				self.post = post.bind({sessionId: 0}, self);
+				self.send = (body, transfer) => self.postMessage({body, TYPE: type, PID}, transfer);
 				self.ping = ping.bind({}, self);
 				self.addEventListener('message', onMessage.bind({sessionId: 0}, self));
+				self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
 				self.start && self.start();
 			};
 			bindFunc(self);
+			worker.addEventListener('error', e => {
+				if (state === 'disposed') { return; }
+				if (state === 'starting') { state = 'failed'; }
+				rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
+			});
+			if (self === worker && typeof worker.terminate === 'function') {
+				const terminate = worker.terminate.bind(worker);
+				self.terminate = () => {
+					if (state === 'disposed') { return; }
+					state = 'disposed';
+					rejectAll('terminated', `worker terminated: ${name}`);
+					for (const c of closables.splice(0)) {
+						try { c.close(); } catch (e) { /* 閉じられなくても続ける */ }
+					}
+					terminate();
+				};
+			}
+			self.getRpcState = () => ({id: instanceId, name, state, pending: Object.keys(promises).length});
 			if (config) {
-				self.post({
+				self.send({
 					command: 'env',
 					params: {config: config.export(true), TOKEN, PRODUCT, CONSTANT}
 				});
@@ -6095,30 +6396,28 @@ const workerUtil = (() => {
 				return self.post({command: 'port', params: {port, name}}, {transfer: [port]});
 			};
 			const channel = new MessageChannel();
-			self.addPort(channel.port2);
-			bindFunc(channel.port1, {name: 'MessageChannel'});
+			self.addPort(channel.port2).catch(() => {});
+			bindFunc(channel.port1, 'MessageChannel');
+			closables.push(channel.port1);
 			self.bridge = async (worker, options = {}) => {
 				const name = options.name || 'MessageChannelBridge';
 				const channel = new MessageChannel();
 				await self.addPort(channel.port1, {name: worker.name || name});
 				await worker.addPort(channel.port2, {name: self.name || name});
-				console.log('ping self -> other', await channel.port1.ping());
-				console.log('ping other -> self', await channel.port2.ping());
 			};
 			self.BroadcastChannel = basename => {
 				const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
-				self.post({command: 'broadcast', params: {basename, name}});
+				self.send({command: 'broadcast', params: {basename, name}});
 				const channel = new BroadcastChannel(name);
-				channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
 				bindFunc(channel, 'BroadcastChannel');
+				closables.push(channel);
 				return name;
 			};
 			self.ping()
 				.catch(result => console.warn('FAIL', result));
 			return self;
 		}.bind({
-			sessionId: 0,
-			promises: {}
+			instanceSeq: 0
 		})
 	};
 	return workerUtil;
@@ -6126,14 +6425,17 @@ const workerUtil = (() => {
 const IndexedDbStorage = (() => {
 	const workerFunc = function(self) {
 		const db = {};
+		const initializing = new Map();
 		const controller = {
 			async init({name, ver, stores}) {
 				if (db[name]) {
 					return Promise.resolve(db[name]);
 				}
-				return new Promise((resolve, reject) => {
+				if (initializing.has(name)) { return initializing.get(name); }
+				const pending = new Promise((resolve, reject) => {
 					const req = indexedDB.open(name, ver);
 					req.onupgradeneeded = e => {
+						try {
 						const _db = e.target.result;
 						for (const meta of stores) {
 							if(_db.objectStoreNames.contains(meta.name)) {
@@ -6148,13 +6450,23 @@ const IndexedDbStorage = (() => {
 								console.log('store.transaction.complete', JSON.stringify({name, ver, store: meta}));
 							};
 						}
+						} catch (error) {
+							try { req.transaction && req.transaction.abort(); } catch (abortError) {}
+							reject(error);
+						}
 					};
 					req.onsuccess = e => {
 						db[name] = e.target.result;
 						resolve(db[name]);
 					};
-					req.onerror = reject;
+					req.onerror = e => reject(req.error || e);
 				});
+				initializing.set(name, pending);
+				try {
+					return await pending;
+				} finally {
+					if (initializing.get(name) === pending) { initializing.delete(name); }
+				}
 			},
 			close({name}) {
 				if (!db[name]) {
@@ -6165,24 +6477,42 @@ const IndexedDbStorage = (() => {
 			},
 			async getStore({name, storeName, mode = 'readonly'}) {
 				const db = await this.init({name});
-				return new Promise(async (resolve, reject) => {
-					const tx = db.transaction(storeName, mode);
-					tx.onerror = reject;
-					return resolve({
-						store: tx.objectStore(storeName),
-						transaction: tx
-					});
+				const transaction = db.transaction(storeName, mode);
+				return {store: transaction.objectStore(storeName), transaction};
+			},
+			async _write({name, storeName}, operation) {
+				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
+				return new Promise((resolve, reject) => {
+					let result, settled = false;
+					const cleanup = () => {
+						transaction.oncomplete = transaction.onabort = transaction.onerror = null;
+					};
+					const fail = error => {
+						if (settled) { return; }
+						settled = true;
+						const reason = (error && error.target) ?
+							(error.target.error || transaction.error || new Error('IndexedDB transaction failed')) : error;
+						cleanup();
+						try { transaction.abort(); } catch (abortError) {}
+						reject(reason || new Error('IndexedDB transaction failed'));
+					};
+					transaction.oncomplete = () => {
+						if (settled) { return; }
+						settled = true;
+						cleanup();
+						resolve(result);
+					};
+					transaction.onabort = transaction.onerror = fail;
+					try {
+						operation(store, value => { result = value; }, fail);
+					} catch (error) { fail(error); }
 				});
 			},
 			async put({name, storeName, data}) {
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					const req = store.put(data);
-					req.onsuccess = e => {
-						transaction.commit && transaction.commit();
-						resolve(e.target.result);
-					};
-					req.onerror = reject;
+					req.onsuccess = e => result(e.target.result);
+					req.onerror = fail;
 				});
 			},
 			async get({name, storeName, data: {key, index, timeout}}) {
@@ -6206,72 +6536,57 @@ const IndexedDbStorage = (() => {
 					return null;
 				}
 				record.updatedAt = Date.now();
-				this.put({name, storeName, data: record});
+				await this.put({name, storeName, data: record});
 				return record;
 			},
 			async delete({name, storeName, data: {key, index}}) {
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					let remove = 0;
-					let range = IDBKeyRange.only(key);
-					let req =
-						index ?
-							store.index(index).openCursor(range) : store.openCursor(range);
-					req.onsuccess = e =>  {
-						const result = e.target.result;
-						if (!result) {
-							transaction.commit && transaction.commit();
-							return resolve(remove > 0);
-						}
-						result.delete();
-						remove++;
-						result.continue();
+					const range = IDBKeyRange.only(key);
+					const req = index ? store.index(index).openCursor(range) : store.openCursor(range);
+					req.onsuccess = e => {
+						try {
+							const cursor = e.target.result;
+							if (!cursor) { result(remove > 0); return; }
+							cursor.delete();
+							remove++;
+							cursor.continue();
+						} catch (error) { fail(error); }
 					};
-					req.onerror = reject;
+					req.onerror = fail;
 				});
 			},
 			async clear({name, storeName}) {
-				const {store} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					const req = store.clear();
-					req.onsuccess = e => {
-						console.timeEnd('storage clear');
-						resolve();
-					};
-					req.onerror = e => {
-						console.timeEnd('storage clear');
-						reject(e);
-					};
+					req.onsuccess = () => result(undefined);
+					req.onerror = fail;
 				});
 			},
 			async gc({name, storeName, data: {expireTime, index}}) {
 				index = index || 'updatedAt';
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
 				const now = Date.now(), ptime = performance.now();
 				const expiresAt = (index !== 'expiresAt') ? (now - expireTime) : now;
-				const expireDateTime = new Date(expiresAt).toLocaleString();
-				const timekey = `GC [DELETE FROM ${name}.${storeName} WHERE ${index} < '${expireDateTime}'] `;
-				console.time(timekey);
 				let count = 0;
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					const range = IDBKeyRange.upperBound(expiresAt);
-					const idx = store.index(index);
-					const req = idx.openCursor(range);
+					const req = store.index(index).openCursor(range);
 					req.onsuccess = e => {
-						const cursor = e.target.result;
-						if (cursor) {
-							count++;
-							cursor.delete();
-							return cursor.continue();
-						}
-						console.timeEnd(timekey);
-						resolve({status: 'ok', count, time: performance.now() - ptime});
-						count && console.log('deleted %s records.', count);
+						try {
+							const cursor = e.target.result;
+							if (cursor) {
+								count++;
+								cursor.delete();
+								cursor.continue();
+							} else {
+								result({status: 'ok', count, time: performance.now() - ptime});
+							}
+						} catch (error) { fail(error); }
 					};
-					req.onerror = reject;
+					req.onerror = fail;
 				}).catch(e => {
-					console.error('gc fail', {name, storeName, data: {expireTime, index}, timekey}, e);
-					store.clear();
+					console.warn('IndexedDB cache cleanup failed');
+					throw e;
 				});
 			}
 		};
@@ -6315,7 +6630,7 @@ const IndexedDbStorage = (() => {
 			worker = workers.get(workerFunc) || workerUtil.createCrossMessageWorker(workerFunc, {name: 'IndexedDb'});
 			workers.set(workerFunc, worker);
 		}
-		worker.post({command: 'init', params: {name, ver, stores}});
+		await worker.post({command: 'init', params: {name, ver, stores}});
 		const post = (command, data, storeName, transfer) => {
 			const params = {data, name, storeName, transfer};
 			return worker.post({command, params}, transfer);
@@ -6357,9 +6672,9 @@ const ThumbInfoCacheDb = (() => {
 	const open = async () => {
 		db = db || await IndexedDbStorage.open(THUMB_INFO);
 		const cacheDb = db['cache'];
-		cacheDb.gc(90 * 24 * 60 * 60 * 1000);
+		cacheDb.gc(90 * 24 * 60 * 60 * 1000).catch(() => console.warn('Thumbnail cache cleanup failed'));
 		return {
-			put: (xml, thumbInfo = null) => {
+			put: async (xml, thumbInfo = null) => {
 				thumbInfo = thumbInfo || parseThumbInfo(xml);
 				if (thumbInfo.status !== 'ok') {
 					return;
@@ -6376,7 +6691,7 @@ const ThumbInfoCacheDb = (() => {
 					xml,
 					thumbInfo
 				};
-				cacheDb.put(record);
+				await cacheDb.put(record);
 				return {watchId, updatedAt};
 			},
 			get: watchId => cacheDb.updateTime({key: watchId}),
@@ -6454,36 +6769,51 @@ const gate = () => {
 			'www.youtube.com',
 		].includes(host) || host.endsWith('.slack.com');
 	};
-	const uFetch = params => {
-		const {url, options}= params;
+	const uFetch = async params => {
+		const {url, options: requestOptions = {}} = params;
 		if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
 			return Promise.reject({status: 'fail', message: 'network error'});
 		}
+		const options = {...requestOptions};
+		const callerSignal = options.signal;
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+			Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+		const timeout = (typeof options.timeout === 'number' && !isNaN(options.timeout)) ? options.timeout :
+			(typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
 		const racers = [];
 		let timer;
-		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-		if (timeout > 0) {
-			racers.push(new Promise((resolve, reject) =>
-				timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-			);
-		}
-		const controller = AbortController ? (new AbortController()) : null;
-		if (controller) {
-			params.signal = controller.signal;
-		}
-		racers.push(fetch(url, options));
-		return Promise.race(racers)
-			.catch(err => {
-			let message = 'uFetch fail';
-			if (err && err.name === 'timeout') {
-				if (controller) {
-					console.warn('request timeout');
-					controller.abort();
-				}
-				message = 'timeout';
+		let onAbort;
+		try {
+			if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+			if (controller) { options.signal = controller.signal; }
+			if (callerSignal) {
+				racers.push(new Promise((resolve, reject) => {
+					onAbort = () => {
+						const reason = abortReason();
+						reject(reason);
+						if (controller) { controller.abort(reason); }
+					};
+					callerSignal.addEventListener('abort', onAbort, {once: true});
+				}));
 			}
-			return Promise.reject({status: 'fail', message});
-		}).finally(() => { timer && clearTimeout(timer); });
+			if (timeout > 0) {
+				racers.push(new Promise((resolve, reject) => {
+					timer = setTimeout(() => {
+						const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+						reject(error);
+						if (controller) { controller.abort(error); }
+					}, timeout);
+				}));
+			}
+			racers.push(fetch(url, options));
+			return await Promise.race(racers);
+		} catch (err) {
+			throw {status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail'};
+		} finally {
+			if (timer !== undefined) { clearTimeout(timer); }
+			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
+		}
 	};
 	const xFetch = (params, sessionId = null) => {
 		const command = 'fetch';
@@ -6521,8 +6851,10 @@ const gate = () => {
 	return {post, parseUrl, isNicoServiceHost, isWhiteHost, uFetch, xFetch, init};
 };
   const {post, parseUrl, uFetch, init} = gate();
+  // Finish asynchronous setup before advertising readiness: the parent sends its
+  // first request as soon as init() opens the already-started message port.
+  const db = await ThumbInfoCacheDb.open().catch(() => null);
   const {port, TOKEN} = init({prefix: `thumbInfo${PRODUCT}`, type: 'thumbInfo'});
-  const db = await ThumbInfoCacheDb.open();
   port.addEventListener('message', async e => {
     const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     const {body, sessionId, token} = data;
@@ -6532,14 +6864,14 @@ const gate = () => {
     if (TOKEN !== token ||
       p.hostname !== location.host ||
       !p.pathname.startsWith('/api/getthumbinfo/')) {
-      console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+      console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
       return;
     }
     params.options = params.options || {};
 
     const watchId = params.url.split('/').reverse()[0];
     const expiresAt = Date.now() - (params.options.expireTime || 0);
-    const cache = await db.get(watchId);
+    const cache = db ? await db.get(watchId).catch(() => null) : null;
     if (cache && cache.thumbInfo.status === 'ok' && cache.updatedAt > expiresAt) {
       return post({status: 'ok', command, params: cache.thumbInfo}, {sessionId});
     }
@@ -6551,7 +6883,7 @@ const gate = () => {
       .then(async xmlText => {
         let thumbInfo = parseThumbInfo(xmlText);
         if (thumbInfo.status === 'ok') {
-          db.put(xmlText, thumbInfo);
+          if (db) db.put(xmlText, thumbInfo).catch(() => console.warn('Thumbnail cache write failed'));
         } else if (cache && cache.thumbInfo.status === 'ok') {
           thumbInfo = cache.thumbInfo;
         }

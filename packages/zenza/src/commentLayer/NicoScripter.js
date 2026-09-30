@@ -360,6 +360,7 @@ class NicoScripter extends Emitter {
     this._hasSort = false;
     this._list = [];
     this._eventScript = [];
+    this._assignedEvents = new Set();
     this._nextVideo = null;
     this._marker = {};
     this._inviewEvents = {};
@@ -425,7 +426,7 @@ class NicoScripter extends Emitter {
       }
       this._inviewEvents[p.id] = true;
       let diff = nicos.vpos / 100 - ct;
-      diff = Math.min(1, Math.abs(diff)) * (diff / Math.abs(diff));
+      diff = Math.max(-1, Math.min(1, diff));
       switch (p.type) {
         case 'SEEK':
           this.emit('command', 'nicosSeek', Math.max(0, p.params.time * 1 + diff));
@@ -441,7 +442,13 @@ class NicoScripter extends Emitter {
 
   apply(group) {
     this._sort();
-    const assigned = {};
+    const registerEvent = (p, nicos, position) => {
+      const id = JSON.stringify([nicos.uniqNo, position]);
+      if (this._assignedEvents.has(id)) { return; }
+      this._assignedEvents.add(id);
+      p.id = id;
+      this._eventScript.push({p, nicos});
+    };
 
     // どうせ全動画の1%も使われていないので
     // 最適化もへったくれもない
@@ -453,22 +460,8 @@ class NicoScripter extends Emitter {
           this._nextVideo = target;
         }
       },
-      'SEEK': (p, nicos) => {
-        if (assigned[p.id]) {
-          return;
-        }
-        assigned[p.id] = true;
-        this._eventScript.push({p, nicos});
-      },
-      'SEEK_MARKER': (p, nicos) => {
-        if (assigned[p.id]) {
-          return;
-        }
-        assigned[p.id] = true;
-
-        console.log('SEEK_MARKER: ', p, nicos);
-        this._eventScript.push({p, nicos});
-      },
+      'SEEK': registerEvent,
+      'SEEK_MARKER': registerEvent,
       'MARKER': (p, nicos) => {
         console.log('@ジャンプマーカー: ', p, nicos);
         this._marker[p.params.name] = nicos.vpos / 100;
@@ -589,14 +582,14 @@ class NicoScripter extends Emitter {
 
       const ev = eventFunc[p.type];
       if (ev) {
-        return ev(p, nicos);
+        return ev(p, nicos, 0);
       }
       else if (p.type === 'PIPE') {
-        p.params.forEach(line => {
+        p.params.forEach((line, position) => {
           const type = line.type;
           const ev = eventFunc[type];
           if (ev) {
-            return ev(line, nicos);
+            return ev(line, nicos, position);
           }
         });
       }

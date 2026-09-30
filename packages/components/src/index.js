@@ -1,7 +1,7 @@
 import { BaseCommandElement } from './element/BaseCommandElement';
 import { VideoItemElement } from './element/VideoItemElement';
 import { VideoSeriesLabel } from './element/VideoSeriesLabel';
-import { NoWebComponent } from './element/NoWebComponent';
+import './element/NoWebComponent'; // 名前を export しない（custom element を登録するだけの）モジュール
 import { RangeBarElement }  from './element/RangeBarElement';
 import { DialogElement }  from './element/DialogElement';
 import { SettingPanelElement } from './element/SettingPanelElement';

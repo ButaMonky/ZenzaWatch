@@ -32,15 +32,15 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.21-task081
+// @version        2.7.86-task157
 // @run-at         document-body
-// @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
+// @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-09-19 06:48Z 80e7200
+// build: 2026-09-30 16:58Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.21-task081';
+    var VER = '2.7.86-task157';
     const ENV = 'DEV';
 
-    var BUILD = '2026-09-19 06:48Z 80e7200';
+    var BUILD = '2026-09-30 16:58Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -241,15 +241,21 @@ const Observable = (() => {
 			}
 			return new this(onNext || {});
 		}
-		constructor({start, next, error, complete} = {start:nop, next:nop, error:nop, complete:nop}) {
-			this.callbacks = {start, next, error, complete};
+		constructor({start, next, error, complete, closed} = {}) {
+			this.callbacks = {
+				start: typeof start === 'function' ? start : nop,
+				next: typeof next === 'function' ? next : nop,
+				error: typeof error === 'function' ? error : nop,
+				complete: typeof complete === 'function' ? complete : nop,
+				closed: typeof closed === 'function' ? closed : () => false
+			};
 		}
 		start(arg) {this.callbacks.start(arg);}
 		next(arg) {this.callbacks.next(arg);}
 		error(arg) {this.callbacks.error(arg);}
 		complete(arg) {this.callbacks.complete(arg);}
 		get closed() {
-			return this._callbacks.closed ? this._callbacks.closed() : false;
+			return this.callbacks.closed();
 		}
 	}
 	Subscriber.nop = {start: nop, next: nop, error: nop, complete: nop, closed: nop};
@@ -698,18 +704,19 @@ class DataStorage {
 	}
 	namespace(name) {
 		const namespace = name ? `${name}.` : '';
-		const origin = Symbol(`${namespace}`);
+		const updateListeners = new Map();
 		const result = {
 			getValue: key => this.getValue(`${namespace}${key}`),
 			setValue: (key, value) => this.setValue(`${namespace}${key}`, value),
 			on: (key, func) => {
 				if (key === 'update') {
+					if (updateListeners.has(func)) { return result; }
 					const onUpdate = (key, value) => {
 						if (key.startsWith(namespace)) {
-							func(key.slice(namespace.length + 1), value);
+							func(key.slice(namespace.length), value);
 						}
 					};
-					onUpdate[origin] = func;
+					updateListeners.set(func, onUpdate);
 					this.on('update', onUpdate);
 					return result;
 				}
@@ -717,8 +724,15 @@ class DataStorage {
 			},
 			off: (key, func) => {
 				if (key === 'update') {
-					func = func[origin] || func;
-					this.off('update', func);
+					if (!func) {
+						for (const listener of updateListeners.values()) {
+							this.off('update', listener);
+						}
+						updateListeners.clear();
+					} else if (updateListeners.has(func)) {
+						this.off('update', updateListeners.get(func));
+						updateListeners.delete(func);
+					}
 					return result;
 				}
 				return this.offkey(`${namespace}${key}`, func);
@@ -1293,14 +1307,18 @@ Config.exportConfig = () => Config.export();
 Config.importConfig = v => Config.import(v);
 Config.exportToFile = () => {
 	const json = Config.exportJson();
-	const blob = new Blob([json], {'type': 'text/html'});
+	const blob = new Blob([json], {type: 'application/json'});
 	const url = URL.createObjectURL(blob);
-	const a = Object.assign(document.createElement('a'), {
-		download: `${new Date().toLocaleString().replace(/[:/]/g, '_')}_ZenzaWatch.config.json`,
-		rel: 'noopener',
-		href: url
-	});
-	a.click();
+	try {
+		const a = Object.assign(document.createElement('a'), {
+			download: `${new Date().toLocaleString().replace(/[:/]/g, '_')}_ZenzaWatch.config.json`,
+			rel: 'noopener',
+			href: url
+		});
+		a.click();
+	} finally {
+		setTimeout(() => URL.revokeObjectURL(url), 2000);
+	}
 };
 const NaviConfig = Config;
 await Config.promise('restore');
@@ -2832,19 +2850,27 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
 			(new self.BroadcastChannel(PRODUCT)) : null;
 	const onStorage = e => {
 		let command = e.key;
-		if (e.type !== 'storage' || !command.startsWith(`${PRODUCT}_`)) {
+		if (e.type !== 'storage' || typeof command !== 'string' || !command.startsWith(`${PRODUCT}_`)) {
 			return;
 		}
-		command = command.replace('ZenzaWatch_', '');
+		command = command.slice(`${PRODUCT}_`.length);
 		let oldValue = e.oldValue;
 		let newValue = e.newValue;
-		if (oldValue === newValue) {
+		if (newValue === null || oldValue === newValue) {
 			return;
 		}
 		switch (command) {
 			case 'message': {
-				const {body} = JSON.parse(newValue);
-				console.log('%cmessage', 'background: cyan;', body);
+				let data;
+				try {
+					data = JSON.parse(newValue);
+				} catch (err) {
+					return;
+				}
+				if (!data || typeof data !== 'object' || Array.isArray(data)) { return; }
+				const {body} = data;
+				if (!body || typeof body !== 'object' || Array.isArray(body) ||
+						typeof body.command !== 'string' || !body.command) { return; }
 				bcast.emitAsync('message', body, 'broadcast');
 				break;
 			}
@@ -3109,30 +3135,45 @@ const netUtil = {
 		}
 		return $.ajax(params);
 	},
-	abortableFetch: (url, params) => {
+	abortableFetch: async (url, params = {}) => {
 		params = params || {};
+		const options = {...params};
+		const callerSignal = options.signal;
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+			Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
 		const racers = [];
 		let timer;
-		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-		if (timeout > 0) {
-			racers.push(new Promise((resolve, reject) =>
-				timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-			);
+		let onAbort;
+		try {
+			if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+			if (controller) { options.signal = controller.signal; }
+			if (callerSignal) {
+				racers.push(new Promise((resolve, reject) => {
+					onAbort = () => {
+						const reason = abortReason();
+						reject(reason);
+						if (controller) { controller.abort(reason); }
+					};
+					callerSignal.addEventListener('abort', onAbort, {once: true});
+				}));
+			}
+			if (timeout > 0) {
+				racers.push(new Promise((resolve, reject) => {
+					timer = setTimeout(() => {
+						const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+						reject(error);
+						if (controller) { controller.abort(error); }
+					}, timeout);
+				}));
+			}
+			racers.push(fetch(url, options));
+			return await Promise.race(racers);
+		} finally {
+			if (timer !== undefined) { clearTimeout(timer); }
+			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
 		}
-		const controller = window.AbortController ? (new AbortController()) : null;
-		if (controller) {
-			params.signal = controller.signal;
-		}
-		racers.push(fetch(url, params));
-		return Promise.race(racers)
-			.catch(err => {
-				if (err.name === 'timeout') {
-					if (controller) {
-						controller.abort();
-					}
-				}
-				return Promise.reject(err.message || err);
-			}).finally(() => timer = null);
 	},
 	fetch(url, params) {
 		if (location.host !== 'www.nicovideo.jp') {
@@ -3232,33 +3273,27 @@ const VideoCaptureUtil = (() => {
 		const svg = new Blob([data], {type: 'image/svg+xml;charset=utf-8'});
 		return {svg, data};
 	};
-	const htmlToCanvas = (html, width = 640, height = 360) => {
+	const htmlToCanvas = async (html, width = 640, height = 360) => {
 		const imageW = height * 16 / 9;
 		const imageH = imageW * 9 / 16;
-		const {svg, data} = htmlToSvg(html);
+		const {svg} = htmlToSvg(html);
 		const url = window.URL.createObjectURL(svg);
-		if (!url) {
-			return Promise.reject(new Error('convert svg fail'));
+		if (!url) { throw new Error('convert svg fail'); }
+		try {
+			const img = new Image();
+			img.width = 682;
+			img.height = 384;
+			const canvas = document.createElement('canvas');
+			const context = canvas.getContext('2d');
+			canvas.width = width;
+			canvas.height = height;
+			img.src = url;
+			await img.decode();
+			context.drawImage(img, (width - imageW) / 2, (height - imageH) / 2, imageW, imageH);
+			return {canvas, img};
+		} finally {
+			window.URL.revokeObjectURL(url);
 		}
-		const img = new Image();
-		img.width = 682;
-		img.height = 384;
-		const canvas = document.createElement('canvas');
-		const context = canvas.getContext('2d');
-		canvas.width = width;
-		canvas.height = height;
-		img.src = url;
-		img.decode().then(() => {
-			context.drawImage(
-				img,
-				(width - imageW) / 2,
-				(height - imageH) / 2,
-				imageW,
-				imageH);
-		}).catch(e => {
-			throw new Error('img decode error', e);
-		}).finally(() => window.URL.revokeObjectURL(url));
-		return {canvas, img};
 	};
 	const nicoVideoToCanvas = async ({video, html, minHeight = 1080, processVideoCanvas = null}) => {
 		let scale = 1;
@@ -3424,28 +3459,41 @@ VideoCaptureUtil.capTubeThumbnail = (width = 320, height = 180, type = 'image/we
 };
 util.videoCapture = VideoCaptureUtil.capture;
 util.capTube = VideoCaptureUtil.capTube;
+/*
+* Task 088（監査v2 ZW-085）: 以前は動画のタイトル等を、保存する HTML の <h2> と <title> へそのまま差し込んでいた
+* （「titleはエスケープされてる」とコメントにあったが、今の VideoInfo.title は元の文字列を返す）。
+* タイトルに < > & " を含むと、保存した HTML の中で要素・属性として解釈されてしまう。
+* HTML に入れる文字はすべてエスケープし、置き換えは関数で行う（$& 等の特殊な記号を置き換えの指示として解釈させない）。
+*/
 const saveMymemory = (player, videoInfo) => {
+	const escapeHtml = text => String(text == null ? '' : text).replace(/[&<>"']/g, ch => ({
+		'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'
+	})[ch]);
+	const rawTitle = String(videoInfo.title == null ? '' : videoInfo.title);
+	const watchId = String(videoInfo.watchId == null ? '' : videoInfo.watchId);
+	const from = Math.floor(player.currentTime) || 0;
 	const info = (`
 		<div>
-			<h2>${videoInfo.title}</h2>
-			<a href="//www.nicovideo.jp/watch/${videoInfo.watchId}?from=${Math.floor(player.currentTime)}">元動画</a><br>
-			作成環境: ${navigator.userAgent}<br>
-			作成日: ${(new Date()).toLocaleString()}<br>
-			ZenzaWatch: ver${ZenzaWatch.version} (${ZenzaWatch.env})<br>
+			<h2>${escapeHtml(rawTitle)}</h2>
+			<a href="//www.nicovideo.jp/watch/${escapeHtml(encodeURIComponent(watchId))}?from=${from}">元動画</a><br>
+			作成環境: ${escapeHtml(navigator.userAgent)}<br>
+			作成日: ${escapeHtml((new Date()).toLocaleString())}<br>
+			ZenzaWatch: ver${escapeHtml(ZenzaWatch.version)} (${escapeHtml(ZenzaWatch.env)})<br>
 			<button
 				onclick="document.body.classList.toggle('debug');return false;">
 				デバッグON/OFF
 			</button>
 		</div>
 	`).trim();
-		const title = `${videoInfo.watchId} - ${videoInfo.title}`; // titleはエスケープされてる
-		const html = player.getMymemory()
-			.replace(/<title>(.*?)<\/title>/, `<title>${title}</title>`)
-			.replace(/(<body.*?>)/, '$1' + info);
+	const title = `${watchId} - ${rawTitle}`;
+	const html = player.getMymemory()
+		.replace(/<title>(.*?)<\/title>/, () => `<title>${escapeHtml(title)}</title>`)
+		.replace(/(<body.*?>)/, (m, body) => body + info);
+	const fileName = `${title.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '_').trim() || watchId || 'mymemory'}.html`;
 	const blob = new Blob([html], {'type': 'text/html'});
 	const url = URL.createObjectURL(blob);
 	const a = Object.assign(document.createElement('a'), {
-		download: `${title}.html`,
+		download: fileName,
 		href: url,
 		rel: 'noopener'
 	});
@@ -3633,13 +3681,22 @@ class ShortcutKeyEmitter {
 				rebuildDynamicMap();
 			});
 		}
+		const isInputEvent = e => {
+			if (e.defaultPrevented || e.isComposing) { return true; }
+			const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+			const nodes = path.length ? path : [e.target];
+			return nodes.some(node => {
+				for (let target = node; target; target = target.parentElement) {
+					if (['SELECT', 'INPUT', 'TEXTAREA'].includes(target.tagName) || target.isContentEditable) { return true; }
+					const editable = target.getAttribute && target.getAttribute('contenteditable');
+					if (editable !== null && editable !== undefined &&
+							['', 'true', 'plaintext-only'].includes(editable.toLowerCase())) { return true; }
+				}
+				return false;
+			});
+		};
 		const onKeyDown = e => {
-			const target = (e.path && e.path[0]) ? e.path[0] : e.target;
-			if (target.tagName === 'SELECT' ||
-				target.tagName === 'INPUT' ||
-				target.tagName === 'TEXTAREA') {
-				return;
-			}
+			if (isInputEvent(e)) { return; }
 			const keyCode = e.keyCode +
 				(e.metaKey ? 0x1000000 : 0) +
 				(e.altKey ? 0x100000 : 0) +
@@ -3669,21 +3726,15 @@ class ShortcutKeyEmitter {
 					param = 0;
 					break;
 				case map.SEEK_LEFT:
-				case 37: // LEFT
-					if (e.shiftKey || isVerySlow) {
-						key = 'SEEK_BY';
-						param = isVerySlow ? -0.5 : -5;
-					}
+					key = 'SEEK_BY';
+					param = isVerySlow ? -0.5 : -5;
 					break;
 				case map.VOL_UP:
 					key = 'VOL_UP';
 					break;
 				case map.SEEK_RIGHT:
-				case 39: // RIGHT
-					if (e.shiftKey || isVerySlow) {
-						key = 'SEEK_BY';
-						param = isVerySlow ? 0.5 : 5;
-					}
+					key = 'SEEK_BY';
+					param = isVerySlow ? 0.5 : 5;
 					break;
 				case map.SEEK_PREV_FRAME:
 					key = 'SEEK_PREV_FRAME';
@@ -3782,17 +3833,17 @@ class ShortcutKeyEmitter {
 					break;
 				}
 			}
+			if (!key && isVerySlow && (keyCode === 37 || keyCode === 39) &&
+					!Object.values(map).includes(keyCode) && !dynamicMap[keyCode]) {
+				key = 'SEEK_BY';
+				param = keyCode === 37 ? -0.5 : 0.5;
+			}
 			if (key) {
 				emitter.emit('keyDown', key, e, param);
 			}
 		};
 		const onKeyUp = e => {
-			const target = (e.path && e.path[0]) ? e.path[0] : e.target;
-			if (target.tagName === 'SELECT' ||
-				target.tagName === 'INPUT' ||
-				target.tagName === 'TEXTAREA') {
-				return;
-			}
+			if (isInputEvent(e)) { return; }
 			let key = '';
 			const keyCode = e.keyCode +
 				(e.metaKey ? 0x1000000 : 0) +
@@ -4579,7 +4630,7 @@ class BaseCommandElement extends HTMLElement {
 		if (dll.lit) {
 			return dll.lit;
 		}
-		dll.lit = await util.dimport('https://esm.run/lit');
+		dll.lit = await util.dimport('https://esm.run/lit@2.0.2');
 		return dll.lit;
 	}
 	static get observedAttributes() {
@@ -6720,22 +6771,31 @@ const CacheStorage = (() => {
 			this._storage = storage;
 			this.gc = _.debounce(this.gc.bind(this), 100);
 		}
+		_readItem(key) {
+			let item;
+			try {
+				item = JSON.parse(this._storage[key]);
+			} catch (e) {
+				this._storage.removeItem(key);
+				return null;
+			}
+			if (!item || typeof item !== 'object' || Array.isArray(item) ||
+					!Object.prototype.hasOwnProperty.call(item, 'data') ||
+					!(item.expiredAt === '' ||
+						(typeof item.expiredAt === 'number' && Number.isFinite(item.expiredAt)))) {
+				this._storage.removeItem(key);
+				return null;
+			}
+			return item;
+		}
 		gc(now = NaN) {
 			const storage = this._storage;
 			now = isNaN(now) ? Date.now() : now;
 			Object.keys(storage).forEach(key => {
-				if (key.indexOf(PREFIX) === 0) {
-					let item;
-					try {
-						item = JSON.parse(this._storage[key]);
-					} catch(e) {
-						storage.removeItem(key);
-					}
-					if (item.expiredAt === '' || item.expiredAt > now) {
-						return;
-					}
-					storage.removeItem(key);
-				}
+				if (key.indexOf(PREFIX) !== 0) { return; }
+				const item = this._readItem(key);
+				if (!item || item.expiredAt === '' || item.expiredAt > now) { return; }
+				storage.removeItem(key);
 			});
 		}
 		setItem(key, data, expireTime) {
@@ -6747,12 +6807,20 @@ const CacheStorage = (() => {
 				type: typeof data,
 				expiredAt: expiredAt
 			};
+			let serialized;
 			try {
-				this._storage[key] = JSON.stringify(cacheData);
+				serialized = JSON.stringify(cacheData);
+				this._storage[key] = serialized;
 				this.gc();
 			} catch (e) {
 				if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-					this.gc(0);
+					try {
+						this.gc.cancel();
+						CacheStorage.prototype.gc.call(this);
+						this._storage[key] = serialized;
+						this.gc();
+					} catch (retryError) {
+					}
 				}
 			}
 		}
@@ -6761,13 +6829,8 @@ const CacheStorage = (() => {
 			if (!(this._storage.hasOwnProperty(key) || this._storage[key] !== undefined)) {
 				return null;
 			}
-			let item = null;
-			try {
-				item = JSON.parse(this._storage[key]);
-			} catch(e) {
-				this._storage.removeItem(key);
-				return null;
-			}
+			const item = this._readItem(key);
+			if (!item) { return null; }
 			if (item.expiredAt === '' || item.expiredAt > Date.now()) {
 				return item.data;
 			}
@@ -6792,8 +6855,99 @@ const CacheStorage = (() => {
 })();
 const VideoInfoLoader = (function () {
 	const cacheStorage = new CacheStorage(sessionStorage);
-	const parseWatchApiData = function (json) {
-		const _data = json.data.response;
+	const normalizeWatchV4 = async (response, requestedWatchId) => {
+		const data = response?.$watchV4?.data;
+		if (!data || response.errorCode) return response;
+		if (data.errorCode || !data.client) return data;
+		let lazy = {};
+		if (data.lazy?.authKey) {
+			try {
+				const result = await netUtil.fetch(
+					`https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
+						method: 'POST', credentials: 'include', timeout: 5000,
+						headers: {
+							'Content-Type': 'application/json', 'X-Frontend-Id': '6',
+							'X-Frontend-Version': '0', 'X-Request-With': 'https://www.nicovideo.jp'
+						},
+						body: JSON.stringify({actionTrackId: data.client.watchTrackId, keyToken: data.lazy.authKey})
+					}).then(res => res.json());
+				if (result.meta?.status === 200) lazy = result.data || {};
+			} catch (_) {
+				window.console.warn('watch v4 optional metadata unavailable');
+			}
+		}
+		const owner = lazy.owner;
+		const comment = data.comment;
+		const media = data.media;
+		return {
+			...data,
+			channel: owner?.type === 'channel' ? owner : null,
+			owner: owner?.type === 'user' ? {...owner, iconUrl: owner.icon?.url} : null,
+			series: lazy.series ?? null,
+			external: {commons: {hasContentTree: false}},
+			tag: data.tags,
+			video: {
+				...data.video,
+				thumbnail: {
+					...data.video.thumbnail,
+					url: data.video.thumbnail?.normal ?? data.video.thumbnail?.url,
+					middleUrl: data.video.thumbnail?.middle ?? data.video.thumbnail?.middleUrl,
+					largeUrl: data.video.thumbnail?.large ?? data.video.thumbnail?.largeUrl
+				},
+				viewer: {like: {isLiked: data.video.isLikedByViewer === true}}
+			},
+			comment: {
+				...comment, keys: {}, server: {url: comment.nvComment?.server},
+				ng: {...comment.ng, channel: comment.ng?.channel || [], owner: comment.ng?.owner || []},
+				threads: comment.threads.map(thread => ({...thread, isDefaultPostTarget: thread.isPostTarget})),
+				layers: comment.layers.map(layer => ({...layer,
+					threadIds: layer.components.map(({threadId, fork}) => ({id: threadId, fork}))
+				}))
+			},
+			media: {delivery: null, domand: media?.accessRightKey && media.contents ? {
+				...media.contents, accessRightKey: media.accessRightKey,
+				isStoryboardAvailable: media.isStoryboardAvailable
+			} : null},
+			payment: {video: {
+				isAdmission: data.payment?.admission?.isEnabled === true,
+				isPpv: data.payment?.ppv?.isEnabled === true,
+				isPremium: data.payment?.premium?.isEnabled === true
+			}}
+		};
+	};
+	const parseWatchApiData = async function (json, requestedWatchId) {
+		const response = await normalizeWatchV4(json?.data?.response, requestedWatchId);
+		if (!response) {
+			return null;
+		}
+		if (response.errorCode || !response.client) {
+			const statusCode = response.statusCode || null;
+			const errorCode = response.errorCode || null;
+			const reasonCode = response.reasonCode || null;
+			const isNotFound = errorCode === 'NOT_FOUND';
+			const isForbidden = errorCode === 'FORBIDDEN';
+			let message = response.deletedMessage || '';
+			if (!message) {
+				if (reasonCode === 'ADMINISTRATOR_DELETE_VIDEO') {
+					message = 'この動画は削除されています';
+				} else if (isNotFound) {
+					message = '動画が見つかりません';
+				} else if (isForbidden) {
+					message = 'この動画は視聴できません';
+				} else {
+					message = '動画情報の取得に失敗しました';
+				}
+			}
+			return {
+				reject: true,
+				reason: isNotFound ? 'not found' : (isForbidden ? 'forbidden' : 'watch api'),
+				message,
+				statusCode,
+				errorCode,
+				reasonCode
+			};
+		}
+		const _data = response;
 		const {
 			channel, // nullable
 			client: {
@@ -7030,8 +7184,8 @@ const VideoInfoLoader = (function () {
 			setTimeout(r, 1000);
 		}).then(() => netUtil.fetch(url, {credentials: 'include'}))
 			.then(res => res.json())
-			.then(json => {
-				const data = parseWatchApiData(json);
+			.then(async json => {
+				const data = await parseWatchApiData(json, videoId);
 				originalData.dmcInfo = data.dmcInfo;
 				originalData.domandInfo = data.domandInfo;
 				originalData.isPlayable = data.isPlayable;
@@ -7100,7 +7254,7 @@ const VideoInfoLoader = (function () {
 		window.console.info('%c投稿者IDを補完しました', 'background: lightgreen;', {videoId, ownerId, source});
 	};
 	const onLoadPromise = async (watchId, options, isRetry, resp) => {
-		const data = parseWatchApiData(resp);
+		const data = await parseWatchApiData(resp, watchId);
 		debug.watchApiData = data;
 		if (!data) {
 			throw {
@@ -7189,8 +7343,8 @@ const VideoInfoLoader = (function () {
 						type: 'watchapi'
 					});
 				}
-				if (err.reason === 'forbidden') {
-					return Promise.reject(err);
+				if (err.reason === 'forbidden' || err.reason === 'not found') {
+					return Promise.reject({...err, watchId});
 				} else if (err.reason === 'network') {
 					return createSleep(5000).then(() => {
 						window.console.warn('network error & retry');
@@ -7349,7 +7503,7 @@ const MylistApiLoader = (() => {
 			if (!token) {
 				token = cacheStorage.getItem('csrfToken');
 				if (token) {
-					console.log('cached token exists', token);
+					console.log('cached token exists'); // Task 088: トークンの値はログに出さない
 				}
 			}
 		}
@@ -7368,7 +7522,7 @@ const MylistApiLoader = (() => {
 				}
 				token = cacheStorage.getItem('csrfToken');
 				if (token) {
-						console.log('cached token exists', token);
+						console.log('cached token exists'); // Task 088: トークンの値はログに出さない
 				}else{
 						const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
 						const result = await netUtil.fetch( tokenUrl, {
@@ -7745,66 +7899,76 @@ const CommonsTreeLoader = (() => {
 	return {load, loadRelatives};
 })();
 const NicodicArticleLoader = (() => {
-	const BASE_URL = 'https://dic.nicovideo.jp/robots.txt';
-	const MESSAGE_ORIGIN = 'https://dic.nicovideo.jp/';
+	const API_URL = 'https://api.dic.nicovideo.jp/v1/articles/article';
+	const CACHE_PREFIX = 'nicodicBatch: ';
 	const CACHE_EXPIRE_TIME = 24 * 60 * 60 * 1000;
-	const CACHE_PREFIX = 'nicodicExists: ';
-	let gate = null;
-	let cacheStorage = null;
+	const BATCH_SIZE = 10;
 	const inFlight = new Map();
-	const initGate = () => {
-		if (gate) { return gate; }
-		gate = new CrossDomainGate({
-			baseUrl: BASE_URL,
-			origin: MESSAGE_ORIGIN,
-			type: 'nicodic'
-		});
-		return gate;
-	};
-	const getCache = () => {
-		if (!cacheStorage) { cacheStorage = new CacheStorage(sessionStorage); }
-		return cacheStorage;
-	};
-	const exists = async tagName => {
-		if (!tagName) { return null; }
-		const key = CACHE_PREFIX + tagName;
-		const cached = getCache().getItem(key);
-		if (typeof cached === 'boolean') { return cached; }
-		if (inFlight.has(tagName)) { return inFlight.get(tagName); }
-		const promise = (async () => {
-			try {
-				initGate();
-				const url = `https://dic.nicovideo.jp/a/${encodeURIComponent(tagName)}`;
-				const res = await gate.fetch(url, {method: 'HEAD'});
-				const status = (res && typeof res.status === 'number') ? res.status : 0;
-				if (status !== 200 && status !== 404) {
-					return null;
-				}
-				const result = status === 200;
-				getCache().setItem(key, result, CACHE_EXPIRE_TIME);
-				return result;
-			} catch (e) {
-				window.console.warn('大百科の記事有無を調べられませんでした', tagName, e);
-				return null;
-			} finally {
-				inFlight.delete(tagName);
+	const pending = new Map();
+	let cacheStorage;
+	let scheduled = false;
+	const getCache = () => cacheStorage || (cacheStorage = new CacheStorage(sessionStorage));
+	const fetchBatch = async entries => {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 10000);
+		let articles = null;
+		try {
+			const query = new URLSearchParams();
+			entries.forEach(([name]) => query.append('titles[]', name));
+			const res = await fetch(`${API_URL}?${query}`, {credentials: 'omit', signal: controller.signal});
+			if (!res.ok) { throw new Error(`Nicodic HTTP ${res.status}`); }
+			const data = await res.json();
+			if (!Array.isArray(data) || data.some(a => !a || typeof a.request_title !== 'string' || typeof a.title !== 'string')) {
+				throw new Error('Invalid Nicodic batch response');
 			}
-		})();
-		inFlight.set(tagName, promise);
+			articles = new Map(data.map(a => [a.request_title, a]));
+		} catch (e) {
+			window.console.warn('大百科の記事有無を調べられませんでした', e);
+		} finally {
+			clearTimeout(timeout);
+		}
+		entries.forEach(([name, resolve]) => {
+			const result = articles ? {exists: articles.has(name), article: articles.get(name) || null} : null;
+			if (result) {
+				try { getCache().setItem(CACHE_PREFIX + name, result, CACHE_EXPIRE_TIME); } catch (e) { /* cache is optional */ }
+			}
+			inFlight.delete(name);
+			resolve(result);
+		});
+	};
+	const flush = async () => {
+		const entries = Array.from(pending);
+		pending.clear();
+		scheduled = false;
+		for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+			await fetchBatch(entries.slice(i, i + BATCH_SIZE));
+		}
+	};
+	const lookup = name => {
+		if (typeof name !== 'string' || !name) { return Promise.resolve(null); }
+		try {
+			const cached = getCache().getItem(CACHE_PREFIX + name);
+			if (cached && typeof cached.exists === 'boolean') { return Promise.resolve(cached); }
+		} catch (e) { /* cache is optional */ }
+		if (inFlight.has(name)) { return inFlight.get(name); }
+		const promise = new Promise(resolve => pending.set(name, resolve));
+		inFlight.set(name, promise);
+		if (!scheduled) {
+			scheduled = true;
+			Promise.resolve().then(flush);
+		}
 		return promise;
 	};
+	const exists = async name => {
+		const result = await lookup(name);
+		return result ? result.exists : null;
+	};
 	const checkAll = async (tagNames, onResult) => {
-		const CONCURRENCY = 4;
-		const names = Array.from(new Set((tagNames || []).filter(n => n)));
-		for (let i = 0; i < names.length; i += CONCURRENCY) {
-			const chunk = names.slice(i, i + CONCURRENCY);
-			await Promise.all(chunk.map(async name => {
-				const result = await exists(name);
-				if (typeof result === 'boolean' && typeof onResult === 'function') {
-					onResult(name, result);
-				}
-			}));
-		}
+		const names = Array.from(new Set((tagNames || []).filter(n => typeof n === 'string' && n)));
+		await Promise.all(names.map(async name => {
+			const result = await lookup(name);
+			if (result && typeof onResult === 'function') { onResult(name, result.exists, result.article); }
+		}));
 	};
 	return {exists, checkAll};
 })();
@@ -7943,8 +8107,10 @@ class CrossDomainGate extends Emitter {
 			if (event.source !== this._loaderWindow) {
 				return;
 			}
-			window.removeEventListener('message', onInitialMessage);
 			this._onMessage(event);
+			if (this._initializeStatus === 'done') {
+				window.removeEventListener('message', onInitialMessage, {capture: true});
+			}
 		};
 		window.addEventListener('message', onInitialMessage, {capture: true});
 		this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
@@ -7954,7 +8120,7 @@ class CrossDomainGate extends Emitter {
 		const {id, type, token, sessionId, body} = data;
 		if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
 			console.warn('invalid token:',
-				{id, PRODUCT, type, _type: this._type, token, TOKEN});
+				{id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN});
 			return;
 		}
 		if (!this.port && body.command === 'initialized') {
@@ -8059,20 +8225,19 @@ class CrossDomainGate extends Emitter {
 		await this._initializeFrame();
 		sessionId = sessionId || (`gate:${Math.random()}`);
 		const {params} = body;
-		return this._sessions[sessionId] =
-			new PromiseHandler((resolve, reject) => {
-				try {
-					this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
-					if (!usePromise) {
-						delete this._sessions[sessionId];
-						resolve();
-					}
-				} catch (error) {
-					console.log('%cException!', 'background: red;', {error, body});
-					delete this._sessions[sessionId];
-					reject(error);
-				}
-		});
+		if (!usePromise) {
+			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
+			return;
+		}
+		const session = new PromiseHandler();
+		this._sessions[sessionId] = session;
+		try {
+			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
+		} catch (error) {
+			delete this._sessions[sessionId];
+			session.reject(error);
+		}
+		return session;
 	}
 	postMessage(body, promise = true) {
 		return this._postMessage(body, promise);
@@ -9623,22 +9788,36 @@ class MediaTimeline {
 			this.attach(options.media);
 		}
 	}
+	syncClock(v) {
+		v = isNaN(v) ? 0 : v;
+		this.currentTime = v;
+		this.anime.currentTime = v * 1000;
+	}
 	initEventMap() {
 		const map = {
 			'pause': e => {
 				this.paused = true;
-				this.currentTime = this.media.currentTime;
+				this.syncClock(this.media.currentTime);
 			},
 			'play': e => {
-				this.currentTime = this.media.currentTime;
+				this.syncClock(this.media.currentTime);
 				this.paused = false;
 			},
+			'seeking': e => {
+				this.syncClock(this.media.currentTime);
+			},
 			'seeked': e => {
-				this.currentTime = this.media.currentTime;
+				this.syncClock(this.media.currentTime);
 			},
 			'ratechange': e => {
 				this.playbackRate = this.media.playbackRate;
-				this.currentTime = this.media.currentTime;
+				this.syncClock(this.media.currentTime);
+			},
+			'durationchange': e => {
+				this.duration = this.media.duration;
+			},
+			'durationChange': e => {
+				this.duration = this.media.duration;
 			}
 		};
 		return objUtil.toMap(map);
@@ -9648,7 +9827,7 @@ class MediaTimeline {
 			this.detach();
 		}
 		this.media = media;
-		this.currentTime  = media.currentTime;
+		this.syncClock(media.currentTime);
 		this.playbackRate = media.playbackRate;
 		this.duration     = media.duration;
 		this.paused       = media.paused;
@@ -9664,6 +9843,9 @@ class MediaTimeline {
 		}
 		this.media = null;
 		clearInterval(this.timer);
+		this.raf && cancelAnimationFrame(this.raf);
+		this.raf = null;
+		this._isBusy = false;
 	}
 	onTimer() {
 		const media = this.media;
@@ -9671,12 +9853,16 @@ class MediaTimeline {
 		const mc = media.currentTime;
 		const diffMs = Math.abs(mc - ac) * 1000;
 		if (!this.isWAAvailable || diffMs >= this.interval * 3 || media.paused !== this.paused) {
-			this.currentTime  = mc;
+			this.syncClock(mc);
 			this.playbackRate = media.playbackRate;
 			this.paused       = media.paused;
 		}
 	}
 	onRaf() {
+		if (!this.media) {
+			this.raf = null;
+			return;
+		}
 		if (this._isBusy) {
 			this.raf = null;
 			return;
@@ -9693,6 +9879,10 @@ class MediaTimeline {
 	}
 	async callRaf() {
 		await sleep.resolve;
+		if (!this.media) {
+			this._isBusy = false;
+			return;
+		}
 		this.raf = requestAnimationFrame(this.onRaf);
 		this._isBusy = false;
 	}
@@ -9789,6 +9979,60 @@ const StoryboardInfoLoader = {
 // ZenzaWatch.api.DmcStoryboardInfoLoader = DmcStoryboardInfoLoader;
 ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 
+/*
+* Task 088（監査v2 ZW-056）: 通常のログ（console）に、キー・トークン・Cookie・投稿本文・ユーザーID を出さないための道具。
+* logSafe.redact(値) は、オブジェクト・配列・JSON の文字列を再帰的にたどり、
+* 秘密の値や個人の情報に当たるキーの値を '[REDACTED]' に置き換えた「写し」を返す（元の値は変えない）。
+* ログに出してよいのは、処理の段階・動画ID・スレッドID・状態コード・エラーコード等だけ。
+*/
+const logSafe = (() => {
+	const SECRET_KEY = /(token|key$|keys$|cookie|authorization|password|passwd|secret|csrf|credential|signature|session)/i;
+	const PERSONAL_KEY = /^(body|text|content|comment|comments|mail|email|userid|user_id|nickname|username|user_name)$/i;
+	const MASK = '[REDACTED]';
+	const MAX_DEPTH = 8;
+	const isSecretKey = key => SECRET_KEY.test(String(key)) || PERSONAL_KEY.test(String(key));
+	const redact = (value, depth = 0, seen = new WeakSet()) => {
+		if (value === null || value === undefined) {
+			return value;
+		}
+		if (typeof value === 'string') {
+			const t = value.trim();
+			if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
+				try {
+					return JSON.stringify(redact(JSON.parse(t), depth + 1, seen));
+				} catch (e) {
+					return value;
+				}
+			}
+			return value;
+		}
+		if (typeof value !== 'object') {
+			return value;
+		}
+		if (depth > MAX_DEPTH) {
+			return '[…]';
+		}
+		if (seen.has(value)) {
+			return '[循環]';
+		}
+		seen.add(value);
+		if (typeof URL !== 'undefined' && value instanceof URL) {
+			return value.toString();
+		}
+		if (value instanceof Error) {
+			return {name: value.name, message: value.message};
+		}
+		if (Array.isArray(value)) {
+			return value.map(v => redact(v, depth + 1, seen));
+		}
+		const out = {};
+		for (const key of Object.keys(value)) {
+			out[key] = isSecretKey(key) ? MASK : redact(value[key], depth + 1, seen);
+		}
+		return out;
+	};
+	return {redact, isSecretKey, MASK};
+})();
 const {ThreadLoader} = (() => {
 	const FRONT_ID = '6';
 	const FRONT_VER = '0';
@@ -9897,7 +10141,7 @@ const {ThreadLoader} = (() => {
 			};
 			if (options.retrying) {
 				const info = await this.getThreadKey(msgInfo.videoId, options);
-				console.log('threadKey (retry): ', msgInfo.videoId, info);
+				console.log('threadKey (retry): ', msgInfo.videoId, logSafe.redact(info));
 				packet.threadKey = info.threadKey;
 			}
 			if (!options.useServerDefaultLanguage && msgInfo.language && msgInfo.language !== packet.params.language) {
@@ -9907,7 +10151,7 @@ const {ThreadLoader} = (() => {
 				packet.additionals.when = msgInfo.when;
 			}
 			const url = new URL('/v1/threads', server);
-			console.log('load threads...', url, packet);
+			console.log('load threads...', url, logSafe.redact(packet));
 			try {
 				const { meta, data } = await netUtil.fetch(url, {
 					method: 'POST',
@@ -9926,7 +10170,7 @@ const {ThreadLoader} = (() => {
 			} catch (result) {
 				window.console.error(
 					`_load threads fail: videoId=${msgInfo.videoId} status=${result && result.status} errorCode=${result && result.errorCode}`,
-					result
+					logSafe.redact(result)
 				);
 				throw {
 					result,
@@ -9957,8 +10201,19 @@ const {ThreadLoader} = (() => {
 				} catch (e) {
 					lastError = e;
 					console.timeEnd(timeKey);
+					const failure = e && e.result || e;
+					if (failure && failure.name === 'AbortError') { throw failure; }
+					const status = Number(failure && failure.status);
+					const invalidLanguage = failure && failure.errorCode === 'INVALID_PARAMETER';
+					const serverLanguage = msgInfo.nvComment && msgInfo.nvComment.params && msgInfo.nvComment.params.language;
+					const canFallback = invalidLanguage && !loadOptions.useServerDefaultLanguage &&
+						serverLanguage && msgInfo.language && msgInfo.language !== serverLanguage;
+					if (!canFallback && (invalidLanguage ||
+							(status > 400 && status < 500 && status !== 408 && status !== 429))) {
+						break;
+					}
 					const label = isRetry ? `リトライ${attempt}回目` : '1回目';
-					window.console.error(`loadComment fail (${label}): `, e);
+					window.console.error(`loadComment fail (${label}): `, logSafe.redact(e));
 					const delay = RETRY_DELAYS_MS[attempt];
 					if (delay != null) {
 						PopupMessage.alert(`コメントの取得失敗: ${delay / 1000}秒後にリトライ`);
@@ -9967,7 +10222,7 @@ const {ThreadLoader} = (() => {
 				}
 			}
 			if (lastError) {
-				window.console.error('loadComment fail finally: ', lastError);
+				window.console.error('loadComment fail finally: ', logSafe.redact(lastError));
 				throw {
 					message: 'コメントサーバーの通信失敗',
 					result: lastError.result
@@ -10002,10 +10257,13 @@ const {ThreadLoader} = (() => {
 				isWaybackMode: !!msgInfo.when
 			};
 			msgInfo.threadInfo = threadInfo;
-			console.log('threadInfo: ', threadInfo);
+			console.log('threadInfo: ', logSafe.redact(threadInfo));
 			return {threadInfo, body: result, format: 'threads'};
 		}
-		async postChat(msgInfo, text, cmd, vpos, retrying = false) {
+		async postChat(msgInfo, text, cmd, vpos) {
+			return this._postChat(msgInfo, text, cmd, vpos);
+		}
+		async _postChat(msgInfo, text, cmd, vpos, retrying = false) {
 			const {
 				videoId,
 				threadId,
@@ -10020,7 +10278,7 @@ const {ThreadLoader} = (() => {
 				postKey,
 				videoId,
 			});
-			console.log('post packet: ', packet);
+			console.log('post packet: ', logSafe.redact(packet));
 			try {
 				const { no, id } = await this._post(url, packet);
 				return {
@@ -10047,7 +10305,7 @@ const {ThreadLoader} = (() => {
 					};
 				}
 				await sleep(3000);
-				return await this.postChat(msgInfo, text, cmd, vpos, true)
+				return await this._postChat(msgInfo, text, cmd, vpos, true)
 			}
 		}
 		async getDeleteKey(threadId, options = {}) {
@@ -10089,7 +10347,7 @@ const {ThreadLoader} = (() => {
 				}],
 				videoId,
 			});
-			console.log('put packet: ', packet);
+			console.log('put packet: ', logSafe.redact(packet));
 			try {
 				await this._delete(url, packet);
 				return {
@@ -10140,7 +10398,7 @@ const {ThreadLoader} = (() => {
 				nicoruKey,
 				videoId,
 			});
-			console.log('post packet: ', packet);
+			console.log('post packet: ', logSafe.redact(packet));
 			try {
 				const { nicoruId, nicoruCount } = await this._post(url, packet);
 				return {
@@ -12225,7 +12483,7 @@ const SupporterCredit = (() => {
 		.zenzaSupporterCredit {
 			position: absolute;
 			inset: 0;
-			z-index: 8;
+			z-index: 11;
 			display: none;
 			opacity: 0;
 			transition: opacity 0.4s ease;
@@ -12690,7 +12948,9 @@ class NicoVideoPlayer extends Emitter {
 		this._creditAbort = null;
 		this._playerConfig.onkey('supporterCredit.enable', v => {
 			if (!v) {
+				const finishEnded = this.isSupporterCreditActive || !!this._creditWaiting;
 				this._cancelSupporterCredit();
+				if (finishEnded) { this._emitEnded(); }
 			} else if (this.videoInfo && !this._creditData) {
 				this._loadSupporterCredit(this.videoInfo);
 			}
@@ -12981,9 +13241,17 @@ class NicoVideoPlayer extends Emitter {
 		}
 	}
 	setPlaybackRate(playbackRate) {
-		playbackRate = Math.max(0, Math.min(playbackRate, 10));
-		this._videoPlayer.playbackRate = playbackRate;
-		this._commentPlayer.setPlaybackRate(playbackRate);
+		const rate = typeof playbackRate === 'number' ? playbackRate : parseFloat(playbackRate);
+		if (!Number.isFinite(rate) || rate <= 0) {
+			return;
+		}
+		const v = Math.min(rate, 10);
+		if (this._state && 'playbackRate' in this._state) {
+			this._state.playbackRate = v;
+			return;
+		}
+		this._videoPlayer.playbackRate = v;
+		this._commentPlayer.playbackRate = v;
 	}
 	fastSeek(t) {
 		this._beforeSeek();
@@ -13241,17 +13509,19 @@ class ContextMenu extends BaseViewComponent {
 			const handler = (command, param) => {
 				this.emit('command', command, param);
 			};
+			const legacyTopContainer = view.find('.empty-area-top');
+			const legacyListContainer = view.find('.listInner ul');
 			global.emitter.emitAsync('videoContextMenu.addonMenuReady',
-				view.find('.empty-area-top'), handler
+				legacyTopContainer, handler
 			);
 			global.emitter.emitAsync('videoContextMenu.addonMenuReady.list',
-				view.find('.listInner ul'), handler
+				legacyListContainer, handler
 			);
 			global.emitter.emitResolve('videoContextMenu.addonMenuReady',
-				{container: view.find('.empty-area-top'), handler}
+				{container: legacyTopContainer[0], handler}
 			);
 			global.emitter.emitResolve('videoContextMenu.addonMenuReady.list',
-				{container: view.find('.listInner ul'), handler}
+				{container: legacyListContainer[0], handler}
 			);
 		}
 	}
@@ -13950,8 +14220,8 @@ class VideoPlayer extends Emitter {
 	}
 	get playbackRate() {return this._playbackRate;}
 	get bufferedRange() {return this._video.buffered;}
-	set isAutoPlay(v) {this._video.autoplay = v;}
-	get isAutoPlay() {return this._video.autoPlay;}
+	set isAutoPlay(v) {this._video.autoplay = !!v;}
+	get isAutoPlay() {return !!this._video.autoplay;}
 	setSrc(url) { this.src = url;}
 	setVolume(v) { this.volume = v; }
 	getVolume() { return this.volume; }
@@ -13965,7 +14235,7 @@ class VideoPlayer extends Emitter {
 	setPlaybackRate(v) { this.playbackRate = v; }
 	getPlaybackRate() { return this.playbackRate; }
 	getBufferedRange() { return this.bufferedRange; }
-	setIsAutoPlay(v) {this.isAutoplay = v;}
+	setIsAutoPlay(v) {this.isAutoPlay = v;}
 	getIsAutoPlay() {return this.isAutoPlay;}
 	appendTo(node) {node.append(this._body);}
 	close() {
@@ -15708,7 +15978,7 @@ class Storyboard extends Emitter {
 			updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
 			this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
 			global.emitter.on('heatMapUpdate',
-				heatMap => WatchInfoCacheDb.put(this.player.watchId, {heatMap}));
+				heatMap => WatchInfoCacheDb.putBestEffort(this.player.watchId, {heatMap}));
 			this.storyboard = new Storyboard({
 				playerConfig: config,
 				player: this.player,
@@ -17024,6 +17294,10 @@ util.addStyle(`
 	}
 	.controlItemContainer.right {
 		top: auto;
+		z-index: 310;
+	}
+	.videoControlBar.is-menuOpen .controlItemContainer.right {
+		z-index: 320;
 	}
 `, {className: 'screenMode for-screen-full videoControlBar', disabled: true});
 	VideoControlBar.__tpl__ = (`
@@ -17581,7 +17855,7 @@ const HeatMap = HeatMapInitFunc({
 			const view = this._view;
 			const command = target ? target.dataset.command : '';
 			const nicoChatElement = e.target.closest('.nicoChat');
-			const uniqNo = parseInt(nicoChatElement.dataset.nicochatUniqNo, 10);
+			const uniqNo = nicoChatElement.dataset.nicochatUniqNo;
 			const nicoChat  = this._model.getItemByUniqNo(uniqNo);
 			if (command && nicoChat) {
 				view.classList.add('is-updating');
@@ -18802,7 +19076,7 @@ class NicoChat {
 			date: parseInt(elm.getAttribute('date'), 10) || Math.floor(Date.now() / 1000),
 			cmd: elm.getAttribute('mail') || '',
 			isPremium: elm.getAttribute('premium') === '1',
-			userId: elm.getAttribute('user_id'),
+			user_id: elm.getAttribute('user_id'),
 			vpos: parseInt(elm.getAttribute('vpos'), 10),
 			deleted: elm.getAttribute('deleted') === '1',
 			isMine: elm.getAttribute('mine') === '1',
@@ -18880,12 +19154,15 @@ class NicoChat {
 		}
 		return props;
 	}
+	static identity(data) {
+		return JSON.stringify([data.thread * 1, data.fork * 1, data.no * 1]);
+	}
 	static SORT_FUNCTION(a, b) {
 		const av = a.vpos, bv = b.vpos;
 		if (av !== bv) {
 			return av - bv;
 		} else {
-			return a.uniqNo < b.uniqNo ? -1 : 1;
+			return (a.threadId - b.threadId) || (a.fork - b.fork) || (a.no - b.no);
 		}
 	}
 	constructor(data, options = {}) {
@@ -18895,12 +19172,14 @@ class NicoChat {
 		props.currentTime = 0;
 		Object.assign(props, data);
 		if (options.format === 'bulk') {
+			props.uniqNo = NicoChat.identity(props);
 			return;
 		}
 		props.userId = data.user_id;
 		props.fork = data.fork * 1;
 		props.thread = data.thread * 1;
-		props.isPremium = data.premium ? '1' : '0';
+		const premium = data.premium === undefined ? data.isPremium : data.premium;
+		props.isPremium = (premium === true || premium === 1 || premium === '1') ? '1' : '0';
 		props.isSubThread = (options.mainThreadId && props.thread !== options.mainThreadId);
 		if (typeof data.layerId === 'number') {
 			props.layerId = data.layerId;
@@ -18909,10 +19188,7 @@ class NicoChat {
 		} else {
 			props.layerId = props.fork;
 		}
-		props.uniqNo =
-			(data.no                 %   10000) +
-			(data.fork               *  100000) +
-			((data.thread % 1000000) * 1000000);
+		props.uniqNo = NicoChat.identity(props);
 		props.color = null;
 		props.size = NicoChat.SIZE.MEDIUM;
 		props.type = NicoChat.TYPE.NAKA;
@@ -19010,13 +19286,17 @@ class NicoChat {
 	get dateUsec() {return this.props.date_usec;}
 	get lastNicoruDate() {return this.props.lastNicoruDate;}
 	get cmd() {return this.props.cmd;}
-	get isPremium() {return !!this.props.isPremium;}
+	get isPremium() {
+		const value = this.props.isPremium;
+		return value === true || value === 1 || value === '1';
+	}
 	get isEnder() {return !!this.props.isEnder;}
 	get isFull() {return !!this.props.isFull;}
 	get isMine() {return !!this.props.isMine;}
 	get isInvisible() {return this.props.isInvisible;}
 	get isNicoScript() {return this.props.isNicoScript;}
 	get isPatissier() {return this.props.isPatissier;}
+	get isCA() {return !!this.props.isCA;}
 	get isSubThread() {return this.props.isSubThread;}
 	get hasColorCommand() {return !!this.props.hasColorCommand;}
 	get hasSizeCommand() {return !!this.props.hasSizeCommand;}
@@ -19042,10 +19322,7 @@ class NicoChat {
 	set no(no) {
 		const props = this.props;
 		props.no = no;
-		props.uniqNo =
-			(no     %  100000) +
-			(props.fork   *  1000000) +
-			(props.thread * 10000000);
+		props.uniqNo = NicoChat.identity(props);
 	}
 	get uniqNo() {return this.props.uniqNo;}
 	get layerId() {return this.props.layerId;}
@@ -19159,6 +19436,7 @@ class NicoChatViewModel {
 		} else {
 			this._setupMarqueeMode();
 		}
+		this.recalcBeginEndTiming(this._speedRate);
 	}
 	setType(type) {
 		this._type = type;
@@ -19229,6 +19507,15 @@ class NicoChatViewModel {
 			this._endLeftTiming = this._endRightTiming;
 			this._beginRightTiming = this._beginLeftTiming;
 		}
+	}
+	resetLayoutForSpeedChange() {
+		const screenHeight = CommentLayer.SCREEN.HEIGHT;
+		this._isOverflow =
+			this._height >= screenHeight - this._fontSizePixel / 2;
+		this._y =
+			this._type === NicoChat.TYPE.BOTTOM ?
+				screenHeight - this._height : 0;
+		this._isLayouted = false;
 	}
 	recalcBeginEndTiming(speedRate = 1) {
 		const width = this._width;
@@ -19444,6 +19731,7 @@ class NicoChatViewModel {
 	get lineHeight() {return this._cssLineHeight;}
 	get isLineResized() {return this._isLineResized;}
 	get isDoubleResized() {return this._isDoubleResized;}
+	get threadId() {return this._nicoChat.threadId;}
 	get no() {return this._nicoChat.no;}
 	get uniqNo() {return this._nicoChat.uniqNo;}
 	get layerId() {return this._nicoChat.layerId;}
@@ -19901,9 +20189,7 @@ class NicoChatFilter extends Emitter {
 		this._userIdReg = null;
 		this._commandReg = null;
 		this._onChange = _.debounce(this._onChange.bind(this), 50);
-		if (params.wordRegFilter) {
-			this.setWordRegFilter(params.wordRegFilter, params.wordRegFilterFlags);
-		}
+		this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
 	}
 	get isEnable() {
 		return this._enable;
@@ -20058,18 +20344,23 @@ class NicoChatFilter extends Emitter {
 	get wordFilterList() {
 		return this._wordFilterList;
 	}
+	get wordRegFilterSource() { return this._wordRegSource || ''; }
+	get wordRegFilterFlags() { return this._wordRegFlags || ''; }
 	setWordRegFilter(source, flags) {
-		if (this._wordRegReg) {
-			if (this._wordRegReg.source === source && this._flags === flags) {
-				return;
-			}
-		}
+		let next;
 		try {
-			this._wordRegReg = new RegExp(source, flags);
+			next = new RegExp(source, flags);
 		} catch (e) {
 			window.console.error(e);
 			return;
 		}
+		source = source == null ? '' : String(source);
+		if (this.wordRegFilterSource === source && this.wordRegFilterFlags === next.flags) {
+			return;
+		}
+		this._wordRegSource = source;
+		this._wordRegFlags = next.flags;
+		this._wordRegReg = source === '' ? null : next;
 		this._onChange();
 	}
 	addUserIdFilter(text) {
@@ -20177,6 +20468,7 @@ class NicoChatFilter extends Emitter {
 					);
 					return false;
 				}
+				if (wordRegReg) { wordRegReg.lastIndex = 0; }
 				wordRegReg && (m = wordRegReg.exec(nicoChat.text));
 				if (m) {
 					window.console.log(
@@ -20218,6 +20510,7 @@ class NicoChatFilter extends Emitter {
 				return true;
 			}
 			const text = nicoChat.text;
+			if (wordRegReg) { wordRegReg.lastIndex = 0; }
 			return !(
 				(nicoChat.score <= threthold) ||
 				(wordReg && wordReg.test(text)) ||
@@ -20236,9 +20529,13 @@ class NicoChatFilter extends Emitter {
 		window.console.time(timeKey);
 		const filterFunc = this.getFilterFunc();
 		let result = nicoChatArray.filter(filterFunc);
-		const removedUserIds = (before !== result.length && this._removeNgMatchedUser)
-			? nicoChatArray.filter(chat => !result.includes(chat)).map(chat => chat.userId)
-			: [];
+		const removedUserIds = new Set();
+		if (before !== result.length && this._removeNgMatchedUser) {
+			const accepted = new Set(result);
+			for (const chat of nicoChatArray) {
+				if (!accepted.has(chat)) { removedUserIds.add(chat.userId); }
+			}
+		}
 		const denyTypes = [
 			!this.fork0 && 0,
 			!this.fork1 && 1,
@@ -20259,7 +20556,7 @@ class NicoChatFilter extends Emitter {
 			!this.extraEasyThread      && 'extra-easy',
 		].filter(type => type !== false);
 		result = result.filter(chat => {
-			if (removedUserIds.length > 0 && removedUserIds.includes(chat.userId)) {
+			if (removedUserIds.has(chat.userId)) {
 				return false;
 			}
 			return !denyTypes.includes(chat.fork) && !denyThreadTypes.includes(chat.threadLabel);
@@ -20416,7 +20713,8 @@ class NicoCommentPlayer extends Emitter {
 	}
 	get filter() {return this._model.filter;}
 	get chatList() {return this._model.chatList;}
-	get nonfilteredChatList() {return this._model.nonfilteredChatList;}
+	get nonFilteredChatList() {return this._model.nonFilteredChatList;}
+	get nonfilteredChatList() {return this.nonFilteredChatList;}
 	export() {
 		return this._viewModel.export();
 	}
@@ -20489,6 +20787,7 @@ class NicoComment extends Emitter {
 		window.console.time('コメントのパース処理');
 		const nicoScripter = this.nicoScripter;
 		if (!options.append) {
+			this._nicoScriptGeneration = (this._nicoScriptGeneration || 0) + 1;
 			this.topGroup.reset();
 			this.nakaGroup.reset();
 			this.bottomGroup.reset();
@@ -20515,10 +20814,10 @@ class NicoComment extends Emitter {
 		nicoChats = []
 			.concat(... // fork0 通常のコメント fork1 投稿者コメント fork2 かんたんコメント
 				nicoChats.filter(c => (c.isPatissier || c.isCA) && c.fork !== 1 && c.isSubThread)
-					.splice(maxCommentsByDuration))
+					.slice(0, maxCommentsByDuration))
 			.concat(...
 				nicoChats.filter(c => (c.isPatissier || c.isCA) && c.fork !== 1 && !c.isSubThread)
-					.splice(maxCommentsByDuration))
+					.slice(0, maxCommentsByDuration))
 			.concat(...nicoChats.filter(c => !(c.isPatissier || c.isCA) || c.fork === 1));
 			window.console.timeLog && window.console.timeLog('コメントのパース処理', 'NicoChat created');
 		nicoChats.filter(chat => chat.fork === 2).forEach(chat => chat.size = NicoChat.SIZE.SMALL);
@@ -20553,7 +20852,12 @@ class NicoComment extends Emitter {
 			const nextVideo = nicoScripter.getNextVideo();
 			window.console.info('nextVideo', nextVideo);
 			if (nextVideo) {
-				this.emitAsync('command', 'nextVideo', nextVideo);
+				const generation = this._nicoScriptGeneration;
+				setTimeout(() => {
+					if (generation === this._nicoScriptGeneration) {
+						this.emit('command', 'nextVideo', nextVideo);
+					}
+				}, 0);
 			}
 		}
 		const TYPE = NicoChat.TYPE;
@@ -20687,6 +20991,8 @@ class NicoComment extends Emitter {
 		this.topGroup.reset();
 		this.nakaGroup.reset();
 		this.bottomGroup.reset();
+		this._nicoScriptGeneration = (this._nicoScriptGeneration || 0) + 1;
+		this.nicoScripter.reset();
 		this.emit('clear');
 	}
 	get currentTime() {
@@ -20977,8 +21283,10 @@ class NicoChatGroup extends Emitter {
 	reset() {
 		this._members = [];
 		this._filteredMembers = [];
+		this._filteredMembersValid = false;
 	}
 	addChatArray(nicoChatArray) {
+		this._filteredMembersValid = false;
 		let members = this._members;
 		let newMembers = [];
 		for (const nicoChat of nicoChatArray) {
@@ -20986,17 +21294,24 @@ class NicoChatGroup extends Emitter {
 			members.push(nicoChat);
 			nicoChat.group = this;
 		}
+		if (nicoChatArray.length && this._nicoChatFilter.removeNgMatchedUser) {
+			this.onChange(null);
+			return;
+		}
 		newMembers = this._nicoChatFilter.applyFilter(nicoChatArray);
 		if (newMembers.length > 0) {
-			this._filteredMembers = this._filteredMembers.concat(newMembers);
 			this.emit('addChatArray', newMembers);
 		}
 	}
 	addChat(nicoChat) {
+		this._filteredMembersValid = false;
 		this._members.push(nicoChat);
 		nicoChat.group = this;
+		if (this._nicoChatFilter.removeNgMatchedUser) {
+			this.onChange(null);
+			return;
+		}
 		if (this._nicoChatFilter.isSafe(nicoChat)) {
-			this._filteredMembers.push(nicoChat);
 			this.emit('addChat', nicoChat);
 		}
 	}
@@ -21005,24 +21320,28 @@ class NicoChatGroup extends Emitter {
 	}
 	removeChat(nicoChat) {
 		const getChat = this._getChat(nicoChat);
-		this._members.splice(this._members.findIndex(getChat), 1);
+		const index = this._members.findIndex(getChat);
+		if (index < 0) { return; }
+		this._filteredMembersValid = false;
+		this._members.splice(index, 1);
 		nicoChat.group = this;
-		if (this._nicoChatFilter.isSafe(nicoChat)) {
-			this._filteredMembers.splice(this._filteredMembers.findIndex(getChat), 1);
+		if (this._nicoChatFilter.removeNgMatchedUser || this._nicoChatFilter.isSafe(nicoChat)) {
 			this.onChange(null);
 		}
 	}
 	get type() {return this._type;}
 	get members() {
-		if (this._filteredMembers.length > 0) {
-			return this._filteredMembers;
+		if (!this._filteredMembersValid) {
+			this._filteredMembers = this._nicoChatFilter.applyFilter(this._members);
+			this._filteredMembersValid = true;
 		}
-		return this._filteredMembers = this._nicoChatFilter.applyFilter(this._members);
+		return this._filteredMembers;
 	}
 	get nonFilteredMembers() { return this._members; }
 	onChange(e) {
 		console.log('NicoChatGroup.onChange: ', e);
 		this._filteredMembers = [];
+		this._filteredMembersValid = false;
 		this.emit('change', {
 			chat: e,
 			group: this
@@ -21057,6 +21376,7 @@ class NicoChatGroupViewModel {
 		this._members = [];
 		this._lastUpdate = 0;
 		this._vSortedMembers = [];
+		this._maxInViewDuration = 0;
 		this._initWorker();
 		nicoChatGroup.on('addChat', this._onAddChat.bind(this));
 		nicoChatGroup.on('addChatArray', this._onAddChatArray.bind(this));
@@ -21086,37 +21406,37 @@ class NicoChatGroupViewModel {
 		window.console.timeEnd('_onChange');
 	}
 	async _execCommentLayoutWorker() {
-		if (this._members.length < 1) {
-			return;
-		}
+		const requestId = ++this._lastUpdate;
+		if (this._members.length < 1) { return; }
 		const type = this._members[0].type;
-		const result = await this._layoutWorker.post({
-			command: 'layout',
-			params: {
-				type,
-				members: this.bulkLayoutData,
-				lastUpdate: this._lastUpdate,
+		const data = this.bulkLayoutData;
+		const members = this._vSortedMembers;
+		try {
+			const result = await this._layoutWorker.post({
+				command: 'layout',
+				params: {type, members: data, lastUpdate: requestId}
+			});
+			if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return; }
+			for (let i = 0; i < members.length; i++) {
+				members[i].bulkLayoutData = result.members[i];
 			}
-		});
-		if (result.lastUpdate !== this._lastUpdate) {
-			console.warn('group changed', this._lastUpdate, result.lastUpdate);
-			return;
+		} catch (err) {
+			if (requestId === this._lastUpdate) { console.warn('comment layout failed', err); }
 		}
-		this.bulkLayoutData = result.members;
 	}
 	async addChatArray(nicoChatArray) {
+		const members = this._members;
 		for (let i = 0, len = nicoChatArray.length; i < len; i++) {
+			if (members !== this._members) { return; }
 			const nicoChat = nicoChatArray[i];
 			const nc = NicoChatViewModel.create(nicoChat, this._offScreen);
-			this._members.push(nc);
+			members.push(nc);
+				this._lastUpdate;
 			if (i % 100 === 99) {
 				await new Promise(r => setTimeout(r, 10));
 			}
 		}
-		if (this._members.length < 1) {
-			return;
-		}
-		this._lastUpdate = Date.now();
+		if (members !== this._members || members.length < 1) { return; }
 		this._execCommentLayoutWorker();
 	}
 	_onCommentSpeedRateUpdate() {
@@ -21124,6 +21444,7 @@ class NicoChatGroupViewModel {
 	}
 	changeSpeed(speedRate = 1) {
 		for (const member of this._members) {
+			member.resetLayoutForSpeedChange();
 			member.recalcBeginEndTiming(speedRate);
 		}
 		this._execCommentLayoutWorker();
@@ -21141,7 +21462,7 @@ class NicoChatGroupViewModel {
 		let timeKey = 'addChat:' + nicoChat.text;
 		window.console.time(timeKey);
 		let nc = NicoChatViewModel.create(nicoChat, this._offScreen);
-		this._lastUpdate = Date.now();
+			this._lastUpdate;
 		this.checkCollision(nc);
 		nc.isLayouted =true;
 		this._members.push(nc);
@@ -21155,7 +21476,8 @@ class NicoChatGroupViewModel {
 		}
 		this._members = [];
 		this._vSortedMembers = [];
-		this._lastUpdate = Date.now();
+		this._maxInViewDuration = 0;
+			this._lastUpdate;
 	}
 	get currentTime() {return this._nicoChatGroup.currentTime;}
 	get type() {return this._nicoChatGroup.type;}
@@ -21223,15 +21545,47 @@ class NicoChatGroupViewModel {
 		}
 	}
 	_createVSortedMembers() {
-		this._vSortedMembers = this._members.concat().sort(NicoChat.SORT_FUNCTION);
-		return this._vSortedMembers;
+		const members =
+			this._vSortedMembers =
+				this._members.concat().sort(NicoChat.SORT_FUNCTION);
+		let maxDuration = 0;
+		for (const member of members) {
+			const duration = member.endRightTiming - member.beginLeftTiming;
+			if (Number.isFinite(duration) && duration > maxDuration) {
+				maxDuration = duration;
+			}
+		}
+		this._maxInViewDuration = maxDuration;
+		return members;
+	}
+	_findInViewStartIndex(sec) {
+		const members = this._vSortedMembers;
+		const minBegin = sec - (this._maxInViewDuration || 0);
+		let low = 0;
+		let high = members.length;
+		while (low < high) {
+			const mid = (low + high) >> 1;
+			if (members[mid].beginLeftTiming < minBegin) {
+				low = mid + 1;
+			} else {
+				high = mid;
+			}
+		}
+		return low;
 	}
 	get members() {return this._members;}
 	get inViewMembers() {return this.getInViewMembersBySecond(this.currentTime);}
 	getInViewMembersBySecond(sec) {
-		let result = [], m = this._vSortedMembers, len = m.length;
-		for (let i = 0; i < len; i++) {
-			let chat = m[i]; //, s = m.getBeginLeftTiming();
+		const result = [];
+		const members = this._vSortedMembers;
+		const len = members.length;
+		const futureLimit = sec + 1;
+		const startIndex = this._findInViewStartIndex(sec);
+		for (let i = startIndex; i < len; i++) {
+			const chat = members[i];
+			if (chat.beginLeftTiming > futureLimit) {
+				break;
+			}
 			if (chat.isInViewBySecond(sec)) {
 				result.push(chat);
 			}
@@ -21262,8 +21616,15 @@ class NicoChatGroupViewModel {
 }
 const updateSpeedRate = () => {
 	let rate = Config.props.commentSpeedRate * 1;
+	if (!Number.isFinite(rate) || rate <= 0) {
+		rate = 1;
+	}
 	if (Config.props.autoCommentSpeedRate) {
-		rate = rate / Math.max(Config.props.playbackRate, 1);
+		const playbackRate = Config.props.playbackRate * 1;
+		rate = rate / (Number.isFinite(playbackRate) ? Math.max(playbackRate, 1) : 1);
+	}
+	if (!Number.isFinite(rate) || rate <= 0) {
+		rate = 1;
 	}
 	if (rate !== NicoChatViewModel.SPEED_RATE) {
 		NicoChatViewModel.SPEED_RATE = rate;
@@ -22708,6 +23069,7 @@ class NicoScripter extends Emitter {
 		this._hasSort = false;
 		this._list = [];
 		this._eventScript = [];
+		this._assignedEvents = new Set();
 		this._nextVideo = null;
 		this._marker = {};
 		this._inviewEvents = {};
@@ -22765,7 +23127,7 @@ class NicoScripter extends Emitter {
 			}
 			this._inviewEvents[p.id] = true;
 			let diff = nicos.vpos / 100 - ct;
-			diff = Math.min(1, Math.abs(diff)) * (diff / Math.abs(diff));
+			diff = Math.max(-1, Math.min(1, diff));
 			switch (p.type) {
 				case 'SEEK':
 					this.emit('command', 'nicosSeek', Math.max(0, p.params.time * 1 + diff));
@@ -22780,7 +23142,13 @@ class NicoScripter extends Emitter {
 	}
 	apply(group) {
 		this._sort();
-		const assigned = {};
+		const registerEvent = (p, nicos, position) => {
+			const id = JSON.stringify([nicos.uniqNo, position]);
+			if (this._assignedEvents.has(id)) { return; }
+			this._assignedEvents.add(id);
+			p.id = id;
+			this._eventScript.push({p, nicos});
+		};
 		const eventFunc = {
 			'JUMP': (p, nicos) => {
 				console.log('@ジャンプ: ', p, nicos);
@@ -22789,21 +23157,8 @@ class NicoScripter extends Emitter {
 					this._nextVideo = target;
 				}
 			},
-			'SEEK': (p, nicos) => {
-				if (assigned[p.id]) {
-					return;
-				}
-				assigned[p.id] = true;
-				this._eventScript.push({p, nicos});
-			},
-			'SEEK_MARKER': (p, nicos) => {
-				if (assigned[p.id]) {
-					return;
-				}
-				assigned[p.id] = true;
-				console.log('SEEK_MARKER: ', p, nicos);
-				this._eventScript.push({p, nicos});
-			},
+			'SEEK': registerEvent,
+			'SEEK_MARKER': registerEvent,
 			'MARKER': (p, nicos) => {
 				console.log('@ジャンプマーカー: ', p, nicos);
 				this._marker[p.params.name] = nicos.vpos / 100;
@@ -22909,14 +23264,14 @@ class NicoScripter extends Emitter {
 			}
 			const ev = eventFunc[p.type];
 			if (ev) {
-				return ev(p, nicos);
+				return ev(p, nicos, 0);
 			}
 			else if (p.type === 'PIPE') {
-				p.params.forEach(line => {
+				p.params.forEach((line, position) => {
 					const type = line.type;
 					const ev = eventFunc[type];
 					if (ev) {
-						return ev(line, nicos);
+						return ev(line, nicos, position);
 					}
 				});
 			}
@@ -22982,7 +23337,7 @@ class CommentListModel extends Emitter {
 		if (!target) {
 			return;
 		}
-		this._items = this._items.filter(item => item !== target);
+		this.removeItem(target);
 	}
 	get length() {
 		return this._items.length;
@@ -23009,6 +23364,8 @@ class CommentListModel extends Emitter {
 		this._items = this._items.filter(i => i !== item); //_.pull(this._items, item);
 		const afterLen = this._items.length;
 		if (beforeLen !== afterLen) {
+			this._positions = this._items.map(item => item.vpos / 100).sort((a, b) => a - b);
+			this._currentIndex = -1;
 			this.emit('update', this._items);
 		}
 	}
@@ -23033,6 +23390,7 @@ class CommentListModel extends Emitter {
 		}
 		this._currentSortKey = key;
 		this._isDesc = isDesc;
+		this._currentIndex = -1;
 		this.onUpdate(true);
 	}
 	sort() {
@@ -23045,7 +23403,8 @@ class CommentListModel extends Emitter {
 		this.emitAsync('update', this._items, replaceAll);
 	}
 	getInViewIndex(sec) {
-		return Math.max(0, _.sortedLastIndex(this._positions, sec + 1) - 1);
+		const index = Math.max(0, _.sortedLastIndex(this._positions, sec + 1) - 1);
+		return this._isDesc ? Math.max(0, this._positions.length - 1 - index) : index;
 	}
 	set currentTime(sec) {
 		if (this._currentTime !== sec && typeof sec === 'number') {
@@ -23074,8 +23433,14 @@ class CommentListView extends Emitter {
 		this.removedItems = [];
 		this._innerHeight = 100;
 		this._model = params.model;
+		this._modelUpdateVersion = 0;
+		this._isModelUpdatePending = false;
 		if (this._model) {
-			this._model.on('update', _.debounce(this._onModelUpdate.bind(this), 500));
+			const update = _.debounce(this._onModelUpdate.bind(this), 500);
+			this._model.on('update', (items, replaceAll) => {
+				this._isModelUpdatePending = true;
+				update(items, replaceAll, ++this._modelUpdateVersion);
+			});
 		}
 		this.setScrollTop = throttle.raf(this.setScrollTop.bind(this));
 		this._initializeView(params, 0);
@@ -23118,9 +23483,7 @@ class CommentListView extends Emitter {
 		this.frameLayer.frame.addEventListener('visibilitychange', e => {
 			const {isVisible} = e.detail;
 			if (!isVisible) { return; }
-			if (this.isAutoScroll) {
-				this.setScrollTop(this.timeScrollTop);
-			}
+			this._refreshCurrentPoint();
 			this._refreshInviewElements();
 		});
 		this._$menu.on('click', this._onMenuClick.bind(this));
@@ -23143,31 +23506,37 @@ class CommentListView extends Emitter {
 			Array.from(doc.querySelectorAll('.commentListItem'));
 		this.emitResolve('frame-ready');
 	}
-	async _onModelUpdate(itemList, replaceAll) {
+	async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
+		this._clearSelectedItem();
 		if (!this._isFrameReady) {
 			await this.promise('frame-ready');
 		}
+		if (revision !== this._modelUpdateVersion) { return; }
 		this._isFrameReady = true;
 		window.console.time('update commentlistView');
 		this.addClass('updating');
 		itemList = Array.isArray(itemList) ? itemList : [itemList];
-		this.isActive = false;
 		if (replaceAll) {
 			this._scrollTop = this._container ? this._container.scrollTop : 0;
 		}
 		const itemViews = itemList.map((item, i) =>
 			new this._ItemView({item: item, index: i, height: CommentListView.ITEM_HEIGHT})
 		);
-		this._itemViews = itemViews;
 		await cssUtil.setProps([this.body, '--list-height',
 			Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
-		if (!this._list) { return; }
+		if (revision !== this._modelUpdateVersion || !this._list) { return; }
+		this._itemViews = itemViews;
+		this._isModelUpdatePending = false;
+		this.newItems.length = 0;
+		this.removedItems.length = 0;
 		this._list.textContent = '';
 		this._inviewItemList.clear();
 		this._$menu.removeClass('show');
+		this._refreshCurrentPoint();
 		this._refreshInviewElements();
 		this.hideItemDetail();
 		window.setTimeout(() => {
+			if (revision !== this._modelUpdateVersion) { return; }
 			this.removeClass('updating');
 			this.emit('update');
 		}, 100);
@@ -23229,6 +23598,20 @@ class CommentListView extends Emitter {
 		}
 		this.emit('command', command, param, itemId);
 	}
+	_clearSelectedItem() {
+		if (this._selectedItem) {
+			this._selectedItem.classList.remove('is-active');
+			this._selectedItem = null;
+		}
+	}
+	_selectItem(item) {
+		if (!item || this._selectedItem === item) {
+			return;
+		}
+		this._clearSelectedItem();
+		this._selectedItem = item;
+		item.classList.add('is-active');
+	}
 	_onDblClick(e) {
 		e.stopPropagation();
 		const item = e.target.closest('.commentListItem');
@@ -23236,6 +23619,7 @@ class CommentListView extends Emitter {
 			return;
 		}
 		e.preventDefault();
+		this._selectItem(item);
 		const itemId = item.dataset.itemId;
 		this.emit('command', 'select', null, itemId);
 	}
@@ -23365,7 +23749,8 @@ class CommentListView extends Emitter {
 		}
 	}
 	setScrollTop(v) {
-		if (!this.contentWindow) {
+		if (!this.contentWindow || this._isModelUpdatePending || this.isActive ||
+				this.isAutoScroll === false || (this._model && this._model.currentSortKey !== 'vpos')) {
 			return;
 		}
 		this._scrollTop = v;
@@ -23374,8 +23759,14 @@ class CommentListView extends Emitter {
 		}
 		this._container.scrollTop = v;
 	}
+	_refreshCurrentPoint() {
+		const model = this._model;
+		if (!model || model.currentSortKey !== 'vpos') { return; }
+		this.setCurrentPoint(model.currentTime, model.getInViewIndex(model.currentTime), this.isAutoScroll);
+	}
 	setCurrentPoint(sec, idx, isAutoScroll) {
-		if (!this.contentWindow || !this._itemViews || !this.frameLayer.isVisible) {
+		this.isAutoScroll = isAutoScroll;
+		if (!this.contentWindow || !this._itemViews || this._isModelUpdatePending) {
 			return;
 		}
 		const innerHeight = this._innerHeight;
@@ -23383,6 +23774,8 @@ class CommentListView extends Emitter {
 		const len = itemViews.length;
 		const view = itemViews[idx];
 		if (len < 1 || !view) {
+			this.timeScrollTop = 0;
+			if (!this.isActive && isAutoScroll) { this.setScrollTop(0); }
 			return;
 		}
 		const itemHeight = CommentListView.ITEM_HEIGHT;
@@ -24167,6 +24560,8 @@ class CommentPanelView extends Emitter {
 	}
 	_onCommentPanelStatusUpdate() {
 		const commentPanel = this.commentPanel;
+		this._listView.isAutoScroll = commentPanel.isAutoScroll;
+		this._listView._refreshCurrentPoint();
 		const $view = this.toggleClass('autoScroll', commentPanel.isAutoScroll);
 		const langClass = `lang-${commentPanel.getLanguage()}`;
 		if (!$view.hasClass(langClass)) {
@@ -24335,8 +24730,14 @@ class CommentPanel extends Emitter {
 	}
 	_onCommand(command, param, itemId) {
 		let item;
-		if (itemId) {
+		const hasItemId = itemId !== undefined && itemId !== null;
+		if (hasItemId) {
 			item = this._model.findByItemId(itemId);
+		}
+		const needsItem = ['select', 'clipBoard', 'removeComment',
+			'addUserIdFilter', 'addWordFilter', 'nicoru', 'itemDetailRequest'].includes(command);
+		if (!item && (hasItemId || needsItem)) {
+			return;
 		}
 		switch (command) {
 			case 'toggleScroll':
@@ -24722,6 +25123,16 @@ TimeMachineView._shadow_ = (`
 	`).trim();
 TimeMachineView.__tpl__ = ('<div class="TimeMachineView"></div>').trim();
 
+/*
+* Task 093: プレイリストの1件。3種類の identity を混同しないこと。
+*  - watchId: 今その動画を再生・検索・重複判定に使う正規の動画ID（sm〜・so〜・ss〜・スレッドIDの数字）。
+*             後から変わることがある（例: 数字のIDで入れたチャンネル動画が so〜 と分かった時。
+*             MylistPocket の情報で item.watchId = … と書き換える外部のコードもある）。
+*             変わった時は所属する model（groupList）へすぐ知らせ、findByWatchId が新しいIDで見つかるようにする。
+*  - uniqId:  item が最初に持った安定した identity（動画を開いた時の contextWatchId 等）。watchId が変わっても変えない。
+*             保存形式では uniq_id（以前から serialize が書いていた名前）。読む時は uniqId・uniq_id のどちらも受け付ける。
+*  - itemId:  実行中の item object ごとの番号（保存しない。復元すると新しい番号になる）。
+*/
 class VideoListItem {
 	static createByThumbInfo(info) {
 		return new this({
@@ -24847,9 +25258,14 @@ class VideoListItem {
 			timestamp: performance.now(),
 			adDecoration: null, // 広告装飾('normal'/'silver'/'gold')。未取得はnull(Task 054)
 		};
-		this._uniq_id = rawData.uniqId || this.watchId;
+		const uniqId = rawData.uniqId != null && rawData.uniqId !== '' ? rawData.uniqId :
+			(rawData.uniq_id != null && rawData.uniq_id !== '' ? rawData.uniq_id : this._watchId);
+		this._uniq_id = uniqId.toString();
 		rawData.first_retrieve = textUtil.dateToString(rawData.first_retrieve);
 		this.notifyUpdate = throttle.raf(this.notifyUpdate.bind(this));
+		this._updateSortTitle();
+	}
+	_updateSortTitle() {
 		this._sortTitle = textUtil.convertKansuEi(this.title)
 			.replace(/([0-9]{1,9})/g, m => m.padStart(10, '0')).replace(/([０-９]{1,9})/g, m => m.padStart(10, '０'));
 	}
@@ -24870,8 +25286,11 @@ class VideoListItem {
 	get itemId() { return this._itemId; }
 	get watchId() { return this._watchId; }
 	set watchId(v) {
-		if (v === this._watchId) { return; }
+		v = (v == null ? '' : v).toString();
+		if (!v || v === this._watchId) { return; }
+		const oldWatchId = this._watchId;
 		this._watchId = v;
+		this._groupList && this._groupList.onItemWatchIdChange && this._groupList.onItemWatchIdChange(this, oldWatchId);
 		this.notifyUpdate();
 	}
 	get title() { return this._getData('title', ''); }
@@ -24964,7 +25383,7 @@ class VideoListItem {
 			last_activated: this.state.lastActivated || 0,
 			played: this.isPlayed,
 			uniq_id: this._uniq_id,
-			id: this._rawData.id,
+			id: this._watchId,
 			title: this._rawData.title,
 			length_seconds: this._rawData.length_seconds,
 			num_res: this._rawData.num_res,
@@ -24975,6 +25394,9 @@ class VideoListItem {
 		};
 	}
 	updateByVideoInfo(videoInfo) {
+		if (this.isBlankData) {
+			return this.upgradeByVideoInfo(videoInfo);
+		}
 		const before = JSON.stringify(this.serialize());
 		const rawData = this._rawData;
 		const count = videoInfo.count;
@@ -24986,6 +25408,54 @@ class VideoListItem {
 		if (JSON.stringify(this.serialize()) !== before) {
 			this.notifyUpdate();
 		}
+	}
+	upgradeByVideoInfo(videoInfo) {
+		const count = videoInfo.count || {};
+		return this._applyFullData({
+			_format: 'videoInfo',
+			watchId: videoInfo.watchId,
+			title: videoInfo.title,
+			length_seconds: videoInfo.duration,
+			num_res: count.comment,
+			mylist_counter: count.mylist,
+			view_counter: count.view,
+			thumbnail_url: videoInfo.thumbnail,
+			first_retrieve: videoInfo.postedAt,
+			owner: videoInfo.owner
+		});
+	}
+	upgradeFromItem(item) {
+		const raw = item._rawData || {};
+		return this._applyFullData({
+			_format: raw._format || 'upgraded',
+			watchId: item.watchId,
+			title: raw.title,
+			length_seconds: raw.length_seconds,
+			num_res: raw.num_res,
+			mylist_counter: raw.mylist_counter,
+			view_counter: raw.view_counter,
+			thumbnail_url: raw.thumbnail_url,
+			first_retrieve: raw.first_retrieve,
+			owner: raw.owner
+		});
+	}
+	_applyFullData(data) {
+		const rawData = this._rawData;
+		for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner']) {
+			if (data[key] !== undefined && data[key] !== null) {
+				rawData[key] = data[key];
+			}
+		}
+		if (data.first_retrieve) {
+			rawData.first_retrieve = textUtil.dateToString(data.first_retrieve);
+		}
+		rawData._format = data._format;
+		this._updateSortTitle();
+		if (data.watchId) {
+			this.watchId = data.watchId;
+		}
+		this.notifyUpdate();
+		return true;
 	}
 }
 VideoListItem._itemId = 1;
@@ -25009,20 +25479,106 @@ class VideoListModel extends Emitter {
 			.map(itemData => new VideoListItem(itemData));
 		this.setItem(items);
 	}
+	/*
+	* Task 093: 一覧を変える操作（setItem・appendItem・insertItem・削除・unserialize）は、最後に _commit を通す。
+	*  1. isUniq なら、uniqId・watchId・itemId のどれかが同じ item を1つにする（_dedupe）
+	*  2. maxItems を超えた分を落とす（_limit。落とす向きは操作ごとに以前と同じ）
+	*  3. 一覧から外れた item を切り離し（groupList = null）、残った item を所属させる
+	*  4. Map（watchIds・itemIds・uset）を作り直し、update を1回出す
+	* 一覧から外れた item の状態を後から変えても、この model の update は起きない（ghost update を防ぐ）。
+	*/
 	setItem(items = []) {
-		items = (Array.isArray(items) ? items : [items]);
-		if (this.isUniq) {
-			const uset = new Set(), iset = new Set();
-			items = items.filter(item => {
-				const has = uset.has(item.uniqId) || iset.has(item.itemId);
-				uset.add(item.uniqId);
-				iset.add(item.itemId);
-				return !has;
-			});
+		items = (Array.isArray(items) ? items : [items]).filter(Boolean);
+		this._commit(this._dedupe([], items), 'tail');
+	}
+	_commit(nextItems, trimFrom = 'tail') {
+		const before = this.items || [];
+		const next = this._limit(nextItems, trimFrom);
+		const nextSet = new Set(next);
+		for (const item of before) {
+			if (!nextSet.has(item) && item.groupList === this) {
+				item.groupList = null;
+			}
 		}
-		this.items = items;
+		this.items = next;
 		this._refreshMaps();
 		this.onUpdate();
+		return next;
+	}
+	_limit(items, trimFrom) {
+		let over = items.length - this.maxItems;
+		if (over <= 0) {
+			return items;
+		}
+		const drop = new Set();
+		const order = trimFrom === 'head' ? items : [...items].reverse();
+		for (const item of order) {
+			if (over <= 0) { break; }
+			if (item.isActive) { continue; }
+			drop.add(item);
+			over--;
+		}
+		return items.filter(item => !drop.has(item)).slice(0, this.maxItems);
+	}
+	static _keysOf(item) {
+		return [`u:${item.uniqId}`, `w:${item.watchId}`, `i:${item.itemId}`];
+	}
+	static _preferred(a, b) {
+		if (a.isActive !== b.isActive) { return a.isActive ? a : b; }
+		if (a.isBlankData !== b.isBlankData) { return a.isBlankData ? b : a; }
+		return a;
+	}
+	static _mergeState(keep, drop) {
+		if (drop.isPlayed && !keep.isPlayed) { keep.isPlayed = true; }
+		if (drop.state && keep.state && (drop.state.lastActivated || 0) > (keep.state.lastActivated || 0)) {
+			keep.state.lastActivated = drop.state.lastActivated;
+		}
+	}
+	_dedupe(existing, incoming) {
+		if (!this.isUniq) {
+			return existing.concat(incoming);
+		}
+		const result = [...existing];
+		const owner = new Map(); // key -> result の添字
+		const put = (item, index) => VideoListModel._keysOf(item).forEach(k => owner.set(k, index));
+		result.forEach(put);
+		const existingCount = existing.length;
+		for (const item of incoming) {
+			const hits = [...new Set(VideoListModel._keysOf(item).map(k => owner.get(k)).filter(i => i !== undefined))]
+				.filter(i => result[i]);
+			if (!hits.length) {
+				put(item, result.push(item) - 1);
+				continue;
+			}
+			if (hits.some(i => i < existingCount)) {
+				const target = result[Math.min(...hits)];
+				if (target !== item && target.isBlankData && !item.isBlankData && target.upgradeFromItem &&
+					target.watchId === item.watchId) {
+					target.upgradeFromItem(item);
+				}
+				if (target !== item) {
+					VideoListModel._mergeState(target, item);
+				}
+				continue;
+			}
+			const pos = Math.min(...hits);
+			let keep = item;
+			for (const i of hits) {
+				const other = result[i];
+				if (other === keep) { continue; }
+				const preferred = VideoListModel._preferred(other, keep);
+				const dropped = preferred === other ? keep : other;
+				VideoListModel._mergeState(preferred, dropped);
+				keep = preferred;
+			}
+			for (const i of hits) {
+				VideoListModel._keysOf(result[i]).forEach(k => owner.get(k) === i && owner.delete(k));
+				result[i] = null;
+			}
+			result[pos] = keep;
+			put(keep, pos);
+		}
+		return result.filter(Boolean);
 	}
 	_refreshMaps() {
 		this.uset.clear();
@@ -25035,6 +25591,24 @@ class VideoListModel extends Emitter {
 			item.groupList = this;
 		});
 	}
+	onItemWatchIdChange(item, oldWatchId) {
+		if (this.itemIds.get(item.itemId) !== item) {
+			return;
+		}
+		if (this.watchIds.get(oldWatchId) === item) {
+			this.watchIds.delete(oldWatchId);
+		}
+		const other = this.watchIds.get(item.watchId);
+		if (!other || other === item || !this.isUniq) {
+			this.watchIds.set(item.watchId, item);
+			return;
+		}
+		const keep = VideoListModel._preferred(other, item);
+		const drop = keep === item ? other : item;
+		VideoListModel._mergeState(keep, drop);
+		this._commit(this.items.filter(i => i !== drop), 'tail');
+		this.emit('item-removed', [drop]);
+	}
 	includes(item) {
 		return this.uset.has(item.uniqId) || this.watchIds.has(item.watchId) || this.itemIds.has(item.itemId);
 	}
@@ -25042,43 +25616,42 @@ class VideoListModel extends Emitter {
 		this.setItem([]);
 	}
 	insertItem(items, index) {
-		items = Array.isArray(items) ? items : [items];
-		if (this.isUniq) {
-			items = items.filter(item => !this.includes(item));
-		}
-		if (!items.length) {
+		items = (Array.isArray(items) ? items : [items]).filter(Boolean);
+		const added = this._dedupe(this.items, items).slice(this.items.length);
+		if (!added.length) {
 			return;
 		}
-		index = Math.min(this.items.length, (_.isNumber(index) ? index : 0));
-		Array.prototype.splice.apply(this.items, [index, 0].concat(items));
-		this.items.splice(this.maxItems);
-		this._refreshMaps();
-		this.onUpdate();
-		return this.indexOf(items[0]);
+		index = Math.min(this.items.length, (_.isNumber(index) ? Math.max(0, index) : 0));
+		const next = [...this.items];
+		next.splice(index, 0, ...added);
+		this._commit(next, 'tail');
+		for (const item of added) {
+			if (item.groupList === this && this.itemIds.get(item.itemId) !== item) {
+				item.groupList = null;
+			}
+		}
+		return this.indexOf(added[0]);
 	}
 	appendItem(items) {
-		items = Array.isArray(items) ? items : [items];
-		if (this.isUniq) {
-			items = items.filter(item => !this.includes(item));
-		}
-		if (!items.length) {
+		items = (Array.isArray(items) ? items : [items]).filter(Boolean);
+		const next = this._dedupe(this.items, items);
+		if (next.length === this.items.length) {
 			return;
 		}
-		this.items = this.items.concat(items);
-		while (this.items.length > this.maxItems) {
-			this.items.shift();
-		}
-		this._refreshMaps();
-		this.onUpdate();
+		this._commit(next, 'head');
 		return this.items.length - 1;
 	}
 	moveItemTo(fromItem, toItem) {
 		fromItem.isUpdating = true;
 		toItem.isUpdating = true;
 		const destIndex = this.indexOf(toItem);
-		this.items = this.items.filter(item => item !== fromItem);
-		this._refreshMaps();
-		this.insertItem(fromItem, destIndex);
+		if (destIndex < 0 || this.indexOf(fromItem) < 0) {
+			this.resetUiFlags([fromItem, toItem]);
+			return;
+		}
+		const next = this.items.filter(item => item !== fromItem);
+		next.splice(Math.min(destIndex, next.length), 0, fromItem);
+		this._commit(next, 'tail');
 		this.resetUiFlags([fromItem, toItem]);
 	}
 	resetUiFlags(items) {
@@ -25097,12 +25670,7 @@ class VideoListModel extends Emitter {
 		if (befores.length === afters.length) {
 			return false;
 		}
-		for (const item of befores) {
-			!afters.includes(item) && (item.groupList = null);
-		}
-		this.items = afters;
-		this._refreshMaps();
-		this.onUpdate();
+		this._commit(afters, 'tail');
 		return true;
 	}
 	removePlayedItem() {
@@ -25131,6 +25699,9 @@ class VideoListModel extends Emitter {
 		return this.itemIds.get(itemId);
 	}
 	findByWatchId(watchId) {
+		if (watchId === undefined || watchId === null) {
+			return undefined;
+		}
 		watchId = watchId.toString();
 		return this.watchIds.get(watchId);
 	}
@@ -25144,7 +25715,9 @@ class VideoListModel extends Emitter {
 		return this.items.map(item => item.serialize());
 	}
 	unserialize(itemDataList) {
-		const items = itemDataList.map(itemData => new VideoListItem(itemData));
+		const items = (Array.isArray(itemDataList) ? itemDataList : [])
+			.filter(itemData => itemData && typeof itemData === 'object')
+			.map(itemData => new VideoListItem(itemData));
 		this.setItem(items);
 	}
 	sortBy(key, isDesc) {
@@ -26719,6 +27292,7 @@ class PlayList extends VideoList {
 		this._isEnable = false;
 		this._isLoop = params.loop;
 		this.model = new PlayListModel({});
+		this.model.on('item-removed', () => this._refreshIndex());
 		this._initializeAdDecoration(params);
 		global.debug.playlist = this;
 		this.on('update', _.debounce(() => PlayListSession.save(this.serialize()), 3000));
@@ -26737,8 +27311,8 @@ class PlayList extends VideoList {
 		};
 	}
 	unserialize(data) {
-		if (!data) {
-			return;
+		if (!data || !Array.isArray(data.items)) {
+			return false;
 		}
 		this._initializeView();
 		console.log('unserialize: ', data);
@@ -26746,7 +27320,19 @@ class PlayList extends VideoList {
 		this._isEnable = data.enable;
 		this._isLoop = data.loop;
 		this.emit('update');
-		this.setIndex(data.index);
+		const index = PlayList.normalizeRestoredIndex(data.index, this.model.length, -1);
+		this.setIndex(index, true);
+		return true;
+	}
+	static normalizeRestoredIndex(index, length, fallback = 0) {
+		if (!(length > 0)) {
+			return -1;
+		}
+		const n = typeof index === 'number' ? Math.floor(index) : parseInt(index, 10);
+		if (!isFinite(n) || n < 0) {
+			return Math.min(fallback, length - 1);
+		}
+		return Math.min(n, length - 1);
 	}
 	restoreFromSession() {
 		this.unserialize(PlayListSession.restore());
@@ -26777,7 +27363,7 @@ class PlayList extends VideoList {
 				this.shuffle();
 				break;
 			case 'reverse':
-				this.model.reverse();
+				this.reverse();
 				break;
 			case 'sortBy': {
 				let [key, order] = param.split(':');
@@ -26828,7 +27414,7 @@ class PlayList extends VideoList {
 			return;
 		}
 		const data = JSON.stringify(this.serialize(), null, 2);
-		const blob = new Blob([data], {'type': 'text/html'});
+		const blob = new Blob([data], {'type': 'application/json'});
 		const url = window.URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		Object.assign(a, {
@@ -26844,11 +27430,15 @@ class PlayList extends VideoList {
 		if (!textUtil.isValidJson(fileData)) {
 			return;
 		}
+		const data = JSON.parse(fileData);
+		if (!data || !Array.isArray(data.items)) {
+			return;
+		}
 		this.emit('command', 'pause');
 		this.emit('command', 'notify', 'プレイリストを復元');
-		this.unserialize(JSON.parse(fileData));
+		this.unserialize(data);
 		window.setTimeout(() => {
-			const index = Math.max(0, fileData.index || 0);
+			const index = PlayList.normalizeRestoredIndex(data.index, this.model.length, 0);
 			const item = this.model.getItemByIndex(index);
 			if (item) {
 				this.setIndex(index, true);
@@ -26882,11 +27472,15 @@ class PlayList extends VideoList {
 		}
 		this.setIndex(this.model.indexOf(item));
 	}
+	_countNewlyAdded(videoListItems, beforeItemIds) {
+		return videoListItems.filter(item =>
+			item && !beforeItemIds.has(item.itemId) && this.model.findByItemId(item.itemId) === item).length;
+	}
 	_appendAll(videoListItems, options) {
 		options = options || {};
-		const before = this.model.items.length;
+		const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
 		this.model.appendItem(videoListItems);
-		const added = this.model.items.length - before;
+		const added = this._countNewlyAdded(videoListItems, beforeItemIds);
 		const item = this.model.findByWatchId(options.watchId);
 		if (item) {
 			item.isActive = true;
@@ -26898,11 +27492,11 @@ class PlayList extends VideoList {
 	}
 	_insertAll(videoListItems, options) {
 		options = options || {};
-		const before = this.model.items.length;
+		const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
 		this.model.insertItem(
 			videoListItems,
 			this.getIndex() + 1);
-		const added = this.model.items.length - before;
+		const added = this._countNewlyAdded(videoListItems, beforeItemIds);
 		const item = this.model.findByWatchId(options.watchId);
 		if (item) {
 			item.isActive = true;
@@ -27081,16 +27675,16 @@ class PlayList extends VideoList {
 	}
 	insertCurrentVideo(videoInfo) {
 		this._initializeView();
-		if (this._activeItem &&
-			!this._activeItem.isBlankData &&
-			this._activeItem.watchId === videoInfo.watchId) {
+		const ids = [videoInfo.watchId, videoInfo.contextWatchId].filter(Boolean).map(id => id.toString());
+		const matches = item => item && ids.includes(item.watchId);
+		if (this._activeItem && matches(this._activeItem) && this.model.indexOf(this._activeItem) >= 0) {
 			this._activeItem.updateByVideoInfo(videoInfo);
 			this._activeItem.isPlayed = true;
 			this.scrollToActiveItem();
 			return;
 		}
-		let currentItem = this.model.findByWatchId(videoInfo.watchId);
-		if (currentItem && !currentItem.isBlankData) {
+		let currentItem = ids.map(id => this.model.findByWatchId(id)).find(Boolean);
+		if (currentItem) {
 			currentItem.updateByVideoInfo(videoInfo);
 			currentItem.isPlayed = true;
 			this.setIndex(this.model.indexOf(currentItem));
@@ -27103,7 +27697,7 @@ class PlayList extends VideoList {
 			this._activeItem.isActive = false;
 		}
 		this.model.insertItem(item, this._index + 1);
-		this._activeItem = this.model.findByItemId(item.itemId);
+		this._activeItem = this.model.findByItemId(item.itemId) || this.model.findByWatchId(videoInfo.watchId) || null;
 		this._refreshIndex(true);
 	}
 	removeItemByWatchId(watchId) {
@@ -27187,6 +27781,10 @@ class PlayList extends VideoList {
 	toggleLoop() {
 		this._isLoop = !this._isLoop;
 		this.emit('update');
+	}
+	reverse() {
+		this.model.reverse();
+		this._refreshIndex();
 	}
 	shuffle() {
 		this.model.shuffle();
@@ -27296,7 +27894,7 @@ const MediaSessionApi = (() => {
 			title,
 			artist,
 			album,
-			artwork
+			artwork: (artwork || []).filter(image => typeof image?.src === 'string' && image.src.trim())
 		});
 		const nm = navigator.mediaSession;
 		if ('setPositionState' in nm) {
@@ -28065,7 +28663,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 		this.varMapper = new VariablesMapper({config: this._playerConfig});
 		this.varMapper.on('update', () => this._updateResponsive());
 	}
-	_updateResponsive() {
+	_updateResponsive({onlyControlBar = false} = {}) {
 		if (!this._state.isOpen) {
 			return;
 		}
@@ -28081,7 +28679,6 @@ class NicoVideoPlayerDialogView extends Emitter {
 				return;
 			}
 			const videoControlBarHeight = this.varMapper.videoControlBarHeight;
-			const showVideoHeaderPanel = vMargin >= videoControlBarHeight + header.offsetHeight * 2;
 			let showVideoControlBar;
 			switch (controlBarMode) {
 				case 'always-show':
@@ -28094,6 +28691,10 @@ class NicoVideoPlayerDialogView extends Emitter {
 						: vMargin >= videoControlBarHeight;
 			}
 			this.toggleClass('showVideoControlBar', showVideoControlBar);
+			if (onlyControlBar) {
+				return;
+			}
+			const showVideoHeaderPanel = vMargin >= videoControlBarHeight + header.offsetHeight * 2;
 			this.toggleClass('showVideoHeaderPanel', showVideoHeaderPanel);
 		};
 		update();
@@ -28272,7 +28873,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 			requestAnimationFrame(() => this._updateCommentInputLayout());
 		}
 		if (this.varMapper) {
-			requestAnimationFrame(() => this._updateResponsive());
+			requestAnimationFrame(() => this._updateResponsive({onlyControlBar: true}));
 		}
 	}
 	_updateScreenModeStyle() {
@@ -28501,6 +29102,18 @@ util.addStyle(`
 		width:  50%;
 		height: 50%;
 		z-index: 102;
+	}
+	/* Task 095: restore Task 052 B-6. This viewport-sized comment layer must only
+		be active together with the matching back-comment video shrink rule above. */
+	.zenzaPlayerContainer.is-backComment .commentLayerFrame {
+		position: fixed;
+		top:  0;
+		left: 0;
+		width:  100vw;
+		height: calc(100vh - 40px);
+		right: auto;
+		bottom: auto;
+		z-index: 1;
 	}
 	body[data-screen-mode="3D"] .zenzaPlayerContainer .videoPlayer {
 		transform: perspective(600px) rotateX(10deg);
@@ -29124,22 +29737,6 @@ NicoVideoPlayerDialogView.__css__ = `
 		user-select: none;
 		opacity: var(--zenza-comment-layer-opacity);
 	}
-	.zenzaPlayerContainer.is-backComment .commentLayerFrame {
-		position: fixed;
-		top:  0;
-		left: 0;
-		width:  100vw;
-		height: calc(100vh - 40px);
-		right: auto;
-		bottom: auto;
-		z-index: 1;
-	}
-	.is-showComment.is-backComment .videoPlayer {
-		opacity: 0.90;
-	}
-	.is-showComment.is-backComment .videoPlayer:hover {
-		opacity: 1;
-	}
 	.loadingMessageContainer {
 		display: none;
 		pointer-events: none;
@@ -29358,6 +29955,7 @@ NicoVideoPlayerDialogView.__tpl__ = (`
 		</div>
 	`).trim();
 class NicoVideoPlayerDialog extends Emitter {
+	static get OPTIONAL_LOAD_TIMEOUT() { return 3000; }
 	constructor(params) {
 		super();
 		this.initialize(params);
@@ -29551,8 +30149,12 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._nicoVideoPlayer.filter.addWordFilter(param);
 				break;
 			case 'setWordRegFilter':
+				this._nicoVideoPlayer.filter.setWordRegFilter(
+					param, this._nicoVideoPlayer.filter.wordRegFilterFlags);
+				break;
 			case 'setWordRegFilterFlags':
-				this._nicoVideoPlayer.filter.setWordRegFilter(param);
+				this._nicoVideoPlayer.filter.setWordRegFilter(
+					this._nicoVideoPlayer.filter.wordRegFilterSource, param);
 				break;
 			case 'addUserIdFilter':
 				this._nicoVideoPlayer.filter.addUserIdFilter(param);
@@ -29777,6 +30379,12 @@ class NicoVideoPlayerDialog extends Emitter {
 				break;
 			case 'wordFilter':
 				filter.wordFilterList = value;
+				break;
+			case 'wordRegFilter':
+			case 'wordRegFilterFlags':
+				filter.setWordRegFilter(
+					key === 'wordRegFilter' ? value : this._playerConfig.props.wordRegFilter,
+					key === 'wordRegFilterFlags' ? value : this._playerConfig.props.wordRegFilterFlags);
 				break;
 			case 'userIdFilter':
 				filter.userIdFilterList = value;
@@ -30112,18 +30720,29 @@ class NicoVideoPlayerDialog extends Emitter {
 			return;
 		}
 		this.refreshLastPlayerId();
-		this._requestId = 'play-' + Math.random();
-		this._videoWatchOptions = options = new VideoWatchOptions(watchId, options, this._playerConfig);
+		options = new VideoWatchOptions(watchId, options, this._playerConfig);
 		if (!options.isPlaylistStartRequest &&
 			this.isPlaying && this.isPlaylistEnable && !options.isOpenNow) {
 			this._onPlaylistInsert(watchId);
 			return;
 		}
+		this._requestId = 'play-' + Math.random();
+		this._videoWatchOptions = options;
+		this._clearVideoTimers();
 		window.console.log('%copen video: ', 'color: blue;', watchId);
 		window.console.time('動画選択から再生可能までの時間 watchId=' + watchId);
+		const requestId = this._requestId;
 		let nicoVideoPlayer = this._nicoVideoPlayer;
 		if (!nicoVideoPlayer) {
-			nicoVideoPlayer = await this._initializeNicoVideoPlayer();
+			this._nicoVideoPlayerInit = this._nicoVideoPlayerInit ||
+				this._initializeNicoVideoPlayer().catch(err => {
+					this._nicoVideoPlayerInit = null;
+					throw err;
+				});
+			nicoVideoPlayer = await this._nicoVideoPlayerInit;
+			if (this._requestId !== requestId) {
+				return;
+			}
 		} else {
 			if (this._videoInfo) {
 				this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
@@ -30137,16 +30756,27 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		this._state.resetVideoLoadingStatus();
 		this._state.isCommentReady = false;
+		this._state.isCommentPosting = false;
 		this._watchId = watchId;
 		this._lastCurrentTime = 0;
 		this._lastOpenAt = Date.now();
 		this._state.isError = false;
+		const optional = (label, func, fallback, onGiveUp = () => {}) => new Promise(resolve => {
+			const timer = window.setTimeout(() => {
+				window.console.warn(`${label}: timeout`);
+				onGiveUp();
+				resolve(fallback);
+			}, NicoVideoPlayerDialog.OPTIONAL_LOAD_TIMEOUT);
+			Promise.resolve().then(func).then(
+				result => { window.clearTimeout(timer); resolve(result); },
+				err => { window.clearTimeout(timer); window.console.warn(`${label}: fail`, err); onGiveUp(); resolve(fallback); });
+		});
 		Promise.all([
 			VideoInfoLoader.load(watchId, options.videoLoadOptions),
-			WatchInfoCacheDb.get(this._watchId),
-			this._initializePlaylist()  //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
-		]).then(this._onVideoInfoLoaderLoad.bind(this, this._requestId)
-		).catch(this._onVideoInfoLoaderFail.bind(this, this._requestId));
+			optional('WatchInfoCacheDb.get', () => WatchInfoCacheDb.get(watchId), null),
+			optional('initializePlaylist', () => this._initializePlaylist(), undefined, () => this.emitResolve('playlist-ready'))  //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
+		]).then(this._onVideoInfoLoaderLoad.bind(this, requestId)
+		).catch(this._onVideoInfoLoaderFail.bind(this, requestId));
 		this.show();
 		if (this._playerConfig.getValue('autoFullScreen') && !util.fullscreen.now()) {
 			nicoVideoPlayer.requestFullScreen();
@@ -30202,7 +30832,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
 		this._watchId = videoInfo.watchId;
-		WatchInfoCacheDb.put(this._watchId, {videoInfo});
+		WatchInfoCacheDb.putBestEffort(this._watchId, {videoInfo});
 		let serverType;
 		let videoQuality;
 		if (!videoInfo.isDomandOnly && this._playerConfig.props.autoDisableNew && videoInfo.maybeBetterQualityServerType === 'dmc') {
@@ -30237,25 +30867,40 @@ class NicoVideoPlayerDialog extends Emitter {
 			document.createElement('video').canPlayType('application/vnd.apple.mpegURL') !== '' ||
 			document.createElement('video').canPlayType('application/x-mpegURL') !== '';
 		const useHLS = isHLSSupported && (isHLSRequired || !this._playerConfig.props['video.hls.enableOnlyRequired'] || serverType != 'dmc');
-		this._videoSession = await VideoSessionWorker.create({
+		const isStale = () => this._requestId !== requestId;
+		const session = await VideoSessionWorker.create({
 			videoInfo,
 			videoQuality,
 			serverType,
 			useHLS
 		});
+		if (isStale()) {
+			Promise.resolve(session.close()).catch(() => {});
+			return;
+		}
+		this._videoSession = session;
 		if (this._videoFilter.isNgVideo(videoInfo)) {
 			return this._onVideoFilterMatch();
 		}
 		try {
-			if (this._videoSession.isDmc) {
-				await NVWatchCaller.call(videoInfo.dmcInfo.trackingId)
+			if (session.isDmc) {
+				await NVWatchCaller.call(videoInfo.dmcInfo.trackingId);
+				if (isStale()) {
+					return;
+				}
 			}
-			const sessionInfo = await this._videoSession.connect();
+			const sessionInfo = await session.connect();
+			if (isStale()) {
+				return;
+			}
 			this.setVideo(sessionInfo.url);
 			videoInfo.setCurrentVideo(sessionInfo.url);
 			this.emit('videoServerType', sessionInfo.type, sessionInfo, videoInfo);
 		} catch (e) {
-			this._onVideoSessionFail(this._videoSession.serverType, e);
+			if (isStale()) {
+				return;
+			}
+			this._onVideoSessionFail(session.serverType, e);
 		}
 		this._state.videoInfo = videoInfo;
 		this.loadComment(videoInfo.msgInfo);
@@ -30289,7 +30934,32 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		this.loadComment(msgInfo);
 	}
+	_setVideoTimer(func, ms) {
+		const requestId = this._requestId;
+		const timers = this._videoTimers = this._videoTimers || new Set();
+		const id = window.setTimeout(() => {
+			timers.delete(id);
+			if (this._requestId !== requestId) {
+				return;
+			}
+			func();
+		}, ms);
+		timers.add(id);
+		return id;
+	}
+	_clearVideoTimers() {
+		if (!this._videoTimers) {
+			return;
+		}
+		for (const id of this._videoTimers) {
+			window.clearTimeout(id);
+		}
+		this._videoTimers.clear();
+	}
 	_onVideoInfoLoaderFail(requestId, e) {
+		if (!e || typeof e !== 'object') {
+			e = {message: e === undefined || e === null ? '' : String(e)};
+		}
 		const watchId = e.watchId;
 		window.console.error('_onVideoInfoLoaderFail', watchId, e);
 		if (this._requestId !== requestId) {
@@ -30308,8 +30978,9 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (!this.isPlaylistEnable) {
 			return;
 		}
-		if (e.reason === 'forbidden' || e.info.isPlayable === false) {
-			window.setTimeout(() => this.playNextVideo(), 3000);
+		if (e.reason === 'forbidden' || e.reason === 'not found' ||
+			(e.info && e.info.isPlayable === false)) {
+			this._setVideoTimer(() => this.playNextVideo(), 3000);
 		}
 	}
 	_onVideoSessionFail(serverType, result) {
@@ -30319,29 +30990,41 @@ class NicoVideoPlayerDialog extends Emitter {
 			`動画の読み込みに失敗しました(${server}) ${result && result.message || ''}`, this._watchId);
 		this._state.setState({isError: true, isLoading: false});
 		if (this.isPlaylistEnable) {
-			window.setTimeout(() => this.playNextVideo(), 3000);
+			this._setVideoTimer(() => this.playNextVideo(), 3000);
 		}
+	}
+	static classifyPlayStartError(err) {
+		const name = err && err.name;
+		const kind = err && (err.kind || err.message);
+		if (name === 'SessionClosedError' || kind === 'SessionClosedError') {
+			return 'sessionClosed';
+		}
+		if (name === 'NotAllowedError') {
+			return 'notAllowed';   // 自動再生のブロック
+		}
+		if (name === 'AbortError') {
+			return 'aborted';      // 再生開始を待っている間に動画変更などで中断された等
+		}
+		return 'unknown';
 	}
 	_onVideoPlayStartFail(err) {
 		window.console.error('動画再生開始に失敗', err);
-		if (!(err instanceof DOMException)) { //
-			return;
-		}
-		console.warn('play() request was rejected code: %s. message: %s', err.code, err.message);
-		const message = err.message;
-		switch (message) {
-			case 'SessionClosedError':
-				if (this._playserState.isError) { break; }
+		const type = NicoVideoPlayerDialog.classifyPlayStartError(err);
+		console.warn('play() request was rejected type: %s name: %s message: %s',
+			type, err && err.name, err && err.message);
+		switch (type) {
+			case 'sessionClosed':
+				if (this._state.isError) { break; }
 				this._setErrorMessage('動画の再生開始に失敗しました', this._watchId);
 				this._state.setVideoErrorOccurred();
 				break;
-			case 'AbortError': // 再生開始を待っている間に動画変更などで中断された等
-			case 'NotAllowedError': // 自動再生のブロック
+			case 'aborted':
+			case 'notAllowed':
 			default:
 				break;
 		}
-		this.emit('loadVideoPlayStartFail');
-		global.emitter.emitAsync('loadVideoPlayStartFail');
+		this.emit('loadVideoPlayStartFail', type);
+		global.emitter.emitAsync('loadVideoPlayStartFail', type);
 	}
 	_onVideoFilterMatch() {
 		window.console.error('ng video', this._watchId);
@@ -30349,7 +31032,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		this._state.isError = true;
 		this.emit('error');
 		if (this.isPlaylistEnable) {
-			window.setTimeout(() => this.playNextVideo(), 3000);
+			this._setVideoTimer(() => this.playNextVideo(), 3000);
 		}
 	}
 	_setErrorMessage(msg) {
@@ -30372,7 +31055,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (result.threadInfo.language && result.threadInfo.language !== this._playerConfig.props.commentLanguage) {
 			this._playerConfig.props.commentLanguage = result.threadInfo.language;
 		}
-		WatchInfoCacheDb.put(this._watchId, {threadInfo: result.threadInfo});
+		WatchInfoCacheDb.putBestEffort(this._watchId, {threadInfo: result.threadInfo});
 		this._state.isCommentReady = true;
 		this._state.isWaybackMode = result.threadInfo.isWaybackMode;
 		this.emit('commentReady', result, this._threadInfo);
@@ -30405,9 +31088,9 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		window.console.timeEnd('動画選択から再生可能までの時間 watchId=' + this._watchId);
 		this._playerConfig.props.lastWatchId = this._watchId;
-		WatchInfoCacheDb.put(this._watchId, {watchCount: 1});
+		WatchInfoCacheDb.putBestEffort(this._watchId, {watchCount: 1});
 		await this.promise('playlist-ready');
-		if (this._videoWatchOptions.isPlaylistStartRequest) {
+		if (this._playlist && this._videoWatchOptions.isPlaylistStartRequest) {
 			let option = this._videoWatchOptions.mylistLoadOptions;
 			let query = this._videoWatchOptions.query;
 			option.append = this.isPlaying && this._playlist.isEnable;
@@ -30416,8 +31099,8 @@ class NicoVideoPlayerDialog extends Emitter {
 			this._playlist.load(query.playlist, option, this._videoInfo.msgInfo);
 			this._playlist.toggleEnable(true);
 		}
-		this._playlist.insertCurrentVideo(this._videoInfo);
-		if (this._videoInfo.watchId !== this._videoInfo.videoId &&
+		this._playlist && this._playlist.insertCurrentVideo(this._videoInfo);
+		if (this._playlist && this._videoInfo.watchId !== this._videoInfo.videoId &&
 			this._videoInfo.videoId.startsWith('so')) {
 			this._playlist.removeItemByWatchId(this._videoInfo.watchId);
 		}
@@ -30430,7 +31113,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (this._nextVideo) {
 			const nextVideo = this._nextVideo;
 			this._nextVideo = null;
-			if (this._playerConfig.props.enableNicosJumpVideo) {
+			if (this._playlist && this._playerConfig.props.enableNicosJumpVideo) {
 				const nv = this._playlist.findByWatchId(nextVideo);
 				if (nv && nv.isPlayed()) {
 					return;
@@ -30483,14 +31166,18 @@ class NicoVideoPlayerDialog extends Emitter {
 			return;
 		}
 		const retry = params => {
-			setTimeout(() => {
+			this._setVideoTimer(() => {
 				if (!this.isOpen) {
 					return;
 				}
 				this.reload(params);
 			}, 3000);
 		};
+		const requestId = this._requestId;
 		const sessionState = await this._videoSession.getState();
+		if (this._requestId !== requestId) {
+			return;  // Task 090（ZW-012）: 待っている間に別の動画を開いた・閉じた
+		}
 		const {isDomand, isDmc, isDeleted, isAbnormallyClosed} = sessionState;
 		const videoWatchOptions = this._videoWatchOptions;
 		const code = (e && e.target && e.target.error && e.target.error.code) || 0;
@@ -30517,7 +31204,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		this._setErrorMessage(e.description);
 		this.emit('error', e);
 		if (e.fallback) {
-			setTimeout(() => this.reload({isAutoZenTubeDisabled: true}), 3000);
+			this._setVideoTimer(() => this.reload({isAutoZenTubeDisabled: true}), 3000);  // Task 090（ZW-016）
 		}
 	}
 	_onVideoAbort() {
@@ -30560,7 +31247,7 @@ class NicoVideoPlayerDialog extends Emitter {
 			return;
 		}
 		const dr = this.duration;
-		console.info('%csave PlaybackPosition:', 'background: cyan', ct, dr, vi.csrfToken);
+		console.info('%csave PlaybackPosition:', 'background: cyan', ct, dr); // Task 088: csrfToken はログに出さない
 		if (vi.contextWatchId !== contextWatchId) {
 			return;
 		}
@@ -30583,12 +31270,14 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (this.isPlaying) {
 			this._savePlaybackPosition(this._watchId, this.currentTime);
 		}
-		WatchInfoCacheDb.put(this._watchId, {currentTime: this.currentTime});
+		WatchInfoCacheDb.putBestEffort(this._watchId, {currentTime: this.currentTime});
 		if (Fullscreen.now()) {
 			Fullscreen.cancel();
 		}
 		this.pause();
 		this.hide();
+		this._requestId = null;  // Task 090（ZW-012）: 閉じた後に、読み込み中だった動画の結果を使わない
+		this._clearVideoTimers();  // Task 090（ZW-016）
 		this._refresh();
 		this.emit('close');
 		global.emitter.emitAsync('DialogPlayerClose');
@@ -30615,8 +31304,12 @@ class NicoVideoPlayerDialog extends Emitter {
 		});
 		this._playlist.on('command', this._onCommand.bind(this));
 		this._playlist.on('update', _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
-		if (PlayListSession.isExist()) {
-			this._playlist.restoreFromSession();
+		try {
+			if (PlayListSession.isExist()) {
+				this._playlist.restoreFromSession();
+			}
+		} catch (err) {
+			window.console.warn('playlist restore fail', err);
 		}
 		this.emitResolve('playlist-ready');
 	}
@@ -30711,24 +31404,31 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (!util.isLogin()) {
 			return Promise.reject();
 		}
+		const requestId = this._requestId;
+		const watchId = this._watchId;
+		const threadInfo = this._threadInfo;
+		const isCurrent = () => this._requestId === requestId;
 		const threadId = this._threadInfo.threadId * 1;
-		if (this._threadInfo.force184 !== '1') {
+		if (!threadInfo.is184Forced) {
 			cmd = cmd ? ('184 ' + cmd) : '184';
 		}
-		Object.assign(options, {isMine: true, isUpdating: true, thead: threadId});
+		Object.assign(options, {isMine: true, isUpdating: true, thread: threadId});
 		vpos = (!isNaN(vpos) && typeof vpos === 'number') ? vpos : this._nicoVideoPlayer.vpos;
 		const nicoChat = this._nicoVideoPlayer.addChat(text, cmd, vpos, options);
 		this._state.isCommentPosting = true;
-		const lang = this._playerConfig.props.commentLanguage;
 		window.console.time('コメント投稿');
 		const onSuccess = result => {
 			window.console.timeEnd('コメント投稿');
 			nicoChat.isUpdating = false;
 			nicoChat.no = result.no;
-			this.execCommand('notify', 'コメント投稿成功');
-			this._state.isCommentPosting = false;
-			this._threadInfo.blockNo = result.blockNo;
-			WatchInfoCacheDb.put(this._watchId, {comment: {text, cmd, vpos, options}});
+			if (typeof result.blockNo === 'number' && Number.isFinite(result.blockNo)) {
+				(isCurrent() ? this._threadInfo : threadInfo).blockNo = result.blockNo;
+			}
+			WatchInfoCacheDb.putBestEffort(watchId, {comment: {text, cmd, vpos, options}});
+			if (isCurrent()) {
+				this.execCommand('notify', 'コメント投稿成功');
+				this._state.isCommentPosting = false;
+			}
 			return Promise.resolve(result);
 		};
 		const onFail = err => {
@@ -30737,15 +31437,17 @@ class NicoVideoPlayerDialog extends Emitter {
 			window.console.timeEnd('コメント投稿');
 			nicoChat.isPostFail = true;
 			nicoChat.isUpdating = false;
-			this.execCommand('alert', err.message);
-			this._state.isCommentPosting = false;
 			if (err.blockNo && typeof err.blockNo === 'number') {
-				this._threadInfo.blockNo = err.blockNo;
+				(isCurrent() ? this._threadInfo : threadInfo).blockNo = err.blockNo;
+			}
+			if (isCurrent()) {
+				this.execCommand('alert', err.message);
+				this._state.isCommentPosting = false;
 			}
 			return Promise.reject(err);
 		};
 		const msgInfo = this._videoInfo.msgInfo;
-		return this.threadLoader.postChat(msgInfo, text, cmd, vpos, lang)
+		return this.threadLoader.postChat(msgInfo, text, cmd, vpos)
 			.then(onSuccess).catch(onFail);
 	}
 	removeChat(chat) {
@@ -34294,6 +34996,7 @@ class VideoInfoPanel extends Emitter {
 		this._relatedInfoMenu.update(videoInfo);
 	}
 	async _updateVideoDescription(html, series = null) {
+		const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
 		this._description.textContent = '';
 		this._zenTubeUrl = null;
 		if (series) {
@@ -34301,10 +35004,10 @@ class VideoInfoPanel extends Emitter {
 				html += `<br><br>「${textUtil.escapeHtml(series.title)}」 シリーズ前後の動画`;
 			}
 			if (series.video.prev) {
-				html += `<br>前の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${series.video.prev.id}">${series.video.prev.id}</a>`;
+				html += `<br>前の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.prev.id)}">${textUtil.escapeHtml(series.video.prev.id)}</a>`;
 			}
 			if (series.video.next) {
-				html += `<br>次の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${series.video.next.id}">${series.video.next.id}</a>`;
+				html += `<br>次の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.next.id)}">${textUtil.escapeHtml(series.video.next.id)}</a>`;
 			}
 		}
 		/*
@@ -34364,29 +35067,63 @@ class VideoInfoPanel extends Emitter {
 			const [min, sec] = (seek.dataset.seektime || '0:0').split(':');
 			Object.assign(seek.dataset, {command: 'seek', type: 'number', param: min * 60 + sec * 1});
 		};
-		const mylistLink = link => {
-			link.classList.add('mylistLink');
-			const mylistId = link.textContent.split('/')[1];
-			const button = uq(`<zenza-mylist-link data-mylist-id="${mylistId}">
-					${link.outerHTML}
-					<zenza-playlist-append
-						class="playlistSetMylist clickable-item" title="プレイリストで開く"
-						data-command="playlistSetMylist" data-param="${mylistId}"
-					>▶</zenza-playlist-append>
-				</zenza-mylist-link>`)[0];
-			link.replaceWith(button);
+		/*
+		* Task 088（監査v2 ZW-052）: 以前はリンクの文字（link.textContent）から取った ID を、
+		* そのまま HTML の文字列へ埋め込んで要素を作り直していたため、引用符や < > を含むリンクの文字が
+		* 新しい属性・要素として解釈されてしまった。ID はリンク先(href)から取り（取れない時だけ文字から）、
+		* 数字だけであることを確かめてから、createElement と dataset で組み立てる。元のリンクはそのまま中へ移す。
+		*/
+		const playlistLinkId = (link, kind) => {
+			const host = (link.hostname || '').replace(/^(www|sp)\./, '');
+			if (host === 'nicovideo.jp') {
+				const m = new RegExp(`^(?:/user/[0-9]+)?/${kind}/([0-9]+)/?$`).exec(link.pathname || '');
+				if (m) {
+					return m[1];
+				}
+			}
+			const t = new RegExp(`^${kind}/([0-9]+)$`).exec((link.textContent || '').trim());
+			return t ? t[1] : null;
 		};
-		const seriesLink = link => {
-			link.classList.add('seriesLink');
-			const seriesId = link.textContent.split('/')[1];
-			const button = uq(`<zenza-series-link data-series-id="${seriesId}">
-					${link.outerHTML}
-					<zenza-playlist-append
-						class="playlistSetSeries clickable-item" title="プレイリストで開く"
-						data-command="playlistSetSeries" data-param="${seriesId}"
-					>▶</zenza-playlist-append>
-				</zenza-series-link>`)[0];
-			link.replaceWith(button);
+		const playlistLink = (link, {kind, tag, idKey, command}) => {
+			const id = playlistLinkId(link, kind);
+			if (!id) {
+				return;
+			}
+			link.classList.add(`${kind}Link`);
+			const wrapper = document.createElement(tag);
+			wrapper.dataset[idKey] = id;
+			const button = document.createElement('zenza-playlist-append');
+			button.className = `${command} clickable-item`;
+			button.title = 'プレイリストで開く';
+			Object.assign(button.dataset, {command, param: id});
+			button.textContent = '▶';
+			link.replaceWith(wrapper);
+			wrapper.append(link, button);
+		};
+		const mylistLink = link =>
+			playlistLink(link, {kind: 'mylist', tag: 'zenza-mylist-link', idKey: 'mylistId', command: 'playlistSetMylist'});
+		const seriesLink = link =>
+			playlistLink(link, {kind: 'series', tag: 'zenza-series-link', idKey: 'seriesId', command: 'playlistSetSeries'});
+		/*
+		* Task 088（監査v2 ZW-052）: 説明文の本文はニコニコが返す HTML をそのまま表示している。
+		* 念のため、表示する前にスクリプトとして動き得るもの（script 等の要素、on〜 の属性、
+		* javascript: / data: / vbscript: の URL）だけを取り除く。文字の装飾や普通のリンクはそのまま。
+		*/
+		const UNSAFE_ELEMENTS = 'script,iframe,frame,object,embed,base,meta,link,form';
+		const UNSAFE_URL = /^[\s\u0000-\u001f]*(javascript|data|vbscript):/i;
+		const sanitizeDescription = root => {
+			for (const e of root.querySelectorAll(UNSAFE_ELEMENTS)) {
+				e.remove();
+			}
+			for (const e of root.querySelectorAll('*')) {
+				for (const {name, value} of [...e.attributes]) {
+					const n = name.toLowerCase();
+					if (n.startsWith('on') ||
+						(['href', 'src', 'action', 'formaction', 'xlink:href'].includes(n) && UNSAFE_URL.test(value))) {
+						e.removeAttribute(name);
+					}
+				}
+			}
 		};
 		const youtube = link => {
 			const btn = uq(`<zentube-button
@@ -34402,7 +35139,11 @@ class VideoInfoPanel extends Emitter {
 			link.parentNode.insertBefore(btn, link);
 		};
 		await sleep.promise();
+		if (generation !== this._descriptionGeneration) {
+			return;
+		}
 		const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);
+		sanitizeDescription($description[0]);
 		for (const a of $description.query('a')) {
 			a.classList.add('noHoverMenu');
 			const href = a.href;
@@ -34428,7 +35169,7 @@ class VideoInfoPanel extends Emitter {
 		for (const e of $description.query('span')) {
 			e.classList.add('videoDescription-font');
 		}
-		this._description.append($description[0]);
+		this._description.replaceChildren($description[0]);
 	}
 	/*
 	* Task 074: いいね！のお礼メッセージをパネルに残す。
@@ -34589,6 +35330,7 @@ class VideoInfoPanel extends Emitter {
 		this._videoHeaderPanel.clear();
 		this.classList.add('initializing');
 		this._$ownerIcon.raf.addClass('is-loading');
+		this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
 		this._description.textContent = '';
 	}
 	selectTab(tabName) {
@@ -36456,6 +37198,11 @@ class VideoSearchForm extends Emitter {
 		card.classList.add('is-failed', 'is-imageError');
 		if (code === 'DELETED' || code === 'NOT_FOUND') {
 			card.classList.add('is-unavailable');
+			card.setAttribute('aria-disabled', 'true');
+			Array.from(card.querySelectorAll('.searchVideoCard-button')).forEach(button => {
+				button.disabled = true;
+				button.setAttribute('aria-disabled', 'true');
+			});
 		}
 	}
 	_videoIdNavItems() {
@@ -36763,6 +37510,9 @@ class VideoSearchForm extends Emitter {
 			return;
 		}
 		const card = this._videoIdCards.get(watchId);
+		if (card && card.classList.contains('is-unavailable')) {
+			return;
+		}
 		switch (action) {
 			case 'open':
 				card && card.classList.add('is-opening');
@@ -37496,9 +38246,13 @@ VideoSearchForm.__css__ = (`
 				font-weight: bold;
 				animation: zenzaVideoCardDoneMark 0.9s ease both;
 			}
-			.zenzaVideoSearchPanel .searchVideoCard.is-unavailable .searchVideoCard-button:not(.is-primary) {
+			.zenzaVideoSearchPanel .searchVideoCard.is-unavailable {
+				cursor: not-allowed;
+			}
+			.zenzaVideoSearchPanel .searchVideoCard.is-unavailable .searchVideoCard-button {
 				opacity: 0.4;
 				pointer-events: none;
+				cursor: not-allowed;
 			}
 			@keyframes zenzaVideoCardIn {
 				0%   { opacity: 0; transform: translateY(-10px) scale(0.96); }
@@ -38717,8 +39471,8 @@ class HoverMenu {
 		return Promise.all([
 			StoryboardWorker.initWorker(),
 			VideoSessionWorker.initWorker(),
-			StoryboardCacheDb.initWorker(),
-			WatchInfoCacheDb.initWorker()
+			StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable')),
+			WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'))
 		]).then(() => window.console.timeEnd('init Workers'));
 	};
 const replaceRedirectLinks = async () => {
@@ -39553,25 +40307,17 @@ class Handler { //extends Array {
 		return this._list.length;
 	}
 	exec(...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member.apply(this._list, args); }
 		}
 	}
 	execMethod(name, ...args) {
-		if (!this._list.length) {
-			return;
-		} else if (this._list.length === 1) {
-			this._list[0][name](...args);
-			return;
-		}
-		for (let i = this._list.length - 1; i >= 0; i--) {
-			this._list[i][name](...args);
+		const pending = this._list.slice();
+		for (let i = pending.length - 1; i >= 0; i--) {
+			const member = pending[i];
+			if (this._list.includes(member)) { member[name](...args); }
 		}
 	}
 	add(member) {
@@ -39680,7 +40426,11 @@ const {Emitter} = (() => {
 			} else if (!callback) {
 				this._events.delete(name);
 			} else {
-				e.remove(callback);
+				for (const listener of e) {
+					if (listener === callback || listener._original === callback) {
+						e.remove(listener);
+					}
+				}
 				if (e.isEmpty) {
 					this._events.delete(name);
 				}
@@ -39692,9 +40442,9 @@ const {Emitter} = (() => {
 		}
 		once(name, func) {
 			const wrapper = (...args) => {
-				func(...args);
 				this.off(name, wrapper);
 				wrapper._original = null;
+				func(...args);
 			};
 			wrapper._original = func;
 			return this.on(name, wrapper);
@@ -39779,10 +40529,12 @@ const {Handler, PromiseHandler, Emitter} = EmitterInitFunc();
 const workerUtil = (() => {
 	let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
 	let global = null, external = null;
+	const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
 	const isAvailable = !!(window.Blob && window.Worker && window.URL);
 	const messageWrapper = function(self) {
 		const _onmessage = self.onmessage || (() => {});
 		const promises = {};
+		let requestSeq = 0;
 		const onMessage = async function(self, type, e) {
 			const {body, sessionId, status} = e.data;
 			const {command, params} = body;
@@ -39806,7 +40558,9 @@ const workerUtil = (() => {
 						const port = e.ports[0];
 						portMap[params.name] = port;
 						port.addEventListener('message', onMessage.bind({}, port, params.name));
+						port.start && port.start();
 						bindFunc(port, 'MessageChannel');
+						result = {name: params.name};
 						if (params.ping) {
 							console.time('ping:' + sessionId);
 							port.ping().then(result => {
@@ -39818,7 +40572,7 @@ const workerUtil = (() => {
 							});
 						}
 					}
-						return;
+						break;
 					case 'broadcast': {
 						if (!BroadcastChannel) { return; }
 						const channel = new BroadcastChannel(`${params.name}`);
@@ -39834,12 +40588,14 @@ const workerUtil = (() => {
 						result = await _onmessage({command, params}, type, PID);
 						break;
 					}
+				if (sessionId === undefined || sessionId === null) { return; }
 				self.postMessage({body:
 					{command: 'commandResult', params:
 						{command, result}}, sessionId, TYPE: type, PID, status: 'ok'
 					});
 			} catch(err) {
 				console.error('failed', {err, command, params, sessionId, TYPE: type, PID, data: e.data});
+				if (sessionId === undefined || sessionId === null) { return; }
 				self.postMessage({body:
 						{command: 'commandResult', params: {command, result: err.message || null}},
 						sessionId, TYPE: type, PID, status: err.status || 'fail'
@@ -39854,7 +40610,7 @@ const workerUtil = (() => {
 		};
 		const bindFunc = (self, type = 'Worker') => {
 			const post = function(self, body, options = {}) {
-				const sessionId = `recv:${NAME}:${type}:${this.sessionId++}`;
+				const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
 				return new Promise((resolve, reject) => {
 					promises[sessionId] = {resolve, reject};
 					self.postMessage({body, sessionId, PID}, options.transfer);
@@ -39930,9 +40686,10 @@ const workerUtil = (() => {
 			let cache = this.urlMap.get(func);
 			const name = options.name || 'Worker';
 			if (!cache) {
+				const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
 				const src = `
-				const PID = '${window && window.name || 'self'}:${location.href.replace(/\'/g, '\\\'')}:${name}:${Date.now().toString(16).toUpperCase()}';
-				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', '${PRODUCT}', location.origin);
+				const PID = ${JSON.stringify(pid)};
+				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
 				const blob = new Blob([src], {type: 'text/javascript'});
@@ -39948,12 +40705,26 @@ const workerUtil = (() => {
 			return new Worker(cache, options);
 		}.bind({urlMap: new Map(), workerMap: new Map()}),
 		createCrossMessageWorker: function(func, options = {}) {
-			const promises = this.promises;
+			const promises = {};
+			const instanceId = this.instanceSeq++;
+			let requestSeq = 0;
 			const name = options.name || 'Worker';
+			let state = 'starting';
+			const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
+			const rpcError = (reason, message) =>
+				Object.assign(new Error(message || reason), {name: 'WorkerRpcError', status: 'fail', reason, workerName: name});
+			const rejectAll = (reason, message) => {
+				for (const id of Object.keys(promises)) {
+					const p = promises[id];
+					delete promises[id];
+					p.reject(rpcError(reason, message));
+				}
+			};
+			const closables = [];
 			const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
 			const _func = `
 			function (self) {
-			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = decodeURI('${encodeURI(name)}'), bcast = {}, portMap = {};
+			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = ${JSON.stringify(String(name))}, bcast = {}, portMap = {};
 			const {Handler, PromiseHandler, Emitter} = (${EmitterInitFunc.toString()})();
 			${options.inject ?? ''}
 			(${func.toString()})(self);
@@ -39965,6 +40736,8 @@ const workerUtil = (() => {
 			const self = options.type === 'SharedWorker' ? worker.port : worker;
 			self.name = name;
 			const onMessage = async function(self, e) {
+				if (state === 'disposed') { return; }
+				if (state === 'starting' || state === 'failed') { state = 'ready'; }
 				const {body, sessionId, status} = e.data;
 				const {command, params} = body;
 				try {
@@ -40003,25 +40776,36 @@ const workerUtil = (() => {
 							self.oncommand && (result = await self.oncommand({command, params}));
 							break;
 					}
+					if (sessionId === undefined || sessionId === null) { return; }
 					self.postMessage({body: {command: 'commandResult', params: {command, result}}, sessionId, status: 'ok'}, transfer);
 				} catch (err) {
 					console.error('failed', {err, command, params, sessionId});
+					if (sessionId === undefined || sessionId === null) { return; }
 					self.postMessage({body: {command: 'commandResult', params: {command, result: err.message || null}}, sessionId, status: err.status || 'fail'});
 				}
 			};
 			const bindFunc = (self, type = 'Worker') => {
 				const post = function(self, body, options = {}) {
-					const sessionId = `send:${name}:${type}:${this.sessionId++}`;
+					if (state === 'failed' || state === 'disposed') {
+						return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
+					}
+					const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
+					const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
+					let timer = null;
 					return new Promise((resolve, reject) => {
 							promises[sessionId] = {resolve, reject};
 							self.postMessage({body, sessionId, TYPE: type, PID}, options.transfer);
-							if (typeof options.timeout === 'number') {
-								setTimeout(() => {
-									reject({status: 'fail', message: 'timeout'});
+							if (timeout > 0 && timeout < Infinity) {
+								timer = setTimeout(() => {
+									if (!promises[sessionId]) { return; }
 									delete promises[sessionId];
-								}, options.timeout);
+									reject(rpcError('timeout', 'timeout'));
+								}, timeout);
 							}
-						}).finally(() => { delete promises[sessionId]; });
+						}).finally(() => {
+							timer && clearTimeout(timer);
+							delete promises[sessionId];
+						});
 				};
 				const ping = async function(self, options = {}) {
 					const timekey = `PING "${self.name}" total time`;
@@ -40039,13 +40823,33 @@ const workerUtil = (() => {
 					return result;
 				};
 				self.post = post.bind({sessionId: 0}, self);
+				self.send = (body, transfer) => self.postMessage({body, TYPE: type, PID}, transfer);
 				self.ping = ping.bind({}, self);
 				self.addEventListener('message', onMessage.bind({sessionId: 0}, self));
+				self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
 				self.start && self.start();
 			};
 			bindFunc(self);
+			worker.addEventListener('error', e => {
+				if (state === 'disposed') { return; }
+				if (state === 'starting') { state = 'failed'; }
+				rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
+			});
+			if (self === worker && typeof worker.terminate === 'function') {
+				const terminate = worker.terminate.bind(worker);
+				self.terminate = () => {
+					if (state === 'disposed') { return; }
+					state = 'disposed';
+					rejectAll('terminated', `worker terminated: ${name}`);
+					for (const c of closables.splice(0)) {
+						try { c.close(); } catch (e) { /* 閉じられなくても続ける */ }
+					}
+					terminate();
+				};
+			}
+			self.getRpcState = () => ({id: instanceId, name, state, pending: Object.keys(promises).length});
 			if (config) {
-				self.post({
+				self.send({
 					command: 'env',
 					params: {config: config.export(true), TOKEN, PRODUCT, CONSTANT}
 				});
@@ -40055,30 +40859,28 @@ const workerUtil = (() => {
 				return self.post({command: 'port', params: {port, name}}, {transfer: [port]});
 			};
 			const channel = new MessageChannel();
-			self.addPort(channel.port2);
-			bindFunc(channel.port1, {name: 'MessageChannel'});
+			self.addPort(channel.port2).catch(() => {});
+			bindFunc(channel.port1, 'MessageChannel');
+			closables.push(channel.port1);
 			self.bridge = async (worker, options = {}) => {
 				const name = options.name || 'MessageChannelBridge';
 				const channel = new MessageChannel();
 				await self.addPort(channel.port1, {name: worker.name || name});
 				await worker.addPort(channel.port2, {name: self.name || name});
-				console.log('ping self -> other', await channel.port1.ping());
-				console.log('ping other -> self', await channel.port2.ping());
 			};
 			self.BroadcastChannel = basename => {
 				const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
-				self.post({command: 'broadcast', params: {basename, name}});
+				self.send({command: 'broadcast', params: {basename, name}});
 				const channel = new BroadcastChannel(name);
-				channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
 				bindFunc(channel, 'BroadcastChannel');
+				closables.push(channel);
 				return name;
 			};
 			self.ping()
 				.catch(result => console.warn('FAIL', result));
 			return self;
 		}.bind({
-			sessionId: 0,
-			promises: {}
+			instanceSeq: 0
 		})
 	};
 	return workerUtil;
@@ -40086,14 +40888,17 @@ const workerUtil = (() => {
 const IndexedDbStorage = (() => {
 	const workerFunc = function(self) {
 		const db = {};
+		const initializing = new Map();
 		const controller = {
 			async init({name, ver, stores}) {
 				if (db[name]) {
 					return Promise.resolve(db[name]);
 				}
-				return new Promise((resolve, reject) => {
+				if (initializing.has(name)) { return initializing.get(name); }
+				const pending = new Promise((resolve, reject) => {
 					const req = indexedDB.open(name, ver);
 					req.onupgradeneeded = e => {
+						try {
 						const _db = e.target.result;
 						for (const meta of stores) {
 							if(_db.objectStoreNames.contains(meta.name)) {
@@ -40108,13 +40913,23 @@ const IndexedDbStorage = (() => {
 								console.log('store.transaction.complete', JSON.stringify({name, ver, store: meta}));
 							};
 						}
+						} catch (error) {
+							try { req.transaction && req.transaction.abort(); } catch (abortError) {}
+							reject(error);
+						}
 					};
 					req.onsuccess = e => {
 						db[name] = e.target.result;
 						resolve(db[name]);
 					};
-					req.onerror = reject;
+					req.onerror = e => reject(req.error || e);
 				});
+				initializing.set(name, pending);
+				try {
+					return await pending;
+				} finally {
+					if (initializing.get(name) === pending) { initializing.delete(name); }
+				}
 			},
 			close({name}) {
 				if (!db[name]) {
@@ -40125,24 +40940,42 @@ const IndexedDbStorage = (() => {
 			},
 			async getStore({name, storeName, mode = 'readonly'}) {
 				const db = await this.init({name});
-				return new Promise(async (resolve, reject) => {
-					const tx = db.transaction(storeName, mode);
-					tx.onerror = reject;
-					return resolve({
-						store: tx.objectStore(storeName),
-						transaction: tx
-					});
+				const transaction = db.transaction(storeName, mode);
+				return {store: transaction.objectStore(storeName), transaction};
+			},
+			async _write({name, storeName}, operation) {
+				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
+				return new Promise((resolve, reject) => {
+					let result, settled = false;
+					const cleanup = () => {
+						transaction.oncomplete = transaction.onabort = transaction.onerror = null;
+					};
+					const fail = error => {
+						if (settled) { return; }
+						settled = true;
+						const reason = (error && error.target) ?
+							(error.target.error || transaction.error || new Error('IndexedDB transaction failed')) : error;
+						cleanup();
+						try { transaction.abort(); } catch (abortError) {}
+						reject(reason || new Error('IndexedDB transaction failed'));
+					};
+					transaction.oncomplete = () => {
+						if (settled) { return; }
+						settled = true;
+						cleanup();
+						resolve(result);
+					};
+					transaction.onabort = transaction.onerror = fail;
+					try {
+						operation(store, value => { result = value; }, fail);
+					} catch (error) { fail(error); }
 				});
 			},
 			async put({name, storeName, data}) {
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					const req = store.put(data);
-					req.onsuccess = e => {
-						transaction.commit && transaction.commit();
-						resolve(e.target.result);
-					};
-					req.onerror = reject;
+					req.onsuccess = e => result(e.target.result);
+					req.onerror = fail;
 				});
 			},
 			async get({name, storeName, data: {key, index, timeout}}) {
@@ -40166,72 +40999,57 @@ const IndexedDbStorage = (() => {
 					return null;
 				}
 				record.updatedAt = Date.now();
-				this.put({name, storeName, data: record});
+				await this.put({name, storeName, data: record});
 				return record;
 			},
 			async delete({name, storeName, data: {key, index}}) {
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					let remove = 0;
-					let range = IDBKeyRange.only(key);
-					let req =
-						index ?
-							store.index(index).openCursor(range) : store.openCursor(range);
-					req.onsuccess = e =>  {
-						const result = e.target.result;
-						if (!result) {
-							transaction.commit && transaction.commit();
-							return resolve(remove > 0);
-						}
-						result.delete();
-						remove++;
-						result.continue();
+					const range = IDBKeyRange.only(key);
+					const req = index ? store.index(index).openCursor(range) : store.openCursor(range);
+					req.onsuccess = e => {
+						try {
+							const cursor = e.target.result;
+							if (!cursor) { result(remove > 0); return; }
+							cursor.delete();
+							remove++;
+							cursor.continue();
+						} catch (error) { fail(error); }
 					};
-					req.onerror = reject;
+					req.onerror = fail;
 				});
 			},
 			async clear({name, storeName}) {
-				const {store} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					const req = store.clear();
-					req.onsuccess = e => {
-						console.timeEnd('storage clear');
-						resolve();
-					};
-					req.onerror = e => {
-						console.timeEnd('storage clear');
-						reject(e);
-					};
+					req.onsuccess = () => result(undefined);
+					req.onerror = fail;
 				});
 			},
 			async gc({name, storeName, data: {expireTime, index}}) {
 				index = index || 'updatedAt';
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
 				const now = Date.now(), ptime = performance.now();
 				const expiresAt = (index !== 'expiresAt') ? (now - expireTime) : now;
-				const expireDateTime = new Date(expiresAt).toLocaleString();
-				const timekey = `GC [DELETE FROM ${name}.${storeName} WHERE ${index} < '${expireDateTime}'] `;
-				console.time(timekey);
 				let count = 0;
-				return new Promise((resolve, reject) => {
+				return this._write({name, storeName}, (store, result, fail) => {
 					const range = IDBKeyRange.upperBound(expiresAt);
-					const idx = store.index(index);
-					const req = idx.openCursor(range);
+					const req = store.index(index).openCursor(range);
 					req.onsuccess = e => {
-						const cursor = e.target.result;
-						if (cursor) {
-							count++;
-							cursor.delete();
-							return cursor.continue();
-						}
-						console.timeEnd(timekey);
-						resolve({status: 'ok', count, time: performance.now() - ptime});
-						count && console.log('deleted %s records.', count);
+						try {
+							const cursor = e.target.result;
+							if (cursor) {
+								count++;
+								cursor.delete();
+								cursor.continue();
+							} else {
+								result({status: 'ok', count, time: performance.now() - ptime});
+							}
+						} catch (error) { fail(error); }
 					};
-					req.onerror = reject;
+					req.onerror = fail;
 				}).catch(e => {
-					console.error('gc fail', {name, storeName, data: {expireTime, index}, timekey}, e);
-					store.clear();
+					console.warn('IndexedDB cache cleanup failed');
+					throw e;
 				});
 			}
 		};
@@ -40275,7 +41093,7 @@ const IndexedDbStorage = (() => {
 			worker = workers.get(workerFunc) || workerUtil.createCrossMessageWorker(workerFunc, {name: 'IndexedDb'});
 			workers.set(workerFunc, worker);
 		}
-		worker.post({command: 'init', params: {name, ver, stores}});
+		await worker.post({command: 'init', params: {name, ver, stores}});
 		const post = (command, data, storeName, transfer) => {
 			const params = {data, name, storeName, transfer};
 			return worker.post({command, params}, transfer);
@@ -40348,7 +41166,7 @@ const WatchInfoCacheDb = (() => {
 				resume.length = Math.min(10, resume.length);
 				const ownerId = videoInfo?.owner.linkId ?? '';
 				const comment = cache.comment || [];
-				options.comment && (comment.push(comment));
+				options.comment && (comment.push(options.comment));
 				const record = {
 					watchId,
 					videoId:  (cache.videoId  ? cache.videoId  : videoId) || '',
@@ -40364,7 +41182,7 @@ const WatchInfoCacheDb = (() => {
 					heatMap:    (options.heatMap    ? options.heatMap    : cache.heatMap) || null,
 					config:     (options.config     ? options.config     : cache.config) || ''
 				};
-				cacheDb.put(record);
+				await cacheDb.put(record);
 				return record;
 			},
 			get(watchId) { return cacheDb.updateTime({key: watchId}); },
@@ -40374,12 +41192,14 @@ const WatchInfoCacheDb = (() => {
 		};
 	};
 	const put = (watchId, options = {}) => open().then(db => db.put(watchId, options));
+	const putBestEffort = (watchId, options = {}) => put(watchId, options)
+		.catch(() => { console.warn('Watch info cache write failed'); });
 	const get = watchId => open().then(db => db.get(watchId));
 	const del = watchId => open().then(db => db.delete(watchId));
 	const close = () => open().then(db => db.close());
 	const gc = (expireTime) => open().then(db => db.gc(expireTime));
 	const api = api => NicoVideoApi = api;
-	return {initWorker, open, put, get, delete: del, close, gc, api};
+	return {initWorker, open, put, putBestEffort, get, delete: del, close, gc, api};
 })();
 function parseThumbInfo(xmlText) {
 	if (typeof xmlText !== 'string' || xmlText.status === 'ok') {
@@ -40511,7 +41331,7 @@ const StoryboardCacheDb = (() => {
 					updatedAt: Date.now(),
 					sbInfo
 				};
-				cacheDb.put(record);
+				await cacheDb.put(record);
 				return record;
 			},
 			async get(watchId) {
@@ -40523,7 +41343,7 @@ const StoryboardCacheDb = (() => {
 			close() { return cacheDb.close(); },
 			gc(expireTime) { return cacheDb.gc(expireTime); }
 		};
-		instance.gc(7 * 24 * 60 * 60 * 1000);
+		instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
 		return instance;
 	};
 	const put = (watchId, sbInfo = {}) => open().then(db => db.put(watchId, sbInfo));
@@ -40910,32 +41730,47 @@ const VideoSessionWorker = (() => {
 			verylow: "低画質",
 		};
 		const util = {
-			fetch(url, params = {}) { // ブラウザによっては location.origin は 'blob:' しか入らない
+			async fetch(url, params = {}) { // ブラウザによっては location.origin は 'blob:' しか入らない
 				if (!location.origin.endsWith('.nicovideo.jp') && !new RegExp('^blob:https?://[a-z0-9]+\\.nicovideo\\.jp/').test(location.href)) {
 					return self.xFetch(url, params);
 				}
+				const options = {...params};
+				const callerSignal = options.signal;
+				const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+				const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+					Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+				const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
 				const racers = [];
 				let timer;
-				const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-				if (timeout > 0) {
-					racers.push(new Promise((resolve, reject) =>
-						timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-					);
-				}
-				const controller = AbortController ? (new AbortController()) : null;
-				if (controller) {
-					params.signal = controller.signal;
-				}
-				racers.push(fetch(url, params));
-				return Promise.race(racers).catch(err => {
-					if (err.name === 'timeout') {
-						console.warn('request timeout', url, params);
-						if (controller) {
-							controller.abort();
-						}
+				let onAbort;
+				try {
+					if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+					if (controller) { options.signal = controller.signal; }
+					if (callerSignal) {
+						racers.push(new Promise((resolve, reject) => {
+							onAbort = () => {
+								const reason = abortReason();
+								reject(reason);
+								if (controller) { controller.abort(reason); }
+							};
+							callerSignal.addEventListener('abort', onAbort, {once: true});
+						}));
 					}
-					return Promise.reject(err.message || err);
-				}).finally(() => timer = null);
+					if (timeout > 0) {
+						racers.push(new Promise((resolve, reject) => {
+							timer = setTimeout(() => {
+								const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+								reject(error);
+								if (controller) { controller.abort(error); }
+							}, timeout);
+						}));
+					}
+					racers.push(fetch(url, options));
+					return await Promise.race(racers);
+				} finally {
+					if (timer !== undefined) { clearTimeout(timer); }
+					if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
+				}
 			}
 		};
 		class DmcPostData {
@@ -41349,12 +42184,20 @@ const VideoSessionWorker = (() => {
 		const SESSION_ID = Symbol('SESSION_ID');
 		const getSessionId = function() { return `session_${this.id++}`; }.bind({id: 0});
 		let current = null;
+		let createSeq = 0;
+		const isCurrent = sessionId => !!current && sessionId !== undefined && current[SESSION_ID] === sessionId;
 		const create = async (params) => {
+			const seq = ++createSeq;
 			if (current) {
 				current.close();
 				current = null;
 			}
-			current = await VideoSession.create(params);
+			const session = await VideoSession.create(params);
+			if (seq !== createSeq) {
+				session.close();
+				throw new Error('session superseded');
+			}
+			current = session;
 			const sessionId = getSessionId();
 			current[SESSION_ID] = sessionId;
 			return {
@@ -41364,11 +42207,14 @@ const VideoSessionWorker = (() => {
 				sessionId
 			};
 		};
-		const connect = async () => {
+		const connect = async ({sessionId} = {}) => {
+			if (!isCurrent(sessionId)) {
+				throw new Error('session mismatch');
+			}
 			return current.connect();
 		};
-		const getState = () => {
-			if (!current) {
+		const getState = ({sessionId} = {}) => {
+			if (!isCurrent(sessionId)) {
 				return {};
 			}
 			return {
@@ -41380,8 +42226,11 @@ const VideoSessionWorker = (() => {
 				sessionId: current[SESSION_ID]
 			};
 		};
-		const close = () => {
-			current && current.close();
+		const close = ({sessionId} = {}) => {
+			if (!isCurrent(sessionId)) {
+				return;
+			}
+			current.close();
 			current = null;
 		};
 		const storyboard = async ({videoInfo, serverType, withImages = true}) => {
@@ -41420,11 +42269,11 @@ const VideoSessionWorker = (() => {
 				case 'create':
 					return create(params);
 				case 'connect':
-					return await connect();
+					return await connect(params);
 				case 'getState':
-					return getState();
+					return getState(params);
 				case 'close':
-					return close();
+					return close(params);
 				case 'storyboard':
 					return await storyboard(params);
 				case 'storyboardImages':
@@ -41557,36 +42406,51 @@ const gate = () => {
 			'www.youtube.com',
 		].includes(host) || host.endsWith('.slack.com');
 	};
-	const uFetch = params => {
-		const {url, options}= params;
+	const uFetch = async params => {
+		const {url, options: requestOptions = {}} = params;
 		if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
 			return Promise.reject({status: 'fail', message: 'network error'});
 		}
+		const options = {...requestOptions};
+		const callerSignal = options.signal;
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+			Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+		const timeout = (typeof options.timeout === 'number' && !isNaN(options.timeout)) ? options.timeout :
+			(typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
 		const racers = [];
 		let timer;
-		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-		if (timeout > 0) {
-			racers.push(new Promise((resolve, reject) =>
-				timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-			);
-		}
-		const controller = AbortController ? (new AbortController()) : null;
-		if (controller) {
-			params.signal = controller.signal;
-		}
-		racers.push(fetch(url, options));
-		return Promise.race(racers)
-			.catch(err => {
-			let message = 'uFetch fail';
-			if (err && err.name === 'timeout') {
-				if (controller) {
-					console.warn('request timeout');
-					controller.abort();
-				}
-				message = 'timeout';
+		let onAbort;
+		try {
+			if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+			if (controller) { options.signal = controller.signal; }
+			if (callerSignal) {
+				racers.push(new Promise((resolve, reject) => {
+					onAbort = () => {
+						const reason = abortReason();
+						reject(reason);
+						if (controller) { controller.abort(reason); }
+					};
+					callerSignal.addEventListener('abort', onAbort, {once: true});
+				}));
 			}
-			return Promise.reject({status: 'fail', message});
-		}).finally(() => { timer && clearTimeout(timer); });
+			if (timeout > 0) {
+				racers.push(new Promise((resolve, reject) => {
+					timer = setTimeout(() => {
+						const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+						reject(error);
+						if (controller) { controller.abort(error); }
+					}, timeout);
+				}));
+			}
+			racers.push(fetch(url, options));
+			return await Promise.race(racers);
+		} catch (err) {
+			throw {status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail'};
+		} finally {
+			if (timer !== undefined) { clearTimeout(timer); }
+			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
+		}
 	};
 	const xFetch = (params, sessionId = null) => {
 		const command = 'fetch';
@@ -41644,9 +42508,9 @@ const ThumbInfoCacheDb = (() => {
 	const open = async () => {
 		db = db || await IndexedDbStorage.open(THUMB_INFO);
 		const cacheDb = db['cache'];
-		cacheDb.gc(90 * 24 * 60 * 60 * 1000);
+		cacheDb.gc(90 * 24 * 60 * 60 * 1000).catch(() => console.warn('Thumbnail cache cleanup failed'));
 		return {
-			put: (xml, thumbInfo = null) => {
+			put: async (xml, thumbInfo = null) => {
 				thumbInfo = thumbInfo || parseThumbInfo(xml);
 				if (thumbInfo.status !== 'ok') {
 					return;
@@ -41663,7 +42527,7 @@ const ThumbInfoCacheDb = (() => {
 					xml,
 					thumbInfo
 				};
-				cacheDb.put(record);
+				await cacheDb.put(record);
 				return {watchId, updatedAt};
 			},
 			get: watchId => cacheDb.updateTime({key: watchId}),
@@ -41675,7 +42539,10 @@ const ThumbInfoCacheDb = (() => {
 })();
 	const thumbInfo = async () => {
 		const {port, TOKEN} = init({prefix: `thumbInfo${PRODUCT}Loader`, type: 'thumbInfo'});
-		const db = await ThumbInfoCacheDb.open();
+		const db = await ThumbInfoCacheDb.open().catch(() => {
+			console.warn('Thumbnail cache unavailable');
+			return {get: async () => null, put: async () => {}};
+		});
 		port.addEventListener('message', async e => {
 			const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
 			const {body, sessionId, token} = data;
@@ -41685,7 +42552,7 @@ const ThumbInfoCacheDb = (() => {
 			if (TOKEN !== token ||
 				p.hostname !== location.host ||
 				!p.pathname.startsWith('/api/getthumbinfo/')) {
-				console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+				console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
 				return;
 			}
 			params.options = params.options || {};
@@ -41701,7 +42568,7 @@ const ThumbInfoCacheDb = (() => {
 			.then(async xmlText => {
 				let thumbInfo = parseThumbInfo(xmlText);
 				if (thumbInfo.status === 'ok') {
-					db.put(xmlText, thumbInfo);
+					db.put(xmlText, thumbInfo).catch(() => console.warn('Thumbnail cache write failed'));
 				} else if (cache && cache.thumbInfo.status === 'ok') {
 					thumbInfo = cache.thumbInfo;
 				}
@@ -41855,7 +42722,7 @@ const ThumbInfoCacheDb = (() => {
 			const {body, sessionId, token} = data;
 			const {command, params} = body;
 			if (TOKEN !== token) {
-				console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+				console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
 				return;
 			}
 			try {
@@ -41874,7 +42741,9 @@ const ThumbInfoCacheDb = (() => {
 					case 'pushHistory':
 						return pushHistory(params);
 					case 'bridge-db':
-						return bridgeDb(params, sessionId);
+						return bridgeDb(params, sessionId).catch(() =>
+							post({status: 'fail', command: 'bridge-db-result',
+								params: {message: 'IndexedDB operation failed'}}, {sessionId}));
 					case 'message':
 						return sendMessage(body, sessionId);
 					case 'ping':
@@ -41926,7 +42795,7 @@ const ThumbInfoCacheDb = (() => {
 			const {command, params} = body;
 			if (command !== 'videoCapture') { return; }
 			if (TOKEN !== token) {
-				window.console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+				window.console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
 				return;
 			}
 			videoCapture(params.src, params.sec).then(canvas => {
@@ -41945,7 +42814,7 @@ const ThumbInfoCacheDb = (() => {
 			const p = parseUrl(params.url);
 			if (TOKEN !== token ||
 				p.hostname !== location.host) {
-				console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+				console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
 				return;
 			}
 			params.options = params.options || {};
@@ -41964,7 +42833,7 @@ const ThumbInfoCacheDb = (() => {
 			if (TOKEN !== token ||
 				p.hostname !== location.host ||
 				!p.pathname.startsWith('/a/')) {
-				console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+				console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
 				return;
 			}
 			params.options = params.options || {};

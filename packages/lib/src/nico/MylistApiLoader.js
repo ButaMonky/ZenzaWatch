@@ -34,7 +34,7 @@ const MylistApiLoader = (() => {
       if (!token) {
         token = cacheStorage.getItem('csrfToken');
         if (token) {
-          console.log('cached token exists', token);
+          console.log('cached token exists'); // Task 088: トークンの値はログに出さない
         }
       }
     }
@@ -60,7 +60,7 @@ const MylistApiLoader = (() => {
         
         //キャッシュにあったらそこで返す
         if (token) {
-            console.log('cached token exists', token);
+            console.log('cached token exists'); // Task 088: トークンの値はログに出さない
         }else{
         
             //そもそもemit元からは取れる物がないんだから、

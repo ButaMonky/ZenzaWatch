@@ -9,6 +9,8 @@ ZenzaWatch.user\ *.js
 .DS_Store
 *.lnk
 node_modules/
+__pycache__/
+*.pyc
 .gitkeep
 session/*
 .idea/*

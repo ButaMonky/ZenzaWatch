@@ -83,6 +83,17 @@ describe('公開前スキャン publish_scan.py（ZW-003）', function() {
     assert.ok(!r.out.includes(token.slice(4, 20)), '秘密情報の一部がログに出ている');
   });
 
+  it('見つかった時の表示は種類・ファイル・行だけで、前後の文字も出さない（Task 088 / 監査v2 ZW-056）', function() {
+    const token = 'gh' + 'p_' + 'Zq7'.repeat(12);
+    const repo = makeRepo(`const c = "CTXNEAR" + "${token}";\n`);
+    const r = scan(repo);
+    assert.equal(r.status, 1, r.out);
+    assert.ok(/GitHub のトークン/.test(r.out), r.out);
+    assert.ok(/a\.js:1/.test(r.out) || /:1\b/.test(r.out), 'ファイルと行が表示されていない\n' + r.out);
+    assert.ok(!r.out.includes('CTXNEAR'), '見つかった文字列の前の文字がログに出ている\n' + r.out);
+    assert.ok(!r.out.includes(token.slice(0, 6)), '秘密情報の一部がログに出ている');
+  });
+
   it('git リポジトリでないフォルダでは「0件」ではなく検査不能（終了コード2）', function() {
     const dir = path.join(work, 'not-a-repo');
     fs.mkdirSync(dir);

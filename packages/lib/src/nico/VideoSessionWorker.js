@@ -437,34 +437,47 @@ const VideoSessionWorker = (() => {
     };
 
     const util = {
-      fetch(url, params = {}) { // ブラウザによっては location.origin は 'blob:' しか入らない
+      async fetch(url, params = {}) { // ブラウザによっては location.origin は 'blob:' しか入らない
         if (!location.origin.endsWith('.nicovideo.jp') && !new RegExp('^blob:https?://[a-z0-9]+\\.nicovideo\\.jp/').test(location.href)) {
           return self.xFetch(url, params);
         }
+        const options = {...params};
+        const callerSignal = options.signal;
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+          Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
+        const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
         const racers = [];
         let timer;
-
-        const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-        if (timeout > 0) {
-          racers.push(new Promise((resolve, reject) =>
-            timer = setTimeout(() => timer ? reject({name: 'timeout', message: 'timeout'}) : resolve(), timeout))
-          );
-        }
-
-        const controller = AbortController ? (new AbortController()) : null;
-        if (controller) {
-          params.signal = controller.signal;
-        }
-        racers.push(fetch(url, params));
-        return Promise.race(racers).catch(err => {
-          if (err.name === 'timeout') {
-            console.warn('request timeout', url, params);
-            if (controller) {
-              controller.abort();
-            }
+        let onAbort;
+        try {
+          if (callerSignal && callerSignal.aborted) { throw abortReason(); }
+          if (controller) { options.signal = controller.signal; }
+          if (callerSignal) {
+            racers.push(new Promise((resolve, reject) => {
+              onAbort = () => {
+                const reason = abortReason();
+                reject(reason);
+                if (controller) { controller.abort(reason); }
+              };
+              callerSignal.addEventListener('abort', onAbort, {once: true});
+            }));
           }
-          return Promise.reject(err.message || err);
-        }).finally(() => timer = null);
+          if (timeout > 0) {
+            racers.push(new Promise((resolve, reject) => {
+              timer = setTimeout(() => {
+                const error = Object.assign(new Error('timeout'), {name: 'timeout'});
+                reject(error);
+                if (controller) { controller.abort(error); }
+              }, timeout);
+            }));
+          }
+          racers.push(fetch(url, options));
+          return await Promise.race(racers);
+        } finally {
+          if (timer !== undefined) { clearTimeout(timer); }
+          if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
+        }
       }
     };
 
@@ -942,17 +955,27 @@ const VideoSessionWorker = (() => {
     const SESSION_ID = Symbol('SESSION_ID');
     const getSessionId = function() { return `session_${this.id++}`; }.bind({id: 0});
 
+    // Task 090（監査v2 ZW-013）: セッションは1つだけ持ち、connect・getState・close は送られた sessionId が
+    // 今のセッションと同じ時だけ操作する（古い動画の close が新しい動画のセッションを閉じないように）。
     let current = null;
+    let createSeq = 0;
+    const isCurrent = sessionId => !!current && sessionId !== undefined && current[SESSION_ID] === sessionId;
     const create = async (params) => {
+      const seq = ++createSeq;
       if (current) {
         current.close();
         current = null;
       }
-      current = await VideoSession.create(params);
+      const session = await VideoSession.create(params);
+      if (seq !== createSeq) {
+        // 待っている間に次の create が来た: この session は使われないので閉じる
+        session.close();
+        throw new Error('session superseded');
+      }
+      current = session;
       const sessionId = getSessionId();
       current[SESSION_ID] = sessionId;
 
-      // console.log('create', sessionId, current[SESSION_ID]);
       return {
         serverType: current.serverType,
         isDomand: current.isDomand,
@@ -961,16 +984,17 @@ const VideoSessionWorker = (() => {
       };
     };
 
-    const connect = async () => {
-      // console.log('connect', sessionId, current[SESSION_ID]);
+    const connect = async ({sessionId} = {}) => {
+      if (!isCurrent(sessionId)) {
+        throw new Error('session mismatch');
+      }
       return current.connect();
     };
 
-    const getState = () => {
-      if (!current) {
+    const getState = ({sessionId} = {}) => {
+      if (!isCurrent(sessionId)) {
         return {};
       }
-      // console.log('getState', sessionId, current[SESSION_ID]);
       return {
         serverType: current.serverType,
         isDomand: current.isDomand,
@@ -981,9 +1005,11 @@ const VideoSessionWorker = (() => {
       };
     };
 
-    const close = () => {
-      // current && console.log('close', sessionId, current[SESSION_ID]);
-      current && current.close();
+    const close = ({sessionId} = {}) => {
+      if (!isCurrent(sessionId)) {
+        return;
+      }
+      current.close();
       current = null;
     };
 
@@ -1026,11 +1052,11 @@ const VideoSessionWorker = (() => {
         case 'create':
           return create(params);
         case 'connect':
-          return await connect();
+          return await connect(params);
         case 'getState':
-          return getState();
+          return getState(params);
         case 'close':
-          return close();
+          return close(params);
         case 'storyboard':
           return await storyboard(params);
         case 'storyboardImages':

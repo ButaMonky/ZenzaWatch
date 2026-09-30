@@ -10,26 +10,18 @@ class Handler { //extends Array {
   }
 
   exec(...args) {
-    if (!this._list.length) {
-      return;
-    } else if (this._list.length === 1) {
-      this._list[0](...args);
-      return;
-    }
-    for (let i = this._list.length - 1; i >= 0; i--) {
-      this._list[i](...args);
+    const pending = this._list.slice();
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const member = pending[i];
+      if (this._list.includes(member)) { member.apply(this._list, args); }
     }
   }
 
   execMethod(name, ...args) {
-    if (!this._list.length) {
-      return;
-    } else if (this._list.length === 1) {
-      this._list[0][name](...args);
-      return;
-    }
-    for (let i = this._list.length - 1; i >= 0; i--) {
-      this._list[i][name](...args);
+    const pending = this._list.slice();
+    for (let i = pending.length - 1; i >= 0; i--) {
+      const member = pending[i];
+      if (this._list.includes(member)) { member[name](...args); }
     }
   }
 
@@ -157,7 +149,11 @@ const {Emitter} = (() => {
       } else if (!callback) {
         this._events.delete(name);
       } else {
-        e.remove(callback);
+        for (const listener of e) {
+          if (listener === callback || listener._original === callback) {
+            e.remove(listener);
+          }
+        }
 
         if (e.isEmpty) {
           this._events.delete(name);
@@ -172,9 +168,9 @@ const {Emitter} = (() => {
 
     once(name, func) {
       const wrapper = (...args) => {
-        func(...args);
         this.off(name, wrapper);
         wrapper._original = null;
+        func(...args);
       };
       wrapper._original = func;
       return this.on(name, wrapper);

@@ -90,4 +90,4 @@ const PlaylistSession = PlayListSession;
 
 //===END===
 
-export {PlayListSession};
+export {PlayListSession, PlaylistSession};

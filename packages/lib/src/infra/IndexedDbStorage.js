@@ -3,15 +3,18 @@ import {workerUtil} from './workerUtil';
 const IndexedDbStorage = (() => {
   const workerFunc = function(self) {
     const db = {};
+    const initializing = new Map();
 
     const controller = {
       async init({name, ver, stores}) {
         if (db[name]) {
           return Promise.resolve(db[name]);
         }
-        return new Promise((resolve, reject) => {
+        if (initializing.has(name)) { return initializing.get(name); }
+        const pending = new Promise((resolve, reject) => {
           const req = indexedDB.open(name, ver);
           req.onupgradeneeded = e => {
+            try {
             const _db = e.target.result;
 
             for (const meta of stores) {
@@ -27,13 +30,23 @@ const IndexedDbStorage = (() => {
                 console.log('store.transaction.complete', JSON.stringify({name, ver, store: meta}));
               };
             }
+            } catch (error) {
+              try { req.transaction && req.transaction.abort(); } catch (abortError) {}
+              reject(error);
+            }
           };
           req.onsuccess = e => {
             db[name] = e.target.result;
             resolve(db[name]);
           };
-          req.onerror = reject;
+          req.onerror = e => reject(req.error || e);
         });
+        initializing.set(name, pending);
+        try {
+          return await pending;
+        } finally {
+          if (initializing.get(name) === pending) { initializing.delete(name); }
+        }
       },
       close({name}) {
         if (!db[name]) {
@@ -44,24 +57,42 @@ const IndexedDbStorage = (() => {
       },
       async getStore({name, storeName, mode = 'readonly'}) {
         const db = await this.init({name});
-        return new Promise(async (resolve, reject) => {
-          const tx = db.transaction(storeName, mode);
-          tx.onerror = reject;
-          return resolve({
-            store: tx.objectStore(storeName),
-            transaction: tx
-          });
+        const transaction = db.transaction(storeName, mode);
+        return {store: transaction.objectStore(storeName), transaction};
+      },
+      async _write({name, storeName}, operation) {
+        const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
+        return new Promise((resolve, reject) => {
+          let result, settled = false;
+          const cleanup = () => {
+            transaction.oncomplete = transaction.onabort = transaction.onerror = null;
+          };
+          const fail = error => {
+            if (settled) { return; }
+            settled = true;
+            const reason = (error && error.target) ?
+              (error.target.error || transaction.error || new Error('IndexedDB transaction failed')) : error;
+            cleanup();
+            try { transaction.abort(); } catch (abortError) {}
+            reject(reason || new Error('IndexedDB transaction failed'));
+          };
+          transaction.oncomplete = () => {
+            if (settled) { return; }
+            settled = true;
+            cleanup();
+            resolve(result);
+          };
+          transaction.onabort = transaction.onerror = fail;
+          try {
+            operation(store, value => { result = value; }, fail);
+          } catch (error) { fail(error); }
         });
       },
       async put({name, storeName, data}) {
-        const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-        return new Promise((resolve, reject) => {
+        return this._write({name, storeName}, (store, result, fail) => {
           const req = store.put(data);
-          req.onsuccess = e => {
-            transaction.commit && transaction.commit();
-            resolve(e.target.result);
-          };
-          req.onerror = reject;
+          req.onsuccess = e => result(e.target.result);
+          req.onerror = fail;
         });
       },
       async get({name, storeName, data: {key, index, timeout}}) {
@@ -87,72 +118,57 @@ const IndexedDbStorage = (() => {
           return null;
         }
         record.updatedAt = Date.now();
-        this.put({name, storeName, data: record});
+        await this.put({name, storeName, data: record});
         return record;
       },
       async delete({name, storeName, data: {key, index}}) {
-        const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-        return new Promise((resolve, reject) => {
+        return this._write({name, storeName}, (store, result, fail) => {
           let remove = 0;
-          let range = IDBKeyRange.only(key);
-          let req =
-            index ?
-              store.index(index).openCursor(range) : store.openCursor(range);
-          req.onsuccess = e =>  {
-            const result = e.target.result;
-            if (!result) {
-              transaction.commit && transaction.commit();
-              return resolve(remove > 0);
-            }
-            result.delete();
-            remove++;
-            result.continue();
+          const range = IDBKeyRange.only(key);
+          const req = index ? store.index(index).openCursor(range) : store.openCursor(range);
+          req.onsuccess = e => {
+            try {
+              const cursor = e.target.result;
+              if (!cursor) { result(remove > 0); return; }
+              cursor.delete();
+              remove++;
+              cursor.continue();
+            } catch (error) { fail(error); }
           };
-          req.onerror = reject;
+          req.onerror = fail;
         });
       },
       async clear({name, storeName}) {
-        const {store} = await this.getStore({name, storeName, mode: 'readwrite'});
-        return new Promise((resolve, reject) => {
+        return this._write({name, storeName}, (store, result, fail) => {
           const req = store.clear();
-          req.onsuccess = e => {
-            console.timeEnd('storage clear');
-            resolve();
-          };
-          req.onerror = e => {
-            console.timeEnd('storage clear');
-            reject(e);
-          };
+          req.onsuccess = () => result(undefined);
+          req.onerror = fail;
         });
       },
       async gc({name, storeName, data: {expireTime, index}}) {
         index = index || 'updatedAt';
-        const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
         const now = Date.now(), ptime = performance.now();
         const expiresAt = (index !== 'expiresAt') ? (now - expireTime) : now;
-        const expireDateTime = new Date(expiresAt).toLocaleString();
-        const timekey = `GC [DELETE FROM ${name}.${storeName} WHERE ${index} < '${expireDateTime}'] `;
-        console.time(timekey);
         let count = 0;
-        return new Promise((resolve, reject) => {
+        return this._write({name, storeName}, (store, result, fail) => {
           const range = IDBKeyRange.upperBound(expiresAt);
-          const idx = store.index(index);
-          const req = idx.openCursor(range);
+          const req = store.index(index).openCursor(range);
           req.onsuccess = e => {
-            const cursor = e.target.result;
-            if (cursor) {
-              count++;
-              cursor.delete();
-              return cursor.continue();
-            }
-            console.timeEnd(timekey);
-            resolve({status: 'ok', count, time: performance.now() - ptime});
-            count && console.log('deleted %s records.', count);
+            try {
+              const cursor = e.target.result;
+              if (cursor) {
+                count++;
+                cursor.delete();
+                cursor.continue();
+              } else {
+                result({status: 'ok', count, time: performance.now() - ptime});
+              }
+            } catch (error) { fail(error); }
           };
-          req.onerror = reject;
+          req.onerror = fail;
         }).catch(e => {
-          console.error('gc fail', {name, storeName, data: {expireTime, index}, timekey}, e);
-          store.clear();
+          console.warn('IndexedDB cache cleanup failed');
+          throw e;
         });
       }
 
@@ -200,7 +216,7 @@ const IndexedDbStorage = (() => {
       workers.set(workerFunc, worker);
     }
 
-    worker.post({command: 'init', params: {name, ver, stores}});
+    await worker.post({command: 'init', params: {name, ver, stores}});
 
     const post = (command, data, storeName, transfer) => {
       const params = {data, name, storeName, transfer};

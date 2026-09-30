@@ -26,11 +26,11 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.18-task079b
+// @version     0.5.34-task156
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
-// @require     https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.5/lodash.min.js
+// @require     https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
 
 import {gate} from '../packages/lib/src/message/gate';
@@ -1366,7 +1366,7 @@ AntiPrototypeJs().then(() => {
             padding: 2px 4px;
             text-shadow: none;
             font-weight: normal;
-            pointer-evnets: none !important;
+            pointer-events: none !important;
           }
           .is-ng-enable .is-ng .add-ng-button:hover::after,
           .is-ng-enable .is-ng .add-fav-button:hover::after {
@@ -1780,46 +1780,232 @@ AntiPrototypeJs().then(() => {
         root.appendChild(node);
         return root;
       };
-      util.httpLink = function(html) {
-        let links = {}, keyCount = 0;
-        const getTmpKey = function() { return ` <!--${keyCount++}--> `; };
-        html = html.replace(/@([a-zA-Z0-9_]+)/g,
-          (g, id) => {
-            const tmpKey = getTmpKey();
-            links[tmpKey] =
-              ` <a href="https://twitter.com/${id}" class="twitterLink" rel="noopener" target="_blank">@${id}</a> `;
-            return tmpKey;
-          });
-
-
-        html = html.replace(/(https?:\/\/seiga\.nicovideo\.jp\/seiga\/)?im(\d+)/g,
-          ' <a href="//seiga.nicovideo.jp/seiga/im$2" class="seigaLink" rel="noopener" target="_blank">$1im$2</a> ');
-        html = html.replace(/(https?:\/\/com\.nicovideo\.jp\/community\/)?co(\d+)/g,
-          ' <a href="//com.nicovideo.jp/community/co$2" class="communityLink" rel="noopener" target="_blank">$1co$2</a> ');
-        html = html.replace(/(https?:\/\/www\.nicovideo\.jp\/)?(watch|shorts|mylist|series|user)\/(\d+)/g,
-          ' <a href="https://www.nicovideo.jp/$2/$3" rel="noopener" class="videoLink target-change">$1$2/$3</a> ');
-        html = html.replace(/(https?:\/\/www\.nicovideo\.jp\/watch\/)?(sm|nm|so|ss)(\d+)/g,
-          ' <a href="https://www.nicovideo.jp/watch/$2$3" rel="noopener" class="videoLink target-change">$1$2$3</a> ');
-        html = html.replace(/(https?:\/\/www\.nicovideo\.jp\/shorts\/)?ss(\d+)/g,
-          ' <a href="https://www.nicovideo.jp/shorts/ss$2" rel="noopener" class="videoLink target-change">$1ss$2</a> ');
-
-        let linkmatch = /<a.*?<\/a>/, n;
-        html = html.split('<br />').join(' <br /> ');
-        while ((n = linkmatch.exec(html)) !== null) {
-          let tmpKey = getTmpKey();
-          links[tmpKey] = n;
-          html = html.replace(n, tmpKey);
+      /*
+       * Task 092: 動画の参照（sm/nm/so/ss の ID・/watch/・/shorts/・www./sp. の URL・nico.ms）の「解析」を1か所にまとめ、
+       * 説明文の「リンク化」（httpLink）と、ページ上のリンクからの解決（resolveNicoVideoLink、HoverMenu 等）で同じものを使う。
+       * 以前の httpLink は、sm〜 等を正規表現で <a> にする置換を何回も重ねた後で、既存の <a> を退避していたため、
+       * フルURL・/shorts/ss〜・nico.ms・既にリンクの文字列を混ぜると、二重のリンク化や href の中の置換が起きていた
+       * （例: https://www.nicovideo.jp/shorts/ss123 の中の ss123 が <a> になり、その href の中の ss123 がさらに <a> になる）。
+       * 今は、HTML を一度 DOM（<template> の中なので画像の読み込み等は起きない）にしてから、
+       * <a> の外の文字だけを順に見てリンクにする。文字列の置換で HTML を組み立てることはしない。
+       * ZenzaWatch 本体の説明文（VideoInfoPanel）の Task 074・088 の処理とは別物（MylistPocket の中だけで使う）。
+       */
+      const NICO_VIDEO_ID = /^(?:sm|nm|so|ss)[0-9]+$/;
+      const NICO_VIDEO_HOSTS = ['www.nicovideo.jp', 'sp.nicovideo.jp'];
+      const toVideoReference = (watchId, source) => {
+        const type = watchId.startsWith('ss') ? 'shorts' : 'watch';
+        return {watchId, type, source, canonicalUrl: `https://www.nicovideo.jp/${type}/${watchId}`};
+      };
+      /**
+       * sm123・/watch/sm123・/shorts/ss123・https://(www|sp).nicovideo.jp/(watch|shorts)/…・https://nico.ms/… を解析する。
+       * 動画でなければ null。ss〜 の正規の URL は、今の本家に合わせて /shorts/ss〜。
+       * /watch/ の後ろが数字だけ（スレッドID）のものも、以前と同じく動画として扱う。
+       * @param {string} value
+       * @returns {{watchId: string, type: 'watch'|'shorts', source: string, canonicalUrl: string}|null}
+       */
+      util.parseNicoVideoReference = function(value) {
+        if (typeof value !== 'string') { return null; }
+        const v = value.trim();
+        if (NICO_VIDEO_ID.test(v)) { return toVideoReference(v, 'id'); }
+        let url, source;
+        try {
+          if (/^\/(?:watch|shorts)\//.test(v)) {
+            url = new URL(v, 'https://www.nicovideo.jp/');
+            source = 'path';
+          } else if (/^https?:\/\//i.test(v)) {
+            url = new URL(v);
+            source = 'url';
+          } else {
+            return null;
+          }
+        } catch (e) {
+          return null;
         }
+        const host = url.hostname.toLowerCase();
+        const path = url.pathname;
+        let m;
+        if (host === 'nico.ms') {
+          m = /^\/((?:sm|nm|so|ss)[0-9]+)\/?$/.exec(path);
+          return m ? toVideoReference(m[1], 'nico.ms') : null;
+        }
+        if (!NICO_VIDEO_HOSTS.includes(host)) { return null; }
+        if ((m = /^\/watch\/((?:sm|nm|so|ss)?[0-9]+)\/?$/.exec(path))) { return toVideoReference(m[1], source); }
+        if ((m = /^\/shorts\/(ss[0-9]+)\/?$/.exec(path))) { return toVideoReference(m[1], source); }
+        return null;
+      };
 
-        html = html.replace(/\((https?:\/\/[\x21-\x3b\x3d-\x7e]+)\)/gi, '( $1 )');
-        html = html.replace(/(https?:\/\/[\x21-\x3b\x3d-\x7e]+)http/gi, '$1 http');
-        html = html.replace(/(https?:\/\/[\x21-\x3b\x3d-\x7e]+)/gi, '<a href="$1" rel="noopener" target="_blank" class="otherSite">$1</a>');
-        Object.keys(links).forEach(tmpKey => {
-          html = html.replace(tmpKey, links[tmpKey]);
-        });
+      // Google のリダイレクト用のリンク（https://www.google.com/url?…&url=… または ?q=…）。1段だけ解く
+      const GOOGLE_HOST = /^(?:www\.)?google\.[a-z]{2,3}(?:\.[a-z]{2})?$/;
+      const unwrapGoogleRedirect = absoluteUrl => {
+        let url;
+        try { url = new URL(absoluteUrl); } catch (e) { return null; }
+        if (!GOOGLE_HOST.test(url.hostname.toLowerCase()) || url.pathname !== '/url') { return null; }
+        const target = url.searchParams.get('url') || url.searchParams.get('q');
+        return target && /^https?:\/\//i.test(target) ? target : null;
+      };
+      const toAbsoluteUrl = href => {
+        try {
+          return new URL(href, document.baseURI || location.href).href;
+        } catch (e) {
+          return null;
+        }
+      };
+      const parseAbsoluteVideoUrl = absoluteUrl => {
+        const ref = absoluteUrl ? util.parseNicoVideoReference(absoluteUrl) : null;
+        return ref && (ref.source === 'url' || ref.source === 'nico.ms') ? ref : null;
+      };
+      /**
+       * ページ上のリンク（または URL の文字列）の最終的なリンク先が、www./sp.nicovideo.jp・nico.ms の動画なら、その解析結果。
+       * data-href → href の順に見る。Google のリダイレクト用リンクは、中の URL が上の3つのホストの時だけ解く
+       * （任意のサイトへのリダイレクトは対象にしない）。
+       * @param {HTMLAnchorElement|Element|string} link
+       */
+      util.resolveNicoVideoLink = function(link) {
+        if (!link) { return null; }
+        const candidates = typeof link === 'string' ? [link] :
+          (link.getAttribute ? [link.getAttribute('data-href'), link.getAttribute('href')] : []);
+        for (const candidate of candidates) {
+          if (!candidate) { continue; }
+          const absoluteUrl = toAbsoluteUrl(candidate);
+          const ref = parseAbsoluteVideoUrl(absoluteUrl) || parseAbsoluteVideoUrl(unwrapGoogleRedirect(absoluteUrl));
+          if (ref) { return ref; }
+        }
+        return null;
+      };
 
-        html = html.split(' <br /> ').join('<br />');
-        return html;
+      // Task 088（ZenzaWatch 本体の説明文）と同じ方針: スクリプトとして動き得るものだけを取り除く
+      const UNSAFE_ELEMENTS = 'script,iframe,frame,object,embed,base,meta,link,form,style';
+      const UNSAFE_URL = /^[\s\u0000-\u001f]*(javascript|data|vbscript):/i;
+      const sanitizeFragment = root => {
+        for (const e of root.querySelectorAll(UNSAFE_ELEMENTS)) {
+          e.remove();
+        }
+        for (const e of root.querySelectorAll('*')) {
+          for (const {name, value} of [...e.attributes]) {
+            const n = name.toLowerCase();
+            if (n.startsWith('on') ||
+              (['href', 'src', 'action', 'formaction', 'xlink:href'].includes(n) && UNSAFE_URL.test(value))) {
+              e.removeAttribute(name);
+            }
+          }
+        }
+      };
+
+      const createLink = (href, text, className, isNewWindow) => {
+        const a = document.createElement('a');
+        a.setAttribute('href', href);
+        a.setAttribute('rel', 'noopener');
+        if (isNewWindow) { a.setAttribute('target', '_blank'); }
+        a.setAttribute('class', className);
+        a.textContent = text;
+        return a;
+      };
+      const VIDEO_LINK_CLASS = 'videoLink target-change';
+      // URL の直後に付きがちな句読点・閉じ括弧（対応する開き括弧が URL の中に無いもの）を外す
+      const trimUrl = url => {
+        const count = (s, c) => s.split(c).length - 1;
+        for (;;) {
+          const last = url.slice(-1);
+          if ('.,:;!?\'"'.includes(last) ||
+            (last === ')' && count(url, '(') < count(url, ')')) ||
+            (last === ']' && count(url, '[') < count(url, ']'))) {
+            url = url.slice(0, -1);
+            continue;
+          }
+          return url;
+        }
+      };
+      const linkForUrl = url => {
+        const ref = util.parseNicoVideoReference(url);
+        if (ref) { return createLink(ref.canonicalUrl, url, VIDEO_LINK_CLASS, false); }
+        let m;
+        if ((m = /^https?:\/\/seiga\.nicovideo\.jp\/seiga\/(im[0-9]+)$/i.exec(url))) {
+          return createLink(`https://seiga.nicovideo.jp/seiga/${m[1]}`, url, 'seigaLink', true);
+        }
+        if ((m = /^https?:\/\/com\.nicovideo\.jp\/community\/(co[0-9]+)$/i.exec(url))) {
+          return createLink(`https://com.nicovideo.jp/community/${m[1]}`, url, 'communityLink', true);
+        }
+        if (/^https?:\/\/www\.nicovideo\.jp\/(?:mylist|series|user)\/[0-9]/i.test(url)) {
+          return createLink(url, url, VIDEO_LINK_CLASS, false);
+        }
+        return createLink(url, url, 'otherSite', true);
+      };
+      const linkForWord = word => {
+        if (word.startsWith('@')) {
+          return createLink(`https://twitter.com/${word.slice(1)}`, word, 'twitterLink', true);
+        }
+        if (/^im[0-9]+$/.test(word)) {
+          return createLink(`https://seiga.nicovideo.jp/seiga/${word}`, word, 'seigaLink', true);
+        }
+        if (/^co[0-9]+$/.test(word)) {
+          return createLink(`https://com.nicovideo.jp/community/${word}`, word, 'communityLink', true);
+        }
+        const ref = util.parseNicoVideoReference(word);
+        if (ref) { return createLink(ref.canonicalUrl, word, VIDEO_LINK_CLASS, false); }
+        return createLink(`https://www.nicovideo.jp/${word}`, word, VIDEO_LINK_CLASS, false);
+      };
+      // URL・@ID・watch/数字 等・sm/nm/so/ss/im/co + 数字
+      const TOKEN = /(https?:\/\/[\x21-\x3b\x3d\x3f-\x7e]+)|(@[A-Za-z0-9_]+|(?:watch|shorts|mylist|series|user)\/[0-9]+|(?:sm|nm|so|ss|im|co)[0-9]+)/g;
+      const WORD_CHAR = /[A-Za-z0-9_]/;
+      const linkifyText = text => {
+        const frag = document.createDocumentFragment();
+        let pos = 0, m;
+        TOKEN.lastIndex = 0;
+        while ((m = TOKEN.exec(text)) !== null) {
+          let token = m[0], node;
+          if (m[1]) {
+            const next = token.slice(1).search(/https?:\/\//i);
+            token = trimUrl(next >= 0 ? token.slice(0, next + 1) : token);
+            node = linkForUrl(token);
+          } else {
+            const before = text.charAt(m.index - 1), after = text.charAt(m.index + token.length);
+            if ((before && WORD_CHAR.test(before)) || (after && WORD_CHAR.test(after))) {
+              TOKEN.lastIndex = m.index + 1;
+              continue;
+            }
+            node = linkForWord(token);
+          }
+          if (m.index > pos) { frag.append(text.slice(pos, m.index)); }
+          frag.append(node);
+          pos = m.index + token.length;
+          TOKEN.lastIndex = pos;
+        }
+        if (pos === 0) { return null; }
+        if (pos < text.length) { frag.append(text.slice(pos)); }
+        return frag;
+      };
+
+      /**
+       * 説明文（ニコニコが返す文字列。<a>・<br> を含むこともある）を、リンクを付けた DocumentFragment にする。
+       * 既存の <a> の中は触らない（href も変えない。動画へのリンクなら videoLink の印だけ付ける）。
+       */
+      util.httpLinkFragment = function(html) {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = html === undefined || html === null ? '' : String(html);
+        const root = tpl.content;
+        sanitizeFragment(root);
+        for (const a of root.querySelectorAll('a')) {
+          if (util.resolveNicoVideoLink(a)) {
+            a.classList.add('videoLink', 'target-change');
+          }
+        }
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        const texts = [];
+        while (walker.nextNode()) {
+          const node = walker.currentNode;
+          if (node.parentElement && node.parentElement.closest('a')) { continue; }
+          texts.push(node);
+        }
+        for (const node of texts) {
+          const frag = linkifyText(node.data);
+          if (frag) { node.replaceWith(frag); }
+        }
+        return root;
+      };
+      util.httpLink = function(html) {
+        const div = document.createElement('div');
+        div.append(util.httpLinkFragment(html));
+        return div.innerHTML;
       };
 
       util.getSleepPromise = function(sleepTime, label = 'sleep') {
@@ -1998,26 +2184,35 @@ Object.assign(util, textUtil);
           this.gc = bounce.time(this.gc.bind(this), 100);
         }
 
+        _readItem(key) {
+          let item;
+          try {
+            item = JSON.parse(this._storage[key]);
+          } catch (e) {
+            delete this._memory[key];
+            this._storage.removeItem(key);
+            return null;
+          }
+          if (!item || typeof item !== 'object' || Array.isArray(item) ||
+              !Object.prototype.hasOwnProperty.call(item, 'data') ||
+              !(item.expiredAt === '' ||
+                (typeof item.expiredAt === 'number' && Number.isFinite(item.expiredAt)))) {
+            delete this._memory[key];
+            this._storage.removeItem(key);
+            return null;
+          }
+          return item;
+        }
+
         gc(now = -1) {
           const storage = this._storage;
           now = now >= 0 ? now : Date.now();
-          Object.keys(storage).forEach((key, index) => {
-            if (key.indexOf(PREFIX) === 0) {
-              let item;
-              try {
-                item = JSON.parse(this._storage[key]);
-              } catch(e) {
-                storage.removeItem(key);
-              }
-              //console.info(
-              //  `${index}, key: ${key}, expiredAt: ${new Date(item.expiredAt).toLocaleString()}, now: ${new Date(now).toLocaleString()}`);
-              if (item.expiredAt === '' || item.expiredAt > now) {
-                //console.info('not expired: ', key);
-                return;
-              }
-              //console.info('cache expired: ', key, item.expiredAt);
-              storage.removeItem(key);
-            }
+          Object.keys(storage).forEach(key => {
+            if (key.indexOf(PREFIX) !== 0) { return; }
+            const item = this._readItem(key);
+            if (!item || item.expiredAt === '' || item.expiredAt > now) { return; }
+            delete this._memory[key];
+            storage.removeItem(key);
           });
         }
 
@@ -2033,13 +2228,22 @@ Object.assign(util, textUtil);
           };
 
           this._memory[key] = cacheData;
+          let serialized;
           try {
-            this._storage[key] = JSON.stringify(cacheData);
+            serialized = JSON.stringify(cacheData);
+            this._storage[key] = serialized;
             this.gc();
           } catch (e) {
             if (e.name === 'QuotaExceededError' ||
                 e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-              this.gc(0);
+              try {
+                // bounce.time is deferred and has no cancel/flush API.
+                CacheStorage.prototype.gc.call(this);
+                this._storage[key] = serialized;
+                this.gc();
+              } catch (retryError) {
+                // Preserve best-effort persistence and the existing memory envelope.
+              }
             }
           }
         }
@@ -2049,14 +2253,8 @@ Object.assign(util, textUtil);
           if (!(this._storage.hasOwnProperty(key) || this._storage[key] !== undefined)) {
             return null;
           }
-          let item = null;
-          try {
-            item = JSON.parse(this._storage[key]);
-          } catch(e) {
-            delete this._memory[key];
-            this._storage.removeItem(key);
-            return null;
-          }
+          const item = this._readItem(key);
+          if (!item) { return null; }
 
           if (item.expiredAt === '' || item.expiredAt > Date.now()) {
             return item.data;
@@ -2065,10 +2263,8 @@ Object.assign(util, textUtil);
         }
 
         removeItem(key) {
-          if (this._memory.hasOwnProperty(key)) {
-            delete this._memory[key];
-          }
           key = PREFIX + key;
+          delete this._memory[key];
           if (this._storage.hasOwnProperty(key) || this._storage[key] !== undefined) {
             this._storage.removeItem(key);
           }
@@ -2398,16 +2594,16 @@ const emitter = util.emitter;
         const target =
           e.target.tagName === 'A' ? e.target : e.target.closest('a');
         if (!target || this._hoverElement !== target) { return; }
-        const href = target.getAttribute('data-href') || target.getAttribute('href');
-        const watchId = target.dataset.nicoVideoId || util.getWatchId(href);
+        // Task 092: data-href・href・Google のリダイレクト用リンクから、最終的なリンク先の動画を解決する
+        const ref = util.resolveNicoVideoLink(target);
+        if (!ref) { return; }
+        const watchId = target.dataset.nicoVideoId || ref.watchId;
         const offset = target.getBoundingClientRect();
         //const bodyOffset = document.body.getBoundingClientRect();
         const scrollTop  = document.documentElement.scrollTop  || document.body.scrollTop  || 0;
         const scrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft || 0;
         const left = offset.left + scrollLeft;
         const top  = offset.top  + scrollTop;
-        const host = target.hostname;
-        if (host !== 'www.nicovideo.jp' && host !== 'nico.ms' && host !== 'sp.nicovideo.jp') { return; }
 
         if (target.classList.contains('noHoverMenu')) { return; }
         if (!watchId || !watchId.match(/^[a-z0-9]+$/)) { return; }
@@ -2434,9 +2630,9 @@ const emitter = util.emitter;
         const target =
           e.target.tagName === 'A' ? e.target : e.target.closest('a');
         if (!target) { return false; }
-        const href = target.href || '';
-        if (!/((watch|shorts)\/[a-z0-9]+|nico\.ms\/[a-z0-9]+)/.test(href)) { return false; }
-        return target;
+        // Task 092: 以前は href の文字列のどこかに watch/〜・shorts/〜・nico.ms/〜 があれば対象にしていた
+        // （Google の検索リンクの q= の中などでも当たる）。リンク先のホストとパスで判定する
+        return util.resolveNicoVideoLink(target) ? target : false;
       }
 
       set isBusy(v) {
@@ -2850,14 +3046,15 @@ const emitter = util.emitter;
       }
 
       _createDescription(elm, data) {
-        elm.innerHTML = util.httpLink(data);
-        const watchReg = /(watch|shorts)\/([a-z0-9]+)/;
+        // Task 092: 文字列の innerHTML ではなく、リンクを付けた DOM をそのまま入れる
+        elm.textContent = '';
+        elm.append(util.httpLinkFragment(data));
         const isZenzaReady = this._isZenzaReady;
         //if (util.isFirefox()) { return; }
-        Array.from(elm.querySelectorAll('.videoLink[href*="watch/"],.videoLink[href*="shorts/"]')).forEach((link) => {
-          const href = link.getAttribute('href');
-          if (!watchReg.test(href)) { return; }
-          const watchId = RegExp.$2;
+        Array.from(elm.querySelectorAll('a.videoLink')).forEach((link) => {
+          const ref = util.resolveNicoVideoLink(link);
+          if (!ref) { return; }
+          const watchId = ref.watchId;
           if (isZenzaReady) {
             link.classList.add('noHoverMenu');
             link.classList.add('command');
@@ -3422,16 +3619,39 @@ const emitter = util.emitter;
     };
 
 
+    /*
+     * Task 092: 同時に読み込む数を本当に MAX_LOAD（6）件以下にする。
+     * 以前は6個の Promise の配列を Promise.race で待っていたため、完了時間がばらつくと、
+     * 「どれか1つが終わった」ことで待っていた多くの要求が同時に動き始め、6件を超えていた
+     * （再現試験で最大13〜16件）。今は、動いている数を数えて、空いた分だけ待ち行列の先頭から始める（先に来た順）。
+     * 1件の成功後の50ms・失敗後の1000msの待ちは、以前と同じくその枠の中で待つ。
+     * 1件が失敗・例外になっても枠は必ず戻し、残りの要求は止めない。
+     */
     const QueueLoader = (() => {
-      let lastPromise = null;
-      let count = 0;
       const MAX_LOAD = 6;
-      const promises = [];
+      const waiting = [];
+      let active = 0;
+
+      const startNext = () => {
+        while (active < MAX_LOAD && waiting.length > 0) {
+          const {run, resolve, reject} = waiting.shift();
+          active++;
+          let promise;
+          try {
+            promise = Promise.resolve(run());
+          } catch (e) {
+            promise = Promise.reject(e);
+          }
+          promise
+            .then(resolve, reject)
+            .then(() => {
+              active--;
+              startNext();
+            });
+        }
+      };
 
       const load = function(watchId, item) {
-        count = (count + 1) % MAX_LOAD;
-        lastPromise = promises[count];
-
         const onLoad = info => {
           if (item) {
             watchId = info.watchId;
@@ -3443,23 +3663,24 @@ const emitter = util.emitter;
         };
         const onFail = util.getSleepPromise(1000, 'fail-'    + watchId);
 
-        if (!lastPromise) {
-          if (item) { item.classList.add('is-ng-current'); }
-          lastPromise = ThumbInfoLoader.load(watchId).then(onLoad, onFail);
-        } else {
-          //lastPromise = Promise.all([lastPromise]).then(() => {
-          lastPromise = Promise.race(promises).then(() => {
-            if (item) { item.classList.add('is-ng-current'); }
-            return ThumbInfoLoader.load(watchId).then(onLoad, onFail);
+        return new Promise((resolve, reject) => {
+          waiting.push({
+            run: () => {
+              if (item) { item.classList.add('is-ng-current'); }
+              return ThumbInfoLoader.load(watchId).then(onLoad, onFail);
+            },
+            resolve,
+            reject
           });
-        }
-
-        promises[count] = lastPromise;
-        return lastPromise;
+          startNext();
+        });
       };
 
       return {
-        load
+        load,
+        MAX_LOAD,
+        get activeCount() { return active; },
+        get waitingCount() { return waiting.length; }
       };
     })();
 
@@ -3592,7 +3813,7 @@ const emitter = util.emitter;
         }
 
         if (!watchId) {
-          item.classList.add('.no-watch-id');
+          item.classList.add('no-watch-id');
           return ignore();
         }
 
@@ -3748,7 +3969,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.18-task079b', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.34-task156', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -3820,8 +4041,10 @@ window.MylistPocketLib = {
 const thumbInfoApi = async function() {
 //@require gate
   const {post, parseUrl, uFetch, init} = gate();
+  // Finish asynchronous setup before advertising readiness: the parent sends its
+  // first request as soon as init() opens the already-started message port.
+  const db = await ThumbInfoCacheDb.open().catch(() => null);
   const {port, TOKEN} = init({prefix: `thumbInfo${PRODUCT}`, type: 'thumbInfo'});
-  const db = await ThumbInfoCacheDb.open();
   port.addEventListener('message', async e => {
     const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
     const {body, sessionId, token} = data;
@@ -3831,14 +4054,14 @@ const thumbInfoApi = async function() {
     if (TOKEN !== token ||
       p.hostname !== location.host ||
       !p.pathname.startsWith('/api/getthumbinfo/')) {
-      console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+      console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
       return;
     }
     params.options = params.options || {};
 
     const watchId = params.url.split('/').reverse()[0];
     const expiresAt = Date.now() - (params.options.expireTime || 0);
-    const cache = await db.get(watchId);
+    const cache = db ? await db.get(watchId).catch(() => null) : null;
     if (cache && cache.thumbInfo.status === 'ok' && cache.updatedAt > expiresAt) {
       return post({status: 'ok', command, params: cache.thumbInfo}, {sessionId});
     }
@@ -3850,7 +4073,7 @@ const thumbInfoApi = async function() {
       .then(async xmlText => {
         let thumbInfo = parseThumbInfo(xmlText);
         if (thumbInfo.status === 'ok') {
-          db.put(xmlText, thumbInfo);
+          if (db) db.put(xmlText, thumbInfo).catch(() => console.warn('Thumbnail cache write failed'));
         } else if (cache && cache.thumbInfo.status === 'ok') {
           thumbInfo = cache.thumbInfo;
         }

@@ -103,21 +103,29 @@ const BroadcastEmitter = messageUtil.BroadcastEmitter = (() => {
    */
   const onStorage = e => {
     let command = e.key;
-    if (e.type !== 'storage' || !command.startsWith(`${PRODUCT}_`)) {
+    if (e.type !== 'storage' || typeof command !== 'string' || !command.startsWith(`${PRODUCT}_`)) {
       return;
     }
 
-    command = command.replace('ZenzaWatch_', '');
+    command = command.slice(`${PRODUCT}_`.length);
     let oldValue = e.oldValue;
     let newValue = e.newValue;
-    if (oldValue === newValue) {
+    if (newValue === null || oldValue === newValue) {
       return;
     }
 
     switch (command) {
       case 'message': {
-        const {body} = JSON.parse(newValue);
-        console.log('%cmessage', 'background: cyan;', body);
+        let data;
+        try {
+          data = JSON.parse(newValue);
+        } catch (err) {
+          return;
+        }
+        if (!data || typeof data !== 'object' || Array.isArray(data)) { return; }
+        const {body} = data;
+        if (!body || typeof body !== 'object' || Array.isArray(body) ||
+            typeof body.command !== 'string' || !body.command) { return; }
         bcast.emitAsync('message', body, 'broadcast');
         break;
       }

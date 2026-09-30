@@ -150,7 +150,8 @@ class NicoCommentPlayer extends Emitter {
   /**
    * NGフィルタなどのかかってない全chatを返す
    */
-  get nonfilteredChatList() {return this._model.nonfilteredChatList;}
+  get nonFilteredChatList() {return this._model.nonFilteredChatList;}
+  get nonfilteredChatList() {return this.nonFilteredChatList;}
   // getNonfilteredChatList() {return this._model.getNonfilteredChatList();}
   export() {
     return this._viewModel.export();
@@ -170,8 +171,16 @@ NicoComment.offscreenLayer = OffscreenLayer(Config);
 
 const updateSpeedRate = () => {
   let rate = Config.props.commentSpeedRate * 1;
+  if (!Number.isFinite(rate) || rate <= 0) {
+    rate = 1;
+  }
   if (Config.props.autoCommentSpeedRate) {
-    rate = rate / Math.max(Config.props.playbackRate, 1);
+    const playbackRate = Config.props.playbackRate * 1;
+    rate = rate / (Number.isFinite(playbackRate) ? Math.max(playbackRate, 1) : 1);
+  }
+  // Imported settings and numeric underflow must not produce invalid durations.
+  if (!Number.isFinite(rate) || rate <= 0) {
+    rate = 1;
   }
   // window.console.info('updateSpeedRate', rate, Config.getValue('commentSpeedRate'), NicoChatViewModel.SPEED_RATE);
   if (rate !== NicoChatViewModel.SPEED_RATE) {

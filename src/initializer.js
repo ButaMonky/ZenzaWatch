@@ -2,10 +2,10 @@ import {ZenzaWatch, global} from './ZenzaWatchIndex';
 import {
   Config,
   PlayerSession,
-  PlaylistSession,
   util,
   WatchPageHistory
 } from './util';
+import {PlaylistSession} from '../packages/zenza/src/Playlist/PlayListSession';
 import {NicoComment} from './CommentPlayer';
 import {NicoVideoPlayerDialog, PlayerConfig, PlayerState} from './NicoVideoPlayerDialog';
 import {initializeGinzaSlayer} from './GinzaSlayer';
@@ -134,8 +134,8 @@ const {initialize} = (() => {
     return Promise.all([
       StoryboardWorker.initWorker(),
       VideoSessionWorker.initWorker(),
-      StoryboardCacheDb.initWorker(),
-      WatchInfoCacheDb.initWorker()
+      StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable')),
+      WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'))
     ]).then(() => window.console.timeEnd('init Workers'));
   };
 

@@ -21,7 +21,8 @@ class BaseCommandElement extends HTMLElement {
     if (dll.lit) {
       return dll.lit;
     }
-    dll.lit = await util.dimport('https://esm.run/lit');
+    // Task 088（監査v2 ZW-010 と同じ趣旨）: 版の指定なしだと lit の最新（3.x）になり、本体が読む lit@2.0.2 と混ざり得た。
+    dll.lit = await util.dimport('https://esm.run/lit@2.0.2');
     return dll.lit;
   }
 

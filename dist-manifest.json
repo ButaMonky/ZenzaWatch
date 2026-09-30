@@ -1,0 +1,55 @@
+{
+  "format": 1,
+  "description": "dist/*.user.js の分類（Task 087 / 監査v2 ZW-006）。すべての配布物は active（ソースから生成）か legacy-frozen（旧作者の成果物をそのまま保持・再生成しない）のどちらか。どちらにも無い dist/*.user.js があると test/unit/DistManifestTest.js が失敗する。",
+  "active": {
+    "policy": "npm run build（node build.js --dev）でソースから生成する。ビルド後の構文検査（build.js）・再生成チェック（tools/check_regeneration.js）・DistSmokeTest の対象。通常の公開対象。",
+    "files": [
+      {"file": "dist/ZenzaWatch-dev.user.js", "source": "src/_template.js"},
+      {"file": "dist/uQuery.user.js", "source": "src/_uquery.js"},
+      {"file": "dist/MylistPocket.user.js", "source": "src/_pocket.js"},
+      {"file": "dist/MaskedWatch.user.js", "source": "src/_shape.js"},
+      {"file": "dist/ZenzaAdvancedSettings.user.js", "source": "src/_setting.js"},
+      {"file": "dist/ZenzaHLS.user.js", "source": "src/_hls.js"},
+      {"file": "dist/ZenzaGamePad.user.js", "source": "src/_gamepad.js"},
+      {"file": "dist/ZenzaBlogPartsButton.user.js", "source": "src/_blog.js"},
+      {"file": "dist/CapTube.user.js", "source": "src/_captube.js"},
+      {"file": "dist/HeatSync.user.js", "source": "src/_heatsync.js"}
+    ]
+  },
+  "legacyFrozen": {
+    "policy": "active な公開成果物ではない。今のソースから再生成しない。内容を変更しない（SHA-256 で固定）。移行・削除の方針が決まるまで保持する。",
+    "provenanceCheck": "2026-09-25（Task 086）に https://raw.githubusercontent.com/segabito/ZenzaWatch/master/dist/<ファイル名> を取得し、3つともバイト単位で一致することを確認。元のコミットは未特定（GitHub API を使えなかったため）。gitBlobSha1 は git hash-object の値で、元リポジトリの tree の値と照合できる。",
+    "files": [
+      {
+        "file": "dist/ZenzaWatch.user.js",
+        "userscript": {"name": "ZenzaWatch", "namespace": "https://github.com/segabito/", "version": "2.6.2", "downloadURL": null, "updateURL": null},
+        "origin": "segabito/ZenzaWatch（master の dist/ZenzaWatch.user.js）",
+        "originalSource": "src/_template.js の旧ビルド（--dev なし）。今の npm run build:production は別物（2.7.x の STABLE、更新先 ButaMonky）を作るため再現できない",
+        "sha256": "a7c540e62e525d5dc911c2aa0f332bf729826cf7642274b680520270c8c83acf",
+        "gitBlobSha1": "8503e0784395f9a4cc9edd756b3aa8a01e149c1c",
+        "bytes": 994287,
+        "decision": "OPS-7（dev版と通常版の整理・正式版の移行）。INV-13"
+      },
+      {
+        "file": "dist/MylistFilter.user.js",
+        "userscript": {"name": "Mylist Filter", "namespace": "https://github.com/segabito/", "version": "0.0.1", "downloadURL": null, "updateURL": null},
+        "origin": "segabito/ZenzaWatch（master の dist/MylistFilter.user.js）",
+        "originalSource": "src/_my4.js の旧ビルド。build.js の templates ではコメントアウトされている",
+        "sha256": "d05769e268bcc810203f89b922c6bc448112563365d7c2df9d21842763f496e1",
+        "gitBlobSha1": "00a9af1cca7fbdb9df635e0ab76934e333007a56",
+        "bytes": 17764,
+        "decision": "削除・アーカイブ移動は別タスクで判断。INV-13"
+      },
+      {
+        "file": "dist/WatchDump.user.js",
+        "userscript": {"name": "WatchDump", "namespace": "https://github.com/segabito/", "version": "0.1", "downloadURL": null, "updateURL": null},
+        "origin": "segabito/ZenzaWatch（master の dist/WatchDump.user.js）",
+        "originalSource": "ソースなし（手書き）。@include http://*.nicovideo.jp/watch/* だけで、今の https のページでは動かない",
+        "sha256": "95d2b00326ecd391f505e12917fdf84087b9a44e5b72d4f1d49df9ddd9b0f10e",
+        "gitBlobSha1": "a6b71150aed25530ce44b3d31976f32c1a95751d",
+        "bytes": 2085,
+        "decision": "削除・アーカイブ移動は別タスクで判断。INV-13"
+      }
+    ]
+  }
+}

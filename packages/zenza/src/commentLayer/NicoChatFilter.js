@@ -42,9 +42,7 @@ class NicoChatFilter extends Emitter {
 
     this._onChange = _.debounce(this._onChange.bind(this), 50);
 
-    if (params.wordRegFilter) {
-      this.setWordRegFilter(params.wordRegFilter, params.wordRegFilterFlags);
-    }
+    this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
   }
   get isEnable() {
     return this._enable;
@@ -202,18 +200,24 @@ class NicoChatFilter extends Emitter {
     return this._wordFilterList;
   }
 
+  get wordRegFilterSource() { return this._wordRegSource || ''; }
+  get wordRegFilterFlags() { return this._wordRegFlags || ''; }
   setWordRegFilter(source, flags) {
-    if (this._wordRegReg) {
-      if (this._wordRegReg.source === source && this._flags === flags) {
-        return;
-      }
-    }
+    let next;
     try {
-      this._wordRegReg = new RegExp(source, flags);
+      // Validate the complete pair before replacing the accepted filter.
+      next = new RegExp(source, flags);
     } catch (e) {
       window.console.error(e);
       return;
     }
+    source = source == null ? '' : String(source);
+    if (this.wordRegFilterSource === source && this.wordRegFilterFlags === next.flags) {
+      return;
+    }
+    this._wordRegSource = source;
+    this._wordRegFlags = next.flags;
+    this._wordRegReg = source === '' ? null : next;
     this._onChange();
   }
 
@@ -332,6 +336,7 @@ class NicoChatFilter extends Emitter {
           return false;
         }
 
+        if (wordRegReg) { wordRegReg.lastIndex = 0; }
         wordRegReg && (m = wordRegReg.exec(nicoChat.text));
         if (m) {
           window.console.log(
@@ -376,6 +381,7 @@ class NicoChatFilter extends Emitter {
         return true;
       }
       const text = nicoChat.text;
+      if (wordRegReg) { wordRegReg.lastIndex = 0; }
       return !(
         (nicoChat.score <= threthold) ||
         (wordReg && wordReg.test(text)) ||
@@ -394,9 +400,13 @@ class NicoChatFilter extends Emitter {
     window.console.time(timeKey);
     const filterFunc = this.getFilterFunc();
     let result = nicoChatArray.filter(filterFunc);
-    const removedUserIds = (before !== result.length && this._removeNgMatchedUser)
-      ? nicoChatArray.filter(chat => !result.includes(chat)).map(chat => chat.userId)
-      : [];
+    const removedUserIds = new Set();
+    if (before !== result.length && this._removeNgMatchedUser) {
+      const accepted = new Set(result);
+      for (const chat of nicoChatArray) {
+        if (!accepted.has(chat)) { removedUserIds.add(chat.userId); }
+      }
+    }
     const denyTypes = [
       !this.fork0 && 0,
       !this.fork1 && 1,
@@ -417,7 +427,7 @@ class NicoChatFilter extends Emitter {
       !this.extraEasyThread      && 'extra-easy',
     ].filter(type => type !== false);
     result = result.filter(chat => {
-      if (removedUserIds.length > 0 && removedUserIds.includes(chat.userId)) {
+      if (removedUserIds.has(chat.userId)) {
         return false;
       }
       return !denyTypes.includes(chat.fork) && !denyThreadTypes.includes(chat.threadLabel);

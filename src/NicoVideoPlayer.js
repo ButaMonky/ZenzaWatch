@@ -182,7 +182,9 @@ class NicoVideoPlayer extends Emitter {
     this._creditAbort = null;
     this._playerConfig.onkey('supporterCredit.enable', v => {
       if (!v) {
+        const finishEnded = this.isSupporterCreditActive || !!this._creditWaiting;
         this._cancelSupporterCredit();
+        if (finishEnded) { this._emitEnded(); }
       } else if (this.videoInfo && !this._creditData) {
         this._loadSupporterCredit(this.videoInfo);
       }
@@ -483,10 +485,23 @@ class NicoVideoPlayer extends Emitter {
       wasPlaying && Promise.resolve().then(() => this._videoPlayer.play()).catch(() => {});
     }
   }
+  /**
+   * 古い API（メソッド形式）。Task 090（監査v2 ZW-019）: 以前はコメントのプレイヤーに無いメソッド setPlaybackRate を呼んで
+   * TypeError になっていた。有限の正の値だけを受け付け（10倍まで）、通常の経路（プレイヤーの状態 playbackRate）へ渡す。
+   * 状態が無い時（古い呼び方）は、状態が変わった時と同じく動画とコメントの両方へ直接入れる。
+   */
   setPlaybackRate(playbackRate) {
-    playbackRate = Math.max(0, Math.min(playbackRate, 10));
-    this._videoPlayer.playbackRate = playbackRate;
-    this._commentPlayer.setPlaybackRate(playbackRate);
+    const rate = typeof playbackRate === 'number' ? playbackRate : parseFloat(playbackRate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      return;
+    }
+    const v = Math.min(rate, 10);
+    if (this._state && 'playbackRate' in this._state) {
+      this._state.playbackRate = v;
+      return;
+    }
+    this._videoPlayer.playbackRate = v;
+    this._commentPlayer.playbackRate = v;
   }
   fastSeek(t) {
     this._beforeSeek();
@@ -783,17 +798,19 @@ class ContextMenu extends BaseViewComponent {
       const handler = (command, param) => {
         this.emit('command', command, param);
       };
+      const legacyTopContainer = view.find('.empty-area-top');
+      const legacyListContainer = view.find('.listInner ul');
       global.emitter.emitAsync('videoContextMenu.addonMenuReady',
-        view.find('.empty-area-top'), handler
+        legacyTopContainer, handler
       );
       global.emitter.emitAsync('videoContextMenu.addonMenuReady.list',
-        view.find('.listInner ul'), handler
+        legacyListContainer, handler
       );
       global.emitter.emitResolve('videoContextMenu.addonMenuReady',
-        {container: view.find('.empty-area-top'), handler}
+        {container: legacyTopContainer[0], handler}
       );
       global.emitter.emitResolve('videoContextMenu.addonMenuReady.list',
-        {container: view.find('.listInner ul'), handler}
+        {container: legacyListContainer[0], handler}
       );
     }
   }
@@ -1602,8 +1619,9 @@ class VideoPlayer extends Emitter {
   }
   get playbackRate() {return this._playbackRate;}
   get bufferedRange() {return this._video.buffered;}
-  set isAutoPlay(v) {this._video.autoplay = v;}
-  get isAutoPlay() {return this._video.autoPlay;}
+  // Task 090（監査v2 ZW-020）: <video> のプロパティは autoplay（以前は autoPlay を読んでいて常に undefined）
+  set isAutoPlay(v) {this._video.autoplay = !!v;}
+  get isAutoPlay() {return !!this._video.autoplay;}
   setSrc(url) { this.src = url;}
   setVolume(v) { this.volume = v; }
   getVolume() { return this.volume; }
@@ -1617,7 +1635,7 @@ class VideoPlayer extends Emitter {
   setPlaybackRate(v) { this.playbackRate = v; }
   getPlaybackRate() { return this.playbackRate; }
   getBufferedRange() { return this.bufferedRange; }
-  setIsAutoPlay(v) {this.isAutoplay = v;}
+  setIsAutoPlay(v) {this.isAutoPlay = v;}
   getIsAutoPlay() {return this.isAutoPlay;}
 
   appendTo(node) {node.append(this._body);}

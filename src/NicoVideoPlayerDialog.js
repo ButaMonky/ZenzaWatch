@@ -944,7 +944,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     this.varMapper = new VariablesMapper({config: this._playerConfig});
     this.varMapper.on('update', () => this._updateResponsive());
   }
-  _updateResponsive() {
+  _updateResponsive({onlyControlBar = false} = {}) {
     if (!this._state.isOpen) {
       return;
     }
@@ -963,7 +963,6 @@ class NicoVideoPlayerDialogView extends Emitter {
         return;
       }
       const videoControlBarHeight = this.varMapper.videoControlBarHeight;
-      const showVideoHeaderPanel = vMargin >= videoControlBarHeight + header.offsetHeight * 2;
       let showVideoControlBar;
       switch (controlBarMode) {
         case 'always-show':
@@ -990,6 +989,10 @@ class NicoVideoPlayerDialogView extends Emitter {
             : vMargin >= videoControlBarHeight;
       }
       this.toggleClass('showVideoControlBar', showVideoControlBar);
+      if (onlyControlBar) {
+        return;
+      }
+      const showVideoHeaderPanel = vMargin >= videoControlBarHeight + header.offsetHeight * 2;
       this.toggleClass('showVideoHeaderPanel', showVideoHeaderPanel);
     };
 
@@ -1195,7 +1198,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     // 画面モード切り替え時に再計算しておく（body側のクラス付与自体は
     // raf.toggleClassで次フレームになるため、こちらも1フレーム遅らせる）。
     if (this.varMapper) {
-      requestAnimationFrame(() => this._updateResponsive());
+      requestAnimationFrame(() => this._updateResponsive({onlyControlBar: true}));
     }
   }
   _updateScreenModeStyle() {
@@ -1445,6 +1448,19 @@ util.addStyle(`
     width:  50%;
     height: 50%;
     z-index: 102;
+  }
+
+  /* Task 095: restore Task 052 B-6. This viewport-sized comment layer must only
+     be active together with the matching back-comment video shrink rule above. */
+  .zenzaPlayerContainer.is-backComment .commentLayerFrame {
+    position: fixed;
+    top:  0;
+    left: 0;
+    width:  100vw;
+    height: calc(100vh - 40px);
+    right: auto;
+    bottom: auto;
+    z-index: 1;
   }
 
   body[data-screen-mode="3D"] .zenzaPlayerContainer .videoPlayer {
@@ -2122,25 +2138,6 @@ NicoVideoPlayerDialogView.__css__ = `
     opacity: var(--zenza-comment-layer-opacity);
   }
 
-  .zenzaPlayerContainer.is-backComment .commentLayerFrame {
-    position: fixed;
-    top:  0;
-    left: 0;
-    width:  100vw;
-    height: calc(100vh - 40px);
-    right: auto;
-    bottom: auto;
-    z-index: 1;
-  }
-
-  .is-showComment.is-backComment .videoPlayer {
-    opacity: 0.90;
-  }
-
-  .is-showComment.is-backComment .videoPlayer:hover {
-    opacity: 1;
-  }
-
   .loadingMessageContainer {
     display: none;
     pointer-events: none;
@@ -2385,6 +2382,8 @@ NicoVideoPlayerDialogView.__tpl__ = (`
  * TODO: 分割 まにあわなくなっても知らんぞー
  */
 class NicoVideoPlayerDialog extends Emitter {
+  // Task 090（監査v2 ZW-017）: キャッシュ・プレイリストの初期化を待つ最長の時間（ミリ秒）
+  static get OPTIONAL_LOAD_TIMEOUT() { return 3000; }
   constructor(params) {
     super();
     this.initialize(params);
@@ -2597,8 +2596,12 @@ class NicoVideoPlayerDialog extends Emitter {
         this._nicoVideoPlayer.filter.addWordFilter(param);
         break;
       case 'setWordRegFilter':
+        this._nicoVideoPlayer.filter.setWordRegFilter(
+          param, this._nicoVideoPlayer.filter.wordRegFilterFlags);
+        break;
       case 'setWordRegFilterFlags':
-        this._nicoVideoPlayer.filter.setWordRegFilter(param);
+        this._nicoVideoPlayer.filter.setWordRegFilter(
+          this._nicoVideoPlayer.filter.wordRegFilterSource, param);
         break;
       case 'addUserIdFilter':
         this._nicoVideoPlayer.filter.addUserIdFilter(param);
@@ -2836,6 +2839,12 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       case 'wordFilter':
         filter.wordFilterList = value;
+        break;
+      case 'wordRegFilter':
+      case 'wordRegFilterFlags':
+        filter.setWordRegFilter(
+          key === 'wordRegFilter' ? value : this._playerConfig.props.wordRegFilter,
+          key === 'wordRegFilterFlags' ? value : this._playerConfig.props.wordRegFilterFlags);
         break;
       case 'userIdFilter':
         filter.userIdFilterList = value;
@@ -3239,21 +3248,35 @@ class NicoVideoPlayerDialog extends Emitter {
     }
 
     this.refreshLastPlayerId();
-    this._requestId = 'play-' + Math.random();
-    this._videoWatchOptions = options = new VideoWatchOptions(watchId, options, this._playerConfig);
+    options = new VideoWatchOptions(watchId, options, this._playerConfig);
 
+    // Task 090（監査v2 ZW-014）: プレイリストへ入れるだけの時は、今の再生の世代（requestId）と options を変えない
     if (!options.isPlaylistStartRequest &&
       this.isPlaying && this.isPlaylistEnable && !options.isOpenNow) {
       this._onPlaylistInsert(watchId);
       return;
     }
+    this._requestId = 'play-' + Math.random();
+    this._videoWatchOptions = options;
+    this._clearVideoTimers();
 
     window.console.log('%copen video: ', 'color: blue;', watchId);
     window.console.time('動画選択から再生可能までの時間 watchId=' + watchId);
 
+    // Task 090（監査v2 ZW-012）: この open の世代。await の後で、別の open・close があったら先へ進まない
+    const requestId = this._requestId;
     let nicoVideoPlayer = this._nicoVideoPlayer;
     if (!nicoVideoPlayer) {
-      nicoVideoPlayer = await this._initializeNicoVideoPlayer();
+      // 最初のプレイヤーの準備中にもう一度開かれても、プレイヤーは1つだけ作る
+      this._nicoVideoPlayerInit = this._nicoVideoPlayerInit ||
+        this._initializeNicoVideoPlayer().catch(err => {
+          this._nicoVideoPlayerInit = null;
+          throw err;
+        });
+      nicoVideoPlayer = await this._nicoVideoPlayerInit;
+      if (this._requestId !== requestId) {
+        return;
+      }
     } else {
       if (this._videoInfo) {
         this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
@@ -3269,17 +3292,32 @@ class NicoVideoPlayerDialog extends Emitter {
     this._state.resetVideoLoadingStatus();
 
     this._state.isCommentReady = false;
+    // Task 090（ZW-025）: 前の動画への投稿の「投稿中」は外す（前の投稿の完了は、新しい動画の表示を変えない）
+    this._state.isCommentPosting = false;
     this._watchId = watchId;
     this._lastCurrentTime = 0;
     this._lastOpenAt = Date.now();
     this._state.isError = false;
 
+    // Task 090（監査v2 ZW-017）: 再生に必須なのは動画情報だけ。手元のキャッシュ（IndexedDB）とプレイリストの初期化は
+    // 失敗しても・いつまでも終わらなくても（期限 OPTIONAL_LOAD_TIMEOUT）、無しで先へ進む
+    const optional = (label, func, fallback, onGiveUp = () => {}) => new Promise(resolve => {
+      const timer = window.setTimeout(() => {
+        window.console.warn(`${label}: timeout`);
+        onGiveUp();
+        resolve(fallback);
+      }, NicoVideoPlayerDialog.OPTIONAL_LOAD_TIMEOUT);
+      Promise.resolve().then(func).then(
+        result => { window.clearTimeout(timer); resolve(result); },
+        err => { window.clearTimeout(timer); window.console.warn(`${label}: fail`, err); onGiveUp(); resolve(fallback); });
+    });
     Promise.all([
       VideoInfoLoader.load(watchId, options.videoLoadOptions),
-      WatchInfoCacheDb.get(this._watchId),
-      this._initializePlaylist()  //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
-    ]).then(this._onVideoInfoLoaderLoad.bind(this, this._requestId)
-    ).catch(this._onVideoInfoLoaderFail.bind(this, this._requestId));
+      optional('WatchInfoCacheDb.get', () => WatchInfoCacheDb.get(watchId), null),
+      // プレイリストを待つ処理（再生可能になった時の playlist-ready 待ち）が止まらないよう、諦めた時も ready にする
+      optional('initializePlaylist', () => this._initializePlaylist(), undefined, () => this.emitResolve('playlist-ready'))  //videoinfo取得に300msくらいかかってるぽいから他のことやろうか
+    ]).then(this._onVideoInfoLoaderLoad.bind(this, requestId)
+    ).catch(this._onVideoInfoLoaderFail.bind(this, requestId));
 
     this.show();
     if (this._playerConfig.getValue('autoFullScreen') && !util.fullscreen.now()) {
@@ -3337,7 +3375,7 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     const videoInfo = this._videoInfo = new VideoInfoModel(videoInfoData, localCacheData);
     this._watchId = videoInfo.watchId;
-    WatchInfoCacheDb.put(this._watchId, {videoInfo});
+    WatchInfoCacheDb.putBestEffort(this._watchId, {videoInfo});
     let serverType;
     let videoQuality;
     if (!videoInfo.isDomandOnly && this._playerConfig.props.autoDisableNew && videoInfo.maybeBetterQualityServerType === 'dmc') {
@@ -3375,27 +3413,44 @@ class NicoVideoPlayerDialog extends Emitter {
       document.createElement('video').canPlayType('application/vnd.apple.mpegURL') !== '' ||
       document.createElement('video').canPlayType('application/x-mpegURL') !== '';
     const useHLS = isHLSSupported && (isHLSRequired || !this._playerConfig.props['video.hls.enableOnlyRequired'] || serverType != 'dmc');
-    this._videoSession = await VideoSessionWorker.create({
+    // Task 090（監査v2 ZW-012）: セッションはこの読み込みのローカル変数で持ち、await の後ごとに、
+    // 別の動画を開いた・閉じた（requestId が変わった）かを確かめる。古い読み込みの結果は画面へ入れない
+    const isStale = () => this._requestId !== requestId;
+    const session = await VideoSessionWorker.create({
       videoInfo,
       videoQuality,
       serverType,
       useHLS
     });
+    if (isStale()) {
+      Promise.resolve(session.close()).catch(() => {});
+      return;
+    }
+    this._videoSession = session;
 
     if (this._videoFilter.isNgVideo(videoInfo)) {
       return this._onVideoFilterMatch();
     }
 
     try {
-      if (this._videoSession.isDmc) {
-        await NVWatchCaller.call(videoInfo.dmcInfo.trackingId)
+      if (session.isDmc) {
+        await NVWatchCaller.call(videoInfo.dmcInfo.trackingId);
+        if (isStale()) {
+          return;
+        }
       }
-      const sessionInfo = await this._videoSession.connect();
+      const sessionInfo = await session.connect();
+      if (isStale()) {
+        return;
+      }
       this.setVideo(sessionInfo.url);
       videoInfo.setCurrentVideo(sessionInfo.url);
       this.emit('videoServerType', sessionInfo.type, sessionInfo, videoInfo);
     } catch (e) {
-      this._onVideoSessionFail(this._videoSession.serverType, e);
+      if (isStale()) {
+        return;
+      }
+      this._onVideoSessionFail(session.serverType, e);
     }
     this._state.videoInfo = videoInfo;
 
@@ -3432,7 +3487,38 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     this.loadComment(msgInfo);
   }
+  /**
+   * Task 090（監査v2 ZW-016）: 今の動画（requestId）に属するタイマー（エラー・NG の後の自動の「次へ」、再生エラーの後の再読み込み）。
+   * 別の動画を開く・閉じると取り消し、動く時にも同じ動画のままかを確かめる。
+   */
+  _setVideoTimer(func, ms) {
+    const requestId = this._requestId;
+    const timers = this._videoTimers = this._videoTimers || new Set();
+    const id = window.setTimeout(() => {
+      timers.delete(id);
+      if (this._requestId !== requestId) {
+        return;
+      }
+      func();
+    }, ms);
+    timers.add(id);
+    return id;
+  }
+  _clearVideoTimers() {
+    if (!this._videoTimers) {
+      return;
+    }
+    for (const id of this._videoTimers) {
+      window.clearTimeout(id);
+    }
+    this._videoTimers.clear();
+  }
   _onVideoInfoLoaderFail(requestId, e) {
+    // Task 090（監査v2 ZW-015）: 失敗の中身は Error・DOMException・{message, info, reason}・文字列等さまざま。
+    // 以前は info が無い時にも e.info.isPlayable を読んで2つ目の例外になっていた
+    if (!e || typeof e !== 'object') {
+      e = {message: e === undefined || e === null ? '' : String(e)};
+    }
     const watchId = e.watchId;
     window.console.error('_onVideoInfoLoaderFail', watchId, e);
     if (this._requestId !== requestId) {
@@ -3452,8 +3538,9 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!this.isPlaylistEnable) {
       return;
     }
-    if (e.reason === 'forbidden' || e.info.isPlayable === false) {
-      window.setTimeout(() => this.playNextVideo(), 3000);
+    if (e.reason === 'forbidden' || e.reason === 'not found' ||
+      (e.info && e.info.isPlayable === false)) {
+      this._setVideoTimer(() => this.playNextVideo(), 3000);
     }
   }
   _onVideoSessionFail(serverType, result) {
@@ -3463,37 +3550,50 @@ class NicoVideoPlayerDialog extends Emitter {
       `動画の読み込みに失敗しました(${server}) ${result && result.message || ''}`, this._watchId);
     this._state.setState({isError: true, isLoading: false});
     if (this.isPlaylistEnable) {
-      window.setTimeout(() => this.playNextVideo(), 3000);
+      this._setVideoTimer(() => this.playNextVideo(), 3000);
     }
+  }
+  /**
+   * Task 090（監査v2 ZW-021）: 再生開始（play() の Promise）の失敗の分け方。
+   * DOMException は name（NotAllowedError・AbortError 等）で分ける。ZenzaHLS はセッション切れを
+   * new DOMException('SessionClosedError')（message に入る）で返すので、message・name・独自の kind のどれでも分かるようにする。
+   */
+  static classifyPlayStartError(err) {
+    const name = err && err.name;
+    const kind = err && (err.kind || err.message);
+    if (name === 'SessionClosedError' || kind === 'SessionClosedError') {
+      return 'sessionClosed';
+    }
+    if (name === 'NotAllowedError') {
+      return 'notAllowed';   // 自動再生のブロック
+    }
+    if (name === 'AbortError') {
+      return 'aborted';      // 再生開始を待っている間に動画変更などで中断された等
+    }
+    return 'unknown';
   }
   _onVideoPlayStartFail(err) {
     window.console.error('動画再生開始に失敗', err);
-    if (!(err instanceof DOMException)) { //
-      return;
-    }
-
-    console.warn('play() request was rejected code: %s. message: %s', err.code, err.message);
-    const message = err.message;
-    switch (message) {
-      case 'SessionClosedError':
+    const type = NicoVideoPlayerDialog.classifyPlayStartError(err);
+    console.warn('play() request was rejected type: %s name: %s message: %s',
+      type, err && err.name, err && err.message);
+    switch (type) {
+      case 'sessionClosed':
         // TODO: DMCのセッション切れなら自動リロード
-        // if (this._videoSession.isDeleted && !this._videoSession.isAbnormallyClosed) {
-        //   window.console.info('%cリロードしたら直るかも', 'background: yellow');
-        //
-        // }
-        if (this._playserState.isError) { break; }
+        // 以前は存在しない this._playserState を読んで、ここに来ると例外になっていた
+        if (this._state.isError) { break; }
         this._setErrorMessage('動画の再生開始に失敗しました', this._watchId);
         this._state.setVideoErrorOccurred();
         break;
-
-      case 'AbortError': // 再生開始を待っている間に動画変更などで中断された等
-      case 'NotAllowedError': // 自動再生のブロック
+      case 'aborted':
+      case 'notAllowed':
       default:
         break;
     }
 
-    this.emit('loadVideoPlayStartFail');
-    global.emitter.emitAsync('loadVideoPlayStartFail');
+    // 失敗した再生開始は、種類によらず必ず知らせる（以前は DOMException 以外を黙って捨てていた）
+    this.emit('loadVideoPlayStartFail', type);
+    global.emitter.emitAsync('loadVideoPlayStartFail', type);
   }
   _onVideoFilterMatch() {
     window.console.error('ng video', this._watchId);
@@ -3501,7 +3601,7 @@ class NicoVideoPlayerDialog extends Emitter {
     this._state.isError = true;
     this.emit('error');
     if (this.isPlaylistEnable) {
-      window.setTimeout(() => this.playNextVideo(), 3000);
+      this._setVideoTimer(() => this.playNextVideo(), 3000);
     }
   }
   _setErrorMessage(msg) {
@@ -3532,7 +3632,7 @@ class NicoVideoPlayerDialog extends Emitter {
       this._playerConfig.props.commentLanguage = result.threadInfo.language;
     }
 
-    WatchInfoCacheDb.put(this._watchId, {threadInfo: result.threadInfo});
+    WatchInfoCacheDb.putBestEffort(this._watchId, {threadInfo: result.threadInfo});
     this._state.isCommentReady = true;
     this._state.isWaybackMode = result.threadInfo.isWaybackMode;
     this.emit('commentReady', result, this._threadInfo);
@@ -3569,11 +3669,12 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     window.console.timeEnd('動画選択から再生可能までの時間 watchId=' + this._watchId);
     this._playerConfig.props.lastWatchId = this._watchId;
-    WatchInfoCacheDb.put(this._watchId, {watchCount: 1});
+    WatchInfoCacheDb.putBestEffort(this._watchId, {watchCount: 1});
 
     await this.promise('playlist-ready');
 
-    if (this._videoWatchOptions.isPlaylistStartRequest) {
+    // Task 090（ZW-017）: プレイリストを作れなかった時も、再生可能の処理は続ける
+    if (this._playlist && this._videoWatchOptions.isPlaylistStartRequest) {
 
       let option = this._videoWatchOptions.mylistLoadOptions;
       let query = this._videoWatchOptions.query;
@@ -3592,8 +3693,8 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     // チャンネル動画は、1本の動画がwatchId表記とvideoId表記で2本登録されてしまう。
     // そこでwatchId表記のほうを除去する
-    this._playlist.insertCurrentVideo(this._videoInfo);
-    if (this._videoInfo.watchId !== this._videoInfo.videoId &&
+    this._playlist && this._playlist.insertCurrentVideo(this._videoInfo);
+    if (this._playlist && this._videoInfo.watchId !== this._videoInfo.videoId &&
       this._videoInfo.videoId.startsWith('so')) {
       this._playlist.removeItemByWatchId(this._videoInfo.watchId);
     }
@@ -3609,7 +3710,7 @@ class NicoVideoPlayerDialog extends Emitter {
     if (this._nextVideo) {
       const nextVideo = this._nextVideo;
       this._nextVideo = null;
-      if (this._playerConfig.props.enableNicosJumpVideo) {
+      if (this._playlist && this._playerConfig.props.enableNicosJumpVideo) {
         const nv = this._playlist.findByWatchId(nextVideo);
         if (nv && nv.isPlayed()) {
           return;
@@ -3664,7 +3765,7 @@ class NicoVideoPlayerDialog extends Emitter {
     }
 
     const retry = params => {
-      setTimeout(() => {
+      this._setVideoTimer(() => {
         if (!this.isOpen) {
           return;
         }
@@ -3672,7 +3773,11 @@ class NicoVideoPlayerDialog extends Emitter {
       }, 3000);
     };
 
+    const requestId = this._requestId;
     const sessionState = await this._videoSession.getState();
+    if (this._requestId !== requestId) {
+      return;  // Task 090（ZW-012）: 待っている間に別の動画を開いた・閉じた
+    }
     const {isDomand, isDmc, isDeleted, isAbnormallyClosed} = sessionState;
     const videoWatchOptions = this._videoWatchOptions;
     const code = (e && e.target && e.target.error && e.target.error.code) || 0;
@@ -3702,7 +3807,7 @@ class NicoVideoPlayerDialog extends Emitter {
     this._setErrorMessage(e.description);
     this.emit('error', e);
     if (e.fallback) {
-      setTimeout(() => this.reload({isAutoZenTubeDisabled: true}), 3000);
+      this._setVideoTimer(() => this.reload({isAutoZenTubeDisabled: true}), 3000);  // Task 090（ZW-016）
     }
   }
   _onVideoAbort() {
@@ -3747,7 +3852,7 @@ class NicoVideoPlayerDialog extends Emitter {
       return;
     }
     const dr = this.duration;
-    console.info('%csave PlaybackPosition:', 'background: cyan', ct, dr, vi.csrfToken);
+    console.info('%csave PlaybackPosition:', 'background: cyan', ct, dr); // Task 088: csrfToken はログに出さない
     if (vi.contextWatchId !== contextWatchId) {
       return;
     }
@@ -3770,12 +3875,14 @@ class NicoVideoPlayerDialog extends Emitter {
     if (this.isPlaying) {
       this._savePlaybackPosition(this._watchId, this.currentTime);
     }
-    WatchInfoCacheDb.put(this._watchId, {currentTime: this.currentTime});
+    WatchInfoCacheDb.putBestEffort(this._watchId, {currentTime: this.currentTime});
     if (Fullscreen.now()) {
       Fullscreen.cancel();
     }
     this.pause();
     this.hide();
+    this._requestId = null;  // Task 090（ZW-012）: 閉じた後に、読み込み中だった動画の結果を使わない
+    this._clearVideoTimers();  // Task 090（ZW-016）
     this._refresh();
     this.emit('close');
     global.emitter.emitAsync('DialogPlayerClose');
@@ -3802,8 +3909,13 @@ class NicoVideoPlayerDialog extends Emitter {
     });
     this._playlist.on('command', this._onCommand.bind(this));
     this._playlist.on('update', _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
-    if (PlayListSession.isExist()) {
-      this._playlist.restoreFromSession();
+    // Task 090（ZW-017）: 保存しておいたプレイリストが壊れていても、プレイリストの準備（と動画を開くこと）は止めない
+    try {
+      if (PlayListSession.isExist()) {
+        this._playlist.restoreFromSession();
+      }
+    } catch (err) {
+      window.console.warn('playlist restore fail', err);
     }
     this.emitResolve('playlist-ready');
   }
@@ -3903,29 +4015,38 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!util.isLogin()) {
       return Promise.reject();
     }
+    // Task 090（監査v2 ZW-025）: 投稿を始めた時の動画・スレッド・世代を固定する。
+    // 結果の記録（履歴・blockNo）は元の動画へ、今の画面の更新（投稿中の表示・通知）は同じ動画のままの時だけ行う
+    const requestId = this._requestId;
+    const watchId = this._watchId;
+    const threadInfo = this._threadInfo;
+    const isCurrent = () => this._requestId === requestId;
     const threadId = this._threadInfo.threadId * 1;
     // force184のスレッドに184コマンドをつけてしまうとエラー. 同じなんだから無視すりゃいいだろが
-    if (this._threadInfo.force184 !== '1') {
+    if (!threadInfo.is184Forced) {
       cmd = cmd ? ('184 ' + cmd) : '184';
     }
-    Object.assign(options, {isMine: true, isUpdating: true, thead: threadId});
+    Object.assign(options, {isMine: true, isUpdating: true, thread: threadId});
     vpos = (!isNaN(vpos) && typeof vpos === 'number') ? vpos : this._nicoVideoPlayer.vpos;
     const nicoChat = this._nicoVideoPlayer.addChat(text, cmd, vpos, options);
 
     this._state.isCommentPosting = true;
 
-    const lang = this._playerConfig.props.commentLanguage;
     window.console.time('コメント投稿');
 
     const onSuccess = result => {
       window.console.timeEnd('コメント投稿');
       nicoChat.isUpdating = false;
       nicoChat.no = result.no;
-      this.execCommand('notify', 'コメント投稿成功');
-      this._state.isCommentPosting = false;
-
-      this._threadInfo.blockNo = result.blockNo;
-      WatchInfoCacheDb.put(this._watchId, {comment: {text, cmd, vpos, options}});
+      // 同じ動画のまま（コメントの読み直しでスレッドの情報が新しくなっていても）なら今のスレッドへ、切り替えた後なら元のスレッドへ
+      if (typeof result.blockNo === 'number' && Number.isFinite(result.blockNo)) {
+        (isCurrent() ? this._threadInfo : threadInfo).blockNo = result.blockNo;
+      }
+      WatchInfoCacheDb.putBestEffort(watchId, {comment: {text, cmd, vpos, options}});
+      if (isCurrent()) {
+        this.execCommand('notify', 'コメント投稿成功');
+        this._state.isCommentPosting = false;
+      }
       return Promise.resolve(result);
     };
 
@@ -3935,16 +4056,18 @@ class NicoVideoPlayerDialog extends Emitter {
       window.console.timeEnd('コメント投稿');
       nicoChat.isPostFail = true;
       nicoChat.isUpdating = false;
-      this.execCommand('alert', err.message);
-      this._state.isCommentPosting = false;
       if (err.blockNo && typeof err.blockNo === 'number') {
-        this._threadInfo.blockNo = err.blockNo;
+        (isCurrent() ? this._threadInfo : threadInfo).blockNo = err.blockNo;
+      }
+      if (isCurrent()) {
+        this.execCommand('alert', err.message);
+        this._state.isCommentPosting = false;
       }
       return Promise.reject(err);
     };
 
     const msgInfo = this._videoInfo.msgInfo;
-    return this.threadLoader.postChat(msgInfo, text, cmd, vpos, lang)
+    return this.threadLoader.postChat(msgInfo, text, cmd, vpos)
       .then(onSuccess).catch(onFail);
   }
   removeChat(chat) {

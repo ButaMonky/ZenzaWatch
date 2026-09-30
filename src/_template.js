@@ -32,9 +32,9 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.21-task081
+// @version        2.7.86-task157
 // @run-at         document-body
-// @require        https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
+// @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
 import {AntiPrototypeJs} from '../packages/lib/src/infra/AntiPrototype-js';
 import {Emitter, Handler, EmitterInitFunc, PromiseHandler} from '../packages/lib/src/Emitter';
@@ -42,11 +42,11 @@ import {Config, NaviConfig} from './Config';
 import {uQuery, uq} from '../packages/lib/src/uQuery';
 import {util} from './util';
 import {components} from '../packages/components/src/index';
-import {State} from './State';
+import {PlayerState} from './State';
 import {VideoInfoLoader} from '../packages/lib/src/nico/loader';
 import {ThumbInfoLoader, PlaylistApiLoader, MylistApiLoader, CacheStorage, CrossDomainGate, UaaLoader, PlaybackPosition, NicoVideoApi, RecommendAPILoader, NVWatchCaller, CommonsTreeLoader, NicoRssLoader, MatrixRankingLoader} from '../packages/lib/src/nico/loader';
 import {VideoInfoModel} from './VideoInfo';
-import {VideoSearch, NicoSearchApiV2Loader} from '../packages/lib/src/nico/VideoSearch';
+import {NicoSearchApiV2Loader} from '../packages/lib/src/nico/VideoSearch';
 import {TagSuggestLoader} from '../packages/lib/src/nico/TagSuggestLoader';
 import {TagEditApi} from '../packages/lib/src/nico/TagEditApi';
 import {StoryboardInfoLoader} from '../packages/lib/src/nico/StoryboardInfoLoader';
@@ -60,10 +60,10 @@ import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';
 import {ScreenFilter, ScreenFilterPanel} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';
 import {NicoVideoPlayer} from './NicoVideoPlayer';
-import {StoryBoardModel} from './StoryBoard';
+import {StoryboardModel} from './StoryBoard';
 import {VideoControlBar} from './VideoControlBar';
 import {NicoTextParser} from '../packages/zenza/src/commentLayer/NicoTextParser';
-import {CommentPlayer} from './CommentPlayer';
+import {NicoCommentPlayer} from './CommentPlayer';
 import {CommentLayoutWorker} from '../packages/zenza/src/commentLayer/CommentLayoutWorker';
 import {SlotLayoutWorker} from '../packages/zenza/src/commentLayer/SlotLayoutWorker';
 import {NicoScripter} from '../packages/zenza/src/commentLayer/NicoScripter';
@@ -77,10 +77,10 @@ import {CommentInputPanel} from './CommentInputPanel';
 // import {SettingPanel} from './SettingPanel';
 import {TagListView} from './TagListView';
 import {VideoInfoPanel} from './VideoInfoPanel';
-import {GinzaSlayer} from './GinzaSlayer';
+import {initializeGinzaSlayer} from './GinzaSlayer';
 import {initialize} from './initializer';
 import {CustomElements} from '../packages/zenza/src/parts/CustomElements';
-import {CONSTANT, NICORU} from './constant';
+import {CONSTANT} from './constant';
 import {TextLabel} from '../packages/lib/src/ui/TextLabel';
 import {parseThumbInfo} from '../packages/lib/src/nico/parseThumbInfo';
 import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';
@@ -223,10 +223,10 @@ WindowResizeObserver.subscribe(({width, height}) => {
   );
 });
 //@require components
-//@require State
+//@require PlayerState
 //@require VideoInfoLoader
 //@require VideoInfoModel
-//@require VideoSearch
+//@require NicoSearchApiV2Loader
 //@require TagSuggestLoader
 //@require TagEditApi
 Object.assign(ZenzaWatch.api, {
@@ -267,11 +267,11 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 //@require SupporterCredit
 //@require NicoVideoPlayer
 
-//@require StoryBoardModel
+//@require StoryboardModel
 
 //@require VideoControlBar
 
-//@require CommentPlayer
+//@require NicoCommentPlayer
 
 //@require CommentLayoutWorker
 
@@ -293,7 +293,7 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 
 //@require VideoInfoPanel
 
-//@require GinzaSlayer
+//@require initializeGinzaSlayer
 
 //@require initialize
 

@@ -3,12 +3,12 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.19-task080
+// @version     0.3.26-task152
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
 // @noframes
-// @require     https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.11/lodash.min.js
+// @require     https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
 
 import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
@@ -384,7 +384,7 @@ const $ = uq;
         switch (settingName) {
           case 'wordRegFilter':
             try {
-              const reg = new RegExp(val);
+              const reg = new RegExp(val, this._playerConfig.props.wordRegFilterFlags);
               $target.addClass('update');
             } catch(err) {
               $target.addClass('error');
@@ -394,7 +394,7 @@ const $ = uq;
             break;
           case 'wordRegFilterFlags': {
             try {
-              const reg = new RegExp(/./, val);
+              const reg = new RegExp(this._playerConfig.props.wordRegFilter, val);
               $target.addClass('update');
             } catch(err) {
               $target.addClass('error');

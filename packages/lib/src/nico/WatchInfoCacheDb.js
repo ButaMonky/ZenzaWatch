@@ -61,7 +61,7 @@ const WatchInfoCacheDb = (() => {
         const ownerId = videoInfo?.owner.linkId ?? '';
 
         const comment = cache.comment || [];
-        options.comment && (comment.push(comment));
+        options.comment && (comment.push(options.comment));
         const record = {
           watchId,
           videoId:  (cache.videoId  ? cache.videoId  : videoId) || '',
@@ -77,7 +77,7 @@ const WatchInfoCacheDb = (() => {
           heatMap:    (options.heatMap    ? options.heatMap    : cache.heatMap) || null,
           config:     (options.config     ? options.config     : cache.config) || ''
         };
-        cacheDb.put(record);
+        await cacheDb.put(record);
         return record;
       },
       get(watchId) { return cacheDb.updateTime({key: watchId}); },
@@ -87,13 +87,16 @@ const WatchInfoCacheDb = (() => {
     };
   };
   const put = (watchId, options = {}) => open().then(db => db.put(watchId, options));
+  // Playback callers deliberately keep persistence best effort; explicit put still rejects.
+  const putBestEffort = (watchId, options = {}) => put(watchId, options)
+    .catch(() => { console.warn('Watch info cache write failed'); });
   const get = watchId => open().then(db => db.get(watchId));
   const del = watchId => open().then(db => db.delete(watchId));
   const close = () => open().then(db => db.close());
   const gc = (expireTime) => open().then(db => db.gc(expireTime));
   const api = api => NicoVideoApi = api;
 
-  return {initWorker, open, put, get, delete: del, close, gc, api};
+  return {initWorker, open, put, putBestEffort, get, delete: del, close, gc, api};
 })();
 //===END===
 export {WatchInfoCacheDb};

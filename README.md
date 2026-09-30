@@ -72,6 +72,10 @@ npm run build   # dist/ の10個の配布物を作り直す（node ./build.js --
 - Node.js は `package.json` の `engines` の範囲（22.22.2 以上の 22 系、24.15.0 以上の 24 系、または 26 以上）を使ってください。
 - ビルドは入力の欠け・構文エラー・書き込み失敗があると終了コード1で止まり、`dist/` を書き換えません。
 - 作り直した配布物は、ビルド識別子の行（`// build: …` と `var BUILD = …`）以外は `dist/` のものと同じになります。
+- `dist/` の配布物は [dist-manifest.json](/dist-manifest.json) で2種類に分けて管理しています。
+  - **active**（10個）: `npm run build` でソースから作る配布物。
+  - **legacy-frozen**（3個: `ZenzaWatch.user.js` 2.6.2・`MylistFilter.user.js`・`WatchDump.user.js`）: 元の作者のリポジトリから引き継いだ古い成果物。今のソースからは作り直さず、内容を変えない（SHA-256 で固定）。移行・削除の方針が決まるまで残しています。
+  - どちらにも入っていない配布物があると `npm test` が失敗します。
 
 ## オリジナル版について
 

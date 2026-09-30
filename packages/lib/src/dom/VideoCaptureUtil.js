@@ -47,37 +47,27 @@ const VideoCaptureUtil = (() => {
     return {svg, data};
   };
 
-  const htmlToCanvas = (html, width = 640, height = 360) => {
-
+  const htmlToCanvas = async (html, width = 640, height = 360) => {
     const imageW = height * 16 / 9;
     const imageH = imageW * 9 / 16;
-    const {svg, data} = htmlToSvg(html);
-
+    const {svg} = htmlToSvg(html);
     const url = window.URL.createObjectURL(svg);
-    if (!url) {
-      return Promise.reject(new Error('convert svg fail'));
+    if (!url) { throw new Error('convert svg fail'); }
+    try {
+      const img = new Image();
+      img.width = 682;
+      img.height = 384;
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
+      canvas.width = width;
+      canvas.height = height;
+      img.src = url;
+      await img.decode();
+      context.drawImage(img, (width - imageW) / 2, (height - imageH) / 2, imageW, imageH);
+      return {canvas, img};
+    } finally {
+      window.URL.revokeObjectURL(url);
     }
-    const img = new Image();
-    img.width = 682;
-    img.height = 384;
-    const canvas = document.createElement('canvas');
-
-    const context = canvas.getContext('2d');
-    canvas.width = width;
-    canvas.height = height;
-
-    img.src = url;
-    img.decode().then(() => {
-      context.drawImage(
-        img,
-        (width - imageW) / 2,
-        (height - imageH) / 2,
-        imageW,
-        imageH);
-    }).catch(e => {
-      throw new Error('img decode error', e);
-    }).finally(() => window.URL.revokeObjectURL(url));
-    return {canvas, img};
   };
 
   const nicoVideoToCanvas = async ({video, html, minHeight = 1080, processVideoCanvas = null}) => {

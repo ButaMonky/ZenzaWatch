@@ -13,7 +13,10 @@ const GateAPI = (() => {
 //@require ThumbInfoCacheDb
   const thumbInfo = async () => {
     const {port, TOKEN} = init({prefix: `thumbInfo${PRODUCT}Loader`, type: 'thumbInfo'});
-    const db = await ThumbInfoCacheDb.open();
+    const db = await ThumbInfoCacheDb.open().catch(() => {
+      console.warn('Thumbnail cache unavailable');
+      return {get: async () => null, put: async () => {}};
+    });
 
     port.addEventListener('message', async e => {
       const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
@@ -24,7 +27,7 @@ const GateAPI = (() => {
       if (TOKEN !== token ||
         p.hostname !== location.host ||
         !p.pathname.startsWith('/api/getthumbinfo/')) {
-        console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+        console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
         return;
       }
       params.options = params.options || {};
@@ -43,7 +46,7 @@ const GateAPI = (() => {
       .then(async xmlText => {
         let thumbInfo = parseThumbInfo(xmlText);
         if (thumbInfo.status === 'ok') {
-          db.put(xmlText, thumbInfo);
+          db.put(xmlText, thumbInfo).catch(() => console.warn('Thumbnail cache write failed'));
         } else if (cache && cache.thumbInfo.status === 'ok') {
           thumbInfo = cache.thumbInfo;
         }
@@ -225,7 +228,7 @@ const GateAPI = (() => {
       const {body, sessionId, token} = data;
       const {command, params} = body;
       if (TOKEN !== token) {
-        console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+        console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
         return;
       }
       try {
@@ -244,7 +247,9 @@ const GateAPI = (() => {
           case 'pushHistory':
             return pushHistory(params);
           case 'bridge-db':
-            return bridgeDb(params, sessionId);
+            return bridgeDb(params, sessionId).catch(() =>
+              post({status: 'fail', command: 'bridge-db-result',
+                params: {message: 'IndexedDB operation failed'}}, {sessionId}));
           case 'message':
             return sendMessage(body, sessionId);
           case 'ping':
@@ -305,7 +310,7 @@ const GateAPI = (() => {
       const {command, params} = body;
       if (command !== 'videoCapture') { return; }
       if (TOKEN !== token) {
-        window.console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+        window.console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
         return;
       }
 
@@ -328,7 +333,7 @@ const GateAPI = (() => {
       const p = parseUrl(params.url);
       if (TOKEN !== token ||
         p.hostname !== location.host) {
-        console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+        console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
         return;
       }
       params.options = params.options || {};
@@ -355,7 +360,7 @@ const GateAPI = (() => {
       if (TOKEN !== token ||
         p.hostname !== location.host ||
         !p.pathname.startsWith('/a/')) {
-        console.log('invalid msg: ', {origin: e.origin, TOKEN, token, body});
+        console.log('invalid msg: ', {origin: e.origin, tokenMatches: TOKEN === token, command: body && body.command});
         return;
       }
       params.options = params.options || {};

@@ -143,6 +143,8 @@ class VideoInfoPanel extends Emitter {
    * 説明文中のurlの自動リンク等の処理
    */
   async _updateVideoDescription(html, series = null) {
+    // Task 090（監査v2 ZW-053）: 更新の世代。await の後で、もっと新しい更新や clear() があったら、この結果は捨てる
+    const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
     this._description.textContent = '';
     this._zenTubeUrl = null;
     if (series) {
@@ -150,10 +152,10 @@ class VideoInfoPanel extends Emitter {
         html += `<br><br>「${textUtil.escapeHtml(series.title)}」 シリーズ前後の動画`;
       }
       if (series.video.prev) {
-        html += `<br>前の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${series.video.prev.id}">${series.video.prev.id}</a>`;
+        html += `<br>前の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.prev.id)}">${textUtil.escapeHtml(series.video.prev.id)}</a>`;
       }
       if (series.video.next) {
-        html += `<br>次の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${series.video.next.id}">${series.video.next.id}</a>`;
+        html += `<br>次の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.next.id)}">${textUtil.escapeHtml(series.video.next.id)}</a>`;
       }
     }
     /*
@@ -214,29 +216,63 @@ class VideoInfoPanel extends Emitter {
       const [min, sec] = (seek.dataset.seektime || '0:0').split(':');
       Object.assign(seek.dataset, {command: 'seek', type: 'number', param: min * 60 + sec * 1});
     };
-    const mylistLink = link => {
-      link.classList.add('mylistLink');
-      const mylistId = link.textContent.split('/')[1];
-      const button = uq(`<zenza-mylist-link data-mylist-id="${mylistId}">
-          ${link.outerHTML}
-          <zenza-playlist-append
-            class="playlistSetMylist clickable-item" title="プレイリストで開く"
-            data-command="playlistSetMylist" data-param="${mylistId}"
-          >▶</zenza-playlist-append>
-        </zenza-mylist-link>`)[0];
-      link.replaceWith(button);
+    /*
+     * Task 088（監査v2 ZW-052）: 以前はリンクの文字（link.textContent）から取った ID を、
+     * そのまま HTML の文字列へ埋め込んで要素を作り直していたため、引用符や < > を含むリンクの文字が
+     * 新しい属性・要素として解釈されてしまった。ID はリンク先(href)から取り（取れない時だけ文字から）、
+     * 数字だけであることを確かめてから、createElement と dataset で組み立てる。元のリンクはそのまま中へ移す。
+     */
+    const playlistLinkId = (link, kind) => {
+      const host = (link.hostname || '').replace(/^(www|sp)\./, '');
+      if (host === 'nicovideo.jp') {
+        const m = new RegExp(`^(?:/user/[0-9]+)?/${kind}/([0-9]+)/?$`).exec(link.pathname || '');
+        if (m) {
+          return m[1];
+        }
+      }
+      const t = new RegExp(`^${kind}/([0-9]+)$`).exec((link.textContent || '').trim());
+      return t ? t[1] : null;
     };
-    const seriesLink = link => {
-      link.classList.add('seriesLink');
-      const seriesId = link.textContent.split('/')[1];
-      const button = uq(`<zenza-series-link data-series-id="${seriesId}">
-          ${link.outerHTML}
-          <zenza-playlist-append
-            class="playlistSetSeries clickable-item" title="プレイリストで開く"
-            data-command="playlistSetSeries" data-param="${seriesId}"
-          >▶</zenza-playlist-append>
-        </zenza-series-link>`)[0];
-      link.replaceWith(button);
+    const playlistLink = (link, {kind, tag, idKey, command}) => {
+      const id = playlistLinkId(link, kind);
+      if (!id) {
+        return;
+      }
+      link.classList.add(`${kind}Link`);
+      const wrapper = document.createElement(tag);
+      wrapper.dataset[idKey] = id;
+      const button = document.createElement('zenza-playlist-append');
+      button.className = `${command} clickable-item`;
+      button.title = 'プレイリストで開く';
+      Object.assign(button.dataset, {command, param: id});
+      button.textContent = '▶';
+      link.replaceWith(wrapper);
+      wrapper.append(link, button);
+    };
+    const mylistLink = link =>
+      playlistLink(link, {kind: 'mylist', tag: 'zenza-mylist-link', idKey: 'mylistId', command: 'playlistSetMylist'});
+    const seriesLink = link =>
+      playlistLink(link, {kind: 'series', tag: 'zenza-series-link', idKey: 'seriesId', command: 'playlistSetSeries'});
+    /*
+     * Task 088（監査v2 ZW-052）: 説明文の本文はニコニコが返す HTML をそのまま表示している。
+     * 念のため、表示する前にスクリプトとして動き得るもの（script 等の要素、on〜 の属性、
+     * javascript: / data: / vbscript: の URL）だけを取り除く。文字の装飾や普通のリンクはそのまま。
+     */
+    const UNSAFE_ELEMENTS = 'script,iframe,frame,object,embed,base,meta,link,form';
+    const UNSAFE_URL = /^[\s\u0000-\u001f]*(javascript|data|vbscript):/i;
+    const sanitizeDescription = root => {
+      for (const e of root.querySelectorAll(UNSAFE_ELEMENTS)) {
+        e.remove();
+      }
+      for (const e of root.querySelectorAll('*')) {
+        for (const {name, value} of [...e.attributes]) {
+          const n = name.toLowerCase();
+          if (n.startsWith('on') ||
+            (['href', 'src', 'action', 'formaction', 'xlink:href'].includes(n) && UNSAFE_URL.test(value))) {
+            e.removeAttribute(name);
+          }
+        }
+      }
     };
     const youtube = link => {
       const btn = uq(`<zentube-button
@@ -253,8 +289,12 @@ class VideoInfoPanel extends Emitter {
     };
 
     await sleep.promise();
+    if (generation !== this._descriptionGeneration) {
+      return;
+    }
 
     const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);
+    sanitizeDescription($description[0]);
     for (const a of $description.query('a')) {
       a.classList.add('noHoverMenu');
       const href = a.href;
@@ -281,7 +321,8 @@ class VideoInfoPanel extends Emitter {
       e.classList.add('videoDescription-font');
     }
 
-    this._description.append($description[0]);
+    // 装飾は切り離した要素の上で済ませてあるので、最新の結果だけで置き換える
+    this._description.replaceChildren($description[0]);
 
   }
   /*
@@ -447,6 +488,7 @@ class VideoInfoPanel extends Emitter {
     this._videoHeaderPanel.clear();
     this.classList.add('initializing');
     this._$ownerIcon.raf.addClass('is-loading');
+    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
     this._description.textContent = '';
   }
   selectTab(tabName) {
@@ -2524,6 +2566,11 @@ class VideoSearchForm extends Emitter {
     card.classList.add('is-failed', 'is-imageError');
     if (code === 'DELETED' || code === 'NOT_FOUND') {
       card.classList.add('is-unavailable');
+      card.setAttribute('aria-disabled', 'true');
+      Array.from(card.querySelectorAll('.searchVideoCard-button')).forEach(button => {
+        button.disabled = true;
+        button.setAttribute('aria-disabled', 'true');
+      });
     }
   }
 
@@ -2862,6 +2909,9 @@ class VideoSearchForm extends Emitter {
       return;
     }
     const card = this._videoIdCards.get(watchId);
+    if (card && card.classList.contains('is-unavailable')) {
+      return;
+    }
     switch (action) {
       case 'open':
         card && card.classList.add('is-opening');
@@ -3647,9 +3697,13 @@ VideoSearchForm.__css__ = (`
         font-weight: bold;
         animation: zenzaVideoCardDoneMark 0.9s ease both;
       }
-      .zenzaVideoSearchPanel .searchVideoCard.is-unavailable .searchVideoCard-button:not(.is-primary) {
+      .zenzaVideoSearchPanel .searchVideoCard.is-unavailable {
+        cursor: not-allowed;
+      }
+      .zenzaVideoSearchPanel .searchVideoCard.is-unavailable .searchVideoCard-button {
         opacity: 0.4;
         pointer-events: none;
+        cursor: not-allowed;
       }
 
       @keyframes zenzaVideoCardIn {

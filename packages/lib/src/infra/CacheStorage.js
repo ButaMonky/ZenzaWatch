@@ -14,22 +14,32 @@ const CacheStorage = (() => {
       this.gc = _.debounce(this.gc.bind(this), 100);
     }
 
+    _readItem(key) {
+      let item;
+      try {
+        item = JSON.parse(this._storage[key]);
+      } catch (e) {
+        this._storage.removeItem(key);
+        return null;
+      }
+      if (!item || typeof item !== 'object' || Array.isArray(item) ||
+          !Object.prototype.hasOwnProperty.call(item, 'data') ||
+          !(item.expiredAt === '' ||
+            (typeof item.expiredAt === 'number' && Number.isFinite(item.expiredAt)))) {
+        this._storage.removeItem(key);
+        return null;
+      }
+      return item;
+    }
+
     gc(now = NaN) {
       const storage = this._storage;
       now = isNaN(now) ? Date.now() : now;
       Object.keys(storage).forEach(key => {
-        if (key.indexOf(PREFIX) === 0) {
-          let item;
-          try {
-            item = JSON.parse(this._storage[key]);
-          } catch(e) {
-            storage.removeItem(key);
-          }
-          if (item.expiredAt === '' || item.expiredAt > now) {
-            return;
-          }
-          storage.removeItem(key);
-        }
+        if (key.indexOf(PREFIX) !== 0) { return; }
+        const item = this._readItem(key);
+        if (!item || item.expiredAt === '' || item.expiredAt > now) { return; }
+        storage.removeItem(key);
       });
     }
 
@@ -44,12 +54,22 @@ const CacheStorage = (() => {
         expiredAt: expiredAt
       };
 
+      let serialized;
       try {
-        this._storage[key] = JSON.stringify(cacheData);
+        serialized = JSON.stringify(cacheData);
+        this._storage[key] = serialized;
         this.gc();
       } catch (e) {
         if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-          this.gc(0);
+          try {
+            // Emergency cleanup must complete before retrying; this.gc is debounced.
+            this.gc.cancel();
+            CacheStorage.prototype.gc.call(this);
+            this._storage[key] = serialized;
+            this.gc();
+          } catch (retryError) {
+            // Cache writes have always been best effort; retry only once.
+          }
         }
       }
     }
@@ -59,13 +79,8 @@ const CacheStorage = (() => {
       if (!(this._storage.hasOwnProperty(key) || this._storage[key] !== undefined)) {
         return null;
       }
-      let item = null;
-      try {
-        item = JSON.parse(this._storage[key]);
-      } catch(e) {
-        this._storage.removeItem(key);
-        return null;
-      }
+      const item = this._readItem(key);
+      if (!item) { return null; }
 
       if (item.expiredAt === '' || item.expiredAt > Date.now()) {
         return item.data;

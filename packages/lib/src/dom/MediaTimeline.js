@@ -25,26 +25,46 @@ class MediaTimeline {
       this.attach(options.media);
     }
   }
+  /**
+   * Task 090（監査v2 ZW-022）: 動画の時刻へ、共有の時刻と補間の時計（Web Animations）の両方を必ず合わせる。
+   * currentTime の setter は「差が1秒を超える時」しか時計を合わせないため、シーク等ではこちらを使う
+   * （以前は 0.5秒のシークの後の onRaf で、時刻が古い時計の値へ戻っていた）。
+   */
+  syncClock(v) {
+    v = isNaN(v) ? 0 : v;
+    this.currentTime = v;
+    this.anime.currentTime = v * 1000;
+  }
   initEventMap() {
     const map = {
       'pause': e => {
         // console.nicoru('paused', this.paused, this.media.paused, this.currentTime, this.media.currentTime);
         this.paused = true;
-        this.currentTime = this.media.currentTime;
+        this.syncClock(this.media.currentTime);
       },
       'play': e => {
         // console.nicoru('play');
-        this.currentTime = this.media.currentTime;
+        this.syncClock(this.media.currentTime);
         this.paused = false;
+      },
+      'seeking': e => {
+        this.syncClock(this.media.currentTime);
       },
       'seeked': e => {
         // console.nicoru('seeked');
-        this.currentTime = this.media.currentTime;
+        this.syncClock(this.media.currentTime);
       },
       'ratechange': e => {
         // console.nicoru('ratechange');
         this.playbackRate = this.media.playbackRate;
-        this.currentTime = this.media.currentTime;
+        this.syncClock(this.media.currentTime);
+      },
+      'durationchange': e => {
+        this.duration = this.media.duration;
+      },
+      // 本体の VideoPlayer（Emitter）は durationChange の名前で知らせる
+      'durationChange': e => {
+        this.duration = this.media.duration;
       }
     };
     return objUtil.toMap(map);
@@ -54,7 +74,7 @@ class MediaTimeline {
       this.detach();
     }
     this.media = media;
-    this.currentTime  = media.currentTime;
+    this.syncClock(media.currentTime);
     this.playbackRate = media.playbackRate;
     this.duration     = media.duration;
     this.paused       = media.paused;
@@ -70,6 +90,10 @@ class MediaTimeline {
     }
     this.media = null;
     clearInterval(this.timer);
+    // Task 090（ZW-022）: 予約中の rAF も取り消す（外した後に onRaf が動画を読みにいかないように）
+    this.raf && cancelAnimationFrame(this.raf);
+    this.raf = null;
+    this._isBusy = false;
   }
   onTimer() {
     const media = this.media;
@@ -78,12 +102,16 @@ class MediaTimeline {
     const diffMs = Math.abs(mc - ac) * 1000;
     if (!this.isWAAvailable || diffMs >= this.interval * 3 || media.paused !== this.paused) {
       // console.warn('fix diff', diff);
-      this.currentTime  = mc;
+      this.syncClock(mc);
       this.playbackRate = media.playbackRate;
       this.paused       = media.paused;
     }
   }
   onRaf() {
+    if (!this.media) {
+      this.raf = null;
+      return;
+    }
     if (this._isBusy) {
       this.raf = null;
       return;
@@ -101,6 +129,10 @@ class MediaTimeline {
   }
   async callRaf() {
     await sleep.resolve;
+    if (!this.media) {
+      this._isBusy = false;
+      return;
+    }
     this.raf = requestAnimationFrame(this.onRaf);
     this._isBusy = false;
   }

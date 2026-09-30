@@ -206,8 +206,8 @@ class TagListView extends BaseViewComponent {
    * 以前は視聴ページAPIのタグ情報にあるisNicodicArticleExistsを見ていたが、
    * ニコニコ側がこの値を返さなくなり（2026-09時点で、明らかに記事がある
    * タグまで含めて常にfalse）、アイコンが一切出なくなっていた。
-   * 代わりに大百科の記事ページのHTTPステータス（あれば200・無ければ404）で
-   * 判定する。詳しくはNicodicArticleLoaderのコメントを参照。
+   * Task157では大百科APIへタグを一括送信し、request_titleで結果を対応付ける。
+   * 詳しくはNicodicArticleLoaderと互換性追補を参照。
    *
    * 判定には通信が要るため、まず今まで通りの見た目で描画しておき、
    * 結果が返ったものから順にアイコンと状態を書き換える

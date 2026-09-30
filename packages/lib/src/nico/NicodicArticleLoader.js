@@ -1,125 +1,92 @@
-import {CrossDomainGate} from '../infra/CrossDomainGate';
 import {CacheStorage} from '../infra/CacheStorage';
 
 //===BEGIN===
 /**
- * タグに対応するニコニコ大百科の記事が存在するかを調べる（Task 044）。
- *
- * 【なぜ必要になったか】
- * タグの大百科アイコンは、視聴ページのAPIが返すタグ情報の
- * isNicodicArticleExists を見て出し分けていた。ZenzaWatch側の実装は
- * 今も正しいが、**ニコニコ側がこの値を返さなくなった**。
- * 2026-09時点で実際に確認したところ、
- *
- *   sm9 / sm500873 / sm33824596 / sm44839793 の全40件以上のタグについて、
- *   「陰陽師」「音楽」「けものフレンズ」「クッキー☆」など、明らかに
- *   大百科記事があるタグまで含めて **すべて false** だった。
- *
- * つまり値が壊れているため、ZenzaWatch側では常にアイコンが出ない状態だった。
- *
- * 【代わりの判定方法】
- * 大百科の記事ページは、記事があれば200・無ければ404を返す
- * （実測で確認。無い場合も「記事を作成」ページが表示されるが、
- *   HTTPステータスは404になっている）。
- *
- *   https://dic.nicovideo.jp/a/{タグ名}
- *
- * ただし www.nicovideo.jp から dic.nicovideo.jp へ直接fetchすると
- * CORSで拒否される（実測で確認）。そこでZenzaWatchに元からある
- * CrossDomainGate（対象ドメインのページを隠しiframeで開き、その中で
- * 動いているZenzaWatch自身に代理取得させる仕組み。ext.nicovideo.jp等で
- * 既に使われている）を経由する。ゲート側の受け口はGateAPI.nicodic、
- * iframeを開く条件の分岐はsrc/boot.jsにある。
- *
- * 【負荷への配慮】
- * - 本文は不要なのでHEADで問い合わせる
- * - 結果はsessionStorageに1日キャッシュする（同じタグを何度も問い合わせない）
- * - 動画を開くたびに数個〜十数個のタグをまとめて問い合わせる程度で済む
+ * Task157: titles[]を反復する一括API。wwwからcredentials:omitでCORS成功を実測。
+ * titleは正規化されるためrequest_titleで元のタグへ対応付ける。
+ * 10件は実測済みのクライアント側分割数（サーバー上限は未確定）。
+ * 詳細: docs/research/NICONICO_COMPATIBILITY_2026-10-01.md
  */
 const NicodicArticleLoader = (() => {
-  const BASE_URL = 'https://dic.nicovideo.jp/robots.txt';
-  const MESSAGE_ORIGIN = 'https://dic.nicovideo.jp/';
+  const API_URL = 'https://api.dic.nicovideo.jp/v1/articles/article';
+  const CACHE_PREFIX = 'nicodicBatch: ';
   const CACHE_EXPIRE_TIME = 24 * 60 * 60 * 1000;
-  const CACHE_PREFIX = 'nicodicExists: ';
-
-  let gate = null;
-  let cacheStorage = null;
-  // 同じタグへの問い合わせが同時に走らないようにする
+  const BATCH_SIZE = 10;
   const inFlight = new Map();
+  const pending = new Map();
+  let cacheStorage;
+  let scheduled = false;
+  const getCache = () => cacheStorage || (cacheStorage = new CacheStorage(sessionStorage));
 
-  const initGate = () => {
-    if (gate) { return gate; }
-    gate = new CrossDomainGate({
-      baseUrl: BASE_URL,
-      origin: MESSAGE_ORIGIN,
-      type: 'nicodic'
-    });
-    return gate;
-  };
-
-  const getCache = () => {
-    if (!cacheStorage) { cacheStorage = new CacheStorage(sessionStorage); }
-    return cacheStorage;
-  };
-
-  /**
-   * @param {string} tagName
-   * @return {Promise<boolean|null>} true:記事あり false:記事なし null:判定できず
-   */
-  const exists = async tagName => {
-    if (!tagName) { return null; }
-    const key = CACHE_PREFIX + tagName;
-    const cached = getCache().getItem(key);
-    if (typeof cached === 'boolean') { return cached; }
-    if (inFlight.has(tagName)) { return inFlight.get(tagName); }
-
-    const promise = (async () => {
-      try {
-        initGate();
-        const url = `https://dic.nicovideo.jp/a/${encodeURIComponent(tagName)}`;
-        const res = await gate.fetch(url, {method: 'HEAD'});
-        const status = (res && typeof res.status === 'number') ? res.status : 0;
-        if (status !== 200 && status !== 404) {
-          // 想定外の応答は「判定できず」とし、キャッシュもしない
-          return null;
-        }
-        const result = status === 200;
-        getCache().setItem(key, result, CACHE_EXPIRE_TIME);
-        return result;
-      } catch (e) {
-        window.console.warn('大百科の記事有無を調べられませんでした', tagName, e);
-        return null;
-      } finally {
-        inFlight.delete(tagName);
+  const fetchBatch = async entries => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    let articles = null;
+    try {
+      const query = new URLSearchParams();
+      entries.forEach(([name]) => query.append('titles[]', name));
+      const res = await fetch(`${API_URL}?${query}`, {credentials: 'omit', signal: controller.signal});
+      if (!res.ok) { throw new Error(`Nicodic HTTP ${res.status}`); }
+      const data = await res.json();
+      if (!Array.isArray(data) || data.some(a => !a || typeof a.request_title !== 'string' || typeof a.title !== 'string')) {
+        throw new Error('Invalid Nicodic batch response');
       }
-    })();
-    inFlight.set(tagName, promise);
-    return promise;
+      articles = new Map(data.map(a => [a.request_title, a]));
+    } catch (e) {
+      window.console.warn('大百科の記事有無を調べられませんでした', e);
+    } finally {
+      clearTimeout(timeout);
+    }
+    entries.forEach(([name, resolve]) => {
+      const result = articles ? {exists: articles.has(name), article: articles.get(name) || null} : null;
+      if (result) {
+        try { getCache().setItem(CACHE_PREFIX + name, result, CACHE_EXPIRE_TIME); } catch (e) { /* cache is optional */ }
+      }
+      inFlight.delete(name);
+      resolve(result);
+    });
   };
 
-  /**
-   * 複数のタグをまとめて調べる。
-   * 一度に大量のリクエストを投げないよう、少しずつ処理する。
-   * @param {string[]} tagNames
-   * @param {function(string, boolean)} onResult 1件確定するたびに呼ばれる
-   */
-  const checkAll = async (tagNames, onResult) => {
-    const CONCURRENCY = 4;
-    const names = Array.from(new Set((tagNames || []).filter(n => n)));
-    for (let i = 0; i < names.length; i += CONCURRENCY) {
-      const chunk = names.slice(i, i + CONCURRENCY);
-      await Promise.all(chunk.map(async name => {
-        const result = await exists(name);
-        if (typeof result === 'boolean' && typeof onResult === 'function') {
-          onResult(name, result);
-        }
-      }));
+  const flush = async () => {
+    const entries = Array.from(pending);
+    pending.clear();
+    scheduled = false;
+    // 大きな一覧でも同時通信を増やさず、10件ずつ取得する。
+    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+      await fetchBatch(entries.slice(i, i + BATCH_SIZE));
     }
   };
 
+  const lookup = name => {
+    if (typeof name !== 'string' || !name) { return Promise.resolve(null); }
+    try {
+      const cached = getCache().getItem(CACHE_PREFIX + name);
+      if (cached && typeof cached.exists === 'boolean') { return Promise.resolve(cached); }
+    } catch (e) { /* cache is optional */ }
+    if (inFlight.has(name)) { return inFlight.get(name); }
+    const promise = new Promise(resolve => pending.set(name, resolve));
+    inFlight.set(name, promise);
+    if (!scheduled) {
+      scheduled = true;
+      Promise.resolve().then(flush);
+    }
+    return promise;
+  };
+
+  /** true:記事あり false:記事なし null:通信失敗等で判定できず */
+  const exists = async name => {
+    const result = await lookup(name);
+    return result ? result.exists : null;
+  };
+
+  const checkAll = async (tagNames, onResult) => {
+    const names = Array.from(new Set((tagNames || []).filter(n => typeof n === 'string' && n)));
+    await Promise.all(names.map(async name => {
+      const result = await lookup(name);
+      if (result && typeof onResult === 'function') { onResult(name, result.exists, result.article); }
+    }));
+  };
   return {exists, checkAll};
 })();
-
 //===END===
-
 export {NicodicArticleLoader};

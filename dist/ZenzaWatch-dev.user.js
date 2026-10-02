@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.131-task203
+// @version        2.7.132-task204
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-02 13:37Z
+// build: 2026-10-02 15:20Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.131-task203';
+    var VER = '2.7.132-task204';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-02 13:37Z';
+    var BUILD = '2026-10-02 15:20Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -32290,6 +32290,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 			isAbort: 'is-abort',
 			isBackComment: 'is-backComment',
 			isShowComment: 'is-showComment',
+			isEnableFilter: 'is-enableFilter',
 			isDebug: 'is-debug',
 			isDomandAvailable: 'is-domandAvailable',
 			isDmcAvailable: 'is-dmcAvailable',
@@ -35693,6 +35694,40 @@ class VideoHoverMenu {
 			.is-showComment .showCommentSwitch .menuButtonInner {
 				text-decoration: none;
 			}
+		.ngFilterSwitch {
+			left: 40px;
+			width: 32px;
+			height: 32px;
+			background: #888;
+			color: #000;
+			border: 1px solid #666;
+			line-height: 30px;
+			filter: grayscale(100%);
+			border-radius: 4px;
+		}
+			.ngFilterSwitch .ngFilterIcon {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				width: 100%;
+				height: 100%;
+			}
+			.ngFilterSwitch .ngFilterIcon svg {
+				width: 24px;
+				height: 24px;
+				fill: none;
+				stroke: currentColor;
+				stroke-width: 2;
+				stroke-linecap: round;
+				stroke-linejoin: round;
+			}
+			.is-enableFilter .ngFilterSwitch {
+				color: var(--enabled-button-color, #9cf);
+				filter: none;
+			}
+			.is-enableFilter .ngFilterSwitch .ngFilterIcon svg {
+				filter: drop-shadow(0 0 2px currentColor);
+			}
 		.menuItemContainer .mylistButton {
 			font-size: 21px;
 		}
@@ -36009,6 +36044,12 @@ VideoHoverMenu.__tpl__ = (`
 					<div class="showCommentSwitch menuButton" data-command="toggle-showComment">
 						<div class="tooltip">コメント表示ON/OFF(V)</div>
 						<div class="menuButtonInner">💬</div>
+					</div>
+					<div class="ngFilterSwitch menuButton" data-command="toggle-enableFilter">
+						<div class="tooltip">NGフィルターON/OFF</div>
+						<div class="menuButtonInner ngFilterIcon" aria-hidden="true">
+							<svg viewBox="0 0 24 24"><path d="M12 2.5 19 5v5.5c0 4.6-2.8 8.4-7 10.8-4.2-2.4-7-6.2-7-10.8V5l7-2.5Z"/><path d="m8 8 8 8"/></svg>
+						</div>
 					</div>
 				</div>
 			</div>

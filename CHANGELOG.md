@@ -12,6 +12,13 @@
 機能ごとのまとめは [CHANGES_FROM_UPSTREAM.md](./CHANGES_FROM_UPSTREAM.md) を参照してください。
 「〔確認中〕」は、実装済みで実際の環境での確認がまだ終わっていないものです。
 
+### Task 204（2026-10-02） ZenzaWatch-dev 2.7.132-task204
+- プレイヤー左下のコメント表示ON/OFFボタンの隣に、NGフィルター全体のON/OFFボタンを常時表示する。
+- 既存の`enableFilter` / `toggle-enableFilter`をそのまま使用し、NG判定ロジックは変更しない。ON/OFF状態は既存PlayerStateと同期してボタン色に反映する。
+- ボタンは32pxの既存menuButtonと同じ配置・状態表現に合わせ、シールド＋斜線のアイコンでコメント表示ボタンと区別する。
+- 将来の「各プレイヤーボタンの表示/非表示を上級者設定から共通管理」と「NGフィルタープリセット切替」は別Taskへ分離する。
+- 検証: Task204専用5件とZenza全体1,267件が成功。最終distを隔離Chromeへ読み込み、配置・32pxサイズ・物理クリックによるON→OFF→ONでConfig/State/実フィルター/表示状態の同期を確認。
+
 ### Task 203（2026-10-02） ZenzaWatch-dev 2.7.131-task203
 - MylistPocket 0.5.43-task203も共通URL判定の再生成で更新。上級者設定は0.3.32-task201のまま。
 - クリック対象のサムネ削除時とZenza終了時にプレビュー停止の監視・参照を解放する。

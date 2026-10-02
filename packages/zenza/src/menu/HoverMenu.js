@@ -2,7 +2,9 @@ import {ZenzaWatch} from '../../../../src/ZenzaWatchIndex';
 import {uq} from '../../../lib/src/uQuery';
 import {nicoUtil} from '../../../lib/src/nico/nicoUtil';
 import {cssUtil} from '../../../lib/src/css/css';
+import {PagePreviewGuard} from '../init/PagePreviewGuard';
 //===BEGIN===
+//@require PagePreviewGuard
 
 class HoverMenu {
   constructor(param) {
@@ -32,6 +34,10 @@ class HoverMenu {
     }
   }
   setPlayer(player) {
+    if (this._player !== player) {
+      this._pagePreviewGuard?.dispose();
+      this._pagePreviewGuard = new PagePreviewGuard(player);
+    }
     this._player = player;
     if (this._playerResolve) {
       this._playerResolve(player);
@@ -49,7 +55,7 @@ class HoverMenu {
     return this._playerPromise;
   }
   _closest(target) {
-    return target.closest('a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],.UadVideoItem-link');
+    return target?.closest?.('a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],.UadVideoItem-link');
   }
   _onHover (e) {
     const target = this._closest(e.target);
@@ -133,80 +139,30 @@ class HoverMenu {
     ZenzaWatch.external.send(watchId, Object.assign({query: this._query}, params));
   }
   _overrideWatchLink () {
-    let userPageIntercept;
-    if (document.querySelector('.UserPageHeader') != null) {
-      console.log('user page');
-      const blockNavigation = e => {
-        if (e.ctrlKey) { return; }
-        e.preventDefault();
-        // e.stopPropagation();
-      };
-      userPageIntercept = e => {
-        const target = e.target;
-        if (target.tagName !== 'A' || !target.closest('.TimelineItem_video,.TimelineItem_shortVideo')) {
-          return;
-        }
-        // console.nicoru('mouseover', target.tagName);
-        target.removeEventListener('click', blockNavigation);
-        target.addEventListener('click', blockNavigation);
-      }
-    }
-    const requireIntercepts = [];
-    if (location.pathname.startsWith('/ranking') || location.pathname.startsWith('/search') || location.pathname.startsWith('/tag')) {
-      console.log('ranking/search/tag page');
-      requireIntercepts.push(e => {
-        const target = e.target.closest('button');
-        return target != null && this._closest(target) != null;
-      });
-    }
-    const onClick = e => {
-      if (e.ctrlKey) { return; }
-      const target = this._closest(e.target);
-      if (!target || target.classList.contains('noHoverMenu')) {
-        return;
-      }
-      let href = target.dataset.href || target.href;
-      let watchId = nicoUtil.getWatchId(href);
-      if (!watchId || !watchId.match(/^[a-z0-9]+$/)) {
-        return;
-      }
-      if (watchId.startsWith('lv')) {
-        return;
-      }
-
-      if (target.closest('.TimelineItem_video,.TimelineItem_shortVideo')) {
-        // console.nicoru('nicorepoi', target, target.href);
-        e.stopPropagation();
-        // history.pushState(null, null, target.href);
-      }
+    // Task202 / issue #1: claim a real video click before page/React navigation.
+    // Late mouseover-installed handlers can run after the official header handler.
+    if (this._watchLinkClick) { return; }
+    const onClick = this._watchLinkClick = e => {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) { return; }
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+      const target = path.map(node => this._closest(node)).find(Boolean);
+      if (!target || target.classList.contains('noHoverMenu') || target.closest('.zen-family') || target.hasAttribute('download')) { return; }
+      const action = path.find(node => node?.matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'));
+      const primaryWatchButton = action?.matches?.('.VideoIntroductionPlayerContainer-watchPageButton');
+      if (action && !primaryWatchButton && action !== target && (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return; }
+      let url;
+      try { url = new URL(target.dataset.href || target.href, location.href); } catch (_) { return; }
+      if (!/^https?:$/.test(url.protocol) || !['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname)) { return; }
+      const watchId = nicoUtil.getWatchId(url.href);
+      if (!watchId || !/^[a-z0-9]+$/.test(watchId) || watchId.startsWith('lv')) { return; }
+      this._pagePreviewGuard?.claim(target);
       e.preventDefault();
-
-      this._query = nicoUtil.parseWatchQuery((target.search || '').substr(1));
-      if (e.shiftKey) {
-        // 秘密機能。最後にZenzaWatchを開いたウィンドウで開く
-        this._send(watchId);
-      } else {
-        this._open(watchId);
-      }
-
+      e.stopImmediatePropagation();
+      this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
+      if (e.shiftKey) { this._send(watchId); } else { this._open(watchId); }
       window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
     };
-    uq('body').on('mouseover', e => {
-      userPageIntercept?.(e);
-      const target = this._closest(e.target);
-      if (!target || target.classList.contains('noHoverMenu')) {
-        return;
-      }
-      let host = target.hostname;
-      if (!['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(host)) {
-        return;
-      }
-      target.removeEventListener('click', onClick);
-      if (requireIntercepts.length > 0 && requireIntercepts.some(f => f(e))) {
-        return;
-      }
-      target.addEventListener('click', onClick);
-    });
+    document.addEventListener('click', onClick, true);
   }
 }
 

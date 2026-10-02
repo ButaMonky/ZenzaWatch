@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.42-task201
+// @version     0.5.43-task203
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain

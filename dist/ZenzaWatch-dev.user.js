@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.130-task201
+// @version        2.7.131-task203
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-02 09:07Z
+// build: 2026-10-02 13:37Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.130-task201';
+    var VER = '2.7.131-task203';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-02 09:07Z';
+    var BUILD = '2026-10-02 13:37Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3924,13 +3924,14 @@ const nicoUtil = {
 			`https://tn.smilevideo.jp/smile?i=${fileId}.${large}`;
 	},
 	getWatchId: url => {
-		if (url && url.indexOf('nico.ms') >= 0) {
-			let m = /\/\/nico\.ms\/([a-z0-9]+)/.exec(url);
-			return m ? m[1] : null;
-		} else {
-			let m = /\/?(watch|shorts)\/([a-z0-9]+)/.exec(url || location.pathname);
-			return m ? m[2] : null;
-		}
+		try {
+			const parsed = new URL(url || location.href, location.href);
+			if (!/^https?:$/.test(parsed.protocol)) { return null; }
+			const match = parsed.hostname === 'nico.ms' ?
+				/^\/([a-z0-9]+)\/?$/.exec(parsed.pathname) :
+				/^\/(?:watch|shorts)\/([a-z0-9]+)\/?$/.exec(parsed.pathname);
+			return match ? match[1] : null;
+		} catch (_) { return null; }
 	},
 	getCommonHeader: () => {
 		try { // hoge?.fuga... はGreasyforkの文法チェックで弾かれるのでまだ使えない
@@ -43014,6 +43015,90 @@ const initializeGinzaSlayer = (dialog, query) => {
 };
 
 const {initialize} = (() => {
+class PagePreviewGuard {
+	constructor(player, doc = document) {
+		this.player = player; this.doc = doc; this.active = false;
+		this.claimedLinks = new Set(); this.claimReleases = new Map(); this.listening = false;
+		this.onOpen = () => this.activate();
+		this.onClose = () => this.deactivate();
+		this.onPlay = event => this.pausePreview(event.target);
+		player.on('open', this.onOpen); player.on('close', this.onClose);
+		if (player.isOpen) { this.activate(); }
+	}
+	isPreview(video) {
+		if (!video?.matches?.('video') || video.closest('.zen-family,.zenzaVideoPlayerDialog') ||
+				video.classList.contains('zenzaWatchVideoElement')) { return false; }
+		const link = video.closest('a[href]');
+		if (!link) { return false; }
+		try {
+			const url = new URL(link.href, this.doc.baseURI);
+			const id = nicoUtil.getWatchId(url.href);
+			return /^https?:$/.test(url.protocol) &&
+				['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname) && !!id && !id.startsWith('lv');
+		} catch (_) { return false; }
+	}
+	isClaimed(video) {
+		const link = video?.closest?.('a[href]');
+		return !!link && this.claimedLinks.has(link);
+	}
+	_startListening() {
+		if (this.listening) { return; }
+		this.listening = true;
+		this.doc.addEventListener('play', this.onPlay, true);
+		this.doc.addEventListener('playing', this.onPlay, true);
+	}
+	_stopListeningIfIdle() {
+		if (!this.claimedLinks.size && this.claimObserver) {
+			this.claimObserver.disconnect(); this.claimObserver = null;
+		}
+		if (!this.listening || this.active || this.claimedLinks.size) { return; }
+		this.listening = false;
+		this.doc.removeEventListener('play', this.onPlay, true);
+		this.doc.removeEventListener('playing', this.onPlay, true);
+	}
+	_releaseClaim(link) {
+		const release = this.claimReleases.get(link);
+		if (release) { link.removeEventListener('pointerleave', release); }
+		this.claimedLinks.delete(link); this.claimReleases.delete(link);
+		this._stopListeningIfIdle();
+	}
+	_watchClaimedLinks() {
+		if (this.claimObserver || !this.doc.defaultView?.MutationObserver || !this.doc.documentElement) { return; }
+		this.claimObserver = new this.doc.defaultView.MutationObserver(() => {
+			for (const link of this.claimedLinks) { if (!link.isConnected) { this._releaseClaim(link); } }
+		});
+		this.claimObserver.observe(this.doc.documentElement, {childList: true, subtree: true});
+	}
+	claim(link) {
+		if (!link?.matches?.('a[href]') || !link.isConnected) { return; }
+		if (!this.claimedLinks.has(link)) {
+			const release = () => this._releaseClaim(link);
+			this.claimedLinks.add(link); this.claimReleases.set(link, release);
+			link.addEventListener('pointerleave', release, {once: true});
+		}
+		this._startListening(); this._watchClaimedLinks();
+		link.querySelectorAll('video').forEach(video => this.pausePreview(video));
+	}
+	_clearClaims() {
+		for (const [link, release] of this.claimReleases) { link.removeEventListener('pointerleave', release); }
+		this.claimedLinks.clear(); this.claimReleases.clear(); this._stopListeningIfIdle();
+	}
+	pausePreview(video) {
+		if ((!this.active && !this.isClaimed(video)) || !this.isPreview(video) || video.paused) { return; }
+		try { video.pause(); } catch (_) { /* Detached/ending previews cannot block Zenza. */ }
+	}
+	activate() {
+		this.active = true; this._clearClaims(); this._startListening();
+		this.doc.querySelectorAll('video').forEach(video => this.pausePreview(video));
+	}
+	deactivate() {
+		this.active = false; this._clearClaims();
+	}
+	dispose() {
+		this.deactivate(); this._clearClaims();
+		this.player.off('open', this.onOpen); this.player.off('close', this.onClose);
+	}
+}
 class HoverMenu {
 	constructor(param) {
 		this.initialize(param);
@@ -43040,6 +43125,10 @@ class HoverMenu {
 		}
 	}
 	setPlayer(player) {
+		if (this._player !== player) {
+			this._pagePreviewGuard?.dispose();
+			this._pagePreviewGuard = new PagePreviewGuard(player);
+		}
 		this._player = player;
 		if (this._playerResolve) {
 			this._playerResolve(player);
@@ -43057,7 +43146,7 @@ class HoverMenu {
 		return this._playerPromise;
 	}
 	_closest(target) {
-		return target.closest('a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],.UadVideoItem-link');
+		return target?.closest?.('a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],.UadVideoItem-link');
 	}
 	_onHover (e) {
 		const target = this._closest(e.target);
@@ -43135,72 +43224,28 @@ class HoverMenu {
 		ZenzaWatch.external.send(watchId, Object.assign({query: this._query}, params));
 	}
 	_overrideWatchLink () {
-		let userPageIntercept;
-		if (document.querySelector('.UserPageHeader') != null) {
-			console.log('user page');
-			const blockNavigation = e => {
-				if (e.ctrlKey) { return; }
-				e.preventDefault();
-			};
-			userPageIntercept = e => {
-				const target = e.target;
-				if (target.tagName !== 'A' || !target.closest('.TimelineItem_video,.TimelineItem_shortVideo')) {
-					return;
-				}
-				target.removeEventListener('click', blockNavigation);
-				target.addEventListener('click', blockNavigation);
-			}
-		}
-		const requireIntercepts = [];
-		if (location.pathname.startsWith('/ranking') || location.pathname.startsWith('/search') || location.pathname.startsWith('/tag')) {
-			console.log('ranking/search/tag page');
-			requireIntercepts.push(e => {
-				const target = e.target.closest('button');
-				return target != null && this._closest(target) != null;
-			});
-		}
-		const onClick = e => {
-			if (e.ctrlKey) { return; }
-			const target = this._closest(e.target);
-			if (!target || target.classList.contains('noHoverMenu')) {
-				return;
-			}
-			let href = target.dataset.href || target.href;
-			let watchId = nicoUtil.getWatchId(href);
-			if (!watchId || !watchId.match(/^[a-z0-9]+$/)) {
-				return;
-			}
-			if (watchId.startsWith('lv')) {
-				return;
-			}
-			if (target.closest('.TimelineItem_video,.TimelineItem_shortVideo')) {
-				e.stopPropagation();
-			}
+		if (this._watchLinkClick) { return; }
+		const onClick = this._watchLinkClick = e => {
+			if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) { return; }
+			const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+			const target = path.map(node => this._closest(node)).find(Boolean);
+			if (!target || target.classList.contains('noHoverMenu') || target.closest('.zen-family') || target.hasAttribute('download')) { return; }
+			const action = path.find(node => node?.matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'));
+			const primaryWatchButton = action?.matches?.('.VideoIntroductionPlayerContainer-watchPageButton');
+			if (action && !primaryWatchButton && action !== target && (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return; }
+			let url;
+			try { url = new URL(target.dataset.href || target.href, location.href); } catch (_) { return; }
+			if (!/^https?:$/.test(url.protocol) || !['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname)) { return; }
+			const watchId = nicoUtil.getWatchId(url.href);
+			if (!watchId || !/^[a-z0-9]+$/.test(watchId) || watchId.startsWith('lv')) { return; }
+			this._pagePreviewGuard?.claim(target);
 			e.preventDefault();
-			this._query = nicoUtil.parseWatchQuery((target.search || '').substr(1));
-			if (e.shiftKey) {
-				this._send(watchId);
-			} else {
-				this._open(watchId);
-			}
+			e.stopImmediatePropagation();
+			this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
+			if (e.shiftKey) { this._send(watchId); } else { this._open(watchId); }
 			window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
 		};
-		uq('body').on('mouseover', e => {
-			userPageIntercept?.(e);
-			const target = this._closest(e.target);
-			if (!target || target.classList.contains('noHoverMenu')) {
-				return;
-			}
-			let host = target.hostname;
-			if (!['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(host)) {
-				return;
-			}
-			target.removeEventListener('click', onClick);
-			if (requireIntercepts.length > 0 && requireIntercepts.some(f => f(e))) {
-				return;
-			}
-			target.addEventListener('click', onClick);
-		});
+		document.addEventListener('click', onClick, true);
 	}
 }
 	const overrideGinza = async (dialog, query) => {

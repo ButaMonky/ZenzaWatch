@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.42-task201
+// @version     0.5.43-task203
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-02 09:07Z
+// build: 2026-10-02 13:37Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -2283,13 +2283,14 @@ const nicoUtil = {
 			`https://tn.smilevideo.jp/smile?i=${fileId}.${large}`;
 	},
 	getWatchId: url => {
-		if (url && url.indexOf('nico.ms') >= 0) {
-			let m = /\/\/nico\.ms\/([a-z0-9]+)/.exec(url);
-			return m ? m[1] : null;
-		} else {
-			let m = /\/?(watch|shorts)\/([a-z0-9]+)/.exec(url || location.pathname);
-			return m ? m[2] : null;
-		}
+		try {
+			const parsed = new URL(url || location.href, location.href);
+			if (!/^https?:$/.test(parsed.protocol)) { return null; }
+			const match = parsed.hostname === 'nico.ms' ?
+				/^\/([a-z0-9]+)\/?$/.exec(parsed.pathname) :
+				/^\/(?:watch|shorts)\/([a-z0-9]+)\/?$/.exec(parsed.pathname);
+			return match ? match[1] : null;
+		} catch (_) { return null; }
 	},
 	getCommonHeader: () => {
 		try { // hoge?.fuga... はGreasyforkの文法チェックで弾かれるのでまだ使えない

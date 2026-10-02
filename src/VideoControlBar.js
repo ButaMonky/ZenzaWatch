@@ -1253,6 +1253,9 @@ util.addStyle(`
     fill: currentColor;
   }
   .commentHistorySwitch { border: 0; padding: 0; background: transparent; }
+  /* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
+     while preserving focus-within suppression for existing popup-menu containers. */
+  .videoControlBar .commentHistorySwitch:focus-within { pointer-events: auto; }
   .commentHistorySwitch:focus-visible { outline: 2px solid var(--enabled-button-color, #9cf); outline-offset: -2px; }
   .commentHistorySwitch:focus-visible .tooltip { display: block; }
   .screenFilterSwitch.is-active {

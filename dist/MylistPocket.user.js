@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.41-task200
+// @version     0.5.42-task201
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-02 08:01Z
+// build: 2026-10-02 09:07Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -5872,7 +5872,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.41-task200', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.42-task201', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

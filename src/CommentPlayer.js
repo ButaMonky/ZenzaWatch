@@ -6,6 +6,7 @@ import {SlotLayoutWorker} from '../packages/zenza/src/commentLayer/SlotLayoutWor
 import {Emitter} from './baselib';
 import {bounce} from '../packages/lib/src/infra/bounce';
 import {sleep} from '../packages/lib/src/infra/sleep';
+import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 
 import {CommentLayer} from '../packages/zenza/src/commentLayer/CommentLayer';
 import {NicoChatFilter} from '../packages/zenza/src/commentLayer/NicoChatFilter';
@@ -20,6 +21,7 @@ import {NicoComment} from '../packages/zenza/src/commentLayer/NicoComment';
 import {NicoCommentViewModel} from '../packages/zenza/src/commentLayer/NicoCommentViewModel';
 import {NicoCommentCss3PlayerView} from '../packages/zenza/src/commentLayer/NicoCommentCss3PlayerView';
 //===BEGIN===
+//@require ZenzaCommentHistoryCore
 //@require NicoTextParser
 //@require CommentLayer
 
@@ -52,6 +54,7 @@ class NicoCommentPlayer extends Emitter {
     this.emitResolve('GetReady!');
   }
   setComment(data, options) {
+    if (!options?.append) { this._commentHistoryRenderer?.reset(); }
     if (typeof data === 'string') {
       if (options.format === 'json') {
         this._model.setData(JSON.parse(data), options);
@@ -111,7 +114,17 @@ class NicoCommentPlayer extends Emitter {
 
     return nicoChat;
   }
+  applyHistoryThreads(data, control) {
+    if (!this._commentHistoryRenderer) {
+      this._commentHistoryRenderer = new ZenzaCommentHistoryCore.CommentHistoryRenderer({
+        player: this, Chat: NicoChat, ChatViewModel: NicoChatViewModel
+      });
+    }
+    return this._commentHistoryRenderer.apply(data, control);
+  }
+  clearCommentHistory() { this._commentHistoryRenderer?.clear(); }
   removeChat(nicoChat) {
+    this._commentHistoryRenderer?.removed(nicoChat);
     this._model.removeChat(nicoChat);
   }
   set playbackRate(v) {
@@ -136,6 +149,7 @@ class NicoCommentPlayer extends Emitter {
     this._view.hide();
   }
   close() {
+    this._commentHistoryRenderer?.reset();
     this._model.clear();
     if (this._view) {
       this._view.clear();

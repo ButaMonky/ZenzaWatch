@@ -5,7 +5,7 @@ function setup(){
  const decoded=new Promise((resolve,reject)=>{resolveDecode=resolve;rejectDecode=reject;});
  class Image{decode(){events.push('decode');return decoded;}}
  const c=createContext({Blob,Image,URL:{createObjectURL(){events.push('url');return 'blob:html';},revokeObjectURL(url){events.push('revoke:'+url);}},
- document:{createElement(tag){if(tag==='a')return {};assert.strictEqual(tag,'canvas');const canvas={id:canvases.length};canvases.push(canvas);canvas.getContext=()=>({fillRect(){},drawImage(image){if(image instanceof Image){if(drawError)throw drawError;events.push('html-painted');}else if(canvases.includes(image)){events.push('composite:'+image.id);assert(events.includes('html-painted')||image.id!==2,'html composite before painting');}}});return canvas;}}});
+ document:{createElement(tag){if(tag==='a')return {};assert.strictEqual(tag,'canvas');const canvas={id:canvases.length};canvases.push(canvas);canvas.getContext=()=>({fillRect(){},getImageData(){return {};},drawImage(image){if(image instanceof Image){if(drawError)throw drawError;events.push('html-painted');}else if(canvases.includes(image)){events.push('composite:'+image.id);assert(events.includes('html-painted')||image.id!==2,'html composite before painting');}}});return canvas;}}});
  const util=run(beginSection('packages/lib/src/dom/VideoCaptureUtil.js').split('VideoCaptureUtil.capture =')[0]+';VideoCaptureUtil;',c);
  return {util,events,canvases,resolveDecode,rejectDecode,failDraw:error=>drawError=error};
 }

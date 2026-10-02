@@ -35,6 +35,8 @@ class PlayList extends VideoList {
     this.model = new PlayListModel({});
     // Task 093: item の watchId の変更で model が重複を外した時も、再生位置（_index）を再生中の item に合わせる
     this.model.on('item-removed', () => this._refreshIndex());
+    // Task196: 表示範囲に入った情報不明の項目の詳細を補完する
+    this.model.on('update', () => this._scheduleDetailFill());
 
     // Task 054: プレイリストの動画に広告(ニコニ広告)の金冠・銀冠枠を表示する。
     // 実装は基底クラスVideoList側にある（RelatedVideoList等とも共通化する
@@ -261,6 +263,15 @@ class PlayList extends VideoList {
     setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
     return added;
   }
+  // Task199: insert at an explicit index (same bookkeeping as _insertAll)
+  _insertAllAt(videoListItems, index, options) {
+    options = options || {};
+    const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
+    this.model.insertItem(videoListItems, index);
+    const added = this._countNewlyAdded(videoListItems, beforeItemIds);
+    this._refreshIndex(false);
+    return added;
+  }
   _insertAll(videoListItems, options) {
     options = options || {};
 
@@ -356,6 +367,17 @@ class PlayList extends VideoList {
     }
     return Math.min(Math.max(n, PlayList.SEARCH_LIMIT_MIN), PlayList.SEARCH_LIMIT_MAX);
   }
+  // Task189: 検索で適用できなかった条件を利用者へ伝える一文（無ければ空）
+  static searchNotice(result) {
+    const unapplied = (result && Array.isArray(result.unappliedConditions)) ? result.unappliedConditions : [];
+    const LABEL = {selectContentType: '動画の長さ種別', channelVideoListingStatus: 'チャンネル動画の掲載', kind: '投稿者の種類(kind)', genre: 'ジャンル'};
+    let notice = unapplied.length ? `（未対応のため適用していない条件: ${unapplied.map(key => LABEL[key] || key).join('、')}）` : '';
+    // Task190: 途中のページの取得に失敗した時は、取れた分だけであることを伝える
+    if (result && result.partial === true) {
+      notice += `（途中のページの取得に失敗したため、取得できた${result.returnedCount ?? (result.list || []).length}件だけです）`;
+    }
+    return notice;
+  }
   loadSearchVideo(word, options, limit = PlayList.SEARCH_LIMIT_DEFAULT) {
     this._initializeView();
     limit = PlayList.normalizeSearchLimit(limit);
@@ -372,8 +394,9 @@ class PlayList extends VideoList {
     // Task 067: 検索は NicoSearchApiV2Loader.searchMore() 側で本家と同じ検索API(nvapi)を
     // 使うようになったため、Task 066で追加した「0件の時にnvapiで取り直す」処理は撤去した
     // （同じ条件で同じAPIをもう一度呼ぶだけになるため）。
+    let searchResult = null;
     const loadItems = async () => {
-      const result = await this._nicoSearchApiLoader.searchMore(word, options, limit);
+      const result = searchResult = await this._nicoSearchApiLoader.searchMore(word, options, limit);
       const items = (result && result.list) || [];
       return items
         .filter(item => {
@@ -420,9 +443,9 @@ class PlayList extends VideoList {
         return Promise.resolve({
           status: 'ok',
           message:
-            added !== null ?
+            (added !== null ?
               `検索結果を${added}件プレイリストに追加しました` :
-              '検索結果をプレイリストに読み込みしました'
+              '検索結果をプレイリストに読み込みしました') + PlayList.searchNotice(searchResult)
         });
       });
   }
@@ -449,28 +472,142 @@ class PlayList extends VideoList {
     if (!Array.isArray(watchIds) || !watchIds.length) {
       return 0;
     }
+    // Task192 (COM-04): optional display hints by watchId, used only when the full
+    // video information cannot be loaded. They are never written to any cache.
+    const hints = options.hints && typeof options.hints === 'object' ? options.hints : null;
+    // Task196: 大量のID（親子作品の全件等）は、詳細の取得を待たずに一度で追加する（詳細は表示範囲から補完）
+    if (options.deferDetails === true) {
+      return this._appendIdsDeferred(watchIds, options, hints);
+    }
     const loadOne = watchId =>
       this._thumbInfoLoader.load(watchId).then(info => {
         // APIにwatchIdを指定してもvideoIdが返るので上書きする. バッドノウハウ
         info.id = watchId;
         return VideoListItem.createByThumbInfo(info);
-      }).catch(() => VideoListItem.createBlankInfo(watchId));
+      }).catch(() => VideoListItem.createBlankInfo(watchId, hints && hints[watchId]));
 
     // 一度に全部投げると、数十件・数百件の時にAPIへ一気に負荷をかけてしまう。
     // 並列数を絞って順に処理する（Task 044）。
     // 並び順は watchIds の通りに保つ必要があるので、結果は添字で書き戻す。
     const CONCURRENCY = 8;
+    // Task181 (F04): the caller may cancel (video switched / closed / superseded)
+    // while metadata is loading; then nothing is added and null is returned.
+    const isCancelled = typeof options.isCancelled === 'function' ? options.isCancelled : () => false;
     const items = new Array(watchIds.length);
     for (let i = 0; i < watchIds.length; i += CONCURRENCY) {
+      if (isCancelled()) {
+        return null;
+      }
       const chunk = watchIds.slice(i, i + CONCURRENCY);
       const loaded = await Promise.all(chunk.map(loadOne));
       loaded.forEach((item, j) => { items[i + j] = item; });
+    }
+    if (isCancelled()) {
+      return null;
     }
 
     const added = options.insert ?
       this._insertAll(items, options) : this._appendAll(items, options);
     this.emit('update');
     return added;
+  }
+  /**
+   * Task196: IDの一覧を、動画の詳細（getthumbinfo）の取得を待たずにプレイリストへ追加する。
+   *  - 既にプレイリストにある動画は追加しない（詳細も取りに行かない）。
+   *  - 上限（model.maxItems）に入りきらない分は追加せず、report.overflow に残す（既存の項目も新しい項目も黙って捨てない）。
+   *  - 全件を1回で挿入する（何度にも分けて「再生中の次」へ入れると、後の分が前に来て順番が逆転するため）。
+   *  - 追加する項目は「情報不明（IDだけ）」で、表示範囲に入った項目から少しずつ詳細を補完する（_scheduleDetailFill）。
+   * 戻り値は追加した件数。取消された時は null（何も追加しない）。options.report に内訳を書く。
+   */
+  _appendIdsDeferred(watchIds, options = {}, hints = null) {
+    const isCancelled = typeof options.isCancelled === 'function' ? options.isCancelled : () => false;
+    const report = options.report && typeof options.report === 'object' ? options.report : {};
+    const seen = new Set();
+    const ids = [];
+    for (const id of Array.isArray(watchIds) ? watchIds : []) {
+      const key = id == null ? '' : String(id);
+      if (!key || seen.has(key)) { continue; }
+      seen.add(key);
+      ids.push(key);
+    }
+    const existing = ids.filter(id => this.model.findByWatchId(id));
+    const fresh = ids.filter(id => !this.model.findByWatchId(id));
+    const room = Math.max(0, (this.model.maxItems || 0) - this.model.length);
+    const accepted = fresh.slice(0, room);
+    const overflow = fresh.slice(room);
+    Object.assign(report, {requested: ids.length, existing: existing.length, accepted: accepted.length,
+      overflow, capacity: this.model.maxItems, before: this.model.length, added: 0});
+    if (isCancelled()) {
+      return null;
+    }
+    if (!accepted.length) {
+      return 0;
+    }
+    const items = accepted.map(id => VideoListItem.createBlankInfo(id, hints && hints[id]));
+    const beforeIds = new Set(this.model.items.map(item => item.watchId));
+    // Task199: a resumed batch can be placed right after a given item (the previous batch's last item)
+    const anchor = options.insert && options.insertAfterWatchId ? this.model.findByWatchId(options.insertAfterWatchId) : null;
+    const added = anchor ? this._insertAllAt(items, this.model.indexOf(anchor) + 1, options) :
+      (options.insert ? this._insertAll(items, options) : this._appendAll(items, options));
+    report.added = added;
+    report.addedIds = accepted.filter(id => !beforeIds.has(id) && this.model.findByWatchId(id));
+    report.existingIds = existing;
+    this.emit('update');
+    this._scheduleDetailFill();
+    return added;
+  }
+  /**
+   * Task196: 情報不明（IDだけ）の項目の詳細を、画面に見えている（isLazy=false）項目から順に、少ない並列数で取得して
+   * 同じ項目のまま完全にする。見えていない項目は取りに行かない（約1000件の詳細を一度に待たない）。
+   * 失敗しても項目とIDは残す（detailFailed）。プレイリストから外れた項目の結果は反映しない。
+   */
+  _scheduleDetailFill() {
+    if (this._detailFillTimer) { return; }
+    this._detailFillTimer = window.setTimeout(() => {
+      this._detailFillTimer = null;
+      this._fillDetails();
+    }, PlayList.DETAIL_FILL_DELAY_MS);
+  }
+  _fillDetails() {
+    const loader = this._thumbInfoLoader;
+    if (!loader || typeof loader.load !== 'function') { return; }
+    this._detailRunning = this._detailRunning || 0;
+    const slots = PlayList.DETAIL_CONCURRENCY - this._detailRunning;
+    if (slots <= 0) { return; }
+    const active = Math.max(0, this.model.activeIndex);
+    const candidates = this.model.items
+      .map((item, index) => ({item, index}))
+      .filter(({item}) => item.isBlankData && !item.isLazy && !item.state.detailRequested && /^[a-z]{2}\d+$/.test(item.watchId))
+      .sort((a, b) => Math.abs(a.index - active) - Math.abs(b.index - active))
+      .slice(0, slots);
+    for (const {item} of candidates) {
+      item.state.detailRequested = true;
+      this._detailRunning++;
+      Promise.resolve().then(() => loader.load(item.watchId)).then(info => {
+        if (this.model.findByItemId(item.itemId) === item && item.isBlankData) {
+          item.upgradeByThumbInfo(info);
+        }
+      }).catch(() => {
+        item.state.detailFailed = true;
+      }).then(() => {
+        this._detailRunning--;
+        this._scheduleDetailFill();
+      });
+    }
+  }
+  /**
+   * Task196: 表示用のヒント（動画ID → {title, thumbnailUrl}）を、情報不明の項目にだけ反映する。戻り値は更新した件数。
+   */
+  applyHints(hintMap) {
+    if (!hintMap) { return 0; }
+    const get = typeof hintMap.get === 'function' ? id => hintMap.get(id) : id => hintMap[id];
+    let n = 0;
+    for (const item of this.model.items) {
+      if (!item.isBlankData) { continue; }
+      const hint = get(item.watchId);
+      if (hint && item.applyHint(hint)) { n++; }
+    }
+    return n;
   }
   insert(watchId) {
     this._initializeView();
@@ -727,7 +864,9 @@ class PlayList extends VideoList {
   }
 }
 /* Task 073: 検索でプレイリストに読み込む最大件数。本家検索API(nvapi)の上限が5000件。 */
-PlayList.SEARCH_LIMIT_DEFAULT = 300;
+PlayList.DETAIL_CONCURRENCY = 2;
+PlayList.DETAIL_FILL_DELAY_MS = 200;
+PlayList.SEARCH_LIMIT_DEFAULT = 1000; // Task 193: 設定の初期値（search.limit）と同じ
 PlayList.SEARCH_LIMIT_MIN = 100;
 PlayList.SEARCH_LIMIT_MAX = 5000;
 //===END===

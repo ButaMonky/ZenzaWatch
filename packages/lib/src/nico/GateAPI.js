@@ -189,6 +189,9 @@ const GateAPI = (() => {
         case 'get':
           result = await db.get({key, index, timeout});
           break;
+        case 'update':
+          result = await db.update(data);
+          break;
         case 'updateTime':
           result = await db.updateTime({key, index, timeout});
           break;

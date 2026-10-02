@@ -1,7 +1,16 @@
 import assert from 'power-assert';
 const {beginSection,createContext,run}=require('../helpers/extractSource');
 function subject(){
- const records=new Map();const cache={updateTime:async({key})=>records.get(key),put(record){records.set(record.watchId,record);return Promise.resolve(record);}};
+ const {controllerFixture,eventTarget}=require('../helpers/idbRecoveryFixture');
+ const records=new Map(),f=controllerFixture();
+ const ready=f.ready({transaction(){
+  const tx=eventTarget();tx.abort=()=>{};
+  tx.objectStore=()=>({
+   get(key){const req=eventTarget();Promise.resolve().then(()=>{req.result=records.get(key);req.fire('success');Promise.resolve().then(()=>tx.fire('complete'));});return req;},
+   put(record){const req=eventTarget();records.set(record.watchId,record);Promise.resolve().then(()=>req.fire('success'));return req;}
+  });return tx;
+ }});
+ const cache={};for(const method of ['update','updateTime'])cache[method]=data=>ready.then(c=>c[method]({name:'fixture',storeName:'cache',data}));
  const c=createContext({location:{host:'www.nicovideo.jp'},IndexedDbStorage:{open:async()=>({cache})}});
  run(beginSection('packages/lib/src/nico/WatchInfoCacheDb.js')+';globalThis.subject=WatchInfoCacheDb;',c);return c.subject;
 }

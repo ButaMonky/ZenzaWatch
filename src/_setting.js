@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.26-task152
+// @version     0.3.31-task200
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -19,6 +19,7 @@ import {Config} from './Config';
 import {Emitter, Handler} from '../packages/lib/src/Emitter';
 import {SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsByCategory} from '../packages/zenza/src/ShortcutActions';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
 ((window) => { const self = window;
   const PRODUCT = 'ZenzaWatch';
   const monkey = async (PRODUCT) => {
@@ -32,6 +33,7 @@ const $ = uq;
 //@require cssUtil
 //@require SHORTCUT_ACTIONS
 //@require ScreenFilter
+//@require ZenzaCommentHistorySettings
     window.ZenzaAdvancedSettings = {
       config: Config
     };
@@ -244,9 +246,12 @@ const $ = uq;
           }
 
           if (confirm('設定データを直接書き換えしますか？')) {
-            config.clear();
-            config.import(data);
-            location.reload();
+            try {
+              config.import(data);
+              location.reload();
+            } catch (error) {
+              alert(`設定を読み込めませんでした: ${error.message}`);
+            }
           }
 
         });
@@ -341,6 +346,11 @@ const $ = uq;
           this.hide();
         });
 
+        // Task200: attach after legacy input handlers, avoiding double saves.
+        this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({window, config});
+        this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings(
+          $panel.find('.commentHistorySettingsContainer')[0], {preferences: this._historyPreferences}
+        );
         $panel.toggleClass('debug', config.props.debug);
       }
       _onPlayerConfigUpdate(key, value) {
@@ -1041,6 +1051,7 @@ const $ = uq;
           </div>
 
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>
+          <div class="commentHistorySettingsContainer"></div>
 
           <div class="searchLimitControl control toggle">
             <label>

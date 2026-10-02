@@ -2,6 +2,7 @@
 const PRODUCT = 'ZenzaWatch';
 import { DataStorage } from '../packages/lib/src/infra/DataStorage';
 import { buildDefaultKeyConfig } from '../packages/zenza/src/ShortcutActions';
+import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
 
 const location = {host: 'www.nicovideo.jp'};
 const navigator = {};
@@ -13,6 +14,7 @@ const window = {console: console};
 //@require ../packages/lib/src/infra/objUtil.js
 //@require ../packages/lib/src/infra/DataStorage.js
 //@require buildDefaultKeyConfig
+//@require ZenzaCommentHistorySettings
 const Config = (() => {
   const DEFAULT_CONFIG = {
     debug: false,
@@ -218,7 +220,8 @@ const Config = (() => {
     // Task 073: 検索でプレイリストに読み込む最大件数。上級者向け設定で変更できる。
     // 100件ごとにAPIを1回呼ぶので多くするほど遅く・重くなる。推奨は1000件まで、上限5000件
     // （本家検索APIの上限。スナップショット検索に切り替わった時は1600件まで）。
-    'search.limit': 300,
+    // Task 193: 初めて導入した時の値を1000件にする（設定画面の表記は変えない。変更済みの値はそのまま）。
+    'search.limit': 1000,
 
     //タッチパネルがある場合は null ない場合は undefined になるらしい
     //うちのデスクトップは無いのに null だが…
@@ -343,9 +346,54 @@ const Config = (() => {
     DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
   }
 
+  Object.assign(DEFAULT_CONFIG, ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS);
+
   return DataStorage.create(
     DEFAULT_CONFIG,
     {
+      // Import checks are intentionally independent of normal live updates.
+      // Preserve legacy flat JSON backups; do not invent a new file format.
+      normalizeImport: (key, value) => {
+        if (['videoSearch.f_range', 'videoSearch.l_range'].includes(key) &&
+            typeof value === 'string' && /^[0-9]+$/.test(value)) { return Number(value); }
+        return value;
+      },
+      validateImport: (key, value) => {
+        if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
+        if (key.startsWith('commentHistory.')) {
+          const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
+          if (!descriptor) { return false; }
+          try {
+            ZenzaCommentHistorySettings.normalizeSettings({[descriptor.name]: value});
+            return true;
+          } catch (_) { return false; }
+        }
+        const choices = {
+          screenMode: ['normal', 'big', 'wide', 'small', 'sideView', '3D'],
+          sharedNgLevel: ['NONE', 'LOW', 'MID', 'HIGH', 'MAX'],
+          fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
+          'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
+          'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed']
+        };
+        const name = key.startsWith('screenMode:') ? 'screenMode' : key;
+        if (Object.prototype.hasOwnProperty.call(choices, name)) {
+          return choices[name].includes(value);
+        }
+        if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
+        if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
+        if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
+          'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
+          return Number.isFinite(value) && value >= 0 && value <= 1;
+        }
+        if (['playbackRate', 'commentSpeedRate', 'baseChatScale', 'menuScale'].includes(key)) {
+          return Number.isFinite(value) && value > 0;
+        }
+        if (['smallModeWidth', 'smallModeHeight'].includes(key)) {
+          return Number.isFinite(value) && value >= 0;
+        }
+        return true;
+      },
+      preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
       prefix: PRODUCT,
       ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
       readonly: !location || location.host !== 'www.nicovideo.jp',

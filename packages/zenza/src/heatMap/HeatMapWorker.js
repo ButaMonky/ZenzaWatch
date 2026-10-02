@@ -187,9 +187,27 @@ class HeatMap {
     });
     this.reset();
   }
-  reset() {
+  // Task187（監査v2 F13）: 動画を切り替えたら世代を進め、どの動画のヒートマップかを覚える。
+  // 古い世代の非同期の完了（toDataURL）は捨て、別の動画のヒートマップとして通知・保存させない
+  reset(params = {}) {
+    this._generation = (this._generation || 0) + 1;
+    this._watchId = (params && typeof params.watchId === 'string' && params.watchId) ? params.watchId : null;
     this.model.reset();
     this.view.reset();
+  }
+  get watchId() {
+    return this._watchId || null;
+  }
+  _publish() {
+    if (!this.view.update()) { return; }
+    const generation = this._generation = (this._generation || 0) + 1;
+    const watchId = this._watchId || null;
+    const map = Array.from(this.map);
+    const duration = this.duration;
+    this.toDataURL().then(dataURL => {
+      if (generation !== this._generation) { return; }
+      self.emit('heatMapUpdate', {watchId, map, duration, dataURL});
+    }).catch(() => {});
   }
   /**
    * @params {number} duration
@@ -197,9 +215,7 @@ class HeatMap {
   set duration(duration) {
     if (this.model.duration === duration) { return; }
     this.model.duration = duration;
-    this.view.update() && this.toDataURL().then(dataURL => {
-      self.emit('heatMapUpdate', {map: this.map, duration: this.duration, dataURL});
-    });
+    this._publish();
   }
   get duration() {
     return this.model.duration;
@@ -209,9 +225,7 @@ class HeatMap {
    */
   set chatList(chatList) {
     this.model.chatList = chatList;
-    this.view.update() && this.toDataURL().then(dataURL => {
-      self.emit('heatMapUpdate', {map: this.map, duration: this.duration, dataURL});
-    });
+    this._publish();
   }
   get canvas() {
     return this.view.canvas || {};
@@ -293,7 +307,7 @@ const HeatMapWorker = (() => {
       set duration(d) {
         _duration = d;
         worker.post({command: 'duration', params: {duration: d}}); },
-      reset: () => worker.post({command: 'reset', params: {}}),
+      reset: (params = {}) => worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}}),
       get chatList() {return _chatList;},
       set chatList(chatList) { this.update(_chatList = chatList); }
     };
@@ -305,6 +319,15 @@ const HeatMap = HeatMapInitFunc({
   emit: (...args) => global.emitter.emit(...args)
 });
 
+// Task187（監査v2 F13）: ヒートマップの通知を保存してよいのは、通知に付いた動画IDが今の動画と一致する時だけ。
+// 動画IDが無い・別の動画の通知は保存しない（IndexedDBへ別動画のヒートマップを書かない）
+const heatMapCacheEntry = (payload, currentWatchId) => {
+  if (!payload || typeof payload.watchId !== 'string' || !payload.watchId) { return null; }
+  if (payload.watchId !== currentWatchId) { return null; }
+  if (!Array.isArray(payload.map) || !Number.isFinite(payload.duration)) { return null; }
+  return {watchId: payload.watchId, heatMap: {map: payload.map, duration: payload.duration, dataURL: payload.dataURL}};
+};
+
 //===END===
 
-export {HeatMap, HeatMapWorker};
+export {HeatMap, HeatMapWorker, heatMapCacheEntry};

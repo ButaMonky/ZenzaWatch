@@ -20,16 +20,17 @@ const Observable = (() => {
       };
       this._closed = false;
     }
-    subscribe(subscriber, onError, onCompleted) {
-      return this.observable.subscribe(subscriber, onError, onCompleted)
-        .filter(this._filterFunc)
-        .map(this._mapFunc);
+    subscribe(onNext, onError, onCompleted) {
+      return this.observable._subscribe({
+        subscriber: Subscriber.create(onNext, onError, onCompleted),
+        isNop: [onNext, onError, onCompleted].every(f => f == null),
+        filterFunc: this._filterFunc, mapFunc: this._mapFunc
+      });
     }
     unsubscribe() {
+      if (this._closed) { return this; }
       this._closed = true;
-      if (this.callbacks.unsubscribe) {
-        this.callbacks.unsubscribe();
-      }
+      if (this.callbacks.unsubscribe) { this.callbacks.unsubscribe(); }
       return this;
     }
     dispose() {
@@ -122,35 +123,68 @@ const Observable = (() => {
     }
     constructor(subscriberFunction) {
       this._subscriberFunction = subscriberFunction;
-      this._completed = false;
-      this._cancelled = false;
-      this._handlers = new Handler();
+      this._sources = [];
+      this._connection = null;
     }
-    _initSubscriber() {
-      if (this._subscriber) {
-        return;
+    get closed() { return !!(this._connection && this._connection.closed); }
+
+    _disposeToken(token) {
+      token.done = true;
+      if (!token.cleanup) { return; }
+      const cleanup = token.cleanup;
+      token.cleanup = null;
+      try { cleanup(); } catch (error) { console.warn('Observable cleanup failed', error); }
+    }
+
+    _finish(connection, method, value) {
+      if (connection.closed) { return; }
+      connection.closed = true;
+      try { if (method) { connection.handlers.execMethod(method, value); } }
+      finally {
+        connection.handlers.clear();
+        for (const token of connection.tokens) { this._disposeToken(token); }
+        connection.tokens.clear();
       }
-      const handlers = this._handlers;
-      this._completed = this._cancelled = false;
-      return this._subscriber = new Subscriber({
-        start: arg => handlers.execMethod('start', arg),
-        next: arg => handlers.execMethod('next', arg),
-        error: arg => handlers.execMethod('error', arg),
-        complete: arg => {
-          if (this._nextObservable) {
-            this._nextObservable.subscribe(this._subscriber);
-            this._nextObservable = this._nextObservable._nextObservable;
-          } else {
-            this._completed = true;
-            handlers.execMethod('complete', arg);
-          }
-        },
-        closed: () => this.closed
-      });
     }
-    get closed() {
-      return this._completed || this._cancelled;
+
+    _connect(connection) {
+      connection.started = true;
+      const sources = [observer => this._subscriberFunction(observer),
+        ...this._sources.map(source => observer => source.subscribe({
+          next: value => observer.next(value), error: error => observer.error(error),
+          complete: value => observer.complete(value)
+        }))];
+      let index = 0;
+      const advance = completion => {
+        if (connection.closed) { return; }
+        if (index === sources.length) { this._finish(connection, 'complete', completion); return; }
+        const producer = sources[index++];
+        const token = {done: false, cleanup: null};
+        connection.tokens.add(token);
+        const active = () => !connection.closed && !token.done;
+        const observer = new Subscriber({
+          start: value => { if (active()) { connection.handlers.execMethod('start', value); } },
+          next: value => { if (active()) { connection.handlers.execMethod('next', value); } },
+          error: error => { if (active()) { this._finish(connection, 'error', error); } },
+          complete: value => {
+            if (!active()) { return; }
+            this._disposeToken(token);
+            advance(value);
+          },
+          closed: () => !active()
+        });
+        this._subscriber = observer;
+        try {
+          const cleanup = producer(observer);
+          token.cleanup = typeof cleanup === 'function' ? cleanup :
+            cleanup && typeof cleanup.unsubscribe === 'function' ? () => cleanup.unsubscribe() : null;
+          // Synchronous complete/unsubscribe may precede the returned cleanup.
+          if (token.done || connection.closed) { this._disposeToken(token); }
+        } catch (error) { observer.error(error); }
+      };
+      advance();
     }
+
     filter(func) {
       return this.subscribe().filter(func);
     }
@@ -159,11 +193,16 @@ const Observable = (() => {
     }
     concat(arg) {
       const observable = Observable.from(arg);
-      if (this._nextObservable) {
-        this._nextObservable.concat(observable);
-      } else {
-        this._nextObservable = observable;
+      if (!observable || observable === this) { throw new TypeError('Invalid concatenated Observable'); }
+      const pending = [observable], seen = new Set();
+      while (pending.length) {
+        const source = pending.pop();
+        if (source === this) { throw new TypeError('Cyclic concatenated Observable'); }
+        if (seen.has(source)) { continue; }
+        seen.add(source);
+        pending.push(...(source._sources || []));
       }
+      this._sources.push(observable);
       return this;
     }
     forEach(callback) {
@@ -188,44 +227,36 @@ const Observable = (() => {
     onError(arg) { this._subscriber.error(arg); }
     onComplete(arg) { this._subscriber.complete(arg);}
     disconnect() {
-      if (!this._disconnectFunction) {
-        return;
-      }
-      this._closed = true;
-      this._disconnectFunction();
-      delete this._disconnectFunction;
-      this._subscriber;
-      this._handlers.clear();
+      if (this._connection) { this._finish(this._connection); }
     }
-    [observableSymbol]() {
-      return this;
-    }
+    [observableSymbol]() { return this; }
     subscribe(onNext = null, onError = null, onCompleted = null) {
-      this._initSubscriber();
-      const isNop = [onNext, onError, onCompleted].every(f => f === null);
-      const subscriber = Subscriber.create(onNext, onError, onCompleted);
-      return this._subscribe({subscriber, isNop});
+      return this._subscribe({
+        subscriber: Subscriber.create(onNext, onError, onCompleted),
+        isNop: [onNext, onError, onCompleted].every(f => f === null)
+      });
     }
-    _subscribe({subscriber, isNop}) {
-
-      if (!isNop && !this._disconnectFunction) {
-        this._disconnectFunction = this._subscriberFunction(this._subscriber);
+    _subscribe({subscriber, isNop, filterFunc, mapFunc}) {
+      let connection = this._connection;
+      if (!connection || connection.closed) {
+        connection = {closed: false, started: false, handlers: new Handler(), tokens: new Set()};
+        if (!isNop) { this._connection = connection; }
       }
-
-      !isNop && this._handlers.add(subscriber);
-
-      return new Subscription({
-        observable: this,
-        subscriber,
+      const subscription = new Subscription({
+        observable: this, subscriber,
         unsubscribe: () => {
           if (isNop) { return; }
-          this._handlers.remove(subscriber);
-          if (this._handlers.isEmpty) {
-            this.disconnect();
-          }
+          connection.handlers.remove(subscriber);
+          if (connection.handlers.isEmpty) { this._finish(connection); }
         },
-        closed: () => this.closed
-      });
+        closed: () => connection.closed
+      }).filter(filterFunc).map(mapFunc);
+      if (isNop) { return subscription; }
+      connection.handlers.add(subscriber);
+      try { subscriber.start(subscription); }
+      catch (error) { subscription.unsubscribe(); throw error; }
+      if (!connection.closed && !connection.started) { this._connect(connection); }
+      return subscription;
     }
   }
 

@@ -222,7 +222,11 @@ class NicoVideoPlayer extends Emitter {
     const loading = this._creditLoading = SupporterCredit.load({videoId: req.videoId, tags: req.tags, signal: abort.signal})
       .then(async data => {
         if (abort.signal.aborted || !data) { return; }
-        await credit.prepare(data, {gift: !!props['supporterCredit.gift']});
+        const source = this._videoPlayer.src;
+        await credit.prepare(data, {
+          gift: !!props['supporterCredit.gift'], signal: abort.signal,
+          captureBackground: (sec, signal) => VideoCaptureUtil.capture(source, sec, {signal, timeout: 8000})
+        });
         if (!abort.signal.aborted) {
           this._creditData = data;
         }
@@ -638,7 +642,9 @@ class NicoVideoPlayer extends Emitter {
   getDuration() {return this._videoPlayer.duration;}
   getChatList() {return this._commentPlayer.chatList;}
   getVpos() {return Math.floor(this.vpos);}
-  setComment(xmlText, options) {this._commentPlayer.setComment(xmlText, options);}
+  setComment(xmlText, options) {this._commentPlayer.setComment(xmlText, options); }
+  applyHistoryThreads(data, control) { return this._commentPlayer.applyHistoryThreads(data, control); }
+  clearCommentHistory() { this._commentPlayer?.clearCommentHistory(); }
   getNonFilteredChatList() {return this._commentPlayer.nonFilteredChatList;}
   getBufferedRange() {return this._videoPlayer.bufferedRange;}
   setVideoInfo(v) {

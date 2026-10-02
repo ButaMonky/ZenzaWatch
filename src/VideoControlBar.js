@@ -5,7 +5,7 @@ import {SeekBarThumbnail, Storyboard} from './StoryBoard';
 import {util, BaseViewComponent} from './util';
 import {Emitter} from './baselib';
 import {throttle, bounce} from '../packages/lib/src/infra/bounce';
-import {HeatMapWorker} from '../packages/zenza/src/heatMap/HeatMapWorker';
+import {HeatMapWorker, heatMapCacheEntry} from '../packages/zenza/src/heatMap/HeatMapWorker';
 import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';
 import {TextLabel} from '../packages/lib/src/ui/TextLabel';
 import {cssUtil} from '../packages/lib/src/css/css';
@@ -14,7 +14,12 @@ import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {VideoControlState} from './State';
 import {WindowResizeObserver} from '../packages/lib/src/infra/Observable';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 //===BEGIN===
+//@require ZenzaCommentHistoryCore
+const historyTriggerKeyGuard = event => {
+  if (['Enter', ' ', 'Spacebar'].includes(event.key)) { event.stopPropagation(); }
+};
 
   class VideoControlBar extends Emitter {
     constructor(...args) {
@@ -74,6 +79,11 @@ import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
       Object.assign(this, mq.$);
 
       // Task 077c: 画面フィルターのボタン。フィルターが効いている間は光らせる
+      const historyButton = $view.find('.commentHistorySwitch')[0];
+      if (historyButton) {
+        historyButton.addEventListener('keydown', historyTriggerKeyGuard);
+        historyButton.addEventListener('keyup', historyTriggerKeyGuard);
+      }
       const screenFilterButton = $view.find('.screenFilterSwitch')[0];
       const updateScreenFilterButton = () => {
         screenFilterButton && screenFilterButton.classList.toggle('is-active', ScreenFilter.isActive());
@@ -117,13 +127,20 @@ import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
         .on('click', this._onClick.bind(this))
         .on('command', this._onCommandEvent.bind(this));
 
-      HeatMapWorker.init({container: this._seekBar}).then(hm => this.heatMap = hm);
+      HeatMapWorker.init({container: this._seekBar}).then(hm => {
+        this.heatMap = hm;
+        // 準備前に開いた動画があれば、その動画のヒートマップとして始める（Task187）
+        this._heatMapWatchId && hm.reset({watchId: this._heatMapWatchId});
+      });
       const updateHeatMapVisibility =
         v => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
       updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
       this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
-      global.emitter.on('heatMapUpdate',
-        heatMap => WatchInfoCacheDb.putBestEffort(this.player.watchId, {heatMap}));
+      // Task187（監査v2 F13）: 通知に付いた動画IDが今の動画と一致する時だけ、その動画IDで保存する
+      global.emitter.on('heatMapUpdate', payload => {
+        const entry = heatMapCacheEntry(payload, this.player.watchId);
+        entry && WatchInfoCacheDb.putBestEffort(entry.watchId, {heatMap: entry.heatMap});
+      });
 
       this.storyboard = new Storyboard({
         playerConfig: config,
@@ -323,11 +340,12 @@ import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
     _timeToPer(time) {
       return (time / Math.max(this._duration, 1)) * 100;
     }
-    _onPlayerOpen() {
+    _onPlayerOpen(watchId) {
       this._startTimer();
       this.duration = 0;
       this.currentTime = 0;
-      this.heatMap && this.heatMap.reset();
+      this._heatMapWatchId = typeof watchId === 'string' ? watchId : null;
+      this.heatMap && this.heatMap.reset({watchId: this._heatMapWatchId});
       this.storyboard.reset();
       this.resetBufferedRange();
     }
@@ -1221,17 +1239,22 @@ util.addStyle(`
   }
 
   /* Task 077c: 画面フィルターのボタン（「画」の左）。効いている時は水色に光る */
-  .screenFilterSwitch .controlButtonInner {
+  .screenFilterSwitch .controlButtonInner,
+  .commentHistorySwitch .controlButtonInner {
     width: 26px;
     height: 26px;
     vertical-align: middle;
   }
-  .screenFilterSwitch svg {
+  .screenFilterSwitch svg,
+  .commentHistorySwitch svg {
     display: block;
     width: 100%;
     height: 100%;
     fill: currentColor;
   }
+  .commentHistorySwitch { border: 0; padding: 0; background: transparent; }
+  .commentHistorySwitch:focus-visible { outline: 2px solid var(--enabled-button-color, #9cf); outline-offset: -2px; }
+  .commentHistorySwitch:focus-visible .tooltip { display: block; }
   .screenFilterSwitch.is-active {
     color: var(--enabled-button-color);
     opacity: 1;
@@ -1239,7 +1262,8 @@ util.addStyle(`
   .screenFilterSwitch.is-active svg {
     filter: drop-shadow(0 0 3px var(--enabled-button-color));
   }
-  .is-youTube .screenFilterSwitch {
+  .is-youTube .screenFilterSwitch,
+  .is-youTube .commentHistorySwitch {
     display: none;
   }
 
@@ -1683,6 +1707,11 @@ util.addStyle(`
       <div class="controlItemContainer right">
 
         <div class="scalingUI">
+
+          <button type="button" class="commentHistorySwitch controlButton" data-command="toggle-commentHistoryPanel" aria-label="コメント増量" aria-expanded="false">
+            <span class="controlButtonInner">${ZenzaCommentHistoryCore.HISTORY_ICON}</span>
+            <span class="tooltip">コメント増量</span>
+          </button>
 
           <div class="screenFilterSwitch controlButton" data-command="toggle-screenFilterPanel">
             <div class="controlButtonInner"><svg viewBox="0 0 36 36" aria-hidden="true"><path d="M15 10Q15 19 24 19Q15 19 15 28Q15 19 6 19Q15 19 15 10ZM26 5.5Q26 10 30.5 10Q26 10 26 14.5Q26 10 21.5 10Q26 10 26 5.5Z"/></svg></div>

@@ -446,6 +446,30 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
       const UNORDERABLE = ['hot', 'personalized'];
       const dateReg = /^\d{4}-\d{2}-\d{2}$/;
 
+      // Task189（検索追補Q01）: 本家の検索条件のうち、公式コード・実測で値を確認できたものだけを送る。
+      // selectContentType: long（公式playlist文脈の実測）/ short（公式クライアントのコード）。
+      // channelVideoListingStatus: included（公式playlist文脈の実測）。
+      // kind（URLのuser/any等）: 公式APIのどの値に当たるか未確認のため送らず、「適用していない条件」として返す。
+      // 任意のURLパラメータをそのままAPIへ透過しない。
+      const CONTENT_TYPES = ['long', 'short'];
+      const LISTING_STATUSES = ['included'];
+      const KIND_NEUTRAL = ['', 'any', 'all'];
+      const normalizeConditions = (params = {}) => {
+        const applied = {}, unapplied = [];
+        const contentType = params.selectContentType;
+        if (contentType !== undefined && contentType !== null && contentType !== '') {
+          CONTENT_TYPES.includes(contentType) ? (applied.selectContentType = contentType) : unapplied.push('selectContentType');
+        }
+        const listing = params.channelVideoListingStatus;
+        if (listing !== undefined && listing !== null && listing !== '') {
+          LISTING_STATUSES.includes(listing) ? (applied.channelVideoListingStatus = listing) : unapplied.push('channelVideoListingStatus');
+        }
+        if (params.kind !== undefined && params.kind !== null && !KIND_NEUTRAL.includes(String(params.kind))) {
+          unapplied.push('kind');
+        }
+        return {applied, unapplied};
+      };
+
       const canHandle = (params = {}) => {
         if (params.userId || params.channelId || params.commentCount) {
           return false;
@@ -507,6 +531,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         if (params.genre && params.genre !== 'all') {
           q.genres = params.genre;
         }
+        Object.assign(q, normalizeConditions(params).applied);
         q.sensitiveContents = 'mask';
         return q;
       };
@@ -549,7 +574,12 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
           throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`),
             {status: json && json.meta && json.meta.status});
         }
-        return json.data;
+        // Task190（検索追補Q02）: itemsが無い・配列でない、総件数が数値でない応答は「正常な0件」にしない
+        const data = json.data;
+        if (!Array.isArray(data.items) || !Number.isFinite(data.totalCount) || data.totalCount < 0) {
+          throw Object.assign(new Error('nvapi search returned an unexpected schema'), {status: 'schema', kind: 'schema'});
+        }
+        return data;
       };
 
       /**
@@ -579,13 +609,18 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const first = await fetchPage(query, firstPage, PAGE_SIZE);
         const count = first.totalCount;
         let list = toItems(first, firstPage);
+        // Task190: 続きがあるか。hasNextが返っていればそれに従い、無い時だけ従来どおり件数で判断する
+        const pageHasNext = data => data.hasNext === false ? false : (data.hasNext === true ? true : data.items.length >= PAGE_SIZE);
+        let stopReason = null, failedPage = null;
         // Task 074: 2ページ目以降は総件数から必要なページ数を割り出し、同時にSEARCH_CONCURRENCY件ずつ
         // 並行して取得する（以前は1ページずつ順番に取得していたため1000件で約2〜3秒かかっていた）。
         // 結果の並び順はページ順のまま。途中のページが失敗した場合は、その直前までの連続した分だけを返す。
         const available = Math.min(count, MAX_RESULT) - (firstPage - 1) * PAGE_SIZE - firstSkip;
         const wanted = Math.min(limit, Math.max(0, available));
         const lastPage = Math.min(MAX_API_PAGE, firstPage + Math.ceil(Math.max(0, wanted - list.length) / PAGE_SIZE));
-        if ((first.items || []).length >= PAGE_SIZE && list.length < wanted && lastPage > firstPage) {
+        if (!pageHasNext(first)) {
+          stopReason = 'end';
+        } else if (list.length < wanted && lastPage > firstPage) {
           const pages = [];
           for (let pg = firstPage + 1; pg <= lastPage; pg++) {
             pages.push(pg);
@@ -607,17 +642,35 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
             const data = results[i];
             if (!data) { break; }
             list = list.concat(toItems(data, pages[i]));
-            if ((data.items || []).length < PAGE_SIZE) { break; }
+            if (!pageHasNext(data)) { stopReason = 'end'; break; }
           }
-          if (failedAt < pages.length) {
+          if (failedAt < pages.length && !stopReason) {
+            stopReason = 'failed';
+            failedPage = pages[failedAt];
             window.console.warn('nvapi検索: 途中のページで失敗したため、%d件で打ち切ります', list.length);
           }
         }
-        return {status: 'ok', count, list: list.slice(0, limit), engine: 'nvapi', word, params};
+        // Task190: 結果の状態を返す（既存のstatus:'ok'の契約は変えない）。
+        //  complete: 最後まで取れた / truncated: 件数上限・APIのページ上限で止めた（続きはある）
+        //  partial: 途中のページが失敗し、その直前までの連続した分だけ / empty: 正常な0件
+        const returned = list.slice(0, limit);
+        if (!stopReason) {
+          stopReason = list.length >= limit ? 'limit' :
+            ((firstPage - 1) * PAGE_SIZE + firstSkip + list.length >= MAX_RESULT ? 'api-page-limit' : 'end');
+        }
+        const resultState = stopReason === 'failed' ? 'partial' :
+          (returned.length === 0 && count === 0 ? 'empty' :
+            (stopReason === 'end' ? 'complete' : 'truncated'));
+        return {status: 'ok', count, list: returned, engine: 'nvapi', word, params,
+          unappliedConditions: normalizeConditions(params).unapplied,
+          resultState, complete: resultState === 'complete' || resultState === 'empty', partial: resultState === 'partial',
+          stopReason, failedPage, returnedCount: returned.length};
       };
 
-      return {canHandle, buildQuery, search, toLegacyItem};
+      return {canHandle, buildQuery, search, toLegacyItem, normalizeConditions};
     })();
+
+    const KIND_NEUTRAL_FOR_SNAPSHOT = ['', 'any', 'all'];
 
     class NicoSearchApiV2Loader {
       static version = new NicoSearchApiV2Version;
@@ -755,7 +808,17 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
             window.console.warn('本家検索API(nvapi)での検索に失敗したため、スナップショット検索を使います', e);
           }
         }
-        return NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit);
+        // Task189: スナップショット検索では本家専用の条件（長さ種別・チャンネル掲載・kind・ジャンル）を反映できない。
+        // 黙って同じ結果にせず、適用していない条件として返す
+        const result = await NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit);
+        const p = params || {};
+        const unapplied = ['selectContentType', 'channelVideoListingStatus', 'kind']
+          .filter(key => p[key] !== undefined && p[key] !== null && !KIND_NEUTRAL_FOR_SNAPSHOT.includes(String(p[key])));
+        if (p.genre && p.genre !== 'all') { unapplied.push('genre'); }
+        if (result && typeof result === 'object' && unapplied.length) {
+          result.unappliedConditions = unapplied;
+        }
+        return result;
       }
 
       /**

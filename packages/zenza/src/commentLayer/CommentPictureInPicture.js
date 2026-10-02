@@ -312,13 +312,24 @@ const CommentPictureInPicture = (() => {
 
   let session = null;
 
-  const waitEvent = (target, name, timeout) => new Promise(resolve => {
-    const timer = setTimeout(() => resolve(false), timeout);
-    target.addEventListener(name, () => { clearTimeout(timer); resolve(true); }, {once: true});
+  const waitEvent = (target, name, timeout, signal) => new Promise(resolve => {
+    let timer;
+    const finish = value => {
+      clearTimeout(timer);
+      target.removeEventListener(name, onEvent);
+      signal && signal.removeEventListener('abort', onAbort);
+      resolve(value);
+    };
+    const onEvent = () => finish(true), onAbort = () => finish(false);
+    if (signal && signal.aborted) { resolve(false); return; }
+    target.addEventListener(name, onEvent);
+    signal && signal.addEventListener('abort', onAbort, {once: true});
+    timer = setTimeout(() => finish(false), timeout);
   });
 
   class Session {
     constructor({getVideo, getViewModel, config, onPlay, onPause, onEnd}) {
+      this._abort = new AbortController();
       this.getVideo = getVideo;
       this.getViewModel = getViewModel;
       this.config = config;
@@ -374,10 +385,12 @@ const CommentPictureInPicture = (() => {
     }
 
     _onPipPlay() {
+      if (this.isStopped) { return; }
       if (performance.now() < this.ignorePipEventsUntil) { return; }
       this.video && this.video.paused && this.onPlay && this.onPlay();
     }
     _onPipPause() {
+      if (this.isStopped) { return; }
       if (performance.now() < this.ignorePipEventsUntil) { return; }
       this.video && !this.video.paused && this.onPause && this.onPause();
     }
@@ -410,10 +423,11 @@ const CommentPictureInPicture = (() => {
     }
 
     draw() {
-      if (this.isDrawing) { return; }
+      if (this.isStopped || this.isDrawing) { return; }
       this.isDrawing = true;
       try {
         const video = this.getVideo();
+        if (!video) { this.stop(); return; }
         this._bindVideo(video);
         const resized = this._resizeCanvas(video);
         const canvas = this.canvas, ctx = this.ctx;
@@ -456,7 +470,27 @@ const CommentPictureInPicture = (() => {
       }
     }
 
+    _waitForStart(promise) {
+      const signal = this._abort.signal;
+      return new Promise((resolve, reject) => {
+        let timer;
+        const finish = (value, error) => {
+          clearTimeout(timer);
+          signal.removeEventListener('abort', cancel);
+          error ? reject(error) : resolve(value);
+        };
+        const cancel = () => finish(undefined);
+        // Always observe late rejection, including already-stopped sessions.
+        Promise.resolve(promise).then(value => finish(value), error => finish(null, error));
+        if (signal.aborted) { cancel(); return; }
+        signal.addEventListener('abort', cancel, {once: true});
+        timer = setTimeout(() => finish(null, new Error('PiPの開始が時間内に完了しませんでした')), 5000);
+      });
+    }
+
     async start() {
+      if (this.isStarted || this.isStopped) { return; }
+      this.isStarted = true;
       const video = this.getVideo();
       if (!video) {
         throw new Error('動画がありません');
@@ -464,6 +498,7 @@ const CommentPictureInPicture = (() => {
       this._bindVideo(video);
       this._resizeCanvas(video);
       this.draw();
+      if (this.isStopped) { return; }
       const stream = this.stream = this.canvas.captureStream(FPS);
       const pip = this.pipVideo = document.createElement('video');
       pip.className = 'zenzaCommentPipVideo';
@@ -477,21 +512,35 @@ const CommentPictureInPicture = (() => {
       document.body.append(pip);
       pip.srcObject = stream;
       this.ticker = createTicker(Math.floor(1000 / FPS), this.draw);
-      const metadata = pip.readyState >= 1 ? Promise.resolve(true) : waitEvent(pip, 'loadedmetadata', 3000);
+      const metadata = pip.readyState >= 1 ? Promise.resolve(true) : waitEvent(pip, 'loadedmetadata', 3000, this._abort.signal);
       this.lastKey = '';
       this.draw();
-      await pip.play().catch(() => {});
-      await metadata;
+      await this._waitForStart(pip.play());
+      if (this.isStopped) { return; }
+      const ready = await metadata;
+      if (this.isStopped) { return; }
+      if (!ready) { throw new Error('PiPの映像を準備できませんでした'); }
       if (video.paused) {
         this._syncPip('pause');
       }
-      pip.addEventListener('play', () => this._onPipPlay());
-      pip.addEventListener('pause', () => this._onPipPause());
-      pip.addEventListener('leavepictureinpicture', () => this.stop(), {once: true});
+      this._pipListeners = {
+        play: () => this._onPipPlay(), pause: () => this._onPipPause(),
+        leavepictureinpicture: () => this.stop()
+      };
+      for (const [name, listener] of Object.entries(this._pipListeners)) { pip.addEventListener(name, listener); }
       if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture().catch(() => {});
+        await this._waitForStart(document.exitPictureInPicture());
+        if (this.isStopped) { return; }
       }
-      this.pipWindow = await pip.requestPictureInPicture();
+      const requested = pip.requestPictureInPicture().then(pipWindow => {
+        if (this.isStopped && document.pictureInPictureElement === pip) {
+          document.exitPictureInPicture().catch(() => {});
+        }
+        return pipWindow;
+      });
+      const pipWindow = await this._waitForStart(requested);
+      if (this.isStopped) { return; }
+      this.pipWindow = pipWindow;
       this.pipWindow.addEventListener('resize', this._onResize);
       this._onResize();
     }
@@ -499,11 +548,13 @@ const CommentPictureInPicture = (() => {
     stop() {
       if (this.isStopped) { return; }
       this.isStopped = true;
+      this._abort.abort();
       this.ticker && this.ticker.stop();
       this._bindVideo(null);
       this.pipWindow && this.pipWindow.removeEventListener('resize', this._onResize);
       const pip = this.pipVideo;
       if (pip) {
+        for (const [name, listener] of Object.entries(this._pipListeners || {})) { pip.removeEventListener(name, listener); }
         if (document.pictureInPictureElement === pip) {
           document.exitPictureInPicture().catch(() => {});
         }
@@ -512,6 +563,9 @@ const CommentPictureInPicture = (() => {
       }
       this.stream && this.stream.getTracks().forEach(track => track.stop());
       this.renderer.clearCache();
+      this.renderer.snapshot = null;
+      this.canvas.width = this.canvas.height = 1;
+      this._pipListeners = null;
       this.pipVideo = this.stream = this.pipWindow = null;
       this.onEnd && this.onEnd();
     }
@@ -535,7 +589,7 @@ const CommentPictureInPicture = (() => {
       current.stop();
       throw e;
     }
-    return current;
+    return current.isStopped ? null : current;
   };
 
   const stop = () => {

@@ -21,6 +21,87 @@ const {ThreadLoader} = (() => {
     3: 'ai',
   }
 
+  // Task185 (F11): the fetch timeout used to stop once response headers arrived, so a
+  // body that never finished kept a post "in progress" forever. This bounds headers AND
+  // body with one deadline and classifies the failure (network / header-timeout /
+  // body-timeout). It never retries by itself.
+  const POST_TIMEOUT_MS = 30 * 1000;
+  const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS) => {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    let stage = 'headers';
+    let timer;
+    const deadline = new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        const kind = stage === 'headers' ? 'header-timeout' : 'body-timeout';
+        const error = Object.assign(new Error(kind), {name: 'timeout', kind});
+        reject(error);
+        if (controller) { controller.abort(error); }
+      }, timeoutMs);
+    });
+    deadline.catch(() => {});
+    try {
+      let res;
+      try {
+        res = await Promise.race([netUtil.fetch(url, {...options, timeout: timeoutMs, ...(controller ? {signal: controller.signal} : {})}), deadline]);
+      } catch (e) {
+        throw (e && e.kind) ? e : Object.assign(e instanceof Error ? e : new Error(String(e && e.message || e)), {kind: 'network'});
+      }
+      stage = 'body';
+      return await Promise.race([res.json(), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const abortReason = signal => signal.reason !== undefined ? signal.reason :
+    Object.assign(new Error('Comment load aborted'), {name: 'AbortError'});
+  const checkAbort = signal => { if (signal && signal.aborted) { throw abortReason(signal); } };
+  const withSignal = async (operation, signal) => {
+    checkAbort(signal);
+    if (!signal) { return operation(); }
+    let onAbort;
+    try {
+      const aborted = new Promise((resolve, reject) => {
+        onAbort = () => reject(abortReason(signal));
+        signal.addEventListener('abort', onAbort, {once: true});
+      });
+      return await Promise.race([aborted, operation()]);
+    } finally { signal.removeEventListener('abort', onAbort); }
+  };
+  const waitForRetry = async (ms, signal) => {
+    if (!signal) { return sleep(ms); }
+    let timer;
+    try {
+      await withSignal(() => new Promise(resolve => { timer = setTimeout(resolve, ms); }), signal);
+    } finally { if (timer !== undefined) { clearTimeout(timer); } }
+  };
+  const readJson = (url, options) => withSignal(async () => {
+    const response = await netUtil.fetch(url, options);
+    checkAbort(options.signal);
+    const header = response.headers && response.headers.get('Retry-After');
+    let retryAfterMs;
+    if (typeof header === 'string') {
+      const value = header.trim();
+      if (/^\d+$/.test(value)) { retryAfterMs = Number(value) * 1000; }
+      else if (/^[A-Za-z]{3},/.test(value)) {
+        const date = Date.parse(value);
+        if (Number.isFinite(date)) { retryAfterMs = Math.max(0, date - Date.now()); }
+      }
+    }
+    let body;
+    try { body = await response.json(); }
+    catch (error) {
+      if (response.status >= 400) { throw {status: response.status, retryAfterMs}; }
+      throw error;
+    }
+    checkAbort(options.signal);
+    if (body.meta.status >= 300 || response.status >= 400) {
+      const failure = body.meta.status >= 300 ? body.meta : {status: response.status};
+      throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
+    }
+    return body;
+  }, options.signal);
+
   class ThreadLoader {
 
     constructor() {
@@ -32,16 +113,18 @@ const {ThreadLoader} = (() => {
 
       console.log('getThreadKey url: ', url);
       try {
-        const { meta, data } = await netUtil.fetch(url, {
+        const { meta, data } = await readJson(url, {
           headers: {
             'X-Frontend-Id': FRONT_ID,
             'X-Frontend-Version': FRONT_VER,
           },
+          signal: options.signal,
           credentials: 'include'
-        }).then(res => res.json());
+        });
         if (meta.status >= 300) {
           throw meta
         }
+        checkAbort(options.signal);
         this._threadKeys[videoId] = data.threadKey;
         return data
       } catch (result) {
@@ -53,14 +136,17 @@ const {ThreadLoader} = (() => {
       const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
 
       console.log('getPostKey url: ', url);
+      const postKeyLanguage = options.language || 'ja-jp';
       try {
-        const { meta, data } = await netUtil.fetch(url, {
+        const { meta, data } = await fetchJsonWithin(url, {
           headers: {
             'X-Frontend-Id': FRONT_ID,
             'X-Frontend-Version': FRONT_VER,
+            // Task176: send the resolved thread language like the delete/nicoru keys.
+            'X-Niconico-Language': postKeyLanguage
           },
           credentials: 'include'
-        }).then(res => res.json());
+        });
         if (meta.status >= 300) {
           throw meta
         }
@@ -94,7 +180,7 @@ const {ThreadLoader} = (() => {
 
     async _post(url, body, options = {}) {
       try {
-        const { meta, data } = await netUtil.fetch(url, {
+        const { meta, data } = await fetchJsonWithin(url, {
           method: 'POST',
           headers: {
             'X-Frontend-Id': FRONT_ID,
@@ -102,7 +188,7 @@ const {ThreadLoader} = (() => {
             'Content-Type': 'text/plain; charset=UTF-8'
           },
           body
-        }).then(res => res.json());
+        });
         if (meta.status >= 300) {
           throw meta
         }
@@ -110,12 +196,15 @@ const {ThreadLoader} = (() => {
       } catch (result) {
         throw {
           result,
+          // Task185 (F11): network / header-timeout / body-timeout (undefined for API errors)
+          kind: result && result.kind,
           message: `コメントの通信失敗`
         }
       }
     }
 
     async _load(msgInfo, options = {}) {
+      checkAbort(options.signal);
       const {
         params,
         server,
@@ -155,24 +244,27 @@ const {ThreadLoader} = (() => {
       const url = new URL('/v1/threads', server);
       console.log('load threads...', url, logSafe.redact(packet));
       try {
-        const { meta, data } = await netUtil.fetch(url, {
+        const { meta, data } = await readJson(url, {
           method: 'POST',
+          signal: options.signal,
           headers: {
             'X-Frontend-Id': FRONT_ID,
             'X-Frontend-Version': FRONT_VER,
             'Content-Type': 'text/plain; charset=UTF-8'
           },
           body: JSON.stringify(packet)
-        }).then(res => res.json());
+        });
         if (meta.status >= 300) {
           throw meta;
         }
+        checkAbort(options.signal);
         // 実際にサーバーへ送った言語をload()側に伝え、フォールバックが
         // 発生した場合に msgInfo.language / threadInfo.language を
         // 実態に合わせて更新できるようにする（Task B-5 追加調査）。
         data.__usedLanguage = packet.params.language;
         return data;
       } catch (result) {
+        checkAbort(options.signal);
         // 400/INVALID_TOKEN 等が起きた時にすぐ切り分けられるよう、
         // ネストせず1行で status / errorCode を出す（Task B-5）。
         window.console.error(
@@ -187,6 +279,7 @@ const {ThreadLoader} = (() => {
     }
 
     async load(msgInfo, options = {}) {
+      checkAbort(options.signal);
       const { videoId, userId } = msgInfo;
 
       const timeKey = `loadComment videoId: ${videoId}`;
@@ -214,9 +307,11 @@ const {ThreadLoader} = (() => {
             console.time(timeKey);
           }
           result = await this._load(msgInfo, loadOptions);
+          checkAbort(options.signal);
           lastError = null;
           break;
         } catch (e) {
+          checkAbort(options.signal);
           lastError = e;
           console.timeEnd(timeKey);
           const failure = e && e.result || e;
@@ -233,10 +328,15 @@ const {ThreadLoader} = (() => {
           const label = isRetry ? `リトライ${attempt}回目` : '1回目';
           window.console.error(`loadComment fail (${label}): `, logSafe.redact(e));
 
-          const delay = RETRY_DELAYS_MS[attempt];
+          let delay = RETRY_DELAYS_MS[attempt];
+          if (delay != null && failure && failure.retryAfterMs >= 0) {
+            // Do not shorten a server-requested delay just to fit our retry budget.
+            if (failure.retryAfterMs > 120000) { break; }
+            delay = Math.max(delay, failure.retryAfterMs);
+          }
           if (delay != null) {
             PopupMessage.alert(`コメントの取得失敗: ${delay / 1000}秒後にリトライ`);
-            await sleep(delay);
+            await waitForRetry(delay, options.signal);
           }
         }
       }
@@ -280,7 +380,9 @@ const {ThreadLoader} = (() => {
         userId,
         videoId,
         threadId: msgInfo.threadId,
-        is184Forced: msgInfo.defaultThread.is184Forced,
+        // Task183 (F07): no default post target -> not postable (no null dereference).
+        is184Forced: msgInfo.defaultThread?.is184Forced === true,
+        canPost: msgInfo.canPost !== false && msgInfo.threadId != null,
         totalResCount,
         language: msgInfo.language,
         when: msgInfo.when,
@@ -303,8 +405,16 @@ const {ThreadLoader} = (() => {
         threadId,
         language
       } = msgInfo.threadInfo;
+      // Task183 (F07): without a post target nothing is sent (no key, no POST).
+      if (threadId === null || threadId === undefined || threadId === '' || msgInfo.threadInfo.canPost === false) {
+        throw {status: 'fail', reason: 'no-post-target', message: 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）'};
+      }
       const url = new URL(`/v1/threads/${threadId}/comments`, msgInfo.nvComment.server);
-      const { postKey } = await this.getPostKey(threadId, { language });
+      const { postKey } = (await this.getPostKey(threadId, { language })) || {};
+      // Task186 (F12): never POST without a usable post key.
+      if (typeof postKey !== 'string' || !postKey.trim()) {
+        throw {status: 'fail', reason: 'post-key-missing', message: '投稿キーを取得できませんでした（コメントは送信していません）'};
+      }
 
       const packet = JSON.stringify({
         body: text,
@@ -315,19 +425,41 @@ const {ThreadLoader} = (() => {
       });
       console.log('post packet: ', logSafe.redact(packet));
       try {
-        const { no, id } = await this._post(url, packet);
+        const ack = await this._post(url, packet);
+        // Task186 (F12): Zenza needs the comment number to show the posted comment.
+        // An acknowledgement without a numeric `no` is not a confirmed success.
+        // (`id` is passed through but not required: its contract is unconfirmed.)
+        const no = ack && typeof ack === 'object' && ack.no !== null && ack.no !== '' ? Number(ack.no) : NaN;
+        if (!Number.isFinite(no)) {
+          throw {ackIncomplete: true};
+        }
         return {
           status: 'ok',
           no,
-          id,
+          id: ack.id,
           message: 'コメント投稿成功'
         };
       } catch (error) {
-        const { result: { status: statusCode, errorCode } } = error;
-        if (statusCode == null) {
+        if (error && error.ackIncomplete) {
+          // The server may have accepted it: outcome unknown, never re-posted.
           throw {
             status: 'fail',
-            message: `コメント投稿失敗`
+            reason: 'ack-incomplete',
+            outcome: 'unknown',
+            message: 'コメント投稿の結果を確認できませんでした（応答に投稿番号がありません。自動では再投稿しません）'
+          };
+        }
+        const { result: { status: statusCode, errorCode } = {} } = error;
+        if (statusCode == null) {
+          // Task185 (F11): after the POST was sent, a lost/late response means the
+          // outcome is unknown. It is not retried automatically (no double post).
+          throw {
+            status: 'fail',
+            reason: error.kind || 'network',
+            outcome: 'unknown',
+            message: error.kind === 'body-timeout' || error.kind === 'header-timeout' ?
+              'コメント投稿の結果を確認できませんでした（応答の待ち時間を超えました。自動では再投稿しません）' :
+              `コメント投稿失敗`
           };
         }
         if (!retrying && ['INVALID_TOKEN', 'EXPIRED_TOKEN'].includes(errorCode)) {

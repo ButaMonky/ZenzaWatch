@@ -1,0 +1,21 @@
+{
+  "schema": "nico-comment-history-zenza-generated/1",
+  "generatorVersion": 2,
+  "files": [
+    {
+      "path": "ZenzaCommentHistoryCore.generated.js",
+      "sha256": "702006589823f4f5e68fb016b88a2b10f33d6743f883cfc306c811c7c6bc71b2",
+      "bytes": 89427
+    },
+    {
+      "path": "ZenzaCommentHistorySettings.generated.js",
+      "sha256": "f2547b57fb5e15e87b82cd6e99877ba788cca5da62db9d23a74a25a12bfb0da9",
+      "bytes": 81354
+    },
+    {
+      "path": "package.json",
+      "sha256": "3ca9d4afd21425087cf31893b8f9f63c81b0b8408db5e343ca76e5f8aa26ab9a",
+      "bytes": 23
+    }
+  ]
+}

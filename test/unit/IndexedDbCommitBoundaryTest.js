@@ -93,10 +93,10 @@ describe('IndexedDB persistence waits for transaction completion (ZW-041 bounded
     assert.strictEqual(state.status, 'rejected');
   });
 
-  it('updateTime returns its record only after the follow-up write commits', async function() {
+  it('updateTime returns its record only after its readwrite transaction commits', async function() {
     const read = eventTarget(), write = eventTarget(), readTx = eventTarget(), writeTx = eventTarget();
     readTx.objectStore = () => ({get: () => read});
-    writeTx.objectStore = () => ({put: () => write});
+    writeTx.objectStore = () => ({get: () => read, put: () => write});
     writeTx.abort = () => {};
     writeTx.commit = () => {};
     const f = controllerFixture();
@@ -118,7 +118,7 @@ describe('IndexedDB persistence waits for transaction completion (ZW-041 bounded
         const write = deferred();
         // Keep original code's fire-and-forget negative case local to this test.
         observe(write.promise);
-        const adapter = adapterFixture(name, {put: () => write.promise,
+        const adapter = adapterFixture(name, {put: () => write.promise, update: data => write.promise.then(() => ({watchId: data.key})),
           updateTime: async () => null, gc: async () => {}});
         const db = await adapter.open();
         const pending = name === 'ThumbInfoCacheDb' ? db.put('<fixture/>', {
@@ -138,7 +138,7 @@ describe('IndexedDB persistence waits for transaction completion (ZW-041 bounded
 
   it('playback best-effort write handles failure while explicit writes still reject', async function() {
     const warnings = [];
-    const adapter = adapterFixture('WatchInfoCacheDb', {put: async () => { throw new Error('private-record'); },
+    const adapter = adapterFixture('WatchInfoCacheDb', {put: async () => { throw new Error('private-record'); }, update: async () => { throw new Error('private-record'); },
       updateTime: async () => null, gc: async () => {}}, {
       console: Object.assign({}, quiet, {warn: (...args) => warnings.push(args)})
     });

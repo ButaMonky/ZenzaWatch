@@ -20,7 +20,7 @@
  *   - 動画本編の後ろに「提供」のコンテンツがつながっていて、提供音声（mp3）の長さだけ流れる。
  *     時間は音声の再生位置で進む（音声が終われば提供画面も終わる）。コメントもその間流れ続ける。
  *   - 1280×720 の画面。背景は adTopSupporter.auxiliary.bgColor（無ければ #00f）。
- *     bgVideoPosition がある時は、その位置の動画の場面を背景に使う（Zenza では最後の場面で代用）。
+ *     bgVideoPosition がある時は、その位置の動画の場面を背景に使う（独立した動画キャプチャで取得し、本編はシークしない）。
  *   - 「提　供」の下に、ニコニ広告のトップ支援者・最新の支援者（NEW!）。
  *     ギフトもある時は 5秒 で左へ 0.3秒 かけてスライドし、ギフトのトップ・最新の支援者に切り替わる。
  *   - ギフトは 1000×562.5 の仮想画面に 50px のマス目で下から積み上がるように落ちてくる（1.25秒、3乗の加速）。
@@ -519,14 +519,16 @@ const SupporterCredit = (() => {
     }
 
     /** 表示の準備（読み込みが済んだ情報を渡す） */
-    async prepare(data, {gift = true} = {}) {
+    async prepare(data, {gift = true, captureBackground, signal} = {}) {
       this.dispose();
       this.data = data;
       this._initializeDom();
       const s = data.supporters;
       const bg = s.adTopSupporter;
       this.bgColor = (bg && bg.auxiliary && bg.auxiliary.bgColor) || DEFAULT_BG;
-      this.useVideoBackground = !!(bg && bg.auxiliary && typeof bg.auxiliary.bgVideoPosition === 'number');
+      this.bgVideoPosition = bg && bg.auxiliary && bg.auxiliary.bgVideoPosition;
+      this.useVideoBackground = Number.isFinite(this.bgVideoPosition) && this.bgVideoPosition >= 0;
+      this._backgroundLoading = this._prepareBackground(captureBackground, signal);
       this.page = new SupportersPage(s);
       const header = this.view.querySelector('.scHeader');
       header.textContent = '';
@@ -587,56 +589,99 @@ const SupporterCredit = (() => {
     }
 
     get currentTime() {
-      if (this._audioOk && this.audio) { return this.audio.currentTime; }
-      if (this.state === 'playing') {
-        return this._clockBase + (performance.now() - this._clockStart) / 1000;
+      if (this.state !== 'playing') { return this._clockBase; }
+      const now = performance.now();
+      if (this._audioOk && this.audio) {
+        const t = this.audio.currentTime;
+        if (Number.isFinite(t) && t > this._lastAudioTime) {
+          this._lastAudioTime = t;
+          this._audioProgressAt = now;
+          this._clockBase = Math.max(this._clockBase, t);
+          this._clockStart = now;
+        } else if (this.audio.error || now - this._audioProgressAt >= 2000) {
+          this._audioOk = false;
+          this.audio.pause();
+        }
+        if (this._audioOk) { return this._clockBase; }
       }
-      return this._clockBase;
+      return this._clockBase + (now - this._clockStart) / 1000;
     }
 
-    /** 動画の最後の場面（背景に使う場合）を覚えておく */
-    _captureBackground(videoElement) {
-      this.bgCanvas = null;
-      if (!this.useVideoBackground || !videoElement || !videoElement.videoWidth) { return; }
-      try {
-        const c = document.createElement('canvas');
-        c.width = CANVAS_W;
-        c.height = CANVAS_H;
-        const ctx = c.getContext('2d');
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-        const vw = videoElement.videoWidth, vh = videoElement.videoHeight;
-        const scale = Math.min(CANVAS_W / vw, CANVAS_H / vh);
-        ctx.drawImage(videoElement, (CANVAS_W - vw * scale) / 2, (CANVAS_H - vh * scale) / 2, vw * scale, vh * scale);
-        this.bgCanvas = c;
-      } catch (e) {
-        this.bgCanvas = null;
+    _watchClock() {
+      if (this.state !== 'playing') { return; }
+      const elapsed = this._elapsedBase + (performance.now() - this._elapsedStart) / 1000;
+      if (this.currentTime >= this.duration + 0.05 || elapsed >= MAX_DURATION) {
+        this._finish();
       }
+    }
+
+    _prepareBackground(captureBackground, signal) {
+      if (!this.useVideoBackground || typeof captureBackground !== 'function') { return Promise.resolve(); }
+      const abort = this._backgroundAbort = new AbortController();
+      const relay = () => abort.abort();
+      if (signal) {
+        if (signal.aborted) { relay(); }
+        else { signal.addEventListener('abort', relay, {once: true}); }
+      }
+      const position = this.bgVideoPosition;
+      return Promise.resolve().then(() => {
+        if (abort.signal.aborted) { return null; }
+        return captureBackground(position, abort.signal);
+      }).then(frame => {
+        if (abort.signal.aborted || this._backgroundAbort !== abort || !frame || !frame.width || !frame.height) { return; }
+        const canvas = document.createElement('canvas');
+        canvas.width = CANVAS_W; canvas.height = CANVAS_H;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        const scale = Math.min(CANVAS_W / frame.width, CANVAS_H / frame.height);
+        ctx.drawImage(frame, (CANVAS_W - frame.width * scale) / 2, (CANVAS_H - frame.height * scale) / 2,
+          frame.width * scale, frame.height * scale);
+        this.bgCanvas = canvas;
+      }).catch(() => { /* Keep the configured color if capture is unavailable. */ })
+        .finally(() => {
+          signal && signal.removeEventListener('abort', relay);
+          if (this._backgroundAbort === abort) { this._backgroundAbort = null; }
+        });
     }
 
     start({volume = 1, muted = false, voice = true, videoElement = null} = {}) {
       if (!this.isReady) { return false; }
-      this._captureBackground(videoElement);
+      this.stop();
+      const generation = this._generation = (this._generation || 0) + 1;
       this.view.classList.add('is-show');
       void this.view.offsetWidth;
       this.view.classList.add('is-visible');
       this._clockBase = 0;
       this._audioOk = false;
       this.state = 'playing';
-      this._clockStart = performance.now();
-      if (this.audio) {
-        this.audio.currentTime = 0;
+      this._clockStart = this._elapsedStart = this._audioProgressAt = performance.now();
+      this._elapsedBase = this._lastAudioTime = 0;
+      const audio = this.audio;
+      if (audio) {
+        audio.currentTime = 0;
         this.setVolume(volume, muted || !voice);
-        this.audio.onended = () => this._finish();
-        this.audio.play().then(() => {
-          if (this.state === 'idle') { this.audio.pause(); return; }
+        audio.onended = () => {
+          if (generation === this._generation && this.state === 'playing') { this._finish(); }
+        };
+        let play;
+        try { play = audio.play(); } catch (error) { play = Promise.reject(error); }
+        Promise.resolve(play).then(() => {
+          if (generation !== this._generation || this.audio !== audio || this.state === 'idle') { return; }
+          const elapsed = this.currentTime;
+          if (audio.currentTime < elapsed) { audio.currentTime = elapsed; }
+          this._clockBase = elapsed;
+          this._clockStart = this._audioProgressAt = performance.now();
+          this._lastAudioTime = audio.currentTime;
           this._audioOk = true;
-          this.state === 'paused' && this.audio.pause();
+          if (this.state === 'paused') { audio.pause(); }
         }).catch(e => {
+          if (generation !== this._generation || this.audio !== audio) { return; }
+          try { audio.pause(); } catch (error) {}
           window.console.warn('提供音声を再生できませんでした（時計で進めます）', e && e.name);
           this._audioOk = false;
         });
       }
+      this._watchdog = setInterval(() => this._watchClock(), 250);
       this._schedule();
       return true;
     }
@@ -650,6 +695,7 @@ const SupporterCredit = (() => {
     pause() {
       if (this.state !== 'playing') { return; }
       this._clockBase = this.currentTime;
+      this._elapsedBase += (performance.now() - this._elapsedStart) / 1000;
       this.state = 'paused';
       this.audio && this._audioOk && this.audio.pause();
     }
@@ -657,9 +703,14 @@ const SupporterCredit = (() => {
     resume() {
       if (this.state !== 'paused') { return; }
       this.state = 'playing';
-      this._clockStart = performance.now();
+      this._clockStart = this._elapsedStart = this._audioProgressAt = performance.now();
       if (this.audio && this._audioOk) {
-        this.audio.play().catch(() => { this._audioOk = false; });
+        const audio = this.audio, generation = this._generation;
+        let play;
+        try { play = audio.play(); } catch (error) { play = Promise.reject(error); }
+        Promise.resolve(play).catch(() => {
+          if (generation === this._generation && this.audio === audio) { this._audioOk = false; }
+        });
       }
       this._schedule();
     }
@@ -668,6 +719,10 @@ const SupporterCredit = (() => {
     stop() {
       if (this.state === 'idle') { return; }
       this.state = 'idle';
+      this._generation = (this._generation || 0) + 1;
+      clearInterval(this._watchdog);
+      this._watchdog = null;
+      this._audioOk = false;
       this._raf && cancelAnimationFrame(this._raf);
       this._raf = 0;
       if (this.audio) {
@@ -713,6 +768,8 @@ const SupporterCredit = (() => {
     }
 
     dispose() {
+      this._backgroundAbort && this._backgroundAbort.abort();
+      this._backgroundAbort = null;
       this.stop();
       if (this.audio) {
         this.audio.removeAttribute('src');

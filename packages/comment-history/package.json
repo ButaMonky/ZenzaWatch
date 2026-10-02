@@ -1,0 +1,17 @@
+{
+  "name": "nico-comment-history-standalone",
+  "version": "0.2.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "build": "node tools/build.mjs",
+    "build:zenza": "node tools/build-zenza.mjs",
+    "check:zenza": "node tools/build-zenza.mjs --check",
+    "pretest": "node tools/build-zenza.mjs && node tools/build.mjs"
+  },
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "integrationRevision": "Task200"
+}

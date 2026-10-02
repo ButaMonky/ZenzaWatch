@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.26-task152
+// @version     0.3.31-task200
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-09-30 15:36Z
+// build: 2026-10-02 08:01Z
 /* eslint-disable */
 
 ((window) => { const self = window;
@@ -327,16 +327,17 @@ const Observable = (() => {
 			};
 			this._closed = false;
 		}
-		subscribe(subscriber, onError, onCompleted) {
-			return this.observable.subscribe(subscriber, onError, onCompleted)
-				.filter(this._filterFunc)
-				.map(this._mapFunc);
+		subscribe(onNext, onError, onCompleted) {
+			return this.observable._subscribe({
+				subscriber: Subscriber.create(onNext, onError, onCompleted),
+				isNop: [onNext, onError, onCompleted].every(f => f == null),
+				filterFunc: this._filterFunc, mapFunc: this._mapFunc
+			});
 		}
 		unsubscribe() {
+			if (this._closed) { return this; }
 			this._closed = true;
-			if (this.callbacks.unsubscribe) {
-				this.callbacks.unsubscribe();
-			}
+			if (this.callbacks.unsubscribe) { this.callbacks.unsubscribe(); }
 			return this;
 		}
 		dispose() {
@@ -427,34 +428,62 @@ const Observable = (() => {
 		}
 		constructor(subscriberFunction) {
 			this._subscriberFunction = subscriberFunction;
-			this._completed = false;
-			this._cancelled = false;
-			this._handlers = new Handler();
+			this._sources = [];
+			this._connection = null;
 		}
-		_initSubscriber() {
-			if (this._subscriber) {
-				return;
+		get closed() { return !!(this._connection && this._connection.closed); }
+		_disposeToken(token) {
+			token.done = true;
+			if (!token.cleanup) { return; }
+			const cleanup = token.cleanup;
+			token.cleanup = null;
+			try { cleanup(); } catch (error) { console.warn('Observable cleanup failed', error); }
+		}
+		_finish(connection, method, value) {
+			if (connection.closed) { return; }
+			connection.closed = true;
+			try { if (method) { connection.handlers.execMethod(method, value); } }
+			finally {
+				connection.handlers.clear();
+				for (const token of connection.tokens) { this._disposeToken(token); }
+				connection.tokens.clear();
 			}
-			const handlers = this._handlers;
-			this._completed = this._cancelled = false;
-			return this._subscriber = new Subscriber({
-				start: arg => handlers.execMethod('start', arg),
-				next: arg => handlers.execMethod('next', arg),
-				error: arg => handlers.execMethod('error', arg),
-				complete: arg => {
-					if (this._nextObservable) {
-						this._nextObservable.subscribe(this._subscriber);
-						this._nextObservable = this._nextObservable._nextObservable;
-					} else {
-						this._completed = true;
-						handlers.execMethod('complete', arg);
-					}
-				},
-				closed: () => this.closed
-			});
 		}
-		get closed() {
-			return this._completed || this._cancelled;
+		_connect(connection) {
+			connection.started = true;
+			const sources = [observer => this._subscriberFunction(observer),
+				...this._sources.map(source => observer => source.subscribe({
+					next: value => observer.next(value), error: error => observer.error(error),
+					complete: value => observer.complete(value)
+				}))];
+			let index = 0;
+			const advance = completion => {
+				if (connection.closed) { return; }
+				if (index === sources.length) { this._finish(connection, 'complete', completion); return; }
+				const producer = sources[index++];
+				const token = {done: false, cleanup: null};
+				connection.tokens.add(token);
+				const active = () => !connection.closed && !token.done;
+				const observer = new Subscriber({
+					start: value => { if (active()) { connection.handlers.execMethod('start', value); } },
+					next: value => { if (active()) { connection.handlers.execMethod('next', value); } },
+					error: error => { if (active()) { this._finish(connection, 'error', error); } },
+					complete: value => {
+						if (!active()) { return; }
+						this._disposeToken(token);
+						advance(value);
+					},
+					closed: () => !active()
+				});
+				this._subscriber = observer;
+				try {
+					const cleanup = producer(observer);
+					token.cleanup = typeof cleanup === 'function' ? cleanup :
+						cleanup && typeof cleanup.unsubscribe === 'function' ? () => cleanup.unsubscribe() : null;
+					if (token.done || connection.closed) { this._disposeToken(token); }
+				} catch (error) { observer.error(error); }
+			};
+			advance();
 		}
 		filter(func) {
 			return this.subscribe().filter(func);
@@ -464,11 +493,16 @@ const Observable = (() => {
 		}
 		concat(arg) {
 			const observable = Observable.from(arg);
-			if (this._nextObservable) {
-				this._nextObservable.concat(observable);
-			} else {
-				this._nextObservable = observable;
+			if (!observable || observable === this) { throw new TypeError('Invalid concatenated Observable'); }
+			const pending = [observable], seen = new Set();
+			while (pending.length) {
+				const source = pending.pop();
+				if (source === this) { throw new TypeError('Cyclic concatenated Observable'); }
+				if (seen.has(source)) { continue; }
+				seen.add(source);
+				pending.push(...(source._sources || []));
 			}
+			this._sources.push(observable);
 			return this;
 		}
 		forEach(callback) {
@@ -493,41 +527,36 @@ const Observable = (() => {
 		onError(arg) { this._subscriber.error(arg); }
 		onComplete(arg) { this._subscriber.complete(arg);}
 		disconnect() {
-			if (!this._disconnectFunction) {
-				return;
-			}
-			this._closed = true;
-			this._disconnectFunction();
-			delete this._disconnectFunction;
-			this._subscriber;
-			this._handlers.clear();
+			if (this._connection) { this._finish(this._connection); }
 		}
-		[observableSymbol]() {
-			return this;
-		}
+		[observableSymbol]() { return this; }
 		subscribe(onNext = null, onError = null, onCompleted = null) {
-			this._initSubscriber();
-			const isNop = [onNext, onError, onCompleted].every(f => f === null);
-			const subscriber = Subscriber.create(onNext, onError, onCompleted);
-			return this._subscribe({subscriber, isNop});
+			return this._subscribe({
+				subscriber: Subscriber.create(onNext, onError, onCompleted),
+				isNop: [onNext, onError, onCompleted].every(f => f === null)
+			});
 		}
-		_subscribe({subscriber, isNop}) {
-			if (!isNop && !this._disconnectFunction) {
-				this._disconnectFunction = this._subscriberFunction(this._subscriber);
+		_subscribe({subscriber, isNop, filterFunc, mapFunc}) {
+			let connection = this._connection;
+			if (!connection || connection.closed) {
+				connection = {closed: false, started: false, handlers: new Handler(), tokens: new Set()};
+				if (!isNop) { this._connection = connection; }
 			}
-			!isNop && this._handlers.add(subscriber);
-			return new Subscription({
-				observable: this,
-				subscriber,
+			const subscription = new Subscription({
+				observable: this, subscriber,
 				unsubscribe: () => {
 					if (isNop) { return; }
-					this._handlers.remove(subscriber);
-					if (this._handlers.isEmpty) {
-						this.disconnect();
-					}
+					connection.handlers.remove(subscriber);
+					if (connection.handlers.isEmpty) { this._finish(connection); }
 				},
-				closed: () => this.closed
-			});
+				closed: () => connection.closed
+			}).filter(filterFunc).map(mapFunc);
+			if (isNop) { return subscription; }
+			connection.handlers.add(subscriber);
+			try { subscriber.start(subscription); }
+			catch (error) { subscription.unsubscribe(); throw error; }
+			if (!connection.closed && !connection.started) { this._connect(connection); }
+			return subscription;
 		}
 	}
 	Observable.observavle = observableSymbol;
@@ -654,7 +683,10 @@ class DataStorage {
 			prefix:  dataStorage.prefix,
 			storage: dataStorage.storage,
 			ignoreExportKeys: dataStorage.options.ignoreExportKeys,
-			readonly: dataStorage.readonly
+			readonly: dataStorage.readonly,
+			normalizeImport: dataStorage.options.normalizeImport,
+			validateImport: dataStorage.options.validateImport,
+			preserveInvalidKeys: dataStorage.options.preserveInvalidKeys
 		};
 		return DataStorage.create(dataStorage.default, options);
 	}
@@ -727,7 +759,7 @@ class DataStorage {
 					this._data[key] = JSON.parse(storage[storageKey]);
 				} catch (e) {
 					console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-					delete storage[storageKey];
+					if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
 					this._data[key] = this.default[key];
 				}
 			} else {
@@ -803,12 +835,44 @@ class DataStorage {
 		return JSON.stringify(this.export(), null, 2);
 	}
 	import(data) {
-		Object.keys(this.props)
-			.forEach(key => {
-				const val = data.hasOwnProperty(key) ? data[key] : this.default[key];
-				console.log('import data: %s=%s', key, val);
-				this.setValueSilently(key, val);
-		});
+		if (!data || typeof data !== 'object' || Array.isArray(data)) {
+			throw new TypeError('設定データはJSONオブジェクトで指定してください。');
+		}
+		const entries = Object.keys(this.default)
+			.filter(key => !this._ignoreExportKeys.includes(key))
+			.map(key => {
+				const raw = Object.prototype.hasOwnProperty.call(data, key) ? data[key] : this.default[key];
+				const value = this.options.normalizeImport ? this.options.normalizeImport(key, raw) : raw;
+				const expected = this.default[key];
+				if (typeof value !== typeof expected || value === null && expected !== null ||
+						Array.isArray(value) !== Array.isArray(expected) ||
+						typeof value === 'number' && !Number.isFinite(value) ||
+						this.options.validateImport && !this.options.validateImport(key, value)) {
+					throw new TypeError(`設定値が不正です: ${key}`);
+				}
+				const json = JSON.stringify(value);
+				if (json === undefined) { throw new TypeError(`設定値を保存できません: ${key}`); }
+				return {key, value, json, storageKey: this.getStorageKey(key)};
+			});
+		if (!this.readonly) {
+			const written = [];
+			try {
+				for (const entry of entries) {
+					const previous = this.storage[entry.storageKey];
+					this.storage[entry.storageKey] = entry.json;
+					written.push({key: entry.storageKey, previous});
+				}
+			} catch (error) {
+				for (const {key, previous} of written.reverse()) {
+					try {
+						if (previous === undefined) { delete this.storage[key]; }
+						else { this.storage[key] = previous; }
+					} catch (restoreError) { window.console.error('設定の復元に失敗しました', restoreError); }
+				}
+				throw error;
+			}
+		}
+		for (const {key, value} of entries) { this._data[key] = value; }
 	}
 	importJson(json) {
 		this.import(JSON.parse(json));
@@ -1227,6 +1291,1090 @@ const groupShortcutActionsByCategory = () => {
 	});
 	return groups;
 };
+const ZenzaCommentHistorySettings = (() => {
+'use strict';
+const modules = [];
+modules[0] = (() => {
+const COMMENT_ORIGIN = 'https://public.nvcomment.nicovideo.jp';
+class HistoryError extends Error {
+	constructor(code, details={}) {
+		super(code); this.name='HistoryError'; this.code=code;
+		for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
+	}
+}
+function fail(code) { throw new HistoryError(code); }
+function integerOption(value,min,max) {
+	if (!Number.isSafeInteger(value) || value<min || value>max) fail('OPTION');
+	return value;
+}
+function threadId(value) {
+	if (typeof value==='number' && !Number.isSafeInteger(value)) fail('TARGET_SCHEMA');
+	if (!/^[0-9]+$/.test(String(value))) fail('TARGET_SCHEMA');
+	return String(value);
+}
+function targetKey(t) {return `${t.id}:${t.fork}`;}
+function normalizeWatch(input, expectedVideoId) {
+	if(input?.meta?.status!==undefined && input.meta.status!==200)fail('WATCH_SCHEMA');
+	if (typeof expectedVideoId!=='string' || !/^(?:(?:sm|so|nm))?\d+$/.test(expectedVideoId)) fail('OPTION');
+	const candidates=[input?.data?.response?.$watchV4?.data,input?.data?.response,
+		input?.response?.$watchV4?.data,input?.response,input?.$watchV4?.data,input?.data,input];
+	const w=candidates.find(x=>x?.video?.id && x?.comment?.nvComment);
+	if (!w) fail('WATCH_SCHEMA');
+	if (w.video.id!==expectedVideoId) fail('VIDEO_MISMATCH');
+	const nv=w.comment.nvComment;
+	if (nv.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof nv.threadKey!=='string' || !nv.threadKey) fail('MISSING_KEY');
+	const p=nv.params;
+	if (!p || !Array.isArray(p.targets) || !p.targets.length || typeof p.language!=='string' || !/^[a-z]{2}-[a-z]{2}$/i.test(p.language)) fail('WATCH_SCHEMA');
+	const targets=p.targets.map(t=>{
+		if (!['main','owner','easy'].includes(t.fork)) fail('TARGET_SCHEMA');
+		return Object.freeze({id:threadId(t.id),fork:t.fork});
+	});
+	if (new Set(targets.map(targetKey)).size!==targets.length) fail('TARGET_SCHEMA');
+	const ctx={videoId:expectedVideoId,server:COMMENT_ORIGIN,language:p.language,targets:Object.freeze(targets)};
+	Object.defineProperty(ctx,'threadKey',{value:nv.threadKey,enumerable:false});
+	return Object.freeze(ctx);
+}
+function checkedTargets(context, targets=context.targets) {
+	if (!Array.isArray(targets) || !targets.length) fail('OPTION');
+	const allowed=new Set(context.targets.map(targetKey));
+	const selected=targets.map(t=>({id:threadId(t.id),fork:t.fork}));
+	if (selected.some(t=>!allowed.has(targetKey(t)))) fail('TARGET_NOT_ALLOWED');
+	if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
+	return selected;
+}
+function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
+	if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
+	const selected=checkedTargets(context,targets), additionals={};
+	if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
+	if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
+	return {url:`${COMMENT_ORIGIN}/v1/threads?pc=1`,init:{method:'POST',
+		headers:{'Content-Type':'text/plain;charset=UTF-8','X-Frontend-Id':'6','X-Frontend-Version':'0','X-Client-Os-Type':'others'},
+		mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
+		body:JSON.stringify({params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals})}};
+}
+const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
+function copyComment(c) {
+	const out={};for(const k of FIELDS) if(Object.hasOwn(c,k))out[k]=k==='commands'?[...c.commands]:c[k];
+	return out;
+}
+function normalizeComment(c) {
+	const idOk=typeof c?.id==='string' && c.id.length>0 || Number.isSafeInteger(c?.id) && c.id>=0;
+	if(!c || !idOk || !Number.isSafeInteger(c.no) || c.no<0 || !Number.isFinite(c.vposMs) ||
+		typeof c.body!=='string' || typeof c.userId!=='string' || !Array.isArray(c.commands) || c.commands.some(x=>typeof x!=='string') ||
+		typeof c.postedAt!=='string' || !/^\d{4}-\d\d-\d\dT/.test(c.postedAt) || !Number.isFinite(Date.parse(c.postedAt)) || Date.parse(c.postedAt)<0) fail('COMMENT_SCHEMA');
+	for(const k of ['isPremium','isMyPost'])if(Object.hasOwn(c,k)&&typeof c[k]!=='boolean')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'score')&&!Number.isFinite(c.score))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruCount')&&(!Number.isSafeInteger(c.nicoruCount)||c.nicoruCount<0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'source')&&typeof c.source!=='string')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruId')&&c.nicoruId!==null&&typeof c.nicoruId!=='string'&&!(Number.isSafeInteger(c.nicoruId)&&c.nicoruId>=0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
+	const out=copyComment(c);out.id=String(c.id);return out;
+}
+function validateThreads(body, context, targets=context.targets) {
+	if(body?.meta?.status!==200 || body?.meta?.errorCode) fail('API_ERROR');
+	if(!Array.isArray(body?.data?.threads)) fail('RESPONSE_SCHEMA');
+	const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
+	const result=body.data.threads.map(th=>{
+		const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
+		if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
+		if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);
+		if(!Array.isArray(th.comments) || !Number.isSafeInteger(th.commentCount) || th.commentCount<0)fail('RESPONSE_SCHEMA');
+		return {id,fork,commentCount:th.commentCount,comments:th.comments.map(normalizeComment)};
+	});
+	if(seen.size!==expected.size)fail('MISSING_TARGET');
+	return result;
+}
+class CommentStore {
+	#context; #items=new Map(); #threads=new Map();
+	constructor(context){this.#context=context;}
+	get size(){return this.#items.size;}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	add(threads,allowance=Infinity) {
+		if(allowance!==Infinity)integerOption(allowance,0,50000);
+		if(threads.length)checkedTargets(this.#context,threads);
+		const ids=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const key=this.#key(t,c),existing=this.#items.get(key)?.comment.id??ids.get(key);
+			if(existing!==undefined && existing!==c.id)fail('IDENTITY_CONFLICT');
+			ids.set(key,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=targetKey(t);this.#threads.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const key=this.#key(t,c);
+				if(this.#items.has(key)){duplicates++;continue;}
+				if(added>=allowance){limited=true;continue;}
+				this.#items.set(key,{thread:tk,comment:copyComment(c)});added++;
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	snapshot(){
+		const out=new Map([...this.#threads].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const {thread,comment} of this.#items.values())out.get(thread).comments.push(copyComment(comment));
+		return [...out.values()];
+	}
+}
+function summarizeThreads(threads){
+	return threads.map(t=>{
+		let oldest=Infinity,newest=-Infinity,minNo=Infinity,maxNo=-Infinity,prevDate=-Infinity,prevNo=-Infinity,prevVpos=-Infinity;
+		let ascendingPostedAt=true,ascendingNo=true,ascendingVpos=true;
+		for(const c of t.comments){const sec=Date.parse(c.postedAt)/1000;oldest=Math.min(oldest,sec);newest=Math.max(newest,sec);
+			minNo=Math.min(minNo,c.no);maxNo=Math.max(maxNo,c.no);ascendingPostedAt&&=sec>=prevDate;ascendingNo&&=c.no>=prevNo;ascendingVpos&&=c.vposMs>=prevVpos;
+			prevDate=sec;prevNo=c.no;prevVpos=c.vposMs;}
+		return {id:t.id,fork:t.fork,commentCountField:t.commentCount,returnedCount:t.comments.length,
+			oldestUnixSeconds:oldest===Infinity?null:Math.floor(oldest),newestUnixSeconds:newest===-Infinity?null:Math.floor(newest),
+			minNo:minNo===Infinity?null:minNo,maxNo:maxNo===-Infinity?null:maxNo,ascendingPostedAt,ascendingNo,ascendingVpos};
+	});
+}
+function withThreadKey(context,key){
+	if(context.server!==COMMENT_ORIGIN)fail('SERVER_NOT_ALLOWED');
+	if(typeof key!=='string'||!key)fail('MISSING_KEY');
+	const next={videoId:context.videoId,server:context.server,language:context.language,targets:context.targets};
+	Object.defineProperty(next,'threadKey',{value:key,enumerable:false});
+	return Object.freeze(next);
+}
+return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
+})();
+modules[1] = (() => {
+const {HistoryError,integerOption,fail} = modules[0];
+const SETTINGS_SCHEMA=Object.freeze([
+	{name:'maxAdditionalComments',label:'追加コメント上限',type:'integer',default:5000,min:1,max:20000},
+	{name:'maxPages',label:'履歴ページ上限',type:'integer',default:100,min:1,max:100},
+	{name:'maxRequests',label:'総リクエスト上限（再試行・キー更新を含む）',type:'integer',default:150,min:1,max:200},
+	{name:'minIntervalMs',label:'通信の最小間隔（ミリ秒）',type:'integer',default:1500,min:1500,max:60000},
+	{name:'requestTimeoutMs',label:'通信タイムアウト（ミリ秒）',type:'integer',default:10000,min:1000,max:30000},
+	{name:'maxElapsedMs',label:'取得全体の時間上限（ミリ秒）',type:'integer',default:300000,min:1000,max:300000},
+	{name:'maxRetries',label:'一操作ごとの再試行上限',type:'integer',default:2,min:0,max:3},
+	{name:'maxKeyRefreshes',label:'キー更新の総上限',type:'integer',default:1,min:0,max:2},
+	{name:'includeEasy',label:'かんたんコメントも追加取得',type:'boolean',default:false},
+].map(d=>Object.freeze({...d,key:`commentHistory.${d.name}`})));
+const DEFAULT_SETTINGS=Object.freeze(Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.name,d.default])));
+function normalizeSettings(input={}){
+	if(!input || typeof input!=='object' || Array.isArray(input))fail('OPTION');
+	const names=new Set(SETTINGS_SCHEMA.map(d=>d.name));
+	if(Object.keys(input).some(k=>!names.has(k)))fail('OPTION');
+	const values={...DEFAULT_SETTINGS,...input};
+	for(const d of SETTINGS_SCHEMA){
+		if(d.type==='boolean'){if(typeof values[d.name]!=='boolean')fail('OPTION');}
+		else integerOption(values[d.name],d.min,d.max);
+	}
+	return values;
+}
+class SettingsStore {
+	#read;#write;
+	constructor({read,write}){
+		if(typeof read!=='function'||typeof write!=='function')fail('OPTION');
+		this.#read=read;this.#write=write;
+	}
+	get(){
+		const saved=this.#read();
+		if(saved===null||saved===undefined)return normalizeSettings();
+		if(saved.schema!=='nico-comment-history-settings'||saved.version!==1)throw new HistoryError('SETTINGS_VERSION');
+		if(!saved.values||typeof saved.values!=='object'||Array.isArray(saved.values))fail('OPTION');
+		return normalizeSettings(saved.values);
+	}
+	patch(changes){
+		if(!changes||typeof changes!=='object'||Array.isArray(changes))fail('OPTION');
+		const values=normalizeSettings({...this.get(),...changes});
+		this.#write({schema:'nico-comment-history-settings',version:1,values:{...values}});
+		return values;
+	}
+}
+return Object.freeze({SETTINGS_SCHEMA,DEFAULT_SETTINGS,normalizeSettings,SettingsStore});
+})();
+modules[2] = (() => {
+const {HistoryError} = modules[0];
+const {SETTINGS_SCHEMA,normalizeSettings} = modules[1];
+const ZENZA_SETTINGS_NAMES = new Set(SETTINGS_SCHEMA.map(d=>d.name));
+const ZENZA_SETTINGS_KEYS = new Set(SETTINGS_SCHEMA.map(d=>d.key));
+const ZENZA_SETTINGS_EVENT = 'comment-history-settings';
+function settingsError(code) { return new HistoryError(code); }
+function checkedSettingNames(names) {
+	if (!Array.isArray(names) || names.some(n=>!ZENZA_SETTINGS_NAMES.has(n)) || new Set(names).size!==names.length) throw settingsError('OPTION');
+	return names;
+}
+class ZenzaSettingsRepository {
+	#storage; #prefix; #bus; #off; #last; #disposed=false; #listeners=new Set();
+	constructor({storage,prefix='ZenzaWatch_',bus} = {}) {
+		if (!storage || ['getItem','setItem','removeItem'].some(k=>typeof storage[k]!=='function') ||
+				typeof prefix!=='string' || !prefix || bus && ['publish','subscribe'].some(k=>typeof bus[k]!=='function')) throw settingsError('OPTION');
+		this.#storage=storage;this.#prefix=prefix;this.#bus=bus;
+		this.#last=this.#read().values;
+		if (bus) this.#off=bus.subscribe(message=>{
+			if (this.#disposed || message?.type!==ZENZA_SETTINGS_EVENT || !Array.isArray(message.keys) ||
+					!message.keys.length || message.keys.some(k=>!ZENZA_SETTINGS_KEYS.has(k))) return;
+			try { this.refresh(); } catch { /* Caller sees validation failure on next explicit get/start. */ }
+		});
+	}
+	#assertActive() { if(this.#disposed)throw settingsError('DISPOSED'); }
+	#read() {
+		this.#assertActive();
+		const input={},raw=new Map();
+		for(const d of SETTINGS_SCHEMA) {
+			let value;
+			try {value=this.#storage.getItem(this.#prefix+d.key);} catch {throw settingsError('SETTINGS_READ');}
+			raw.set(d.name,value);
+			if(value!==null && value!==undefined) {
+				try {input[d.name]=JSON.parse(value);} catch {throw settingsError('SETTINGS_INVALID');}
+			}
+		}
+		let values;
+		try {values=Object.freeze(normalizeSettings(input));} catch {throw settingsError('SETTINGS_INVALID');}
+		return {values,raw};
+	}
+	#accept(values) {
+		const changed=SETTINGS_SCHEMA.some(d=>values[d.name]!==this.#last[d.name]);
+		this.#last=values;
+		if(changed)for(const callback of [...this.#listeners]) {
+			try {callback(values);} catch { /* A UI failure must not reinterpret successful persistence. */ }
+		}
+	}
+	get() {return this.#read().values;}
+	refresh() {const values=this.get();this.#accept(values);return values;}
+	patch(changes) {
+		this.#assertActive();
+		if(!changes || typeof changes!=='object' || Array.isArray(changes))throw settingsError('OPTION');
+		checkedSettingNames(Object.keys(changes));
+		const before=this.#read();
+		const next=Object.freeze(normalizeSettings({...before.values,...changes}));
+		const entries=SETTINGS_SCHEMA.filter(d=>Object.hasOwn(changes,d.name)&&before.values[d.name]!==next[d.name])
+			.map(d=>({name:d.name,key:this.#prefix+d.key,publicKey:d.key,value:JSON.stringify(next[d.name]),previous:before.raw.get(d.name)}));
+		if(!entries.length){this.#accept(next);return next;}
+		const attempted=[];
+		let committed;
+		try {
+			for(const entry of entries) {
+				if(this.#storage.getItem(entry.key)!==entry.previous)throw settingsError('SETTINGS_CONFLICT');
+				attempted.push(entry);
+				this.#storage.setItem(entry.key,entry.value);
+			}
+			for(const entry of entries)if(this.#storage.getItem(entry.key)!==entry.value)throw settingsError('SETTINGS_WRITE');
+			committed=this.#read().values;
+		} catch {
+			let rollbackComplete=true;
+			for(const entry of attempted.reverse()) {
+				try {
+					const current=this.#storage.getItem(entry.key);
+					if(current===entry.previous)continue;
+					if(current!==entry.value){rollbackComplete=false;continue;}
+					if(entry.previous===null || entry.previous===undefined)this.#storage.removeItem(entry.key);
+					else this.#storage.setItem(entry.key,entry.previous);
+					if(this.#storage.getItem(entry.key)!==(entry.previous??null))rollbackComplete=false;
+				} catch {rollbackComplete=false;}
+			}
+			const error=settingsError('SETTINGS_WRITE');error.rollbackComplete=rollbackComplete;throw error;
+		}
+		this.#accept(committed);
+		try {this.#bus?.publish({type:ZENZA_SETTINGS_EVENT,keys:entries.map(e=>e.publicKey)});} catch { /* Storage succeeded; next explicit refresh reconciles. */ }
+		return committed;
+	}
+	reset(names=SETTINGS_SCHEMA.map(d=>d.name)) {
+		checkedSettingNames(names);
+		return this.patch(Object.fromEntries(SETTINGS_SCHEMA.filter(d=>names.includes(d.name)).map(d=>[d.name,d.default])));
+	}
+	subscribe(callback) {
+		this.#assertActive();if(typeof callback!=='function')throw settingsError('OPTION');
+		this.#listeners.add(callback);return()=>this.#listeners.delete(callback);
+	}
+	dispose() {
+		if(this.#disposed)return;this.#disposed=true;this.#listeners.clear();
+		if(typeof this.#off==='function')this.#off();this.#off=null;
+	}
+}
+return Object.freeze({ZenzaSettingsRepository});
+})();
+modules[3] = (() => {
+const {SETTINGS_SCHEMA,DEFAULT_SETTINGS} = modules[1];
+const {ZenzaSettingsRepository} = modules[2];
+const {HistoryError} = modules[0];
+const HISTORY_PRESETS=Object.freeze([1000,2500,5000,10000,20000]);
+const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
+const EVENT='ZenzaWatch-comment-history-settings';
+function createBrowserHistoryPreferences({window:win=globalThis.window,config,storage=win.localStorage}={}){
+	const prefix='ZenzaWatch_',enabledKey=prefix+'commentHistory.enabled';
+	const listeners=new Set();let repository,disposed=false,lastSignature='',snapshot;
+	function checked(){if(disposed)throw new HistoryError('DISPOSED');}
+	function read(){
+		checked();
+		try{
+			if(!repository)repository=new ZenzaSettingsRepository({storage,prefix});
+			const settings=repository.get(),raw=storage.getItem(enabledKey);
+			const enabled=raw===null?false:JSON.parse(raw);
+			if(typeof enabled!=='boolean')throw new Error('type');
+			return Object.freeze({valid:true,enabled,settings});
+		}catch{return Object.freeze({valid:false,enabled:false,settings:Object.freeze({...DEFAULT_SETTINGS}),error:'SETTINGS_INVALID'});}
+	}
+	function refresh(){
+		snapshot=read();const signature=JSON.stringify(snapshot);
+		if(signature===lastSignature)return snapshot;
+		lastSignature=signature;
+		if(snapshot.valid&&config?._data){
+			const values={...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,snapshot.settings[d.name]])),'commentHistory.enabled':snapshot.enabled};
+			for(const [key,value] of Object.entries(values)){
+				if(config.default&&!Object.hasOwn(config.default,key))continue;
+				if(config._data[key]===value)continue;
+				config._data[key]=value;
+				const emit=typeof config.emitAsync==='function'?config.emitAsync:config.emit;
+				if(typeof emit==='function'){emit.call(config,'update',key,value);emit.call(config,'update-'+key,value);}
+			}
+		}
+		for(const fn of [...listeners]){try{fn(snapshot);}catch{}}
+		return snapshot;
+	}
+	function publish(keys){win.dispatchEvent(new win.CustomEvent(EVENT,{detail:{keys}}));}
+	const onStorage=e=>{if(!disposed&&(e.key===null||typeof e.key==='string'&&e.key.startsWith(prefix+'commentHistory.'))&&(!e.storageArea||e.storageArea===storage))refresh();};
+	const onLocal=e=>{if(!disposed&&Array.isArray(e.detail?.keys)&&e.detail.keys.every(k=>Object.hasOwn(HISTORY_PREFERENCE_DEFAULTS,k)))refresh();};
+	win.addEventListener('storage',onStorage);win.addEventListener(EVENT,onLocal);refresh();
+	return {
+		get(){checked();return refresh();},
+		patch(changes){
+			checked();if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			repository.patch(changes);refresh();publish(Object.keys(changes).map(k=>'commentHistory.'+k));return snapshot;
+		},
+		setEnabled(enabled){
+			checked();if(typeof enabled!=='boolean')throw new HistoryError('OPTION');
+			if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			if(snapshot.enabled===enabled)return snapshot;
+			const before=storage.getItem(enabledKey),serialized=JSON.stringify(enabled);
+			try{storage.setItem(enabledKey,serialized);if(storage.getItem(enabledKey)!==serialized)throw new Error();}
+			catch{
+				try{if(storage.getItem(enabledKey)===serialized){before===null?storage.removeItem(enabledKey):storage.setItem(enabledKey,before);}}catch{}
+				throw new HistoryError('SETTINGS_WRITE');
+			}
+			refresh();publish(['commentHistory.enabled']);return snapshot;
+		},
+		subscribe(fn){checked();listeners.add(fn);return()=>listeners.delete(fn);},
+		dispose(){if(disposed)return;disposed=true;win.removeEventListener('storage',onStorage);win.removeEventListener(EVENT,onLocal);repository?.dispose();repository=null;listeners.clear();}
+	};
+}
+return Object.freeze({HISTORY_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
+})();
+modules[4] = (() => {
+const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} = modules[0];
+function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
+async function withDeadline(work,{signal,timeoutMs=10000,timeoutCode='TIMEOUT'}={}){
+	integerOption(timeoutMs,1,300000);if(!['TIMEOUT','TIME_LIMIT'].includes(timeoutCode))throw new HistoryError('OPTION');assertNotCancelled(signal);
+	const controller=new AbortController();let timeout=false, rejectAbort;
+	const onParent=()=>controller.abort();const onAbort=()=>rejectAbort(new HistoryError(timeout?timeoutCode:'CANCELLED'));
+	const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+	controller.signal.addEventListener('abort',onAbort,{once:true});signal?.addEventListener('abort',onParent,{once:true});
+	const timer=setTimeout(()=>{timeout=true;controller.abort();},timeoutMs);
+	try{return await Promise.race([Promise.resolve().then(()=>{assertNotCancelled(controller.signal);return work(controller.signal);}),aborted]);}
+	finally{clearTimeout(timer);signal?.removeEventListener('abort',onParent);controller.signal.removeEventListener('abort',onAbort);}
+}
+function abortableDelay(ms,signal){
+	integerOption(ms,0,300000);
+	return new Promise((resolve,reject)=>{
+		if(signal?.aborted){reject(new HistoryError('CANCELLED'));return;}
+		const finish=()=>{signal?.removeEventListener('abort',cancel);resolve();};
+		const timer=setTimeout(finish,ms);
+		function cancel(){clearTimeout(timer);signal?.removeEventListener('abort',cancel);reject(new HistoryError('CANCELLED'));}
+		signal?.addEventListener('abort',cancel,{once:true});
+	});
+}
+async function readBoundedText(response,maxBytes,signal){
+	if(!response.body)return '';
+	const reader=response.body.getReader(),parts=[];let size=0,finished=false;
+	const onAbort=()=>{void reader.cancel().catch(()=>{});};
+	signal?.addEventListener('abort',onAbort,{once:true});
+	try{
+		while(true){assertNotCancelled(signal);const {done,value}=await reader.read();if(done){finished=true;break;}
+			size+=value.byteLength;if(size>maxBytes)throw new HistoryError('RESPONSE_TOO_LARGE');parts.push(value);}
+		const data=new Uint8Array(size);let offset=0;for(const part of parts){data.set(part,offset);offset+=part.byteLength;}
+		return new TextDecoder('utf-8',{fatal:true}).decode(data);
+	}finally{signal?.removeEventListener('abort',onAbort);if(!finished){try{await reader.cancel();}catch{}}reader.releaseLock();}
+}
+const API_CODES=new Set(['TOO_MANY_REQUESTS','EXPIRED_TOKEN','INVALID_TOKEN','INVALID_PARAMETER','NOT_FOUND','FORBIDDEN']);
+function retryAfter(header){
+	if(!header)return undefined;
+	if(/^\d+(?:\.\d+)?$/.test(header)){const ms=Number(header)*1000;return Number.isSafeInteger(Math.ceil(ms))?Math.ceil(ms):undefined;}
+	const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
+}
+async function requestJson(url,init,options={}){
+	const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
+	integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
+	try{
+		return await withDeadline(async innerSignal=>{
+			const response=await fetchImpl(url,{...init,signal:innerSignal});assertNotCancelled(innerSignal);
+			const text=await readBoundedText(response,maxBytes,innerSignal);assertNotCancelled(innerSignal);
+			let data;try{data=JSON.parse(text);}catch{}
+			const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
+			const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
+			if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
+			if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
+			if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
+			if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
+			if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
+			if(data.meta?.status!==200||raw)throw new HistoryError('API_ERROR',details);
+			return data;
+		},{signal,timeoutMs});
+	}catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
+}
+async function requestThreads(context,options={}){
+	const {url,init}=buildThreadRequest(context,options);
+	return validateThreads(await requestJson(url,init,options),context,options.targets??context.targets);
+}
+const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
+function checkedVideoId(id){
+	if(typeof id!=='string'||!/^(?:(?:sm|so|nm))?\d+$/.test(id))throw new HistoryError('OPTION');return id;
+}
+async function requestWatchContext(videoId,options={}){
+	const id=checkedVideoId(videoId);
+	const data=await requestJson(`https://www.nicovideo.jp/watch/${id}?responseType=json`,
+		{method:'GET',credentials:'include',cache:'no-store',redirect:'error'},options);
+	return normalizeWatch(data,id);
+}
+async function requestThreadKey(context,options={}){
+	if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
+	const id=checkedVideoId(context.videoId);
+	const data=await requestJson(`https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${id}`,
+		{method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
+			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},options);
+	return withThreadKey(context,data?.data?.threadKey);
+}
+const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
+	'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',
+	'API_ERROR','HTTP_ERROR','INVALID_JSON','RESPONSE_TOO_LARGE','NETWORK_ERROR','RESPONSE_SCHEMA','COMMENT_SCHEMA',
+	'TARGET_SCHEMA','TARGET_NOT_ALLOWED','MISSING_TARGET','IDENTITY_CONFLICT','WATCH_SCHEMA','VIDEO_MISMATCH','MISSING_KEY',
+	'SERVER_NOT_ALLOWED','CONTEXT_CHANGED','UNKNOWN_ERROR']);
+function safeError(error){
+	const out={code:SAFE_CODES.has(error?.code)?error.code:'UNKNOWN_ERROR'};
+	if(Number.isInteger(error?.httpStatus))out.httpStatus=error.httpStatus;
+	if(API_CODES.has(error?.apiCode)||error?.apiCode==='OTHER')out.apiCode=error.apiCode;
+	if(Number.isFinite(error?.retryAfterMs)&&error.retryAfterMs>=0)out.retryAfterMs=error.retryAfterMs;
+	if(SAFE_CODES.has(error?.causeCode))out.causeCode=error.causeCode;
+	return out;
+}
+return Object.freeze({assertNotCancelled,withDeadline,abortableDelay,requestThreads,requestWatchContext,requestThreadKey,safeError});
+})();
+modules[5] = (() => {
+const {HistoryError,fail} = modules[0];
+const {normalizeSettings} = modules[1];
+const {withDeadline,abortableDelay,assertNotCancelled,safeError} = modules[4];
+class RequestCoordinator {
+	#settings;#now;#sleep;#random;#start=null;#nextAllowed=0;#tail=Promise.resolve();
+	#attempts=0;#successful=0;#retries=0;#keyRefreshes=0;
+	#byKind={metadata:0,comment:0,key:0};
+	constructor({settings={},now=()=>performance.now(),sleep=abortableDelay,random=Math.random}={}){
+		this.#settings=normalizeSettings(settings);this.#now=now;this.#sleep=sleep;this.#random=random;
+		if([now,sleep,random].some(f=>typeof f!=='function'))fail('OPTION');
+	}
+	#remaining(){return this.#settings.maxElapsedMs-(this.#now()-this.#start);}
+	#check(signal){
+		assertNotCancelled(signal);
+		if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+		if(this.#attempts>=this.#settings.maxRequests)throw new HistoryError('REQUEST_LIMIT');
+	}
+	async #queued(work,signal){
+		assertNotCancelled(signal);
+		if(this.#start===null)this.#start=this.#now();
+		const previous=this.#tail;let release;
+		const done=new Promise(resolve=>{release=resolve;});
+		this.#tail=previous.catch(()=>{}).then(()=>done);
+		try{
+			this.#check(signal);
+			await withDeadline(()=>previous,{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);return await work();
+		}finally{release();}
+	}
+	#retryable(e){
+		return ['NETWORK_ERROR','TIMEOUT','RATE_LIMITED'].includes(e?.code)||
+			e?.code==='HTTP_ERROR'&&[500,502,503,504].includes(e.httpStatus);
+	}
+	async #perform(work,{signal,kind='comment',onRetry}={}){
+		if(!['metadata','comment','key'].includes(kind)||typeof work!=='function')fail('OPTION');
+		let retried=0;
+		while(true){
+			this.#check(signal);
+			const delay=Math.max(0,Math.ceil(this.#nextAllowed-this.#now()));
+			if(delay>=this.#remaining())throw new HistoryError('TIME_LIMIT');
+			if(delay)await withDeadline(s=>this.#sleep(delay,s),{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);
+			const remaining=this.#remaining(),timeoutMs=Math.min(this.#settings.requestTimeoutMs,Math.max(1,Math.ceil(remaining)));
+			this.#attempts++;this.#byKind[kind]++;this.#nextAllowed=this.#now()+this.#settings.minIntervalMs;
+			try{
+				const result=await withDeadline(s=>work({signal:s,timeoutMs}),{signal,timeoutMs,
+					timeoutCode:remaining<=this.#settings.requestTimeoutMs?'TIME_LIMIT':'TIMEOUT'});
+				assertNotCancelled(signal);
+				if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+				this.#successful++;return result;
+			}catch(e){
+				assertNotCancelled(signal);
+				if(!this.#retryable(e))throw e;
+				if(retried>=this.#settings.maxRetries)throw new HistoryError('RETRY_LIMIT',{...safeError(e),causeCode:safeError(e).code});
+				this.#check(signal);
+				const random=this.#random();const jitter=Number.isFinite(random)?Math.floor(Math.max(0,Math.min(1,random))*250):0;
+				const exponential=1000*2**retried+jitter;
+				const rateWait=e.code==='RATE_LIMITED'?(Number.isFinite(e.retryAfterMs)&&e.retryAfterMs>=0?e.retryAfterMs:60000):0;
+				const waitMs=Math.ceil(Math.max(this.#settings.minIntervalMs,exponential,rateWait));
+				if(waitMs>=this.#remaining())throw new HistoryError('TIME_LIMIT',{causeCode:safeError(e).code});
+				this.#nextAllowed=Math.max(this.#nextAllowed,this.#now()+waitMs);
+				retried++;this.#retries++;
+				try{onRetry?.({kind,retryNumber:retried,waitMs,error:safeError(e)});}catch{}
+			}
+		}
+	}
+	execute(work,options={}){return this.#queued(()=>this.#perform(work,options),options.signal);}
+	refresh(work,options={}){
+		return this.#queued(()=>{
+			if(this.#keyRefreshes>=this.#settings.maxKeyRefreshes)throw new HistoryError('KEY_REFRESH_LIMIT');
+			this.#keyRefreshes++;return this.#perform(work,{...options,kind:'key'});
+		},options.signal);
+	}
+	stats(){
+		return {attempts:this.#attempts,successfulRequests:this.#successful,retries:this.#retries,keyRefreshes:this.#keyRefreshes,
+			requestsByKind:{...this.#byKind},remainingRequests:Math.max(0,this.#settings.maxRequests-this.#attempts),
+			elapsedMs:this.#start===null?0:Math.max(0,Math.round(this.#now()-this.#start))};
+	}
+}
+return Object.freeze({RequestCoordinator});
+})();
+modules[6] = (() => {
+const {validateThreads,integerOption,fail} = modules[0];
+class LayeredCommentStore {
+	#context;
+	#items=new Map();
+	#normalMeta=new Map();
+	#historyMeta=new Map();
+	#normalCount=0;
+	#historyCount=0;
+	#overlapCount=0;
+	constructor(context){this.#context=context;}
+	#threadKey(t){return JSON.stringify([t.id,t.fork]);}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	#add(input,kind,allowance){
+		integerOption(allowance,0,50000);
+		if(!Array.isArray(input))fail('RESPONSE_SCHEMA');
+		if(!input.length)return {added:0,duplicates:0,limited:false};
+		const threads=validateThreads({meta:{status:200},data:{threads:input}},this.#context,input.map(t=>({id:t.id,fork:t.fork})));
+		const pageIds=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const k=this.#key(t,c),old=this.#items.get(k);
+			const id=old?.normal?.id??old?.history?.id??pageIds.get(k);
+			if(id!==undefined && id!==c.id)fail('IDENTITY_CONFLICT');
+			pageIds.set(k,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=this.#threadKey(t);
+			const meta=kind==='normal'?this.#normalMeta:this.#historyMeta;
+			meta.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const k=this.#key(t,c),old=this.#items.get(k);
+				const gains=kind==='history'?!old?.normal&&!old?.history:!old?.normal;
+				if(gains && added>=allowance){limited=true;continue;}
+				const entry=old??{thread:tk,normal:null,history:null};
+				if(entry[kind])duplicates++;
+				else {
+					if(kind==='normal')this.#normalCount++;else this.#historyCount++;
+					if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
+				}
+				if(gains)added++;
+				entry[kind]=c;
+				this.#items.set(k,entry);
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	addNormal(threads){return this.#add(threads,'normal',50000);}
+	addHistory(threads,allowance=50000){return this.#add(threads,'history',allowance);}
+	removeHistory(){
+		for(const [key,entry] of this.#items){
+			if(entry.normal)entry.history=null;else this.#items.delete(key);
+		}
+		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;
+	}
+	historySnapshot(){
+		const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const entry of this.#items.values())if(entry.history){
+			const c=entry.history;out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		return [...out.values()];
+	}
+	counts(){
+		return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
+			additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
+	}
+	snapshot({historyEnabled=true,historyOnly=false}={}){
+		const out=new Map();
+		if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
+		for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
+		for(const entry of this.#items.values()){
+			const c=historyOnly?(entry.normal?null:entry.history):(entry.normal??(historyEnabled?entry.history:null));
+			if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
+		return [...out.values()];
+	}
+}
+return Object.freeze({LayeredCommentStore});
+})();
+modules[7] = (() => {
+const {HistoryError,integerOption,checkedTargets,validateThreads,summarizeThreads,withThreadKey} = modules[0];
+const {requestThreads,requestThreadKey,assertNotCancelled,safeError} = modules[4];
+const {normalizeSettings} = modules[1];
+const {RequestCoordinator} = modules[5];
+const {LayeredCommentStore} = modules[6];
+const resumeIdentity=c=>JSON.stringify([c.videoId,c.language,c.server,c.targets.map(t=>[String(t.id),t.fork]).sort()]);
+const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limit','retry_limit','cancelled','network_error','timeout','rate_limited','key_refresh_limit','token_invalid','token_expired','api_error','http_error']);
+class HistorySession {
+	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;
+	#controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
+	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey}={}){
+		this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
+		this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
+		if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
+		this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
+		this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
+		this.#store=new LayeredCommentStore(context);
+		this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
+			settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
+			historyCursorProgressed:false,completeCoverageVerified:false};
+	}
+	cancel(){this.#controller.abort();}
+	removeHistory(){this.cancel();this.#store.removeHistory();}
+	snapshot(options){return this.#store.snapshot(options);}
+	report(){return JSON.parse(JSON.stringify({...this.#report,counts:this.#store.counts(),network:this.#finishedNetwork??this.#coordinator.stats()}));}
+	resumeData(){
+		if(!this.#report.finishedAt)throw new HistoryError('OPTION');
+		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),
+			cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
+	}
+	#verifyRefreshed(next){
+		const previous=this.#context;
+		const targetIdentity=c=>JSON.stringify(c.targets.map(t=>[String(t.id),t.fork]).sort());
+		try{
+			if(!next||next.videoId!==previous.videoId||next.server!==previous.server||next.language!==previous.language||
+				targetIdentity(next)!==targetIdentity(previous)||typeof next.threadKey!=='string'||!next.threadKey)throw new Error();
+		}catch{throw new HistoryError('CONTEXT_CHANGED');}
+		return withThreadKey(previous,next.threadKey);
+	}
+	async #page(request,onRetry){
+		const signal=this.#controller.signal;
+		while(true){
+			assertNotCancelled(signal);
+			try{
+				return await this.#coordinator.execute(async ({signal,timeoutMs})=>{
+					const data=await this.#fetchPage(this.#context,{...request,signal,timeoutMs});assertNotCancelled(signal);
+					return validateThreads({meta:{status:200},data:{threads:data}},this.#context,request.targets);
+				},{signal,kind:'comment',onRetry});
+			}catch(e){
+				if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
+				const next=await this.#coordinator.refresh(async options=>this.#verifyRefreshed(await this.#refreshKey(this.#context,options)),{signal,onRetry});
+				assertNotCancelled(signal);this.#context=next;
+			}
+		}
+	}
+	async run({signal,startWhen=Math.floor(Date.now()/1000),onProgress}={}){
+		integerOption(startWhen,0,9999999999);
+		if(this.#started)throw new HistoryError('ALREADY_RUN');this.#started=true;
+		this.#report.startedAt=new Date().toISOString();this.#report.startWhen=startWhen;
+		const abort=()=>this.cancel();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)this.cancel();
+		const localSignal=this.#controller.signal;
+		const notify=extra=>{try{onProgress?.({event:'progress',...extra,pages:this.#report.pages,counts:this.#store.counts(),network:this.#coordinator.stats()});}catch{}};
+		const onRetry=event=>notify({event:'retry',...event});
+		try{
+			assertNotCancelled(localSignal);
+			const baseline=this.#baseline??await this.#page({targets:this.#context.targets},onRetry);
+			assertNotCancelled(localSignal);
+			const normal=this.#store.addNormal(baseline);if(normal.limited)throw new HistoryError('BASELINE_LIMIT');
+			if(this.#resume){
+				const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
+				if(restored.limited)throw new HistoryError('OPTION');
+			}
+			notify({event:'baseline'});
+			const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
+			if(!selected.length)this.#report.reason='no_history_target';
+			const targets=selected.length?checkedTargets(this.#context,selected):[];
+			this.#report.targetResults=targets.map(t=>{
+				if(!this.#resume)return {...t,pages:0,nextWhen:startWhen,reason:null};
+				const matches=this.#resume.cursors.filter(s=>s.id===t.id&&s.fork===t.fork);
+				if(matches.length!==1)throw new HistoryError('CONTEXT_CHANGED');
+				const previous=matches[0];integerOption(previous.nextWhen,0,9999999999);
+				return {...t,pages:0,nextWhen:previous.nextWhen,reason:RESUMABLE.has(previous.reason)?null:previous.reason};
+			});
+			const states=this.#report.targetResults;let stopped=false;
+			while(states.some(s=>s.reason===null)&&!stopped){
+				for(const state of states){
+					if(state.reason!==null)continue;
+					assertNotCancelled(localSignal);
+					if(this.#report.pages>=this.#settings.maxPages){this.#report.reason='page_limit';stopped=true;break;}
+					if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){this.#report.reason='comment_limit';stopped=true;break;}
+					const target={id:state.id,fork:state.fork};const cursor=state.nextWhen;
+					const threads=await this.#page({targets:[target],when:cursor,resFrom:-1000},onRetry);
+					assertNotCancelled(localSignal);
+					const summary=summarizeThreads(threads)[0];
+					state.lastPageCount=summary.returnedCount;state.oldestUnixSeconds=summary.oldestUnixSeconds;state.newestUnixSeconds=summary.newestUnixSeconds;
+					this.#report.pages++;state.pages++;
+					if(threads[0].comments.some(c=>Date.parse(c.postedAt)/1000>cursor)){
+						state.reason='cursor_not_respected';this.#report.reason=state.reason;stopped=true;break;
+					}
+					const newestFirst=threads.map(t=>({...t,comments:[...t.comments].sort((a,b)=>Date.parse(b.postedAt)-Date.parse(a.postedAt)||b.no-a.no)}));
+					const added=this.#store.addHistory(newestFirst,this.#settings.maxAdditionalComments-this.#store.counts().additionalCount);
+					this.#report.duplicates+=added.duplicates;
+					notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
+					assertNotCancelled(localSignal);
+					if(added.limited||this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){
+						state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
+					}
+					if(!summary.returnedCount){state.reason='empty_page';continue;}
+					const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
+					if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
+					if(summary.oldestUnixSeconds===summary.newestUnixSeconds&&summary.returnedCount>1){
+						state.reason='same_second_boundary_unverified';continue;
+					}
+					state.nextWhen=oldest;
+					if(oldest>=cursor){state.reason='cursor_stalled';continue;}
+					this.#report.historyCursorProgressed=true;
+				}
+			}
+			if(!stopped&&states.length){
+				const reasons=[...new Set(states.map(s=>s.reason))];
+				this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+			}
+			for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
+		}catch(e){
+			this.#report.error=safeError(e);this.#report.reason=this.#report.error.code.toLowerCase();
+			for(const state of this.#report.targetResults)if(state.reason===null)state.reason=this.#report.reason;
+		}finally{
+			signal?.removeEventListener('abort',abort);this.#report.finishedAt=new Date().toISOString();
+			this.#finishedNetwork=this.#coordinator.stats();
+			this.#report.resumeAvailable=this.#report.targetResults.some(s=>RESUMABLE.has(s.reason));
+		}
+		return this.report();
+	}
+}
+return Object.freeze({HistorySession});
+})();
+modules[8] = (() => {
+const {HistoryError,normalizeWatch,validateThreads,integerOption} = modules[0];
+const ZENZA_FORKS = Object.freeze({main:0,owner:1,easy:2});
+function seedError(code) { throw new HistoryError(code); }
+function freezeSeedData(value) {
+	if (value && typeof value === 'object') {
+		for (const child of Object.values(value)) freezeSeedData(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+function copyThreadDescriptor(info) {
+	if (!info || !Object.hasOwn(ZENZA_FORKS, info.forkLabel) ||
+			info.fork !== ZENZA_FORKS[info.forkLabel] || typeof info.label !== 'string' ||
+			!Number.isSafeInteger(info.layer?.index) || info.layer.index < 0) seedError('THREAD_METADATA');
+	const out = {id:String(info.id),fork:info.fork,forkLabel:info.forkLabel,label:info.label,
+		layer:{index:info.layer.index}};
+	if (typeof info.layer.isTranslucent === 'boolean') out.layer.isTranslucent = info.layer.isTranslucent;
+	return out;
+}
+function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevision} = {}) {
+	if (typeof playbackGeneration !== 'string' || !playbackGeneration) seedError('OPTION');
+	integerOption(normalRevision,1,Number.MAX_SAFE_INTEGER);
+	if (normalResult?.format !== 'threads' || !normalResult.threadInfo || !normalResult.body) seedError('UNSUPPORTED_FORMAT');
+	const msg = videoInfo?.msgInfo, resultInfo = normalResult.threadInfo;
+	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
+	const videoId = videoInfo.videoId;
+	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
+	if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
+	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
+	const nv = msg.nvComment;
+	const context = normalizeWatch({video:{id:videoId},comment:{nvComment:{
+		server:nv?.server,threadKey:nv?.threadKey,params:{targets:nv?.params?.targets,language}
+	}}},videoId);
+	const watchId = String(videoInfo.contextWatchId ?? videoInfo.watchId ?? videoId);
+	if (!/^(?:(?:sm|so|nm))?\d+$/.test(watchId)) seedError('WATCH_ID');
+	if (!Number.isFinite(videoInfo.duration) || videoInfo.duration < 0) seedError('DURATION');
+	if (!Array.isArray(msg.threads)) seedError('THREAD_METADATA');
+	const descriptors = new Map();
+	for (const target of context.targets) {
+		const found = msg.threads.filter(t => String(t.id) === target.id && t.forkLabel === target.fork);
+		if (found.length !== 1) seedError('THREAD_METADATA');
+		descriptors.set(JSON.stringify([target.id,target.fork]),copyThreadDescriptor(found[0]));
+	}
+	const baseline = validateThreads({meta:{status:200},data:{threads:normalResult.body.threads}},context);
+	const mainThreadId = resultInfo.threadId ?? null;
+	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
+	return freezeSeedData({context,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
+	});
+}
+function toZenzaThreads(seed, threads) {
+	if (!seed?.context || !Array.isArray(seed.render?.threads)) seedError('OPTION');
+	const copied = validateThreads({meta:{status:200},data:{threads}},seed.context);
+	return {threads:copied.map(thread=>{
+		const info = seed.render.threads.find(t=>t.id===thread.id && t.forkLabel===thread.fork);
+		if (!info) seedError('THREAD_METADATA');
+		return {...thread,info:{...info,layer:{...info.layer}}};
+	})};
+}
+return Object.freeze({createZenzaSeed,toZenzaThreads});
+})();
+modules[9] = (() => {
+const {HistorySession} = modules[7];
+const {createZenzaSeed,toZenzaThreads} = modules[8];
+const {normalizeSettings} = modules[1];
+class CommentHistoryController {
+	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
+	#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+	#state={enabled:false,phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false};
+	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
+		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
+		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+		this.#state.enabled=preferences.get().enabled===true;
+		this.#off=preferences.subscribe(snapshot=>{
+			if(this.#disposed)return;
+			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
+			if(!this.#state.enabled){this.#cancel(true);this.#emit({phase:'idle',additionalCount:0,appliedAdditional:0,pages:0,goal:0,reason:null,canContinue:false});}
+			else {this.#emit({});if(!before&&this.#seed)void this.start();}
+		});
+	}
+	get state(){return JSON.parse(JSON.stringify(this.#state));}
+	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
+	#emit(changes){Object.assign(this.#state,changes);for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}}
+	#cancel(clear){
+		this.#epoch++;this.#operation?.abort();this.#operation=null;
+		this.#session?.removeHistory();this.#session=null;this.#report=null;
+		if(clear){try{this.#clear();}catch{}}
+	}
+	invalidate(){
+		this.#cancel(true);this.#seed=null;
+		this.#emit({phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false});
+	}
+	async normalReady({videoInfo,result,generation}={}){
+		if(this.#disposed)return;
+		this.invalidate();
+		try{
+			this.#seed=createZenzaSeed({videoInfo,normalResult:result,playbackGeneration:generation,normalRevision:++this.#normalRevision});
+			const normalCount=this.#seed.baseline.reduce((n,t)=>n+t.comments.length,0);
+			this.#emit({videoId:this.#seed.identity.videoId,normalCount});
+		}catch(error){this.#emit({phase:'unavailable',reason:typeof error?.code==='string'?error.code:'CONTEXT_CHANGED'});return;}
+		if(this.#state.enabled)return this.start();
+	}
+	setEnabled(value){this.#preferences.setEnabled(!!value);}
+	stop(){
+		if(this.#state.phase==='queued'){this.#operation?.abort();}
+		else this.#session?.cancel();
+	}
+	whenIdle(){return this.#promise;}
+	more(){return this.start({more:true});}
+	restart(){return this.start({restart:true});}
+	start({more=false,restart=false}={}){
+		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#operation)return this.#promise;
+		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
+		if(more&&this.#state.additionalCount>=20000&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		const applyOnly=this.#state.phase==='render-error'&&!restart;
+		const continuing=!!(more&&!restart&&this.#session&&this.#report);
+		const resume=continuing?this.#session.resumeData():undefined;
+		if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
+		const oldGoal=this.#state.goal;
+		const goal=applyOnly?oldGoal:continuing?Math.min(20000,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
+		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
+		const seed=this.#seed;
+		this.#emit({phase:applyOnly?'applying':'queued',goal,reason:null,canContinue:false});
+		this.#promise=(async()=>{
+			try{
+				if(!applyOnly){
+					await this.#acquire(async()=>{
+						if(!current())return;
+						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
+						const session=this.#session;
+						this.#emit({phase:'fetching',pages:0});
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
+								waitingMs:progress.event==='retry'?progress.waitMs:0});
+						}});
+						if(!current())return;
+						this.#report=report;
+					},operation.signal);
+				}
+				if(!current()||!this.#report||!this.#session)return;
+				const report=this.#report;
+				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,pages:report.pages,network:report.network,waitingMs:0});
+				let applied;
+				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true})),{isCurrent:current,signal:operation.signal});}
+				catch{
+					if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
+					return;
+				}
+				if(!current())return;
+				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??report.counts.additionalCount,
+					canContinue:report.resumeAvailable&&report.counts.additionalCount<20000});
+				if(partial&&report.reason!=='cancelled')this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+			}catch{
+				if(this.#epoch===epoch&&this.#state.enabled){
+					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
+					if(!operation.signal.aborted)this.#notify('コメント増量：取得を開始できませんでした。パネルから再試行できます。');
+				}
+			}finally{if(this.#epoch===epoch)this.#operation=null;}
+			return this.state;
+		})();
+		return this.#promise;
+	}
+	dispose(){if(this.#disposed)return;this.#disposed=true;this.invalidate();this.#off?.();this.#listeners.clear();}
+}
+return Object.freeze({CommentHistoryController});
+})();
+modules[10] = (() => {
+const {SETTINGS_SCHEMA} = modules[1];
+const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[3];
+const {CommentHistoryController} = modules[9];
+const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
+const CSS=`
+.commentHistorySwitch .controlButtonInner{display:inline-block;width:26px;height:26px;vertical-align:middle}
+.commentHistorySwitch svg{display:block;width:100%;height:100%;fill:currentColor}
+.commentHistorySwitch.is-active{color:var(--enabled-button-color,#9cf);opacity:1}
+.commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
+.commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
+@keyframes zenzaHistoryPulse{50%{opacity:.48}}
+.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:16px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
+.zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
+.zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
+@keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+@keyframes zenzaHistoryOut{from{opacity:1;transform:none}to{opacity:0;transform:translate(8px,12px) scale(.92)}}
+@media(prefers-reduced-motion:reduce){.zenzaCommentHistoryPanel.is-open,.zenzaCommentHistoryPanel.is-closing{animation-duration:.01s}.commentHistorySwitch.is-fetching svg{animation:none}}
+.zenzaCommentHistoryPanel button,.zenzaCommentHistoryPanel select,.ch-settings input{font:inherit;box-sizing:border-box}
+.zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
+.zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
+.zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
+.ch-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.ch-header strong{font-size:16px;flex:1}.ch-header button{padding:1px 8px;font-size:22px;background:none;border:0}
+.ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
+.ch-counter{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#91f2dc}.ch-counter small{font-size:12px;font-weight:400;color:#b4c2d0;margin-left:5px}
+.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:9px 0}
+.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:10px 0 14px}
+.ch-action-row{display:grid;grid-template-columns:124px minmax(0,1fr);gap:10px;align-items:end;margin-top:12px}.ch-action-row label{display:grid;gap:3px;color:#b4c2d0;font-size:11px}
+.zenzaCommentHistoryPanel select{width:100%;height:36px;padding:4px 8px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
+.zenzaCommentHistoryPanel [data-ch-primary]{background:#79dfc9;color:#0c2b28;border-color:#79dfc9;min-height:36px;font-weight:700}
+.ch-details{border-top:1px solid #33475d;margin-top:14px;padding-top:11px}.ch-details summary{cursor:pointer;color:#cedde9}.ch-details>div{margin-top:10px}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin-bottom:9px;font-size:12px}.ch-footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px}.ch-footer button{background:none;font-size:12px;padding:5px 8px}
+.ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
+.is-youTube .commentHistorySwitch{display:none}
+`;
+function style(doc){if(doc.querySelector('style[data-zenza-comment-history]'))return;const el=doc.createElement('style');el.dataset.zenzaCommentHistory='';el.textContent=CSS;doc.head.append(el);}
+const fmt=n=>Number(n||0).toLocaleString('ja-JP');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mountHistorySettings(container,{preferences}={}){
+	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
+	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
+		`<label><span>${esc(d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
+	).join('')+'<p class="ch-setting-error" role="status"></p>';
+	const error=container.querySelector('.ch-setting-error');
+	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
+	const change=e=>{const name=e.target.dataset.historySetting,d=SETTINGS_SCHEMA.find(x=>x.name===name);if(!d)return;e.stopPropagation();try{const v=d.type==='boolean'?e.target.checked:e.target.value.trim()===''?NaN:Number(e.target.value);preferences.patch({[name]:v});error.textContent='';e.target.removeAttribute('aria-invalid');}catch{error.textContent='設定を保存できませんでした。入力範囲と保存領域を確認してください。';e.target.setAttribute('aria-invalid','true');}};
+	container.addEventListener('change',change);const off=preferences.subscribe(refresh);refresh();
+	return {dispose(){off();container.removeEventListener('change',change);container.replaceChildren();}};
+}
+class CommentHistoryPanel {
+	constructor({controller,preferences,anchor,window:win=globalThis.window}){
+		this.controller=controller;this.preferences=preferences;this.anchor=anchor;this.win=win;this.doc=win.document;this.listeners=[];this.closeTimer=null;this.swallowCleanup=[];this.disposed=false;
+		style(this.doc);
+		this.onOutside=e=>this._outside(e);this.onEscape=e=>{if(this.isOpen&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.close(true);}};
+		this.onResize=()=>this._place();
+		this.off=controller.subscribe(state=>this.refresh(state));this.offPrefs=preferences.subscribe(()=>this.refresh(controller.state));
+	}
+	get isOpen(){return !!this.view?.classList.contains('is-open')&&!this.view.classList.contains('is-closing');}
+	_init(){
+		if(this.view)return;
+		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>反映済みの追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
+		el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
+		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
+		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
+		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
+		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
+		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
+		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
+		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
+	}
+	refresh(state){
+		const a=this.anchor?.();
+		if(a){a.classList.toggle('is-active',state.enabled);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：ON':'：OFF'));}
+		if(!this.view)return;
+		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
+		q('[data-ch-enabled]').checked=state.enabled;
+		const quota=q('[data-ch-quota]');
+		quota.querySelector('[data-ch-custom]')?.remove();
+		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
+			const option=this.doc.createElement('option');option.dataset.chCustom='';
+			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
+		}
+		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
+		q('[data-ch-count]').textContent=fmt(state.additionalCount);q('[data-ch-goal]').textContent=` / ${fmt(state.goal||p.settings.maxAdditionalComments)} 件`;
+		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
+		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
+		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
+		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
+		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
+		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
+		button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
+	}
+	_place(){
+		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
+		const a=this.anchor?.()?.getBoundingClientRect(),width=Math.min(360,this.win.innerWidth-32);
+		this.view.style.left=Math.max(16,Math.min(this.win.innerWidth-width-16,(a?.right||this.win.innerWidth-16)-width))+'px';
+		this.view.style.bottom=Math.max(16,Math.min(this.win.innerHeight-120,a?this.win.innerHeight-a.top+10:50))+'px';
+		this.view.style.maxHeight=Math.max(100,this.win.innerHeight-parseFloat(this.view.style.bottom)-16)+'px';
+	}
+	_listen(){
+		const attach=win=>{if(this.listeners.includes(win))return;try{win.addEventListener('pointerdown',this.onOutside,true);win.addEventListener('keydown',this.onEscape,true);this.listeners.push(win);}catch{}};
+		attach(this.win);for(const f of this.doc.querySelectorAll('iframe')){try{if(f.contentWindow?.document)attach(f.contentWindow);}catch{}}
+	}
+	_unlisten(){for(const w of this.listeners){try{w.removeEventListener('pointerdown',this.onOutside,true);w.removeEventListener('keydown',this.onEscape,true);}catch{}}this.listeners=[];this.observer?.disconnect();this.observer=null;this.win.removeEventListener('resize',this.onResize);this.doc.removeEventListener('fullscreenchange',this.onResize);}
+	_outside(e){
+		if(!this.isOpen)return;const path=e.composedPath?.()||[e.target],a=this.anchor?.();if(path.includes(this.view)||path.includes(a))return;
+		let video=path.some(x=>x?.matches?.('video,.videoPlayer,.commentLayerFrame'));
+		try{video=video||e.view?.frameElement?.matches('.commentLayerFrame,[name="commentLayerFrame"]');}catch{}
+		this.close(false);
+		if(video&&e.button===0){
+			const target=e.target,win=e.view||this.win;
+			const swallow=event=>{if(event.target===target||(event.composedPath?.()||[]).includes(target)){event.preventDefault();event.stopImmediatePropagation();}cleanup();};
+			const timer=this.win.setTimeout(()=>cleanup(),600);
+			const cleanup=()=>{win.removeEventListener('click',swallow,true);this.win.clearTimeout(timer);const i=this.swallowCleanup.indexOf(cleanup);if(i>=0)this.swallowCleanup.splice(i,1);};
+			win.addEventListener('click',swallow,true);this.swallowCleanup.push(cleanup);
+		}
+	}
+	open(){
+		if(this.disposed)return;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+	}
+	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
+	toggle(){this.isOpen?this.close(true):this.open();}
+	dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
+}
+function createHistoryFeature({dialog,config,window:win=globalThis.window}){
+	const preferences=createBrowserHistoryPreferences({window:win,config});
+	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
+	const controller=new CommentHistoryController({preferences,acquire,
+		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
+		clearRender:()=>dialog._nicoVideoPlayer?.clearCommentHistory(),
+		notify:text=>dialog.execCommand('notify',text)});
+	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
+	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
+}
+return Object.freeze({HISTORY_ICON,mountHistorySettings,CommentHistoryPanel,createHistoryFeature});
+})();
+return Object.freeze({
+SETTINGS_SCHEMA: modules[1].SETTINGS_SCHEMA,
+DEFAULT_SETTINGS: modules[1].DEFAULT_SETTINGS,
+normalizeSettings: modules[1].normalizeSettings,
+SettingsStore: modules[1].SettingsStore,
+ZenzaSettingsRepository: modules[2].ZenzaSettingsRepository,
+HISTORY_PRESETS: modules[3].HISTORY_PRESETS,
+HISTORY_PREFERENCE_DEFAULTS: modules[3].HISTORY_PREFERENCE_DEFAULTS,
+createBrowserHistoryPreferences: modules[3].createBrowserHistoryPreferences,
+HISTORY_ICON: modules[10].HISTORY_ICON,
+mountHistorySettings: modules[10].mountHistorySettings,
+CommentHistoryPanel: modules[10].CommentHistoryPanel,
+createHistoryFeature: modules[10].createHistoryFeature,
+});
+})();
 const Config = (() => {
 	const DEFAULT_CONFIG = {
 		debug: false,
@@ -1366,7 +2514,7 @@ const Config = (() => {
 		'screenFilter.applyToScreenshot': true, // スクリーンショットにも反映する
 		'screenFilter.applyToCommentPip': true, // P in P(コメント付き)にも反映する
 		'screenshot.prefix': '', // スクリーンショットのファイル名の先頭につける文字
-		'search.limit': 300,
+		'search.limit': 1000,
 		'touch.enable': window.ontouchstart !== undefined,
 		'touch.tap2command': '',
 		'touch.tap3command': 'toggle-mute',
@@ -1423,9 +2571,51 @@ const Config = (() => {
 	for (let i = 1; i <= 10; i++) {
 		DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
 	}
+	Object.assign(DEFAULT_CONFIG, ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS);
 	return DataStorage.create(
 		DEFAULT_CONFIG,
 		{
+			normalizeImport: (key, value) => {
+				if (['videoSearch.f_range', 'videoSearch.l_range'].includes(key) &&
+						typeof value === 'string' && /^[0-9]+$/.test(value)) { return Number(value); }
+				return value;
+			},
+			validateImport: (key, value) => {
+				if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
+				if (key.startsWith('commentHistory.')) {
+					const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
+					if (!descriptor) { return false; }
+					try {
+						ZenzaCommentHistorySettings.normalizeSettings({[descriptor.name]: value});
+						return true;
+					} catch (_) { return false; }
+				}
+				const choices = {
+					screenMode: ['normal', 'big', 'wide', 'small', 'sideView', '3D'],
+					sharedNgLevel: ['NONE', 'LOW', 'MID', 'HIGH', 'MAX'],
+					fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
+					'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
+					'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed']
+				};
+				const name = key.startsWith('screenMode:') ? 'screenMode' : key;
+				if (Object.prototype.hasOwnProperty.call(choices, name)) {
+					return choices[name].includes(value);
+				}
+				if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
+				if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
+				if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
+					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
+					return Number.isFinite(value) && value >= 0 && value <= 1;
+				}
+				if (['playbackRate', 'commentSpeedRate', 'baseChatScale', 'menuScale'].includes(key)) {
+					return Number.isFinite(value) && value > 0;
+				}
+				if (['smallModeWidth', 'smallModeHeight'].includes(key)) {
+					return Number.isFinite(value) && value >= 0;
+				}
+				return true;
+			},
+			preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
 			prefix: PRODUCT,
 			ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
 			readonly: !location || location.host !== 'www.nicovideo.jp',
@@ -3512,6 +4702,7 @@ const ScreenFilterPanel = (() => {
 	}
 	return Panel;
 })();
+// already required
     window.ZenzaAdvancedSettings = {
       config: Config
     };
@@ -3724,9 +4915,12 @@ const ScreenFilterPanel = (() => {
           }
 
           if (confirm('設定データを直接書き換えしますか？')) {
-            config.clear();
-            config.import(data);
-            location.reload();
+            try {
+              config.import(data);
+              location.reload();
+            } catch (error) {
+              alert(`設定を読み込めませんでした: ${error.message}`);
+            }
           }
 
         });
@@ -3821,6 +5015,11 @@ const ScreenFilterPanel = (() => {
           this.hide();
         });
 
+        // Task200: attach after legacy input handlers, avoiding double saves.
+        this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({window, config});
+        this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings(
+          $panel.find('.commentHistorySettingsContainer')[0], {preferences: this._historyPreferences}
+        );
         $panel.toggleClass('debug', config.props.debug);
       }
       _onPlayerConfigUpdate(key, value) {
@@ -4521,6 +5720,7 @@ const ScreenFilterPanel = (() => {
           </div>
 
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>
+          <div class="commentHistorySettingsContainer"></div>
 
           <div class="searchLimitControl control toggle">
             <label>

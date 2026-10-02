@@ -81,7 +81,7 @@ const gate = () => {
     ].includes(host) || host.endsWith('.slack.com');
   };
 
-  const uFetch = async params => {
+  const uFetch = async (params, consume = response => response) => {
     const {url, options: requestOptions = {}} = params;
     if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
       return Promise.reject({status: 'fail', message: 'network error'});
@@ -118,7 +118,7 @@ const gate = () => {
           }, timeout);
         }));
       }
-      racers.push(fetch(url, options));
+      racers.push(fetch(url, options).then(consume));
       return await Promise.race(racers);
     } catch (err) {
       throw {status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail'};
@@ -128,20 +128,26 @@ const gate = () => {
     }
   };
 
+  const fetchSessions = new Map();
   const xFetch = (params, sessionId = null) => {
     const command = 'fetch';
-    return uFetch(params).then(async resp => {
+    const controller = new AbortController();
+    fetchSessions.set(sessionId, controller);
+    const request = {...params, options: {...params.options, signal: controller.signal}};
+    return uFetch(request, async resp => {
       const buffer = await resp.arrayBuffer();
       const init = ['type', 'url', 'redirected', 'status', 'ok', 'statusText']
           .reduce((map, key) => {map[key] = resp[key]; return map;}, {});
       const headers = [...resp.headers.entries()];
-      return Promise.resolve({buffer, init, headers});
+      return {buffer, init, headers};
     }).then(({buffer, init, headers}) => {
       const result = {status: 'ok', command, params: {buffer, init, headers}};
       post(result, {sessionId});
       return result;
     }).catch(({status, message}) => {
       post({status, message, command}, {sessionId});
+    }).finally(() => {
+      if (fetchSessions.get(sessionId) === controller) { fetchSessions.delete(sessionId); }
     });
   };
 
@@ -164,6 +170,15 @@ const gate = () => {
     const TOKEN = location.hash ? location.hash.substring(1) : null;
     window.history.replaceState(null, null, location.pathname);
     const port = post({status: 'ok', command: 'initialized'}, {type, token: TOKEN, origin});
+    port.addEventListener('message', event => {
+      let data;
+      try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
+      catch (_) { return; }
+      if (!data || data.token !== TOKEN || !data.body || data.body.command !== 'cancelFetch') { return; }
+      event.stopImmediatePropagation();
+      const controller = fetchSessions.get(data.body.params && data.body.params.sessionId);
+      if (controller) { controller.abort(); }
+    });
     workerUtil && workerUtil.env({TOKEN, PRODUCT});
     // console.info(`%c3. port init OK [${window.name.split('#')[0]} ${PRODUCT}]`, 'background: #039393; color: gold; font-size: 120%;');
     return {port, TOKEN, origin, type, PID};

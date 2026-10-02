@@ -86,22 +86,35 @@ const {initialize} = (() => {
     });
   };
 
-  const readyContent = () => {
+  // Task175 (F02): the wait ends even if #root is missing or the SPA never mounts.
+  const readyContent = (timeoutMs = 15000) => {
     if (document.querySelector('[aria-label="nicovideo-content"]') != null) {
       return Promise.resolve();
     }
+    const root = document.getElementById('root');
+    if (!root) {
+      return Promise.resolve();
+    }
     const {promise, resolve} = Promise.withResolvers();
-    new MutationObserver((records, observer) => {
+    let timer = null;
+    const observer = new MutationObserver((records, observer) => {
       for (const record of records) {
         if(record.addedNodes.length === 0 || document.querySelector('[aria-label="nicovideo-content"]') == null) {
           continue;
         }
-        resolve();
+        clearTimeout(timer);
         observer.disconnect();
+        resolve();
+        return;
       }
-    }).observe(document.getElementById('root'), {
+    });
+    observer.observe(root, {
       childList: true,
     });
+    timer = setTimeout(() => {
+      observer.disconnect();
+      resolve();
+    }, timeoutMs);
     return promise;
   }
 
@@ -111,18 +124,28 @@ const {initialize} = (() => {
     }
 
     const res = document.querySelector('meta[name="server-response"]')?.getAttribute('content');
-    if (res == null) {
+    // Task175 (F02): decide per response, without network, between the legacy
+    // data.response envelope and the Watch V4 data.response.$watchV4.data envelope.
+    let json = null;
+    if (res != null) {
+      try {
+        json = JSON.parse(res);
+      } catch (_) {
+        json = null;
+      }
+    }
+    if (json == null || typeof json !== 'object') {
       await readyContent();
       return !!document.querySelector('.grid-area_\\[player\\]');
     }
 
-    const json = JSON.parse(res);
-
-    if (json.meta.status > 299) {
+    if (json.meta?.status > 299) {
       return false;
     }
 
-    return typeof json.data.response.okReason === 'string';
+    const response = json.data?.response;
+    const watchData = response?.$watchV4 ? response.$watchV4.data : response;
+    return typeof watchData?.okReason === 'string';
   };
 
   const initWorker = () => {

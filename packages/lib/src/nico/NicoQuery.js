@@ -307,7 +307,14 @@ class NicoQuery {
       dateTo: params.end || null,
       commentCount: params.commentCount || null,
       f_range: params.fRange || null,
-      l_range: params.lRange || null
+      l_range: params.lRange || null,
+      // Task189（検索追補Q01）: ページ位置・ジャンル・長さ種別・チャンネル掲載・kindも検索段階へ渡す。
+      // 値の検証と、APIへ送るかどうかの判断はVideoSearch（NicoSearchNvapi.normalizeConditions）側で行う
+      page: params.page || null,
+      genre: params.genre || null,
+      selectContentType: params.selectContentType || null,
+      channelVideoListingStatus: params.channelVideoListingStatus || null,
+      kind: params.kind || null
     };
   }
 

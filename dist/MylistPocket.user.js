@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.34-task156
+// @version     0.5.41-task200
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-09-30 16:35Z
+// build: 2026-10-02 08:01Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -2771,16 +2771,17 @@ const Observable = (() => {
 			};
 			this._closed = false;
 		}
-		subscribe(subscriber, onError, onCompleted) {
-			return this.observable.subscribe(subscriber, onError, onCompleted)
-				.filter(this._filterFunc)
-				.map(this._mapFunc);
+		subscribe(onNext, onError, onCompleted) {
+			return this.observable._subscribe({
+				subscriber: Subscriber.create(onNext, onError, onCompleted),
+				isNop: [onNext, onError, onCompleted].every(f => f == null),
+				filterFunc: this._filterFunc, mapFunc: this._mapFunc
+			});
 		}
 		unsubscribe() {
+			if (this._closed) { return this; }
 			this._closed = true;
-			if (this.callbacks.unsubscribe) {
-				this.callbacks.unsubscribe();
-			}
+			if (this.callbacks.unsubscribe) { this.callbacks.unsubscribe(); }
 			return this;
 		}
 		dispose() {
@@ -2871,34 +2872,62 @@ const Observable = (() => {
 		}
 		constructor(subscriberFunction) {
 			this._subscriberFunction = subscriberFunction;
-			this._completed = false;
-			this._cancelled = false;
-			this._handlers = new Handler();
+			this._sources = [];
+			this._connection = null;
 		}
-		_initSubscriber() {
-			if (this._subscriber) {
-				return;
+		get closed() { return !!(this._connection && this._connection.closed); }
+		_disposeToken(token) {
+			token.done = true;
+			if (!token.cleanup) { return; }
+			const cleanup = token.cleanup;
+			token.cleanup = null;
+			try { cleanup(); } catch (error) { console.warn('Observable cleanup failed', error); }
+		}
+		_finish(connection, method, value) {
+			if (connection.closed) { return; }
+			connection.closed = true;
+			try { if (method) { connection.handlers.execMethod(method, value); } }
+			finally {
+				connection.handlers.clear();
+				for (const token of connection.tokens) { this._disposeToken(token); }
+				connection.tokens.clear();
 			}
-			const handlers = this._handlers;
-			this._completed = this._cancelled = false;
-			return this._subscriber = new Subscriber({
-				start: arg => handlers.execMethod('start', arg),
-				next: arg => handlers.execMethod('next', arg),
-				error: arg => handlers.execMethod('error', arg),
-				complete: arg => {
-					if (this._nextObservable) {
-						this._nextObservable.subscribe(this._subscriber);
-						this._nextObservable = this._nextObservable._nextObservable;
-					} else {
-						this._completed = true;
-						handlers.execMethod('complete', arg);
-					}
-				},
-				closed: () => this.closed
-			});
 		}
-		get closed() {
-			return this._completed || this._cancelled;
+		_connect(connection) {
+			connection.started = true;
+			const sources = [observer => this._subscriberFunction(observer),
+				...this._sources.map(source => observer => source.subscribe({
+					next: value => observer.next(value), error: error => observer.error(error),
+					complete: value => observer.complete(value)
+				}))];
+			let index = 0;
+			const advance = completion => {
+				if (connection.closed) { return; }
+				if (index === sources.length) { this._finish(connection, 'complete', completion); return; }
+				const producer = sources[index++];
+				const token = {done: false, cleanup: null};
+				connection.tokens.add(token);
+				const active = () => !connection.closed && !token.done;
+				const observer = new Subscriber({
+					start: value => { if (active()) { connection.handlers.execMethod('start', value); } },
+					next: value => { if (active()) { connection.handlers.execMethod('next', value); } },
+					error: error => { if (active()) { this._finish(connection, 'error', error); } },
+					complete: value => {
+						if (!active()) { return; }
+						this._disposeToken(token);
+						advance(value);
+					},
+					closed: () => !active()
+				});
+				this._subscriber = observer;
+				try {
+					const cleanup = producer(observer);
+					token.cleanup = typeof cleanup === 'function' ? cleanup :
+						cleanup && typeof cleanup.unsubscribe === 'function' ? () => cleanup.unsubscribe() : null;
+					if (token.done || connection.closed) { this._disposeToken(token); }
+				} catch (error) { observer.error(error); }
+			};
+			advance();
 		}
 		filter(func) {
 			return this.subscribe().filter(func);
@@ -2908,11 +2937,16 @@ const Observable = (() => {
 		}
 		concat(arg) {
 			const observable = Observable.from(arg);
-			if (this._nextObservable) {
-				this._nextObservable.concat(observable);
-			} else {
-				this._nextObservable = observable;
+			if (!observable || observable === this) { throw new TypeError('Invalid concatenated Observable'); }
+			const pending = [observable], seen = new Set();
+			while (pending.length) {
+				const source = pending.pop();
+				if (source === this) { throw new TypeError('Cyclic concatenated Observable'); }
+				if (seen.has(source)) { continue; }
+				seen.add(source);
+				pending.push(...(source._sources || []));
 			}
+			this._sources.push(observable);
 			return this;
 		}
 		forEach(callback) {
@@ -2937,41 +2971,36 @@ const Observable = (() => {
 		onError(arg) { this._subscriber.error(arg); }
 		onComplete(arg) { this._subscriber.complete(arg);}
 		disconnect() {
-			if (!this._disconnectFunction) {
-				return;
-			}
-			this._closed = true;
-			this._disconnectFunction();
-			delete this._disconnectFunction;
-			this._subscriber;
-			this._handlers.clear();
+			if (this._connection) { this._finish(this._connection); }
 		}
-		[observableSymbol]() {
-			return this;
-		}
+		[observableSymbol]() { return this; }
 		subscribe(onNext = null, onError = null, onCompleted = null) {
-			this._initSubscriber();
-			const isNop = [onNext, onError, onCompleted].every(f => f === null);
-			const subscriber = Subscriber.create(onNext, onError, onCompleted);
-			return this._subscribe({subscriber, isNop});
+			return this._subscribe({
+				subscriber: Subscriber.create(onNext, onError, onCompleted),
+				isNop: [onNext, onError, onCompleted].every(f => f === null)
+			});
 		}
-		_subscribe({subscriber, isNop}) {
-			if (!isNop && !this._disconnectFunction) {
-				this._disconnectFunction = this._subscriberFunction(this._subscriber);
+		_subscribe({subscriber, isNop, filterFunc, mapFunc}) {
+			let connection = this._connection;
+			if (!connection || connection.closed) {
+				connection = {closed: false, started: false, handlers: new Handler(), tokens: new Set()};
+				if (!isNop) { this._connection = connection; }
 			}
-			!isNop && this._handlers.add(subscriber);
-			return new Subscription({
-				observable: this,
-				subscriber,
+			const subscription = new Subscription({
+				observable: this, subscriber,
 				unsubscribe: () => {
 					if (isNop) { return; }
-					this._handlers.remove(subscriber);
-					if (this._handlers.isEmpty) {
-						this.disconnect();
-					}
+					connection.handlers.remove(subscriber);
+					if (connection.handlers.isEmpty) { this._finish(connection); }
 				},
-				closed: () => this.closed
-			});
+				closed: () => connection.closed
+			}).filter(filterFunc).map(mapFunc);
+			if (isNop) { return subscription; }
+			connection.handlers.add(subscriber);
+			try { subscriber.start(subscription); }
+			catch (error) { subscription.unsubscribe(); throw error; }
+			if (!connection.closed && !connection.started) { this._connect(connection); }
+			return subscription;
 		}
 	}
 	Observable.observavle = observableSymbol;
@@ -2989,7 +3018,10 @@ class DataStorage {
 			prefix:  dataStorage.prefix,
 			storage: dataStorage.storage,
 			ignoreExportKeys: dataStorage.options.ignoreExportKeys,
-			readonly: dataStorage.readonly
+			readonly: dataStorage.readonly,
+			normalizeImport: dataStorage.options.normalizeImport,
+			validateImport: dataStorage.options.validateImport,
+			preserveInvalidKeys: dataStorage.options.preserveInvalidKeys
 		};
 		return DataStorage.create(dataStorage.default, options);
 	}
@@ -3062,7 +3094,7 @@ class DataStorage {
 					this._data[key] = JSON.parse(storage[storageKey]);
 				} catch (e) {
 					console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-					delete storage[storageKey];
+					if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
 					this._data[key] = this.default[key];
 				}
 			} else {
@@ -3138,12 +3170,44 @@ class DataStorage {
 		return JSON.stringify(this.export(), null, 2);
 	}
 	import(data) {
-		Object.keys(this.props)
-			.forEach(key => {
-				const val = data.hasOwnProperty(key) ? data[key] : this.default[key];
-				console.log('import data: %s=%s', key, val);
-				this.setValueSilently(key, val);
-		});
+		if (!data || typeof data !== 'object' || Array.isArray(data)) {
+			throw new TypeError('設定データはJSONオブジェクトで指定してください。');
+		}
+		const entries = Object.keys(this.default)
+			.filter(key => !this._ignoreExportKeys.includes(key))
+			.map(key => {
+				const raw = Object.prototype.hasOwnProperty.call(data, key) ? data[key] : this.default[key];
+				const value = this.options.normalizeImport ? this.options.normalizeImport(key, raw) : raw;
+				const expected = this.default[key];
+				if (typeof value !== typeof expected || value === null && expected !== null ||
+						Array.isArray(value) !== Array.isArray(expected) ||
+						typeof value === 'number' && !Number.isFinite(value) ||
+						this.options.validateImport && !this.options.validateImport(key, value)) {
+					throw new TypeError(`設定値が不正です: ${key}`);
+				}
+				const json = JSON.stringify(value);
+				if (json === undefined) { throw new TypeError(`設定値を保存できません: ${key}`); }
+				return {key, value, json, storageKey: this.getStorageKey(key)};
+			});
+		if (!this.readonly) {
+			const written = [];
+			try {
+				for (const entry of entries) {
+					const previous = this.storage[entry.storageKey];
+					this.storage[entry.storageKey] = entry.json;
+					written.push({key: entry.storageKey, previous});
+				}
+			} catch (error) {
+				for (const {key, previous} of written.reverse()) {
+					try {
+						if (previous === undefined) { delete this.storage[key]; }
+						else { this.storage[key] = previous; }
+					} catch (restoreError) { window.console.error('設定の復元に失敗しました', restoreError); }
+				}
+				throw error;
+			}
+		}
+		for (const {key, value} of entries) { this._data[key] = value; }
 	}
 	importJson(json) {
 		this.import(JSON.parse(json));
@@ -3476,34 +3540,92 @@ class CrossDomainGate extends Emitter {
 		this.name = params.name || params.type;
 		this._sessions = {};
 		this._initializeStatus = 'none';
+		this._generation = 0;
+		this._disposed = false;
 	}
 	_initializeFrame() {
-		if (this._initializeStatus !== 'none') {
-			return this.promise('initialize');
+		if (this._disposed) { return Promise.reject(new Error('Gate disposed')); }
+		if (this.loaderFrame && !this.loaderFrame.parentNode) {
+			this._disconnect(new Error('Gate frame removed'));
 		}
+		if (this._initializeStatus !== 'none') { return this.promise('initialize'); }
+		this.resetPromise('initialize');
+		const pending = this.promise('initialize');
 		this._initializeStatus = 'initializing';
-		const append = () => {
-			if (!this.loaderFrame.parentNode) {
-				console.warn('frame removed');
-				this.port = null;
-				this._initializeCrossDomainGate();
+		const generation = ++this._generation;
+		this._initializeTimer = setTimeout(() => {
+			if (generation === this._generation) {
+				this._disconnect(Object.assign(new Error('Gate initialization timeout'), {status: 'timeout'}));
 			}
-		};
-		setTimeout(append,  5 * 1000);
-		setTimeout(append, 10 * 1000);
-		setTimeout(append, 20 * 1000);
-		setTimeout(append, 30 * 1000);
-		setTimeout(() => {
-			if (this._initializeStatus === 'done') {
-				return;
+		}, 60000);
+		if (!this._pageHide) {
+			this._pageHide = () => this._disconnect(new Error('Gate page hidden'));
+			window.addEventListener('pagehide', this._pageHide);
+		}
+		try { this._initializeCrossDomainGate(); }
+		catch (error) { this._disconnect(error); }
+		return pending;
+	}
+	_clearInitializeTimer() {
+		if (this._initializeTimer !== undefined) { clearTimeout(this._initializeTimer); }
+		this._initializeTimer = undefined;
+	}
+	_disconnect(error = new Error('Gate disconnected')) {
+			this._generation;
+		this._clearInitializeTimer();
+		if (this._initialListener) {
+			window.removeEventListener('message', this._initialListener, {capture: true});
+			this._initialListener = null;
+		}
+		if (this._frameObserver) { this._frameObserver.disconnect(); this._frameObserver = null; }
+		if (this._initializeStatus === 'initializing') { this.emitReject('initialize', error); }
+		this._initializeStatus = 'none';
+		this.resetPromise('initialize');
+		for (const id of Object.keys(this._sessions)) { this._settleSession(id, error); }
+		if (this.port) {
+			this.port.removeEventListener && this.port.removeEventListener('message', this._portListener);
+			this.port.removeEventListener && this.port.removeEventListener('messageerror', this._portError);
+			this.port.close && this.port.close();
+		}
+		this.port = null;
+		this._loaderWindow = null;
+		if (this.loaderFrame) { this.loaderFrame.remove(); this.loaderFrame = null; }
+	}
+	dispose() {
+		this._disposed = true;
+		this._disconnect(new Error('Gate disposed'));
+		if (this._pageHide) { window.removeEventListener('pagehide', this._pageHide); this._pageHide = null; }
+		if (this._configListener) { this._config.off('update', this._configListener); this._configListener = null; }
+	}
+	reconnect() {
+		this._disconnect(new Error('Gate reconnecting'));
+		this._disposed = false;
+		return this._initializeFrame();
+	}
+	_settleSession(id, error, result) {
+		const session = this._sessions[id];
+		if (!session) { return; }
+		delete this._sessions[id];
+		session.cleanup();
+		if (arguments.length < 3) {
+			if (session.command === 'fetch' && this.port) {
+				try {
+					this.port.postMessage({body: {command: 'cancelFetch', params: {sessionId: id}}, token: TOKEN});
+				} catch (_) { /* The peer may already be gone. */ }
 			}
-			this.emitReject('initialize', {
-				status: 'timeout', message: `CrossDomainGate初期化タイムアウト (type: ${this._type}, status: ${this._initializeStatus})`
-			});
-			console.warn(`CrossDomainGate初期化タイムアウト (type: ${this._type}, status: ${this._initializeStatus})`);
-		}, 60 * 1000);
-		this._initializeCrossDomainGate();
-		return this.promise('initialize');
+			session.reject(error);
+		} else { session.resolve(result); }
+	}
+	async _waitForInitialize(pending, signal) {
+		if (!signal) { return pending; }
+		if (signal.aborted) { throw signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), {name: 'AbortError'}); }
+		let onAbort;
+		try {
+			return await Promise.race([pending, new Promise((resolve, reject) => {
+				onAbort = () => reject(signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), {name: 'AbortError'}));
+				signal.addEventListener('abort', onAbort, {once: true});
+			})]);
+		} finally { signal.removeEventListener('abort', onAbort); }
 	}
 	_initializeCrossDomainGate() {
 		window.console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
@@ -3517,29 +3639,53 @@ class CrossDomainGate extends Emitter {
 			position: fixed; left: -100vw; pointer-events: none;user-select: none; contain: strict;`;
 		(document.body || document.documentElement).append(loaderFrame);
 		this._loaderWindow = loaderFrame.contentWindow;
-		const onInitialMessage = event => {
-			if (event.source !== this._loaderWindow) {
+		const generation = this._generation;
+		if (typeof MutationObserver !== 'undefined') {
+			this._frameObserver = new MutationObserver(() => {
+				if (generation === this._generation && !loaderFrame.parentNode) {
+					this._disconnect(new Error('Gate frame removed'));
+				}
+			});
+			this._frameObserver.observe(loaderFrame.parentNode, {childList: true});
+		}
+		const onInitialMessage = this._initialListener = event => {
+			if (generation !== this._generation || event.source !== loaderFrame.contentWindow) {
 				return;
 			}
 			this._onMessage(event);
 			if (this._initializeStatus === 'done') {
 				window.removeEventListener('message', onInitialMessage, {capture: true});
+				this._initialListener = null;
 			}
 		};
 		window.addEventListener('message', onInitialMessage, {capture: true});
 		this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
 	}
 	_onMessage(event) {
-		const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+		if (this._disposed) { return; }
+		let data;
+		try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
+		catch (_) { return; }
+		if (!data || !data.body || typeof data.body !== 'object') { return; }
 		const {id, type, token, sessionId, body} = data;
 		if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
 			console.warn('invalid token:',
 				{id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN});
 			return;
 		}
+		if (!this.port && body.command !== 'initialized') { return; }
 		if (!this.port && body.command === 'initialized') {
+			if (!event.ports || !event.ports[0]) { return; }
 			const port = this.port = event.ports[0];
-			port.addEventListener('message', this._onMessage.bind(this));
+			const generation = this._generation;
+			this._portListener = event => {
+				if (generation === this._generation && this.port === port) { this._onMessage(event); }
+			};
+			this._portError = () => {
+				if (generation === this._generation) { this._disconnect(new Error('Gate message error')); }
+			};
+			port.addEventListener('message', this._portListener);
+			port.addEventListener('messageerror', this._portError);
 			port.start();
 			port.postMessage({body: {command: 'ok'}, token: TOKEN});
 		}
@@ -3550,9 +3696,10 @@ class CrossDomainGate extends Emitter {
 			case 'initialized':
 				if (this._initializeStatus !== 'done') {
 					this._initializeStatus = 'done';
+					this._clearInitializeTimer();
 					const originalBody = params;
 					window.console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
-					const result = this._onCommand(originalBody, sessionId);
+					const result = originalBody && this._onCommand(originalBody, sessionId);
 					this.emitResolve('initialize', {status: 'ok'});
 					return result;
 				}
@@ -3566,11 +3713,10 @@ class CrossDomainGate extends Emitter {
 					return;
 				}
 				if (status === 'ok') {
-					session.resolve(params);
+					this._settleSession(sessionId, null, params);
 				} else {
-					session.reject({message: status || 'fail'});
+					this._settleSession(sessionId, {message: status || 'fail'});
 				}
-				delete this._sessions[sessionId];
 			}
 				break;
 		}
@@ -3582,10 +3728,13 @@ class CrossDomainGate extends Emitter {
 		return this._postMessage({command: 'videoCapture', params: {src, sec}})
 			.then(result => Promise.resolve(result.dataUrl));
 	}
-	_fetch(url, options) {
-		return this._postMessage({command: 'fetch', params: {url, options}});
+	_fetch(url, options = {}) {
+		const {signal, ...transferOptions} = options;
+		return this._postMessage({command: 'fetch', params: {url, options: transferOptions}}, true, '',
+			{signal, timeout: options.timeout});
 	}
 	async fetch(resource, options = {}) {
+		options = {...options};
 		let url = resource;
 		if (resource instanceof URL) {
 			url = resource.toString();
@@ -3616,6 +3765,7 @@ class CrossDomainGate extends Emitter {
 	}
 	async configBridge(config) {
 		const keys = config.getKeys();
+		if (this._configListener) { this._config.off('update', this._configListener); this._configListener = null; }
 		this._config = config;
 		const configData = await this._postMessage({
 			command: 'dumpConfig',
@@ -3628,30 +3778,53 @@ class CrossDomainGate extends Emitter {
 			!config.props.allowOtherDomain) {
 			return;
 		}
-		config.on('update', (key, value) => {
+		if (this._disposed) { return; }
+		this._configListener = (key, value) => {
 			if (key === 'autoCloseFullScreen') {
 				return;
 			}
-			this._postMessage({command: 'saveConfig', params: {key, value, prefix: PRODUCT}}, false);
-		});
+			this._postMessage({command: 'saveConfig', params: {key, value, prefix: PRODUCT}}, false).catch(() => {});
+		};
+		config.on('update', this._configListener);
 	}
-	async _postMessage(body, usePromise = true, sessionId = '') {
-		await this._initializeFrame();
+	async _postMessage(body, usePromise = true, sessionId = '', control = {}) {
+		const {signal} = control;
+		const abortReason = () => signal.reason !== undefined ? signal.reason :
+			Object.assign(new Error('Aborted'), {name: 'AbortError'});
+		if (signal && signal.aborted) { throw abortReason(); }
+		const pending = this._initializeFrame();
+		const generation = this._generation;
+		await this._waitForInitialize(pending, signal);
+		if (signal && signal.aborted) { throw abortReason(); }
+		if (this._disposed || generation !== this._generation ||
+				(control.generation !== undefined && control.generation !== generation)) {
+			throw new Error('Gate disconnected before send');
+		}
 		sessionId = sessionId || (`gate:${Math.random()}`);
-		const {params} = body;
+		const params = body.params || {};
 		if (!usePromise) {
 			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
 			return;
 		}
+		if (this._sessions[sessionId]) { throw new Error('Duplicate gate session'); }
 		const session = new PromiseHandler();
+		const timeout = Number.isFinite(control.timeout) && control.timeout > 0 ?
+			Math.min(control.timeout + 1000, 2147483647) : 60000;
+		const timer = setTimeout(() => this._settleSession(sessionId,
+			Object.assign(new Error('Gate request timeout'), {status: 'timeout'})), timeout);
+		const onAbort = () => this._settleSession(sessionId, abortReason());
+		session.command = body.command;
+		session.cleanup = () => {
+			clearTimeout(timer);
+			if (signal) { signal.removeEventListener('abort', onAbort); }
+		};
 		this._sessions[sessionId] = session;
-		try {
-			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
-		} catch (error) {
-			delete this._sessions[sessionId];
-			session.reject(error);
-		}
-		return session;
+		if (signal) { signal.addEventListener('abort', onAbort, {once: true}); }
+		try { this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer); }
+		catch (error) { this._settleSession(sessionId, error); }
+		const result = await session;
+		if (this._disposed || generation !== this._generation) { throw new Error('Gate disconnected after reply'); }
+		return result;
 	}
 	postMessage(body, promise = true) {
 		return this._postMessage(body, promise);
@@ -3666,9 +3839,24 @@ class CrossDomainGate extends Emitter {
 		const worker = await this._postMessage(
 			{command: 'bridge-db', params: {command: 'open', params: {name, ver, stores}}}
 		);
-		const post = (command, data, storeName, transfer) => {
+		let dbGeneration = this._generation;
+		let reopening;
+		const post = async (command, data, storeName, transfer) => {
+			await this._initializeFrame();
+			const generation = this._generation;
+			if (dbGeneration !== generation) {
+				if (!reopening || reopening.generation !== generation) {
+					const promise = this._postMessage(
+						{command: 'bridge-db', params: {command: 'open', params: {name, ver, stores}}},
+						true, '', {generation}
+					).then(() => { dbGeneration = generation; });
+					reopening = {generation, promise};
+					promise.catch(() => { if (reopening && reopening.promise === promise) { reopening = null; } });
+				}
+				await reopening.promise;
+			}
 			const params = {data, storeName, transfer, name};
-			return this._postMessage({command: 'bridge-db', params: {command, params, transfer}});
+			return this._postMessage({command: 'bridge-db', params: {command, params, transfer}}, true, '', {generation});
 		};
 		const result = {worker};
 		for (const meta of stores) {
@@ -3677,6 +3865,7 @@ class CrossDomainGate extends Emitter {
 				return {
 					close: params => post('close', params, storeName),
 					put: (record, transfer) => post('put', record, storeName, transfer),
+					update: data => post('update', data, storeName),
 					get: ({key, index, timeout}) => post('get', {key, index, timeout}, storeName),
 					updateTime: ({key, index, timeout}) => post('updateTime', {key, index, timeout}, storeName),
 					delete: ({key, index, timeout}) => post('delete', {key, index, timeout}, storeName),
@@ -5683,7 +5872,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.34-task156', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.41-task200', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -6424,60 +6613,86 @@ const workerUtil = (() => {
 })();
 const IndexedDbStorage = (() => {
 	const workerFunc = function(self) {
-		const db = {};
+		const db = Object.create(null);
 		const initializing = new Map();
+		const schemas = new Map();
 		const controller = {
 			async init({name, ver, stores}) {
-				if (db[name]) {
-					return Promise.resolve(db[name]);
+				if (db[name] && (ver === undefined || db[name].version === ver)) { return db[name]; }
+				const active = initializing.get(name);
+				if (active) {
+					await active.promise;
+					return this.init({name, ver, stores});
 				}
-				if (initializing.has(name)) { return initializing.get(name); }
+				if (db[name]) { this.close({name}); }
+				const schema = stores || schemas.get(name) || [];
+				const entry = {};
 				const pending = new Promise((resolve, reject) => {
-					const req = indexedDB.open(name, ver);
+					let settled = false, req;
+					const fail = error => {
+						if (settled) { return; }
+						settled = true;
+						clearTimeout(timer);
+						try { req && req.transaction && req.transaction.abort(); } catch (abortError) {}
+						reject(error);
+					};
+					const timer = setTimeout(() => fail(new Error('IndexedDB open timed out')), 30000);
+					entry.cancel = () => fail(new Error('IndexedDB open cancelled'));
+					try { req = indexedDB.open(name, ver); } catch (error) { fail(error); return; }
+					req.onblocked = () => fail(new Error('IndexedDB upgrade blocked by another connection'));
 					req.onupgradeneeded = e => {
+						if (settled) { try { req.transaction.abort(); } catch (error) {} return; }
 						try {
-						const _db = e.target.result;
-						for (const meta of stores) {
-							if(_db.objectStoreNames.contains(meta.name)) {
-								_db.deleteObjectStore(meta.name);
+							const connection = e.target.result;
+							for (const meta of schema) {
+								const definition = meta.definition || {};
+								const exists = connection.objectStoreNames.contains(meta.name);
+								const store = exists ? req.transaction.objectStore(meta.name) :
+									connection.createObjectStore(meta.name, definition);
+								if (exists && (JSON.stringify(store.keyPath) !== JSON.stringify(definition.keyPath ?? null) ||
+										store.autoIncrement !== !!definition.autoIncrement)) {
+									throw new Error('IndexedDB store migration requires an explicit data migration');
+								}
+								for (const idx of meta.indexes || []) {
+									if (store.indexNames.contains(idx.name)) {
+										const current = store.index(idx.name), params = idx.params || {};
+										if (JSON.stringify(current.keyPath) !== JSON.stringify(idx.keyPath) ||
+												current.unique !== !!params.unique || current.multiEntry !== !!params.multiEntry) {
+											throw new Error('IndexedDB index migration requires an explicit data migration');
+										}
+									} else { store.createIndex(idx.name, idx.keyPath, idx.params); }
+								}
 							}
-							const store = _db.createObjectStore(meta.name, meta.definition);
-							const indexes = meta.indexes || [];
-							for (const idx of indexes) {
-								store.createIndex(idx.name, idx.keyPath, idx.params);
-							}
-							store.transaction.oncomplete = () => {
-								console.log('store.transaction.complete', JSON.stringify({name, ver, store: meta}));
-							};
-						}
-						} catch (error) {
-							try { req.transaction && req.transaction.abort(); } catch (abortError) {}
-							reject(error);
-						}
+						} catch (error) { fail(error); }
 					};
 					req.onsuccess = e => {
-						db[name] = e.target.result;
-						resolve(db[name]);
+						const connection = e.target.result;
+						if (settled) { connection.close(); return; }
+						settled = true;
+						clearTimeout(timer);
+						const forget = () => { if (db[name] === connection) { delete db[name]; } };
+						connection.onversionchange = () => { connection.close(); forget(); };
+						connection.onclose = forget;
+						db[name] = connection;
+						schemas.set(name, schema);
+						resolve(connection);
 					};
-					req.onerror = e => reject(req.error || e);
+					req.onerror = e => fail(req.error || e);
 				});
-				initializing.set(name, pending);
-				try {
-					return await pending;
-				} finally {
-					if (initializing.get(name) === pending) { initializing.delete(name); }
-				}
+				entry.promise = pending;
+				initializing.set(name, entry);
+				try { return await pending; }
+				finally { if (initializing.get(name) === entry) { initializing.delete(name); } }
 			},
 			close({name}) {
-				if (!db[name]) {
-					return;
-				}
-				db[name].close();
-				db[name] = null;
+				const active = initializing.get(name);
+				if (active) { active.cancel(); initializing.delete(name); }
+				if (db[name]) { db[name].close(); delete db[name]; }
 			},
 			async getStore({name, storeName, mode = 'readonly'}) {
-				const db = await this.init({name});
-				const transaction = db.transaction(storeName, mode);
+				let connection;
+				do { connection = await this.init({name}); } while (db[name] !== connection);
+				const transaction = connection.transaction(storeName, mode);
 				return {store: transaction.objectStore(storeName), transaction};
 			},
 			async _write({name, storeName}, operation) {
@@ -6530,14 +6745,45 @@ const IndexedDbStorage = (() => {
 					}
 				});
 			},
-			async updateTime({name, storeName, data: {key, index, timeout}}) {
-				const record = await this.get({name, storeName, data: {key, index, timeout}});
-				if (!record) {
-					return null;
-				}
-				record.updatedAt = Date.now();
-				await this.put({name, storeName, data: record});
-				return record;
+			async update({name, storeName, data}) {
+				return this._write({name, storeName}, (store, result, fail) => {
+					const req = data.index ? store.index(data.index).get(data.key) : store.get(data.key);
+					req.onerror = fail;
+					req.onsuccess = () => {
+						try {
+							if (data.onlyExisting && !req.result) { result(null); return; }
+							const record = {...(req.result || {})};
+							const safe = key => !['__proto__', 'constructor', 'prototype'].includes(key);
+							for (const [key, value] of Object.entries(data.defaults || {})) {
+								if (safe(key) && !record[key]) { record[key] = value; }
+							}
+							for (const [key, value] of Object.entries(data.patch || {})) {
+								if (safe(key)) { record[key] = value; }
+							}
+							for (const [key, value] of Object.entries(data.increment || {})) {
+								if (!safe(key) || !Number.isFinite(value)) { throw new TypeError('Invalid increment'); }
+								record[key] = (Number.isFinite(record[key]) ? record[key] : 0) + value;
+							}
+							for (const [kind, first] of [['prepend', true], ['append', false]]) {
+								for (const [key, values] of Object.entries(data[kind] || {})) {
+									if (!safe(key) || !Array.isArray(values)) { throw new TypeError('Invalid list update'); }
+									const old = Array.isArray(record[key]) ? record[key] : [];
+									record[key] = first ? values.concat(old) : old.concat(values);
+								}
+							}
+							for (const [key, length] of Object.entries(data.limits || {})) {
+								if (!safe(key) || !Number.isSafeInteger(length) || length < 0) { throw new TypeError('Invalid list limit'); }
+								if (Array.isArray(record[key])) { record[key] = record[key].slice(0, length); }
+							}
+							const write = store.put(record);
+							write.onerror = fail;
+							write.onsuccess = () => result(record);
+						} catch (error) { fail(error); }
+					};
+				});
+			},
+			async updateTime({name, storeName, data: {key, index}}) {
+				return this.update({name, storeName, data: {key, index, onlyExisting: true, patch: {updatedAt: Date.now()}}});
 			},
 			async delete({name, storeName, data: {key, index}}) {
 				return this._write({name, storeName}, (store, result, fail) => {
@@ -6642,6 +6888,7 @@ const IndexedDbStorage = (() => {
 				return {
 					close: params => post('close', params, storeName),
 					put: (record, transfer) => post('put', record, storeName, transfer),
+					update: data => post('update', data, storeName),
 					get: ({key, index, timeout}) => post('get', {key, index, timeout}, storeName),
 					updateTime: ({key, index, timeout}) => post('updateTime', {key, index, timeout}, storeName),
 					delete: ({key, index, timeout}) => post('delete', {key, index, timeout}, storeName),
@@ -6769,7 +7016,7 @@ const gate = () => {
 			'www.youtube.com',
 		].includes(host) || host.endsWith('.slack.com');
 	};
-	const uFetch = async params => {
+	const uFetch = async (params, consume = response => response) => {
 		const {url, options: requestOptions = {}} = params;
 		if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
 			return Promise.reject({status: 'fail', message: 'network error'});
@@ -6806,7 +7053,7 @@ const gate = () => {
 					}, timeout);
 				}));
 			}
-			racers.push(fetch(url, options));
+			racers.push(fetch(url, options).then(consume));
 			return await Promise.race(racers);
 		} catch (err) {
 			throw {status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail'};
@@ -6815,20 +7062,26 @@ const gate = () => {
 			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
 		}
 	};
+	const fetchSessions = new Map();
 	const xFetch = (params, sessionId = null) => {
 		const command = 'fetch';
-		return uFetch(params).then(async resp => {
+		const controller = new AbortController();
+		fetchSessions.set(sessionId, controller);
+		const request = {...params, options: {...params.options, signal: controller.signal}};
+		return uFetch(request, async resp => {
 			const buffer = await resp.arrayBuffer();
 			const init = ['type', 'url', 'redirected', 'status', 'ok', 'statusText']
 					.reduce((map, key) => {map[key] = resp[key]; return map;}, {});
 			const headers = [...resp.headers.entries()];
-			return Promise.resolve({buffer, init, headers});
+			return {buffer, init, headers};
 		}).then(({buffer, init, headers}) => {
 			const result = {status: 'ok', command, params: {buffer, init, headers}};
 			post(result, {sessionId});
 			return result;
 		}).catch(({status, message}) => {
 			post({status, message, command}, {sessionId});
+		}).finally(() => {
+			if (fetchSessions.get(sessionId) === controller) { fetchSessions.delete(sessionId); }
 		});
 	};
 	const init = ({prefix, type}) => {
@@ -6845,6 +7098,15 @@ const gate = () => {
 		const TOKEN = location.hash ? location.hash.substring(1) : null;
 		window.history.replaceState(null, null, location.pathname);
 		const port = post({status: 'ok', command: 'initialized'}, {type, token: TOKEN, origin});
+		port.addEventListener('message', event => {
+			let data;
+			try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
+			catch (_) { return; }
+			if (!data || data.token !== TOKEN || !data.body || data.body.command !== 'cancelFetch') { return; }
+			event.stopImmediatePropagation();
+			const controller = fetchSessions.get(data.body.params && data.body.params.sessionId);
+			if (controller) { controller.abort(); }
+		});
 		workerUtil && workerUtil.env({TOKEN, PRODUCT});
 		return {port, TOKEN, origin, type, PID};
 	};

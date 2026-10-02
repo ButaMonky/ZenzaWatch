@@ -31,20 +31,24 @@ class VideoListItem {
     });
   }
 
-  static createBlankInfo(id) {
+  // Task192 (COM-04): hint = optional display hints (e.g. from the commons tree with_meta).
+  // Only the title and thumbnail are used; the item stays a 'blank' (incomplete) item.
+  static createBlankInfo(id, hint = null) {
     let postedAt = '0000/00/00 00:00:00';
     if (!isNaN(id)) {
       postedAt = textUtil.dateToString(new Date(id * 1000));
     }
+    const hintTitle = hint && typeof hint.title === 'string' && hint.title ? hint.title : null;
+    const hintThumb = hint && typeof hint.thumbnailUrl === 'string' && /^https:\/\//.test(hint.thumbnailUrl) ? hint.thumbnailUrl : null;
     return new this({
       _format: 'blank',
       id: id,
-      title: id + '(動画情報不明)',
+      title: hintTitle ? `${hintTitle}(動画情報不明)` : id + '(動画情報不明)',
       length_seconds: 0,
       num_res: 0,
       mylist_counter: 0,
       view_counter: 0,
-      thumbnail_url: 'https://nicovideo.cdn.nimg.jp/web/images/bundle/nicovideo/components/Thumbnail/Thumbnail-placeholder.jpg',
+      thumbnail_url: hintThumb || 'https://nicovideo.cdn.nimg.jp/web/images/bundle/nicovideo/components/Thumbnail/Thumbnail-placeholder.jpg',
       first_retrieve: postedAt,
     });
   }
@@ -127,6 +131,12 @@ class VideoListItem {
   }
 
   constructor(rawData) {
+    // Task195: 情報不明（不完全）な item は保存形式に incomplete: true を持つ。読み戻した時に不完全のまま扱う
+    // （以前は _format を保存しなかったため、復元後は完全な item と見なされ、補完されないままだった）。
+    // incomplete の無い旧保存形式は、これまでどおり完全な item として読む（全部を不完全に移行しない）。
+    if (rawData && rawData.incomplete === true && !rawData._format) {
+      rawData._format = 'blank';
+    }
     this._rawData = rawData;
     this._itemId = VideoListItem._itemId++;
     this._watchId = (this._getData('id', '') || '').toString();
@@ -299,7 +309,53 @@ class VideoListItem {
       view_counter: this._rawData.view_counter,
       thumbnail_url: this._rawData.thumbnail_url,
       first_retrieve: this._rawData.first_retrieve,
+      // Task195: 不完全な item の印（完全な item には書かない＝旧形式と同じ）
+      ...(this.isBlankData ? {incomplete: true} : {})
     };
+  }
+  /**
+   * Task195: 動画の詳細情報（getthumbinfo）で、不完全な item を同じ object のまま完全にする。
+   * 完全な item には何もしない（完全な情報を書き換えない）。
+   */
+  upgradeByThumbInfo(info) {
+    if (!this.isBlankData || !info || typeof info.title !== 'string' || !info.title) {
+      return false;
+    }
+    return this._applyFullData({
+      _format: 'thumbInfo',
+      title: info.title,
+      length_seconds: Number.isFinite(info.duration) ? info.duration : undefined,
+      num_res: Number.isFinite(info.commentCount) ? info.commentCount : undefined,
+      mylist_counter: Number.isFinite(info.mylistCount) ? info.mylistCount : undefined,
+      view_counter: Number.isFinite(info.viewCount) ? info.viewCount : undefined,
+      thumbnail_url: info.thumbnail,
+      first_retrieve: info.postedAt,
+      owner: info.owner
+    });
+  }
+  /**
+   * Task195: 表示用のヒント（親子一覧の with_meta 等）で、不完全な item のタイトル・サムネイルだけを更新する。
+   * item は不完全のまま（長さ・件数・タグは確定しない）。完全な item には何もしない。
+   */
+  applyHint(hint) {
+    if (!this.isBlankData || !hint) {
+      return false;
+    }
+    const raw = this._rawData;
+    let changed = false;
+    if (typeof hint.title === 'string' && hint.title) {
+      const title = `${hint.title}(動画情報不明)`;
+      if (raw.title !== title) { raw.title = title; changed = true; }
+    }
+    if (typeof hint.thumbnailUrl === 'string' && /^https:\/\//.test(hint.thumbnailUrl) && raw.thumbnail_url !== hint.thumbnailUrl) {
+      raw.thumbnail_url = hint.thumbnailUrl;
+      changed = true;
+    }
+    if (changed) {
+      this._updateSortTitle();
+      this.notifyUpdate();
+    }
+    return changed;
   }
   /**
    * 動画情報（VideoInfoModel）で件数・サムネイル・投稿日を更新する（普通の item の軽い更新）。

@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.30-task155
+// @version        0.0.32-task188
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
@@ -63,10 +63,13 @@ AntiPrototypeJs().then(() => {
 //@require Emitter
 //@require workerUtil
 
+    // Task173: 'force' = always native HLS; true = native only where hls.js cannot play.
+    const nativeHlsPreference = value => value === 'force' ? 'force' : (value ? 'yes' : 'no');
+
     const DEFAULT_CONFIG = {
       // hls.js 以外のパラメータ
       segment_duration: 4000, // dmc!
-      use_native_hls: true,   // SafariなどブラウザがHLS対応だったらそっちを使う
+      use_native_hls: true,   // hls.jsが使えない環境でブラウザがHLS対応ならそっちを使う（'force'で常にネイティブ）
       show_video_label: false, //
       autoAbrEwmaDefaultEstimate: true,
       hls_js_ver: HLS_JS_VERSION, // 表示用。読み込む版は HLS_JS_URL に固定（保存された古い値は使わない）
@@ -1108,6 +1111,10 @@ AntiPrototypeJs().then(() => {
             root.classList.remove('is-playing');
           });
 
+          // Task188（HLS追補C）: manifest解析・実メディアのcanplay・最初のplaying・時刻進行・最初の映像を区別して記録する
+          ['canplay', 'playing', 'timeupdate', 'loadeddata'].forEach(name =>
+            video.addEventListener(name, event => this._onMediaReadinessEvent(event)));
+
           this._throttledCurrentTime = throttle(sec => {
             this._isSeeking = false;
             this._video.currentTime = sec;
@@ -1371,6 +1378,69 @@ AntiPrototypeJs().then(() => {
           this._isBufferCompleted = false;
           this._throttledCurrentTime.cancel();
           this._bufferStats = [];
+          this._resetReadiness();
+        }
+
+        // Task188（HLS追補C）: 「再生可能」の判定を段階に分ける。manifestReadyはhls.jsがmanifestを読めただけで、
+        // 映像の復号・再生の成功を意味しない（互換のためにloadedmetadata/canplayは引き続き合成するが、
+        // それはsynthetic=trueとして区別する）。実再生の確認は mediaCanPlay と firstProgress/firstFrame で行う。
+        _resetReadiness() {
+          this._readiness = {
+            manifestReady: false, mediaCanPlay: false, firstPlaying: false, firstProgress: false, firstFrame: false,
+            origin: ZenzaVideoElement.now(), at: {}, playingTime: null
+          };
+        }
+
+        static now() {
+          return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        }
+
+        _markReadiness(stage) {
+          const r = this._readiness;
+          if (!r || r[stage]) { return false; }
+          r[stage] = true;
+          r.at[stage] = Math.round(ZenzaVideoElement.now() - r.origin);
+          this.dispatchEvent(new CustomEvent('zenza-readiness', {detail: {stage, mode: this.playerMode, ms: r.at[stage]}}));
+          if (stage === 'firstProgress' || stage === 'firstFrame') {
+            // 秒数と段階名だけを出す（URL・キー・識別子は出さない）
+            console.info('[Zenza] playback readiness', this.playerMode, JSON.stringify(r.at));
+          }
+          return true;
+        }
+
+        _onMediaReadinessEvent(event) {
+          const video = this._video;
+          if (!video || !this._readiness) { return; }
+          switch (event && event.type) {
+            case 'canplay':
+              // 実メディアのcanplay（readyState>=HAVE_FUTURE_DATA）だけを数える
+              if (video.readyState >= 3) { this._markReadiness('mediaCanPlay'); }
+              break;
+            case 'playing':
+              if (this._markReadiness('firstPlaying')) { this._readiness.playingTime = video.currentTime; }
+              break;
+            case 'timeupdate': {
+              const r = this._readiness;
+              if (r.firstPlaying && !video.paused && !video.seeking && video.readyState >= 2 &&
+                  Number.isFinite(video.currentTime) && video.currentTime > r.playingTime) {
+                this._markReadiness('firstProgress');
+              }
+              break;
+            }
+            case 'loadeddata':
+              if (video.readyState >= 2 && video.videoWidth > 0) { this._markReadiness('firstFrame'); }
+              break;
+          }
+        }
+
+        get readiness() {
+          const r = this._readiness || {};
+          return {
+            manifestReady: !!r.manifestReady, mediaCanPlay: !!r.mediaCanPlay, firstPlaying: !!r.firstPlaying,
+            firstProgress: !!r.firstProgress, firstFrame: !!r.firstFrame,
+            isMediaPlaying: !!(r.mediaCanPlay && (r.firstProgress || r.firstFrame)),
+            at: {...(r.at || {})}
+          };
         }
 
         _onNativeHLSError(event) {
@@ -1383,6 +1453,9 @@ AntiPrototypeJs().then(() => {
           // Switching mode before initialization permits one fallback per source.
           this.playerMode = PLAYER_MODE.HLS_JS;
           this._resetPlayingStatus();
+          // Task173: stop the native load first so the two engines do not read the
+          // same delivery session concurrently. (The session itself is not renewed here.)
+          this._video.removeAttribute?.('src');
           try {
             this._initHLSJS(this._src);
           } catch (_) {
@@ -1393,8 +1466,17 @@ AntiPrototypeJs().then(() => {
         }
 
         get _useNativeHLS() {
-          return !!this._video.canPlayType('application/x-mpegURL') &&
-            this.getAttribute('use-native-hls') === 'yes';
+          if (!this._video.canPlayType('application/x-mpegURL')) {
+            return false;
+          }
+          const preference = this.getAttribute('use-native-hls');
+          if (preference === 'force') {
+            return true;
+          }
+          // Task173: when hls.js/MSE can play the stream, do not let native HLS consume the
+          // delivery session first. A later hls.js re-fetch of the same signed key URL was
+          // observed to return a different key for the same encrypted fragment.
+          return preference === 'yes' && !(typeof Hls !== 'undefined' && Hls.isSupported());
         }
 
         set playerMode(v) {
@@ -1495,8 +1577,12 @@ AntiPrototypeJs().then(() => {
           if (this._fragmentLoader) {
             this._fragmentLoader.levels = data.levels;
           }
-          this.dispatchEvent(new Event('loadedmetadata'));
-          this.dispatchEvent(new Event('canplay'));
+          this._markReadiness('manifestReady');
+          // 互換イベント: 開始待ち・コメント表示等が依存するので残す。ただし実メディアの準備完了ではない
+          // （media.readyState=0 / buffered=0でも出る）ので、detail.synthetic=trueで区別できるようにする（Task188）
+          const detail = {synthetic: true, stage: 'manifestReady'};
+          this.dispatchEvent(new CustomEvent('loadedmetadata', {detail}));
+          this.dispatchEvent(new CustomEvent('canplay', {detail}));
         }
 
         _onHLSJSLevelLoaded(eventName, data) {
@@ -2463,7 +2549,7 @@ AntiPrototypeJs().then(() => {
     };
 
     const init = () => {
-      console.log('%cinit ZenzaWatch HLS 0.0.30-task155', 'background: cyan');
+      console.log('%cinit ZenzaWatch HLS 0.0.32-task188', 'background: cyan');
 
       const hlsConfig = Object.assign({}, Config.raw);
       // Task 079: Config は emit('update', {key, value}) の形で知らせるので、
@@ -2539,7 +2625,7 @@ AntiPrototypeJs().then(() => {
           });
           primaryVideo = video;
         }
-        video.setAttribute('use-native-hls', Config.get('use_native_hls') ? 'yes' : 'no');
+        video.setAttribute('use-native-hls', nativeHlsPreference(Config.get('use_native_hls')));
         return video;
       };
 

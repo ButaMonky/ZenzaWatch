@@ -4466,7 +4466,8 @@ class RelatedInfoMenu extends BaseViewComponent {
     this._currentWatchId = videoInfo.watchId;
     this._currentVideoId = videoInfo.videoId;
     this.setState({
-      isParentVideoExist: videoInfo.hasParentVideo,
+      // Task172 (F01): show the entries when the tree may exist (V4 unknown) too.
+      isParentVideoExist: videoInfo.canOpenContentTree === true,
       isCommunity: videoInfo.isCommunityVideo,
       isMymemory: videoInfo.isMymemory
     });
@@ -4659,6 +4660,10 @@ RelatedInfoMenu._shadow_ = (`
           <li class="parentVideoMenu">
             <span class="command"
               data-command="playlistSetCommonsTree">親作品・子作品をプレイリストに追加</span>
+          </li>
+          <li class="parentVideoMenu">
+            <span class="command"
+              data-command="commonsTreeExport">親作品・子作品の一覧を保存（JSON）</span>
           </li>
           <li class="copyVideoWatchUrlMenu">
             <span class="copyVideoWatchUrlLink command"

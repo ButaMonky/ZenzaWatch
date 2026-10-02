@@ -42,42 +42,31 @@ const WatchInfoCacheDb = (() => {
         /** @type {VideoInfoModel|null} */
         const videoInfo = options.videoInfo || null;
         const videoInfoRawData = (videoInfo && videoInfo.toJSON) ? videoInfo.toJSON() : videoInfo;
-        const cache = await this.get(watchId) || {};
         const now = Date.now();
-        /** @type {string} */
-        const videoId = videoInfo ? videoInfo.videoId : watchId;
-        /** @type {string} */
-        const postedAt = videoInfo ? new Date(videoInfo.postedAt).getTime() : 0;
-        /** @type {number} */
-        const threadId = videoInfo ? (videoInfo.threadId * 1) : 0;
-        /** @type {number} */
-        const updatedAt = Date.now();
-        const resume = cache.resume || [];
-        const watchCount = (cache.watchCount || 0) + (options.watchCount === 1 ? 1 : 0);
-
-        typeof options.currentTime === 'number' && options.currentTime > 0 &&
-          (resume.unshift({now, time: options.currentTime}));
-        resume.length = Math.min(10, resume.length);
-        const ownerId = videoInfo?.owner.linkId ?? '';
-
-        const comment = cache.comment || [];
-        options.comment && (comment.push(options.comment));
-        const record = {
-          watchId,
-          videoId:  (cache.videoId  ? cache.videoId  : videoId) || '',
-          threadId: (cache.threadId ? cache.threadId : threadId) || '',
-          ownerId:  (ownerId ? ownerId : cache.ownerId) || '',
-          watchCount,
-          postedAt: cache && cache.postedAt ? cache.postedAt : postedAt,
-          updatedAt,
-          videoInfo: videoInfoRawData ? videoInfoRawData : cache.videoInfo,
-          threadInfo: (options.threadInfo ? options.threadInfo : cache.threadInfo) || 0,
-          comment,
-          resume,
-          heatMap:    (options.heatMap    ? options.heatMap    : cache.heatMap) || null,
-          config:     (options.config     ? options.config     : cache.config) || ''
-        };
-        await cacheDb.put(record);
+        const patch = {watchId, updatedAt: now};
+        const ownerId = videoInfo?.owner?.linkId || '';
+        if (ownerId) { patch.ownerId = ownerId; }
+        if (videoInfoRawData) { patch.videoInfo = videoInfoRawData; }
+        for (const key of ['threadInfo', 'heatMap', 'config']) {
+          if (options[key]) { patch[key] = options[key]; }
+        }
+        const resume = Number.isFinite(options.currentTime) && options.currentTime > 0 ?
+          [{now, time: options.currentTime}] : [];
+        const record = await cacheDb.update({
+          key: watchId, patch,
+          defaults: {
+            videoId: (videoInfo ? videoInfo.videoId : watchId) || '',
+            threadId: (videoInfo ? videoInfo.threadId * 1 : 0) || '',
+            ownerId, postedAt: videoInfo ? new Date(videoInfo.postedAt).getTime() : 0,
+            threadInfo: 0, heatMap: null, config: ''
+          },
+          increment: {watchCount: options.watchCount === 1 ? 1 : 0},
+          prepend: {resume}, append: {comment: options.comment ? [options.comment] : []},
+          limits: {resume: 10}
+        });
+        if (!record || typeof record !== 'object' || record.watchId !== watchId) {
+          throw new Error('Watch history update was not acknowledged');
+        }
         return record;
       },
       get(watchId) { return cacheDb.updateTime({key: watchId}); },

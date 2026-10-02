@@ -28,8 +28,10 @@ import {MediaSessionApi} from '../packages/lib/src/infra/MediaSessionApi';
 import {LikeApi} from '../packages/lib/src/nico/LikeApi.js';
 import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';
 import {ScreenFilter, ScreenFilterPanel} from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 
 //===BEGIN===
+//@require ZenzaCommentHistoryCore
 //@require MediaSessionApi
 //@require LikeApi
 //@require AudioAdjuster
@@ -2414,8 +2416,7 @@ class NicoVideoPlayerDialog extends Emitter {
       this._playerConfig.props.videoTagFilter
     );
 
-    this._savePlaybackPosition =
-      _.throttle(this._savePlaybackPosition.bind(this), 1000, {trailing: false});
+    this._bindPlaybackPositionSavers();
 
     this._onToggleLike = _.debounce(this._onToggleLike.bind(this), 1000);
 
@@ -2441,6 +2442,18 @@ class NicoVideoPlayerDialog extends Emitter {
         .catch(() => e.reject());
     });
     MediaSessionApi.onCommand(this._onCommand.bind(this));
+  }
+  _ensureCommentHistory() {
+    if (this._commentHistory) { return this._commentHistory; }
+    if (!this._nicoVideoPlayer) { return null; }
+    try {
+      return this._commentHistory = ZenzaCommentHistoryCore.createHistoryFeature({
+        dialog: this, config: this._playerConfig, window
+      });
+    } catch (error) {
+      console.warn('Comment history initialization failed', {code: error?.code || 'INIT'});
+      return null;
+    }
   }
   async _initializeNicoVideoPlayer() {
     if (this._nicoVideoPlayer) {
@@ -2547,6 +2560,9 @@ class NicoVideoPlayerDialog extends Emitter {
       break;
       case 'playlistSetCommonsTree':
         this._onPlaylistSetCommonsTree();
+        break;
+      case 'commonsTreeExport':
+        this._onCommonsTreeExport();
         break;
       case 'playNextVideo':
         this.playNextVideo();
@@ -2687,6 +2703,9 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       case 'toggle-screenFilterPanel':
         this._view && this._view.toggleScreenFilterPanel();
+        break;
+      case 'toggle-commentHistoryPanel':
+        this._ensureCommentHistory()?.panel.toggle();
         break;
       case 'nextVideo':
         this._nextVideo = param;
@@ -2998,14 +3017,61 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!videoId) {
       return this.execCommand('alert', '動画の情報がまだ読み込めていません');
     }
-    this.execCommand('notify', 'コンテンツツリーを取得中...');
+    // Task181 (F04): bind this request to the video, the player request and the
+    // latest click; a switch, close or newer click makes every later step a no-op.
+    const requestId = this._requestId;
+    const watchId = this._watchId;
+    // Task197: a newer click, a video switch or close also aborts the running job itself
+    // (HTTP, body read, retry wait, display-info fill), not only its later steps.
+    this._abortCommonsTreeJob();
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    this._commonsTreeJob = controller;
+    const signal = controller ? controller.signal : undefined;
+    const token = this._commonsTreeToken = {};
+    const isCurrent = () => this._commonsTreeToken === token && this._requestId === requestId &&
+      this._watchId === watchId && !!this._videoInfo && this._videoInfo.videoId === videoId &&
+      !(signal && signal.aborted);
+    // Task191 (COM-03): if the previous request for this same video stopped at the cap
+    // (or failed part way), this explicit request continues from where it stopped and
+    // fetches at most the same cap again; nothing is fetched automatically.
+    const prev = this._commonsTreeProgress;
+    const progress = (prev && prev.videoId === videoId && prev.requestId === requestId) ? prev : null;
+    // Task199 (review R03): a resume continues the same accumulated job; a fresh scan starts a new one
+    const accumBase = this._commonsTreeAccum;
+    const accum = (progress && accumBase && accumBase.jobId === progress.jobId &&
+      accumBase.videoId === videoId && accumBase.requestId === requestId) ? accumBase :
+      NicoVideoPlayerDialog.newCommonsTreeAccum(videoId, requestId);
+    this._commonsTreeProgress = null;
+    this.execCommand('notify', progress ? 'コンテンツツリーの続きを取得中...' : 'コンテンツツリーを取得中...');
+    // Task197: one operation scans the whole direct parent/child range (Task194); progress is
+    // reported at most once a second. Manual "continue" is only needed after a failure.
+    let lastProgressAt = 0;
+    const onProgress = p => {
+      const now = Date.now();
+      if (!isCurrent() || now - lastProgressAt < 1000) { return; }
+      lastProgressAt = now;
+      const label = p.kind === 'parents' ? '親作品' : '子作品';
+      this.execCommand('notify', `コンテンツツリーを取得中...（${label} ${Math.min(p.offset, p.total)}/${p.total}件目）`);
+    };
+    const loadOptions = {fullScan: true, signal, onProgress};
+    if (progress) {
+      loadOptions.offsets = {parents: progress.parents, children: progress.children};
+    }
     let tree;
     try {
-      tree = await CommonsTreeLoader.load(videoId);
+      tree = await CommonsTreeLoader.load(videoId, undefined, loadOptions);
     } catch (e) {
-      window.console.error('コンテンツツリーの取得に失敗', e);
+      if (!isCurrent()) {
+        return;
+      }
+      // Task191: a failed continuation can be retried from the same place
+      this._commonsTreeProgress = progress;
+      window.console.error('コンテンツツリーの取得に失敗', e && e.message);
       return this.execCommand('alert',
         (e && e.message) || 'コンテンツツリーの取得に失敗しました');
+    }
+    if (!isCurrent() || tree.cancelled) {
+      return;
     }
 
     // 再生できるのは公開中の動画だけ。コモンズ素材や非公開・削除済みは除外する。
@@ -3015,7 +3081,54 @@ class NicoVideoPlayerDialog extends Emitter {
       (tree.parents.works.length - parents.length) +
       (tree.children.works.length - children.length);
 
+    // Task180 (F03/COM-02/COM-03): a failed side is "unknown", not "0 items".
+    // Task191 (COM-03): report the scanned range (start + rows returned) against the total.
+    const sideNotes = [];
+    const scanned = side => (side.startOffset || 0) + (side.fetchedCount ?? side.works.length);
+    for (const [label, side] of [['親作品', tree.parents], ['子作品', tree.children]]) {
+      if (side.skipped) {
+        continue;
+      }
+      if (side.failed && side.partial) {
+        sideNotes.push(`${label}は途中で取得に失敗（全${side.total}件中${scanned(side)}件目まで取得）`);
+      } else if (side.failed) {
+        sideNotes.push(`${label}の取得に失敗（件数不明）`);
+      } else if (side.truncated || (side.stopReason === 'limit' && side.total > scanned(side))) {
+        sideNotes.push(`${label}は全${side.total}件中${scanned(side)}件目まで取得（上限）`);
+      } else if (['empty-before-end', 'repeated-page', 'no-progress'].includes(side.stopReason) ||
+        (side.totalChanges && side.totalChanges.length)) {
+        // Task197: inconsistent pages are a partial result, never "all fetched"
+        sideNotes.push(`${label}は一覧の途中で応答が矛盾したため一部のみ（全${side.total}件中${side.works.length}件）`);
+      } else if (side.complete === false) {
+        // Task198 (review R02): any other explicitly incomplete side is not a normal result either
+        sideNotes.push(`${label}は一部のみ取得（理由: ${side.stopReason || '不明'}）`);
+      }
+    }
+    // Task198 (review R02): explicit complete:false (Task194 scan) is carried to the UI. An old-style
+    // result without the field (complete undefined) keeps its previous meaning.
+    const incompleteSide = [tree.parents, tree.children].some(side => side && !side.skipped && side.complete === false);
+    const resumable = [tree.parents, tree.children].some(side => typeof side.nextOffset === 'number');
+    // stored only once this request has finished (a superseded request must not leave a
+    // continuation point that skips rows it never added)
+    const nextProgress = !resumable ? null : {videoId, requestId, jobId: accum.jobId,
+        parents: typeof tree.parents.nextOffset === 'number' ? tree.parents.nextOffset : null,
+        children: typeof tree.children.nextOffset === 'number' ? tree.children.nextOffset : null};
+    if (resumable) {
+      sideNotes.push('もう一度「親作品・子作品」を選ぶと続きを取得します');
+    }
+    const failureNote = sideNotes.length ? `／${sideNotes.join('／')}` : '';
+    const anyFailed = !!(tree.parents.failed || tree.children.failed || resumable || incompleteSide);
+
+    // Task199 (review R01/R03): every work (video or not) of this step is merged into the job result
+    NicoVideoPlayerDialog.mergeCommonsTreeWorks(accum, tree);
+    this._commonsTreeAccum = accum;
     if (!parents.length && !children.length) {
+      this._commonsTreeProgress = nextProgress;
+      this._commonsTreeLastResult = NicoVideoPlayerDialog.buildCommonsTreeResult(accum);
+      if (anyFailed) {
+        return this.execCommand('notify',
+          `追加できる親作品・子作品はありませんでした${skipped > 0 ? `（動画以外・非公開${skipped}件は除外）` : ''}${failureNote}`);
+      }
       // Task 074: コンテンツツリー自体が無い動画（APIが404）も「0件」として普通に伝える
       const notRegistered = tree.parents.notFound && tree.children.notFound;
       return this.execCommand('notify',
@@ -3028,26 +3141,174 @@ class NicoVideoPlayerDialog extends Emitter {
 
     // 親 → 子 の順に並べる
     const watchIds = parents.concat(children).map(w => w.contentId);
-    const option = {watchId: this._watchId};
+    // Task197: all IDs are added at once without waiting for ~1000 per-video detail loads (Task196);
+    // details are filled for visible items, overflow beyond the playlist capacity is reported and kept.
+    const report = {};
+    const option = {watchId, isCancelled: () => !isCurrent(), deferDetails: true, report};
+    // Task192 (COM-04): with_meta display hints (if the response had them) for items whose
+    // full video information cannot be loaded
+    const hints = {};
+    parents.concat(children).forEach(w => { if (w.meta) { hints[w.contentId] = w.meta; } });
+    if (Object.keys(hints).length) { option.hints = hints; }
     option.insert = this._playlist.isEnable;
+    // Task199 (review R03): a resumed batch goes right after the previous batch of the same job,
+    // not before it (insert mode puts items behind the active item otherwise)
+    if (option.insert && accum.lastAddedWatchId) {
+      option.insertAfterWatchId = accum.lastAddedWatchId;
+    }
     this._state.currentTab = 'playlist';
 
     const added = await this._playlist.appendWatchIds(watchIds, option);
+    if (added === null || !isCurrent()) {
+      return;
+    }
 
     const detail = `親作品${parents.length}件・子作品${children.length}件`;
     // APIが総数を返すので、取得できた件数が総数に満たない場合は伝える
     const total = tree.parents.total + tree.children.total;
     const fetched = tree.parents.works.length + tree.children.works.length;
-    const truncated = total > fetched ? `／全${total}件中${fetched}件を取得` : '';
-    if (added === 0) {
+    const truncated = failureNote || (!progress && total > fetched && !tree.complete ? `／全${total}件中${fetched}件を取得` : '');
+    this._commonsTreeProgress = nextProgress;
+    // Task197/199: keep the whole job result (all works, overflow, added/existing) for the JSON export
+    const overflow = Array.isArray(report.overflow) ? report.overflow : [];
+    NicoVideoPlayerDialog.mergeCommonsTreeReport(accum, report, watchIds);
+    this._commonsTreeLastResult = NicoVideoPlayerDialog.buildCommonsTreeResult(accum);
+    const overflowNote = overflow.length ?
+      `／プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加（「親作品・子作品の一覧を保存」で全件を保存できます）` : '';
+    const existingNote = report.existing ? `／${report.existing}件は既にプレイリストにあります` : '';
+    const pending = added > 0 ? '。表示情報を補完しています' : '';
+    if (added === 0 && !overflow.length) {
       this.execCommand('notify',
-        `追加できる動画がありませんでした（${detail}はすべて既にプレイリストにあります）`);
+        `追加できる動画がありませんでした（${detail}はすべて既にプレイリストにあります${truncated}）`);
     } else {
       this.execCommand('notify',
-        `プレイリストに${added}件追加しました（${detail}${skipped > 0 ? `／動画以外${skipped}件は除外` : ''}${truncated}）`);
+        `プレイリストに${added}件追加しました（${detail}${skipped > 0 ? `／動画以外${skipped}件は除外` : ''}${existingNote}${overflowNote}${truncated}）${pending}`);
+    }
+    if (added > 0) {
+      this._fillCommonsTreeDisplayInfo(videoId, tree, {signal, isCurrent});
     }
     this._playlist.insertCurrentVideo(this._videoInfo);
-    window.setTimeout(() => this._playlist.scrollToActiveItem(), 1000);
+    window.setTimeout(() => {
+      if (isCurrent()) {
+        this._playlist.scrollToActiveItem();
+      }
+    }, 1000);
+  }
+  /**
+   * Task199 (review R01/R03): the accumulated result of one parent/child job. A resume merges into it;
+   * a different video, request or fresh scan starts a new one. Only IDs and kinds are kept (no response
+   * bodies, no credentials).
+   */
+  static newCommonsTreeAccum(videoId, requestId) {
+    return {
+      jobId: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      videoId, requestId, startedAt: new Date().toISOString(),
+      works: {parents: new Map(), children: new Map()},
+      sides: {parents: null, children: null},
+      added: new Set(), existing: new Set(), overflow: new Set(), lastAddedWatchId: null
+    };
+  }
+  static mergeCommonsTreeWorks(accum, tree) {
+    for (const kind of ['parents', 'children']) {
+      const side = tree[kind];
+      if (!side || side.skipped) { continue; }
+      for (const w of side.works || []) {
+        if (!w || !w.contentId || accum.works[kind].has(w.contentId)) { continue; }
+        accum.works[kind].set(w.contentId, {globalId: w.contentId, contentKind: w.contentKind || null,
+          visibleStatus: w.visibleStatus || null, isVideo: w.isVideo === true});
+      }
+      accum.sides[kind] = {
+        total: Number.isFinite(side.total) ? side.total : null,
+        complete: side.complete === undefined ? null : side.complete === true,
+        stopReason: side.stopReason || null,
+        nextOffset: typeof side.nextOffset === 'number' ? side.nextOffset : null
+      };
+    }
+  }
+  static mergeCommonsTreeReport(accum, report, requestedIds) {
+    for (const id of report.addedIds || []) {
+      accum.added.add(id);
+      accum.overflow.delete(id);
+      accum.lastAddedWatchId = id;
+    }
+    for (const id of report.existingIds || []) { accum.existing.add(id); }
+    for (const id of report.overflow || []) { if (!accum.added.has(id)) { accum.overflow.add(id); } }
+    if (!report.addedIds && Array.isArray(requestedIds) && requestedIds.length) {
+      // older playlist implementations without addedIds: remember the batch end for ordering only
+      accum.lastAddedWatchId = requestedIds[requestedIds.length - 1];
+    }
+  }
+  static buildCommonsTreeResult(accum) {
+    const list = kind => [...accum.works[kind].values()];
+    const all = list('parents').concat(list('children'));
+    const videos = kind => list(kind).filter(w => w.isVideo).map(w => w.globalId);
+    const strip = w => ({globalId: w.globalId, contentKind: w.contentKind, visibleStatus: w.visibleStatus});
+    const sides = ['parents', 'children'].map(k => accum.sides[k]).filter(Boolean);
+    return {
+      // formatRevision 2 (Task199) only adds fields: parents/children stay the video-candidate IDs as in revision 1
+      format: 'zenza-commons-tree-1', formatRevision: 2,
+      videoId: accum.videoId, jobId: accum.jobId, startedAt: accum.startedAt, fetchedAt: new Date().toISOString(),
+      parents: videos('parents'), children: videos('children'),
+      allWorks: {parents: list('parents').map(strip), children: list('children').map(strip)},
+      nonVideo: all.filter(w => !w.isVideo).length,
+      addedIds: [...accum.added], existingIds: [...accum.existing], overflow: [...accum.overflow],
+      counts: {
+        allWorks: all.length, parents: accum.works.parents.size, children: accum.works.children.size,
+        videoCandidates: all.filter(w => w.isVideo).length, nonVideo: all.filter(w => !w.isVideo).length,
+        added: accum.added.size, existing: accum.existing.size, overflow: accum.overflow.size
+      },
+      sides: {parents: accum.sides.parents, children: accum.sides.children},
+      complete: sides.length > 0 && sides.every(sd => sd.complete === true)
+    };
+  }
+  // Task197: abort the running parent/child job (HTTP, waits and display-info fill)
+  _abortCommonsTreeJob() {
+    const job = this._commonsTreeJob;
+    this._commonsTreeJob = null;
+    if (job && !job.signal.aborted) {
+      job.abort();
+    }
+  }
+  /**
+   * Task197: after the IDs are added, fetch the display info (with_meta=1, at most 100 per request,
+   * one request at a time) and apply it to the still-incomplete items only. Failure or cancellation
+   * keeps the IDs; duration/tags/counts are never confirmed from this info.
+   */
+  async _fillCommonsTreeDisplayInfo(videoId, tree, {signal, isCurrent}) {
+    if (!CommonsTreeLoader.scanMeta) { return; }
+    let applied = 0, complete = true;
+    for (const side of [tree.parents, tree.children]) {
+      if (!side || side.skipped || !(side.total > 0) || !isCurrent()) { continue; }
+      const r = await CommonsTreeLoader.scanMeta(videoId, side.kind || (side === tree.parents ? 'parents' : 'children'), side.total, {
+        signal,
+        onPage: ({map}) => {
+          if (isCurrent() && this._playlist) {
+            applied += this._playlist.applyHints(map);
+            map.clear();
+          }
+        }
+      }).catch(() => ({complete: false}));
+      complete = complete && r.complete !== false;
+    }
+    if (!isCurrent()) { return; }
+    this.execCommand('notify', complete ?
+      `親作品・子作品の表示情報を補完しました（${applied}件。詳細は表示した項目から順に取得します）` :
+      `親作品・子作品の表示情報の一部を取得できませんでした（動画は追加済み。表示した項目から詳細を取得します）`);
+  }
+  // Task197: save the last parent/child result as JSON (all IDs, including overflow)
+  _onCommonsTreeExport() {
+    const r = this._commonsTreeLastResult;
+    if (!r) {
+      return this.execCommand('alert', '保存できる親作品・子作品の取得結果がありません（先に「親作品・子作品をプレイリストに追加」を実行してください）');
+    }
+    const data = JSON.stringify({format: 'zenza-commons-tree-1', ...r}, null, 2);
+    const blob = new Blob([data], {type: 'application/json'});
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    Object.assign(a, {download: `${r.videoId}.commons-tree.json`, rel: 'noopener', href: url});
+    document.body.append(a);
+    a.click();
+    window.setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 1000);
   }
   _onPlaylistStatusUpdate() {
     let playlist = this._playlist;
@@ -3256,12 +3517,15 @@ class NicoVideoPlayerDialog extends Emitter {
       this._onPlaylistInsert(watchId);
       return;
     }
+    this._cancelCommentLoad();
+    this._abortCommonsTreeJob();  // Task197: switching video stops the parent/child job
     this._requestId = 'play-' + Math.random();
     this._videoWatchOptions = options;
     this._clearVideoTimers();
 
     window.console.log('%copen video: ', 'color: blue;', watchId);
-    window.console.time('動画選択から再生可能までの時間 watchId=' + watchId);
+    // Task188: HLS.jsではmanifest解析時点の互換canplayで止まる。実再生の確認ではない（実再生はzenza-readinessで別記録）
+    window.console.time('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + watchId);
 
     // Task 090（監査v2 ZW-012）: この open の世代。await の後で、別の open・close があったら先へ進まない
     const requestId = this._requestId;
@@ -3279,7 +3543,7 @@ class NicoVideoPlayerDialog extends Emitter {
       }
     } else {
       if (this._videoInfo) {
-        this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
+        this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
       }
       nicoVideoPlayer.close();
       this._view.clearPanel();
@@ -3472,13 +3736,27 @@ class NicoVideoPlayerDialog extends Emitter {
       currentSrc: url
     });
   }
+  _cancelCommentLoad() {
+    // Task200: the history job belongs to the old normal-comment generation.
+    this._commentHistory?.controller.invalidate();
+    const previous = this._commentLoadController;
+    this._commentLoadController = null;
+    if (previous) { previous.abort(); }
+  }
   loadComment(msgInfo) {
+    this._cancelCommentLoad();
+    const controller = this._commentLoadController = new AbortController();
+    const requestId = this._requestId;
+    const isCurrent = () => this._commentLoadController === controller &&
+      this._requestId === requestId && !controller.signal.aborted;
     msgInfo.language = this._playerConfig.props.commentLanguage;
     this._playerConfig.props.commentLanguage = msgInfo.language;
-    this.threadLoader.load(msgInfo).then(
-      this._onCommentLoadSuccess.bind(this, this._requestId),
-      this._onCommentLoadFail.bind(this, this._requestId)
-    );
+    return this.threadLoader.load(msgInfo, {signal: controller.signal}).then(
+      result => { if (isCurrent()) { this._onCommentLoadSuccess(requestId, result); } },
+      error => { if (isCurrent()) { this._onCommentLoadFail(requestId, error); } }
+    ).finally(() => {
+      if (this._commentLoadController === controller) { this._commentLoadController = null; }
+    });
   }
   reloadComment(param = {}) {
     const msgInfo = Object.assign({}, this._videoInfo.msgInfo);
@@ -3520,7 +3798,9 @@ class NicoVideoPlayerDialog extends Emitter {
       e = {message: e === undefined || e === null ? '' : String(e)};
     }
     const watchId = e.watchId;
-    window.console.error('_onVideoInfoLoaderFail', watchId, e);
+    // Task174 (F14): e.info is the raw converted watch response; never log it whole.
+    window.console.error('_onVideoInfoLoaderFail', watchId,
+      {message: e.message, reason: e.reason, type: e.type, name: e.name});
     if (this._requestId !== requestId) {
       return;
     }
@@ -3636,6 +3916,11 @@ class NicoVideoPlayerDialog extends Emitter {
     this._state.isCommentReady = true;
     this._state.isWaybackMode = result.threadInfo.isWaybackMode;
     this.emit('commentReady', result, this._threadInfo);
+    // Task200: reuse the successful normal result; history never changes posting metadata.
+    const history = this._ensureCommentHistory?.();
+    if (history) {
+      void history.controller.normalReady({videoInfo: this._videoInfo, result, generation: requestId});
+    }
     if (result.threadInfo.totalResCount !== this._videoInfo.count.comment) {
       this._state.count = {
         ...this._state.count, comment: result.threadInfo.totalResCount
@@ -3667,7 +3952,7 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!this._state.isLoading) {
       return;
     }
-    window.console.timeEnd('動画選択から再生可能までの時間 watchId=' + this._watchId);
+    window.console.timeEnd('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + this._watchId);
     this._playerConfig.props.lastWatchId = this._watchId;
     WatchInfoCacheDb.putBestEffort(this._watchId, {watchCount: 1});
 
@@ -3820,7 +4105,7 @@ class NicoVideoPlayerDialog extends Emitter {
     // ループ再生中は飛んでこない
     this.emitAsync('ended');
     this._state.setVideoEnded();
-    this._savePlaybackPosition(this._videoInfo.contextWatchId, 0);
+    this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, 0);
     if (this.isPlaylistEnable && this._playlist.hasNext) {
       this.playNextVideo({eventType: 'playlist'});
       return;
@@ -3843,6 +4128,18 @@ class NicoVideoPlayerDialog extends Emitter {
   _onVolumeChangeEnd(vol, mute) {
     this.emit('volumeChangeEnd', vol, mute);
   }
+  // Task178 (F10): ordinary saves (pause etc.) stay throttled, but the final save of a
+  // video (ended -> 0, close, switching to another video) must not be dropped by the
+  // throttle window that a pause right before it consumed.
+  _bindPlaybackPositionSavers() {
+    this._savePlaybackPositionNow = this._savePlaybackPosition.bind(this);
+    this._savePlaybackPosition =
+      _.throttle(this._savePlaybackPositionNow, 1000, {trailing: false});
+  }
+  _saveFinalPlaybackPosition(contextWatchId, ct) {
+    const save = this._savePlaybackPositionNow || this._savePlaybackPosition;
+    save.call(this, contextWatchId, ct);
+  }
   _savePlaybackPosition(contextWatchId, ct) {
     if (!util.isLogin()) {
       return;
@@ -3862,18 +4159,20 @@ class NicoVideoPlayerDialog extends Emitter {
     if (dr < 120) {
       return;
     } // 短い動画は記録しない
+    // Task177 (F09): contextWatchId only guards which video is current; the v2 API
+    // takes the canonical video.id (a numeric channel watch ID is not renamed).
     PlaybackPosition.record(
-      contextWatchId,
+      vi.videoId,
       ct,
       vi.msgInfo.frontendId,
       vi.msgInfo.frontendVersion
     ).catch(e => {
-      window.console.warn('save playback fail', e);
+      window.console.warn('save playback fail', {reason: e && e.reason, status: e && e.status});
     });
   }
   close() {
     if (this.isPlaying) {
-      this._savePlaybackPosition(this._watchId, this.currentTime);
+      this._saveFinalPlaybackPosition(this._watchId, this.currentTime);
     }
     WatchInfoCacheDb.putBestEffort(this._watchId, {currentTime: this.currentTime});
     if (Fullscreen.now()) {
@@ -3881,6 +4180,8 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     this.pause();
     this.hide();
+    this._cancelCommentLoad();
+    this._abortCommonsTreeJob();  // Task197
     this._requestId = null;  // Task 090（ZW-012）: 閉じた後に、読み込み中だった動画の結果を使わない
     this._clearVideoTimers();  // Task 090（ZW-016）
     this._refresh();
@@ -4021,6 +4322,12 @@ class NicoVideoPlayerDialog extends Emitter {
     const watchId = this._watchId;
     const threadInfo = this._threadInfo;
     const isCurrent = () => this._requestId === requestId;
+    // Task183 (F07): a video without a post target cannot be posted to; tell the user
+    // and do not add a local "posting" comment.
+    if (!threadInfo || threadInfo.threadId === null || threadInfo.threadId === undefined || threadInfo.canPost === false) {
+      this.execCommand('alert', 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）');
+      return Promise.reject({status: 'fail', reason: 'no-post-target'});
+    }
     const threadId = this._threadInfo.threadId * 1;
     // force184のスレッドに184コマンドをつけてしまうとエラー. 同じなんだから無視すりゃいいだろが
     if (!threadInfo.is184Forced) {

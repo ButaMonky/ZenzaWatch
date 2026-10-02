@@ -26,6 +26,7 @@ class CommentListModel extends Emitter {
     this._positions = [];
     this._maxItems = params.maxItems || 100;
     this._currentSortKey = 'vpos';
+    this._readingEpoch = 0;
     this._isDesc = false;
     this._currentTime = 0;
     this._currentIndex = -1;
@@ -34,6 +35,7 @@ class CommentListModel extends Emitter {
     this._items = Array.isArray(itemList) ? itemList : [itemList];
   }
   clear() {
+    this._readingEpoch++;
     this._items = [];
     this._positions = [];
     this._currentTime = 0;
@@ -50,7 +52,7 @@ class CommentListModel extends Emitter {
     }
     this._items = items;
     this._positions = positions.sort((a, b) => a - b);
-    this._currentTime = 0;
+    // Same-video replacements keep the clock; clear() resets it on video changes.
     this._currentIndex = -1;
 
     this.sort();
@@ -262,8 +264,55 @@ class CommentListView extends Emitter {
       Array.from(doc.querySelectorAll('.commentListItem'));
     this.emitResolve('frame-ready');
   }
+  // Task200: row IDs are disposable; reading state follows the original comment.
+  _readingKey(item) {
+    const chat = item && item.nicoChat;
+    if (!chat) { return null; }
+    const thread = chat.threadId ?? chat.thread, no = Number(chat.no), fork = Number(chat.fork);
+    if (thread != null && String(thread) && Number.isSafeInteger(no) && no > 0 && Number.isInteger(fork)) {
+      return JSON.stringify([String(thread), fork, no]);
+    }
+    return chat.id == null ? null : 'pending:' + String(chat.id);
+  }
+  _captureReadingState() {
+    const views = this._itemViews || [], height = CommentListView.ITEM_HEIGHT;
+    const changedVideo = this._readingEpoch !== this._model?._readingEpoch;
+    const top = changedVideo ? 0 : Math.max(0, this._container?.scrollTop || 0);
+    const index = Math.min(views.length - 1, Math.floor(top / height));
+    const anchors = [];
+    if (!changedVideo) {
+      for (let distance = 0; distance < 12; distance++) {
+        for (const i of [index + distance, index - distance]) {
+          const key = this._readingKey(views[i]?._item);
+          if (key && !anchors.includes(key)) { anchors.push(key); }
+        }
+      }
+    }
+    const previous = id => id == null ? null : views.find(v => String(v._item?.itemId) === String(id))?._item;
+    const detail = this._$itemDetail?.[0];
+    return {anchors, offset: top % height, scrollTop: top,
+      manual: this.isActive || this.isAutoScroll === false || this._model?.currentSortKey !== 'vpos',
+      selected: changedVideo ? null : this._readingKey(previous(this._selectedItem?.dataset.itemId)),
+      detail: changedVideo || !detail?.classList.contains('show') ? null : this._readingKey(previous(detail.dataset.itemId))};
+  }
+  _restoreReadingState(state) {
+    if (!state) { return; }
+    const views = this._itemViews || [], byKey = new Map();
+    views.forEach((view, index) => { const key = this._readingKey(view._item); if (key && !byKey.has(key)) { byKey.set(key, {view, index}); } });
+    this._clearSelectedItem(); this._selectedItem = null;
+    if (state.manual && this._container) {
+      const anchor = state.anchors.map(key => byKey.get(key)).find(Boolean);
+      const top = anchor ? anchor.index * CommentListView.ITEM_HEIGHT + state.offset : state.scrollTop;
+      const maximum = views.length ? Math.max(0, views.length * CommentListView.ITEM_HEIGHT + 100 - this._innerHeight) : 0;
+      this._scrollTop = Math.max(0, Math.min(top, maximum));
+      this._container.scrollTop = this._scrollTop;
+    }
+    const selected = byKey.get(state.selected);
+    if (selected) { this._selectItem(selected.view.viewElement); }
+    const detail = byKey.get(state.detail);
+    if (detail) { this.showItemDetail(detail.view._item); } else { this.hideItemDetail(); }
+  }
   async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
-    this._clearSelectedItem();
     if (!this._isFrameReady) {
       await this.promise('frame-ready');
     }
@@ -287,6 +336,8 @@ class CommentListView extends Emitter {
       Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
 
     if (revision !== this._modelUpdateVersion || !this._list) { return; }
+    const readingState = this._captureReadingState();
+    this._readingEpoch = this._model?._readingEpoch;
     this._itemViews = itemViews;
     this._isModelUpdatePending = false;
     this.newItems.length = 0;
@@ -295,8 +346,8 @@ class CommentListView extends Emitter {
     this._inviewItemList.clear();
     this._$menu.removeClass('show');
     this._refreshCurrentPoint();
+    this._restoreReadingState(readingState);
     this._refreshInviewElements();
-    this.hideItemDetail();
 
     window.setTimeout(() => {
       if (revision !== this._modelUpdateVersion) { return; }

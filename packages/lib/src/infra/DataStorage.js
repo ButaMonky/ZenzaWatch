@@ -25,7 +25,10 @@ class DataStorage {
       prefix:  dataStorage.prefix,
       storage: dataStorage.storage,
       ignoreExportKeys: dataStorage.options.ignoreExportKeys,
-      readonly: dataStorage.readonly
+      readonly: dataStorage.readonly,
+      normalizeImport: dataStorage.options.normalizeImport,
+      validateImport: dataStorage.options.validateImport,
+      preserveInvalidKeys: dataStorage.options.preserveInvalidKeys
     };
     return DataStorage.create(dataStorage.default, options);
   }
@@ -109,7 +112,7 @@ class DataStorage {
           this._data[key] = JSON.parse(storage[storageKey]);
         } catch (e) {
           console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-          delete storage[storageKey];
+          if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
           this._data[key] = this.default[key];
         }
       } else {
@@ -198,12 +201,48 @@ class DataStorage {
   }
 
   import(data) {
-    Object.keys(this.props)
-      .forEach(key => {
-        const val = data.hasOwnProperty(key) ? data[key] : this.default[key];
-        console.log('import data: %s=%s', key, val);
-        this.setValueSilently(key, val);
-    });
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new TypeError('設定データはJSONオブジェクトで指定してください。');
+    }
+    // props also contains synthetic namespace objects. Only real default keys
+    // are persisted; old/unknown keys and private session values are ignored.
+    const entries = Object.keys(this.default)
+      .filter(key => !this._ignoreExportKeys.includes(key))
+      .map(key => {
+        const raw = Object.prototype.hasOwnProperty.call(data, key) ? data[key] : this.default[key];
+        const value = this.options.normalizeImport ? this.options.normalizeImport(key, raw) : raw;
+        const expected = this.default[key];
+        if (typeof value !== typeof expected || value === null && expected !== null ||
+            Array.isArray(value) !== Array.isArray(expected) ||
+            typeof value === 'number' && !Number.isFinite(value) ||
+            this.options.validateImport && !this.options.validateImport(key, value)) {
+          throw new TypeError(`設定値が不正です: ${key}`);
+        }
+        const json = JSON.stringify(value);
+        if (json === undefined) { throw new TypeError(`設定値を保存できません: ${key}`); }
+        return {key, value, json, storageKey: this.getStorageKey(key)};
+      });
+    if (!this.readonly) {
+      const written = [];
+      try {
+        for (const entry of entries) {
+          const previous = this.storage[entry.storageKey];
+          this.storage[entry.storageKey] = entry.json;
+          written.push({key: entry.storageKey, previous});
+        }
+      } catch (error) {
+        // localStorage has no multi-key transaction. Restore completed writes
+        // best-effort and report any failure instead of claiming success.
+        for (const {key, previous} of written.reverse()) {
+          try {
+            if (previous === undefined) { delete this.storage[key]; }
+            else { this.storage[key] = previous; }
+          } catch (restoreError) { window.console.error('設定の復元に失敗しました', restoreError); }
+        }
+        throw error;
+      }
+    }
+    for (const {key, value} of entries) { this._data[key] = value; }
   }
 
   importJson(json) {

@@ -142,10 +142,18 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
       'src/_template.js', 'src/_jshintrc', 'src/yomi/YomiPage.js', 'packages/lib/src/nico/ThreadLoader.js',
       'packages/components/src/template.txt', 'packages/components/mock/config.js', 'packages/components/dist/main.js',
       'dist/ZenzaWatch-dev.user.js', 'test/unit/utilTest.js', 'test/fixtures/VideoInfoRawData.json',
-      'test/mocha.opts', 'sample/CA_TEST.playlist.json'];
+      'test/mocha.opts', 'sample/CA_TEST.playlist.json',
+      'packages/comment-history/src/core.mjs', 'packages/comment-history/src/panel.mjs',
+      'packages/comment-history/src/generated/MANIFEST.json', 'packages/comment-history/src/generated/package.json',
+      'packages/comment-history/package.json', 'packages/comment-history/README.md',
+      'packages/comment-history/tools/build.mjs', 'packages/comment-history/tools/build-zenza.mjs',
+      'packages/comment-history/tests/fixtures.mjs', 'packages/comment-history/tests/core.test.mjs'];
     const denied = ['.env', 'src/.env.local', 'capture.har', 'tools/publish_scan.py', 'docs/design-pack/x.md',
       'dist/_versions/ZenzaWatch-dev.task081.user.js', '.npmrc', 'test/fixtures/cookies.json', 'id_rsa',
-      'notes.txt', 'src/data.bin', 'server.key', 'debug.log'];
+      'notes.txt', 'src/data.bin', 'server.key', 'debug.log',
+      'packages/comment-history/capture.har', 'packages/comment-history/src/cookies.mjs',
+      'packages/comment-history/evidence/results.json', 'packages/comment-history/tools/unknown.mjs',
+      'packages/other/src/unreviewed.mjs', 'packages/comment-history/src/generated/credentials.json'];
     const code = [
       'import sys, json',
       `sys.path.insert(0, ${JSON.stringify(path.dirname(POLICY))})`,

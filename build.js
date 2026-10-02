@@ -36,6 +36,7 @@ var watchDirs = [
   './packages/components/src',
   './packages/lib/src',
   './packages/zenza/src',
+  './packages/comment-history/src',
 ];
 // 今回のビルドで読んだ入力ファイル（監視対象から漏れていないかの確認用。Task 085）
 const BUILD_INPUTS = new Set();
@@ -417,10 +418,39 @@ function commitOutputs(outputs) {
 
 // 失敗（入力欠損・構文不正・書き込み不可）があれば dist を書き換えず false を返し、
 // 終了コードを1にする（Task 084 / 監査v2 ZW-002）
+// Task200: refuse stale or edited bundles before writing any dist file.
+function checkHistoryGeneration() {
+  const fs = require('fs'), path = require('path'), crypto = require('crypto');
+  const root = path.resolve('packages/comment-history/src');
+  const generated = path.join(root, 'generated');
+  const fail = file => { throw new Error('comment-history generated source is stale or missing: ' + file + '; run node packages/comment-history/tools/build-zenza.mjs'); };
+  const sha = data => crypto.createHash('sha256').update(data).digest('hex');
+  let manifest;
+  try { manifest = JSON.parse(fs.readFileSync(path.join(generated, 'MANIFEST.json'), 'utf8')); }
+  catch (_) { fail('MANIFEST.json'); }
+  const required = ['ZenzaCommentHistoryCore.generated.js', 'ZenzaCommentHistorySettings.generated.js', 'package.json'];
+  if (!manifest || manifest.generatorVersion !== 2 || !Array.isArray(manifest.files) || manifest.files.length !== required.length) { fail('manifest schema'); }
+  for (const name of required) {
+    const entry = manifest.files.find(item => item && item.path === name);
+    const file = path.join(generated, name);
+    if (!entry || !fs.existsSync(file) || sha(fs.readFileSync(file)) !== entry.sha256) { fail(name); }
+    BUILD_INPUTS.add(file);
+    if (!name.endsWith('.js')) { continue; }
+    const text = fs.readFileSync(file, 'utf8');
+    const sources = Array.from(text.matchAll(/^\/\/ ([a-z][a-z0-9-]*\.mjs) sha256=([a-f0-9]{64})$/gm));
+    if (!sources.length) { fail(name + ' input hashes'); }
+    for (const [, source, expected] of sources) {
+      const input = path.join(root, source);
+      if (!fs.existsSync(input) || sha(fs.readFileSync(input)) !== expected) { fail(source); }
+      BUILD_INPUTS.add(input);
+    }
+  }
+}
 function build(params) {
   var path = require('path');
   const outputs = [];
   const errors = [];
+  try { checkHistoryGeneration(); } catch (error) { errors.push(error.message); }
   templates.forEach(template => {
     var _params = {...params};
     var templateFile = template.src;

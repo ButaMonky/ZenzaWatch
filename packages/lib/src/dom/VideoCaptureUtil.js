@@ -5,35 +5,21 @@ import {PRODUCT} from '../../../../src/ZenzaWatchIndex';
 //===BEGIN===
 
 const VideoCaptureUtil = (() => {
-  const _toCanvas = (v, width, height) => {
+  const videoToCanvas = async video => {
+    const frame = video.drawableElement || video;
+    const width = video.videoWidth, height = video.videoHeight;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 ||
+        (typeof frame.readyState === 'number' && frame.readyState < 2)) {
+      throw new Error('Video frame is not ready');
+    }
     const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
     canvas.width = width;
     canvas.height = height;
-    context.drawImage(v.drawableElement || v, 0, 0, width, height);
-    return canvas;
-  };
-
-  const isCORSReadySrc = src => {
-    if (src.indexOf('delivery.domand.nicovideo.jp') >= 0 || src.indexOf('dmc.nico') >= 0) {
-      return true;
-    }
-    return false;
-  };
-
-  const videoToCanvas = video => {
-    const src = video.src;
-    const sec = video.currentTime;
-    const a = document.createElement('a');
-    a.href = src;
-    const server = a.host;
-    const search = a.search;
-
-    if (isCORSReadySrc(src)) {
-      return Promise.resolve({canvas: _toCanvas(video, video.videoWidth, video.videoHeight)});
-    }
-
-    return Promise.reject({status: 'fail', message: 'not supported url', url: src})
+    const context = canvas.getContext('2d');
+    context.drawImage(frame, 0, 0, width, height);
+    // Check actual canvas origin cleanliness; blob/HLS URLs are valid inputs.
+    context.getImageData(0, 0, 1, 1);
+    return {canvas};
   };
 
   // 参考
@@ -139,61 +125,72 @@ const VideoCaptureUtil = (() => {
     saveToFile
   };
 })();
-VideoCaptureUtil.capture = function(src, sec) {
-  const func = () => {
-    return new Promise((resolve, reject) => {
-      const v = createVideoElement('capture');
-      if (!v) {
-        return reject();
-      }
-      Object.assign(v.style, {
-        width: '64px',
-        height: '36px',
-        position: 'fixed',
-        left: '-100px',
-        top: '-100px'
-      });
-
-      v.volume = 0;
-      v.autoplay = false;
-      v.controls = false;
-      v.addEventListener('loadedmetadata', () => v.currentTime = sec, {once: true});
-      v.addEventListener('error', err => { v.remove(); reject(err); }, {once: true});
-
-      const onSeeked = () => {
-        const c = document.createElement('canvas');
-        c.width = v.videoWidth;
-        c.height = v.videoHeight;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(v.drawableElement || v, 0, 0);
-        v.remove();
-        return resolve(c);
-      };
-
-      v.addEventListener('seeked', onSeeked, {once: true});
-
-      setTimeout(() => {v.remove();reject();}, 30000);
-
-      document.body.append(v);
-      v.src = src;
-      v.currentTime = sec;
-    });
-  };
-
-  let wait = (this.lastSrc === src && this.wait) ? this.wait : sleep(1000);
+VideoCaptureUtil.capture = function(src, sec, {signal, timeout = 30000} = {}) {
+  if (!Number.isFinite(sec) || sec < 0 || typeof src !== 'string' || !src) {
+    return Promise.reject(new TypeError('Invalid capture source or position'));
+  }
+  const wait = (this.lastSrc === src && this.wait) ? this.wait : sleep(1000);
   this.lastSrc = src;
-  // 連続アクセスでセッションがkillされないように
-  let waitTime = 1000;
-  waitTime += src.indexOf('dmc.nico') >= 0 ? 2000 : 0;
-  waitTime += src.indexOf('.m3u8')    >= 0 ? 2000 : 0;
-
-  let resolve, reject;
-  this.wait = new Promise((...args) => [resolve, reject] = args)
-    .then(() => sleep(waitTime)).catch(() => sleep(waitTime * 2));
-
-  return wait.then(func)
-    .then(r => { resolve(r); return r; })
-    .catch(e => { reject(e); return e; });
+  const delay = 1000 + (src.includes('dmc.nico') ? 2000 : 0) + (src.includes('.m3u8') ? 2000 : 0);
+  const result = new Promise((resolve, reject) => {
+    let video, target = sec, settled = false, capturing = false, timer;
+    const cleanup = () => {
+      clearTimeout(timer);
+      signal && signal.removeEventListener('abort', abort);
+      if (!video) { return; }
+      for (const [name, handler] of events) { video.removeEventListener(name, handler); }
+      try { video.pause(); } catch (error) {}
+      try { video.src = ''; video.removeAttribute('src'); video.load(); } catch (error) {}
+      try { video.remove(); } catch (error) {}
+    };
+    const finish = (error, canvas) => {
+      if (settled) { return; }
+      settled = true;
+      cleanup();
+      error ? reject(error) : resolve(canvas);
+    };
+    const abort = () => finish(new Error('Video capture aborted'));
+    const frame = () => {
+      if (settled || capturing || !video) { return; }
+      const drawable = video.drawableElement || video;
+      if (drawable.readyState < 2 || drawable.seeking || Math.abs(video.currentTime - target) > 0.1) { return; }
+      capturing = true;
+      VideoCaptureUtil.videoToCanvas(video).then(({canvas}) => finish(null, canvas), finish);
+    };
+    const metadata = () => {
+      try {
+        if (Number.isFinite(video.duration) && video.duration > 0) { target = Math.min(sec, Math.max(0, video.duration - 0.001)); }
+        video.currentTime = target;
+        frame();
+      } catch (error) { finish(error); }
+    };
+    const events = [['loadedmetadata', metadata], ['loadeddata', frame], ['canplay', frame], ['seeked', frame],
+      ['error', () => finish(new Error('Video capture media failed'))]];
+    if (signal && signal.aborted) { abort(); return; }
+    signal && signal.addEventListener('abort', abort, {once: true});
+    timer = setTimeout(() => finish(new Error('Video capture timed out')),
+      Number.isFinite(timeout) && timeout > 0 ? timeout : 30000);
+    wait.then(() => {
+      if (settled) { return; }
+      try {
+        video = createVideoElement('capture');
+        if (!video) { throw new Error('Capture video unavailable'); }
+        Object.assign(video.style, {width: '64px', height: '36px', position: 'fixed', left: '-100px', top: '-100px'});
+        video.volume = 0; video.muted = true; video.autoplay = false; video.controls = false;
+        video.crossOrigin = 'anonymous';
+        for (const [name, handler] of events) { video.addEventListener(name, handler); }
+        document.body.append(video);
+        video.src = src;
+        // The HLS capture wrapper starts buffering through currentTime.
+        // Waiting for metadata before this would leave autoStartLoad=false idle.
+        video.currentTime = sec;
+      } catch (error) { finish(error); }
+    }, finish);
+  });
+  // Keep throttling internally while exposing failures to the caller.
+  this.wait = Promise.all([Promise.resolve(wait).catch(() => {}),
+    result.then(() => sleep(delay), () => sleep(delay * 2))]).then(() => undefined);
+  return result;
 }.bind({});
 
 VideoCaptureUtil.initCapTube = function() {

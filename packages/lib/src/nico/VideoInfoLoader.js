@@ -40,15 +40,39 @@ const VideoInfoLoader = (function () {
         window.console.warn('watch v4 optional metadata unavailable');
       }
     }
-    const owner = lazy.owner;
-    const comment = data.comment;
+    // Task182 (F05): lazy owner first; otherwise keep the identity carried by the
+    // initial V4 data, accepting only a channel ID (ch+digits) or a numeric user ID.
+    const initialOwner = data.metadata?.jsonLd?.owner;
+    const fallbackOwner = (() => {
+      if (!initialOwner || typeof initialOwner !== 'object') { return null; }
+      const id = String(initialOwner.id ?? '');
+      const icon = typeof initialOwner.iconUrl === 'string' ? initialOwner.iconUrl : undefined;
+      if (initialOwner.type === 'channel' && /^ch\d+$/.test(id)) {
+        return {type: 'channel', id, name: initialOwner.name, thumbnail: {url: icon, smallUrl: icon}};
+      }
+      if (initialOwner.type === 'user' && /^\d+$/.test(id)) {
+        return {type: 'user', id, nickname: initialOwner.name, icon: {url: icon}};
+      }
+      return null;
+    })();
+    const owner = lazy.owner?.type === 'channel' || lazy.owner?.type === 'user' ? lazy.owner : fallbackOwner;
+    // Task183 (F07): a missing/partial comment structure must not break video parsing,
+    // but it is recorded as an issue instead of being silently treated as normal.
+    const comment = data.comment && typeof data.comment === 'object' ? data.comment : {};
+    const commentIssues = [];
+    if (!data.comment || typeof data.comment !== 'object') { commentIssues.push('comment'); }
+    if (!Array.isArray(comment.threads)) { commentIssues.push('threads'); }
+    if (!Array.isArray(comment.layers)) { commentIssues.push('layers'); }
     const media = data.media;
     return {
       ...data,
-      channel: owner?.type === 'channel' ? owner : null,
+      channel: owner?.type === 'channel' ? {...owner, thumbnail: owner.thumbnail || {}} : null,
       owner: owner?.type === 'user' ? {...owner, iconUrl: owner.icon?.url} : null,
       series: lazy.series ?? null,
-      external: {commons: {hasContentTree: false}},
+      // Task172 (F01): V4 has no content-tree flag. Keep it unknown (null) instead of
+      // inventing false; an explicit boolean, if present, is preserved.
+      external: {commons: {hasContentTree:
+        typeof data.external?.commons?.hasContentTree === 'boolean' ? data.external.commons.hasContentTree : null}},
       tag: data.tags,
       video: {
         ...data.video,
@@ -63,10 +87,15 @@ const VideoInfoLoader = (function () {
       comment: {
         ...comment, keys: {}, server: {url: comment.nvComment?.server},
         ng: {...comment.ng, channel: comment.ng?.channel || [], owner: comment.ng?.owner || []},
-        threads: comment.threads.map(thread => ({...thread, isDefaultPostTarget: thread.isPostTarget})),
-        layers: comment.layers.map(layer => ({...layer,
-          threadIds: layer.components.map(({threadId, fork}) => ({id: threadId, fork}))
-        }))
+        threads: (Array.isArray(comment.threads) ? comment.threads : [])
+          .map(thread => ({...thread, isDefaultPostTarget: thread.isPostTarget === true})),
+        layers: (Array.isArray(comment.layers) ? comment.layers : []).map(layer => {
+          if (!Array.isArray(layer?.components)) { commentIssues.push('components'); }
+          return {...layer,
+            threadIds: (Array.isArray(layer?.components) ? layer.components : [])
+              .map(({threadId, fork}) => ({id: threadId, fork}))};
+        }),
+        metadataIssues: commentIssues
       },
       media: {delivery: null, domand: media?.accessRightKey && media.contents ? {
         ...media.contents, accessRightKey: media.accessRightKey,
@@ -259,10 +288,16 @@ const VideoInfoLoader = (function () {
       } = { ...viewer };
       return { id, isPremium };
     })();
-    const defaultThread = threads.find(t => t.isDefaultPostTarget);
+    // Task183 (F07): no post target -> comments can still be read, but posting is
+    // disabled explicitly; never fall back to an arbitrary thread such as threads[0].
+    const defaultThread = threads.find(t => t.isDefaultPostTarget) || null;
+    const commentMetadataIssues = Array.isArray(_data.comment?.metadataIssues) ? _data.comment.metadataIssues : [];
     const msgInfo = {
       server: commentServer,
-      threadId: defaultThread.id,
+      threadId: defaultThread ? defaultThread.id : null,
+      canPost: !!defaultThread,
+      postUnavailableReason: defaultThread ? null : (commentMetadataIssues.length ? 'malformed-comment' : 'no-post-target'),
+      commentMetadataIssues,
       duration,
       videoId,
       nvComment,
@@ -270,7 +305,7 @@ const VideoInfoLoader = (function () {
       isNeedKey: threads.findIndex(t => t.isThreadkeyRequired) >= 0, // (isChannel || isCommunity)
       optionalThreadId: '',
       defaultThread,
-      optionalThreads: threads.filter(t => t.id !== defaultThread.id) || [],
+      optionalThreads: defaultThread ? threads.filter(t => t.id !== defaultThread.id) : threads.slice(),
       threads,
       userKey,
       hasOwnerThread: threads.find(t => t.isOwnerThread),
@@ -597,6 +632,15 @@ const VideoInfoLoader = (function () {
     };
   };
 
+  // Task174 (F14): normal logs carry only shareable fields. err.info holds the
+  // converted watch response (lazy/auth/access-right/thread keys, signed URLs).
+  const safeLoadError = err => (err && typeof err === 'object') ? {
+    reason: err.reason, message: err.message, type: err.type, name: err.name,
+    errorCode: err.errorCode ?? err.info?.errorCode ?? null,
+    statusCode: err.statusCode ?? err.info?.statusCode ?? null,
+    isPlayable: err.info?.isPlayable, isNeedPayment: err.info?.isNeedPayment
+  } : {message: String(err)};
+
   const createSleep = function (sleepTime) {
     return new Promise(resolve => setTimeout(resolve, sleepTime));
   };
@@ -617,7 +661,7 @@ const VideoInfoLoader = (function () {
       .catch(() => Promise.reject({reason: 'network', message: '通信エラー(network)'}))
       .then(onLoadPromise.bind(this, watchId, options, isRetry))
       .catch(err => {
-        window.console.error('err', {err, isRetry, url, query});
+        window.console.error('err', {err: safeLoadError(err), isRetry, watchId});
         if (isRetry) {
           return Promise.reject({
             watchId,
@@ -642,7 +686,7 @@ const VideoInfoLoader = (function () {
             return loadPromise(watchId, options, true);
           });
         } else {
-          window.console.info('watch api fail', err);
+          window.console.info('watch api fail', safeLoadError(err));
           return Promise.reject({
             watchId,
             message: err.message || '動画情報の取得に失敗',

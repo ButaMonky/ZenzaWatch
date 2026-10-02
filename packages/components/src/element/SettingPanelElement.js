@@ -855,7 +855,7 @@ const {SettingPanelElement} = (() => {
       e.stopPropagation();
 
       const file = e.target.files[0];
-      if (!/\.config\.json$/.test(file.name)) {
+      if (!file || !/\.config\.json$/.test(file.name)) {
         return;
       }
       if (!confirm(`ファイル "${file.name}" で書き換えますか？`)) {
@@ -866,10 +866,15 @@ const {SettingPanelElement} = (() => {
 
       const fileReader = new FileReader();
       fileReader.onload = ev => {
-        this.config.importJson(ev.target.result);
-        location.reload();
+        try {
+          this.config.importJson(ev.target.result);
+          location.reload();
+        } catch (error) {
+          alert(`設定を読み込めませんでした: ${error.message}`);
+        }
       };
 
+      fileReader.onerror = () => alert('設定ファイルを読み取れませんでした。');
       fileReader.readAsText(file);
     }
 

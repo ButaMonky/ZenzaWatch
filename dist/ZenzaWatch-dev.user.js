@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.86-task157
+// @version        2.7.129-task200
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-09-30 16:58Z
+// build: 2026-10-02 08:01Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.86-task157';
+    var VER = '2.7.129-task200';
     const ENV = 'DEV';
 
-    var BUILD = '2026-09-30 16:58Z';
+    var BUILD = '2026-10-02 08:01Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -197,16 +197,17 @@ const Observable = (() => {
 			};
 			this._closed = false;
 		}
-		subscribe(subscriber, onError, onCompleted) {
-			return this.observable.subscribe(subscriber, onError, onCompleted)
-				.filter(this._filterFunc)
-				.map(this._mapFunc);
+		subscribe(onNext, onError, onCompleted) {
+			return this.observable._subscribe({
+				subscriber: Subscriber.create(onNext, onError, onCompleted),
+				isNop: [onNext, onError, onCompleted].every(f => f == null),
+				filterFunc: this._filterFunc, mapFunc: this._mapFunc
+			});
 		}
 		unsubscribe() {
+			if (this._closed) { return this; }
 			this._closed = true;
-			if (this.callbacks.unsubscribe) {
-				this.callbacks.unsubscribe();
-			}
+			if (this.callbacks.unsubscribe) { this.callbacks.unsubscribe(); }
 			return this;
 		}
 		dispose() {
@@ -297,34 +298,62 @@ const Observable = (() => {
 		}
 		constructor(subscriberFunction) {
 			this._subscriberFunction = subscriberFunction;
-			this._completed = false;
-			this._cancelled = false;
-			this._handlers = new Handler();
+			this._sources = [];
+			this._connection = null;
 		}
-		_initSubscriber() {
-			if (this._subscriber) {
-				return;
+		get closed() { return !!(this._connection && this._connection.closed); }
+		_disposeToken(token) {
+			token.done = true;
+			if (!token.cleanup) { return; }
+			const cleanup = token.cleanup;
+			token.cleanup = null;
+			try { cleanup(); } catch (error) { console.warn('Observable cleanup failed', error); }
+		}
+		_finish(connection, method, value) {
+			if (connection.closed) { return; }
+			connection.closed = true;
+			try { if (method) { connection.handlers.execMethod(method, value); } }
+			finally {
+				connection.handlers.clear();
+				for (const token of connection.tokens) { this._disposeToken(token); }
+				connection.tokens.clear();
 			}
-			const handlers = this._handlers;
-			this._completed = this._cancelled = false;
-			return this._subscriber = new Subscriber({
-				start: arg => handlers.execMethod('start', arg),
-				next: arg => handlers.execMethod('next', arg),
-				error: arg => handlers.execMethod('error', arg),
-				complete: arg => {
-					if (this._nextObservable) {
-						this._nextObservable.subscribe(this._subscriber);
-						this._nextObservable = this._nextObservable._nextObservable;
-					} else {
-						this._completed = true;
-						handlers.execMethod('complete', arg);
-					}
-				},
-				closed: () => this.closed
-			});
 		}
-		get closed() {
-			return this._completed || this._cancelled;
+		_connect(connection) {
+			connection.started = true;
+			const sources = [observer => this._subscriberFunction(observer),
+				...this._sources.map(source => observer => source.subscribe({
+					next: value => observer.next(value), error: error => observer.error(error),
+					complete: value => observer.complete(value)
+				}))];
+			let index = 0;
+			const advance = completion => {
+				if (connection.closed) { return; }
+				if (index === sources.length) { this._finish(connection, 'complete', completion); return; }
+				const producer = sources[index++];
+				const token = {done: false, cleanup: null};
+				connection.tokens.add(token);
+				const active = () => !connection.closed && !token.done;
+				const observer = new Subscriber({
+					start: value => { if (active()) { connection.handlers.execMethod('start', value); } },
+					next: value => { if (active()) { connection.handlers.execMethod('next', value); } },
+					error: error => { if (active()) { this._finish(connection, 'error', error); } },
+					complete: value => {
+						if (!active()) { return; }
+						this._disposeToken(token);
+						advance(value);
+					},
+					closed: () => !active()
+				});
+				this._subscriber = observer;
+				try {
+					const cleanup = producer(observer);
+					token.cleanup = typeof cleanup === 'function' ? cleanup :
+						cleanup && typeof cleanup.unsubscribe === 'function' ? () => cleanup.unsubscribe() : null;
+					if (token.done || connection.closed) { this._disposeToken(token); }
+				} catch (error) { observer.error(error); }
+			};
+			advance();
 		}
 		filter(func) {
 			return this.subscribe().filter(func);
@@ -334,11 +363,16 @@ const Observable = (() => {
 		}
 		concat(arg) {
 			const observable = Observable.from(arg);
-			if (this._nextObservable) {
-				this._nextObservable.concat(observable);
-			} else {
-				this._nextObservable = observable;
+			if (!observable || observable === this) { throw new TypeError('Invalid concatenated Observable'); }
+			const pending = [observable], seen = new Set();
+			while (pending.length) {
+				const source = pending.pop();
+				if (source === this) { throw new TypeError('Cyclic concatenated Observable'); }
+				if (seen.has(source)) { continue; }
+				seen.add(source);
+				pending.push(...(source._sources || []));
 			}
+			this._sources.push(observable);
 			return this;
 		}
 		forEach(callback) {
@@ -363,41 +397,36 @@ const Observable = (() => {
 		onError(arg) { this._subscriber.error(arg); }
 		onComplete(arg) { this._subscriber.complete(arg);}
 		disconnect() {
-			if (!this._disconnectFunction) {
-				return;
-			}
-			this._closed = true;
-			this._disconnectFunction();
-			delete this._disconnectFunction;
-			this._subscriber;
-			this._handlers.clear();
+			if (this._connection) { this._finish(this._connection); }
 		}
-		[observableSymbol]() {
-			return this;
-		}
+		[observableSymbol]() { return this; }
 		subscribe(onNext = null, onError = null, onCompleted = null) {
-			this._initSubscriber();
-			const isNop = [onNext, onError, onCompleted].every(f => f === null);
-			const subscriber = Subscriber.create(onNext, onError, onCompleted);
-			return this._subscribe({subscriber, isNop});
+			return this._subscribe({
+				subscriber: Subscriber.create(onNext, onError, onCompleted),
+				isNop: [onNext, onError, onCompleted].every(f => f === null)
+			});
 		}
-		_subscribe({subscriber, isNop}) {
-			if (!isNop && !this._disconnectFunction) {
-				this._disconnectFunction = this._subscriberFunction(this._subscriber);
+		_subscribe({subscriber, isNop, filterFunc, mapFunc}) {
+			let connection = this._connection;
+			if (!connection || connection.closed) {
+				connection = {closed: false, started: false, handlers: new Handler(), tokens: new Set()};
+				if (!isNop) { this._connection = connection; }
 			}
-			!isNop && this._handlers.add(subscriber);
-			return new Subscription({
-				observable: this,
-				subscriber,
+			const subscription = new Subscription({
+				observable: this, subscriber,
 				unsubscribe: () => {
 					if (isNop) { return; }
-					this._handlers.remove(subscriber);
-					if (this._handlers.isEmpty) {
-						this.disconnect();
-					}
+					connection.handlers.remove(subscriber);
+					if (connection.handlers.isEmpty) { this._finish(connection); }
 				},
-				closed: () => this.closed
-			});
+				closed: () => connection.closed
+			}).filter(filterFunc).map(mapFunc);
+			if (isNop) { return subscription; }
+			connection.handlers.add(subscriber);
+			try { subscriber.start(subscription); }
+			catch (error) { subscription.unsubscribe(); throw error; }
+			if (!connection.closed && !connection.started) { this._connect(connection); }
+			return subscription;
 		}
 	}
 	Observable.observavle = observableSymbol;
@@ -524,7 +553,10 @@ class DataStorage {
 			prefix:  dataStorage.prefix,
 			storage: dataStorage.storage,
 			ignoreExportKeys: dataStorage.options.ignoreExportKeys,
-			readonly: dataStorage.readonly
+			readonly: dataStorage.readonly,
+			normalizeImport: dataStorage.options.normalizeImport,
+			validateImport: dataStorage.options.validateImport,
+			preserveInvalidKeys: dataStorage.options.preserveInvalidKeys
 		};
 		return DataStorage.create(dataStorage.default, options);
 	}
@@ -597,7 +629,7 @@ class DataStorage {
 					this._data[key] = JSON.parse(storage[storageKey]);
 				} catch (e) {
 					console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-					delete storage[storageKey];
+					if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
 					this._data[key] = this.default[key];
 				}
 			} else {
@@ -673,12 +705,44 @@ class DataStorage {
 		return JSON.stringify(this.export(), null, 2);
 	}
 	import(data) {
-		Object.keys(this.props)
-			.forEach(key => {
-				const val = data.hasOwnProperty(key) ? data[key] : this.default[key];
-				console.log('import data: %s=%s', key, val);
-				this.setValueSilently(key, val);
-		});
+		if (!data || typeof data !== 'object' || Array.isArray(data)) {
+			throw new TypeError('設定データはJSONオブジェクトで指定してください。');
+		}
+		const entries = Object.keys(this.default)
+			.filter(key => !this._ignoreExportKeys.includes(key))
+			.map(key => {
+				const raw = Object.prototype.hasOwnProperty.call(data, key) ? data[key] : this.default[key];
+				const value = this.options.normalizeImport ? this.options.normalizeImport(key, raw) : raw;
+				const expected = this.default[key];
+				if (typeof value !== typeof expected || value === null && expected !== null ||
+						Array.isArray(value) !== Array.isArray(expected) ||
+						typeof value === 'number' && !Number.isFinite(value) ||
+						this.options.validateImport && !this.options.validateImport(key, value)) {
+					throw new TypeError(`設定値が不正です: ${key}`);
+				}
+				const json = JSON.stringify(value);
+				if (json === undefined) { throw new TypeError(`設定値を保存できません: ${key}`); }
+				return {key, value, json, storageKey: this.getStorageKey(key)};
+			});
+		if (!this.readonly) {
+			const written = [];
+			try {
+				for (const entry of entries) {
+					const previous = this.storage[entry.storageKey];
+					this.storage[entry.storageKey] = entry.json;
+					written.push({key: entry.storageKey, previous});
+				}
+			} catch (error) {
+				for (const {key, previous} of written.reverse()) {
+					try {
+						if (previous === undefined) { delete this.storage[key]; }
+						else { this.storage[key] = previous; }
+					} catch (restoreError) { window.console.error('設定の復元に失敗しました', restoreError); }
+				}
+				throw error;
+			}
+		}
+		for (const {key, value} of entries) { this._data[key] = value; }
 	}
 	importJson(json) {
 		this.import(JSON.parse(json));
@@ -1097,6 +1161,1090 @@ const groupShortcutActionsByCategory = () => {
 	});
 	return groups;
 };
+const ZenzaCommentHistorySettings = (() => {
+'use strict';
+const modules = [];
+modules[0] = (() => {
+const COMMENT_ORIGIN = 'https://public.nvcomment.nicovideo.jp';
+class HistoryError extends Error {
+	constructor(code, details={}) {
+		super(code); this.name='HistoryError'; this.code=code;
+		for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
+	}
+}
+function fail(code) { throw new HistoryError(code); }
+function integerOption(value,min,max) {
+	if (!Number.isSafeInteger(value) || value<min || value>max) fail('OPTION');
+	return value;
+}
+function threadId(value) {
+	if (typeof value==='number' && !Number.isSafeInteger(value)) fail('TARGET_SCHEMA');
+	if (!/^[0-9]+$/.test(String(value))) fail('TARGET_SCHEMA');
+	return String(value);
+}
+function targetKey(t) {return `${t.id}:${t.fork}`;}
+function normalizeWatch(input, expectedVideoId) {
+	if(input?.meta?.status!==undefined && input.meta.status!==200)fail('WATCH_SCHEMA');
+	if (typeof expectedVideoId!=='string' || !/^(?:(?:sm|so|nm))?\d+$/.test(expectedVideoId)) fail('OPTION');
+	const candidates=[input?.data?.response?.$watchV4?.data,input?.data?.response,
+		input?.response?.$watchV4?.data,input?.response,input?.$watchV4?.data,input?.data,input];
+	const w=candidates.find(x=>x?.video?.id && x?.comment?.nvComment);
+	if (!w) fail('WATCH_SCHEMA');
+	if (w.video.id!==expectedVideoId) fail('VIDEO_MISMATCH');
+	const nv=w.comment.nvComment;
+	if (nv.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof nv.threadKey!=='string' || !nv.threadKey) fail('MISSING_KEY');
+	const p=nv.params;
+	if (!p || !Array.isArray(p.targets) || !p.targets.length || typeof p.language!=='string' || !/^[a-z]{2}-[a-z]{2}$/i.test(p.language)) fail('WATCH_SCHEMA');
+	const targets=p.targets.map(t=>{
+		if (!['main','owner','easy'].includes(t.fork)) fail('TARGET_SCHEMA');
+		return Object.freeze({id:threadId(t.id),fork:t.fork});
+	});
+	if (new Set(targets.map(targetKey)).size!==targets.length) fail('TARGET_SCHEMA');
+	const ctx={videoId:expectedVideoId,server:COMMENT_ORIGIN,language:p.language,targets:Object.freeze(targets)};
+	Object.defineProperty(ctx,'threadKey',{value:nv.threadKey,enumerable:false});
+	return Object.freeze(ctx);
+}
+function checkedTargets(context, targets=context.targets) {
+	if (!Array.isArray(targets) || !targets.length) fail('OPTION');
+	const allowed=new Set(context.targets.map(targetKey));
+	const selected=targets.map(t=>({id:threadId(t.id),fork:t.fork}));
+	if (selected.some(t=>!allowed.has(targetKey(t)))) fail('TARGET_NOT_ALLOWED');
+	if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
+	return selected;
+}
+function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
+	if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
+	const selected=checkedTargets(context,targets), additionals={};
+	if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
+	if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
+	return {url:`${COMMENT_ORIGIN}/v1/threads?pc=1`,init:{method:'POST',
+		headers:{'Content-Type':'text/plain;charset=UTF-8','X-Frontend-Id':'6','X-Frontend-Version':'0','X-Client-Os-Type':'others'},
+		mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
+		body:JSON.stringify({params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals})}};
+}
+const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
+function copyComment(c) {
+	const out={};for(const k of FIELDS) if(Object.hasOwn(c,k))out[k]=k==='commands'?[...c.commands]:c[k];
+	return out;
+}
+function normalizeComment(c) {
+	const idOk=typeof c?.id==='string' && c.id.length>0 || Number.isSafeInteger(c?.id) && c.id>=0;
+	if(!c || !idOk || !Number.isSafeInteger(c.no) || c.no<0 || !Number.isFinite(c.vposMs) ||
+		typeof c.body!=='string' || typeof c.userId!=='string' || !Array.isArray(c.commands) || c.commands.some(x=>typeof x!=='string') ||
+		typeof c.postedAt!=='string' || !/^\d{4}-\d\d-\d\dT/.test(c.postedAt) || !Number.isFinite(Date.parse(c.postedAt)) || Date.parse(c.postedAt)<0) fail('COMMENT_SCHEMA');
+	for(const k of ['isPremium','isMyPost'])if(Object.hasOwn(c,k)&&typeof c[k]!=='boolean')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'score')&&!Number.isFinite(c.score))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruCount')&&(!Number.isSafeInteger(c.nicoruCount)||c.nicoruCount<0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'source')&&typeof c.source!=='string')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruId')&&c.nicoruId!==null&&typeof c.nicoruId!=='string'&&!(Number.isSafeInteger(c.nicoruId)&&c.nicoruId>=0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
+	const out=copyComment(c);out.id=String(c.id);return out;
+}
+function validateThreads(body, context, targets=context.targets) {
+	if(body?.meta?.status!==200 || body?.meta?.errorCode) fail('API_ERROR');
+	if(!Array.isArray(body?.data?.threads)) fail('RESPONSE_SCHEMA');
+	const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
+	const result=body.data.threads.map(th=>{
+		const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
+		if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
+		if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);
+		if(!Array.isArray(th.comments) || !Number.isSafeInteger(th.commentCount) || th.commentCount<0)fail('RESPONSE_SCHEMA');
+		return {id,fork,commentCount:th.commentCount,comments:th.comments.map(normalizeComment)};
+	});
+	if(seen.size!==expected.size)fail('MISSING_TARGET');
+	return result;
+}
+class CommentStore {
+	#context; #items=new Map(); #threads=new Map();
+	constructor(context){this.#context=context;}
+	get size(){return this.#items.size;}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	add(threads,allowance=Infinity) {
+		if(allowance!==Infinity)integerOption(allowance,0,50000);
+		if(threads.length)checkedTargets(this.#context,threads);
+		const ids=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const key=this.#key(t,c),existing=this.#items.get(key)?.comment.id??ids.get(key);
+			if(existing!==undefined && existing!==c.id)fail('IDENTITY_CONFLICT');
+			ids.set(key,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=targetKey(t);this.#threads.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const key=this.#key(t,c);
+				if(this.#items.has(key)){duplicates++;continue;}
+				if(added>=allowance){limited=true;continue;}
+				this.#items.set(key,{thread:tk,comment:copyComment(c)});added++;
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	snapshot(){
+		const out=new Map([...this.#threads].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const {thread,comment} of this.#items.values())out.get(thread).comments.push(copyComment(comment));
+		return [...out.values()];
+	}
+}
+function summarizeThreads(threads){
+	return threads.map(t=>{
+		let oldest=Infinity,newest=-Infinity,minNo=Infinity,maxNo=-Infinity,prevDate=-Infinity,prevNo=-Infinity,prevVpos=-Infinity;
+		let ascendingPostedAt=true,ascendingNo=true,ascendingVpos=true;
+		for(const c of t.comments){const sec=Date.parse(c.postedAt)/1000;oldest=Math.min(oldest,sec);newest=Math.max(newest,sec);
+			minNo=Math.min(minNo,c.no);maxNo=Math.max(maxNo,c.no);ascendingPostedAt&&=sec>=prevDate;ascendingNo&&=c.no>=prevNo;ascendingVpos&&=c.vposMs>=prevVpos;
+			prevDate=sec;prevNo=c.no;prevVpos=c.vposMs;}
+		return {id:t.id,fork:t.fork,commentCountField:t.commentCount,returnedCount:t.comments.length,
+			oldestUnixSeconds:oldest===Infinity?null:Math.floor(oldest),newestUnixSeconds:newest===-Infinity?null:Math.floor(newest),
+			minNo:minNo===Infinity?null:minNo,maxNo:maxNo===-Infinity?null:maxNo,ascendingPostedAt,ascendingNo,ascendingVpos};
+	});
+}
+function withThreadKey(context,key){
+	if(context.server!==COMMENT_ORIGIN)fail('SERVER_NOT_ALLOWED');
+	if(typeof key!=='string'||!key)fail('MISSING_KEY');
+	const next={videoId:context.videoId,server:context.server,language:context.language,targets:context.targets};
+	Object.defineProperty(next,'threadKey',{value:key,enumerable:false});
+	return Object.freeze(next);
+}
+return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
+})();
+modules[1] = (() => {
+const {HistoryError,integerOption,fail} = modules[0];
+const SETTINGS_SCHEMA=Object.freeze([
+	{name:'maxAdditionalComments',label:'追加コメント上限',type:'integer',default:5000,min:1,max:20000},
+	{name:'maxPages',label:'履歴ページ上限',type:'integer',default:100,min:1,max:100},
+	{name:'maxRequests',label:'総リクエスト上限（再試行・キー更新を含む）',type:'integer',default:150,min:1,max:200},
+	{name:'minIntervalMs',label:'通信の最小間隔（ミリ秒）',type:'integer',default:1500,min:1500,max:60000},
+	{name:'requestTimeoutMs',label:'通信タイムアウト（ミリ秒）',type:'integer',default:10000,min:1000,max:30000},
+	{name:'maxElapsedMs',label:'取得全体の時間上限（ミリ秒）',type:'integer',default:300000,min:1000,max:300000},
+	{name:'maxRetries',label:'一操作ごとの再試行上限',type:'integer',default:2,min:0,max:3},
+	{name:'maxKeyRefreshes',label:'キー更新の総上限',type:'integer',default:1,min:0,max:2},
+	{name:'includeEasy',label:'かんたんコメントも追加取得',type:'boolean',default:false},
+].map(d=>Object.freeze({...d,key:`commentHistory.${d.name}`})));
+const DEFAULT_SETTINGS=Object.freeze(Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.name,d.default])));
+function normalizeSettings(input={}){
+	if(!input || typeof input!=='object' || Array.isArray(input))fail('OPTION');
+	const names=new Set(SETTINGS_SCHEMA.map(d=>d.name));
+	if(Object.keys(input).some(k=>!names.has(k)))fail('OPTION');
+	const values={...DEFAULT_SETTINGS,...input};
+	for(const d of SETTINGS_SCHEMA){
+		if(d.type==='boolean'){if(typeof values[d.name]!=='boolean')fail('OPTION');}
+		else integerOption(values[d.name],d.min,d.max);
+	}
+	return values;
+}
+class SettingsStore {
+	#read;#write;
+	constructor({read,write}){
+		if(typeof read!=='function'||typeof write!=='function')fail('OPTION');
+		this.#read=read;this.#write=write;
+	}
+	get(){
+		const saved=this.#read();
+		if(saved===null||saved===undefined)return normalizeSettings();
+		if(saved.schema!=='nico-comment-history-settings'||saved.version!==1)throw new HistoryError('SETTINGS_VERSION');
+		if(!saved.values||typeof saved.values!=='object'||Array.isArray(saved.values))fail('OPTION');
+		return normalizeSettings(saved.values);
+	}
+	patch(changes){
+		if(!changes||typeof changes!=='object'||Array.isArray(changes))fail('OPTION');
+		const values=normalizeSettings({...this.get(),...changes});
+		this.#write({schema:'nico-comment-history-settings',version:1,values:{...values}});
+		return values;
+	}
+}
+return Object.freeze({SETTINGS_SCHEMA,DEFAULT_SETTINGS,normalizeSettings,SettingsStore});
+})();
+modules[2] = (() => {
+const {HistoryError} = modules[0];
+const {SETTINGS_SCHEMA,normalizeSettings} = modules[1];
+const ZENZA_SETTINGS_NAMES = new Set(SETTINGS_SCHEMA.map(d=>d.name));
+const ZENZA_SETTINGS_KEYS = new Set(SETTINGS_SCHEMA.map(d=>d.key));
+const ZENZA_SETTINGS_EVENT = 'comment-history-settings';
+function settingsError(code) { return new HistoryError(code); }
+function checkedSettingNames(names) {
+	if (!Array.isArray(names) || names.some(n=>!ZENZA_SETTINGS_NAMES.has(n)) || new Set(names).size!==names.length) throw settingsError('OPTION');
+	return names;
+}
+class ZenzaSettingsRepository {
+	#storage; #prefix; #bus; #off; #last; #disposed=false; #listeners=new Set();
+	constructor({storage,prefix='ZenzaWatch_',bus} = {}) {
+		if (!storage || ['getItem','setItem','removeItem'].some(k=>typeof storage[k]!=='function') ||
+				typeof prefix!=='string' || !prefix || bus && ['publish','subscribe'].some(k=>typeof bus[k]!=='function')) throw settingsError('OPTION');
+		this.#storage=storage;this.#prefix=prefix;this.#bus=bus;
+		this.#last=this.#read().values;
+		if (bus) this.#off=bus.subscribe(message=>{
+			if (this.#disposed || message?.type!==ZENZA_SETTINGS_EVENT || !Array.isArray(message.keys) ||
+					!message.keys.length || message.keys.some(k=>!ZENZA_SETTINGS_KEYS.has(k))) return;
+			try { this.refresh(); } catch { /* Caller sees validation failure on next explicit get/start. */ }
+		});
+	}
+	#assertActive() { if(this.#disposed)throw settingsError('DISPOSED'); }
+	#read() {
+		this.#assertActive();
+		const input={},raw=new Map();
+		for(const d of SETTINGS_SCHEMA) {
+			let value;
+			try {value=this.#storage.getItem(this.#prefix+d.key);} catch {throw settingsError('SETTINGS_READ');}
+			raw.set(d.name,value);
+			if(value!==null && value!==undefined) {
+				try {input[d.name]=JSON.parse(value);} catch {throw settingsError('SETTINGS_INVALID');}
+			}
+		}
+		let values;
+		try {values=Object.freeze(normalizeSettings(input));} catch {throw settingsError('SETTINGS_INVALID');}
+		return {values,raw};
+	}
+	#accept(values) {
+		const changed=SETTINGS_SCHEMA.some(d=>values[d.name]!==this.#last[d.name]);
+		this.#last=values;
+		if(changed)for(const callback of [...this.#listeners]) {
+			try {callback(values);} catch { /* A UI failure must not reinterpret successful persistence. */ }
+		}
+	}
+	get() {return this.#read().values;}
+	refresh() {const values=this.get();this.#accept(values);return values;}
+	patch(changes) {
+		this.#assertActive();
+		if(!changes || typeof changes!=='object' || Array.isArray(changes))throw settingsError('OPTION');
+		checkedSettingNames(Object.keys(changes));
+		const before=this.#read();
+		const next=Object.freeze(normalizeSettings({...before.values,...changes}));
+		const entries=SETTINGS_SCHEMA.filter(d=>Object.hasOwn(changes,d.name)&&before.values[d.name]!==next[d.name])
+			.map(d=>({name:d.name,key:this.#prefix+d.key,publicKey:d.key,value:JSON.stringify(next[d.name]),previous:before.raw.get(d.name)}));
+		if(!entries.length){this.#accept(next);return next;}
+		const attempted=[];
+		let committed;
+		try {
+			for(const entry of entries) {
+				if(this.#storage.getItem(entry.key)!==entry.previous)throw settingsError('SETTINGS_CONFLICT');
+				attempted.push(entry);
+				this.#storage.setItem(entry.key,entry.value);
+			}
+			for(const entry of entries)if(this.#storage.getItem(entry.key)!==entry.value)throw settingsError('SETTINGS_WRITE');
+			committed=this.#read().values;
+		} catch {
+			let rollbackComplete=true;
+			for(const entry of attempted.reverse()) {
+				try {
+					const current=this.#storage.getItem(entry.key);
+					if(current===entry.previous)continue;
+					if(current!==entry.value){rollbackComplete=false;continue;}
+					if(entry.previous===null || entry.previous===undefined)this.#storage.removeItem(entry.key);
+					else this.#storage.setItem(entry.key,entry.previous);
+					if(this.#storage.getItem(entry.key)!==(entry.previous??null))rollbackComplete=false;
+				} catch {rollbackComplete=false;}
+			}
+			const error=settingsError('SETTINGS_WRITE');error.rollbackComplete=rollbackComplete;throw error;
+		}
+		this.#accept(committed);
+		try {this.#bus?.publish({type:ZENZA_SETTINGS_EVENT,keys:entries.map(e=>e.publicKey)});} catch { /* Storage succeeded; next explicit refresh reconciles. */ }
+		return committed;
+	}
+	reset(names=SETTINGS_SCHEMA.map(d=>d.name)) {
+		checkedSettingNames(names);
+		return this.patch(Object.fromEntries(SETTINGS_SCHEMA.filter(d=>names.includes(d.name)).map(d=>[d.name,d.default])));
+	}
+	subscribe(callback) {
+		this.#assertActive();if(typeof callback!=='function')throw settingsError('OPTION');
+		this.#listeners.add(callback);return()=>this.#listeners.delete(callback);
+	}
+	dispose() {
+		if(this.#disposed)return;this.#disposed=true;this.#listeners.clear();
+		if(typeof this.#off==='function')this.#off();this.#off=null;
+	}
+}
+return Object.freeze({ZenzaSettingsRepository});
+})();
+modules[3] = (() => {
+const {SETTINGS_SCHEMA,DEFAULT_SETTINGS} = modules[1];
+const {ZenzaSettingsRepository} = modules[2];
+const {HistoryError} = modules[0];
+const HISTORY_PRESETS=Object.freeze([1000,2500,5000,10000,20000]);
+const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
+const EVENT='ZenzaWatch-comment-history-settings';
+function createBrowserHistoryPreferences({window:win=globalThis.window,config,storage=win.localStorage}={}){
+	const prefix='ZenzaWatch_',enabledKey=prefix+'commentHistory.enabled';
+	const listeners=new Set();let repository,disposed=false,lastSignature='',snapshot;
+	function checked(){if(disposed)throw new HistoryError('DISPOSED');}
+	function read(){
+		checked();
+		try{
+			if(!repository)repository=new ZenzaSettingsRepository({storage,prefix});
+			const settings=repository.get(),raw=storage.getItem(enabledKey);
+			const enabled=raw===null?false:JSON.parse(raw);
+			if(typeof enabled!=='boolean')throw new Error('type');
+			return Object.freeze({valid:true,enabled,settings});
+		}catch{return Object.freeze({valid:false,enabled:false,settings:Object.freeze({...DEFAULT_SETTINGS}),error:'SETTINGS_INVALID'});}
+	}
+	function refresh(){
+		snapshot=read();const signature=JSON.stringify(snapshot);
+		if(signature===lastSignature)return snapshot;
+		lastSignature=signature;
+		if(snapshot.valid&&config?._data){
+			const values={...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,snapshot.settings[d.name]])),'commentHistory.enabled':snapshot.enabled};
+			for(const [key,value] of Object.entries(values)){
+				if(config.default&&!Object.hasOwn(config.default,key))continue;
+				if(config._data[key]===value)continue;
+				config._data[key]=value;
+				const emit=typeof config.emitAsync==='function'?config.emitAsync:config.emit;
+				if(typeof emit==='function'){emit.call(config,'update',key,value);emit.call(config,'update-'+key,value);}
+			}
+		}
+		for(const fn of [...listeners]){try{fn(snapshot);}catch{}}
+		return snapshot;
+	}
+	function publish(keys){win.dispatchEvent(new win.CustomEvent(EVENT,{detail:{keys}}));}
+	const onStorage=e=>{if(!disposed&&(e.key===null||typeof e.key==='string'&&e.key.startsWith(prefix+'commentHistory.'))&&(!e.storageArea||e.storageArea===storage))refresh();};
+	const onLocal=e=>{if(!disposed&&Array.isArray(e.detail?.keys)&&e.detail.keys.every(k=>Object.hasOwn(HISTORY_PREFERENCE_DEFAULTS,k)))refresh();};
+	win.addEventListener('storage',onStorage);win.addEventListener(EVENT,onLocal);refresh();
+	return {
+		get(){checked();return refresh();},
+		patch(changes){
+			checked();if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			repository.patch(changes);refresh();publish(Object.keys(changes).map(k=>'commentHistory.'+k));return snapshot;
+		},
+		setEnabled(enabled){
+			checked();if(typeof enabled!=='boolean')throw new HistoryError('OPTION');
+			if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			if(snapshot.enabled===enabled)return snapshot;
+			const before=storage.getItem(enabledKey),serialized=JSON.stringify(enabled);
+			try{storage.setItem(enabledKey,serialized);if(storage.getItem(enabledKey)!==serialized)throw new Error();}
+			catch{
+				try{if(storage.getItem(enabledKey)===serialized){before===null?storage.removeItem(enabledKey):storage.setItem(enabledKey,before);}}catch{}
+				throw new HistoryError('SETTINGS_WRITE');
+			}
+			refresh();publish(['commentHistory.enabled']);return snapshot;
+		},
+		subscribe(fn){checked();listeners.add(fn);return()=>listeners.delete(fn);},
+		dispose(){if(disposed)return;disposed=true;win.removeEventListener('storage',onStorage);win.removeEventListener(EVENT,onLocal);repository?.dispose();repository=null;listeners.clear();}
+	};
+}
+return Object.freeze({HISTORY_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
+})();
+modules[4] = (() => {
+const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} = modules[0];
+function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
+async function withDeadline(work,{signal,timeoutMs=10000,timeoutCode='TIMEOUT'}={}){
+	integerOption(timeoutMs,1,300000);if(!['TIMEOUT','TIME_LIMIT'].includes(timeoutCode))throw new HistoryError('OPTION');assertNotCancelled(signal);
+	const controller=new AbortController();let timeout=false, rejectAbort;
+	const onParent=()=>controller.abort();const onAbort=()=>rejectAbort(new HistoryError(timeout?timeoutCode:'CANCELLED'));
+	const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+	controller.signal.addEventListener('abort',onAbort,{once:true});signal?.addEventListener('abort',onParent,{once:true});
+	const timer=setTimeout(()=>{timeout=true;controller.abort();},timeoutMs);
+	try{return await Promise.race([Promise.resolve().then(()=>{assertNotCancelled(controller.signal);return work(controller.signal);}),aborted]);}
+	finally{clearTimeout(timer);signal?.removeEventListener('abort',onParent);controller.signal.removeEventListener('abort',onAbort);}
+}
+function abortableDelay(ms,signal){
+	integerOption(ms,0,300000);
+	return new Promise((resolve,reject)=>{
+		if(signal?.aborted){reject(new HistoryError('CANCELLED'));return;}
+		const finish=()=>{signal?.removeEventListener('abort',cancel);resolve();};
+		const timer=setTimeout(finish,ms);
+		function cancel(){clearTimeout(timer);signal?.removeEventListener('abort',cancel);reject(new HistoryError('CANCELLED'));}
+		signal?.addEventListener('abort',cancel,{once:true});
+	});
+}
+async function readBoundedText(response,maxBytes,signal){
+	if(!response.body)return '';
+	const reader=response.body.getReader(),parts=[];let size=0,finished=false;
+	const onAbort=()=>{void reader.cancel().catch(()=>{});};
+	signal?.addEventListener('abort',onAbort,{once:true});
+	try{
+		while(true){assertNotCancelled(signal);const {done,value}=await reader.read();if(done){finished=true;break;}
+			size+=value.byteLength;if(size>maxBytes)throw new HistoryError('RESPONSE_TOO_LARGE');parts.push(value);}
+		const data=new Uint8Array(size);let offset=0;for(const part of parts){data.set(part,offset);offset+=part.byteLength;}
+		return new TextDecoder('utf-8',{fatal:true}).decode(data);
+	}finally{signal?.removeEventListener('abort',onAbort);if(!finished){try{await reader.cancel();}catch{}}reader.releaseLock();}
+}
+const API_CODES=new Set(['TOO_MANY_REQUESTS','EXPIRED_TOKEN','INVALID_TOKEN','INVALID_PARAMETER','NOT_FOUND','FORBIDDEN']);
+function retryAfter(header){
+	if(!header)return undefined;
+	if(/^\d+(?:\.\d+)?$/.test(header)){const ms=Number(header)*1000;return Number.isSafeInteger(Math.ceil(ms))?Math.ceil(ms):undefined;}
+	const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
+}
+async function requestJson(url,init,options={}){
+	const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
+	integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
+	try{
+		return await withDeadline(async innerSignal=>{
+			const response=await fetchImpl(url,{...init,signal:innerSignal});assertNotCancelled(innerSignal);
+			const text=await readBoundedText(response,maxBytes,innerSignal);assertNotCancelled(innerSignal);
+			let data;try{data=JSON.parse(text);}catch{}
+			const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
+			const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
+			if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
+			if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
+			if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
+			if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
+			if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
+			if(data.meta?.status!==200||raw)throw new HistoryError('API_ERROR',details);
+			return data;
+		},{signal,timeoutMs});
+	}catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
+}
+async function requestThreads(context,options={}){
+	const {url,init}=buildThreadRequest(context,options);
+	return validateThreads(await requestJson(url,init,options),context,options.targets??context.targets);
+}
+const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
+function checkedVideoId(id){
+	if(typeof id!=='string'||!/^(?:(?:sm|so|nm))?\d+$/.test(id))throw new HistoryError('OPTION');return id;
+}
+async function requestWatchContext(videoId,options={}){
+	const id=checkedVideoId(videoId);
+	const data=await requestJson(`https://www.nicovideo.jp/watch/${id}?responseType=json`,
+		{method:'GET',credentials:'include',cache:'no-store',redirect:'error'},options);
+	return normalizeWatch(data,id);
+}
+async function requestThreadKey(context,options={}){
+	if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
+	const id=checkedVideoId(context.videoId);
+	const data=await requestJson(`https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${id}`,
+		{method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
+			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},options);
+	return withThreadKey(context,data?.data?.threadKey);
+}
+const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
+	'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',
+	'API_ERROR','HTTP_ERROR','INVALID_JSON','RESPONSE_TOO_LARGE','NETWORK_ERROR','RESPONSE_SCHEMA','COMMENT_SCHEMA',
+	'TARGET_SCHEMA','TARGET_NOT_ALLOWED','MISSING_TARGET','IDENTITY_CONFLICT','WATCH_SCHEMA','VIDEO_MISMATCH','MISSING_KEY',
+	'SERVER_NOT_ALLOWED','CONTEXT_CHANGED','UNKNOWN_ERROR']);
+function safeError(error){
+	const out={code:SAFE_CODES.has(error?.code)?error.code:'UNKNOWN_ERROR'};
+	if(Number.isInteger(error?.httpStatus))out.httpStatus=error.httpStatus;
+	if(API_CODES.has(error?.apiCode)||error?.apiCode==='OTHER')out.apiCode=error.apiCode;
+	if(Number.isFinite(error?.retryAfterMs)&&error.retryAfterMs>=0)out.retryAfterMs=error.retryAfterMs;
+	if(SAFE_CODES.has(error?.causeCode))out.causeCode=error.causeCode;
+	return out;
+}
+return Object.freeze({assertNotCancelled,withDeadline,abortableDelay,requestThreads,requestWatchContext,requestThreadKey,safeError});
+})();
+modules[5] = (() => {
+const {HistoryError,fail} = modules[0];
+const {normalizeSettings} = modules[1];
+const {withDeadline,abortableDelay,assertNotCancelled,safeError} = modules[4];
+class RequestCoordinator {
+	#settings;#now;#sleep;#random;#start=null;#nextAllowed=0;#tail=Promise.resolve();
+	#attempts=0;#successful=0;#retries=0;#keyRefreshes=0;
+	#byKind={metadata:0,comment:0,key:0};
+	constructor({settings={},now=()=>performance.now(),sleep=abortableDelay,random=Math.random}={}){
+		this.#settings=normalizeSettings(settings);this.#now=now;this.#sleep=sleep;this.#random=random;
+		if([now,sleep,random].some(f=>typeof f!=='function'))fail('OPTION');
+	}
+	#remaining(){return this.#settings.maxElapsedMs-(this.#now()-this.#start);}
+	#check(signal){
+		assertNotCancelled(signal);
+		if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+		if(this.#attempts>=this.#settings.maxRequests)throw new HistoryError('REQUEST_LIMIT');
+	}
+	async #queued(work,signal){
+		assertNotCancelled(signal);
+		if(this.#start===null)this.#start=this.#now();
+		const previous=this.#tail;let release;
+		const done=new Promise(resolve=>{release=resolve;});
+		this.#tail=previous.catch(()=>{}).then(()=>done);
+		try{
+			this.#check(signal);
+			await withDeadline(()=>previous,{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);return await work();
+		}finally{release();}
+	}
+	#retryable(e){
+		return ['NETWORK_ERROR','TIMEOUT','RATE_LIMITED'].includes(e?.code)||
+			e?.code==='HTTP_ERROR'&&[500,502,503,504].includes(e.httpStatus);
+	}
+	async #perform(work,{signal,kind='comment',onRetry}={}){
+		if(!['metadata','comment','key'].includes(kind)||typeof work!=='function')fail('OPTION');
+		let retried=0;
+		while(true){
+			this.#check(signal);
+			const delay=Math.max(0,Math.ceil(this.#nextAllowed-this.#now()));
+			if(delay>=this.#remaining())throw new HistoryError('TIME_LIMIT');
+			if(delay)await withDeadline(s=>this.#sleep(delay,s),{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);
+			const remaining=this.#remaining(),timeoutMs=Math.min(this.#settings.requestTimeoutMs,Math.max(1,Math.ceil(remaining)));
+			this.#attempts++;this.#byKind[kind]++;this.#nextAllowed=this.#now()+this.#settings.minIntervalMs;
+			try{
+				const result=await withDeadline(s=>work({signal:s,timeoutMs}),{signal,timeoutMs,
+					timeoutCode:remaining<=this.#settings.requestTimeoutMs?'TIME_LIMIT':'TIMEOUT'});
+				assertNotCancelled(signal);
+				if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+				this.#successful++;return result;
+			}catch(e){
+				assertNotCancelled(signal);
+				if(!this.#retryable(e))throw e;
+				if(retried>=this.#settings.maxRetries)throw new HistoryError('RETRY_LIMIT',{...safeError(e),causeCode:safeError(e).code});
+				this.#check(signal);
+				const random=this.#random();const jitter=Number.isFinite(random)?Math.floor(Math.max(0,Math.min(1,random))*250):0;
+				const exponential=1000*2**retried+jitter;
+				const rateWait=e.code==='RATE_LIMITED'?(Number.isFinite(e.retryAfterMs)&&e.retryAfterMs>=0?e.retryAfterMs:60000):0;
+				const waitMs=Math.ceil(Math.max(this.#settings.minIntervalMs,exponential,rateWait));
+				if(waitMs>=this.#remaining())throw new HistoryError('TIME_LIMIT',{causeCode:safeError(e).code});
+				this.#nextAllowed=Math.max(this.#nextAllowed,this.#now()+waitMs);
+				retried++;this.#retries++;
+				try{onRetry?.({kind,retryNumber:retried,waitMs,error:safeError(e)});}catch{}
+			}
+		}
+	}
+	execute(work,options={}){return this.#queued(()=>this.#perform(work,options),options.signal);}
+	refresh(work,options={}){
+		return this.#queued(()=>{
+			if(this.#keyRefreshes>=this.#settings.maxKeyRefreshes)throw new HistoryError('KEY_REFRESH_LIMIT');
+			this.#keyRefreshes++;return this.#perform(work,{...options,kind:'key'});
+		},options.signal);
+	}
+	stats(){
+		return {attempts:this.#attempts,successfulRequests:this.#successful,retries:this.#retries,keyRefreshes:this.#keyRefreshes,
+			requestsByKind:{...this.#byKind},remainingRequests:Math.max(0,this.#settings.maxRequests-this.#attempts),
+			elapsedMs:this.#start===null?0:Math.max(0,Math.round(this.#now()-this.#start))};
+	}
+}
+return Object.freeze({RequestCoordinator});
+})();
+modules[6] = (() => {
+const {validateThreads,integerOption,fail} = modules[0];
+class LayeredCommentStore {
+	#context;
+	#items=new Map();
+	#normalMeta=new Map();
+	#historyMeta=new Map();
+	#normalCount=0;
+	#historyCount=0;
+	#overlapCount=0;
+	constructor(context){this.#context=context;}
+	#threadKey(t){return JSON.stringify([t.id,t.fork]);}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	#add(input,kind,allowance){
+		integerOption(allowance,0,50000);
+		if(!Array.isArray(input))fail('RESPONSE_SCHEMA');
+		if(!input.length)return {added:0,duplicates:0,limited:false};
+		const threads=validateThreads({meta:{status:200},data:{threads:input}},this.#context,input.map(t=>({id:t.id,fork:t.fork})));
+		const pageIds=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const k=this.#key(t,c),old=this.#items.get(k);
+			const id=old?.normal?.id??old?.history?.id??pageIds.get(k);
+			if(id!==undefined && id!==c.id)fail('IDENTITY_CONFLICT');
+			pageIds.set(k,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=this.#threadKey(t);
+			const meta=kind==='normal'?this.#normalMeta:this.#historyMeta;
+			meta.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const k=this.#key(t,c),old=this.#items.get(k);
+				const gains=kind==='history'?!old?.normal&&!old?.history:!old?.normal;
+				if(gains && added>=allowance){limited=true;continue;}
+				const entry=old??{thread:tk,normal:null,history:null};
+				if(entry[kind])duplicates++;
+				else {
+					if(kind==='normal')this.#normalCount++;else this.#historyCount++;
+					if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
+				}
+				if(gains)added++;
+				entry[kind]=c;
+				this.#items.set(k,entry);
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	addNormal(threads){return this.#add(threads,'normal',50000);}
+	addHistory(threads,allowance=50000){return this.#add(threads,'history',allowance);}
+	removeHistory(){
+		for(const [key,entry] of this.#items){
+			if(entry.normal)entry.history=null;else this.#items.delete(key);
+		}
+		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;
+	}
+	historySnapshot(){
+		const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const entry of this.#items.values())if(entry.history){
+			const c=entry.history;out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		return [...out.values()];
+	}
+	counts(){
+		return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
+			additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
+	}
+	snapshot({historyEnabled=true,historyOnly=false}={}){
+		const out=new Map();
+		if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
+		for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
+		for(const entry of this.#items.values()){
+			const c=historyOnly?(entry.normal?null:entry.history):(entry.normal??(historyEnabled?entry.history:null));
+			if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
+		return [...out.values()];
+	}
+}
+return Object.freeze({LayeredCommentStore});
+})();
+modules[7] = (() => {
+const {HistoryError,integerOption,checkedTargets,validateThreads,summarizeThreads,withThreadKey} = modules[0];
+const {requestThreads,requestThreadKey,assertNotCancelled,safeError} = modules[4];
+const {normalizeSettings} = modules[1];
+const {RequestCoordinator} = modules[5];
+const {LayeredCommentStore} = modules[6];
+const resumeIdentity=c=>JSON.stringify([c.videoId,c.language,c.server,c.targets.map(t=>[String(t.id),t.fork]).sort()]);
+const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limit','retry_limit','cancelled','network_error','timeout','rate_limited','key_refresh_limit','token_invalid','token_expired','api_error','http_error']);
+class HistorySession {
+	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;
+	#controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
+	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey}={}){
+		this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
+		this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
+		if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
+		this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
+		this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
+		this.#store=new LayeredCommentStore(context);
+		this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
+			settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
+			historyCursorProgressed:false,completeCoverageVerified:false};
+	}
+	cancel(){this.#controller.abort();}
+	removeHistory(){this.cancel();this.#store.removeHistory();}
+	snapshot(options){return this.#store.snapshot(options);}
+	report(){return JSON.parse(JSON.stringify({...this.#report,counts:this.#store.counts(),network:this.#finishedNetwork??this.#coordinator.stats()}));}
+	resumeData(){
+		if(!this.#report.finishedAt)throw new HistoryError('OPTION');
+		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),
+			cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
+	}
+	#verifyRefreshed(next){
+		const previous=this.#context;
+		const targetIdentity=c=>JSON.stringify(c.targets.map(t=>[String(t.id),t.fork]).sort());
+		try{
+			if(!next||next.videoId!==previous.videoId||next.server!==previous.server||next.language!==previous.language||
+				targetIdentity(next)!==targetIdentity(previous)||typeof next.threadKey!=='string'||!next.threadKey)throw new Error();
+		}catch{throw new HistoryError('CONTEXT_CHANGED');}
+		return withThreadKey(previous,next.threadKey);
+	}
+	async #page(request,onRetry){
+		const signal=this.#controller.signal;
+		while(true){
+			assertNotCancelled(signal);
+			try{
+				return await this.#coordinator.execute(async ({signal,timeoutMs})=>{
+					const data=await this.#fetchPage(this.#context,{...request,signal,timeoutMs});assertNotCancelled(signal);
+					return validateThreads({meta:{status:200},data:{threads:data}},this.#context,request.targets);
+				},{signal,kind:'comment',onRetry});
+			}catch(e){
+				if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
+				const next=await this.#coordinator.refresh(async options=>this.#verifyRefreshed(await this.#refreshKey(this.#context,options)),{signal,onRetry});
+				assertNotCancelled(signal);this.#context=next;
+			}
+		}
+	}
+	async run({signal,startWhen=Math.floor(Date.now()/1000),onProgress}={}){
+		integerOption(startWhen,0,9999999999);
+		if(this.#started)throw new HistoryError('ALREADY_RUN');this.#started=true;
+		this.#report.startedAt=new Date().toISOString();this.#report.startWhen=startWhen;
+		const abort=()=>this.cancel();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)this.cancel();
+		const localSignal=this.#controller.signal;
+		const notify=extra=>{try{onProgress?.({event:'progress',...extra,pages:this.#report.pages,counts:this.#store.counts(),network:this.#coordinator.stats()});}catch{}};
+		const onRetry=event=>notify({event:'retry',...event});
+		try{
+			assertNotCancelled(localSignal);
+			const baseline=this.#baseline??await this.#page({targets:this.#context.targets},onRetry);
+			assertNotCancelled(localSignal);
+			const normal=this.#store.addNormal(baseline);if(normal.limited)throw new HistoryError('BASELINE_LIMIT');
+			if(this.#resume){
+				const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
+				if(restored.limited)throw new HistoryError('OPTION');
+			}
+			notify({event:'baseline'});
+			const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
+			if(!selected.length)this.#report.reason='no_history_target';
+			const targets=selected.length?checkedTargets(this.#context,selected):[];
+			this.#report.targetResults=targets.map(t=>{
+				if(!this.#resume)return {...t,pages:0,nextWhen:startWhen,reason:null};
+				const matches=this.#resume.cursors.filter(s=>s.id===t.id&&s.fork===t.fork);
+				if(matches.length!==1)throw new HistoryError('CONTEXT_CHANGED');
+				const previous=matches[0];integerOption(previous.nextWhen,0,9999999999);
+				return {...t,pages:0,nextWhen:previous.nextWhen,reason:RESUMABLE.has(previous.reason)?null:previous.reason};
+			});
+			const states=this.#report.targetResults;let stopped=false;
+			while(states.some(s=>s.reason===null)&&!stopped){
+				for(const state of states){
+					if(state.reason!==null)continue;
+					assertNotCancelled(localSignal);
+					if(this.#report.pages>=this.#settings.maxPages){this.#report.reason='page_limit';stopped=true;break;}
+					if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){this.#report.reason='comment_limit';stopped=true;break;}
+					const target={id:state.id,fork:state.fork};const cursor=state.nextWhen;
+					const threads=await this.#page({targets:[target],when:cursor,resFrom:-1000},onRetry);
+					assertNotCancelled(localSignal);
+					const summary=summarizeThreads(threads)[0];
+					state.lastPageCount=summary.returnedCount;state.oldestUnixSeconds=summary.oldestUnixSeconds;state.newestUnixSeconds=summary.newestUnixSeconds;
+					this.#report.pages++;state.pages++;
+					if(threads[0].comments.some(c=>Date.parse(c.postedAt)/1000>cursor)){
+						state.reason='cursor_not_respected';this.#report.reason=state.reason;stopped=true;break;
+					}
+					const newestFirst=threads.map(t=>({...t,comments:[...t.comments].sort((a,b)=>Date.parse(b.postedAt)-Date.parse(a.postedAt)||b.no-a.no)}));
+					const added=this.#store.addHistory(newestFirst,this.#settings.maxAdditionalComments-this.#store.counts().additionalCount);
+					this.#report.duplicates+=added.duplicates;
+					notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
+					assertNotCancelled(localSignal);
+					if(added.limited||this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){
+						state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
+					}
+					if(!summary.returnedCount){state.reason='empty_page';continue;}
+					const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
+					if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
+					if(summary.oldestUnixSeconds===summary.newestUnixSeconds&&summary.returnedCount>1){
+						state.reason='same_second_boundary_unverified';continue;
+					}
+					state.nextWhen=oldest;
+					if(oldest>=cursor){state.reason='cursor_stalled';continue;}
+					this.#report.historyCursorProgressed=true;
+				}
+			}
+			if(!stopped&&states.length){
+				const reasons=[...new Set(states.map(s=>s.reason))];
+				this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+			}
+			for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
+		}catch(e){
+			this.#report.error=safeError(e);this.#report.reason=this.#report.error.code.toLowerCase();
+			for(const state of this.#report.targetResults)if(state.reason===null)state.reason=this.#report.reason;
+		}finally{
+			signal?.removeEventListener('abort',abort);this.#report.finishedAt=new Date().toISOString();
+			this.#finishedNetwork=this.#coordinator.stats();
+			this.#report.resumeAvailable=this.#report.targetResults.some(s=>RESUMABLE.has(s.reason));
+		}
+		return this.report();
+	}
+}
+return Object.freeze({HistorySession});
+})();
+modules[8] = (() => {
+const {HistoryError,normalizeWatch,validateThreads,integerOption} = modules[0];
+const ZENZA_FORKS = Object.freeze({main:0,owner:1,easy:2});
+function seedError(code) { throw new HistoryError(code); }
+function freezeSeedData(value) {
+	if (value && typeof value === 'object') {
+		for (const child of Object.values(value)) freezeSeedData(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+function copyThreadDescriptor(info) {
+	if (!info || !Object.hasOwn(ZENZA_FORKS, info.forkLabel) ||
+			info.fork !== ZENZA_FORKS[info.forkLabel] || typeof info.label !== 'string' ||
+			!Number.isSafeInteger(info.layer?.index) || info.layer.index < 0) seedError('THREAD_METADATA');
+	const out = {id:String(info.id),fork:info.fork,forkLabel:info.forkLabel,label:info.label,
+		layer:{index:info.layer.index}};
+	if (typeof info.layer.isTranslucent === 'boolean') out.layer.isTranslucent = info.layer.isTranslucent;
+	return out;
+}
+function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevision} = {}) {
+	if (typeof playbackGeneration !== 'string' || !playbackGeneration) seedError('OPTION');
+	integerOption(normalRevision,1,Number.MAX_SAFE_INTEGER);
+	if (normalResult?.format !== 'threads' || !normalResult.threadInfo || !normalResult.body) seedError('UNSUPPORTED_FORMAT');
+	const msg = videoInfo?.msgInfo, resultInfo = normalResult.threadInfo;
+	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
+	const videoId = videoInfo.videoId;
+	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
+	if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
+	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
+	const nv = msg.nvComment;
+	const context = normalizeWatch({video:{id:videoId},comment:{nvComment:{
+		server:nv?.server,threadKey:nv?.threadKey,params:{targets:nv?.params?.targets,language}
+	}}},videoId);
+	const watchId = String(videoInfo.contextWatchId ?? videoInfo.watchId ?? videoId);
+	if (!/^(?:(?:sm|so|nm))?\d+$/.test(watchId)) seedError('WATCH_ID');
+	if (!Number.isFinite(videoInfo.duration) || videoInfo.duration < 0) seedError('DURATION');
+	if (!Array.isArray(msg.threads)) seedError('THREAD_METADATA');
+	const descriptors = new Map();
+	for (const target of context.targets) {
+		const found = msg.threads.filter(t => String(t.id) === target.id && t.forkLabel === target.fork);
+		if (found.length !== 1) seedError('THREAD_METADATA');
+		descriptors.set(JSON.stringify([target.id,target.fork]),copyThreadDescriptor(found[0]));
+	}
+	const baseline = validateThreads({meta:{status:200},data:{threads:normalResult.body.threads}},context);
+	const mainThreadId = resultInfo.threadId ?? null;
+	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
+	return freezeSeedData({context,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
+	});
+}
+function toZenzaThreads(seed, threads) {
+	if (!seed?.context || !Array.isArray(seed.render?.threads)) seedError('OPTION');
+	const copied = validateThreads({meta:{status:200},data:{threads}},seed.context);
+	return {threads:copied.map(thread=>{
+		const info = seed.render.threads.find(t=>t.id===thread.id && t.forkLabel===thread.fork);
+		if (!info) seedError('THREAD_METADATA');
+		return {...thread,info:{...info,layer:{...info.layer}}};
+	})};
+}
+return Object.freeze({createZenzaSeed,toZenzaThreads});
+})();
+modules[9] = (() => {
+const {HistorySession} = modules[7];
+const {createZenzaSeed,toZenzaThreads} = modules[8];
+const {normalizeSettings} = modules[1];
+class CommentHistoryController {
+	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
+	#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+	#state={enabled:false,phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false};
+	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
+		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
+		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+		this.#state.enabled=preferences.get().enabled===true;
+		this.#off=preferences.subscribe(snapshot=>{
+			if(this.#disposed)return;
+			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
+			if(!this.#state.enabled){this.#cancel(true);this.#emit({phase:'idle',additionalCount:0,appliedAdditional:0,pages:0,goal:0,reason:null,canContinue:false});}
+			else {this.#emit({});if(!before&&this.#seed)void this.start();}
+		});
+	}
+	get state(){return JSON.parse(JSON.stringify(this.#state));}
+	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
+	#emit(changes){Object.assign(this.#state,changes);for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}}
+	#cancel(clear){
+		this.#epoch++;this.#operation?.abort();this.#operation=null;
+		this.#session?.removeHistory();this.#session=null;this.#report=null;
+		if(clear){try{this.#clear();}catch{}}
+	}
+	invalidate(){
+		this.#cancel(true);this.#seed=null;
+		this.#emit({phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false});
+	}
+	async normalReady({videoInfo,result,generation}={}){
+		if(this.#disposed)return;
+		this.invalidate();
+		try{
+			this.#seed=createZenzaSeed({videoInfo,normalResult:result,playbackGeneration:generation,normalRevision:++this.#normalRevision});
+			const normalCount=this.#seed.baseline.reduce((n,t)=>n+t.comments.length,0);
+			this.#emit({videoId:this.#seed.identity.videoId,normalCount});
+		}catch(error){this.#emit({phase:'unavailable',reason:typeof error?.code==='string'?error.code:'CONTEXT_CHANGED'});return;}
+		if(this.#state.enabled)return this.start();
+	}
+	setEnabled(value){this.#preferences.setEnabled(!!value);}
+	stop(){
+		if(this.#state.phase==='queued'){this.#operation?.abort();}
+		else this.#session?.cancel();
+	}
+	whenIdle(){return this.#promise;}
+	more(){return this.start({more:true});}
+	restart(){return this.start({restart:true});}
+	start({more=false,restart=false}={}){
+		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#operation)return this.#promise;
+		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
+		if(more&&this.#state.additionalCount>=20000&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		const applyOnly=this.#state.phase==='render-error'&&!restart;
+		const continuing=!!(more&&!restart&&this.#session&&this.#report);
+		const resume=continuing?this.#session.resumeData():undefined;
+		if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
+		const oldGoal=this.#state.goal;
+		const goal=applyOnly?oldGoal:continuing?Math.min(20000,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
+		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
+		const seed=this.#seed;
+		this.#emit({phase:applyOnly?'applying':'queued',goal,reason:null,canContinue:false});
+		this.#promise=(async()=>{
+			try{
+				if(!applyOnly){
+					await this.#acquire(async()=>{
+						if(!current())return;
+						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
+						const session=this.#session;
+						this.#emit({phase:'fetching',pages:0});
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
+								waitingMs:progress.event==='retry'?progress.waitMs:0});
+						}});
+						if(!current())return;
+						this.#report=report;
+					},operation.signal);
+				}
+				if(!current()||!this.#report||!this.#session)return;
+				const report=this.#report;
+				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,pages:report.pages,network:report.network,waitingMs:0});
+				let applied;
+				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true})),{isCurrent:current,signal:operation.signal});}
+				catch{
+					if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
+					return;
+				}
+				if(!current())return;
+				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??report.counts.additionalCount,
+					canContinue:report.resumeAvailable&&report.counts.additionalCount<20000});
+				if(partial&&report.reason!=='cancelled')this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+			}catch{
+				if(this.#epoch===epoch&&this.#state.enabled){
+					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
+					if(!operation.signal.aborted)this.#notify('コメント増量：取得を開始できませんでした。パネルから再試行できます。');
+				}
+			}finally{if(this.#epoch===epoch)this.#operation=null;}
+			return this.state;
+		})();
+		return this.#promise;
+	}
+	dispose(){if(this.#disposed)return;this.#disposed=true;this.invalidate();this.#off?.();this.#listeners.clear();}
+}
+return Object.freeze({CommentHistoryController});
+})();
+modules[10] = (() => {
+const {SETTINGS_SCHEMA} = modules[1];
+const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[3];
+const {CommentHistoryController} = modules[9];
+const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
+const CSS=`
+.commentHistorySwitch .controlButtonInner{display:inline-block;width:26px;height:26px;vertical-align:middle}
+.commentHistorySwitch svg{display:block;width:100%;height:100%;fill:currentColor}
+.commentHistorySwitch.is-active{color:var(--enabled-button-color,#9cf);opacity:1}
+.commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
+.commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
+@keyframes zenzaHistoryPulse{50%{opacity:.48}}
+.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:16px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
+.zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
+.zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
+@keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+@keyframes zenzaHistoryOut{from{opacity:1;transform:none}to{opacity:0;transform:translate(8px,12px) scale(.92)}}
+@media(prefers-reduced-motion:reduce){.zenzaCommentHistoryPanel.is-open,.zenzaCommentHistoryPanel.is-closing{animation-duration:.01s}.commentHistorySwitch.is-fetching svg{animation:none}}
+.zenzaCommentHistoryPanel button,.zenzaCommentHistoryPanel select,.ch-settings input{font:inherit;box-sizing:border-box}
+.zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
+.zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
+.zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
+.ch-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.ch-header strong{font-size:16px;flex:1}.ch-header button{padding:1px 8px;font-size:22px;background:none;border:0}
+.ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
+.ch-counter{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#91f2dc}.ch-counter small{font-size:12px;font-weight:400;color:#b4c2d0;margin-left:5px}
+.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:9px 0}
+.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:10px 0 14px}
+.ch-action-row{display:grid;grid-template-columns:124px minmax(0,1fr);gap:10px;align-items:end;margin-top:12px}.ch-action-row label{display:grid;gap:3px;color:#b4c2d0;font-size:11px}
+.zenzaCommentHistoryPanel select{width:100%;height:36px;padding:4px 8px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
+.zenzaCommentHistoryPanel [data-ch-primary]{background:#79dfc9;color:#0c2b28;border-color:#79dfc9;min-height:36px;font-weight:700}
+.ch-details{border-top:1px solid #33475d;margin-top:14px;padding-top:11px}.ch-details summary{cursor:pointer;color:#cedde9}.ch-details>div{margin-top:10px}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin-bottom:9px;font-size:12px}.ch-footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px}.ch-footer button{background:none;font-size:12px;padding:5px 8px}
+.ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
+.is-youTube .commentHistorySwitch{display:none}
+`;
+function style(doc){if(doc.querySelector('style[data-zenza-comment-history]'))return;const el=doc.createElement('style');el.dataset.zenzaCommentHistory='';el.textContent=CSS;doc.head.append(el);}
+const fmt=n=>Number(n||0).toLocaleString('ja-JP');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mountHistorySettings(container,{preferences}={}){
+	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
+	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
+		`<label><span>${esc(d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
+	).join('')+'<p class="ch-setting-error" role="status"></p>';
+	const error=container.querySelector('.ch-setting-error');
+	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
+	const change=e=>{const name=e.target.dataset.historySetting,d=SETTINGS_SCHEMA.find(x=>x.name===name);if(!d)return;e.stopPropagation();try{const v=d.type==='boolean'?e.target.checked:e.target.value.trim()===''?NaN:Number(e.target.value);preferences.patch({[name]:v});error.textContent='';e.target.removeAttribute('aria-invalid');}catch{error.textContent='設定を保存できませんでした。入力範囲と保存領域を確認してください。';e.target.setAttribute('aria-invalid','true');}};
+	container.addEventListener('change',change);const off=preferences.subscribe(refresh);refresh();
+	return {dispose(){off();container.removeEventListener('change',change);container.replaceChildren();}};
+}
+class CommentHistoryPanel {
+	constructor({controller,preferences,anchor,window:win=globalThis.window}){
+		this.controller=controller;this.preferences=preferences;this.anchor=anchor;this.win=win;this.doc=win.document;this.listeners=[];this.closeTimer=null;this.swallowCleanup=[];this.disposed=false;
+		style(this.doc);
+		this.onOutside=e=>this._outside(e);this.onEscape=e=>{if(this.isOpen&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.close(true);}};
+		this.onResize=()=>this._place();
+		this.off=controller.subscribe(state=>this.refresh(state));this.offPrefs=preferences.subscribe(()=>this.refresh(controller.state));
+	}
+	get isOpen(){return !!this.view?.classList.contains('is-open')&&!this.view.classList.contains('is-closing');}
+	_init(){
+		if(this.view)return;
+		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>反映済みの追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
+		el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
+		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
+		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
+		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
+		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
+		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
+		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
+		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
+	}
+	refresh(state){
+		const a=this.anchor?.();
+		if(a){a.classList.toggle('is-active',state.enabled);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：ON':'：OFF'));}
+		if(!this.view)return;
+		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
+		q('[data-ch-enabled]').checked=state.enabled;
+		const quota=q('[data-ch-quota]');
+		quota.querySelector('[data-ch-custom]')?.remove();
+		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
+			const option=this.doc.createElement('option');option.dataset.chCustom='';
+			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
+		}
+		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
+		q('[data-ch-count]').textContent=fmt(state.additionalCount);q('[data-ch-goal]').textContent=` / ${fmt(state.goal||p.settings.maxAdditionalComments)} 件`;
+		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
+		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
+		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
+		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
+		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
+		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
+		button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
+	}
+	_place(){
+		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
+		const a=this.anchor?.()?.getBoundingClientRect(),width=Math.min(360,this.win.innerWidth-32);
+		this.view.style.left=Math.max(16,Math.min(this.win.innerWidth-width-16,(a?.right||this.win.innerWidth-16)-width))+'px';
+		this.view.style.bottom=Math.max(16,Math.min(this.win.innerHeight-120,a?this.win.innerHeight-a.top+10:50))+'px';
+		this.view.style.maxHeight=Math.max(100,this.win.innerHeight-parseFloat(this.view.style.bottom)-16)+'px';
+	}
+	_listen(){
+		const attach=win=>{if(this.listeners.includes(win))return;try{win.addEventListener('pointerdown',this.onOutside,true);win.addEventListener('keydown',this.onEscape,true);this.listeners.push(win);}catch{}};
+		attach(this.win);for(const f of this.doc.querySelectorAll('iframe')){try{if(f.contentWindow?.document)attach(f.contentWindow);}catch{}}
+	}
+	_unlisten(){for(const w of this.listeners){try{w.removeEventListener('pointerdown',this.onOutside,true);w.removeEventListener('keydown',this.onEscape,true);}catch{}}this.listeners=[];this.observer?.disconnect();this.observer=null;this.win.removeEventListener('resize',this.onResize);this.doc.removeEventListener('fullscreenchange',this.onResize);}
+	_outside(e){
+		if(!this.isOpen)return;const path=e.composedPath?.()||[e.target],a=this.anchor?.();if(path.includes(this.view)||path.includes(a))return;
+		let video=path.some(x=>x?.matches?.('video,.videoPlayer,.commentLayerFrame'));
+		try{video=video||e.view?.frameElement?.matches('.commentLayerFrame,[name="commentLayerFrame"]');}catch{}
+		this.close(false);
+		if(video&&e.button===0){
+			const target=e.target,win=e.view||this.win;
+			const swallow=event=>{if(event.target===target||(event.composedPath?.()||[]).includes(target)){event.preventDefault();event.stopImmediatePropagation();}cleanup();};
+			const timer=this.win.setTimeout(()=>cleanup(),600);
+			const cleanup=()=>{win.removeEventListener('click',swallow,true);this.win.clearTimeout(timer);const i=this.swallowCleanup.indexOf(cleanup);if(i>=0)this.swallowCleanup.splice(i,1);};
+			win.addEventListener('click',swallow,true);this.swallowCleanup.push(cleanup);
+		}
+	}
+	open(){
+		if(this.disposed)return;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+	}
+	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
+	toggle(){this.isOpen?this.close(true):this.open();}
+	dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
+}
+function createHistoryFeature({dialog,config,window:win=globalThis.window}){
+	const preferences=createBrowserHistoryPreferences({window:win,config});
+	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
+	const controller=new CommentHistoryController({preferences,acquire,
+		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
+		clearRender:()=>dialog._nicoVideoPlayer?.clearCommentHistory(),
+		notify:text=>dialog.execCommand('notify',text)});
+	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
+	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
+}
+return Object.freeze({HISTORY_ICON,mountHistorySettings,CommentHistoryPanel,createHistoryFeature});
+})();
+return Object.freeze({
+SETTINGS_SCHEMA: modules[1].SETTINGS_SCHEMA,
+DEFAULT_SETTINGS: modules[1].DEFAULT_SETTINGS,
+normalizeSettings: modules[1].normalizeSettings,
+SettingsStore: modules[1].SettingsStore,
+ZenzaSettingsRepository: modules[2].ZenzaSettingsRepository,
+HISTORY_PRESETS: modules[3].HISTORY_PRESETS,
+HISTORY_PREFERENCE_DEFAULTS: modules[3].HISTORY_PREFERENCE_DEFAULTS,
+createBrowserHistoryPreferences: modules[3].createBrowserHistoryPreferences,
+HISTORY_ICON: modules[10].HISTORY_ICON,
+mountHistorySettings: modules[10].mountHistorySettings,
+CommentHistoryPanel: modules[10].CommentHistoryPanel,
+createHistoryFeature: modules[10].createHistoryFeature,
+});
+})();
 const Config = (() => {
 	const DEFAULT_CONFIG = {
 		debug: false,
@@ -1236,7 +2384,7 @@ const Config = (() => {
 		'screenFilter.applyToScreenshot': true, // スクリーンショットにも反映する
 		'screenFilter.applyToCommentPip': true, // P in P(コメント付き)にも反映する
 		'screenshot.prefix': '', // スクリーンショットのファイル名の先頭につける文字
-		'search.limit': 300,
+		'search.limit': 1000,
 		'touch.enable': window.ontouchstart !== undefined,
 		'touch.tap2command': '',
 		'touch.tap3command': 'toggle-mute',
@@ -1293,9 +2441,51 @@ const Config = (() => {
 	for (let i = 1; i <= 10; i++) {
 		DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
 	}
+	Object.assign(DEFAULT_CONFIG, ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS);
 	return DataStorage.create(
 		DEFAULT_CONFIG,
 		{
+			normalizeImport: (key, value) => {
+				if (['videoSearch.f_range', 'videoSearch.l_range'].includes(key) &&
+						typeof value === 'string' && /^[0-9]+$/.test(value)) { return Number(value); }
+				return value;
+			},
+			validateImport: (key, value) => {
+				if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
+				if (key.startsWith('commentHistory.')) {
+					const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
+					if (!descriptor) { return false; }
+					try {
+						ZenzaCommentHistorySettings.normalizeSettings({[descriptor.name]: value});
+						return true;
+					} catch (_) { return false; }
+				}
+				const choices = {
+					screenMode: ['normal', 'big', 'wide', 'small', 'sideView', '3D'],
+					sharedNgLevel: ['NONE', 'LOW', 'MID', 'HIGH', 'MAX'],
+					fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
+					'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
+					'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed']
+				};
+				const name = key.startsWith('screenMode:') ? 'screenMode' : key;
+				if (Object.prototype.hasOwnProperty.call(choices, name)) {
+					return choices[name].includes(value);
+				}
+				if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
+				if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
+				if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
+					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
+					return Number.isFinite(value) && value >= 0 && value <= 1;
+				}
+				if (['playbackRate', 'commentSpeedRate', 'baseChatScale', 'menuScale'].includes(key)) {
+					return Number.isFinite(value) && value > 0;
+				}
+				if (['smallModeWidth', 'smallModeHeight'].includes(key)) {
+					return Number.isFinite(value) && value >= 0;
+				}
+				return true;
+			},
+			preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
 			prefix: PRODUCT,
 			ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
 			readonly: !location || location.host !== 'www.nicovideo.jp',
@@ -3239,31 +4429,20 @@ const netUtil = {
 };
 Object.assign(util, netUtil);
 const VideoCaptureUtil = (() => {
-	const _toCanvas = (v, width, height) => {
+	const videoToCanvas = async video => {
+		const frame = video.drawableElement || video;
+		const width = video.videoWidth, height = video.videoHeight;
+		if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 ||
+				(typeof frame.readyState === 'number' && frame.readyState < 2)) {
+			throw new Error('Video frame is not ready');
+		}
 		const canvas = document.createElement('canvas');
-		const context = canvas.getContext('2d');
 		canvas.width = width;
 		canvas.height = height;
-		context.drawImage(v.drawableElement || v, 0, 0, width, height);
-		return canvas;
-	};
-	const isCORSReadySrc = src => {
-		if (src.indexOf('delivery.domand.nicovideo.jp') >= 0 || src.indexOf('dmc.nico') >= 0) {
-			return true;
-		}
-		return false;
-	};
-	const videoToCanvas = video => {
-		const src = video.src;
-		const sec = video.currentTime;
-		const a = document.createElement('a');
-		a.href = src;
-		const server = a.host;
-		const search = a.search;
-		if (isCORSReadySrc(src)) {
-			return Promise.resolve({canvas: _toCanvas(video, video.videoWidth, video.videoHeight)});
-		}
-		return Promise.reject({status: 'fail', message: 'not supported url', url: src})
+		const context = canvas.getContext('2d');
+		context.drawImage(frame, 0, 0, width, height);
+		context.getImageData(0, 0, 1, 1);
+		return {canvas};
 	};
 	const htmlToSvg = (html, width = 682, height = 384) => {
 		const data =
@@ -3352,52 +4531,69 @@ const VideoCaptureUtil = (() => {
 		saveToFile
 	};
 })();
-VideoCaptureUtil.capture = function(src, sec) {
-	const func = () => {
-		return new Promise((resolve, reject) => {
-			const v = createVideoElement('capture');
-			if (!v) {
-				return reject();
-			}
-			Object.assign(v.style, {
-				width: '64px',
-				height: '36px',
-				position: 'fixed',
-				left: '-100px',
-				top: '-100px'
-			});
-			v.volume = 0;
-			v.autoplay = false;
-			v.controls = false;
-			v.addEventListener('loadedmetadata', () => v.currentTime = sec, {once: true});
-			v.addEventListener('error', err => { v.remove(); reject(err); }, {once: true});
-			const onSeeked = () => {
-				const c = document.createElement('canvas');
-				c.width = v.videoWidth;
-				c.height = v.videoHeight;
-				const ctx = c.getContext('2d');
-				ctx.drawImage(v.drawableElement || v, 0, 0);
-				v.remove();
-				return resolve(c);
-			};
-			v.addEventListener('seeked', onSeeked, {once: true});
-			setTimeout(() => {v.remove();reject();}, 30000);
-			document.body.append(v);
-			v.src = src;
-			v.currentTime = sec;
-		});
-	};
-	let wait = (this.lastSrc === src && this.wait) ? this.wait : sleep(1000);
+VideoCaptureUtil.capture = function(src, sec, {signal, timeout = 30000} = {}) {
+	if (!Number.isFinite(sec) || sec < 0 || typeof src !== 'string' || !src) {
+		return Promise.reject(new TypeError('Invalid capture source or position'));
+	}
+	const wait = (this.lastSrc === src && this.wait) ? this.wait : sleep(1000);
 	this.lastSrc = src;
-	let waitTime = 1000;
-	waitTime += src.indexOf('dmc.nico') >= 0 ? 2000 : 0;
-	waitTime += src.indexOf('.m3u8')    >= 0 ? 2000 : 0;
-	let resolve, reject;
-	this.wait = new Promise((...args) => [resolve, reject] = args)
-		.then(() => sleep(waitTime)).catch(() => sleep(waitTime * 2));
-	return wait.then(func)
-		.then(r => { resolve(r); return r; })
-		.catch(e => { reject(e); return e; });
+	const delay = 1000 + (src.includes('dmc.nico') ? 2000 : 0) + (src.includes('.m3u8') ? 2000 : 0);
+	const result = new Promise((resolve, reject) => {
+		let video, target = sec, settled = false, capturing = false, timer;
+		const cleanup = () => {
+			clearTimeout(timer);
+			signal && signal.removeEventListener('abort', abort);
+			if (!video) { return; }
+			for (const [name, handler] of events) { video.removeEventListener(name, handler); }
+			try { video.pause(); } catch (error) {}
+			try { video.src = ''; video.removeAttribute('src'); video.load(); } catch (error) {}
+			try { video.remove(); } catch (error) {}
+		};
+		const finish = (error, canvas) => {
+			if (settled) { return; }
+			settled = true;
+			cleanup();
+			error ? reject(error) : resolve(canvas);
+		};
+		const abort = () => finish(new Error('Video capture aborted'));
+		const frame = () => {
+			if (settled || capturing || !video) { return; }
+			const drawable = video.drawableElement || video;
+			if (drawable.readyState < 2 || drawable.seeking || Math.abs(video.currentTime - target) > 0.1) { return; }
+			capturing = true;
+			VideoCaptureUtil.videoToCanvas(video).then(({canvas}) => finish(null, canvas), finish);
+		};
+		const metadata = () => {
+			try {
+				if (Number.isFinite(video.duration) && video.duration > 0) { target = Math.min(sec, Math.max(0, video.duration - 0.001)); }
+				video.currentTime = target;
+				frame();
+			} catch (error) { finish(error); }
+		};
+		const events = [['loadedmetadata', metadata], ['loadeddata', frame], ['canplay', frame], ['seeked', frame],
+			['error', () => finish(new Error('Video capture media failed'))]];
+		if (signal && signal.aborted) { abort(); return; }
+		signal && signal.addEventListener('abort', abort, {once: true});
+		timer = setTimeout(() => finish(new Error('Video capture timed out')),
+			Number.isFinite(timeout) && timeout > 0 ? timeout : 30000);
+		wait.then(() => {
+			if (settled) { return; }
+			try {
+				video = createVideoElement('capture');
+				if (!video) { throw new Error('Capture video unavailable'); }
+				Object.assign(video.style, {width: '64px', height: '36px', position: 'fixed', left: '-100px', top: '-100px'});
+				video.volume = 0; video.muted = true; video.autoplay = false; video.controls = false;
+				video.crossOrigin = 'anonymous';
+				for (const [name, handler] of events) { video.addEventListener(name, handler); }
+				document.body.append(video);
+				video.src = src;
+				video.currentTime = sec;
+			} catch (error) { finish(error); }
+		}, finish);
+	});
+	this.wait = Promise.all([Promise.resolve(wait).catch(() => {}),
+		result.then(() => sleep(delay), () => sleep(delay * 2))]).then(() => undefined);
+	return result;
 }.bind({});
 VideoCaptureUtil.initCapTube = function() {
 	const iframe = document.querySelector(
@@ -3880,43 +5076,44 @@ class RequestAnimationFrame {
 		this._callback = callback;
 		this._enable = false;
 		this._onFrame = this._onFrame.bind(this);
+		this._generation = 0;
+		this._requestId = null;
 		this._isOnce = false;
 		this._isBusy = false;
 	}
-	_onFrame() {
-		if (!this._enable || this._isBusy) {
-			this._requestId = null;
-			return;
-		}
+	_onFrame(generation = this._generation) {
+		if (!this._enable || generation !== this._generation || this._isBusy) { return; }
+		this._requestId = null;
 		this._isBusy = true;
-		this._frameCount++;
-		if (this._frameCount % (this._frameSkip + 1) === 0) {
-			this._callback();
+		try {
+			this._frameCount++;
+			if (this._frameCount % (this._frameSkip + 1) === 0) { this._callback(); }
+		} finally {
+			if (generation === this._generation) {
+				this._isBusy = false;
+				if (this._isOnce) { this.disable(); }
+				else { this.callRaf(generation); }
+			}
 		}
-		if (this._isOnce) {
-			return this.disable();
-		}
-		this.callRaf();
 	}
-	async callRaf() {
+	async callRaf(generation = this._generation) {
 		await sleep.resolve;
-		this._requestId = requestAnimationFrame(this._onFrame);
-		this._isBusy = false;
+		if (!this._enable || generation !== this._generation || this._requestId !== null) { return; }
+		this._requestId = requestAnimationFrame(() => this._onFrame(generation));
 	}
 	enable() {
-		if (this._enable) {
-			return;
-		}
+		if (this._enable) { return; }
 		this._enable = true;
 		this._isBusy = false;
-		this._requestId && cancelAnimationFrame(this._requestId);
-		this._requestId = requestAnimationFrame(this._onFrame);
+		const generation = ++this._generation;
+		this._requestId = requestAnimationFrame(() => this._onFrame(generation));
 	}
 	disable() {
+			this._generation;
 		this._enable = false;
 		this._isOnce = false;
 		this._isBusy = false;
-		this._requestId && cancelAnimationFrame(this._requestId);
+		if (this._requestId !== null) { cancelAnimationFrame(this._requestId); }
 		this._requestId = null;
 	}
 	execOnce() {
@@ -4529,7 +5726,12 @@ class NicoQuery {
 			dateTo: params.end || null,
 			commentCount: params.commentCount || null,
 			f_range: params.fRange || null,
-			l_range: params.lRange || null
+			l_range: params.lRange || null,
+			page: params.page || null,
+			genre: params.genre || null,
+			selectContentType: params.selectContentType || null,
+			channelVideoListingStatus: params.channelVideoListingStatus || null,
+			kind: params.kind || null
 		};
 	}
 	nearlyEquals(query) {
@@ -6535,7 +7737,7 @@ const {SettingPanelElement} = (() => {
 			e.preventDefault();
 			e.stopPropagation();
 			const file = e.target.files[0];
-			if (!/\.config\.json$/.test(file.name)) {
+			if (!file || !/\.config\.json$/.test(file.name)) {
 				return;
 			}
 			if (!confirm(`ファイル "${file.name}" で書き換えますか？`)) {
@@ -6544,9 +7746,14 @@ const {SettingPanelElement} = (() => {
 			domEvent.dispatchCommand(e.target, 'close');
 			const fileReader = new FileReader();
 			fileReader.onload = ev => {
-				this.config.importJson(ev.target.result);
-				location.reload();
+				try {
+					this.config.importJson(ev.target.result);
+					location.reload();
+				} catch (error) {
+					alert(`設定を読み込めませんでした: ${error.message}`);
+				}
 			};
+			fileReader.onerror = () => alert('設定ファイルを読み取れませんでした。');
 			fileReader.readAsText(file);
 		}
 	}
@@ -6876,15 +8083,33 @@ const VideoInfoLoader = (function () {
 				window.console.warn('watch v4 optional metadata unavailable');
 			}
 		}
-		const owner = lazy.owner;
-		const comment = data.comment;
+		const initialOwner = data.metadata?.jsonLd?.owner;
+		const fallbackOwner = (() => {
+			if (!initialOwner || typeof initialOwner !== 'object') { return null; }
+			const id = String(initialOwner.id ?? '');
+			const icon = typeof initialOwner.iconUrl === 'string' ? initialOwner.iconUrl : undefined;
+			if (initialOwner.type === 'channel' && /^ch\d+$/.test(id)) {
+				return {type: 'channel', id, name: initialOwner.name, thumbnail: {url: icon, smallUrl: icon}};
+			}
+			if (initialOwner.type === 'user' && /^\d+$/.test(id)) {
+				return {type: 'user', id, nickname: initialOwner.name, icon: {url: icon}};
+			}
+			return null;
+		})();
+		const owner = lazy.owner?.type === 'channel' || lazy.owner?.type === 'user' ? lazy.owner : fallbackOwner;
+		const comment = data.comment && typeof data.comment === 'object' ? data.comment : {};
+		const commentIssues = [];
+		if (!data.comment || typeof data.comment !== 'object') { commentIssues.push('comment'); }
+		if (!Array.isArray(comment.threads)) { commentIssues.push('threads'); }
+		if (!Array.isArray(comment.layers)) { commentIssues.push('layers'); }
 		const media = data.media;
 		return {
 			...data,
-			channel: owner?.type === 'channel' ? owner : null,
+			channel: owner?.type === 'channel' ? {...owner, thumbnail: owner.thumbnail || {}} : null,
 			owner: owner?.type === 'user' ? {...owner, iconUrl: owner.icon?.url} : null,
 			series: lazy.series ?? null,
-			external: {commons: {hasContentTree: false}},
+			external: {commons: {hasContentTree:
+				typeof data.external?.commons?.hasContentTree === 'boolean' ? data.external.commons.hasContentTree : null}},
 			tag: data.tags,
 			video: {
 				...data.video,
@@ -6899,10 +8124,15 @@ const VideoInfoLoader = (function () {
 			comment: {
 				...comment, keys: {}, server: {url: comment.nvComment?.server},
 				ng: {...comment.ng, channel: comment.ng?.channel || [], owner: comment.ng?.owner || []},
-				threads: comment.threads.map(thread => ({...thread, isDefaultPostTarget: thread.isPostTarget})),
-				layers: comment.layers.map(layer => ({...layer,
-					threadIds: layer.components.map(({threadId, fork}) => ({id: threadId, fork}))
-				}))
+				threads: (Array.isArray(comment.threads) ? comment.threads : [])
+					.map(thread => ({...thread, isDefaultPostTarget: thread.isPostTarget === true})),
+				layers: (Array.isArray(comment.layers) ? comment.layers : []).map(layer => {
+					if (!Array.isArray(layer?.components)) { commentIssues.push('components'); }
+					return {...layer,
+						threadIds: (Array.isArray(layer?.components) ? layer.components : [])
+							.map(({threadId, fork}) => ({id: threadId, fork}))};
+				}),
+				metadataIssues: commentIssues
 			},
 			media: {delivery: null, domand: media?.accessRightKey && media.contents ? {
 				...media.contents, accessRightKey: media.accessRightKey,
@@ -7046,10 +8276,14 @@ const VideoInfoLoader = (function () {
 			} = { ...viewer };
 			return { id, isPremium };
 		})();
-		const defaultThread = threads.find(t => t.isDefaultPostTarget);
+		const defaultThread = threads.find(t => t.isDefaultPostTarget) || null;
+		const commentMetadataIssues = Array.isArray(_data.comment?.metadataIssues) ? _data.comment.metadataIssues : [];
 		const msgInfo = {
 			server: commentServer,
-			threadId: defaultThread.id,
+			threadId: defaultThread ? defaultThread.id : null,
+			canPost: !!defaultThread,
+			postUnavailableReason: defaultThread ? null : (commentMetadataIssues.length ? 'malformed-comment' : 'no-post-target'),
+			commentMetadataIssues,
 			duration,
 			videoId,
 			nvComment,
@@ -7057,7 +8291,7 @@ const VideoInfoLoader = (function () {
 			isNeedKey: threads.findIndex(t => t.isThreadkeyRequired) >= 0, // (isChannel || isCommunity)
 			optionalThreadId: '',
 			defaultThread,
-			optionalThreads: threads.filter(t => t.id !== defaultThread.id) || [],
+			optionalThreads: defaultThread ? threads.filter(t => t.id !== defaultThread.id) : threads.slice(),
 			threads,
 			userKey,
 			hasOwnerThread: threads.find(t => t.isOwnerThread),
@@ -7317,6 +8551,12 @@ const VideoInfoLoader = (function () {
 			info: data,
 		};
 	};
+	const safeLoadError = err => (err && typeof err === 'object') ? {
+		reason: err.reason, message: err.message, type: err.type, name: err.name,
+		errorCode: err.errorCode ?? err.info?.errorCode ?? null,
+		statusCode: err.statusCode ?? err.info?.statusCode ?? null,
+		isPlayable: err.info?.isPlayable, isNeedPayment: err.info?.isNeedPayment
+	} : {message: String(err)};
 	const createSleep = function (sleepTime) {
 		return new Promise(resolve => setTimeout(resolve, sleepTime));
 	};
@@ -7335,7 +8575,7 @@ const VideoInfoLoader = (function () {
 			.catch(() => Promise.reject({reason: 'network', message: '通信エラー(network)'}))
 			.then(onLoadPromise.bind(this, watchId, options, isRetry))
 			.catch(err => {
-				window.console.error('err', {err, isRetry, url, query});
+				window.console.error('err', {err: safeLoadError(err), isRetry, watchId});
 				if (isRetry) {
 					return Promise.reject({
 						watchId,
@@ -7359,7 +8599,7 @@ const VideoInfoLoader = (function () {
 						return loadPromise(watchId, options, true);
 					});
 				} else {
-					window.console.info('watch api fail', err);
+					window.console.info('watch api fail', safeLoadError(err));
 					return Promise.reject({
 						watchId,
 						message: err.message || '動画情報の取得に失敗',
@@ -7841,62 +9081,420 @@ const CommonsTreeLoader = (() => {
 	const API_BASE = 'https://public-api.commons.nicovideo.jp/v1/tree';
 	const PAGE_SIZE = 100;
 	const DEFAULT_MAX_ITEMS = 300;
-	const fetchPage = async (globalId, kind, offset, limit) => {
+	const pageError = (message, extra = {}) => Object.assign(new Error(message), extra);
+	const WITH_META_DEFAULT = false;
+	const fetchPage = async (globalId, kind, offset, limit, withMeta = WITH_META_DEFAULT) => {
 		const url = `${API_BASE}/${globalId}/relatives/${kind}` +
-			`?_offset=${offset}&_limit=${limit}&_sort=-id`;
+			`?_offset=${offset}&_limit=${limit}${withMeta ? '&with_meta=1' : ''}&_sort=-id`;
 		const res = await netUtil.fetch(url, {credentials: 'omit'});
 		if (res.status === 404) {
-			return {total: 0, contents: [], notFound: true};
+			if (offset === 0) {
+				return {total: 0, contents: [], notFound: true};
+			}
+			throw pageError(`コンテンツツリーの取得に失敗 (${kind}: 404 at ${offset})`, {status: 404});
 		}
 		if (!res.ok) {
-			throw new Error(`コンテンツツリーの取得に失敗 (${kind}: ${res.status})`);
+			throw pageError(`コンテンツツリーの取得に失敗 (${kind}: ${res.status})`, {status: res.status});
 		}
 		const json = await res.json();
-		const box = (json && json.data && json.data[kind]) || {};
-		return {
-			total: typeof box.total === 'number' ? box.total : 0,
-			contents: Array.isArray(box.contents) ? box.contents : []
-		};
+		const metaStatus = json && json.meta ? json.meta.status : undefined;
+		if (metaStatus !== undefined && !(metaStatus >= 200 && metaStatus <= 299)) {
+			throw pageError(`コンテンツツリーの取得に失敗 (${kind}: meta ${metaStatus})`, {status: metaStatus});
+		}
+		const box = json && json.data ? json.data[kind] : undefined;
+		if (!box || typeof box !== 'object' || typeof box.total !== 'number' || !Array.isArray(box.contents)) {
+			throw pageError(`コンテンツツリーの応答形式が不正 (${kind})`, {reason: 'schema'});
+		}
+		return {total: box.total, contents: box.contents};
 	};
-	const loadRelatives = async (globalId, kind, maxItems = DEFAULT_MAX_ITEMS) => {
+	const isGlobalId = id => typeof id === 'string' && /^[a-z]{2}\d+$/.test(id);
+	const count = v => (Number.isInteger(v) && v >= 0) ? v : undefined;
+	const pickMeta = c => {
+		const meta = {};
+		if (typeof c.title === 'string' && c.title.trim()) { meta.title = c.title.trim().slice(0, 300); }
+		const thumb = c.thumbnailURL ?? c.thumbnailUrl;
+		if (typeof thumb === 'string' && /^https:\/\//.test(thumb)) { meta.thumbnailUrl = thumb; }
+		if ((typeof c.userId === 'string' || typeof c.userId === 'number') && /^\d+$/.test(String(c.userId))) { meta.userId = String(c.userId); }
+		const parentsCount = count(c.parentsCount), childrenCount = count(c.childrenCount);
+		if (parentsCount !== undefined) { meta.parentsCount = parentsCount; }
+		if (childrenCount !== undefined) { meta.childrenCount = childrenCount; }
+		return Object.keys(meta).length ? meta : null;
+	};
+	const loadRelatives = async (globalId, kind, maxItems = DEFAULT_MAX_ITEMS, {pageSize = PAGE_SIZE, startOffset = 0, withMeta = WITH_META_DEFAULT} = {}) => {
 		const contents = [];
 		let total = 0;
 		let notFound = false;
-		for (let offset = 0; offset < maxItems; offset += PAGE_SIZE) {
-			const limit = Math.min(PAGE_SIZE, maxItems - offset);
-			const page = await fetchPage(globalId, kind, offset, limit);
+		let stopReason = 'limit';
+		startOffset = Math.max(0, Math.floor(Number(startOffset) || 0));
+		let offset = startOffset;
+		let failure = null;
+		const end = startOffset + maxItems;
+		while (offset < end) {
+			const limit = Math.min(pageSize, end - offset);
+			let page;
+			try {
+				page = await fetchPage(globalId, kind, offset, limit, withMeta);
+			} catch (e) {
+				if (!contents.length && offset === startOffset) {
+					throw e;
+				}
+				failure = {failedOffset: offset, error: e};
+				stopReason = 'failed';
+				break;
+			}
 			total = page.total;
 			notFound = notFound || !!page.notFound;
 			contents.push(...page.contents);
-			if (page.contents.length < limit || contents.length >= total) {
+			offset += limit;
+			if (page.notFound) {
+				stopReason = 'not-found';
+				break;
+			}
+			if (offset >= total) {
+				stopReason = 'end-of-range';
+				break;
+			}
+			if (!page.contents.length) {
+				stopReason = 'empty-page';
 				break;
 			}
 		}
-		const works = contents.map(c => ({
+		const seen = new Set();
+		let duplicateCount = 0, invalidCount = 0;
+		const works = [];
+		for (const c of contents) {
+			if (!c || !isGlobalId(c.globalId)) {
+				invalidCount++;
+				continue;
+			}
+			if (seen.has(c.globalId)) {
+				duplicateCount++;
+				continue;
+			}
+			seen.add(c.globalId);
+			const meta = pickMeta(c);
+			works.push({
+				...(meta ? {meta} : {}),
+				contentId: c.globalId,
+				isVideo: c.contentKind === 'video' && c.visibleStatus === 'visible',
+				contentKind: c.contentKind,
+				visibleStatus: c.visibleStatus
+			});
+		}
+		const result = {
+			total: total || works.length, works, notFound,
+			stopReason,
+			scanComplete: stopReason === 'end-of-range' || stopReason === 'not-found',
+			nextOffset: (stopReason === 'limit' && offset < total) ? offset :
+				(failure ? failure.failedOffset : null),
+			duplicateCount, invalidCount,
+			startOffset, fetchedCount: contents.length,
+			truncated: stopReason === 'limit' && offset < total
+		};
+		if (failure) {
+			Object.assign(result, {failed: true, partial: true, failedOffset: failure.failedOffset});
+			window.console.warn(`コンテンツツリーの一部取得に失敗 (${kind})`, failure.error && failure.error.message);
+		}
+		return result;
+	};
+	const API_MAX_LIMIT = 300;
+	const SCAN_PAGE_SIZE = 300;
+	const META_PAGE_SIZE = 100;
+	const SCAN_MAX_ROWS_PER_SIDE = 100000; // Zenza 側の安全上限（サーバーの上限ではない）
+	const REQUEST_TIMEOUT_MS = 20000;      // 応答ヘッダーと本文の両方を含む期限
+	const RETRY_MAX = 2;
+	const RETRY_AFTER_CAP_MS = 60000;
+	const RETRY_BASE_MS = 1000;
+	const abortErrorOf = signal => {
+		const reason = signal && signal.reason;
+		if (reason && reason.name === 'AbortError') { return reason; }
+		return Object.assign(new Error('aborted'), {name: 'AbortError', kind: 'cancelled'});
+	};
+	const isAbort = e => !!e && (e.name === 'AbortError' || e.kind === 'cancelled');
+	const abortableSleep = (ms, signal) => new Promise((resolve, reject) => {
+		if (signal && signal.aborted) { reject(abortErrorOf(signal)); return; }
+		let onAbort = null;
+		const timer = setTimeout(() => {
+			signal && onAbort && signal.removeEventListener('abort', onAbort);
+			resolve();
+		}, ms);
+		if (signal) {
+			onAbort = () => { clearTimeout(timer); reject(abortErrorOf(signal)); };
+			signal.addEventListener('abort', onAbort, {once: true});
+		}
+	});
+	const retryAfterMs = (value, now = Date.now()) => {
+		if (value === null || value === undefined || value === '') { return null; }
+		const s = String(value).trim();
+		if (/^\d+$/.test(s)) { return parseInt(s, 10) * 1000; }
+		const t = Date.parse(s);
+		return Number.isFinite(t) ? Math.max(0, t - now) : null;
+	};
+	const requestJson = async (url, {signal, timeoutMs = REQUEST_TIMEOUT_MS} = {}) => {
+		if (signal && signal.aborted) { throw abortErrorOf(signal); }
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		let timer = null, rejectStop = null, onAbort = null;
+		const stop = new Promise((resolve, reject) => { rejectStop = reject; });
+		stop.catch(() => {});
+		if (signal) {
+			onAbort = () => { controller && controller.abort(); rejectStop(abortErrorOf(signal)); };
+			signal.addEventListener('abort', onAbort, {once: true});
+		}
+		timer = setTimeout(() => {
+			controller && controller.abort();
+			rejectStop(Object.assign(new Error('timeout'), {kind: 'timeout'}));
+		}, timeoutMs);
+		try {
+			const work = (async () => {
+				const res = await netUtil.fetch(url, {credentials: 'omit', signal: controller ? controller.signal : undefined, timeout: 0});
+				const headers = res && res.headers;
+				const retryAfter = headers && typeof headers.get === 'function' ? headers.get('Retry-After') : null;
+				let json = null, invalidJson = false;
+				if (res.status !== 404 && res.status !== 429) {
+					try { json = await res.json(); } catch (e) { invalidJson = true; }
+				}
+				return {status: res.status, ok: !!res.ok, json, invalidJson, retryAfter};
+			})();
+			work.catch(() => {});
+			return await Promise.race([work, stop]);
+		} catch (e) {
+			if (signal && signal.aborted) { throw abortErrorOf(signal); }
+			throw e;
+		} finally {
+			clearTimeout(timer);
+			signal && onAbort && signal.removeEventListener('abort', onAbort);
+		}
+	};
+	const scanError = (message, extra) => Object.assign(new Error(message), extra);
+	const fetchScanPage = async (globalId, kind, offset, limit, {signal, withMeta = false, timeoutMs, onRetry} = {}) => {
+		limit = Math.max(1, Math.min(API_MAX_LIMIT, limit | 0));
+		const url = `${API_BASE}/${globalId}/relatives/${kind}` +
+			`?_offset=${offset}&_limit=${limit}${withMeta ? '&with_meta=1' : ''}&_sort=-id`;
+		for (let attempt = 0; ; attempt++) {
+			let r;
+			try {
+				r = await requestJson(url, {signal, timeoutMs});
+			} catch (e) {
+				if (isAbort(e)) { throw e; }
+				if (attempt < RETRY_MAX) {
+					onRetry && onRetry({kind, offset, attempt: attempt + 1, reason: e.kind || 'network'});
+					await abortableSleep(RETRY_BASE_MS * (attempt + 1), signal);
+					continue;
+				}
+				throw scanError(`コンテンツツリーの取得に失敗 (${kind}: ${e.kind || 'network'} at ${offset})`, {kind: e.kind || 'network', offset});
+			}
+			if (r.status === 404) {
+				return {notFound: true};
+			}
+			if ([429, 502, 503, 504].includes(r.status)) {
+				const wait = retryAfterMs(r.retryAfter);
+				if (attempt < RETRY_MAX && (wait === null || wait <= RETRY_AFTER_CAP_MS)) {
+					onRetry && onRetry({kind, offset, attempt: attempt + 1, reason: `http-${r.status}`, waitMs: wait});
+					await abortableSleep(wait !== null ? wait : RETRY_BASE_MS * (attempt + 1), signal);
+					continue;
+				}
+				throw scanError(`コンテンツツリーの取得に失敗 (${kind}: ${r.status} at ${offset})`,
+					{kind: r.status === 429 ? 'rate-limited' : 'http', status: r.status, offset, retryAfterMs: wait});
+			}
+			if (!r.ok) {
+				throw scanError(`コンテンツツリーの取得に失敗 (${kind}: ${r.status} at ${offset})`, {kind: 'http', status: r.status, offset});
+			}
+			if (r.invalidJson) {
+				throw scanError(`コンテンツツリーの応答が読めません (${kind} at ${offset})`, {kind: 'schema', offset});
+			}
+			const json = r.json;
+			const metaStatus = json && json.meta ? json.meta.status : undefined;
+			if (metaStatus !== undefined && !(metaStatus >= 200 && metaStatus <= 299)) {
+				throw scanError(`コンテンツツリーの取得に失敗 (${kind}: meta ${metaStatus})`, {kind: 'api', status: metaStatus, offset});
+			}
+			const box = json && json.data ? json.data[kind] : undefined;
+			if (!box || typeof box !== 'object' || !Array.isArray(box.contents)) {
+				throw scanError(`コンテンツツリーの応答形式が不正 (${kind})`, {kind: 'schema', offset});
+			}
+			if (!(Number.isInteger(box.total) && box.total >= 0)) {
+				throw scanError(`コンテンツツリーの総数が不正 (${kind})`, {kind: 'invalid-total', offset});
+			}
+			return {total: box.total, contents: box.contents};
+		}
+	};
+	const toWork = c => {
+		const meta = pickMeta(c);
+		return {
+			...(meta ? {meta} : {}),
 			contentId: c.globalId,
 			isVideo: c.contentKind === 'video' && c.visibleStatus === 'visible',
 			contentKind: c.contentKind,
 			visibleStatus: c.visibleStatus
-		}));
-		return {total: total || works.length, works, notFound};
+		};
 	};
-	const load = async (globalId, maxItems = DEFAULT_MAX_ITEMS) => {
-		const [parents, children] = await Promise.all([
-			loadRelatives(globalId, 'parents', maxItems).catch(e => {
-				window.console.warn('親作品の取得に失敗', e);
-				return {total: 0, works: [], failed: true};
-			}),
-			loadRelatives(globalId, 'children', maxItems).catch(e => {
-				window.console.warn('子作品の取得に失敗', e);
-				return {total: 0, works: [], failed: true};
-			})
-		]);
-		if (parents.failed && children.failed) {
+	const scanSide = async (globalId, kind, {signal, pageSize = SCAN_PAGE_SIZE, startOffset = 0, jobSeen = new Set(),
+		onPage, onRetry, timeoutMs, maxRows = SCAN_MAX_ROWS_PER_SIDE} = {}) => {
+		pageSize = Math.max(1, Math.min(API_MAX_LIMIT, pageSize | 0));
+		startOffset = Math.max(0, Math.floor(Number(startOffset) || 0));
+		const works = [];
+		let offset = startOffset, initialTotal = null, requests = 0, rows = 0;
+		let duplicateCount = 0, crossDuplicateCount = 0, invalidCount = 0;
+		let stopReason = null, failure = null, notFound = false, prevPageKey = null;
+		const totalChanges = [];
+		const sideSeen = new Set();
+		while (true) {
+			if (initialTotal !== null && offset >= initialTotal) { stopReason = 'end-of-range'; break; }
+			if (offset - startOffset >= maxRows) { stopReason = 'job-cap'; break; }
+			const limit = initialTotal === null ? pageSize : Math.min(pageSize, initialTotal - offset);
+			let page;
+			try {
+				page = await fetchScanPage(globalId, kind, offset, limit, {signal, timeoutMs, onRetry});
+				requests++;
+			} catch (e) {
+				if (isAbort(e)) { stopReason = 'cancelled'; break; }
+				failure = {failedOffset: offset, kind: e.kind || 'error', status: e.status, message: e.message};
+				stopReason = 'failed';
+				break;
+			}
+			if (page.notFound) {
+				if (offset === 0 && initialTotal === null) {
+					notFound = true; initialTotal = 0; stopReason = 'not-found';
+				} else {
+					failure = {failedOffset: offset, kind: 'not-found-mid', status: 404};
+					stopReason = 'failed';
+				}
+				break;
+			}
+			if (initialTotal === null) {
+				initialTotal = page.total;
+			} else if (page.total !== initialTotal) {
+				totalChanges.push({offset, total: page.total});
+			}
+			const pageKey = page.contents.map(c => c && c.globalId).join(',');
+			if (page.contents.length && pageKey === prevPageKey) { stopReason = 'repeated-page'; break; }
+			prevPageKey = pageKey;
+			rows += page.contents.length;
+			const before = sideSeen.size;
+			for (const c of page.contents) {
+				if (!c || !isGlobalId(c.globalId)) { invalidCount++; continue; }
+				if (sideSeen.has(c.globalId)) { duplicateCount++; continue; }
+				sideSeen.add(c.globalId);
+				if (jobSeen.has(c.globalId)) { crossDuplicateCount++; continue; }
+				jobSeen.add(c.globalId);
+				works.push(toWork(c));
+			}
+			if (!page.contents.length) {
+				stopReason = offset < initialTotal ? 'empty-before-end' : 'end-of-range';
+				break;
+			}
+			if (sideSeen.size === before) { stopReason = 'no-progress'; break; }
+			offset += limit;
+			onPage && onPage({kind, offset, total: initialTotal, rows, works: works.length, requests});
+		}
+		const total = initialTotal === null ? 0 : initialTotal;
+		const complete = (stopReason === 'end-of-range' || stopReason === 'not-found') && !totalChanges.length;
+		const resumable = stopReason === 'failed' || stopReason === 'job-cap' || stopReason === 'cancelled';
+		return {
+			kind, total, works, rows, requests, stopReason, complete,
+			partial: !complete && (works.length > 0 || rows > 0),
+			failed: stopReason === 'failed',
+			cancelled: stopReason === 'cancelled',
+			notFound, totalChanges, duplicateCount, crossDuplicateCount, invalidCount,
+			startOffset, fetchedCount: rows, scanComplete: complete,
+			failedOffset: failure ? failure.failedOffset : null,
+			failure,
+			truncated: stopReason === 'job-cap',
+			nextOffset: resumable ? offset : null
+		};
+	};
+	const kindCounts = works => works.reduce((acc, w) => {
+		const k = w.contentKind || 'unknown';
+		acc[k] = (acc[k] || 0) + 1;
+		return acc;
+	}, {});
+	const scanAll = async (globalId, {signal, pageSize = SCAN_PAGE_SIZE, offsets = null, onProgress, onRetry, timeoutMs} = {}) => {
+		const jobSeen = new Set();
+		const sides = {};
+		for (const kind of ['parents', 'children']) {
+			const start = offsets ? offsets[kind] : 0;
+			if (offsets && (start === null || start === undefined)) {
+				sides[kind] = {kind, total: 0, works: [], rows: 0, requests: 0, skipped: true, stopReason: 'skipped',
+					complete: true, scanComplete: true, nextOffset: null, startOffset: null, fetchedCount: 0, truncated: false,
+					totalChanges: [], duplicateCount: 0, crossDuplicateCount: 0, invalidCount: 0};
+				continue;
+			}
+			if (signal && signal.aborted) {
+				sides[kind] = {kind, total: 0, works: [], rows: 0, requests: 0, stopReason: 'cancelled', cancelled: true,
+					complete: false, nextOffset: start || 0, startOffset: start || 0, fetchedCount: 0, totalChanges: []};
+				continue;
+			}
+			sides[kind] = await scanSide(globalId, kind, {signal, pageSize, startOffset: start || 0, jobSeen, timeoutMs, onRetry,
+				onPage: p => onProgress && onProgress({...p, phase: 'ids'})});
+		}
+		const {parents, children} = sides;
+		const all = parents.works.concat(children.works);
+		const stats = {
+			requests: parents.requests + children.requests,
+			rows: (parents.rows || 0) + (children.rows || 0),
+			unique: all.length,
+			videoCandidates: all.filter(w => w.isVideo).length,
+			kinds: kindCounts(all),
+			parentsTotal: parents.total, childrenTotal: children.total
+		};
+		const cancelled = !!(parents.cancelled || children.cancelled);
+		const complete = [parents, children].every(s => s.skipped || s.complete);
+		return {parents, children, stats, cancelled, complete};
+	};
+	const scanMeta = async (globalId, kind, total, {signal, pageSize = META_PAGE_SIZE, onPage, timeoutMs} = {}) => {
+		pageSize = Math.max(1, Math.min(META_PAGE_SIZE, pageSize | 0));
+		const metas = new Map();
+		let offset = 0, requests = 0, stopReason = null;
+		const end = Math.max(0, Math.min(Number.isInteger(total) ? total : 0, SCAN_MAX_ROWS_PER_SIDE));
+		while (offset < end) {
+			const limit = Math.min(pageSize, end - offset);
+			let page;
+			try {
+				page = await fetchScanPage(globalId, kind, offset, limit, {signal, withMeta: true, timeoutMs});
+				requests++;
+			} catch (e) {
+				stopReason = isAbort(e) ? 'cancelled' : 'failed';
+				break;
+			}
+			if (page.notFound) { stopReason = 'not-found'; break; }
+			for (const c of page.contents) {
+				if (!c || !isGlobalId(c.globalId)) { continue; }
+				const meta = pickMeta(c);
+				meta && metas.set(c.globalId, meta);
+			}
+			offset += limit;
+			onPage && onPage({kind, offset, total: end, metas: metas.size, requests, map: metas});
+		}
+		return {metas, requests, stopReason: stopReason || 'end-of-range', complete: !stopReason};
+	};
+	const load = async (globalId, maxItems = DEFAULT_MAX_ITEMS, {offsets = null, fullScan = false, signal, onProgress, onRetry, pageSize} = {}) => {
+		if (fullScan) {
+			const result = await scanAll(globalId, {signal, offsets, onProgress, onRetry, pageSize});
+			const requested = [result.parents, result.children].filter(x => !x.skipped);
+			if (!result.cancelled && requested.length && requested.every(x => x.failed && !x.works.length)) {
+				throw Object.assign(new Error('コンテンツツリーの取得に失敗しました'), {result});
+			}
+			return result;
+		}
+		const side = kind => {
+			const start = offsets ? offsets[kind] : 0;
+			if (offsets && (start === null || start === undefined)) {
+				return Promise.resolve({total: 0, works: [], skipped: true, stopReason: 'skipped', scanComplete: true,
+					nextOffset: null, startOffset: null, fetchedCount: 0, truncated: false});
+			}
+			const label = kind === 'parents' ? '親作品' : '子作品';
+			return loadRelatives(globalId, kind, maxItems, {startOffset: start || 0}).catch(e => {
+				window.console.warn(`${label}の取得に失敗`, e && e.message);
+				return {total: 0, works: [], failed: true, nextOffset: start ? start : null, startOffset: start || 0, fetchedCount: 0};
+			});
+		};
+		const [parents, children] = await Promise.all([side('parents'), side('children')]);
+		const requested = [parents, children].filter(x => !x.skipped);
+		if (requested.length && requested.every(x => x.failed && !x.works.length)) {
 			throw new Error('コンテンツツリーの取得に失敗しました');
 		}
 		return {parents, children};
 	};
-	return {load, loadRelatives};
+	return {load, loadRelatives, scanAll, scanSide, scanMeta, retryAfterMs, WITH_META_DEFAULT, API_MAX_LIMIT, SCAN_PAGE_SIZE, META_PAGE_SIZE};
 })();
 const NicodicArticleLoader = (() => {
 	const API_URL = 'https://api.dic.nicovideo.jp/v1/articles/article';
@@ -8028,24 +9626,66 @@ const NVWatchCaller = (() => {
 	};
 	return {call};
 })();
-const PlaybackPosition = {
-	record: (watchId, playbackPosition, frontendId, frontendVersion) => {
-		const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch/history/playback-position';
-		const body =
-				`watchId=${watchId}&seconds=${playbackPosition}`;
-		return netUtil.fetch(url, {
+const PlaybackPosition = (() => {
+	const URL_V2 = 'https://nvapi.nicovideo.jp/v2/users/me/watch/history/playback-position';
+	const isVideoId = id => typeof id === 'string' && /^[a-z]{2}\d+$/.test(id);
+	const readBody = async res => {
+		if (res.status === 204) {
+			return null;
+		}
+		if (typeof res.text === 'function') {
+			const text = await res.text();
+			if (!text || !text.trim()) {
+				return null;
+			}
+			try {
+				return JSON.parse(text);
+			} catch (_) {
+				throw {reason: 'invalid-body', status: res.status};
+			}
+		}
+		if (typeof res.json === 'function') {
+			try {
+				return await res.json();
+			} catch (_) {
+				throw {reason: 'invalid-body', status: res.status};
+			}
+		}
+		return null;
+	};
+	const record = async (videoId, seconds, frontendId, frontendVersion) => {
+		if (!isVideoId(videoId)) {
+			throw {reason: 'invalid-video-id'};
+		}
+		if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds < 0) {
+			throw {reason: 'invalid-seconds'};
+		}
+		const res = await netUtil.fetch(URL_V2, {
 			method: 'PUT',
 			credentials: 'include',
 			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-				'X-Frontend-Id': frontendId,
-				'X-Frontend-Version': frontendVersion,
+				'Content-Type': 'application/json',
+				'X-Frontend-Id': String(frontendId ?? 6),
+				'X-Frontend-Version': String(frontendVersion ?? 0),
 				'X-Request-With': 'https://www.nicovideo.jp'
 			},
-			body
+			body: JSON.stringify({videoId, seconds})
 		});
-	}
-};
+		if (!res) {
+			throw {reason: 'no-response'};
+		}
+		if (typeof res.status === 'number' && (res.status < 200 || res.status > 299)) {
+			throw {reason: 'http', status: res.status};
+		}
+		const body = await readBody(res);
+		const metaStatus = body && body.meta ? body.meta.status : undefined;
+		if (metaStatus !== undefined && !(metaStatus >= 200 && metaStatus <= 299)) {
+			throw {reason: 'api', status: metaStatus, errorCode: body.meta.errorCode || null};
+		}
+		return {status: res.status, metaStatus};
+	};
+	return {record};
+})();
 class CrossDomainGate extends Emitter {
 	static get hostReg() {
 		return /^[a-z0-9]*\.nicovideo\.jp$/;
@@ -8062,34 +9702,92 @@ class CrossDomainGate extends Emitter {
 		this.name = params.name || params.type;
 		this._sessions = {};
 		this._initializeStatus = 'none';
+		this._generation = 0;
+		this._disposed = false;
 	}
 	_initializeFrame() {
-		if (this._initializeStatus !== 'none') {
-			return this.promise('initialize');
+		if (this._disposed) { return Promise.reject(new Error('Gate disposed')); }
+		if (this.loaderFrame && !this.loaderFrame.parentNode) {
+			this._disconnect(new Error('Gate frame removed'));
 		}
+		if (this._initializeStatus !== 'none') { return this.promise('initialize'); }
+		this.resetPromise('initialize');
+		const pending = this.promise('initialize');
 		this._initializeStatus = 'initializing';
-		const append = () => {
-			if (!this.loaderFrame.parentNode) {
-				console.warn('frame removed');
-				this.port = null;
-				this._initializeCrossDomainGate();
+		const generation = ++this._generation;
+		this._initializeTimer = setTimeout(() => {
+			if (generation === this._generation) {
+				this._disconnect(Object.assign(new Error('Gate initialization timeout'), {status: 'timeout'}));
 			}
-		};
-		setTimeout(append,  5 * 1000);
-		setTimeout(append, 10 * 1000);
-		setTimeout(append, 20 * 1000);
-		setTimeout(append, 30 * 1000);
-		setTimeout(() => {
-			if (this._initializeStatus === 'done') {
-				return;
+		}, 60000);
+		if (!this._pageHide) {
+			this._pageHide = () => this._disconnect(new Error('Gate page hidden'));
+			window.addEventListener('pagehide', this._pageHide);
+		}
+		try { this._initializeCrossDomainGate(); }
+		catch (error) { this._disconnect(error); }
+		return pending;
+	}
+	_clearInitializeTimer() {
+		if (this._initializeTimer !== undefined) { clearTimeout(this._initializeTimer); }
+		this._initializeTimer = undefined;
+	}
+	_disconnect(error = new Error('Gate disconnected')) {
+			this._generation;
+		this._clearInitializeTimer();
+		if (this._initialListener) {
+			window.removeEventListener('message', this._initialListener, {capture: true});
+			this._initialListener = null;
+		}
+		if (this._frameObserver) { this._frameObserver.disconnect(); this._frameObserver = null; }
+		if (this._initializeStatus === 'initializing') { this.emitReject('initialize', error); }
+		this._initializeStatus = 'none';
+		this.resetPromise('initialize');
+		for (const id of Object.keys(this._sessions)) { this._settleSession(id, error); }
+		if (this.port) {
+			this.port.removeEventListener && this.port.removeEventListener('message', this._portListener);
+			this.port.removeEventListener && this.port.removeEventListener('messageerror', this._portError);
+			this.port.close && this.port.close();
+		}
+		this.port = null;
+		this._loaderWindow = null;
+		if (this.loaderFrame) { this.loaderFrame.remove(); this.loaderFrame = null; }
+	}
+	dispose() {
+		this._disposed = true;
+		this._disconnect(new Error('Gate disposed'));
+		if (this._pageHide) { window.removeEventListener('pagehide', this._pageHide); this._pageHide = null; }
+		if (this._configListener) { this._config.off('update', this._configListener); this._configListener = null; }
+	}
+	reconnect() {
+		this._disconnect(new Error('Gate reconnecting'));
+		this._disposed = false;
+		return this._initializeFrame();
+	}
+	_settleSession(id, error, result) {
+		const session = this._sessions[id];
+		if (!session) { return; }
+		delete this._sessions[id];
+		session.cleanup();
+		if (arguments.length < 3) {
+			if (session.command === 'fetch' && this.port) {
+				try {
+					this.port.postMessage({body: {command: 'cancelFetch', params: {sessionId: id}}, token: TOKEN});
+				} catch (_) { /* The peer may already be gone. */ }
 			}
-			this.emitReject('initialize', {
-				status: 'timeout', message: `CrossDomainGate初期化タイムアウト (type: ${this._type}, status: ${this._initializeStatus})`
-			});
-			console.warn(`CrossDomainGate初期化タイムアウト (type: ${this._type}, status: ${this._initializeStatus})`);
-		}, 60 * 1000);
-		this._initializeCrossDomainGate();
-		return this.promise('initialize');
+			session.reject(error);
+		} else { session.resolve(result); }
+	}
+	async _waitForInitialize(pending, signal) {
+		if (!signal) { return pending; }
+		if (signal.aborted) { throw signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), {name: 'AbortError'}); }
+		let onAbort;
+		try {
+			return await Promise.race([pending, new Promise((resolve, reject) => {
+				onAbort = () => reject(signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), {name: 'AbortError'}));
+				signal.addEventListener('abort', onAbort, {once: true});
+			})]);
+		} finally { signal.removeEventListener('abort', onAbort); }
 	}
 	_initializeCrossDomainGate() {
 		window.console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
@@ -8103,29 +9801,53 @@ class CrossDomainGate extends Emitter {
 			position: fixed; left: -100vw; pointer-events: none;user-select: none; contain: strict;`;
 		(document.body || document.documentElement).append(loaderFrame);
 		this._loaderWindow = loaderFrame.contentWindow;
-		const onInitialMessage = event => {
-			if (event.source !== this._loaderWindow) {
+		const generation = this._generation;
+		if (typeof MutationObserver !== 'undefined') {
+			this._frameObserver = new MutationObserver(() => {
+				if (generation === this._generation && !loaderFrame.parentNode) {
+					this._disconnect(new Error('Gate frame removed'));
+				}
+			});
+			this._frameObserver.observe(loaderFrame.parentNode, {childList: true});
+		}
+		const onInitialMessage = this._initialListener = event => {
+			if (generation !== this._generation || event.source !== loaderFrame.contentWindow) {
 				return;
 			}
 			this._onMessage(event);
 			if (this._initializeStatus === 'done') {
 				window.removeEventListener('message', onInitialMessage, {capture: true});
+				this._initialListener = null;
 			}
 		};
 		window.addEventListener('message', onInitialMessage, {capture: true});
 		this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
 	}
 	_onMessage(event) {
-		const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+		if (this._disposed) { return; }
+		let data;
+		try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
+		catch (_) { return; }
+		if (!data || !data.body || typeof data.body !== 'object') { return; }
 		const {id, type, token, sessionId, body} = data;
 		if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
 			console.warn('invalid token:',
 				{id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN});
 			return;
 		}
+		if (!this.port && body.command !== 'initialized') { return; }
 		if (!this.port && body.command === 'initialized') {
+			if (!event.ports || !event.ports[0]) { return; }
 			const port = this.port = event.ports[0];
-			port.addEventListener('message', this._onMessage.bind(this));
+			const generation = this._generation;
+			this._portListener = event => {
+				if (generation === this._generation && this.port === port) { this._onMessage(event); }
+			};
+			this._portError = () => {
+				if (generation === this._generation) { this._disconnect(new Error('Gate message error')); }
+			};
+			port.addEventListener('message', this._portListener);
+			port.addEventListener('messageerror', this._portError);
 			port.start();
 			port.postMessage({body: {command: 'ok'}, token: TOKEN});
 		}
@@ -8136,9 +9858,10 @@ class CrossDomainGate extends Emitter {
 			case 'initialized':
 				if (this._initializeStatus !== 'done') {
 					this._initializeStatus = 'done';
+					this._clearInitializeTimer();
 					const originalBody = params;
 					window.console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
-					const result = this._onCommand(originalBody, sessionId);
+					const result = originalBody && this._onCommand(originalBody, sessionId);
 					this.emitResolve('initialize', {status: 'ok'});
 					return result;
 				}
@@ -8152,11 +9875,10 @@ class CrossDomainGate extends Emitter {
 					return;
 				}
 				if (status === 'ok') {
-					session.resolve(params);
+					this._settleSession(sessionId, null, params);
 				} else {
-					session.reject({message: status || 'fail'});
+					this._settleSession(sessionId, {message: status || 'fail'});
 				}
-				delete this._sessions[sessionId];
 			}
 				break;
 		}
@@ -8168,10 +9890,13 @@ class CrossDomainGate extends Emitter {
 		return this._postMessage({command: 'videoCapture', params: {src, sec}})
 			.then(result => Promise.resolve(result.dataUrl));
 	}
-	_fetch(url, options) {
-		return this._postMessage({command: 'fetch', params: {url, options}});
+	_fetch(url, options = {}) {
+		const {signal, ...transferOptions} = options;
+		return this._postMessage({command: 'fetch', params: {url, options: transferOptions}}, true, '',
+			{signal, timeout: options.timeout});
 	}
 	async fetch(resource, options = {}) {
+		options = {...options};
 		let url = resource;
 		if (resource instanceof URL) {
 			url = resource.toString();
@@ -8202,6 +9927,7 @@ class CrossDomainGate extends Emitter {
 	}
 	async configBridge(config) {
 		const keys = config.getKeys();
+		if (this._configListener) { this._config.off('update', this._configListener); this._configListener = null; }
 		this._config = config;
 		const configData = await this._postMessage({
 			command: 'dumpConfig',
@@ -8214,30 +9940,53 @@ class CrossDomainGate extends Emitter {
 			!config.props.allowOtherDomain) {
 			return;
 		}
-		config.on('update', (key, value) => {
+		if (this._disposed) { return; }
+		this._configListener = (key, value) => {
 			if (key === 'autoCloseFullScreen') {
 				return;
 			}
-			this._postMessage({command: 'saveConfig', params: {key, value, prefix: PRODUCT}}, false);
-		});
+			this._postMessage({command: 'saveConfig', params: {key, value, prefix: PRODUCT}}, false).catch(() => {});
+		};
+		config.on('update', this._configListener);
 	}
-	async _postMessage(body, usePromise = true, sessionId = '') {
-		await this._initializeFrame();
+	async _postMessage(body, usePromise = true, sessionId = '', control = {}) {
+		const {signal} = control;
+		const abortReason = () => signal.reason !== undefined ? signal.reason :
+			Object.assign(new Error('Aborted'), {name: 'AbortError'});
+		if (signal && signal.aborted) { throw abortReason(); }
+		const pending = this._initializeFrame();
+		const generation = this._generation;
+		await this._waitForInitialize(pending, signal);
+		if (signal && signal.aborted) { throw abortReason(); }
+		if (this._disposed || generation !== this._generation ||
+				(control.generation !== undefined && control.generation !== generation)) {
+			throw new Error('Gate disconnected before send');
+		}
 		sessionId = sessionId || (`gate:${Math.random()}`);
-		const {params} = body;
+		const params = body.params || {};
 		if (!usePromise) {
 			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
 			return;
 		}
+		if (this._sessions[sessionId]) { throw new Error('Duplicate gate session'); }
 		const session = new PromiseHandler();
+		const timeout = Number.isFinite(control.timeout) && control.timeout > 0 ?
+			Math.min(control.timeout + 1000, 2147483647) : 60000;
+		const timer = setTimeout(() => this._settleSession(sessionId,
+			Object.assign(new Error('Gate request timeout'), {status: 'timeout'})), timeout);
+		const onAbort = () => this._settleSession(sessionId, abortReason());
+		session.command = body.command;
+		session.cleanup = () => {
+			clearTimeout(timer);
+			if (signal) { signal.removeEventListener('abort', onAbort); }
+		};
 		this._sessions[sessionId] = session;
-		try {
-			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
-		} catch (error) {
-			delete this._sessions[sessionId];
-			session.reject(error);
-		}
-		return session;
+		if (signal) { signal.addEventListener('abort', onAbort, {once: true}); }
+		try { this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer); }
+		catch (error) { this._settleSession(sessionId, error); }
+		const result = await session;
+		if (this._disposed || generation !== this._generation) { throw new Error('Gate disconnected after reply'); }
+		return result;
 	}
 	postMessage(body, promise = true) {
 		return this._postMessage(body, promise);
@@ -8252,9 +10001,24 @@ class CrossDomainGate extends Emitter {
 		const worker = await this._postMessage(
 			{command: 'bridge-db', params: {command: 'open', params: {name, ver, stores}}}
 		);
-		const post = (command, data, storeName, transfer) => {
+		let dbGeneration = this._generation;
+		let reopening;
+		const post = async (command, data, storeName, transfer) => {
+			await this._initializeFrame();
+			const generation = this._generation;
+			if (dbGeneration !== generation) {
+				if (!reopening || reopening.generation !== generation) {
+					const promise = this._postMessage(
+						{command: 'bridge-db', params: {command: 'open', params: {name, ver, stores}}},
+						true, '', {generation}
+					).then(() => { dbGeneration = generation; });
+					reopening = {generation, promise};
+					promise.catch(() => { if (reopening && reopening.promise === promise) { reopening = null; } });
+				}
+				await reopening.promise;
+			}
 			const params = {data, storeName, transfer, name};
-			return this._postMessage({command: 'bridge-db', params: {command, params, transfer}});
+			return this._postMessage({command: 'bridge-db', params: {command, params, transfer}}, true, '', {generation});
 		};
 		const result = {worker};
 		for (const meta of stores) {
@@ -8263,6 +10027,7 @@ class CrossDomainGate extends Emitter {
 				return {
 					close: params => post('close', params, storeName),
 					put: (record, transfer) => post('put', record, storeName, transfer),
+					update: data => post('update', data, storeName),
 					get: ({key, index, timeout}) => post('get', {key, index, timeout}, storeName),
 					updateTime: ({key, index, timeout}) => post('updateTime', {key, index, timeout}, storeName),
 					delete: ({key, index, timeout}) => post('delete', {key, index, timeout}, storeName),
@@ -8322,6 +10087,14 @@ class JSONable {
 	}
 }
 class DomandInfo extends JSONable {
+	static _qualityDesc(level) {
+		return (a, b) => {
+			const x = Number(level(a)), y = Number(level(b));
+			const fx = Number.isFinite(x), fy = Number.isFinite(y);
+			if (fx && fy) { return y - x; }
+			return fx === fy ? 0 : (fx ? -1 : 1);
+		};
+	}
 	constructor(rawData, videoDetail, linkedChannelVideo) {
 		super();
 		this._rawData = rawData;
@@ -8335,7 +10108,7 @@ class DomandInfo extends JSONable {
 		return this._rawData.accessRightKey || '';
 	}
 	get audios() {
-		return this._rawData.audios.toSorted((a, b) => b.qualityLevel > a.qualityLevel);
+		return this._rawData.audios.toSorted(DomandInfo._qualityDesc(a => a.qualityLevel));
 	}
 	get availableAudios() {
 		return this.audios.filter(a => a.isAvailable);
@@ -8344,7 +10117,7 @@ class DomandInfo extends JSONable {
 		return this.availableAudios.map(a => a.id);
 	}
 	get videos() {
-		return this._rawData.videos.toSorted((a, b) => b.qualityLevel > a.qualityLevel);
+		return this._rawData.videos.toSorted(DomandInfo._qualityDesc(v => v.qualityLevel));
 	}
 	get availableVideos() {
 		return this.videos.filter(v => v.isAvailable);
@@ -8368,6 +10141,14 @@ class DomandInfo extends JSONable {
 	}
 }
 class DmcInfo extends JSONable {
+	static _qualityDesc(level) {
+		return (a, b) => {
+			const x = Number(level(a)), y = Number(level(b));
+			const fx = Number.isFinite(x), fy = Number.isFinite(y);
+			if (fx && fy) { return y - x; }
+			return fx === fy ? 0 : (fx ? -1 : 1);
+		};
+	}
 	constructor(rawData) {
 		super();
 		this._rawData = rawData;
@@ -8380,7 +10161,7 @@ class DmcInfo extends JSONable {
 		return this._session.urls;
 	}
 	get audios() {
-		return this._rawData.movie.audios.toSorted((a, b) => b.metadata.levelIndex > a.metadata.levelIndex);
+		return this._rawData.movie.audios.toSorted(DmcInfo._qualityDesc(a => a.metadata && a.metadata.levelIndex));
 	}
 	get availableAudios() {
 		return this.audios.filter(a => a.isAvailable);
@@ -8389,7 +10170,7 @@ class DmcInfo extends JSONable {
 		return this.availableAudios.map(a => a.id);
 	}
 	get videos() {
-		return this._rawData.movie.videos.toSorted((a, b) => b.metadata.levelIndex > a.metadata.levelIndex);
+		return this._rawData.movie.videos.toSorted(DmcInfo._qualityDesc(v => v.metadata && v.metadata.levelIndex));
 	}
 	get availableVideos() {
 		return this.videos.filter(v => v.isAvailable);
@@ -8637,8 +10418,16 @@ class VideoInfoModel extends JSONable {
 	set isLiked(v) {
 		this._videoDetail.isLiked = v;
 	}
+	get contentTreeState() {
+		const exists = this._videoDetail.commons_tree_exists;
+		if (exists === null || exists === undefined) { return 'unknown'; }
+		return exists ? 'exists' : 'none';
+	}
 	get hasParentVideo() {
-		return !!(this._videoDetail.commons_tree_exists);
+		return this.contentTreeState === 'exists';
+	}
+	get canOpenContentTree() {
+		return this.contentTreeState !== 'none' && /^[a-z]{2}\d+$/.test(String(this.videoId || ''));
 	}
 	get isHLSRequired() {
 		if (this.isDmcAvailable) {
@@ -8734,13 +10523,13 @@ class VideoInfoModel extends JSONable {
 		return Object.assign({}, series, {thumbnailUrl});
 	}
 	get firstVideo() {
-		return this.series ? this.series.video.first : null;
+		return this.series?.video?.first ?? null;
 	}
 	get prevVideo() {
-		return this.series ? this.series.video.prev : null;
+		return this.series?.video?.prev ?? null;
 	}
 	get nextVideo() {
-		return this.series ? this.series.video.next : null;
+		return this.series?.video?.next ?? null;
 	}
 	get relatedVideoItems() {
 		return this._relatedVideo.playlist || [];
@@ -9163,6 +10952,24 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 			};
 			const UNORDERABLE = ['hot', 'personalized'];
 			const dateReg = /^\d{4}-\d{2}-\d{2}$/;
+			const CONTENT_TYPES = ['long', 'short'];
+			const LISTING_STATUSES = ['included'];
+			const KIND_NEUTRAL = ['', 'any', 'all'];
+			const normalizeConditions = (params = {}) => {
+				const applied = {}, unapplied = [];
+				const contentType = params.selectContentType;
+				if (contentType !== undefined && contentType !== null && contentType !== '') {
+					CONTENT_TYPES.includes(contentType) ? (applied.selectContentType = contentType) : unapplied.push('selectContentType');
+				}
+				const listing = params.channelVideoListingStatus;
+				if (listing !== undefined && listing !== null && listing !== '') {
+					LISTING_STATUSES.includes(listing) ? (applied.channelVideoListingStatus = listing) : unapplied.push('channelVideoListingStatus');
+				}
+				if (params.kind !== undefined && params.kind !== null && !KIND_NEUTRAL.includes(String(params.kind))) {
+					unapplied.push('kind');
+				}
+				return {applied, unapplied};
+			};
 			const canHandle = (params = {}) => {
 				if (params.userId || params.channelId || params.commentCount) {
 					return false;
@@ -9223,6 +11030,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 				if (params.genre && params.genre !== 'all') {
 					q.genres = params.genre;
 				}
+				Object.assign(q, normalizeConditions(params).applied);
 				q.sensitiveContents = 'mask';
 				return q;
 			};
@@ -9262,7 +11070,11 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 					throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`),
 						{status: json && json.meta && json.meta.status});
 				}
-				return json.data;
+				const data = json.data;
+				if (!Array.isArray(data.items) || !Number.isFinite(data.totalCount) || data.totalCount < 0) {
+					throw Object.assign(new Error('nvapi search returned an unexpected schema'), {status: 'schema', kind: 'schema'});
+				}
+				return data;
 			};
 			const search = async (word, params = {}, maxLimit = 100) => {
 				const query = buildQuery(word, params);
@@ -9282,10 +11094,14 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 				const first = await fetchPage(query, firstPage, PAGE_SIZE);
 				const count = first.totalCount;
 				let list = toItems(first, firstPage);
+				const pageHasNext = data => data.hasNext === false ? false : (data.hasNext === true ? true : data.items.length >= PAGE_SIZE);
+				let stopReason = null, failedPage = null;
 				const available = Math.min(count, MAX_RESULT) - (firstPage - 1) * PAGE_SIZE - firstSkip;
 				const wanted = Math.min(limit, Math.max(0, available));
 				const lastPage = Math.min(MAX_API_PAGE, firstPage + Math.ceil(Math.max(0, wanted - list.length) / PAGE_SIZE));
-				if ((first.items || []).length >= PAGE_SIZE && list.length < wanted && lastPage > firstPage) {
+				if (!pageHasNext(first)) {
+					stopReason = 'end';
+				} else if (list.length < wanted && lastPage > firstPage) {
 					const pages = [];
 					for (let pg = firstPage + 1; pg <= lastPage; pg++) {
 						pages.push(pg);
@@ -9307,16 +11123,30 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 						const data = results[i];
 						if (!data) { break; }
 						list = list.concat(toItems(data, pages[i]));
-						if ((data.items || []).length < PAGE_SIZE) { break; }
+						if (!pageHasNext(data)) { stopReason = 'end'; break; }
 					}
-					if (failedAt < pages.length) {
+					if (failedAt < pages.length && !stopReason) {
+						stopReason = 'failed';
+						failedPage = pages[failedAt];
 						window.console.warn('nvapi検索: 途中のページで失敗したため、%d件で打ち切ります', list.length);
 					}
 				}
-				return {status: 'ok', count, list: list.slice(0, limit), engine: 'nvapi', word, params};
+				const returned = list.slice(0, limit);
+				if (!stopReason) {
+					stopReason = list.length >= limit ? 'limit' :
+						((firstPage - 1) * PAGE_SIZE + firstSkip + list.length >= MAX_RESULT ? 'api-page-limit' : 'end');
+				}
+				const resultState = stopReason === 'failed' ? 'partial' :
+					(returned.length === 0 && count === 0 ? 'empty' :
+						(stopReason === 'end' ? 'complete' : 'truncated'));
+				return {status: 'ok', count, list: returned, engine: 'nvapi', word, params,
+					unappliedConditions: normalizeConditions(params).unapplied,
+					resultState, complete: resultState === 'complete' || resultState === 'empty', partial: resultState === 'partial',
+					stopReason, failedPage, returnedCount: returned.length};
 			};
-			return {canHandle, buildQuery, search, toLegacyItem};
+			return {canHandle, buildQuery, search, toLegacyItem, normalizeConditions};
 		})();
+		const KIND_NEUTRAL_FOR_SNAPSHOT = ['', 'any', 'all'];
 		class NicoSearchApiV2Loader {
 			static version = new NicoSearchApiV2Version;
 			static cacheStorage;
@@ -9426,7 +11256,15 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 						window.console.warn('本家検索API(nvapi)での検索に失敗したため、スナップショット検索を使います', e);
 					}
 				}
-				return NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit);
+				const result = await NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit);
+				const p = params || {};
+				const unapplied = ['selectContentType', 'channelVideoListingStatus', 'kind']
+					.filter(key => p[key] !== undefined && p[key] !== null && !KIND_NEUTRAL_FOR_SNAPSHOT.includes(String(p[key])));
+				if (p.genre && p.genre !== 'all') { unapplied.push('genre'); }
+				if (result && typeof result === 'object' && unapplied.length) {
+					result.unappliedConditions = unapplied;
+				}
+				return result;
 			}
 			static async searchByOwner(word, params = {}, maxLimit = 300) {
 				if (params.channelId && !params.userId) {
@@ -10042,6 +11880,81 @@ const {ThreadLoader} = (() => {
 		2: 'easy',
 		3: 'ai',
 	}
+	const POST_TIMEOUT_MS = 30 * 1000;
+	const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS) => {
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		let stage = 'headers';
+		let timer;
+		const deadline = new Promise((resolve, reject) => {
+			timer = setTimeout(() => {
+				const kind = stage === 'headers' ? 'header-timeout' : 'body-timeout';
+				const error = Object.assign(new Error(kind), {name: 'timeout', kind});
+				reject(error);
+				if (controller) { controller.abort(error); }
+			}, timeoutMs);
+		});
+		deadline.catch(() => {});
+		try {
+			let res;
+			try {
+				res = await Promise.race([netUtil.fetch(url, {...options, timeout: timeoutMs, ...(controller ? {signal: controller.signal} : {})}), deadline]);
+			} catch (e) {
+				throw (e && e.kind) ? e : Object.assign(e instanceof Error ? e : new Error(String(e && e.message || e)), {kind: 'network'});
+			}
+			stage = 'body';
+			return await Promise.race([res.json(), deadline]);
+		} finally {
+			clearTimeout(timer);
+		}
+	};
+	const abortReason = signal => signal.reason !== undefined ? signal.reason :
+		Object.assign(new Error('Comment load aborted'), {name: 'AbortError'});
+	const checkAbort = signal => { if (signal && signal.aborted) { throw abortReason(signal); } };
+	const withSignal = async (operation, signal) => {
+		checkAbort(signal);
+		if (!signal) { return operation(); }
+		let onAbort;
+		try {
+			const aborted = new Promise((resolve, reject) => {
+				onAbort = () => reject(abortReason(signal));
+				signal.addEventListener('abort', onAbort, {once: true});
+			});
+			return await Promise.race([aborted, operation()]);
+		} finally { signal.removeEventListener('abort', onAbort); }
+	};
+	const waitForRetry = async (ms, signal) => {
+		if (!signal) { return sleep(ms); }
+		let timer;
+		try {
+			await withSignal(() => new Promise(resolve => { timer = setTimeout(resolve, ms); }), signal);
+		} finally { if (timer !== undefined) { clearTimeout(timer); } }
+	};
+	const readJson = (url, options) => withSignal(async () => {
+		const response = await netUtil.fetch(url, options);
+		checkAbort(options.signal);
+		const header = response.headers && response.headers.get('Retry-After');
+		let retryAfterMs;
+		if (typeof header === 'string') {
+			const value = header.trim();
+			if (/^\d+$/.test(value)) { retryAfterMs = Number(value) * 1000; }
+			else if (/^[A-Za-z]{3},/.test(value)) {
+				const date = Date.parse(value);
+				if (Number.isFinite(date)) { retryAfterMs = Math.max(0, date - Date.now()); }
+			}
+		}
+		let body;
+		try { body = await response.json(); }
+		catch (error) {
+			if (response.status >= 400) { throw {status: response.status, retryAfterMs}; }
+			throw error;
+		}
+		checkAbort(options.signal);
+		if (body.meta.status >= 300 || response.status >= 400) {
+			const failure = body.meta.status >= 300 ? body.meta : {status: response.status};
+			throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
+		}
+		return body;
+	}, options.signal);
 	class ThreadLoader {
 		constructor() {
 			this._threadKeys = {};
@@ -10050,16 +11963,18 @@ const {ThreadLoader} = (() => {
 			let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
 			console.log('getThreadKey url: ', url);
 			try {
-				const { meta, data } = await netUtil.fetch(url, {
+				const { meta, data } = await readJson(url, {
 					headers: {
 						'X-Frontend-Id': FRONT_ID,
 						'X-Frontend-Version': FRONT_VER,
 					},
+					signal: options.signal,
 					credentials: 'include'
-				}).then(res => res.json());
+				});
 				if (meta.status >= 300) {
 					throw meta
 				}
+				checkAbort(options.signal);
 				this._threadKeys[videoId] = data.threadKey;
 				return data
 			} catch (result) {
@@ -10069,14 +11984,16 @@ const {ThreadLoader} = (() => {
 		async getPostKey(threadId, options = {}) {
 			const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
 			console.log('getPostKey url: ', url);
+			const postKeyLanguage = options.language || 'ja-jp';
 			try {
-				const { meta, data } = await netUtil.fetch(url, {
+				const { meta, data } = await fetchJsonWithin(url, {
 					headers: {
 						'X-Frontend-Id': FRONT_ID,
 						'X-Frontend-Version': FRONT_VER,
+						'X-Niconico-Language': postKeyLanguage
 					},
 					credentials: 'include'
-				}).then(res => res.json());
+				});
 				if (meta.status >= 300) {
 					throw meta
 				}
@@ -10108,7 +12025,7 @@ const {ThreadLoader} = (() => {
 		}
 		async _post(url, body, options = {}) {
 			try {
-				const { meta, data } = await netUtil.fetch(url, {
+				const { meta, data } = await fetchJsonWithin(url, {
 					method: 'POST',
 					headers: {
 						'X-Frontend-Id': FRONT_ID,
@@ -10116,7 +12033,7 @@ const {ThreadLoader} = (() => {
 						'Content-Type': 'text/plain; charset=UTF-8'
 					},
 					body
-				}).then(res => res.json());
+				});
 				if (meta.status >= 300) {
 					throw meta
 				}
@@ -10124,11 +12041,13 @@ const {ThreadLoader} = (() => {
 			} catch (result) {
 				throw {
 					result,
+					kind: result && result.kind,
 					message: `コメントの通信失敗`
 				}
 			}
 		}
 		async _load(msgInfo, options = {}) {
+			checkAbort(options.signal);
 			const {
 				params,
 				server,
@@ -10153,21 +12072,24 @@ const {ThreadLoader} = (() => {
 			const url = new URL('/v1/threads', server);
 			console.log('load threads...', url, logSafe.redact(packet));
 			try {
-				const { meta, data } = await netUtil.fetch(url, {
+				const { meta, data } = await readJson(url, {
 					method: 'POST',
+					signal: options.signal,
 					headers: {
 						'X-Frontend-Id': FRONT_ID,
 						'X-Frontend-Version': FRONT_VER,
 						'Content-Type': 'text/plain; charset=UTF-8'
 					},
 					body: JSON.stringify(packet)
-				}).then(res => res.json());
+				});
 				if (meta.status >= 300) {
 					throw meta;
 				}
+				checkAbort(options.signal);
 				data.__usedLanguage = packet.params.language;
 				return data;
 			} catch (result) {
+				checkAbort(options.signal);
 				window.console.error(
 					`_load threads fail: videoId=${msgInfo.videoId} status=${result && result.status} errorCode=${result && result.errorCode}`,
 					logSafe.redact(result)
@@ -10179,6 +12101,7 @@ const {ThreadLoader} = (() => {
 			}
 		}
 		async load(msgInfo, options = {}) {
+			checkAbort(options.signal);
 			const { videoId, userId } = msgInfo;
 			const timeKey = `loadComment videoId: ${videoId}`;
 			console.time(timeKey);
@@ -10196,9 +12119,11 @@ const {ThreadLoader} = (() => {
 						console.time(timeKey);
 					}
 					result = await this._load(msgInfo, loadOptions);
+					checkAbort(options.signal);
 					lastError = null;
 					break;
 				} catch (e) {
+					checkAbort(options.signal);
 					lastError = e;
 					console.timeEnd(timeKey);
 					const failure = e && e.result || e;
@@ -10214,10 +12139,14 @@ const {ThreadLoader} = (() => {
 					}
 					const label = isRetry ? `リトライ${attempt}回目` : '1回目';
 					window.console.error(`loadComment fail (${label}): `, logSafe.redact(e));
-					const delay = RETRY_DELAYS_MS[attempt];
+					let delay = RETRY_DELAYS_MS[attempt];
+					if (delay != null && failure && failure.retryAfterMs >= 0) {
+						if (failure.retryAfterMs > 120000) { break; }
+						delay = Math.max(delay, failure.retryAfterMs);
+					}
 					if (delay != null) {
 						PopupMessage.alert(`コメントの取得失敗: ${delay / 1000}秒後にリトライ`);
-						await sleep(delay);
+						await waitForRetry(delay, options.signal);
 					}
 				}
 			}
@@ -10250,7 +12179,8 @@ const {ThreadLoader} = (() => {
 				userId,
 				videoId,
 				threadId: msgInfo.threadId,
-				is184Forced: msgInfo.defaultThread.is184Forced,
+				is184Forced: msgInfo.defaultThread?.is184Forced === true,
+				canPost: msgInfo.canPost !== false && msgInfo.threadId != null,
 				totalResCount,
 				language: msgInfo.language,
 				when: msgInfo.when,
@@ -10269,8 +12199,14 @@ const {ThreadLoader} = (() => {
 				threadId,
 				language
 			} = msgInfo.threadInfo;
+			if (threadId === null || threadId === undefined || threadId === '' || msgInfo.threadInfo.canPost === false) {
+				throw {status: 'fail', reason: 'no-post-target', message: 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）'};
+			}
 			const url = new URL(`/v1/threads/${threadId}/comments`, msgInfo.nvComment.server);
-			const { postKey } = await this.getPostKey(threadId, { language });
+			const { postKey } = (await this.getPostKey(threadId, { language })) || {};
+			if (typeof postKey !== 'string' || !postKey.trim()) {
+				throw {status: 'fail', reason: 'post-key-missing', message: '投稿キーを取得できませんでした（コメントは送信していません）'};
+			}
 			const packet = JSON.stringify({
 				body: text,
 				commands: cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [],
@@ -10280,19 +12216,35 @@ const {ThreadLoader} = (() => {
 			});
 			console.log('post packet: ', logSafe.redact(packet));
 			try {
-				const { no, id } = await this._post(url, packet);
+				const ack = await this._post(url, packet);
+				const no = ack && typeof ack === 'object' && ack.no !== null && ack.no !== '' ? Number(ack.no) : NaN;
+				if (!Number.isFinite(no)) {
+					throw {ackIncomplete: true};
+				}
 				return {
 					status: 'ok',
 					no,
-					id,
+					id: ack.id,
 					message: 'コメント投稿成功'
 				};
 			} catch (error) {
-				const { result: { status: statusCode, errorCode } } = error;
+				if (error && error.ackIncomplete) {
+					throw {
+						status: 'fail',
+						reason: 'ack-incomplete',
+						outcome: 'unknown',
+						message: 'コメント投稿の結果を確認できませんでした（応答に投稿番号がありません。自動では再投稿しません）'
+					};
+				}
+				const { result: { status: statusCode, errorCode } = {} } = error;
 				if (statusCode == null) {
 					throw {
 						status: 'fail',
-						message: `コメント投稿失敗`
+						reason: error.kind || 'network',
+						outcome: 'unknown',
+						message: error.kind === 'body-timeout' || error.kind === 'header-timeout' ?
+							'コメント投稿の結果を確認できませんでした（応答の待ち時間を超えました。自動では再投稿しません）' :
+							`コメント投稿失敗`
 					};
 				}
 				if (!retrying && ['INVALID_TOKEN', 'EXPIRED_TOKEN'].includes(errorCode)) {
@@ -12150,7 +14102,7 @@ const ScreenFilterPanel = (() => {
 *   - 動画本編の後ろに「提供」のコンテンツがつながっていて、提供音声（mp3）の長さだけ流れる。
 *     時間は音声の再生位置で進む（音声が終われば提供画面も終わる）。コメントもその間流れ続ける。
 *   - 1280×720 の画面。背景は adTopSupporter.auxiliary.bgColor（無ければ #00f）。
-*     bgVideoPosition がある時は、その位置の動画の場面を背景に使う（Zenza では最後の場面で代用）。
+*     bgVideoPosition がある時は、その位置の動画の場面を背景に使う（独立した動画キャプチャで取得し、本編はシークしない）。
 *   - 「提　供」の下に、ニコニ広告のトップ支援者・最新の支援者（NEW!）。
 *     ギフトもある時は 5秒 で左へ 0.3秒 かけてスライドし、ギフトのトップ・最新の支援者に切り替わる。
 *   - ギフトは 1000×562.5 の仮想画面に 50px のマス目で下から積み上がるように落ちてくる（1.25秒、3乗の加速）。
@@ -12611,14 +14563,16 @@ const SupporterCredit = (() => {
 			});
 			this.parentNode.append(view);
 		}
-		async prepare(data, {gift = true} = {}) {
+		async prepare(data, {gift = true, captureBackground, signal} = {}) {
 			this.dispose();
 			this.data = data;
 			this._initializeDom();
 			const s = data.supporters;
 			const bg = s.adTopSupporter;
 			this.bgColor = (bg && bg.auxiliary && bg.auxiliary.bgColor) || DEFAULT_BG;
-			this.useVideoBackground = !!(bg && bg.auxiliary && typeof bg.auxiliary.bgVideoPosition === 'number');
+			this.bgVideoPosition = bg && bg.auxiliary && bg.auxiliary.bgVideoPosition;
+			this.useVideoBackground = Number.isFinite(this.bgVideoPosition) && this.bgVideoPosition >= 0;
+			this._backgroundLoading = this._prepareBackground(captureBackground, signal);
 			this.page = new SupportersPage(s);
 			const header = this.view.querySelector('.scHeader');
 			header.textContent = '';
@@ -12676,53 +14630,96 @@ const SupporterCredit = (() => {
 			return Math.min(MAX_DURATION, (d && isFinite(d) && d > 0) ? d : DEFAULT_DURATION);
 		}
 		get currentTime() {
-			if (this._audioOk && this.audio) { return this.audio.currentTime; }
-			if (this.state === 'playing') {
-				return this._clockBase + (performance.now() - this._clockStart) / 1000;
+			if (this.state !== 'playing') { return this._clockBase; }
+			const now = performance.now();
+			if (this._audioOk && this.audio) {
+				const t = this.audio.currentTime;
+				if (Number.isFinite(t) && t > this._lastAudioTime) {
+					this._lastAudioTime = t;
+					this._audioProgressAt = now;
+					this._clockBase = Math.max(this._clockBase, t);
+					this._clockStart = now;
+				} else if (this.audio.error || now - this._audioProgressAt >= 2000) {
+					this._audioOk = false;
+					this.audio.pause();
+				}
+				if (this._audioOk) { return this._clockBase; }
 			}
-			return this._clockBase;
+			return this._clockBase + (now - this._clockStart) / 1000;
 		}
-		_captureBackground(videoElement) {
-			this.bgCanvas = null;
-			if (!this.useVideoBackground || !videoElement || !videoElement.videoWidth) { return; }
-			try {
-				const c = document.createElement('canvas');
-				c.width = CANVAS_W;
-				c.height = CANVAS_H;
-				const ctx = c.getContext('2d');
-				ctx.fillStyle = '#000';
-				ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-				const vw = videoElement.videoWidth, vh = videoElement.videoHeight;
-				const scale = Math.min(CANVAS_W / vw, CANVAS_H / vh);
-				ctx.drawImage(videoElement, (CANVAS_W - vw * scale) / 2, (CANVAS_H - vh * scale) / 2, vw * scale, vh * scale);
-				this.bgCanvas = c;
-			} catch (e) {
-				this.bgCanvas = null;
+		_watchClock() {
+			if (this.state !== 'playing') { return; }
+			const elapsed = this._elapsedBase + (performance.now() - this._elapsedStart) / 1000;
+			if (this.currentTime >= this.duration + 0.05 || elapsed >= MAX_DURATION) {
+				this._finish();
 			}
+		}
+		_prepareBackground(captureBackground, signal) {
+			if (!this.useVideoBackground || typeof captureBackground !== 'function') { return Promise.resolve(); }
+			const abort = this._backgroundAbort = new AbortController();
+			const relay = () => abort.abort();
+			if (signal) {
+				if (signal.aborted) { relay(); }
+				else { signal.addEventListener('abort', relay, {once: true}); }
+			}
+			const position = this.bgVideoPosition;
+			return Promise.resolve().then(() => {
+				if (abort.signal.aborted) { return null; }
+				return captureBackground(position, abort.signal);
+			}).then(frame => {
+				if (abort.signal.aborted || this._backgroundAbort !== abort || !frame || !frame.width || !frame.height) { return; }
+				const canvas = document.createElement('canvas');
+				canvas.width = CANVAS_W; canvas.height = CANVAS_H;
+				const ctx = canvas.getContext('2d');
+				ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+				const scale = Math.min(CANVAS_W / frame.width, CANVAS_H / frame.height);
+				ctx.drawImage(frame, (CANVAS_W - frame.width * scale) / 2, (CANVAS_H - frame.height * scale) / 2,
+					frame.width * scale, frame.height * scale);
+				this.bgCanvas = canvas;
+			}).catch(() => { /* Keep the configured color if capture is unavailable. */ })
+				.finally(() => {
+					signal && signal.removeEventListener('abort', relay);
+					if (this._backgroundAbort === abort) { this._backgroundAbort = null; }
+				});
 		}
 		start({volume = 1, muted = false, voice = true, videoElement = null} = {}) {
 			if (!this.isReady) { return false; }
-			this._captureBackground(videoElement);
+			this.stop();
+			const generation = this._generation = (this._generation || 0) + 1;
 			this.view.classList.add('is-show');
 			void this.view.offsetWidth;
 			this.view.classList.add('is-visible');
 			this._clockBase = 0;
 			this._audioOk = false;
 			this.state = 'playing';
-			this._clockStart = performance.now();
-			if (this.audio) {
-				this.audio.currentTime = 0;
+			this._clockStart = this._elapsedStart = this._audioProgressAt = performance.now();
+			this._elapsedBase = this._lastAudioTime = 0;
+			const audio = this.audio;
+			if (audio) {
+				audio.currentTime = 0;
 				this.setVolume(volume, muted || !voice);
-				this.audio.onended = () => this._finish();
-				this.audio.play().then(() => {
-					if (this.state === 'idle') { this.audio.pause(); return; }
+				audio.onended = () => {
+					if (generation === this._generation && this.state === 'playing') { this._finish(); }
+				};
+				let play;
+				try { play = audio.play(); } catch (error) { play = Promise.reject(error); }
+				Promise.resolve(play).then(() => {
+					if (generation !== this._generation || this.audio !== audio || this.state === 'idle') { return; }
+					const elapsed = this.currentTime;
+					if (audio.currentTime < elapsed) { audio.currentTime = elapsed; }
+					this._clockBase = elapsed;
+					this._clockStart = this._audioProgressAt = performance.now();
+					this._lastAudioTime = audio.currentTime;
 					this._audioOk = true;
-					this.state === 'paused' && this.audio.pause();
+					if (this.state === 'paused') { audio.pause(); }
 				}).catch(e => {
+					if (generation !== this._generation || this.audio !== audio) { return; }
+					try { audio.pause(); } catch (error) {}
 					window.console.warn('提供音声を再生できませんでした（時計で進めます）', e && e.name);
 					this._audioOk = false;
 				});
 			}
+			this._watchdog = setInterval(() => this._watchClock(), 250);
 			this._schedule();
 			return true;
 		}
@@ -12734,21 +14731,31 @@ const SupporterCredit = (() => {
 		pause() {
 			if (this.state !== 'playing') { return; }
 			this._clockBase = this.currentTime;
+			this._elapsedBase += (performance.now() - this._elapsedStart) / 1000;
 			this.state = 'paused';
 			this.audio && this._audioOk && this.audio.pause();
 		}
 		resume() {
 			if (this.state !== 'paused') { return; }
 			this.state = 'playing';
-			this._clockStart = performance.now();
+			this._clockStart = this._elapsedStart = this._audioProgressAt = performance.now();
 			if (this.audio && this._audioOk) {
-				this.audio.play().catch(() => { this._audioOk = false; });
+				const audio = this.audio, generation = this._generation;
+				let play;
+				try { play = audio.play(); } catch (error) { play = Promise.reject(error); }
+				Promise.resolve(play).catch(() => {
+					if (generation === this._generation && this.audio === audio) { this._audioOk = false; }
+				});
 			}
 			this._schedule();
 		}
 		stop() {
 			if (this.state === 'idle') { return; }
 			this.state = 'idle';
+			this._generation = (this._generation || 0) + 1;
+			clearInterval(this._watchdog);
+			this._watchdog = null;
+			this._audioOk = false;
 			this._raf && cancelAnimationFrame(this._raf);
 			this._raf = 0;
 			if (this.audio) {
@@ -12790,6 +14797,8 @@ const SupporterCredit = (() => {
 			this.state === 'playing' && this._schedule();
 		}
 		dispose() {
+			this._backgroundAbort && this._backgroundAbort.abort();
+			this._backgroundAbort = null;
 			this.stop();
 			if (this.audio) {
 				this.audio.removeAttribute('src');
@@ -12987,7 +14996,11 @@ class NicoVideoPlayer extends Emitter {
 		const loading = this._creditLoading = SupporterCredit.load({videoId: req.videoId, tags: req.tags, signal: abort.signal})
 			.then(async data => {
 				if (abort.signal.aborted || !data) { return; }
-				await credit.prepare(data, {gift: !!props['supporterCredit.gift']});
+				const source = this._videoPlayer.src;
+				await credit.prepare(data, {
+					gift: !!props['supporterCredit.gift'], signal: abort.signal,
+					captureBackground: (sec, signal) => VideoCaptureUtil.capture(source, sec, {signal, timeout: 8000})
+				});
 				if (!abort.signal.aborted) {
 					this._creditData = data;
 				}
@@ -13371,7 +15384,9 @@ class NicoVideoPlayer extends Emitter {
 	getDuration() {return this._videoPlayer.duration;}
 	getChatList() {return this._commentPlayer.chatList;}
 	getVpos() {return Math.floor(this.vpos);}
-	setComment(xmlText, options) {this._commentPlayer.setComment(xmlText, options);}
+	setComment(xmlText, options) {this._commentPlayer.setComment(xmlText, options); }
+	applyHistoryThreads(data, control) { return this._commentPlayer.applyHistoryThreads(data, control); }
+	clearCommentHistory() { this._commentPlayer?.clearCommentHistory(); }
 	getNonFilteredChatList() {return this._commentPlayer.nonFilteredChatList;}
 	getBufferedRange() {return this._videoPlayer.bufferedRange;}
 	setVideoInfo(v) {
@@ -15881,6 +17896,1227 @@ class Storyboard extends Emitter {
 	}
 }
 
+const ZenzaCommentHistoryCore = (() => {
+'use strict';
+const modules = [];
+modules[0] = (() => {
+const COMMENT_ORIGIN = 'https://public.nvcomment.nicovideo.jp';
+class HistoryError extends Error {
+	constructor(code, details={}) {
+		super(code); this.name='HistoryError'; this.code=code;
+		for (const k of ['httpStatus','apiCode','retryAfterMs','causeCode']) if (details[k] !== undefined) this[k]=details[k];
+	}
+}
+function fail(code) { throw new HistoryError(code); }
+function integerOption(value,min,max) {
+	if (!Number.isSafeInteger(value) || value<min || value>max) fail('OPTION');
+	return value;
+}
+function threadId(value) {
+	if (typeof value==='number' && !Number.isSafeInteger(value)) fail('TARGET_SCHEMA');
+	if (!/^[0-9]+$/.test(String(value))) fail('TARGET_SCHEMA');
+	return String(value);
+}
+function targetKey(t) {return `${t.id}:${t.fork}`;}
+function normalizeWatch(input, expectedVideoId) {
+	if(input?.meta?.status!==undefined && input.meta.status!==200)fail('WATCH_SCHEMA');
+	if (typeof expectedVideoId!=='string' || !/^(?:(?:sm|so|nm))?\d+$/.test(expectedVideoId)) fail('OPTION');
+	const candidates=[input?.data?.response?.$watchV4?.data,input?.data?.response,
+		input?.response?.$watchV4?.data,input?.response,input?.$watchV4?.data,input?.data,input];
+	const w=candidates.find(x=>x?.video?.id && x?.comment?.nvComment);
+	if (!w) fail('WATCH_SCHEMA');
+	if (w.video.id!==expectedVideoId) fail('VIDEO_MISMATCH');
+	const nv=w.comment.nvComment;
+	if (nv.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof nv.threadKey!=='string' || !nv.threadKey) fail('MISSING_KEY');
+	const p=nv.params;
+	if (!p || !Array.isArray(p.targets) || !p.targets.length || typeof p.language!=='string' || !/^[a-z]{2}-[a-z]{2}$/i.test(p.language)) fail('WATCH_SCHEMA');
+	const targets=p.targets.map(t=>{
+		if (!['main','owner','easy'].includes(t.fork)) fail('TARGET_SCHEMA');
+		return Object.freeze({id:threadId(t.id),fork:t.fork});
+	});
+	if (new Set(targets.map(targetKey)).size!==targets.length) fail('TARGET_SCHEMA');
+	const ctx={videoId:expectedVideoId,server:COMMENT_ORIGIN,language:p.language,targets:Object.freeze(targets)};
+	Object.defineProperty(ctx,'threadKey',{value:nv.threadKey,enumerable:false});
+	return Object.freeze(ctx);
+}
+function checkedTargets(context, targets=context.targets) {
+	if (!Array.isArray(targets) || !targets.length) fail('OPTION');
+	const allowed=new Set(context.targets.map(targetKey));
+	const selected=targets.map(t=>({id:threadId(t.id),fork:t.fork}));
+	if (selected.some(t=>!allowed.has(targetKey(t)))) fail('TARGET_NOT_ALLOWED');
+	if (new Set(selected.map(targetKey)).size!==selected.length) fail('OPTION');
+	return selected;
+}
+function buildThreadRequest(context,{targets=context.targets,when,resFrom}={}) {
+	if (context.server!==COMMENT_ORIGIN) fail('SERVER_NOT_ALLOWED');
+	if (typeof context.threadKey!=='string' || !context.threadKey) fail('MISSING_KEY');
+	const selected=checkedTargets(context,targets), additionals={};
+	if (when!==undefined) additionals.when=integerOption(when,0,9999999999);
+	if (resFrom!==undefined) additionals.res_from=integerOption(resFrom,-1000,-1);
+	return {url:`${COMMENT_ORIGIN}/v1/threads?pc=1`,init:{method:'POST',
+		headers:{'Content-Type':'text/plain;charset=UTF-8','X-Frontend-Id':'6','X-Frontend-Version':'0','X-Client-Os-Type':'others'},
+		mode:'cors',credentials:'omit',cache:'no-store',redirect:'error',
+		body:JSON.stringify({params:{targets:selected,language:context.language},threadKey:context.threadKey,additionals})}};
+}
+const FIELDS=['id','no','vposMs','body','commands','userId','isPremium','score','postedAt','nicoruCount','nicoruId','source','isMyPost','deleted'];
+function copyComment(c) {
+	const out={};for(const k of FIELDS) if(Object.hasOwn(c,k))out[k]=k==='commands'?[...c.commands]:c[k];
+	return out;
+}
+function normalizeComment(c) {
+	const idOk=typeof c?.id==='string' && c.id.length>0 || Number.isSafeInteger(c?.id) && c.id>=0;
+	if(!c || !idOk || !Number.isSafeInteger(c.no) || c.no<0 || !Number.isFinite(c.vposMs) ||
+		typeof c.body!=='string' || typeof c.userId!=='string' || !Array.isArray(c.commands) || c.commands.some(x=>typeof x!=='string') ||
+		typeof c.postedAt!=='string' || !/^\d{4}-\d\d-\d\dT/.test(c.postedAt) || !Number.isFinite(Date.parse(c.postedAt)) || Date.parse(c.postedAt)<0) fail('COMMENT_SCHEMA');
+	for(const k of ['isPremium','isMyPost'])if(Object.hasOwn(c,k)&&typeof c[k]!=='boolean')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'score')&&!Number.isFinite(c.score))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruCount')&&(!Number.isSafeInteger(c.nicoruCount)||c.nicoruCount<0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'source')&&typeof c.source!=='string')fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'nicoruId')&&c.nicoruId!==null&&typeof c.nicoruId!=='string'&&!(Number.isSafeInteger(c.nicoruId)&&c.nicoruId>=0))fail('COMMENT_SCHEMA');
+	if(Object.hasOwn(c,'deleted')&&typeof c.deleted!=='boolean'&&!Number.isSafeInteger(c.deleted))fail('COMMENT_SCHEMA');
+	const out=copyComment(c);out.id=String(c.id);return out;
+}
+function validateThreads(body, context, targets=context.targets) {
+	if(body?.meta?.status!==200 || body?.meta?.errorCode) fail('API_ERROR');
+	if(!Array.isArray(body?.data?.threads)) fail('RESPONSE_SCHEMA');
+	const selected=checkedTargets(context,targets), expected=new Set(selected.map(targetKey)), seen=new Set();
+	const result=body.data.threads.map(th=>{
+		const id=threadId(th.id), fork=th.fork, key=targetKey({id,fork});
+		if(!expected.has(key))fail('TARGET_NOT_ALLOWED');
+		if(seen.has(key))fail('RESPONSE_SCHEMA');seen.add(key);
+		if(!Array.isArray(th.comments) || !Number.isSafeInteger(th.commentCount) || th.commentCount<0)fail('RESPONSE_SCHEMA');
+		return {id,fork,commentCount:th.commentCount,comments:th.comments.map(normalizeComment)};
+	});
+	if(seen.size!==expected.size)fail('MISSING_TARGET');
+	return result;
+}
+class CommentStore {
+	#context; #items=new Map(); #threads=new Map();
+	constructor(context){this.#context=context;}
+	get size(){return this.#items.size;}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	add(threads,allowance=Infinity) {
+		if(allowance!==Infinity)integerOption(allowance,0,50000);
+		if(threads.length)checkedTargets(this.#context,threads);
+		const ids=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const key=this.#key(t,c),existing=this.#items.get(key)?.comment.id??ids.get(key);
+			if(existing!==undefined && existing!==c.id)fail('IDENTITY_CONFLICT');
+			ids.set(key,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=targetKey(t);this.#threads.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const key=this.#key(t,c);
+				if(this.#items.has(key)){duplicates++;continue;}
+				if(added>=allowance){limited=true;continue;}
+				this.#items.set(key,{thread:tk,comment:copyComment(c)});added++;
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	snapshot(){
+		const out=new Map([...this.#threads].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const {thread,comment} of this.#items.values())out.get(thread).comments.push(copyComment(comment));
+		return [...out.values()];
+	}
+}
+function summarizeThreads(threads){
+	return threads.map(t=>{
+		let oldest=Infinity,newest=-Infinity,minNo=Infinity,maxNo=-Infinity,prevDate=-Infinity,prevNo=-Infinity,prevVpos=-Infinity;
+		let ascendingPostedAt=true,ascendingNo=true,ascendingVpos=true;
+		for(const c of t.comments){const sec=Date.parse(c.postedAt)/1000;oldest=Math.min(oldest,sec);newest=Math.max(newest,sec);
+			minNo=Math.min(minNo,c.no);maxNo=Math.max(maxNo,c.no);ascendingPostedAt&&=sec>=prevDate;ascendingNo&&=c.no>=prevNo;ascendingVpos&&=c.vposMs>=prevVpos;
+			prevDate=sec;prevNo=c.no;prevVpos=c.vposMs;}
+		return {id:t.id,fork:t.fork,commentCountField:t.commentCount,returnedCount:t.comments.length,
+			oldestUnixSeconds:oldest===Infinity?null:Math.floor(oldest),newestUnixSeconds:newest===-Infinity?null:Math.floor(newest),
+			minNo:minNo===Infinity?null:minNo,maxNo:maxNo===-Infinity?null:maxNo,ascendingPostedAt,ascendingNo,ascendingVpos};
+	});
+}
+function withThreadKey(context,key){
+	if(context.server!==COMMENT_ORIGIN)fail('SERVER_NOT_ALLOWED');
+	if(typeof key!=='string'||!key)fail('MISSING_KEY');
+	const next={videoId:context.videoId,server:context.server,language:context.language,targets:context.targets};
+	Object.defineProperty(next,'threadKey',{value:key,enumerable:false});
+	return Object.freeze(next);
+}
+return Object.freeze({COMMENT_ORIGIN,HistoryError,fail,integerOption,normalizeWatch,checkedTargets,buildThreadRequest,validateThreads,CommentStore,summarizeThreads,withThreadKey});
+})();
+modules[1] = (() => {
+const {HistoryError,integerOption,fail} = modules[0];
+const SETTINGS_SCHEMA=Object.freeze([
+	{name:'maxAdditionalComments',label:'追加コメント上限',type:'integer',default:5000,min:1,max:20000},
+	{name:'maxPages',label:'履歴ページ上限',type:'integer',default:100,min:1,max:100},
+	{name:'maxRequests',label:'総リクエスト上限（再試行・キー更新を含む）',type:'integer',default:150,min:1,max:200},
+	{name:'minIntervalMs',label:'通信の最小間隔（ミリ秒）',type:'integer',default:1500,min:1500,max:60000},
+	{name:'requestTimeoutMs',label:'通信タイムアウト（ミリ秒）',type:'integer',default:10000,min:1000,max:30000},
+	{name:'maxElapsedMs',label:'取得全体の時間上限（ミリ秒）',type:'integer',default:300000,min:1000,max:300000},
+	{name:'maxRetries',label:'一操作ごとの再試行上限',type:'integer',default:2,min:0,max:3},
+	{name:'maxKeyRefreshes',label:'キー更新の総上限',type:'integer',default:1,min:0,max:2},
+	{name:'includeEasy',label:'かんたんコメントも追加取得',type:'boolean',default:false},
+].map(d=>Object.freeze({...d,key:`commentHistory.${d.name}`})));
+const DEFAULT_SETTINGS=Object.freeze(Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.name,d.default])));
+function normalizeSettings(input={}){
+	if(!input || typeof input!=='object' || Array.isArray(input))fail('OPTION');
+	const names=new Set(SETTINGS_SCHEMA.map(d=>d.name));
+	if(Object.keys(input).some(k=>!names.has(k)))fail('OPTION');
+	const values={...DEFAULT_SETTINGS,...input};
+	for(const d of SETTINGS_SCHEMA){
+		if(d.type==='boolean'){if(typeof values[d.name]!=='boolean')fail('OPTION');}
+		else integerOption(values[d.name],d.min,d.max);
+	}
+	return values;
+}
+class SettingsStore {
+	#read;#write;
+	constructor({read,write}){
+		if(typeof read!=='function'||typeof write!=='function')fail('OPTION');
+		this.#read=read;this.#write=write;
+	}
+	get(){
+		const saved=this.#read();
+		if(saved===null||saved===undefined)return normalizeSettings();
+		if(saved.schema!=='nico-comment-history-settings'||saved.version!==1)throw new HistoryError('SETTINGS_VERSION');
+		if(!saved.values||typeof saved.values!=='object'||Array.isArray(saved.values))fail('OPTION');
+		return normalizeSettings(saved.values);
+	}
+	patch(changes){
+		if(!changes||typeof changes!=='object'||Array.isArray(changes))fail('OPTION');
+		const values=normalizeSettings({...this.get(),...changes});
+		this.#write({schema:'nico-comment-history-settings',version:1,values:{...values}});
+		return values;
+	}
+}
+return Object.freeze({SETTINGS_SCHEMA,DEFAULT_SETTINGS,normalizeSettings,SettingsStore});
+})();
+modules[2] = (() => {
+const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} = modules[0];
+function assertNotCancelled(signal){if(signal?.aborted)throw new HistoryError('CANCELLED');}
+async function withDeadline(work,{signal,timeoutMs=10000,timeoutCode='TIMEOUT'}={}){
+	integerOption(timeoutMs,1,300000);if(!['TIMEOUT','TIME_LIMIT'].includes(timeoutCode))throw new HistoryError('OPTION');assertNotCancelled(signal);
+	const controller=new AbortController();let timeout=false, rejectAbort;
+	const onParent=()=>controller.abort();const onAbort=()=>rejectAbort(new HistoryError(timeout?timeoutCode:'CANCELLED'));
+	const aborted=new Promise((_,reject)=>{rejectAbort=reject;});
+	controller.signal.addEventListener('abort',onAbort,{once:true});signal?.addEventListener('abort',onParent,{once:true});
+	const timer=setTimeout(()=>{timeout=true;controller.abort();},timeoutMs);
+	try{return await Promise.race([Promise.resolve().then(()=>{assertNotCancelled(controller.signal);return work(controller.signal);}),aborted]);}
+	finally{clearTimeout(timer);signal?.removeEventListener('abort',onParent);controller.signal.removeEventListener('abort',onAbort);}
+}
+function abortableDelay(ms,signal){
+	integerOption(ms,0,300000);
+	return new Promise((resolve,reject)=>{
+		if(signal?.aborted){reject(new HistoryError('CANCELLED'));return;}
+		const finish=()=>{signal?.removeEventListener('abort',cancel);resolve();};
+		const timer=setTimeout(finish,ms);
+		function cancel(){clearTimeout(timer);signal?.removeEventListener('abort',cancel);reject(new HistoryError('CANCELLED'));}
+		signal?.addEventListener('abort',cancel,{once:true});
+	});
+}
+async function readBoundedText(response,maxBytes,signal){
+	if(!response.body)return '';
+	const reader=response.body.getReader(),parts=[];let size=0,finished=false;
+	const onAbort=()=>{void reader.cancel().catch(()=>{});};
+	signal?.addEventListener('abort',onAbort,{once:true});
+	try{
+		while(true){assertNotCancelled(signal);const {done,value}=await reader.read();if(done){finished=true;break;}
+			size+=value.byteLength;if(size>maxBytes)throw new HistoryError('RESPONSE_TOO_LARGE');parts.push(value);}
+		const data=new Uint8Array(size);let offset=0;for(const part of parts){data.set(part,offset);offset+=part.byteLength;}
+		return new TextDecoder('utf-8',{fatal:true}).decode(data);
+	}finally{signal?.removeEventListener('abort',onAbort);if(!finished){try{await reader.cancel();}catch{}}reader.releaseLock();}
+}
+const API_CODES=new Set(['TOO_MANY_REQUESTS','EXPIRED_TOKEN','INVALID_TOKEN','INVALID_PARAMETER','NOT_FOUND','FORBIDDEN']);
+function retryAfter(header){
+	if(!header)return undefined;
+	if(/^\d+(?:\.\d+)?$/.test(header)){const ms=Number(header)*1000;return Number.isSafeInteger(Math.ceil(ms))?Math.ceil(ms):undefined;}
+	const value=Date.parse(header);return Number.isFinite(value)?Math.max(0,value-Date.now()):undefined;
+}
+async function requestJson(url,init,options={}){
+	const {fetchImpl=globalThis.fetch,timeoutMs=10000,maxBytes=4*1024*1024,signal}=options;
+	integerOption(maxBytes,1,8*1024*1024);if(typeof fetchImpl!=='function')throw new HistoryError('OPTION');
+	try{
+		return await withDeadline(async innerSignal=>{
+			const response=await fetchImpl(url,{...init,signal:innerSignal});assertNotCancelled(innerSignal);
+			const text=await readBoundedText(response,maxBytes,innerSignal);assertNotCancelled(innerSignal);
+			let data;try{data=JSON.parse(text);}catch{}
+			const raw=data?.meta?.errorCode,apiCode=API_CODES.has(raw)?raw:raw?'OTHER':undefined;
+			const details={httpStatus:response.status,apiCode,retryAfterMs:retryAfter(response.headers.get('Retry-After'))};
+			if(response.status===429||apiCode==='TOO_MANY_REQUESTS')throw new HistoryError('RATE_LIMITED',details);
+			if(apiCode==='EXPIRED_TOKEN')throw new HistoryError('TOKEN_EXPIRED',details);
+			if(apiCode==='INVALID_TOKEN')throw new HistoryError('TOKEN_INVALID',details);
+			if(!response.ok)throw new HistoryError(apiCode?'API_ERROR':'HTTP_ERROR',details);
+			if(!data)throw new HistoryError('INVALID_JSON',{httpStatus:response.status});
+			if(data.meta?.status!==200||raw)throw new HistoryError('API_ERROR',details);
+			return data;
+		},{signal,timeoutMs});
+	}catch(error){if(error instanceof HistoryError)throw error;throw new HistoryError('NETWORK_ERROR');}
+}
+async function requestThreads(context,options={}){
+	const {url,init}=buildThreadRequest(context,options);
+	return validateThreads(await requestJson(url,init,options),context,options.targets??context.targets);
+}
+const READ_HEADERS=Object.freeze({'X-Frontend-Id':'6','X-Frontend-Version':'0','X-Niconico-Language':'ja-jp'});
+function checkedVideoId(id){
+	if(typeof id!=='string'||!/^(?:(?:sm|so|nm))?\d+$/.test(id))throw new HistoryError('OPTION');return id;
+}
+async function requestWatchContext(videoId,options={}){
+	const id=checkedVideoId(videoId);
+	const data=await requestJson(`https://www.nicovideo.jp/watch/${id}?responseType=json`,
+		{method:'GET',credentials:'include',cache:'no-store',redirect:'error'},options);
+	return normalizeWatch(data,id);
+}
+async function requestThreadKey(context,options={}){
+	if(context.server!==COMMENT_ORIGIN)throw new HistoryError('SERVER_NOT_ALLOWED');
+	const id=checkedVideoId(context.videoId);
+	const data=await requestJson(`https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${id}`,
+		{method:'GET',headers:{...READ_HEADERS,'X-Niconico-Language':context.language},
+			credentials:'include',mode:'cors',cache:'no-store',redirect:'error'},options);
+	return withThreadKey(context,data?.data?.threadKey);
+}
+const SAFE_CODES=new Set(['OPTION','CANCELLED','TIMEOUT','TIME_LIMIT','REQUEST_LIMIT','RETRY_LIMIT','KEY_REFRESH_LIMIT',
+	'ALREADY_RUN','HISTORY_RUNNING','BASELINE_LIMIT','SETTINGS_VERSION','RATE_LIMITED','TOKEN_EXPIRED','TOKEN_INVALID',
+	'API_ERROR','HTTP_ERROR','INVALID_JSON','RESPONSE_TOO_LARGE','NETWORK_ERROR','RESPONSE_SCHEMA','COMMENT_SCHEMA',
+	'TARGET_SCHEMA','TARGET_NOT_ALLOWED','MISSING_TARGET','IDENTITY_CONFLICT','WATCH_SCHEMA','VIDEO_MISMATCH','MISSING_KEY',
+	'SERVER_NOT_ALLOWED','CONTEXT_CHANGED','UNKNOWN_ERROR']);
+function safeError(error){
+	const out={code:SAFE_CODES.has(error?.code)?error.code:'UNKNOWN_ERROR'};
+	if(Number.isInteger(error?.httpStatus))out.httpStatus=error.httpStatus;
+	if(API_CODES.has(error?.apiCode)||error?.apiCode==='OTHER')out.apiCode=error.apiCode;
+	if(Number.isFinite(error?.retryAfterMs)&&error.retryAfterMs>=0)out.retryAfterMs=error.retryAfterMs;
+	if(SAFE_CODES.has(error?.causeCode))out.causeCode=error.causeCode;
+	return out;
+}
+return Object.freeze({assertNotCancelled,withDeadline,abortableDelay,requestThreads,requestWatchContext,requestThreadKey,safeError});
+})();
+modules[3] = (() => {
+const {HistoryError,fail} = modules[0];
+const {normalizeSettings} = modules[1];
+const {withDeadline,abortableDelay,assertNotCancelled,safeError} = modules[2];
+class RequestCoordinator {
+	#settings;#now;#sleep;#random;#start=null;#nextAllowed=0;#tail=Promise.resolve();
+	#attempts=0;#successful=0;#retries=0;#keyRefreshes=0;
+	#byKind={metadata:0,comment:0,key:0};
+	constructor({settings={},now=()=>performance.now(),sleep=abortableDelay,random=Math.random}={}){
+		this.#settings=normalizeSettings(settings);this.#now=now;this.#sleep=sleep;this.#random=random;
+		if([now,sleep,random].some(f=>typeof f!=='function'))fail('OPTION');
+	}
+	#remaining(){return this.#settings.maxElapsedMs-(this.#now()-this.#start);}
+	#check(signal){
+		assertNotCancelled(signal);
+		if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+		if(this.#attempts>=this.#settings.maxRequests)throw new HistoryError('REQUEST_LIMIT');
+	}
+	async #queued(work,signal){
+		assertNotCancelled(signal);
+		if(this.#start===null)this.#start=this.#now();
+		const previous=this.#tail;let release;
+		const done=new Promise(resolve=>{release=resolve;});
+		this.#tail=previous.catch(()=>{}).then(()=>done);
+		try{
+			this.#check(signal);
+			await withDeadline(()=>previous,{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);return await work();
+		}finally{release();}
+	}
+	#retryable(e){
+		return ['NETWORK_ERROR','TIMEOUT','RATE_LIMITED'].includes(e?.code)||
+			e?.code==='HTTP_ERROR'&&[500,502,503,504].includes(e.httpStatus);
+	}
+	async #perform(work,{signal,kind='comment',onRetry}={}){
+		if(!['metadata','comment','key'].includes(kind)||typeof work!=='function')fail('OPTION');
+		let retried=0;
+		while(true){
+			this.#check(signal);
+			const delay=Math.max(0,Math.ceil(this.#nextAllowed-this.#now()));
+			if(delay>=this.#remaining())throw new HistoryError('TIME_LIMIT');
+			if(delay)await withDeadline(s=>this.#sleep(delay,s),{signal,timeoutMs:Math.max(1,Math.ceil(this.#remaining())),timeoutCode:'TIME_LIMIT'});
+			this.#check(signal);
+			const remaining=this.#remaining(),timeoutMs=Math.min(this.#settings.requestTimeoutMs,Math.max(1,Math.ceil(remaining)));
+			this.#attempts++;this.#byKind[kind]++;this.#nextAllowed=this.#now()+this.#settings.minIntervalMs;
+			try{
+				const result=await withDeadline(s=>work({signal:s,timeoutMs}),{signal,timeoutMs,
+					timeoutCode:remaining<=this.#settings.requestTimeoutMs?'TIME_LIMIT':'TIMEOUT'});
+				assertNotCancelled(signal);
+				if(this.#remaining()<=0)throw new HistoryError('TIME_LIMIT');
+				this.#successful++;return result;
+			}catch(e){
+				assertNotCancelled(signal);
+				if(!this.#retryable(e))throw e;
+				if(retried>=this.#settings.maxRetries)throw new HistoryError('RETRY_LIMIT',{...safeError(e),causeCode:safeError(e).code});
+				this.#check(signal);
+				const random=this.#random();const jitter=Number.isFinite(random)?Math.floor(Math.max(0,Math.min(1,random))*250):0;
+				const exponential=1000*2**retried+jitter;
+				const rateWait=e.code==='RATE_LIMITED'?(Number.isFinite(e.retryAfterMs)&&e.retryAfterMs>=0?e.retryAfterMs:60000):0;
+				const waitMs=Math.ceil(Math.max(this.#settings.minIntervalMs,exponential,rateWait));
+				if(waitMs>=this.#remaining())throw new HistoryError('TIME_LIMIT',{causeCode:safeError(e).code});
+				this.#nextAllowed=Math.max(this.#nextAllowed,this.#now()+waitMs);
+				retried++;this.#retries++;
+				try{onRetry?.({kind,retryNumber:retried,waitMs,error:safeError(e)});}catch{}
+			}
+		}
+	}
+	execute(work,options={}){return this.#queued(()=>this.#perform(work,options),options.signal);}
+	refresh(work,options={}){
+		return this.#queued(()=>{
+			if(this.#keyRefreshes>=this.#settings.maxKeyRefreshes)throw new HistoryError('KEY_REFRESH_LIMIT');
+			this.#keyRefreshes++;return this.#perform(work,{...options,kind:'key'});
+		},options.signal);
+	}
+	stats(){
+		return {attempts:this.#attempts,successfulRequests:this.#successful,retries:this.#retries,keyRefreshes:this.#keyRefreshes,
+			requestsByKind:{...this.#byKind},remainingRequests:Math.max(0,this.#settings.maxRequests-this.#attempts),
+			elapsedMs:this.#start===null?0:Math.max(0,Math.round(this.#now()-this.#start))};
+	}
+}
+return Object.freeze({RequestCoordinator});
+})();
+modules[4] = (() => {
+const {validateThreads,integerOption,fail} = modules[0];
+class LayeredCommentStore {
+	#context;
+	#items=new Map();
+	#normalMeta=new Map();
+	#historyMeta=new Map();
+	#normalCount=0;
+	#historyCount=0;
+	#overlapCount=0;
+	constructor(context){this.#context=context;}
+	#threadKey(t){return JSON.stringify([t.id,t.fork]);}
+	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
+	#add(input,kind,allowance){
+		integerOption(allowance,0,50000);
+		if(!Array.isArray(input))fail('RESPONSE_SCHEMA');
+		if(!input.length)return {added:0,duplicates:0,limited:false};
+		const threads=validateThreads({meta:{status:200},data:{threads:input}},this.#context,input.map(t=>({id:t.id,fork:t.fork})));
+		const pageIds=new Map();
+		for(const t of threads)for(const c of t.comments){
+			const k=this.#key(t,c),old=this.#items.get(k);
+			const id=old?.normal?.id??old?.history?.id??pageIds.get(k);
+			if(id!==undefined && id!==c.id)fail('IDENTITY_CONFLICT');
+			pageIds.set(k,c.id);
+		}
+		let added=0,duplicates=0,limited=false;
+		for(const t of threads){
+			const tk=this.#threadKey(t);
+			const meta=kind==='normal'?this.#normalMeta:this.#historyMeta;
+			meta.set(tk,{id:t.id,fork:t.fork,commentCount:t.commentCount});
+			for(const c of t.comments){
+				const k=this.#key(t,c),old=this.#items.get(k);
+				const gains=kind==='history'?!old?.normal&&!old?.history:!old?.normal;
+				if(gains && added>=allowance){limited=true;continue;}
+				const entry=old??{thread:tk,normal:null,history:null};
+				if(entry[kind])duplicates++;
+				else {
+					if(kind==='normal')this.#normalCount++;else this.#historyCount++;
+					if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
+				}
+				if(gains)added++;
+				entry[kind]=c;
+				this.#items.set(k,entry);
+			}
+		}
+		return {added,duplicates,limited};
+	}
+	addNormal(threads){return this.#add(threads,'normal',50000);}
+	addHistory(threads,allowance=50000){return this.#add(threads,'history',allowance);}
+	removeHistory(){
+		for(const [key,entry] of this.#items){
+			if(entry.normal)entry.history=null;else this.#items.delete(key);
+		}
+		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;
+	}
+	historySnapshot(){
+		const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
+		for(const entry of this.#items.values())if(entry.history){
+			const c=entry.history;out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		return [...out.values()];
+	}
+	counts(){
+		return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
+			additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
+	}
+	snapshot({historyEnabled=true,historyOnly=false}={}){
+		const out=new Map();
+		if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
+		for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
+		for(const entry of this.#items.values()){
+			const c=historyOnly?(entry.normal?null:entry.history):(entry.normal??(historyEnabled?entry.history:null));
+			if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
+		}
+		for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
+		return [...out.values()];
+	}
+}
+return Object.freeze({LayeredCommentStore});
+})();
+modules[5] = (() => {
+const {HistoryError,integerOption,checkedTargets,validateThreads,summarizeThreads,withThreadKey} = modules[0];
+const {requestThreads,requestThreadKey,assertNotCancelled,safeError} = modules[2];
+const {normalizeSettings} = modules[1];
+const {RequestCoordinator} = modules[3];
+const {LayeredCommentStore} = modules[4];
+const resumeIdentity=c=>JSON.stringify([c.videoId,c.language,c.server,c.targets.map(t=>[String(t.id),t.fork]).sort()]);
+const RESUMABLE=new Set(['comment_limit','page_limit','request_limit','time_limit','retry_limit','cancelled','network_error','timeout','rate_limited','key_refresh_limit','token_invalid','token_expired','api_error','http_error']);
+class HistorySession {
+	#context;#settings;#coordinator;#store;#baseline;#fetchPage;#refreshKey;
+	#controller=new AbortController();#started=false;#report;#resume;#finishedNetwork;
+	constructor(context,{settings={},coordinator,baseline,resume,fetchPage=requestThreads,refreshKey=requestThreadKey}={}){
+		this.#context=context;this.#settings=Object.freeze(normalizeSettings(settings));
+		this.#coordinator=coordinator??new RequestCoordinator({settings:this.#settings});
+		if(resume && (resume.identity!==resumeIdentity(context)||!Array.isArray(resume.history)||!Array.isArray(resume.cursors)))throw new HistoryError('CONTEXT_CHANGED');
+		this.#resume=resume?JSON.parse(JSON.stringify(resume)):null;
+		this.#baseline=baseline;this.#fetchPage=fetchPage;this.#refreshKey=refreshKey;
+		this.#store=new LayeredCommentStore(context);
+		this.#report={schema:'nico-comment-history-session/1',version:'0.2.0',videoId:context.videoId,language:context.language,
+			settings:{...this.#settings},reason:'not_started',pages:0,duplicates:0,targetResults:[],
+			historyCursorProgressed:false,completeCoverageVerified:false};
+	}
+	cancel(){this.#controller.abort();}
+	removeHistory(){this.cancel();this.#store.removeHistory();}
+	snapshot(options){return this.#store.snapshot(options);}
+	report(){return JSON.parse(JSON.stringify({...this.#report,counts:this.#store.counts(),network:this.#finishedNetwork??this.#coordinator.stats()}));}
+	resumeData(){
+		if(!this.#report.finishedAt)throw new HistoryError('OPTION');
+		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),
+			cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
+	}
+	#verifyRefreshed(next){
+		const previous=this.#context;
+		const targetIdentity=c=>JSON.stringify(c.targets.map(t=>[String(t.id),t.fork]).sort());
+		try{
+			if(!next||next.videoId!==previous.videoId||next.server!==previous.server||next.language!==previous.language||
+				targetIdentity(next)!==targetIdentity(previous)||typeof next.threadKey!=='string'||!next.threadKey)throw new Error();
+		}catch{throw new HistoryError('CONTEXT_CHANGED');}
+		return withThreadKey(previous,next.threadKey);
+	}
+	async #page(request,onRetry){
+		const signal=this.#controller.signal;
+		while(true){
+			assertNotCancelled(signal);
+			try{
+				return await this.#coordinator.execute(async ({signal,timeoutMs})=>{
+					const data=await this.#fetchPage(this.#context,{...request,signal,timeoutMs});assertNotCancelled(signal);
+					return validateThreads({meta:{status:200},data:{threads:data}},this.#context,request.targets);
+				},{signal,kind:'comment',onRetry});
+			}catch(e){
+				if(!['TOKEN_EXPIRED','TOKEN_INVALID'].includes(e?.code))throw e;
+				const next=await this.#coordinator.refresh(async options=>this.#verifyRefreshed(await this.#refreshKey(this.#context,options)),{signal,onRetry});
+				assertNotCancelled(signal);this.#context=next;
+			}
+		}
+	}
+	async run({signal,startWhen=Math.floor(Date.now()/1000),onProgress}={}){
+		integerOption(startWhen,0,9999999999);
+		if(this.#started)throw new HistoryError('ALREADY_RUN');this.#started=true;
+		this.#report.startedAt=new Date().toISOString();this.#report.startWhen=startWhen;
+		const abort=()=>this.cancel();signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)this.cancel();
+		const localSignal=this.#controller.signal;
+		const notify=extra=>{try{onProgress?.({event:'progress',...extra,pages:this.#report.pages,counts:this.#store.counts(),network:this.#coordinator.stats()});}catch{}};
+		const onRetry=event=>notify({event:'retry',...event});
+		try{
+			assertNotCancelled(localSignal);
+			const baseline=this.#baseline??await this.#page({targets:this.#context.targets},onRetry);
+			assertNotCancelled(localSignal);
+			const normal=this.#store.addNormal(baseline);if(normal.limited)throw new HistoryError('BASELINE_LIMIT');
+			if(this.#resume){
+				const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
+				if(restored.limited)throw new HistoryError('OPTION');
+			}
+			notify({event:'baseline'});
+			const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
+			if(!selected.length)this.#report.reason='no_history_target';
+			const targets=selected.length?checkedTargets(this.#context,selected):[];
+			this.#report.targetResults=targets.map(t=>{
+				if(!this.#resume)return {...t,pages:0,nextWhen:startWhen,reason:null};
+				const matches=this.#resume.cursors.filter(s=>s.id===t.id&&s.fork===t.fork);
+				if(matches.length!==1)throw new HistoryError('CONTEXT_CHANGED');
+				const previous=matches[0];integerOption(previous.nextWhen,0,9999999999);
+				return {...t,pages:0,nextWhen:previous.nextWhen,reason:RESUMABLE.has(previous.reason)?null:previous.reason};
+			});
+			const states=this.#report.targetResults;let stopped=false;
+			while(states.some(s=>s.reason===null)&&!stopped){
+				for(const state of states){
+					if(state.reason!==null)continue;
+					assertNotCancelled(localSignal);
+					if(this.#report.pages>=this.#settings.maxPages){this.#report.reason='page_limit';stopped=true;break;}
+					if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){this.#report.reason='comment_limit';stopped=true;break;}
+					const target={id:state.id,fork:state.fork};const cursor=state.nextWhen;
+					const threads=await this.#page({targets:[target],when:cursor,resFrom:-1000},onRetry);
+					assertNotCancelled(localSignal);
+					const summary=summarizeThreads(threads)[0];
+					state.lastPageCount=summary.returnedCount;state.oldestUnixSeconds=summary.oldestUnixSeconds;state.newestUnixSeconds=summary.newestUnixSeconds;
+					this.#report.pages++;state.pages++;
+					if(threads[0].comments.some(c=>Date.parse(c.postedAt)/1000>cursor)){
+						state.reason='cursor_not_respected';this.#report.reason=state.reason;stopped=true;break;
+					}
+					const newestFirst=threads.map(t=>({...t,comments:[...t.comments].sort((a,b)=>Date.parse(b.postedAt)-Date.parse(a.postedAt)||b.no-a.no)}));
+					const added=this.#store.addHistory(newestFirst,this.#settings.maxAdditionalComments-this.#store.counts().additionalCount);
+					this.#report.duplicates+=added.duplicates;
+					notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
+					assertNotCancelled(localSignal);
+					if(added.limited||this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){
+						state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
+					}
+					if(!summary.returnedCount){state.reason='empty_page';continue;}
+					const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
+					if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
+					if(summary.oldestUnixSeconds===summary.newestUnixSeconds&&summary.returnedCount>1){
+						state.reason='same_second_boundary_unverified';continue;
+					}
+					state.nextWhen=oldest;
+					if(oldest>=cursor){state.reason='cursor_stalled';continue;}
+					this.#report.historyCursorProgressed=true;
+				}
+			}
+			if(!stopped&&states.length){
+				const reasons=[...new Set(states.map(s=>s.reason))];
+				this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+			}
+			for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
+		}catch(e){
+			this.#report.error=safeError(e);this.#report.reason=this.#report.error.code.toLowerCase();
+			for(const state of this.#report.targetResults)if(state.reason===null)state.reason=this.#report.reason;
+		}finally{
+			signal?.removeEventListener('abort',abort);this.#report.finishedAt=new Date().toISOString();
+			this.#finishedNetwork=this.#coordinator.stats();
+			this.#report.resumeAvailable=this.#report.targetResults.some(s=>RESUMABLE.has(s.reason));
+		}
+		return this.report();
+	}
+}
+return Object.freeze({HistorySession});
+})();
+modules[6] = (() => {
+const {HistoryError,normalizeWatch,validateThreads,integerOption} = modules[0];
+const ZENZA_FORKS = Object.freeze({main:0,owner:1,easy:2});
+function seedError(code) { throw new HistoryError(code); }
+function freezeSeedData(value) {
+	if (value && typeof value === 'object') {
+		for (const child of Object.values(value)) freezeSeedData(child);
+		Object.freeze(value);
+	}
+	return value;
+}
+function copyThreadDescriptor(info) {
+	if (!info || !Object.hasOwn(ZENZA_FORKS, info.forkLabel) ||
+			info.fork !== ZENZA_FORKS[info.forkLabel] || typeof info.label !== 'string' ||
+			!Number.isSafeInteger(info.layer?.index) || info.layer.index < 0) seedError('THREAD_METADATA');
+	const out = {id:String(info.id),fork:info.fork,forkLabel:info.forkLabel,label:info.label,
+		layer:{index:info.layer.index}};
+	if (typeof info.layer.isTranslucent === 'boolean') out.layer.isTranslucent = info.layer.isTranslucent;
+	return out;
+}
+function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevision} = {}) {
+	if (typeof playbackGeneration !== 'string' || !playbackGeneration) seedError('OPTION');
+	integerOption(normalRevision,1,Number.MAX_SAFE_INTEGER);
+	if (normalResult?.format !== 'threads' || !normalResult.threadInfo || !normalResult.body) seedError('UNSUPPORTED_FORMAT');
+	const msg = videoInfo?.msgInfo, resultInfo = normalResult.threadInfo;
+	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
+	const videoId = videoInfo.videoId;
+	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
+	if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
+	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
+	const nv = msg.nvComment;
+	const context = normalizeWatch({video:{id:videoId},comment:{nvComment:{
+		server:nv?.server,threadKey:nv?.threadKey,params:{targets:nv?.params?.targets,language}
+	}}},videoId);
+	const watchId = String(videoInfo.contextWatchId ?? videoInfo.watchId ?? videoId);
+	if (!/^(?:(?:sm|so|nm))?\d+$/.test(watchId)) seedError('WATCH_ID');
+	if (!Number.isFinite(videoInfo.duration) || videoInfo.duration < 0) seedError('DURATION');
+	if (!Array.isArray(msg.threads)) seedError('THREAD_METADATA');
+	const descriptors = new Map();
+	for (const target of context.targets) {
+		const found = msg.threads.filter(t => String(t.id) === target.id && t.forkLabel === target.fork);
+		if (found.length !== 1) seedError('THREAD_METADATA');
+		descriptors.set(JSON.stringify([target.id,target.fork]),copyThreadDescriptor(found[0]));
+	}
+	const baseline = validateThreads({meta:{status:200},data:{threads:normalResult.body.threads}},context);
+	const mainThreadId = resultInfo.threadId ?? null;
+	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
+	return freezeSeedData({context,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
+	});
+}
+function toZenzaThreads(seed, threads) {
+	if (!seed?.context || !Array.isArray(seed.render?.threads)) seedError('OPTION');
+	const copied = validateThreads({meta:{status:200},data:{threads}},seed.context);
+	return {threads:copied.map(thread=>{
+		const info = seed.render.threads.find(t=>t.id===thread.id && t.forkLabel===thread.fork);
+		if (!info) seedError('THREAD_METADATA');
+		return {...thread,info:{...info,layer:{...info.layer}}};
+	})};
+}
+return Object.freeze({createZenzaSeed,toZenzaThreads});
+})();
+modules[7] = (() => {
+const {HistorySession} = modules[5];
+const {createZenzaSeed,toZenzaThreads} = modules[6];
+const {normalizeSettings} = modules[1];
+class CommentHistoryController {
+	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
+	#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+	#state={enabled:false,phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false};
+	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
+		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
+		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+		this.#state.enabled=preferences.get().enabled===true;
+		this.#off=preferences.subscribe(snapshot=>{
+			if(this.#disposed)return;
+			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
+			if(!this.#state.enabled){this.#cancel(true);this.#emit({phase:'idle',additionalCount:0,appliedAdditional:0,pages:0,goal:0,reason:null,canContinue:false});}
+			else {this.#emit({});if(!before&&this.#seed)void this.start();}
+		});
+	}
+	get state(){return JSON.parse(JSON.stringify(this.#state));}
+	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
+	#emit(changes){Object.assign(this.#state,changes);for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}}
+	#cancel(clear){
+		this.#epoch++;this.#operation?.abort();this.#operation=null;
+		this.#session?.removeHistory();this.#session=null;this.#report=null;
+		if(clear){try{this.#clear();}catch{}}
+	}
+	invalidate(){
+		this.#cancel(true);this.#seed=null;
+		this.#emit({phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false});
+	}
+	async normalReady({videoInfo,result,generation}={}){
+		if(this.#disposed)return;
+		this.invalidate();
+		try{
+			this.#seed=createZenzaSeed({videoInfo,normalResult:result,playbackGeneration:generation,normalRevision:++this.#normalRevision});
+			const normalCount=this.#seed.baseline.reduce((n,t)=>n+t.comments.length,0);
+			this.#emit({videoId:this.#seed.identity.videoId,normalCount});
+		}catch(error){this.#emit({phase:'unavailable',reason:typeof error?.code==='string'?error.code:'CONTEXT_CHANGED'});return;}
+		if(this.#state.enabled)return this.start();
+	}
+	setEnabled(value){this.#preferences.setEnabled(!!value);}
+	stop(){
+		if(this.#state.phase==='queued'){this.#operation?.abort();}
+		else this.#session?.cancel();
+	}
+	whenIdle(){return this.#promise;}
+	more(){return this.start({more:true});}
+	restart(){return this.start({restart:true});}
+	start({more=false,restart=false}={}){
+		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#operation)return this.#promise;
+		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
+		if(more&&this.#state.additionalCount>=20000&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		const applyOnly=this.#state.phase==='render-error'&&!restart;
+		const continuing=!!(more&&!restart&&this.#session&&this.#report);
+		const resume=continuing?this.#session.resumeData():undefined;
+		if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
+		const oldGoal=this.#state.goal;
+		const goal=applyOnly?oldGoal:continuing?Math.min(20000,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
+		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
+		const seed=this.#seed;
+		this.#emit({phase:applyOnly?'applying':'queued',goal,reason:null,canContinue:false});
+		this.#promise=(async()=>{
+			try{
+				if(!applyOnly){
+					await this.#acquire(async()=>{
+						if(!current())return;
+						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
+						const session=this.#session;
+						this.#emit({phase:'fetching',pages:0});
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
+								waitingMs:progress.event==='retry'?progress.waitMs:0});
+						}});
+						if(!current())return;
+						this.#report=report;
+					},operation.signal);
+				}
+				if(!current()||!this.#report||!this.#session)return;
+				const report=this.#report;
+				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,pages:report.pages,network:report.network,waitingMs:0});
+				let applied;
+				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true})),{isCurrent:current,signal:operation.signal});}
+				catch{
+					if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
+					return;
+				}
+				if(!current())return;
+				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??report.counts.additionalCount,
+					canContinue:report.resumeAvailable&&report.counts.additionalCount<20000});
+				if(partial&&report.reason!=='cancelled')this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+			}catch{
+				if(this.#epoch===epoch&&this.#state.enabled){
+					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
+					if(!operation.signal.aborted)this.#notify('コメント増量：取得を開始できませんでした。パネルから再試行できます。');
+				}
+			}finally{if(this.#epoch===epoch)this.#operation=null;}
+			return this.state;
+		})();
+		return this.#promise;
+	}
+	dispose(){if(this.#disposed)return;this.#disposed=true;this.invalidate();this.#off?.();this.#listeners.clear();}
+}
+return Object.freeze({CommentHistoryController});
+})();
+modules[8] = (() => {
+const identity=chat=>JSON.stringify([String(chat.threadId??chat.thread),Number(chat.fork),Number(chat.no)]);
+const abortError=()=>Object.assign(new Error('Comment display update superseded'),{name:'AbortError'});
+class CommentHistoryRenderer {
+	#player;#Chat;#VM;#yield;#revision=0;#history=new Set();#deleted=new Set();
+	constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
+		this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
+	}
+	#groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
+	reset(){this.#revision++;this.#history.clear();this.#deleted.clear();}
+	removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#revision++;}
+	clear(){
+		this.#revision++;
+		if(!this.#history.size)return;
+		for(const group of this.#groups()){
+			if(!group)continue;
+			group._members=group._members.filter(chat=>!this.#history.has(chat));
+			group._filteredMembers=[];group._filteredMembersValid=false;
+			group.onChange(null);
+		}
+		this.#history.clear();this.#player._view?.refresh();this.#player._model.emit('change');
+	}
+	async apply(data,{isCurrent=()=>true,signal}={}){
+		const revision=++this.#revision,model=this.#player._model;
+		const valid=()=>revision===this.#revision&&!signal?.aborted&&isCurrent();
+		const check=()=>{if(!valid())throw abortError();};
+		check();await model.promise('GetReady!');check();
+		if(!data||!Array.isArray(data.threads))throw new TypeError('Invalid history display input');
+		const count=data.threads.reduce((n,t)=>n+(Array.isArray(t.comments)?t.comments.length:Infinity),0);
+		if(count>20000)throw new RangeError('History display limit is 20000');
+		const types=[this.#Chat.TYPE.TOP,this.#Chat.TYPE.NAKA,this.#Chat.TYPE.BOTTOM];
+		const oldByKey=new Map([...this.#history].map(c=>[identity(c),c]));
+		const options=model._options||{};
+		const added=[],newChats=[],seen=new Set();
+		for(const thread of data.threads){
+			if(!thread.info||![0,2].includes(thread.info.fork)&&thread.comments.length)throw new TypeError('Unsupported history fork');
+			for(const c of thread.comments){
+				const key=identity({thread:thread.id,fork:thread.info.fork,no:c.no});
+				if(seen.has(key)||this.#deleted.has(key))continue;
+				seen.add(key);
+				let chat=oldByKey.get(key);
+				if(!chat){
+					chat=this.#Chat.create(Object.assign({},c,{
+						text:c.body,date:new Date(c.postedAt).getTime()/1000,cmd:c.commands.join(' '),
+						premium:c.isPremium,user_id:c.userId,vpos:c.vposMs/10,fork:thread.info.fork,
+						isMine:c.isMyPost,thread:thread.id,nicoru:c.nicoruCount,
+						layerId:thread.info.layer.index,threadLabel:thread.info.label
+					}),{videoDuration:options.duration,creditDuration:options.creditDuration,mainThreadId:options.mainThreadId});
+					if(chat.isDeleted||chat.isNicoScript)continue;
+					if(chat.fork===2)chat.size=this.#Chat.SIZE.SMALL;
+					if(model._wordReplacer)chat.text=model._wordReplacer(chat.text);
+					newChats.push(chat);
+				}
+				added.push(chat);
+				if(added.length%100===0){await this.#yield();check();}
+			}
+		}
+		if(newChats.length&&!model.nicoScripter.isEmpty)model.nicoScripter.apply(newChats);
+		check();
+		const prepared=[];
+		try{
+			for(let attempt=0;attempt<3;attempt++){
+				prepared.splice(0).forEach(x=>x.members.forEach(m=>m.reset()));
+				const groups=this.#groups(),vms=types.map(t=>this.#player._viewModel.getGroup(t));
+				if(groups.some(g=>!g)||vms.some(g=>!g))throw new Error('Comment view is not ready');
+				const sources=groups.map(g=>({array:g._members,length:g._members.length}));
+				const versions=vms.map(v=>v._lastUpdate);
+				const normals=groups.flatMap(g=>g._members.filter(c=>!this.#history.has(c)));
+				const normalKeys=new Set(normals.map(identity));
+				const extras=added.filter(c=>!normalKeys.has(identity(c))&&!this.#deleted.has(identity(c)));
+				const all=normals.concat(extras);
+				for(let i=0;i<groups.length;i++){
+					check();
+					const chats=all.filter(c=>c.type===types[i]||(i===1&&!types.includes(c.type)));
+					const filtered=model._nicoChatFilter.applyFilter(chats),members=[];
+					const entry={chats,filtered,members,group:groups[i],vm:vms[i],sorted:[],maxDuration:0};prepared.push(entry);
+					for(const c of filtered){
+						members.push(this.#VM.create(c,vms[i]._offScreen));
+						if(members.length%100===0){await this.#yield();check();}
+					}
+					const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
+					if(sorted.length){
+						const sent=sorted.map(c=>c.bulkLayoutData);
+						const result=await this.#wait(vms[i]._layoutWorker.post({command:'layout',params:{type:types[i],members:sent,lastUpdate:revision}}),signal);
+						check();
+						if(result?.lastUpdate!==revision||!Array.isArray(result.members)||result.members.length!==sent.length||
+							!sent.every((m,j)=>result.members[j]?.id===m.id&&Number.isFinite(result.members[j].ypos)&&typeof result.members[j].isOverflow==='boolean'))throw new Error('Invalid history layout response');
+						sorted.forEach((m,j)=>{m.bulkLayoutData=result.members[j];});
+						for(const m of sorted){const d=m.endRightTiming-m.beginLeftTiming;if(Number.isFinite(d)&&d>entry.maxDuration)entry.maxDuration=d;}
+					}
+				}
+				check();
+				if(groups.some((g,i)=>g._members!==sources[i].array||g._members.length!==sources[i].length||vms[i]._lastUpdate!==versions[i]))continue;
+				this.#player._view?.clear?.();
+				for(const e of prepared){
+					for(const c of e.chats)c.group=e.group;
+					e.group._members=e.chats;e.group._filteredMembers=e.filtered;e.group._filteredMembersValid=true;
+					const old=e.vm._members;
+					e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
+					for(const m of old)m.reset();
+				}
+				this.#history=new Set(extras);
+				prepared.length=0;
+				this.#player._view?.refresh();model.emit('change');
+				return {additionalCount:extras.length};
+			}
+			throw new Error('Comment collection changed during display preparation');
+		}finally{prepared.forEach(e=>e.members.forEach(m=>m.reset()));}
+	}
+	#wait(promise,signal){
+		return new Promise((resolve,reject)=>{
+			const finish=(fn,value)=>{clearTimeout(timer);signal?.removeEventListener('abort',cancel);fn(value);};
+			const cancel=()=>finish(reject,abortError());
+			const timer=setTimeout(()=>finish(reject,new Error('Comment layout timed out')),20000);
+			signal?.addEventListener('abort',cancel,{once:true});
+			Promise.resolve(promise).then(v=>finish(resolve,v),e=>finish(reject,e));
+			if(signal?.aborted)cancel();
+		});
+	}
+}
+return Object.freeze({CommentHistoryRenderer});
+})();
+modules[9] = (() => {
+const {HistoryError} = modules[0];
+const {SETTINGS_SCHEMA,normalizeSettings} = modules[1];
+const ZENZA_SETTINGS_NAMES = new Set(SETTINGS_SCHEMA.map(d=>d.name));
+const ZENZA_SETTINGS_KEYS = new Set(SETTINGS_SCHEMA.map(d=>d.key));
+const ZENZA_SETTINGS_EVENT = 'comment-history-settings';
+function settingsError(code) { return new HistoryError(code); }
+function checkedSettingNames(names) {
+	if (!Array.isArray(names) || names.some(n=>!ZENZA_SETTINGS_NAMES.has(n)) || new Set(names).size!==names.length) throw settingsError('OPTION');
+	return names;
+}
+class ZenzaSettingsRepository {
+	#storage; #prefix; #bus; #off; #last; #disposed=false; #listeners=new Set();
+	constructor({storage,prefix='ZenzaWatch_',bus} = {}) {
+		if (!storage || ['getItem','setItem','removeItem'].some(k=>typeof storage[k]!=='function') ||
+				typeof prefix!=='string' || !prefix || bus && ['publish','subscribe'].some(k=>typeof bus[k]!=='function')) throw settingsError('OPTION');
+		this.#storage=storage;this.#prefix=prefix;this.#bus=bus;
+		this.#last=this.#read().values;
+		if (bus) this.#off=bus.subscribe(message=>{
+			if (this.#disposed || message?.type!==ZENZA_SETTINGS_EVENT || !Array.isArray(message.keys) ||
+					!message.keys.length || message.keys.some(k=>!ZENZA_SETTINGS_KEYS.has(k))) return;
+			try { this.refresh(); } catch { /* Caller sees validation failure on next explicit get/start. */ }
+		});
+	}
+	#assertActive() { if(this.#disposed)throw settingsError('DISPOSED'); }
+	#read() {
+		this.#assertActive();
+		const input={},raw=new Map();
+		for(const d of SETTINGS_SCHEMA) {
+			let value;
+			try {value=this.#storage.getItem(this.#prefix+d.key);} catch {throw settingsError('SETTINGS_READ');}
+			raw.set(d.name,value);
+			if(value!==null && value!==undefined) {
+				try {input[d.name]=JSON.parse(value);} catch {throw settingsError('SETTINGS_INVALID');}
+			}
+		}
+		let values;
+		try {values=Object.freeze(normalizeSettings(input));} catch {throw settingsError('SETTINGS_INVALID');}
+		return {values,raw};
+	}
+	#accept(values) {
+		const changed=SETTINGS_SCHEMA.some(d=>values[d.name]!==this.#last[d.name]);
+		this.#last=values;
+		if(changed)for(const callback of [...this.#listeners]) {
+			try {callback(values);} catch { /* A UI failure must not reinterpret successful persistence. */ }
+		}
+	}
+	get() {return this.#read().values;}
+	refresh() {const values=this.get();this.#accept(values);return values;}
+	patch(changes) {
+		this.#assertActive();
+		if(!changes || typeof changes!=='object' || Array.isArray(changes))throw settingsError('OPTION');
+		checkedSettingNames(Object.keys(changes));
+		const before=this.#read();
+		const next=Object.freeze(normalizeSettings({...before.values,...changes}));
+		const entries=SETTINGS_SCHEMA.filter(d=>Object.hasOwn(changes,d.name)&&before.values[d.name]!==next[d.name])
+			.map(d=>({name:d.name,key:this.#prefix+d.key,publicKey:d.key,value:JSON.stringify(next[d.name]),previous:before.raw.get(d.name)}));
+		if(!entries.length){this.#accept(next);return next;}
+		const attempted=[];
+		let committed;
+		try {
+			for(const entry of entries) {
+				if(this.#storage.getItem(entry.key)!==entry.previous)throw settingsError('SETTINGS_CONFLICT');
+				attempted.push(entry);
+				this.#storage.setItem(entry.key,entry.value);
+			}
+			for(const entry of entries)if(this.#storage.getItem(entry.key)!==entry.value)throw settingsError('SETTINGS_WRITE');
+			committed=this.#read().values;
+		} catch {
+			let rollbackComplete=true;
+			for(const entry of attempted.reverse()) {
+				try {
+					const current=this.#storage.getItem(entry.key);
+					if(current===entry.previous)continue;
+					if(current!==entry.value){rollbackComplete=false;continue;}
+					if(entry.previous===null || entry.previous===undefined)this.#storage.removeItem(entry.key);
+					else this.#storage.setItem(entry.key,entry.previous);
+					if(this.#storage.getItem(entry.key)!==(entry.previous??null))rollbackComplete=false;
+				} catch {rollbackComplete=false;}
+			}
+			const error=settingsError('SETTINGS_WRITE');error.rollbackComplete=rollbackComplete;throw error;
+		}
+		this.#accept(committed);
+		try {this.#bus?.publish({type:ZENZA_SETTINGS_EVENT,keys:entries.map(e=>e.publicKey)});} catch { /* Storage succeeded; next explicit refresh reconciles. */ }
+		return committed;
+	}
+	reset(names=SETTINGS_SCHEMA.map(d=>d.name)) {
+		checkedSettingNames(names);
+		return this.patch(Object.fromEntries(SETTINGS_SCHEMA.filter(d=>names.includes(d.name)).map(d=>[d.name,d.default])));
+	}
+	subscribe(callback) {
+		this.#assertActive();if(typeof callback!=='function')throw settingsError('OPTION');
+		this.#listeners.add(callback);return()=>this.#listeners.delete(callback);
+	}
+	dispose() {
+		if(this.#disposed)return;this.#disposed=true;this.#listeners.clear();
+		if(typeof this.#off==='function')this.#off();this.#off=null;
+	}
+}
+return Object.freeze({ZenzaSettingsRepository});
+})();
+modules[10] = (() => {
+const {SETTINGS_SCHEMA,DEFAULT_SETTINGS} = modules[1];
+const {ZenzaSettingsRepository} = modules[9];
+const {HistoryError} = modules[0];
+const HISTORY_PRESETS=Object.freeze([1000,2500,5000,10000,20000]);
+const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
+const EVENT='ZenzaWatch-comment-history-settings';
+function createBrowserHistoryPreferences({window:win=globalThis.window,config,storage=win.localStorage}={}){
+	const prefix='ZenzaWatch_',enabledKey=prefix+'commentHistory.enabled';
+	const listeners=new Set();let repository,disposed=false,lastSignature='',snapshot;
+	function checked(){if(disposed)throw new HistoryError('DISPOSED');}
+	function read(){
+		checked();
+		try{
+			if(!repository)repository=new ZenzaSettingsRepository({storage,prefix});
+			const settings=repository.get(),raw=storage.getItem(enabledKey);
+			const enabled=raw===null?false:JSON.parse(raw);
+			if(typeof enabled!=='boolean')throw new Error('type');
+			return Object.freeze({valid:true,enabled,settings});
+		}catch{return Object.freeze({valid:false,enabled:false,settings:Object.freeze({...DEFAULT_SETTINGS}),error:'SETTINGS_INVALID'});}
+	}
+	function refresh(){
+		snapshot=read();const signature=JSON.stringify(snapshot);
+		if(signature===lastSignature)return snapshot;
+		lastSignature=signature;
+		if(snapshot.valid&&config?._data){
+			const values={...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,snapshot.settings[d.name]])),'commentHistory.enabled':snapshot.enabled};
+			for(const [key,value] of Object.entries(values)){
+				if(config.default&&!Object.hasOwn(config.default,key))continue;
+				if(config._data[key]===value)continue;
+				config._data[key]=value;
+				const emit=typeof config.emitAsync==='function'?config.emitAsync:config.emit;
+				if(typeof emit==='function'){emit.call(config,'update',key,value);emit.call(config,'update-'+key,value);}
+			}
+		}
+		for(const fn of [...listeners]){try{fn(snapshot);}catch{}}
+		return snapshot;
+	}
+	function publish(keys){win.dispatchEvent(new win.CustomEvent(EVENT,{detail:{keys}}));}
+	const onStorage=e=>{if(!disposed&&(e.key===null||typeof e.key==='string'&&e.key.startsWith(prefix+'commentHistory.'))&&(!e.storageArea||e.storageArea===storage))refresh();};
+	const onLocal=e=>{if(!disposed&&Array.isArray(e.detail?.keys)&&e.detail.keys.every(k=>Object.hasOwn(HISTORY_PREFERENCE_DEFAULTS,k)))refresh();};
+	win.addEventListener('storage',onStorage);win.addEventListener(EVENT,onLocal);refresh();
+	return {
+		get(){checked();return refresh();},
+		patch(changes){
+			checked();if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			repository.patch(changes);refresh();publish(Object.keys(changes).map(k=>'commentHistory.'+k));return snapshot;
+		},
+		setEnabled(enabled){
+			checked();if(typeof enabled!=='boolean')throw new HistoryError('OPTION');
+			if(!refresh().valid)throw new HistoryError('SETTINGS_INVALID');
+			if(snapshot.enabled===enabled)return snapshot;
+			const before=storage.getItem(enabledKey),serialized=JSON.stringify(enabled);
+			try{storage.setItem(enabledKey,serialized);if(storage.getItem(enabledKey)!==serialized)throw new Error();}
+			catch{
+				try{if(storage.getItem(enabledKey)===serialized){before===null?storage.removeItem(enabledKey):storage.setItem(enabledKey,before);}}catch{}
+				throw new HistoryError('SETTINGS_WRITE');
+			}
+			refresh();publish(['commentHistory.enabled']);return snapshot;
+		},
+		subscribe(fn){checked();listeners.add(fn);return()=>listeners.delete(fn);},
+		dispose(){if(disposed)return;disposed=true;win.removeEventListener('storage',onStorage);win.removeEventListener(EVENT,onLocal);repository?.dispose();repository=null;listeners.clear();}
+	};
+}
+return Object.freeze({HISTORY_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
+})();
+modules[11] = (() => {
+const {SETTINGS_SCHEMA} = modules[1];
+const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[10];
+const {CommentHistoryController} = modules[7];
+const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
+const CSS=`
+.commentHistorySwitch .controlButtonInner{display:inline-block;width:26px;height:26px;vertical-align:middle}
+.commentHistorySwitch svg{display:block;width:100%;height:100%;fill:currentColor}
+.commentHistorySwitch.is-active{color:var(--enabled-button-color,#9cf);opacity:1}
+.commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
+.commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
+@keyframes zenzaHistoryPulse{50%{opacity:.48}}
+.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:16px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
+.zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
+.zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
+@keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
+@keyframes zenzaHistoryOut{from{opacity:1;transform:none}to{opacity:0;transform:translate(8px,12px) scale(.92)}}
+@media(prefers-reduced-motion:reduce){.zenzaCommentHistoryPanel.is-open,.zenzaCommentHistoryPanel.is-closing{animation-duration:.01s}.commentHistorySwitch.is-fetching svg{animation:none}}
+.zenzaCommentHistoryPanel button,.zenzaCommentHistoryPanel select,.ch-settings input{font:inherit;box-sizing:border-box}
+.zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
+.zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
+.zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
+.ch-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.ch-header strong{font-size:16px;flex:1}.ch-header button{padding:1px 8px;font-size:22px;background:none;border:0}
+.ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
+.ch-counter{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#91f2dc}.ch-counter small{font-size:12px;font-weight:400;color:#b4c2d0;margin-left:5px}
+.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:9px 0}
+.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:10px 0 14px}
+.ch-action-row{display:grid;grid-template-columns:124px minmax(0,1fr);gap:10px;align-items:end;margin-top:12px}.ch-action-row label{display:grid;gap:3px;color:#b4c2d0;font-size:11px}
+.zenzaCommentHistoryPanel select{width:100%;height:36px;padding:4px 8px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
+.zenzaCommentHistoryPanel [data-ch-primary]{background:#79dfc9;color:#0c2b28;border-color:#79dfc9;min-height:36px;font-weight:700}
+.ch-details{border-top:1px solid #33475d;margin-top:14px;padding-top:11px}.ch-details summary{cursor:pointer;color:#cedde9}.ch-details>div{margin-top:10px}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin-bottom:9px;font-size:12px}.ch-footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px}.ch-footer button{background:none;font-size:12px;padding:5px 8px}
+.ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
+.is-youTube .commentHistorySwitch{display:none}
+`;
+function style(doc){if(doc.querySelector('style[data-zenza-comment-history]'))return;const el=doc.createElement('style');el.dataset.zenzaCommentHistory='';el.textContent=CSS;doc.head.append(el);}
+const fmt=n=>Number(n||0).toLocaleString('ja-JP');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mountHistorySettings(container,{preferences}={}){
+	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
+	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
+		`<label><span>${esc(d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
+	).join('')+'<p class="ch-setting-error" role="status"></p>';
+	const error=container.querySelector('.ch-setting-error');
+	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
+	const change=e=>{const name=e.target.dataset.historySetting,d=SETTINGS_SCHEMA.find(x=>x.name===name);if(!d)return;e.stopPropagation();try{const v=d.type==='boolean'?e.target.checked:e.target.value.trim()===''?NaN:Number(e.target.value);preferences.patch({[name]:v});error.textContent='';e.target.removeAttribute('aria-invalid');}catch{error.textContent='設定を保存できませんでした。入力範囲と保存領域を確認してください。';e.target.setAttribute('aria-invalid','true');}};
+	container.addEventListener('change',change);const off=preferences.subscribe(refresh);refresh();
+	return {dispose(){off();container.removeEventListener('change',change);container.replaceChildren();}};
+}
+class CommentHistoryPanel {
+	constructor({controller,preferences,anchor,window:win=globalThis.window}){
+		this.controller=controller;this.preferences=preferences;this.anchor=anchor;this.win=win;this.doc=win.document;this.listeners=[];this.closeTimer=null;this.swallowCleanup=[];this.disposed=false;
+		style(this.doc);
+		this.onOutside=e=>this._outside(e);this.onEscape=e=>{if(this.isOpen&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();this.close(true);}};
+		this.onResize=()=>this._place();
+		this.off=controller.subscribe(state=>this.refresh(state));this.offPrefs=preferences.subscribe(()=>this.refresh(controller.state));
+	}
+	get isOpen(){return !!this.view?.classList.contains('is-open')&&!this.view.classList.contains('is-closing');}
+	_init(){
+		if(this.view)return;
+		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>反映済みの追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
+		el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
+		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
+		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
+		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
+		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
+		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
+		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
+		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
+	}
+	refresh(state){
+		const a=this.anchor?.();
+		if(a){a.classList.toggle('is-active',state.enabled);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：ON':'：OFF'));}
+		if(!this.view)return;
+		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
+		q('[data-ch-enabled]').checked=state.enabled;
+		const quota=q('[data-ch-quota]');
+		quota.querySelector('[data-ch-custom]')?.remove();
+		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
+			const option=this.doc.createElement('option');option.dataset.chCustom='';
+			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
+		}
+		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
+		q('[data-ch-count]').textContent=fmt(state.additionalCount);q('[data-ch-goal]').textContent=` / ${fmt(state.goal||p.settings.maxAdditionalComments)} 件`;
+		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
+		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
+		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
+		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
+		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
+		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
+		button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
+	}
+	_place(){
+		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
+		const a=this.anchor?.()?.getBoundingClientRect(),width=Math.min(360,this.win.innerWidth-32);
+		this.view.style.left=Math.max(16,Math.min(this.win.innerWidth-width-16,(a?.right||this.win.innerWidth-16)-width))+'px';
+		this.view.style.bottom=Math.max(16,Math.min(this.win.innerHeight-120,a?this.win.innerHeight-a.top+10:50))+'px';
+		this.view.style.maxHeight=Math.max(100,this.win.innerHeight-parseFloat(this.view.style.bottom)-16)+'px';
+	}
+	_listen(){
+		const attach=win=>{if(this.listeners.includes(win))return;try{win.addEventListener('pointerdown',this.onOutside,true);win.addEventListener('keydown',this.onEscape,true);this.listeners.push(win);}catch{}};
+		attach(this.win);for(const f of this.doc.querySelectorAll('iframe')){try{if(f.contentWindow?.document)attach(f.contentWindow);}catch{}}
+	}
+	_unlisten(){for(const w of this.listeners){try{w.removeEventListener('pointerdown',this.onOutside,true);w.removeEventListener('keydown',this.onEscape,true);}catch{}}this.listeners=[];this.observer?.disconnect();this.observer=null;this.win.removeEventListener('resize',this.onResize);this.doc.removeEventListener('fullscreenchange',this.onResize);}
+	_outside(e){
+		if(!this.isOpen)return;const path=e.composedPath?.()||[e.target],a=this.anchor?.();if(path.includes(this.view)||path.includes(a))return;
+		let video=path.some(x=>x?.matches?.('video,.videoPlayer,.commentLayerFrame'));
+		try{video=video||e.view?.frameElement?.matches('.commentLayerFrame,[name="commentLayerFrame"]');}catch{}
+		this.close(false);
+		if(video&&e.button===0){
+			const target=e.target,win=e.view||this.win;
+			const swallow=event=>{if(event.target===target||(event.composedPath?.()||[]).includes(target)){event.preventDefault();event.stopImmediatePropagation();}cleanup();};
+			const timer=this.win.setTimeout(()=>cleanup(),600);
+			const cleanup=()=>{win.removeEventListener('click',swallow,true);this.win.clearTimeout(timer);const i=this.swallowCleanup.indexOf(cleanup);if(i>=0)this.swallowCleanup.splice(i,1);};
+			win.addEventListener('click',swallow,true);this.swallowCleanup.push(cleanup);
+		}
+	}
+	open(){
+		if(this.disposed)return;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+	}
+	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
+	toggle(){this.isOpen?this.close(true):this.open();}
+	dispose(){if(this.disposed)return;this.disposed=true;this._unlisten();this.off?.();this.offPrefs?.();this.advanced?.dispose();this.win.clearTimeout(this.closeTimer);[...this.swallowCleanup].forEach(f=>f());this.view?.remove();this.view=null;}
+}
+function createHistoryFeature({dialog,config,window:win=globalThis.window}){
+	const preferences=createBrowserHistoryPreferences({window:win,config});
+	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
+	const controller=new CommentHistoryController({preferences,acquire,
+		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
+		clearRender:()=>dialog._nicoVideoPlayer?.clearCommentHistory(),
+		notify:text=>dialog.execCommand('notify',text)});
+	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
+	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
+}
+return Object.freeze({HISTORY_ICON,mountHistorySettings,CommentHistoryPanel,createHistoryFeature});
+})();
+return Object.freeze({
+COMMENT_ORIGIN: modules[0].COMMENT_ORIGIN,
+HistoryError: modules[0].HistoryError,
+fail: modules[0].fail,
+integerOption: modules[0].integerOption,
+normalizeWatch: modules[0].normalizeWatch,
+checkedTargets: modules[0].checkedTargets,
+buildThreadRequest: modules[0].buildThreadRequest,
+validateThreads: modules[0].validateThreads,
+CommentStore: modules[0].CommentStore,
+summarizeThreads: modules[0].summarizeThreads,
+withThreadKey: modules[0].withThreadKey,
+RequestCoordinator: modules[3].RequestCoordinator,
+HistorySession: modules[5].HistorySession,
+createZenzaSeed: modules[6].createZenzaSeed,
+toZenzaThreads: modules[6].toZenzaThreads,
+CommentHistoryController: modules[7].CommentHistoryController,
+CommentHistoryRenderer: modules[8].CommentHistoryRenderer,
+HISTORY_ICON: modules[11].HISTORY_ICON,
+mountHistorySettings: modules[11].mountHistorySettings,
+CommentHistoryPanel: modules[11].CommentHistoryPanel,
+createHistoryFeature: modules[11].createHistoryFeature,
+HISTORY_PRESETS: modules[10].HISTORY_PRESETS,
+HISTORY_PREFERENCE_DEFAULTS: modules[10].HISTORY_PREFERENCE_DEFAULTS,
+createBrowserHistoryPreferences: modules[10].createBrowserHistoryPreferences,
+});
+})();
+const historyTriggerKeyGuard = event => {
+	if (['Enter', ' ', 'Spacebar'].includes(event.key)) { event.stopPropagation(); }
+};
 	class VideoControlBar extends Emitter {
 		constructor(...args) {
 			super();
@@ -15933,6 +19169,11 @@ class Storyboard extends Emitter {
 			});
 			Object.assign(this, mq.e, {_currentTime: 0});
 			Object.assign(this, mq.$);
+			const historyButton = $view.find('.commentHistorySwitch')[0];
+			if (historyButton) {
+				historyButton.addEventListener('keydown', historyTriggerKeyGuard);
+				historyButton.addEventListener('keyup', historyTriggerKeyGuard);
+			}
 			const screenFilterButton = $view.find('.screenFilterSwitch')[0];
 			const updateScreenFilterButton = () => {
 				screenFilterButton && screenFilterButton.classList.toggle('is-active', ScreenFilter.isActive());
@@ -15972,13 +19213,18 @@ class Storyboard extends Emitter {
 			$view
 				.on('click', this._onClick.bind(this))
 				.on('command', this._onCommandEvent.bind(this));
-			HeatMapWorker.init({container: this._seekBar}).then(hm => this.heatMap = hm);
+			HeatMapWorker.init({container: this._seekBar}).then(hm => {
+				this.heatMap = hm;
+				this._heatMapWatchId && hm.reset({watchId: this._heatMapWatchId});
+			});
 			const updateHeatMapVisibility =
 				v => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
 			updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
 			this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
-			global.emitter.on('heatMapUpdate',
-				heatMap => WatchInfoCacheDb.putBestEffort(this.player.watchId, {heatMap}));
+			global.emitter.on('heatMapUpdate', payload => {
+				const entry = heatMapCacheEntry(payload, this.player.watchId);
+				entry && WatchInfoCacheDb.putBestEffort(entry.watchId, {heatMap: entry.heatMap});
+			});
 			this.storyboard = new Storyboard({
 				playerConfig: config,
 				player: this.player,
@@ -16158,11 +19404,12 @@ class Storyboard extends Emitter {
 		_timeToPer(time) {
 			return (time / Math.max(this._duration, 1)) * 100;
 		}
-		_onPlayerOpen() {
+		_onPlayerOpen(watchId) {
 			this._startTimer();
 			this.duration = 0;
 			this.currentTime = 0;
-			this.heatMap && this.heatMap.reset();
+			this._heatMapWatchId = typeof watchId === 'string' ? watchId : null;
+			this.heatMap && this.heatMap.reset({watchId: this._heatMapWatchId});
 			this.storyboard.reset();
 			this.resetBufferedRange();
 		}
@@ -16978,17 +20225,22 @@ util.addStyle(`
 		transform: scale(0.75);
 	}
 	/* Task 077c: 画面フィルターのボタン（「画」の左）。効いている時は水色に光る */
-	.screenFilterSwitch .controlButtonInner {
+	.screenFilterSwitch .controlButtonInner,
+	.commentHistorySwitch .controlButtonInner {
 		width: 26px;
 		height: 26px;
 		vertical-align: middle;
 	}
-	.screenFilterSwitch svg {
+	.screenFilterSwitch svg,
+	.commentHistorySwitch svg {
 		display: block;
 		width: 100%;
 		height: 100%;
 		fill: currentColor;
 	}
+	.commentHistorySwitch { border: 0; padding: 0; background: transparent; }
+	.commentHistorySwitch:focus-visible { outline: 2px solid var(--enabled-button-color, #9cf); outline-offset: -2px; }
+	.commentHistorySwitch:focus-visible .tooltip { display: block; }
 	.screenFilterSwitch.is-active {
 		color: var(--enabled-button-color);
 		opacity: 1;
@@ -16996,7 +20248,8 @@ util.addStyle(`
 	.screenFilterSwitch.is-active svg {
 		filter: drop-shadow(0 0 3px var(--enabled-button-color));
 	}
-	.is-youTube .screenFilterSwitch {
+	.is-youTube .screenFilterSwitch,
+	.is-youTube .commentHistorySwitch {
 		display: none;
 	}
 	.videoServerTypeMenu {
@@ -17388,6 +20641,10 @@ util.addStyle(`
 			</div>
 			<div class="controlItemContainer right">
 				<div class="scalingUI">
+					<button type="button" class="commentHistorySwitch controlButton" data-command="toggle-commentHistoryPanel" aria-label="コメント増量" aria-expanded="false">
+						<span class="controlButtonInner">${ZenzaCommentHistoryCore.HISTORY_ICON}</span>
+						<span class="tooltip">コメント増量</span>
+					</button>
 					<div class="screenFilterSwitch controlButton" data-command="toggle-screenFilterPanel">
 						<div class="controlButtonInner"><svg viewBox="0 0 36 36" aria-hidden="true"><path d="M15 10Q15 19 24 19Q15 19 15 28Q15 19 6 19Q15 19 15 10ZM26 5.5Q26 10 30.5 10Q26 10 26 14.5Q26 10 21.5 10Q26 10 26 5.5Z"/></svg></div>
 						<div class="tooltip">画面フィルター（明るさ・色）</div>
@@ -17634,25 +20891,37 @@ class HeatMap {
 		});
 		this.reset();
 	}
-	reset() {
+	reset(params = {}) {
+		this._generation = (this._generation || 0) + 1;
+		this._watchId = (params && typeof params.watchId === 'string' && params.watchId) ? params.watchId : null;
 		this.model.reset();
 		this.view.reset();
+	}
+	get watchId() {
+		return this._watchId || null;
+	}
+	_publish() {
+		if (!this.view.update()) { return; }
+		const generation = this._generation = (this._generation || 0) + 1;
+		const watchId = this._watchId || null;
+		const map = Array.from(this.map);
+		const duration = this.duration;
+		this.toDataURL().then(dataURL => {
+			if (generation !== this._generation) { return; }
+			self.emit('heatMapUpdate', {watchId, map, duration, dataURL});
+		}).catch(() => {});
 	}
 	set duration(duration) {
 		if (this.model.duration === duration) { return; }
 		this.model.duration = duration;
-		this.view.update() && this.toDataURL().then(dataURL => {
-			self.emit('heatMapUpdate', {map: this.map, duration: this.duration, dataURL});
-		});
+		this._publish();
 	}
 	get duration() {
 		return this.model.duration;
 	}
 	set chatList(chatList) {
 		this.model.chatList = chatList;
-		this.view.update() && this.toDataURL().then(dataURL => {
-			self.emit('heatMapUpdate', {map: this.map, duration: this.duration, dataURL});
-		});
+		this._publish();
 	}
 	get canvas() {
 		return this.view.canvas || {};
@@ -17732,7 +21001,7 @@ const HeatMapWorker = (() => {
 			set duration(d) {
 				_duration = d;
 				worker.post({command: 'duration', params: {duration: d}}); },
-			reset: () => worker.post({command: 'reset', params: {}}),
+			reset: (params = {}) => worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}}),
 			get chatList() {return _chatList;},
 			set chatList(chatList) { this.update(_chatList = chatList); }
 		};
@@ -17742,6 +21011,12 @@ const HeatMapWorker = (() => {
 const HeatMap = HeatMapInitFunc({
 	emit: (...args) => global.emitter.emit(...args)
 });
+const heatMapCacheEntry = (payload, currentWatchId) => {
+	if (!payload || typeof payload.watchId !== 'string' || !payload.watchId) { return null; }
+	if (payload.watchId !== currentWatchId) { return null; }
+	if (!Array.isArray(payload.map) || !Number.isFinite(payload.duration)) { return null; }
+	return {watchId: payload.watchId, heatMap: {map: payload.map, duration: payload.duration, dataURL: payload.dataURL}};
+};
 	class CommentPreviewModel extends Emitter {
 		reset() {
 			this._chatReady = false;
@@ -18719,6 +21994,7 @@ util.addStyle(`
 		}
 	}
 
+// already required
 function NicoTextParserInitFunc() {
 class NicoTextParser {}
 NicoTextParser._FONT_REG = {
@@ -20624,6 +23900,7 @@ class NicoCommentPlayer extends Emitter {
 		this.emitResolve('GetReady!');
 	}
 	setComment(data, options) {
+		if (!options?.append) { this._commentHistoryRenderer?.reset(); }
 		if (typeof data === 'string') {
 			if (options.format === 'json') {
 				this._model.setData(JSON.parse(data), options);
@@ -20681,7 +23958,17 @@ class NicoCommentPlayer extends Emitter {
 		this._model.addChat(nicoChat);
 		return nicoChat;
 	}
+	applyHistoryThreads(data, control) {
+		if (!this._commentHistoryRenderer) {
+			this._commentHistoryRenderer = new ZenzaCommentHistoryCore.CommentHistoryRenderer({
+				player: this, Chat: NicoChat, ChatViewModel: NicoChatViewModel
+			});
+		}
+		return this._commentHistoryRenderer.apply(data, control);
+	}
+	clearCommentHistory() { this._commentHistoryRenderer?.clear(); }
 	removeChat(nicoChat) {
+		this._commentHistoryRenderer?.removed(nicoChat);
 		this._model.removeChat(nicoChat);
 	}
 	set playbackRate(v) {
@@ -20706,6 +23993,7 @@ class NicoCommentPlayer extends Emitter {
 		this._view.hide();
 	}
 	close() {
+		this._commentHistoryRenderer?.reset();
 		this._model.clear();
 		if (this._view) {
 			this._view.clear();
@@ -21417,6 +24705,14 @@ class NicoChatGroupViewModel {
 				params: {type, members: data, lastUpdate: requestId}
 			});
 			if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return; }
+			if (!Array.isArray(result.members) || result.members.length !== members.length ||
+					!data.every((expected, i) => {
+						const item = result.members[i];
+						return item && item.id === expected.id && Number.isFinite(item.ypos) &&
+							typeof item.isOverflow === 'boolean';
+					})) {
+				throw new Error('Invalid comment layout reply');
+			}
 			for (let i = 0; i < members.length; i++) {
 				members[i].bulkLayoutData = result.members[i];
 			}
@@ -21657,7 +24953,7 @@ class NicoCommentCss3PlayerView extends Emitter {
 		document.addEventListener('visibilitychange', () => {
 			if (document.visibilityState === 'visible') {
 				this.refresh();
-				this.onResize();
+				this._adjust();
 			}
 		});
 		global.debug.css3Player = this;
@@ -23303,6 +26599,7 @@ class CommentListModel extends Emitter {
 		this._positions = [];
 		this._maxItems = params.maxItems || 100;
 		this._currentSortKey = 'vpos';
+		this._readingEpoch = 0;
 		this._isDesc = false;
 		this._currentTime = 0;
 		this._currentIndex = -1;
@@ -23311,6 +26608,7 @@ class CommentListModel extends Emitter {
 		this._items = Array.isArray(itemList) ? itemList : [itemList];
 	}
 	clear() {
+		this._readingEpoch++;
 		this._items = [];
 		this._positions = [];
 		this._currentTime = 0;
@@ -23327,7 +26625,6 @@ class CommentListModel extends Emitter {
 		}
 		this._items = items;
 		this._positions = positions.sort((a, b) => a - b);
-		this._currentTime = 0;
 		this._currentIndex = -1;
 		this.sort();
 		this.emit('update', this._items, true);
@@ -23506,8 +26803,54 @@ class CommentListView extends Emitter {
 			Array.from(doc.querySelectorAll('.commentListItem'));
 		this.emitResolve('frame-ready');
 	}
+	_readingKey(item) {
+		const chat = item && item.nicoChat;
+		if (!chat) { return null; }
+		const thread = chat.threadId ?? chat.thread, no = Number(chat.no), fork = Number(chat.fork);
+		if (thread != null && String(thread) && Number.isSafeInteger(no) && no > 0 && Number.isInteger(fork)) {
+			return JSON.stringify([String(thread), fork, no]);
+		}
+		return chat.id == null ? null : 'pending:' + String(chat.id);
+	}
+	_captureReadingState() {
+		const views = this._itemViews || [], height = CommentListView.ITEM_HEIGHT;
+		const changedVideo = this._readingEpoch !== this._model?._readingEpoch;
+		const top = changedVideo ? 0 : Math.max(0, this._container?.scrollTop || 0);
+		const index = Math.min(views.length - 1, Math.floor(top / height));
+		const anchors = [];
+		if (!changedVideo) {
+			for (let distance = 0; distance < 12; distance++) {
+				for (const i of [index + distance, index - distance]) {
+					const key = this._readingKey(views[i]?._item);
+					if (key && !anchors.includes(key)) { anchors.push(key); }
+				}
+			}
+		}
+		const previous = id => id == null ? null : views.find(v => String(v._item?.itemId) === String(id))?._item;
+		const detail = this._$itemDetail?.[0];
+		return {anchors, offset: top % height, scrollTop: top,
+			manual: this.isActive || this.isAutoScroll === false || this._model?.currentSortKey !== 'vpos',
+			selected: changedVideo ? null : this._readingKey(previous(this._selectedItem?.dataset.itemId)),
+			detail: changedVideo || !detail?.classList.contains('show') ? null : this._readingKey(previous(detail.dataset.itemId))};
+	}
+	_restoreReadingState(state) {
+		if (!state) { return; }
+		const views = this._itemViews || [], byKey = new Map();
+		views.forEach((view, index) => { const key = this._readingKey(view._item); if (key && !byKey.has(key)) { byKey.set(key, {view, index}); } });
+		this._clearSelectedItem(); this._selectedItem = null;
+		if (state.manual && this._container) {
+			const anchor = state.anchors.map(key => byKey.get(key)).find(Boolean);
+			const top = anchor ? anchor.index * CommentListView.ITEM_HEIGHT + state.offset : state.scrollTop;
+			const maximum = views.length ? Math.max(0, views.length * CommentListView.ITEM_HEIGHT + 100 - this._innerHeight) : 0;
+			this._scrollTop = Math.max(0, Math.min(top, maximum));
+			this._container.scrollTop = this._scrollTop;
+		}
+		const selected = byKey.get(state.selected);
+		if (selected) { this._selectItem(selected.view.viewElement); }
+		const detail = byKey.get(state.detail);
+		if (detail) { this.showItemDetail(detail.view._item); } else { this.hideItemDetail(); }
+	}
 	async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
-		this._clearSelectedItem();
 		if (!this._isFrameReady) {
 			await this.promise('frame-ready');
 		}
@@ -23525,6 +26868,8 @@ class CommentListView extends Emitter {
 		await cssUtil.setProps([this.body, '--list-height',
 			Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
 		if (revision !== this._modelUpdateVersion || !this._list) { return; }
+		const readingState = this._captureReadingState();
+		this._readingEpoch = this._model?._readingEpoch;
 		this._itemViews = itemViews;
 		this._isModelUpdatePending = false;
 		this.newItems.length = 0;
@@ -23533,8 +26878,8 @@ class CommentListView extends Emitter {
 		this._inviewItemList.clear();
 		this._$menu.removeClass('show');
 		this._refreshCurrentPoint();
+		this._restoreReadingState(readingState);
 		this._refreshInviewElements();
-		this.hideItemDetail();
 		window.setTimeout(() => {
 			if (revision !== this._modelUpdateVersion) { return; }
 			this.removeClass('updating');
@@ -25151,20 +28496,22 @@ class VideoListItem {
 			lastResBody: info.lastResBody
 		});
 	}
-	static createBlankInfo(id) {
+	static createBlankInfo(id, hint = null) {
 		let postedAt = '0000/00/00 00:00:00';
 		if (!isNaN(id)) {
 			postedAt = textUtil.dateToString(new Date(id * 1000));
 		}
+		const hintTitle = hint && typeof hint.title === 'string' && hint.title ? hint.title : null;
+		const hintThumb = hint && typeof hint.thumbnailUrl === 'string' && /^https:\/\//.test(hint.thumbnailUrl) ? hint.thumbnailUrl : null;
 		return new this({
 			_format: 'blank',
 			id: id,
-			title: id + '(動画情報不明)',
+			title: hintTitle ? `${hintTitle}(動画情報不明)` : id + '(動画情報不明)',
 			length_seconds: 0,
 			num_res: 0,
 			mylist_counter: 0,
 			view_counter: 0,
-			thumbnail_url: 'https://nicovideo.cdn.nimg.jp/web/images/bundle/nicovideo/components/Thumbnail/Thumbnail-placeholder.jpg',
+			thumbnail_url: hintThumb || 'https://nicovideo.cdn.nimg.jp/web/images/bundle/nicovideo/components/Thumbnail/Thumbnail-placeholder.jpg',
 			first_retrieve: postedAt,
 		});
 	}
@@ -25240,6 +28587,9 @@ class VideoListItem {
 		});
 	}
 	constructor(rawData) {
+		if (rawData && rawData.incomplete === true && !rawData._format) {
+			rawData._format = 'blank';
+		}
 		this._rawData = rawData;
 		this._itemId = VideoListItem._itemId++;
 		this._watchId = (this._getData('id', '') || '').toString();
@@ -25391,7 +28741,44 @@ class VideoListItem {
 			view_counter: this._rawData.view_counter,
 			thumbnail_url: this._rawData.thumbnail_url,
 			first_retrieve: this._rawData.first_retrieve,
+			...(this.isBlankData ? {incomplete: true} : {})
 		};
+	}
+	upgradeByThumbInfo(info) {
+		if (!this.isBlankData || !info || typeof info.title !== 'string' || !info.title) {
+			return false;
+		}
+		return this._applyFullData({
+			_format: 'thumbInfo',
+			title: info.title,
+			length_seconds: Number.isFinite(info.duration) ? info.duration : undefined,
+			num_res: Number.isFinite(info.commentCount) ? info.commentCount : undefined,
+			mylist_counter: Number.isFinite(info.mylistCount) ? info.mylistCount : undefined,
+			view_counter: Number.isFinite(info.viewCount) ? info.viewCount : undefined,
+			thumbnail_url: info.thumbnail,
+			first_retrieve: info.postedAt,
+			owner: info.owner
+		});
+	}
+	applyHint(hint) {
+		if (!this.isBlankData || !hint) {
+			return false;
+		}
+		const raw = this._rawData;
+		let changed = false;
+		if (typeof hint.title === 'string' && hint.title) {
+			const title = `${hint.title}(動画情報不明)`;
+			if (raw.title !== title) { raw.title = title; changed = true; }
+		}
+		if (typeof hint.thumbnailUrl === 'string' && /^https:\/\//.test(hint.thumbnailUrl) && raw.thumbnail_url !== hint.thumbnailUrl) {
+			raw.thumbnail_url = hint.thumbnailUrl;
+			changed = true;
+		}
+		if (changed) {
+			this._updateSortTitle();
+			this.notifyUpdate();
+		}
+		return changed;
 	}
 	updateByVideoInfo(videoInfo) {
 		if (this.isBlankData) {
@@ -27293,6 +30680,7 @@ class PlayList extends VideoList {
 		this._isLoop = params.loop;
 		this.model = new PlayListModel({});
 		this.model.on('item-removed', () => this._refreshIndex());
+		this.model.on('update', () => this._scheduleDetailFill());
 		this._initializeAdDecoration(params);
 		global.debug.playlist = this;
 		this.on('update', _.debounce(() => PlayListSession.save(this.serialize()), 3000));
@@ -27490,6 +30878,14 @@ class PlayList extends VideoList {
 		setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
 		return added;
 	}
+	_insertAllAt(videoListItems, index, options) {
+		options = options || {};
+		const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
+		this.model.insertItem(videoListItems, index);
+		const added = this._countNewlyAdded(videoListItems, beforeItemIds);
+		this._refreshIndex(false);
+		return added;
+	}
 	_insertAll(videoListItems, options) {
 		options = options || {};
 		const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
@@ -27571,6 +30967,15 @@ class PlayList extends VideoList {
 		}
 		return Math.min(Math.max(n, PlayList.SEARCH_LIMIT_MIN), PlayList.SEARCH_LIMIT_MAX);
 	}
+	static searchNotice(result) {
+		const unapplied = (result && Array.isArray(result.unappliedConditions)) ? result.unappliedConditions : [];
+		const LABEL = {selectContentType: '動画の長さ種別', channelVideoListingStatus: 'チャンネル動画の掲載', kind: '投稿者の種類(kind)', genre: 'ジャンル'};
+		let notice = unapplied.length ? `（未対応のため適用していない条件: ${unapplied.map(key => LABEL[key] || key).join('、')}）` : '';
+		if (result && result.partial === true) {
+			notice += `（途中のページの取得に失敗したため、取得できた${result.returnedCount ?? (result.list || []).length}件だけです）`;
+		}
+		return notice;
+	}
 	loadSearchVideo(word, options, limit = PlayList.SEARCH_LIMIT_DEFAULT) {
 		this._initializeView();
 		limit = PlayList.normalizeSearchLimit(limit);
@@ -27580,8 +30985,9 @@ class PlayList extends VideoList {
 		const timerLabel = `loadSearchVideos${word} #${PlayList._searchSeq = (PlayList._searchSeq || 0) + 1}`;
 		window.console.time(timerLabel);
 		options = options || {};
+		let searchResult = null;
 		const loadItems = async () => {
-			const result = await this._nicoSearchApiLoader.searchMore(word, options, limit);
+			const result = searchResult = await this._nicoSearchApiLoader.searchMore(word, options, limit);
 			const items = (result && result.list) || [];
 			return items
 				.filter(item => {
@@ -27620,9 +31026,9 @@ class PlayList extends VideoList {
 				return Promise.resolve({
 					status: 'ok',
 					message:
-						added !== null ?
+						(added !== null ?
 							`検索結果を${added}件プレイリストに追加しました` :
-							'検索結果をプレイリストに読み込みしました'
+							'検索結果をプレイリストに読み込みしました') + PlayList.searchNotice(searchResult)
 				});
 			});
 	}
@@ -27631,22 +31037,114 @@ class PlayList extends VideoList {
 		if (!Array.isArray(watchIds) || !watchIds.length) {
 			return 0;
 		}
+		const hints = options.hints && typeof options.hints === 'object' ? options.hints : null;
+		if (options.deferDetails === true) {
+			return this._appendIdsDeferred(watchIds, options, hints);
+		}
 		const loadOne = watchId =>
 			this._thumbInfoLoader.load(watchId).then(info => {
 				info.id = watchId;
 				return VideoListItem.createByThumbInfo(info);
-			}).catch(() => VideoListItem.createBlankInfo(watchId));
+			}).catch(() => VideoListItem.createBlankInfo(watchId, hints && hints[watchId]));
 		const CONCURRENCY = 8;
+		const isCancelled = typeof options.isCancelled === 'function' ? options.isCancelled : () => false;
 		const items = new Array(watchIds.length);
 		for (let i = 0; i < watchIds.length; i += CONCURRENCY) {
+			if (isCancelled()) {
+				return null;
+			}
 			const chunk = watchIds.slice(i, i + CONCURRENCY);
 			const loaded = await Promise.all(chunk.map(loadOne));
 			loaded.forEach((item, j) => { items[i + j] = item; });
+		}
+		if (isCancelled()) {
+			return null;
 		}
 		const added = options.insert ?
 			this._insertAll(items, options) : this._appendAll(items, options);
 		this.emit('update');
 		return added;
+	}
+	_appendIdsDeferred(watchIds, options = {}, hints = null) {
+		const isCancelled = typeof options.isCancelled === 'function' ? options.isCancelled : () => false;
+		const report = options.report && typeof options.report === 'object' ? options.report : {};
+		const seen = new Set();
+		const ids = [];
+		for (const id of Array.isArray(watchIds) ? watchIds : []) {
+			const key = id == null ? '' : String(id);
+			if (!key || seen.has(key)) { continue; }
+			seen.add(key);
+			ids.push(key);
+		}
+		const existing = ids.filter(id => this.model.findByWatchId(id));
+		const fresh = ids.filter(id => !this.model.findByWatchId(id));
+		const room = Math.max(0, (this.model.maxItems || 0) - this.model.length);
+		const accepted = fresh.slice(0, room);
+		const overflow = fresh.slice(room);
+		Object.assign(report, {requested: ids.length, existing: existing.length, accepted: accepted.length,
+			overflow, capacity: this.model.maxItems, before: this.model.length, added: 0});
+		if (isCancelled()) {
+			return null;
+		}
+		if (!accepted.length) {
+			return 0;
+		}
+		const items = accepted.map(id => VideoListItem.createBlankInfo(id, hints && hints[id]));
+		const beforeIds = new Set(this.model.items.map(item => item.watchId));
+		const anchor = options.insert && options.insertAfterWatchId ? this.model.findByWatchId(options.insertAfterWatchId) : null;
+		const added = anchor ? this._insertAllAt(items, this.model.indexOf(anchor) + 1, options) :
+			(options.insert ? this._insertAll(items, options) : this._appendAll(items, options));
+		report.added = added;
+		report.addedIds = accepted.filter(id => !beforeIds.has(id) && this.model.findByWatchId(id));
+		report.existingIds = existing;
+		this.emit('update');
+		this._scheduleDetailFill();
+		return added;
+	}
+	_scheduleDetailFill() {
+		if (this._detailFillTimer) { return; }
+		this._detailFillTimer = window.setTimeout(() => {
+			this._detailFillTimer = null;
+			this._fillDetails();
+		}, PlayList.DETAIL_FILL_DELAY_MS);
+	}
+	_fillDetails() {
+		const loader = this._thumbInfoLoader;
+		if (!loader || typeof loader.load !== 'function') { return; }
+		this._detailRunning = this._detailRunning || 0;
+		const slots = PlayList.DETAIL_CONCURRENCY - this._detailRunning;
+		if (slots <= 0) { return; }
+		const active = Math.max(0, this.model.activeIndex);
+		const candidates = this.model.items
+			.map((item, index) => ({item, index}))
+			.filter(({item}) => item.isBlankData && !item.isLazy && !item.state.detailRequested && /^[a-z]{2}\d+$/.test(item.watchId))
+			.sort((a, b) => Math.abs(a.index - active) - Math.abs(b.index - active))
+			.slice(0, slots);
+		for (const {item} of candidates) {
+			item.state.detailRequested = true;
+			this._detailRunning++;
+			Promise.resolve().then(() => loader.load(item.watchId)).then(info => {
+				if (this.model.findByItemId(item.itemId) === item && item.isBlankData) {
+					item.upgradeByThumbInfo(info);
+				}
+			}).catch(() => {
+				item.state.detailFailed = true;
+			}).then(() => {
+				this._detailRunning--;
+				this._scheduleDetailFill();
+			});
+		}
+	}
+	applyHints(hintMap) {
+		if (!hintMap) { return 0; }
+		const get = typeof hintMap.get === 'function' ? id => hintMap.get(id) : id => hintMap[id];
+		let n = 0;
+		for (const item of this.model.items) {
+			if (!item.isBlankData) { continue; }
+			const hint = get(item.watchId);
+			if (hint && item.applyHint(hint)) { n++; }
+		}
+		return n;
 	}
 	insert(watchId) {
 		this._initializeView();
@@ -27878,10 +31376,13 @@ class PlayList extends VideoList {
 	}
 }
 /* Task 073: 検索でプレイリストに読み込む最大件数。本家検索API(nvapi)の上限が5000件。 */
-PlayList.SEARCH_LIMIT_DEFAULT = 300;
+PlayList.DETAIL_CONCURRENCY = 2;
+PlayList.DETAIL_FILL_DELAY_MS = 200;
+PlayList.SEARCH_LIMIT_DEFAULT = 1000; // Task 193: 設定の初期値（search.limit）と同じ
 PlayList.SEARCH_LIMIT_MIN = 100;
 PlayList.SEARCH_LIMIT_MAX = 5000;
 
+// already required
 const MediaSessionApi = (() => {
 	const emitter = new Emitter();
 	let init = false;
@@ -29978,8 +33479,7 @@ class NicoVideoPlayerDialog extends Emitter {
 			this._playerConfig.props.videoOwnerFilter,
 			this._playerConfig.props.videoTagFilter
 		);
-		this._savePlaybackPosition =
-			_.throttle(this._savePlaybackPosition.bind(this), 1000, {trailing: false});
+		this._bindPlaybackPositionSavers();
 		this._onToggleLike = _.debounce(this._onToggleLike.bind(this), 1000);
 		this.promise('firstVideoInitialized').then(() => console.log('firstVideoInitialized'));
 	}
@@ -30001,6 +33501,18 @@ class NicoVideoPlayerDialog extends Emitter {
 				.catch(() => e.reject());
 		});
 		MediaSessionApi.onCommand(this._onCommand.bind(this));
+	}
+	_ensureCommentHistory() {
+		if (this._commentHistory) { return this._commentHistory; }
+		if (!this._nicoVideoPlayer) { return null; }
+		try {
+			return this._commentHistory = ZenzaCommentHistoryCore.createHistoryFeature({
+				dialog: this, config: this._playerConfig, window
+			});
+		} catch (error) {
+			console.warn('Comment history initialization failed', {code: error?.code || 'INIT'});
+			return null;
+		}
 	}
 	async _initializeNicoVideoPlayer() {
 		if (this._nicoVideoPlayer) {
@@ -30100,6 +33612,9 @@ class NicoVideoPlayerDialog extends Emitter {
 			break;
 			case 'playlistSetCommonsTree':
 				this._onPlaylistSetCommonsTree();
+				break;
+			case 'commonsTreeExport':
+				this._onCommonsTreeExport();
 				break;
 			case 'playNextVideo':
 				this.playNextVideo();
@@ -30238,6 +33753,9 @@ class NicoVideoPlayerDialog extends Emitter {
 				break;
 			case 'toggle-screenFilterPanel':
 				this._view && this._view.toggleScreenFilterPanel();
+				break;
+			case 'toggle-commentHistoryPanel':
+				this._ensureCommentHistory()?.panel.toggle();
 				break;
 			case 'nextVideo':
 				this._nextVideo = param;
@@ -30497,21 +34015,94 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (!videoId) {
 			return this.execCommand('alert', '動画の情報がまだ読み込めていません');
 		}
-		this.execCommand('notify', 'コンテンツツリーを取得中...');
+		const requestId = this._requestId;
+		const watchId = this._watchId;
+		this._abortCommonsTreeJob();
+		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+		this._commonsTreeJob = controller;
+		const signal = controller ? controller.signal : undefined;
+		const token = this._commonsTreeToken = {};
+		const isCurrent = () => this._commonsTreeToken === token && this._requestId === requestId &&
+			this._watchId === watchId && !!this._videoInfo && this._videoInfo.videoId === videoId &&
+			!(signal && signal.aborted);
+		const prev = this._commonsTreeProgress;
+		const progress = (prev && prev.videoId === videoId && prev.requestId === requestId) ? prev : null;
+		const accumBase = this._commonsTreeAccum;
+		const accum = (progress && accumBase && accumBase.jobId === progress.jobId &&
+			accumBase.videoId === videoId && accumBase.requestId === requestId) ? accumBase :
+			NicoVideoPlayerDialog.newCommonsTreeAccum(videoId, requestId);
+		this._commonsTreeProgress = null;
+		this.execCommand('notify', progress ? 'コンテンツツリーの続きを取得中...' : 'コンテンツツリーを取得中...');
+		let lastProgressAt = 0;
+		const onProgress = p => {
+			const now = Date.now();
+			if (!isCurrent() || now - lastProgressAt < 1000) { return; }
+			lastProgressAt = now;
+			const label = p.kind === 'parents' ? '親作品' : '子作品';
+			this.execCommand('notify', `コンテンツツリーを取得中...（${label} ${Math.min(p.offset, p.total)}/${p.total}件目）`);
+		};
+		const loadOptions = {fullScan: true, signal, onProgress};
+		if (progress) {
+			loadOptions.offsets = {parents: progress.parents, children: progress.children};
+		}
 		let tree;
 		try {
-			tree = await CommonsTreeLoader.load(videoId);
+			tree = await CommonsTreeLoader.load(videoId, undefined, loadOptions);
 		} catch (e) {
-			window.console.error('コンテンツツリーの取得に失敗', e);
+			if (!isCurrent()) {
+				return;
+			}
+			this._commonsTreeProgress = progress;
+			window.console.error('コンテンツツリーの取得に失敗', e && e.message);
 			return this.execCommand('alert',
 				(e && e.message) || 'コンテンツツリーの取得に失敗しました');
+		}
+		if (!isCurrent() || tree.cancelled) {
+			return;
 		}
 		const parents = tree.parents.works.filter(w => w.isVideo);
 		const children = tree.children.works.filter(w => w.isVideo);
 		const skipped =
 			(tree.parents.works.length - parents.length) +
 			(tree.children.works.length - children.length);
+		const sideNotes = [];
+		const scanned = side => (side.startOffset || 0) + (side.fetchedCount ?? side.works.length);
+		for (const [label, side] of [['親作品', tree.parents], ['子作品', tree.children]]) {
+			if (side.skipped) {
+				continue;
+			}
+			if (side.failed && side.partial) {
+				sideNotes.push(`${label}は途中で取得に失敗（全${side.total}件中${scanned(side)}件目まで取得）`);
+			} else if (side.failed) {
+				sideNotes.push(`${label}の取得に失敗（件数不明）`);
+			} else if (side.truncated || (side.stopReason === 'limit' && side.total > scanned(side))) {
+				sideNotes.push(`${label}は全${side.total}件中${scanned(side)}件目まで取得（上限）`);
+			} else if (['empty-before-end', 'repeated-page', 'no-progress'].includes(side.stopReason) ||
+				(side.totalChanges && side.totalChanges.length)) {
+				sideNotes.push(`${label}は一覧の途中で応答が矛盾したため一部のみ（全${side.total}件中${side.works.length}件）`);
+			} else if (side.complete === false) {
+				sideNotes.push(`${label}は一部のみ取得（理由: ${side.stopReason || '不明'}）`);
+			}
+		}
+		const incompleteSide = [tree.parents, tree.children].some(side => side && !side.skipped && side.complete === false);
+		const resumable = [tree.parents, tree.children].some(side => typeof side.nextOffset === 'number');
+		const nextProgress = !resumable ? null : {videoId, requestId, jobId: accum.jobId,
+				parents: typeof tree.parents.nextOffset === 'number' ? tree.parents.nextOffset : null,
+				children: typeof tree.children.nextOffset === 'number' ? tree.children.nextOffset : null};
+		if (resumable) {
+			sideNotes.push('もう一度「親作品・子作品」を選ぶと続きを取得します');
+		}
+		const failureNote = sideNotes.length ? `／${sideNotes.join('／')}` : '';
+		const anyFailed = !!(tree.parents.failed || tree.children.failed || resumable || incompleteSide);
+		NicoVideoPlayerDialog.mergeCommonsTreeWorks(accum, tree);
+		this._commonsTreeAccum = accum;
 		if (!parents.length && !children.length) {
+			this._commonsTreeProgress = nextProgress;
+			this._commonsTreeLastResult = NicoVideoPlayerDialog.buildCommonsTreeResult(accum);
+			if (anyFailed) {
+				return this.execCommand('notify',
+					`追加できる親作品・子作品はありませんでした${skipped > 0 ? `（動画以外・非公開${skipped}件は除外）` : ''}${failureNote}`);
+			}
 			const notRegistered = tree.parents.notFound && tree.children.notFound;
 			return this.execCommand('notify',
 				skipped > 0 ?
@@ -30521,23 +34112,150 @@ class NicoVideoPlayerDialog extends Emitter {
 						'親作品・子作品は0件でした'));
 		}
 		const watchIds = parents.concat(children).map(w => w.contentId);
-		const option = {watchId: this._watchId};
+		const report = {};
+		const option = {watchId, isCancelled: () => !isCurrent(), deferDetails: true, report};
+		const hints = {};
+		parents.concat(children).forEach(w => { if (w.meta) { hints[w.contentId] = w.meta; } });
+		if (Object.keys(hints).length) { option.hints = hints; }
 		option.insert = this._playlist.isEnable;
+		if (option.insert && accum.lastAddedWatchId) {
+			option.insertAfterWatchId = accum.lastAddedWatchId;
+		}
 		this._state.currentTab = 'playlist';
 		const added = await this._playlist.appendWatchIds(watchIds, option);
+		if (added === null || !isCurrent()) {
+			return;
+		}
 		const detail = `親作品${parents.length}件・子作品${children.length}件`;
 		const total = tree.parents.total + tree.children.total;
 		const fetched = tree.parents.works.length + tree.children.works.length;
-		const truncated = total > fetched ? `／全${total}件中${fetched}件を取得` : '';
-		if (added === 0) {
+		const truncated = failureNote || (!progress && total > fetched && !tree.complete ? `／全${total}件中${fetched}件を取得` : '');
+		this._commonsTreeProgress = nextProgress;
+		const overflow = Array.isArray(report.overflow) ? report.overflow : [];
+		NicoVideoPlayerDialog.mergeCommonsTreeReport(accum, report, watchIds);
+		this._commonsTreeLastResult = NicoVideoPlayerDialog.buildCommonsTreeResult(accum);
+		const overflowNote = overflow.length ?
+			`／プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加（「親作品・子作品の一覧を保存」で全件を保存できます）` : '';
+		const existingNote = report.existing ? `／${report.existing}件は既にプレイリストにあります` : '';
+		const pending = added > 0 ? '。表示情報を補完しています' : '';
+		if (added === 0 && !overflow.length) {
 			this.execCommand('notify',
-				`追加できる動画がありませんでした（${detail}はすべて既にプレイリストにあります）`);
+				`追加できる動画がありませんでした（${detail}はすべて既にプレイリストにあります${truncated}）`);
 		} else {
 			this.execCommand('notify',
-				`プレイリストに${added}件追加しました（${detail}${skipped > 0 ? `／動画以外${skipped}件は除外` : ''}${truncated}）`);
+				`プレイリストに${added}件追加しました（${detail}${skipped > 0 ? `／動画以外${skipped}件は除外` : ''}${existingNote}${overflowNote}${truncated}）${pending}`);
+		}
+		if (added > 0) {
+			this._fillCommonsTreeDisplayInfo(videoId, tree, {signal, isCurrent});
 		}
 		this._playlist.insertCurrentVideo(this._videoInfo);
-		window.setTimeout(() => this._playlist.scrollToActiveItem(), 1000);
+		window.setTimeout(() => {
+			if (isCurrent()) {
+				this._playlist.scrollToActiveItem();
+			}
+		}, 1000);
+	}
+	static newCommonsTreeAccum(videoId, requestId) {
+		return {
+			jobId: `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+			videoId, requestId, startedAt: new Date().toISOString(),
+			works: {parents: new Map(), children: new Map()},
+			sides: {parents: null, children: null},
+			added: new Set(), existing: new Set(), overflow: new Set(), lastAddedWatchId: null
+		};
+	}
+	static mergeCommonsTreeWorks(accum, tree) {
+		for (const kind of ['parents', 'children']) {
+			const side = tree[kind];
+			if (!side || side.skipped) { continue; }
+			for (const w of side.works || []) {
+				if (!w || !w.contentId || accum.works[kind].has(w.contentId)) { continue; }
+				accum.works[kind].set(w.contentId, {globalId: w.contentId, contentKind: w.contentKind || null,
+					visibleStatus: w.visibleStatus || null, isVideo: w.isVideo === true});
+			}
+			accum.sides[kind] = {
+				total: Number.isFinite(side.total) ? side.total : null,
+				complete: side.complete === undefined ? null : side.complete === true,
+				stopReason: side.stopReason || null,
+				nextOffset: typeof side.nextOffset === 'number' ? side.nextOffset : null
+			};
+		}
+	}
+	static mergeCommonsTreeReport(accum, report, requestedIds) {
+		for (const id of report.addedIds || []) {
+			accum.added.add(id);
+			accum.overflow.delete(id);
+			accum.lastAddedWatchId = id;
+		}
+		for (const id of report.existingIds || []) { accum.existing.add(id); }
+		for (const id of report.overflow || []) { if (!accum.added.has(id)) { accum.overflow.add(id); } }
+		if (!report.addedIds && Array.isArray(requestedIds) && requestedIds.length) {
+			accum.lastAddedWatchId = requestedIds[requestedIds.length - 1];
+		}
+	}
+	static buildCommonsTreeResult(accum) {
+		const list = kind => [...accum.works[kind].values()];
+		const all = list('parents').concat(list('children'));
+		const videos = kind => list(kind).filter(w => w.isVideo).map(w => w.globalId);
+		const strip = w => ({globalId: w.globalId, contentKind: w.contentKind, visibleStatus: w.visibleStatus});
+		const sides = ['parents', 'children'].map(k => accum.sides[k]).filter(Boolean);
+		return {
+			format: 'zenza-commons-tree-1', formatRevision: 2,
+			videoId: accum.videoId, jobId: accum.jobId, startedAt: accum.startedAt, fetchedAt: new Date().toISOString(),
+			parents: videos('parents'), children: videos('children'),
+			allWorks: {parents: list('parents').map(strip), children: list('children').map(strip)},
+			nonVideo: all.filter(w => !w.isVideo).length,
+			addedIds: [...accum.added], existingIds: [...accum.existing], overflow: [...accum.overflow],
+			counts: {
+				allWorks: all.length, parents: accum.works.parents.size, children: accum.works.children.size,
+				videoCandidates: all.filter(w => w.isVideo).length, nonVideo: all.filter(w => !w.isVideo).length,
+				added: accum.added.size, existing: accum.existing.size, overflow: accum.overflow.size
+			},
+			sides: {parents: accum.sides.parents, children: accum.sides.children},
+			complete: sides.length > 0 && sides.every(sd => sd.complete === true)
+		};
+	}
+	_abortCommonsTreeJob() {
+		const job = this._commonsTreeJob;
+		this._commonsTreeJob = null;
+		if (job && !job.signal.aborted) {
+			job.abort();
+		}
+	}
+	async _fillCommonsTreeDisplayInfo(videoId, tree, {signal, isCurrent}) {
+		if (!CommonsTreeLoader.scanMeta) { return; }
+		let applied = 0, complete = true;
+		for (const side of [tree.parents, tree.children]) {
+			if (!side || side.skipped || !(side.total > 0) || !isCurrent()) { continue; }
+			const r = await CommonsTreeLoader.scanMeta(videoId, side.kind || (side === tree.parents ? 'parents' : 'children'), side.total, {
+				signal,
+				onPage: ({map}) => {
+					if (isCurrent() && this._playlist) {
+						applied += this._playlist.applyHints(map);
+						map.clear();
+					}
+				}
+			}).catch(() => ({complete: false}));
+			complete = complete && r.complete !== false;
+		}
+		if (!isCurrent()) { return; }
+		this.execCommand('notify', complete ?
+			`親作品・子作品の表示情報を補完しました（${applied}件。詳細は表示した項目から順に取得します）` :
+			`親作品・子作品の表示情報の一部を取得できませんでした（動画は追加済み。表示した項目から詳細を取得します）`);
+	}
+	_onCommonsTreeExport() {
+		const r = this._commonsTreeLastResult;
+		if (!r) {
+			return this.execCommand('alert', '保存できる親作品・子作品の取得結果がありません（先に「親作品・子作品をプレイリストに追加」を実行してください）');
+		}
+		const data = JSON.stringify({format: 'zenza-commons-tree-1', ...r}, null, 2);
+		const blob = new Blob([data], {type: 'application/json'});
+		const url = window.URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		Object.assign(a, {download: `${r.videoId}.commons-tree.json`, rel: 'noopener', href: url});
+		document.body.append(a);
+		a.click();
+		window.setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 1000);
 	}
 	_onPlaylistStatusUpdate() {
 		let playlist = this._playlist;
@@ -30726,11 +34444,13 @@ class NicoVideoPlayerDialog extends Emitter {
 			this._onPlaylistInsert(watchId);
 			return;
 		}
+		this._cancelCommentLoad();
+		this._abortCommonsTreeJob();  // Task197: switching video stops the parent/child job
 		this._requestId = 'play-' + Math.random();
 		this._videoWatchOptions = options;
 		this._clearVideoTimers();
 		window.console.log('%copen video: ', 'color: blue;', watchId);
-		window.console.time('動画選択から再生可能までの時間 watchId=' + watchId);
+		window.console.time('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + watchId);
 		const requestId = this._requestId;
 		let nicoVideoPlayer = this._nicoVideoPlayer;
 		if (!nicoVideoPlayer) {
@@ -30745,7 +34465,7 @@ class NicoVideoPlayerDialog extends Emitter {
 			}
 		} else {
 			if (this._videoInfo) {
-				this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
+				this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
 			}
 			nicoVideoPlayer.close();
 			this._view.clearPanel();
@@ -30919,13 +34639,26 @@ class NicoVideoPlayerDialog extends Emitter {
 			currentSrc: url
 		});
 	}
+	_cancelCommentLoad() {
+		this._commentHistory?.controller.invalidate();
+		const previous = this._commentLoadController;
+		this._commentLoadController = null;
+		if (previous) { previous.abort(); }
+	}
 	loadComment(msgInfo) {
+		this._cancelCommentLoad();
+		const controller = this._commentLoadController = new AbortController();
+		const requestId = this._requestId;
+		const isCurrent = () => this._commentLoadController === controller &&
+			this._requestId === requestId && !controller.signal.aborted;
 		msgInfo.language = this._playerConfig.props.commentLanguage;
 		this._playerConfig.props.commentLanguage = msgInfo.language;
-		this.threadLoader.load(msgInfo).then(
-			this._onCommentLoadSuccess.bind(this, this._requestId),
-			this._onCommentLoadFail.bind(this, this._requestId)
-		);
+		return this.threadLoader.load(msgInfo, {signal: controller.signal}).then(
+			result => { if (isCurrent()) { this._onCommentLoadSuccess(requestId, result); } },
+			error => { if (isCurrent()) { this._onCommentLoadFail(requestId, error); } }
+		).finally(() => {
+			if (this._commentLoadController === controller) { this._commentLoadController = null; }
+		});
 	}
 	reloadComment(param = {}) {
 		const msgInfo = Object.assign({}, this._videoInfo.msgInfo);
@@ -30961,7 +34694,8 @@ class NicoVideoPlayerDialog extends Emitter {
 			e = {message: e === undefined || e === null ? '' : String(e)};
 		}
 		const watchId = e.watchId;
-		window.console.error('_onVideoInfoLoaderFail', watchId, e);
+		window.console.error('_onVideoInfoLoaderFail', watchId,
+			{message: e.message, reason: e.reason, type: e.type, name: e.name});
 		if (this._requestId !== requestId) {
 			return;
 		}
@@ -31059,6 +34793,10 @@ class NicoVideoPlayerDialog extends Emitter {
 		this._state.isCommentReady = true;
 		this._state.isWaybackMode = result.threadInfo.isWaybackMode;
 		this.emit('commentReady', result, this._threadInfo);
+		const history = this._ensureCommentHistory?.();
+		if (history) {
+			void history.controller.normalReady({videoInfo: this._videoInfo, result, generation: requestId});
+		}
 		if (result.threadInfo.totalResCount !== this._videoInfo.count.comment) {
 			this._state.count = {
 				...this._state.count, comment: result.threadInfo.totalResCount
@@ -31086,7 +34824,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (!this._state.isLoading) {
 			return;
 		}
-		window.console.timeEnd('動画選択から再生可能までの時間 watchId=' + this._watchId);
+		window.console.timeEnd('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + this._watchId);
 		this._playerConfig.props.lastWatchId = this._watchId;
 		WatchInfoCacheDb.putBestEffort(this._watchId, {watchCount: 1});
 		await this.promise('playlist-ready');
@@ -31216,7 +34954,7 @@ class NicoVideoPlayerDialog extends Emitter {
 	_onVideoEnded() {
 		this.emitAsync('ended');
 		this._state.setVideoEnded();
-		this._savePlaybackPosition(this._videoInfo.contextWatchId, 0);
+		this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, 0);
 		if (this.isPlaylistEnable && this._playlist.hasNext) {
 			this.playNextVideo({eventType: 'playlist'});
 			return;
@@ -31238,6 +34976,15 @@ class NicoVideoPlayerDialog extends Emitter {
 	_onVolumeChangeEnd(vol, mute) {
 		this.emit('volumeChangeEnd', vol, mute);
 	}
+	_bindPlaybackPositionSavers() {
+		this._savePlaybackPositionNow = this._savePlaybackPosition.bind(this);
+		this._savePlaybackPosition =
+			_.throttle(this._savePlaybackPositionNow, 1000, {trailing: false});
+	}
+	_saveFinalPlaybackPosition(contextWatchId, ct) {
+		const save = this._savePlaybackPositionNow || this._savePlaybackPosition;
+		save.call(this, contextWatchId, ct);
+	}
 	_savePlaybackPosition(contextWatchId, ct) {
 		if (!util.isLogin()) {
 			return;
@@ -31258,17 +35005,17 @@ class NicoVideoPlayerDialog extends Emitter {
 			return;
 		} // 短い動画は記録しない
 		PlaybackPosition.record(
-			contextWatchId,
+			vi.videoId,
 			ct,
 			vi.msgInfo.frontendId,
 			vi.msgInfo.frontendVersion
 		).catch(e => {
-			window.console.warn('save playback fail', e);
+			window.console.warn('save playback fail', {reason: e && e.reason, status: e && e.status});
 		});
 	}
 	close() {
 		if (this.isPlaying) {
-			this._savePlaybackPosition(this._watchId, this.currentTime);
+			this._saveFinalPlaybackPosition(this._watchId, this.currentTime);
 		}
 		WatchInfoCacheDb.putBestEffort(this._watchId, {currentTime: this.currentTime});
 		if (Fullscreen.now()) {
@@ -31276,6 +35023,8 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		this.pause();
 		this.hide();
+		this._cancelCommentLoad();
+		this._abortCommonsTreeJob();  // Task197
 		this._requestId = null;  // Task 090（ZW-012）: 閉じた後に、読み込み中だった動画の結果を使わない
 		this._clearVideoTimers();  // Task 090（ZW-016）
 		this._refresh();
@@ -31408,6 +35157,10 @@ class NicoVideoPlayerDialog extends Emitter {
 		const watchId = this._watchId;
 		const threadInfo = this._threadInfo;
 		const isCurrent = () => this._requestId === requestId;
+		if (!threadInfo || threadInfo.threadId === null || threadInfo.threadId === undefined || threadInfo.canPost === false) {
+			this.execCommand('alert', 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）');
+			return Promise.reject({status: 'fail', reason: 'no-post-target'});
+		}
 		const threadId = this._threadInfo.threadId * 1;
 		if (!threadInfo.is184Forced) {
 			cmd = cmd ? ('184 ' + cmd) : '184';
@@ -32615,12 +36368,23 @@ const CommentPictureInPicture = (() => {
 		}
 	}
 	let session = null;
-	const waitEvent = (target, name, timeout) => new Promise(resolve => {
-		const timer = setTimeout(() => resolve(false), timeout);
-		target.addEventListener(name, () => { clearTimeout(timer); resolve(true); }, {once: true});
+	const waitEvent = (target, name, timeout, signal) => new Promise(resolve => {
+		let timer;
+		const finish = value => {
+			clearTimeout(timer);
+			target.removeEventListener(name, onEvent);
+			signal && signal.removeEventListener('abort', onAbort);
+			resolve(value);
+		};
+		const onEvent = () => finish(true), onAbort = () => finish(false);
+		if (signal && signal.aborted) { resolve(false); return; }
+		target.addEventListener(name, onEvent);
+		signal && signal.addEventListener('abort', onAbort, {once: true});
+		timer = setTimeout(() => finish(false), timeout);
 	});
 	class Session {
 		constructor({getVideo, getViewModel, config, onPlay, onPause, onEnd}) {
+			this._abort = new AbortController();
 			this.getVideo = getVideo;
 			this.getViewModel = getViewModel;
 			this.config = config;
@@ -32671,10 +36435,12 @@ const CommentPictureInPicture = (() => {
 			setTimeout(() => this.video && this.video.paused && this._syncPip('pause'), 150);
 		}
 		_onPipPlay() {
+			if (this.isStopped) { return; }
 			if (performance.now() < this.ignorePipEventsUntil) { return; }
 			this.video && this.video.paused && this.onPlay && this.onPlay();
 		}
 		_onPipPause() {
+			if (this.isStopped) { return; }
 			if (performance.now() < this.ignorePipEventsUntil) { return; }
 			this.video && !this.video.paused && this.onPause && this.onPause();
 		}
@@ -32704,10 +36470,11 @@ const CommentPictureInPicture = (() => {
 			return false;
 		}
 		draw() {
-			if (this.isDrawing) { return; }
+			if (this.isStopped || this.isDrawing) { return; }
 			this.isDrawing = true;
 			try {
 				const video = this.getVideo();
+				if (!video) { this.stop(); return; }
 				this._bindVideo(video);
 				const resized = this._resizeCanvas(video);
 				const canvas = this.canvas, ctx = this.ctx;
@@ -32746,7 +36513,25 @@ const CommentPictureInPicture = (() => {
 				this.isDrawing = false;
 			}
 		}
+		_waitForStart(promise) {
+			const signal = this._abort.signal;
+			return new Promise((resolve, reject) => {
+				let timer;
+				const finish = (value, error) => {
+					clearTimeout(timer);
+					signal.removeEventListener('abort', cancel);
+					error ? reject(error) : resolve(value);
+				};
+				const cancel = () => finish(undefined);
+				Promise.resolve(promise).then(value => finish(value), error => finish(null, error));
+				if (signal.aborted) { cancel(); return; }
+				signal.addEventListener('abort', cancel, {once: true});
+				timer = setTimeout(() => finish(null, new Error('PiPの開始が時間内に完了しませんでした')), 5000);
+			});
+		}
 		async start() {
+			if (this.isStarted || this.isStopped) { return; }
+			this.isStarted = true;
 			const video = this.getVideo();
 			if (!video) {
 				throw new Error('動画がありません');
@@ -32754,6 +36539,7 @@ const CommentPictureInPicture = (() => {
 			this._bindVideo(video);
 			this._resizeCanvas(video);
 			this.draw();
+			if (this.isStopped) { return; }
 			const stream = this.stream = this.canvas.captureStream(FPS);
 			const pip = this.pipVideo = document.createElement('video');
 			pip.className = 'zenzaCommentPipVideo';
@@ -32767,32 +36553,48 @@ const CommentPictureInPicture = (() => {
 			document.body.append(pip);
 			pip.srcObject = stream;
 			this.ticker = createTicker(Math.floor(1000 / FPS), this.draw);
-			const metadata = pip.readyState >= 1 ? Promise.resolve(true) : waitEvent(pip, 'loadedmetadata', 3000);
+			const metadata = pip.readyState >= 1 ? Promise.resolve(true) : waitEvent(pip, 'loadedmetadata', 3000, this._abort.signal);
 			this.lastKey = '';
 			this.draw();
-			await pip.play().catch(() => {});
-			await metadata;
+			await this._waitForStart(pip.play());
+			if (this.isStopped) { return; }
+			const ready = await metadata;
+			if (this.isStopped) { return; }
+			if (!ready) { throw new Error('PiPの映像を準備できませんでした'); }
 			if (video.paused) {
 				this._syncPip('pause');
 			}
-			pip.addEventListener('play', () => this._onPipPlay());
-			pip.addEventListener('pause', () => this._onPipPause());
-			pip.addEventListener('leavepictureinpicture', () => this.stop(), {once: true});
+			this._pipListeners = {
+				play: () => this._onPipPlay(), pause: () => this._onPipPause(),
+				leavepictureinpicture: () => this.stop()
+			};
+			for (const [name, listener] of Object.entries(this._pipListeners)) { pip.addEventListener(name, listener); }
 			if (document.pictureInPictureElement) {
-				await document.exitPictureInPicture().catch(() => {});
+				await this._waitForStart(document.exitPictureInPicture());
+				if (this.isStopped) { return; }
 			}
-			this.pipWindow = await pip.requestPictureInPicture();
+			const requested = pip.requestPictureInPicture().then(pipWindow => {
+				if (this.isStopped && document.pictureInPictureElement === pip) {
+					document.exitPictureInPicture().catch(() => {});
+				}
+				return pipWindow;
+			});
+			const pipWindow = await this._waitForStart(requested);
+			if (this.isStopped) { return; }
+			this.pipWindow = pipWindow;
 			this.pipWindow.addEventListener('resize', this._onResize);
 			this._onResize();
 		}
 		stop() {
 			if (this.isStopped) { return; }
 			this.isStopped = true;
+			this._abort.abort();
 			this.ticker && this.ticker.stop();
 			this._bindVideo(null);
 			this.pipWindow && this.pipWindow.removeEventListener('resize', this._onResize);
 			const pip = this.pipVideo;
 			if (pip) {
+				for (const [name, listener] of Object.entries(this._pipListeners || {})) { pip.removeEventListener(name, listener); }
 				if (document.pictureInPictureElement === pip) {
 					document.exitPictureInPicture().catch(() => {});
 				}
@@ -32801,6 +36603,9 @@ const CommentPictureInPicture = (() => {
 			}
 			this.stream && this.stream.getTracks().forEach(track => track.stop());
 			this.renderer.clearCache();
+			this.renderer.snapshot = null;
+			this.canvas.width = this.canvas.height = 1;
+			this._pipListeners = null;
 			this.pipVideo = this.stream = this.pipWindow = null;
 			this.onEnd && this.onEnd();
 		}
@@ -32823,7 +36628,7 @@ const CommentPictureInPicture = (() => {
 			current.stop();
 			throw e;
 		}
-		return current;
+		return current.isStopped ? null : current;
 	};
 	const stop = () => {
 		session && session.stop();
@@ -38928,7 +42733,7 @@ class RelatedInfoMenu extends BaseViewComponent {
 		this._currentWatchId = videoInfo.watchId;
 		this._currentVideoId = videoInfo.videoId;
 		this.setState({
-			isParentVideoExist: videoInfo.hasParentVideo,
+			isParentVideoExist: videoInfo.canOpenContentTree === true,
 			isCommunity: videoInfo.isCommunityVideo,
 			isMymemory: videoInfo.isMymemory
 		});
@@ -39094,6 +42899,10 @@ RelatedInfoMenu._shadow_ = (`
 					<li class="parentVideoMenu">
 						<span class="command"
 							data-command="playlistSetCommonsTree">親作品・子作品をプレイリストに追加</span>
+					</li>
+					<li class="parentVideoMenu">
+						<span class="command"
+							data-command="commonsTreeExport">親作品・子作品の一覧を保存（JSON）</span>
 					</li>
 					<li class="copyVideoWatchUrlMenu">
 						<span class="copyVideoWatchUrlLink command"
@@ -39430,22 +43239,34 @@ class HoverMenu {
 			subtree: true,
 		});
 	};
-	const readyContent = () => {
+	const readyContent = (timeoutMs = 15000) => {
 		if (document.querySelector('[aria-label="nicovideo-content"]') != null) {
 			return Promise.resolve();
 		}
+		const root = document.getElementById('root');
+		if (!root) {
+			return Promise.resolve();
+		}
 		const {promise, resolve} = Promise.withResolvers();
-		new MutationObserver((records, observer) => {
+		let timer = null;
+		const observer = new MutationObserver((records, observer) => {
 			for (const record of records) {
 				if(record.addedNodes.length === 0 || document.querySelector('[aria-label="nicovideo-content"]') == null) {
 					continue;
 				}
-				resolve();
+				clearTimeout(timer);
 				observer.disconnect();
+				resolve();
+				return;
 			}
-		}).observe(document.getElementById('root'), {
+		});
+		observer.observe(root, {
 			childList: true,
 		});
+		timer = setTimeout(() => {
+			observer.disconnect();
+			resolve();
+		}, timeoutMs);
 		return promise;
 	}
 	const isWatchPage = async () => {
@@ -39453,15 +43274,24 @@ class HoverMenu {
 			return false;
 		}
 		const res = document.querySelector('meta[name="server-response"]')?.getAttribute('content');
-		if (res == null) {
+		let json = null;
+		if (res != null) {
+			try {
+				json = JSON.parse(res);
+			} catch (_) {
+				json = null;
+			}
+		}
+		if (json == null || typeof json !== 'object') {
 			await readyContent();
 			return !!document.querySelector('.grid-area_\\[player\\]');
 		}
-		const json = JSON.parse(res);
-		if (json.meta.status > 299) {
+		if (json.meta?.status > 299) {
 			return false;
 		}
-		return typeof json.data.response.okReason === 'string';
+		const response = json.data?.response;
+		const watchData = response?.$watchV4 ? response.$watchV4.data : response;
+		return typeof watchData?.okReason === 'string';
 	};
 	const initWorker = () => {
 		if (!location.host.endsWith('.nicovideo.jp')) { return; }
@@ -40887,60 +44717,86 @@ const workerUtil = (() => {
 })();
 const IndexedDbStorage = (() => {
 	const workerFunc = function(self) {
-		const db = {};
+		const db = Object.create(null);
 		const initializing = new Map();
+		const schemas = new Map();
 		const controller = {
 			async init({name, ver, stores}) {
-				if (db[name]) {
-					return Promise.resolve(db[name]);
+				if (db[name] && (ver === undefined || db[name].version === ver)) { return db[name]; }
+				const active = initializing.get(name);
+				if (active) {
+					await active.promise;
+					return this.init({name, ver, stores});
 				}
-				if (initializing.has(name)) { return initializing.get(name); }
+				if (db[name]) { this.close({name}); }
+				const schema = stores || schemas.get(name) || [];
+				const entry = {};
 				const pending = new Promise((resolve, reject) => {
-					const req = indexedDB.open(name, ver);
+					let settled = false, req;
+					const fail = error => {
+						if (settled) { return; }
+						settled = true;
+						clearTimeout(timer);
+						try { req && req.transaction && req.transaction.abort(); } catch (abortError) {}
+						reject(error);
+					};
+					const timer = setTimeout(() => fail(new Error('IndexedDB open timed out')), 30000);
+					entry.cancel = () => fail(new Error('IndexedDB open cancelled'));
+					try { req = indexedDB.open(name, ver); } catch (error) { fail(error); return; }
+					req.onblocked = () => fail(new Error('IndexedDB upgrade blocked by another connection'));
 					req.onupgradeneeded = e => {
+						if (settled) { try { req.transaction.abort(); } catch (error) {} return; }
 						try {
-						const _db = e.target.result;
-						for (const meta of stores) {
-							if(_db.objectStoreNames.contains(meta.name)) {
-								_db.deleteObjectStore(meta.name);
+							const connection = e.target.result;
+							for (const meta of schema) {
+								const definition = meta.definition || {};
+								const exists = connection.objectStoreNames.contains(meta.name);
+								const store = exists ? req.transaction.objectStore(meta.name) :
+									connection.createObjectStore(meta.name, definition);
+								if (exists && (JSON.stringify(store.keyPath) !== JSON.stringify(definition.keyPath ?? null) ||
+										store.autoIncrement !== !!definition.autoIncrement)) {
+									throw new Error('IndexedDB store migration requires an explicit data migration');
+								}
+								for (const idx of meta.indexes || []) {
+									if (store.indexNames.contains(idx.name)) {
+										const current = store.index(idx.name), params = idx.params || {};
+										if (JSON.stringify(current.keyPath) !== JSON.stringify(idx.keyPath) ||
+												current.unique !== !!params.unique || current.multiEntry !== !!params.multiEntry) {
+											throw new Error('IndexedDB index migration requires an explicit data migration');
+										}
+									} else { store.createIndex(idx.name, idx.keyPath, idx.params); }
+								}
 							}
-							const store = _db.createObjectStore(meta.name, meta.definition);
-							const indexes = meta.indexes || [];
-							for (const idx of indexes) {
-								store.createIndex(idx.name, idx.keyPath, idx.params);
-							}
-							store.transaction.oncomplete = () => {
-								console.log('store.transaction.complete', JSON.stringify({name, ver, store: meta}));
-							};
-						}
-						} catch (error) {
-							try { req.transaction && req.transaction.abort(); } catch (abortError) {}
-							reject(error);
-						}
+						} catch (error) { fail(error); }
 					};
 					req.onsuccess = e => {
-						db[name] = e.target.result;
-						resolve(db[name]);
+						const connection = e.target.result;
+						if (settled) { connection.close(); return; }
+						settled = true;
+						clearTimeout(timer);
+						const forget = () => { if (db[name] === connection) { delete db[name]; } };
+						connection.onversionchange = () => { connection.close(); forget(); };
+						connection.onclose = forget;
+						db[name] = connection;
+						schemas.set(name, schema);
+						resolve(connection);
 					};
-					req.onerror = e => reject(req.error || e);
+					req.onerror = e => fail(req.error || e);
 				});
-				initializing.set(name, pending);
-				try {
-					return await pending;
-				} finally {
-					if (initializing.get(name) === pending) { initializing.delete(name); }
-				}
+				entry.promise = pending;
+				initializing.set(name, entry);
+				try { return await pending; }
+				finally { if (initializing.get(name) === entry) { initializing.delete(name); } }
 			},
 			close({name}) {
-				if (!db[name]) {
-					return;
-				}
-				db[name].close();
-				db[name] = null;
+				const active = initializing.get(name);
+				if (active) { active.cancel(); initializing.delete(name); }
+				if (db[name]) { db[name].close(); delete db[name]; }
 			},
 			async getStore({name, storeName, mode = 'readonly'}) {
-				const db = await this.init({name});
-				const transaction = db.transaction(storeName, mode);
+				let connection;
+				do { connection = await this.init({name}); } while (db[name] !== connection);
+				const transaction = connection.transaction(storeName, mode);
 				return {store: transaction.objectStore(storeName), transaction};
 			},
 			async _write({name, storeName}, operation) {
@@ -40993,14 +44849,45 @@ const IndexedDbStorage = (() => {
 					}
 				});
 			},
-			async updateTime({name, storeName, data: {key, index, timeout}}) {
-				const record = await this.get({name, storeName, data: {key, index, timeout}});
-				if (!record) {
-					return null;
-				}
-				record.updatedAt = Date.now();
-				await this.put({name, storeName, data: record});
-				return record;
+			async update({name, storeName, data}) {
+				return this._write({name, storeName}, (store, result, fail) => {
+					const req = data.index ? store.index(data.index).get(data.key) : store.get(data.key);
+					req.onerror = fail;
+					req.onsuccess = () => {
+						try {
+							if (data.onlyExisting && !req.result) { result(null); return; }
+							const record = {...(req.result || {})};
+							const safe = key => !['__proto__', 'constructor', 'prototype'].includes(key);
+							for (const [key, value] of Object.entries(data.defaults || {})) {
+								if (safe(key) && !record[key]) { record[key] = value; }
+							}
+							for (const [key, value] of Object.entries(data.patch || {})) {
+								if (safe(key)) { record[key] = value; }
+							}
+							for (const [key, value] of Object.entries(data.increment || {})) {
+								if (!safe(key) || !Number.isFinite(value)) { throw new TypeError('Invalid increment'); }
+								record[key] = (Number.isFinite(record[key]) ? record[key] : 0) + value;
+							}
+							for (const [kind, first] of [['prepend', true], ['append', false]]) {
+								for (const [key, values] of Object.entries(data[kind] || {})) {
+									if (!safe(key) || !Array.isArray(values)) { throw new TypeError('Invalid list update'); }
+									const old = Array.isArray(record[key]) ? record[key] : [];
+									record[key] = first ? values.concat(old) : old.concat(values);
+								}
+							}
+							for (const [key, length] of Object.entries(data.limits || {})) {
+								if (!safe(key) || !Number.isSafeInteger(length) || length < 0) { throw new TypeError('Invalid list limit'); }
+								if (Array.isArray(record[key])) { record[key] = record[key].slice(0, length); }
+							}
+							const write = store.put(record);
+							write.onerror = fail;
+							write.onsuccess = () => result(record);
+						} catch (error) { fail(error); }
+					};
+				});
+			},
+			async updateTime({name, storeName, data: {key, index}}) {
+				return this.update({name, storeName, data: {key, index, onlyExisting: true, patch: {updatedAt: Date.now()}}});
 			},
 			async delete({name, storeName, data: {key, index}}) {
 				return this._write({name, storeName}, (store, result, fail) => {
@@ -41105,6 +44992,7 @@ const IndexedDbStorage = (() => {
 				return {
 					close: params => post('close', params, storeName),
 					put: (record, transfer) => post('put', record, storeName, transfer),
+					update: data => post('update', data, storeName),
 					get: ({key, index, timeout}) => post('get', {key, index, timeout}, storeName),
 					updateTime: ({key, index, timeout}) => post('updateTime', {key, index, timeout}, storeName),
 					delete: ({key, index, timeout}) => post('delete', {key, index, timeout}, storeName),
@@ -41153,36 +45041,31 @@ const WatchInfoCacheDb = (() => {
 			async put(watchId, options = {}) {
 				const videoInfo = options.videoInfo || null;
 				const videoInfoRawData = (videoInfo && videoInfo.toJSON) ? videoInfo.toJSON() : videoInfo;
-				const cache = await this.get(watchId) || {};
 				const now = Date.now();
-				const videoId = videoInfo ? videoInfo.videoId : watchId;
-				const postedAt = videoInfo ? new Date(videoInfo.postedAt).getTime() : 0;
-				const threadId = videoInfo ? (videoInfo.threadId * 1) : 0;
-				const updatedAt = Date.now();
-				const resume = cache.resume || [];
-				const watchCount = (cache.watchCount || 0) + (options.watchCount === 1 ? 1 : 0);
-				typeof options.currentTime === 'number' && options.currentTime > 0 &&
-					(resume.unshift({now, time: options.currentTime}));
-				resume.length = Math.min(10, resume.length);
-				const ownerId = videoInfo?.owner.linkId ?? '';
-				const comment = cache.comment || [];
-				options.comment && (comment.push(options.comment));
-				const record = {
-					watchId,
-					videoId:  (cache.videoId  ? cache.videoId  : videoId) || '',
-					threadId: (cache.threadId ? cache.threadId : threadId) || '',
-					ownerId:  (ownerId ? ownerId : cache.ownerId) || '',
-					watchCount,
-					postedAt: cache && cache.postedAt ? cache.postedAt : postedAt,
-					updatedAt,
-					videoInfo: videoInfoRawData ? videoInfoRawData : cache.videoInfo,
-					threadInfo: (options.threadInfo ? options.threadInfo : cache.threadInfo) || 0,
-					comment,
-					resume,
-					heatMap:    (options.heatMap    ? options.heatMap    : cache.heatMap) || null,
-					config:     (options.config     ? options.config     : cache.config) || ''
-				};
-				await cacheDb.put(record);
+				const patch = {watchId, updatedAt: now};
+				const ownerId = videoInfo?.owner?.linkId || '';
+				if (ownerId) { patch.ownerId = ownerId; }
+				if (videoInfoRawData) { patch.videoInfo = videoInfoRawData; }
+				for (const key of ['threadInfo', 'heatMap', 'config']) {
+					if (options[key]) { patch[key] = options[key]; }
+				}
+				const resume = Number.isFinite(options.currentTime) && options.currentTime > 0 ?
+					[{now, time: options.currentTime}] : [];
+				const record = await cacheDb.update({
+					key: watchId, patch,
+					defaults: {
+						videoId: (videoInfo ? videoInfo.videoId : watchId) || '',
+						threadId: (videoInfo ? videoInfo.threadId * 1 : 0) || '',
+						ownerId, postedAt: videoInfo ? new Date(videoInfo.postedAt).getTime() : 0,
+						threadInfo: 0, heatMap: null, config: ''
+					},
+					increment: {watchCount: options.watchCount === 1 ? 1 : 0},
+					prepend: {resume}, append: {comment: options.comment ? [options.comment] : []},
+					limits: {resume: 10}
+				});
+				if (!record || typeof record !== 'object' || record.watchId !== watchId) {
+					throw new Error('Watch history update was not acknowledged');
+				}
 				return record;
 			},
 			get(watchId) { return cacheDb.updateTime({key: watchId}); },
@@ -42406,7 +46289,7 @@ const gate = () => {
 			'www.youtube.com',
 		].includes(host) || host.endsWith('.slack.com');
 	};
-	const uFetch = async params => {
+	const uFetch = async (params, consume = response => response) => {
 		const {url, options: requestOptions = {}} = params;
 		if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
 			return Promise.reject({status: 'fail', message: 'network error'});
@@ -42443,7 +46326,7 @@ const gate = () => {
 					}, timeout);
 				}));
 			}
-			racers.push(fetch(url, options));
+			racers.push(fetch(url, options).then(consume));
 			return await Promise.race(racers);
 		} catch (err) {
 			throw {status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail'};
@@ -42452,20 +46335,26 @@ const gate = () => {
 			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
 		}
 	};
+	const fetchSessions = new Map();
 	const xFetch = (params, sessionId = null) => {
 		const command = 'fetch';
-		return uFetch(params).then(async resp => {
+		const controller = new AbortController();
+		fetchSessions.set(sessionId, controller);
+		const request = {...params, options: {...params.options, signal: controller.signal}};
+		return uFetch(request, async resp => {
 			const buffer = await resp.arrayBuffer();
 			const init = ['type', 'url', 'redirected', 'status', 'ok', 'statusText']
 					.reduce((map, key) => {map[key] = resp[key]; return map;}, {});
 			const headers = [...resp.headers.entries()];
-			return Promise.resolve({buffer, init, headers});
+			return {buffer, init, headers};
 		}).then(({buffer, init, headers}) => {
 			const result = {status: 'ok', command, params: {buffer, init, headers}};
 			post(result, {sessionId});
 			return result;
 		}).catch(({status, message}) => {
 			post({status, message, command}, {sessionId});
+		}).finally(() => {
+			if (fetchSessions.get(sessionId) === controller) { fetchSessions.delete(sessionId); }
 		});
 	};
 	const init = ({prefix, type}) => {
@@ -42482,6 +46371,15 @@ const gate = () => {
 		const TOKEN = location.hash ? location.hash.substring(1) : null;
 		window.history.replaceState(null, null, location.pathname);
 		const port = post({status: 'ok', command: 'initialized'}, {type, token: TOKEN, origin});
+		port.addEventListener('message', event => {
+			let data;
+			try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
+			catch (_) { return; }
+			if (!data || data.token !== TOKEN || !data.body || data.body.command !== 'cancelFetch') { return; }
+			event.stopImmediatePropagation();
+			const controller = fetchSessions.get(data.body.params && data.body.params.sessionId);
+			if (controller) { controller.abort(); }
+		});
 		workerUtil && workerUtil.env({TOKEN, PRODUCT});
 		return {port, TOKEN, origin, type, PID};
 	};
@@ -42687,6 +46585,9 @@ const ThumbInfoCacheDb = (() => {
 					break;
 				case 'get':
 					result = await db.get({key, index, timeout});
+					break;
+				case 'update':
+					result = await db.update(data);
 					break;
 				case 'updateTime':
 					result = await db.updateTime({key, index, timeout});

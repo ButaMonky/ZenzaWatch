@@ -23,6 +23,18 @@ class JSONable {
 }
 
 class DomandInfo extends JSONable {
+  // Task184 (F08): a comparator must return a signed number. The former boolean
+  // comparators (b > a) left e.g. [1,3,2] unsorted. Higher level first; ties keep the
+  // server order (toSorted is stable); missing / non-numeric levels go last.
+  static _qualityDesc(level) {
+    return (a, b) => {
+      const x = Number(level(a)), y = Number(level(b));
+      const fx = Number.isFinite(x), fy = Number.isFinite(y);
+      if (fx && fy) { return y - x; }
+      return fx === fy ? 0 : (fx ? -1 : 1);
+    };
+  }
+
   constructor(rawData, videoDetail, linkedChannelVideo) {
     super();
     this._rawData = rawData;
@@ -39,7 +51,7 @@ class DomandInfo extends JSONable {
   }
 
   get audios() {
-    return this._rawData.audios.toSorted((a, b) => b.qualityLevel > a.qualityLevel);
+    return this._rawData.audios.toSorted(DomandInfo._qualityDesc(a => a.qualityLevel));
   }
 
   get availableAudios() {
@@ -51,7 +63,7 @@ class DomandInfo extends JSONable {
   }
 
   get videos() {
-    return this._rawData.videos.toSorted((a, b) => b.qualityLevel > a.qualityLevel);
+    return this._rawData.videos.toSorted(DomandInfo._qualityDesc(v => v.qualityLevel));
   }
 
   get availableVideos() {
@@ -80,6 +92,16 @@ class DomandInfo extends JSONable {
 }
 
 class DmcInfo extends JSONable {
+  // Task184 (F08): same signed descending comparator as DomandInfo.
+  static _qualityDesc(level) {
+    return (a, b) => {
+      const x = Number(level(a)), y = Number(level(b));
+      const fx = Number.isFinite(x), fy = Number.isFinite(y);
+      if (fx && fy) { return y - x; }
+      return fx === fy ? 0 : (fx ? -1 : 1);
+    };
+  }
+
   constructor(rawData) {
     super();
     this._rawData = rawData;
@@ -95,7 +117,7 @@ class DmcInfo extends JSONable {
   }
 
   get audios() {
-    return this._rawData.movie.audios.toSorted((a, b) => b.metadata.levelIndex > a.metadata.levelIndex);
+    return this._rawData.movie.audios.toSorted(DmcInfo._qualityDesc(a => a.metadata && a.metadata.levelIndex));
   }
 
   get availableAudios() {
@@ -107,7 +129,7 @@ class DmcInfo extends JSONable {
   }
 
   get videos() {
-    return this._rawData.movie.videos.toSorted((a, b) => b.metadata.levelIndex > a.metadata.levelIndex);
+    return this._rawData.movie.videos.toSorted(DmcInfo._qualityDesc(v => v.metadata && v.metadata.levelIndex));
   }
 
   get availableVideos() {
@@ -427,8 +449,21 @@ class VideoInfoModel extends JSONable {
     this._videoDetail.isLiked = v;
   }
 
+  // Task172 (F01): existence of a content tree is true / false / unknown.
+  // Watch V4 does not report it, so unknown must not be treated as "no tree".
+  get contentTreeState() {
+    const exists = this._videoDetail.commons_tree_exists;
+    if (exists === null || exists === undefined) { return 'unknown'; }
+    return exists ? 'exists' : 'none';
+  }
+
   get hasParentVideo() {
-    return !!(this._videoDetail.commons_tree_exists);
+    return this.contentTreeState === 'exists';
+  }
+
+  // Opening /works/{videoId} is offered unless the tree is explicitly absent.
+  get canOpenContentTree() {
+    return this.contentTreeState !== 'none' && /^[a-z]{2}\d+$/.test(String(this.videoId || ''));
   }
 
   get isHLSRequired() {
@@ -548,16 +583,17 @@ class VideoInfoModel extends JSONable {
     return Object.assign({}, series, {thumbnailUrl});
   }
 
+  // Task182 (F05): a series may come without video neighbours; missing ones are null.
   get firstVideo() {
-    return this.series ? this.series.video.first : null;
+    return this.series?.video?.first ?? null;
   }
 
   get prevVideo() {
-    return this.series ? this.series.video.prev : null;
+    return this.series?.video?.prev ?? null;
   }
 
   get nextVideo() {
-    return this.series ? this.series.video.next : null;
+    return this.series?.video?.next ?? null;
   }
 
   get relatedVideoItems() {

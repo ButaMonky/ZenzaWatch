@@ -57,7 +57,7 @@ class NicoCommentCss3PlayerView extends Emitter {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         this.refresh();
-        this.onResize();
+        this._adjust();
       }
     });
     global.debug.css3Player = this;

@@ -59,6 +59,15 @@ class NicoChatGroupViewModel {
         params: {type, members: data, lastUpdate: requestId}
       });
       if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return; }
+      // Validate the complete reply before writing any member (no partial layout).
+      if (!Array.isArray(result.members) || result.members.length !== members.length ||
+          !data.every((expected, i) => {
+            const item = result.members[i];
+            return item && item.id === expected.id && Number.isFinite(item.ypos) &&
+              typeof item.isOverflow === 'boolean';
+          })) {
+        throw new Error('Invalid comment layout reply');
+      }
       // Apply to the exact order sent to the worker, not a later sorted array.
       for (let i = 0; i < members.length; i++) {
         members[i].bulkLayoutData = result.members[i];

@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.132-task204
+// @version        2.7.133-task205
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-02 15:20Z
+// build: 2026-10-02 16:14Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.132-task204';
+    var VER = '2.7.133-task205';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-02 15:20Z';
+    var BUILD = '2026-10-02 16:14Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -7696,6 +7696,25 @@ const {SettingPanelElement} = (() => {
 				onChange: this.onChange.bind(this),
 				onImportFileSelect: this.onImportFileSelect.bind(this)
 			});
+			this._boundEnableFilterConfig = null;
+			this._onEnableFilterConfigUpdate = () => {
+				this.state.revision++;
+				if (this.isOpen) { this.requestRender(); }
+			};
+		}
+		_bindEnableFilterConfig(config) {
+			if (this._boundEnableFilterConfig === config) { return; }
+			this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+			this._boundEnableFilterConfig = config || null;
+			this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+		}
+		async connectedCallback() {
+			await super.connectedCallback();
+			this._bindEnableFilterConfig(this.config);
+		}
+		async disconnectedCallback() {
+			this._bindEnableFilterConfig(null);
+			await super.disconnectedCallback();
 		}
 		get config() {
 			return this.props.config;
@@ -7703,6 +7722,10 @@ const {SettingPanelElement} = (() => {
 		set config(v) {
 			this.props.config = v;
 			this.state.revision++;
+			if (this._isConnected) {
+				this._bindEnableFilterConfig(v);
+				this.requestRender();
+			}
 		}
 		onUIEvent(e) {
 			if (e.target.closest('label, input, select, textarea') || e.target.tagName === 'SUMMARY') {

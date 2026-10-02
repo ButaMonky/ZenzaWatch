@@ -802,6 +802,28 @@ const {SettingPanelElement} = (() => {
         onChange: this.onChange.bind(this),
         onImportFileSelect: this.onImportFileSelect.bind(this)
       });
+      this._boundEnableFilterConfig = null;
+      this._onEnableFilterConfigUpdate = () => {
+        this.state.revision++;
+        if (this.isOpen) { this.requestRender(); }
+      };
+    }
+
+    _bindEnableFilterConfig(config) {
+      if (this._boundEnableFilterConfig === config) { return; }
+      this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+      this._boundEnableFilterConfig = config || null;
+      this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+    }
+
+    async connectedCallback() {
+      await super.connectedCallback();
+      this._bindEnableFilterConfig(this.config);
+    }
+
+    async disconnectedCallback() {
+      this._bindEnableFilterConfig(null);
+      await super.disconnectedCallback();
     }
 
     get config() {
@@ -810,6 +832,10 @@ const {SettingPanelElement} = (() => {
     set config(v) {
       this.props.config = v;
       this.state.revision++;
+      if (this._isConnected) {
+        this._bindEnableFilterConfig(v);
+        this.requestRender();
+      }
     }
 
     onUIEvent(e) {

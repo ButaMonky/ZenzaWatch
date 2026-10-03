@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.140-task213
+// @version        2.7.143-task217
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-03 17:43Z
+// build: 2026-10-03 19:49Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.140-task213';
+    var VER = '2.7.143-task217';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-03 17:43Z';
+    var BUILD = '2026-10-03 19:49Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -12049,6 +12049,58 @@ const {ThreadLoader} = (() => {
 		3: 'ai',
 	}
 	const POST_TIMEOUT_MS = 30 * 1000;
+	let commentPostDiagnosticSeq = 0;
+	const safeStatusCode = value => {
+		const status = Number(value);
+		return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
+	};
+	const safeErrorCode = value =>
+		typeof value === 'string' && /^[A-Z0-9_]{1,80}$/.test(value) ? value : undefined;
+	const safeKind = value =>
+		typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value) ? value : undefined;
+	const getCommentPostFailureDetails = error => {
+		const result = error && error.result !== undefined ? error.result : error;
+		const details = {};
+		const statusCode = safeStatusCode(result && (result.status !== undefined ? result.status : result.httpStatus));
+		const errorCode = safeErrorCode(result && result.errorCode);
+		const kind = safeKind((error && error.kind) || (result && result.kind));
+		const errorName = safeKind(result && result.name);
+		const retryAfterMs = Number(result && result.retryAfterMs);
+		if (statusCode !== undefined) { details.statusCode = statusCode; }
+		if (errorCode !== undefined) { details.errorCode = errorCode; }
+		if (kind !== undefined) { details.kind = kind; }
+		if (errorName !== undefined && errorName !== kind) { details.errorName = errorName; }
+		if (Number.isFinite(retryAfterMs) && retryAfterMs >= 0) { details.retryAfterMs = retryAfterMs; }
+		return details;
+	};
+	const createCommentPostDiagnostic = msgInfo => {
+		const threadInfo = msgInfo && msgInfo.threadInfo || {};
+		return {
+			id: `cp-${++commentPostDiagnosticSeq}`,
+			attempt: 1,
+			videoId: threadInfo.videoId || (msgInfo && msgInfo.videoId) || null,
+			threadId: threadInfo.threadId === undefined ? null : threadInfo.threadId,
+			language: threadInfo.language || null
+		};
+	};
+	const logCommentPostDiagnostic = (diagnostic, phase, event, details = {}) => {
+		window.console.log(
+			'[ZenzaWatch][CommentPost]',
+			logSafe.redact({...diagnostic, phase, event, ...details})
+		);
+	};
+	const summarizeCommentPostAck = ack => {
+		if (ack === null) { return {ackType: 'null'}; }
+		if (Array.isArray(ack)) { return {ackType: 'array', ackLength: ack.length}; }
+		if (typeof ack !== 'object') { return {ackType: typeof ack}; }
+		return {
+			ackType: 'object',
+			ackKeys: Object.keys(ack).slice(0, 20).sort(),
+			hasNo: Object.prototype.hasOwnProperty.call(ack, 'no'),
+			noType: typeof ack.no,
+			hasId: Object.prototype.hasOwnProperty.call(ack, 'id')
+		};
+	};
 	const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS) => {
 		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 		let stage = 'headers';
@@ -12070,7 +12122,15 @@ const {ThreadLoader} = (() => {
 				throw (e && e.kind) ? e : Object.assign(e instanceof Error ? e : new Error(String(e && e.message || e)), {kind: 'network'});
 			}
 			stage = 'body';
-			return await Promise.race([res.json(), deadline]);
+			try {
+				return await Promise.race([res.json(), deadline]);
+			} catch (error) {
+				const httpStatus = safeStatusCode(res && res.status);
+				if (error && httpStatus !== undefined && error.httpStatus === undefined) {
+					error.httpStatus = httpStatus;
+				}
+				throw error;
+			}
 		} finally {
 			clearTimeout(timer);
 		}
@@ -12363,36 +12423,81 @@ const {ThreadLoader} = (() => {
 			return {threadInfo, body: result, format: 'threads'};
 		}
 		async postChat(msgInfo, text, cmd, vpos) {
-			return this._postChat(msgInfo, text, cmd, vpos);
+			return this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo));
 		}
-		async _postChat(msgInfo, text, cmd, vpos, retrying = false) {
+		async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null) {
+			diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
 			const {
 				videoId,
 				threadId,
-				language
+				language,
+				is184Forced
 			} = msgInfo.threadInfo;
+			logCommentPostDiagnostic(diagnostic, 'precheck', 'start', {
+				canPost: msgInfo.threadInfo.canPost !== false,
+				is184Forced: is184Forced === true
+			});
 			if (threadId === null || threadId === undefined || threadId === '' || msgInfo.threadInfo.canPost === false) {
+				logCommentPostDiagnostic(diagnostic, 'precheck', 'rejected', {
+					reason: 'no-post-target',
+					outcome: 'not-sent'
+				});
 				throw {status: 'fail', reason: 'no-post-target', message: 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）'};
 			}
 			const url = new URL(`/v1/threads/${threadId}/comments`, msgInfo.nvComment.server);
-			const { postKey } = (await this.getPostKey(threadId, { language })) || {};
+			let postKeyData;
+			logCommentPostDiagnostic(diagnostic, 'post-key', 'start');
+			try {
+				postKeyData = (await this.getPostKey(threadId, { language })) || {};
+			} catch (error) {
+				logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
+					...getCommentPostFailureDetails(error),
+					outcome: 'not-sent'
+				});
+				throw error;
+			}
+			const {postKey} = postKeyData;
+			const challenge = postKeyData && postKeyData.challenge;
+			logCommentPostDiagnostic(diagnostic, 'post-key', 'success', {
+				postKeyPresent: typeof postKey === 'string' && !!postKey.trim(),
+				challengeRequired: challenge && challenge.isRequired === true,
+				challengeSiteKeyPresent: !!(challenge && typeof challenge.siteKey === 'string' && challenge.siteKey)
+			});
 			if (typeof postKey !== 'string' || !postKey.trim()) {
+				logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
+					reason: 'post-key-missing',
+					outcome: 'not-sent'
+				});
 				throw {status: 'fail', reason: 'post-key-missing', message: '投稿キーを取得できませんでした（コメントは送信していません）'};
 			}
+			const commands = cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [];
 			const packet = JSON.stringify({
 				body: text,
-				commands: cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [],
+				commands,
 				vposMs: Math.floor((vpos || 0) * 10),
 				postKey,
 				videoId,
 			});
-			console.log('post packet: ', logSafe.redact(packet));
+			logCommentPostDiagnostic(diagnostic, 'post', 'start', {
+				commandCount: commands.length,
+				hasBlankCommand: commands.some(command => command === ''),
+				is184Forced: is184Forced === true
+			});
 			try {
 				const ack = await this._post(url, packet);
 				const no = ack && typeof ack === 'object' && ack.no !== null && ack.no !== '' ? Number(ack.no) : NaN;
 				if (!Number.isFinite(no)) {
+					logCommentPostDiagnostic(diagnostic, 'ack', 'failure', {
+						reason: 'ack-incomplete',
+						outcome: 'unknown',
+						...summarizeCommentPostAck(ack)
+					});
 					throw {ackIncomplete: true};
 				}
+				logCommentPostDiagnostic(diagnostic, 'complete', 'success', {
+					outcome: 'accepted',
+					postedNo: no
+				});
 				return {
 					status: 'ok',
 					no,
@@ -12409,7 +12514,12 @@ const {ThreadLoader} = (() => {
 					};
 				}
 				const { result: { status: statusCode, errorCode } = {} } = error;
+				const failureDetails = getCommentPostFailureDetails(error);
 				if (statusCode == null) {
+					logCommentPostDiagnostic(diagnostic, 'post', 'failure', {
+						...failureDetails,
+						outcome: 'unknown'
+					});
 					throw {
 						status: 'fail',
 						reason: error.kind || 'network',
@@ -12420,16 +12530,45 @@ const {ThreadLoader} = (() => {
 					};
 				}
 				if (!retrying && ['INVALID_TOKEN', 'EXPIRED_TOKEN'].includes(errorCode)) {
-					await this.load(msgInfo);
+					logCommentPostDiagnostic(diagnostic, 'post', 'failure', {
+						...failureDetails,
+						outcome: 'rejected',
+						retryScheduled: true
+					});
+					logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'start', {reason: errorCode});
+					try {
+						await this.load(msgInfo);
+						logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'success', {reason: errorCode});
+					} catch (refreshError) {
+						logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'failure', {
+							...getCommentPostFailureDetails(refreshError),
+							reason: errorCode,
+							outcome: 'not-sent'
+						});
+						throw refreshError;
+					}
 				} else {
+					logCommentPostDiagnostic(diagnostic, 'post', 'failure', {
+						...failureDetails,
+						outcome: 'rejected',
+						retryScheduled: false
+					});
 					throw {
 						status: 'fail',
 						statusCode,
 						message: errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗'
 					};
 				}
+				logCommentPostDiagnostic(diagnostic, 'retry', 'wait', {
+					reason: errorCode,
+					delayMs: 3000,
+					nextAttempt: diagnostic.attempt + 1
+				});
 				await sleep(3000);
-				return await this._postChat(msgInfo, text, cmd, vpos, true)
+				return await this._postChat(msgInfo, text, cmd, vpos, true, {
+					...diagnostic,
+					attempt: diagnostic.attempt + 1
+				});
 			}
 		}
 		async getDeleteKey(threadId, options = {}) {
@@ -22960,6 +23099,7 @@ class CommentArtProtection {
 	}
 }
 class NicoChatViewModel {
+	static _parsedTextCache = new WeakMap();
 	static prepareCommentArt(members) {
 		const metadata = CommentArtProtection.analyze(members.map(m => m._nicoChat), {
 			enabled: Config.props['commentLayer.protectCA'] === true
@@ -23062,8 +23202,18 @@ class NicoChatViewModel {
 	setText(text, parsedHtmlText = '') {
 		const fontCommand = this.fontCommand;
 		const commentVer = this.commentVer;
-		const htmlText = parsedHtmlText ||
-			(commentVer === 'html5' ? NicoTextParser.likeHTML5(text) : NicoTextParser.likeXP(text));
+				let htmlText = parsedHtmlText;
+		if (!htmlText) {
+			const parser = commentVer === 'html5' ? NicoTextParser.likeHTML5 : NicoTextParser.likeXP;
+			const cache = NicoChatViewModel._parsedTextCache;
+			const old = cache.get(this._nicoChat);
+			if (old && old.text === text && old.commentVer === commentVer && old.parser === parser) {
+				htmlText = old.htmlText;
+			} else {
+				htmlText = parser.call(NicoTextParser, text);
+				cache.set(this._nicoChat, {text, commentVer, parser, htmlText});
+			}
+		}
 		this._htmlText = htmlText;
 		this._text = text;
 		const field = this._offScreen.getTextField();
@@ -24015,7 +24165,7 @@ class NicoChatFilter extends Emitter {
 		if (!this._wordReg) {
 			this._wordReg = this._buildFilterReg(this._wordFilterList);
 		}
-		const umatch = this._userIdFilterList.length ? this._userIdFilterList : null;
+		const umatch = this._userIdFilterList.length ? new Set(this._userIdFilterList) : null;
 		if (!this._commandReg) {
 			this._commandReg = this._buildFilterReg(this._commandFilterList);
 		}
@@ -24062,7 +24212,7 @@ class NicoChatFilter extends Emitter {
 					);
 					return false;
 				}
-				if (umatch && umatch.includes(nicoChat.userId)) {
+				if (umatch && umatch.has(nicoChat.userId)) {
 					window.console.log('%cNGID: "%s" %s %s秒 %s %s', 'background: yellow;',
 						nicoChat.userId,
 						nicoChat.type,
@@ -24096,7 +24246,7 @@ class NicoChatFilter extends Emitter {
 				(nicoChat.score <= threthold) ||
 				(wordReg && wordReg.test(text)) ||
 				(wordRegReg && wordRegReg.test(text)) ||
-				(umatch && umatch.includes(nicoChat.userId)) ||
+				(umatch && umatch.has(nicoChat.userId)) ||
 				(commandReg && commandReg.test(nicoChat.cmd))
 				);
 		};
@@ -35563,13 +35713,29 @@ class NicoVideoPlayerDialog extends Emitter {
 		return this._playerConfig.props.volume;
 	}
 	async addChat(text, cmd, vpos = null, options = {}) {
-		if (!this._nicoVideoPlayer ||
-			!this.threadLoader ||
-			!this._state.isCommentReady ||
-			this._state.isCommentPosting) {
+		const precheckRejectReason =
+			!this._nicoVideoPlayer ? 'player-unavailable' :
+			!this.threadLoader ? 'thread-loader-unavailable' :
+			!this._state.isCommentReady ? 'comment-not-ready' :
+			this._state.isCommentPosting ? 'post-already-in-flight' : '';
+		if (precheckRejectReason) {
+			window.console.warn('[ZenzaWatch][CommentPost]', {
+				phase: 'dialog-precheck',
+				event: 'rejected',
+				reason: precheckRejectReason,
+				videoId: this._watchId || null,
+				isCommentReady: !!this._state.isCommentReady,
+				isCommentPosting: !!this._state.isCommentPosting
+			});
 			return Promise.reject();
 		}
 		if (!util.isLogin()) {
+			window.console.warn('[ZenzaWatch][CommentPost]', {
+				phase: 'dialog-precheck',
+				event: 'rejected',
+				reason: 'not-logged-in',
+				videoId: this._watchId || null
+			});
 			return Promise.reject();
 		}
 		const requestId = this._requestId;
@@ -35577,6 +35743,14 @@ class NicoVideoPlayerDialog extends Emitter {
 		const threadInfo = this._threadInfo;
 		const isCurrent = () => this._requestId === requestId;
 		if (!threadInfo || threadInfo.threadId === null || threadInfo.threadId === undefined || threadInfo.canPost === false) {
+			window.console.warn('[ZenzaWatch][CommentPost]', {
+				phase: 'dialog-precheck',
+				event: 'rejected',
+				reason: 'no-post-target',
+				videoId: watchId || null,
+				hasThreadInfo: !!threadInfo,
+				hasPostTarget: !!(threadInfo && threadInfo.threadId !== null && threadInfo.threadId !== undefined && threadInfo.canPost !== false)
+			});
 			this.execCommand('alert', 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）');
 			return Promise.reject({status: 'fail', reason: 'no-post-target'});
 		}
@@ -35605,7 +35779,14 @@ class NicoVideoPlayerDialog extends Emitter {
 		};
 		const onFail = err => {
 			err = err || {};
-			window.console.log('_onFail: ', err);
+			window.console.warn('[ZenzaWatch][CommentPost]', {
+				phase: 'dialog-result',
+				event: 'failure',
+				videoId: watchId || null,
+				reason: typeof err.reason === 'string' ? err.reason : undefined,
+				statusCode: Number.isInteger(Number(err.statusCode)) ? Number(err.statusCode) : undefined,
+				outcome: ['not-sent', 'rejected', 'unknown'].includes(err.outcome) ? err.outcome : undefined
+			});
 			window.console.timeEnd('コメント投稿');
 			nicoChat.isPostFail = true;
 			nicoChat.isUpdating = false;

@@ -11,7 +11,7 @@ function posting(fetcher) {
   const h = createDialogHarness(), alerts = [];
   const c = h.context;
   Object.assign(c, {AbortController, location: {host: 'www.nicovideo.jp'}, fetch: fetcher,
-    logSafe: {redact: () => '<redacted>'}, sleep: async () => {}, PopupMessage: {alert() {}}, debug: {}});
+    logSafe: {redact: value => value}, sleep: async () => {}, PopupMessage: {alert() {}}, debug: {}});
   run(beginSection('packages/lib/src/infra/netUtil.js') + ';globalThis.netUtil=netUtil;', c);
   run(beginSection('packages/lib/src/nico/ThreadLoader.js') + ';globalThis.realThreadLoader=ThreadLoader;', c);
   const info = {videoId: 'so9', threadId: 10, language: 'ja-jp', is184Forced: false};
@@ -78,6 +78,26 @@ describe('Task185 comment post response-body deadline (Watch V4 audit F11)', () 
     assert(settled, 'settled');
     assert.strictEqual(posts, 0);
     assert.strictEqual(h.state.isCommentPosting, false);
+  });
+
+  it('Task215 keeps HTTP status in diagnostics when the POST body is not JSON', async () => {
+    const {h} = posting(async (url, options) => {
+      if (options && options.method === 'POST') {
+        return {status: 502, ok: false, json: async () => { throw new SyntaxError('invalid json'); }};
+      }
+      return ok({postKey: 'fixture'});
+    });
+    const consoleCalls = [];
+    h.context.console.log = (...args) => consoleCalls.push(args);
+    const e = await h.dialog.addChat('fixture', '', 0).then(() => null, x => x);
+    assert.strictEqual(e.reason, 'network', 'outward behavior stays unchanged');
+    const entry = consoleCalls.find(args =>
+      args[0] === '[ZenzaWatch][CommentPost]' &&
+      args[1] && args[1].phase === 'post' && args[1].event === 'failure');
+    assert(entry, 'structured post failure is logged');
+    assert.strictEqual(entry[1].statusCode, 502);
+    assert.strictEqual(entry[1].errorName, 'SyntaxError');
+    assert.strictEqual(entry[1].outcome, 'unknown');
   });
 
   it('a network failure is classified and not re-posted', async () => {

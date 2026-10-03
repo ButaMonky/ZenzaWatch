@@ -17,6 +17,8 @@ import {CommentArtProtection} from './CommentArtProtection';
  * 互換性にこだわらないのであれば7割くらいが不要。
  */
 class NicoChatViewModel {
+  // Only the latest parse per live source object. No source mutation or global text retention.
+  static _parsedTextCache = new WeakMap();
   static prepareCommentArt(members) {
     const metadata = CommentArtProtection.analyze(members.map(m => m._nicoChat), {
       enabled: Config.props['commentLayer.protectCA'] === true
@@ -150,8 +152,18 @@ class NicoChatViewModel {
 
     const fontCommand = this.fontCommand;
     const commentVer = this.commentVer;
-    const htmlText = parsedHtmlText ||
-      (commentVer === 'html5' ? NicoTextParser.likeHTML5(text) : NicoTextParser.likeXP(text));
+        let htmlText = parsedHtmlText;
+    if (!htmlText) {
+      const parser = commentVer === 'html5' ? NicoTextParser.likeHTML5 : NicoTextParser.likeXP;
+      const cache = NicoChatViewModel._parsedTextCache;
+      const old = cache.get(this._nicoChat);
+      if (old && old.text === text && old.commentVer === commentVer && old.parser === parser) {
+        htmlText = old.htmlText;
+      } else {
+        htmlText = parser.call(NicoTextParser, text);
+        cache.set(this._nicoChat, {text, commentVer, parser, htmlText});
+      }
+    }
 
     this._htmlText = htmlText;
     this._text = text;

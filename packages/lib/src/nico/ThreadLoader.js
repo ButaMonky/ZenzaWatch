@@ -26,6 +26,63 @@ const {ThreadLoader} = (() => {
   // body with one deadline and classifies the failure (network / header-timeout /
   // body-timeout). It never retries by itself.
   const POST_TIMEOUT_MS = 30 * 1000;
+
+  // Task215: privacy-safe, structured diagnostics for intermittent comment-post failures.
+  // Keep enough information to reconstruct the failing phase from a copied console log,
+  // but never log comment bodies, user IDs, cookies, keys, tokens or credentials.
+  let commentPostDiagnosticSeq = 0;
+  const safeStatusCode = value => {
+    const status = Number(value);
+    return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
+  };
+  const safeErrorCode = value =>
+    typeof value === 'string' && /^[A-Z0-9_]{1,80}$/.test(value) ? value : undefined;
+  const safeKind = value =>
+    typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value) ? value : undefined;
+  const getCommentPostFailureDetails = error => {
+    const result = error && error.result !== undefined ? error.result : error;
+    const details = {};
+    const statusCode = safeStatusCode(result && (result.status !== undefined ? result.status : result.httpStatus));
+    const errorCode = safeErrorCode(result && result.errorCode);
+    const kind = safeKind((error && error.kind) || (result && result.kind));
+    const errorName = safeKind(result && result.name);
+    const retryAfterMs = Number(result && result.retryAfterMs);
+    if (statusCode !== undefined) { details.statusCode = statusCode; }
+    if (errorCode !== undefined) { details.errorCode = errorCode; }
+    if (kind !== undefined) { details.kind = kind; }
+    if (errorName !== undefined && errorName !== kind) { details.errorName = errorName; }
+    if (Number.isFinite(retryAfterMs) && retryAfterMs >= 0) { details.retryAfterMs = retryAfterMs; }
+    return details;
+  };
+  const createCommentPostDiagnostic = msgInfo => {
+    const threadInfo = msgInfo && msgInfo.threadInfo || {};
+    return {
+      id: `cp-${++commentPostDiagnosticSeq}`,
+      attempt: 1,
+      videoId: threadInfo.videoId || (msgInfo && msgInfo.videoId) || null,
+      threadId: threadInfo.threadId === undefined ? null : threadInfo.threadId,
+      language: threadInfo.language || null
+    };
+  };
+  const logCommentPostDiagnostic = (diagnostic, phase, event, details = {}) => {
+    window.console.log(
+      '[ZenzaWatch][CommentPost]',
+      logSafe.redact({...diagnostic, phase, event, ...details})
+    );
+  };
+  const summarizeCommentPostAck = ack => {
+    if (ack === null) { return {ackType: 'null'}; }
+    if (Array.isArray(ack)) { return {ackType: 'array', ackLength: ack.length}; }
+    if (typeof ack !== 'object') { return {ackType: typeof ack}; }
+    return {
+      ackType: 'object',
+      ackKeys: Object.keys(ack).slice(0, 20).sort(),
+      hasNo: Object.prototype.hasOwnProperty.call(ack, 'no'),
+      noType: typeof ack.no,
+      hasId: Object.prototype.hasOwnProperty.call(ack, 'id')
+    };
+  };
+
   const fetchJsonWithin = async (url, options, timeoutMs = POST_TIMEOUT_MS) => {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     let stage = 'headers';
@@ -47,7 +104,17 @@ const {ThreadLoader} = (() => {
         throw (e && e.kind) ? e : Object.assign(e instanceof Error ? e : new Error(String(e && e.message || e)), {kind: 'network'});
       }
       stage = 'body';
-      return await Promise.race([res.json(), deadline]);
+      try {
+        return await Promise.race([res.json(), deadline]);
+      } catch (error) {
+        // Diagnostic-only metadata: keep the HTTP status if headers arrived but JSON parsing failed.
+        // Do not promote it to `status`; existing retry/outcome semantics remain unchanged.
+        const httpStatus = safeStatusCode(res && res.status);
+        if (error && httpStatus !== undefined && error.httpStatus === undefined) {
+          error.httpStatus = httpStatus;
+        }
+        throw error;
+      }
     } finally {
       clearTimeout(timer);
     }
@@ -400,34 +467,73 @@ const {ThreadLoader} = (() => {
     }
 
     async postChat(msgInfo, text, cmd, vpos) {
-      return this._postChat(msgInfo, text, cmd, vpos);
+      return this._postChat(msgInfo, text, cmd, vpos, false, createCommentPostDiagnostic(msgInfo));
     }
 
-    async _postChat(msgInfo, text, cmd, vpos, retrying = false) {
+    async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null) {
+      diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
       const {
         videoId,
         threadId,
-        language
+        language,
+        is184Forced
       } = msgInfo.threadInfo;
+      logCommentPostDiagnostic(diagnostic, 'precheck', 'start', {
+        canPost: msgInfo.threadInfo.canPost !== false,
+        is184Forced: is184Forced === true
+      });
       // Task183 (F07): without a post target nothing is sent (no key, no POST).
       if (threadId === null || threadId === undefined || threadId === '' || msgInfo.threadInfo.canPost === false) {
+        logCommentPostDiagnostic(diagnostic, 'precheck', 'rejected', {
+          reason: 'no-post-target',
+          outcome: 'not-sent'
+        });
         throw {status: 'fail', reason: 'no-post-target', message: 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）'};
       }
+
       const url = new URL(`/v1/threads/${threadId}/comments`, msgInfo.nvComment.server);
-      const { postKey } = (await this.getPostKey(threadId, { language })) || {};
+      let postKeyData;
+      logCommentPostDiagnostic(diagnostic, 'post-key', 'start');
+      try {
+        postKeyData = (await this.getPostKey(threadId, { language })) || {};
+      } catch (error) {
+        logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
+          ...getCommentPostFailureDetails(error),
+          outcome: 'not-sent'
+        });
+        throw error;
+      }
+      const {postKey} = postKeyData;
+      const challenge = postKeyData && postKeyData.challenge;
+      logCommentPostDiagnostic(diagnostic, 'post-key', 'success', {
+        postKeyPresent: typeof postKey === 'string' && !!postKey.trim(),
+        challengeRequired: challenge && challenge.isRequired === true,
+        challengeSiteKeyPresent: !!(challenge && typeof challenge.siteKey === 'string' && challenge.siteKey)
+      });
       // Task186 (F12): never POST without a usable post key.
       if (typeof postKey !== 'string' || !postKey.trim()) {
+        logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
+          reason: 'post-key-missing',
+          outcome: 'not-sent'
+        });
         throw {status: 'fail', reason: 'post-key-missing', message: '投稿キーを取得できませんでした（コメントは送信していません）'};
       }
 
+      const commands = cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [];
       const packet = JSON.stringify({
         body: text,
-        commands: cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [],
+        commands,
         vposMs: Math.floor((vpos || 0) * 10),
         postKey,
         videoId,
       });
-      console.log('post packet: ', logSafe.redact(packet));
+      logCommentPostDiagnostic(diagnostic, 'post', 'start', {
+        commandCount: commands.length,
+        hasBlankCommand: commands.some(command => command === ''),
+        is184Forced: is184Forced === true
+      });
+      // Do not log the raw packet: command strings are user input too. The structured
+      // diagnostic above contains only counts/booleans plus public identifiers.
       try {
         const ack = await this._post(url, packet);
         // Task186 (F12): Zenza needs the comment number to show the posted comment.
@@ -435,8 +541,17 @@ const {ThreadLoader} = (() => {
         // (`id` is passed through but not required: its contract is unconfirmed.)
         const no = ack && typeof ack === 'object' && ack.no !== null && ack.no !== '' ? Number(ack.no) : NaN;
         if (!Number.isFinite(no)) {
+          logCommentPostDiagnostic(diagnostic, 'ack', 'failure', {
+            reason: 'ack-incomplete',
+            outcome: 'unknown',
+            ...summarizeCommentPostAck(ack)
+          });
           throw {ackIncomplete: true};
         }
+        logCommentPostDiagnostic(diagnostic, 'complete', 'success', {
+          outcome: 'accepted',
+          postedNo: no
+        });
         return {
           status: 'ok',
           no,
@@ -454,9 +569,14 @@ const {ThreadLoader} = (() => {
           };
         }
         const { result: { status: statusCode, errorCode } = {} } = error;
+        const failureDetails = getCommentPostFailureDetails(error);
         if (statusCode == null) {
           // Task185 (F11): after the POST was sent, a lost/late response means the
           // outcome is unknown. It is not retried automatically (no double post).
+          logCommentPostDiagnostic(diagnostic, 'post', 'failure', {
+            ...failureDetails,
+            outcome: 'unknown'
+          });
           throw {
             status: 'fail',
             reason: error.kind || 'network',
@@ -467,16 +587,45 @@ const {ThreadLoader} = (() => {
           };
         }
         if (!retrying && ['INVALID_TOKEN', 'EXPIRED_TOKEN'].includes(errorCode)) {
-          await this.load(msgInfo);
+          logCommentPostDiagnostic(diagnostic, 'post', 'failure', {
+            ...failureDetails,
+            outcome: 'rejected',
+            retryScheduled: true
+          });
+          logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'start', {reason: errorCode});
+          try {
+            await this.load(msgInfo);
+            logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'success', {reason: errorCode});
+          } catch (refreshError) {
+            logCommentPostDiagnostic(diagnostic, 'retry-refresh', 'failure', {
+              ...getCommentPostFailureDetails(refreshError),
+              reason: errorCode,
+              outcome: 'not-sent'
+            });
+            throw refreshError;
+          }
         } else {
+          logCommentPostDiagnostic(diagnostic, 'post', 'failure', {
+            ...failureDetails,
+            outcome: 'rejected',
+            retryScheduled: false
+          });
           throw {
             status: 'fail',
             statusCode,
             message: errorCode ? `コメント投稿失敗 ${errorCode}` : 'コメント投稿失敗'
           };
         }
+        logCommentPostDiagnostic(diagnostic, 'retry', 'wait', {
+          reason: errorCode,
+          delayMs: 3000,
+          nextAttempt: diagnostic.attempt + 1
+        });
         await sleep(3000);
-        return await this._postChat(msgInfo, text, cmd, vpos, true)
+        return await this._postChat(msgInfo, text, cmd, vpos, true, {
+          ...diagnostic,
+          attempt: diagnostic.attempt + 1
+        });
       }
     }
 

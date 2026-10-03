@@ -300,7 +300,9 @@ class NicoChatFilter extends Emitter {
     if (!this._wordReg) {
       this._wordReg = this._buildFilterReg(this._wordFilterList);
     }
-    const umatch = this._userIdFilterList.length ? this._userIdFilterList : null;
+    // Build once per predicate/batch, not per comment. The public list stays an array.
+    // Deriving here also observes legacy callers that mutate the returned list directly.
+    const umatch = this._userIdFilterList.length ? new Set(this._userIdFilterList) : null;
     if (!this._commandReg) {
       this._commandReg = this._buildFilterReg(this._commandFilterList);
     }
@@ -350,7 +352,7 @@ class NicoChatFilter extends Emitter {
           return false;
         }
 
-        if (umatch && umatch.includes(nicoChat.userId)) {
+        if (umatch && umatch.has(nicoChat.userId)) {
           window.console.log('%cNGID: "%s" %s %s秒 %s %s', 'background: yellow;',
             nicoChat.userId,
             nicoChat.type,
@@ -386,7 +388,7 @@ class NicoChatFilter extends Emitter {
         (nicoChat.score <= threthold) ||
         (wordReg && wordReg.test(text)) ||
         (wordRegReg && wordRegReg.test(text)) ||
-        (umatch && umatch.includes(nicoChat.userId)) ||
+        (umatch && umatch.has(nicoChat.userId)) ||
         (commandReg && commandReg.test(nicoChat.cmd))
         );
     };

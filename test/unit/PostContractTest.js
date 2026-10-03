@@ -16,9 +16,18 @@ function posting(is184Forced = false) {
 }
 
 function connect(s, responses) {
-  const packets = [], keys = [], waits = [];
+  const packets = [], keys = [], waits = [], consoleCalls = [];
   let refreshes = 0;
-  const quiet = {log() {}, warn() {}, error() {}};
+  const rec = kind => (...args) => consoleCalls.push({kind, args});
+  const quiet = {
+    log: rec('log'),
+    info: rec('info'),
+    warn: rec('warn'),
+    error: rec('error'),
+    debug: rec('debug'),
+    time() {},
+    timeEnd() {}
+  };
   const c = createContext({console: quiet, logSafe: {redact: x => x},
     sleep: async ms => { waits.push(ms); }});
   const loader = run(beginSection('packages/lib/src/nico/ThreadLoader.js') + ';ThreadLoader;', c);
@@ -35,11 +44,28 @@ function connect(s, responses) {
     return response;
   };
   s.d.threadLoader = loader;
-  return {packets, keys, waits, refreshes: () => refreshes};
+  const diagnostics = () => consoleCalls
+    .filter(call => call.args[0] === '[ZenzaWatch][CommentPost]')
+    .map(call => call.args[1]);
+  return {packets, keys, waits, loader, diagnostics, refreshes: () => refreshes};
 }
 const token = code => ({error: {result: {status: 403, errorCode: code}}});
 
 describe('ZW-023/024 posting contract', function() {
+  it('Task215 dialog precheck reports an already-running post before network work starts', async function() {
+    const s = posting();
+    const warnings = [];
+    s.h.context.console.warn = (...args) => warnings.push(args);
+    s.h.state.isCommentPosting = true;
+    await assert.rejects(s.d.addChat('fixture', '', 0));
+    const entry = warnings.find(args => args[0] === '[ZenzaWatch][CommentPost]');
+    assert(entry);
+    assert.strictEqual(entry[1].phase, 'dialog-precheck');
+    assert.strictEqual(entry[1].event, 'rejected');
+    assert.strictEqual(entry[1].reason, 'post-already-in-flight');
+    assert.strictEqual(entry[1].videoId, 'smA');
+  });
+
   it('EXPIRED_TOKEN from real dialog refreshes once and retries with resolved language and fresh post key', async function() {
     const s = posting();
     const net = connect(s, [token('EXPIRED_TOKEN'), {no: 41, id: 'new-id'}]);
@@ -56,6 +82,28 @@ describe('ZW-023/024 posting contract', function() {
     assert.strictEqual(s.threadInfo.blockNo, 17);
   });
 
+  it('Task215 diagnostics correlate token retry and keep the first rejection', async function() {
+    const s = posting();
+    const net = connect(s, [token('EXPIRED_TOKEN'), {no: 41, id: 'new-id'}]);
+    await s.d.addChat('diagnostic-fixture-body', 'red', 123);
+    const diagnostics = net.diagnostics();
+    const ids = [...new Set(diagnostics.map(d => d && d.id).filter(Boolean))];
+    assert.strictEqual(ids.length, 1);
+    const firstFailure = diagnostics.find(d => d.phase === 'post' && d.event === 'failure' && d.attempt === 1);
+    assert(firstFailure);
+    assert.strictEqual(firstFailure.statusCode, 403);
+    assert.strictEqual(firstFailure.errorCode, 'EXPIRED_TOKEN');
+    assert.strictEqual(firstFailure.retryScheduled, true);
+    assert(diagnostics.some(d => d.phase === 'retry-refresh' && d.event === 'success'));
+    const completed = diagnostics.find(d => d.phase === 'complete' && d.event === 'success' && d.attempt === 2);
+    assert(completed);
+    assert.strictEqual(completed.outcome, 'accepted');
+    const serialized = JSON.stringify(diagnostics);
+    assert(!serialized.includes('diagnostic-fixture-body'));
+    assert(!serialized.includes('key-1'));
+    assert(!serialized.includes('key-2'));
+  });
+
   it('INVALID_TOKEN refreshes once; a second token rejection ends without a third post', async function() {
     const s = posting();
     const net = connect(s, [token('INVALID_TOKEN'), token('EXPIRED_TOKEN')]);
@@ -67,6 +115,37 @@ describe('ZW-023/024 posting contract', function() {
     assert.strictEqual(net.keys.length, 2);
     assert.strictEqual(s.h.player.chats[0].isPostFail, true);
     assert.strictEqual(s.h.state.isCommentPosting, false);
+  });
+
+  it('Task215 diagnostics classify post-key HTTP failure before POST', async function() {
+    const s = posting();
+    const net = connect(s, []);
+    net.loader.getPostKey = async () => {
+      throw {result: {status: 429, errorCode: 'TOO_MANY_REQUESTS', retryAfterMs: 7000}};
+    };
+    await assert.rejects(s.d.addChat('fixture', '', 0));
+    assert.strictEqual(net.packets.length, 0);
+    const failure = net.diagnostics().find(d => d.phase === 'post-key' && d.event === 'failure');
+    assert(failure);
+    assert.strictEqual(failure.statusCode, 429);
+    assert.strictEqual(failure.errorCode, 'TOO_MANY_REQUESTS');
+    assert.strictEqual(failure.retryAfterMs, 7000);
+    assert.strictEqual(failure.outcome, 'not-sent');
+  });
+
+  it('Task215 diagnostics keep only ACK shape when acknowledgement is incomplete', async function() {
+    const s = posting();
+    const net = connect(s, [{id: 'only-id', serverNote: 'diagnostic-ack-value'}]);
+    const failure = await s.d.addChat('fixture', '', 0).then(() => null, error => error);
+    assert.strictEqual(failure.reason, 'ack-incomplete');
+    const ackFailure = net.diagnostics().find(d => d.phase === 'ack' && d.event === 'failure');
+    assert(ackFailure);
+    assert.strictEqual(ackFailure.outcome, 'unknown');
+    assert.strictEqual(ackFailure.ackType, 'object');
+    assert.strictEqual(ackFailure.hasNo, false);
+    assert(ackFailure.ackKeys.includes('id'));
+    assert(ackFailure.ackKeys.includes('serverNote'));
+    assert(!JSON.stringify(net.diagnostics()).includes('diagnostic-ack-value'));
   });
 
   it('an ambiguous network failure never refreshes or reposts', async function() {

@@ -19,6 +19,7 @@ const SECRETS = {
   nicoruKey: 'SYNTH-NICORUKEY-0b1e',
   deleteKey: 'SYNTH-DELETEKEY-c4d5',
   text: 'SYNTH-BODY-こんにちは-8e9f',
+  command: 'SYNTH-COMMAND-private-55ef',
   userId: 'SYNTH-USERID-123456',
   token: 'SYNTH-GATE-TOKEN-abcd'
 };
@@ -43,7 +44,7 @@ function threadLoaderSubject() {
     const u = String(url);
     requests.push({url: u, opts});
     const json = body => ({json: async () => body});
-    if (u.includes('/v1/comment/keys/post')) { return json({meta: {status: 200}, data: {postKey: SECRETS.postKey}}); }
+    if (u.includes('/v1/comment/keys/post')) { return json({meta: {status: 200}, data: {postKey: SECRETS.postKey, challenge: {isRequired: true, siteKey: 'synthetic-site-key', challengeToken: SECRETS.token}}}); }
     if (u.includes('/v1/comment/keys/nicoru')) { return json({meta: {status: 200}, data: {nicoruKey: SECRETS.nicoruKey}}); }
     if (u.includes('/v1/comment/keys/delete')) { return json({meta: {status: 200}, data: {deleteKey: SECRETS.deleteKey}}); }
     if (u.includes('/v1/comment/keys/thread')) { return json({meta: {status: 200}, data: {threadKey: SECRETS.retryThreadKey}}); }
@@ -150,18 +151,19 @@ describe('通常のログに秘密の値・個人の情報を出さない（ZW-0
   it('コメント投稿・ニコる・削除で、postKey・nicoruKey・deleteKey・本文がログに出ない（送信内容は変わらない）', async function() {
     const s = threadLoaderSubject();
     await s.loader.load(s.msgInfo);
-    const posted = await s.loader.postChat(s.msgInfo, SECRETS.text, '184 red', 12.3);
+    const posted = await s.loader.postChat(s.msgInfo, SECRETS.text, SECRETS.command, 12.3);
     assert.equal(posted.status, 'ok');
     const nicoru = await s.loader.nicoru(s.msgInfo, {text: SECRETS.text, fork: 0, no: 1});
     assert.equal(nicoru.status, 'ok');
     const deleted = await s.loader.deleteChat(s.msgInfo, {fork: 0, no: 1});
     assert.equal(deleted.status, 'ok');
     const log = s.dump();
-    for (const k of ['postKey', 'nicoruKey', 'deleteKey', 'text', 'userId']) {
+    assert.ok(log.includes('[ZenzaWatch][CommentPost]'), '構造化された投稿診断ログが出る');
+    for (const k of ['postKey', 'nicoruKey', 'deleteKey', 'text', 'command', 'userId', 'token']) {
       assert.ok(!log.includes(SECRETS[k]), `${k} の原文がログに残っている:\n${log}`);
     }
     const bodies = s.requests.map(q => String(q.opts.body || '')).join('\n');
-    for (const k of ['postKey', 'nicoruKey', 'deleteKey', 'text']) {
+    for (const k of ['postKey', 'nicoruKey', 'deleteKey', 'text', 'command']) {
       assert.ok(bodies.includes(SECRETS[k]), `${k} が送信内容から消えている`);
     }
   });

@@ -4293,13 +4293,29 @@ class NicoVideoPlayerDialog extends Emitter {
     return this._playerConfig.props.volume;
   }
   async addChat(text, cmd, vpos = null, options = {}) {
-    if (!this._nicoVideoPlayer ||
-      !this.threadLoader ||
-      !this._state.isCommentReady ||
-      this._state.isCommentPosting) {
+    const precheckRejectReason =
+      !this._nicoVideoPlayer ? 'player-unavailable' :
+      !this.threadLoader ? 'thread-loader-unavailable' :
+      !this._state.isCommentReady ? 'comment-not-ready' :
+      this._state.isCommentPosting ? 'post-already-in-flight' : '';
+    if (precheckRejectReason) {
+      window.console.warn('[ZenzaWatch][CommentPost]', {
+        phase: 'dialog-precheck',
+        event: 'rejected',
+        reason: precheckRejectReason,
+        videoId: this._watchId || null,
+        isCommentReady: !!this._state.isCommentReady,
+        isCommentPosting: !!this._state.isCommentPosting
+      });
       return Promise.reject();
     }
     if (!util.isLogin()) {
+      window.console.warn('[ZenzaWatch][CommentPost]', {
+        phase: 'dialog-precheck',
+        event: 'rejected',
+        reason: 'not-logged-in',
+        videoId: this._watchId || null
+      });
       return Promise.reject();
     }
     // Task 090（監査v2 ZW-025）: 投稿を始めた時の動画・スレッド・世代を固定する。
@@ -4311,6 +4327,14 @@ class NicoVideoPlayerDialog extends Emitter {
     // Task183 (F07): a video without a post target cannot be posted to; tell the user
     // and do not add a local "posting" comment.
     if (!threadInfo || threadInfo.threadId === null || threadInfo.threadId === undefined || threadInfo.canPost === false) {
+      window.console.warn('[ZenzaWatch][CommentPost]', {
+        phase: 'dialog-precheck',
+        event: 'rejected',
+        reason: 'no-post-target',
+        videoId: watchId || null,
+        hasThreadInfo: !!threadInfo,
+        hasPostTarget: !!(threadInfo && threadInfo.threadId !== null && threadInfo.threadId !== undefined && threadInfo.canPost !== false)
+      });
       this.execCommand('alert', 'この動画ではコメントを投稿できません（投稿先のスレッドがありません）');
       return Promise.reject({status: 'fail', reason: 'no-post-target'});
     }
@@ -4345,7 +4369,14 @@ class NicoVideoPlayerDialog extends Emitter {
 
     const onFail = err => {
       err = err || {};
-      window.console.log('_onFail: ', err);
+      window.console.warn('[ZenzaWatch][CommentPost]', {
+        phase: 'dialog-result',
+        event: 'failure',
+        videoId: watchId || null,
+        reason: typeof err.reason === 'string' ? err.reason : undefined,
+        statusCode: Number.isInteger(Number(err.statusCode)) ? Number(err.statusCode) : undefined,
+        outcome: ['not-sent', 'rejected', 'unknown'].includes(err.outcome) ? err.outcome : undefined
+      });
       window.console.timeEnd('コメント投稿');
       nicoChat.isPostFail = true;
       nicoChat.isUpdating = false;

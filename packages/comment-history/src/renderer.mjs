@@ -89,6 +89,7 @@ export class CommentHistoryRenderer {
             members.push(this.#VM.create(c,vms[i]._offScreen));
             if(members.length%100===0){await this.#yield();check();}
           }
+          this.#VM.prepareCommentArt?.(members);
           const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
           if(sorted.length){
             const sent=sorted.map(c=>c.bulkLayoutData);

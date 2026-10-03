@@ -8,7 +8,7 @@
 // session.mjs sha256=3296db2613fcf5061519299879a442922417cfebc0ea3f1a0b3b95085cf0d3c2
 // zenza-context.mjs sha256=967f0b27c0ede6ab7528eaf59507f5b56effcf237c139ea47878ce79d3cbbb39
 // controller.mjs sha256=4f2fadd41c51d4e4ce6bbe3860ba67b0afb4655f3b6ccdcbde45dcde200a9e06
-// renderer.mjs sha256=22bc0972b7ceb9940a45cf2d1893b79a04fe9b10aa56d83a9e6dda750a53b2ae
+// renderer.mjs sha256=a5300569595e261b431206e2d77f2641f5711678ecd9600432cc3981fff5a4d4
 // zenza-settings.mjs sha256=a960df22bcf1cc59df8cc4080b6a52043607e5e67f4ac552a9a5b5303ee71866
 // browser-preferences.mjs sha256=1b7249122958af10770fd059ab37b5a196606a17cfe538f5c276534bc418478f
 // panel.mjs sha256=697061fe46e6a3608c7f09cd40dccc70fdaceb045fea1a5d24ff5808cbf7173c
@@ -1022,6 +1022,7 @@ class CommentHistoryRenderer {
             members.push(this.#VM.create(c,vms[i]._offScreen));
             if(members.length%100===0){await this.#yield();check();}
           }
+          this.#VM.prepareCommentArt?.(members);
           const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
           if(sorted.length){
             const sent=sorted.map(c=>c.bulkLayoutData);

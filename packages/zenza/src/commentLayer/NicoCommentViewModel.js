@@ -25,6 +25,7 @@ class NicoCommentViewModel extends Emitter {
       new NicoChatGroupViewModel(nicoComment.getGroup(NicoChat.TYPE.BOTTOM), offScreen);
 
     const config = Config.namespace('commentLayer');
+    config.onkey('protectCA', () => { void this._onCommentArtProtectionChange(); });
     if (config.props.enableSlotLayoutEmulation) {
       this._slotLayoutWorker = SlotLayoutWorker.create();
       this._updateSlotLayout = _.debounce(this._updateSlotLayout.bind(this), 100);
@@ -36,10 +37,39 @@ class NicoCommentViewModel extends Emitter {
     nicoComment.on('parsed', this._onCommentParsed.bind(this));
     nicoComment.on('currentTime', this._onCurrentTime.bind(this));
   }
+  async _onCommentArtProtectionChange() {
+    const generation = this._commentArtGeneration = (this._commentArtGeneration || 0) + 1;
+    const groups = [this._topGroup, this._nakaGroup, this._bottomGroup];
+    const sources = groups.map(group => group._members);
+    const previous = groups.map(group => group._members.map(member => ({
+      member,
+      metadata: member._commentArtMetadata,
+      y: member._y,
+      overflow: member._isOverflow,
+      ready: member._isLayouted
+    })));
+    const ok = await Promise.all(groups.map(group => group._execCommentLayoutWorker()));
+    if (generation !== this._commentArtGeneration ||
+        groups.some((group, i) => group._members !== sources[i])) { return; }
+    if (!ok.every(Boolean)) {
+      for (const snapshot of previous) {
+        for (const old of snapshot) {
+          old.member._commentArtMetadata = old.metadata;
+          old.member._y = old.y;
+          old.member._isOverflow = old.overflow;
+          old.member._isLayouted = old.ready;
+        }
+      }
+      return;
+    }
+    this.emit('setData');
+  }
   _onSetData() {
+    this._commentArtGeneration = (this._commentArtGeneration || 0) + 1;
     this.emit('setData');
   }
   _onClear() {
+    this._commentArtGeneration = (this._commentArtGeneration || 0) + 1;
     this._topGroup.reset();
     this._nakaGroup.reset();
     this._bottomGroup.reset();

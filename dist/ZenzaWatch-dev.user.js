@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.137-task209
+// @version        2.7.139-task212
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-03 14:08Z
+// build: 2026-10-03 16:24Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.137-task209';
+    var VER = '2.7.139-task212';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-03 14:08Z';
+    var BUILD = '2026-10-03 16:24Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -2342,22 +2342,35 @@ class CommentDisplayBudget {
 		const ratio = CommentDisplayBudget.CEILING_RATIO[tier];
 		return Math.max(1, Math.floor(limit * (ratio === undefined ? 0.7 : ratio)));
 	}
-	static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order} = {}) {
+	static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order, groupOf} = {}) {
 		limit = CommentDisplayBudget.normalizeLimit(limit);
 		const tiers = new Map();
 		for (const chat of candidates) { tiers.set(chat, tierOf ? tierOf(chat) : CommentDisplayBudget.tierOf(chat)); }
 		const byTime = order || ((a, b) => a.beginLeftTiming - b.beginLeftTiming);
 		const sorted = candidates.slice().sort((a, b) => (tiers.get(a) - tiers.get(b)) || byTime(a, b));
-		const admitted = [], suppressed = [];
-		let live = liveCount;
+		const units = [], groups = new Map();
 		for (const chat of sorted) {
 			const tier = tiers.get(chat);
-			if (tier < 0) { admitted.push(chat); continue; }
-			if (live < CommentDisplayBudget.ceilingOf(tier, limit)) {
-				admitted.push(chat);
-				live++;
+			const key = tier < 0 || !groupOf ? null : groupOf(chat);
+			let unit = key == null ? null : groups.get(key);
+			if (!unit) {
+				unit = {chats: [], tier}; units.push(unit);
+				if (key != null) { groups.set(key, unit); }
+			}
+			unit.chats.push(chat);
+			unit.tier = Math.max(unit.tier, tier);
+		}
+		units.sort((a,b) => a.tier-b.tier || byTime(a.chats[0],b.chats[0]));
+		const admitted = [], suppressed = [];
+		let live = liveCount;
+		for (const unit of units) {
+			const count = unit.chats.length, tier = unit.tier;
+			if (tier < 0 || live + count <= CommentDisplayBudget.ceilingOf(tier, limit)) {
+				admitted.push(...unit.chats);
+				if (tier >= 0) { live += count; }
 			} else {
-				suppressed.push({chat, tier, reason: live >= limit ? 'limit' : 'reserve'});
+				const reason = (count > 1 ? 'ca_group_' : '') + (live + count > limit ? 'limit' : 'reserve');
+				for (const chat of unit.chats) { suppressed.push({chat, tier: tiers.get(chat), reason}); }
 			}
 		}
 		return {admitted, suppressed, tiers};
@@ -2448,6 +2461,7 @@ const Config = (() => {
 		'commentLayer.textShadowType': '', // フォントの修飾タイプ
 		'commentLayer.enableSlotLayoutEmulation': false,
 		'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
+		'commentLayer.protectCA': true,
 		'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
 		'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 		'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
@@ -2592,6 +2606,7 @@ const Config = (() => {
 				}
 				if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
 				if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
+				if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
 				if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
 				if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
 					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
@@ -18933,6 +18948,7 @@ class CommentHistoryRenderer {
 						members.push(this.#VM.create(c,vms[i]._offScreen));
 						if(members.length%100===0){await this.#yield();check();}
 					}
+					this.#VM.prepareCommentArt?.(members);
 					const sorted=entry.sorted=members.slice().sort(this.#Chat.SORT_FUNCTION);
 					if(sorted.length){
 						const sent=sorted.map(c=>c.bulkLayoutData);
@@ -22880,7 +22896,66 @@ NicoChat.COLORS = {
 	return NicoChat;
 } // worker用
 const NicoChat = NicoChatInitFunc();
+class CommentArtProtection {
+	static analyze(chats, {enabled = true} = {}) {
+		const result = new Map();
+		if (!enabled) { return result; }
+		const authors = new Map();
+		for (const chat of chats) {
+			if (!chat || Number(chat.fork) === 1 || chat.isInvisible || chat.isDeleted || chat.isNicoScript) { continue; }
+			const author = chat.userId, date = chat.date, layer = chat.layerId;
+			if (author == null || ['', '0', '-1'].includes(String(author)) ||
+					!Number.isFinite(date) || date <= 0 || !Number.isInteger(layer) ||
+					!Number.isFinite(chat.vpos) || chat.vpos < 0) { continue; }
+			const mail = typeof chat.cmd === 'string' ? chat.cmd.toLowerCase().split(/\s+/) : [];
+			const marked = chat.isCA || chat.isPatissier || chat.isFull || chat.isEnder ||
+				mail.some(word => ['ca', 'patissier', 'pattisier', 'full', 'ender'].includes(word));
+			const breaks = (String(chat.text || '').match(/\r\n|\n|\r/g) || []).length;
+			const score = (marked ? 5 : 0) + (breaks > 2 ? breaks / 2 : 0);
+			if (!score) { continue; }
+			const key = JSON.stringify([String(chat.threadId), Number(chat.fork), layer, String(author)]);
+			let bucket = authors.get(key);
+			if (!bucket) { bucket = []; authors.set(key, bucket); }
+			bucket.push({chat, score, date});
+		}
+		let layerNumber = 0;
+		for (const key of [...authors.keys()].sort()) {
+			const bucket = authors.get(key).sort((a,b) => a.date-b.date || a.chat.vpos-b.chat.vpos || String(a.chat.no).localeCompare(String(b.chat.no)));
+			let cluster = [], anchor = 0, score = 0;
+			const finish = () => {
+				if (score < 10) { return; }
+				const layerId = 'zenza-ca/' + layerNumber++;
+				for (const {chat} of cluster) {
+					result.set(chat, Object.freeze({layerId, group: layerId + '/' + chat.type + '/' + chat.vpos}));
+				}
+			};
+			for (const entry of bucket) {
+				if (cluster.length && entry.date - anchor > 300) {
+					finish(); cluster = []; score = 0;
+				}
+				if (!cluster.length) { anchor = entry.date; }
+				cluster.push(entry); score += entry.score;
+			}
+			finish();
+		}
+		return result;
+	}
+}
 class NicoChatViewModel {
+	static prepareCommentArt(members) {
+		const metadata = CommentArtProtection.analyze(members.map(m => m._nicoChat), {
+			enabled: Config.props['commentLayer.protectCA'] === true
+		});
+		let changed = false;
+		for (const member of members) {
+			const next = metadata.get(member._nicoChat) || null;
+			const old = member._commentArtMetadata || null;
+			if ((old && old.layerId) !== (next && next.layerId) || (old && old.group) !== (next && next.group)) { changed = true; }
+			member._commentArtMetadata = next;
+		}
+		if (changed) { for (const member of members) { member.resetLayoutForSpeedChange(); } }
+		return changed;
+	}
 	static create(nicoChat, offScreen) {
 		if (nicoChat.commentVer === 'html5') {
 			return new HTML5NicoChatViewModel(nicoChat, offScreen);
@@ -23221,7 +23296,8 @@ class NicoChatViewModel {
 	get threadId() {return this._nicoChat.threadId;}
 	get no() {return this._nicoChat.no;}
 	get uniqNo() {return this._nicoChat.uniqNo;}
-	get layerId() {return this._nicoChat.layerId;}
+	get layerId() {return this._commentArtMetadata ? this._commentArtMetadata.layerId : this._nicoChat.layerId;}
+	get commentArtGroup() {return this._commentArtMetadata ? this._commentArtMetadata.group : null;}
 	get fork() {return this._nicoChat.fork;}
 	get nicoru() { return this._nicoChat.nicoru; }
 	get nicotta() { return this._nicoChat.nicotta; }
@@ -24682,6 +24758,7 @@ class NicoCommentViewModel extends Emitter {
 		this._bottomGroup =
 			new NicoChatGroupViewModel(nicoComment.getGroup(NicoChat.TYPE.BOTTOM), offScreen);
 		const config = Config.namespace('commentLayer');
+		config.onkey('protectCA', () => { void this._onCommentArtProtectionChange(); });
 		if (config.props.enableSlotLayoutEmulation) {
 			this._slotLayoutWorker = SlotLayoutWorker.create();
 			this._updateSlotLayout = _.debounce(this._updateSlotLayout.bind(this), 100);
@@ -24692,10 +24769,39 @@ class NicoCommentViewModel extends Emitter {
 		nicoComment.on('parsed', this._onCommentParsed.bind(this));
 		nicoComment.on('currentTime', this._onCurrentTime.bind(this));
 	}
+	async _onCommentArtProtectionChange() {
+		const generation = this._commentArtGeneration = (this._commentArtGeneration || 0) + 1;
+		const groups = [this._topGroup, this._nakaGroup, this._bottomGroup];
+		const sources = groups.map(group => group._members);
+		const previous = groups.map(group => group._members.map(member => ({
+			member,
+			metadata: member._commentArtMetadata,
+			y: member._y,
+			overflow: member._isOverflow,
+			ready: member._isLayouted
+		})));
+		const ok = await Promise.all(groups.map(group => group._execCommentLayoutWorker()));
+		if (generation !== this._commentArtGeneration ||
+				groups.some((group, i) => group._members !== sources[i])) { return; }
+		if (!ok.every(Boolean)) {
+			for (const snapshot of previous) {
+				for (const old of snapshot) {
+					old.member._commentArtMetadata = old.metadata;
+					old.member._y = old.y;
+					old.member._isOverflow = old.overflow;
+					old.member._isLayouted = old.ready;
+				}
+			}
+			return;
+		}
+		this.emit('setData');
+	}
 	_onSetData() {
+		this._commentArtGeneration = (this._commentArtGeneration || 0) + 1;
 		this.emit('setData');
 	}
 	_onClear() {
+		this._commentArtGeneration = (this._commentArtGeneration || 0) + 1;
 		this._topGroup.reset();
 		this._nakaGroup.reset();
 		this._bottomGroup.reset();
@@ -24910,8 +25016,11 @@ class NicoChatGroupViewModel {
 	}
 	async _execCommentLayoutWorker() {
 		const requestId = ++this._lastUpdate;
-		if (this._members.length < 1) { return; }
+		if (this._members.length < 1) { return true; }
 		const type = this._members[0].type;
+		const sourceMembers = this._members;
+		const previous = sourceMembers.map(member => ({member, metadata: member._commentArtMetadata, y: member._y, overflow: member._isOverflow, ready: member._isLayouted}));
+		NicoChatViewModel.prepareCommentArt(this._members);
 		const data = this.bulkLayoutData;
 		const members = this._vSortedMembers;
 		try {
@@ -24919,7 +25028,7 @@ class NicoChatGroupViewModel {
 				command: 'layout',
 				params: {type, members: data, lastUpdate: requestId}
 			});
-			if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return; }
+			if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return false; }
 			if (!Array.isArray(result.members) || result.members.length !== members.length ||
 					!data.every((expected, i) => {
 						const item = result.members[i];
@@ -24931,8 +25040,16 @@ class NicoChatGroupViewModel {
 			for (let i = 0; i < members.length; i++) {
 				members[i].bulkLayoutData = result.members[i];
 			}
+			return true;
 		} catch (err) {
-			if (requestId === this._lastUpdate) { console.warn('comment layout failed', err); }
+			if (requestId === this._lastUpdate && this._members === sourceMembers) {
+				for (const old of previous) {
+					old.member._commentArtMetadata = old.metadata;
+					old.member._y = old.y; old.member._isOverflow = old.overflow; old.member._isLayouted = old.ready;
+				}
+				console.warn('comment layout failed', err);
+			}
+			return false;
 		}
 	}
 	async addChatArray(nicoChatArray) {
@@ -25471,7 +25588,8 @@ class NicoCommentCss3PlayerView extends Emitter {
 				liveCount: this._budgetTable.size,
 				limit: this.displayLimit,
 				tierOf: nicoChat => CommentDisplayBudget.tierOf(nicoChat, this._isHistoryChat(nicoChat)),
-				order: NicoChat.SORT_FUNCTION
+				order: NicoChat.SORT_FUNCTION,
+				groupOf: nicoChat => nicoChat.commentArtGroup
 			}) : {admitted: candidates, suppressed: [], tiers: null};
 		for (const {chat, reason} of suppressed) {
 			inViewTable.add(chat);
@@ -26152,17 +26270,42 @@ const CommentLayoutWorker = (config => {
 			self.ypos = self.isOverflow ? Math.floor(Math.random() * rnd) : ypos;
 			return self;
 		};
-		const findCollisionStartIndex = (target, members) => {
+		const createCollisionIndex = members => {
+			const maxEnd = new Array(members.length);
+			const firstId = new Map();
+			let end = -Infinity;
+			for (let i = 0, len = members.length; i < len; i++) {
+				const o = members[i];
+				const value = o.endRight;
+				end = Math.max(end, Number.isFinite(value) ? value : Infinity);
+				maxEnd[i] = end;
+				if (o.id === o.id && !firstId.has(o.id)) {
+					firstId.set(o.id, i);
+				}
+			}
+			return {maxEnd, firstId};
+		};
+		const findCollisionStartIndex = (target, members, index) => {
 			const tl = target.beginLeft;
 			const tr = target.endRight;
 			const layerId = target.layerId;
-			for (let i = 0, len = members.length; i < len; i++) {
+			const stop = index.firstId.has(target.id) ?
+				index.firstId.get(target.id) : members.length;
+			let low = 0, high = stop;
+			if (Number.isFinite(tl)) {
+				while (low < high) {
+					const mid = (low + high) >>> 1;
+					if (index.maxEnd[mid] < tl) {
+						low = mid + 1;
+					} else {
+						high = mid;
+					}
+				}
+			}
+			for (let i = low; i < stop; i++) {
 				const o = members[i];
 				const ol = o.beginLeft;
 				const or = o.endRight;
-				if (o.id === target.id) {
-					return -1;
-				}
 				if (layerId !== o.layerId || o.invisible || o.isOverflow) {
 					continue;
 				}
@@ -26191,19 +26334,20 @@ const CommentLayoutWorker = (config => {
 			}
 			return target;
 		};
-		const checkCollision = (target, members) => {
+		const checkCollision = (target, members, index) => {
 			if (target.isInvisible) {
 				return target;
 			}
-			const collisionStartIndex = findCollisionStartIndex(target, members);
+			const collisionStartIndex = findCollisionStartIndex(target, members, index);
 			if (collisionStartIndex < 0) {
 				return target;
 			}
 			return _checkCollision(target, members, collisionStartIndex);
 		};
 		const groupCollision = members => {
+			const index = createCollisionIndex(members);
 			for (let i = 0, len = members.length; i < len; i++) {
-				checkCollision(members[i], members);
+				checkCollision(members[i], members, index);
 			}
 			return members;
 		};

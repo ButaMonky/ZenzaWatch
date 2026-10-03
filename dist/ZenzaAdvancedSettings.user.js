@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.34-task207
+// @version     0.3.35-task212
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-03 11:28Z
+// build: 2026-10-03 16:24Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -2473,22 +2473,35 @@ class CommentDisplayBudget {
 		const ratio = CommentDisplayBudget.CEILING_RATIO[tier];
 		return Math.max(1, Math.floor(limit * (ratio === undefined ? 0.7 : ratio)));
 	}
-	static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order} = {}) {
+	static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order, groupOf} = {}) {
 		limit = CommentDisplayBudget.normalizeLimit(limit);
 		const tiers = new Map();
 		for (const chat of candidates) { tiers.set(chat, tierOf ? tierOf(chat) : CommentDisplayBudget.tierOf(chat)); }
 		const byTime = order || ((a, b) => a.beginLeftTiming - b.beginLeftTiming);
 		const sorted = candidates.slice().sort((a, b) => (tiers.get(a) - tiers.get(b)) || byTime(a, b));
-		const admitted = [], suppressed = [];
-		let live = liveCount;
+		const units = [], groups = new Map();
 		for (const chat of sorted) {
 			const tier = tiers.get(chat);
-			if (tier < 0) { admitted.push(chat); continue; }
-			if (live < CommentDisplayBudget.ceilingOf(tier, limit)) {
-				admitted.push(chat);
-				live++;
+			const key = tier < 0 || !groupOf ? null : groupOf(chat);
+			let unit = key == null ? null : groups.get(key);
+			if (!unit) {
+				unit = {chats: [], tier}; units.push(unit);
+				if (key != null) { groups.set(key, unit); }
+			}
+			unit.chats.push(chat);
+			unit.tier = Math.max(unit.tier, tier);
+		}
+		units.sort((a,b) => a.tier-b.tier || byTime(a.chats[0],b.chats[0]));
+		const admitted = [], suppressed = [];
+		let live = liveCount;
+		for (const unit of units) {
+			const count = unit.chats.length, tier = unit.tier;
+			if (tier < 0 || live + count <= CommentDisplayBudget.ceilingOf(tier, limit)) {
+				admitted.push(...unit.chats);
+				if (tier >= 0) { live += count; }
 			} else {
-				suppressed.push({chat, tier, reason: live >= limit ? 'limit' : 'reserve'});
+				const reason = (count > 1 ? 'ca_group_' : '') + (live + count > limit ? 'limit' : 'reserve');
+				for (const chat of unit.chats) { suppressed.push({chat, tier: tiers.get(chat), reason}); }
 			}
 		}
 		return {admitted, suppressed, tiers};
@@ -2579,6 +2592,7 @@ const Config = (() => {
 		'commentLayer.textShadowType': '', // フォントの修飾タイプ
 		'commentLayer.enableSlotLayoutEmulation': false,
 		'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
+		'commentLayer.protectCA': true,
 		'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
 		'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 		'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
@@ -2723,6 +2737,7 @@ const Config = (() => {
 				}
 				if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
 				if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
+				if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
 				if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
 				if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
 					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
@@ -5884,6 +5899,11 @@ const ScreenFilterPanel = (() => {
               見送るときは、投稿者コメントと自分の投稿は必ず表示し、通常のコメント → かんたんコメント → AIコメント → 増量で追加した過去のコメントの順に優先します。
               多くするほど密集した場面で負荷が上がります。
             </div>
+          </div>
+
+          <div class="commentArtProtectionControl control toggle">
+            <label><input type="checkbox" class="checkbox" data-setting-name="commentLayer.protectCA">コメントアートの配置を保護する</label>
+            <div class="settingNote">推定したアートを別の衝突レイヤーへ分け、同時に始まる部品はまとめて表示可否を判断します。元コメント・取得済みデータは削除しません。NGや取得範囲で欠けた部品、フォント差まで復元する機能ではありません。</div>
           </div>
 
           <div class="enableSlotLayoutEmulation control toggle">

@@ -112,22 +112,52 @@ const CommentLayoutWorker = (config => {
 
 
     /**
-     * 最初に衝突が起こりうるindexを返す。
-     * 処理効率化のための物
+     * 各位置までの endRight の最大値と、同一IDの最初の位置を1回だけ作る。
+     * endRight が不正なら安全側（スキップしない）に倒す。
      */
-    const findCollisionStartIndex = (target, members) => {
+    const createCollisionIndex = members => {
+      const maxEnd = new Array(members.length);
+      const firstId = new Map();
+      let end = -Infinity;
+      for (let i = 0, len = members.length; i < len; i++) {
+        const o = members[i];
+        const value = o.endRight;
+        end = Math.max(end, Number.isFinite(value) ? value : Infinity);
+        maxEnd[i] = end;
+        // Map は NaN を同一視するが、元実装の === は NaN を同一視しない。
+        if (o.id === o.id && !firstId.has(o.id)) {
+          firstId.set(o.id, i);
+        }
+      }
+      return {maxEnd, firstId};
+    };
+
+    /**
+     * 最初に衝突が起こりうるindexを返す。
+     * prefix max を二分探索し、targetより前で絶対に時間が重ならない範囲だけを飛ばす。
+     */
+    const findCollisionStartIndex = (target, members, index) => {
       const tl = target.beginLeft;
       const tr = target.endRight;
       const layerId = target.layerId;
-      for (let i = 0, len = members.length; i < len; i++) {
+      const stop = index.firstId.has(target.id) ?
+        index.firstId.get(target.id) : members.length;
+      let low = 0, high = stop;
+      if (Number.isFinite(tl)) {
+        while (low < high) {
+          const mid = (low + high) >>> 1;
+          if (index.maxEnd[mid] < tl) {
+            low = mid + 1;
+          } else {
+            high = mid;
+          }
+        }
+      }
+
+      for (let i = low; i < stop; i++) {
         const o = members[i];
         const ol = o.beginLeft;
         const or = o.endRight;
-
-        // 自分よりうしろのメンバーには影響を受けないので処理不要
-        if (o.id === target.id) {
-          return -1;
-        }
 
         if (layerId !== o.layerId || o.invisible || o.isOverflow) {
           continue;
@@ -167,12 +197,12 @@ const CommentLayoutWorker = (config => {
       return target;
     };
 
-    const checkCollision = (target, members) => {
+    const checkCollision = (target, members, index) => {
       if (target.isInvisible) {
         return target;
       }
 
-      const collisionStartIndex = findCollisionStartIndex(target, members);
+      const collisionStartIndex = findCollisionStartIndex(target, members, index);
 
       if (collisionStartIndex < 0) {
         return target;
@@ -183,9 +213,10 @@ const CommentLayoutWorker = (config => {
 
 
     const groupCollision = members => {
+      const index = createCollisionIndex(members);
       for (let i = 0, len = members.length; i < len; i++) {
         //members[i] =
-        checkCollision(members[i], members);
+        checkCollision(members[i], members, index);
       }
       return members;
     };

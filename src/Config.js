@@ -131,6 +131,7 @@ const Config = (() => {
     'commentLayer.enableSlotLayoutEmulation': false,
     // Task 206: 同時に表示を開始できるコメント数（取得件数とは別。表示中は寿命まで消さない）
     'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
+    'commentLayer.protectCA': true,
     'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
     'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
     'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
@@ -385,6 +386,7 @@ const Config = (() => {
         }
         if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
         if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
+        if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
         if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
         if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
           'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {

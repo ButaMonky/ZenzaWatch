@@ -38,7 +38,7 @@ describe('Config import validation',()=>{
  it('validates key-specific ranges and choices from actual Config',()=>{
   const {options}=configSchema();assert.strictEqual(typeof options.validateImport,'function');
   for(const [key,bad,good] of [['volume',1.1,0.5],['playbackRate',0,1],['commentSpeedRate',-1,1],['sharedNgLevel','oops','MID'],['screenMode','oops','normal'],['search.limit',5001,5000],['KEY_PLAY_PAUSE',-1,32],
-    ['commentLayer.maxDisplayComment',150,200],['commentLayer.maxDisplayComment','200',800],['commentLayer.maxDisplayComment',20000,40]]) {
+    ['commentLayer.maxDisplayComment',150,200],['commentLayer.maxDisplayComment','200',800],['commentLayer.maxDisplayComment',20000,40],['commentLayer.protectCA','true',true]]) {
    assert.strictEqual(options.validateImport(key,bad),false,key);assert.strictEqual(options.validateImport(key,good),true,key);
   }
  });

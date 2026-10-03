@@ -4,7 +4,7 @@ const flush = async () => { for(let i=0;i<8;i++) await Promise.resolve(); };
 function subject() {
   const requests=[], timers=[];
   const worker={post({params}) { return new Promise((resolve,reject)=>requests.push({params,resolve,reject})); }};
-  const VM={SPEED_RATE:1,emitter:{on(){}},create(chat) {
+  const VM={prepareCommentArt(){},SPEED_RATE:1,emitter:{on(){}},create(chat) {
     return {id:chat.id,type:'naka',vpos:chat.vpos||0,y:0,beginLeftTiming:0,endRightTiming:4,
       get bulkLayoutData(){return {id:this.id,type:this.type,ypos:this.y,isOverflow:false};},
       set bulkLayoutData(data){this.y=data.ypos;},

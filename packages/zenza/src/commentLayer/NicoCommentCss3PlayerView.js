@@ -412,7 +412,8 @@ class NicoCommentCss3PlayerView extends Emitter {
         liveCount: this._budgetTable.size,
         limit: this.displayLimit,
         tierOf: nicoChat => CommentDisplayBudget.tierOf(nicoChat, this._isHistoryChat(nicoChat)),
-        order: NicoChat.SORT_FUNCTION
+        order: NicoChat.SORT_FUNCTION,
+        groupOf: nicoChat => nicoChat.commentArtGroup
       }) : {admitted: candidates, suppressed: [], tiers: null};
     for (const {chat, reason} of suppressed) {
       inViewTable.add(chat);

@@ -1,0 +1,10 @@
+const assert=require('assert');
+const {beginSection,createContext,run}=require('../helpers/extractSource');
+function subject(){const c=createContext({Config:{},workerUtil:{},console:{time(){},timeEnd(){}}});run(beginSection('packages/zenza/src/commentLayer/CommentArtProtection.js')+';globalThis.Art=CommentArtProtection;',c);run(beginSection('packages/zenza/src/commentLayer/CommentLayoutWorker.js')+';globalThis.factory=CommentLayoutWorker._func;',c);const w={};c.factory(w);return {Art:c.Art,w};}
+const base=(id,extra={})=>({id,no:id,userId:'synthetic-artist',threadId:'10',date:1700000000+id,layerId:0,fork:0,vpos:100,type:'ue',cmd:'ue full ender',text:'part',...extra});
+function layout(data,on){const h=subject(),meta=h.Art.analyze(data,{enabled:on});const members=data.map(c=>({id:c.id,type:c.type,layerId:meta.get(c)?.layerId??c.layerId,height:c.id===3?30:80,ypos:0,beginLeft:1,beginRight:1,endLeft:4,endRight:4,isFixed:true,isInvisible:false,isOverflow:false}));return h.w.onmessage({command:'layout',params:{type:'ue',members,lastUpdate:1}}).members;}
+describe('Task211 art geometry through the actual collision worker',()=>{
+ it('keeps stacked geometry when an unrelated comment is inserted',()=>{const a=base(1),b=base(2),ordinary=base(3,{userId:'ordinary',cmd:'',text:'hello'});assert.deepStrictEqual(Array.from(layout([a,b],false),x=>x.ypos),[0,81]);const mixed=layout([a,ordinary,b],false);assert.strictEqual(mixed[2].ypos,112);const protectedLayout=layout([a,ordinary,b],true);assert.strictEqual(protectedLayout[0].ypos,0);assert.strictEqual(protectedLayout[2].ypos,81);});
+ it('switching protection OFF restores the original layout, not new raw data',()=>{const data=[base(1),base(3,{userId:'ordinary',cmd:''}),base(2)];const before=JSON.stringify(data);layout(data,true);assert.strictEqual(layout(data,false)[2].ypos,112);assert.strictEqual(JSON.stringify(data),before);});
+ it('does not restore a component deliberately removed by NG',()=>{const data=[base(1),base(2)].filter(c=>c.no!==2);assert.strictEqual(layout(data,true).length,1);});
+});

@@ -49,22 +49,35 @@ class CommentDisplayBudget {
    * @param {{liveCount:number, limit:number, tierOf:function, order?:function}} options
    * @returns {{admitted:Array, suppressed:Array<{chat, tier:number, reason:string}>}}
    */
-  static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order} = {}) {
+  static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order, groupOf} = {}) {
     limit = CommentDisplayBudget.normalizeLimit(limit);
     const tiers = new Map();
     for (const chat of candidates) { tiers.set(chat, tierOf ? tierOf(chat) : CommentDisplayBudget.tierOf(chat)); }
     const byTime = order || ((a, b) => a.beginLeftTiming - b.beginLeftTiming);
     const sorted = candidates.slice().sort((a, b) => (tiers.get(a) - tiers.get(b)) || byTime(a, b));
-    const admitted = [], suppressed = [];
-    let live = liveCount;
+    const units = [], groups = new Map();
     for (const chat of sorted) {
       const tier = tiers.get(chat);
-      if (tier < 0) { admitted.push(chat); continue; }
-      if (live < CommentDisplayBudget.ceilingOf(tier, limit)) {
-        admitted.push(chat);
-        live++;
+      const key = tier < 0 || !groupOf ? null : groupOf(chat);
+      let unit = key == null ? null : groups.get(key);
+      if (!unit) {
+        unit = {chats: [], tier}; units.push(unit);
+        if (key != null) { groups.set(key, unit); }
+      }
+      unit.chats.push(chat);
+      unit.tier = Math.max(unit.tier, tier);
+    }
+    units.sort((a,b) => a.tier-b.tier || byTime(a.chats[0],b.chats[0]));
+    const admitted = [], suppressed = [];
+    let live = liveCount;
+    for (const unit of units) {
+      const count = unit.chats.length, tier = unit.tier;
+      if (tier < 0 || live + count <= CommentDisplayBudget.ceilingOf(tier, limit)) {
+        admitted.push(...unit.chats);
+        if (tier >= 0) { live += count; }
       } else {
-        suppressed.push({chat, tier, reason: live >= limit ? 'limit' : 'reserve'});
+        const reason = (count > 1 ? 'ca_group_' : '') + (live + count > limit ? 'limit' : 'reserve');
+        for (const chat of unit.chats) { suppressed.push({chat, tier: tiers.get(chat), reason}); }
       }
     }
     return {admitted, suppressed, tiers};

@@ -49,8 +49,11 @@ class NicoChatGroupViewModel {
   }
   async _execCommentLayoutWorker() {
     const requestId = ++this._lastUpdate;
-    if (this._members.length < 1) { return; }
+    if (this._members.length < 1) { return true; }
     const type = this._members[0].type;
+    const sourceMembers = this._members;
+    const previous = sourceMembers.map(member => ({member, metadata: member._commentArtMetadata, y: member._y, overflow: member._isOverflow, ready: member._isLayouted}));
+    NicoChatViewModel.prepareCommentArt(this._members);
     const data = this.bulkLayoutData;
     const members = this._vSortedMembers;
     try {
@@ -58,7 +61,7 @@ class NicoChatGroupViewModel {
         command: 'layout',
         params: {type, members: data, lastUpdate: requestId}
       });
-      if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return; }
+      if (requestId !== this._lastUpdate || result.lastUpdate !== requestId) { return false; }
       // Validate the complete reply before writing any member (no partial layout).
       if (!Array.isArray(result.members) || result.members.length !== members.length ||
           !data.every((expected, i) => {
@@ -72,8 +75,16 @@ class NicoChatGroupViewModel {
       for (let i = 0; i < members.length; i++) {
         members[i].bulkLayoutData = result.members[i];
       }
+      return true;
     } catch (err) {
-      if (requestId === this._lastUpdate) { console.warn('comment layout failed', err); }
+      if (requestId === this._lastUpdate && this._members === sourceMembers) {
+        for (const old of previous) {
+          old.member._commentArtMetadata = old.metadata;
+          old.member._y = old.y; old.member._isOverflow = old.overflow; old.member._isLayouted = old.ready;
+        }
+        console.warn('comment layout failed', err);
+      }
+      return false;
     }
   }
   async addChatArray(nicoChatArray) {

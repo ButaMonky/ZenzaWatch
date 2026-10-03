@@ -54,7 +54,7 @@ describe('Task158 タブ復帰',()=>{
  });
 });
 function group() {
- const c=createContext({console:{warn(){}}});
+ const c=createContext({console:{warn(){}},NicoChatViewModel:{prepareCommentArt(){}}});
  const G=loadClass('packages/zenza/src/commentLayer/NicoChatGroupViewModel.js','NicoChatGroupViewModel',c);
  const g=Object.create(G.prototype);g._lastUpdate=0;
  const members=['a','b'].map(id=>({id,type:'naka',y:5,set bulkLayoutData(v){this.y=v.ypos;this.overflow=v.isOverflow;}}));

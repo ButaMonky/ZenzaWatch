@@ -3,8 +3,10 @@ import {NicoChat} from './NicoChat';
 import {NicoTextParser} from './NicoTextParser';
 import {Config} from '../../../../src/Config';
 import {CommentLayer} from './CommentLayer';
+import {CommentArtProtection} from './CommentArtProtection';
 
 //===BEGIN===
+//@require CommentArtProtection
 /**
  * 個別のコメントの表示位置・タイミング計算
  * コメントアート互換は大体こいつにかかっている
@@ -15,6 +17,21 @@ import {CommentLayer} from './CommentLayer';
  * 互換性にこだわらないのであれば7割くらいが不要。
  */
 class NicoChatViewModel {
+  static prepareCommentArt(members) {
+    const metadata = CommentArtProtection.analyze(members.map(m => m._nicoChat), {
+      enabled: Config.props['commentLayer.protectCA'] === true
+    });
+    let changed = false;
+    for (const member of members) {
+      const next = metadata.get(member._nicoChat) || null;
+      const old = member._commentArtMetadata || null;
+      if ((old && old.layerId) !== (next && next.layerId) || (old && old.group) !== (next && next.group)) { changed = true; }
+      member._commentArtMetadata = next;
+    }
+    if (changed) { for (const member of members) { member.resetLayoutForSpeedChange(); } }
+    return changed;
+  }
+
   static create(nicoChat, offScreen) {
     if (nicoChat.commentVer === 'html5') {
       return new HTML5NicoChatViewModel(nicoChat, offScreen);
@@ -439,7 +456,8 @@ class NicoChatViewModel {
   get threadId() {return this._nicoChat.threadId;}
   get no() {return this._nicoChat.no;}
   get uniqNo() {return this._nicoChat.uniqNo;}
-  get layerId() {return this._nicoChat.layerId;}
+  get layerId() {return this._commentArtMetadata ? this._commentArtMetadata.layerId : this._nicoChat.layerId;}
+  get commentArtGroup() {return this._commentArtMetadata ? this._commentArtMetadata.group : null;}
   get fork() {return this._nicoChat.fork;}
   get nicoru() { return this._nicoChat.nicoru; }
   get nicotta() { return this._nicoChat.nicotta; }

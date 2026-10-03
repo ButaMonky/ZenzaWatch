@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.34-task207
+// @version     0.3.35-task212
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -1096,6 +1096,11 @@ const $ = uq;
               見送るときは、投稿者コメントと自分の投稿は必ず表示し、通常のコメント → かんたんコメント → AIコメント → 増量で追加した過去のコメントの順に優先します。
               多くするほど密集した場面で負荷が上がります。
             </div>
+          </div>
+
+          <div class="commentArtProtectionControl control toggle">
+            <label><input type="checkbox" class="checkbox" data-setting-name="commentLayer.protectCA">コメントアートの配置を保護する</label>
+            <div class="settingNote">推定したアートを別の衝突レイヤーへ分け、同時に始まる部品はまとめて表示可否を判断します。元コメント・取得済みデータは削除しません。NGや取得範囲で欠けた部品、フォント差まで復元する機能ではありません。</div>
           </div>
 
           <div class="enableSlotLayoutEmulation control toggle">

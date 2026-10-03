@@ -12,6 +12,9 @@ export class LayeredCommentStore {
   #normalCount=0;
   #historyCount=0;
   #overlapCount=0;
+  // Task207: keys of history entries in the order they first became additional (= fetch order, nearest to the
+  // normal comments first). Subsets for "applied additional count" are prefixes of this order, so they are stable.
+  #additionalOrder=[];
   constructor(context){this.#context=context;}
   #threadKey(t){return JSON.stringify([t.id,t.fork]);}
   #key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
@@ -44,7 +47,7 @@ export class LayeredCommentStore {
           if(kind==='normal')this.#normalCount++;else this.#historyCount++;
           if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
         }
-        if(gains)added++;
+        if(gains){added++;if(kind==='history')this.#additionalOrder.push(k);}
         entry[kind]=c;
         this.#items.set(k,entry);
       }
@@ -57,7 +60,17 @@ export class LayeredCommentStore {
     for(const [key,entry] of this.#items){
       if(entry.normal)entry.history=null;else this.#items.delete(key);
     }
-    this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;
+    this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;this.#additionalOrder=[];
+  }
+  /** Identity keys only (no comment data). Used to carry the fetch order into a continuation session. */
+  additionalOrder(){return this.#additionalOrder.filter(k=>{const e=this.#items.get(k);return !!(e?.history&&!e.normal);});}
+  /** Reorder restored history by a previous session's order; unknown keys are ignored, missing ones keep their order. */
+  restoreAdditionalOrder(keys){
+    if(!Array.isArray(keys))return;
+    const current=new Set(this.#additionalOrder),seen=new Set(),out=[];
+    for(const k of keys)if(typeof k==='string'&&current.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}
+    for(const k of this.#additionalOrder)if(!seen.has(k)){seen.add(k);out.push(k);}
+    this.#additionalOrder=out;
   }
   historySnapshot(){
     const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
@@ -70,12 +83,16 @@ export class LayeredCommentStore {
     return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
       additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
   }
-  snapshot({historyEnabled=true,historyOnly=false}={}){
+  snapshot({historyEnabled=true,historyOnly=false,historyLimit}={}){
     const out=new Map();
     if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
     for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
-    for(const entry of this.#items.values()){
-      const c=historyOnly?(entry.normal?null:entry.history):(entry.normal??(historyEnabled?entry.history:null));
+    // Task207: limit additional history to the first N of the fetch order (undefined = all).
+    let allowed=null;
+    if(historyLimit!==undefined){integerOption(historyLimit,0,50000);allowed=new Set(this.additionalOrder().slice(0,historyLimit));}
+    for(const [key,entry] of this.#items){
+      const history=entry.history&&(!allowed||entry.normal||allowed.has(key))?entry.history:null;
+      const c=historyOnly?(entry.normal?null:history):(entry.normal??(historyEnabled?history:null));
       if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
     }
     for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);

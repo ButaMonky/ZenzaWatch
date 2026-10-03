@@ -1,5 +1,5 @@
 const assert = require('assert');
-const {extract, createContext, run} = require('../helpers/extractSource');
+const {extract, createContext, run, loadClass} = require('../helpers/extractSource');
 const {ZenzaCommentHistorySettings} = require('../../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js');
 function setup() {
   const c = createContext({});
@@ -14,6 +14,7 @@ function setup() {
 }
 function configSchema() {
  const c=createContext({ZenzaCommentHistorySettings,PRODUCT:'ZenzaWatch',navigator:{},location:{host:'www.nicovideo.jp'},localStorage:{},buildDefaultKeyConfig:()=>({}),DataStorage:{create(defaults,options){return {default:defaults,options};}}});
+ c.CommentDisplayBudget=loadClass('packages/zenza/src/commentLayer/CommentDisplayBudget.js','CommentDisplayBudget',c); // Task 206
  run('const Config = '+extract('src/Config.js','Config','var')+';this.config=Config;',c);
  return c.config;
 }
@@ -36,7 +37,8 @@ describe('Config import validation',()=>{
  it('rejects a malformed JSON before altering memory or storage',()=>{const s=setup(),before=JSON.stringify([s.storage,s._data]);assert.throws(()=>s.importJson('{'));assert.strictEqual(JSON.stringify([s.storage,s._data]),before);});
  it('validates key-specific ranges and choices from actual Config',()=>{
   const {options}=configSchema();assert.strictEqual(typeof options.validateImport,'function');
-  for(const [key,bad,good] of [['volume',1.1,0.5],['playbackRate',0,1],['commentSpeedRate',-1,1],['sharedNgLevel','oops','MID'],['screenMode','oops','normal'],['search.limit',5001,5000],['KEY_PLAY_PAUSE',-1,32]]) {
+  for(const [key,bad,good] of [['volume',1.1,0.5],['playbackRate',0,1],['commentSpeedRate',-1,1],['sharedNgLevel','oops','MID'],['screenMode','oops','normal'],['search.limit',5001,5000],['KEY_PLAY_PAUSE',-1,32],
+    ['commentLayer.maxDisplayComment',150,200],['commentLayer.maxDisplayComment','200',800],['commentLayer.maxDisplayComment',20000,40]]) {
    assert.strictEqual(options.validateImport(key,bad),false,key);assert.strictEqual(options.validateImport(key,good),true,key);
   }
  });

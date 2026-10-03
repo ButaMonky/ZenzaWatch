@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.32-task201
+// @version     0.3.34-task207
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,9 +14,10 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-02 09:07Z
+// build: 2026-10-03 11:28Z
 /* eslint-disable */
 
+// CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 ((window) => { const self = window;
   const PRODUCT = 'ZenzaWatch';
   const monkey = async (PRODUCT) => {
@@ -1591,7 +1592,8 @@ modules[3] = (() => {
 const {SETTINGS_SCHEMA,DEFAULT_SETTINGS} = modules[1];
 const {ZenzaSettingsRepository} = modules[2];
 const {HistoryError} = modules[0];
-const HISTORY_PRESETS=Object.freeze([1000,2500,5000,10000,20000]);
+const HISTORY_PRESETS=Object.freeze([1000,2500,5000,7500,10000,15000,20000]);
+const APPLIED_PRESETS=Object.freeze([0,...HISTORY_PRESETS]);
 const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
 const EVENT='ZenzaWatch-comment-history-settings';
 function createBrowserHistoryPreferences({window:win=globalThis.window,config,storage=win.localStorage}={}){
@@ -1651,7 +1653,7 @@ function createBrowserHistoryPreferences({window:win=globalThis.window,config,st
 		dispose(){if(disposed)return;disposed=true;win.removeEventListener('storage',onStorage);win.removeEventListener(EVENT,onLocal);repository?.dispose();repository=null;listeners.clear();}
 	};
 }
-return Object.freeze({HISTORY_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
+return Object.freeze({HISTORY_PRESETS,APPLIED_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
 })();
 modules[4] = (() => {
 const {HistoryError,integerOption,buildThreadRequest,validateThreads,normalizeWatch,withThreadKey,COMMENT_ORIGIN} = modules[0];
@@ -1843,6 +1845,7 @@ class LayeredCommentStore {
 	#normalCount=0;
 	#historyCount=0;
 	#overlapCount=0;
+	#additionalOrder=[];
 	constructor(context){this.#context=context;}
 	#threadKey(t){return JSON.stringify([t.id,t.fork]);}
 	#key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
@@ -1873,7 +1876,7 @@ class LayeredCommentStore {
 					if(kind==='normal')this.#normalCount++;else this.#historyCount++;
 					if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
 				}
-				if(gains)added++;
+				if(gains){added++;if(kind==='history')this.#additionalOrder.push(k);}
 				entry[kind]=c;
 				this.#items.set(k,entry);
 			}
@@ -1886,7 +1889,15 @@ class LayeredCommentStore {
 		for(const [key,entry] of this.#items){
 			if(entry.normal)entry.history=null;else this.#items.delete(key);
 		}
-		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;
+		this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;this.#additionalOrder=[];
+	}
+	additionalOrder(){return this.#additionalOrder.filter(k=>{const e=this.#items.get(k);return !!(e?.history&&!e.normal);});}
+	restoreAdditionalOrder(keys){
+		if(!Array.isArray(keys))return;
+		const current=new Set(this.#additionalOrder),seen=new Set(),out=[];
+		for(const k of keys)if(typeof k==='string'&&current.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}
+		for(const k of this.#additionalOrder)if(!seen.has(k)){seen.add(k);out.push(k);}
+		this.#additionalOrder=out;
 	}
 	historySnapshot(){
 		const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
@@ -1899,12 +1910,15 @@ class LayeredCommentStore {
 		return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
 			additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
 	}
-	snapshot({historyEnabled=true,historyOnly=false}={}){
+	snapshot({historyEnabled=true,historyOnly=false,historyLimit}={}){
 		const out=new Map();
 		if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
 		for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
-		for(const entry of this.#items.values()){
-			const c=historyOnly?(entry.normal?null:entry.history):(entry.normal??(historyEnabled?entry.history:null));
+		let allowed=null;
+		if(historyLimit!==undefined){integerOption(historyLimit,0,50000);allowed=new Set(this.additionalOrder().slice(0,historyLimit));}
+		for(const [key,entry] of this.#items){
+			const history=entry.history&&(!allowed||entry.normal||allowed.has(key))?entry.history:null;
+			const c=historyOnly?(entry.normal?null:history):(entry.normal??(historyEnabled?history:null));
 			if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
 		}
 		for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
@@ -1941,7 +1955,7 @@ class HistorySession {
 	report(){return JSON.parse(JSON.stringify({...this.#report,counts:this.#store.counts(),network:this.#finishedNetwork??this.#coordinator.stats()}));}
 	resumeData(){
 		if(!this.#report.finishedAt)throw new HistoryError('OPTION');
-		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),
+		return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),order:this.#store.additionalOrder(),
 			cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
 	}
 	#verifyRefreshed(next){
@@ -1985,6 +1999,7 @@ class HistorySession {
 			if(this.#resume){
 				const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
 				if(restored.limited)throw new HistoryError('OPTION');
+				this.#store.restoreAdditionalOrder(this.#resume.order);
 			}
 			notify({event:'baseline'});
 			const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
@@ -2018,9 +2033,10 @@ class HistorySession {
 					this.#report.duplicates+=added.duplicates;
 					notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
 					assertNotCancelled(localSignal);
-					if(added.limited||this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){
+					if(added.limited){
 						state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
 					}
+					const reachedGoal=this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments;
 					if(!summary.returnedCount){state.reason='empty_page';continue;}
 					const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
 					if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
@@ -2030,11 +2046,13 @@ class HistorySession {
 					state.nextWhen=oldest;
 					if(oldest>=cursor){state.reason='cursor_stalled';continue;}
 					this.#report.historyCursorProgressed=true;
+					if(reachedGoal){state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;}
 				}
 			}
 			if(!stopped&&states.length){
 				const reasons=[...new Set(states.map(s=>s.reason))];
 				this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+				if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments)this.#report.reason='comment_limit';
 			}
 			for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
 		}catch(e){
@@ -2118,10 +2136,12 @@ modules[9] = (() => {
 const {HistorySession} = modules[7];
 const {createZenzaSeed,toZenzaThreads} = modules[8];
 const {normalizeSettings} = modules[1];
+const MAX_ADDITIONAL=20000;
+const RESET={phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
 class CommentHistoryController {
 	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
 	#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
-	#state={enabled:false,phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false};
+	#state={enabled:false,videoId:null,normalCount:0,...RESET};
 	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
 		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
 		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
@@ -2129,13 +2149,17 @@ class CommentHistoryController {
 		this.#off=preferences.subscribe(snapshot=>{
 			if(this.#disposed)return;
 			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
-			if(!this.#state.enabled){this.#cancel(true);this.#emit({phase:'idle',additionalCount:0,appliedAdditional:0,pages:0,goal:0,reason:null,canContinue:false});}
+			if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
 			else {this.#emit({});if(!before&&this.#seed)void this.start();}
 		});
 	}
 	get state(){return JSON.parse(JSON.stringify(this.#state));}
 	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
-	#emit(changes){Object.assign(this.#state,changes);for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}}
+	#emit(changes){
+		Object.assign(this.#state,changes);
+		if('additionalCount' in changes)this.#state.cachedAdditional=this.#state.additionalCount;
+		for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
+	}
 	#cancel(clear){
 		this.#epoch++;this.#operation?.abort();this.#operation=null;
 		this.#session?.removeHistory();this.#session=null;this.#report=null;
@@ -2143,7 +2167,7 @@ class CommentHistoryController {
 	}
 	invalidate(){
 		this.#cancel(true);this.#seed=null;
-		this.#emit({phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false});
+		this.#emit({...RESET,videoId:null,normalCount:0});
 	}
 	async normalReady({videoInfo,result,generation}={}){
 		if(this.#disposed)return;
@@ -2163,22 +2187,40 @@ class CommentHistoryController {
 	whenIdle(){return this.#promise;}
 	more(){return this.start({more:true});}
 	restart(){return this.start({restart:true});}
-	start({more=false,restart=false}={}){
+	setAppliedCount(value){
+		const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
+		if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
+		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#operation)return this.#promise;
+		if(!this.#session||!this.#report){
+			if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
+			return this.start({target:n});
+		}
+		const cached=this.#report.counts.additionalCount;
+		if(n>cached&&this.#report.resumeAvailable&&cached<MAX_ADDITIONAL)return this.start({more:true,target:n});
+		return this.start({displayOnly:true,target:n});
+	}
+	start({more=false,restart=false,target,displayOnly=false}={}){
 		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
 		if(this.#operation)return this.#promise;
 		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
-		if(more&&this.#state.additionalCount>=20000&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+		if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
+		if(more&&target===undefined&&this.#state.additionalCount>=MAX_ADDITIONAL&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
 		if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
-		const applyOnly=this.#state.phase==='render-error'&&!restart;
+		const retryRender=this.#state.phase==='render-error'&&!restart&&target===undefined;
+		const applyOnly=displayOnly||retryRender;
 		const continuing=!!(more&&!restart&&this.#session&&this.#report);
 		const resume=continuing?this.#session.resumeData():undefined;
 		if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
 		const oldGoal=this.#state.goal;
-		const goal=applyOnly?oldGoal:continuing?Math.min(20000,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+		const goal=applyOnly?oldGoal:
+			target!==undefined?Math.min(MAX_ADDITIONAL,target):
+			continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+		const appliedTarget=target!==undefined?target:retryRender?this.#state.appliedTarget:goal;
 		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
 		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
 		const seed=this.#seed;
-		this.#emit({phase:applyOnly?'applying':'queued',goal,reason:null,canContinue:false});
+		this.#emit({phase:applyOnly?'applying':'queued',goal,appliedTarget,reason:applyOnly?this.#state.reason:null,canContinue:false});
 		this.#promise=(async()=>{
 			try{
 				if(!applyOnly){
@@ -2197,18 +2239,19 @@ class CommentHistoryController {
 				}
 				if(!current()||!this.#report||!this.#session)return;
 				const report=this.#report;
-				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,pages:report.pages,network:report.network,waitingMs:0});
+				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
 				let applied;
-				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true})),{isCurrent:current,signal:operation.signal});}
+				const limit=Math.min(appliedTarget,report.counts.additionalCount);
+				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:current,signal:operation.signal});}
 				catch{
 					if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
 					return;
 				}
 				if(!current())return;
 				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
-				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??report.counts.additionalCount,
-					canContinue:report.resumeAvailable&&report.counts.additionalCount<20000});
-				if(partial&&report.reason!=='cancelled')this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??limit,
+					canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
+				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
 			}catch{
 				if(this.#epoch===epoch&&this.#state.enabled){
 					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
@@ -2225,7 +2268,7 @@ return Object.freeze({CommentHistoryController});
 })();
 modules[10] = (() => {
 const {SETTINGS_SCHEMA} = modules[1];
-const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[3];
+const {HISTORY_PRESETS,APPLIED_PRESETS,createBrowserHistoryPreferences} = modules[3];
 const {CommentHistoryController} = modules[9];
 const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
 const CSS=`
@@ -2283,11 +2326,12 @@ class CommentHistoryPanel {
 	_init(){
 		if(this.view)return;
 		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel zen-family';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
-		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>反映済みの追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><div class="ch-action-row ch-apply-row"><label>適用する件数<select data-ch-applied-target aria-label="適用する件数">${APPLIED_PRESETS.map(n=>`<option value="${n}">${n?fmt(n)+' 件':'0 件（増量前）'}</option>`).join('')}</select></label><span class="ch-note" data-ch-apply-summary></span></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。適用する件数を減らしても取得済みの分は保持し、戻すときは再取得しません。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>取得済みの追加分（保持中）</span><span data-ch-cached></span><span>適用中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
 		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
 		el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
 		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
 		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
+		el.querySelector('[data-ch-applied-target]').onchange=e=>safe(()=>{void this.controller.setAppliedCount(Number(e.target.value)).catch?.(()=>{});});
 		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
 		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
 		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
@@ -2312,7 +2356,17 @@ class CommentHistoryPanel {
 		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
 		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
 		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
-		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
+		const appliedSelect=q('[data-ch-applied-target]');appliedSelect.querySelector('[data-ch-custom]')?.remove();
+		const appliedTarget=Number(state.appliedTarget)||0;
+		if(!APPLIED_PRESETS.includes(appliedTarget)){
+			const option=this.doc.createElement('option');option.dataset.chCustom='';option.value=String(appliedTarget);option.textContent=fmt(appliedTarget)+' 件';appliedSelect.append(option);
+		}
+		appliedSelect.value=String(appliedTarget);
+		appliedSelect.disabled=!state.enabled||running||!state.cacheAvailable||p.valid===false;
+		q('[data-ch-apply-summary]').textContent=state.cacheAvailable?`取得済み ${fmt(state.cachedAdditional)} 件 · 適用中 ${fmt(state.appliedAdditional)} 件`:'';
+		if(state.cacheAvailable&&!running&&['ready','partial'].includes(state.phase)&&state.appliedAdditional<state.cachedAdditional)
+			q('[data-ch-status]').textContent+=state.appliedAdditional===0?'（増量前の表示・取得済み分は保持）':'（一部を適用中・取得済み分は保持）';
+		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-cached]').textContent=fmt(state.cachedAdditional);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
 		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
 		button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
 	}
@@ -2367,6 +2421,7 @@ normalizeSettings: modules[1].normalizeSettings,
 SettingsStore: modules[1].SettingsStore,
 ZenzaSettingsRepository: modules[2].ZenzaSettingsRepository,
 HISTORY_PRESETS: modules[3].HISTORY_PRESETS,
+APPLIED_PRESETS: modules[3].APPLIED_PRESETS,
 HISTORY_PREFERENCE_DEFAULTS: modules[3].HISTORY_PREFERENCE_DEFAULTS,
 createBrowserHistoryPreferences: modules[3].createBrowserHistoryPreferences,
 HISTORY_ICON: modules[10].HISTORY_ICON,
@@ -2375,6 +2430,70 @@ CommentHistoryPanel: modules[10].CommentHistoryPanel,
 createHistoryFeature: modules[10].createHistoryFeature,
 });
 })();
+/*
+* Task 206: 同時表示コメント数の予算（取得件数・保持件数とは別）。
+* - 上限判定は「新しく表示を開始する直前」だけに使う。表示を始めた要素は寿命まで消さない。
+* - owner(fork1)・自分の投稿（投稿中/失敗を含む）は上限の対象外で、数にも入れない。
+* - 優先度: 今回の通常取得 > 増量で追加した過去コメント、各グループ内は 通常 > かんたん > AI。
+*   低い優先度ほど「表示中の総数がこの割合未満なら受け入れる」天井を低くし、
+*   増量分やかんたん/AIが枠を埋め尽くしても、通常コメント用の枠が残るようにする。
+*/
+class CommentDisplayBudget {
+	static get CONFIG_KEY() { return 'commentLayer.maxDisplayComment'; }
+	static get CHOICES() { return [40, 100, 200, 400, 800]; }
+	static get DEFAULT() { return 200; }
+	static get TIER() {
+		return {EXEMPT: -1, MAIN: 0, EASY: 1, AI: 2, HISTORY_MAIN: 3, HISTORY_EASY: 4, HISTORY_AI: 5};
+	}
+	static get TIER_NAMES() {
+		return ['main', 'easy', 'ai', 'historyMain', 'historyEasy', 'historyAi'];
+	}
+	/* 各優先度が受け入れられる「表示中総数」の天井（上限に対する割合） */
+	static get CEILING_RATIO() { return [1, 0.9, 0.85, 0.75, 0.7, 0.7]; }
+	static normalizeLimit(value) {
+		const n = Number(value);
+		return CommentDisplayBudget.CHOICES.includes(n) ? n : CommentDisplayBudget.DEFAULT;
+	}
+	static isValidLimit(value) {
+		return typeof value === 'number' && CommentDisplayBudget.CHOICES.includes(value);
+	}
+	static isExempt(chat) {
+		if (!chat) { return false; }
+		return Number(chat.fork) === 1 || !!chat.isMine || !!chat.isUpdating || !!chat.isPostFail;
+	}
+	static tierOf(chat, isHistory = false) {
+		const T = CommentDisplayBudget.TIER;
+		if (CommentDisplayBudget.isExempt(chat)) { return T.EXEMPT; }
+		const fork = Number(chat.fork);
+		const kind = fork === 2 ? T.EASY : (fork === 3 ? T.AI : T.MAIN);
+		return isHistory ? kind + 3 : kind;
+	}
+	static ceilingOf(tier, limit) {
+		if (tier < 0) { return Infinity; }
+		const ratio = CommentDisplayBudget.CEILING_RATIO[tier];
+		return Math.max(1, Math.floor(limit * (ratio === undefined ? 0.7 : ratio)));
+	}
+	static admit(candidates, {liveCount = 0, limit = CommentDisplayBudget.DEFAULT, tierOf, order} = {}) {
+		limit = CommentDisplayBudget.normalizeLimit(limit);
+		const tiers = new Map();
+		for (const chat of candidates) { tiers.set(chat, tierOf ? tierOf(chat) : CommentDisplayBudget.tierOf(chat)); }
+		const byTime = order || ((a, b) => a.beginLeftTiming - b.beginLeftTiming);
+		const sorted = candidates.slice().sort((a, b) => (tiers.get(a) - tiers.get(b)) || byTime(a, b));
+		const admitted = [], suppressed = [];
+		let live = liveCount;
+		for (const chat of sorted) {
+			const tier = tiers.get(chat);
+			if (tier < 0) { admitted.push(chat); continue; }
+			if (live < CommentDisplayBudget.ceilingOf(tier, limit)) {
+				admitted.push(chat);
+				live++;
+			} else {
+				suppressed.push({chat, tier, reason: live >= limit ? 'limit' : 'reserve'});
+			}
+		}
+		return {admitted, suppressed, tiers};
+	}
+}
 const Config = (() => {
 	const DEFAULT_CONFIG = {
 		debug: false,
@@ -2459,6 +2578,7 @@ const Config = (() => {
 		commentLayerOpacity: 1.0, //
 		'commentLayer.textShadowType': '', // フォントの修飾タイプ
 		'commentLayer.enableSlotLayoutEmulation': false,
+		'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
 		'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
 		'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 		'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
@@ -2602,6 +2722,7 @@ const Config = (() => {
 					return choices[name].includes(value);
 				}
 				if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
+				if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
 				if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
 				if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
 					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
@@ -5098,6 +5219,12 @@ const ScreenFilterPanel = (() => {
           }
         }
 
+        // Task 206: 同時表示上限は選択肢の数値として保存する（文字列のまま保存しない）
+        if (settingName === CommentDisplayBudget.CONFIG_KEY) {
+          this._playerConfig.props[settingName] = CommentDisplayBudget.normalizeLimit(val);
+          return;
+        }
+
         this._playerConfig.props[settingName] = val;
 
         // Task 065: カスタムシーク秒数の入力欄。キーも秒数も未設定に
@@ -5739,6 +5866,23 @@ const ScreenFilterPanel = (() => {
               100件ごとにニコニコへ1回問い合わせるため、多いほど読み込みが遅くなり、プレイリストの表示も重くなります。
               上限はニコニコの検索の仕様で5000件です（予備の検索方式に切り替わった時は1600件まで）。
               リロード後に復元されるのは、再生中の動画の前後1000件までです。
+            </div>
+          </div>
+
+          <div class="maxDisplayCommentControl control toggle">
+            <label>
+              同時に表示するコメント数の上限
+              <select data-setting-name="commentLayer.maxDisplayComment">
+                ${CommentDisplayBudget.CHOICES.map(n =>
+                  `<option value="${n}">${n}件${n === CommentDisplayBudget.DEFAULT ? '（初期値）' : n === 40 ? '（本家ZenzaWatchと同じ）' : n >= 800 ? '（重い）' : ''}</option>`
+                ).join('')}
+              </select>
+            </label>
+            <div class="settingNote">
+              画面に同時に流せるコメントの数です（取得するコメント数とは別の設定です）。
+              一度流れ始めたコメントは上限を超えても最後まで流れ、上限を超えた分は流れ始める前に見送ります。
+              見送るときは、投稿者コメントと自分の投稿は必ず表示し、通常のコメント → かんたんコメント → AIコメント → 増量で追加した過去のコメントの順に優先します。
+              多くするほど密集した場面で負荷が上がります。
             </div>
           </div>
 

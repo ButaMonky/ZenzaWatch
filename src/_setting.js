@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.32-task201
+// @version     0.3.34-task207
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -20,6 +20,8 @@ import {Emitter, Handler} from '../packages/lib/src/Emitter';
 import {SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsByCategory} from '../packages/zenza/src/ShortcutActions';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
+// CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
+import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
 ((window) => { const self = window;
   const PRODUCT = 'ZenzaWatch';
   const monkey = async (PRODUCT) => {
@@ -427,6 +429,12 @@ const $ = uq;
             e.target.value = v;
             return;
           }
+        }
+
+        // Task 206: 同時表示上限は選択肢の数値として保存する（文字列のまま保存しない）
+        if (settingName === CommentDisplayBudget.CONFIG_KEY) {
+          this._playerConfig.props[settingName] = CommentDisplayBudget.normalizeLimit(val);
+          return;
         }
 
         this._playerConfig.props[settingName] = val;
@@ -1070,6 +1078,23 @@ const $ = uq;
               100件ごとにニコニコへ1回問い合わせるため、多いほど読み込みが遅くなり、プレイリストの表示も重くなります。
               上限はニコニコの検索の仕様で5000件です（予備の検索方式に切り替わった時は1600件まで）。
               リロード後に復元されるのは、再生中の動画の前後1000件までです。
+            </div>
+          </div>
+
+          <div class="maxDisplayCommentControl control toggle">
+            <label>
+              同時に表示するコメント数の上限
+              <select data-setting-name="commentLayer.maxDisplayComment">
+                ${CommentDisplayBudget.CHOICES.map(n =>
+                  `<option value="${n}">${n}件${n === CommentDisplayBudget.DEFAULT ? '（初期値）' : n === 40 ? '（本家ZenzaWatchと同じ）' : n >= 800 ? '（重い）' : ''}</option>`
+                ).join('')}
+              </select>
+            </label>
+            <div class="settingNote">
+              画面に同時に流せるコメントの数です（取得するコメント数とは別の設定です）。
+              一度流れ始めたコメントは上限を超えても最後まで流れ、上限を超えた分は流れ始める前に見送ります。
+              見送るときは、投稿者コメントと自分の投稿は必ず表示し、通常のコメント → かんたんコメント → AIコメント → 増量で追加した過去のコメントの順に優先します。
+              多くするほど密集した場面で負荷が上がります。
             </div>
           </div>
 

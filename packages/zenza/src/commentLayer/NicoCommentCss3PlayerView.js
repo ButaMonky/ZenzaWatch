@@ -14,7 +14,9 @@ import {NicoChatViewModel} from './NicoChatViewModel';
 import {watchResize} from '../../../lib/src/dom/watchResize';
 import {cssUtil} from '../../../lib/src/css/css';
 import {ClassList} from '../../../lib/src/dom/ClassListWrapper';
+import {CommentDisplayBudget} from './CommentDisplayBudget';
 //===BEGIN===
+//@require CommentDisplayBudget
 /**
  * ニコニコ動画のコメントをCSS3アニメーションだけで再現出来るよ
  * という一発ネタのつもりだったのだが意外とポテンシャルが高かった。
@@ -35,9 +37,18 @@ class NicoCommentCss3PlayerView extends Emitter {
 
     this._aspectRatio = 9 / 16;
 
+    // Task 206: 表示ライフサイクルの管理表（不変条件）
+    //   _inViewTable   = 採否を決めたコメント = _inSlotTable ∪ _suppressedTable
+    //   _inSlotTable   = 表示中（DOMあり）。キーは _domTable と常に一致
+    //   _budgetTable   = 表示中のうち同時表示上限に数えるもの（owner/自分の投稿は除く）
+    //   _suppressedTable = 上限のため表示前に見送ったもの。寿命が終わるまで再判定しない
     this._inViewTable = new Set();
     this._inSlotTable = new Set();
     this._domTable = new Map();
+    this._budgetTable = new Set();
+    this._suppressedTable = new Set();
+    this._historyClassifier = null;
+    this._resetDisplayStats();
     this._playbackRate = params.playbackRate || 1.0;
 
     this._isPaused = undefined;
@@ -249,6 +260,43 @@ class NicoCommentCss3PlayerView extends Emitter {
   }
   _onSetData () {
     this.clear();
+    this._resetDisplayStats();
+  }
+  _resetDisplayStats () {
+    this._displayStats = {admitted: 0, exempt: 0, expired: 0, suppressed: {limit: 0, reserve: 0}};
+  }
+  /**
+   * 増量(過去コメント)由来かどうかの判定を外から受け取る。
+   * NicoChatに永続フラグは持たせず、CommentHistoryRendererの保持情報を参照する。
+   */
+  setHistoryClassifier (fn) {
+    this._historyClassifier = typeof fn === 'function' ? fn : null;
+  }
+  _isHistoryChat (nicoChat) {
+    if (!this._historyClassifier) { return false; }
+    try {
+      return !!this._historyClassifier(nicoChat);
+    } catch (e) {
+      return false;
+    }
+  }
+  get displayLimit () {
+    const props = this._config && this._config.props;
+    return CommentDisplayBudget.normalizeLimit(props ? props.maxDisplayComment : undefined);
+  }
+  /** 診断用: 取得数ではなく「描画側」の数と、見送り・終了の理由別の累計 */
+  get displayStats () {
+    const s = this._displayStats;
+    return {
+      limit: this.displayLimit,
+      live: this._budgetTable.size,
+      dom: this._domTable.size,
+      suppressedNow: this._suppressedTable.size,
+      admitted: s.admitted,
+      exempt: s.exempt,
+      expired: s.expired,
+      suppressed: {limit: s.suppressed.limit, reserve: s.suppressed.reserve}
+    };
   }
   _onCurrentTime (sec) {
     const REFRESH_THRESHOLD = 1;
@@ -317,6 +365,12 @@ class NicoCommentCss3PlayerView extends Emitter {
     this._inViewTable.clear();
     this._inSlotTable.clear();
     this._domTable.clear();
+    this._budgetTable.clear();
+    this._suppressedTable.clear();
+    if (this.removingElements) {
+      // textContent=''で既に外れているので、古い削除予約を次の世代へ持ち越さない
+      this.removingElements.length = 0;
+    }
     this.isUpdating = false;
   }
   refresh () {
@@ -335,54 +389,95 @@ class NicoCommentCss3PlayerView extends Emitter {
       vm.getGroup(NicoChat.TYPE.TOP).inViewMembers
     ].flat();
 
-    const dom = [], subDom = [], newView = [];
+    const dom = [], subDom = [], candidates = [];
     const inSlotTable = this._inSlotTable, inViewTable = this._inViewTable;
     const ct = this._currentTime;
+
+    // Task 206: 新着の有無に関係なく、先に寿命の終わったものを回収する。
+    // 容量判定より前に行うので、終わったDOMが有効な新着を押し出すことはない。
+    this._collectExpired(ct);
+
     for (let i = 0, len = inView.length; i < len; i++) {
       const nicoChat = inView[i];
       if (inViewTable.has(nicoChat)) {
         continue;
       }
-      inViewTable.add(nicoChat);
-      inSlotTable.add(nicoChat);
-      newView.push(nicoChat);
+      candidates.push(nicoChat);
     }
 
-    if (newView.length > 1) {
-      newView.sort(NicoChat.SORT_FUNCTION);
+    // 上限判定は「新しく表示を開始する直前」だけ。表示中の要素は追い出さない。
+    const stats = this._displayStats;
+    const {admitted, suppressed, tiers} = candidates.length ?
+      CommentDisplayBudget.admit(candidates, {
+        liveCount: this._budgetTable.size,
+        limit: this.displayLimit,
+        tierOf: nicoChat => CommentDisplayBudget.tierOf(nicoChat, this._isHistoryChat(nicoChat)),
+        order: NicoChat.SORT_FUNCTION
+      }) : {admitted: candidates, suppressed: [], tiers: null};
+    for (const {chat, reason} of suppressed) {
+      inViewTable.add(chat);
+      this._suppressedTable.add(chat);
+      stats.suppressed[reason] = (stats.suppressed[reason] || 0) + 1;
+    }
+
+    if (admitted.length > 1) {
+      admitted.sort(NicoChat.SORT_FUNCTION);
     }
 
     const doc = this.document, playbackRate = this._playbackRate;
     const domTable = this._domTable;
-    for (let i = 0, len = newView.length; i < len; i++) {
-      const nicoChat = newView[i];
+    for (let i = 0, len = admitted.length; i < len; i++) {
+      const nicoChat = admitted[i];
       const type = nicoChat.type;
       const size = nicoChat.size;
       const cssText = NicoChatCss3View.buildChatCss(nicoChat, type, ct, playbackRate);
       const element = NicoChatCss3View.buildChatDom(nicoChat, type, size, cssText, doc);
+      inViewTable.add(nicoChat);
+      inSlotTable.add(nicoChat);
       domTable.set(nicoChat, element);
+      if (tiers && tiers.get(nicoChat) < 0) {
+        stats.exempt++;
+      } else {
+        this._budgetTable.add(nicoChat);
+        stats.admitted++;
+      }
       (nicoChat.isSubThread ? subDom : dom).push(element);
     }
 
-    // DOMへの追加
-    if (!newView.length) {
+    if (!admitted.length && !this.removingElements.length) {
       return;
     }
     this.isUpdating = true;
     dom.length    && this.fragment.append(...dom);
     subDom.length && this.subFragment.append(...subDom);
-    const currentTime = this._currentTime;
-
+    this._updateDom();
+  }
+  /**
+   * 寿命の終わったコメントを全ての管理表から外し、DOMを削除予約する。
+   * 見送ったコメントも寿命が終われば表から外す（同じ寿命の間は再判定しない）。
+   */
+  _collectExpired (currentTime) {
     const margin = 2 * NicoChatViewModel.SPEED_RATE;
-    for (const nicoChat of inSlotTable) {
+    const domTable = this._domTable, inViewTable = this._inViewTable;
+    for (const nicoChat of this._inSlotTable) {
       if (currentTime - margin < nicoChat.endRightTiming) {
         continue;
       }
       const elm = domTable.get(nicoChat);
       elm && this.removingElements.push(elm);
-      inSlotTable.delete(nicoChat);
+      this._inSlotTable.delete(nicoChat);
+      this._budgetTable.delete(nicoChat);
+      domTable.delete(nicoChat);
+      inViewTable.delete(nicoChat);
+      this._displayStats.expired++;
     }
-    this._updateDom();
+    for (const nicoChat of this._suppressedTable) {
+      if (currentTime - margin < nicoChat.endRightTiming) {
+        continue;
+      }
+      this._suppressedTable.delete(nicoChat);
+      inViewTable.delete(nicoChat);
+    }
   }
 
   _updateDom() {
@@ -394,7 +489,8 @@ class NicoCommentCss3PlayerView extends Emitter {
     if (this.subFragment.firstElementChild) {
       this.subLayer.append(this.subFragment);
     }
-    this._gcInviewElements();
+    // Task 206: 旧_gcInviewElements（40件超過で表示中を古い順に削除）は廃止。
+    // ここで消すのは寿命が終わったものだけ。
     if (this.removingElements.length) {
       for (const e of this.removingElements) { e.remove(); }
       this.removingElements.length = 0;
@@ -409,28 +505,6 @@ class NicoCommentCss3PlayerView extends Emitter {
     // performance.mark('updateDom:end-remove');
     // performance.measure('updateDom');
   }
-  /*
-  * 古い順に要素を除去していく
-  */
-  _gcInviewElements () {
-    if (!this.commentLayer || !this._style) {
-      return;
-    }
-
-    const max = NicoCommentCss3PlayerView.MAX_DISPLAY_COMMENT;
-
-    const commentLayer = this.commentLayer;
-    const elements = this.removingElements;
-    const af = this.window.Array.from; // prototype.js汚染を警戒
-    let inViewElements =  // 表示上限オーバー時、AIキャラクターコメントとかんたんコメントが優先的に消えるように
-      af(commentLayer.querySelectorAll('.nicoChat.fork3'))
-        .concat(af(commentLayer.querySelectorAll('.nicoChat.fork2')))
-        .concat(af(commentLayer.querySelectorAll('.nicoChat.fork0')));
-    for (let i = inViewElements.length - max - 1; i >= 0; i--) {
-      elements.push(inViewElements[i]);
-    }
-  }
-
   buildHtml (currentTime) {
     self.console.time('buildHtml');
 
@@ -589,7 +663,6 @@ class NicoCommentCss3PlayerView extends Emitter {
 
 }
 
-NicoCommentCss3PlayerView.MAX_DISPLAY_COMMENT = 40;
 /* eslint-disable */
 NicoCommentCss3PlayerView.__TPL__ = ((Config) => {
   let ownerShadowColor = Config.props['commentLayer.ownerCommentShadowColor'];

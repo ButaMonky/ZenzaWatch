@@ -32,7 +32,7 @@ export class HistorySession {
   /** Contains real comment data: internal continuation only, never a diagnostic export. */
   resumeData(){
     if(!this.#report.finishedAt)throw new HistoryError('OPTION');
-    return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),
+    return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),order:this.#store.additionalOrder(),
       cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
   }
   #verifyRefreshed(next){
@@ -77,6 +77,8 @@ export class HistorySession {
       if(this.#resume){
         const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
         if(restored.limited)throw new HistoryError('OPTION');
+        // Task207: keep the previous fetch order so applied subsets stay the same after continuing.
+        this.#store.restoreAdditionalOrder(this.#resume.order);
       }
       notify({event:'baseline'});
       const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
@@ -112,9 +114,13 @@ export class HistorySession {
           this.#report.duplicates+=added.duplicates;
           notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
           assertNotCancelled(localSignal);
-          if(added.limited||this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){
+          // A page cut by the allowance must be requested again on continuation (its rest is still unread).
+          if(added.limited){
             state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
           }
+          // Task207: a page consumed completely when the goal is reached still advances the cursor below, so a
+          // later "fetch only the missing part" does not request (re-download) this page again.
+          const reachedGoal=this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments;
           if(!summary.returnedCount){state.reason='empty_page';continue;}
           const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
           if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
@@ -125,12 +131,15 @@ export class HistorySession {
           state.nextWhen=oldest;
           if(oldest>=cursor){state.reason='cursor_stalled';continue;}
           this.#report.historyCursorProgressed=true;
+          if(reachedGoal){state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;}
           // Additional=0 is not an end condition: the first page may be entirely in baseline.
         }
       }
       if(!stopped&&states.length){
         const reasons=[...new Set(states.map(s=>s.reason))];
         this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+        // Task207: the goal was reached on a page whose cursor could not advance safely; still a completed goal.
+        if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments)this.#report.reason='comment_limit';
       }
       for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
     }catch(e){

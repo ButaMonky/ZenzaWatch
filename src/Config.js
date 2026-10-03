@@ -3,6 +3,7 @@ const PRODUCT = 'ZenzaWatch';
 import { DataStorage } from '../packages/lib/src/infra/DataStorage';
 import { buildDefaultKeyConfig } from '../packages/zenza/src/ShortcutActions';
 import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
+import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
 
 const location = {host: 'www.nicovideo.jp'};
 const navigator = {};
@@ -15,6 +16,7 @@ const window = {console: console};
 //@require ../packages/lib/src/infra/DataStorage.js
 //@require buildDefaultKeyConfig
 //@require ZenzaCommentHistorySettings
+//@require CommentDisplayBudget
 const Config = (() => {
   const DEFAULT_CONFIG = {
     debug: false,
@@ -127,6 +129,8 @@ const Config = (() => {
     commentLayerOpacity: 1.0, //
     'commentLayer.textShadowType': '', // フォントの修飾タイプ
     'commentLayer.enableSlotLayoutEmulation': false,
+    // Task 206: 同時に表示を開始できるコメント数（取得件数とは別。表示中は寿命まで消さない）
+    'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
     'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
     'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
     'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
@@ -380,6 +384,7 @@ const Config = (() => {
           return choices[name].includes(value);
         }
         if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
+        if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
         if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
         if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
           'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {

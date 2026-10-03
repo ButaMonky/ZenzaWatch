@@ -4,14 +4,22 @@ const abortError=()=>Object.assign(new Error('Comment display update superseded'
 /** Prepares detached layout data; it never resets the normal comment or NicoScript session. */
 export class CommentHistoryRenderer {
   #player;#Chat;#VM;#yield;#revision=0;#history=new Set();#deleted=new Set();
+  // Task207: display objects of history comments that a smaller applied count took off the screen. Kept (same
+  // video only) so that raising the count again reuses the very same objects (identity, nicoru state) instead of
+  // re-creating them. Released with the cache by reset() (video switch / reload) and clear() (OFF).
+  #retained=new Map();
   constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
     this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
   }
   #groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
-  reset(){this.#revision++;this.#history.clear();this.#deleted.clear();}
-  removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#revision++;}
+  reset(){this.#revision++;this.#history.clear();this.#deleted.clear();this.#retained.clear();}
+  removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#retained.delete(identity(chat));this.#revision++;}
+  /** Diagnostics for tests: number of retained (currently not applied) display objects. */
+  get retainedCount(){return this.#retained.size;}
+  /** Read-only: whether this display object came from the added history (used for display priority only). */
+  has(chat){return !!chat&&this.#history.has(chat);}
   clear(){
-    this.#revision++;
+    this.#revision++;this.#retained.clear();
     if(!this.#history.size)return;
     for(const group of this.#groups()){
       if(!group)continue;
@@ -30,7 +38,7 @@ export class CommentHistoryRenderer {
     const count=data.threads.reduce((n,t)=>n+(Array.isArray(t.comments)?t.comments.length:Infinity),0);
     if(count>20000)throw new RangeError('History display limit is 20000');
     const types=[this.#Chat.TYPE.TOP,this.#Chat.TYPE.NAKA,this.#Chat.TYPE.BOTTOM];
-    const oldByKey=new Map([...this.#history].map(c=>[identity(c),c]));
+    const oldByKey=new Map([...this.#retained.values(),...this.#history].map(c=>[identity(c),c]));
     const options=model._options||{};
     const added=[],newChats=[],seen=new Set();
     for(const thread of data.threads){
@@ -103,7 +111,10 @@ export class CommentHistoryRenderer {
           e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
           for(const m of old)m.reset();
         }
-        this.#history=new Set(extras);
+        const next=new Set(extras);
+        for(const c of this.#history)if(!next.has(c))this.#retained.set(identity(c),c);
+        for(const c of extras)this.#retained.delete(identity(c));
+        this.#history=next;
         prepared.length=0;
         this.#player._view?.refresh();model.emit('change');
         return {additionalCount:extras.length};

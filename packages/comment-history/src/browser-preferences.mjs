@@ -2,7 +2,10 @@ import {SETTINGS_SCHEMA,DEFAULT_SETTINGS} from './settings.mjs';
 import {ZenzaSettingsRepository} from './zenza-settings.mjs';
 import {HistoryError} from './core.mjs';
 
-export const HISTORY_PRESETS=Object.freeze([1000,2500,5000,10000,20000]);
+// Fetch step ("追加する件数"). Task207 adds 7,500 and 15,000; the 20,000 total maximum is unchanged.
+export const HISTORY_PRESETS=Object.freeze([1000,2500,5000,7500,10000,15000,20000]);
+// Task207: applied additional count ("適用する件数"). 0 = normal comments only while ON (not OFF).
+export const APPLIED_PRESETS=Object.freeze([0,...HISTORY_PRESETS]);
 export const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
 const EVENT='ZenzaWatch-comment-history-settings';
 

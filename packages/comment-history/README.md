@@ -10,6 +10,7 @@ The right-bottom panel and advanced-settings userscript use the same settings sc
 
 ## Behavior
 Data is applied after an acquisition batch ends. Further acquisition preserves the cursor and adds the selected quota, up to 20,000 total extras. Stop applies good partial results; OFF releases extras and retains normal comments and local edits. Switching videos invalidates old responses.
+Task207: the fetched (cached) additional comments and the applied count are separate. `setAppliedCount(n)` (0-20,000; 0 = normal comments only while ON) applies the first n of the fetch order, keeps the in-memory cache when reducing, re-applies within the cache without network, and fetches only the missing part from the saved cursor. Only OFF, video switch and reload release the cache.
 Timestamp-only paging does not prove complete historical coverage. Same-second ambiguity, malformed responses, time/request limits and errors are reported explicitly.
 Current official totals and posting metadata are not replaced by historical page counts. Comment text and authentication material are never included in the public diagnostic summary.
 

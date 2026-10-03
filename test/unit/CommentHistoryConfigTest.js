@@ -4,6 +4,7 @@ const {extract,createContext,run,loadClass} = require('../helpers/extractSource'
 const {ZenzaCommentHistorySettings:H} = require('../../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js');
 function schema(){
  const c=createContext({PRODUCT:'ZenzaWatch',navigator:{},location:{host:'www.nicovideo.jp'},localStorage:{},buildDefaultKeyConfig:()=>({}),ZenzaCommentHistorySettings:H,DataStorage:{create(defaults,options){return {default:defaults,options};}}});
+ c.CommentDisplayBudget=loadClass('packages/zenza/src/commentLayer/CommentDisplayBudget.js','CommentDisplayBudget',c); // Task 206
  run('const Config = '+extract('src/Config.js','Config','var')+';this.config=Config;',c);return c.config;
 }
 describe('Task200 shared comment-history configuration',()=>{

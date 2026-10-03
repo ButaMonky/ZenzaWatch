@@ -11,6 +11,8 @@ function createNgHarness(debug = false, params = {}) {
     ScreenFilter: {PREFIX: 'screenFilter.', PARAM_MAP: {}},
     $: target => ({addClass: name => target.classes.push(name), removeClass() {}}),
     setTimeout() {}});
+  // Task 206: _setting.js の入力処理が参照する同時表示上限の共通定義（実物）
+  c.CommentDisplayBudget = loadClass('packages/zenza/src/commentLayer/CommentDisplayBudget.js', 'CommentDisplayBudget', c);
   run(beginSection('packages/lib/src/Emitter.js'), c);
   run(beginSection('packages/zenza/src/commentLayer/NicoChatFilter.js') +
     '\nglobalThis.Filter = NicoChatFilter;', c);

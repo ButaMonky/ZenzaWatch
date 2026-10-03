@@ -4,14 +4,14 @@
 // settings.mjs sha256=72b4606304cb23877305242fd297dccba731df16c864179311289246500eb44e
 // transport.mjs sha256=84a6f36091300fa443a55637181617516b57dc629bf7edb0df109e59efbfb618
 // coordinator.mjs sha256=b517aee0841c50d3900af42fd4258eb282928c9534db41b0d0a62732fb92b253
-// layers.mjs sha256=883241825389cff8985bb19ab0e6708464353275a81f18737b053bd458a5d8ac
-// session.mjs sha256=c7c8b3bd58c962f54ef1b79a7a8ad1040c038a593a53885abb189ff6a9ead03c
+// layers.mjs sha256=ef11fb75a8d5a4fdc0ad2e4a86842f0a4a5d75356079a88f28c4741b16d1b04b
+// session.mjs sha256=3296db2613fcf5061519299879a442922417cfebc0ea3f1a0b3b95085cf0d3c2
 // zenza-context.mjs sha256=967f0b27c0ede6ab7528eaf59507f5b56effcf237c139ea47878ce79d3cbbb39
-// controller.mjs sha256=a5160e89e692eadca1377c93fc762bba983e479cadd81537610263ce26ded67c
-// renderer.mjs sha256=d49237039aa1422aad6e8ef6c75351484c234f67f50787443b834d032f5caa0e
+// controller.mjs sha256=4f2fadd41c51d4e4ce6bbe3860ba67b0afb4655f3b6ccdcbde45dcde200a9e06
+// renderer.mjs sha256=22bc0972b7ceb9940a45cf2d1893b79a04fe9b10aa56d83a9e6dda750a53b2ae
 // zenza-settings.mjs sha256=a960df22bcf1cc59df8cc4080b6a52043607e5e67f4ac552a9a5b5303ee71866
-// browser-preferences.mjs sha256=529f53857184e9d5bd19a5d72448aa89c548ec72e3a53359da59563c559000d6
-// panel.mjs sha256=65fb322750e67be997b598fdb5e74b048807d13e5b27c4a948c67aa4db3d894b
+// browser-preferences.mjs sha256=1b7249122958af10770fd059ab37b5a196606a17cfe538f5c276534bc418478f
+// panel.mjs sha256=697061fe46e6a3608c7f09cd40dccc70fdaceb045fea1a5d24ff5808cbf7173c
 //===BEGIN===
 const ZenzaCommentHistoryCore = (() => {
 'use strict';
@@ -440,6 +440,9 @@ class LayeredCommentStore {
   #normalCount=0;
   #historyCount=0;
   #overlapCount=0;
+  // Task207: keys of history entries in the order they first became additional (= fetch order, nearest to the
+  // normal comments first). Subsets for "applied additional count" are prefixes of this order, so they are stable.
+  #additionalOrder=[];
   constructor(context){this.#context=context;}
   #threadKey(t){return JSON.stringify([t.id,t.fork]);}
   #key(t,c){return JSON.stringify([this.#context.videoId,this.#context.language,t.id,t.fork,c.no]);}
@@ -472,7 +475,7 @@ class LayeredCommentStore {
           if(kind==='normal')this.#normalCount++;else this.#historyCount++;
           if(entry[kind==='normal'?'history':'normal'])this.#overlapCount++;
         }
-        if(gains)added++;
+        if(gains){added++;if(kind==='history')this.#additionalOrder.push(k);}
         entry[kind]=c;
         this.#items.set(k,entry);
       }
@@ -485,7 +488,17 @@ class LayeredCommentStore {
     for(const [key,entry] of this.#items){
       if(entry.normal)entry.history=null;else this.#items.delete(key);
     }
-    this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;
+    this.#historyMeta.clear();this.#historyCount=0;this.#overlapCount=0;this.#additionalOrder=[];
+  }
+  /** Identity keys only (no comment data). Used to carry the fetch order into a continuation session. */
+  additionalOrder(){return this.#additionalOrder.filter(k=>{const e=this.#items.get(k);return !!(e?.history&&!e.normal);});}
+  /** Reorder restored history by a previous session's order; unknown keys are ignored, missing ones keep their order. */
+  restoreAdditionalOrder(keys){
+    if(!Array.isArray(keys))return;
+    const current=new Set(this.#additionalOrder),seen=new Set(),out=[];
+    for(const k of keys)if(typeof k==='string'&&current.has(k)&&!seen.has(k)){seen.add(k);out.push(k);}
+    for(const k of this.#additionalOrder)if(!seen.has(k)){seen.add(k);out.push(k);}
+    this.#additionalOrder=out;
   }
   historySnapshot(){
     const out=new Map([...this.#historyMeta].map(([k,t])=>[k,{...t,comments:[]}]));
@@ -498,12 +511,16 @@ class LayeredCommentStore {
     return {normalCount:this.#normalCount,historyCount:this.#historyCount,overlapCount:this.#overlapCount,
       additionalCount:this.#historyCount-this.#overlapCount,unionCount:this.#items.size};
   }
-  snapshot({historyEnabled=true,historyOnly=false}={}){
+  snapshot({historyEnabled=true,historyOnly=false,historyLimit}={}){
     const out=new Map();
     if(historyEnabled)for(const [k,t] of this.#historyMeta)out.set(k,{...t,comments:[]});
     for(const [k,t] of this.#normalMeta)out.set(k,{...t,comments:[]});
-    for(const entry of this.#items.values()){
-      const c=historyOnly?(entry.normal?null:entry.history):(entry.normal??(historyEnabled?entry.history:null));
+    // Task207: limit additional history to the first N of the fetch order (undefined = all).
+    let allowed=null;
+    if(historyLimit!==undefined){integerOption(historyLimit,0,50000);allowed=new Set(this.additionalOrder().slice(0,historyLimit));}
+    for(const [key,entry] of this.#items){
+      const history=entry.history&&(!allowed||entry.normal||allowed.has(key))?entry.history:null;
+      const c=historyOnly?(entry.normal?null:history):(entry.normal??(historyEnabled?history:null));
       if(c)out.get(entry.thread).comments.push({...c,commands:[...c.commands]});
     }
     for(const t of out.values())t.comments.sort((a,b)=>a.no-b.no);
@@ -554,7 +571,7 @@ class HistorySession {
   /** Contains real comment data: internal continuation only, never a diagnostic export. */
   resumeData(){
     if(!this.#report.finishedAt)throw new HistoryError('OPTION');
-    return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),
+    return {identity:resumeIdentity(this.#context),history:this.#store.historySnapshot(),order:this.#store.additionalOrder(),
       cursors:this.#report.targetResults.map(s=>({...s})),startWhen:this.#report.startWhen};
   }
   #verifyRefreshed(next){
@@ -599,6 +616,8 @@ class HistorySession {
       if(this.#resume){
         const restored=this.#store.addHistory(this.#resume.history,this.#settings.maxAdditionalComments);
         if(restored.limited)throw new HistoryError('OPTION');
+        // Task207: keep the previous fetch order so applied subsets stay the same after continuing.
+        this.#store.restoreAdditionalOrder(this.#resume.order);
       }
       notify({event:'baseline'});
       const selected=this.#context.targets.filter(t=>t.fork==='main'||this.#settings.includeEasy&&t.fork==='easy');
@@ -634,9 +653,13 @@ class HistorySession {
           this.#report.duplicates+=added.duplicates;
           notify({event:'page',target,returnedCount:summary.returnedCount,added:added.added,oldestUnixSeconds:summary.oldestUnixSeconds});
           assertNotCancelled(localSignal);
-          if(added.limited||this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments){
+          // A page cut by the allowance must be requested again on continuation (its rest is still unread).
+          if(added.limited){
             state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;
           }
+          // Task207: a page consumed completely when the goal is reached still advances the cursor below, so a
+          // later "fetch only the missing part" does not request (re-download) this page again.
+          const reachedGoal=this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments;
           if(!summary.returnedCount){state.reason='empty_page';continue;}
           const oldest=threads[0].comments.reduce((min,c)=>Math.min(min,Date.parse(c.postedAt)/1000),Infinity);
           if(!Number.isInteger(oldest)){state.reason='subsecond_boundary_unverified';continue;}
@@ -647,12 +670,15 @@ class HistorySession {
           state.nextWhen=oldest;
           if(oldest>=cursor){state.reason='cursor_stalled';continue;}
           this.#report.historyCursorProgressed=true;
+          if(reachedGoal){state.reason='comment_limit';this.#report.reason=state.reason;stopped=true;break;}
           // Additional=0 is not an end condition: the first page may be entirely in baseline.
         }
       }
       if(!stopped&&states.length){
         const reasons=[...new Set(states.map(s=>s.reason))];
         this.#report.reason=reasons.length===1?reasons[0]:'target_boundaries';
+        // Task207: the goal was reached on a page whose cursor could not advance safely; still a completed goal.
+        if(this.#store.counts().additionalCount>=this.#settings.maxAdditionalComments)this.#report.reason='comment_limit';
       }
       for(const state of states)if(state.reason===null)state.reason=this.#report.reason;
     }catch(e){
@@ -757,11 +783,21 @@ const {normalizeSettings} = modules[1];
 
 
 
+const MAX_ADDITIONAL=20000;
+/** Task207 terms (keep them distinct; Task206's simultaneous display limit is unrelated):
+ *  goal              = fetch target: how many additional comments the network fetch aims for.
+ *  cachedAdditional  = fetched + de-duplicated additional comments kept in memory for the current video
+ *                      (additionalCount is the same number, kept for compatibility).
+ *  appliedTarget     = requested applied additional count (0 = normal comments only, the feature stays ON).
+ *  appliedAdditional = additional comments actually applied to Zenza (<= cachedAdditional).
+ */
+const RESET={phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
+
 /** One player's lifecycle. It owns no DOM and never controls playback or posting. */
 class CommentHistoryController {
   #preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
   #epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
-  #state={enabled:false,phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false};
+  #state={enabled:false,videoId:null,normalCount:0,...RESET};
   constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
     if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
     this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
@@ -769,13 +805,18 @@ class CommentHistoryController {
     this.#off=preferences.subscribe(snapshot=>{
       if(this.#disposed)return;
       const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
-      if(!this.#state.enabled){this.#cancel(true);this.#emit({phase:'idle',additionalCount:0,appliedAdditional:0,pages:0,goal:0,reason:null,canContinue:false});}
+      // OFF is the explicit release: the in-memory cache is discarded (existing Task200 rule).
+      if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
       else {this.#emit({});if(!before&&this.#seed)void this.start();}
     });
   }
   get state(){return JSON.parse(JSON.stringify(this.#state));}
   subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
-  #emit(changes){Object.assign(this.#state,changes);for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}}
+  #emit(changes){
+    Object.assign(this.#state,changes);
+    if('additionalCount' in changes)this.#state.cachedAdditional=this.#state.additionalCount;
+    for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
+  }
   #cancel(clear){
     this.#epoch++;this.#operation?.abort();this.#operation=null;
     this.#session?.removeHistory();this.#session=null;this.#report=null;
@@ -783,7 +824,7 @@ class CommentHistoryController {
   }
   invalidate(){
     this.#cancel(true);this.#seed=null;
-    this.#emit({phase:'idle',videoId:null,goal:0,additionalCount:0,appliedAdditional:0,normalCount:0,pages:0,reason:null,canContinue:false});
+    this.#emit({...RESET,videoId:null,normalCount:0});
   }
   async normalReady({videoInfo,result,generation}={}){
     if(this.#disposed)return;
@@ -803,22 +844,44 @@ class CommentHistoryController {
   whenIdle(){return this.#promise;}
   more(){return this.start({more:true});}
   restart(){return this.start({restart:true});}
-  start({more=false,restart=false}={}){
+  /**
+   * Task207: change how many cached additional comments are applied. Reducing (including to 0) never discards
+   * the cache; a count within the cache is re-applied without network; only the missing part is fetched.
+   */
+  setAppliedCount(value){
+    const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
+    if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
+    if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+    if(this.#operation)return this.#promise;
+    if(!this.#session||!this.#report){
+      if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
+      return this.start({target:n});
+    }
+    const cached=this.#report.counts.additionalCount;
+    if(n>cached&&this.#report.resumeAvailable&&cached<MAX_ADDITIONAL)return this.start({more:true,target:n});
+    return this.start({displayOnly:true,target:n});
+  }
+  start({more=false,restart=false,target,displayOnly=false}={}){
     if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
     if(this.#operation)return this.#promise;
     let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
-    if(more&&this.#state.additionalCount>=20000&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
+    if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
+    if(more&&target===undefined&&this.#state.additionalCount>=MAX_ADDITIONAL&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
     if(more&&this.#report&&!this.#report.resumeAvailable&&this.#state.phase!=='render-error')return Promise.resolve(this.state);
-    const applyOnly=this.#state.phase==='render-error'&&!restart;
+    const retryRender=this.#state.phase==='render-error'&&!restart&&target===undefined;
+    const applyOnly=displayOnly||retryRender;
     const continuing=!!(more&&!restart&&this.#session&&this.#report);
     const resume=continuing?this.#session.resumeData():undefined;
     if(continuing)settings.includeEasy=this.#report.settings.includeEasy;
     const oldGoal=this.#state.goal;
-    const goal=applyOnly?oldGoal:continuing?Math.min(20000,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+    const goal=applyOnly?oldGoal:
+      target!==undefined?Math.min(MAX_ADDITIONAL,target):
+      continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
+    const appliedTarget=target!==undefined?target:retryRender?this.#state.appliedTarget:goal;
     const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
     const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
     const seed=this.#seed;
-    this.#emit({phase:applyOnly?'applying':'queued',goal,reason:null,canContinue:false});
+    this.#emit({phase:applyOnly?'applying':'queued',goal,appliedTarget,reason:applyOnly?this.#state.reason:null,canContinue:false});
     this.#promise=(async()=>{
       try{
         if(!applyOnly){
@@ -837,18 +900,20 @@ class CommentHistoryController {
         }
         if(!current()||!this.#report||!this.#session)return;
         const report=this.#report;
-        this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,pages:report.pages,network:report.network,waitingMs:0});
+        this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
         let applied;
-        try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true})),{isCurrent:current,signal:operation.signal});}
+        // Only the first appliedTarget of the fetch order are applied; the rest stays cached in the session.
+        const limit=Math.min(appliedTarget,report.counts.additionalCount);
+        try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:current,signal:operation.signal});}
         catch{
           if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
           return;
         }
         if(!current())return;
         const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
-        this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??report.counts.additionalCount,
-          canContinue:report.resumeAvailable&&report.counts.additionalCount<20000});
-        if(partial&&report.reason!=='cancelled')this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+        this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??limit,
+          canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
+        if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
       }catch{
         if(this.#epoch===epoch&&this.#state.enabled){
           this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
@@ -872,14 +937,22 @@ const abortError=()=>Object.assign(new Error('Comment display update superseded'
 /** Prepares detached layout data; it never resets the normal comment or NicoScript session. */
 class CommentHistoryRenderer {
   #player;#Chat;#VM;#yield;#revision=0;#history=new Set();#deleted=new Set();
+  // Task207: display objects of history comments that a smaller applied count took off the screen. Kept (same
+  // video only) so that raising the count again reuses the very same objects (identity, nicoru state) instead of
+  // re-creating them. Released with the cache by reset() (video switch / reload) and clear() (OFF).
+  #retained=new Map();
   constructor({player,Chat,ChatViewModel,yieldControl=()=>new Promise(r=>setTimeout(r,0))}){
     this.#player=player;this.#Chat=Chat;this.#VM=ChatViewModel;this.#yield=yieldControl;
   }
   #groups(){const m=this.#player._model;return [m.topGroup,m.nakaGroup,m.bottomGroup];}
-  reset(){this.#revision++;this.#history.clear();this.#deleted.clear();}
-  removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#revision++;}
+  reset(){this.#revision++;this.#history.clear();this.#deleted.clear();this.#retained.clear();}
+  removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#retained.delete(identity(chat));this.#revision++;}
+  /** Diagnostics for tests: number of retained (currently not applied) display objects. */
+  get retainedCount(){return this.#retained.size;}
+  /** Read-only: whether this display object came from the added history (used for display priority only). */
+  has(chat){return !!chat&&this.#history.has(chat);}
   clear(){
-    this.#revision++;
+    this.#revision++;this.#retained.clear();
     if(!this.#history.size)return;
     for(const group of this.#groups()){
       if(!group)continue;
@@ -898,7 +971,7 @@ class CommentHistoryRenderer {
     const count=data.threads.reduce((n,t)=>n+(Array.isArray(t.comments)?t.comments.length:Infinity),0);
     if(count>20000)throw new RangeError('History display limit is 20000');
     const types=[this.#Chat.TYPE.TOP,this.#Chat.TYPE.NAKA,this.#Chat.TYPE.BOTTOM];
-    const oldByKey=new Map([...this.#history].map(c=>[identity(c),c]));
+    const oldByKey=new Map([...this.#retained.values(),...this.#history].map(c=>[identity(c),c]));
     const options=model._options||{};
     const added=[],newChats=[],seen=new Set();
     for(const thread of data.threads){
@@ -971,7 +1044,10 @@ class CommentHistoryRenderer {
           e.vm._lastUpdate++;e.vm._members=e.members;e.vm._vSortedMembers=e.sorted;e.vm._maxInViewDuration=e.maxDuration;
           for(const m of old)m.reset();
         }
-        this.#history=new Set(extras);
+        const next=new Set(extras);
+        for(const c of this.#history)if(!next.has(c))this.#retained.set(identity(c),c);
+        for(const c of extras)this.#retained.delete(identity(c));
+        this.#history=next;
         prepared.length=0;
         this.#player._view?.refresh();model.emit('change');
         return {additionalCount:extras.length};
@@ -1117,7 +1193,10 @@ const {HistoryError} = modules[0];
 
 
 
-const HISTORY_PRESETS=Object.freeze([1000,2500,5000,10000,20000]);
+// Fetch step ("追加する件数"). Task207 adds 7,500 and 15,000; the 20,000 total maximum is unchanged.
+const HISTORY_PRESETS=Object.freeze([1000,2500,5000,7500,10000,15000,20000]);
+// Task207: applied additional count ("適用する件数"). 0 = normal comments only while ON (not OFF).
+const APPLIED_PRESETS=Object.freeze([0,...HISTORY_PRESETS]);
 const HISTORY_PREFERENCE_DEFAULTS=Object.freeze({...Object.fromEntries(SETTINGS_SCHEMA.map(d=>[d.key,d.default])),'commentHistory.enabled':false});
 const EVENT='ZenzaWatch-comment-history-settings';
 
@@ -1182,12 +1261,12 @@ function createBrowserHistoryPreferences({window:win=globalThis.window,config,st
   };
 }
 
-return Object.freeze({HISTORY_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
+return Object.freeze({HISTORY_PRESETS,APPLIED_PRESETS,HISTORY_PREFERENCE_DEFAULTS,createBrowserHistoryPreferences});
 })();
 // Module: panel.mjs
 modules[11] = (() => {
 const {SETTINGS_SCHEMA} = modules[1];
-const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[10];
+const {HISTORY_PRESETS,APPLIED_PRESETS,createBrowserHistoryPreferences} = modules[10];
 const {CommentHistoryController} = modules[7];
 
 
@@ -1252,11 +1331,13 @@ class CommentHistoryPanel {
   _init(){
     if(this.view)return;
     const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel zen-family';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
-    el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>反映済みの追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+    el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><div class="ch-action-row ch-apply-row"><label>適用する件数<select data-ch-applied-target aria-label="適用する件数">${APPLIED_PRESETS.map(n=>`<option value="${n}">${n?fmt(n)+' 件':'0 件（増量前）'}</option>`).join('')}</select></label><span class="ch-note" data-ch-apply-summary></span></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。適用する件数を減らしても取得済みの分は保持し、戻すときは再取得しません。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>取得済みの追加分（保持中）</span><span data-ch-cached></span><span>適用中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
     const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
     el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
     el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
     el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
+    // Task207: applied additional count. Not a fetch setting and not Task206's simultaneous display limit.
+    el.querySelector('[data-ch-applied-target]').onchange=e=>safe(()=>{void this.controller.setAppliedCount(Number(e.target.value)).catch?.(()=>{});});
     el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
     el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
     el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
@@ -1281,7 +1362,18 @@ class CommentHistoryPanel {
     const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
     q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
     if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
-    q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
+    // Task207: applied additional count (separate from the fetch step above and from Task206's display limit).
+    const appliedSelect=q('[data-ch-applied-target]');appliedSelect.querySelector('[data-ch-custom]')?.remove();
+    const appliedTarget=Number(state.appliedTarget)||0;
+    if(!APPLIED_PRESETS.includes(appliedTarget)){
+      const option=this.doc.createElement('option');option.dataset.chCustom='';option.value=String(appliedTarget);option.textContent=fmt(appliedTarget)+' 件';appliedSelect.append(option);
+    }
+    appliedSelect.value=String(appliedTarget);
+    appliedSelect.disabled=!state.enabled||running||!state.cacheAvailable||p.valid===false;
+    q('[data-ch-apply-summary]').textContent=state.cacheAvailable?`取得済み ${fmt(state.cachedAdditional)} 件 · 適用中 ${fmt(state.appliedAdditional)} 件`:'';
+    if(state.cacheAvailable&&!running&&['ready','partial'].includes(state.phase)&&state.appliedAdditional<state.cachedAdditional)
+      q('[data-ch-status]').textContent+=state.appliedAdditional===0?'（増量前の表示・取得済み分は保持）':'（一部を適用中・取得済み分は保持）';
+    q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-cached]').textContent=fmt(state.cachedAdditional);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
     const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
     button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
   }
@@ -1354,6 +1446,7 @@ mountHistorySettings: modules[11].mountHistorySettings,
 CommentHistoryPanel: modules[11].CommentHistoryPanel,
 createHistoryFeature: modules[11].createHistoryFeature,
 HISTORY_PRESETS: modules[10].HISTORY_PRESETS,
+APPLIED_PRESETS: modules[10].APPLIED_PRESETS,
 HISTORY_PREFERENCE_DEFAULTS: modules[10].HISTORY_PREFERENCE_DEFAULTS,
 createBrowserHistoryPreferences: modules[10].createBrowserHistoryPreferences,
 });

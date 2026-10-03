@@ -28,3 +28,39 @@ test('applies 20000 history comments without the legacy 10000 input truncation',
 test('rejects more than 20000 extras, before changing visible groups',async()=>{const h=setup();await assert.rejects(()=>h.renderer.apply(h.page(Array.from({length:20001},(_,i)=>i+2))));assert.deepEqual(h.groups[1]._members,[h.normal]);});
 test('continuation preserves the already displayed history object and its nicoru state',async()=>{const h=setup();await h.renderer.apply(h.page([2]));const old=h.groups[1]._members[1];old.nicoru=8;await h.renderer.apply(h.page([2,3]));assert.strictEqual(h.groups[1]._members[1],old);assert.equal(old.nicoru,8);});
 test('invalid layout id/order is rejected atomically',async()=>{const h=setup();h.vms[1]._layoutWorker.post=async({params:p})=>({...p,members:p.members.map(x=>({...x,id:999}))});await assert.rejects(()=>h.renderer.apply(h.page([2])));assert.deepEqual(h.groups[1]._members,[h.normal]);});
+test('Task206: has() reports only added history objects, before the view refresh, and forgets them on OFF/reset/removal',async()=>{
+ const h=setup();let seenAtRefresh=null;
+ h.player._view.refresh=function(){this.count=(this.count||0)+1;seenAtRefresh=h.groups[1]._members.map(c=>h.renderer.has(c));};
+ assert.equal(h.renderer.has(h.normal),false);assert.equal(h.renderer.has(undefined),false);
+ await h.renderer.apply(h.page([2,3]));
+ assert.deepEqual(seenAtRefresh,[false,true,true],'classification is ready when the view re-admits comments');
+ const [,a,b]=h.groups[1]._members;
+ h.renderer.removed(a);assert.equal(h.renderer.has(a),false);assert.equal(h.renderer.has(b),true);
+ h.renderer.clear();assert.equal(h.renderer.has(b),false);
+ await h.renderer.apply(h.page([4]));const c=h.groups[1]._members.find(x=>x.no===4);assert.equal(h.renderer.has(c),true);
+ h.renderer.reset();assert.equal(h.renderer.has(c),false);
+});
+test('Task207: 15000 -> 7500 -> 15000 keeps the same objects (first 7,500 untouched, the rest reused), no duplicates',async()=>{
+ const h=setup();const all=Array.from({length:15000},(_,i)=>i+2),half=all.slice(0,7500);
+ await h.renderer.apply(h.page(all));const first=h.groups[1]._members.slice(1);assert.equal(first.length,15000);
+ first[0].nicoru=3;first[14999].nicoru=4;
+ await h.renderer.apply(h.page(half));let members=h.groups[1]._members.slice(1);
+ assert.equal(members.length,7500);for(let i=0;i<7500;i++)assert.strictEqual(members[i],first[i]);
+ assert.equal(h.renderer.retainedCount,7500);
+ await h.renderer.apply(h.page([]));assert.deepEqual(h.groups[1]._members,[h.normal],'applied 0 = normal comments only');
+ assert.equal(h.renderer.retainedCount,15000);
+ await h.renderer.apply(h.page(all));members=h.groups[1]._members.slice(1);
+ assert.equal(members.length,15000);assert.equal(new Set(members).size,15000);
+ const ids=members.map(c=>`${c.thread}:${c.fork}:${c.no}`);assert.equal(new Set(ids).size,15000,'no duplicate comment identity');
+ for(let i=0;i<15000;i++)assert.strictEqual(members[i],first[i]);
+ assert.equal(first[0].nicoru,3);assert.equal(first[14999].nicoru,4);assert.equal(h.renderer.retainedCount,0);
+ h.renderer.clear();assert.equal(h.renderer.retainedCount,0);
+ await h.renderer.apply(h.page(half));h.renderer.reset();assert.equal(h.renderer.retainedCount,0);
+});
+test('Task207: retained objects are released on OFF and video switch and never revive deleted comments',async()=>{
+ const h=setup();await h.renderer.apply(h.page([2,3,4]));const [,a]=h.groups[1]._members;
+ await h.renderer.apply(h.page([3]));assert.equal(h.renderer.retainedCount,2);
+ h.renderer.removed(a);assert.equal(h.renderer.retainedCount,1);
+ await h.renderer.apply(h.page([2,3,4]));assert(!h.groups[1]._members.some(c=>c.no===2),'deleted stays deleted');
+ h.renderer.clear();assert.equal(h.renderer.retainedCount,0);
+});

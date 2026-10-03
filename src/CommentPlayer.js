@@ -42,6 +42,12 @@ class NicoCommentPlayer extends Emitter {
       show: params.showComment,
       opacity: _.isNumber(params.commentOpacity) ? params.commentOpacity : 1.0
     });
+    // Task 206: 同時表示上限の優先度で「増量で追加した過去コメント」を判別する。
+    // NicoChatへフラグを足さず、CommentHistoryRendererが保持している集合を参照する。
+    this._view.setHistoryClassifier(viewModel => {
+      const renderer = this._commentHistoryRenderer;
+      return !!(renderer && renderer.has(viewModel && viewModel._nicoChat));
+    });
 
     const onCommentChange = _.throttle(this._onCommentChange.bind(this), 1000);
     this._model.on('change', onCommentChange);

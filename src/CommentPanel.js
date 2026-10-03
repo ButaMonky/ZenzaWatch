@@ -1478,7 +1478,7 @@ class CommentPanelView extends Emitter {
     global.emitter.emitAsync('hideHover');
   }
   _onThreadInfo(threadInfo) {
-    this._timeMachineView.update(threadInfo);
+    this._timeMachineView.update(threadInfo, {videoPostedAt: this.commentPanel?._player?._videoInfo?.postedAt});
   }
   _onCommentPanelStatusUpdate() {
     const commentPanel = this.commentPanel;
@@ -1859,9 +1859,10 @@ class TimeMachineView extends BaseViewComponent {
     this._elm.cancel.addEventListener('click', this._onCancel.bind(this));
   }
 
-  update(threadInfo) {
-    //window.console.info('TimeMachineView update', threadInfo);
-    this._videoPostTime = threadInfo.threadId * 1000;
+  update(threadInfo, {videoPostedAt} = {}) {
+    // Thread IDs are opaque: neither a newer 10-digit ID nor a long ID is the video date.
+    const published = typeof videoPostedAt === 'string' ? Date.parse(videoPostedAt) : NaN;
+    this._videoPostTime = Number.isFinite(published) && published > 0 && published <= Date.now() ? published : null;
     const isWaybackMode = threadInfo.isWaybackMode;
     this.setState({isWaybackMode, isSelecting: false});
 
@@ -1885,7 +1886,8 @@ class TimeMachineView extends BaseViewComponent {
     const now = this._toTDate(Date.now());
     input.setAttribute('max', now);
     input.setAttribute('value', this._toTDate(this._currentTimestamp));
-    input.setAttribute('min', this._toTDate(this._videoPostTime));
+    if (Number.isFinite(this._videoPostTime)) { input.setAttribute('min', this._toTDate(this._videoPostTime)); }
+    else { input.removeAttribute('min'); }
     this.setState({isSelecting: true});
     window.setTimeout(() => {
       input.focus();
@@ -1946,9 +1948,9 @@ class TimeMachineView extends BaseViewComponent {
     if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
       return;
     }
-    const dt = new Date(val);
-    const when =
-      Math.floor(Math.max(dt.getTime(), this._videoPostTime) / 1000);
+    const time = new Date(val).getTime();
+    if (!Number.isFinite(time) || time <= 0 || time > Date.now()) { return; }
+    const when = Math.floor(Math.max(time, this._videoPostTime || 0) / 1000);
     this.emit('command', 'reloadComment', {when});
     this.closeSelect();
   }
@@ -1958,7 +1960,7 @@ class TimeMachineView extends BaseViewComponent {
   }
 
   _onBack() {
-    this.setState({isWaybackMode: false});
+    // Leave the successful historical label intact until the latest load succeeds.
     this.closeSelect();
     this.emit('command', 'reloadComment', {when: 0});
   }
@@ -2094,7 +2096,7 @@ TimeMachineView._shadow_ = (`
       <div class="reloadButton command" data-command="reloadComment" data-param="0" title="コメントのリロード"><span class="icon">&#8635;</span>リロード</div>
       <div class="backToTheFuture" title="Back To The Future">&#11152; Back</div>
       <div class="inputContainer">
-        <input type="datetime-local" class="dateTimeInput">
+        <input type="datetime-local" class="dateTimeInput" step="1">
         <div class="submitContainer">
         <div class="dateTimeSubmit">G&nbsp;&nbsp;O</div>
         <div class="dateTimeCancel">Cancel</div>

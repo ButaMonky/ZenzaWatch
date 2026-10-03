@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.135-task207
+// @version        2.7.137-task209
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-03 11:28Z
+// build: 2026-10-03 14:08Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.135-task207';
+    var VER = '2.7.137-task209';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-03 11:28Z';
+    var BUILD = '2026-10-03 14:08Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -12296,8 +12296,12 @@ const {ThreadLoader} = (() => {
 			}
 			if (lastError) {
 				window.console.error('loadComment fail finally: ', logSafe.redact(lastError));
+				const failure = lastError.result || lastError;
+				const status = Number(failure && failure.status);
+				const code = typeof failure?.errorCode === 'string' && /^[A-Z0-9_]{1,60}$/.test(failure.errorCode) ? failure.errorCode : '';
+				const detail = [Number.isInteger(status) && status >= 100 && status <= 599 ? 'HTTP ' + status : '', code].filter(Boolean).join(' / ');
 				throw {
-					message: 'コメントサーバーの通信失敗',
+					message: msgInfo.when > 0 ? '過去ログの取得に失敗しました' + (detail ? '（' + detail + '）' : '') : 'コメントサーバーの通信失敗',
 					result: lastError.result
 				};
 			}
@@ -28166,7 +28170,7 @@ class CommentPanelView extends Emitter {
 		global.emitter.emitAsync('hideHover');
 	}
 	_onThreadInfo(threadInfo) {
-		this._timeMachineView.update(threadInfo);
+		this._timeMachineView.update(threadInfo, {videoPostedAt: this.commentPanel?._player?._videoInfo?.postedAt});
 	}
 	_onCommentPanelStatusUpdate() {
 		const commentPanel = this.commentPanel;
@@ -28510,8 +28514,9 @@ class TimeMachineView extends BaseViewComponent {
 		this._elm.submit.addEventListener('click', this._onSubmit.bind(this));
 		this._elm.cancel.addEventListener('click', this._onCancel.bind(this));
 	}
-	update(threadInfo) {
-		this._videoPostTime = threadInfo.threadId * 1000;
+	update(threadInfo, {videoPostedAt} = {}) {
+		const published = typeof videoPostedAt === 'string' ? Date.parse(videoPostedAt) : NaN;
+		this._videoPostTime = Number.isFinite(published) && published > 0 && published <= Date.now() ? published : null;
 		const isWaybackMode = threadInfo.isWaybackMode;
 		this.setState({isWaybackMode, isSelecting: false});
 		if (isWaybackMode) {
@@ -28532,7 +28537,8 @@ class TimeMachineView extends BaseViewComponent {
 		const now = this._toTDate(Date.now());
 		input.setAttribute('max', now);
 		input.setAttribute('value', this._toTDate(this._currentTimestamp));
-		input.setAttribute('min', this._toTDate(this._videoPostTime));
+		if (Number.isFinite(this._videoPostTime)) { input.setAttribute('min', this._toTDate(this._videoPostTime)); }
+		else { input.removeAttribute('min'); }
 		this.setState({isSelecting: true});
 		window.setTimeout(() => {
 			input.focus();
@@ -28585,9 +28591,9 @@ class TimeMachineView extends BaseViewComponent {
 		if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
 			return;
 		}
-		const dt = new Date(val);
-		const when =
-			Math.floor(Math.max(dt.getTime(), this._videoPostTime) / 1000);
+		const time = new Date(val).getTime();
+		if (!Number.isFinite(time) || time <= 0 || time > Date.now()) { return; }
+		const when = Math.floor(Math.max(time, this._videoPostTime || 0) / 1000);
 		this.emit('command', 'reloadComment', {when});
 		this.closeSelect();
 	}
@@ -28595,7 +28601,6 @@ class TimeMachineView extends BaseViewComponent {
 		this.closeSelect();
 	}
 	_onBack() {
-		this.setState({isWaybackMode: false});
 		this.closeSelect();
 		this.emit('command', 'reloadComment', {when: 0});
 	}
@@ -28723,7 +28728,7 @@ TimeMachineView._shadow_ = (`
 			<div class="reloadButton command" data-command="reloadComment" data-param="0" title="コメントのリロード"><span class="icon">&#8635;</span>リロード</div>
 			<div class="backToTheFuture" title="Back To The Future">&#11152; Back</div>
 			<div class="inputContainer">
-				<input type="datetime-local" class="dateTimeInput">
+				<input type="datetime-local" class="dateTimeInput" step="1">
 				<div class="submitContainer">
 				<div class="dateTimeSubmit">G&nbsp;&nbsp;O</div>
 				<div class="dateTimeCancel">Cancel</div>
@@ -33879,9 +33884,6 @@ class NicoVideoPlayerDialog extends Emitter {
 			case 'playlistSetCommonsTree':
 				this._onPlaylistSetCommonsTree();
 				break;
-			case 'commonsTreeExport':
-				this._onCommonsTreeExport();
-				break;
 			case 'playNextVideo':
 				this.playNextVideo();
 				break;
@@ -34401,7 +34403,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		NicoVideoPlayerDialog.mergeCommonsTreeReport(accum, report, watchIds);
 		this._commonsTreeLastResult = NicoVideoPlayerDialog.buildCommonsTreeResult(accum);
 		const overflowNote = overflow.length ?
-			`／プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加（「親作品・子作品の一覧を保存」で全件を保存できます）` : '';
+			`／プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加` : '';
 		const existingNote = report.existing ? `／${report.existing}件は既にプレイリストにあります` : '';
 		const pending = added > 0 ? '。表示情報を補完しています' : '';
 		if (added === 0 && !overflow.length) {
@@ -34508,20 +34510,6 @@ class NicoVideoPlayerDialog extends Emitter {
 		this.execCommand('notify', complete ?
 			`親作品・子作品の表示情報を補完しました（${applied}件。詳細は表示した項目から順に取得します）` :
 			`親作品・子作品の表示情報の一部を取得できませんでした（動画は追加済み。表示した項目から詳細を取得します）`);
-	}
-	_onCommonsTreeExport() {
-		const r = this._commonsTreeLastResult;
-		if (!r) {
-			return this.execCommand('alert', '保存できる親作品・子作品の取得結果がありません（先に「親作品・子作品をプレイリストに追加」を実行してください）');
-		}
-		const data = JSON.stringify({format: 'zenza-commons-tree-1', ...r}, null, 2);
-		const blob = new Blob([data], {type: 'application/json'});
-		const url = window.URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		Object.assign(a, {download: `${r.videoId}.commons-tree.json`, rel: 'noopener', href: url});
-		document.body.append(a);
-		a.click();
-		window.setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 1000);
 	}
 	_onPlaylistStatusUpdate() {
 		let playlist = this._playlist;
@@ -34928,10 +34916,13 @@ class NicoVideoPlayerDialog extends Emitter {
 	}
 	reloadComment(param = {}) {
 		const msgInfo = Object.assign({}, this._videoInfo.msgInfo);
-		if (typeof param.when === 'number') {
+		if (param && Object.prototype.hasOwnProperty.call(param, 'when')) {
+			if (!Number.isSafeInteger(param.when) || param.when < 0 || param.when > Math.floor(Date.now() / 1000)) {
+				return this.execCommand('alert', '過去ログの日時が不正です。日時を選び直してください。');
+			}
 			msgInfo.when = param.when;
 		}
-		this.loadComment(msgInfo);
+		return this.loadComment(msgInfo);
 	}
 	_setVideoTimer(func, ms) {
 		const requestId = this._requestId;
@@ -43205,10 +43196,6 @@ RelatedInfoMenu._shadow_ = (`
 					<li class="parentVideoMenu">
 						<span class="command"
 							data-command="playlistSetCommonsTree">親作品・子作品をプレイリストに追加</span>
-					</li>
-					<li class="parentVideoMenu">
-						<span class="command"
-							data-command="commonsTreeExport">親作品・子作品の一覧を保存（JSON）</span>
 					</li>
 					<li class="copyVideoWatchUrlMenu">
 						<span class="copyVideoWatchUrlLink command"

@@ -343,8 +343,12 @@ const {ThreadLoader} = (() => {
 
       if (lastError) {
         window.console.error('loadComment fail finally: ', logSafe.redact(lastError));
+        const failure = lastError.result || lastError;
+        const status = Number(failure && failure.status);
+        const code = typeof failure?.errorCode === 'string' && /^[A-Z0-9_]{1,60}$/.test(failure.errorCode) ? failure.errorCode : '';
+        const detail = [Number.isInteger(status) && status >= 100 && status <= 599 ? 'HTTP ' + status : '', code].filter(Boolean).join(' / ');
         throw {
-          message: 'コメントサーバーの通信失敗',
+          message: msgInfo.when > 0 ? '過去ログの取得に失敗しました' + (detail ? '（' + detail + '）' : '') : 'コメントサーバーの通信失敗',
           result: lastError.result
         };
       }

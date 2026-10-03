@@ -4661,10 +4661,6 @@ RelatedInfoMenu._shadow_ = (`
             <span class="command"
               data-command="playlistSetCommonsTree">親作品・子作品をプレイリストに追加</span>
           </li>
-          <li class="parentVideoMenu">
-            <span class="command"
-              data-command="commonsTreeExport">親作品・子作品の一覧を保存（JSON）</span>
-          </li>
           <li class="copyVideoWatchUrlMenu">
             <span class="copyVideoWatchUrlLink command"
               rel="noopener" data-command="copy-video-watch-url">動画URLをコピー</span>

@@ -100,7 +100,7 @@ describe('Task197 one operation fetches the whole parent/child range', () => {
     assert((src.match(/this\._abortCommonsTreeJob\(\);\s+\/\/ Task197/g) || []).length >= 2, 'wired into video switch and close');
   });
 
-  it('overflow beyond the playlist capacity is reported and kept for the JSON export', async () => {
+  it('overflow beyond the playlist capacity is reported without offering the removed export', async () => {
     const f = realLoader(badApple);
     const s = dialog(f.loader, {appendResult: (ids, options) => {
       Object.assign(options.report, {existing: 3, overflow: ids.slice(100), capacity: 10000});
@@ -109,7 +109,7 @@ describe('Task197 one operation fetches the whole parent/child range', () => {
     await s.d._onPlaylistSetCommonsTree();
     await flush(30);
     const msg = s.notes.find(n => n.includes('プレイリストに97件追加しました'));
-    assert(msg && msg.includes('上限（10000件）のため897件は未追加') && msg.includes('一覧を保存'), s.notes.join('|'));
+    assert(msg && msg.includes('上限（10000件）のため897件は未追加') && !msg.includes('一覧を保存'), s.notes.join('|'));
     assert(!msg.includes('全件追加'), 'not reported as all added');
     assert.strictEqual(s.d._commonsTreeLastResult.overflow.length, 897);
   });
@@ -127,10 +127,13 @@ describe('Task197 one operation fetches the whole parent/child range', () => {
     assert.deepStrictEqual(point, {videoId: 'sm8628149', requestId: 'r1', parents: null, children: 600});
   });
 
-  it('the export command and menu entry exist', () => {
+  it('the rejected export is absent while related-tree actions remain', () => {
     const panel = fs.readFileSync(path.join(__dirname, '../../src/VideoInfoPanel.js'), 'utf-8');
-    assert(panel.includes('data-command="commonsTreeExport"'));
+    assert(!panel.includes('data-command="commonsTreeExport"'));
+    assert(panel.includes('data-command="playlistSetCommonsTree"'));
+    assert(panel.includes('data-command="open-parent-video"'));
     const src = fs.readFileSync(path.join(__dirname, '../../src/NicoVideoPlayerDialog.js'), 'utf-8');
-    assert(src.includes("case 'commonsTreeExport':"));
+    assert(!src.includes("case 'commonsTreeExport':"));
+    assert(!src.includes('_onCommonsTreeExport()'));
   });
 });

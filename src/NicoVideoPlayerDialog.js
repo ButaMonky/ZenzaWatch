@@ -2562,9 +2562,6 @@ class NicoVideoPlayerDialog extends Emitter {
       case 'playlistSetCommonsTree':
         this._onPlaylistSetCommonsTree();
         break;
-      case 'commonsTreeExport':
-        this._onCommonsTreeExport();
-        break;
       case 'playNextVideo':
         this.playNextVideo();
         break;
@@ -3175,7 +3172,7 @@ class NicoVideoPlayerDialog extends Emitter {
     NicoVideoPlayerDialog.mergeCommonsTreeReport(accum, report, watchIds);
     this._commonsTreeLastResult = NicoVideoPlayerDialog.buildCommonsTreeResult(accum);
     const overflowNote = overflow.length ?
-      `／プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加（「親作品・子作品の一覧を保存」で全件を保存できます）` : '';
+      `／プレイリストの上限（${report.capacity}件）のため${overflow.length}件は未追加` : '';
     const existingNote = report.existing ? `／${report.existing}件は既にプレイリストにあります` : '';
     const pending = added > 0 ? '。表示情報を補完しています' : '';
     if (added === 0 && !overflow.length) {
@@ -3295,21 +3292,6 @@ class NicoVideoPlayerDialog extends Emitter {
     this.execCommand('notify', complete ?
       `親作品・子作品の表示情報を補完しました（${applied}件。詳細は表示した項目から順に取得します）` :
       `親作品・子作品の表示情報の一部を取得できませんでした（動画は追加済み。表示した項目から詳細を取得します）`);
-  }
-  // Task197: save the last parent/child result as JSON (all IDs, including overflow)
-  _onCommonsTreeExport() {
-    const r = this._commonsTreeLastResult;
-    if (!r) {
-      return this.execCommand('alert', '保存できる親作品・子作品の取得結果がありません（先に「親作品・子作品をプレイリストに追加」を実行してください）');
-    }
-    const data = JSON.stringify({format: 'zenza-commons-tree-1', ...r}, null, 2);
-    const blob = new Blob([data], {type: 'application/json'});
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    Object.assign(a, {download: `${r.videoId}.commons-tree.json`, rel: 'noopener', href: url});
-    document.body.append(a);
-    a.click();
-    window.setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 1000);
   }
   _onPlaylistStatusUpdate() {
     let playlist = this._playlist;
@@ -3761,10 +3743,13 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   reloadComment(param = {}) {
     const msgInfo = Object.assign({}, this._videoInfo.msgInfo);
-    if (typeof param.when === 'number') {
+    if (param && Object.prototype.hasOwnProperty.call(param, 'when')) {
+      if (!Number.isSafeInteger(param.when) || param.when < 0 || param.when > Math.floor(Date.now() / 1000)) {
+        return this.execCommand('alert', '過去ログの日時が不正です。日時を選び直してください。');
+      }
       msgInfo.when = param.when;
     }
-    this.loadComment(msgInfo);
+    return this.loadComment(msgInfo);
   }
   /**
    * Task 090（監査v2 ZW-016）: 今の動画（requestId）に属するタイマー（エラー・NG の後の自動の「次へ」、再生エラーの後の再読み込み）。

@@ -109,7 +109,7 @@ export class CommentHistoryController {
             this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
             const session=this.#session;
             this.#emit({phase:'fetching',pages:0});
-            const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+            const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
               if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
                 waitingMs:progress.event==='retry'?progress.waitMs:0});
             }});

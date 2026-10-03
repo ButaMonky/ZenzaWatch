@@ -6,8 +6,8 @@
 // coordinator.mjs sha256=b517aee0841c50d3900af42fd4258eb282928c9534db41b0d0a62732fb92b253
 // layers.mjs sha256=ef11fb75a8d5a4fdc0ad2e4a86842f0a4a5d75356079a88f28c4741b16d1b04b
 // session.mjs sha256=3296db2613fcf5061519299879a442922417cfebc0ea3f1a0b3b95085cf0d3c2
-// zenza-context.mjs sha256=967f0b27c0ede6ab7528eaf59507f5b56effcf237c139ea47878ce79d3cbbb39
-// controller.mjs sha256=4f2fadd41c51d4e4ce6bbe3860ba67b0afb4655f3b6ccdcbde45dcde200a9e06
+// zenza-context.mjs sha256=13d4850b1c26a46ddf7fd2fa3cc62ad0db4cb212891434f5519b0b66bc2e7432
+// controller.mjs sha256=58b3680fa4421b015f51e867bff388de3de4763eb99d4c2d5c6c4413f6cb8d1a
 // renderer.mjs sha256=a5300569595e261b431206e2d77f2641f5711678ecd9600432cc3981fff5a4d4
 // zenza-settings.mjs sha256=a960df22bcf1cc59df8cc4080b6a52043607e5e67f4ac552a9a5b5303ee71866
 // browser-preferences.mjs sha256=1b7249122958af10770fd059ab37b5a196606a17cfe538f5c276534bc418478f
@@ -732,7 +732,17 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
   if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
   const videoId = videoInfo.videoId;
   if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
-  if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+  const rawWhen = resultInfo.when ?? 0;
+  const isWaybackMode = resultInfo.isWaybackMode === true;
+  let historyStartWhen = null;
+  if (isWaybackMode) {
+    const now = Math.floor(Date.now() / 1000);
+    if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
+    historyStartWhen = rawWhen;
+  } else if (rawWhen !== 0) {
+    // A dated response must explicitly identify itself as wayback; do not guess the mode.
+    seedError('UNSUPPORTED_WAYBACK');
+  }
   const language = normalResult.body.__usedLanguage ?? resultInfo.language;
   if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
   const nv = msg.nvComment;
@@ -753,7 +763,7 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
   const mainThreadId = resultInfo.threadId ?? null;
   if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
   return freezeSeedData({context,
-    identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+    identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
     render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
   });
 }
@@ -890,7 +900,7 @@ class CommentHistoryController {
             this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
             const session=this.#session;
             this.#emit({phase:'fetching',pages:0});
-            const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+            const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
               if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
                 waitingMs:progress.event==='retry'?progress.waitMs:0});
             }});

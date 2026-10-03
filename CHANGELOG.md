@@ -23,6 +23,13 @@
 - 元の配置順・衝突条件・レイヤー・overflow時の乱数順を維持。入力時刻の並び、重複ID、NaN等の境界は従来互換を優先。
 - 新UI・CA保護はこのTaskに含めない。詳細は `docs/design-pack/TASK210_COMMENT_LAYOUT_INDEX.md`。
 
+## Task213 — 過去ログ中のコメント増量を再対応（2.7.140-task213 / Advanced 0.3.36-task213）
+
+- 過去ログ(TimeMachine)表示中、コメント増量パネルが`UNSUPPORTED_WAYBACK`で`unavailable`となり「取得し直す」が無効化されていた問題を修正。
+- 成功したwayback結果の選択日時`when`を履歴取得の開始境界として保持し、初回取得と「取得し直す」は同じ日時からさらに古いコメントを取得する。
+- current/waybackフラグと日時が矛盾する入力、0/未来/不正日時は引き続き拒否。現在コメント・投稿状態・Task207キャッシュ/適用数は変更しない。
+- package回帰に、wayback seed・境界検証・同一日時restartの3件を追加。
+
 # Changelog
 
 このプロジェクト（ZenzaWatch改良版）の変更履歴です。

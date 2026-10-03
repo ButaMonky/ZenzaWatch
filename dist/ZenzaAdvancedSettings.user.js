@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.35-task212
+// @version     0.3.36-task213
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-03 16:24Z
+// build: 2026-10-03 17:43Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -2096,7 +2096,16 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
 	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
 	const videoId = videoInfo.videoId;
 	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
-	if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+	const rawWhen = resultInfo.when ?? 0;
+	const isWaybackMode = resultInfo.isWaybackMode === true;
+	let historyStartWhen = null;
+	if (isWaybackMode) {
+		const now = Math.floor(Date.now() / 1000);
+		if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
+		historyStartWhen = rawWhen;
+	} else if (rawWhen !== 0) {
+		seedError('UNSUPPORTED_WAYBACK');
+	}
 	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
 	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
 	const nv = msg.nvComment;
@@ -2117,7 +2126,7 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
 	const mainThreadId = resultInfo.threadId ?? null;
 	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
 	return freezeSeedData({context,
-		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
 		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
 	});
 }
@@ -2229,7 +2238,7 @@ class CommentHistoryController {
 						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
 						const session=this.#session;
 						this.#emit({phase:'fetching',pages:0});
-						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
 							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
 								waitingMs:progress.event==='retry'?progress.waitMs:0});
 						}});

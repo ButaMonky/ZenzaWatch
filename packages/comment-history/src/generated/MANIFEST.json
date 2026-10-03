@@ -4,13 +4,13 @@
   "files": [
     {
       "path": "ZenzaCommentHistoryCore.generated.js",
-      "sha256": "12f4a3dcb1ec6f72c9ce42bb8b248d22ea464e0e8ac121744f5155e38e784a93",
-      "bytes": 97392
+      "sha256": "05be10d7c73d794ecb5e03819eff5090c98972bffbcb06d058e09a0352866ff9",
+      "bytes": 97845
     },
     {
       "path": "ZenzaCommentHistorySettings.generated.js",
-      "sha256": "637b6babfc49a789f5f39b4ea823f8624028c91a6b3abde90d86cec4dc3852a6",
-      "bytes": 88324
+      "sha256": "16ac7456473cba68c87f1cf16f44989df9d60934c93975f0fdf79aefeeb241bf",
+      "bytes": 88777
     },
     {
       "path": "package.json",

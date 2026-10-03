@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.139-task212
+// @version        2.7.140-task213
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-03 16:24Z
+// build: 2026-10-03 17:43Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.139-task212';
+    var VER = '2.7.140-task213';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-03 16:24Z';
+    var BUILD = '2026-10-03 17:43Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -1965,7 +1965,16 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
 	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
 	const videoId = videoInfo.videoId;
 	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
-	if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+	const rawWhen = resultInfo.when ?? 0;
+	const isWaybackMode = resultInfo.isWaybackMode === true;
+	let historyStartWhen = null;
+	if (isWaybackMode) {
+		const now = Math.floor(Date.now() / 1000);
+		if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
+		historyStartWhen = rawWhen;
+	} else if (rawWhen !== 0) {
+		seedError('UNSUPPORTED_WAYBACK');
+	}
 	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
 	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
 	const nv = msg.nvComment;
@@ -1986,7 +1995,7 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
 	const mainThreadId = resultInfo.threadId ?? null;
 	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
 	return freezeSeedData({context,
-		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
 		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
 	});
 }
@@ -2098,7 +2107,7 @@ class CommentHistoryController {
 						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
 						const session=this.#session;
 						this.#emit({phase:'fetching',pages:0});
-						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
 							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
 								waitingMs:progress.event==='retry'?progress.waitMs:0});
 						}});
@@ -18695,7 +18704,16 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
 	if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
 	const videoId = videoInfo.videoId;
 	if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
-	if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+	const rawWhen = resultInfo.when ?? 0;
+	const isWaybackMode = resultInfo.isWaybackMode === true;
+	let historyStartWhen = null;
+	if (isWaybackMode) {
+		const now = Math.floor(Date.now() / 1000);
+		if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
+		historyStartWhen = rawWhen;
+	} else if (rawWhen !== 0) {
+		seedError('UNSUPPORTED_WAYBACK');
+	}
 	const language = normalResult.body.__usedLanguage ?? resultInfo.language;
 	if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
 	const nv = msg.nvComment;
@@ -18716,7 +18734,7 @@ function createZenzaSeed({videoInfo,normalResult,playbackGeneration,normalRevisi
 	const mainThreadId = resultInfo.threadId ?? null;
 	if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
 	return freezeSeedData({context,
-		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+		identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
 		render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
 	});
 }
@@ -18828,7 +18846,7 @@ class CommentHistoryController {
 						this.#session=this.#create(seed.context,{baseline:seed.baseline,settings:{...settings,maxAdditionalComments:goal},resume});
 						const session=this.#session;
 						this.#emit({phase:'fetching',pages:0});
-						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
+						const report=await session.run({signal:operation.signal,startWhen:resume?.startWhen??seed.historyStartWhen??Math.floor(Date.now()/1000),onProgress:progress=>{
 							if(current())this.#emit({phase:'fetching',additionalCount:progress.counts.additionalCount,pages:progress.pages,network:progress.network,
 								waitingMs:progress.event==='retry'?progress.waitMs:0});
 						}});

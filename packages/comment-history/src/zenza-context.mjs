@@ -32,7 +32,17 @@ export function createZenzaSeed({videoInfo,normalResult,playbackGeneration,norma
   if (!msg || typeof videoInfo.videoId !== 'string') seedError('VIDEO_MISSING');
   const videoId = videoInfo.videoId;
   if (msg.videoId !== videoId || resultInfo.videoId !== videoId) seedError('VIDEO_MISMATCH');
-  if (resultInfo.isWaybackMode || resultInfo.when > 0) seedError('UNSUPPORTED_WAYBACK');
+  const rawWhen = resultInfo.when ?? 0;
+  const isWaybackMode = resultInfo.isWaybackMode === true;
+  let historyStartWhen = null;
+  if (isWaybackMode) {
+    const now = Math.floor(Date.now() / 1000);
+    if (!Number.isSafeInteger(rawWhen) || rawWhen <= 0 || rawWhen > now) seedError('UNSUPPORTED_WAYBACK');
+    historyStartWhen = rawWhen;
+  } else if (rawWhen !== 0) {
+    // A dated response must explicitly identify itself as wayback; do not guess the mode.
+    seedError('UNSUPPORTED_WAYBACK');
+  }
   const language = normalResult.body.__usedLanguage ?? resultInfo.language;
   if (typeof language !== 'string' || !/^[a-z]{2}-[a-z]{2}$/i.test(language)) seedError('LANGUAGE_MISSING');
   const nv = msg.nvComment;
@@ -53,7 +63,7 @@ export function createZenzaSeed({videoInfo,normalResult,playbackGeneration,norma
   const mainThreadId = resultInfo.threadId ?? null;
   if (mainThreadId !== null && !context.targets.some(t=>t.id===String(mainThreadId))) seedError('THREAD_METADATA');
   return freezeSeedData({context,
-    identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,
+    identity:{videoId,watchId,language,playbackGeneration,normalRevision},baseline,historyStartWhen,
     render:{duration:videoInfo.duration,mainThreadId,threads:[...descriptors.values()]}
   });
 }

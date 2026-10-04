@@ -1001,6 +1001,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
             length: item.lengthSeconds ?
               Math.floor(item.lengthSeconds / 60) + ':' +
               (item.lengthSeconds % 60 + 100).toString().substring(1) : '',
+            like_counter: item.likeCounter,
             mylist_counter: item.mylistCounter,
             view_counter: item.viewCounter,
             num_res: item.commentCounter,

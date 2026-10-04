@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.146-task220
+// @version        2.7.149-task224
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 07:51Z
+// build: 2026-10-04 16:02Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.146-task220';
+    var VER = '2.7.149-task224';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 07:51Z';
+    var BUILD = '2026-10-04 16:02Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -10568,8 +10568,13 @@ class VideoInfoModel extends JSONable {
 		return {
 			comment: vd.commentCount,
 			mylist: vd.mylistCount,
-			view: vd.viewCount
+			view: vd.viewCount,
+			...(vd.likeCount !== undefined ? {like: vd.likeCount} : {})
 		};
+	}
+	get cardAccess() {
+		return {paid: this._rawData.isNeedPayment, member: this._rawData.isMemberFree,
+			premium: this._rawData.isPremiumFree};
 	}
 	get isChannel() {
 		return !!this._videoDetail.channelId;
@@ -11589,6 +11594,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 						length: item.lengthSeconds ?
 							Math.floor(item.lengthSeconds / 60) + ':' +
 							(item.lengthSeconds % 60 + 100).toString().substring(1) : '',
+						like_counter: item.likeCounter,
 						mylist_counter: item.mylistCounter,
 						view_counter: item.viewCounter,
 						num_res: item.commentCounter,
@@ -29218,9 +29224,30 @@ TimeMachineView.__tpl__ = ('<div class="TimeMachineView"></div>').trim();
 *  - itemId:  実行中の item object ごとの番号（保存しない。復元すると新しい番号になる）。
 */
 class VideoListItem {
+	static cardMetadata(source) {
+		const result = {};
+		const like = source.count?.like ?? source.like ?? source.like_counter;
+		if (typeof like === 'number' && Number.isSafeInteger(like) && like >= 0) { result.like = like; }
+		if (source.owner && typeof source.owner.name === 'string') {
+			const owner = source.owner;
+			const icon = owner.icon ?? owner.iconUrl;
+			result.owner = {name: owner.name, id: owner.id, type: owner.type ?? owner.ownerType,
+				icon: typeof icon === 'string' && /^https?:\/\//i.test(icon) ? icon : ''};
+		}
+		const access = source.cardAccess || {};
+		for (const [key, value] of Object.entries({
+			isPaymentRequired: access.paid ?? source.isPaymentRequired,
+			isMemberOnly: access.member ?? source.isMemberOnly,
+			isPremiumOnly: access.premium ?? source.isPremiumOnly
+		})) {
+			if (typeof value === 'boolean') { result[key] = value; }
+		}
+		return result;
+	}
 	static createByThumbInfo(info) {
 		return new this({
 			_format: 'thumbInfo',
+			...this.cardMetadata(info),
 			id: info.id,
 			title: info.title,
 			length_seconds: info.duration,
@@ -29259,6 +29286,7 @@ class VideoListItem {
 			const content = item.content || {};
 			return new VideoListItem({
 				_format: 'mylistItemRiapi',
+				...VideoListItem.cardMetadata(content),
 				id: content.id,
 				uniq_id: content.id,
 				title: content.title,
@@ -29276,6 +29304,7 @@ class VideoListItem {
 			const item_data = item.item_data || {};
 			return new VideoListItem({
 				_format: 'mylistItemOldApi',
+				...VideoListItem.cardMetadata(item_data),
 				id: item_data.watch_id,
 				uniq_id: item_data.watch_id,
 				title: item_data.title,
@@ -29297,6 +29326,7 @@ class VideoListItem {
 		}
 		return new VideoListItem({
 			_format: 'mylistItemRiapi',
+			...VideoListItem.cardMetadata(item),
 			id: item.id,
 			uniq_id: item.id,
 			title: item.title,
@@ -29313,6 +29343,7 @@ class VideoListItem {
 		const count = info.count;
 		return new VideoListItem({
 			_format: 'videoInfo',
+			...VideoListItem.cardMetadata(info),
 			id: info.watchId,
 			uniq_id: info.contextWatchId,
 			title: info.title,
@@ -29389,9 +29420,14 @@ class VideoListItem {
 		return {
 			comment: parseInt(this._rawData.num_res, 10),
 			mylist: parseInt(this._rawData.mylist_counter, 10),
-			view: parseInt(this._rawData.view_counter, 10)
+			view: parseInt(this._rawData.view_counter, 10),
+			...(VideoListItem.cardMetadata(this._rawData).like !== undefined ? {like: this._rawData.like ?? this._rawData.like_counter} : {})
 		};
 	}
+	get owner() { return VideoListItem.cardMetadata(this._rawData).owner || null; }
+	get isPaymentRequired() { return this._rawData.isPaymentRequired === true; }
+	get isMemberOnly() { return this._rawData.isMemberOnly === true; }
+	get isPremiumOnly() { return this._rawData.isPremiumOnly === true; }
 	get thumbnail() { return this._rawData.thumbnail_url; }
 	get postedAt() { return this._rawData.first_retrieve; }
 	get commentCount() { return this.count.comment; }
@@ -29468,6 +29504,7 @@ class VideoListItem {
 	}
 	serialize() {
 		return {
+			...VideoListItem.cardMetadata(this._rawData),
 			active: this.isActive,
 			last_activated: this.state.lastActivated || 0,
 			played: this.isPlayed,
@@ -29489,6 +29526,7 @@ class VideoListItem {
 		}
 		return this._applyFullData({
 			_format: 'thumbInfo',
+			...VideoListItem.cardMetadata(info),
 			title: info.title,
 			length_seconds: Number.isFinite(info.duration) ? info.duration : undefined,
 			num_res: Number.isFinite(info.commentCount) ? info.commentCount : undefined,
@@ -29525,6 +29563,7 @@ class VideoListItem {
 		}
 		const before = JSON.stringify(this.serialize());
 		const rawData = this._rawData;
+		Object.assign(rawData, VideoListItem.cardMetadata(videoInfo));
 		const count = videoInfo.count;
 		rawData.first_retrieve = textUtil.dateToString(videoInfo.postedAt);
 		rawData.num_res = count.comment;
@@ -29539,6 +29578,7 @@ class VideoListItem {
 		const count = videoInfo.count || {};
 		return this._applyFullData({
 			_format: 'videoInfo',
+			...VideoListItem.cardMetadata(videoInfo),
 			watchId: videoInfo.watchId,
 			title: videoInfo.title,
 			length_seconds: videoInfo.duration,
@@ -29554,6 +29594,7 @@ class VideoListItem {
 		const raw = item._rawData || {};
 		return this._applyFullData({
 			_format: raw._format || 'upgraded',
+			...VideoListItem.cardMetadata(raw),
 			watchId: item.watchId,
 			title: raw.title,
 			length_seconds: raw.length_seconds,
@@ -29567,7 +29608,7 @@ class VideoListItem {
 	}
 	_applyFullData(data) {
 		const rawData = this._rawData;
-		for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner']) {
+		for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner', 'like', 'isPaymentRequired', 'isMemberOnly', 'isPremiumOnly']) {
 			if (data[key] !== undefined && data[key] !== null) {
 				rawData[key] = data[key];
 			}
@@ -30096,6 +30137,7 @@ class VideoListItemView  {
 	}
 	.videoInfo {
 		height: 100%;
+		min-width: 0;
 		padding-left: 4px;
 	}
 	.postedAt {
@@ -30109,13 +30151,22 @@ class VideoListItemView  {
 	.counter {
 		position: absolute;
 		top: 80px;
-		width: 100%;
+		left: 2px;
+		right: 2px;
 		text-align: center;
 	}
 	.title {
 		height: 52px;
+		line-height: 17px;
 		overflow: hidden;
 	}
+	.counter { display: flex; justify-content: center; gap: 5px; font-size: 12px; }
+	.counter .count + .count { margin-left: 0; }
+	.counter .count { flex: none; }
+	.counter .count-full { display: inline-block; }
+	.counter .count-short { display: none; }
+	.counter.is-compact .count-full { position: absolute; visibility: hidden; pointer-events: none; }
+	.counter.is-compact .count-short { display: inline-block; }
 	.videoLink {
 		font-size: 14px;
 		color: #ff9;
@@ -30143,7 +30194,7 @@ class VideoListItemView  {
 		white-space: nowrap;
 	}
 	.counter .count + .count {
-		margin-left: 8px;
+		margin-left: 0;
 	}
 	.videoItem.is-active {
 		border: none !important;
@@ -30163,10 +30214,31 @@ class VideoListItemView  {
 	}
 	`;
 	}
+	static compactCount(value) {
+		if (!Number.isFinite(value)) { return '不明'; }
+		if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+		if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
+		if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
+		return value.toLocaleString();
+	}
+	static fitCounters(root) {
+		const changes = [];
+		for (const counter of root.querySelectorAll('.counter')) {
+			const available = counter.clientWidth;
+			if (!available) { continue; }
+			const fields = [...counter.querySelectorAll('.count-full')];
+			const required = fields.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0) + Math.max(0, fields.length - 1) * 5;
+			changes.push([counter, required > available]);
+		}
+		for (const [counter, compact] of changes) {
+			counter.classList.toggle('is-compact', compact);
+		}
+	}
 	static build(item, index = 0) {
 		const {html} = dll.lit;
 		const {classMap} = dll.directives;
-		const addComma = m => isNaN(m) ? '---' : (m.toLocaleString ? m.toLocaleString() : m);
+		const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
+		const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}><span class="count-full">${label}: <span class=${`value ${key}Count`}>${fullCount(value)}</span></span><span class="count-short">${label}: <span class="value">${this.compactCount(value)}</span></span></span>`;
 		const {cache, timestamp, index: _index} = this.map.get(item) || {};
 		if (cache && timestamp === item.timestamp && index === _index) {
 			return cache;
@@ -30213,9 +30285,10 @@ class VideoListItemView  {
 						</div>
 					</div>
 					<div class="counter">
-						<span class="count">再生: <span class="value viewCount">${addComma(count.view)}</span></span>
-						<span class="count">コメ: <span class="value commentCount">${addComma(count.comment)}</span></span>
-						<span class="count">マイ: <span class="value mylistCount">${addComma(count.mylist)}</span></span>
+						${countField('view', '再生', count.view)}
+						${countField('comment', 'コメ', count.comment)}
+						${countField('mylist', 'マイ', count.mylist)}
+						${count.like != null ? countField('like', '♡', count.like) : ''}
 					</div>
 				`}
 			</div>`;
@@ -30652,6 +30725,21 @@ class VideoListView extends Emitter {
 		);
 		const container = this.listContainer = doc.querySelector('#listContainer');
 		const list = this.list = doc.getElementById('listContainerInner');
+		const fitCounters = () => VideoListItemView.fitCounters(list);
+		if (w.ResizeObserver) {
+			let lastWidth = -1;
+			const observer = new w.ResizeObserver(entries => {
+				const width = entries[0].contentRect.width;
+				if (width === lastWidth) { return; }
+				lastWidth = width;
+				fitCounters();
+			});
+			observer.observe(list);
+			w.addEventListener('pagehide', () => observer.disconnect(), {once: true});
+		} else {
+			w.addEventListener('resize', _.debounce(fitCounters, 100));
+		}
+		if (doc.fonts) { doc.fonts.ready.then(fitCounters); }
 		if (this.items && this.items.length) {
 			this.renderList(this.items);
 		}
@@ -30860,6 +30948,7 @@ class VideoListView extends Emitter {
 		console.timeEnd(timeLabel);
 		this._updateCSSVars();
 		this._setInviewObserver();
+		VideoListItemView.fitCounters(this.list);
 	}
 	async _buildList(items) {
 		items = items || this.items || [];

@@ -246,6 +246,7 @@ class VideoListItemView  {
 
   .videoInfo {
     height: 100%;
+    min-width: 0;
     padding-left: 4px;
   }
 
@@ -261,15 +262,24 @@ class VideoListItemView  {
   .counter {
     position: absolute;
     top: 80px;
-    width: 100%;
+    left: 2px;
+    right: 2px;
     text-align: center;
   }
 
   .title {
     height: 52px;
+    line-height: 17px;
     overflow: hidden;
   }
 
+  .counter { display: flex; justify-content: center; gap: 5px; font-size: 12px; }
+  .counter .count + .count { margin-left: 0; }
+  .counter .count { flex: none; }
+  .counter .count-full { display: inline-block; }
+  .counter .count-short { display: none; }
+  .counter.is-compact .count-full { position: absolute; visibility: hidden; pointer-events: none; }
+  .counter.is-compact .count-short { display: inline-block; }
   .videoLink {
     font-size: 14px;
     color: #ff9;
@@ -299,7 +309,7 @@ class VideoListItemView  {
     white-space: nowrap;
   }
   .counter .count + .count {
-    margin-left: 8px;
+    margin-left: 0;
   }
 
   .videoItem.is-active {
@@ -322,11 +332,34 @@ class VideoListItemView  {
   }
   `;
   }
+  static compactCount(value) {
+    if (!Number.isFinite(value)) { return '不明'; }
+    if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+    if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
+    if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
+    return value.toLocaleString();
+  }
+  static fitCounters(root) {
+    // Measure the exact text even while compact. Read all geometry before writing
+    // classes, avoiding one synchronous layout per card in large playlists.
+    const changes = [];
+    for (const counter of root.querySelectorAll('.counter')) {
+      const available = counter.clientWidth;
+      if (!available) { continue; }
+      const fields = [...counter.querySelectorAll('.count-full')];
+      const required = fields.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0) + Math.max(0, fields.length - 1) * 5;
+      changes.push([counter, required > available]);
+    }
+    for (const [counter, compact] of changes) {
+      counter.classList.toggle('is-compact', compact);
+    }
+  }
   static build(item, index = 0) {
     const {html} = dll.lit;
     const {classMap} = dll.directives;
 
-    const addComma = m => isNaN(m) ? '---' : (m.toLocaleString ? m.toLocaleString() : m);
+    const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
+    const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}><span class="count-full">${label}: <span class=${`value ${key}Count`}>${fullCount(value)}</span></span><span class="count-short">${label}: <span class="value">${this.compactCount(value)}</span></span></span>`;
     const {cache, timestamp, index: _index} = this.map.get(item) || {};
     if (cache && timestamp === item.timestamp && index === _index) {
       return cache;
@@ -375,9 +408,10 @@ class VideoListItemView  {
             </div>
           </div>
           <div class="counter">
-            <span class="count">再生: <span class="value viewCount">${addComma(count.view)}</span></span>
-            <span class="count">コメ: <span class="value commentCount">${addComma(count.comment)}</span></span>
-            <span class="count">マイ: <span class="value mylistCount">${addComma(count.mylist)}</span></span>
+            ${countField('view', '再生', count.view)}
+            ${countField('comment', 'コメ', count.comment)}
+            ${countField('mylist', 'マイ', count.mylist)}
+            ${count.like != null ? countField('like', '♡', count.like) : ''}
           </div>
         `}
       </div>`;

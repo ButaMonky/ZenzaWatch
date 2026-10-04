@@ -426,8 +426,14 @@ class VideoInfoModel extends JSONable {
     return {
       comment: vd.commentCount,
       mylist: vd.mylistCount,
-      view: vd.viewCount
+      view: vd.viewCount,
+      ...(vd.likeCount !== undefined ? {like: vd.likeCount} : {})
     };
+  }
+
+  get cardAccess() {
+    return {paid: this._rawData.isNeedPayment, member: this._rawData.isMemberFree,
+      premium: this._rawData.isPremiumFree};
   }
 
   get isChannel() {

@@ -12,9 +12,32 @@ import {textUtil} from '../../../lib/src/text/textUtil';
  *  - itemId:  実行中の item object ごとの番号（保存しない。復元すると新しい番号になる）。
  */
 class VideoListItem {
+  // Keep optional card metadata through all adapters; absence is not a zero count.
+  static cardMetadata(source) {
+    const result = {};
+    const like = source.count?.like ?? source.like ?? source.like_counter;
+    if (typeof like === 'number' && Number.isSafeInteger(like) && like >= 0) { result.like = like; }
+    if (source.owner && typeof source.owner.name === 'string') {
+      const owner = source.owner;
+      const icon = owner.icon ?? owner.iconUrl;
+      result.owner = {name: owner.name, id: owner.id, type: owner.type ?? owner.ownerType,
+        icon: typeof icon === 'string' && /^https?:\/\//i.test(icon) ? icon : ''};
+    }
+    const access = source.cardAccess || {};
+    for (const [key, value] of Object.entries({
+      isPaymentRequired: access.paid ?? source.isPaymentRequired,
+      isMemberOnly: access.member ?? source.isMemberOnly,
+      isPremiumOnly: access.premium ?? source.isPremiumOnly
+    })) {
+      if (typeof value === 'boolean') { result[key] = value; }
+    }
+    return result;
+  }
+
   static createByThumbInfo(info) {
     return new this({
       _format: 'thumbInfo',
+      ...this.cardMetadata(info),
       id: info.id,
       title: info.title,
       length_seconds: info.duration,
@@ -58,6 +81,7 @@ class VideoListItem {
       const content = item.content || {};
       return new VideoListItem({
         _format: 'mylistItemRiapi',
+        ...VideoListItem.cardMetadata(content),
         id: content.id,
         uniq_id: content.id,
         title: content.title,
@@ -76,6 +100,7 @@ class VideoListItem {
       const item_data = item.item_data || {};
       return new VideoListItem({
         _format: 'mylistItemOldApi',
+        ...VideoListItem.cardMetadata(item_data),
         id: item_data.watch_id,
         uniq_id: item_data.watch_id,
         title: item_data.title,
@@ -100,6 +125,7 @@ class VideoListItem {
     }
     return new VideoListItem({
       _format: 'mylistItemRiapi',
+      ...VideoListItem.cardMetadata(item),
       id: item.id,
       uniq_id: item.id,
       title: item.title,
@@ -117,6 +143,7 @@ class VideoListItem {
     const count = info.count;
     return new VideoListItem({
       _format: 'videoInfo',
+      ...VideoListItem.cardMetadata(info),
       id: info.watchId,
       uniq_id: info.contextWatchId,
       title: info.title,
@@ -213,9 +240,15 @@ class VideoListItem {
     return {
       comment: parseInt(this._rawData.num_res, 10),
       mylist: parseInt(this._rawData.mylist_counter, 10),
-      view: parseInt(this._rawData.view_counter, 10)
+      view: parseInt(this._rawData.view_counter, 10),
+      ...(VideoListItem.cardMetadata(this._rawData).like !== undefined ? {like: this._rawData.like ?? this._rawData.like_counter} : {})
     };
   }
+
+  get owner() { return VideoListItem.cardMetadata(this._rawData).owner || null; }
+  get isPaymentRequired() { return this._rawData.isPaymentRequired === true; }
+  get isMemberOnly() { return this._rawData.isMemberOnly === true; }
+  get isPremiumOnly() { return this._rawData.isPremiumOnly === true; }
 
   get thumbnail() { return this._rawData.thumbnail_url; }
 
@@ -296,6 +329,7 @@ class VideoListItem {
   }
   serialize() {
     return {
+      ...VideoListItem.cardMetadata(this._rawData),
       active: this.isActive,
       last_activated: this.state.lastActivated || 0,
       played: this.isPlayed,
@@ -323,6 +357,7 @@ class VideoListItem {
     }
     return this._applyFullData({
       _format: 'thumbInfo',
+      ...VideoListItem.cardMetadata(info),
       title: info.title,
       length_seconds: Number.isFinite(info.duration) ? info.duration : undefined,
       num_res: Number.isFinite(info.commentCount) ? info.commentCount : undefined,
@@ -367,6 +402,7 @@ class VideoListItem {
     }
     const before = JSON.stringify(this.serialize());
     const rawData = this._rawData;
+    Object.assign(rawData, VideoListItem.cardMetadata(videoInfo));
     const count = videoInfo.count;
     rawData.first_retrieve = textUtil.dateToString(videoInfo.postedAt);
 
@@ -389,6 +425,7 @@ class VideoListItem {
     const count = videoInfo.count || {};
     return this._applyFullData({
       _format: 'videoInfo',
+      ...VideoListItem.cardMetadata(videoInfo),
       watchId: videoInfo.watchId,
       title: videoInfo.title,
       length_seconds: videoInfo.duration,
@@ -407,6 +444,7 @@ class VideoListItem {
     const raw = item._rawData || {};
     return this._applyFullData({
       _format: raw._format || 'upgraded',
+      ...VideoListItem.cardMetadata(raw),
       watchId: item.watchId,
       title: raw.title,
       length_seconds: raw.length_seconds,
@@ -420,7 +458,7 @@ class VideoListItem {
   }
   _applyFullData(data) {
     const rawData = this._rawData;
-    for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner']) {
+    for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner', 'like', 'isPaymentRequired', 'isMemberOnly', 'isPremiumOnly']) {
       if (data[key] !== undefined && data[key] !== null) {
         rawData[key] = data[key];
       }

@@ -1,0 +1,19 @@
+<!doctype html><meta charset="utf-8"><title>Task224 responsive card counts</title>
+<body style="background:#222;color:#ddd;font-family:sans-serif"><h2>Exact counts / overflow-only Japanese units</h2><main></main>
+<script type="module">
+import {html,render} from '../../node_modules/lit-html/lit-html.js';
+import {classMap} from '../../node_modules/lit-html/directives/class-map.js';
+const source=await (await fetch('../../packages/zenza/src/Playlist/VideoListItemView.js')).text();
+const View=new Function('dll','textUtil',source.split('//===BEGIN===')[1].split('//===END===')[0]+';return VideoListItemView')({lit:{html},directives:{classMap}},{secToTime:()=> '03:39'});
+const style=document.createElement('style');style.textContent=View.CSS;document.head.append(style);
+const counts=[{view:31441461,comment:5594970,mylist:674219,like:45678},{view:60,comment:4,mylist:1,like:0},{view:123456789,comment:987654321,mylist:9999999,like:8888888},{view:2708,comment:164,mylist:23}];
+let id=0;
+for(const width of [300,440]) for(const count of counts) {
+ const root=document.createElement('section');root.style.cssText=`width:${width}px;height:100px;margin:8px 0;background:#333`;document.querySelector('main').append(root);
+ const item={title:'【東方】Bad Apple!! ＰＶ【影絵】',count,owner:{name:'NOT DISPLAYED',icon:''},itemId:++id,watchId:'sm1',duration:219,postedAt:'2009-10-27',thumbnail:'',isLazy:false,isPaymentRequired:true,isMemberOnly:true,isPremiumOnly:true,timestamp:1};
+ render(View.build(item),root);
+}
+window.View=View; window.render=render;
+View.fitCounters(document);
+window.previewReady=true;
+</script>

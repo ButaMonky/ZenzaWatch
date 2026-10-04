@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Task225 playlist scroll regression</title>
+<script src="../../node_modules/lodash/lodash.js"></script>
+<body style="background:#222;color:#eee;font-family:sans-serif"><h2>Real playlist model, lazy rendering and scroll observer</h2><iframe style="width:300px;height:420px"></iframe><pre id="result"></pre>
+<script type="module">
+import * as lit from '../../node_modules/lit-html/lit-html.js';
+import {classMap} from '../../node_modules/lit-html/directives/class-map.js';
+const paths=['packages/lib/src/Emitter.js','packages/lib/src/infra/bounce.js','packages/lib/src/text/textUtil.js','packages/zenza/src/Playlist/VideoListItem.js','packages/zenza/src/Playlist/VideoListModel.js','packages/zenza/src/Playlist/VideoListItemView.js','packages/zenza/src/Playlist/VideoListView.js'];
+const sources=await Promise.all(paths.map(async p=>(await(await fetch('../../'+p)).text()).split('//===BEGIN===')[1].split('//===END===')[0]));
+const cssUtil={registerProps(){},px:x=>x,percent:x=>x,number:x=>x,setProps(...args){for(const [el,key,value] of args)el.style.setProperty(key,value)}};
+const uq=()=>({on(){return this;}});
+const {VideoListItem,VideoListModel,VideoListItemView,VideoListView}=new Function('dll','CONSTANT','cssUtil','uq','ClassList','MylistPocketDetector','sleep','global',sources.join('\n')+';return {VideoListItem,VideoListModel,VideoListItemView,VideoListView};')({lit,directives:{classMap}},{BASE_CSS_VARS:'',SCROLLBAR_CSS:''},cssUtil,uq,e=>e.classList,{detect:()=>new Promise(()=>{})},{},{emitter:{emit(){}}});
+const model=new VideoListModel({uniq:true,maxItems:2000});
+const view=Object.create(VideoListView.prototype);view._initializeView=()=>{};view.initialize({model,className:'playlist'});
+const frame=document.querySelector('iframe'),doc=frame.contentDocument;doc.open();doc.write(VideoListView.__tpl__.replace('%CSS%',VideoListItemView.CSS));doc.close();view._initializeFrame(frame.contentWindow);
+let renders=0;const renderList=view.renderList.bind(view);view.renderList=async(...args)=>{renders++;return renderList(...args);};
+const thumb='data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="72"><rect width="96" height="72" fill="#6597b3"/></svg>');
+const expectedCount=Math.min(2000,Number(new URLSearchParams(location.search).get('count'))||300);
+model.setItem(Array.from({length:expectedCount},(_,i)=>new VideoListItem({id:'sm'+(i+1),title:'動画 '+(i+1)+' — スクロール確認',view_counter:31441461,num_res:5594970,mylist_counter:674219,like:45678,length_seconds:219,thumbnail_url:thumb,first_retrieve:'2026/01/01'})));
+const pause=ms=>new Promise(r=>setTimeout(r,ms));await pause(1000);
+window.runScroll=async()=>{
+ const opacity=[];let sample=true;const collect=()=>{if(!sample)return;opacity.push(Number(frame.contentWindow.getComputedStyle(view.listContainer).opacity));requestAnimationFrame(collect);};collect();
+ const before=renders;
+ for(let i=0;i<16;i++){view.listContainer.scrollTop=i*180;await pause(70);}
+ for(let i=15;i>=0;i--){view.listContainer.scrollTop=i*180;await pause(70);}
+ await pause(300);sample=false;
+ const out={minOpacity:Math.min(...opacity),dimFrames:opacity.filter(x=>x<.99).length,samples:opacity.length,renders:renders-before,cards:doc.querySelectorAll('.videoItem').length,renderedCards:doc.querySelectorAll('.counter').length,pass:opacity.length>0 && renders>before && doc.querySelectorAll('.videoItem').length===expectedCount && doc.querySelectorAll('.counter').length>0 && doc.querySelectorAll('.counter').length<expectedCount && opacity.every(x=>x===1)};
+ document.querySelector('#result').textContent=JSON.stringify(out,null,2);return out;
+};
+window.withoutFit=()=>VideoListItemView.fitCounters=()=>{};
+window.ready=true;
+</script>

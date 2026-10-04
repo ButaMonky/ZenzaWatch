@@ -290,7 +290,8 @@ class VideoListView extends Emitter {
   }
   async _onModelUpdate(items) {
     this.items = items;
-    this.addClass('is-updating');
+    // Local/lazy updates must not dim the list: count measurement flushes
+    // this transient style and makes its opacity transition visible on scroll.
     await this.renderList(items);
     this.removeClass('is-updating');
     this.emit('update');

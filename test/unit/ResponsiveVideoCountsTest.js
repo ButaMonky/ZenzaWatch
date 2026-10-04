@@ -42,9 +42,14 @@ describe('Task227 header likes',()=>{
     meta.update({postedAt:0,count:{like:12}});meta.update({postedAt:1,count:{view:2}});
     assert.strictEqual(meta._elm.likeColumn.hidden,true);assert.strictEqual(meta._elm.likeCount.textContent,'');
   });
-  it('uses the same compact display and exact tooltip for header counts',()=>{
-    meta.updateVideoCount({view:31441461,comment:5594970,mylist:674219,like:45678});
-    assert.strictEqual(meta._elm.viewCount.textContent,'3144万');assert.strictEqual(meta._elm.viewCount.title,'31,441,461');assert.strictEqual(meta._elm.likeCount.textContent,'4.5万');
+  it('shows exact header counts while cards keep their compact display',()=>{
+    for(const counts of [{view:209757,comment:1070,mylist:1790,like:63},{view:31441461,comment:5594970,mylist:674219,like:45678}]) {
+      meta.updateVideoCount(counts);
+      for(const key of ['view','comment','mylist','like']) {
+        assert.strictEqual(meta._elm[key+'Count'].textContent,counts[key].toLocaleString());
+        assert.strictEqual(meta._elm[key+'Count'].title,counts[key].toLocaleString());
+      }
+    }
   });
   it('hides explicitly invalid likes instead of showing a fabricated zero',()=>{
     for(const like of [null,-1,NaN,Infinity,'0',1.5]) {meta.updateVideoCount({like:5});meta.updateVideoCount({like});assert.strictEqual(meta._elm.likeColumn.hidden,true);}

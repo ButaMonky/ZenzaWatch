@@ -4710,12 +4710,6 @@ class VideoMetaInfo extends BaseViewComponent {
   }
 
   updateVideoCount(count) {
-    const compact = value => {
-      if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
-      if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
-      if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
-      return value.toLocaleString();
-    };
     for (const key of ['comment', 'view', 'mylist', 'like']) {
       // Comment-only refreshes must preserve likes; full video changes reset them.
       if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
@@ -4726,7 +4720,7 @@ class VideoMetaInfo extends BaseViewComponent {
       const valid = Number.isSafeInteger(value) && value >= 0;
       const element = this._elm[`${key}Count`];
       if (key === 'like') { this._elm.likeColumn.hidden = !valid; }
-      element.textContent = valid ? compact(value) : '';
+      element.textContent = valid ? value.toLocaleString() : '';
       element.title = valid ? value.toLocaleString() : '';
     }
   }
@@ -4747,11 +4741,12 @@ VideoMetaInfo._shadow_ = (`
       .VideoMetaInfo .countOuter {
         display: inline-flex;
         flex-wrap: wrap;
-        gap: 0 4px;
+        gap: 0 8px;
       }
 
       .VideoMetaInfo .countOuter .column {
-        display: inline-block;
+        display: inline-flex;
+        gap: 4px;
         white-space: nowrap;
       }
 
@@ -4782,10 +4777,10 @@ VideoMetaInfo._shadow_ = (`
       </span>
 
       <span class="countOuter">
-        <span class="column">再生:       <span class="count viewCount"></span></span>
-        <span class="column">コメント:   <span class="count commentCount"></span></span>
-        <span class="column">マイリスト: <span class="count mylistCount"></span></span>
-        <span class="column likeColumn" hidden>いいね: <span class="count likeCount"></span></span>
+        <span class="column"><span>再生:</span><span class="count viewCount"></span></span>
+        <span class="column"><span>コメント:</span><span class="count commentCount"></span></span>
+        <span class="column"><span>マイリスト:</span><span class="count mylistCount"></span></span>
+        <span class="column likeColumn" hidden><span>いいね:</span><span class="count likeCount"></span></span>
       </span>
     </div>
   `);

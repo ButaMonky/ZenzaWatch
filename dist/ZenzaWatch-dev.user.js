@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.154-task229
+// @version        2.7.155-task230
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 18:10Z
+// build: 2026-10-04 18:51Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.154-task229';
+    var VER = '2.7.155-task230';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 18:10Z';
+    var BUILD = '2026-10-04 18:51Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -43835,12 +43835,6 @@ class VideoMetaInfo extends BaseViewComponent {
 		this.updateVideoCount(count);
 	}
 	updateVideoCount(count) {
-		const compact = value => {
-			if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
-			if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
-			if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
-			return value.toLocaleString();
-		};
 		for (const key of ['comment', 'view', 'mylist', 'like']) {
 			if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
 			const value = count[key];
@@ -43848,7 +43842,7 @@ class VideoMetaInfo extends BaseViewComponent {
 			const valid = Number.isSafeInteger(value) && value >= 0;
 			const element = this._elm[`${key}Count`];
 			if (key === 'like') { this._elm.likeColumn.hidden = !valid; }
-			element.textContent = valid ? compact(value) : '';
+			element.textContent = valid ? value.toLocaleString() : '';
 			element.title = valid ? value.toLocaleString() : '';
 		}
 	}
@@ -43866,10 +43860,11 @@ VideoMetaInfo._shadow_ = (`
 			.VideoMetaInfo .countOuter {
 				display: inline-flex;
 				flex-wrap: wrap;
-				gap: 0 4px;
+				gap: 0 8px;
 			}
 			.VideoMetaInfo .countOuter .column {
-				display: inline-block;
+				display: inline-flex;
+				gap: 4px;
 				white-space: nowrap;
 			}
 			.VideoMetaInfo .column[hidden] { display: none; }
@@ -43894,10 +43889,10 @@ VideoMetaInfo._shadow_ = (`
 				<span class="postedAt"></span>
 			</span>
 			<span class="countOuter">
-				<span class="column">再生:       <span class="count viewCount"></span></span>
-				<span class="column">コメント:   <span class="count commentCount"></span></span>
-				<span class="column">マイリスト: <span class="count mylistCount"></span></span>
-				<span class="column likeColumn" hidden>いいね: <span class="count likeCount"></span></span>
+				<span class="column"><span>再生:</span><span class="count viewCount"></span></span>
+				<span class="column"><span>コメント:</span><span class="count commentCount"></span></span>
+				<span class="column"><span>マイリスト:</span><span class="count mylistCount"></span></span>
+				<span class="column likeColumn" hidden><span>いいね:</span><span class="count likeCount"></span></span>
 			</span>
 		</div>
 	`);

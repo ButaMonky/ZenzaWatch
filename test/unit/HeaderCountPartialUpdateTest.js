@@ -13,7 +13,7 @@ describe('Task228 real comment-count event preserves header counters',()=>{
    meta.update({postedAt:0,count:{view:115000,comment:1351,mylist:158,like:1225}});
    const view=Object.create(DialogView.prototype);view.emit=(name,data)=>{assert.strictEqual(name,'videoCount');meta.updateVideoCount(data);};
    view._onVideoCount({comment:1282});
-   assert.strictEqual(meta._elm.viewCount.textContent,'11.5万');
+   assert.strictEqual(meta._elm.viewCount.textContent,'115,000');
    assert.strictEqual(meta._elm.mylistCount.textContent,'158');
    assert.strictEqual(meta._elm.commentCount.textContent,'1,282');
    assert.strictEqual(meta._elm.likeCount.textContent,'1,225');

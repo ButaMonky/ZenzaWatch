@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.153-task228
+// @version        2.7.154-task229
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 17:56Z
+// build: 2026-10-04 18:10Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.153-task228';
+    var VER = '2.7.154-task229';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 17:56Z';
+    var BUILD = '2026-10-04 18:10Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -30731,6 +30731,7 @@ class VideoListView extends Emitter {
 		}, 100);
 		const onScrollEnd = _.debounce(() => ccl.remove('is-scrolling'), 500);
 		container.addEventListener('scroll', onScroll, {passive: true});
+		container.addEventListener('scroll', this._revealVisibleItems.bind(this), {passive: true});
 		if (this._dropfile) {
 			$body
 				.on('dragover', this._onBodyDragOverFile.bind(this))
@@ -30751,6 +30752,28 @@ class VideoListView extends Emitter {
 				});
 			}
 		});
+	}
+	_revealVisibleItems() {
+		const container = this.listContainer;
+		const nodes = this.list && this.list.children;
+		if (!container || !nodes || !container.clientHeight) { return; }
+		const top = container.scrollTop - 800;
+		const bottom = container.scrollTop + container.clientHeight + 800;
+		let low = 0, high = nodes.length;
+		while (low < high) {
+			const middle = (low + high) >>> 1;
+			const node = nodes[middle];
+			if (node.offsetTop + node.offsetHeight < top) { low = middle + 1; }
+			else { high = middle; }
+		}
+		let changed = false;
+		for (let i = low; i < nodes.length && nodes[i].offsetTop < bottom; i++) {
+			const item = this.findItemByItemView(nodes[i]);
+			if (item && item.isLazy) { item.isLazy = false; changed = true; }
+		}
+		if (changed) {
+			this.renderList(this.items).catch(error => console.warn('playlist viewport render', error));
+		}
 	}
 	_onMylistPocketInfo(itemView, {info, isNg, isFav}) {
 		const item = this.findItemByItemView(itemView);

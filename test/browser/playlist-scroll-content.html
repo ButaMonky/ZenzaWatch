@@ -49,5 +49,22 @@ window.runListMutations=async()=>{
  const replaced=[...doc.querySelectorAll('.videoItem')].slice(0,4).every(n=>n.querySelector('.videoInfo')?.textContent.includes('Replacement'));
  return {reversed,replaced,pass:reversed&&replaced};
 };
+// Task229: large/reverse jumps, including multi-column layouts and clamped ends.
+window.runJumpScroll=async(width=300)=>{
+ frame.style.width=width+'px';await pause(200);
+ const frames=[];
+ for(const target of [5000,12000,35000,1000,80000,0,-100,1e9,5000,0]){
+  view.listContainer.scrollTop=target;
+  await new Promise(requestAnimationFrame);
+  const box=view.listContainer.getBoundingClientRect();
+  const visible=[...doc.querySelectorAll('.videoItem')].filter(n=>{
+   const rect=n.getBoundingClientRect();return rect.bottom>box.top && rect.top<box.bottom;
+  });
+  frames.push({target,visible:visible.length,blank:visible.filter(n=>!n.querySelector('.videoInfo')).length});
+ }
+ await pause(200);
+ return {width,pass:frames.every(x=>x.visible>0 && x.blank===0),frames,
+  retained:doc.querySelectorAll('.videoInfo').length,total:expectedCount};
+};
 window.ready=true;
 </script>

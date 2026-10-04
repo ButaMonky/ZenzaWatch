@@ -100,6 +100,7 @@ class VideoListView extends Emitter {
     }, 100);
     const onScrollEnd = _.debounce(() => ccl.remove('is-scrolling'), 500);
     container.addEventListener('scroll', onScroll, {passive: true});
+    container.addEventListener('scroll', this._revealVisibleItems.bind(this), {passive: true});
 
     if (this._dropfile) {
       $body
@@ -122,6 +123,30 @@ class VideoListView extends Emitter {
         });
       }
     });
+  }
+  _revealVisibleItems() {
+    const container = this.listContainer;
+    const nodes = this.list && this.list.children;
+    if (!container || !nodes || !container.clientHeight) { return; }
+    // Observer delivery follows painting. Reveal a newly scrolled viewport now,
+    // retaining the observer's offscreen cleanup and 800px preload margin.
+    const top = container.scrollTop - 800;
+    const bottom = container.scrollTop + container.clientHeight + 800;
+    let low = 0, high = nodes.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      const node = nodes[middle];
+      if (node.offsetTop + node.offsetHeight < top) { low = middle + 1; }
+      else { high = middle; }
+    }
+    let changed = false;
+    for (let i = low; i < nodes.length && nodes[i].offsetTop < bottom; i++) {
+      const item = this.findItemByItemView(nodes[i]);
+      if (item && item.isLazy) { item.isLazy = false; changed = true; }
+    }
+    if (changed) {
+      this.renderList(this.items).catch(error => console.warn('playlist viewport render', error));
+    }
   }
   _onMylistPocketInfo(itemView, {info, isNg, isFav}) {
     const item = this.findItemByItemView(itemView);

@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.152-task227
+// @version        2.7.153-task228
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 17:13Z
+// build: 2026-10-04 17:56Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.152-task227';
+    var VER = '2.7.153-task228';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 17:13Z';
+    var BUILD = '2026-10-04 17:56Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -29954,15 +29954,15 @@ class VideoListItemView  {
 		/*counter-increment: itemIndex;*/
 		position: absolute;
 		right: 8px;
-		bottom: 24px;
+		top: 80%;
 		color: #666;
 		font-family: Impact;
 		font-size: 45px;
 		pointer-events: none;
 		z-index: 1;
-		line-height: 1;
+		line-height: ${this.ITEM_HEIGHT}px;
 		opacity: 0.6;
-		transform: none;
+		transform: translate(0, -50%);
 	}
 	.videoItem.is-updating {
 		opacity: 0.3;
@@ -30214,6 +30214,7 @@ class VideoListItemView  {
 	static compactCount(value) {
 		if (!Number.isFinite(value)) { return '不明'; }
 		if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+		if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
 		if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
 		return value.toLocaleString();
 	}
@@ -41340,10 +41341,6 @@ VideoHeaderPanel.__css__ = (`
 			margin: 8px;
 		}
 		.zenzaWatchVideoHeaderPanel .publicStatus {
-			display: flex;
-			flex-wrap: wrap;
-			align-items: center;
-			gap: 4px 16px;
 			position: relative;
 			color: #ccc;
 		}
@@ -41384,8 +41381,9 @@ VideoHeaderPanel.__css__ = (`
 		}
 		.zenzaWatchVideoHeaderPanel .relatedInfoMenuContainer {
 			display: inline-block;
-			position: relative;
-			margin: 0;
+			position: absolute;
+			top: 0;
+			margin: 0 16px;
 			z-index: 1000;
 		}
 		.zenzaWatchVideoHeaderPanel:focus-within,
@@ -43816,12 +43814,14 @@ class VideoMetaInfo extends BaseViewComponent {
 	updateVideoCount(count) {
 		const compact = value => {
 			if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+			if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
 			if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
 			return value.toLocaleString();
 		};
 		for (const key of ['comment', 'view', 'mylist', 'like']) {
 			if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
 			const value = count[key];
+			if (value === undefined) { continue; }
 			const valid = Number.isSafeInteger(value) && value >= 0;
 			const element = this._elm[`${key}Count`];
 			if (key === 'like') { this._elm.likeColumn.hidden = !valid; }

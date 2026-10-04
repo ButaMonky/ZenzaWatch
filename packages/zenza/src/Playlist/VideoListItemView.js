@@ -40,16 +40,16 @@ class VideoListItemView  {
     /*counter-increment: itemIndex;*/
     position: absolute;
     right: 8px;
-    bottom: 24px;
+    top: 80%;
     color: #666;
     font-family: Impact;
     font-size: 45px;
     pointer-events: none;
     z-index: 1;
-    line-height: 1;
+    line-height: ${this.ITEM_HEIGHT}px;
     opacity: 0.6;
 
-    transform: none;
+    transform: translate(0, -50%);
   }
 
   .videoItem.is-updating {
@@ -332,6 +332,7 @@ class VideoListItemView  {
   static compactCount(value) {
     if (!Number.isFinite(value)) { return '不明'; }
     if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+    if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
     if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
     return value.toLocaleString();
   }

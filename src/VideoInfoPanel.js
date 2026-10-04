@@ -1975,10 +1975,6 @@ VideoHeaderPanel.__css__ = (`
       margin: 8px;
     }
     .zenzaWatchVideoHeaderPanel .publicStatus {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 4px 16px;
       position: relative;
       color: #ccc;
     }
@@ -2024,8 +2020,9 @@ VideoHeaderPanel.__css__ = (`
 
     .zenzaWatchVideoHeaderPanel .relatedInfoMenuContainer {
       display: inline-block;
-      position: relative;
-      margin: 0;
+      position: absolute;
+      top: 0;
+      margin: 0 16px;
       z-index: 1000;
     }
 
@@ -4715,6 +4712,7 @@ class VideoMetaInfo extends BaseViewComponent {
   updateVideoCount(count) {
     const compact = value => {
       if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+      if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
       if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
       return value.toLocaleString();
     };
@@ -4722,6 +4720,9 @@ class VideoMetaInfo extends BaseViewComponent {
       // Comment-only refreshes must preserve likes; full video changes reset them.
       if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
       const value = count[key];
+      // Dialog expands a comment-only event with view/mylist: undefined.
+      // Undefined means no update, not a request to erase existing counts.
+      if (value === undefined) { continue; }
       const valid = Number.isSafeInteger(value) && value >= 0;
       const element = this._elm[`${key}Count`];
       if (key === 'like') { this._elm.likeColumn.hidden = !valid; }

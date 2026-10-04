@@ -198,7 +198,7 @@ class VideoInfoPanel extends Emitter {
           class="playlistAppend clickable-item" title="プレイリストで開く"
           data-command="playlistAppend" data-param="${videoId}"
         >▶</zenza-playlist-append><div
-          class="deflistAdd" title="とりあえずマイリスト"
+          class="deflistAdd" title="あとで見る"
           data-command="deflistAdd" data-param="${videoId}"
         >&#x271A;</div
         ><div class="pocket-info" title="動画情報"
@@ -1975,6 +1975,10 @@ VideoHeaderPanel.__css__ = (`
       margin: 8px;
     }
     .zenzaWatchVideoHeaderPanel .publicStatus {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px 16px;
       position: relative;
       color: #ccc;
     }
@@ -2020,9 +2024,8 @@ VideoHeaderPanel.__css__ = (`
 
     .zenzaWatchVideoHeaderPanel .relatedInfoMenuContainer {
       display: inline-block;
-      position: absolute;
-      top: 0;
-      margin: 0 16px;
+      position: relative;
+      margin: 0;
       z-index: 1000;
     }
 
@@ -2208,7 +2211,7 @@ class VideoSearchForm extends Emitter {
    * すぐに開くのではなく、検索欄の下にその動画のカードをアニメーション付きで表示する。
    * - 手入力でも貼り付けでも動く（input イベントで判定）
    * - 空白・読点・改行区切りで最大5件まで同時に表示（全部が動画IDの時だけ。1つでも普通の語があれば通常の検索扱い）
-   * - カードのクリック/▶再生/Enter で開く。次に再生・末尾に追加・とりあえずマイリストも可能
+   * - カードのクリック/▶再生/Enter で開く。次に再生・末尾に追加・あとで見るも可能
    * - ↑↓でカードを選択、Esc で閉じる（入力を変えると再表示）
    */
   static parseVideoIds(text) {
@@ -2492,7 +2495,7 @@ class VideoSearchForm extends Emitter {
         <button type="button" class="searchVideoCard-button is-primary" data-action="open" title="今すぐ再生">&#x25B6; 再生</button>
         <button type="button" class="searchVideoCard-button" data-action="playlistInsert" title="プレイリストの次に入れる">次に再生</button>
         <button type="button" class="searchVideoCard-button" data-action="playlistAdd" title="プレイリストの最後に追加">末尾に追加</button>
-        <button type="button" class="searchVideoCard-button" data-action="deflistAdd" title="とりあえずマイリストに登録">とりマイ</button>
+        <button type="button" class="searchVideoCard-button" data-action="deflistAdd" title="あとで見るに登録">あとで見る</button>
       </div>
     `.trim();
     card.querySelector('.searchVideoCard-id').textContent = watchId;
@@ -4694,26 +4697,36 @@ class VideoMetaInfo extends BaseViewComponent {
       body: shadow.querySelector('.videoMetaInfo'),
       viewCount: shadow.querySelector('.viewCount'),
       commentCount: shadow.querySelector('.commentCount'),
-      mylistCount: shadow.querySelector('.mylistCount')
+      mylistCount: shadow.querySelector('.mylistCount'),
+      likeCount: shadow.querySelector('.likeCount'),
+      likeColumn: shadow.querySelector('.likeColumn')
     });
   }
 
   update(videoInfo) {
     this._elm.postedAt.textContent = new Date(videoInfo.postedAt).toLocaleString();
+    this._elm.likeColumn.hidden = true;
+    this._elm.likeCount.textContent = '';
+    this._elm.likeCount.title = '';
     const count = videoInfo.count;
     this.updateVideoCount(count);
   }
 
-  updateVideoCount({comment, view, mylist}) {
-    const addComma = m => m.toLocaleString ? m.toLocaleString() : m;
-    if (typeof comment === 'number') {
-      this._elm.commentCount.textContent = addComma(comment);
-    }
-    if (typeof view === 'number') {
-      this._elm.viewCount.textContent = addComma(view);
-    }
-    if (typeof mylist === 'number') {
-      this._elm.mylistCount.textContent = addComma(mylist);
+  updateVideoCount(count) {
+    const compact = value => {
+      if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+      if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
+      return value.toLocaleString();
+    };
+    for (const key of ['comment', 'view', 'mylist', 'like']) {
+      // Comment-only refreshes must preserve likes; full video changes reset them.
+      if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
+      const value = count[key];
+      const valid = Number.isSafeInteger(value) && value >= 0;
+      const element = this._elm[`${key}Count`];
+      if (key === 'like') { this._elm.likeColumn.hidden = !valid; }
+      element.textContent = valid ? compact(value) : '';
+      element.title = valid ? value.toLocaleString() : '';
     }
   }
 }
@@ -4731,13 +4744,17 @@ VideoMetaInfo._shadow_ = (`
       }
 
       .VideoMetaInfo .countOuter {
-        white-space: nowrap;
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0 4px;
       }
 
       .VideoMetaInfo .countOuter .column {
         display: inline-block;
         white-space: nowrap;
       }
+
+      .VideoMetaInfo .column[hidden] { display: none; }
 
       .VideoMetaInfo .count {
         font-weight: bolder;
@@ -4767,6 +4784,7 @@ VideoMetaInfo._shadow_ = (`
         <span class="column">再生:       <span class="count viewCount"></span></span>
         <span class="column">コメント:   <span class="count commentCount"></span></span>
         <span class="column">マイリスト: <span class="count mylistCount"></span></span>
+        <span class="column likeColumn" hidden>いいね: <span class="count likeCount"></span></span>
       </span>
     </div>
   `);

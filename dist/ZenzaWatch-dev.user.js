@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.151-task226
+// @version        2.7.152-task227
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 16:50Z
+// build: 2026-10-04 17:13Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.151-task226';
+    var VER = '2.7.152-task227';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 16:50Z';
+    var BUILD = '2026-10-04 17:13Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -917,9 +917,9 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 86, command: 'toggle-showComment'},
 	{id: 'TOGGLE_LOOP', legacy: true, category: '再生', label: 'ループ再生 ON/OFF',
 		defaultKey: 82, command: 'toggle-loop'},
-	{id: 'DEFLIST_ADD', legacy: true, category: 'マイリスト', label: 'とりあえずマイリストへ追加',
+	{id: 'DEFLIST_ADD', legacy: true, category: 'マイリスト', label: 'あとで見るへ追加',
 		defaultKey: 84, command: 'deflistAdd'},
-	{id: 'DEFLIST_REMOVE', legacy: true, category: 'マイリスト', label: 'とりあえずマイリストから削除',
+	{id: 'DEFLIST_REMOVE', legacy: true, category: 'マイリスト', label: 'あとで見るから削除',
 		defaultKey: 84 + KEY_MOD.SHIFT, command: 'deflistRemove'},
 	{id: 'TOGGLE_PLAY', legacy: true, category: '再生', label: '再生 / 一時停止',
 		defaultKey: 32, command: 'togglePlay'},
@@ -5809,7 +5809,7 @@ class NicoQuery {
 			case 'user':
 				return `投稿動画一覧 user/${id}`;
 			case 'deflist':
-				return 'とりあえずマイリスト';
+				return 'あとで見る';
 			case 'nicorepo':
 				return 'ニコレポ新着動画';
 			case 'mylist':
@@ -6380,7 +6380,7 @@ const {VideoItemElement, VideoItemProps} = (() => {
 						${duration}
 					</a>
 					<span class="playlistAppend" data-command="playlistAppend" data-param="${watchId}" title="プレイリストに追加">▶</span>
-					<span class="deflistAdd"  data-command="deflistAdd" data-param="${watchId}" title="とりあえずマイリスト">&#x271A;</span>
+					<span class="deflistAdd"  data-command="deflistAdd" data-param="${watchId}" title="あとで見る">&#x271A;</span>
 					<span class="pocket-info" data-command="pocket-info" data-param="${watchId}" title="動画情報">？</span>
 				</div>
 				<div class="videoInfo">
@@ -8954,9 +8954,9 @@ const MylistApiLoader = (() => {
 					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 					credentials: 'include'
 				}).then(r => r.json())
-					.catch(e => { throw new Error('とりあえずマイリストの取得失敗(2)', e); });
+					.catch(e => { throw new Error('あとで見るの取得失敗(2)', e); });
 				if (res.meta.status !== 200 || !res.data.watchLater) {
-					throw new Error('とりあえずマイリストの取得失敗(1)', res);
+					throw new Error('あとで見るの取得失敗(1)', res);
 				}
 				if (data == null) {
 					data = res.data.watchLater;
@@ -9047,7 +9047,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(result => {
-					throw new Error('とりあえずマイリストから削除失敗(2)', { result, status: 'fail' });
+					throw new Error('あとで見るから削除失敗(2)', { result, status: 'fail' });
 				});
 			if (result.meta.status && result.meta.status === 200) {
 				cacheStorage.removeItem(cacheKey);
@@ -9055,7 +9055,7 @@ const MylistApiLoader = (() => {
 				return {
 					status: 'ok',
 					result,
-					message: 'とりあえずマイリストから削除'
+					message: 'あとで見るから削除'
 				};
 			}
 			throw new Error(result.error.description, {
@@ -9110,7 +9110,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(err => {
-						throw new Error('とりあえずマイリスト登録失敗(200)', {
+						throw new Error('あとで見る登録失敗(200)', {
 							status: 'fail',
 							result: err
 						});
@@ -9121,12 +9121,12 @@ const MylistApiLoader = (() => {
 				return {
 					status: 'ok',
 					result,
-					message: 'とりあえずマイリスト登録'
+					message: 'あとで見る登録'
 				};
 			}
 			if (result.meta.status && result.meta.status === 409 && !isRetry) {
 					await this.removeDeflistItem(watchId).catch(err => {
-							throw new Error('とりあえずマイリスト登録失敗(101)', {
+							throw new Error('あとで見る登録失敗(101)', {
 								status: 'fail',
 								result: err.result,
 								code: err.code
@@ -9136,11 +9136,11 @@ const MylistApiLoader = (() => {
 					return {
 						status: 'ok',
 						result: added,
-						message: 'とりあえずマイリストの先頭に移動'
+						message: 'あとで見るの先頭に移動'
 					};
 			}
 			if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-				throw new Error('とりあえずマイリスト登録失敗(100)', {
+				throw new Error('あとで見る登録失敗(100)', {
 					status: 'fail',
 					result,
 				});
@@ -29954,15 +29954,15 @@ class VideoListItemView  {
 		/*counter-increment: itemIndex;*/
 		position: absolute;
 		right: 8px;
-		top: 80%;
+		bottom: 24px;
 		color: #666;
 		font-family: Impact;
 		font-size: 45px;
 		pointer-events: none;
 		z-index: 1;
-		line-height: ${this.ITEM_HEIGHT}px;
+		line-height: 1;
 		opacity: 0.6;
-		transform: translate(0, -50%);
+		transform: none;
 	}
 	.videoItem.is-updating {
 		opacity: 0.3;
@@ -30151,6 +30151,7 @@ class VideoListItemView  {
 	.counter {
 		position: absolute;
 		top: 80px;
+		z-index: 2;
 		left: 2px;
 		right: 2px;
 		text-align: center;
@@ -30163,10 +30164,6 @@ class VideoListItemView  {
 	.counter { display: flex; justify-content: center; gap: 5px; font-size: 12px; }
 	.counter .count + .count { margin-left: 0; }
 	.counter .count { flex: none; }
-	.counter .count-full { display: inline-block; }
-	.counter .count-short { display: none; }
-	.counter.is-compact .count-full { position: absolute; visibility: hidden; pointer-events: none; }
-	.counter.is-compact .count-short { display: inline-block; }
 	.videoLink {
 		font-size: 14px;
 		color: #ff9;
@@ -30217,28 +30214,14 @@ class VideoListItemView  {
 	static compactCount(value) {
 		if (!Number.isFinite(value)) { return '不明'; }
 		if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
-		if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
 		if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
 		return value.toLocaleString();
-	}
-	static fitCounters(root) {
-		const changes = [];
-		for (const counter of root.querySelectorAll('.counter')) {
-			const available = counter.clientWidth;
-			if (!available) { continue; }
-			const fields = [...counter.querySelectorAll('.count-full')];
-			const required = fields.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0) + Math.max(0, fields.length - 1) * 5;
-			changes.push([counter, required > available]);
-		}
-		for (const [counter, compact] of changes) {
-			counter.classList.toggle('is-compact', compact);
-		}
 	}
 	static build(item, index = 0) {
 		const {html} = dll.lit;
 		const {classMap} = dll.directives;
 		const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
-		const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}><span class="count-full">${label}: <span class=${`value ${key}Count`}>${fullCount(value)}</span></span><span class="count-short">${label}: <span class="value">${this.compactCount(value)}</span></span></span>`;
+		const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}>${label}: <span class=${`value ${key}Count`}>${this.compactCount(value)}</span></span>`;
 		const {cache, timestamp, index: _index, isLazy} = this.map.get(item) || {};
 		if (cache && timestamp === item.timestamp && index === _index && isLazy === item.isLazy) {
 			return cache;
@@ -30274,7 +30257,7 @@ class VideoListItemView  {
 							<span class="duration">${textUtil.secToTime(item.duration)}</span>
 						</a>
 						<span class="command playlistAppend" data-command="playlistAppend" data-param=${watchId} title="プレイリストに追加">▶</span>
-						<span class="command deflistAdd"  data-command="deflistAdd" data-param=${watchId} title="とりあえずマイリスト">&#x271A;</span>
+						<span class="command deflistAdd"  data-command="deflistAdd" data-param=${watchId} title="あとで見る">&#x271A;</span>
 						<span class="command pocket-info" data-command="pocket-info" data-param=${watchId} title="動画情報">？</span>
 					</div>
 					<div class="videoInfo">
@@ -30725,21 +30708,6 @@ class VideoListView extends Emitter {
 		);
 		const container = this.listContainer = doc.querySelector('#listContainer');
 		const list = this.list = doc.getElementById('listContainerInner');
-		const fitCounters = () => VideoListItemView.fitCounters(list);
-		if (w.ResizeObserver) {
-			let lastWidth = -1;
-			const observer = new w.ResizeObserver(entries => {
-				const width = entries[0].contentRect.width;
-				if (width === lastWidth) { return; }
-				lastWidth = width;
-				fitCounters();
-			});
-			observer.observe(list);
-			w.addEventListener('pagehide', () => observer.disconnect(), {once: true});
-		} else {
-			w.addEventListener('resize', _.debounce(fitCounters, 100));
-		}
-		if (doc.fonts) { doc.fonts.ready.then(fitCounters); }
 		if (this.items && this.items.length) {
 			this.renderList(this.items);
 		}
@@ -30950,7 +30918,6 @@ class VideoListView extends Emitter {
 		console.timeEnd(timeLabel);
 		this._updateCSSVars();
 		this._setInviewObserver();
-		VideoListItemView.fitCounters(this.list);
 	}
 	async _buildList(items) {
 		items = items || this.items || [];
@@ -33789,7 +33756,7 @@ util.addStyle(`
 	}
 	/*
 		Task 039: 画面モード「小」でプレイヤーを小さくすると、右上のホバーメニュー
-		（いいね・ツイート・マイリスト・とりあえずマイリスト・閉じる）が動画の
+		（いいね・ツイート・マイリスト・あとで見る・閉じる）が動画の
 		左外側にはみ出して、宙に浮いたように表示される問題への対策。
 		原因は、この5つのボタンが「幅240pxの箱（.menuItemContainer.rightTop）の
 		左端から left: 0 / 40 / 80 / 120px」という**左基準**で並べられていること。
@@ -35124,7 +35091,7 @@ class NicoVideoPlayerDialog extends Emitter {
 					`投稿者: ${info.owner.name} ${info.owner.linkId} ${originalVideoId}` : '';
 		}).then(() => this._mylistApiLoader.addDeflistItem(watchId, description))
 			.then(result => this.execCommand('notify', result.message))
-			.catch(err => this.execCommand('alert', err.message ? err.message : 'とりあえずマイリストに登録失敗'))
+			.catch(err => this.execCommand('alert', err.message ? err.message : 'あとで見るに登録失敗'))
 			.then(() => {
 			window.clearTimeout(timer);
 			timer = window.setTimeout(unlock, 2000);
@@ -36888,7 +36855,7 @@ VideoHoverMenu.__tpl__ = (`
 						</div>
 					</div>
 					<div class="menuButton mylistButton deflistAdd forMember" data-command="deflistAdd">
-						<div class="tooltip">とりあえずマイリスト(T)</div>
+						<div class="tooltip">あとで見る(T)</div>
 						<div class="menuButtonInner">&#x271A;</div>
 					</div>
 					<div class="menuButton closeButton" data-command="close">
@@ -39756,7 +39723,7 @@ class VideoInfoPanel extends Emitter {
 					class="playlistAppend clickable-item" title="プレイリストで開く"
 					data-command="playlistAppend" data-param="${videoId}"
 				>▶</zenza-playlist-append><div
-					class="deflistAdd" title="とりあえずマイリスト"
+					class="deflistAdd" title="あとで見る"
 					data-command="deflistAdd" data-param="${videoId}"
 				>&#x271A;</div
 				><div class="pocket-info" title="動画情報"
@@ -41373,6 +41340,10 @@ VideoHeaderPanel.__css__ = (`
 			margin: 8px;
 		}
 		.zenzaWatchVideoHeaderPanel .publicStatus {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: center;
+			gap: 4px 16px;
 			position: relative;
 			color: #ccc;
 		}
@@ -41413,9 +41384,8 @@ VideoHeaderPanel.__css__ = (`
 		}
 		.zenzaWatchVideoHeaderPanel .relatedInfoMenuContainer {
 			display: inline-block;
-			position: absolute;
-			top: 0;
-			margin: 0 16px;
+			position: relative;
+			margin: 0;
 			z-index: 1000;
 		}
 		.zenzaWatchVideoHeaderPanel:focus-within,
@@ -41570,7 +41540,7 @@ class VideoSearchForm extends Emitter {
 	* すぐに開くのではなく、検索欄の下にその動画のカードをアニメーション付きで表示する。
 	* - 手入力でも貼り付けでも動く（input イベントで判定）
 	* - 空白・読点・改行区切りで最大5件まで同時に表示（全部が動画IDの時だけ。1つでも普通の語があれば通常の検索扱い）
-	* - カードのクリック/▶再生/Enter で開く。次に再生・末尾に追加・とりあえずマイリストも可能
+	* - カードのクリック/▶再生/Enter で開く。次に再生・末尾に追加・あとで見るも可能
 	* - ↑↓でカードを選択、Esc で閉じる（入力を変えると再表示）
 	*/
 	static parseVideoIds(text) {
@@ -41834,7 +41804,7 @@ class VideoSearchForm extends Emitter {
 				<button type="button" class="searchVideoCard-button is-primary" data-action="open" title="今すぐ再生">&#x25B6; 再生</button>
 				<button type="button" class="searchVideoCard-button" data-action="playlistInsert" title="プレイリストの次に入れる">次に再生</button>
 				<button type="button" class="searchVideoCard-button" data-action="playlistAdd" title="プレイリストの最後に追加">末尾に追加</button>
-				<button type="button" class="searchVideoCard-button" data-action="deflistAdd" title="とりあえずマイリストに登録">とりマイ</button>
+				<button type="button" class="searchVideoCard-button" data-action="deflistAdd" title="あとで見るに登録">あとで見る</button>
 			</div>
 		`.trim();
 		card.querySelector('.searchVideoCard-id').textContent = watchId;
@@ -43830,24 +43800,33 @@ class VideoMetaInfo extends BaseViewComponent {
 			body: shadow.querySelector('.videoMetaInfo'),
 			viewCount: shadow.querySelector('.viewCount'),
 			commentCount: shadow.querySelector('.commentCount'),
-			mylistCount: shadow.querySelector('.mylistCount')
+			mylistCount: shadow.querySelector('.mylistCount'),
+			likeCount: shadow.querySelector('.likeCount'),
+			likeColumn: shadow.querySelector('.likeColumn')
 		});
 	}
 	update(videoInfo) {
 		this._elm.postedAt.textContent = new Date(videoInfo.postedAt).toLocaleString();
+		this._elm.likeColumn.hidden = true;
+		this._elm.likeCount.textContent = '';
+		this._elm.likeCount.title = '';
 		const count = videoInfo.count;
 		this.updateVideoCount(count);
 	}
-	updateVideoCount({comment, view, mylist}) {
-		const addComma = m => m.toLocaleString ? m.toLocaleString() : m;
-		if (typeof comment === 'number') {
-			this._elm.commentCount.textContent = addComma(comment);
-		}
-		if (typeof view === 'number') {
-			this._elm.viewCount.textContent = addComma(view);
-		}
-		if (typeof mylist === 'number') {
-			this._elm.mylistCount.textContent = addComma(mylist);
+	updateVideoCount(count) {
+		const compact = value => {
+			if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
+			if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
+			return value.toLocaleString();
+		};
+		for (const key of ['comment', 'view', 'mylist', 'like']) {
+			if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
+			const value = count[key];
+			const valid = Number.isSafeInteger(value) && value >= 0;
+			const element = this._elm[`${key}Count`];
+			if (key === 'like') { this._elm.likeColumn.hidden = !valid; }
+			element.textContent = valid ? compact(value) : '';
+			element.title = valid ? value.toLocaleString() : '';
 		}
 	}
 }
@@ -43862,12 +43841,15 @@ VideoMetaInfo._shadow_ = (`
 				font-weight: bold
 			}
 			.VideoMetaInfo .countOuter {
-				white-space: nowrap;
+				display: inline-flex;
+				flex-wrap: wrap;
+				gap: 0 4px;
 			}
 			.VideoMetaInfo .countOuter .column {
 				display: inline-block;
 				white-space: nowrap;
 			}
+			.VideoMetaInfo .column[hidden] { display: none; }
 			.VideoMetaInfo .count {
 				font-weight: bolder;
 			}
@@ -43892,6 +43874,7 @@ VideoMetaInfo._shadow_ = (`
 				<span class="column">再生:       <span class="count viewCount"></span></span>
 				<span class="column">コメント:   <span class="count commentCount"></span></span>
 				<span class="column">マイリスト: <span class="count mylistCount"></span></span>
+				<span class="column likeColumn" hidden>いいね: <span class="count likeCount"></span></span>
 			</span>
 		</div>
 	`);

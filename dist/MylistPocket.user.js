@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.43-task203
+// @version     0.5.44-task227
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-02 13:37Z
+// build: 2026-10-04 17:13Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -529,7 +529,7 @@ AntiPrototypeJs().then(() => {
     const __tpl__ = (`
       <div class="mylistPocketHoverMenu scalingUI zen-family">
         <button class="mylistPocketButton command deflist-add wwwZenzaOnly is-need-login" data-command="deflist"
-          tooltip="とりあえずマイリスト">&#x271A;</button>
+          tooltip="あとで見る">&#x271A;</button>
         <button class="mylistPocketButton command info" data-command="info"
           tooltip="動画情報を表示">？</button>
         <button class="mylistPocketButton command playlist-queue zenzaMenu" data-command="playlist-queue"
@@ -1470,8 +1470,8 @@ AntiPrototypeJs().then(() => {
                 <button
                   class="mylistPocketButton deflist-add pocket-button command command-watch-id wwwZenzaOnly"
                   data-command="deflist-add"
-                  tooltip="とりあえずマイリスト"
-                >とり</button>
+                  tooltip="あとで見る"
+                >あとで見る</button>
                 <button
                   class="pocket-button command command-watch-id"
                   data-command="mylist-window"
@@ -4142,9 +4142,9 @@ const MylistApiLoader = (() => {
 					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 					credentials: 'include'
 				}).then(r => r.json())
-					.catch(e => { throw new Error('とりあえずマイリストの取得失敗(2)', e); });
+					.catch(e => { throw new Error('あとで見るの取得失敗(2)', e); });
 				if (res.meta.status !== 200 || !res.data.watchLater) {
-					throw new Error('とりあえずマイリストの取得失敗(1)', res);
+					throw new Error('あとで見るの取得失敗(1)', res);
 				}
 				if (data == null) {
 					data = res.data.watchLater;
@@ -4235,7 +4235,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(result => {
-					throw new Error('とりあえずマイリストから削除失敗(2)', { result, status: 'fail' });
+					throw new Error('あとで見るから削除失敗(2)', { result, status: 'fail' });
 				});
 			if (result.meta.status && result.meta.status === 200) {
 				cacheStorage.removeItem(cacheKey);
@@ -4243,7 +4243,7 @@ const MylistApiLoader = (() => {
 				return {
 					status: 'ok',
 					result,
-					message: 'とりあえずマイリストから削除'
+					message: 'あとで見るから削除'
 				};
 			}
 			throw new Error(result.error.description, {
@@ -4298,7 +4298,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(err => {
-						throw new Error('とりあえずマイリスト登録失敗(200)', {
+						throw new Error('あとで見る登録失敗(200)', {
 							status: 'fail',
 							result: err
 						});
@@ -4309,12 +4309,12 @@ const MylistApiLoader = (() => {
 				return {
 					status: 'ok',
 					result,
-					message: 'とりあえずマイリスト登録'
+					message: 'あとで見る登録'
 				};
 			}
 			if (result.meta.status && result.meta.status === 409 && !isRetry) {
 					await this.removeDeflistItem(watchId).catch(err => {
-							throw new Error('とりあえずマイリスト登録失敗(101)', {
+							throw new Error('あとで見る登録失敗(101)', {
 								status: 'fail',
 								result: err.result,
 								code: err.code
@@ -4324,11 +4324,11 @@ const MylistApiLoader = (() => {
 					return {
 						status: 'ok',
 						result: added,
-						message: 'とりあえずマイリストの先頭に移動'
+						message: 'あとで見るの先頭に移動'
 					};
 			}
 			if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-				throw new Error('とりあえずマイリスト登録失敗(100)', {
+				throw new Error('あとで見る登録失敗(100)', {
 					status: 'fail',
 					result,
 				});

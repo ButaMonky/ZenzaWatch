@@ -40,16 +40,16 @@ class VideoListItemView  {
     /*counter-increment: itemIndex;*/
     position: absolute;
     right: 8px;
-    top: 80%;
+    bottom: 24px;
     color: #666;
     font-family: Impact;
     font-size: 45px;
     pointer-events: none;
     z-index: 1;
-    line-height: ${this.ITEM_HEIGHT}px;
+    line-height: 1;
     opacity: 0.6;
 
-    transform: translate(0, -50%);
+    transform: none;
   }
 
   .videoItem.is-updating {
@@ -262,6 +262,7 @@ class VideoListItemView  {
   .counter {
     position: absolute;
     top: 80px;
+    z-index: 2;
     left: 2px;
     right: 2px;
     text-align: center;
@@ -276,10 +277,6 @@ class VideoListItemView  {
   .counter { display: flex; justify-content: center; gap: 5px; font-size: 12px; }
   .counter .count + .count { margin-left: 0; }
   .counter .count { flex: none; }
-  .counter .count-full { display: inline-block; }
-  .counter .count-short { display: none; }
-  .counter.is-compact .count-full { position: absolute; visibility: hidden; pointer-events: none; }
-  .counter.is-compact .count-short { display: inline-block; }
   .videoLink {
     font-size: 14px;
     color: #ff9;
@@ -335,31 +332,15 @@ class VideoListItemView  {
   static compactCount(value) {
     if (!Number.isFinite(value)) { return '不明'; }
     if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
-    if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
     if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
     return value.toLocaleString();
-  }
-  static fitCounters(root) {
-    // Measure the exact text even while compact. Read all geometry before writing
-    // classes, avoiding one synchronous layout per card in large playlists.
-    const changes = [];
-    for (const counter of root.querySelectorAll('.counter')) {
-      const available = counter.clientWidth;
-      if (!available) { continue; }
-      const fields = [...counter.querySelectorAll('.count-full')];
-      const required = fields.reduce((sum, field) => sum + field.getBoundingClientRect().width, 0) + Math.max(0, fields.length - 1) * 5;
-      changes.push([counter, required > available]);
-    }
-    for (const [counter, compact] of changes) {
-      counter.classList.toggle('is-compact', compact);
-    }
   }
   static build(item, index = 0) {
     const {html} = dll.lit;
     const {classMap} = dll.directives;
 
     const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
-    const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}><span class="count-full">${label}: <span class=${`value ${key}Count`}>${fullCount(value)}</span></span><span class="count-short">${label}: <span class="value">${this.compactCount(value)}</span></span></span>`;
+    const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}>${label}: <span class=${`value ${key}Count`}>${this.compactCount(value)}</span></span>`;
     const {cache, timestamp, index: _index, isLazy} = this.map.get(item) || {};
     if (cache && timestamp === item.timestamp && index === _index && isLazy === item.isLazy) {
       return cache;
@@ -397,7 +378,7 @@ class VideoListItemView  {
               <span class="duration">${textUtil.secToTime(item.duration)}</span>
             </a>
             <span class="command playlistAppend" data-command="playlistAppend" data-param=${watchId} title="プレイリストに追加">▶</span>
-            <span class="command deflistAdd"  data-command="deflistAdd" data-param=${watchId} title="とりあえずマイリスト">&#x271A;</span>
+            <span class="command deflistAdd"  data-command="deflistAdd" data-param=${watchId} title="あとで見る">&#x271A;</span>
             <span class="command pocket-info" data-command="pocket-info" data-param=${watchId} title="動画情報">？</span>
           </div>
           <div class="videoInfo">

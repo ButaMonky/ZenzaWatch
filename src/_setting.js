@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.36-task213
+// @version     0.3.37-task227
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -910,7 +910,7 @@ const $ = uq;
       <option value="toggle-loop">ループ ON/OFF</option>
       <option value="toggle-enableFilter">NG設定 ON/OFF</option>
       <option value="screenShot">スクリーンショット</option>
-      <option value="deflistAdd">とりあえずマイリスト</option>
+      <option value="deflistAdd">あとで見る</option>
       <option value="picture-in-picture">picture-in-picture</option>
       <option value="picture-in-picture-comment">picture-in-picture(コメント付き)</option>
       <option value="toggle-screenFilter.enable">エフェクト ON/OFF（今の設定 ⇔ 標準）</option>

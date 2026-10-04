@@ -292,7 +292,7 @@ const {VideoItemElement, VideoItemProps} = (() => {
             ${duration}
           </a>
           <span class="playlistAppend" data-command="playlistAppend" data-param="${watchId}" title="プレイリストに追加">▶</span>
-          <span class="deflistAdd"  data-command="deflistAdd" data-param="${watchId}" title="とりあえずマイリスト">&#x271A;</span>
+          <span class="deflistAdd"  data-command="deflistAdd" data-param="${watchId}" title="あとで見る">&#x271A;</span>
           <span class="pocket-info" data-command="pocket-info" data-param="${watchId}" title="動画情報">？</span>
         </div>
         <div class="videoInfo">

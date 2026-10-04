@@ -235,7 +235,7 @@ class NicoQuery {
       case 'user':
         return `投稿動画一覧 user/${id}`;
       case 'deflist':
-        return 'とりあえずマイリスト';
+        return 'あとで見る';
       case 'nicorepo':
         return 'ニコレポ新着動画';
       case 'mylist':

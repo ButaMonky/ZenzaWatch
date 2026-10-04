@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.36-task213
+// @version     0.3.37-task227
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-03 17:43Z
+// build: 2026-10-04 17:13Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -1048,9 +1048,9 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 86, command: 'toggle-showComment'},
 	{id: 'TOGGLE_LOOP', legacy: true, category: '再生', label: 'ループ再生 ON/OFF',
 		defaultKey: 82, command: 'toggle-loop'},
-	{id: 'DEFLIST_ADD', legacy: true, category: 'マイリスト', label: 'とりあえずマイリストへ追加',
+	{id: 'DEFLIST_ADD', legacy: true, category: 'マイリスト', label: 'あとで見るへ追加',
 		defaultKey: 84, command: 'deflistAdd'},
-	{id: 'DEFLIST_REMOVE', legacy: true, category: 'マイリスト', label: 'とりあえずマイリストから削除',
+	{id: 'DEFLIST_REMOVE', legacy: true, category: 'マイリスト', label: 'あとで見るから削除',
 		defaultKey: 84 + KEY_MOD.SHIFT, command: 'deflistRemove'},
 	{id: 'TOGGLE_PLAY', legacy: true, category: '再生', label: '再生 / 一時停止',
 		defaultKey: 32, command: 'togglePlay'},
@@ -5722,7 +5722,7 @@ const ScreenFilterPanel = (() => {
       <option value="toggle-loop">ループ ON/OFF</option>
       <option value="toggle-enableFilter">NG設定 ON/OFF</option>
       <option value="screenShot">スクリーンショット</option>
-      <option value="deflistAdd">とりあえずマイリスト</option>
+      <option value="deflistAdd">あとで見る</option>
       <option value="picture-in-picture">picture-in-picture</option>
       <option value="picture-in-picture-comment">picture-in-picture(コメント付き)</option>
       <option value="toggle-screenFilter.enable">エフェクト ON/OFF（今の設定 ⇔ 標準）</option>

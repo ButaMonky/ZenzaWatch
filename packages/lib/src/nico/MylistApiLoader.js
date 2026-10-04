@@ -4,7 +4,7 @@ import {Emitter} from '../Emitter';
 const emitter = new Emitter();
 //===BEGIN===
 const MylistApiLoader = (() => {
-  // マイリスト/とりあえずマイリストの取得APIには
+  // マイリスト/あとで見るの取得APIには
   // www.nicovideo.jp配下とflapi.nicovideo.jp配下の２種類がある
   // 他人のマイリストを取得するにはflapi、マイリストの編集にはwwwのapiが必要
   // データのフォーマットが微妙に異なるのでめんどくさい
@@ -93,9 +93,9 @@ const MylistApiLoader = (() => {
           headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
           credentials: 'include'
         }).then(r => r.json())
-          .catch(e => { throw new Error('とりあえずマイリストの取得失敗(2)', e); });
+          .catch(e => { throw new Error('あとで見るの取得失敗(2)', e); });
         if (res.meta.status !== 200 || !res.data.watchLater) {
-          throw new Error('とりあえずマイリストの取得失敗(1)', res);
+          throw new Error('あとで見るの取得失敗(1)', res);
         }
         if (data == null) {
           data = res.data.watchLater;
@@ -200,7 +200,7 @@ const MylistApiLoader = (() => {
         credentials: 'include'
       }).then(r => r.json())
         .catch(result => {
-          throw new Error('とりあえずマイリストから削除失敗(2)', { result, status: 'fail' });
+          throw new Error('あとで見るから削除失敗(2)', { result, status: 'fail' });
         });
 
       if (result.meta.status && result.meta.status === 200) {
@@ -209,7 +209,7 @@ const MylistApiLoader = (() => {
         return {
           status: 'ok',
           result,
-          message: 'とりあえずマイリストから削除'
+          message: 'あとで見るから削除'
         };
       }
 
@@ -274,7 +274,7 @@ const MylistApiLoader = (() => {
         credentials: 'include'
       }).then(r => r.json())
         .catch(err => {
-            throw new Error('とりあえずマイリスト登録失敗(200)', {
+            throw new Error('あとで見る登録失敗(200)', {
               status: 'fail',
               result: err
             });
@@ -285,7 +285,7 @@ const MylistApiLoader = (() => {
         return {
           status: 'ok',
           result,
-          message: 'とりあえずマイリスト登録'
+          message: 'あとで見る登録'
         };
       }
 
@@ -298,7 +298,7 @@ const MylistApiLoader = (() => {
            登録済みの場合、409が返ってくるようになったのでこちらで処理
            */
           await this.removeDeflistItem(watchId).catch(err => {
-              throw new Error('とりあえずマイリスト登録失敗(101)', {
+              throw new Error('あとで見る登録失敗(101)', {
                 status: 'fail',
                 result: err.result,
                 code: err.code
@@ -308,12 +308,12 @@ const MylistApiLoader = (() => {
           return {
             status: 'ok',
             result: added,
-            message: 'とりあえずマイリストの先頭に移動'
+            message: 'あとで見るの先頭に移動'
           };
       }
 
       if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-        throw new Error('とりあえずマイリスト登録失敗(100)', {
+        throw new Error('あとで見る登録失敗(100)', {
           status: 'fail',
           result,
         });
@@ -352,7 +352,7 @@ const MylistApiLoader = (() => {
 
       if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
         cacheStorage.removeItem(cacheKey);
-        // マイリストに登録したらとりあえずマイリストから除去(=移動)
+        // マイリストに登録したらあとで見るから除去(=移動)
         this.removeDeflistItem(watchId).catch(() => {});
         return {status: 'ok', result, message: 'マイリスト登録'};
       }

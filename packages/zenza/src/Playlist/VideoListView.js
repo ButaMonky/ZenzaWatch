@@ -73,21 +73,6 @@ class VideoListView extends Emitter {
 
     const container = this.listContainer = doc.querySelector('#listContainer');
     const list = this.list = doc.getElementById('listContainerInner');
-    const fitCounters = () => VideoListItemView.fitCounters(list);
-    if (w.ResizeObserver) {
-      let lastWidth = -1;
-      const observer = new w.ResizeObserver(entries => {
-        const width = entries[0].contentRect.width;
-        if (width === lastWidth) { return; }
-        lastWidth = width;
-        fitCounters();
-      });
-      observer.observe(list);
-      w.addEventListener('pagehide', () => observer.disconnect(), {once: true});
-    } else {
-      w.addEventListener('resize', _.debounce(fitCounters, 100));
-    }
-    if (doc.fonts) { doc.fonts.ready.then(fitCounters); }
     if (this.items && this.items.length) {
       this.renderList(this.items);
     }
@@ -314,7 +299,6 @@ class VideoListView extends Emitter {
     console.timeEnd(timeLabel);
     this._updateCSSVars();
     this._setInviewObserver();
-    VideoListItemView.fitCounters(this.list);
   }
   async _buildList(items) {
     items = items || this.items || [];

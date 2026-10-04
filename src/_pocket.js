@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.43-task203
+// @version     0.5.44-task227
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -512,7 +512,7 @@ AntiPrototypeJs().then(() => {
     const __tpl__ = (`
       <div class="mylistPocketHoverMenu scalingUI zen-family">
         <button class="mylistPocketButton command deflist-add wwwZenzaOnly is-need-login" data-command="deflist"
-          tooltip="とりあえずマイリスト">&#x271A;</button>
+          tooltip="あとで見る">&#x271A;</button>
         <button class="mylistPocketButton command info" data-command="info"
           tooltip="動画情報を表示">？</button>
         <button class="mylistPocketButton command playlist-queue zenzaMenu" data-command="playlist-queue"
@@ -1453,8 +1453,8 @@ AntiPrototypeJs().then(() => {
                 <button
                   class="mylistPocketButton deflist-add pocket-button command command-watch-id wwwZenzaOnly"
                   data-command="deflist-add"
-                  tooltip="とりあえずマイリスト"
-                >とり</button>
+                  tooltip="あとで見る"
+                >あとで見る</button>
                 <button
                   class="pocket-button command command-watch-id"
                   data-command="mylist-window"

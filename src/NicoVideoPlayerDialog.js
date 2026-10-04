@@ -433,7 +433,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     const MIN_WIDTH = 160, MIN_HEIGHT = 90;
     const DEFAULT_WIDTH = CONSTANT.SIDE_PLAYER_WIDTH;
     const DEFAULT_HEIGHT = CONSTANT.SIDE_PLAYER_HEIGHT;
-    // 右上のホバーメニュー（いいね/ツイート/マイリスト/とりあえずマイリスト/
+    // 右上のホバーメニュー（いいね/ツイート/マイリスト/あとで見る/
     // 閉じる の5個 × 32px）が必要とする横幅。動画がこれより狭い時は
     // メニュー側を縮小して動画の中に収める（Task 039）。
     const HOVER_MENU_BASE_WIDTH = 160;
@@ -1815,7 +1815,7 @@ util.addStyle(`
 
   /*
     Task 039: 画面モード「小」でプレイヤーを小さくすると、右上のホバーメニュー
-    （いいね・ツイート・マイリスト・とりあえずマイリスト・閉じる）が動画の
+    （いいね・ツイート・マイリスト・あとで見る・閉じる）が動画の
     左外側にはみ出して、宙に浮いたように表示される問題への対策。
 
     原因は、この5つのボタンが「幅240pxの箱（.menuItemContainer.rightTop）の
@@ -3333,7 +3333,7 @@ class NicoVideoPlayerDialog extends Emitter {
           `投稿者: ${info.owner.name} ${info.owner.linkId} ${originalVideoId}` : '';
     }).then(() => this._mylistApiLoader.addDeflistItem(watchId, description))
       .then(result => this.execCommand('notify', result.message))
-      .catch(err => this.execCommand('alert', err.message ? err.message : 'とりあえずマイリストに登録失敗'))
+      .catch(err => this.execCommand('alert', err.message ? err.message : 'あとで見るに登録失敗'))
       .then(() => {
       window.clearTimeout(timer);
       timer = window.setTimeout(unlock, 2000);
@@ -5289,7 +5289,7 @@ VideoHoverMenu.__tpl__ = (`
 
 
           <div class="menuButton mylistButton deflistAdd forMember" data-command="deflistAdd">
-            <div class="tooltip">とりあえずマイリスト(T)</div>
+            <div class="tooltip">あとで見る(T)</div>
             <div class="menuButtonInner">&#x271A;</div>
           </div>
 

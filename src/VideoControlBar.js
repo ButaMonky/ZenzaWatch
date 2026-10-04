@@ -40,8 +40,10 @@ const historyTriggerKeyGuard = event => {
       player.on('close',          this._onPlayerClose.bind(this));
       player.on('progress',       this._onPlayerProgress.bind(this));
       player.on('loadVideoInfo',  this._onLoadVideoInfo.bind(this));
-      player.on('commentParsed',  _.debounce(this._onCommentParsed.bind(this), 500));
-      player.on('commentChange',  _.debounce(this._onCommentChange.bind(this), 100));
+      this._commentParsedHandler = _.debounce(this._onCommentParsed.bind(this), 500);
+      this._commentChangeHandler = _.debounce(this._onCommentChange.bind(this), 100);
+      player.on('commentParsed', this._commentParsedHandler);
+      player.on('commentChange', this._commentChangeHandler);
       Promise.all([
         player.promise('firstVideoInitialized'), this.promise('dom-ready')
       ]).then(() => this._onFirstVideoInitialized());
@@ -127,11 +129,7 @@ const historyTriggerKeyGuard = event => {
         .on('click', this._onClick.bind(this))
         .on('command', this._onCommandEvent.bind(this));
 
-      HeatMapWorker.init({container: this._seekBar}).then(hm => {
-        this.heatMap = hm;
-        // 準備前に開いた動画があれば、その動画のヒートマップとして始める（Task187）
-        this._heatMapWatchId && hm.reset({watchId: this._heatMapWatchId});
-      });
+      HeatMapWorker.init({container: this._seekBar}).then(hm => this._onHeatMapReady(hm));
       const updateHeatMapVisibility =
         v => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
       updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
@@ -341,6 +339,8 @@ const historyTriggerKeyGuard = event => {
       return (time / Math.max(this._duration, 1)) * 100;
     }
     _onPlayerOpen(watchId) {
+      this._commentParsedHandler?.cancel?.();
+      this._commentChangeHandler?.cancel?.();
       this._startTimer();
       this.duration = 0;
       this.currentTime = 0;
@@ -354,24 +354,34 @@ const historyTriggerKeyGuard = event => {
       this.duration = duration;
       this.storyboard.onVideoCanPlay(watchId, videoInfo);
 
-      this.heatMap && (this.heatMap.duration = duration);
+      this._syncCommentHeatMap();
     }
-    _onCommentParsed() {
+    _onHeatMapReady(hm) {
+      this.heatMap = hm;
+      if (this._heatMapWatchId) { this.heatMap.reset({watchId: this._heatMapWatchId}); }
+      this._syncCommentHeatMap();
+    }
+    _syncCommentHeatMap() {
+      if (!this._heatMapWatchId || this._heatMapWatchId !== this.player.watchId) { return; }
       const chatList = this.player.chatList;
-      this.heatMap && (this.heatMap.chatList = chatList);
-      this._commentPreview.chatList = chatList;
+      if (!chatList) { return; }
+      if (this.heatMap) {
+        this.heatMap.setData({watchId: this._heatMapWatchId, duration: this.player.duration, chatList});
+      }
+      if (this._commentPreview) { this._commentPreview.chatList = chatList; }
     }
-    _onCommentChange() {
-      const chatList = this.player.chatList;
-      this.heatMap && (this.heatMap.chatList = chatList);
-      this._commentPreview.chatList = chatList;
-    }
+    _onCommentParsed() { this._syncCommentHeatMap(); }
+    _onCommentChange() { this._syncCommentHeatMap(); }
     _onPlayerDurationChange() {
       this._pointer.duration = this._playerState.videoInfo.duration;
       this._wheelSeeker.duration = this._playerState.videoInfo.duration;
-      this.heatMap && (this.heatMap.chatList = this.player.chatList);
+      this._syncCommentHeatMap();
     }
     _onPlayerClose() {
+      this._commentParsedHandler?.cancel?.();
+      this._commentChangeHandler?.cancel?.();
+      this._heatMapWatchId = null;
+      this.heatMap && this.heatMap.reset();
       this._stopTimer();
     }
     _onPlayerProgress(range, currentTime) {

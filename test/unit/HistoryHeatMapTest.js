@@ -1,0 +1,42 @@
+// Task219 / HM-01: real heatmap model/view/worker. Canvas exports are controlled promises.
+const assert=require('assert');
+const {beginSection,createContext,run,loadClass}=require('../helpers/extractSource');
+const flush=()=>new Promise(resolve=>setImmediate(resolve));
+function setup(offscreen=false){
+  const emits=[],pending=[],draws=[],posts=[];let fillStyle;
+  const ctx2d={beginPath(){},get fillStyle(){return fillStyle;},set fillStyle(v){fillStyle=v;},fillRect(...a){draws.push({a,fillStyle});}};
+  const canvas={width:200,height:10,getContext:()=>ctx2d,toDataURL:()=>new Promise((resolve,reject)=>pending.push({resolve,reject})),transferControlToOffscreen(){return this;}};
+  let context;
+  const workerUtil={createCrossMessageWorker(func){const target={emit:(name,data)=>emits.push({name,data})};context.workerSelf=target;run('('+func+')(workerSelf);',context);return {post:async(msg)=>{posts.push(msg);return target.onmessage(msg);}};}};
+  context=createContext({HTMLCanvasElement:{prototype:offscreen?{transferControlToOffscreen(){}}:{}},workerUtil,global:{emitter:{emit:(name,data)=>emits.push({name,data})}},console:{log(){},time(){},timeEnd(){},warn(){}}});
+  run(beginSection('packages/zenza/src/heatMap/HeatMapWorker.js')+';globalThis.API={HeatMap,HeatMapWorker,heatMapCacheEntry};',context);
+  return {context,canvas,emits,pending,draws,posts,hm:new context.API.HeatMap({canvas})};
+}
+const chats=(n,vpos=10000,fork=0)=>({top:[],bottom:[],naka:Array.from({length:n},()=>({vpos,fork}))});
+async function resolveAll(h){for(const p of h.pending)p.resolve('data:image/png;base64,AA');await flush();}
+describe('HM-01 current applied-comment heatmap',()=>{
+  it('positive -> zero clears the visible canvas and publishes a zero map',async()=>{const h=setup();h.hm.reset({watchId:'sm1'});h.hm.duration=200;h.hm.chatList=chats(10);await resolveAll(h);const before=h.draws.length;h.hm.chatList=chats(0);await resolveAll(h);assert(h.draws.length>before);assert(h.emits.at(-1).data.map.every(n=>n===0));});
+  it('a delayed positive export cannot overwrite a newer zero result',async()=>{const h=setup();h.hm.reset({watchId:'sm1'});h.hm.duration=200;h.hm.chatList=chats(10);h.hm.chatList=chats(0);h.pending[0].resolve('old');await flush();assert.strictEqual(h.emits.length,0);assert.strictEqual(h.pending.length,2);h.pending[1].resolve('empty');await flush();assert.strictEqual(h.emits[0].data.dataURL,'empty');});
+  it('keeps raw bin counts separate from normalized 0..255 public values',async()=>{const h=setup();h.hm.duration=200;h.hm.chatList=chats(40);assert.strictEqual(h.hm.model.map[100],40);assert.strictEqual(h.hm.map[100],255);h.hm._publish();assert.strictEqual(h.hm.model.map[100],40);await resolveAll(h);});
+  it('supports shrinking and restoring applied data, without counting a retained cache',async()=>{const h=setup();h.hm.duration=200;const all=chats(15000);for(const n of [15000,7500,0,15000]){h.hm.chatList={...all,naka:all.naka.slice(0,n)};assert.strictEqual(h.hm.model.map[100],n);await resolveAll(h);}assert.strictEqual(all.naka.length,15000);});
+  it('retains easy-comment exclusion and owner inclusion',()=>{const h=setup();h.hm.duration=200;h.hm.chatList={top:[{vpos:10000,fork:1}],naka:[{vpos:10000,fork:0},{vpos:10000,fork:2}],bottom:[]};assert.strictEqual(h.hm.model.map[100],2);});
+  it('does not mutate source comment objects',()=>{const h=setup(),data=chats(20);const before=JSON.stringify(data);h.hm.duration=200;h.hm.chatList=data;assert.strictEqual(JSON.stringify(data),before);});
+  it('guards invalid duration and invalid positions, rather than writing NaN bins',()=>{const h=setup();for(const duration of [NaN,Infinity,-1,0]){h.hm.duration=duration;h.hm.chatList=chats(3);assert.strictEqual(h.hm.map.length,0);}h.hm.duration=200;h.hm.chatList={top:[],bottom:[],naka:[...chats(2).naka,...[NaN,Infinity,-100,'10000'].map(vpos=>({vpos,fork:0}))]};assert.strictEqual(h.hm.model.map[100],2);assert(h.hm.map.every(Number.isFinite));});
+  it('reset releases the old collection and rejects its pending export',async()=>{const h=setup(),data=chats(2);h.hm.reset({watchId:'sm1'});h.hm.duration=200;h.hm.chatList=data;h.hm.reset({watchId:'sm2'});assert.notStrictEqual(h.hm.model._chat,data);h.pending[0].resolve('old');await flush();assert.strictEqual(h.emits.length,0);});
+  it('partitions a short-video canvas into non-overlapping proportional bins',()=>{const h=setup();h.hm.duration=5;h.hm.chatList=chats(2,200);const painted=h.draws.slice(-5);assert.deepStrictEqual(painted.map(d=>d.a),[4,3,2,1,0].map(i=>[i*40,0,40,10]));});
+  it('a single atomic dataset change produces one export',()=>{const h=setup();assert.strictEqual(typeof h.hm.setData,'function');h.hm.setData({watchId:'sm1',duration:200,chatList:chats(10)});assert.strictEqual(h.pending.length,1);h.hm.setData({watchId:'sm1',duration:100,chatList:chats(0)});assert.strictEqual(h.pending.length,2);});
+  it('worker implementation forwards the reset watchId all the way to notifications',async()=>{const h=setup(true),p=await h.context.API.HeatMapWorker.init({container:{querySelector:()=>h.canvas}});await p.reset({watchId:'sm2'});p.duration=200;p.chatList=chats(4);await resolveAll(h);assert.strictEqual(h.emits.at(-1).data.watchId,'sm2');});
+  it('worker receives only position and fork, never body/user/command/parsed HTML',async()=>{const h=setup(true),p=await h.context.API.HeatMapWorker.init({container:{querySelector:()=>h.canvas}});p.chatList={top:[],bottom:[],naka:[{props:{vpos:10000,fork:0,body:'secret',userId:'private',cmd:'hidden'},get vpos(){return this.props.vpos;},get fork(){return 0;}}]};const payload=h.posts.find(x=>x.command==='update').params.chatList;assert.deepStrictEqual(Object.keys(payload.naka[0]).sort(),['fork','vpos']);assert(!JSON.stringify(payload).includes('secret'));});
+  it('worker supports the same atomic setData as the fallback path',async()=>{const h=setup(true),p=await h.context.API.HeatMapWorker.init({container:{querySelector:()=>h.canvas}});assert.strictEqual(typeof p.setData,'function');await p.setData({watchId:'sm3',duration:200,chatList:chats(3)});await resolveAll(h);assert.strictEqual(h.emits.at(-1).data.watchId,'sm3');assert.strictEqual(h.pending.length,1);});
+});
+describe('HM-01 toolbar synchronization',()=>{
+  function subject(){const C=loadClass('src/VideoControlBar.js','VideoControlBar',createContext({Emitter:class{}})),v=Object.create(C.prototype),calls=[];v._heatMapWatchId='sm1';v.player={watchId:'sm1',duration:200,chatList:chats(2)};v._commentPreview={};v._stopTimer=()=>{};v.heatMap={setData:p=>calls.push(p),reset:p=>calls.push({reset:p})};return {v,calls};}
+  it('comment-change uses an atomic snapshot of the active collection',()=>{const h=subject();h.v._onCommentChange();assert.strictEqual(h.calls.length,1);assert.strictEqual(h.calls[0].chatList,h.v.player.chatList);assert.strictEqual(h.calls[0].duration,200);assert.strictEqual(h.calls[0].watchId,'sm1');});
+  it('close clears old state and invalidates delayed comment updates',()=>{const h=subject();h.v._onPlayerClose();assert.strictEqual(h.v._heatMapWatchId,null);h.v._onCommentChange();assert(h.calls.some(x=>Object.prototype.hasOwnProperty.call(x,'reset')));assert(!h.calls.some(x=>x.chatList));});
+  it('a late heatmap initialization picks up comments already applied',()=>{const h=subject();assert.strictEqual(typeof h.v._onHeatMapReady,'function');const hm=h.v.heatMap;h.v.heatMap=null;h.v._onHeatMapReady(hm);assert(h.calls.some(x=>x.chatList===h.v.player.chatList));});
+});
+
+describe('HM-01 asynchronous export and close guards',()=>{
+  it('getData never pairs an old image with a newer map',async()=>{const h=setup(true),p=await h.context.API.HeatMapWorker.init({container:{querySelector:()=>h.canvas}});await p.setData({watchId:'sm1',duration:200,chatList:chats(3)});const promise=h.context.workerSelf.onmessage({command:'getData',params:{}});await p.reset({watchId:'sm2'});for(const d of h.pending)d.resolve('old');const result=await promise;assert.strictEqual(result.status,'stale');assert.strictEqual(result.map,undefined);});
+  it('legacy handlers without a cancel method do not break close',()=>{const C=loadClass('src/VideoControlBar.js','VideoControlBar',createContext({Emitter:class{}})),v=Object.create(C.prototype);v._stopTimer=()=>{};v._commentParsedHandler=()=>{};v._commentChangeHandler=()=>{};v._onPlayerClose();assert.strictEqual(v._heatMapWatchId,null);});
+});

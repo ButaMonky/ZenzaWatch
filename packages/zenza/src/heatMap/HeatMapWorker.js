@@ -12,6 +12,7 @@ class HeatMapModel {
   reset() {
     this._duration = -1;
     this._chatReady = false;
+    this._chat = null;
     this.map = [];
   }
   set duration(duration) {
@@ -28,18 +29,16 @@ class HeatMapModel {
     this.update();
   }
   update() {
-    if (this._duration < 0 || !this._chatReady) {
+    if (!Number.isFinite(this._duration) || this._duration < 1 || !this._chatReady) {
+      this.map = [];
       return false;
     }
     const map = this.map = this.getHeatMap();
     return !!map.length;
   }
   getHeatMap() {
-    const chatList =
-      this._chat.top.concat(this._chat.naka, this._chat.bottom)
-        .filter(chat => chat.fork !== 2); // かんたんコメント除外
     const duration = this._duration;
-    if (duration < 1) { return []; }
+    if (!Number.isFinite(duration) || duration < 1) { return []; }
     const map = new Array(Math.max(Math.min(this.resolution, Math.floor(duration)), 1));
     const length = map.length;
     let i = length;
@@ -47,11 +46,16 @@ class HeatMapModel {
 
     const ratio = duration > map.length ? (map.length / duration) : 1;
 
-    for (i = chatList.length - 1; i >= 0; i--) {
-      let nicoChat = chatList[i];
-      let pos = nicoChat.vpos;
-      let mpos = Math.min(Math.floor(pos * ratio / 100), map.length -1);
-      map[mpos]++;
+    // The input is the active, NG-filtered collection, not the history cache or live-DOM budget.
+    for (const type of ['top', 'naka', 'bottom']) {
+      const chats = this._chat && this._chat[type];
+      if (!Array.isArray(chats)) { continue; }
+      for (const chat of chats) {
+        const pos = chat && chat.vpos;
+        if (!chat || chat.fork === 2 || !Number.isFinite(pos) || pos < 0) { continue; }
+        const bin = Math.min(Math.floor(pos * ratio / 100), length - 1);
+        map[bin]++;
+      }
     }
     for (i = 0; i < Math.min(length, 20); i++) {// 先頭付近は「うぽつ」などで一極集中しがちなのでリミットを設ける
       map[i] = Math.min(5, map[i]);
@@ -132,7 +136,10 @@ class HeatMapView {
       this.reset();
     }
     map = map || this.model.map;
-    if (!map.length) { return false; }
+    // Never normalize model counts in place: public map/HeatSync keeps the 0..255 contract.
+    map = Array.from(map);
+    this.map = map;
+    if (!map.length) { this.reset(); return true; }
 
     console.time('draw HeatMap');
 
@@ -149,19 +156,18 @@ class HeatMapView {
         map[i] = Math.min(255, Math.floor(map[i] * rate));
       }
     } else {
-      console.timeEnd('draw HeatMap');
-      return false;
+      // An empty/all-NG collection supersedes and erases the previous nonempty image.
+      map.fill(0);
     }
 
-    const
-      scale = map.length >= this.width ? 1 : (this.width / Math.max(map.length, 1)),
-      blockWidth = (this.width / map.length) * scale,
-      context = this.context;
+    const context = this.context;
 
     for (i = map.length - 1; i >= 0; i--) {
       context.fillStyle = this._palette[parseInt(map[i], 10)] || this._palette[0];
       context.beginPath();
-      context.fillRect(i * scale, 0, blockWidth, this.height);
+      const left = Math.floor(i * this.width / map.length);
+      const right = Math.floor((i + 1) * this.width / map.length);
+      context.fillRect(left, 0, right - left, this.height);
     }
     console.timeEnd('draw HeatMap');
     context.commit && context.commit();
@@ -193,14 +199,41 @@ class HeatMap {
     this._generation = (this._generation || 0) + 1;
     this._watchId = (params && typeof params.watchId === 'string' && params.watchId) ? params.watchId : null;
     this.model.reset();
+    this.view.map = [];
     this.view.reset();
   }
   get watchId() {
     return this._watchId || null;
   }
+  // Snapshot only histogram inputs. Neither worker messages nor model storage need comment bodies.
+  static snapshotChatList(chatList) {
+    const snapshot = {top: [], naka: [], bottom: []};
+    for (const type of ['top', 'naka', 'bottom']) {
+      for (const chat of (Array.isArray(chatList && chatList[type]) ? chatList[type] : [])) {
+        const vpos = chat && (chat.vpos ?? chat.props?.vpos);
+        const fork = chat && (chat.fork ?? chat.props?.fork);
+        if (Number.isFinite(vpos) && vpos >= 0) {
+          snapshot[type].push({vpos, fork: fork === 2 ? 2 : fork === 1 ? 1 : 0});
+        }
+      }
+    }
+    return snapshot;
+  }
+  setData({watchId, duration, chatList}) {
+    if (watchId !== this._watchId) { this.reset({watchId}); }
+    // One snapshot, one redraw/export. No transient old-comments/new-duration publication.
+    this.model._duration = duration;
+    this.model.chatList = HeatMap.snapshotChatList(chatList);
+    this._publish();
+  }
   _publish() {
-    if (!this.view.update()) { return; }
     const generation = this._generation = (this._generation || 0) + 1;
+    if (!this.model._chatReady || !Number.isFinite(this.duration) || this.duration < 1) {
+      this.view.map = [];
+      this.view.reset();
+      return;
+    }
+    if (!this.view.update()) { return; }
     const watchId = this._watchId || null;
     const map = Array.from(this.map);
     const duration = this.duration;
@@ -224,14 +257,14 @@ class HeatMap {
    * @params {NicoChat[]} chatList
    */
   set chatList(chatList) {
-    this.model.chatList = chatList;
+    this.model.chatList = HeatMap.snapshotChatList(chatList);
     this._publish();
   }
   get canvas() {
     return this.view.canvas || {};
   }
   get map() {
-    return this.model.map;
+    return this.view.map || [];
   }
   async toDataURL() {
     return this.view.toDataURL();
@@ -248,7 +281,7 @@ const HeatMapWorker = (() => {
     const init = ({canvas}) => heatMap = new HeatMap({canvas});
     const update = ({chatList}) => heatMap.chatList = chatList;
     const duration = ({duration}) => heatMap.duration = duration;
-    const reset = () => heatMap.reset();
+    const reset = params => heatMap.reset(params);
     self.onmessage = async ({command, params}) => {
       let result = {status: 'ok'};
       switch (command) {
@@ -264,11 +297,17 @@ const HeatMapWorker = (() => {
         case 'reset':
           reset(params);
           break;
-        case 'getData':
-          result.dataURL  = await heatMap.toDataURL();
-          result.map      = heatMap.map;
-          result.duration = heatMap.duration;
+        case 'setData':
+          heatMap.setData(params);
           break;
+        case 'getData': {
+          const generation = heatMap._generation;
+          const map = Array.from(heatMap.map), duration = heatMap.duration;
+          const dataURL = await heatMap.toDataURL();
+          if (generation !== heatMap._generation) { return {status: 'stale'}; }
+          Object.assign(result, {dataURL, map, duration});
+          break;
+        }
       }
       return result;
     };
@@ -296,18 +335,23 @@ const HeatMapWorker = (() => {
     return {
       canvas,
       update(chatList) {
-        chatList = {
-          top:    chatList.top.map(c => { return {...c.props, ...{group: null}}; }),
-          naka:   chatList.naka.map(c => { return {...c.props, ...{group: null}}; }),
-          bottom: chatList.bottom.map(c => { return {...c.props, ...{group: null}}; })
-        };
+        chatList = HeatMap.snapshotChatList(chatList);
         return worker.post({command: 'update', params: {chatList}});
       },
       get duration() { return _duration; },
       set duration(d) {
         _duration = d;
         worker.post({command: 'duration', params: {duration: d}}); },
-      reset: (params = {}) => worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}}),
+      reset(params = {}) {
+        _chatList = null; _duration = undefined;
+        return worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}});
+      },
+      setData({watchId, duration, chatList}) {
+        _duration = duration; _chatList = chatList;
+        return worker.post({command: 'setData', params: {
+          watchId, duration, chatList: HeatMap.snapshotChatList(chatList)
+        }});
+      },
       get chatList() {return _chatList;},
       set chatList(chatList) { this.update(_chatList = chatList); }
     };

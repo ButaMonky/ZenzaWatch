@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.143-task217
+// @version        2.7.146-task220
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-03 19:49Z
+// build: 2026-10-04 07:51Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.143-task217';
+    var VER = '2.7.146-task220';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-03 19:49Z';
+    var BUILD = '2026-10-04 07:51Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -19516,8 +19516,10 @@ const historyTriggerKeyGuard = event => {
 			player.on('close',          this._onPlayerClose.bind(this));
 			player.on('progress',       this._onPlayerProgress.bind(this));
 			player.on('loadVideoInfo',  this._onLoadVideoInfo.bind(this));
-			player.on('commentParsed',  _.debounce(this._onCommentParsed.bind(this), 500));
-			player.on('commentChange',  _.debounce(this._onCommentChange.bind(this), 100));
+			this._commentParsedHandler = _.debounce(this._onCommentParsed.bind(this), 500);
+			this._commentChangeHandler = _.debounce(this._onCommentChange.bind(this), 100);
+			player.on('commentParsed', this._commentParsedHandler);
+			player.on('commentChange', this._commentChangeHandler);
 			Promise.all([
 				player.promise('firstVideoInitialized'), this.promise('dom-ready')
 			]).then(() => this._onFirstVideoInitialized());
@@ -19594,10 +19596,7 @@ const historyTriggerKeyGuard = event => {
 			$view
 				.on('click', this._onClick.bind(this))
 				.on('command', this._onCommandEvent.bind(this));
-			HeatMapWorker.init({container: this._seekBar}).then(hm => {
-				this.heatMap = hm;
-				this._heatMapWatchId && hm.reset({watchId: this._heatMapWatchId});
-			});
+			HeatMapWorker.init({container: this._seekBar}).then(hm => this._onHeatMapReady(hm));
 			const updateHeatMapVisibility =
 				v => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
 			updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
@@ -19786,6 +19785,8 @@ const historyTriggerKeyGuard = event => {
 			return (time / Math.max(this._duration, 1)) * 100;
 		}
 		_onPlayerOpen(watchId) {
+			this._commentParsedHandler?.cancel?.();
+			this._commentChangeHandler?.cancel?.();
 			this._startTimer();
 			this.duration = 0;
 			this.currentTime = 0;
@@ -19798,24 +19799,34 @@ const historyTriggerKeyGuard = event => {
 			const duration = this.player.duration;
 			this.duration = duration;
 			this.storyboard.onVideoCanPlay(watchId, videoInfo);
-			this.heatMap && (this.heatMap.duration = duration);
+			this._syncCommentHeatMap();
 		}
-		_onCommentParsed() {
+		_onHeatMapReady(hm) {
+			this.heatMap = hm;
+			if (this._heatMapWatchId) { this.heatMap.reset({watchId: this._heatMapWatchId}); }
+			this._syncCommentHeatMap();
+		}
+		_syncCommentHeatMap() {
+			if (!this._heatMapWatchId || this._heatMapWatchId !== this.player.watchId) { return; }
 			const chatList = this.player.chatList;
-			this.heatMap && (this.heatMap.chatList = chatList);
-			this._commentPreview.chatList = chatList;
+			if (!chatList) { return; }
+			if (this.heatMap) {
+				this.heatMap.setData({watchId: this._heatMapWatchId, duration: this.player.duration, chatList});
+			}
+			if (this._commentPreview) { this._commentPreview.chatList = chatList; }
 		}
-		_onCommentChange() {
-			const chatList = this.player.chatList;
-			this.heatMap && (this.heatMap.chatList = chatList);
-			this._commentPreview.chatList = chatList;
-		}
+		_onCommentParsed() { this._syncCommentHeatMap(); }
+		_onCommentChange() { this._syncCommentHeatMap(); }
 		_onPlayerDurationChange() {
 			this._pointer.duration = this._playerState.videoInfo.duration;
 			this._wheelSeeker.duration = this._playerState.videoInfo.duration;
-			this.heatMap && (this.heatMap.chatList = this.player.chatList);
+			this._syncCommentHeatMap();
 		}
 		_onPlayerClose() {
+			this._commentParsedHandler?.cancel?.();
+			this._commentChangeHandler?.cancel?.();
+			this._heatMapWatchId = null;
+			this.heatMap && this.heatMap.reset();
 			this._stopTimer();
 		}
 		_onPlayerProgress(range, currentTime) {
@@ -21123,6 +21134,7 @@ class HeatMapModel {
 	reset() {
 		this._duration = -1;
 		this._chatReady = false;
+		this._chat = null;
 		this.map = [];
 	}
 	set duration(duration) {
@@ -21139,28 +21151,30 @@ class HeatMapModel {
 		this.update();
 	}
 	update() {
-		if (this._duration < 0 || !this._chatReady) {
+		if (!Number.isFinite(this._duration) || this._duration < 1 || !this._chatReady) {
+			this.map = [];
 			return false;
 		}
 		const map = this.map = this.getHeatMap();
 		return !!map.length;
 	}
 	getHeatMap() {
-		const chatList =
-			this._chat.top.concat(this._chat.naka, this._chat.bottom)
-				.filter(chat => chat.fork !== 2); // かんたんコメント除外
 		const duration = this._duration;
-		if (duration < 1) { return []; }
+		if (!Number.isFinite(duration) || duration < 1) { return []; }
 		const map = new Array(Math.max(Math.min(this.resolution, Math.floor(duration)), 1));
 		const length = map.length;
 		let i = length;
 		while(i > 0) map[--i] = 0;
 		const ratio = duration > map.length ? (map.length / duration) : 1;
-		for (i = chatList.length - 1; i >= 0; i--) {
-			let nicoChat = chatList[i];
-			let pos = nicoChat.vpos;
-			let mpos = Math.min(Math.floor(pos * ratio / 100), map.length -1);
-			map[mpos]++;
+		for (const type of ['top', 'naka', 'bottom']) {
+			const chats = this._chat && this._chat[type];
+			if (!Array.isArray(chats)) { continue; }
+			for (const chat of chats) {
+				const pos = chat && chat.vpos;
+				if (!chat || chat.fork === 2 || !Number.isFinite(pos) || pos < 0) { continue; }
+				const bin = Math.min(Math.floor(pos * ratio / 100), length - 1);
+				map[bin]++;
+			}
 		}
 		for (i = 0; i < Math.min(length, 20); i++) {// 先頭付近は「うぽつ」などで一極集中しがちなのでリミットを設ける
 			map[i] = Math.min(5, map[i]);
@@ -21238,7 +21252,9 @@ class HeatMapView {
 			this.reset();
 		}
 		map = map || this.model.map;
-		if (!map.length) { return false; }
+		map = Array.from(map);
+		this.map = map;
+		if (!map.length) { this.reset(); return true; }
 		console.time('draw HeatMap');
 		let max = 0, i;
 		for (i = Math.max(map.length - 4, 0); i >= 0; i--) max = Math.max(map[i], max);
@@ -21248,17 +21264,15 @@ class HeatMapView {
 				map[i] = Math.min(255, Math.floor(map[i] * rate));
 			}
 		} else {
-			console.timeEnd('draw HeatMap');
-			return false;
+			map.fill(0);
 		}
-		const
-			scale = map.length >= this.width ? 1 : (this.width / Math.max(map.length, 1)),
-			blockWidth = (this.width / map.length) * scale,
-			context = this.context;
+		const context = this.context;
 		for (i = map.length - 1; i >= 0; i--) {
 			context.fillStyle = this._palette[parseInt(map[i], 10)] || this._palette[0];
 			context.beginPath();
-			context.fillRect(i * scale, 0, blockWidth, this.height);
+			const left = Math.floor(i * this.width / map.length);
+			const right = Math.floor((i + 1) * this.width / map.length);
+			context.fillRect(left, 0, right - left, this.height);
 		}
 		console.timeEnd('draw HeatMap');
 		context.commit && context.commit();
@@ -21279,14 +21293,39 @@ class HeatMap {
 		this._generation = (this._generation || 0) + 1;
 		this._watchId = (params && typeof params.watchId === 'string' && params.watchId) ? params.watchId : null;
 		this.model.reset();
+		this.view.map = [];
 		this.view.reset();
 	}
 	get watchId() {
 		return this._watchId || null;
 	}
+	static snapshotChatList(chatList) {
+		const snapshot = {top: [], naka: [], bottom: []};
+		for (const type of ['top', 'naka', 'bottom']) {
+			for (const chat of (Array.isArray(chatList && chatList[type]) ? chatList[type] : [])) {
+				const vpos = chat && (chat.vpos ?? chat.props?.vpos);
+				const fork = chat && (chat.fork ?? chat.props?.fork);
+				if (Number.isFinite(vpos) && vpos >= 0) {
+					snapshot[type].push({vpos, fork: fork === 2 ? 2 : fork === 1 ? 1 : 0});
+				}
+			}
+		}
+		return snapshot;
+	}
+	setData({watchId, duration, chatList}) {
+		if (watchId !== this._watchId) { this.reset({watchId}); }
+		this.model._duration = duration;
+		this.model.chatList = HeatMap.snapshotChatList(chatList);
+		this._publish();
+	}
 	_publish() {
-		if (!this.view.update()) { return; }
 		const generation = this._generation = (this._generation || 0) + 1;
+		if (!this.model._chatReady || !Number.isFinite(this.duration) || this.duration < 1) {
+			this.view.map = [];
+			this.view.reset();
+			return;
+		}
+		if (!this.view.update()) { return; }
 		const watchId = this._watchId || null;
 		const map = Array.from(this.map);
 		const duration = this.duration;
@@ -21304,14 +21343,14 @@ class HeatMap {
 		return this.model.duration;
 	}
 	set chatList(chatList) {
-		this.model.chatList = chatList;
+		this.model.chatList = HeatMap.snapshotChatList(chatList);
 		this._publish();
 	}
 	get canvas() {
 		return this.view.canvas || {};
 	}
 	get map() {
-		return this.model.map;
+		return this.view.map || [];
 	}
 	async toDataURL() {
 		return this.view.toDataURL();
@@ -21326,7 +21365,7 @@ const HeatMapWorker = (() => {
 		const init = ({canvas}) => heatMap = new HeatMap({canvas});
 		const update = ({chatList}) => heatMap.chatList = chatList;
 		const duration = ({duration}) => heatMap.duration = duration;
-		const reset = () => heatMap.reset();
+		const reset = params => heatMap.reset(params);
 		self.onmessage = async ({command, params}) => {
 			let result = {status: 'ok'};
 			switch (command) {
@@ -21342,11 +21381,17 @@ const HeatMapWorker = (() => {
 				case 'reset':
 					reset(params);
 					break;
-				case 'getData':
-					result.dataURL  = await heatMap.toDataURL();
-					result.map      = heatMap.map;
-					result.duration = heatMap.duration;
+				case 'setData':
+					heatMap.setData(params);
 					break;
+				case 'getData': {
+					const generation = heatMap._generation;
+					const map = Array.from(heatMap.map), duration = heatMap.duration;
+					const dataURL = await heatMap.toDataURL();
+					if (generation !== heatMap._generation) { return {status: 'stale'}; }
+					Object.assign(result, {dataURL, map, duration});
+					break;
+				}
 			}
 			return result;
 		};
@@ -21374,18 +21419,23 @@ const HeatMapWorker = (() => {
 		return {
 			canvas,
 			update(chatList) {
-				chatList = {
-					top:    chatList.top.map(c => { return {...c.props, ...{group: null}}; }),
-					naka:   chatList.naka.map(c => { return {...c.props, ...{group: null}}; }),
-					bottom: chatList.bottom.map(c => { return {...c.props, ...{group: null}}; })
-				};
+				chatList = HeatMap.snapshotChatList(chatList);
 				return worker.post({command: 'update', params: {chatList}});
 			},
 			get duration() { return _duration; },
 			set duration(d) {
 				_duration = d;
 				worker.post({command: 'duration', params: {duration: d}}); },
-			reset: (params = {}) => worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}}),
+			reset(params = {}) {
+				_chatList = null; _duration = undefined;
+				return worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}});
+			},
+			setData({watchId, duration, chatList}) {
+				_duration = duration; _chatList = chatList;
+				return worker.post({command: 'setData', params: {
+					watchId, duration, chatList: HeatMap.snapshotChatList(chatList)
+				}});
+			},
 			get chatList() {return _chatList;},
 			set chatList(chatList) { this.update(_chatList = chatList); }
 		};
@@ -23217,12 +23267,20 @@ class NicoChatViewModel {
 		this._htmlText = htmlText;
 		this._text = text;
 		const field = this._offScreen.getTextField();
-		field.setText(htmlText);
-		field.setFontSizePixel(this._fontSizePixel);
-		field.setType(this._type, this._size, fontCommand, this.commentVer);
-		this._originalWidth = field.getOriginalWidth();
+		let width, height;
+		if (typeof field.measureChat === 'function') {
+			({width, height} = field.measureChat(this._nicoChat, htmlText,
+				this._fontSizePixel, this._type, this._size, fontCommand, commentVer));
+		} else {
+			field.setText(htmlText);
+			field.setFontSizePixel(this._fontSizePixel);
+			field.setType(this._type, this._size, fontCommand, commentVer);
+			width = field.getOriginalWidth();
+			height = field.getOriginalHeight();
+		}
+		this._originalWidth = width;
 		this._width = this._originalWidth * this._scale;
-		this._originalHeight = field.getOriginalHeight();
+		this._originalHeight = height;
 		this._height = this._calculateHeight({});
 		const w = this._width;
 		const duration = this._duration / this._speedRate;
@@ -24798,6 +24856,7 @@ const OffscreenLayer = config => {
 	let offScreenLayer;
 	let textField;
 	let optionStyle;
+	let invalidateTextMetrics = () => {};
 	const initializeOptionCss = optionStyle => {
 		const update = () => {
 			const tmp = [];
@@ -24816,6 +24875,7 @@ const OffscreenLayer = config => {
 			const newCss = tmp.join('\n');
 			if (inner !== newCss) {
 				optionStyle.innerHTML = newCss;
+				invalidateTextMetrics();
 				global.emitter.emit('updateOptionCss', newCss);
 			}
 		};
@@ -24902,6 +24962,46 @@ const OffscreenLayer = config => {
 			getHeight: () => span.offsetHeight * scale
 		};
 		layer.append(span);
+		let metricCache = new WeakMap();
+		invalidateTextMetrics = () => { metricCache = new WeakMap(); };
+		const fonts = span.ownerDocument.fonts;
+		const view = span.ownerDocument.defaultView;
+		const fontEvents = fonts && typeof fonts.addEventListener === 'function';
+		if (fontEvents) {
+			for (const name of ['loading', 'loadingdone', 'loadingerror']) {
+				fonts.addEventListener(name, invalidateTextMetrics);
+			}
+			if (fonts.ready && typeof fonts.ready.then === 'function') {
+				fonts.ready.then(invalidateTextMetrics, invalidateTextMetrics);
+			}
+		}
+		if (view && typeof view.addEventListener === 'function') {
+			view.addEventListener('resize', invalidateTextMetrics);
+		}
+		const stableEnvironment = () => fontEvents && fonts.status === 'loaded' &&
+			fonts.size === 0 && span.isConnected === true && view &&
+			Number.isFinite(view.devicePixelRatio) && view.devicePixelRatio > 0;
+		textField.measureChat = (owner, htmlText, pixel, type, size, fontCommand, ver) => {
+			const validOwner = owner !== null && (typeof owner === 'object' || typeof owner === 'function');
+			const reusable = stableEnvironment() && validOwner && typeof htmlText === 'string' &&
+				Number.isFinite(pixel) && pixel > 0;
+			if (!reusable) { invalidateTextMetrics(); }
+			const cache = metricCache, ratio = view && view.devicePixelRatio;
+			const old = reusable ? cache.get(owner) : null;
+			if (old && old.htmlText === htmlText && old.pixel === pixel && old.type === type &&
+					old.size === size && old.fontCommand === fontCommand && old.ver === ver && old.ratio === ratio) {
+				return {width: old.width, height: old.height};
+			}
+			textField.setText(htmlText);
+			textField.setFontSizePixel(pixel);
+			textField.setType(type, size, fontCommand, ver);
+			const width = textField.getOriginalWidth(), height = textField.getOriginalHeight();
+			if (reusable && cache === metricCache && stableEnvironment() && ratio === view.devicePixelRatio &&
+					Number.isFinite(width) && width >= 0 && Number.isFinite(height) && height > 0) {
+				cache.set(owner, {htmlText, pixel, type, size, fontCommand, ver, ratio, width, height});
+			}
+			return {width, height};
+		};
 		return span;
 	};
 	return {
@@ -26380,6 +26480,29 @@ const CommentLayoutWorker = (config => {
 			WIDTH_FULL: 640 + 32,
 			HEIGHT: 384
 		};
+		const isTemporalConflict = (target, others) => {
+			let rt, lt;
+			if (target.beginLeft <= others.beginLeft) {
+				lt = target;
+				rt = others;
+			} else {
+				lt = others;
+				rt = target;
+			}
+			if (target.isFixed) {
+				if (lt.endRight > rt.beginLeft) {
+					return true;
+				}
+			} else {
+				if (lt.beginRight >= rt.beginLeft) {
+					return true;
+				}
+				if (lt.endRight >= rt.endLeft) {
+					return true;
+				}
+			}
+			return false;
+		};
 		const isConflict = (target, others) => {
 			if (target.isOverflow || others.isOverflow || others.isInvisible) {
 				return false;
@@ -26451,7 +26574,7 @@ const CommentLayoutWorker = (config => {
 					firstId.set(o.id, i);
 				}
 			}
-			return {maxEnd, firstId};
+			return {maxEnd, firstId, candidates: [], tops: [], bottoms: []};
 		};
 		const findCollisionStartIndex = (target, members, index) => {
 			const tl = target.beginLeft;
@@ -26502,13 +26625,47 @@ const CommentLayoutWorker = (config => {
 			}
 			return target;
 		};
+		const checkDenseCollision = (target, members, start, stop, index) => {
+			const {candidates, tops, bottoms} = index;
+			candidates.length = tops.length = bottoms.length = 0;
+			for (let i = start; i < stop; i++) {
+				const other = members[i];
+				if (other.isOverflow || other.isInvisible || target.layerId !== other.layerId ||
+						target.beginLeft > other.endRight || !isTemporalConflict(target, other)) { continue; }
+				if (!Number.isFinite(other.ypos) || !Number.isFinite(other.height) || other.height < 0) {
+					candidates.length = tops.length = bottoms.length = 0;
+					return _checkCollision(target, members, start);
+				}
+				candidates.push(other);
+				tops.push(other.ypos);
+				bottoms.push(other.ypos + other.height);
+			}
+			while (!target.isOverflow) {
+				let moved = false;
+				const top = target.ypos, bottom = top + target.height;
+				for (let i = 0; i < candidates.length; i++) {
+					if (bottoms[i] < top || tops[i] > bottom) { continue; }
+					moveToNextLine(target, candidates[i]);
+					moved = true;
+					break;
+				}
+				if (!moved) { break; }
+			}
+			candidates.length = tops.length = bottoms.length = 0;
+			return target;
+		};
 		const checkCollision = (target, members, index) => {
-			if (target.isInvisible) {
+			if (target.isInvisible || target.isOverflow) {
 				return target;
 			}
 			const collisionStartIndex = findCollisionStartIndex(target, members, index);
 			if (collisionStartIndex < 0) {
 				return target;
+			}
+			const stop = index.firstId.get(target.id);
+			if (!target.isFixed && Number.isInteger(stop) && stop - collisionStartIndex >= 32 &&
+					Number.isFinite(target.ypos) && Number.isFinite(target.height) && target.height >= 0) {
+				return checkDenseCollision(target, members, collisionStartIndex, stop, index);
 			}
 			return _checkCollision(target, members, collisionStartIndex);
 		};

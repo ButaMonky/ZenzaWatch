@@ -169,13 +169,21 @@ class NicoChatViewModel {
     this._text = text;
 
     const field = this._offScreen.getTextField();
-    field.setText(htmlText);
-    field.setFontSizePixel(this._fontSizePixel);
-    field.setType(this._type, this._size, fontCommand, this.commentVer);
-
-    this._originalWidth = field.getOriginalWidth();
+    let width, height;
+    if (typeof field.measureChat === 'function') {
+      ({width, height} = field.measureChat(this._nicoChat, htmlText,
+        this._fontSizePixel, this._type, this._size, fontCommand, commentVer));
+    } else {
+      // Legacy/custom measuring fields keep their original contract.
+      field.setText(htmlText);
+      field.setFontSizePixel(this._fontSizePixel);
+      field.setType(this._type, this._size, fontCommand, commentVer);
+      width = field.getOriginalWidth();
+      height = field.getOriginalHeight();
+    }
+    this._originalWidth = width;
     this._width = this._originalWidth * this._scale;
-    this._originalHeight = field.getOriginalHeight();
+    this._originalHeight = height;
     this._height = this._calculateHeight({});
 
     // Chrome59で起こる謎の現象。一度ローカル変数に落とすと直る

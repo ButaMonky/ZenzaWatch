@@ -24,6 +24,42 @@ const CommentLayoutWorker = (config => {
     };
 
 
+    const isTemporalConflict = (target, others) => {
+      // ターゲットと自分、どっちが右でどっちが左か？の判定
+      let rt, lt;
+      if (target.beginLeft <= others.beginLeft) {
+        lt = target;
+        rt = others;
+      } else {
+        lt = others;
+        rt = target;
+      }
+
+      if (target.isFixed) {
+
+        // 左にあるやつの終了より右にあるやつの開始が早いなら、衝突する
+        // > か >= で挙動が変わるCAがあったりして正解がわからない
+        if (lt.endRight > rt.beginLeft) {
+          return true;
+        }
+
+      } else {
+
+        // 左にあるやつの右端開始よりも右にあるやつの左端開始のほうが早いなら、衝突する
+        if (lt.beginRight >= rt.beginLeft) {
+          return true;
+        }
+
+        // 左にあるやつの右端終了よりも右にあるやつの左端終了のほうが早いなら、衝突する
+        if (lt.endRight >= rt.endLeft) {
+          return true;
+        }
+
+      }
+
+      return false;
+    };
+
     const isConflict = (target, others) => {
       // 一度はみ出した文字は当たり判定を持たない
       if (target.isOverflow || others.isOverflow || others.isInvisible) {
@@ -129,7 +165,7 @@ const CommentLayoutWorker = (config => {
           firstId.set(o.id, i);
         }
       }
-      return {maxEnd, firstId};
+      return {maxEnd, firstId, candidates: [], tops: [], bottoms: []};
     };
 
     /**
@@ -197,8 +233,41 @@ const CommentLayoutWorker = (config => {
       return target;
     };
 
+    // During one target's placement, preceding comments and all time/layer predicates
+    // are immutable. Compact once, then preserve the exact first-conflict order at
+    // every vertical move. Scratch storage belongs to this request, never the worker.
+    const checkDenseCollision = (target, members, start, stop, index) => {
+      const {candidates, tops, bottoms} = index;
+      candidates.length = tops.length = bottoms.length = 0;
+      for (let i = start; i < stop; i++) {
+        const other = members[i];
+        if (other.isOverflow || other.isInvisible || target.layerId !== other.layerId ||
+            target.beginLeft > other.endRight || !isTemporalConflict(target, other)) { continue; }
+        if (!Number.isFinite(other.ypos) || !Number.isFinite(other.height) || other.height < 0) {
+          candidates.length = tops.length = bottoms.length = 0;
+          return _checkCollision(target, members, start);
+        }
+        candidates.push(other);
+        tops.push(other.ypos);
+        bottoms.push(other.ypos + other.height);
+      }
+      while (!target.isOverflow) {
+        let moved = false;
+        const top = target.ypos, bottom = top + target.height;
+        for (let i = 0; i < candidates.length; i++) {
+          if (bottoms[i] < top || tops[i] > bottom) { continue; }
+          moveToNextLine(target, candidates[i]);
+          moved = true;
+          break;
+        }
+        if (!moved) { break; }
+      }
+      candidates.length = tops.length = bottoms.length = 0;
+      return target;
+    };
+
     const checkCollision = (target, members, index) => {
-      if (target.isInvisible) {
+      if (target.isInvisible || target.isOverflow) {
         return target;
       }
 
@@ -208,6 +277,13 @@ const CommentLayoutWorker = (config => {
         return target;
       }
 
+      const stop = index.firstId.get(target.id);
+      // Fixed-comment compaction measured slower; keep its original scan path.
+      // Also preserve small groups, NaN IDs, and malformed geometry unchanged.
+      if (!target.isFixed && Number.isInteger(stop) && stop - collisionStartIndex >= 32 &&
+          Number.isFinite(target.ypos) && Number.isFinite(target.height) && target.height >= 0) {
+        return checkDenseCollision(target, members, collisionStartIndex, stop, index);
+      }
       return _checkCollision(target, members, collisionStartIndex);
     };
 

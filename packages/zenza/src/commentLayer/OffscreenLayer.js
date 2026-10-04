@@ -40,6 +40,7 @@ const OffscreenLayer = config => {
   let offScreenLayer;
   let textField;
   let optionStyle;
+  let invalidateTextMetrics = () => {};
 
   const initializeOptionCss = optionStyle => {
     const update = () => {
@@ -59,6 +60,7 @@ const OffscreenLayer = config => {
       const newCss = tmp.join('\n');
       if (inner !== newCss) {
         optionStyle.innerHTML = newCss;
+        invalidateTextMetrics();
         global.emitter.emit('updateOptionCss', newCss);
       }
     };
@@ -158,6 +160,52 @@ const OffscreenLayer = config => {
     };
 
     layer.append(span);
+
+    // Original CSS-pixel dimensions only: each source comment owns at most one
+    // entry, and this WeakMap belongs to this isolated measuring frame.
+    let metricCache = new WeakMap();
+    invalidateTextMetrics = () => { metricCache = new WeakMap(); };
+    const fonts = span.ownerDocument.fonts;
+    const view = span.ownerDocument.defaultView;
+    const fontEvents = fonts && typeof fonts.addEventListener === 'function';
+    if (fontEvents) {
+      for (const name of ['loading', 'loadingdone', 'loadingerror']) {
+        fonts.addEventListener(name, invalidateTextMetrics);
+      }
+      if (fonts.ready && typeof fonts.ready.then === 'function') {
+        fonts.ready.then(invalidateTextMetrics, invalidateTextMetrics);
+      }
+    }
+    if (view && typeof view.addEventListener === 'function') {
+      view.addEventListener('resize', invalidateTextMetrics);
+    }
+    // Registered @font-face / FontFace instances can change without a loading
+    // event (e.g. adding an already-loaded face). Stay on the exact legacy path
+    // in that case; the built-in comment stylesheet uses installed fonts only.
+    const stableEnvironment = () => fontEvents && fonts.status === 'loaded' &&
+      fonts.size === 0 && span.isConnected === true && view &&
+      Number.isFinite(view.devicePixelRatio) && view.devicePixelRatio > 0;
+    textField.measureChat = (owner, htmlText, pixel, type, size, fontCommand, ver) => {
+      const validOwner = owner !== null && (typeof owner === 'object' || typeof owner === 'function');
+      const reusable = stableEnvironment() && validOwner && typeof htmlText === 'string' &&
+        Number.isFinite(pixel) && pixel > 0;
+      if (!reusable) { invalidateTextMetrics(); }
+      const cache = metricCache, ratio = view && view.devicePixelRatio;
+      const old = reusable ? cache.get(owner) : null;
+      if (old && old.htmlText === htmlText && old.pixel === pixel && old.type === type &&
+          old.size === size && old.fontCommand === fontCommand && old.ver === ver && old.ratio === ratio) {
+        return {width: old.width, height: old.height};
+      }
+      textField.setText(htmlText);
+      textField.setFontSizePixel(pixel);
+      textField.setType(type, size, fontCommand, ver);
+      const width = textField.getOriginalWidth(), height = textField.getOriginalHeight();
+      if (reusable && cache === metricCache && stableEnvironment() && ratio === view.devicePixelRatio &&
+          Number.isFinite(width) && width >= 0 && Number.isFinite(height) && height > 0) {
+        cache.set(owner, {htmlText, pixel, type, size, fontCommand, ver, ratio, width, height});
+      }
+      return {width, height};
+    };
 
     return span;
   };

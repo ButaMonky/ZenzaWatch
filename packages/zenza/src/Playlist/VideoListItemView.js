@@ -360,8 +360,8 @@ class VideoListItemView  {
 
     const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
     const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}><span class="count-full">${label}: <span class=${`value ${key}Count`}>${fullCount(value)}</span></span><span class="count-short">${label}: <span class="value">${this.compactCount(value)}</span></span></span>`;
-    const {cache, timestamp, index: _index} = this.map.get(item) || {};
-    if (cache && timestamp === item.timestamp && index === _index) {
+    const {cache, timestamp, index: _index, isLazy} = this.map.get(item) || {};
+    if (cache && timestamp === item.timestamp && index === _index && isLazy === item.isLazy) {
       return cache;
     }
     const title = item.title;
@@ -415,7 +415,7 @@ class VideoListItemView  {
           </div>
         `}
       </div>`;
-      this.map.set(item, {cache: result, timestamp: item.timestamp, index});
+      this.map.set(item, {cache: result, timestamp: item.timestamp, index, isLazy: item.isLazy});
       return result;
   }
 }

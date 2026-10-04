@@ -302,12 +302,15 @@ class VideoListView extends Emitter {
   }
   async renderList(items) {
     if (!this.list) { return; }
+    const generation = this._renderGeneration = (this._renderGeneration || 0) + 1;
     items = items || this.items || [];
     const lit = dll.lit || await global.emitter.promise('lit-html');
     const {render} = lit;
+    const result = await this._buildList(items);
+    if (generation !== this._renderGeneration) { return; }
     const timeLabel = `update playlistView items = ${items.length}`;
     console.time(timeLabel);
-    render(await this._buildList(items), this.list);
+    render(result, this.list);
     console.timeEnd(timeLabel);
     this._updateCSSVars();
     this._setInviewObserver();
@@ -323,26 +326,44 @@ class VideoListView extends Emitter {
     return result;
   }
   _setInviewObserver() {
-    if (!this.document) {
-      return;
+    if (!this.document) { return; }
+    if (!this.intersectionObserver || this._observedRoot !== this.listContainer) {
+      if (this.intersectionObserver) { this.intersectionObserver.disconnect(); }
+      this._observedRoot = this.listContainer;
+      this._observedTargets = new Map();
+      this._boundOnItemInview = this._boundOnItemInview || this._onItemInview.bind(this);
+      this.intersectionObserver = new this.contentWindow.IntersectionObserver(
+        this._boundOnItemInview, {rootMargin: '800px', root: this.listContainer});
     }
-    if (this.intersectionObserver) {
-      this.intersectionObserver.disconnect();
+    // Keep pending visibility records for unchanged cards instead of restarting
+    // every observation after each lazy render.
+    const targets = new Set(this.document.querySelectorAll('.videoItem'));
+    for (const [target, itemId] of this._observedTargets) {
+      if (!targets.has(target) || target.dataset.itemId !== itemId) {
+        this.intersectionObserver.unobserve(target);
+        this._observedTargets.delete(target);
+      }
     }
-    const targets = [...this.document.querySelectorAll('.videoItem')];
-    if (!targets.length) { return; }
-    const onInview = this._boundOnItemInview =
-      this._boundOnItemInview || this._onItemInview.bind(this);
-    const observer = this.intersectionObserver =
-      new this.contentWindow.IntersectionObserver(onInview, {rootMargin: '800px', root: this.listContainer});
-    targets.forEach(target => observer.observe(target));
+    for (const target of targets) {
+      if (!this._observedTargets.has(target)) {
+        this.intersectionObserver.observe(target);
+        this._observedTargets.set(target, target.dataset.itemId);
+      }
+    }
   }
   _onItemInview(entries) {
+    let changed = false;
     for (const entry of entries) {
-      const itemView = entry.target;
-      const item = this.findItemByItemView(itemView);
-      if (!item) { continue; }
+      if (this._observedTargets && !this._observedTargets.has(entry.target)) { continue; }
+      const item = this.findItemByItemView(entry.target);
+      if (!item || item.isLazy === !entry.isIntersecting) { continue; }
       item.isLazy = !entry.isIntersecting;
+      changed = true;
+    }
+    if (changed) {
+      // Present visible metadata now. Model notifications still follow their
+      // normal throttle, but must not hold scrolling content behind several frames.
+      this.renderList(this.items).catch(error => console.warn('playlist visibility render', error));
     }
   }
   _updateCSSVars() {

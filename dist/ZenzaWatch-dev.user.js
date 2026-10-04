@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.150-task225
+// @version        2.7.151-task226
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 16:25Z
+// build: 2026-10-04 16:50Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.150-task225';
+    var VER = '2.7.151-task226';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 16:25Z';
+    var BUILD = '2026-10-04 16:50Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -30239,8 +30239,8 @@ class VideoListItemView  {
 		const {classMap} = dll.directives;
 		const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
 		const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}><span class="count-full">${label}: <span class=${`value ${key}Count`}>${fullCount(value)}</span></span><span class="count-short">${label}: <span class="value">${this.compactCount(value)}</span></span></span>`;
-		const {cache, timestamp, index: _index} = this.map.get(item) || {};
-		if (cache && timestamp === item.timestamp && index === _index) {
+		const {cache, timestamp, index: _index, isLazy} = this.map.get(item) || {};
+		if (cache && timestamp === item.timestamp && index === _index && isLazy === item.isLazy) {
 			return cache;
 		}
 		const title = item.title;
@@ -30292,7 +30292,7 @@ class VideoListItemView  {
 					</div>
 				`}
 			</div>`;
-			this.map.set(item, {cache: result, timestamp: item.timestamp, index});
+			this.map.set(item, {cache: result, timestamp: item.timestamp, index, isLazy: item.isLazy});
 			return result;
 	}
 }
@@ -30938,12 +30938,15 @@ class VideoListView extends Emitter {
 	}
 	async renderList(items) {
 		if (!this.list) { return; }
+		const generation = this._renderGeneration = (this._renderGeneration || 0) + 1;
 		items = items || this.items || [];
 		const lit = dll.lit || await global.emitter.promise('lit-html');
 		const {render} = lit;
+		const result = await this._buildList(items);
+		if (generation !== this._renderGeneration) { return; }
 		const timeLabel = `update playlistView items = ${items.length}`;
 		console.time(timeLabel);
-		render(await this._buildList(items), this.list);
+		render(result, this.list);
 		console.timeEnd(timeLabel);
 		this._updateCSSVars();
 		this._setInviewObserver();
@@ -30959,26 +30962,40 @@ class VideoListView extends Emitter {
 		return result;
 	}
 	_setInviewObserver() {
-		if (!this.document) {
-			return;
+		if (!this.document) { return; }
+		if (!this.intersectionObserver || this._observedRoot !== this.listContainer) {
+			if (this.intersectionObserver) { this.intersectionObserver.disconnect(); }
+			this._observedRoot = this.listContainer;
+			this._observedTargets = new Map();
+			this._boundOnItemInview = this._boundOnItemInview || this._onItemInview.bind(this);
+			this.intersectionObserver = new this.contentWindow.IntersectionObserver(
+				this._boundOnItemInview, {rootMargin: '800px', root: this.listContainer});
 		}
-		if (this.intersectionObserver) {
-			this.intersectionObserver.disconnect();
+		const targets = new Set(this.document.querySelectorAll('.videoItem'));
+		for (const [target, itemId] of this._observedTargets) {
+			if (!targets.has(target) || target.dataset.itemId !== itemId) {
+				this.intersectionObserver.unobserve(target);
+				this._observedTargets.delete(target);
+			}
 		}
-		const targets = [...this.document.querySelectorAll('.videoItem')];
-		if (!targets.length) { return; }
-		const onInview = this._boundOnItemInview =
-			this._boundOnItemInview || this._onItemInview.bind(this);
-		const observer = this.intersectionObserver =
-			new this.contentWindow.IntersectionObserver(onInview, {rootMargin: '800px', root: this.listContainer});
-		targets.forEach(target => observer.observe(target));
+		for (const target of targets) {
+			if (!this._observedTargets.has(target)) {
+				this.intersectionObserver.observe(target);
+				this._observedTargets.set(target, target.dataset.itemId);
+			}
+		}
 	}
 	_onItemInview(entries) {
+		let changed = false;
 		for (const entry of entries) {
-			const itemView = entry.target;
-			const item = this.findItemByItemView(itemView);
-			if (!item) { continue; }
+			if (this._observedTargets && !this._observedTargets.has(entry.target)) { continue; }
+			const item = this.findItemByItemView(entry.target);
+			if (!item || item.isLazy === !entry.isIntersecting) { continue; }
 			item.isLazy = !entry.isIntersecting;
+			changed = true;
+		}
+		if (changed) {
+			this.renderList(this.items).catch(error => console.warn('playlist visibility render', error));
 		}
 	}
 	_updateCSSVars() {

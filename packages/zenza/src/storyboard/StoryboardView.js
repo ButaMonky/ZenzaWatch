@@ -394,7 +394,7 @@ StoryboardView.__css__ = (`
     z-index: 9005;
     overflow: hidden;
     pointer-events: none;
-    will-change: tranform;
+    will-change: transform;
     display: none;
     contain: layout paint style;
     user-select: none;

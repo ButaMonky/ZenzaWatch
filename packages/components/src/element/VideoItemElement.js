@@ -310,7 +310,8 @@ const {VideoItemElement, VideoItemProps} = (() => {
       const data = thumbInfo.data || thumbInfo; // legacy 互換のため
       const thumbnail = this.props.thumbnail.match(/smile\?i=/) ?
         this.props.thumbnail : data.thumbnail;
-      const isChannel = data.v.startsWith('so') || data.owner.type === 'channel';
+      const owner = data.owner || {};
+      const isChannel = data.v.startsWith('so') || owner.type === 'channel';
       const watchId = isChannel ? data.id : data.v;
       Object.assign(this.dataset, {
         watchId,
@@ -322,10 +323,10 @@ const {VideoItemElement, VideoItemProps} = (() => {
         viewCount: data.viewCount,
         thumbnail,
         postedAt: data.postedAt,
-        ownerId: data.owner.id,
-        ownerName: data.owner.name,
-        ownerIcon: data.owner.icon,
-        owerUrl: data.owner.url,
+        ownerId: owner.id || 0,
+        ownerName: owner.name || '',
+        ownerIcon: owner.icon || '',
+        owerUrl: owner.url || '',
         isChannel
       });
       this.dispatchEvent(new CustomEvent('thumb-info', {detail: {props: this.props}, bubbles: true, composed: true}));

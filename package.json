@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "author": "segabito",
   "bugs": {
-    "url": "https://github.com/segabito/ZenzaWatch/issues"
+    "url": "https://github.com/ButaMonky/ZenzaWatch/issues"
   },
   "devDependencies": {
     "@babel/cli": "^7.4.4",
@@ -24,7 +24,7 @@
     "babel-register": "^6.26.0",
     "cross-env": "^10.1.0",
     "emitter": "0.0.5",
-    "eslint": "^4.19.0",
+    "eslint": "8.57.1",
     "eslint-config-google": "^0.9.1",
     "eslint-config-standard": "^11.0.0",
     "eslint-plugin-import": "^2.9.0",
@@ -63,7 +63,7 @@
     "lib",
     "test"
   ],
-  "homepage": "https://github.com/segabito/ZenzaWatch",
+  "homepage": "https://github.com/ButaMonky/ZenzaWatch",
   "keywords": [
     "ES6",
     "test"
@@ -72,7 +72,7 @@
   "main": "src/ZenzaWatchIndex.js",
   "repository": {
     "type": "git",
-    "url": "git://github.com/segabito/ZenzaWatch.git"
+    "url": "https://github.com/ButaMonky/ZenzaWatch.git"
   },
   "scripts": {
     "build": "node ./build.js --dev",

@@ -90,7 +90,10 @@ const replaceRedirectLinks = async () => {
     if (continuous) {
       createShuffleButton(continuous);
     }
-    observer.observe(document.querySelector('.UserPage-main'), {childList: true, subtree: true});
+    const userPageMain = document.querySelector('.UserPage-main');
+    if (userPageMain) {
+      observer.observe(userPageMain, {childList: true, subtree: true});
+    }
   }
 
   if (location.host === 'www.nicovideo.jp' &&

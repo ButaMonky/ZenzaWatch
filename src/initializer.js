@@ -152,7 +152,7 @@ const {initialize} = (() => {
     // 動画ロード直後に初期化するとつっかかる原因になるのでWorkerだけ作っておく
     if (!location.host.endsWith('.nicovideo.jp')) { return; }
     CommentLayoutWorker.getInstance();
-    ThumbInfoLoader.load('sm9');
+    void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
     window.console.time('init Workers');
     return Promise.all([
       StoryboardWorker.initWorker(),
@@ -171,7 +171,7 @@ const {initialize} = (() => {
       document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, {bubbles: true, composed: true});
     cssUtil.addStyle(CONSTANT.COMMON_CSS, {className: 'common'});
     initializeBySite();
-    replaceRedirectLinks();
+    replaceRedirectLinks().catch(() => console.warn('Legacy redirect-link enhancement unavailable'));
 
     const query = textUtil.parseQuery(START_PAGE_QUERY);
 

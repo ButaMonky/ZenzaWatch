@@ -1,3 +1,74 @@
+## Task272 / 2.7.179-task272 + MylistPocket 0.5.46-task272 - use resolved Mylist item ID for deletion
+Send the resolved Mylist entry itemId to the nvapi DELETE endpoint instead of the video watch ID. Preserve lookup, cache invalidation, events, error metadata, and Watch-Later behavior. Add source and generated-dist regression coverage for the DELETE query contract.
+
+## Task268 / ZenzaWatch 2.7.178-task268 + MaskedWatch 0.3.4-task268 - integrate low-risk repairs
+Integrate Task244 ownerless thumb-info card tolerance and Task266 MaskedWatch detector Worker cleanup onto current develop. Preserve the newer Mylist/dist/test fixes already in develop, terminate a partially initialized MaskedWatch Worker on detector startup failure, and keep ordinary owner/channel card rendering unchanged.
+
+## Task244 / 2.7.165-task244 - tolerate ownerless thumb-info video cards
+Keep description-linked video cards usable when a successful thumb-info response has no uploader metadata. Use neutral owner defaults only for the missing owner fields, preserve existing owner/channel handling when metadata is present, and add a focused regression for the known ownerless-success shape.
+
+## Task265 / MylistPocket 0.5.45-task265 - sync generated Mylist error handling
+Regenerate the active ZenzaWatch-dev and MylistPocket userscripts from the current shared MylistApiLoader after Task264. Bump MylistPocket so existing installations can receive the shared error-contract fix; no additional Mylist API behavior is introduced by this task beyond source/dist parity.
+
+## Task264 / 2.7.177-task264 - preserve Mylist and Watch-Later error semantics
+Keep successful empty-list lookups distinct from list retrieval failures, return an explicit `NOT_FOUND` error only after a successful lookup finds no matching video, and preserve `status`, `result`, `code`, and nested `cause` metadata across remove/add failures including Watch-Later 409 reorder recovery. Keep ordinary add/remove success behavior and generated dev dist in parity.
+
+## Task263 / 2.7.176-task263 - isolate heatmap Worker failures
+When HeatMap Worker initialization fails after OffscreenCanvas transfer, replace the transferred canvas and fall back to the main-thread HeatMap instead of leaking a rejected initialization. Wrap later Worker RPCs in a failure-safe proxy that terminates/disables the failed worker and resolves ignored reset/setData/update/duration/chatList calls without unhandled rejections. Keep generated dev dist in parity and preserve existing heatmap ownership/generation behavior.
+
+## Task262 / 2.7.175-task262 - respect per-video tag edit permission
+Replace tag edit metadata on every video update, show add/delete controls only when the current logged-in video explicitly reports `isEditable: true`, surface `PREMIUM_ONLY` and generic non-editable messages, and block stale add/remove/edit/input commands when editing is unavailable. Keep generated dev dist in parity and preserve tag browsing/search behavior.
+
+## Task261 / 2.7.174-task261 - cancel stale UAA delay, request, and screenshot work
+Cancel the pending 5-second UAA timer, abort the active UAA fetch, and pass the same generation AbortSignal into sponsor screenshot capture when the video changes or UAA is cleared. Guard async completion by generation/video ownership and preserve current-video rendering. `UaaLoader` now forwards an optional caller signal through `netUtil.fetch`.
+
+## Task260 / 2.7.173-task260 - restore touchcancel fix in generated dev dist
+Synchronize the Task257 `TouchWrapper._onTouchCancel()` final-pointer reset into `dist/ZenzaWatch-dev.user.js`, where the source fix had been integrated but the generated dev distribution remained stale. Add direct source/dist execution coverage so the parity regression cannot recur.
+
+## Task259 / 2.7.172-task259 - save resume position for short-duration long-form videos
+Remove the obsolete duration-only 120-second resume-position cutoff for ordinary long-form videos while preserving login/current-video/near-end/throttle/final-save guards. Keep the existing skip for short-duration `ss...` short-content IDs, and update playback-position regressions for 96s/119s long-form plus short-content coverage.
+
+## Task258 / 2.7.171-task258 - keep ad decoration results on the current list item
+When an ad-decoration request completes after a same-watchId item replacement, resolve the current item from `VideoListModel` and apply the result there instead of mutating the detached request-start item. Preserve request deduplication, normal same-item success, retry eligibility, and detached-item safety.
+
+## Task257 / 2.7.170-task257 - reset canceled touch gesture ownership
+When `touchcancel` removes the final active pointer, clear the stored maximum finger count, movement/center state, and pending swipe debounces so the next gesture cannot inherit a canceled multi-touch command. Preserve partial-cancel state and ordinary multi-finger taps.
+
+## Task256 / 2.7.169-task256 - clean up confirmed CSS typos
+Correct the confirmed CSS spelling/unit/declaration typos in ZenzaWatch source and generated dist without changing layout intent or feature semantics. Add a regression guard covering the known typo tokens and the VideoSearchForm padding/width declaration boundary.
+
+## Task253 / 2.7.168-task253 - ignore stale tag-count completions
+Track a generation for asynchronous tag-count requests so older success or failure completions cannot overwrite a newer filter result or cache-hit display. Keep filter-specific caching and ordinary current-generation rendering unchanged.
+
+## Task252 / 2.7.167-task252 - escape tag text in HTML data attributes
+Escape tag names before embedding them into `data-tag-id` and delete-button `data-param` attributes so quotes and markup characters cannot break TagListView's generated HTML. Preserve the decoded attribute values and existing tag/search behavior, with a hostile-tag regression fixture.
+
+## Task240 / 2.7.166-task240 - repair modern lazy image decode handling
+Call `HTMLImageElement.decode()` as a function instead of reading `decode.then`, and fall back to the existing adjusted image load when decode rejects or is unavailable. Preserve the ordinary non-adjusted lazy-load path.
+
+## Task242 / 2.7.164-task242 - stabilize tag editor listener lifetime
+Bind the TagListView body-click handler once, tear down active tag edit/input ownership before a video update replaces view state, and cancel delayed input focus so stale timers cannot refocus the next video. Add focused listener/focus lifecycle regression coverage without changing tag API or edit semantics.
+
+## Task237 / 2.7.162-task237 - isolate optional HoverMenu mylist initialization failure
+Keep the ordinary video HoverMenu usable when the optional logged-in mylist list request fails. Consume only that submenu initialization rejection with a generic warning, while preserving successful submenu population and the guest no-fetch path. Add focused success/failure/guest regression coverage.
+
+## Task236 / 2.7.161-task236 - serialize Nicodic batch draining
+Keep one Nicodic batch-drain owner while a request is in flight so tags queued during that request are drained sequentially instead of starting overlapping API calls. Preserve 10-item batching, in-flight deduplication, cache/failure semantics, and add a regression that queues twelve tags behind an unresolved first request while asserting maximum network concurrency remains one.
+
+## Task235 / 2.7.160-task235 - guard legacy MyPage observer target
+Skip the optional legacy MyPage shuffle observer when `.UserPage-main` is absent instead of calling `MutationObserver.observe(null)`, and failure-isolate the fire-and-forget bootstrap so future legacy-compatibility failures do not leak unhandled rejections. Preserve the existing observer and shuffle-button behavior when the legacy container exists, with focused SPA/non-SPA regression coverage.
+
+## Task234 / 2.7.159-task234 - fix legacy seek-bar addon handler bridge
+Preserve the exact `handler` function from `seekBar.addonMenuReady` when forwarding to the legacy `emitAsync` compatibility hook. The promise hook, container, command semantics, and modern addon path are unchanged. Add parity coverage for both control-bar and seek-bar addon bridges.
+
+## Task233 / 2.7.158-task233 - fix malformed video-quality menu closing tags
+Replace the 11 malformed `<//li>` closers in the video server/quality submenu with valid `</li>` tags and add a static regression guard. Quality choices, commands, and setting semantics are unchanged.
+## Task232 / 2.7.157-task232 — プレイリスト書き出しBlob URLを解放
+プレイリストJSONのダウンロード後に一時Blob URLを解放し、繰り返し書き出した場合にページ終了までURLが保持され続ける問題を修正。保存内容・インポート・UI挙動は変更しない。
+
+## Task231 / 2.7.156-task231 — 起動時ThumbInfo事前読込の失敗を局所化
+Zenza起動時のThumbInfo warm-upが一時失敗しても、未処理Promise rejectionとしてページへ漏れないように修正。事前読込だけが失敗した場合もWorker初期化は従来どおり継続し、通信・再生仕様は変更しない。
+
 ## Task230 / 2.7.155-task230 — 上部件数の正確表示と間隔の統一
 上部の再生・コメント・マイリスト・いいね数を、万・億への短縮からカンマ付きの正確な数字へ復旧。承認済み比較案に沿って項目間とラベル・数字の間隔を統一。カード側の短縮表示は維持。
 

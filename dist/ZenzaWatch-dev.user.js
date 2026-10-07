@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.155-task230
+// @version        2.7.181-task296
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-04 18:51Z
+// build: 2026-10-07 21:52Z 850a501
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.155-task230';
+    var VER = '2.7.181-task296';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-04 18:51Z';
+    var BUILD = '2026-10-07 21:52Z 850a501';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -6397,7 +6397,8 @@ const {VideoItemElement, VideoItemProps} = (() => {
 			const data = thumbInfo.data || thumbInfo; // legacy 互換のため
 			const thumbnail = this.props.thumbnail.match(/smile\?i=/) ?
 				this.props.thumbnail : data.thumbnail;
-			const isChannel = data.v.startsWith('so') || data.owner.type === 'channel';
+			const owner = data.owner || {};
+			const isChannel = data.v.startsWith('so') || owner.type === 'channel';
 			const watchId = isChannel ? data.id : data.v;
 			Object.assign(this.dataset, {
 				watchId,
@@ -6409,10 +6410,10 @@ const {VideoItemElement, VideoItemProps} = (() => {
 				viewCount: data.viewCount,
 				thumbnail,
 				postedAt: data.postedAt,
-				ownerId: data.owner.id,
-				ownerName: data.owner.name,
-				ownerIcon: data.owner.icon,
-				owerUrl: data.owner.url,
+				ownerId: owner.id || 0,
+				ownerName: owner.name || '',
+				ownerIcon: owner.icon || '',
+				owerUrl: owner.url || '',
 				isChannel
 			});
 			this.dispatchEvent(new CustomEvent('thumb-info', {detail: {props: this.props}, bubbles: true, composed: true}));
@@ -8893,6 +8894,19 @@ const PlaylistApiLoader = (() => {
 const MylistApiLoader = (() => {
 	const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
 	const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
+	const createMylistError = (message, {
+		status = 'fail',
+		result,
+		code,
+		cause
+	} = {}) => {
+		const error = new Error(message);
+		error.status = status;
+		if (result !== undefined) { error.result = result; }
+		if (code !== undefined) { error.code = code; }
+		if (cause !== undefined) { error.cause = cause; }
+		return error;
+	};
 	let cacheStorage = null;
 	let token = '';
 	if (window.ZenzaWatch) {
@@ -8954,9 +8968,9 @@ const MylistApiLoader = (() => {
 					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 					credentials: 'include'
 				}).then(r => r.json())
-					.catch(e => { throw new Error('あとで見るの取得失敗(2)', e); });
+					.catch(e => { throw createMylistError('あとで見るの取得失敗(2)', {result: e, cause: e}); });
 				if (res.meta.status !== 200 || !res.data.watchLater) {
-					throw new Error('あとで見るの取得失敗(1)', res);
+					throw createMylistError('あとで見るの取得失敗(1)', {result: res, code: res?.error?.code});
 				}
 				if (data == null) {
 					data = res.data.watchLater;
@@ -8978,9 +8992,9 @@ const MylistApiLoader = (() => {
 					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 					credentials: 'include'
 				}).then(r => r.json())
-					.catch(e => { throw new Error('マイリスト取得失敗(2)', e); });
+					.catch(e => { throw createMylistError('マイリスト取得失敗(2)', {result: e, cause: e}); });
 				if (res.meta.status !== 200 || !res.data.mylist) {
-					throw new Error('マイリスト取得失敗(1)', res);
+					throw createMylistError('マイリスト取得失敗(1)', {result: res, code: res?.error?.code});
 				}
 				if (data == null) {
 					data = res.data.mylist;
@@ -9004,36 +9018,42 @@ const MylistApiLoader = (() => {
 				headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 				credentials: 'include'
 			}).then(r => r.json())
-				.catch(e => { throw new Error('マイリスト一覧の取得失敗(2)', e); });
+				.catch(e => { throw createMylistError('マイリスト一覧の取得失敗(2)', {result: e, cause: e}); });
 			if (result.meta.status !== 200 || !result.data.mylists) {
-				throw new Error(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, result);
+				throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, {result, code: result?.error?.code});
 			}
 			const data = result.data.mylists;
 			cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
 			return data;
 		}
 		async findDeflistItemByWatchId(watchId) {
-			const items = await this._getDeflistItems().catch(() => []);
+			const items = await this._getDeflistItems();
 			for (let item of items) {
 				if (item.watchId === watchId) {
 					return item;
 				}
 			}
-			return Promise.reject();
+			throw createMylistError('動画が見つかりません', {
+				status: 'not_found',
+				code: 'NOT_FOUND',
+				result: {watchId, list: 'watchLater'}
+			});
 		}
 		async findMylistItemByWatchId(watchId, groupId) {
-			const items = await this._getMylistItems(groupId).catch(() => []);
+			const items = await this._getMylistItems(groupId);
 			for (let item of items) {
 				if (item.watchId === watchId) {
 					return item;
 				}
 			}
-			return Promise.reject();
+			throw createMylistError('動画が見つかりません', {
+				status: 'not_found',
+				code: 'NOT_FOUND',
+				result: {watchId, groupId, list: 'mylist'}
+			});
 		}
 		async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0 } = {}) {
-			const item = await this.findDeflistItemByWatchId(watchId).catch(result => {
-				throw new Error('動画が見つかりません', {result, status: 'fail'});
-			});
+			const item = await this.findDeflistItemByWatchId(watchId);
 			const body = `itemIds=${item.itemId}`;
 			const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
 			const cacheKey = 'deflistItems';
@@ -9047,7 +9067,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(result => {
-					throw new Error('あとで見るから削除失敗(2)', { result, status: 'fail' });
+					throw createMylistError('あとで見るから削除失敗(2)', {result, cause: result});
 				});
 			if (result.meta.status && result.meta.status === 200) {
 				cacheStorage.removeItem(cacheKey);
@@ -9058,15 +9078,13 @@ const MylistApiLoader = (() => {
 					message: 'あとで見るから削除'
 				};
 			}
-			throw new Error(result.error.description, {
-					status: 'fail', result, code: result.error.code
+			throw createMylistError(result.error.description, {
+					result, code: result.error.code
 			});
 		}
 		async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0 } = {}) {
-			const item = await this.findMylistItemByWatchId(watchId, groupId).catch(result => {
-					throw new Error('動画が見つかりません', {result, status: 'fail'});
-				});
-			let body = 'itemIds=' + watchId;
+			const item = await this.findMylistItemByWatchId(watchId, groupId);
+			let body = 'itemIds=' + item.itemId;
 			const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
 			const cacheKey = `mylistItems: ${groupId}`;
 			const result = await netUtil.fetch(url, {
@@ -9079,7 +9097,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(result => {
-					throw new Error('マイリストから削除失敗(2)', {result, status: 'fail'});
+					throw createMylistError('マイリストから削除失敗(2)', {result, cause: result});
 				});
 			if (result.meta.status && result.meta.status === 200) {
 				cacheStorage.removeItem(cacheKey);
@@ -9090,8 +9108,7 @@ const MylistApiLoader = (() => {
 					message: 'マイリストから削除'
 				};
 			}
-			throw new Error(result.error.description, {
-				status: 'fail',
+			throw createMylistError(result.error.description, {
 				result,
 				code: result.error.code
 			});
@@ -9110,9 +9127,9 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(err => {
-						throw new Error('あとで見る登録失敗(200)', {
-							status: 'fail',
-							result: err
+						throw createMylistError('あとで見る登録失敗(200)', {
+							result: err,
+							cause: err
 						});
 					});
 			if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
@@ -9126,10 +9143,10 @@ const MylistApiLoader = (() => {
 			}
 			if (result.meta.status && result.meta.status === 409 && !isRetry) {
 					await this.removeDeflistItem(watchId).catch(err => {
-							throw new Error('あとで見る登録失敗(101)', {
-								status: 'fail',
+							throw createMylistError('あとで見る登録失敗(101)', {
 								result: err.result,
-								code: err.code
+								code: err.code,
+								cause: err
 							});
 						});
 					const added = await this.addDeflistItem(watchId, description, true, {frontendId, frontendVersion});
@@ -9140,16 +9157,13 @@ const MylistApiLoader = (() => {
 					};
 			}
 			if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-				throw new Error('あとで見る登録失敗(100)', {
-					status: 'fail',
-					result,
+				throw createMylistError('あとで見る登録失敗(100)', {
+					result
 				});
 			}
-				throw new Error(result.error.description, {
-					status: 'fail',
+				throw createMylistError(result.error.description, {
 					result,
-					code: result.error.code,
-					message: result.error.description
+					code: result.error.code
 				});
 		}
 		async addMylistItem(watchId, groupId, description, { frontendId = 6, frontendVersion = 0 } = {}) {
@@ -9166,9 +9180,9 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(err => {
-					throw new Error('マイリスト登録失敗(200)', {
-						status: 'fail',
-						result: err
+					throw createMylistError('マイリスト登録失敗(200)', {
+						result: err,
+						cause: err
 					});
 				});
 			if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
@@ -9177,11 +9191,11 @@ const MylistApiLoader = (() => {
 				return {status: 'ok', result, message: 'マイリスト登録'};
 			}
 			if (!result.meta.status /*|| !result.error*/) {
-				throw new Error('マイリスト登録失敗(100)', {status: 'fail', result});
+				throw createMylistError('マイリスト登録失敗(100)', {result});
 			}
 			emitter.emitAsync('mylistAdd', watchId, groupId, description);
-			throw new Error(result.error.description, {
-					status: 'fail', result, code: result.error.code
+			throw createMylistError(result.error.description, {
+					result, code: result.error.code
 			});
 		}
 	}
@@ -9703,11 +9717,20 @@ const NicodicArticleLoader = (() => {
 		});
 	};
 	const flush = async () => {
-		const entries = Array.from(pending);
-		pending.clear();
-		scheduled = false;
-		for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-			await fetchBatch(entries.slice(i, i + BATCH_SIZE));
+		try {
+			while (pending.size) {
+				const entries = Array.from(pending);
+				pending.clear();
+				for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+					await fetchBatch(entries.slice(i, i + BATCH_SIZE));
+				}
+			}
+		} finally {
+			scheduled = false;
+			if (pending.size) {
+				scheduled = true;
+				Promise.resolve().then(flush);
+			}
 		}
 	};
 	const lookup = name => {
@@ -9739,9 +9762,9 @@ const NicodicArticleLoader = (() => {
 	return {exists, checkAll};
 })();
 const UaaLoader = {
-	load: (videoId, {limit = 50} = {}) => {
+	load: (videoId, {limit = 50, signal} = {}) => {
 		const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
-		return netUtil.fetch(url, {credentials: 'include'}).then(res => res.json());
+		return netUtil.fetch(url, {credentials: 'include', signal}).then(res => res.json());
 	}
 };
 const RecommendAPILoader = (() => {
@@ -16826,6 +16849,14 @@ class TouchWrapper extends Emitter {
 			return !identifiers.includes(touch.identifier);
 		});
 		this._currentPointers = currentTouches;
+		if (this.touchCount === 0) {
+			this._maxCount = 0;
+			this._isMoved = false;
+			this._startCenter = null;
+			this._lastCenter = null;
+			this._debouncedOnSwipe2Y.cancel();
+			this._debouncedOnSwipe3X.cancel();
+		}
 	}
 	get touchCount() {
 		return this._currentPointers.length;
@@ -17276,7 +17307,7 @@ StoryboardView.__css__ = (`
 		z-index: 9005;
 		overflow: hidden;
 		pointer-events: none;
-		will-change: tranform;
+		will-change: transform;
 		display: none;
 		contain: layout paint style;
 		user-select: none;
@@ -19953,7 +19984,7 @@ const historyTriggerKeyGuard = event => {
 			).then(({container, handler}) => ge.emitAsync('videoControBar.addonMenuReady', container, handler));
 			ge.emitResolve('seekBar.addonMenuReady',
 				{container: view.querySelector('.seekBar'), handler}
-			).then(({container, handle}) => ge.emitAsync('seekBar.addonMenuReady', container, handle));
+			).then(({container, handler}) => ge.emitAsync('seekBar.addonMenuReady', container, handler));
 		}
 		get currentTime() {
 			return this._currentTime;
@@ -21064,23 +21095,23 @@ util.addStyle(`
 									<span>新システムを使用</span>
 									<p class="currentVideoQuality"></p>
 									<ul class="domandVideoQuality">
-										<li class="select-domand-auto"  data-command="update-domandVideoQuality" data-param="auto"><span>自動(auto)</span><//li>
-										<li class="select-domand-1080p" data-command="update-domandVideoQuality" data-param="1080p"><span>1080p 優先</span><//li>
-										<li class="select-domand-720p"  data-command="update-domandVideoQuality" data-param="720p"><span>720p</span><//li>
-										<li class="select-domand-480p"  data-command="update-domandVideoQuality" data-param="480p"><span>480p</span><//li>
-										<li class="select-domand-360p"  data-command="update-domandVideoQuality" data-param="360p"><span>360p</span><//li>
-										<li class="select-domand-144p"  data-command="update-domandVideoQuality" data-param="144p"><span>144p</span><//li>
+										<li class="select-domand-auto"  data-command="update-domandVideoQuality" data-param="auto"><span>自動(auto)</span></li>
+										<li class="select-domand-1080p" data-command="update-domandVideoQuality" data-param="1080p"><span>1080p 優先</span></li>
+										<li class="select-domand-720p"  data-command="update-domandVideoQuality" data-param="720p"><span>720p</span></li>
+										<li class="select-domand-480p"  data-command="update-domandVideoQuality" data-param="480p"><span>480p</span></li>
+										<li class="select-domand-360p"  data-command="update-domandVideoQuality" data-param="360p"><span>360p</span></li>
+										<li class="select-domand-144p"  data-command="update-domandVideoQuality" data-param="144p"><span>144p</span></li>
 									</ul>
 								</li>
 								<li class="serverType select-server-dmc" data-command="update-videoServerType" data-param="dmc">
 									<span>旧システムを使用</span>
 									<p class="currentVideoQuality"></p>
 									<ul class="dmcVideoQuality">
-										<li class="select-dmc-auto"     data-command="update-dmcVideoQuality" data-param="auto"><span>自動(auto)</span><//li>
-										<li class="select-dmc-veryhigh" data-command="update-dmcVideoQuality" data-param="veryhigh"><span>超(1080) 優先</span><//li>
-										<li class="select-dmc-high"     data-command="update-dmcVideoQuality" data-param="high"><span>高(720) 優先</span><//li>
-										<li class="select-dmc-mid"      data-command="update-dmcVideoQuality" data-param="mid"><span>中(480-540)</span><//li>
-										<li class="select-dmc-low"      data-command="update-dmcVideoQuality" data-param="low"><span>低(360)</span><//li>
+										<li class="select-dmc-auto"     data-command="update-dmcVideoQuality" data-param="auto"><span>自動(auto)</span></li>
+										<li class="select-dmc-veryhigh" data-command="update-dmcVideoQuality" data-param="veryhigh"><span>超(1080) 優先</span></li>
+										<li class="select-dmc-high"     data-command="update-dmcVideoQuality" data-param="high"><span>高(720) 優先</span></li>
+										<li class="select-dmc-mid"      data-command="update-dmcVideoQuality" data-param="mid"><span>中(480-540)</span></li>
+										<li class="select-dmc-low"      data-command="update-dmcVideoQuality" data-param="low"><span>低(360)</span></li>
 									</ul>
 								</li>
 						</ul>
@@ -21410,35 +21441,108 @@ const HeatMapWorker = (() => {
 	`;
 	const isOffscreenCanvasAvailable = !!HTMLCanvasElement.prototype.transferControlToOffscreen;
 	let worker;
+	const createMainThreadHeatMap = ({container, width, height, canvas}) => {
+		const HeatMap = HeatMapInitFunc({
+			emit: (...args) => global.emitter.emit(...args)
+		});
+		return new HeatMap({container, width, height, canvas});
+	};
+	const stopWorker = target => {
+		try { target && target.terminate && target.terminate(); } catch (e) {}
+		if (worker === target) {
+			worker = null;
+		}
+	};
+	const replaceTransferredCanvas = (container, canvas) => {
+		let replacement = canvas && canvas.cloneNode ? canvas.cloneNode(false) : null;
+		if (!replacement && typeof document !== 'undefined' && document.createElement) {
+			replacement = document.createElement('canvas');
+			replacement.className = (canvas && canvas.className) || 'heatMap';
+			replacement.width = (canvas && canvas.width) || 200;
+			replacement.height = (canvas && canvas.height) || 10;
+		}
+		if (!replacement) {
+			return null;
+		}
+		if (canvas) {
+			replacement.width = canvas.width;
+			replacement.height = canvas.height;
+			if (!replacement.className) {
+				replacement.className = canvas.className || 'heatMap';
+			}
+		}
+		if (canvas && canvas.parentNode && canvas.parentNode.replaceChild) {
+			canvas.parentNode.replaceChild(replacement, canvas);
+		} else if (canvas && canvas.replaceWith) {
+			canvas.replaceWith(replacement);
+		} else if (container && container.append) {
+			try { canvas && canvas.remove && canvas.remove(); } catch (e) {}
+			container.append(replacement);
+		} else {
+			return null;
+		}
+		return replacement;
+	};
 	const init = async ({container, width, height}) => {
 		if (!isOffscreenCanvasAvailable) {
-			const HeatMap = HeatMapInitFunc({
-				emit: (...args) => global.emitter.emit(...args)
-			});
-			return new HeatMap({container, width, height});
+			return createMainThreadHeatMap({container, width, height});
 		}
-		worker = worker || workerUtil.createCrossMessageWorker(func, {name: 'HeatMapWorker'});
+		const activeWorker = worker =
+			worker || workerUtil.createCrossMessageWorker(func, {name: 'HeatMapWorker'});
 		const canvas = container.querySelector('canvas.heatMap');
 		const layer = canvas.transferControlToOffscreen();
-		await worker.post({command: 'init', params: {canvas: layer}}, {transfer: [layer]});
-		let _chatList, _duration;
+		try {
+			await activeWorker.post({command: 'init', params: {canvas: layer}}, {transfer: [layer]});
+		} catch (e) {
+			stopWorker(activeWorker);
+			const replacement = replaceTransferredCanvas(container, canvas);
+			if (!replacement) {
+				window.console.warn('HeatMap worker init failed; fallback canvas unavailable');
+				throw e;
+			}
+			window.console.warn('HeatMap worker init failed; using main-thread fallback');
+			return createMainThreadHeatMap({container, width, height, canvas: replacement});
+		}
+		let _chatList, _duration, disabled = false;
+		const disable = e => {
+			if (disabled) { return; }
+			disabled = true;
+			stopWorker(activeWorker);
+			if (canvas && canvas.style) {
+				canvas.style.visibility = 'hidden';
+			}
+			window.console.warn('HeatMap worker disabled after RPC failure',
+				{reason: e && (e.reason || e.name || e.status) || 'unknown'});
+		};
+		const safePost = async (body, options) => {
+			if (disabled) {
+				return null;
+			}
+			try {
+				return await activeWorker.post(body, options);
+			} catch (e) {
+				disable(e);
+				return null;
+			}
+		};
 		return {
 			canvas,
 			update(chatList) {
 				chatList = HeatMap.snapshotChatList(chatList);
-				return worker.post({command: 'update', params: {chatList}});
+				return safePost({command: 'update', params: {chatList}});
 			},
 			get duration() { return _duration; },
 			set duration(d) {
 				_duration = d;
-				worker.post({command: 'duration', params: {duration: d}}); },
+				safePost({command: 'duration', params: {duration: d}});
+			},
 			reset(params = {}) {
 				_chatList = null; _duration = undefined;
-				return worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}});
+				return safePost({command: 'reset', params: {watchId: (params && params.watchId) || null}});
 			},
 			setData({watchId, duration, chatList}) {
 				_duration = duration; _chatList = chatList;
-				return worker.post({command: 'setData', params: {
+				return safePost({command: 'setData', params: {
 					watchId, duration, chatList: HeatMap.snapshotChatList(chatList)
 				}});
 			},
@@ -21802,7 +21906,7 @@ util.addStyle(`
 		cursor: wait;
 	}
 	.zenzaCommentPreview.is-updating * {
-		pointer-evnets: none;
+		pointer-events: none;
 	}
 	.listContainer {
 		bottom: auto;
@@ -22120,7 +22224,7 @@ util.addStyle(`
 			pointer-events: auto;
 			display: flex;
 			text-align: center;
-			vertical-aligm: middle;
+			vertical-align: middle;
 			width: 100%;
 		}
 		.is-wheelSeeking .seekBarToolTipInner,
@@ -22150,7 +22254,7 @@ util.addStyle(`
 		}
 		.seekBarToolTip .controlButton:hover {
 			text-shadow: 0 0 8px #fe9;
-			box-shdow: 0 0 8px #fe9;
+			box-shadow: 0 0 8px #fe9;
 		}
 		.seekBarToolTip .controlButton:active {
 			font-size: 16px;
@@ -30418,9 +30522,11 @@ class VideoList extends Emitter {
 		const watchIds = targets.map(item => item.watchId);
 		this._adDecorationLoader.load(watchIds).then(resultMap => {
 			targets.forEach(item => {
-				this._adDecorationRequested.delete(item.watchId);
-				if (resultMap.has(item.watchId)) {
-					item.adDecoration = resultMap.get(item.watchId);
+				const watchId = item.watchId;
+				this._adDecorationRequested.delete(watchId);
+				const currentItem = this.model.findByWatchId(watchId);
+				if (currentItem && resultMap.has(watchId)) {
+					currentItem.adDecoration = resultMap.get(watchId);
 				}
 			});
 		}).catch(e => {
@@ -31647,7 +31753,10 @@ class PlayList extends VideoList {
 		});
 		document.body.append(a);
 		a.click();
-		setTimeout(() => a.remove(), 1000);
+		setTimeout(() => {
+			a.remove();
+			window.URL.revokeObjectURL(url);
+		}, 1000);
 	}
 	_onImportFileCommand(fileData) {
 		if (!textUtil.isValidJson(fileData)) {
@@ -31713,6 +31822,51 @@ class PlayList extends VideoList {
 		setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
 		return added;
 	}
+	_insertNeighbourItems(videoListItems, options = {}) {
+		const model = this.model;
+		const anchor = (options.watchId && model.findByWatchId(options.watchId)) ||
+			(this._activeItem && model.indexOf(this._activeItem) >= 0 ? this._activeItem : null);
+		const incoming = model._dedupe(model.items, videoListItems).slice(model.length);
+		const fresh = new Set(incoming);
+		const anchorAt = anchor ? videoListItems.findIndex(item => item.watchId === anchor.watchId) : -1;
+		const preceding = videoListItems.filter((item, i) => fresh.has(item) && anchorAt >= 0 && i < anchorAt);
+		const following = videoListItems.filter((item, i) => fresh.has(item) && (anchorAt < 0 || i > anchorAt));
+		const room = Math.max(0, (model.maxItems || 0) - model.length);
+		const accepted = [...preceding, ...following].slice(0, room);
+		if (!accepted.length) {
+			return {added: 0, overflow: incoming.length};
+		}
+		if (!anchor) {
+			model.insertItem(accepted, this.getIndex() + 1);
+		} else {
+			const next = [...model.items];
+			const acceptedSet = new Set(accepted);
+			let cursor = next.indexOf(anchor);
+			for (let i = anchorAt - 1; i >= 0; i--) {
+				const item = videoListItems[i];
+				const position = next.findIndex(existing => existing.watchId === item.watchId);
+				if (position >= 0 && position < cursor) {
+					cursor = position;
+				} else if (position < 0 && acceptedSet.has(item)) {
+					next.splice(cursor, 0, item);
+				}
+			}
+			cursor = next.indexOf(anchor);
+			const tail = anchorAt >= 0 ? videoListItems.slice(anchorAt + 1) : videoListItems;
+			for (const item of tail) {
+				const position = next.findIndex(existing => existing.watchId === item.watchId);
+				if (position > cursor) {
+					cursor = position;
+				} else if (position < 0 && acceptedSet.has(item)) {
+					next.splice(cursor + 1, 0, item);
+					cursor++;
+				}
+			}
+			model._commit(next, 'tail');
+		}
+		this._refreshIndex(false);
+		return {added: accepted.length, overflow: incoming.length - accepted.length};
+	}
 	_insertAllAt(videoListItems, index, options) {
 		options = options || {};
 		const beforeItemIds = new Set(this.model.items.map(item => item.itemId));
@@ -31772,7 +31926,12 @@ class PlayList extends VideoList {
 					videoListItems.reverse();
 				}
 				let added = null;
-				if (options.insert) {
+				let overflow = 0;
+				if (options.insert && ['series', 'user-uploaded'].includes(playlist.type)) {
+					const result = this._insertNeighbourItems(videoListItems, options);
+					added = result.added;
+					overflow = result.overflow;
+				} else if (options.insert) {
 					added = this._insertAll(videoListItems, options);
 				} else if (options.append) {
 					added = this._appendAll(videoListItems, options);
@@ -31780,6 +31939,12 @@ class PlayList extends VideoList {
 					this._replaceAll(videoListItems, options);
 				}
 				this.emit('update');
+				if (overflow && added === 0) {
+					return Promise.resolve({
+						status: 'ok',
+						message: `プレイリストの上限により${overflow}件追加できませんでした`
+					});
+				}
 				if (added === 0) {
 					return Promise.resolve({
 						status: 'ok',
@@ -31790,7 +31955,7 @@ class PlayList extends VideoList {
 					status: 'ok',
 					message:
 						added !== null ?
-							`プレイリストに${added}件追加しました` :
+							`プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
 							'プレイリストに読み込みしました'
 				});
 			});
@@ -35823,9 +35988,11 @@ class NicoVideoPlayerDialog extends Emitter {
 		if (Math.abs(ct - dr) < 3) {
 			return;
 		}
-		if (dr < 120) {
+		const isShortContent =
+			/^ss\d+$/i.test(String(vi.videoId)) || /^ss\d+$/i.test(String(contextWatchId));
+		if (dr < 120 && isShortContent) {
 			return;
-		} // 短い動画は記録しない
+		} // 短尺でも通常long-formは記録し、ss系ショートだけ従来どおり除外
 		PlaybackPosition.record(
 			vi.videoId,
 			ct,
@@ -36143,7 +36310,8 @@ class VideoHoverMenu {
 		$mc.on('click', this._onClick.bind(this));
 		$mc.on('mousedown', this._onMouseDown.bind(this));
 		global.emitter.on('hideHover', this._hideMenu.bind(this));
-		await this._initializeMylistSelectMenu();
+		await this._initializeMylistSelectMenu()
+			.catch(() => console.warn('Hover menu mylist submenu unavailable'));
 	}
 	async _initializeMylistSelectMenu() {
 		if (!util.isLogin()) {
@@ -36464,7 +36632,7 @@ class VideoHoverMenu {
 				font-size: 12px;
 				line-height: 16px;
 				padding: 2px 4px;
-				border: 1px solid !000;
+				border: 1px solid #000;
 				background: #ffc;
 				color: black;
 				box-shadow: 2px 2px 2px #fff;
@@ -36476,7 +36644,7 @@ class VideoHoverMenu {
 			.menuButton:hover .tooltip {
 				display: block;
 			}
-			.menuButton:avtive .tooltip {
+			.menuButton:active .tooltip {
 				display: none;
 			}
 			.menuButtonInner {
@@ -38198,7 +38366,7 @@ CommentInputPanel.__css__ = (`
 		transition: left 0.2s ease, opacity 0.2s ease, z-index 0s;
 		opacity: 0.9;
 		border: none;
-		pointer-evnets: auto;
+		pointer-events: auto;
 		box-shadow: 0 0 8px #fff;
 		padding: 0;
 	}
@@ -38639,6 +38807,8 @@ class TagListView extends BaseViewComponent {
 			isEditing: false
 		};
 		this._tagEditApi = new TagEditApi();
+		this._boundOnBodyClick = this._onBodyClick.bind(this);
+		this._inputFocusTimer = null;
 	}
 	_initDom(...args) {
 		super._initDom(...args);
@@ -38727,6 +38897,12 @@ class TagListView extends BaseViewComponent {
 		super._onCommand('playlistSetSearchVideo', {word, option});
 	}
 	update({tagList = [], watchId = null, videoId = null, token = null, tagEdit = null, genre = undefined}) {
+		if (this._state.isInputing) {
+			this._endInput();
+		}
+		if (this._state.isEditing) {
+			this._endEdit();
+		}
 		if (genre !== undefined) {
 			this._genre = genre;
 		}
@@ -38739,9 +38915,7 @@ class TagListView extends BaseViewComponent {
 		if (token) {
 			this._token = token;
 		}
-		if (tagEdit) {
-			this._tagEdit = tagEdit;
-		}
+		this._tagEdit = tagEdit || null;
 		this.setState({
 			isInputing: false,
 			isUpdating: false,
@@ -38749,13 +38923,24 @@ class TagListView extends BaseViewComponent {
 			isEmpty: false
 		});
 		this._update(tagList);
-		this._boundOnBodyClick = this._onBodyClick.bind(this);
 	}
 	_onClick(e) {
 		if (this._state.isInputing || this._state.isEditing) {
 			e.stopPropagation();
 		}
 		super._onClick(e);
+	}
+	_canEditTags() {
+		return !!(nicoUtil.isLogin() && this._tagEdit && this._tagEdit.isEditable === true);
+	}
+	_tagEditUnavailableMessage() {
+		if (!nicoUtil.isLogin()) {
+			return 'ログインしていません';
+		}
+		if (this._tagEdit && this._tagEdit.uneditableReason === 'PREMIUM_ONLY') {
+			return 'プレミアム会員のみタグ編集できます';
+		}
+		return 'この動画ではタグ編集できません';
 	}
 	_update(tagList = []) {
 		let tags = [];
@@ -38768,10 +38953,11 @@ class TagListView extends BaseViewComponent {
 		tagList.forEach(tag => {
 			tags.push(this._createTag(tag));
 		});
-		if (nicoUtil.isLogin()) {
+		if (this._canEditTags()) {
 			tags.push(this._createToggleInput());
 		} else {
-			tags.push(`<span class="text">ログインしていません</span>`);
+			const message = textUtil.escapeHtml(this._tagEditUnavailableMessage());
+			tags.push(`<span class="text tagEditUnavailable" title="${message}">${message}</span>`);
 		}
 		this.setState({isEmpty: tagList.length < 1});
 		this._elm.videoTagsInner.innerHTML = tags.join('');
@@ -38832,6 +39018,9 @@ class TagListView extends BaseViewComponent {
 		this.emit('command', 'alert', (err && err.message) || `${label}に失敗しました`);
 	}
 	_addTag(tag) {
+		if (!this._canEditTags()) {
+			return;
+		}
 		this.setState({isUpdating: true});
 		const wait3s = this._makeWait(3000);
 		const watchId = this._watchId;
@@ -38862,6 +39051,9 @@ class TagListView extends BaseViewComponent {
 		}).catch(err => this._onTagEditError(watchId, err, 'タグの追加'));
 	}
 	_removeTag(tagId, tag = '') {
+		if (!this._canEditTags()) {
+			return;
+		}
 		this.setState({isUpdating: true});
 		const wait3s = this._makeWait(3000);
 		const watchId = this._watchId;
@@ -38932,13 +39124,10 @@ class TagListView extends BaseViewComponent {
 		);
 	}
 	_createDeleteButton(id) {
-		let deletTag = '';
-		if(nicoUtil.isLogin()){
-			deletTag = `<span target="_blank" class="deleteButton command" title="削除" data-command="removeTag" data-param="${id}">－</span>`;
-		}else{
-			deletTag = `<span target="_blank" class="deleteButton command" title="ログインしてください" data-command="none" data-param="${id}">×</span>`;
+		if (!this._canEditTags()) {
+			return '';
 		}
-		return deletTag;
+		return `<span target="_blank" class="deleteButton command" title="削除" data-command="removeTag" data-param="${textUtil.escapeHtml(String(id))}">－</span>`;
 	}
 	_createLink(text) {
 		let href = `//www.nicovideo.jp/tag/${encodeURIComponent(text)}`;
@@ -38959,7 +39148,7 @@ class TagListView extends BaseViewComponent {
 		let search = this._createSearch(tagName);
 		let data = textUtil.escapeHtml(JSON.stringify(tag));
 		let className = tag.isLocked ? 'tagItem is-Locked' : 'tagItem';
-		return `<li class="${className}" data-tag="${data}" data-tag-id="${tagName}">${dic}${del}${link}${search}</li>`;
+		return `<li class="${className}" data-tag="${data}" data-tag-id="${textUtil.escapeHtml(String(tagName))}">${dic}${del}${link}${search}</li>`;
 	}
 	_onTagInputKeyDown(e) {
 		if (this._state.isUpdating) {
@@ -38993,6 +39182,9 @@ class TagListView extends BaseViewComponent {
 		this._endEdit();
 	}
 	_beginEdit() {
+		if (!this._canEditTags()) {
+			return;
+		}
 		this.setState({isEditing: true});
 		document.body.addEventListener('click', this._boundOnBodyClick);
 	}
@@ -39001,14 +39193,27 @@ class TagListView extends BaseViewComponent {
 		this.setState({isEditing: false});
 	}
 	_beginInput() {
+		if (!this._canEditTags()) {
+			return;
+		}
 		this.setState({isInputing: true});
 		document.body.addEventListener('click', this._boundOnBodyClick);
 		this._elm.tagInput.value = '';
-		window.setTimeout(() => {
-			this._elm.tagInput.focus();
+		if (this._inputFocusTimer !== null) {
+			window.clearTimeout(this._inputFocusTimer);
+		}
+		this._inputFocusTimer = window.setTimeout(() => {
+			this._inputFocusTimer = null;
+			if (this._state.isInputing) {
+				this._elm.tagInput.focus();
+			}
 		}, 100);
 	}
 	_endInput() {
+		if (this._inputFocusTimer !== null) {
+			window.clearTimeout(this._inputFocusTimer);
+			this._inputFocusTimer = null;
+		}
 		this._elm.tagInput.blur();
 		document.body.removeEventListener('click', this._boundOnBodyClick);
 		this.setState({isInputing: false});
@@ -39491,7 +39696,7 @@ class TagItemMenu extends HTMLElement {
 				:host-context(.zenzaWatchVideoInfoPanelFoot) .menu {
 					position: absolute;
 					bottom: 0;
-					transform: translateY(8x);
+					transform: translateY(8px);
 				}
 				.root .menu:hover,
 				.root:focus-within .menu {
@@ -41950,6 +42155,7 @@ class VideoSearchForm extends Emitter {
 	}
 	_requestTagCount(li, word) {
 		window.clearTimeout(this._tagCountTimer);
+		const generation = (this._tagCountGeneration = (this._tagCountGeneration || 0) + 1);
 		const pending = this._tagCountPendingElm;
 		if (pending && pending.classList.contains('is-counting')) {
 			pending.classList.remove('is-counting');
@@ -41962,6 +42168,7 @@ class VideoSearchForm extends Emitter {
 		const mode = this.searchType === 'tag' ? 'tag' : 'keyword';
 		const cacheKey = this._wordCountCacheKey(word, mode);
 		const render = count => {
+			if (generation !== this._tagCountGeneration) { return; }
 			countElm.classList.remove('is-counting');
 			countElm.textContent = typeof count === 'number' ? `${count.toLocaleString()}件` : '';
 			countElm.classList.toggle('is-empty', count === 0);
@@ -42383,7 +42590,7 @@ VideoSearchForm.__css__ = (`
 			position: absolute;
 			top: 32px;
 			right: 8px;
-			padding: 0 8px
+			padding: 0 8px;
 			width: 248px;
 			z-index: 1000;
 		}
@@ -43262,6 +43469,9 @@ class UaaView extends BaseViewComponent {
 			isSpeaking: false
 		};
 		this._config = Config.namespace('uaa');
+		this._generation = 0;
+		this._loadTimer = null;
+		this._abortController = null;
 		this._bound.load = this.load.bind(this);
 		this._bound.update = this.update.bind(this);
 	}
@@ -43274,6 +43484,17 @@ class UaaView extends BaseViewComponent {
 		const shadow = this._shadow || this._view;
 		this._elm.body = shadow.querySelector('.UaaDetailBody');
 	}
+	_cancelPending() {
+		this._generation = (this._generation || 0) + 1;
+		if (this._loadTimer) {
+			window.clearTimeout(this._loadTimer);
+			this._loadTimer = null;
+		}
+		if (this._abortController) {
+			this._abortController.abort();
+			this._abortController = null;
+		}
+	}
 	update(videoInfo) {
 		if (!this._shadow || !this._config.props.enable) {
 			return;
@@ -43281,31 +43502,43 @@ class UaaView extends BaseViewComponent {
 		if (!this._elm.body) {
 			return;
 		}
-		if (this._state.isUpdating) {
+		if (this._state.isUpdating && this._props.videoId === videoInfo.videoId) {
 			return;
 		}
+		this._cancelPending();
 		this.setState({isUpdating: true});
 		this._props.videoInfo = videoInfo;
 		this._props.videoId = videoInfo.videoId;
-		window.setTimeout(() => {
-			this.load(videoInfo);
+		const generation = this._generation;
+		const controller =
+			typeof AbortController === 'undefined' ? null : new AbortController();
+		this._abortController = controller;
+		const signal = controller ? controller.signal : undefined;
+		this._loadTimer = window.setTimeout(() => {
+			this._loadTimer = null;
+			if (generation !== this._generation || (signal && signal.aborted)) {
+				return;
+			}
+			this.load(videoInfo, {generation, signal});
 		}, 5000);
 	}
-	load(videoInfo) {
+	load(videoInfo, {generation = this._generation, signal} = {}) {
 		const videoId = videoInfo.videoId;
-		return UaaLoader.load(videoId, {limit: 50})
-			.then(this._onLoad.bind(this, videoId))
-			.catch(this._onFail.bind(this, videoId));
+		return UaaLoader.load(videoId, {limit: 50, signal})
+			.then(result => this._onLoad(videoId, result, generation, signal))
+			.catch(e => this._onFail(videoId, e, generation, signal));
 	}
 	clear() {
+		this._cancelPending();
 		this.setState({isUpdating: false, isExist: false, isSpeaking: false});
 		if (!this._elm.body) {
 			return;
 		}
 		this._elm.body.textContent = '';
 	}
-	_onLoad(videoId, result) {
-		if (this._props.videoId !== videoId) {
+	_onLoad(videoId, result, generation = this._generation, signal) {
+		if (this._props.videoId !== videoId || generation !== this._generation ||
+				(signal && signal.aborted)) {
 			return;
 		}
 		this.setState({isUpdating: false});
@@ -43322,7 +43555,7 @@ class UaaView extends BaseViewComponent {
 				return;
 			}
 			u.added = true;
-			div.append(this._createItem(u, idx++));
+			div.append(this._createItem(u, idx++, generation, signal));
 			screenshots++;
 		});
 		div.setAttribute('data-screenshot-count', screenshots);
@@ -43332,20 +43565,21 @@ class UaaView extends BaseViewComponent {
 				return;
 			}
 			u.added = true;
-			df.append(this._createItem(u, idx++));
+			df.append(this._createItem(u, idx++, generation, signal));
 		});
 		data.sponsors.forEach(u => {
 			if (u.added) {
 				return;
 			}
 			u.added = true;
-			df.append(this._createItem(u, idx++));
+			df.append(this._createItem(u, idx++, generation, signal));
 		});
 		this._elm.body.innerHTML = '';
 		this._elm.body.append(df);
 		this.setState({isExist: true});
 	}
-	_createItem(data, idx) {
+	_createItem(data, idx, generation = this._generation,
+			signal = this._abortController ? this._abortController.signal : undefined) {
 		const df = document.createElement('div');
 		const contact = document.createElement('span');
 		contact.textContent = data.advertiserName;
@@ -43363,22 +43597,32 @@ class UaaView extends BaseViewComponent {
 			df.classList.add('clickable', 'command', 'other');
 			Object.assign(df.dataset, { command: 'seek', type: 'number', param: sec });
 			contact.setAttribute('title', `${data.message}(${textUtil.secToTime(sec)})`);
+			const isCurrent = () =>
+				generation === this._generation && (!signal || !signal.aborted);
 			this._props.videoInfo.getCurrentVideo()
-				.then(url => ZenzaWatch.util.VideoCaptureUtil.capture(url, sec))
+				.then(url => {
+					if (!isCurrent()) {
+						return null;
+					}
+					return ZenzaWatch.util.VideoCaptureUtil.capture(url, sec, {signal});
+				})
 				.then(screenshot => {
-				const cv = document.createElement('canvas');
-				const ct = cv.getContext('2d');
-				cv.width = screenshot.width;
-				cv.height = screenshot.height;
-				cv.className = 'screenshot command clickable';
-				Object.assign(cv.dataset, { command: 'seek', type: 'number', param: sec });
-				ct.fillStyle = 'rgb(32, 32, 32)';
-				ct.fillRect(0, 0, cv.width, cv.height);
-				ct.drawImage(screenshot, 0, 0);
-				df.classList.add('has-screenshot');
-				df.classList.remove('clickable', 'other');
-				df.append(cv);
-			}).catch(() => {});
+					if (!screenshot || !isCurrent()) {
+						return;
+					}
+					const cv = document.createElement('canvas');
+					const ct = cv.getContext('2d');
+					cv.width = screenshot.width;
+					cv.height = screenshot.height;
+					cv.className = 'screenshot command clickable';
+					Object.assign(cv.dataset, { command: 'seek', type: 'number', param: sec });
+					ct.fillStyle = 'rgb(32, 32, 32)';
+					ct.fillRect(0, 0, cv.width, cv.height);
+					ct.drawImage(screenshot, 0, 0);
+					df.classList.add('has-screenshot');
+					df.classList.remove('clickable', 'other');
+					df.append(cv);
+				}).catch(() => {});
 		} else if (bgkeyframe) {
 			const sec = parseFloat(bgkeyframe);
 			df.classList.add('clickable', 'command', 'other');
@@ -43390,8 +43634,9 @@ class UaaView extends BaseViewComponent {
 		df.append(contact);
 		return df;
 	}
-	_onFail(videoId) {
-		if (this._props.videoId !== videoId) {
+	_onFail(videoId, e, generation = this._generation, signal) {
+		if (this._props.videoId !== videoId || generation !== this._generation ||
+				(signal && signal.aborted)) {
 			return;
 		}
 		this.setState({isUpdating: false});
@@ -44239,7 +44484,7 @@ class HoverMenu {
 	const initWorker = () => {
 		if (!location.host.endsWith('.nicovideo.jp')) { return; }
 		CommentLayoutWorker.getInstance();
-		ThumbInfoLoader.load('sm9');
+		void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
 		window.console.time('init Workers');
 		return Promise.all([
 			StoryboardWorker.initWorker(),
@@ -44329,7 +44574,10 @@ const replaceRedirectLinks = async () => {
 		if (continuous) {
 			createShuffleButton(continuous);
 		}
-		observer.observe(document.querySelector('.UserPage-main'), {childList: true, subtree: true});
+		const userPageMain = document.querySelector('.UserPage-main');
+		if (userPageMain) {
+			observer.observe(userPageMain, {childList: true, subtree: true});
+		}
 	}
 	if (location.host === 'www.nicovideo.jp' &&
 		(location.pathname.indexOf('/search/') === 0 || location.pathname.indexOf('/tag/') === 0)) {
@@ -44420,7 +44668,7 @@ const replaceRedirectLinks = async () => {
 			document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, {bubbles: true, composed: true});
 		cssUtil.addStyle(CONSTANT.COMMON_CSS, {className: 'common'});
 		initializeBySite();
-		replaceRedirectLinks();
+		replaceRedirectLinks().catch(() => console.warn('Legacy redirect-link enhancement unavailable'));
 		const query = textUtil.parseQuery(START_PAGE_QUERY);
 		await uq.ready(); // DOMContentLoaded
 		const isWatch = await isWatchPage();
@@ -47791,12 +48039,21 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 			_adjustSizeAndLoad(item, src) {
 				const img = new Image();
 				img.src = src;
-				img.decode.then(() => {
+				const load = () => {
 					requestAnimationFrame(() => {
 						item.style.objectFit = 'contain';
 						item.setAttribute('src', src);
 					});
-				});
+				};
+				if (typeof img.decode !== 'function') {
+					load();
+					return;
+				}
+				try {
+					img.decode().then(load, load);
+				} catch (e) {
+					load();
+				}
 			},
 			_setPageObserver() {
 				if (!this.intersectionObserver) {

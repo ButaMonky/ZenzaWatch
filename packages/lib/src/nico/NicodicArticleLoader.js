@@ -48,12 +48,23 @@ const NicodicArticleLoader = (() => {
   };
 
   const flush = async () => {
-    const entries = Array.from(pending);
-    pending.clear();
-    scheduled = false;
-    // 大きな一覧でも同時通信を増やさず、10件ずつ取得する。
-    for (let i = 0; i < entries.length; i += BATCH_SIZE) {
-      await fetchBatch(entries.slice(i, i + BATCH_SIZE));
+    try {
+      // drain中に追加されたタグも同じownerが逐次処理し、通信を重ねない。
+      while (pending.size) {
+        const entries = Array.from(pending);
+        pending.clear();
+        // 大きな一覧でも同時通信を増やさず、10件ずつ取得する。
+        for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+          await fetchBatch(entries.slice(i, i + BATCH_SIZE));
+        }
+      }
+    } finally {
+      scheduled = false;
+      // 予期せぬ例外との境界で追加済みなら、取り残さず次のdrainを予約する。
+      if (pending.size) {
+        scheduled = true;
+        Promise.resolve().then(flush);
+      }
     }
   };
 

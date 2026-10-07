@@ -182,7 +182,10 @@ class PlayList extends VideoList {
     });
     document.body.append(a);
     a.click();
-    setTimeout(() => a.remove(), 1000);
+    setTimeout(() => {
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    }, 1000);
   }
   _onImportFileCommand(fileData) {
     if (!textUtil.isValidJson(fileData)) {
@@ -263,6 +266,55 @@ class PlayList extends VideoList {
     setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
     return added;
   }
+  // Task296: series / uploader neighbours are placed around the active item.
+  // Preserve existing objects and entries, even when the playlist is at capacity.
+  _insertNeighbourItems(videoListItems, options = {}) {
+    const model = this.model;
+    const anchor = (options.watchId && model.findByWatchId(options.watchId)) ||
+      (this._activeItem && model.indexOf(this._activeItem) >= 0 ? this._activeItem : null);
+    const incoming = model._dedupe(model.items, videoListItems).slice(model.length);
+    const fresh = new Set(incoming);
+    const anchorAt = anchor ? videoListItems.findIndex(item => item.watchId === anchor.watchId) : -1;
+    const preceding = videoListItems.filter((item, i) => fresh.has(item) && anchorAt >= 0 && i < anchorAt);
+    const following = videoListItems.filter((item, i) => fresh.has(item) && (anchorAt < 0 || i > anchorAt));
+    const room = Math.max(0, (model.maxItems || 0) - model.length);
+    const accepted = [...preceding, ...following].slice(0, room);
+    if (!accepted.length) {
+      return {added: 0, overflow: incoming.length};
+    }
+
+    if (!anchor) {
+      model.insertItem(accepted, this.getIndex() + 1);
+    } else {
+      // Existing neighbours are fixed anchors: never move or replace their objects.
+      const next = [...model.items];
+      const acceptedSet = new Set(accepted);
+      let cursor = next.indexOf(anchor);
+      for (let i = anchorAt - 1; i >= 0; i--) {
+        const item = videoListItems[i];
+        const position = next.findIndex(existing => existing.watchId === item.watchId);
+        if (position >= 0 && position < cursor) {
+          cursor = position;
+        } else if (position < 0 && acceptedSet.has(item)) {
+          next.splice(cursor, 0, item);
+        }
+      }
+      cursor = next.indexOf(anchor);
+      const tail = anchorAt >= 0 ? videoListItems.slice(anchorAt + 1) : videoListItems;
+      for (const item of tail) {
+        const position = next.findIndex(existing => existing.watchId === item.watchId);
+        if (position > cursor) {
+          cursor = position;
+        } else if (position < 0 && acceptedSet.has(item)) {
+          next.splice(cursor + 1, 0, item);
+          cursor++;
+        }
+      }
+      model._commit(next, 'tail');
+    }
+    this._refreshIndex(false);
+    return {added: accepted.length, overflow: incoming.length - accepted.length};
+  }
   // Task199: insert at an explicit index (same bookkeeping as _insertAll)
   _insertAllAt(videoListItems, index, options) {
     options = options || {};
@@ -329,7 +381,14 @@ class PlayList extends VideoList {
         }
 
         let added = null;
-        if (options.insert) {
+        let overflow = 0;
+        // Task296: series/user uploads have a meaningful preceding/following order.
+        // Generic mylist and search insertion retain their existing semantics.
+        if (options.insert && ['series', 'user-uploaded'].includes(playlist.type)) {
+          const result = this._insertNeighbourItems(videoListItems, options);
+          added = result.added;
+          overflow = result.overflow;
+        } else if (options.insert) {
           added = this._insertAll(videoListItems, options);
         } else if (options.append) {
           added = this._appendAll(videoListItems, options);
@@ -338,6 +397,12 @@ class PlayList extends VideoList {
         }
 
         this.emit('update');
+        if (overflow && added === 0) {
+          return Promise.resolve({
+            status: 'ok',
+            message: `プレイリストの上限により${overflow}件追加できませんでした`
+          });
+        }
         // Task 041: 1件も増えなかった場合は、そうと分かるメッセージにする
         // （全部すでにプレイリストに入っていた、という状況を利用者が
         //   区別できないと「壊れている」ようにしか見えないため）。
@@ -351,7 +416,7 @@ class PlayList extends VideoList {
           status: 'ok',
           message:
             added !== null ?
-              `プレイリストに${added}件追加しました` :
+              `プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
               'プレイリストに読み込みしました'
         });
       });

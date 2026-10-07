@@ -320,35 +320,109 @@ const HeatMapWorker = (() => {
   `;
   const isOffscreenCanvasAvailable = !!HTMLCanvasElement.prototype.transferControlToOffscreen;
   let worker;
+  const createMainThreadHeatMap = ({container, width, height, canvas}) => {
+    const HeatMap = HeatMapInitFunc({
+      emit: (...args) => global.emitter.emit(...args)
+    });
+    return new HeatMap({container, width, height, canvas});
+  };
+  const stopWorker = target => {
+    try { target && target.terminate && target.terminate(); } catch (e) {}
+    if (worker === target) {
+      worker = null;
+    }
+  };
+  const replaceTransferredCanvas = (container, canvas) => {
+    let replacement = canvas && canvas.cloneNode ? canvas.cloneNode(false) : null;
+    if (!replacement && typeof document !== 'undefined' && document.createElement) {
+      replacement = document.createElement('canvas');
+      replacement.className = (canvas && canvas.className) || 'heatMap';
+      replacement.width = (canvas && canvas.width) || 200;
+      replacement.height = (canvas && canvas.height) || 10;
+    }
+    if (!replacement) {
+      return null;
+    }
+    if (canvas) {
+      replacement.width = canvas.width;
+      replacement.height = canvas.height;
+      if (!replacement.className) {
+        replacement.className = canvas.className || 'heatMap';
+      }
+    }
+    if (canvas && canvas.parentNode && canvas.parentNode.replaceChild) {
+      canvas.parentNode.replaceChild(replacement, canvas);
+    } else if (canvas && canvas.replaceWith) {
+      canvas.replaceWith(replacement);
+    } else if (container && container.append) {
+      try { canvas && canvas.remove && canvas.remove(); } catch (e) {}
+      container.append(replacement);
+    } else {
+      return null;
+    }
+    return replacement;
+  };
   const init = async ({container, width, height}) => {
     if (!isOffscreenCanvasAvailable) {
-      const HeatMap = HeatMapInitFunc({
-        emit: (...args) => global.emitter.emit(...args)
-      });
-      return new HeatMap({container, width, height});
+      return createMainThreadHeatMap({container, width, height});
     }
-    worker = worker || workerUtil.createCrossMessageWorker(func, {name: 'HeatMapWorker'});
+    const activeWorker = worker =
+      worker || workerUtil.createCrossMessageWorker(func, {name: 'HeatMapWorker'});
     const canvas = container.querySelector('canvas.heatMap');
     const layer = canvas.transferControlToOffscreen();
-    await worker.post({command: 'init', params: {canvas: layer}}, {transfer: [layer]});
-    let _chatList, _duration;
+    try {
+      await activeWorker.post({command: 'init', params: {canvas: layer}}, {transfer: [layer]});
+    } catch (e) {
+      stopWorker(activeWorker);
+      const replacement = replaceTransferredCanvas(container, canvas);
+      if (!replacement) {
+        window.console.warn('HeatMap worker init failed; fallback canvas unavailable');
+        throw e;
+      }
+      window.console.warn('HeatMap worker init failed; using main-thread fallback');
+      return createMainThreadHeatMap({container, width, height, canvas: replacement});
+    }
+
+    let _chatList, _duration, disabled = false;
+    const disable = e => {
+      if (disabled) { return; }
+      disabled = true;
+      stopWorker(activeWorker);
+      if (canvas && canvas.style) {
+        canvas.style.visibility = 'hidden';
+      }
+      window.console.warn('HeatMap worker disabled after RPC failure',
+        {reason: e && (e.reason || e.name || e.status) || 'unknown'});
+    };
+    const safePost = async (body, options) => {
+      if (disabled) {
+        return null;
+      }
+      try {
+        return await activeWorker.post(body, options);
+      } catch (e) {
+        disable(e);
+        return null;
+      }
+    };
     return {
       canvas,
       update(chatList) {
         chatList = HeatMap.snapshotChatList(chatList);
-        return worker.post({command: 'update', params: {chatList}});
+        return safePost({command: 'update', params: {chatList}});
       },
       get duration() { return _duration; },
       set duration(d) {
         _duration = d;
-        worker.post({command: 'duration', params: {duration: d}}); },
+        safePost({command: 'duration', params: {duration: d}});
+      },
       reset(params = {}) {
         _chatList = null; _duration = undefined;
-        return worker.post({command: 'reset', params: {watchId: (params && params.watchId) || null}});
+        return safePost({command: 'reset', params: {watchId: (params && params.watchId) || null}});
       },
       setData({watchId, duration, chatList}) {
         _duration = duration; _chatList = chatList;
-        return worker.post({command: 'setData', params: {
+        return safePost({command: 'setData', params: {
           watchId, duration, chatList: HeatMap.snapshotChatList(chatList)
         }});
       },

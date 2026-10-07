@@ -63,18 +63,13 @@ class VideoList extends Emitter {
     this._adDecorationLoader.load(watchIds).then(resultMap => {
       targets.forEach(item => {
         // 成功・失敗に関わらず、ここで「リクエスト中」状態を解除する。
-        // これを成功時にも消さないと、後から同じwatchIdの別アイテム
-        // （一覧の再読み込み・プレイリストのセッション復元・関連動画の
-        // 再取得等で毎回新しく作られるVideoListItem）が「既にリクエスト
-        // 済み」として二度とチェックされなくなり、AdDecorationLoader側の
-        // キャッシュには正しい値があるのに、そのアイテムのadDecorationは
-        // ずっとnullのまま＝金冠・銀冠の枠が永久に付かない、という不具合
-        // になっていた（2026-09-13、実機フィードバックで発覚。「同じ動画が
-        // 関連動画とプレイリストにあるのに枠が無い」「プレイリスト読み込み
-        // 時にも枠が付かないことがある」という報告の原因）。
-        this._adDecorationRequested.delete(item.watchId);
-        if (resultMap.has(item.watchId)) {
-          item.adDecoration = resultMap.get(item.watchId);
+        // 同じwatchIdのitemが通信中に置き換わっている可能性があるため、
+        // 結果はrequest開始時のitemではなく現在modelに属するitemへ適用する。
+        const watchId = item.watchId;
+        this._adDecorationRequested.delete(watchId);
+        const currentItem = this.model.findByWatchId(watchId);
+        if (currentItem && resultMap.has(watchId)) {
+          currentItem.adDecoration = resultMap.get(watchId);
         }
         // 取得できなかった分(通信失敗等)はadDecorationがnullのままなので、
         // 次回の一覧更新時にfilter条件(item.adDecoration == null)により

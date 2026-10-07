@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.37-task227
+// @version     0.3.38-task294
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -5356,7 +5356,11 @@ const ScreenFilterPanel = (() => {
       _onShortcutResetClick(e) {
         const actionId = e.target.dataset.actionId;
         this._cancelShortcutRecording();
-        this._playerConfig.deleteValue('KEY_' + actionId);
+        const key = 'KEY_' + actionId;
+        // Publish the effective default before removing the persisted override.
+        // deleteValue resets internal data but does not emit a live update.
+        this._playerConfig.props[key] = this._playerConfig.default[key];
+        this._playerConfig.deleteValue(key);
         this._refreshAllShortcutRows();
         this._hideCustomSeekSlotIfUnset(actionId);
       }

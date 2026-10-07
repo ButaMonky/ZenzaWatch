@@ -4142,9 +4142,11 @@ class NicoVideoPlayerDialog extends Emitter {
     if (Math.abs(ct - dr) < 3) {
       return;
     }
-    if (dr < 120) {
+    const isShortContent =
+      /^ss\d+$/i.test(String(vi.videoId)) || /^ss\d+$/i.test(String(contextWatchId));
+    if (dr < 120 && isShortContent) {
       return;
-    } // 短い動画は記録しない
+    } // 短尺でも通常long-formは記録し、ss系ショートだけ従来どおり除外
     // Task177 (F09): contextWatchId only guards which video is current; the v2 API
     // takes the canonical video.id (a numeric channel watch ID is not renamed).
     PlaybackPosition.record(
@@ -4491,7 +4493,8 @@ class VideoHoverMenu {
     $mc.on('mousedown', this._onMouseDown.bind(this));
 
     global.emitter.on('hideHover', this._hideMenu.bind(this));
-    await this._initializeMylistSelectMenu();
+    await this._initializeMylistSelectMenu()
+      .catch(() => console.warn('Hover menu mylist submenu unavailable'));
   }
   async _initializeMylistSelectMenu() {
     if (!util.isLogin()) {
@@ -4837,7 +4840,7 @@ class VideoHoverMenu {
         font-size: 12px;
         line-height: 16px;
         padding: 2px 4px;
-        border: 1px solid !000;
+        border: 1px solid #000;
         background: #ffc;
         color: black;
         box-shadow: 2px 2px 2px #fff;
@@ -4850,7 +4853,7 @@ class VideoHoverMenu {
       .menuButton:hover .tooltip {
         display: block;
       }
-      .menuButton:avtive .tooltip {
+      .menuButton:active .tooltip {
         display: none;
       }
 

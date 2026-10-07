@@ -1963,6 +1963,14 @@ class TouchWrapper extends Emitter {
     });
 
     this._currentPointers = currentTouches;
+    if (this.touchCount === 0) {
+      this._maxCount = 0;
+      this._isMoved = false;
+      this._startCenter = null;
+      this._lastCenter = null;
+      this._debouncedOnSwipe2Y.cancel();
+      this._debouncedOnSwipe3X.cancel();
+    }
   }
 
   get touchCount() {

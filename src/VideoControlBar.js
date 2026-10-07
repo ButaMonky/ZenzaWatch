@@ -511,7 +511,7 @@ const historyTriggerKeyGuard = event => {
       ).then(({container, handler}) => ge.emitAsync('videoControBar.addonMenuReady', container, handler));
       ge.emitResolve('seekBar.addonMenuReady',
         {container: view.querySelector('.seekBar'), handler}
-      ).then(({container, handle}) => ge.emitAsync('seekBar.addonMenuReady', container, handle));
+      ).then(({container, handler}) => ge.emitAsync('seekBar.addonMenuReady', container, handler));
     }
     get currentTime() {
       return this._currentTime;
@@ -1746,12 +1746,12 @@ util.addStyle(`
                   <span>新システムを使用</span>
                   <p class="currentVideoQuality"></p>
                   <ul class="domandVideoQuality">
-                    <li class="select-domand-auto"  data-command="update-domandVideoQuality" data-param="auto"><span>自動(auto)</span><//li>
-                    <li class="select-domand-1080p" data-command="update-domandVideoQuality" data-param="1080p"><span>1080p 優先</span><//li>
-                    <li class="select-domand-720p"  data-command="update-domandVideoQuality" data-param="720p"><span>720p</span><//li>
-                    <li class="select-domand-480p"  data-command="update-domandVideoQuality" data-param="480p"><span>480p</span><//li>
-                    <li class="select-domand-360p"  data-command="update-domandVideoQuality" data-param="360p"><span>360p</span><//li>
-                    <li class="select-domand-144p"  data-command="update-domandVideoQuality" data-param="144p"><span>144p</span><//li>
+                    <li class="select-domand-auto"  data-command="update-domandVideoQuality" data-param="auto"><span>自動(auto)</span></li>
+                    <li class="select-domand-1080p" data-command="update-domandVideoQuality" data-param="1080p"><span>1080p 優先</span></li>
+                    <li class="select-domand-720p"  data-command="update-domandVideoQuality" data-param="720p"><span>720p</span></li>
+                    <li class="select-domand-480p"  data-command="update-domandVideoQuality" data-param="480p"><span>480p</span></li>
+                    <li class="select-domand-360p"  data-command="update-domandVideoQuality" data-param="360p"><span>360p</span></li>
+                    <li class="select-domand-144p"  data-command="update-domandVideoQuality" data-param="144p"><span>144p</span></li>
                   </ul>
                 </li>
 
@@ -1759,11 +1759,11 @@ util.addStyle(`
                   <span>旧システムを使用</span>
                   <p class="currentVideoQuality"></p>
                   <ul class="dmcVideoQuality">
-                    <li class="select-dmc-auto"     data-command="update-dmcVideoQuality" data-param="auto"><span>自動(auto)</span><//li>
-                    <li class="select-dmc-veryhigh" data-command="update-dmcVideoQuality" data-param="veryhigh"><span>超(1080) 優先</span><//li>
-                    <li class="select-dmc-high"     data-command="update-dmcVideoQuality" data-param="high"><span>高(720) 優先</span><//li>
-                    <li class="select-dmc-mid"      data-command="update-dmcVideoQuality" data-param="mid"><span>中(480-540)</span><//li>
-                    <li class="select-dmc-low"      data-command="update-dmcVideoQuality" data-param="low"><span>低(360)</span><//li>
+                    <li class="select-dmc-auto"     data-command="update-dmcVideoQuality" data-param="auto"><span>自動(auto)</span></li>
+                    <li class="select-dmc-veryhigh" data-command="update-dmcVideoQuality" data-param="veryhigh"><span>超(1080) 優先</span></li>
+                    <li class="select-dmc-high"     data-command="update-dmcVideoQuality" data-param="high"><span>高(720) 優先</span></li>
+                    <li class="select-dmc-mid"      data-command="update-dmcVideoQuality" data-param="mid"><span>中(480-540)</span></li>
+                    <li class="select-dmc-low"      data-command="update-dmcVideoQuality" data-param="low"><span>低(360)</span></li>
                   </ul>
                 </li>
              </ul>
@@ -2201,7 +2201,7 @@ util.addStyle(`
     cursor: wait;
   }
   .zenzaCommentPreview.is-updating * {
-    pointer-evnets: none;
+    pointer-events: none;
   }
   .listContainer {
     bottom: auto;
@@ -2547,7 +2547,7 @@ util.addStyle(`
       pointer-events: auto;
       display: flex;
       text-align: center;
-      vertical-aligm: middle;
+      vertical-align: middle;
       width: 100%;
     }
     .is-wheelSeeking .seekBarToolTipInner,
@@ -2582,7 +2582,7 @@ util.addStyle(`
 
     .seekBarToolTip .controlButton:hover {
       text-shadow: 0 0 8px #fe9;
-      box-shdow: 0 0 8px #fe9;
+      box-shadow: 0 0 8px #fe9;
     }
 
     .seekBarToolTip .controlButton:active {

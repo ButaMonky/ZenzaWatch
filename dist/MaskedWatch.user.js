@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.2
+// @version     0.3.4-task268
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -19,7 +19,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:13Z 807b380
+// build: 2026-10-07 04:42Z
 /* eslint-disable */
 
 // chrome://flags/#enable-experimental-web-platform-features
@@ -40,7 +40,7 @@
 
   const monkey = (PRODUCT) => {
     'use strict';
-    var VER = '0.3.2';
+    var VER = '0.3.4-task268';
     const ENV = 'STABLE';
 
     let ZenzaWatch = null;
@@ -103,7 +103,11 @@ interval: ${config.interval}        // マスクの更新間隔
       const src = `(${func.toString()})(self);`;
       const blob = new Blob([src], {type: 'text/javascript'});
       const url = URL.createObjectURL(blob);
-      return new Worker(url, options);
+      try {
+        return new Worker(url, options);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
     };
 const bounce = {
 	origin: Symbol('origin'),
@@ -400,7 +404,12 @@ const cssUtil = css;
 
     const createDetector = async ({video, layer, interval, type}) => {
       const worker = createWorker(業務, {name: 'Facelook'});
-      await css.addModule(下請, {config: {...config}});
+      try {
+        await css.addModule(下請, {config: {...config}});
+      } catch (err) {
+        worker.terminate();
+        throw err;
+      }
       const transferCanvas = new OffscreenCanvas(config.tmpWidth, config.tmpHeight);
       const ctx = transferCanvas.getContext('2d', {alpha: false, desynchronized: true});
       const debugLayer = document.createElement('div');
@@ -734,7 +743,7 @@ const cssUtil = css;
             font-size: 12px;
             line-height: 16px;
             padding: 2px 4px;
-            border: 1px solid !000;
+            border: 1px solid #000;
             background: #ffc;
             color: #000;
             text-shadow: none;

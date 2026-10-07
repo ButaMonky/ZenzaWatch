@@ -1,12 +1,12 @@
 const assert = require('assert');
 const {extract, createContext, run} = require('../helpers/extractSource');
-function setup(handler, brokenStorage=false) {
+function setup(handler, brokenStorage=false, rel='packages/lib/src/nico/NicodicArticleLoader.js') {
  const calls=[], cache=new Map();
  const fetch=async(url,options)=>{calls.push({url,options});return handler(new URL(url),options);};
  class Cache {getItem(k){if(brokenStorage)throw Error('storage');return cache.get(k);}setItem(k,v){if(brokenStorage)throw Error('storage');cache.set(k,v);}}
  class Gate {fetch(url,options){return fetch(url,options);}}
  const c=createContext({fetch,URL,URLSearchParams,AbortController,sessionStorage:{},CacheStorage:Cache,CrossDomainGate:Gate,console:{warn(){}}});
- run('globalThis.subject='+extract('packages/lib/src/nico/NicodicArticleLoader.js','NicodicArticleLoader','var')+';',c);
+ run('globalThis.subject='+extract(rel,'NicodicArticleLoader','var')+';',c);
  return {s:c.subject,calls,cache};
 }
 const article=n=>({request_title:n,title:n.toLowerCase(),summary:'summary '+n});
@@ -25,6 +25,52 @@ describe('Task157 encyclopedia batch lookup',()=>{
   const p=setup(u=>ok(u.searchParams.getAll('titles[]').filter(n=>n!=='none').map(article)));
   const a=p.s.exists('音楽');const b=p.s.checkAll(['音楽','none','音楽'],()=>{});await Promise.all([a,b]);
   assert.equal(p.calls.length,1);assert.equal(await p.s.exists('none'),false);assert.equal(await p.s.exists('音楽'),true);assert.equal(p.calls.length,1);
+ });
+ it('keeps one drain owner while new tags arrive during an in-flight batch',async()=>{
+  let releaseFirst;let active=0;let maxConcurrent=0;
+  const p=setup(u=>{
+   const names=u.searchParams.getAll('titles[]');
+   active++;maxConcurrent=Math.max(maxConcurrent,active);
+   if(names.includes('A')){
+    return new Promise(resolve=>{releaseFirst=()=>{active--;resolve(ok(names.map(article)));};});
+   }
+   active--;return ok(names.map(article));
+  });
+  const a=p.s.exists('A');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.calls.length,1);
+  const later=Array.from({length:12},(_,i)=>p.s.exists('B'+i));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.calls.length,1,'a second batch must not start while the first is unresolved');
+  assert.equal(maxConcurrent,1);
+  releaseFirst();
+  assert.equal(await a,true);
+  assert.deepEqual(await Promise.all(later),Array(12).fill(true));
+  assert.equal(p.calls.length,3);
+  assert.deepEqual(p.calls.map(x=>new URL(x.url).searchParams.getAll('titles[]').length),[1,10,2]);
+  assert.equal(maxConcurrent,1);
+ });
+ it('keeps generated dev dist drain ownership in parity with source',async()=>{
+  let releaseFirst;let active=0;let maxConcurrent=0;
+  const p=setup(u=>{
+   const names=u.searchParams.getAll('titles[]');
+   active++;maxConcurrent=Math.max(maxConcurrent,active);
+   if(names.includes('A')){
+    return new Promise(resolve=>{releaseFirst=()=>{active--;resolve(ok(names.map(article)));};});
+   }
+   active--;return ok(names.map(article));
+  },false,'dist/ZenzaWatch-dev.user.js');
+  const a=p.s.exists('A');
+  await new Promise(resolve=>setImmediate(resolve));
+  const later=Array.from({length:12},(_,i)=>p.s.exists('B'+i));
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(p.calls.length,1,'dist must keep one drain owner while the first request is unresolved');
+  assert.equal(maxConcurrent,1);
+  releaseFirst();
+  assert.equal(await a,true);
+  assert.deepEqual(await Promise.all(later),Array(12).fill(true));
+  assert.deepEqual(p.calls.map(x=>new URL(x.url).searchParams.getAll('titles[]').length),[1,10,2]);
+  assert.equal(maxConcurrent,1);
  });
  it('splits more than ten distinct tags into bounded requests',async()=>{const p=setup(u=>ok(u.searchParams.getAll('titles[]').map(article)));await p.s.checkAll(Array.from({length:21},(_,i)=>'tag'+i),()=>{});assert.equal(p.calls.length,3);assert(p.calls.every(x=>new URL(x.url).searchParams.getAll('titles[]').length<=10));});
  it('does not cache HTTP failures as absent and allows retry',async()=>{let fail=true;const p=setup(()=>fail?{ok:false,status:429}:ok([article('音楽')]));assert.equal(await p.s.exists('音楽'),null);assert.equal(p.cache.size,0);fail=false;assert.equal(await p.s.exists('音楽'),true);});

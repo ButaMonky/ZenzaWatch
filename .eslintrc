@@ -2,12 +2,12 @@
   "env": {
     "browser": true,
     "es6": true,
-    "moocha": true,
-    "node6": true
+    "mocha": true,
+    "node": true
   },
   "parserOptions": {
     "sourceType": "module",
-    "ecmaVersion": 2019
+    "ecmaVersion": 2022
   },
   "globals": {
     "jQuery": false,

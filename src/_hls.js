@@ -578,7 +578,7 @@ AntiPrototypeJs().then(() => {
         try {
           switch (e.data.command) {
             case 'config':
-              Object.assign(Config, e.data);
+              Object.assign(Config, data);
               return self.postMessage({id, result: 'ok'});
             case 'save':
               // let {hash, videoId, meta} = data;

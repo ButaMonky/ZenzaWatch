@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.44-task227
+// @version     0.5.46-task272
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-04 17:13Z
+// build: 2026-10-07 05:16Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -3900,6 +3900,9 @@ class CrossDomainGate extends Emitter {
               window.clearTimeout(timeoutTimer);
               CsrfTokenLoader.saveToCache(token);
               resolve(token);
+            }, (error) => {
+              window.clearTimeout(timeoutTimer);
+              reject(error);
             });
           });
         }
@@ -4081,6 +4084,19 @@ const emitter = util.emitter;
 const MylistApiLoader = (() => {
 	const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
 	const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
+	const createMylistError = (message, {
+		status = 'fail',
+		result,
+		code,
+		cause
+	} = {}) => {
+		const error = new Error(message);
+		error.status = status;
+		if (result !== undefined) { error.result = result; }
+		if (code !== undefined) { error.code = code; }
+		if (cause !== undefined) { error.cause = cause; }
+		return error;
+	};
 	let cacheStorage = null;
 	let token = '';
 	if (window.ZenzaWatch) {
@@ -4142,9 +4158,9 @@ const MylistApiLoader = (() => {
 					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 					credentials: 'include'
 				}).then(r => r.json())
-					.catch(e => { throw new Error('あとで見るの取得失敗(2)', e); });
+					.catch(e => { throw createMylistError('あとで見るの取得失敗(2)', {result: e, cause: e}); });
 				if (res.meta.status !== 200 || !res.data.watchLater) {
-					throw new Error('あとで見るの取得失敗(1)', res);
+					throw createMylistError('あとで見るの取得失敗(1)', {result: res, code: res?.error?.code});
 				}
 				if (data == null) {
 					data = res.data.watchLater;
@@ -4166,9 +4182,9 @@ const MylistApiLoader = (() => {
 					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 					credentials: 'include'
 				}).then(r => r.json())
-					.catch(e => { throw new Error('マイリスト取得失敗(2)', e); });
+					.catch(e => { throw createMylistError('マイリスト取得失敗(2)', {result: e, cause: e}); });
 				if (res.meta.status !== 200 || !res.data.mylist) {
-					throw new Error('マイリスト取得失敗(1)', res);
+					throw createMylistError('マイリスト取得失敗(1)', {result: res, code: res?.error?.code});
 				}
 				if (data == null) {
 					data = res.data.mylist;
@@ -4192,36 +4208,42 @@ const MylistApiLoader = (() => {
 				headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
 				credentials: 'include'
 			}).then(r => r.json())
-				.catch(e => { throw new Error('マイリスト一覧の取得失敗(2)', e); });
+				.catch(e => { throw createMylistError('マイリスト一覧の取得失敗(2)', {result: e, cause: e}); });
 			if (result.meta.status !== 200 || !result.data.mylists) {
-				throw new Error(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, result);
+				throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, {result, code: result?.error?.code});
 			}
 			const data = result.data.mylists;
 			cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
 			return data;
 		}
 		async findDeflistItemByWatchId(watchId) {
-			const items = await this._getDeflistItems().catch(() => []);
+			const items = await this._getDeflistItems();
 			for (let item of items) {
 				if (item.watchId === watchId) {
 					return item;
 				}
 			}
-			return Promise.reject();
+			throw createMylistError('動画が見つかりません', {
+				status: 'not_found',
+				code: 'NOT_FOUND',
+				result: {watchId, list: 'watchLater'}
+			});
 		}
 		async findMylistItemByWatchId(watchId, groupId) {
-			const items = await this._getMylistItems(groupId).catch(() => []);
+			const items = await this._getMylistItems(groupId);
 			for (let item of items) {
 				if (item.watchId === watchId) {
 					return item;
 				}
 			}
-			return Promise.reject();
+			throw createMylistError('動画が見つかりません', {
+				status: 'not_found',
+				code: 'NOT_FOUND',
+				result: {watchId, groupId, list: 'mylist'}
+			});
 		}
 		async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0 } = {}) {
-			const item = await this.findDeflistItemByWatchId(watchId).catch(result => {
-				throw new Error('動画が見つかりません', {result, status: 'fail'});
-			});
+			const item = await this.findDeflistItemByWatchId(watchId);
 			const body = `itemIds=${item.itemId}`;
 			const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
 			const cacheKey = 'deflistItems';
@@ -4235,7 +4257,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(result => {
-					throw new Error('あとで見るから削除失敗(2)', { result, status: 'fail' });
+					throw createMylistError('あとで見るから削除失敗(2)', {result, cause: result});
 				});
 			if (result.meta.status && result.meta.status === 200) {
 				cacheStorage.removeItem(cacheKey);
@@ -4246,15 +4268,13 @@ const MylistApiLoader = (() => {
 					message: 'あとで見るから削除'
 				};
 			}
-			throw new Error(result.error.description, {
-					status: 'fail', result, code: result.error.code
+			throw createMylistError(result.error.description, {
+					result, code: result.error.code
 			});
 		}
 		async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0 } = {}) {
-			const item = await this.findMylistItemByWatchId(watchId, groupId).catch(result => {
-					throw new Error('動画が見つかりません', {result, status: 'fail'});
-				});
-			let body = 'itemIds=' + watchId;
+			const item = await this.findMylistItemByWatchId(watchId, groupId);
+			let body = 'itemIds=' + item.itemId;
 			const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
 			const cacheKey = `mylistItems: ${groupId}`;
 			const result = await netUtil.fetch(url, {
@@ -4267,7 +4287,7 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(result => {
-					throw new Error('マイリストから削除失敗(2)', {result, status: 'fail'});
+					throw createMylistError('マイリストから削除失敗(2)', {result, cause: result});
 				});
 			if (result.meta.status && result.meta.status === 200) {
 				cacheStorage.removeItem(cacheKey);
@@ -4278,8 +4298,7 @@ const MylistApiLoader = (() => {
 					message: 'マイリストから削除'
 				};
 			}
-			throw new Error(result.error.description, {
-				status: 'fail',
+			throw createMylistError(result.error.description, {
 				result,
 				code: result.error.code
 			});
@@ -4298,9 +4317,9 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(err => {
-						throw new Error('あとで見る登録失敗(200)', {
-							status: 'fail',
-							result: err
+						throw createMylistError('あとで見る登録失敗(200)', {
+							result: err,
+							cause: err
 						});
 					});
 			if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
@@ -4314,10 +4333,10 @@ const MylistApiLoader = (() => {
 			}
 			if (result.meta.status && result.meta.status === 409 && !isRetry) {
 					await this.removeDeflistItem(watchId).catch(err => {
-							throw new Error('あとで見る登録失敗(101)', {
-								status: 'fail',
+							throw createMylistError('あとで見る登録失敗(101)', {
 								result: err.result,
-								code: err.code
+								code: err.code,
+								cause: err
 							});
 						});
 					const added = await this.addDeflistItem(watchId, description, true, {frontendId, frontendVersion});
@@ -4328,16 +4347,13 @@ const MylistApiLoader = (() => {
 					};
 			}
 			if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-				throw new Error('あとで見る登録失敗(100)', {
-					status: 'fail',
-					result,
+				throw createMylistError('あとで見る登録失敗(100)', {
+					result
 				});
 			}
-				throw new Error(result.error.description, {
-					status: 'fail',
+				throw createMylistError(result.error.description, {
 					result,
-					code: result.error.code,
-					message: result.error.description
+					code: result.error.code
 				});
 		}
 		async addMylistItem(watchId, groupId, description, { frontendId = 6, frontendVersion = 0 } = {}) {
@@ -4354,9 +4370,9 @@ const MylistApiLoader = (() => {
 				credentials: 'include'
 			}).then(r => r.json())
 				.catch(err => {
-					throw new Error('マイリスト登録失敗(200)', {
-						status: 'fail',
-						result: err
+					throw createMylistError('マイリスト登録失敗(200)', {
+						result: err,
+						cause: err
 					});
 				});
 			if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
@@ -4365,11 +4381,11 @@ const MylistApiLoader = (() => {
 				return {status: 'ok', result, message: 'マイリスト登録'};
 			}
 			if (!result.meta.status /*|| !result.error*/) {
-				throw new Error('マイリスト登録失敗(100)', {status: 'fail', result});
+				throw createMylistError('マイリスト登録失敗(100)', {result});
 			}
 			emitter.emitAsync('mylistAdd', watchId, groupId, description);
-			throw new Error(result.error.description, {
-					status: 'fail', result, code: result.error.code
+			throw createMylistError(result.error.description, {
+					result, code: result.error.code
 			});
 		}
 	}

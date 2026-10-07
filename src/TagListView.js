@@ -26,6 +26,8 @@ class TagListView extends BaseViewComponent {
     };
 
     this._tagEditApi = new TagEditApi();
+    this._boundOnBodyClick = this._onBodyClick.bind(this);
+    this._inputFocusTimer = null;
   }
 
   _initDom(...args) {
@@ -143,6 +145,13 @@ class TagListView extends BaseViewComponent {
   }
 
   update({tagList = [], watchId = null, videoId = null, token = null, tagEdit = null, genre = undefined}) {
+    if (this._state.isInputing) {
+      this._endInput();
+    }
+    if (this._state.isEditing) {
+      this._endEdit();
+    }
+
     // Task 074: 再生中の動画のジャンル（タグ欄の先頭にバッジで出す）
     if (genre !== undefined) {
       this._genre = genre;
@@ -156,9 +165,7 @@ class TagListView extends BaseViewComponent {
     if (token) {
       this._token = token;
     }
-    if (tagEdit) {
-      this._tagEdit = tagEdit;
-    }
+    this._tagEdit = tagEdit || null;
 
     this.setState({
       isInputing: false,
@@ -167,8 +174,6 @@ class TagListView extends BaseViewComponent {
       isEmpty: false
     });
     this._update(tagList);
-
-    this._boundOnBodyClick = this._onBodyClick.bind(this);
   }
 
   _onClick(e) {
@@ -176,6 +181,20 @@ class TagListView extends BaseViewComponent {
       e.stopPropagation();
     }
     super._onClick(e);
+  }
+
+  _canEditTags() {
+    return !!(nicoUtil.isLogin() && this._tagEdit && this._tagEdit.isEditable === true);
+  }
+
+  _tagEditUnavailableMessage() {
+    if (!nicoUtil.isLogin()) {
+      return 'ログインしていません';
+    }
+    if (this._tagEdit && this._tagEdit.uneditableReason === 'PREMIUM_ONLY') {
+      return 'プレミアム会員のみタグ編集できます';
+    }
+    return 'この動画ではタグ編集できません';
   }
 
   _update(tagList = []) {
@@ -190,10 +209,11 @@ class TagListView extends BaseViewComponent {
     tagList.forEach(tag => {
       tags.push(this._createTag(tag));
     });
-    if (nicoUtil.isLogin()) {
+    if (this._canEditTags()) {
       tags.push(this._createToggleInput());
     } else {
-      tags.push(`<span class="text">ログインしていません</span>`);
+      const message = textUtil.escapeHtml(this._tagEditUnavailableMessage());
+      tags.push(`<span class="text tagEditUnavailable" title="${message}">${message}</span>`);
     }
     this.setState({isEmpty: tagList.length < 1});
     this._elm.videoTagsInner.innerHTML = tags.join('');
@@ -283,6 +303,9 @@ class TagListView extends BaseViewComponent {
   }
 
   _addTag(tag) {
+    if (!this._canEditTags()) {
+      return;
+    }
     this.setState({isUpdating: true});
 
     const wait3s = this._makeWait(3000);
@@ -317,6 +340,9 @@ class TagListView extends BaseViewComponent {
   }
 
   _removeTag(tagId, tag = '') {
+    if (!this._canEditTags()) {
+      return;
+    }
     this.setState({isUpdating: true});
 
     const wait3s = this._makeWait(3000);
@@ -397,14 +423,10 @@ class TagListView extends BaseViewComponent {
   }
 
   _createDeleteButton(id) {
-  
-    let deletTag = '';
-    if(nicoUtil.isLogin()){
-      deletTag = `<span target="_blank" class="deleteButton command" title="削除" data-command="removeTag" data-param="${id}">－</span>`;
-    }else{
-      deletTag = `<span target="_blank" class="deleteButton command" title="ログインしてください" data-command="none" data-param="${id}">×</span>`;
+    if (!this._canEditTags()) {
+      return '';
     }
-    return deletTag;
+    return `<span target="_blank" class="deleteButton command" title="削除" data-command="removeTag" data-param="${textUtil.escapeHtml(String(id))}">－</span>`;
   }
 
   _createLink(text) {
@@ -431,7 +453,7 @@ class TagListView extends BaseViewComponent {
     let data = textUtil.escapeHtml(JSON.stringify(tag));
     let className = tag.isLocked ? 'tagItem is-Locked' : 'tagItem';
     
-    return `<li class="${className}" data-tag="${data}" data-tag-id="${tagName}">${dic}${del}${link}${search}</li>`;
+    return `<li class="${className}" data-tag="${data}" data-tag-id="${textUtil.escapeHtml(String(tagName))}">${dic}${del}${link}${search}</li>`;
   }
 
   _onTagInputKeyDown(e) {
@@ -469,6 +491,9 @@ class TagListView extends BaseViewComponent {
   }
 
   _beginEdit() {
+    if (!this._canEditTags()) {
+      return;
+    }
     this.setState({isEditing: true});
     document.body.addEventListener('click', this._boundOnBodyClick);
   }
@@ -479,15 +504,28 @@ class TagListView extends BaseViewComponent {
   }
 
   _beginInput() {
+    if (!this._canEditTags()) {
+      return;
+    }
     this.setState({isInputing: true});
     document.body.addEventListener('click', this._boundOnBodyClick);
     this._elm.tagInput.value = '';
-    window.setTimeout(() => {
-      this._elm.tagInput.focus();
+    if (this._inputFocusTimer !== null) {
+      window.clearTimeout(this._inputFocusTimer);
+    }
+    this._inputFocusTimer = window.setTimeout(() => {
+      this._inputFocusTimer = null;
+      if (this._state.isInputing) {
+        this._elm.tagInput.focus();
+      }
     }, 100);
   }
 
   _endInput() {
+    if (this._inputFocusTimer !== null) {
+      window.clearTimeout(this._inputFocusTimer);
+      this._inputFocusTimer = null;
+    }
     this._elm.tagInput.blur();
     document.body.removeEventListener('click', this._boundOnBodyClick);
     this.setState({isInputing: false});
@@ -1067,7 +1105,7 @@ class TagItemMenu extends HTMLElement {
         :host-context(.zenzaWatchVideoInfoPanelFoot) .menu {
           position: absolute;
           bottom: 0;
-          transform: translateY(8x);
+          transform: translateY(8px);
         }
 
         .root .menu:hover,

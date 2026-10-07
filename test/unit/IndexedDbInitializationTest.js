@@ -1,5 +1,7 @@
+const fs = require('fs');
+const path = require('path');
 const {assert, ticks, observe, deferred, controllerFixture, gateFixture,
-  quiet, extract, beginSection, createContext, run} = require('../helpers/idbRecoveryFixture');
+  quiet, eventTarget, extract, beginSection, createContext, run} = require('../helpers/idbRecoveryFixture');
 
 describe('IndexedDB initialization and exception propagation (ZW-083)', function() {
   it('shares an in-flight open and releases failed initialization for retry', async function() {
@@ -84,7 +86,7 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
   it('optional cache initialization failure does not prevent player worker initialization', async function() {
     const context = createContext({console: quiet, window: {console: quiet},
       location: {host: 'www.nicovideo.jp'}, CommentLayoutWorker: {getInstance() {}},
-      ThumbInfoLoader: {load() {}}, StoryboardWorker: {initWorker: async () => {}},
+      ThumbInfoLoader: {load: async () => {}}, StoryboardWorker: {initWorker: async () => {}},
       VideoSessionWorker: {initWorker: async () => {}},
       StoryboardCacheDb: {initWorker: async () => { throw new Error('DB unavailable'); }},
       WatchInfoCacheDb: {initWorker: async () => { throw new Error('DB unavailable'); }}
@@ -92,6 +94,58 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
     run(`globalThis.initialize = ${extract('src/initializer.js', 'initWorker', 'var')};`, context);
     const state = observe(context.initialize());
     await ticks(); assert.strictEqual(state.status, 'resolved');
+  });
+
+  it('consumes optional thumb-info warm-up failure instead of leaking a rejection', async function() {
+    let catchCount = 0;
+    const context = createContext({console: quiet, window: {console: quiet},
+      location: {host: 'www.nicovideo.jp'}, CommentLayoutWorker: {getInstance() {}},
+      ThumbInfoLoader: {load() {
+        return {catch(handler) {
+          catchCount++;
+          handler(new Error('warm-up unavailable'));
+          return Promise.resolve();
+        }};
+      }},
+      StoryboardWorker: {initWorker: async () => {}},
+      VideoSessionWorker: {initWorker: async () => {}},
+      StoryboardCacheDb: {initWorker: async () => {}},
+      WatchInfoCacheDb: {initWorker: async () => {}}
+    });
+    run(`globalThis.initialize = ${extract('src/initializer.js', 'initWorker', 'var')};`, context);
+    const state = observe(context.initialize());
+    await ticks();
+    assert.strictEqual(state.status, 'resolved');
+    assert.strictEqual(catchCount, 1);
+  });
+
+  it('keeps generated dev dist thumb-info warm-up failure isolation in parity with source', async function() {
+    let catchCount = 0;
+    const context = createContext({console: quiet, window: {console: quiet},
+      location: {host: 'www.nicovideo.jp'}, CommentLayoutWorker: {getInstance() {}},
+      ThumbInfoLoader: {load() {
+        return {catch(handler) {
+          catchCount++;
+          handler(new Error('dist warm-up unavailable'));
+          return Promise.resolve();
+        }};
+      }},
+      StoryboardWorker: {initWorker: async () => {}},
+      VideoSessionWorker: {initWorker: async () => {}},
+      StoryboardCacheDb: {initWorker: async () => {}},
+      WatchInfoCacheDb: {initWorker: async () => {}}
+    });
+    const dist = fs.readFileSync(path.join(__dirname, '../../dist/ZenzaWatch-dev.user.js'), 'utf8');
+    const anchor = dist.indexOf("void ThumbInfoLoader.load('sm9').catch(");
+    assert.ok(anchor >= 0, 'initializer warm-up anchor missing from generated dev dist');
+    const start = dist.lastIndexOf('const initWorker =', anchor);
+    const end = dist.indexOf('\n\t};', anchor);
+    assert.ok(start >= 0 && end > start, 'initializer initWorker block missing from generated dev dist');
+    run(`${dist.slice(start, end + 4)}\nglobalThis.initialize = initWorker;`, context);
+    const state = observe(context.initialize());
+    await ticks();
+    assert.strictEqual(state.status, 'resolved');
+    assert.strictEqual(catchCount, 1);
   });
 
   it('thumbnail gate serves the network result when its optional DB cannot initialize', async function() {
@@ -114,5 +168,43 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
     assert.strictEqual(posts.length, 1);
     assert.strictEqual(posts[0].body.params.v, 'sm9');
     assert.strictEqual(posts[0].options.sessionId, 'thumb-1');
+  });
+});
+
+describe('Task291 generated dist IndexedDB initialization parity', function() {
+  it('rejects an open failure and permits a successful retry in generated dev dist', async function() {
+    this.timeout(10000);
+    const requests = [];
+    const context = createContext({
+      console: quiet,
+      performance: {now: () => 1},
+      indexedDB: {
+        open(name, version) {
+          const req = eventTarget();
+          requests.push({name, version, req});
+          return req;
+        }
+      },
+      IDBKeyRange: {only: value => value, upperBound: value => value}
+    });
+    run(`globalThis.controller = (${extract('dist/ZenzaWatch-dev.user.js', 'workerFunc', 'var')})(self);`, context);
+    const args = {name: 'fixture', ver: 2, stores: []};
+    const initial = observe(context.controller.init(args));
+    assert.strictEqual(requests.length, 1);
+    const failure = new Error('dist indexeddb open failed');
+    requests[0].req.error = failure;
+    requests[0].req.fire('error');
+    await ticks();
+    assert.strictEqual(initial.status, 'rejected');
+    assert.strictEqual(initial.error, failure);
+
+    const retry = observe(context.controller.init(args));
+    assert.strictEqual(requests.length, 2);
+    const db = {};
+    requests[1].req.result = db;
+    requests[1].req.fire('success');
+    await ticks();
+    assert.strictEqual(retry.status, 'resolved');
+    assert.strictEqual(retry.value, db);
   });
 });

@@ -519,7 +519,7 @@ CommentInputPanel.__css__ = (`
     transition: left 0.2s ease, opacity 0.2s ease, z-index 0s;
     opacity: 0.9;
     border: none;
-    pointer-evnets: auto;
+    pointer-events: auto;
     box-shadow: 0 0 8px #fff;
     padding: 0;
   }

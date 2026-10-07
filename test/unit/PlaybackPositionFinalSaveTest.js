@@ -1,7 +1,8 @@
 // Task178 (Watch V4 audit F10): the shared 1-second throttle must not drop the final
 // resume-position save (ended -> 0, close, switching video). Ordinary saves stay throttled.
 const assert = require('assert');
-const {read} = require('../helpers/extractSource');
+const _ = require('lodash');
+const {read, extract, createContext, run} = require('../helpers/extractSource');
 const {createDialogHarness} = require('../helpers/dialogHarness');
 
 function dialog({duration = 300, contextWatchId = 'sm9', videoId = 'sm9'} = {}) {
@@ -39,12 +40,16 @@ describe('Task178 final resume-position save is not throttled away (Watch V4 aud
     assert.deepStrictEqual(calls, [['sm9', 70]]);
   });
 
-  it('a final save keeps the video it was requested for and the existing policy', () => {
+  it('a final save keeps video ownership, saves sub-120s long-form, and still skips short-content IDs', () => {
     const {d, calls} = dialog();
     d._saveFinalPlaybackPosition('smOther', 0);         // not the current video
-    const short = dialog({duration: 119});
-    short.d._saveFinalPlaybackPosition('sm9', 0);        // short videos are not saved (policy)
+    const longForm = dialog({duration: 96, contextWatchId: 'sm96', videoId: 'sm96'});
+    longForm.d._saveFinalPlaybackPosition('sm96', 0);
+    const short = dialog({duration: 60, contextWatchId: 'ss9', videoId: 'ss9'});
+    short.d._saveFinalPlaybackPosition('ss9', 0);
+
     assert.deepStrictEqual(calls, []);
+    assert.deepStrictEqual(longForm.calls, [['sm96', 0]]);
     assert.deepStrictEqual(short.calls, []);
   });
 
@@ -59,5 +64,21 @@ describe('Task178 final resume-position save is not throttled away (Watch V4 aud
     assert(/_saveFinalPlaybackPosition\(this\._watchId, this\.currentTime\)/.test(body('close')));
     assert(/_savePlaybackPosition\(this\._videoInfo\.contextWatchId, this\.currentTime\)/.test(body('_onVideoPause')));
     assert(/_saveFinalPlaybackPosition\(this\._videoInfo\.contextWatchId, this\.currentTime\);\s*\}\s*nicoVideoPlayer\.close\(\);/.test(text));
+  });
+
+  it('keeps generated dev dist final-save bypass in parity with source', () => {
+    class Emitter {}
+    const context = createContext({Emitter, _});
+    run(`${extract('dist/ZenzaWatch-dev.user.js', 'NicoVideoPlayerDialog')}; globalThis.Dialog = NicoVideoPlayerDialog;`, context);
+    const subject = Object.create(context.Dialog.prototype);
+    const calls = [];
+    subject._savePlaybackPositionNow = (...args) => calls.push(args);
+    subject._savePlaybackPosition = () => {
+      throw new Error('final save used throttled path');
+    };
+
+    subject._saveFinalPlaybackPosition('sm9', 0);
+
+    assert.deepStrictEqual(calls, [['sm9', 0]]);
   });
 });

@@ -2627,6 +2627,7 @@ class VideoSearchForm extends Emitter {
   // Task 073: ↑↓やマウスで選んでいるタグ候補の件数（入力語と同じく、絞り込み条件を反映）
   _requestTagCount(li, word) {
     window.clearTimeout(this._tagCountTimer);
+    const generation = (this._tagCountGeneration = (this._tagCountGeneration || 0) + 1);
     // 問い合わせ前に別の候補へ移った場合、前の候補の「数えています」表示を消す
     const pending = this._tagCountPendingElm;
     if (pending && pending.classList.contains('is-counting')) {
@@ -2640,6 +2641,7 @@ class VideoSearchForm extends Emitter {
     const mode = this.searchType === 'tag' ? 'tag' : 'keyword';
     const cacheKey = this._wordCountCacheKey(word, mode);
     const render = count => {
+      if (generation !== this._tagCountGeneration) { return; }
       countElm.classList.remove('is-counting');
       countElm.textContent = typeof count === 'number' ? `${count.toLocaleString()}件` : '';
       countElm.classList.toggle('is-empty', count === 0);
@@ -3123,7 +3125,7 @@ VideoSearchForm.__css__ = (`
       position: absolute;
       top: 32px;
       right: 8px;
-      padding: 0 8px
+      padding: 0 8px;
       width: 248px;
       z-index: 1000;
     }
@@ -4049,6 +4051,9 @@ class UaaView extends BaseViewComponent {
     };
 
     this._config = Config.namespace('uaa');
+    this._generation = 0;
+    this._loadTimer = null;
+    this._abortController = null;
 
     this._bound.load = this.load.bind(this);
     this._bound.update = this.update.bind(this);
@@ -4065,6 +4070,18 @@ class UaaView extends BaseViewComponent {
     this._elm.body = shadow.querySelector('.UaaDetailBody');
   }
 
+  _cancelPending() {
+    this._generation = (this._generation || 0) + 1;
+    if (this._loadTimer) {
+      window.clearTimeout(this._loadTimer);
+      this._loadTimer = null;
+    }
+    if (this._abortController) {
+      this._abortController.abort();
+      this._abortController = null;
+    }
+  }
+
   update(videoInfo) {
     if (!this._shadow || !this._config.props.enable) {
       return;
@@ -4073,27 +4090,38 @@ class UaaView extends BaseViewComponent {
       return;
     }
 
-    if (this._state.isUpdating) {
+    if (this._state.isUpdating && this._props.videoId === videoInfo.videoId) {
       return;
     }
+    this._cancelPending();
     this.setState({isUpdating: true});
     this._props.videoInfo = videoInfo;
     this._props.videoId = videoInfo.videoId;
 
-    window.setTimeout(() => {
-      this.load(videoInfo);
+    const generation = this._generation;
+    const controller =
+      typeof AbortController === 'undefined' ? null : new AbortController();
+    this._abortController = controller;
+    const signal = controller ? controller.signal : undefined;
+    this._loadTimer = window.setTimeout(() => {
+      this._loadTimer = null;
+      if (generation !== this._generation || (signal && signal.aborted)) {
+        return;
+      }
+      this.load(videoInfo, {generation, signal});
     }, 5000);
   }
 
-  load(videoInfo) {
+  load(videoInfo, {generation = this._generation, signal} = {}) {
     const videoId = videoInfo.videoId;
 
-    return UaaLoader.load(videoId, {limit: 50})
-      .then(this._onLoad.bind(this, videoId))
-      .catch(this._onFail.bind(this, videoId));
+    return UaaLoader.load(videoId, {limit: 50, signal})
+      .then(result => this._onLoad(videoId, result, generation, signal))
+      .catch(e => this._onFail(videoId, e, generation, signal));
   }
 
   clear() {
+    this._cancelPending();
     this.setState({isUpdating: false, isExist: false, isSpeaking: false});
     if (!this._elm.body) {
       return;
@@ -4101,8 +4129,9 @@ class UaaView extends BaseViewComponent {
     this._elm.body.textContent = '';
   }
 
-  _onLoad(videoId, result) {
-    if (this._props.videoId !== videoId) {
+  _onLoad(videoId, result, generation = this._generation, signal) {
+    if (this._props.videoId !== videoId || generation !== this._generation ||
+        (signal && signal.aborted)) {
       return;
     }
     this.setState({isUpdating: false});
@@ -4120,7 +4149,7 @@ class UaaView extends BaseViewComponent {
         return;
       }
       u.added = true;
-      div.append(this._createItem(u, idx++));
+      div.append(this._createItem(u, idx++, generation, signal));
       screenshots++;
     });
     div.setAttribute('data-screenshot-count', screenshots);
@@ -4131,14 +4160,14 @@ class UaaView extends BaseViewComponent {
         return;
       }
       u.added = true;
-      df.append(this._createItem(u, idx++));
+      df.append(this._createItem(u, idx++, generation, signal));
     });
     data.sponsors.forEach(u => {
       if (u.added) {
         return;
       }
       u.added = true;
-      df.append(this._createItem(u, idx++));
+      df.append(this._createItem(u, idx++, generation, signal));
     });
 
     this._elm.body.innerHTML = '';
@@ -4147,7 +4176,8 @@ class UaaView extends BaseViewComponent {
     this.setState({isExist: true});
   }
 
-  _createItem(data, idx) {
+  _createItem(data, idx, generation = this._generation,
+      signal = this._abortController ? this._abortController.signal : undefined) {
     const df = document.createElement('div');
     const contact = document.createElement('span');
     contact.textContent = data.advertiserName;
@@ -4167,24 +4197,34 @@ class UaaView extends BaseViewComponent {
       Object.assign(df.dataset, { command: 'seek', type: 'number', param: sec });
       contact.setAttribute('title', `${data.message}(${textUtil.secToTime(sec)})`);
 
+      const isCurrent = () =>
+        generation === this._generation && (!signal || !signal.aborted);
       this._props.videoInfo.getCurrentVideo()
-        .then(url => ZenzaWatch.util.VideoCaptureUtil.capture(url, sec))
+        .then(url => {
+          if (!isCurrent()) {
+            return null;
+          }
+          return ZenzaWatch.util.VideoCaptureUtil.capture(url, sec, {signal});
+        })
         .then(screenshot => {
-        const cv = document.createElement('canvas');
-        const ct = cv.getContext('2d');
-        cv.width = screenshot.width;
-        cv.height = screenshot.height;
+          if (!screenshot || !isCurrent()) {
+            return;
+          }
+          const cv = document.createElement('canvas');
+          const ct = cv.getContext('2d');
+          cv.width = screenshot.width;
+          cv.height = screenshot.height;
 
-        cv.className = 'screenshot command clickable';
-        Object.assign(cv.dataset, { command: 'seek', type: 'number', param: sec });
-        ct.fillStyle = 'rgb(32, 32, 32)';
-        ct.fillRect(0, 0, cv.width, cv.height);
-        ct.drawImage(screenshot, 0, 0);
-        df.classList.add('has-screenshot');
-        df.classList.remove('clickable', 'other');
+          cv.className = 'screenshot command clickable';
+          Object.assign(cv.dataset, { command: 'seek', type: 'number', param: sec });
+          ct.fillStyle = 'rgb(32, 32, 32)';
+          ct.fillRect(0, 0, cv.width, cv.height);
+          ct.drawImage(screenshot, 0, 0);
+          df.classList.add('has-screenshot');
+          df.classList.remove('clickable', 'other');
 
-        df.append(cv);
-      }).catch(() => {});
+          df.append(cv);
+        }).catch(() => {});
     } else if (bgkeyframe) {
       const sec = parseFloat(bgkeyframe);
       df.classList.add('clickable', 'command', 'other');
@@ -4197,8 +4237,9 @@ class UaaView extends BaseViewComponent {
     return df;
   }
 
-  _onFail(videoId) {
-    if (this._props.videoId !== videoId) {
+  _onFail(videoId, e, generation = this._generation, signal) {
+    if (this._props.videoId !== videoId || generation !== this._generation ||
+        (signal && signal.aborted)) {
       return;
     }
     this.setState({isUpdating: false});

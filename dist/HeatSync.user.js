@@ -1220,7 +1220,7 @@ const ZenzaDetector = (() => {
           font-size: 12px;
           line-height: 16px;
           padding: 2px 4px;
-          border: 1px solid !000;
+          border: 1px solid #000;
           background: #ffc;
           color: #000;
           text-shadow: none;

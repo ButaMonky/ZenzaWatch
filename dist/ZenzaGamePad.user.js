@@ -610,7 +610,7 @@
           font-size: 12px;
           line-height: 16px;
           padding: 2px 4px;
-          border: 1px solid !000;
+          border: 1px solid #000;
           background: #ffc;
           color: #000;
           text-shadow: none;
@@ -1562,11 +1562,11 @@
           console.log('%cgamepad connected id:"%s"', 'background: lightblue;', e.gamepad.id);
           detectGamepad();
         } else {
-          ZenzaGamePad.emit('onDeviceDisconnect', activeGamepad.getDeviceIndex());
           if (activeGamepad) {
+            ZenzaGamePad.emit('onDeviceDisconnect', activeGamepad.getDeviceIndex());
             activeGamepad.release();
+            activeGamepad = null;
           }
-          activeGamepad = null;
           console.log('%cgamepad disconneced id:"%s"', 'background: lightblue;', e.gamepad.id);
         }
       };

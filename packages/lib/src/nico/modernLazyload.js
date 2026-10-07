@@ -72,12 +72,21 @@
       _adjustSizeAndLoad(item, src) {
         const img = new Image();
         img.src = src;
-        img.decode.then(() => {
+        const load = () => {
           requestAnimationFrame(() => {
             item.style.objectFit = 'contain';
             item.setAttribute('src', src);
           });
-        });
+        };
+        if (typeof img.decode !== 'function') {
+          load();
+          return;
+        }
+        try {
+          img.decode().then(load, load);
+        } catch (e) {
+          load();
+        }
       },
       _setPageObserver() {
         if (!this.intersectionObserver) {

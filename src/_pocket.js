@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.44-task227
+// @version     0.5.46-task272
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -2345,6 +2345,9 @@ Object.assign(util, textUtil);
               window.clearTimeout(timeoutTimer);
               CsrfTokenLoader.saveToCache(token);
               resolve(token);
+            }, (error) => {
+              window.clearTimeout(timeoutTimer);
+              reject(error);
             });
           });
         }

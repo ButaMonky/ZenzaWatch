@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.46-task272
+// @version     0.5.47-task301
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -3706,7 +3706,7 @@ const emitter = util.emitter;
       if (location.host === 'www.nicovideo.jp' &&
          (location.pathname.startsWith('/tag') ||
           location.pathname.startsWith('/search')) &&
-         (await window.cookieStore.get('new_search'))?.value === "false"
+         (await window.cookieStore?.get('new_search').catch(() => null))?.value === "false"
       ) {
         return {
           query: '.item[data-video-id]:not(.is-ng-wait)',
@@ -3888,7 +3888,7 @@ const emitter = util.emitter;
 
       let {query, container, closest, subtree, callback} = params ? params : await getNgEnv();
 
-      if (!query) { return; }
+      if (!query || !container || (Array.isArray(container) && !container.length)) { return; }
 
       const {ngConfig, favConfig} = initNgConfig();
       if (!ngConfig) { return; }
@@ -4006,7 +4006,10 @@ const emitter = util.emitter;
       });
       MylistPocket.debug.hoverMenu = hoverMenu;
 
-      const ngConfig = await initNg();
+      const ngConfig = await initNg().catch(() => {
+        console.warn('Optional NG initialization unavailable');
+        return null;
+      });
 
       if (config.props.nicoad.hide) {
         util.addStyle(nicoadHideCss);

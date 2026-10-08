@@ -519,7 +519,7 @@ const {ThreadLoader} = (() => {
         throw {status: 'fail', reason: 'post-key-missing', message: '投稿キーを取得できませんでした（コメントは送信していません）'};
       }
 
-      const commands = cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [];
+      const commands = cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/).filter(Boolean) ?? [];
       const packet = JSON.stringify({
         body: text,
         commands,

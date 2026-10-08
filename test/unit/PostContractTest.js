@@ -207,3 +207,18 @@ describe('ZW-023/024 posting contract', function() {
     assert.strictEqual(s.h.player.chats[0].no, 3);
   });
 });
+
+describe('Task301 anonymous-thread empty command compatibility', () => {
+  for (const command of ['', '   ', '\t\u3000']) {
+    it(`omits empty protocol tokens for ${JSON.stringify(command)}`, async () => {
+      const s = posting(true); const net = connect(s, [{no: 1, id: 'one'}]);
+      await s.d.addChat('fixture', command, 0);
+      assert.deepEqual(net.packets[0].body.commands, []);
+    });
+  }
+  it('retains nonempty tokens and automatic anonymity', async () => {
+    const s = posting(false); const net = connect(s, [{no: 1, id: 'one'}]);
+    await s.d.addChat('fixture', 'red  big', 0);
+    assert.deepEqual(net.packets[0].body.commands, ['184', 'red', 'big']);
+  });
+});

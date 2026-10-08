@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.181-task296
+// @version        2.7.182-task301
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-07 21:52Z 850a501
+// build: 2026-10-08 00:05Z 5266732
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.181-task296';
+    var VER = '2.7.182-task301';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-07 21:52Z 850a501';
+    var BUILD = '2026-10-08 00:05Z 5266732';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3844,21 +3844,25 @@ const css = (() => {
 			return setPropsTask.length ? applySetProps() : Promise.resolve();
 		},
 		addModule: async function(func, options = {}) {
-			if (!CSS || !('paintWorklet' in CSS) || this.set.has(func)) {
-				return;
-			}
-			this.set.add(func);
-			const src =
-			`(${func.toString()})(
-				this,
-				registerPaint,
-				${JSON.stringify(options.config || {}, null, 2)}
-				);`;
-			const blob = new Blob([src], {type: 'text/javascript'});
-			const url = URL.createObjectURL(blob);
-			await CSS.paintWorklet.addModule(url).then(() => URL.revokeObjectURL(url));
-			return true;
-		}.bind({set: new WeakSet}),
+			if (!CSS || !('paintWorklet' in CSS)) { return; }
+			if (this.modules.has(func)) { return this.modules.get(func); }
+			const pending = (async () => {
+				let url;
+				try {
+					const src = `(${func.toString()})(this, registerPaint,
+						${JSON.stringify(options.config || {}, null, 2)});`;
+					const blob = new Blob([src], {type: 'text/javascript'});
+					url = URL.createObjectURL(blob);
+					await CSS.paintWorklet.addModule(url);
+					return true;
+				} finally {
+					if (url !== undefined) { URL.revokeObjectURL(url); }
+				}
+			})();
+			this.modules.set(func, pending);
+			try { return await pending; }
+			catch (error) { this.modules.delete(func); throw error; }
+		}.bind({modules: new WeakMap}),
 		escape:  value => CSS.escape  ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
 		number:  value => CSS.number  ? CSS.number(value) : value,
 		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
@@ -3888,9 +3892,13 @@ const textUtil = {
 		const result = {};
 		query.split('&').forEach(item => {
 			const sp = item.split('=');
-			const key = decodeURIComponent(sp[0]);
-			const val = decodeURIComponent(sp.slice(1).join('='));
-			result[key] = val;
+			try {
+				const key = decodeURIComponent(sp[0]);
+				const val = decodeURIComponent(sp.slice(1).join('='));
+				result[key] = val;
+			} catch (error) {
+				if (!(error instanceof URIError)) { throw error; }
+			}
 		});
 		return result;
 	},
@@ -4128,7 +4136,17 @@ isLoginLegacy: () => {
 		window.open(url, '_blank', 'width=550, height=480, left=100, top50, personalbar=0, toolbar=0, scrollbars=1, sizable=1', 0);
 	},
 	isGinzaWatchUrl: url => /^https?:\/\/www\.nicovideo\.jp\/(watch|shorts)\//.test(url || location.href),
-	getNicoHistory: window.decodeURIComponent(document.cookie.replace(/^.*(nicohistory[^;+]).*?/, '')),
+	get getNicoHistory() {
+		const entry = document.cookie.split(';').map(value => value.trim())
+			.find(value => value.startsWith('nicohistory='));
+		if (!entry) { return ''; }
+		try {
+			return window.decodeURIComponent(entry.slice('nicohistory='.length));
+		} catch (error) {
+			if (!(error instanceof URIError)) { throw error; }
+			return '';
+		}
+	},
 	getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
 };
 Object.assign(util, nicoUtil);
@@ -12499,7 +12517,7 @@ const {ThreadLoader} = (() => {
 				});
 				throw {status: 'fail', reason: 'post-key-missing', message: '投稿キーを取得できませんでした（コメントは送信していません）'};
 			}
-			const commands = cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/) ?? [];
+			const commands = cmd?.split(/[\x20\xA0\u3000\t\u2003\s]+/).filter(Boolean) ?? [];
 			const packet = JSON.stringify({
 				body: text,
 				commands,
@@ -29339,10 +29357,15 @@ class VideoListItem {
 				icon: typeof icon === 'string' && /^https?:\/\//i.test(icon) ? icon : ''};
 		}
 		const access = source.cardAccess || {};
+		const paid = access.paid ?? source.isPaymentRequired;
+		const member = access.member ?? source.isMemberFree;
+		const premium = access.premium ?? source.isPremiumFree;
 		for (const [key, value] of Object.entries({
-			isPaymentRequired: access.paid ?? source.isPaymentRequired,
-			isMemberOnly: access.member ?? source.isMemberOnly,
-			isPremiumOnly: access.premium ?? source.isPremiumOnly
+			isPaymentRequired: paid,
+			isMemberFree: member,
+			isPremiumFree: premium,
+			isMemberOnly: paid === true ? false : (paid === false && typeof member === 'boolean' ? member : source.isMemberOnly),
+			isPremiumOnly: paid === true ? false : (paid === false && typeof premium === 'boolean' ? premium : source.isPremiumOnly)
 		})) {
 			if (typeof value === 'boolean') { result[key] = value; }
 		}
@@ -29530,6 +29553,8 @@ class VideoListItem {
 	}
 	get owner() { return VideoListItem.cardMetadata(this._rawData).owner || null; }
 	get isPaymentRequired() { return this._rawData.isPaymentRequired === true; }
+	get isMemberFree() { return this._rawData.isMemberFree === true; }
+	get isPremiumFree() { return this._rawData.isPremiumFree === true; }
 	get isMemberOnly() { return this._rawData.isMemberOnly === true; }
 	get isPremiumOnly() { return this._rawData.isPremiumOnly === true; }
 	get thumbnail() { return this._rawData.thumbnail_url; }
@@ -29712,7 +29737,7 @@ class VideoListItem {
 	}
 	_applyFullData(data) {
 		const rawData = this._rawData;
-		for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner', 'like', 'isPaymentRequired', 'isMemberOnly', 'isPremiumOnly']) {
+		for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner', 'like', 'isPaymentRequired', 'isMemberOnly', 'isPremiumOnly', 'isMemberFree', 'isPremiumFree']) {
 			if (data[key] !== undefined && data[key] !== null) {
 				rawData[key] = data[key];
 			}

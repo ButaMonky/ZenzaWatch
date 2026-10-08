@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.46-task272
+// @version     0.5.47-task301
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-07 05:16Z
+// build: 2026-10-08 00:05Z 5266732
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -2196,21 +2196,25 @@ const css = (() => {
 			return setPropsTask.length ? applySetProps() : Promise.resolve();
 		},
 		addModule: async function(func, options = {}) {
-			if (!CSS || !('paintWorklet' in CSS) || this.set.has(func)) {
-				return;
-			}
-			this.set.add(func);
-			const src =
-			`(${func.toString()})(
-				this,
-				registerPaint,
-				${JSON.stringify(options.config || {}, null, 2)}
-				);`;
-			const blob = new Blob([src], {type: 'text/javascript'});
-			const url = URL.createObjectURL(blob);
-			await CSS.paintWorklet.addModule(url).then(() => URL.revokeObjectURL(url));
-			return true;
-		}.bind({set: new WeakSet}),
+			if (!CSS || !('paintWorklet' in CSS)) { return; }
+			if (this.modules.has(func)) { return this.modules.get(func); }
+			const pending = (async () => {
+				let url;
+				try {
+					const src = `(${func.toString()})(this, registerPaint,
+						${JSON.stringify(options.config || {}, null, 2)});`;
+					const blob = new Blob([src], {type: 'text/javascript'});
+					url = URL.createObjectURL(blob);
+					await CSS.paintWorklet.addModule(url);
+					return true;
+				} finally {
+					if (url !== undefined) { URL.revokeObjectURL(url); }
+				}
+			})();
+			this.modules.set(func, pending);
+			try { return await pending; }
+			catch (error) { this.modules.delete(func); throw error; }
+		}.bind({modules: new WeakMap}),
 		escape:  value => CSS.escape  ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
 		number:  value => CSS.number  ? CSS.number(value) : value,
 		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
@@ -2343,7 +2347,17 @@ isLoginLegacy: () => {
 		window.open(url, '_blank', 'width=550, height=480, left=100, top50, personalbar=0, toolbar=0, scrollbars=1, sizable=1', 0);
 	},
 	isGinzaWatchUrl: url => /^https?:\/\/www\.nicovideo\.jp\/(watch|shorts)\//.test(url || location.href),
-	getNicoHistory: window.decodeURIComponent(document.cookie.replace(/^.*(nicohistory[^;+]).*?/, '')),
+	get getNicoHistory() {
+		const entry = document.cookie.split(';').map(value => value.trim())
+			.find(value => value.startsWith('nicohistory='));
+		if (!entry) { return ''; }
+		try {
+			return window.decodeURIComponent(entry.slice('nicohistory='.length));
+		} catch (error) {
+			if (!(error instanceof URIError)) { throw error; }
+			return '';
+		}
+	},
 	getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
 };
 Object.assign(util, nicoUtil);
@@ -2469,9 +2483,13 @@ const textUtil = {
 		const result = {};
 		query.split('&').forEach(item => {
 			const sp = item.split('=');
-			const key = decodeURIComponent(sp[0]);
-			const val = decodeURIComponent(sp.slice(1).join('='));
-			result[key] = val;
+			try {
+				const key = decodeURIComponent(sp[0]);
+				const val = decodeURIComponent(sp.slice(1).join('='));
+				result[key] = val;
+			} catch (error) {
+				if (!(error instanceof URIError)) { throw error; }
+			}
 		});
 		return result;
 	},
@@ -5623,7 +5641,7 @@ const MylistApiLoader = (() => {
       if (location.host === 'www.nicovideo.jp' &&
          (location.pathname.startsWith('/tag') ||
           location.pathname.startsWith('/search')) &&
-         (await window.cookieStore.get('new_search'))?.value === "false"
+         (await window.cookieStore?.get('new_search').catch(() => null))?.value === "false"
       ) {
         return {
           query: '.item[data-video-id]:not(.is-ng-wait)',
@@ -5805,7 +5823,7 @@ const MylistApiLoader = (() => {
 
       let {query, container, closest, subtree, callback} = params ? params : await getNgEnv();
 
-      if (!query) { return; }
+      if (!query || !container || (Array.isArray(container) && !container.length)) { return; }
 
       const {ngConfig, favConfig} = initNgConfig();
       if (!ngConfig) { return; }
@@ -5923,7 +5941,10 @@ const MylistApiLoader = (() => {
       });
       MylistPocket.debug.hoverMenu = hoverMenu;
 
-      const ngConfig = await initNg();
+      const ngConfig = await initNg().catch(() => {
+        console.warn('Optional NG initialization unavailable');
+        return null;
+      });
 
       if (config.props.nicoad.hide) {
         util.addStyle(nicoadHideCss);

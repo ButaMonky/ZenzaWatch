@@ -39,7 +39,7 @@ const KNOWN_UNDEFINED = {
   'HeatSync.user.js': ['_'], // lodash の @require が無い。要調査（Task 085 で新たに検出）
   'MylistPocket.user.js': ['$', 'NicoVideoApi', 'BroadcastEmitter'], // 要調査（Task 085 で新たに検出）
   'ZenzaAdvancedSettings.user.js': ['workerUtil'], // 要調査（Task 085 で新たに検出）
-  'ZenzaHLS.user.js': ['ZenzaWatch', 'context', 'stats'] // ZenzaWatch は本体が作る window.ZenzaWatch の可能性。要調査
+  'ZenzaHLS.user.js': ['ZenzaWatch'] // ZenzaWatch は本体が作る window.ZenzaWatch の可能性。要調査
 };
 // 既知の起動直後の例外
 const KNOWN_STARTUP_ERRORS = {

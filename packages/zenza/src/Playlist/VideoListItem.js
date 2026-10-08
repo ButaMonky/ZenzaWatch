@@ -24,10 +24,15 @@ class VideoListItem {
         icon: typeof icon === 'string' && /^https?:\/\//i.test(icon) ? icon : ''};
     }
     const access = source.cardAccess || {};
+    const paid = access.paid ?? source.isPaymentRequired;
+    const member = access.member ?? source.isMemberFree;
+    const premium = access.premium ?? source.isPremiumFree;
     for (const [key, value] of Object.entries({
-      isPaymentRequired: access.paid ?? source.isPaymentRequired,
-      isMemberOnly: access.member ?? source.isMemberOnly,
-      isPremiumOnly: access.premium ?? source.isPremiumOnly
+      isPaymentRequired: paid,
+      isMemberFree: member,
+      isPremiumFree: premium,
+      isMemberOnly: paid === true ? false : (paid === false && typeof member === 'boolean' ? member : source.isMemberOnly),
+      isPremiumOnly: paid === true ? false : (paid === false && typeof premium === 'boolean' ? premium : source.isPremiumOnly)
     })) {
       if (typeof value === 'boolean') { result[key] = value; }
     }
@@ -247,6 +252,8 @@ class VideoListItem {
 
   get owner() { return VideoListItem.cardMetadata(this._rawData).owner || null; }
   get isPaymentRequired() { return this._rawData.isPaymentRequired === true; }
+  get isMemberFree() { return this._rawData.isMemberFree === true; }
+  get isPremiumFree() { return this._rawData.isPremiumFree === true; }
   get isMemberOnly() { return this._rawData.isMemberOnly === true; }
   get isPremiumOnly() { return this._rawData.isPremiumOnly === true; }
 
@@ -458,7 +465,7 @@ class VideoListItem {
   }
   _applyFullData(data) {
     const rawData = this._rawData;
-    for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner', 'like', 'isPaymentRequired', 'isMemberOnly', 'isPremiumOnly']) {
+    for (const key of ['title', 'length_seconds', 'num_res', 'mylist_counter', 'view_counter', 'thumbnail_url', 'owner', 'like', 'isPaymentRequired', 'isMemberOnly', 'isPremiumOnly', 'isMemberFree', 'isPremiumFree']) {
       if (data[key] !== undefined && data[key] !== null) {
         rawData[key] = data[key];
       }

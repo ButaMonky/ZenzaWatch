@@ -12,9 +12,14 @@ const textUtil = {
     const result = {};
     query.split('&').forEach(item => {
       const sp = item.split('=');
-      const key = decodeURIComponent(sp[0]);
-      const val = decodeURIComponent(sp.slice(1).join('='));
-      result[key] = val;
+      try {
+        const key = decodeURIComponent(sp[0]);
+        const val = decodeURIComponent(sp.slice(1).join('='));
+        result[key] = val;
+      } catch (error) {
+        // Ignore only this malformed pair; valid siblings remain usable.
+        if (!(error instanceof URIError)) { throw error; }
+      }
     });
     return result;
   },

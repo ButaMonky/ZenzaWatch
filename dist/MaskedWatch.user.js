@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.4-task268
+// @version     0.3.5-task301
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -19,7 +19,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // ==/UserScript==
-// build: 2026-10-07 04:42Z
+// build: 2026-10-08 00:05Z 5266732
 /* eslint-disable */
 
 // chrome://flags/#enable-experimental-web-platform-features
@@ -40,7 +40,7 @@
 
   const monkey = (PRODUCT) => {
     'use strict';
-    var VER = '0.3.4-task268';
+    var VER = '0.3.5-task301';
     const ENV = 'STABLE';
 
     let ZenzaWatch = null;
@@ -265,21 +265,25 @@ const css = (() => {
 			return setPropsTask.length ? applySetProps() : Promise.resolve();
 		},
 		addModule: async function(func, options = {}) {
-			if (!CSS || !('paintWorklet' in CSS) || this.set.has(func)) {
-				return;
-			}
-			this.set.add(func);
-			const src =
-			`(${func.toString()})(
-				this,
-				registerPaint,
-				${JSON.stringify(options.config || {}, null, 2)}
-				);`;
-			const blob = new Blob([src], {type: 'text/javascript'});
-			const url = URL.createObjectURL(blob);
-			await CSS.paintWorklet.addModule(url).then(() => URL.revokeObjectURL(url));
-			return true;
-		}.bind({set: new WeakSet}),
+			if (!CSS || !('paintWorklet' in CSS)) { return; }
+			if (this.modules.has(func)) { return this.modules.get(func); }
+			const pending = (async () => {
+				let url;
+				try {
+					const src = `(${func.toString()})(this, registerPaint,
+						${JSON.stringify(options.config || {}, null, 2)});`;
+					const blob = new Blob([src], {type: 'text/javascript'});
+					url = URL.createObjectURL(blob);
+					await CSS.paintWorklet.addModule(url);
+					return true;
+				} finally {
+					if (url !== undefined) { URL.revokeObjectURL(url); }
+				}
+			})();
+			this.modules.set(func, pending);
+			try { return await pending; }
+			catch (error) { this.modules.delete(func); throw error; }
+		}.bind({modules: new WeakMap}),
 		escape:  value => CSS.escape  ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
 		number:  value => CSS.number  ? CSS.number(value) : value,
 		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
@@ -402,17 +406,25 @@ const cssUtil = css;
       });
     };
 
-    const createDetector = async ({video, layer, interval, type}) => {
+    const createDetector = async ({video, layer, interval, type, owner = video, onDispose = () => {}}) => {
       const worker = createWorker(業務, {name: 'Facelook'});
+      let disposed = false, timer, observer, onConfig, debugLayer;
+      const dispose = () => {
+        if (disposed) { return; }
+        disposed = true;
+        if (timer !== undefined) { clearInterval(timer); }
+        timer = undefined;
+        if (onConfig) { window.removeEventListener(`${PRODUCT}-config.update`, onConfig); }
+        if (observer) { observer.disconnect(); }
+        worker.terminate();
+        if (debugLayer) { debugLayer.remove(); }
+        onDispose();
+      };
       try {
         await css.addModule(下請, {config: {...config}});
-      } catch (err) {
-        worker.terminate();
-        throw err;
-      }
       const transferCanvas = new OffscreenCanvas(config.tmpWidth, config.tmpHeight);
       const ctx = transferCanvas.getContext('2d', {alpha: false, desynchronized: true});
-      const debugLayer = document.createElement('div');
+      debugLayer = document.createElement('div');
       [layer, debugLayer].forEach(layer => {
         layer.style.setProperty('--config', JSON.stringify({...config}));
         layer.style.setProperty('--json-args', '{}');
@@ -443,6 +455,7 @@ const cssUtil = css;
 
       let isBusy = true, currentTime = video.currentTime, boxHistory = [];
       worker.addEventListener('message', e => {
+        if (disposed) { return; }
         const {command, params} = e.data.body;
         switch (command) {
           case 'init':
@@ -468,7 +481,7 @@ const cssUtil = css;
       });
 
       const onTimer = () => {
-        if (isBusy ||
+        if (disposed || isBusy ||
             currentTime === video.currentTime ||
             document.visibilityState !== 'visible') {
           return;
@@ -489,12 +502,14 @@ const cssUtil = css;
         isBusy = true;
         worker.postMessage({body: {command: 'detect', params: {bitmap}}}, [bitmap]);
       };
-      let timer = setInterval(onTimer, interval);
+      const start = () => {
+        if (!disposed && timer === undefined) { timer = setInterval(onTimer, interval); }
+      };
+      const stop = () => { clearInterval(timer); timer = undefined; };
+      start();
 
-      const start = () => timer = setInterval(onTimer, interval);
-      const stop = () => timer = clearInterval(timer);
-
-      window.addEventListener(`${PRODUCT}-config.update`, e => {
+      onConfig = e => {
+        if (disposed) { return; }
         worker.postMessage({body: {command: 'config', params: {config: {...config}}}});
         const {key, value} = e.detail;
         layer.style.setProperty('--config', JSON.stringify({...config}));
@@ -513,8 +528,20 @@ const cssUtil = css;
             transferCanvas.height = value;
             break;
         }
-      }, {passive: true});
-      return { start, stop };
+      };
+      window.addEventListener(`${PRODUCT}-config.update`, onConfig, {passive: true});
+      const checkConnection = () => {
+        if (owner.isConnected === false || video.isConnected === false || layer.isConnected === false ||
+            (owner.drawableElement && owner.drawableElement !== video)) { dispose(); }
+      };
+      observer = new MutationObserver(checkConnection);
+      observer.observe(document.documentElement, {childList: true, subtree: true});
+      checkConnection();
+      return {start, stop, dispose};
+      } catch (error) {
+        dispose();
+        throw error;
+      }
     };
 
     const dialog = ((config) => {
@@ -788,6 +815,9 @@ const cssUtil = css;
 
     const vmap = new WeakMap();
     let timer;
+    const resumeWatching = () => {
+      if (timer === undefined) { timer = setInterval(watch, 1000); }
+    };
     const watch = () => {
       if (!config.enabled || document.visibilityState !== 'visible') { return; }
       [...document.querySelectorAll('video, zenza-video')]
@@ -835,10 +865,14 @@ const cssUtil = css;
 
           vmap.set(video,
             layer ?
-            createDetector({video: video.drawableElement || video, layer, interval: config.interval, type}) :
+            createDetector({video: video.drawableElement || video, owner: video,
+              layer, interval: config.interval, type, onDispose: () => { vmap.delete(video); resumeWatching(); }})
+              .catch(() => { vmap.delete(video); resumeWatching(); console.warn('MaskedWatch detector unavailable'); }) :
             type
           );
-          layer && !location.href.startsWith('https://www.nicovideo.jp/watch/') && clearInterval(timer);
+          if (layer && !location.href.startsWith('https://www.nicovideo.jp/watch/')) {
+            clearInterval(timer); timer = undefined;
+          }
         });
     };
 

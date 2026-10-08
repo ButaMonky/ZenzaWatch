@@ -5,7 +5,7 @@
 // @include     https://www.youtube.com/*
 // @include     https://www.youtube.com/embed/*
 // @include     https://youtube.com/*
-// @version     0.0.15-task152
+// @version     0.0.16-task301
 // @grant       none
 // @license     public domain
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -13,7 +13,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/CapTube.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/CapTube.user.js
 // ==/UserScript==
-// build: 2026-09-30 15:36Z
+// build: 2026-10-08 00:05Z 5266732
 /* eslint-disable */
 
 
@@ -404,21 +404,25 @@ const css = (() => {
 			return setPropsTask.length ? applySetProps() : Promise.resolve();
 		},
 		addModule: async function(func, options = {}) {
-			if (!CSS || !('paintWorklet' in CSS) || this.set.has(func)) {
-				return;
-			}
-			this.set.add(func);
-			const src =
-			`(${func.toString()})(
-				this,
-				registerPaint,
-				${JSON.stringify(options.config || {}, null, 2)}
-				);`;
-			const blob = new Blob([src], {type: 'text/javascript'});
-			const url = URL.createObjectURL(blob);
-			await CSS.paintWorklet.addModule(url).then(() => URL.revokeObjectURL(url));
-			return true;
-		}.bind({set: new WeakSet}),
+			if (!CSS || !('paintWorklet' in CSS)) { return; }
+			if (this.modules.has(func)) { return this.modules.get(func); }
+			const pending = (async () => {
+				let url;
+				try {
+					const src = `(${func.toString()})(this, registerPaint,
+						${JSON.stringify(options.config || {}, null, 2)});`;
+					const blob = new Blob([src], {type: 'text/javascript'});
+					url = URL.createObjectURL(blob);
+					await CSS.paintWorklet.addModule(url);
+					return true;
+				} finally {
+					if (url !== undefined) { URL.revokeObjectURL(url); }
+				}
+			})();
+			this.modules.set(func, pending);
+			try { return await pending; }
+			catch (error) { this.modules.delete(func); throw error; }
+		}.bind({modules: new WeakMap}),
 		escape:  value => CSS.escape  ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
 		number:  value => CSS.number  ? CSS.number(value) : value,
 		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,

@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.32-task188
+// @version        0.0.33-task301
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
@@ -31,7 +31,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // ==/UserScript==
-// build: 2026-10-01 15:02Z
+// build: 2026-10-08 00:05Z 5266732
 /* eslint-disable */
 
 
@@ -967,18 +967,10 @@ const workerUtil = (() => {
         }
 
         async getStore({mode} = {mode: 'readwrite'}) {
-          return new Promise(async (resolve, reject) => {
-            const db = await this.constructor.init();
-            const [data] = this.constructor.storeNames;
-            // window.console.log('getStore', this.storeName, mode);
-            const tx = db.transaction(this.constructor.storeNames, mode);
-            tx.oncomplete = resolve;
-            tx.onerror = reject;
-            return resolve({
-              transaction: tx,
-              store: tx.objectStore(data)
-            });
-          });
+          const db = await this.constructor.init();
+          const [data] = this.constructor.storeNames;
+          const transaction = db.transaction(this.constructor.storeNames, mode);
+          return {transaction, store: transaction.objectStore(data)};
         }
 
         putRecord(store, record) {
@@ -1126,7 +1118,7 @@ const workerUtil = (() => {
           }).catch((e) => {
             this.isBusy = false;
             console.error('gc fail', e);
-            store.clear();
+            throw e;
           });
         }
 
@@ -1214,7 +1206,7 @@ const workerUtil = (() => {
                 }
                 return self.postMessage({id, status, result});
               case 'gc':
-              Storage.gc();
+              await Storage.gc();
               return self.postMessage({id, status, result: null});
             case 'clear':
               result = await Storage.clear();
@@ -1222,7 +1214,7 @@ const workerUtil = (() => {
           }
         } catch (err) {
           status = 'fail';
-          return self.postMessage({e, id, status, result: err});
+          return self.postMessage({id, status, result: 'HLS cache operation failed'});
         }
       };
     };
@@ -1233,10 +1225,10 @@ const workerUtil = (() => {
       const blob = new Blob([src], {type: 'text/javascript'});
       const url = URL.createObjectURL(blob);
 
-      if (type === 'SharedWorker') {
-        return new SharedWorker(url, {name});
-      }
-      return new Worker(url, {name});
+      try {
+        if (type === 'SharedWorker') { return new SharedWorker(url, {name}); }
+        return new Worker(url, {name});
+      } finally { URL.revokeObjectURL(url); }
     };
 
     const Storage = {
@@ -1250,6 +1242,10 @@ const workerUtil = (() => {
           return;
         }
         delete this.request[id];
+        clearTimeout(request.timer);
+        if (e.data.status === 'fail') {
+          return request.reject(new Error('HLS cache worker request failed'));
+        }
         switch (request.command) {
           case 'load':
             if (e.data.result) {
@@ -1261,22 +1257,41 @@ const workerUtil = (() => {
             return request.resolve(e.data.result);
         }
       },
+      onError() {
+        this.failed = true;
+        for (const [id, request] of Object.entries(this.request)) {
+          delete this.request[id];
+          clearTimeout(request.timer);
+          request.reject(new Error('HLS cache worker unavailable'));
+        }
+      },
       getId() {
         return `id:${Math.random()}-${performance.now()}`;
       },
       async sendRequest(command, data, buffer = null) {
+        if (this.failed) { throw new Error('HLS cache worker unavailable'); }
         if (window.Prototype) {
           return Promise.resolve(null);
         }
         const id = this.getId();
         // window.console.info('sendrequest', command, data, buffer);
-        return new Promise(resolve => {
-          this.request[id] = {id, command, resolve};
-          if (buffer) {
-            this.worker.postMessage({id, command, data, buffer}, [buffer]);
-          } else {
-            this.worker.postMessage({id, command, data});
-          }
+        return new Promise((resolve, reject) => {
+          const fail = error => {
+            const request = this.request[id];
+            if (!request) { return; }
+            delete this.request[id];
+            clearTimeout(request.timer);
+            reject(error);
+          };
+          const timer = setTimeout(() => fail(new Error('HLS cache request timeout')), 10000);
+          this.request[id] = {id, command, resolve, reject, timer};
+          try {
+            if (buffer) {
+              this.worker.postMessage({id, command, data, buffer}, [buffer]);
+            } else {
+              this.worker.postMessage({id, command, data});
+            }
+          } catch (error) { fail(error); }
         });
       },
       async setConfig(config) {
@@ -1289,7 +1304,8 @@ const workerUtil = (() => {
         return await this.sendRequest('load', {hash});
       },
       async hasData({hash}) {
-        return await this.sendRequest('hasData', {hash});
+        const result = await this.sendRequest('hasData', {hash});
+        return result === true || !!(result && result.result === true);
       },
       async gc() {
         if (Config.get('enable_db_cache') && !window.Prototype) {
@@ -1302,10 +1318,17 @@ const workerUtil = (() => {
         return this.sendRequest('clear', {});
       }
     };
-    Storage.worker = createWebWorker(StorageWorker, {name: 'ZenzaWatchHLSWorker'});
-    Storage.worker.addEventListener('message', Storage.onMessage.bind(Storage));
-    Storage.setConfig({cache_expire_time: Config.get('cache_expire_time')});
-    Storage.gc = debounce(Storage.gc.bind(Storage), 10 * 1000);
+    try {
+      Storage.worker = createWebWorker(StorageWorker, {name: 'ZenzaWatchHLSWorker'});
+      Storage.worker.addEventListener('message', Storage.onMessage.bind(Storage));
+      Storage.worker.addEventListener('error', Storage.onError.bind(Storage));
+      Storage.worker.addEventListener('messageerror', Storage.onError.bind(Storage));
+    } catch (error) { Storage.onError(); }
+    Storage.setConfig({cache_expire_time: Config.get('cache_expire_time')})
+      .catch(() => console.warn('HLS cache configuration failed'));
+    const runStorageGc = Storage.gc.bind(Storage);
+    Storage.gc = debounce(() => runStorageGc()
+      .catch(() => console.warn('HLS cache maintenance failed')), 10 * 1000);
 
 
     const ZenzaVideoElement = (({Hls, throttle}) => {
@@ -1360,7 +1383,7 @@ const workerUtil = (() => {
 
         const hasCache = async fragment => {
           const {hash} = frag2hash(fragment);
-          return await Storage.hasData({hash});
+          return await Storage.hasData({hash}).catch(() => false);
         };
 
         const preloadFragment = async (fragment, url) => {
@@ -1416,15 +1439,15 @@ const workerUtil = (() => {
             hash,
             videoId,
             meta: {
-              contentLength: buffer.length,
+              contentLength: buffer.byteLength,
               sn,
               resp: { url },
               level,
-              total: buffer.length,
-              stats,
-              url: context.url
+              total: buffer.byteLength,
+              stats: {},
+              url
             }
-          }, buffer);
+          }, buffer).catch(() => console.warn('HLS cache write failed'));
           return true;
         };
 
@@ -1493,7 +1516,7 @@ const workerUtil = (() => {
                       stats,
                       url: context.url
                     }
-                  }, buffer);
+                  }, buffer).catch(() => console.warn('HLS cache write failed'));
                 }
 
                 onSuccess(resp, stats, context, details);
@@ -1502,9 +1525,10 @@ const workerUtil = (() => {
               // prototype.js のあるページでは動かないどころかブラクラ化する
               if (Config.get('enable_db_cache')) {
                 // console.log('***load', hash, Config.get('enable_db_cache'),window.Prototype);
-                const [meta, buffer] = await Storage.load({hash});
+                const [meta, buffer] = await Storage.load({hash}).catch(() => [null, null]) || [null, null];
+                if (this._isAborted || this._isDestroyed) { return; }
                 // console.log('cache?', !!meta, hash);
-                if (meta) {
+                if (meta && buffer && typeof buffer.slice === 'function') {
                   frag.hasCache = true;
                   return callbacks.onSuccess(
                     {url: meta.url, data: buffer }, meta.stats, context, null);
@@ -2858,7 +2882,7 @@ const workerUtil = (() => {
                 break;
               }
               target.classList.add('is-busy');
-              Storage.clear();
+              Storage.clear().catch(() => console.warn('HLS cache clear failed'));
               setTimeout(() =>  target.classList.remove('is-busy'), 5000);
               break;
             default:
@@ -3166,7 +3190,7 @@ const workerUtil = (() => {
     };
 
     const init = () => {
-      console.log('%cinit ZenzaWatch HLS 0.0.32-task188', 'background: cyan');
+      console.log('%cinit ZenzaWatch HLS 0.0.33-task301', 'background: cyan');
 
       const hlsConfig = Object.assign({}, Config.raw);
       // Task 079: Config は emit('update', {key, value}) の形で知らせるので、

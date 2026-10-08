@@ -1,3 +1,6 @@
+## Task301 - internal failure handling and cleanup
+Preserve existing UI and interaction contracts. Isolate malformed query/cookie decoding; share paint-worklet initialization and permit retries; dispose stale MaskedWatch detector resources and resume discovery; contain optional HLS cache initialization/RPC failures and fall back to network; isolate optional MylistPocket NG/CookieStore initialization; preserve independent paid/member-free/premium-free metadata; omit empty forced-184 command tokens. Generated userscripts are synchronized. Comment-post Turnstile compatibility remains unverified and no posting retry policy is changed.
+
 ## Task272 / 2.7.179-task272 + MylistPocket 0.5.46-task272 - use resolved Mylist item ID for deletion
 Send the resolved Mylist entry itemId to the nvapi DELETE endpoint instead of the video watch ID. Preserve lookup, cache invalidation, events, error metadata, and Watch-Later behavior. Add source and generated-dist regression coverage for the DELETE query contract.
 

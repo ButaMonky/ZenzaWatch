@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.4-task268
+// @version     0.3.5-task301
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -212,17 +212,25 @@ interval: ${config.interval}        // マスクの更新間隔
       });
     };
 
-    const createDetector = async ({video, layer, interval, type}) => {
+    const createDetector = async ({video, layer, interval, type, owner = video, onDispose = () => {}}) => {
       const worker = createWorker(業務, {name: 'Facelook'});
+      let disposed = false, timer, observer, onConfig, debugLayer;
+      const dispose = () => {
+        if (disposed) { return; }
+        disposed = true;
+        if (timer !== undefined) { clearInterval(timer); }
+        timer = undefined;
+        if (onConfig) { window.removeEventListener(`${PRODUCT}-config.update`, onConfig); }
+        if (observer) { observer.disconnect(); }
+        worker.terminate();
+        if (debugLayer) { debugLayer.remove(); }
+        onDispose();
+      };
       try {
         await css.addModule(下請, {config: {...config}});
-      } catch (err) {
-        worker.terminate();
-        throw err;
-      }
       const transferCanvas = new OffscreenCanvas(config.tmpWidth, config.tmpHeight);
       const ctx = transferCanvas.getContext('2d', {alpha: false, desynchronized: true});
-      const debugLayer = document.createElement('div');
+      debugLayer = document.createElement('div');
       [layer, debugLayer].forEach(layer => {
         layer.style.setProperty('--config', JSON.stringify({...config}));
         layer.style.setProperty('--json-args', '{}');
@@ -253,6 +261,7 @@ interval: ${config.interval}        // マスクの更新間隔
 
       let isBusy = true, currentTime = video.currentTime, boxHistory = [];
       worker.addEventListener('message', e => {
+        if (disposed) { return; }
         const {command, params} = e.data.body;
         switch (command) {
           case 'init':
@@ -278,7 +287,7 @@ interval: ${config.interval}        // マスクの更新間隔
       });
 
       const onTimer = () => {
-        if (isBusy ||
+        if (disposed || isBusy ||
             currentTime === video.currentTime ||
             document.visibilityState !== 'visible') {
           return;
@@ -299,12 +308,14 @@ interval: ${config.interval}        // マスクの更新間隔
         isBusy = true;
         worker.postMessage({body: {command: 'detect', params: {bitmap}}}, [bitmap]);
       };
-      let timer = setInterval(onTimer, interval);
+      const start = () => {
+        if (!disposed && timer === undefined) { timer = setInterval(onTimer, interval); }
+      };
+      const stop = () => { clearInterval(timer); timer = undefined; };
+      start();
 
-      const start = () => timer = setInterval(onTimer, interval);
-      const stop = () => timer = clearInterval(timer);
-
-      window.addEventListener(`${PRODUCT}-config.update`, e => {
+      onConfig = e => {
+        if (disposed) { return; }
         worker.postMessage({body: {command: 'config', params: {config: {...config}}}});
         const {key, value} = e.detail;
         layer.style.setProperty('--config', JSON.stringify({...config}));
@@ -323,8 +334,20 @@ interval: ${config.interval}        // マスクの更新間隔
             transferCanvas.height = value;
             break;
         }
-      }, {passive: true});
-      return { start, stop };
+      };
+      window.addEventListener(`${PRODUCT}-config.update`, onConfig, {passive: true});
+      const checkConnection = () => {
+        if (owner.isConnected === false || video.isConnected === false || layer.isConnected === false ||
+            (owner.drawableElement && owner.drawableElement !== video)) { dispose(); }
+      };
+      observer = new MutationObserver(checkConnection);
+      observer.observe(document.documentElement, {childList: true, subtree: true});
+      checkConnection();
+      return {start, stop, dispose};
+      } catch (error) {
+        dispose();
+        throw error;
+      }
     };
 
     const dialog = ((config) => {
@@ -598,6 +621,9 @@ interval: ${config.interval}        // マスクの更新間隔
 
     const vmap = new WeakMap();
     let timer;
+    const resumeWatching = () => {
+      if (timer === undefined) { timer = setInterval(watch, 1000); }
+    };
     const watch = () => {
       if (!config.enabled || document.visibilityState !== 'visible') { return; }
       [...document.querySelectorAll('video, zenza-video')]
@@ -645,10 +671,14 @@ interval: ${config.interval}        // マスクの更新間隔
 
           vmap.set(video,
             layer ?
-            createDetector({video: video.drawableElement || video, layer, interval: config.interval, type}) :
+            createDetector({video: video.drawableElement || video, owner: video,
+              layer, interval: config.interval, type, onDispose: () => { vmap.delete(video); resumeWatching(); }})
+              .catch(() => { vmap.delete(video); resumeWatching(); console.warn('MaskedWatch detector unavailable'); }) :
             type
           );
-          layer && !location.href.startsWith('https://www.nicovideo.jp/watch/') && clearInterval(timer);
+          if (layer && !location.href.startsWith('https://www.nicovideo.jp/watch/')) {
+            clearInterval(timer); timer = undefined;
+          }
         });
     };
 

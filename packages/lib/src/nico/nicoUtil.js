@@ -125,7 +125,17 @@ const nicoUtil = {
     window.open(url, '_blank', 'width=550, height=480, left=100, top50, personalbar=0, toolbar=0, scrollbars=1, sizable=1', 0);
   },
   isGinzaWatchUrl: url => /^https?:\/\/www\.nicovideo\.jp\/(watch|shorts)\//.test(url || location.href),
-  getNicoHistory: window.decodeURIComponent(document.cookie.replace(/^.*(nicohistory[^;+]).*?/, '')),
+  get getNicoHistory() {
+    const entry = document.cookie.split(';').map(value => value.trim())
+      .find(value => value.startsWith('nicohistory='));
+    if (!entry) { return ''; }
+    try {
+      return window.decodeURIComponent(entry.slice('nicohistory='.length));
+    } catch (error) {
+      if (!(error instanceof URIError)) { throw error; }
+      return '';
+    }
+  },
   getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
 };
 

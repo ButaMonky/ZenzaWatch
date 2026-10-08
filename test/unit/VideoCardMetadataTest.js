@@ -31,7 +31,8 @@ describe('Task222 video card metadata', () => {
     const id = v.itemId;
     v.upgradeByVideoInfo(videoInfo('sm1', {count:{view:1,comment:2,mylist:3,like:12}, cardAccess:{paid:true,member:true,premium:false}}));
     assert.strictEqual(v.count.like, 12);
-    assert.strictEqual(v.isMemberOnly, true);
+    assert.strictEqual(v.isMemberOnly, false);
+    assert.strictEqual(v.isMemberFree, true);
     v.updateByVideoInfo(videoInfo('sm1',{count:{view:1,comment:2,mylist:3,like:0},cardAccess:{paid:false,member:false,premium:true}}));
     assert.strictEqual(v.count.like, 0);
     assert.strictEqual(v.isPaymentRequired, false);
@@ -66,4 +67,24 @@ describe('Task222 video card metadata', () => {
     assert(!c.View.build(unknown).includes('likeCount'));
     assert(!c.View.build(unknown).includes('\u6709\u6599'));
   });
+});
+
+describe('Task301 access metadata preserves payment and free entitlement separately', () => {
+  for (const paid of [false, true]) {
+    for (const member of [false, true]) {
+      for (const premium of [false, true]) {
+        it(`round-trips paid=${paid}, member=${member}, premium=${premium}`, () => {
+          const {VideoListItem, videoInfo} = createPlaylistContext();
+          const v = VideoListItem.createBlankInfo('sm1');
+          v.upgradeByVideoInfo(videoInfo('sm1', {cardAccess: {paid, member, premium}}));
+          const restored = new VideoListItem(plain(v.serialize()));
+          assert.strictEqual(restored.isPaymentRequired, paid);
+          assert.strictEqual(restored.isMemberFree, member);
+          assert.strictEqual(restored.isPremiumFree, premium);
+          assert.strictEqual(restored.isMemberOnly, !paid && member);
+          assert.strictEqual(restored.isPremiumOnly, !paid && premium);
+        });
+      }
+    }
+  }
 });

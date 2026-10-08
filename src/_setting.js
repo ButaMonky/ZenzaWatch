@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.39-task301
+// @version     0.3.40-task314
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -20,6 +20,7 @@ import {Emitter, Handler} from '../packages/lib/src/Emitter';
 import {SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsByCategory} from '../packages/zenza/src/ShortcutActions';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
+import {RelatedMenuSettings} from './RelatedMenuSettings';
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
 ((window) => { const self = window;
@@ -36,6 +37,7 @@ const $ = uq;
 //@require SHORTCUT_ACTIONS
 //@require ScreenFilter
 //@require ZenzaCommentHistorySettings
+//@require RelatedMenuSettings
     window.ZenzaAdvancedSettings = {
       config: Config
     };
@@ -352,6 +354,12 @@ const $ = uq;
         this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({window, config});
         this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings(
           $panel.find('.commentHistorySettingsContainer')[0], {preferences: this._historyPreferences}
+        );
+        // Task314: mount only after legacy input/checkbox handlers have scanned their inputs.
+        // The custom link editor owns its draft; unrelated settings keep their old handlers.
+        this._relatedMenuLinks = RelatedMenuSettings.mount(
+          $panel.find('.relatedMenuCustomLinksContainer')[0],
+          {config, actions: RelatedMenuActions}
         );
         $panel.toggleClass('debug', config.props.debug);
       }
@@ -1061,6 +1069,8 @@ const $ = uq;
               連続再生中は提供画面を表示しない（すぐ次の動画へ進む）
             </label>
           </div>
+
+          <div class="relatedMenuCustomLinksContainer"></div>
 
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>
           <div class="commentHistorySettingsContainer"></div>

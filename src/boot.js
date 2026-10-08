@@ -39,16 +39,30 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
         URL.revokeObjectURL(src);
         script.remove();
       };
+      const runDirectly = () => {
+        // Strict external-site CSP (notably Google Search) can block blob:
+        // script injection. Try the extension's own execution realm instead.
+        if (window.ZenzaWatch) { return; }
+        Promise.resolve()
+          .then(() => monkey(PRODUCT, encodeURIComponent(START_PAGE_QUERY)))
+          .catch(err => console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err));
+      };
       const script = Object.assign(document.createElement('script'), {
         id: `${PRODUCT}Loader`,
         type: 'text/javascript',
         src,
         onload: handler,
-        onerror: handler
+        onerror: () => {
+          handler();
+          runDirectly();
+        }
       });
-      // script.append(
-      //   `(${monkey})('${PRODUCT}', '${encodeURIComponent(START_PAGE_QUERY)}');`);
-      document.head.append(script);
+      try {
+        document.head.append(script);
+      } catch (_) {
+        handler();
+        runDirectly();
+      }
     }
 //@require ../packages/lib/src/nico/modernLazyload.js
   }

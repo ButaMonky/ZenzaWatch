@@ -1089,6 +1089,10 @@ class TagItemMenu extends HTMLElement {
           font-size: 0.8em;
           font-weight: bolder;
         }
+        /* Keep the existing font and styling, changing only the article-present glyph. */
+        .has-nicodic .toggle::after {
+          content: '百';
+        }
 
         .menu {
           display: none;

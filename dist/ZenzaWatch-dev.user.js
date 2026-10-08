@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.186-task309
+// @version        2.7.188-task311
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-08 17:03Z
+// build: 2026-10-08 17:49Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.186-task309';
+    var VER = '2.7.188-task311';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-08 17:03Z';
+    var BUILD = '2026-10-08 17:49Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -20933,6 +20933,18 @@ util.addStyle(`
 		opacity: 1;
 		background: #000;
 	}
+	/* "Always hide" must take precedence over the activity timer. Keep the
+		directly hovered/focused control strip reachable so users can change back. */
+	body[data-fullscreen-control-bar-mode="always-hide"] .is-controlBarActive .videoControlBar,
+	body[data-fullscreen-control-bar-mode="always-hide"] .volumeChanging .videoControlBar {
+		opacity: 0;
+		background: none;
+	}
+	body[data-fullscreen-control-bar-mode="always-hide"] .videoControlBar:hover,
+	body[data-fullscreen-control-bar-mode="always-hide"] .videoControlBar:focus-within {
+		opacity: 1;
+		background: #000;
+	}
 	.fullscreenControlBarModeMenu {
 		display: inline-block;
 	}
@@ -32751,7 +32763,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 		let onMouseMove = this._onMouseMove.bind(this);
 		let onMouseMoveEnd = _.debounce(this._onMouseMoveEnd.bind(this), 400);
 		let onControlBarActive = this._onControlBarActive.bind(this);
-		let onControlBarIdle = this._onControlBarIdleDebounced = _.debounce(this._onControlBarIdle.bind(this), 3000);
+		this._onControlBarIdleDebounced = _.debounce(this._onControlBarIdle.bind(this), 3000);
+		this._onControlBarIdleDebouncedDefault = _.debounce(this._onControlBarIdle.bind(this), 400);
 		container.addEventListener('mousemove', _.throttle(e => {
 			if (e.buttons === 0 && lastX === e.screenX && lastY === e.screenY) {
 				return;
@@ -32761,7 +32774,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 			onMouseMove(e);
 			onMouseMoveEnd(e);
 			onControlBarActive(e);
-			onControlBarIdle(e);
+			this._scheduleControlBarIdle();
 		}, 100));
 		$dialog
 			.on('dblclick', e => {
@@ -33260,6 +33273,18 @@ class NicoVideoPlayerDialogView extends Emitter {
 		this.removeClass('is-mouseMoving');
 		this._isMouseMoving = false;
 	}
+	_scheduleControlBarIdle() {
+		const isSmall = this._state.screenMode === 'small' && !Fullscreen.now();
+		const small = this._onControlBarIdleDebounced;
+		const regular = this._onControlBarIdleDebouncedDefault;
+		if (isSmall) {
+			regular?.cancel();
+			small?.();
+		} else {
+			small?.cancel();
+			regular?.();
+		}
+	}
 	_onControlBarActive() {
 		if (this._isControlBarActive) {
 			return;
@@ -33303,9 +33328,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 	}
 	_onVideoPause() {
 		this._onControlBarActive();
-		if (this._onControlBarIdleDebounced) {
-			this._onControlBarIdleDebounced();
-		}
+		this._scheduleControlBarIdle();
 	}
 	_onVideoStalled() {
 	}
@@ -33323,6 +33346,9 @@ class NicoVideoPlayerDialogView extends Emitter {
 	}
 	_onScreenModeChange() {
 		this._applyScreenMode();
+		if (this._isControlBarActive) {
+			this._scheduleControlBarIdle();
+		}
 	}
 	_getStateClassNameTable() {
 		return this._classNameTable = this._classNameTable || objUtil.toMap({
@@ -37150,7 +37176,14 @@ class VariablesMapper {
 		this.emitter = new Emitter();
 		const update = _.debounce(this.update.bind(this), 500);
 		Object.keys(this.state).forEach(key =>
-			config.onkey(key, () => update(key)));
+			config.onkey(key, () => {
+				if (key === 'fullscreenControlBarMode') {
+					update.cancel();
+					this.update();
+				} else {
+					update();
+				}
+			}));
 		update();
 	}
 	on(...args) {
@@ -39724,6 +39757,10 @@ class TagItemMenu extends HTMLElement {
 					left: 0;
 					font-size: 0.8em;
 					font-weight: bolder;
+				}
+				/* Keep the existing font and styling, changing only the article-present glyph. */
+				.has-nicodic .toggle::after {
+					content: '百';
 				}
 				.menu {
 					display: none;
@@ -44329,7 +44366,42 @@ class HoverMenu {
 		return this._playerPromise;
 	}
 	_closest(target) {
-		return target?.closest?.('a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],.UadVideoItem-link');
+		if (!target?.closest) { return null; }
+		const selector = location.host.includes('google') ?
+			'a[href],a[data-href]' :
+			'a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],[data-anchor-href],.UadVideoItem-link';
+		return target.closest(selector);
+	}
+	_getWatchReference(target) {
+		if (!target) { return null; }
+		const candidates = [
+			target.getAttribute?.('data-href'),
+			target.getAttribute?.('data-anchor-href'),
+			target.getAttribute?.('href'),
+			target.href
+		];
+		for (const candidate of candidates) {
+			if (typeof candidate !== 'string' || !candidate) { continue; }
+			let url;
+			try {
+				url = new URL(candidate, location.href);
+				if (/^(?:www\.)?google\.(?:com|co\.jp)$/.test(url.hostname) &&
+					url.pathname === '/url') {
+					const destination = url.searchParams.get('url') || url.searchParams.get('q');
+					if (!destination || !/^https?:\/\//.test(destination)) { continue; }
+					url = new URL(destination);
+				}
+			} catch (_) { continue; }
+			if (!/^https?:$/.test(url.protocol) ||
+				!['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname)) {
+				continue;
+			}
+			const watchId = nicoUtil.getWatchId(url.href);
+			if (watchId && /^[a-z0-9]+$/.test(watchId) && !watchId.startsWith('lv')) {
+				return {watchId, url};
+			}
+		}
+		return null;
 	}
 	_onHover (e) {
 		const target = this._closest(e.target);
@@ -44351,20 +44423,10 @@ class HoverMenu {
 		if (!target || target.classList.contains('noHoverMenu')) {
 			return;
 		}
-		let href = target.dataset.href || target.href;
-		let watchId = nicoUtil.getWatchId(href);
-		let host = target.hostname;
-		if (!['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(host)) {
-			return;
-		}
-		this._query = nicoUtil.parseWatchQuery((target.search || '').substr(1));
-		if (!watchId || !watchId.match(/^[a-z0-9]+$/)) {
-			return;
-		}
-		if (watchId.startsWith('lv')) {
-			return;
-		}
-		this._watchId = watchId;
+		const ref = this._getWatchReference(target);
+		if (!ref) { return; }
+		this._query = nicoUtil.parseWatchQuery(ref.url.search.slice(1));
+		this._watchId = ref.watchId;
 		const offset = target.getBoundingClientRect();
 		this._$view.css({
 			top: cssUtil.px(offset.top + window.pageYOffset),
@@ -44416,11 +44478,9 @@ class HoverMenu {
 			const action = path.find(node => node?.matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'));
 			const primaryWatchButton = action?.matches?.('.VideoIntroductionPlayerContainer-watchPageButton');
 			if (action && !primaryWatchButton && action !== target && (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return; }
-			let url;
-			try { url = new URL(target.dataset.href || target.href, location.href); } catch (_) { return; }
-			if (!/^https?:$/.test(url.protocol) || !['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname)) { return; }
-			const watchId = nicoUtil.getWatchId(url.href);
-			if (!watchId || !/^[a-z0-9]+$/.test(watchId) || watchId.startsWith('lv')) { return; }
+			const ref = this._getWatchReference(target);
+			if (!ref) { return; }
+			const {watchId, url} = ref;
 			this._pagePreviewGuard?.claim(target);
 			e.preventDefault();
 			e.stopImmediatePropagation();
@@ -44950,6 +45010,25 @@ const replaceRedirectLinks = async () => {
 	};
 	return {initialize};
 })();
+const initializeExternalSite = ({
+	host, pathname, initializePlayer, connect, readUser, onError = () => {}
+}) => {
+	let started = false;
+	const start = () => {
+		if (started) { return Promise.resolve(); }
+		started = true;
+		return Promise.resolve().then(initializePlayer);
+	};
+	const isGoogleSearch = /^www\.google\.(?:com|co\.jp)$/.test(host) && pathname === '/search';
+	if (isGoogleSearch) {
+		start().catch(onError);
+	}
+	return Promise.resolve()
+		.then(connect)
+		.then(readUser)
+		.catch(onError)
+		.finally(start);
+};
 
 const CustomElements = {};
 CustomElements.initialize = (() => {
@@ -45297,25 +45376,29 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       return initialize();
     }
 
-    uq.ready().then(() => NicoVideoApi.configBridge(Config)).then(() => {
-      window.console.log('%cZenzaWatch Bridge: %s', 'background: lightgreen;', location.host);
-      if (document.getElementById('siteHeaderNotification')) {
-        return initialize();
-      }
-      NicoVideoApi.fetch('https://www.nicovideo.jp/',{credentials: 'include'})
-        .then(r => r.text())
-        .then(result => {
-          const dom = new DOMParser().parseFromString(result, 'text/html');
-
-          const userData = JSON.parse(dom.querySelector('#CommonHeader').dataset.commonHeader).initConfig.user;
-          const isLogin = !!userData.isLogin;
-          const isPremium = !!userData.isPremium;
-          window.console.log('isLogin: %s isPremium: %s', isLogin, isPremium);
-          nicoUtil.isLogin = () => isLogin;
-          nicoUtil.isPremium = util.isPremium = () => isPremium;
-          initialize();
-        });
-    }, err => window.console.log('ZenzaWatch Bridge disabled', err));
+    uq.ready().then(() => initializeExternalSite({
+      host: location.hostname,
+      pathname: location.pathname,
+      initializePlayer: () => initialize(),
+      connect: () => NicoVideoApi.configBridge(Config),
+      readUser: async () => {
+        window.console.log('%cZenzaWatch Bridge: %s', 'background: lightgreen;', location.host);
+        if (document.getElementById('siteHeaderNotification')) { return; }
+        const response = await NicoVideoApi.fetch('https://www.nicovideo.jp/', {credentials: 'include'});
+        const html = await response.text();
+        const dom = new DOMParser().parseFromString(html, 'text/html');
+        // The current site may not expose the legacy #CommonHeader shape.
+        const commonHeader = dom.querySelector('#CommonHeader')?.dataset?.commonHeader;
+        if (!commonHeader) { return; }
+        const userData = JSON.parse(commonHeader)?.initConfig?.user;
+        if (!userData) { return; }
+        const isLogin = !!userData.isLogin;
+        const isPremium = !!userData.isPremium;
+        nicoUtil.isLogin = () => isLogin;
+        nicoUtil.isPremium = util.isPremium = () => isPremium;
+      },
+      onError: err => window.console.warn('ZenzaWatch external site bridge unavailable', err?.message || err)
+    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));
 
 
   }; // end of monkey
@@ -48012,14 +48095,28 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 				URL.revokeObjectURL(src);
 				script.remove();
 			};
+			const runDirectly = () => {
+				if (window.ZenzaWatch) { return; }
+				Promise.resolve()
+					.then(() => monkey(PRODUCT, encodeURIComponent(START_PAGE_QUERY)))
+					.catch(err => console.warn('ZenzaWatch direct bootstrap unavailable', err?.message || err));
+			};
 			const script = Object.assign(document.createElement('script'), {
 				id: `${PRODUCT}Loader`,
 				type: 'text/javascript',
 				src,
 				onload: handler,
-				onerror: handler
+				onerror: () => {
+					handler();
+					runDirectly();
+				}
 			});
-			document.head.append(script);
+			try {
+				document.head.append(script);
+			} catch (_) {
+				handler();
+				runDirectly();
+			}
 		}
 (() => { // 古いページで使われているがパフォーマンス的にちょっとアレなのでリプレースする
 	if (window !== top || location.host !== 'www.nicovideo.jp') {

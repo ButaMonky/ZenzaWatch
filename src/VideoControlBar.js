@@ -1538,6 +1538,19 @@ util.addStyle(`
     background: #000;
   }
 
+  /* "Always hide" must take precedence over the activity timer. Keep the
+     directly hovered/focused control strip reachable so users can change back. */
+  body[data-fullscreen-control-bar-mode="always-hide"] .is-controlBarActive .videoControlBar,
+  body[data-fullscreen-control-bar-mode="always-hide"] .volumeChanging .videoControlBar {
+    opacity: 0;
+    background: none;
+  }
+  body[data-fullscreen-control-bar-mode="always-hide"] .videoControlBar:hover,
+  body[data-fullscreen-control-bar-mode="always-hide"] .videoControlBar:focus-within {
+    opacity: 1;
+    background: #000;
+  }
+
   .fullscreenControlBarModeMenu {
     display: inline-block;
   }

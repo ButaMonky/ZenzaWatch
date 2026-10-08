@@ -264,18 +264,13 @@ class NicoVideoPlayerDialogView extends Emitter {
     // 使われている（Task 039でこの400msに揃えられた経緯がある）ため、
     // ここは変更しない。
     let onMouseMoveEnd = _.debounce(this._onMouseMoveEnd.bind(this), 400);
-    // コントロールバー専用の自動非表示（2026-09-11追加）。is-mouseMovingとは
-    // 別のクラス・別のタイマーにする。理由: 「一時停止時の一時表示・マウスを
-    // 外した時の非表示までの時間を、一般的な動画プレイヤーの目安（数秒）に
-    // 合わせてほしい」というユーザー要望があった一方、is-mouseMoving自体の
-    // 400msを直接延ばすと、上記のホバーメニュー等の表示タイミングまで遅く
-    // なってしまう（無関係な機能への副作用）。そのためコントロールバーの
-    // 表示トリガーだけを切り離し、3000ms（3秒）のdebounceにした。
-    // _onVideoPauseからも同じインスタンスを使うことで、「マウスを動かさなく
-    // なってから消えるまでの時間」と「一時停止した時に一時表示されてから
-    // 消えるまでの時間」を常に一致させている。
+    // コントロールバー専用の自動非表示はマウスメニュー用の400ms判定と
+    // 独立させる。小画面だけ3秒、それ以外は従来の0.4秒とする。
+    // 一時停止時も、現在の表示モードに応じて同じ時間を使う。
     let onControlBarActive = this._onControlBarActive.bind(this);
-    let onControlBarIdle = this._onControlBarIdleDebounced = _.debounce(this._onControlBarIdle.bind(this), 3000);
+    // Keep the extended delay exclusively for the floating small player.
+    this._onControlBarIdleDebounced = _.debounce(this._onControlBarIdle.bind(this), 3000);
+    this._onControlBarIdleDebouncedDefault = _.debounce(this._onControlBarIdle.bind(this), 400);
     container.addEventListener('mousemove', _.throttle(e => {
       if (e.buttons === 0 && lastX === e.screenX && lastY === e.screenY) {
         return;
@@ -285,7 +280,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       onMouseMove(e);
       onMouseMoveEnd(e);
       onControlBarActive(e);
-      onControlBarIdle(e);
+      this._scheduleControlBarIdle();
     }, 100));
 
     $dialog
@@ -1021,6 +1016,20 @@ class NicoVideoPlayerDialogView extends Emitter {
     this.removeClass('is-mouseMoving');
     this._isMouseMoving = false;
   }
+  // Use the original 400ms outside small mode, and retain 3000ms only
+  // for the floating small player. Cancel the opposite timer on mode changes.
+  _scheduleControlBarIdle() {
+    const isSmall = this._state.screenMode === 'small' && !Fullscreen.now();
+    const small = this._onControlBarIdleDebounced;
+    const regular = this._onControlBarIdleDebouncedDefault;
+    if (isSmall) {
+      regular?.cancel();
+      small?.();
+    } else {
+      small?.cancel();
+      regular?.();
+    }
+  }
   // コントロールバー専用の表示トリガー（2026-09-11追加）。is-mouseMovingとは
   // 別に持つ理由は_initializeDom側のコメント参照。
   _onControlBarActive() {
@@ -1068,15 +1077,11 @@ class NicoVideoPlayerDialogView extends Emitter {
     // 「小」モード・フルスクリーン等で下部のコントロールバーを自動非表示に
     // している時、一時停止した瞬間はマウスを動かした時と全く同じ扱いで一時的に
     // 再表示する（2026-09-11 ユーザー要望）。コントロールバー専用の
-    // is-controlBarActiveを使い、消えるまでの待ち時間もマウス移動時と同一の
-    // debounceインスタンス（3000ms）を共有しているため、「マウスを外した時に
-    // 消えるまでの時間」と常に完全に一致する（タイマーの値を別々に持って
-    // 食い違う、という事態が起きない）。実際にマウスが重なっていれば通常の
-    // :hoverがそのまま効き続ける。
+    // is-controlBarActiveを使い、現在の画面モードのマウス移動と同じ
+    // タイマー（小3秒、それ以外0.4秒）で解除する。
+    // マウスがバー上にあれば従来の:hoverを維持する。
     this._onControlBarActive();
-    if (this._onControlBarIdleDebounced) {
-      this._onControlBarIdleDebounced();
-    }
+    this._scheduleControlBarIdle();
   }
   _onVideoStalled() {
   }
@@ -1094,6 +1099,9 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   _onScreenModeChange() {
     this._applyScreenMode();
+    if (this._isControlBarActive) {
+      this._scheduleControlBarIdle();
+    }
   }
   _getStateClassNameTable() {
     // TODO: テーブルなくても対応できるようにcss名を整理
@@ -5367,7 +5375,15 @@ class VariablesMapper {
 
     const update = _.debounce(this.update.bind(this), 500);
     Object.keys(this.state).forEach(key =>
-      config.onkey(key, () => update(key)));
+      config.onkey(key, () => {
+        // Toolbar-mode selection should apply immediately, not half a second later.
+        if (key === 'fullscreenControlBarMode') {
+          update.cancel();
+          this.update();
+        } else {
+          update();
+        }
+      }));
     update();
   }
 

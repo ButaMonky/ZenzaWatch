@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.186-task309
+// @version        2.7.188-task311
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -79,6 +79,7 @@ import {TagListView} from './TagListView';
 import {VideoInfoPanel} from './VideoInfoPanel';
 import {initializeGinzaSlayer} from './GinzaSlayer';
 import {initialize} from './initializer';
+import {initializeExternalSite} from '../packages/zenza/src/init/externalStartup';
 import {CustomElements} from '../packages/zenza/src/parts/CustomElements';
 import {CONSTANT} from './constant';
 import {TextLabel} from '../packages/lib/src/ui/TextLabel';
@@ -296,6 +297,7 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 //@require initializeGinzaSlayer
 
 //@require initialize
+//@require initializeExternalSite
 
 //@require CustomElements
 
@@ -310,25 +312,29 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       return initialize();
     }
 
-    uq.ready().then(() => NicoVideoApi.configBridge(Config)).then(() => {
-      window.console.log('%cZenzaWatch Bridge: %s', 'background: lightgreen;', location.host);
-      if (document.getElementById('siteHeaderNotification')) {
-        return initialize();
-      }
-      NicoVideoApi.fetch('https://www.nicovideo.jp/',{credentials: 'include'})
-        .then(r => r.text())
-        .then(result => {
-          const dom = new DOMParser().parseFromString(result, 'text/html');
-
-          const userData = JSON.parse(dom.querySelector('#CommonHeader').dataset.commonHeader).initConfig.user;
-          const isLogin = !!userData.isLogin;
-          const isPremium = !!userData.isPremium;
-          window.console.log('isLogin: %s isPremium: %s', isLogin, isPremium);
-          nicoUtil.isLogin = () => isLogin;
-          nicoUtil.isPremium = util.isPremium = () => isPremium;
-          initialize();
-        });
-    }, err => window.console.log('ZenzaWatch Bridge disabled', err));
+    uq.ready().then(() => initializeExternalSite({
+      host: location.hostname,
+      pathname: location.pathname,
+      initializePlayer: () => initialize(),
+      connect: () => NicoVideoApi.configBridge(Config),
+      readUser: async () => {
+        window.console.log('%cZenzaWatch Bridge: %s', 'background: lightgreen;', location.host);
+        if (document.getElementById('siteHeaderNotification')) { return; }
+        const response = await NicoVideoApi.fetch('https://www.nicovideo.jp/', {credentials: 'include'});
+        const html = await response.text();
+        const dom = new DOMParser().parseFromString(html, 'text/html');
+        // The current site may not expose the legacy #CommonHeader shape.
+        const commonHeader = dom.querySelector('#CommonHeader')?.dataset?.commonHeader;
+        if (!commonHeader) { return; }
+        const userData = JSON.parse(commonHeader)?.initConfig?.user;
+        if (!userData) { return; }
+        const isLogin = !!userData.isLogin;
+        const isPremium = !!userData.isPremium;
+        nicoUtil.isLogin = () => isLogin;
+        nicoUtil.isPremium = util.isPremium = () => isPremium;
+      },
+      onError: err => window.console.warn('ZenzaWatch external site bridge unavailable', err?.message || err)
+    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));
 
 
   }; // end of monkey

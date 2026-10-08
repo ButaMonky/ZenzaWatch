@@ -55,7 +55,46 @@ class HoverMenu {
     return this._playerPromise;
   }
   _closest(target) {
-    return target?.closest?.('a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],.UadVideoItem-link');
+    if (!target?.closest) { return null; }
+    // The official search result uses a div[data-anchor-href] for its entire
+    // card; thumbnail/title are nested anchors but caption/date are not.
+    // Google can wrap video destinations in /url redirects.
+    const selector = location.host.includes('google') ?
+      'a[href],a[data-href]' :
+      'a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],[data-anchor-href],.UadVideoItem-link';
+    return target.closest(selector);
+  }
+  _getWatchReference(target) {
+    if (!target) { return null; }
+    const candidates = [
+      target.getAttribute?.('data-href'),
+      target.getAttribute?.('data-anchor-href'),
+      target.getAttribute?.('href'),
+      target.href
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate !== 'string' || !candidate) { continue; }
+      let url;
+      try {
+        url = new URL(candidate, location.href);
+        // Resolve one Google /url?url= or ?q= hop, but never arbitrary hosts.
+        if (/^(?:www\.)?google\.(?:com|co\.jp)$/.test(url.hostname) &&
+          url.pathname === '/url') {
+          const destination = url.searchParams.get('url') || url.searchParams.get('q');
+          if (!destination || !/^https?:\/\//.test(destination)) { continue; }
+          url = new URL(destination);
+        }
+      } catch (_) { continue; }
+      if (!/^https?:$/.test(url.protocol) ||
+        !['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname)) {
+        continue;
+      }
+      const watchId = nicoUtil.getWatchId(url.href);
+      if (watchId && /^[a-z0-9]+$/.test(watchId) && !watchId.startsWith('lv')) {
+        return {watchId, url};
+      }
+    }
+    return null;
   }
   _onHover (e) {
     const target = this._closest(e.target);
@@ -77,22 +116,10 @@ class HoverMenu {
     if (!target || target.classList.contains('noHoverMenu')) {
       return;
     }
-    let href = target.dataset.href || target.href;
-    let watchId = nicoUtil.getWatchId(href);
-    let host = target.hostname;
-    if (!['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(host)) {
-      return;
-    }
-    this._query = nicoUtil.parseWatchQuery((target.search || '').substr(1));
-
-    if (!watchId || !watchId.match(/^[a-z0-9]+$/)) {
-      return;
-    }
-    if (watchId.startsWith('lv')) {
-      return;
-    }
-
-    this._watchId = watchId;
+    const ref = this._getWatchReference(target);
+    if (!ref) { return; }
+    this._query = nicoUtil.parseWatchQuery(ref.url.search.slice(1));
+    this._watchId = ref.watchId;
 
     const offset = target.getBoundingClientRect();
     this._$view.css({
@@ -150,11 +177,9 @@ class HoverMenu {
       const action = path.find(node => node?.matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'));
       const primaryWatchButton = action?.matches?.('.VideoIntroductionPlayerContainer-watchPageButton');
       if (action && !primaryWatchButton && action !== target && (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return; }
-      let url;
-      try { url = new URL(target.dataset.href || target.href, location.href); } catch (_) { return; }
-      if (!/^https?:$/.test(url.protocol) || !['www.nicovideo.jp', 'sp.nicovideo.jp', 'nico.ms'].includes(url.hostname)) { return; }
-      const watchId = nicoUtil.getWatchId(url.href);
-      if (!watchId || !/^[a-z0-9]+$/.test(watchId) || watchId.startsWith('lv')) { return; }
+      const ref = this._getWatchReference(target);
+      if (!ref) { return; }
+      const {watchId, url} = ref;
       this._pagePreviewGuard?.claim(target);
       e.preventDefault();
       e.stopImmediatePropagation();

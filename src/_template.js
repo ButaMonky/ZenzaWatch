@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.189-task312
+// @version        2.7.190-task313
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -77,6 +77,7 @@ import {CommentInputPanel} from './CommentInputPanel';
 // import {SettingPanel} from './SettingPanel';
 import {TagListView} from './TagListView';
 import {VideoInfoPanel} from './VideoInfoPanel';
+import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 import {initializeGinzaSlayer} from './GinzaSlayer';
 import {initialize} from './initializer';
 import {initializeExternalSite} from '../packages/zenza/src/init/externalStartup';
@@ -163,6 +164,9 @@ await Config.promise('restore');
       state: {},
       dll
     };
+    //@require RelatedMenuActions
+    // Supported integration point for trusted external userscripts.
+    ZenzaWatch.relatedMenu = RelatedMenuActions;
     Promise.all([//https://esm.run/lit@2.0.2/html.js
       dimport('https://esm.run/lit@2.0.2/html.js'),
       dimport('https://esm.run/lit@2.0.2/directives/repeat'),

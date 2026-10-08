@@ -15,6 +15,7 @@ function setup() {
 function configSchema() {
  const c=createContext({ZenzaCommentHistorySettings,PRODUCT:'ZenzaWatch',navigator:{},location:{host:'www.nicovideo.jp'},localStorage:{},buildDefaultKeyConfig:()=>({}),DataStorage:{create(defaults,options){return {default:defaults,options};}}});
  c.CommentDisplayBudget=loadClass('packages/zenza/src/commentLayer/CommentDisplayBudget.js','CommentDisplayBudget',c); // Task 206
+ c.RelatedMenuActions=loadClass('packages/zenza/src/menu/RelatedMenuActions.js','RelatedMenuActions',Object.assign(c,{URL}));
  run('const Config = '+extract('src/Config.js','Config','var')+';this.config=Config;',c);
  return c.config;
 }
@@ -43,6 +44,21 @@ describe('Config import validation',()=>{
   }
  });
  it('accepts every existing default setting',()=>{const {options,default:d}=configSchema();for(const k of Object.keys(d))assert.strictEqual(options.validateImport(k,d[k]),true,k);});
+ it('validates and round-trips custom related-menu links without executing code',()=>{
+  const {options,default:d}=configSchema(),key='relatedMenu.customLinks';
+  assert.deepStrictEqual(Array.from(d[key]),[]);
+  const good=[{id:'stat',label:'統計',url:'https://example.com/video/{videoId}',enabled:true,openInNewTab:false}];
+  assert.strictEqual(options.validateImport(key,good),true);
+  for(const bad of [null,'javascript:alert(1)',[{id:'script',label:'no',url:'javascript:alert(1)'}],
+    [{id:'bad',label:'x',url:'https://example.com/{unknown}'}]]) {
+    assert.strictEqual(options.validateImport(key,bad),false,JSON.stringify(bad));
+  }
+  const s=setup();s.default=d;s.options=options;s._data={...d};s.props=Object.fromEntries(Object.keys(d).map(k=>[k,null]));
+  const json=s.exportJson();assert.strictEqual(Object.hasOwn(JSON.parse(json),key),false); // defaults are omitted
+  s.import({[key]:good});
+  assert.strictEqual(s.getValue(key)[0].id,'stat');
+  assert.strictEqual(JSON.parse(s.exportJson())[key][0].url,good[0].url);
+ });
 });
 
 

@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.189-task312
+// @version        2.7.190-task313
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-08 18:50Z
+// build: 2026-10-08 19:29Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.189-task312';
+    var VER = '2.7.190-task313';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-08 18:50Z';
+    var BUILD = '2026-10-08 19:29Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -2385,6 +2385,172 @@ class CommentDisplayBudget {
 		return {admitted, suppressed, tiers};
 	}
 }
+class RelatedMenuActions {
+	static get CONFIG_KEY() { return 'relatedMenu.customLinks'; }
+	static get VARIABLES() {
+		return ['videoId', 'watchId', 'videoUrl', 'videoTitle',
+			'uploaderUserId', 'uploaderChannelId', 'uploaderName', 'currentTime'];
+	}
+	static get _actions() {
+		if (!this.__actions) { this.__actions = new Map(); }
+		return this.__actions;
+	}
+	static get _listeners() {
+		if (!this.__listeners) { this.__listeners = new Set(); }
+		return this.__listeners;
+	}
+	static _notify() {
+		for (const listener of this._listeners) {
+			try { listener(); } catch (_) { /* one observer must not break the others */ }
+		}
+	}
+	static onChange(listener) {
+		if (typeof listener !== 'function') { throw new TypeError('listener must be a function'); }
+		this._listeners.add(listener);
+		return () => this._listeners.delete(listener);
+	}
+	static _safeId(id) {
+		return typeof id === 'string' && /^[a-z0-9][a-z0-9._:-]{0,63}$/i.test(id);
+	}
+	static _validateUrlTemplate(template) {
+		if (typeof template !== 'string' || !template.startsWith('http') ||
+			template.length > 2048 || /[\r\n\t]/.test(template)) { return false; }
+		const tokens = template.match(/\{[^{}]*\}/g) || [];
+		if (tokens.some(token => !this.VARIABLES.includes(token.slice(1, -1)))) { return false; }
+		if (/[{}]/.test(template.replace(/\{[^{}]*\}/g, ''))) { return false; }
+		const sample = Object.fromEntries(this.VARIABLES.map(key => [key, 'sample']));
+		return !!this.resolveUrl(template, sample).url;
+	}
+	static validateLinks(input) {
+		const errors = [];
+		if (!Array.isArray(input)) {
+			return {valid: false, errors: ['Expected an array of links'], links: []};
+		}
+		if (input.length > 40) { errors.push('Maximum 40 links'); }
+		const links = [];
+		const ids = new Set();
+		input.slice(0, 40).forEach((item, index) => {
+			if (!item || typeof item !== 'object' || Array.isArray(item) ||
+					!this._safeId(item.id) || ids.has(item.id) ||
+					typeof item.label !== 'string' || !item.label.trim() ||
+					item.label.length > 80 ||
+					!this._validateUrlTemplate(item.url) ||
+					(item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
+					(item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean')) {
+				errors.push('Invalid custom link at index ' + index);
+				return;
+			}
+			ids.add(item.id);
+			links.push({
+				id: item.id, label: item.label.trim(), url: item.url,
+				enabled: item.enabled !== false,
+				openInNewTab: item.openInNewTab !== false
+			});
+		});
+		return {valid: errors.length === 0, errors, links};
+	}
+	static getLinks(input) { return this.validateLinks(input).links; }
+	static makeContext(videoInfo, currentTime = 0) {
+		if (!videoInfo || typeof videoInfo !== 'object') { return Object.freeze({}); }
+		let owner;
+		try { owner = videoInfo.owner || {}; } catch (_) { owner = {}; }
+		const validVideoId = value => {
+			const text = value == null ? '' : String(value);
+			return /^(?:sm|nm|so|ss)?[0-9]+$/.test(text) ? text : '';
+		};
+		const videoId = validVideoId(videoInfo.videoId);
+		const watchId = validVideoId(videoInfo.watchId);
+		const user = owner.type === 'user';
+		const channel = owner.type === 'channel';
+		const id = (typeof owner.id === 'number' || typeof owner.id === 'string') &&
+			String(owner.id).trim() && String(owner.id) !== '0' ?
+				String(owner.id).trim() : '';
+		const sec = Number(currentTime);
+		return Object.freeze({
+			videoId, watchId,
+			videoUrl: watchId ? 'https://www.nicovideo.jp/watch/' + watchId : '',
+			videoTitle: typeof videoInfo.title === 'string' ? videoInfo.title : '',
+			uploaderUserId: user ? id : '',
+			uploaderChannelId: channel ? id : '',
+			uploaderName: user || channel ? (typeof owner.name === 'string' ? owner.name : '') : '',
+			currentTime: Number.isFinite(sec) && sec >= 0 ? String(Math.floor(sec)) : '0'
+		});
+	}
+	static resolveUrl(template, context = {}) {
+		if (typeof template !== 'string') { return {url: null, missing: []}; }
+		const missing = [];
+		const invalid = [];
+		const expanded = template.replace(/\{([^{}]+)\}/g, (_, name) => {
+			if (!this.VARIABLES.includes(name)) {
+				invalid.push(name);
+				return '';
+			}
+			const value = context[name];
+			if (value === undefined || value === null || String(value) === '') {
+				missing.push(name);
+				return '';
+			}
+			return encodeURIComponent(String(value));
+		});
+		if (invalid.length || missing.length || /[{}]/.test(expanded)) {
+			return {url: null, missing, invalid};
+		}
+		try {
+			const url = new URL(expanded);
+			if (!['https:', 'http:'].includes(url.protocol) || !url.hostname ||
+					url.username || url.password || url.href.length > 4096) {
+				return {url: null, missing, invalid: ['unsafe URL']};
+			}
+			return {url: url.href, missing: [], invalid: []};
+		} catch (_) {
+			return {url: null, missing, invalid: ['invalid URL']};
+		}
+	}
+	static register({id, label, action, available} = {}) {
+		if (!this._safeId(id) || typeof label !== 'string' ||
+				!label.trim() || label.length > 80 || typeof action !== 'function' ||
+				(available !== undefined && typeof available !== 'function')) {
+			throw new TypeError('Invalid related-menu action registration');
+		}
+		if (this._actions.has(id)) { throw new Error('Action already registered: ' + id); }
+		const entry = Object.freeze({id, label: label.trim(), action, available});
+		this._actions.set(id, entry);
+		this._notify();
+		return () => {
+			if (this._actions.get(id) === entry) { this.unregister(id); }
+		};
+	}
+	static unregister(id) {
+		const removed = this._actions.delete(id);
+		if (removed) { this._notify(); }
+		return removed;
+	}
+	static getActions(context) {
+		return [...this._actions.values()].map(item => {
+			let enabled = true;
+			if (item.available) {
+				try { enabled = !!item.available(context); } catch (_) { enabled = false; }
+			}
+			return {id: item.id, label: item.label, enabled};
+		});
+	}
+	static invoke(id, context) {
+		const entry = this._actions.get(id);
+		if (!entry || !this.getActions(context).some(item => item.id === id && item.enabled)) {
+			return false;
+		}
+		try {
+			const result = entry.action(context);
+			if (result && typeof result.catch === 'function') {
+				result.catch(() => console.warn('Related-menu custom action failed:', id));
+			}
+			return true;
+		} catch (_) {
+			console.warn('Related-menu custom action failed:', id);
+			return false;
+		}
+	}
+}
 const Config = (() => {
 	const DEFAULT_CONFIG = {
 		debug: false,
@@ -2422,6 +2588,7 @@ const Config = (() => {
 		enableStoryboardBar: false, // シーンサーチ
 		videoInfoPanelTab: 'videoInfoTab',
 		fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
+		'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
 		forceEconomy: false, // 動画を強制的にエコノミーモードで開く(HoverMenu.js/initializer.jsが参照)
 		enableFilter: true,
 		wordFilter: '',
@@ -2593,6 +2760,7 @@ const Config = (() => {
 				return value;
 			},
 			validateImport: (key, value) => {
+				if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
 				if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
 				if (key.startsWith('commentHistory.')) {
 					const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
@@ -3336,6 +3504,9 @@ const uq = uQuery;
       state: {},
       dll
     };
+// already required
+    // Supported integration point for trusted external userscripts.
+    ZenzaWatch.relatedMenu = RelatedMenuActions;
     Promise.all([//https://esm.run/lit@2.0.2/html.js
       dimport('https://esm.run/lit@2.0.2/html.js'),
       dimport('https://esm.run/lit@2.0.2/directives/repeat'),
@@ -39906,6 +40077,7 @@ if (window.customElements) {
 	window.customElements.define('zenza-tag-item-menu', TagItemMenu);
 }
 
+// already required
 class VideoInfoPanel extends Emitter {
 	constructor(params) {
 		super();
@@ -43939,6 +44111,8 @@ class RelatedInfoMenu extends BaseViewComponent {
 		this._state = {};
 		this._bound.update = this.update.bind(this);
 		this._bound._onBodyClick = _.debounce(this._onBodyClick.bind(this), 0);
+		this._unwatchCustomActions = RelatedMenuActions.onChange(() => this._renderCustomMenu());
+		Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
 		this.setState({isHeader});
 	}
 	_initDom(...args) {
@@ -43960,6 +44134,23 @@ class RelatedInfoMenu extends BaseViewComponent {
 		this._originalLink = shadow.querySelector('.originalLink');
 		this._twitterLink = shadow.querySelector('.twitterHashLink');
 		this._parentVideoLink = shadow.querySelector('.parentVideoLink');
+		this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
+		this._customRelatedItems = shadow.querySelector('.customRelatedItems');
+		this._customLinkById = new Map();
+		this._elm.summary.addEventListener('click', () => this._renderCustomMenu());
+		shadow.addEventListener('click', e => {
+			const link = e.target.closest('a[data-related-link-id]');
+			if (!link) { return; }
+			const item = this._customLinkById.get(link.dataset.relatedLinkId);
+			const result = item && RelatedMenuActions.resolveUrl(item.url, this._relatedContext());
+			if (!result || !result.url) {
+				e.preventDefault();
+				return;
+			}
+			link.href = result.url;
+			shadow.open = false;
+			this.emit('close');
+		});
 	}
 	_onBodyClick() {
 		const shadow = this._shadow || this._view;
@@ -43972,6 +44163,7 @@ class RelatedInfoMenu extends BaseViewComponent {
 		shadow.open = false;
 		this._currentWatchId = videoInfo.watchId;
 		this._currentVideoId = videoInfo.videoId;
+		this._currentVideoInfo = videoInfo;
 		this.setState({
 			isParentVideoExist: videoInfo.canOpenContentTree === true,
 			isCommunity: videoInfo.isCommunityVideo,
@@ -43984,7 +44176,57 @@ class RelatedInfoMenu extends BaseViewComponent {
 		this._twitterLink.setAttribute('href', `https://twitter.com/hashtag/${vid}`);
 		this._parentVideoLink.setAttribute('href',
 			`//commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+		this._renderCustomMenu();
 		this.emit('close');
+	}
+	_relatedContext() {
+		const currentTime = ZenzaWatch.debug?.videoControlBar?.player?.currentTime;
+		return RelatedMenuActions.makeContext(this._currentVideoInfo, currentTime);
+	}
+	_renderCustomMenu() {
+		if (!this._customRelatedGroup || !this._customRelatedItems) { return; }
+		const links = RelatedMenuActions.getLinks(Config.getValue(RelatedMenuActions.CONFIG_KEY))
+			.filter(item => item.enabled);
+		const context = this._relatedContext();
+		const actions = RelatedMenuActions.getActions(context);
+		const body = document.createDocumentFragment();
+		this._customLinkById.clear();
+		if (this._currentVideoInfo) {
+			for (const item of links) {
+				const li = document.createElement('li');
+				const resolved = RelatedMenuActions.resolveUrl(item.url, context);
+				const link = document.createElement(resolved.url ? 'a' : 'span');
+				link.className = resolved.url ? 'command customRelatedLink' : 'command customRelatedDisabled';
+				link.textContent = item.label;
+				if (resolved.url) {
+					link.href = resolved.url;
+					link.target = item.openInNewTab ? '_blank' : '_self';
+					link.rel = 'noopener noreferrer';
+					link.dataset.relatedLinkId = item.id;
+					this._customLinkById.set(item.id, item);
+				} else {
+					link.setAttribute('aria-disabled', 'true');
+					link.title = resolved.missing?.length ?
+						'未取得: ' + resolved.missing.join(', ') : 'URLを開けません';
+				}
+				li.appendChild(link);
+				body.appendChild(li);
+			}
+			for (const action of actions) {
+				const li = document.createElement('li');
+				const button = document.createElement('button');
+				button.type = 'button';
+				button.className = 'command customRelatedAction';
+				button.textContent = action.label;
+				button.dataset.command = 'run-custom-related-action';
+				button.dataset.param = action.id;
+				button.disabled = !action.enabled;
+				li.appendChild(button);
+				body.appendChild(li);
+			}
+		}
+		this._customRelatedItems.replaceChildren(body);
+		this._customRelatedGroup.hidden = this._customRelatedItems.children.length === 0;
 	}
 	_onCommand(command, param) {
 		let url;
@@ -44011,6 +44253,9 @@ class RelatedInfoMenu extends BaseViewComponent {
 				break;
 			case 'open-original-video':
 				super._onCommand('openNow', this._currentVideoId);
+				break;
+			case 'run-custom-related-action':
+				RelatedMenuActions.invoke(param, this._relatedContext());
 				break;
 			default:
 				super._onCommand(command, param);
@@ -44060,6 +44305,29 @@ RelatedInfoMenu._shadow_ = (`
 				content: '▷';
 				position: absolute;
 				transform: translate(-100%, 0);
+			}
+			.RelatedInfoMenu .customRelatedGroup[hidden] { display: none; }
+			.RelatedInfoMenu .customRelatedHeading {
+				display: block;
+				font-size: 0.85em;
+				opacity: 0.75;
+			}
+			.RelatedInfoMenu .customRelatedItems { padding-left: 14px; }
+			.RelatedInfoMenu .customRelatedDisabled {
+				opacity: 0.5;
+				cursor: not-allowed;
+			}
+			.RelatedInfoMenu .customRelatedAction {
+				background: none;
+				border: 0;
+				padding: 0;
+				font: inherit;
+				text-align: left;
+				cursor: pointer;
+			}
+			.RelatedInfoMenu .customRelatedAction:disabled {
+				opacity: 0.5;
+				cursor: not-allowed;
 			}
 				.RelatedInfoMenu .originalLinkMenu,
 				.RelatedInfoMenu .parentVideoMenu {
@@ -44143,6 +44411,10 @@ RelatedInfoMenu._shadow_ = (`
 					<li class="copyVideoWatchUrlMenu">
 						<span class="copyVideoWatchUrlLink command"
 							rel="noopener" data-command="copy-video-watch-url">動画URLをコピー</span>
+					</li>
+					<li class="customRelatedGroup" hidden>
+						<span class="customRelatedHeading">カスタムリンク・アクション</span>
+						<ul class="customRelatedItems"></ul>
 					</li>
 				</ul>
 			</div>

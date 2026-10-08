@@ -4,6 +4,7 @@ import { DataStorage } from '../packages/lib/src/infra/DataStorage';
 import { buildDefaultKeyConfig } from '../packages/zenza/src/ShortcutActions';
 import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
 import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
+import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 
 const location = {host: 'www.nicovideo.jp'};
 const navigator = {};
@@ -17,6 +18,7 @@ const window = {console: console};
 //@require buildDefaultKeyConfig
 //@require ZenzaCommentHistorySettings
 //@require CommentDisplayBudget
+//@require RelatedMenuActions
 const Config = (() => {
   const DEFAULT_CONFIG = {
     debug: false,
@@ -54,6 +56,7 @@ const Config = (() => {
     enableStoryboardBar: false, // シーンサーチ
     videoInfoPanelTab: 'videoInfoTab',
     fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
+    'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
 
     // Task 063: 以前は`forceEnable`という名前でここに定義されていたが、
     // 実際にコードから読まれていたのは`forceEconomy`という別の名前だった
@@ -364,6 +367,7 @@ const Config = (() => {
         return value;
       },
       validateImport: (key, value) => {
+        if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
         if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
         if (key.startsWith('commentHistory.')) {
           const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);

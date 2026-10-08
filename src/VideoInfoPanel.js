@@ -18,10 +18,12 @@ import {uq} from '../packages/lib/src/uQuery';
 import {domEvent} from '../packages/lib/src/dom/domEvent';
 import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {MylistPocketDetector} from '../packages/zenza/src/init/MylistPocketDetector';
+import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 const VideoItemObserver = {
   observe: () => {}
 };
 //===BEGIN===
+//@require RelatedMenuActions
 
 class VideoInfoPanel extends Emitter {
   constructor(params) {
@@ -4466,6 +4468,8 @@ class RelatedInfoMenu extends BaseViewComponent {
 
     this._bound.update = this.update.bind(this);
     this._bound._onBodyClick = _.debounce(this._onBodyClick.bind(this), 0);
+    this._unwatchCustomActions = RelatedMenuActions.onChange(() => this._renderCustomMenu());
+    Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
     this.setState({isHeader});
 
   }
@@ -4491,6 +4495,23 @@ class RelatedInfoMenu extends BaseViewComponent {
     this._originalLink = shadow.querySelector('.originalLink');
     this._twitterLink = shadow.querySelector('.twitterHashLink');
     this._parentVideoLink = shadow.querySelector('.parentVideoLink');
+    this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
+    this._customRelatedItems = shadow.querySelector('.customRelatedItems');
+    this._customLinkById = new Map();
+    this._elm.summary.addEventListener('click', () => this._renderCustomMenu());
+    shadow.addEventListener('click', e => {
+      const link = e.target.closest('a[data-related-link-id]');
+      if (!link) { return; }
+      const item = this._customLinkById.get(link.dataset.relatedLinkId);
+      const result = item && RelatedMenuActions.resolveUrl(item.url, this._relatedContext());
+      if (!result || !result.url) {
+        e.preventDefault();
+        return;
+      }
+      link.href = result.url;
+      shadow.open = false;
+      this.emit('close');
+    });
   }
 
   _onBodyClick() {
@@ -4506,6 +4527,7 @@ class RelatedInfoMenu extends BaseViewComponent {
 
     this._currentWatchId = videoInfo.watchId;
     this._currentVideoId = videoInfo.videoId;
+    this._currentVideoInfo = videoInfo;
     this.setState({
       // Task172 (F01): show the entries when the tree may exist (V4 unknown) too.
       isParentVideoExist: videoInfo.canOpenContentTree === true,
@@ -4523,7 +4545,62 @@ class RelatedInfoMenu extends BaseViewComponent {
     // 視聴ページからコンテンツツリーを開いた時と同じもの（流入元の記録用）。
     this._parentVideoLink.setAttribute('href',
       `//commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+    this._renderCustomMenu();
     this.emit('close');
+  }
+
+  _relatedContext() {
+    // Only explicitly approved metadata reaches registered actions.
+    const currentTime = ZenzaWatch.debug?.videoControlBar?.player?.currentTime;
+    return RelatedMenuActions.makeContext(this._currentVideoInfo, currentTime);
+  }
+
+  _renderCustomMenu() {
+    if (!this._customRelatedGroup || !this._customRelatedItems) { return; }
+    const links = RelatedMenuActions.getLinks(Config.getValue(RelatedMenuActions.CONFIG_KEY))
+      .filter(item => item.enabled);
+    const context = this._relatedContext();
+    const actions = RelatedMenuActions.getActions(context);
+    const body = document.createDocumentFragment();
+    this._customLinkById.clear();
+
+    if (this._currentVideoInfo) {
+      for (const item of links) {
+        const li = document.createElement('li');
+        const resolved = RelatedMenuActions.resolveUrl(item.url, context);
+        const link = document.createElement(resolved.url ? 'a' : 'span');
+        link.className = resolved.url ? 'command customRelatedLink' : 'command customRelatedDisabled';
+        link.textContent = item.label;
+        if (resolved.url) {
+          link.href = resolved.url;
+          link.target = item.openInNewTab ? '_blank' : '_self';
+          link.rel = 'noopener noreferrer';
+          link.dataset.relatedLinkId = item.id;
+          this._customLinkById.set(item.id, item);
+        } else {
+          link.setAttribute('aria-disabled', 'true');
+          link.title = resolved.missing?.length ?
+            '未取得: ' + resolved.missing.join(', ') : 'URLを開けません';
+        }
+        li.appendChild(link);
+        body.appendChild(li);
+      }
+      for (const action of actions) {
+        const li = document.createElement('li');
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'command customRelatedAction';
+        button.textContent = action.label;
+        button.dataset.command = 'run-custom-related-action';
+        button.dataset.param = action.id;
+        button.disabled = !action.enabled;
+        li.appendChild(button);
+        body.appendChild(li);
+      }
+    }
+
+    this._customRelatedItems.replaceChildren(body);
+    this._customRelatedGroup.hidden = this._customRelatedItems.children.length === 0;
   }
 
   _onCommand(command, param) {
@@ -4552,6 +4629,9 @@ class RelatedInfoMenu extends BaseViewComponent {
         break;
       case 'open-original-video':
         super._onCommand('openNow', this._currentVideoId);
+        break;
+      case 'run-custom-related-action':
+        RelatedMenuActions.invoke(param, this._relatedContext());
         break;
       default:
         super._onCommand(command, param);
@@ -4612,6 +4692,29 @@ RelatedInfoMenu._shadow_ = (`
         content: '▷';
         position: absolute;
         transform: translate(-100%, 0);
+      }
+      .RelatedInfoMenu .customRelatedGroup[hidden] { display: none; }
+      .RelatedInfoMenu .customRelatedHeading {
+        display: block;
+        font-size: 0.85em;
+        opacity: 0.75;
+      }
+      .RelatedInfoMenu .customRelatedItems { padding-left: 14px; }
+      .RelatedInfoMenu .customRelatedDisabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .RelatedInfoMenu .customRelatedAction {
+        background: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+      }
+      .RelatedInfoMenu .customRelatedAction:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
 
 
@@ -4705,6 +4808,10 @@ RelatedInfoMenu._shadow_ = (`
           <li class="copyVideoWatchUrlMenu">
             <span class="copyVideoWatchUrlLink command"
               rel="noopener" data-command="copy-video-watch-url">動画URLをコピー</span>
+          </li>
+          <li class="customRelatedGroup" hidden>
+            <span class="customRelatedHeading">カスタムリンク・アクション</span>
+            <ul class="customRelatedItems"></ul>
           </li>
         </ul>
       </div>

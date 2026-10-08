@@ -2499,13 +2499,39 @@ util.addStyle(`
     }
     update(sec, left) {
       const timeText = util.secToTime(sec);
-      if (this._timeText === timeText) { return; }
-      this._timeText = timeText;
-      this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
-      const w  = this.offsetWidth = this.offsetWidth || this._$view[0].offsetWidth;
-      const vw = this._innerWidth = this._innerWidth || window.innerWidth;
-      left = Math.max(0, Math.min(left - w / 2, vw - w));
-      cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(left)]);
+      if (this._timeText !== timeText) {
+        this._timeText = timeText;
+        this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
+      }
+
+      // Position must follow every move, even when the displayed second is unchanged.
+      // Map the full seek-bar travel onto the space available to the tooltip, rather
+      // than clamping its center and leaving it stuck at either edge.
+      const container = this._$container[0];
+      const bounds = container.getBoundingClientRect();
+      const containerWidth = container.offsetWidth || bounds.width;
+      const scale = bounds.width && containerWidth ? bounds.width / containerWidth : 1;
+      const tooltipWidth = this._$view[0].offsetWidth;
+      const visibleLeft = Math.max(0, -bounds.left / scale);
+      const visibleRight = Math.max(visibleLeft,
+        Math.min(containerWidth, (window.innerWidth - bounds.left) / scale));
+      const visibleWidth = visibleRight - visibleLeft;
+      let tooltipLeft;
+
+      if (visibleWidth < tooltipWidth) {
+        // Very narrow players cannot contain the tooltip: center within the viewport.
+        const viewportLeft = -bounds.left / scale;
+        const viewportRight = Math.max(viewportLeft,
+          (window.innerWidth - bounds.left) / scale - tooltipWidth);
+        tooltipLeft = Math.max(viewportLeft,
+          Math.min(left - tooltipWidth / 2, viewportRight));
+      } else {
+        const progress = Math.max(0, Math.min(1,
+          (left - visibleLeft) / Math.max(visibleWidth, 1)));
+        tooltipLeft = visibleLeft + progress * (visibleWidth - tooltipWidth);
+      }
+
+      cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(tooltipLeft)]);
       this._seekBarThumbnail.currentTime = sec;
     }
   }

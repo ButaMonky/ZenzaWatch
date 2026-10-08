@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.182-task301
+// @version        2.7.185-task308
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-08 00:05Z 5266732
+// build: 2026-10-08 16:19Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.182-task301';
+    var VER = '2.7.185-task308';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-08 00:05Z 5266732';
+    var BUILD = '2026-10-08 16:19Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -22198,13 +22198,32 @@ util.addStyle(`
 		}
 		update(sec, left) {
 			const timeText = util.secToTime(sec);
-			if (this._timeText === timeText) { return; }
-			this._timeText = timeText;
-			this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
-			const w  = this.offsetWidth = this.offsetWidth || this._$view[0].offsetWidth;
-			const vw = this._innerWidth = this._innerWidth || window.innerWidth;
-			left = Math.max(0, Math.min(left - w / 2, vw - w));
-			cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(left)]);
+			if (this._timeText !== timeText) {
+				this._timeText = timeText;
+				this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
+			}
+			const container = this._$container[0];
+			const bounds = container.getBoundingClientRect();
+			const containerWidth = container.offsetWidth || bounds.width;
+			const scale = bounds.width && containerWidth ? bounds.width / containerWidth : 1;
+			const tooltipWidth = this._$view[0].offsetWidth;
+			const visibleLeft = Math.max(0, -bounds.left / scale);
+			const visibleRight = Math.max(visibleLeft,
+				Math.min(containerWidth, (window.innerWidth - bounds.left) / scale));
+			const visibleWidth = visibleRight - visibleLeft;
+			let tooltipLeft;
+			if (visibleWidth < tooltipWidth) {
+				const viewportLeft = -bounds.left / scale;
+				const viewportRight = Math.max(viewportLeft,
+					(window.innerWidth - bounds.left) / scale - tooltipWidth);
+				tooltipLeft = Math.max(viewportLeft,
+					Math.min(left - tooltipWidth / 2, viewportRight));
+			} else {
+				const progress = Math.max(0, Math.min(1,
+					(left - visibleLeft) / Math.max(visibleWidth, 1)));
+				tooltipLeft = visibleLeft + progress * (visibleWidth - tooltipWidth);
+			}
+			cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(tooltipLeft)]);
 			this._seekBarThumbnail.currentTime = sec;
 		}
 	}

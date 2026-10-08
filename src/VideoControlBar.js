@@ -2504,9 +2504,8 @@ util.addStyle(`
         this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
       }
 
-      // Position must follow every move, even when the displayed second is unchanged.
-      // Map the full seek-bar travel onto the space available to the tooltip, rather
-      // than clamping its center and leaving it stuck at either edge.
+      // Update on every mousemove, even within the same displayed second.
+      // Follow the pointer 1:1 in the middle; stop at the visible edges.
       const container = this._$container[0];
       const bounds = container.getBoundingClientRect();
       const containerWidth = container.offsetWidth || bounds.width;
@@ -2526,9 +2525,8 @@ util.addStyle(`
         tooltipLeft = Math.max(viewportLeft,
           Math.min(left - tooltipWidth / 2, viewportRight));
       } else {
-        const progress = Math.max(0, Math.min(1,
-          (left - visibleLeft) / Math.max(visibleWidth, 1)));
-        tooltipLeft = visibleLeft + progress * (visibleWidth - tooltipWidth);
+        tooltipLeft = Math.max(visibleLeft,
+          Math.min(left - tooltipWidth / 2, visibleRight - tooltipWidth));
       }
 
       cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(tooltipLeft)]);

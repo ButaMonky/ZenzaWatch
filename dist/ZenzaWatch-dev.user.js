@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.185-task308
+// @version        2.7.186-task309
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-08 16:19Z
+// build: 2026-10-08 17:03Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.185-task308';
+    var VER = '2.7.186-task309';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-08 16:19Z';
+    var BUILD = '2026-10-08 17:03Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -22219,9 +22219,8 @@ util.addStyle(`
 				tooltipLeft = Math.max(viewportLeft,
 					Math.min(left - tooltipWidth / 2, viewportRight));
 			} else {
-				const progress = Math.max(0, Math.min(1,
-					(left - visibleLeft) / Math.max(visibleWidth, 1)));
-				tooltipLeft = visibleLeft + progress * (visibleWidth - tooltipWidth);
+				tooltipLeft = Math.max(visibleLeft,
+					Math.min(left - tooltipWidth / 2, visibleRight - tooltipWidth));
 			}
 			cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(tooltipLeft)]);
 			this._seekBarThumbnail.currentTime = sec;

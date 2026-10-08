@@ -36,42 +36,73 @@ function harness({width = 1200, left = 0, scale = 1, viewport = 1200,
     update: (sec, x) => subject.update(sec, x)};
 }
 
-describe('SeekBar scene-search tooltip follows the pointer (Task308)', function() {
-  it('moves on every mousemove inside the same displayed second', function() {
+describe('SeekBar scene-search tooltip follows and clamps at the edges (Task309)', function() {
+  it('moves exactly 1px for each mouse pixel within the same displayed second', function() {
     const h = harness({width: 1000, viewport: 1000});
-    h.update(243.1, 700);
+    h.update(243.1, 400);
     const x1 = h.view.x;
-    h.update(243.2, 850);
-    const x2 = h.view.x;
-    h.update(243.3, 1000);
-    assert(x1 < x2 && x2 < h.view.x, 'tooltip must not freeze at the right edge');
+    h.update(243.2, 401);
+    assert.strictEqual(h.view.x - x1, 1, 'the tooltip must track 1:1');
+    h.update(243.3, 450);
+    assert.strictEqual(h.view.x - x1, 50, 'no slowdown or easing');
     assert.strictEqual(h.labels.length, 1, 'same-second label redraws remain suppressed');
     assert.deepStrictEqual(h.thumbnails, [243.1, 243.2, 243.3]);
   });
-  it('keeps following from center to right edge in full, normal and small modes', function() {
+  it('stops at both edges, then follows immediately when moving inward', function() {
     for (const width of [1920, 1024, 320]) {
       const h = harness({width, viewport: width});
-      const xs = [width * 0.75, width * 0.9, width];
-      const positions = xs.map(x => { h.update(20.1, x); return h.view.x; });
-      assert(positions[0] < positions[1] && positions[1] < positions[2],
-        'tooltip freezes before right edge at width=' + width);
-      assert(positions[0] >= 0, 'left overflow at width=' + width);
-      assert(Math.abs(positions[2] + 180 - width) < 0.01,
-        'right overflow at width=' + width);
+      h.update(20.1, 0);
+      assert.strictEqual(h.view.x, 0, 'left boundary at width=' + width);
+      h.update(20.1, 50);
+      assert.strictEqual(h.view.x, 0, 'no overflow at left edge');
+      h.update(20.1, width / 2);
+      assert.strictEqual(h.view.x, width / 2 - 90, 'cursor centered');
+      h.update(20.1, width / 2 + 1);
+      assert.strictEqual(h.view.x, width / 2 - 89, 'no slowdown in middle');
+      h.update(20.1, width);
+      assert.strictEqual(h.view.x, width - 180, 'right boundary');
+      h.update(20.1, width - 50);
+      assert.strictEqual(h.view.x, width - 180, 'stop at right edge');
+      h.update(20.1, width - 95);
+      assert.strictEqual(h.view.x, width - 185, 'resume immediately inward');
     }
+  });
+  it('updates scene time and thumbnail even while position is clamped', function() {
+    const h = harness({width: 320, viewport: 320});
+    h.update(50.1, 320);
+    h.update(50.2, 319);
+    assert.strictEqual(h.view.x, 140, 'preview stays within the right edge');
+    assert.deepStrictEqual(h.labels, ['50']);
+    h.update(51.2, 319);
+    assert.strictEqual(h.view.x, 140, 'position remains clamped');
+    assert.deepStrictEqual(h.labels, ['50', '51']);
+    assert.deepStrictEqual(h.thumbnails, [50.1, 50.2, 51.2]);
   });
   it('re-measures container width, viewport and CSS scale after a mode change', function() {
     const h = harness({width: 1000, viewport: 1400, left: 200});
-    h.update(10.1, 400);
-    const before = h.view.x;
+    h.update(10.1, 950);
+    assert.strictEqual(h.view.x, 820);
     h.container.width = 500;
     h.container.left = 600;
     h.container.scale = 0.8;
     h.context.window.innerWidth = 1100;
-    h.update(10.2, 400);
-    assert.notStrictEqual(h.view.x, before);
+    h.update(10.2, 950);
+    assert.strictEqual(h.view.x, 320, 'new player width must clamp the position');
     assert(h.container.left + (h.view.x + 180) * h.container.scale <= 1100);
     assert.strictEqual(h.labels.length, 1);
+  });
+  it('uses the visible viewport bounds for an offscreen or offset player', function() {
+    const h = harness({width: 1000, viewport: 800, left: -100});
+    h.update(20, 0);
+    assert.strictEqual(h.view.x, 100, 'left viewport clip');
+    h.update(20, 300);
+    assert.strictEqual(h.view.x, 210);
+    h.update(20, 301);
+    assert.strictEqual(h.view.x, 211, 'exact pointer step');
+    h.update(20, 1000);
+    assert.strictEqual(h.view.x, 720, 'right viewport clip');
+    h.update(20, 750);
+    assert.strictEqual(h.view.x, 660, 'immediate inward tracking');
   });
   it('handles a player narrower than the tooltip without viewport overflow', function() {
     const h = harness({width: 140, left: 400, viewport: 1000});

@@ -415,7 +415,7 @@ StoryboardView.__css__ = (`
   }
 
   .is-wheelSeeking .storyboardContainer.is-success,
-  .is-dragging .storyboardContainer.is-success,
+  .is-dragging.is-storyboardLongPress .storyboardContainer.is-success,
   .storyboardContainer.is-success.is-open {
     z-index: 50;
     opacity: 1;

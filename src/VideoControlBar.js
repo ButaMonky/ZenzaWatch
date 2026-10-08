@@ -378,6 +378,7 @@ const historyTriggerKeyGuard = event => {
       this._syncCommentHeatMap();
     }
     _onPlayerClose() {
+      this._cancelStoryboardLongPress();
       this._commentParsedHandler?.cancel?.();
       this._commentChangeHandler?.cancel?.();
       this._heatMapWatchId = null;
@@ -406,6 +407,27 @@ const historyTriggerKeyGuard = event => {
       // e.preventDefault();
       e.stopPropagation();
       this._beginMouseDrag(e);
+      // Keep seeking immediate, but only reveal the large storyboard after a
+      // deliberate 200ms primary-button hold on the seek bar itself.
+      if (e.button === 0 && this._seekBar?.contains(e.target)) {
+        this._scheduleStoryboardLongPress();
+      }
+    }
+    _scheduleStoryboardLongPress() {
+      this._cancelStoryboardLongPress();
+      this._storyboardLongPressTimer = window.setTimeout(() => {
+        this._storyboardLongPressTimer = null;
+        if (this.state.isDragging) {
+          this.classList.add('is-storyboardLongPress');
+        }
+      }, 200);
+    }
+    _cancelStoryboardLongPress() {
+      if (this._storyboardLongPressTimer != null) {
+        window.clearTimeout(this._storyboardLongPressTimer);
+        this._storyboardLongPressTimer = null;
+      }
+      this.classList?.remove('is-storyboardLongPress');
     }
     _onSeekBarMouseMove(e) {
       if (!this.state.isDragging) {
@@ -441,12 +463,14 @@ const historyTriggerKeyGuard = event => {
       this.state.isDragging = true;
     }
     _endMouseDrag() {
+      this._cancelStoryboardLongPress();
       this._unbindDragEvent();
       this.classList.remove('is-dragging');
       this.state.isDragging = false;
     }
     _onBodyMouseUp(e) {
       if ((e.button === 0 && e.shiftKey)) {
+        this._cancelStoryboardLongPress();
         return;
       }
       this._endMouseDrag();

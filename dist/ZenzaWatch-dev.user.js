@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.188-task311
+// @version        2.7.189-task312
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-08 17:49Z
+// build: 2026-10-08 18:50Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.188-task311';
+    var VER = '2.7.189-task312';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-08 17:49Z';
+    var BUILD = '2026-10-08 18:50Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -17342,7 +17342,7 @@ StoryboardView.__css__ = (`
 		box-sizing: border-box;
 	}
 	.is-wheelSeeking .storyboardContainer.is-success,
-	.is-dragging .storyboardContainer.is-success,
+	.is-dragging.is-storyboardLongPress .storyboardContainer.is-success,
 	.storyboardContainer.is-success.is-open {
 		z-index: 50;
 		opacity: 1;
@@ -19878,6 +19878,7 @@ const historyTriggerKeyGuard = event => {
 			this._syncCommentHeatMap();
 		}
 		_onPlayerClose() {
+			this._cancelStoryboardLongPress();
 			this._commentParsedHandler?.cancel?.();
 			this._commentChangeHandler?.cancel?.();
 			this._heatMapWatchId = null;
@@ -19905,6 +19906,25 @@ const historyTriggerKeyGuard = event => {
 		_onSeekBarMouseDown(e) {
 			e.stopPropagation();
 			this._beginMouseDrag(e);
+			if (e.button === 0 && this._seekBar?.contains(e.target)) {
+				this._scheduleStoryboardLongPress();
+			}
+		}
+		_scheduleStoryboardLongPress() {
+			this._cancelStoryboardLongPress();
+			this._storyboardLongPressTimer = window.setTimeout(() => {
+				this._storyboardLongPressTimer = null;
+				if (this.state.isDragging) {
+					this.classList.add('is-storyboardLongPress');
+				}
+			}, 200);
+		}
+		_cancelStoryboardLongPress() {
+			if (this._storyboardLongPressTimer != null) {
+				window.clearTimeout(this._storyboardLongPressTimer);
+				this._storyboardLongPressTimer = null;
+			}
+			this.classList?.remove('is-storyboardLongPress');
 		}
 		_onSeekBarMouseMove(e) {
 			if (!this.state.isDragging) {
@@ -19936,12 +19956,14 @@ const historyTriggerKeyGuard = event => {
 			this.state.isDragging = true;
 		}
 		_endMouseDrag() {
+			this._cancelStoryboardLongPress();
 			this._unbindDragEvent();
 			this.classList.remove('is-dragging');
 			this.state.isDragging = false;
 		}
 		_onBodyMouseUp(e) {
 			if ((e.button === 0 && e.shiftKey)) {
+				this._cancelStoryboardLongPress();
 				return;
 			}
 			this._endMouseDrag();

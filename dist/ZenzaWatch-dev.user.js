@@ -32,7 +32,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.190-task313
+// @version        2.7.191-task316
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -40,7 +40,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-08 19:29Z
+// build: 2026-10-09 04:36Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -105,10 +105,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.190-task313';
+    var VER = '2.7.191-task316';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-08 19:29Z';
+    var BUILD = '2026-10-09 04:36Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -2436,20 +2436,47 @@ class RelatedMenuActions {
 					item.label.length > 80 ||
 					!this._validateUrlTemplate(item.url) ||
 					(item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
-					(item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean')) {
+					(item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean') ||
+					(item.shortcutKey !== undefined &&
+						(!Number.isSafeInteger(item.shortcutKey) || item.shortcutKey < 0 ||
+						item.shortcutKey >= 90000000))) {
 				errors.push('Invalid custom link at index ' + index);
 				return;
 			}
 			ids.add(item.id);
-			links.push({
+			const link = {
 				id: item.id, label: item.label.trim(), url: item.url,
 				enabled: item.enabled !== false,
 				openInNewTab: item.openInNewTab !== false
-			});
+			};
+			if (item.shortcutKey > 0) { link.shortcutKey = item.shortcutKey; }
+			links.push(link);
 		});
 		return {valid: errors.length === 0, errors, links};
 	}
 	static getLinks(input) { return this.validateLinks(input).links; }
+	static openShortcutsByIds(input, ids, context, opener) {
+		if (!Array.isArray(ids) || typeof opener !== 'function') { return 0; }
+		const selected = new Set(ids);
+		const resolved = this.getLinks(input)
+			.filter(item => item.enabled && selected.has(item.id))
+			.map(item => ({item, value: this.resolveUrl(item.url, context)}))
+			.filter(entry => !!entry.value.url);
+		let currentTabIndex = -1;
+		resolved.forEach((entry, i) => {
+			if (!entry.item.openInNewTab) { currentTabIndex = i; }
+		});
+		const safeOpen = (url, target) => {
+			try { opener(url, target); } catch (_) { /* one failed tab must not block others */ }
+		};
+		resolved.forEach((entry, i) => {
+			if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank'); }
+		});
+		if (currentTabIndex >= 0) {
+			safeOpen(resolved[currentTabIndex].value.url, '_self');
+		}
+		return resolved.length;
+	}
 	static makeContext(videoInfo, currentTime = 0) {
 		if (!videoInfo || typeof videoInfo !== 'object') { return Object.freeze({}); }
 		let owner;
@@ -5367,6 +5394,17 @@ class ShortcutKeyEmitter {
 					!Object.values(map).includes(keyCode) && !dynamicMap[keyCode]) {
 				key = 'SEEK_BY';
 				param = keyCode === 37 ? -0.5 : 0.5;
+			}
+			if (!e.repeat) {
+				const raw = typeof config.getValue === 'function' ?
+					config.getValue('relatedMenu.customLinks') :
+					config.props['relatedMenu.customLinks'];
+				const links = Array.isArray(raw) ? raw : [];
+				const ids = links.filter(item => item && typeof item.id === 'string' &&
+					item.enabled !== false && Number.isSafeInteger(item.shortcutKey) &&
+					item.shortcutKey > 0 && item.shortcutKey === keyCode)
+					.map(item => item.id);
+				if (ids.length) { emitter.emit('keyDown', 'RELATED_MENU_LINKS', e, ids); }
 			}
 			if (key) {
 				emitter.emit('keyDown', key, e, param);
@@ -12302,10 +12340,18 @@ const {ThreadLoader} = (() => {
 		};
 	};
 	const logCommentPostDiagnostic = (diagnostic, phase, event, details = {}) => {
-		window.console.log(
-			'[ZenzaWatch][CommentPost]',
-			logSafe.redact({...diagnostic, phase, event, ...details})
-		);
+		const safe = logSafe.redact({...diagnostic, phase, event, ...details});
+		const copyable = {};
+		for (const key of [
+			'id', 'attempt', 'videoId', 'threadId', 'language', 'phase', 'event',
+			'statusCode', 'errorCode', 'kind', 'errorName', 'reason', 'outcome',
+			'retryScheduled', 'retryAfterMs', 'delayMs', 'nextAttempt',
+			'postKeyPresent', 'challengeRequired', 'commandCount',
+			'ackType', 'hasNo', 'hasId', 'postedNo'
+		]) {
+			if (safe[key] !== undefined) { copyable[key] = safe[key]; }
+		}
+		window.console.log('[ZenzaWatch][CommentPost]', safe, JSON.stringify(copyable));
 	};
 	const summarizeCommentPostAck = ack => {
 		if (ack === null) { return {ackType: 'null'}; }
@@ -21897,6 +21943,7 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			const view = this._view;
 			const command = target ? target.dataset.command : '';
 			const nicoChatElement = e.target.closest('.nicoChat');
+			if (!nicoChatElement) { return; }
 			const uniqNo = nicoChatElement.dataset.nicochatUniqNo;
 			const nicoChat  = this._model.getItemByUniqNo(uniqNo);
 			if (command && nicoChat) {
@@ -32748,6 +32795,7 @@ const LikeApi = {
 };
 // already required
 // already required
+// already required
 class PlayerConfig {
 	static getInstance(config) {
 		if (!PlayerConfig.instance) {
@@ -35113,6 +35161,15 @@ class NicoVideoPlayerDialog extends Emitter {
 			'SCREEN_SHOT_WITH_COMMENT': 'screenShotWithComment'
 		};
 		switch (name) {
+			case 'RELATED_MENU_LINKS': {
+				const context=RelatedMenuActions.makeContext(this._state.videoInfo,this.currentTime);
+				RelatedMenuActions.openShortcutsByIds(
+					this._playerConfig.getValue(RelatedMenuActions.CONFIG_KEY),param,context,
+					(url,target) => window.open(url,target,
+						target === '_blank' ? 'noopener,noreferrer' : undefined)
+				);
+				break;
+			}
 			case 'ESC':
 				if (Date.now() < this._escBlockExpiredAt) {
 					window.console.log('block ESC');
@@ -36394,6 +36451,13 @@ class NicoVideoPlayerDialog extends Emitter {
 	get volume() {
 		return this._playerConfig.props.volume;
 	}
+	_logCommentPostWarning(details) {
+		const safe = {...details};
+		if (typeof safe.reason === 'string' && !/^[a-z0-9-]{1,80}$/i.test(safe.reason)) {
+			safe.reason = 'other';
+		}
+		window.console.warn('[ZenzaWatch][CommentPost]', safe, JSON.stringify(safe));
+	}
 	async addChat(text, cmd, vpos = null, options = {}) {
 		const precheckRejectReason =
 			!this._nicoVideoPlayer ? 'player-unavailable' :
@@ -36401,7 +36465,7 @@ class NicoVideoPlayerDialog extends Emitter {
 			!this._state.isCommentReady ? 'comment-not-ready' :
 			this._state.isCommentPosting ? 'post-already-in-flight' : '';
 		if (precheckRejectReason) {
-			window.console.warn('[ZenzaWatch][CommentPost]', {
+			this._logCommentPostWarning({
 				phase: 'dialog-precheck',
 				event: 'rejected',
 				reason: precheckRejectReason,
@@ -36412,7 +36476,7 @@ class NicoVideoPlayerDialog extends Emitter {
 			return Promise.reject();
 		}
 		if (!util.isLogin()) {
-			window.console.warn('[ZenzaWatch][CommentPost]', {
+			this._logCommentPostWarning({
 				phase: 'dialog-precheck',
 				event: 'rejected',
 				reason: 'not-logged-in',
@@ -36425,7 +36489,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		const threadInfo = this._threadInfo;
 		const isCurrent = () => this._requestId === requestId;
 		if (!threadInfo || threadInfo.threadId === null || threadInfo.threadId === undefined || threadInfo.canPost === false) {
-			window.console.warn('[ZenzaWatch][CommentPost]', {
+			this._logCommentPostWarning({
 				phase: 'dialog-precheck',
 				event: 'rejected',
 				reason: 'no-post-target',
@@ -36461,7 +36525,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		};
 		const onFail = err => {
 			err = err || {};
-			window.console.warn('[ZenzaWatch][CommentPost]', {
+			this._logCommentPostWarning({
 				phase: 'dialog-result',
 				event: 'failure',
 				videoId: watchId || null,

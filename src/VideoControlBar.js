@@ -1980,6 +1980,7 @@ util.addStyle(`
       const view = this._view;
       const command = target ? target.dataset.command : '';
       const nicoChatElement = e.target.closest('.nicoChat');
+      if (!nicoChatElement) { return; }
       const uniqNo = nicoChatElement.dataset.nicochatUniqNo;
       const nicoChat  = this._model.getItemByUniqNo(uniqNo);
 

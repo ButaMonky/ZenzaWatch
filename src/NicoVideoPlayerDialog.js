@@ -5,6 +5,7 @@ import {CONSTANT} from './constant';
 import {PlaybackPosition, VideoInfoLoader, NVWatchCaller, CommonsTreeLoader} from '../packages/lib/src/nico/loader';
 import {Fullscreen, ShortcutKeyEmitter, util} from './util';
 import {SHORTCUT_ACTIONS} from '../packages/zenza/src/ShortcutActions';
+import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 import {NicoVideoPlayer} from './NicoVideoPlayer';
 import {VideoFilter, VideoInfoModel} from './VideoInfo';
 import {CommentInputPanel} from './CommentInputPanel';
@@ -36,6 +37,7 @@ import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated
 //@require LikeApi
 //@require AudioAdjuster
 //@require SHORTCUT_ACTIONS
+//@require RelatedMenuActions
 
 class PlayerConfig {
   static getInstance(config) {
@@ -2809,6 +2811,15 @@ class NicoVideoPlayerDialog extends Emitter {
       'SCREEN_SHOT_WITH_COMMENT': 'screenShotWithComment'
     };
     switch (name) {
+      case 'RELATED_MENU_LINKS': {
+        const context=RelatedMenuActions.makeContext(this._state.videoInfo,this.currentTime);
+        RelatedMenuActions.openShortcutsByIds(
+          this._playerConfig.getValue(RelatedMenuActions.CONFIG_KEY),param,context,
+          (url,target) => window.open(url,target,
+            target === '_blank' ? 'noopener,noreferrer' : undefined)
+        );
+        break;
+      }
       case 'ESC':
         // ESCキーは連打にならないようブロック期間を設ける
         if (Date.now() < this._escBlockExpiredAt) {
@@ -4302,6 +4313,14 @@ class NicoVideoPlayerDialog extends Emitter {
   get volume() {
     return this._playerConfig.props.volume;
   }
+  _logCommentPostWarning(details) {
+    // Keep rejection diagnostics readable when copied from Chrome DevTools.
+    const safe = {...details};
+    if (typeof safe.reason === 'string' && !/^[a-z0-9-]{1,80}$/i.test(safe.reason)) {
+      safe.reason = 'other';
+    }
+    window.console.warn('[ZenzaWatch][CommentPost]', safe, JSON.stringify(safe));
+  }
   async addChat(text, cmd, vpos = null, options = {}) {
     const precheckRejectReason =
       !this._nicoVideoPlayer ? 'player-unavailable' :
@@ -4309,7 +4328,7 @@ class NicoVideoPlayerDialog extends Emitter {
       !this._state.isCommentReady ? 'comment-not-ready' :
       this._state.isCommentPosting ? 'post-already-in-flight' : '';
     if (precheckRejectReason) {
-      window.console.warn('[ZenzaWatch][CommentPost]', {
+      this._logCommentPostWarning({
         phase: 'dialog-precheck',
         event: 'rejected',
         reason: precheckRejectReason,
@@ -4320,7 +4339,7 @@ class NicoVideoPlayerDialog extends Emitter {
       return Promise.reject();
     }
     if (!util.isLogin()) {
-      window.console.warn('[ZenzaWatch][CommentPost]', {
+      this._logCommentPostWarning({
         phase: 'dialog-precheck',
         event: 'rejected',
         reason: 'not-logged-in',
@@ -4337,7 +4356,7 @@ class NicoVideoPlayerDialog extends Emitter {
     // Task183 (F07): a video without a post target cannot be posted to; tell the user
     // and do not add a local "posting" comment.
     if (!threadInfo || threadInfo.threadId === null || threadInfo.threadId === undefined || threadInfo.canPost === false) {
-      window.console.warn('[ZenzaWatch][CommentPost]', {
+      this._logCommentPostWarning({
         phase: 'dialog-precheck',
         event: 'rejected',
         reason: 'no-post-target',
@@ -4379,7 +4398,7 @@ class NicoVideoPlayerDialog extends Emitter {
 
     const onFail = err => {
       err = err || {};
-      window.console.warn('[ZenzaWatch][CommentPost]', {
+      this._logCommentPostWarning({
         phase: 'dialog-result',
         event: 'failure',
         videoId: watchId || null,

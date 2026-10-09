@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.40-task314
+// @version     0.3.41-task316
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-08 19:51Z
+// build: 2026-10-09 04:36Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -2567,20 +2567,47 @@ class RelatedMenuActions {
 					item.label.length > 80 ||
 					!this._validateUrlTemplate(item.url) ||
 					(item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
-					(item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean')) {
+					(item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean') ||
+					(item.shortcutKey !== undefined &&
+						(!Number.isSafeInteger(item.shortcutKey) || item.shortcutKey < 0 ||
+						item.shortcutKey >= 90000000))) {
 				errors.push('Invalid custom link at index ' + index);
 				return;
 			}
 			ids.add(item.id);
-			links.push({
+			const link = {
 				id: item.id, label: item.label.trim(), url: item.url,
 				enabled: item.enabled !== false,
 				openInNewTab: item.openInNewTab !== false
-			});
+			};
+			if (item.shortcutKey > 0) { link.shortcutKey = item.shortcutKey; }
+			links.push(link);
 		});
 		return {valid: errors.length === 0, errors, links};
 	}
 	static getLinks(input) { return this.validateLinks(input).links; }
+	static openShortcutsByIds(input, ids, context, opener) {
+		if (!Array.isArray(ids) || typeof opener !== 'function') { return 0; }
+		const selected = new Set(ids);
+		const resolved = this.getLinks(input)
+			.filter(item => item.enabled && selected.has(item.id))
+			.map(item => ({item, value: this.resolveUrl(item.url, context)}))
+			.filter(entry => !!entry.value.url);
+		let currentTabIndex = -1;
+		resolved.forEach((entry, i) => {
+			if (!entry.item.openInNewTab) { currentTabIndex = i; }
+		});
+		const safeOpen = (url, target) => {
+			try { opener(url, target); } catch (_) { /* one failed tab must not block others */ }
+		};
+		resolved.forEach((entry, i) => {
+			if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank'); }
+		});
+		if (currentTabIndex >= 0) {
+			safeOpen(resolved[currentTabIndex].value.url, '_self');
+		}
+		return resolved.length;
+	}
 	static makeContext(videoInfo, currentTime = 0) {
 		if (!videoInfo || typeof videoInfo !== 'object') { return Object.freeze({}); }
 		let owner;
@@ -5028,15 +5055,28 @@ class RelatedMenuSettings {
 		return String(text == null ? '' : text).replace(/[&<>"']/g, ch =>
 			({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
 	}
-	constructor(container, {config, actions}) {
+	constructor(container, {config, actions, shortcuts = {}}) {
 		if (!container || !config || !actions) { throw new TypeError('Related-menu settings dependencies missing'); }
 		this.container = container;
 		this.doc = container.ownerDocument;
 		this.config = config;
 		this.actions = actions;
+		this.shortcuts = shortcuts;
+		this._recordCleanup = null;
 		this.externalChanged = false;
 		this.message = '';
 		this.saving = false;
+		this.expandedIds = new Set();
+		this.variablesOpen = new Set();
+		this._dragFrom = null;
+		this._handleDragStart = e => this._onDragStart(e);
+		this._handleDragOver = e => this._onDragOver(e);
+		this._handleDrop = e => this._onDrop(e);
+		this._handleDragEnd = () => {
+			this._dragFrom = null;
+			this.container.querySelectorAll('.rl-drop-target').forEach(node =>
+				node.classList.remove('rl-drop-target'));
+		};
 		this._handleClick = e => this._onClick(e);
 		this._handleInput = e => this._onField(e);
 		this._handleChange = e => this._onField(e);
@@ -5046,6 +5086,10 @@ class RelatedMenuSettings {
 		container.addEventListener('click', this._handleClick);
 		container.addEventListener('input', this._handleInput);
 		container.addEventListener('change', this._handleChange);
+		container.addEventListener('dragstart', this._handleDragStart);
+		container.addEventListener('dragover', this._handleDragOver);
+		container.addEventListener('drop', this._handleDrop);
+		container.addEventListener('dragend', this._handleDragEnd);
 		if (typeof config.on === 'function') {
 			config.on('update', this._handleConfigUpdate);
 		}
@@ -5066,6 +5110,17 @@ class RelatedMenuSettings {
 			'.zenzaRelatedLinksEditor .rl-head { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:8px; }',
 			'.zenzaRelatedLinksEditor .rl-head strong { margin-right:auto; min-width:80px; overflow-wrap:anywhere; }',
 			'.zenzaRelatedLinksEditor .rl-head button { font-size:11px; padding:3px 8px; }',
+			'.zenzaRelatedLinksEditor [hidden] { display:none !important; }',
+			'.zenzaRelatedLinksEditor .rl-head .rl-summary { flex:1; min-width:100px; }',
+			'.zenzaRelatedLinksEditor .rl-head .rl-summary strong { display:block; }',
+			'.zenzaRelatedLinksEditor .rl-head .rl-summary small { display:block; opacity:.75; }',
+			'.zenzaRelatedLinksEditor .rl-drag { cursor:grab; color:inherit; touch-action:none; }',
+			'.zenzaRelatedLinksEditor .rl-card.rl-drop-target { outline:2px solid #82bfff; }',
+			'.zenzaRelatedLinksEditor .rl-variables-toggle { margin-top:8px; }',
+			'.zenzaRelatedLinksEditor .rl-variables { padding:6px; border:1px solid #4b5f76; border-radius:5px; }',
+			'.zenzaRelatedLinksEditor .rl-shortcut-editor { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:9px 0; }',
+			'.zenzaRelatedLinksEditor .rl-shortcut-editor button { padding:5px 8px; }',
+			'.zenzaRelatedLinksEditor .rl-shortcut-warning { color:#b67e24; font-size:12px; }',
 			'.zenzaRelatedLinksEditor .rl-fields { display:grid; grid-template-columns:minmax(110px,1fr) minmax(160px,2fr); gap:10px; }',
 			'.zenzaRelatedLinksEditor .rl-fields label { display:grid; gap:4px; min-width:0; }',
 			'.zenzaRelatedLinksEditor .rl-fields label.rl-full { grid-column:1 / -1; }',
@@ -5091,10 +5146,13 @@ class RelatedMenuSettings {
 			Object.assign({}, item) : item);
 	}
 	_load() {
+		if (this._recordCleanup) { this._recordCleanup(); }
 		this.original = this._read();
 		this.draft = Array.isArray(this.original) ? this.original.map(item =>
 			item && typeof item === 'object' ? Object.assign({}, item) : item) : [];
 		this.externalChanged = false;
+		this.expandedIds.clear();
+		this.variablesOpen.clear();
 		this.message = this.original === null ? '保存済みリンクの形式が不正です。JSONのバックアップを確認してください。' : '';
 		this._render();
 	}
@@ -5126,6 +5184,13 @@ class RelatedMenuSettings {
 		}
 		return '';
 	}
+	_rowKey(item, index) {
+		return item && typeof item.id === 'string' && item.id ? item.id : '__invalid_'+index;
+	}
+	_formatShortcut(code) {
+		return typeof this.shortcuts.formatKeyCombo === 'function' ?
+			this.shortcuts.formatKeyCombo(code) : (code ? String(code) : '(未設定)');
+	}
 	_render() {
 		const E = RelatedMenuSettings.escape;
 		const rows = this.draft.map((item, index) => {
@@ -5133,15 +5198,31 @@ class RelatedMenuSettings {
 			const field = (key, label, attrs='') =>
 				'<label>'+label+'<input type="text" data-rl-field="'+key+'" '+attrs+
 				' value="'+E(obj[key])+'"></label>';
+			const names={videoId:'動画ID',watchId:'視聴ID',videoUrl:'動画URL',
+				videoTitle:'動画タイトル',uploaderUserId:'投稿者ID',uploaderChannelId:'チャンネルID',
+				uploaderName:'投稿者名',currentTime:'再生位置（秒）'};
 			const variableButtons = this.actions.VARIABLES.map(name =>
-				'<button type="button" data-rl-insert="'+name+'" data-rl-index="'+index+'">{'+name+'}</button>'
+				'<button type="button" data-rl-insert="'+name+'" data-rl-index="'+index+'">'+
+				E(names[name] || name)+' <code>{'+name+'}</code></button>'
 			).join('');
+			const rowKey=this._rowKey(item,index);
+			const expanded=this.expandedIds.has(rowKey);
+			const variablesShown=this.variablesOpen.has(rowKey);
 			return '<article class="rl-card" data-rl-row="'+index+'">' +
-				'<div class="rl-head"><strong>リンク '+(index+1)+'</strong>' +
+				'<div class="rl-head">' +
+				'<button type="button" class="rl-drag" data-rl-drag="'+index+'" draggable="true" aria-label="ドラッグで並び替え" title="ドラッグで並び替え">⠿</button>' +
+				'<div class="rl-summary"><strong data-rl-summary>'+E(obj.label || 'リンク '+(index+1))+'</strong>' +
+				'<small data-rl-summary-status>'+(obj.enabled===false?'無効':'有効')+' ・ '+
+				E(this._formatShortcut(obj.shortcutKey))+'</small>' +
+				'<small data-rl-shortcut-summary-warning class="rl-shortcut-warning"></small>' +
+				'<small data-rl-error-summary class="rl-error"></small></div>' +
+				'<button type="button" data-rl-expand="'+index+'" aria-expanded="'+(expanded?'true':'false')+'">'+
+				(expanded?'閉じる':'編集')+'</button>' +
 				'<button type="button" data-rl-up="'+index+'" '+(index===0?'disabled':'')+'>↑ 上へ</button>' +
 				'<button type="button" data-rl-down="'+index+'" '+(index===this.draft.length-1?'disabled':'')+'>↓ 下へ</button>' +
 				'<button type="button" data-rl-duplicate="'+index+'" '+(this.draft.length>=40?'disabled':'')+'>複製</button>' +
 				'<button type="button" data-rl-delete="'+index+'">削除</button></div>' +
+				'<div data-rl-details '+(expanded?'':'hidden')+'>' +
 				'<div class="rl-fields">' +
 				field('id','ID（リンク識別子）','maxlength="64"')+
 				field('label','表示名','maxlength="80"')+
@@ -5149,11 +5230,17 @@ class RelatedMenuSettings {
 				'</div><div class="rl-flags">' +
 				'<label><input type="checkbox" data-rl-field="enabled" '+(obj.enabled!==false?'checked':'')+'> 有効にする</label>' +
 				'<label><input type="checkbox" data-rl-field="openInNewTab" '+(obj.openInNewTab!==false?'checked':'')+'> 新しいタブで開く</label></div>' +
-				'<div class="rl-help">変数をURLのカーソル位置に挿入:</div><div class="rl-variables">'+variableButtons+'</div>' +
+				'<div class="rl-shortcut-editor"><span>ショートカット: <strong data-rl-key-text>'+E(this._formatShortcut(obj.shortcutKey))+'</strong></span>' +
+				'<button type="button" data-rl-record="'+index+'">変更</button>' +
+				'<button type="button" data-rl-key-clear="'+index+'">解除</button>' +
+				'<span class="rl-shortcut-warning" data-rl-shortcut-warning></span></div>' +
+				'<button type="button" class="rl-variables-toggle" data-rl-variables-toggle="'+index+'" aria-expanded="'+(variablesShown?'true':'false')+'">'+
+				'｛ ｝ 変数を挿入 '+(variablesShown?'▴':'▾')+'</button>' +
+				'<div class="rl-variables" data-rl-variables-panel '+(variablesShown?'':'hidden')+'>'+variableButtons+'</div>' +
 				'<div class="rl-help">URLプレビュー（サンプル値）</div><code class="rl-preview" data-rl-preview></code>' +
 				'<p class="rl-no-owner" data-rl-no-owner></p>' +
 				'<p class="rl-error" data-rl-error role="status"></p>' +
-				'</article>';
+				'</div></article>';
 		}).join('');
 		this.container.innerHTML =
 			'<section class="zenzaRelatedLinksEditor" aria-label="関連メニュー カスタムリンク編集">' +
@@ -5180,6 +5267,21 @@ class RelatedMenuSettings {
 		});
 		this.container.querySelectorAll('[data-rl-row]').forEach((card,index) => {
 			const item=this.draft[index] || {};
+			card.querySelector('[data-rl-summary]').textContent=item.label || 'リンク '+(index+1);
+			card.querySelector('[data-rl-summary-status]').textContent=
+				(item.enabled===false?'無効':'有効')+' ・ '+this._formatShortcut(item.shortcutKey);
+			const label=card.querySelector('[data-rl-key-text]');
+			label.textContent=this._formatShortcut(item.shortcutKey);
+			const key=Number(item.shortcutKey)||0;
+			const sameLinks=this.draft.filter((other,i)=>i!==index &&
+				other && Number(other.shortcutKey)===key).map(other=>other.label||other.id);
+			const ordinary=(this.shortcuts.actions||[]).filter(action=>
+				this.config.props && Number(this.config.props['KEY_'+action.id])===key)
+				.map(action=>action.label||action.id);
+			const warning=key && (sameLinks.length || ordinary.length) ?
+				'⚠ ショートカットが重複: '+sameLinks.concat(ordinary).join('、')+'（すべて実行）' : '';
+			card.querySelector('[data-rl-shortcut-warning]').textContent=warning;
+			card.querySelector('[data-rl-shortcut-summary-warning]').textContent=warning ? '⚠ キー重複' : '';
 			const preview=card.querySelector('[data-rl-preview]');
 			const noOwnerView=card.querySelector('[data-rl-no-owner]');
 			const err=card.querySelector('[data-rl-error]');
@@ -5191,6 +5293,7 @@ class RelatedMenuSettings {
 			noOwnerView.textContent=ownerDependent ?
 				'投稿者情報を取得できない動画では、このリンクは無効になります。' : '';
 			err.textContent=invalid[index];
+			card.querySelector('[data-rl-error-summary]').textContent=invalid[index] ? '⚠ 入力内容を確認' : '';
 		});
 		const count=this.container.querySelector('[data-rl-count]');
 		count.textContent=this.draft.length+' / 40 件';
@@ -5212,6 +5315,10 @@ class RelatedMenuSettings {
 		const index=Number(card.dataset.rlRow);
 		const item=this.draft[index];
 		const value=e.target.type==='checkbox' ? e.target.checked : e.target.value;
+		if (field==='id' && item && typeof item.id==='string') {
+			if (this.expandedIds.delete(item.id)) { this.expandedIds.add(value); }
+			if (this.variablesOpen.delete(item.id)) { this.variablesOpen.add(value); }
+		}
 		this.draft=this.draft.map((entry,i)=>i===index?Object.assign({},entry,{[field]:value}):entry);
 		this.message='';
 		this._refresh();
@@ -5238,6 +5345,12 @@ class RelatedMenuSettings {
 		this.draft=this.draft.map((item,i)=>i===index?
 			Object.assign({},item,{url:input.value}):item);
 		input.focus();
+		const rowKey=this._rowKey(this.draft[index],index);
+		this.variablesOpen.delete(rowKey);
+		const menu=card.querySelector('[data-rl-variables-panel]');
+		if (menu) { menu.hidden=true; }
+		const toggle=card.querySelector('[data-rl-variables-toggle]');
+		if (toggle) { toggle.setAttribute('aria-expanded','false');toggle.textContent='｛ ｝ 変数を挿入 ▾'; }
 		this.message='';
 		this._refresh();
 	}
@@ -5269,16 +5382,88 @@ class RelatedMenuSettings {
 		if (this._dirty()) { this.externalChanged=true;this._refresh(); }
 		else { this._load(); }
 	}
+	_startRecording(index, button) {
+		if (this._recordCleanup) { this._recordCleanup(); }
+		const originalText=button.textContent;
+		const document=this.doc;
+		button.textContent='キーを押してください（Escで中止）';
+		const cleanup=() => {
+			document.removeEventListener('keydown',onKeyDown,true);
+			button.textContent=originalText;
+			this._recordCleanup=null;
+		};
+		const onKeyDown=evt => {
+			evt.preventDefault();
+			evt.stopPropagation();
+			if (typeof evt.stopImmediatePropagation==='function') { evt.stopImmediatePropagation(); }
+			if ([16,17,18,91,92,93,224].includes(evt.keyCode)) { return; }
+			if (evt.keyCode===27 && !(evt.metaKey || evt.altKey || evt.ctrlKey || evt.shiftKey)) {
+				cleanup();return;
+			}
+			const value=typeof this.shortcuts.encodeKeyCombo==='function' ?
+				this.shortcuts.encodeKeyCombo(evt) : evt.keyCode;
+			cleanup();
+			if (!Number.isSafeInteger(value) || value<=0 || value>=90000000) { return; }
+			this.draft=this.draft.map((entry,i)=>i===index ?
+				Object.assign({},entry,{shortcutKey:value}) : entry);
+			this.message='';
+			this._refresh();
+		};
+		this._recordCleanup=cleanup;
+		document.addEventListener('keydown',onKeyDown,true);
+	}
 	_onClick(e) {
 		const button=e.target.closest('button');
 		if (!button || !this.container.contains(button) || button.disabled) { return; }
 		if (button.dataset.rlInsert) { this._insert(button);return; }
+		if (button.hasAttribute('data-rl-record')) {
+			const index=Number(button.dataset.rlRecord);
+			if (Number.isInteger(index) && index>=0 && index<this.draft.length) {
+				this._startRecording(index,button);
+			}
+			return;
+		}
+		if (button.hasAttribute('data-rl-key-clear')) {
+			const index=Number(button.dataset.rlKeyClear);
+			if (!Number.isInteger(index) || index<0 || index>=this.draft.length) { return; }
+			if (this._recordCleanup) { this._recordCleanup(); }
+			this.draft=this.draft.map((entry,i)=>i===index ?
+				Object.assign({},entry,{shortcutKey:0}) : entry);
+			this._refresh();
+			return;
+		}
+		if (button.hasAttribute('data-rl-expand')) {
+			const index=Number(button.dataset.rlExpand);
+			const card=button.closest('[data-rl-row]');
+			const key=this._rowKey(this.draft[index],index);
+			if (this.expandedIds.has(key)) { this.expandedIds.delete(key); }
+			else { this.expandedIds.add(key); }
+			const expanded=this.expandedIds.has(key);
+			if (!expanded && this._recordCleanup) { this._recordCleanup(); }
+			card.querySelector('[data-rl-details]').hidden=!expanded;
+			button.textContent=expanded?'閉じる':'編集';
+			button.setAttribute('aria-expanded',String(expanded));
+			return;
+		}
+		if (button.hasAttribute('data-rl-variables-toggle')) {
+			const index=Number(button.dataset.rlVariablesToggle);
+			const key=this._rowKey(this.draft[index],index);
+			const panel=button.closest('[data-rl-row]').querySelector('[data-rl-variables-panel]');
+			const expanded=panel.hidden;
+			panel.hidden=!expanded;
+			if (expanded) { this.variablesOpen.add(key); } else { this.variablesOpen.delete(key); }
+			button.setAttribute('aria-expanded',String(expanded));
+			button.textContent='｛ ｝ 変数を挿入 '+(expanded?'▴':'▾');
+			return;
+		}
 		if (button.hasAttribute('data-rl-save')) { this._save();return; }
 		if (button.hasAttribute('data-rl-cancel')) { this._load();return; }
 		if (button.hasAttribute('data-rl-add')) {
 			if (this.draft.length<40 && this.original!==null) {
-				this.draft=this.draft.concat([{id:this._uniqueId(),label:'',url:'',
+				const id=this._uniqueId();
+				this.draft=this.draft.concat([{id,label:'',url:'',
 					enabled:true,openInNewTab:true}]);
+				this.expandedIds.add(id);
 				this.message='';this._render();
 			}
 			return;
@@ -5292,21 +5477,72 @@ class RelatedMenuSettings {
 		if (kind==='duplicate') {
 			if (next.length>=40) { return; }
 			const old=next[index];
+			if (!old || typeof old!=='object' || Array.isArray(old) || typeof old.id!=='string') { return; }
 			const id=this._uniqueId(String(old.id).slice(0,55)+'-copy');
 			next.splice(index+1,0,Object.assign({},old,{id}));
+			this.expandedIds.add(id);
 		} else if (kind==='delete') {
+			const key=this._rowKey(next[index],index);
+			this.expandedIds.delete(key);
+			this.variablesOpen.delete(key);
 			next.splice(index,1);
 		} else {
 			const other=kind==='up'?index-1:index+1;
 			if (other<0 || other>=next.length) { return; }
-			const swap=next[index];next[index]=next[other];next[other]=swap;
+			const entry=next.splice(index,1)[0];
+			next.splice(other,0,entry);
 		}
 		this.draft=next;this.message='';this._render();
 	}
+	_onDragStart(e) {
+		const grip=e.target.closest && e.target.closest('[data-rl-drag]');
+		if (!grip || !this.container.contains(grip)) { return; }
+		const from=Number(grip.dataset.rlDrag);
+		if (!Number.isInteger(from) || from<0 || from>=this.draft.length) { return; }
+		this._dragFrom=from;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed='move';
+			e.dataTransfer.setData('text/plain',String(from));
+		}
+	}
+	_onDragOver(e) {
+		if (this._dragFrom===null) { return; }
+		const card=e.target.closest && e.target.closest('[data-rl-row]');
+		if (!card || !this.container.contains(card)) { return; }
+		e.preventDefault();
+		if (e.dataTransfer) { e.dataTransfer.dropEffect='move'; }
+		this.container.querySelectorAll('.rl-drop-target').forEach(node=>
+			node.classList.remove('rl-drop-target'));
+		card.classList.add('rl-drop-target');
+	}
+	_onDrop(e) {
+		if (this._dragFrom===null) { return; }
+		const card=e.target.closest && e.target.closest('[data-rl-row]');
+		if (!card || !this.container.contains(card)) { return; }
+		e.preventDefault();
+		const from=this._dragFrom;
+		const to=Number(card.dataset.rlRow);
+		this._dragFrom=null;
+		if (!Number.isInteger(to) || to<0 || to>=this.draft.length || from===to) {
+			this.container.querySelectorAll('.rl-drop-target').forEach(node=>
+				node.classList.remove('rl-drop-target'));
+			return;
+		}
+		const next=this.draft.slice();
+		next.splice(to,0,next.splice(from,1)[0]);
+		this.draft=next;
+		this.message='';
+		this._render();
+	}
 	dispose() {
+		if (this._recordCleanup) { this._recordCleanup(); }
 		this.container.removeEventListener('click',this._handleClick);
 		this.container.removeEventListener('input',this._handleInput);
 		this.container.removeEventListener('change',this._handleChange);
+		this.container.removeEventListener('dragstart',this._handleDragStart);
+		this.container.removeEventListener('dragover',this._handleDragOver);
+		this.container.removeEventListener('drop',this._handleDrop);
+		this.container.removeEventListener('dragend',this._handleDragEnd);
 		if (typeof this.config.off==='function') {
 			this.config.off('update',this._handleConfigUpdate);
 		}
@@ -5634,7 +5870,8 @@ class RelatedMenuSettings {
         // The custom link editor owns its draft; unrelated settings keep their old handlers.
         this._relatedMenuLinks = RelatedMenuSettings.mount(
           $panel.find('.relatedMenuCustomLinksContainer')[0],
-          {config, actions: RelatedMenuActions}
+          {config, actions: RelatedMenuActions,
+            shortcuts: {encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS}}
         );
         $panel.toggleClass('debug', config.props.debug);
       }

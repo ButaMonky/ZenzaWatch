@@ -255,6 +255,20 @@ class ShortcutKeyEmitter {
         key = 'SEEK_BY';
         param = keyCode === 37 ? -0.5 : 0.5;
       }
+      // Linked actions are an independent lane: duplicate shortcuts intentionally
+      // dispatch every custom link in the configured list, even if a legacy key
+      // matched above. Repeated keydowns must not open unlimited browser tabs.
+      if (!e.repeat) {
+        const raw = typeof config.getValue === 'function' ?
+          config.getValue('relatedMenu.customLinks') :
+          config.props['relatedMenu.customLinks'];
+        const links = Array.isArray(raw) ? raw : [];
+        const ids = links.filter(item => item && typeof item.id === 'string' &&
+          item.enabled !== false && Number.isSafeInteger(item.shortcutKey) &&
+          item.shortcutKey > 0 && item.shortcutKey === keyCode)
+          .map(item => item.id);
+        if (ids.length) { emitter.emit('keyDown', 'RELATED_MENU_LINKS', e, ids); }
+      }
       if (key) {
         emitter.emit('keyDown', key, e, param);
       }

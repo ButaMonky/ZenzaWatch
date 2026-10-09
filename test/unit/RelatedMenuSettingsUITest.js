@@ -10,14 +10,14 @@ const sample = (id='video-link') => ({
   id, label: '動画を見る', url: 'https://example.com/watch/{videoId}',
   enabled: true, openInNewTab: true
 });
-const boot = (items=[sample()]) => {
+const boot = (items=[sample()], editorPath='src/RelatedMenuSettings.js') => {
   const dom = new JSDOM('<!doctype html><html><body><div id="host"></div></body></html>');
   const ctx = createContext({URL, document:dom.window.document});
   const actions = loadClass('packages/zenza/src/menu/RelatedMenuActions.js', 'RelatedMenuActions', ctx);
-  const Panel = loadClass('src/RelatedMenuSettings.js','RelatedMenuSettings',ctx);
+  const Panel = loadClass(editorPath,'RelatedMenuSettings',ctx);
   const listeners=new Set();
   const config={
-    value:items.map(x=>x && typeof x==='object'?{...x}:x),calls:[],
+    value:items.map(x=>x && typeof x==='object' && !Array.isArray(x)?{...x}:x),calls:[],
     getValue(key){ assert.strictEqual(key,'relatedMenu.customLinks'); return this.value; },
     setValue(key,next){
       assert.strictEqual(key,'relatedMenu.customLinks');
@@ -158,6 +158,26 @@ describe('Task314 related-menu custom links settings UI', function(){
     assert.match(h.all('[data-rl-error]')[1].textContent,/不正/);
     assert.strictEqual(h.config.calls.length,0);
     h.cleanup();
+  });
+  it('does not throw or duplicate malformed saved rows, keeping valid neighbors and stored data',()=>{
+    for (const file of ['src/RelatedMenuSettings.js', 'dist/ZenzaAdvancedSettings.user.js']) {
+      for (const malformed of [null, 42, [], 'invalid']) {
+        const h=boot([sample('one'),malformed],file);
+        const errors=[];
+        h.dom.window.addEventListener('error', event=>{
+          errors.push(event.error || event.message);
+          event.preventDefault();
+        });
+        assert.strictEqual(h.q('[data-rl-save]').disabled,true);
+        h.click('[data-rl-duplicate="1"]');
+        assert.deepStrictEqual(errors,[], file+' duplicate must not throw from malformed row');
+        assert.strictEqual(h.all('[data-rl-row]').length,2);
+        assert.strictEqual(h.all('[data-rl-field="id"]')[0].value,'one');
+        assert.strictEqual(h.q('[data-rl-save]').disabled,true);
+        assert.strictEqual(h.config.calls.length,0);
+        h.cleanup();
+      }
+    }
   });
   it('remounts from exported/imported array without mutating saved data',()=>{
     const initial=[sample('one'),{...sample('two'),enabled:false}];

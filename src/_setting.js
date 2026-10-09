@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.40-task314
+// @version     0.3.41-task316
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -359,7 +359,8 @@ const $ = uq;
         // The custom link editor owns its draft; unrelated settings keep their old handlers.
         this._relatedMenuLinks = RelatedMenuSettings.mount(
           $panel.find('.relatedMenuCustomLinksContainer')[0],
-          {config, actions: RelatedMenuActions}
+          {config, actions: RelatedMenuActions,
+            shortcuts: {encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS}}
         );
         $panel.toggleClass('debug', config.props.debug);
       }

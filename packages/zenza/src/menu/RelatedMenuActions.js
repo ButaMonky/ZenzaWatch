@@ -52,20 +52,49 @@ class RelatedMenuActions {
           item.label.length > 80 ||
           !this._validateUrlTemplate(item.url) ||
           (item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
-          (item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean')) {
+          (item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean') ||
+          (item.shortcutKey !== undefined &&
+            (!Number.isSafeInteger(item.shortcutKey) || item.shortcutKey < 0 ||
+            item.shortcutKey >= 90000000))) {
         errors.push('Invalid custom link at index ' + index);
         return;
       }
       ids.add(item.id);
-      links.push({
+      const link = {
         id: item.id, label: item.label.trim(), url: item.url,
         enabled: item.enabled !== false,
         openInNewTab: item.openInNewTab !== false
-      });
+      };
+      if (item.shortcutKey > 0) { link.shortcutKey = item.shortcutKey; }
+      links.push(link);
     });
     return {valid: errors.length === 0, errors, links};
   }
   static getLinks(input) { return this.validateLinks(input).links; }
+  static openShortcutsByIds(input, ids, context, opener) {
+    if (!Array.isArray(ids) || typeof opener !== 'function') { return 0; }
+    const selected = new Set(ids);
+    const resolved = this.getLinks(input)
+      .filter(item => item.enabled && selected.has(item.id))
+      .map(item => ({item, value: this.resolveUrl(item.url, context)}))
+      .filter(entry => !!entry.value.url);
+    // One browser tab cannot navigate to multiple URLs. Keep the final _self
+    // entry in the current tab and open all remaining links separately.
+    let currentTabIndex = -1;
+    resolved.forEach((entry, i) => {
+      if (!entry.item.openInNewTab) { currentTabIndex = i; }
+    });
+    const safeOpen = (url, target) => {
+      try { opener(url, target); } catch (_) { /* one failed tab must not block others */ }
+    };
+    resolved.forEach((entry, i) => {
+      if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank'); }
+    });
+    if (currentTabIndex >= 0) {
+      safeOpen(resolved[currentTabIndex].value.url, '_self');
+    }
+    return resolved.length;
+  }
   static makeContext(videoInfo, currentTime = 0) {
     if (!videoInfo || typeof videoInfo !== 'object') { return Object.freeze({}); }
     let owner;

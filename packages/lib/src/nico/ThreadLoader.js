@@ -65,10 +65,20 @@ const {ThreadLoader} = (() => {
     };
   };
   const logCommentPostDiagnostic = (diagnostic, phase, event, details = {}) => {
-    window.console.log(
-      '[ZenzaWatch][CommentPost]',
-      logSafe.redact({...diagnostic, phase, event, ...details})
-    );
+    const safe = logSafe.redact({...diagnostic, phase, event, ...details});
+    // Chrome's "Copy console message" collapses object arguments to "Object".
+    // Add a flat JSON string built only from approved diagnostic fields.
+    const copyable = {};
+    for (const key of [
+      'id', 'attempt', 'videoId', 'threadId', 'language', 'phase', 'event',
+      'statusCode', 'errorCode', 'kind', 'errorName', 'reason', 'outcome',
+      'retryScheduled', 'retryAfterMs', 'delayMs', 'nextAttempt',
+      'postKeyPresent', 'challengeRequired', 'commandCount',
+      'ackType', 'hasNo', 'hasId', 'postedNo'
+    ]) {
+      if (safe[key] !== undefined) { copyable[key] = safe[key]; }
+    }
+    window.console.log('[ZenzaWatch][CommentPost]', safe, JSON.stringify(copyable));
   };
   const summarizeCommentPostAck = ack => {
     if (ack === null) { return {ackType: 'null'}; }

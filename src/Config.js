@@ -8,6 +8,7 @@ import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions'
 import {RelatedMenuOrder} from './RelatedMenuOrder';
 import {ScreenshotFileName} from './ScreenshotFileName';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+import {NgCompositeRules} from './NgCompositeRules';
 
 const location = {host: 'www.nicovideo.jp'};
 const navigator = {};
@@ -25,6 +26,7 @@ const window = {console: console};
 //@require RelatedMenuOrder
 //@require ScreenshotFileName
 //@require UiVisibilityRegistry
+//@require NgCompositeRules
 const Config = (() => {
   const DEFAULT_CONFIG = {
     debug: false,
@@ -42,7 +44,7 @@ const Config = (() => {
     autoFullScreen: false,
     autoCloseFullScreen: true, // 再生終了時に自動でフルスクリーン解除するかどうか
     continueNextPage: false,   // 動画再生中にリロードやページ切り替えしたら続きから開き直す
-    backComment: false,        // コメントの裏流し
+    backComment: false,        // 全画面・ワイド表示でコメントを映像の上に全域表示
     autoPauseCommentInput: true, // コメント入力時に自動停止する
     sharedNgLevel: 'MID',      // NG共有の強度 NONE, LOW, MID, HIGH, MAX
     enablePushState: true,     // ブラウザの履歴に乗せる
@@ -82,6 +84,7 @@ const Config = (() => {
     userIdFilter: '',
     commandFilter: '',
     removeNgMatchedUser: false, // NGにマッチしたユーザーのコメント全部消す
+    'ngComposite.rules': [], // 上級者向け複合NG・置換（初期状態は既存挙動のまま）
 
     'filter.fork0': true, // 通常コメント
     'filter.fork1': true, // 投稿者コメント
@@ -382,6 +385,10 @@ const Config = (() => {
         return value;
       },
       validateImport: (key, value) => {
+        if (key === 'ngComposite.rules') {
+          return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
+            Array.isArray(value)&&value.length===0;
+        }
         if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
         if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
         if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }

@@ -192,7 +192,7 @@ const SHORTCUT_ACTIONS = [
     defaultKey: 0, command: 'saveMymemory'},
 
   // RootDispatcher.js に既に 'toggle-<設定名>' のcaseがあり、追加配線が不要な6件。
-  {id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを動画の後ろに流す ON/OFF',
+  {id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを画面全体に流す ON/OFF',
     defaultKey: 0, command: 'toggle-backComment'},
   {id: 'TOGGLE_NG_FILTER', category: 'フィルタ/NG', label: 'NGフィルタ全体 ON/OFF',
     defaultKey: 0, command: 'toggle-enableFilter'},

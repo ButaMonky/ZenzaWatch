@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.52-task399
+// @version     0.3.55-task402
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -26,6 +26,7 @@ import {ScreenshotFileName} from './ScreenshotFileName';
 import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 import {ModernAdvancedSettingsModel} from './ModernAdvancedSettingsModel';
 import {ModernAdvancedSettingsUI} from './ModernAdvancedSettingsUI';
+import {NgCompositeRuleEditor} from './NgCompositeRuleEditor';
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
 ((window) => { const self = window;
@@ -48,6 +49,7 @@ const $ = uq;
 //@require RelatedMenuActions
 //@require ModernAdvancedSettingsModel
 //@require ModernAdvancedSettingsUI
+//@require NgCompositeRuleEditor
     window.ZenzaAdvancedSettings = {
       config: Config
     };
@@ -960,7 +962,7 @@ const $ = uq;
       <option value="fullScreen">フルスクリーン ON/OFF</option>
       <option value="toggle-mute">ミュート ON/OFF</option>
       <option value="toggle-showComment">コメント表示 ON/OFF</option>
-      <option value="toggle-backComment">コメントの背面表示 ON/OFF</option>
+      <option value="toggle-backComment">コメントを画面全体に流す ON/OFF</option>
       <option value="toggle-loop">ループ ON/OFF</option>
       <option value="toggle-enableFilter">NG設定 ON/OFF</option>
       <option value="screenShot">スクリーンショット</option>

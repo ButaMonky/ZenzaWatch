@@ -37,7 +37,10 @@ class NicoChat {
   }
 
   static create(data, options = {}) {
-    return new NicoChat(NicoChat.createBlank(data), options);
+    const value=NicoChat.createBlank(data);
+    value.nicoruKnown=data.nicoruKnown===undefined?
+      data.nicoru!==undefined&&data.nicoru!==null:!!data.nicoruKnown;
+    return new NicoChat(value, options);
   }
 
   static createFromChatElement(elm, options = {}) {
@@ -184,6 +187,8 @@ class NicoChat {
     props.duration = NicoChat.DURATION.NAKA;
     props.commentVer = 'flash';
     props.nicoru = data.nicoru || 0;
+    props.nicoruKnown=data.nicoruKnown===undefined?
+      data.nicoru!==undefined&&data.nicoru!==null:!!data.nicoruKnown;
     props.valhalla = data.valhalla;
     props.lastNicoruDate = data.last_nicoru_date || null;
     props.opacity = 1;
@@ -333,7 +338,8 @@ class NicoChat {
   get threadId() {return this.props.thread;}
   get threadLabel() {return this.props.threadLabel;}
   get nicoru() {return this.props.nicoru;}
-  set nicoru(v) {this.props.nicoru = v;}
+  get nicoruKnown(){return !!this.props.nicoruKnown;}
+  set nicoru(v) {this.props.nicoru = v;this.props.nicoruKnown=true;}
   get nicotta() { return !!this.props.nicotta;}
   set nicotta(v) { this.props.nicotta = v;
     // this.onChange();

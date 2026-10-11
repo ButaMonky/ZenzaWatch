@@ -1444,18 +1444,6 @@ util.addStyle(`
     display: none !important;
   }
 
-  .is-showComment.is-backComment .videoPlayer
-  {
-    top:  25% !important;
-    left: 25% !important;
-    width:  50% !important;
-    height: 50% !important;
-    right:  0 !important;
-    bottom: 0 !important;
-    border: 0 !important;
-    z-index: 102 !important;
-  }
-
   body[data-screen-mode="3D"] .zenzaPlayerContainer .videoPlayer {
     transform: perspective(700px) rotateX(10deg);
     margin-top: -5%;
@@ -1468,25 +1456,21 @@ util.addStyle(`
     box-shadow: none;
   }
 
-  .is-backComment .videoPlayer {
-    left: 25%;
-    top:  25%;
-    width:  50%;
-    height: 50%;
-    z-index: 102;
-  }
-
-  /* Task 095: restore Task 052 B-6. This viewport-sized comment layer must only
-     be active together with the matching back-comment video shrink rule above. */
+  /* Fullscreen / wide-window mode only. Keep the video at its normal size
+     and draw comments above the video across the entire player viewport.
+     Override the "showVideoControlBar" reduced height so comments also pass
+     through the bottom edge; controls retain their own higher UI layer.
+     The normal, big, small and side-view stylesheets are unaffected. */
   .zenzaPlayerContainer.is-backComment .commentLayerFrame {
-    position: fixed;
-    top:  0;
-    left: 0;
-    width:  100vw;
-    height: calc(100vh - 40px);
-    right: auto;
-    bottom: auto;
-    z-index: 1;
+    position: absolute;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0;
+    bottom: 0;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 101 !important;
+    pointer-events: none;
   }
 
   body[data-screen-mode="3D"] .zenzaPlayerContainer .videoPlayer {
@@ -2914,6 +2898,9 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       case 'commandFilter':
         filter.commandFilterList = value;
+        break;
+      case 'ngComposite.rules':
+        filter.compositeRules=value;
         break;
       case 'filter.fork0':
       case 'filter.fork1':

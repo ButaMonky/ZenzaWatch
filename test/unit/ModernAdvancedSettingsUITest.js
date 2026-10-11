@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert');
 const {JSDOM}=require('jsdom');
-const {createContext,loadClass}=require('../helpers/extractSource');
+const {createContext,loadClass,beginSection,run}=require('../helpers/extractSource');
 const markup='<!doctype html><html><body><section id="panel"><div class="settingPanelInner"><div id="legacy">' +
 '<div class="control"><label><input type="checkbox" data-setting-name="supporterCredit.enable"> 提供画面を表示</label>' +
 '<div class="settingNote">動画の最後に提供画面を表示します。</div></div>' +
@@ -14,6 +14,8 @@ const markup='<!doctype html><html><body><section id="panel"><div class="setting
 function boot(saved={},storageValues={}) {
   const dom=new JSDOM(markup,{url:'https://www.nicovideo.jp/my'});
   const ctx=createContext({window:dom.window,document:dom.window.document,URL});
+  run(beginSection('src/NgCompositeRules.js')+'\nglobalThis.Engine=NgCompositeRules;',ctx);
+  run(beginSection('src/NgCompositeRuleEditor.js'),ctx);
   ctx.UiVisibilityRegistry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',ctx);
   const Model=loadClass('src/ModernAdvancedSettingsModel.js','ModernAdvancedSettingsModel',ctx);
   const UI=loadClass('src/ModernAdvancedSettingsUI.js','ModernAdvancedSettingsUI',ctx);
@@ -25,9 +27,10 @@ function boot(saved={},storageValues={}) {
     'commentLayer.protectCA':true,'commentLayer.maxDisplayComment':200,
     'touch.enable':false,'commentHistory.enabled':false,
     'commentHistory.maxAdditionalComments':5000,'screenFilter.gamma':1,
-    enableFilter:true,wordFilter:'',userIdFilter:'',commandFilter:'',
+    enableFilter:true,wordFilter:'',wordRegFilter:'',wordRegFilterFlags:'i',
+    userIdFilter:'',commandFilter:'','ngComposite.rules':[],
     sharedNgLevel:'MID','filter.fork0':true,screenMode:'normal',
-    showComment:true,enableCommentPanel:true,enableCommentPreview:false,
+    showComment:true,backComment:false,enableCommentPanel:true,enableCommentPreview:false,
     enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,
     enableAdDecoration:true,
     KEY_TOGGLE_PLAY:32, KEY_OPEN_GINZA:0, KEY_OPEN_NICOAD:0,
@@ -41,9 +44,16 @@ function boot(saved={},storageValues={}) {
     'ui.relatedMenu':true,'ui.commentInput':true,
     KEY_CUSTOM_SEEK_1:0,PARAM_CUSTOM_SEEK_1:0,'relatedMenu.customLinks':[],
     ...ctx.UiVisibilityRegistry.defaults()};
-  const config={default:defaults,values:{...defaults,...saved},writes:[],getValue(k){return this.values[k]},
-    setValue(k,v){this.values[k]=v;this.writes.push([k,v])},
-    options:{validateImport(k,v){return typeof v===typeof defaults[k]}}};
+  const config={default:defaults,values:{...defaults,...saved},writes:[],listeners:new Map(),
+    getValue(k){return this.values[k]},
+    onkey(k,fn){if(!this.listeners.has(k)){this.listeners.set(k,new Set());}this.listeners.get(k).add(fn);},
+    offkey(k,fn){this.listeners.get(k)?.delete(fn);},
+    setValue(k,v){
+      this.values[k]=v;this.writes.push([k,v]);
+      this.listeners.get(k)?.forEach(fn=>fn(v));
+    },
+    options:{validateImport(k,v){return k==='ngComposite.rules'?
+      ctx.Engine.validate(v):typeof v===typeof defaults[k]}}};
   const actions=[{id:'TOGGLE_PLAY',label:'再生・停止',category:'再生操作',defaultKey:32},
     {id:'CUSTOM_SEEK_1',label:'カスタムシーク 1',category:'シーク',defaultKey:0,customSeekSlot:true},
     ...['OPEN_GINZA','OPEN_NICOAD','OPEN_TWITTER_HASH','OPEN_ORIGINAL_VIDEO',
@@ -79,6 +89,116 @@ function boot(saved={},storageValues={}) {
     closes(){return closed},confirms(){return confirmCalls},allowConfirm(v){confirms=v},
     destroy(){ui.dispose();relatedEditor.dispose();dom.window.close()}};
 }
+describe('Task402 B2 global settings lifecycle',()=>{
+  const openNg=h=>{
+    h.click('[data-zw-major="NG・表示対象"]');
+    h.click('[data-zw-sub="NG・表示対象|複合NGルール（上級者向け）"]');
+    const host=h.q('[data-zw-id="ngComposite.rules"] .zw-composite-ng-host');
+    assert(host?.shadowRoot,'B2 shadow editor should mount inside advanced settings');
+    return host.shadowRoot;
+  };
+  it('mounts B2 with collapsed help and nicoru initial threshold 1, without writing config',()=>{
+    const h=boot();
+    try{
+      const shadow=openNg(h);
+      assert.strictEqual(shadow.querySelector('.ng-help').open,false);
+      assert(!shadow.innerHTML.includes('コメントアートを保護する'));
+      shadow.querySelector('[data-ng-act="add"]').click();
+      assert.strictEqual(h.model.get('ngComposite.rules').length,1);
+      assert.strictEqual(h.model.get('ngComposite.rules')[0].nicoruMin,1);
+      assert.strictEqual(h.config.writes.length,0);
+      assert.strictEqual(h.q('[data-zw-save]').disabled,true,'incomplete rule must not save');
+    }finally{h.destroy();}
+  });
+  it('commits only the finished B2 draft; cancellation restores and keeps other settings',()=>{
+    const h=boot({'supporterCredit.enable':false,backComment:true});
+    try{
+      let shadow=openNg(h);
+      shadow.querySelector('[data-ng-act="add"]').click();
+      shadow=h.q('[data-zw-id="ngComposite.rules"] .zw-composite-ng-host').shadowRoot;
+      const text=shadow.querySelector('[data-node-value]');
+      text.value='中国';h.dispatch(text,'input');
+      assert.strictEqual(h.q('[data-zw-save]').disabled,false);
+      assert.strictEqual(h.config.writes.length,0);
+      h.click('[data-zw-cancel]');
+      assert.deepStrictEqual(h.model.get('ngComposite.rules'),[]);
+      assert.strictEqual(h.config.writes.length,0);
+      shadow=openNgIfPresent(h);
+      shadow.querySelector('[data-ng-act="add"]').click();
+      const input=shadow.querySelector('[data-node-value]');
+      input.value='中国';h.dispatch(input,'input');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['ngComposite.rules'].length,1);
+      assert.strictEqual(h.config.values['ngComposite.rules'][0].enabled,false);
+      assert.strictEqual(h.config.values.backComment,true);
+      assert.strictEqual(h.config.values['supporterCredit.enable'],false);
+      assert.deepStrictEqual(h.config.writes.map(([key])=>key),['ngComposite.rules']);
+    }finally{h.destroy();}
+  });
+  function openNgIfPresent(h){
+    return h.q('[data-zw-id="ngComposite.rules"] .zw-composite-ng-host').shadowRoot;
+  }
+});
+
+describe('Task400 regex flag checkbox and NG command assistance',()=>{
+  const openNg=h=>{
+    h.click('[data-zw-major="NG・表示対象"]');
+    h.click('[data-zw-sub="NG・表示対象|NG条件"]');
+  };
+  it('renders native regex flag checkboxes without switch thumbs',()=>{
+    const h=boot();
+    try{
+      openNg(h);
+      const flags=h.all('[data-zw-regex-flag]');
+      assert.strictEqual(flags.length,4);
+      assert(flags.every(el=>el.type==='checkbox' && !el.classList.contains('zw-switch')));
+      const css=h.dom.window.document.querySelector('style[data-zw-modern-ui]').textContent;
+      assert(css.includes('.zw-modern-regex-editor input[type=checkbox]::after'));
+      assert(css.includes('appearance:checkbox'), 'native square checkbox appearance');
+      flags[1].checked=true;h.dispatch(flags[1]);
+      assert(h.model.get('wordRegFilterFlags').includes('m'));
+      assert.strictEqual(h.config.writes.length,0);
+    }finally{h.destroy();}
+  });
+  it('explains the current OR matching and inserts beginner presets as a draft',()=>{
+    const h=boot({commandFilter:'red'});
+    try{
+      openNg(h);
+      const helper=h.q('[data-zw-command-guide]');
+      assert(helper);
+      assert(helper.textContent.includes('1つでも'));
+      assert(helper.textContent.includes('組み合わせ'));
+      const red=h.q('[data-zw-command-preset="red"]');
+      const big=h.q('[data-zw-command-preset="big"]');
+      const top=h.q('[data-zw-command-preset="ue"]');
+      assert(red && big && top);
+      assert(red.textContent.includes('赤'));
+      assert(big.textContent.includes('大'));
+      assert(top.textContent.includes('上'));
+      assert(red.disabled,'existing command must not be duplicated');
+      big.click();
+      assert.strictEqual(h.model.get('commandFilter'),'red\nbig');
+      assert.strictEqual(h.config.writes.length,0);
+      assert(h.q('[data-zw-command-preset="big"]').disabled);
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values.commandFilter,'red\nbig');
+      assert.deepStrictEqual(h.config.writes.map(([key])=>key),['commandFilter']);
+    }finally{h.destroy();}
+  });
+  it('keeps external command strings and permits cancelling added commands',()=>{
+    const h=boot({commandFilter:'my-custom\nred'});
+    try{
+      openNg(h);
+      h.click('[data-zw-command-preset="blue"]');
+      assert.strictEqual(h.model.get('commandFilter'),'my-custom\nred\nblue');
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('commandFilter'),'my-custom\nred');
+      assert.strictEqual(h.config.writes.length,0);
+      assert.strictEqual(h.q('[data-zw-command-preset="red"]').disabled,true);
+    }finally{h.destroy();}
+  });
+});
+
 describe('Task399 NG user ID list editor',()=>{
   const openUserIds=h=>{
     h.click('[data-zw-major="NG・表示対象"]');
@@ -1295,5 +1415,50 @@ describe('Task398 custom editor search recovery',()=>{
       assert.strictEqual(h.ui.relatedEditor.container.hidden,false);
       assert.strictEqual(h.ui.relatedEditor.container.classList.contains('is-detail-only'),false);
     }finally{h.destroy();}
+  });
+});
+
+
+describe('Task401 full-viewport comment setting synchronization',()=>{
+  const openComments=h=>{
+    h.ui.selected={category:'コメント表示',subcategory:'表示・配置'};
+    h.ui.searchTerm='';
+    h.ui._renderCards();
+    h.ui._refreshFooter();
+    return h.q('[data-zw-id="backComment"] input[type=checkbox]');
+  };
+  it('reflects player/shortcut changes live without losing other drafts',()=>{
+    const h=boot({backComment:false});
+    try{
+      const input=openComments(h);
+      assert(input);
+      assert(input.closest('[data-zw-id]').textContent.includes('画面全体に流す'));
+      assert.strictEqual(input.checked,false);
+      h.model.set('supporterCredit.voice',false);
+      h.config.setValue('backComment',true);
+      assert.strictEqual(input.checked,true);
+      assert.strictEqual(h.model.get('backComment'),true);
+      assert.strictEqual(h.model.get('supporterCredit.voice'),false);
+      assert.deepStrictEqual(Array.from(h.model.changes(),c=>c.id),['supporterCredit.voice']);
+      h.ui._refreshFooter();h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values.backComment,true);
+    }finally{h.destroy();}
+  });
+  it('saves the advanced toggle through the original Config key, and removes listeners',()=>{
+    const h=boot({backComment:true});
+    try{
+      const input=openComments(h);
+      assert.strictEqual(input.checked,true);
+      input.checked=false;h.dispatch(input);
+      assert.strictEqual(h.config.values.backComment,true,'unsaved advanced changes stay in draft');
+      assert.deepStrictEqual(Array.from(h.model.changes(),c=>c.id),['backComment']);
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values.backComment,false);
+      assert.deepStrictEqual(h.config.writes,[['backComment',false]]);
+      assert.strictEqual(h.model.get('backComment'),false);
+    }finally{
+      h.destroy();
+      assert.strictEqual(h.config.listeners.get('backComment').size,0);
+    }
   });
 });

@@ -50,7 +50,7 @@ describe('Historical source recovery（Task 095）', function() {
     );
   });
 
-  it('Task 052: backCommentのviewport-sized comment layerはfor-fullだけで有効', function() {
+  it('Task 401: コメント全画面化はfor-fullだけで有効', function() {
     const source = readDialog();
     const rule = '.zenzaPlayerContainer.is-backComment .commentLayerFrame';
     assert.equal(source.split(rule).length - 1, 1, 'backComment comment-layer ruleは1か所だけであるべき');
@@ -66,9 +66,10 @@ describe('Historical source recovery（Task 095）', function() {
     assert.ok(globalStart >= 0 && globalEnd > globalStart, 'global dialog CSS block が見つからない');
     const globalCss = source.slice(globalStart, globalEnd);
 
-    assert.ok(forFull.includes(rule), 'Task 052 rule がfor-fullへ戻っていない');
-    assert.ok(forFull.includes('.is-backComment .videoPlayer'), '対応するvideo shrink ruleがfor-fullに無い');
-    assert.ok(!globalCss.includes(rule), 'Task 052 rule がglobal CSSへ逆流している');
+    assert.ok(forFull.includes(rule), 'Task 401 rule はfor-fullに必要');
+    assert.ok(!forFull.includes('.is-backComment .videoPlayer'), '旧来のvideo shrink ruleが残っている');
+    assert.ok(!forFull.includes('.is-showComment.is-backComment .videoPlayer'), '動画縮小の上書きが残っている');
+    assert.ok(!globalCss.includes(rule), 'Task 401 rule がglobal CSSへ逆流している');
   });
 
   it('Task 074: retired IchibaLoader file/referenceを残さない', function() {

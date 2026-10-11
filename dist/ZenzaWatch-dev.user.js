@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.232-task398
+// @version        2.7.234-task402
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-11 10:06Z
+// build: 2026-10-11 15:24Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.232-task398';
+    var VER = '2.7.234-task402';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-11 10:06Z';
+    var BUILD = '2026-10-11 15:24Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -984,7 +984,7 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'openGinza'},
 	{id: 'SAVE_MYMEMORY', category: 'その他', label: '再生位置を「おもいで」に保存',
 		defaultKey: 0, command: 'saveMymemory'},
-	{id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを動画の後ろに流す ON/OFF',
+	{id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを画面全体に流す ON/OFF',
 		defaultKey: 0, command: 'toggle-backComment'},
 	{id: 'TOGGLE_NG_FILTER', category: 'フィルタ/NG', label: 'NGフィルタ全体 ON/OFF',
 		defaultKey: 0, command: 'toggle-enableFilter'},
@@ -3060,6 +3060,225 @@ class UiVisibilityRegistry {
 		return true;
 	}
 }
+const NG_COLOR_HEX = Object.freeze({
+	white:'#FFFFFF',red:'#FF0000',pink:'#FF8080',orange:'#FFC000',
+	yellow:'#FFFF00',green:'#00FF00',cyan:'#00FFFF',blue:'#0000FF',
+	purple:'#C000FF',black:'#000000',white2:'#CCCC99',
+	niconicowhite:'#CCCC99',red2:'#CC0033',truered:'#CC0033',
+	pink2:'#FF33CC',orange2:'#FF6600',passionorange:'#FF6600',
+	yellow2:'#999900',madyellow:'#999900',green2:'#00CC66',
+	elementalgreen:'#00CC66',cyan2:'#00CCCC',blue2:'#3399FF',
+	marineblue:'#3399FF',purple2:'#6633CC',nobleviolet:'#6633CC',
+	black2:'#666666'
+});
+class NgCompositeRules {
+	static get CONFIG_KEY() {return 'ngComposite.rules';}
+	static get COLORS() {return NG_COLOR_HEX;}
+	static get FIELDS() {return ['text','regex','cmd','color','size','user','nicoru','position','fork','score','vpos','video'];}
+	static get ACTIONS() {return ['hide','hideAuthor','replace','strip','normalize','dim','mask'];}
+	static get MAX_RULES() {return 50;}
+	static isSafeRegex(pattern) {
+		if(typeof pattern!=='string'||pattern.length>160){return false;}
+		return !/(\([^)]*[+*][^)]*\))[+*{]/.test(pattern) &&
+			!/(?:\.\*|\.\+){2,}/.test(pattern) && !/\\[1-9]/.test(pattern);
+	}
+	static validate(rules) {
+		if(!Array.isArray(rules)||rules.length>NgCompositeRules.MAX_RULES) {return false;}
+		let count=0;
+		const str=(v,max=200)=>typeof v==='string'&&v.length<=max;
+		const walk=(node,depth)=>{
+			if(!node||typeof node!=='object'||++count>350){return false;}
+			if(node.kind==='group'){
+				return depth<3&&['all','any'].includes(node.mode)&&Array.isArray(node.nodes)&&
+					node.nodes.length<=45&&node.nodes.every(n=>walk(n,depth+1));
+			}
+			if(!NgCompositeRules.FIELDS.includes(node.field)||typeof node.not!=='boolean'||
+					!str(node.value,160)||!['contains','equals','notEquals','starts','ends','regex','gte','lte'].includes(node.cmp)){return false;}
+			if(node.value.trim()===''||(['nicoru','score','vpos'].includes(node.field)&&
+				!['gte','lte','equals'].includes(node.cmp))){return false;}
+			if(node.field==='regex'||node.cmp==='regex'){
+				if(!NgCompositeRules.isSafeRegex(node.value)){return false;}
+				try{new RegExp(node.value,'i');}catch(_){return false;}
+			}
+			if(['nicoru','score','vpos'].includes(node.field)&&
+				!Number.isFinite(Number(node.value))){return false;}
+			return true;
+		};
+		return rules.every(r=>{
+			if(!r||typeof r!=='object'||!str(r.id,80)||!str(r.name,90)||
+					typeof r.enabled!=='boolean'||!['normal','any','owner','easy'].includes(r.scope)||
+					!NgCompositeRules.ACTIONS.includes(r.action)||!['before','after'].includes(r.phase)||
+					typeof r.stopOnMatch!=='boolean'||typeof r.exemptNicoru!=='boolean'||
+					!Number.isInteger(r.nicoruMin)||r.nicoruMin<0||r.nicoruMin>10000000||
+					!['evaluate','skip'].includes(r.unknownPolicy)||
+					typeof r.keepProtectedOnAuthorHide!=='boolean'||!str(r.pattern,160)||
+					!str(r.replacement,800)||!str(r.mask,800)||typeof r.regexReplace!=='boolean'||
+					!str(r.flags,6)||!/^[gimsu]*$/.test(r.flags)||!Array.isArray(r.strip)||
+					r.strip.length>40||r.strip.some(c=>!str(c,40))||
+					!(r.normalizeColor==='keep'||r.normalizeColor in NG_COLOR_HEX)||
+					!['keep','medium','big','small'].includes(r.normalizeSize)||
+					!Number.isFinite(r.dim)||r.dim<5||r.dim>100||
+					!walk(r.conditions,0)){return false;}
+			if(r.action==='replace'&&r.regexReplace){
+				if(!NgCompositeRules.isSafeRegex(r.pattern)){return false;}
+				try{new RegExp(r.pattern,r.flags);}catch(_){return false;}
+			}
+			return true;
+		});
+	}
+	static matchScope(rule,chat) {
+		const fork=Number(chat.fork);
+		return rule.scope==='any'||(rule.scope==='normal'&&fork===0)||
+			(rule.scope==='owner'&&fork===1)||(rule.scope==='easy'&&fork===2);
+	}
+	static nicoru(chat) {
+		if(chat.nicoruKnown===false||chat.nicoru===null||chat.nicoru===undefined){return null;}
+		const value=Number(chat.nicoru);
+		return Number.isFinite(value)&&value>=0?value:null;
+	}
+	static protected(rule,chat) {
+		if(!rule.exemptNicoru){return false;}
+		const value=NgCompositeRules.nicoru(chat);
+		return value===null?rule.unknownPolicy==='skip':value>=rule.nicoruMin;
+	}
+	static commandColor(cmd,base) {
+		let value=(base||'#FFFFFF').toUpperCase();
+		for(const token of String(cmd||'').toLowerCase().split(/\s+/)){
+			if(NG_COLOR_HEX[token]){value=NG_COLOR_HEX[token];}
+			else if(/^#[a-f0-9]{6}$/i.test(token)){value=token.toUpperCase();}
+		}
+		return value;
+	}
+	static matches(node,chat) {
+		if(!node){return false;}
+		let matched=false;
+		let known=true;
+		if(node.kind==='group') {
+			matched=node.nodes.length>0 && (node.mode==='all'?
+				node.nodes.every(n=>NgCompositeRules.matches(n,chat)):
+				node.nodes.some(n=>NgCompositeRules.matches(n,chat)));
+		}else{
+			const f=node.field;
+			let actual;
+			if(f==='text'||f==='regex'){actual=chat.text;}
+			else if(f==='cmd'){actual=chat.cmd;}
+			else if(f==='color'){actual=NgCompositeRules.commandColor(chat.cmd,chat.color);}
+			else if(f==='size'){actual=chat.size;}
+			else if(f==='user'){actual=chat.userId;}
+			else if(f==='nicoru'){actual=NgCompositeRules.nicoru(chat);}
+			else if(f==='position'){actual=chat.type;}
+			else if(f==='fork'){actual=({0:'normal',1:'owner',2:'easy'})[chat.fork]||'other';}
+			else if(f==='score'){actual=chat.score;}
+			else if(f==='vpos'){actual=Number(chat.vpos)/100;}
+			else if(f==='video'){actual=chat.videoId;}
+			const expected=f==='color'?(NG_COLOR_HEX[node.value]||node.value).toUpperCase():node.value;
+			if(actual!==null&&actual!==undefined){
+				if(['gte','lte'].includes(node.cmp)){const a=Number(actual),b=Number(expected);
+					matched=Number.isFinite(a)&&Number.isFinite(b)&&(node.cmp==='gte'?a>=b:a<=b);
+				}else if(node.cmp==='regex'||f==='regex'){
+					try{matched=new RegExp(expected,'i').test(String(actual).slice(0,512));}catch(_){matched=false;}
+				}else{
+					const a=String(actual),b=String(expected);
+					if(node.cmp==='contains'){matched=a.includes(b);}
+					else if(node.cmp==='starts'){matched=a.startsWith(b);}
+					else if(node.cmp==='ends'){matched=a.endsWith(b);}
+					else if(node.cmp==='notEquals'){matched=a!==b;}
+					else {matched=a===b;}
+				}
+			} else {known=false;}
+		}
+		return known?(node.not?!matched:matched):false;
+	}
+	static initialState(chat,videoId='') {
+		const p=chat.props||chat;
+		return {
+			text:String(chat.text||''),cmd:String(chat.cmd||''),color:chat.color||'#FFFFFF',
+			size:chat.size||'medium',type:chat.type||'naka',
+			opacity:Number.isFinite(chat.opacity)?chat.opacity:1,
+			nicoru:chat.nicoru,nicoruKnown:chat.nicoruKnown!==undefined?chat.nicoruKnown:p.nicoruKnown,
+			userId:chat.userId||'',fork:chat.fork,score:chat.score,vpos:chat.vpos,
+			videoId:videoId||'',threadLabel:chat.threadLabel,isCA:chat.isCA
+		};
+	}
+	static applyAction(rule,state) {
+		if(rule.action==='hide'||rule.action==='hideAuthor'){state.hidden=true;return;}
+		if(rule.action==='mask'){state.text=rule.mask;return;}
+		if(rule.action==='dim'){state.opacity*=rule.dim/100;return;}
+		if(rule.action==='replace'){
+			if(!rule.pattern){return;}
+			if(rule.regexReplace){
+				try{const re=new RegExp(rule.pattern,rule.flags);
+					state.text=state.text.replace(re,rule.replacement);
+				}catch(_){/* rejected at validation */}
+			}else {state.text=state.text.split(rule.pattern).join(rule.replacement);}
+			return;
+		}
+		let tokens=state.cmd.split(/\s+/).filter(Boolean);
+		if(rule.action==='strip'){
+			const excluded=new Set(rule.strip.map(v=>v.toLowerCase()));
+			tokens=tokens.filter(v=>!excluded.has(v.toLowerCase()));
+		}else if(rule.action==='normalize'){
+			if(rule.normalizeColor!=='keep'){
+				tokens=tokens.filter(t=>!NG_COLOR_HEX[t.toLowerCase()]&&!/^#[a-f\d]{6}$/i.test(t));
+				if(rule.normalizeColor!=='white'){tokens.push(rule.normalizeColor);}
+			}
+			if(rule.normalizeSize!=='keep'){
+				tokens=tokens.filter(t=>!['big','small'].includes(t.toLowerCase()));
+				if(rule.normalizeSize!=='medium'){tokens.push(rule.normalizeSize);}
+			}
+		}
+		state.cmd=tokens.join(' ');
+		state.color=NgCompositeRules.commandColor(state.cmd,'#FFFFFF');
+		const lower=tokens.map(t=>t.toLowerCase());
+		state.size=lower.includes('big')?'big':lower.includes('small')?'small':'medium';
+		state.type=state.type;
+	}
+	static project(chats,rules,legacyPredicate=()=>true,videoId='',baselines=null) {
+		if(!NgCompositeRules.validate(rules)){return null;}
+		const active=rules.filter(r=>r.enabled);
+		if(!active.length){return null;}
+		const initial=chats.map(chat=>{
+			const baseline=baselines?.get?.(chat);
+			return baseline?{...baseline,nicoru:chat.nicoru,
+				nicoruKnown:chat.nicoruKnown,videoId:videoId||baseline.videoId}:
+				NgCompositeRules.initialState(chat,videoId);
+		});
+		const authorMatches=new Map();
+		for(const rule of active.filter(r=>r.action==='hideAuthor')){
+			const ids=new Set();
+			initial.forEach(s=>{
+				if(!s.userId||!NgCompositeRules.matchScope(rule,s)||NgCompositeRules.protected(rule,s)){return;}
+				if(rule.phase==='after'&&!legacyPredicate(s)){return;}
+				if(NgCompositeRules.matches(rule.conditions,s)){ids.add(s.userId);}
+			});
+			authorMatches.set(rule.id,ids);
+		}
+		const results=new Map();
+		for(let i=0;i<chats.length;i++){
+			const s={...initial[i],hidden:false};
+			let stopped=false;
+			const applyPhase=phase=>{
+				if(stopped){return;}
+				for(const r of active){
+					if(r.phase!==phase){continue;}
+					const ban=r.action==='hideAuthor'&&s.userId&&authorMatches.get(r.id).has(s.userId);
+					if(!ban&&!NgCompositeRules.matchScope(r,s)){continue;}
+					const protectedChat=NgCompositeRules.protected(r,s);
+					if(protectedChat&&!(ban&&r.keepProtectedOnAuthorHide===false)){continue;}
+					const hit=r.action==='hideAuthor'?ban:NgCompositeRules.matches(r.conditions,s);
+					if(!hit){continue;}
+					NgCompositeRules.applyAction(r,s);
+					if(r.stopOnMatch||s.hidden){stopped=true;break;}
+				}
+			};
+			applyPhase('before');
+			const legacySafe=!s.hidden&&legacyPredicate(s);
+			if(legacySafe){applyPhase('after');}
+			results.set(chats[i],{...s,visible:legacySafe&&!s.hidden});
+		}
+		return results;
+	}
+}
 const Config = (() => {
 	const DEFAULT_CONFIG = {
 		debug: false,
@@ -3077,7 +3296,7 @@ const Config = (() => {
 		autoFullScreen: false,
 		autoCloseFullScreen: true, // 再生終了時に自動でフルスクリーン解除するかどうか
 		continueNextPage: false,   // 動画再生中にリロードやページ切り替えしたら続きから開き直す
-		backComment: false,        // コメントの裏流し
+		backComment: false,        // 全画面・ワイド表示でコメントを映像の上に全域表示
 		autoPauseCommentInput: true, // コメント入力時に自動停止する
 		sharedNgLevel: 'MID',      // NG共有の強度 NONE, LOW, MID, HIGH, MAX
 		enablePushState: true,     // ブラウザの履歴に乗せる
@@ -3109,6 +3328,7 @@ const Config = (() => {
 		userIdFilter: '',
 		commandFilter: '',
 		removeNgMatchedUser: false, // NGにマッチしたユーザーのコメント全部消す
+		'ngComposite.rules': [], // 上級者向け複合NG・置換（初期状態は既存挙動のまま）
 		'filter.fork0': true, // 通常コメント
 		'filter.fork1': true, // 投稿者コメント
 		'filter.fork2': true, // かんたんコメント
@@ -3275,6 +3495,10 @@ const Config = (() => {
 				return value;
 			},
 			validateImport: (key, value) => {
+				if (key === 'ngComposite.rules') {
+					return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
+						Array.isArray(value)&&value.length===0;
+				}
 				if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
 				if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
 				if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }
@@ -8054,7 +8278,8 @@ const {SettingPanelElement} = (() => {
 							<input type="checkbox" class="checkbox"
 								data-setting-name="backComment"
 								?checked=${conf.backComment}>
-								コメントを動画の後ろに流す
+								コメントを画面全体に流す
+								<small>※ 全画面・ワイド表示時、映像を縮小せず画面の端までコメントを重ねます</small>
 						</label>
 					</div>
 					<div class="control">
@@ -8585,8 +8810,10 @@ const {SettingPanelElement} = (() => {
 		_bindEnableFilterConfig(config) {
 			if (this._boundEnableFilterConfig === config) { return; }
 			this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+			this._boundEnableFilterConfig?.offkey?.('backComment', this._onEnableFilterConfigUpdate);
 			this._boundEnableFilterConfig = config || null;
 			this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+			this._boundEnableFilterConfig?.onkey?.('backComment', this._onEnableFilterConfigUpdate);
 		}
 		async connectedCallback() {
 			await super.connectedCallback();
@@ -15971,6 +16198,7 @@ class NicoVideoPlayer extends Emitter {
 				wordRegFilterFlags: conf.props.wordRegFilterFlags,
 				userIdFilter: conf.props.userIdFilter,
 				commandFilter: conf.props.commandFilter,
+				compositeRules: conf.props['ngComposite.rules'],
 				removeNgMatchedUser: conf.props.removeNgMatchedUser,
 				fork0: conf.props['filter.fork0'],
 				fork1: conf.props['filter.fork1'],
@@ -23811,7 +24039,10 @@ class NicoChat {
 		}, options);
 	}
 	static create(data, options = {}) {
-		return new NicoChat(NicoChat.createBlank(data), options);
+		const value=NicoChat.createBlank(data);
+		value.nicoruKnown=data.nicoruKnown===undefined?
+			data.nicoru!==undefined&&data.nicoru!==null:!!data.nicoruKnown;
+		return new NicoChat(value, options);
 	}
 	static createFromChatElement(elm, options = {}) {
 		const data = {
@@ -23938,6 +24169,8 @@ class NicoChat {
 		props.duration = NicoChat.DURATION.NAKA;
 		props.commentVer = 'flash';
 		props.nicoru = data.nicoru || 0;
+		props.nicoruKnown=data.nicoruKnown===undefined?
+			data.nicoru!==undefined&&data.nicoru!==null:!!data.nicoruKnown;
 		props.valhalla = data.valhalla;
 		props.lastNicoruDate = data.last_nicoru_date || null;
 		props.opacity = 1;
@@ -24078,7 +24311,8 @@ class NicoChat {
 	get threadId() {return this.props.thread;}
 	get threadLabel() {return this.props.threadLabel;}
 	get nicoru() {return this.props.nicoru;}
-	set nicoru(v) {this.props.nicoru = v;}
+	get nicoruKnown(){return !!this.props.nicoruKnown;}
+	set nicoru(v) {this.props.nicoru = v;this.props.nicoruKnown=true;}
 	get nicotta() { return !!this.props.nicotta;}
 	set nicotta(v) { this.props.nicotta = v;
 	}
@@ -24979,6 +25213,7 @@ class NicoChatCss3View {
 		return {inline};
 	}
 }
+// already required
 class NicoChatFilter extends Emitter {
 	constructor(params) {
 		super();
@@ -25010,8 +25245,75 @@ class NicoChatFilter extends Emitter {
 		this._wordRegReg = null;
 		this._userIdReg = null;
 		this._commandReg = null;
-		this._onChange = _.debounce(this._onChange.bind(this), 50);
+		const notifyChange=_.debounce(this._onChange.bind(this),50);
+		this._onChange=()=>{this._compositeProjection=null;notifyChange();};
+		this._onChange.cancel=()=>notifyChange.cancel?.();
+		this._onChange.cancel=()=>notifyChange.cancel?.();
+		this._onChange.flush=()=>notifyChange.flush?.();
 		this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
+		this._compositeRules=typeof NgCompositeRules!=='undefined' &&
+			NgCompositeRules.validate(params.compositeRules||[])?
+			JSON.parse(JSON.stringify(params.compositeRules||[])):[];
+		this._compositePool=[];
+		this._compositeVideoId='';
+		this._compositeBaselines=new WeakMap();
+		this._compositeProjection=null;
+		this._compositeApplied=false;
+	}
+	get compositeRules(){return JSON.parse(JSON.stringify(this._compositeRules));}
+	set compositeRules(value){
+		if(!NgCompositeRules.validate(value)){return;}
+		this._compositeRules=JSON.parse(JSON.stringify(value));
+		this._compositeProjection=null;
+		this.refresh();
+	}
+	setCompositeChatPool(chats,videoId='') {
+		this._compositePool=chats.slice();
+		this._compositeVideoId=videoId;
+		this._compositeProjection=null;
+		if(this._compositeApplied||this._compositeRules.some(r=>r.enabled)){
+			const prior=this._compositeBaselines;
+			const next=new WeakMap();
+			for(const chat of chats){
+				next.set(chat,prior.get(chat)||NgCompositeRules.initialState(chat,videoId));
+			}
+			this._compositeBaselines=next;
+			this.refresh();
+		}
+	}
+	_applyCompositeState(chat,state) {
+		const baseline=this._compositeBaselines.get(chat);
+		if(!state){state=baseline;}
+		if(!state)return;
+		if(chat.props){
+			if(chat.text!==state.text){chat.text=state.text;}
+			chat.props.cmd=state.cmd;
+			chat.props.color=state.color;
+			chat.props.size=state.size;
+			chat.props.opacity=state.opacity;
+		}
+	}
+	_getCompositeProjection(fallback) {
+		if(this._compositeProjection!==null){return this._compositeProjection;}
+		const chats=this._compositePool.length?this._compositePool:fallback;
+		if(!this._enable||!this._compositeRules.some(r=>r.enabled)){
+			if(this._compositeApplied){
+				for(const c of chats){this._applyCompositeState(c,null);}
+				this._compositeApplied=false;
+			}
+			return this._compositeProjection=false;
+		}
+		for(const chat of chats){
+			if(!this._compositeBaselines.has(chat)){
+				this._compositeBaselines.set(chat,NgCompositeRules.initialState(chat,this._compositeVideoId));
+			}
+		}
+		const projection=NgCompositeRules.project(chats,this._compositeRules,
+			this.getFilterFunc(),this._compositeVideoId,this._compositeBaselines);
+		if(!projection){return this._compositeProjection=false;}
+		for(const chat of chats){this._applyCompositeState(chat,projection.get(chat));}
+		this._compositeApplied=true;
+		return this._compositeProjection=projection;
 	}
 	get isEnable() {
 		return this._enable;
@@ -25021,6 +25323,7 @@ class NicoChatFilter extends Emitter {
 			return;
 		}
 		this._enable = !!v;
+		this._compositeProjection=null;
 		this._onChange();
 	}
 	get removeNgMatchedUser() {
@@ -25350,7 +25653,9 @@ class NicoChatFilter extends Emitter {
 		const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
 		if (timeKey) { window.console.time(timeKey); }
 		const filterFunc = this.getFilterFunc();
-		let result = nicoChatArray.filter(filterFunc);
+		const composite=this._getCompositeProjection(nicoChatArray);
+		let result=nicoChatArray.filter(chat=>composite instanceof Map?
+			composite.get(chat)?.visible!==false:filterFunc(chat));
 		const removedUserIds = new Set();
 		if (before !== result.length && this._removeNgMatchedUser) {
 			const accepted = new Set(result);
@@ -25390,7 +25695,9 @@ class NicoChatFilter extends Emitter {
 		return result;
 	}
 	isSafe(nicoChat) {
-		return (this.getFilterFunc())(nicoChat);
+		const composite=this._getCompositeProjection([nicoChat]);
+		return composite instanceof Map?
+			composite.get(nicoChat)?.visible!==false:(this.getFilterFunc())(nicoChat);
 	}
 	_buildFilterReg(filterList) {
 		if (filterList.length < 1) {
@@ -25714,6 +26021,11 @@ class NicoComment extends Emitter {
 					break;
 			}
 		}
+		const previous=options.append?[
+			...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
+			...this.bottomGroup.nonFilteredMembers]:[];
+		this._nicoChatFilter?.setCompositeChatPool?.([...previous,...nicoChats],
+			options.watchId||options.videoId||'');
 		this.topGroup.addChatArray(top);
 		this.nakaGroup.addChatArray(naka);
 		this.bottomGroup.addChatArray(bottom);
@@ -25795,6 +26107,10 @@ class NicoComment extends Emitter {
 				group = this.nakaGroup;
 				break;
 		}
+		this._nicoChatFilter?.setCompositeChatPool?.([
+			...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
+			...this.bottomGroup.nonFilteredMembers,nicoChat
+		],this._nicoChatFilter._compositeVideoId);
 		group.addChat(nicoChat, group);
 		this.emit('addChat');
 	}
@@ -25812,6 +26128,10 @@ class NicoComment extends Emitter {
 				break;
 		}
 		group.removeChat(nicoChat, group);
+		this._nicoChatFilter?.setCompositeChatPool?.([
+			...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
+			...this.bottomGroup.nonFilteredMembers
+		],this._nicoChatFilter._compositeVideoId);
 	}
 	_onChange(e) {
 		console.log('NicoComment.onChange: ', e);
@@ -25831,6 +26151,7 @@ class NicoComment extends Emitter {
 		this.topGroup.reset();
 		this.nakaGroup.reset();
 		this.bottomGroup.reset();
+		this._nicoChatFilter?.setCompositeChatPool?.([]);
 		this._nicoScriptGeneration = (this._nicoScriptGeneration || 0) + 1;
 		this.nicoScripter.reset();
 		this.emit('clear');
@@ -34675,17 +34996,6 @@ util.addStyle(`
 	.hideCommentPanelTab .tabs.comment {
 		display: none !important;
 	}
-	.is-showComment.is-backComment .videoPlayer
-	{
-		top:  25% !important;
-		left: 25% !important;
-		width:  50% !important;
-		height: 50% !important;
-		right:  0 !important;
-		bottom: 0 !important;
-		border: 0 !important;
-		z-index: 102 !important;
-	}
 	body[data-screen-mode="3D"] .zenzaPlayerContainer .videoPlayer {
 		transform: perspective(700px) rotateX(10deg);
 		margin-top: -5%;
@@ -34696,24 +35006,21 @@ util.addStyle(`
 		height: 100vh;
 		box-shadow: none;
 	}
-	.is-backComment .videoPlayer {
-		left: 25%;
-		top:  25%;
-		width:  50%;
-		height: 50%;
-		z-index: 102;
-	}
-	/* Task 095: restore Task 052 B-6. This viewport-sized comment layer must only
-		be active together with the matching back-comment video shrink rule above. */
+	/* Fullscreen / wide-window mode only. Keep the video at its normal size
+		and draw comments above the video across the entire player viewport.
+		Override the "showVideoControlBar" reduced height so comments also pass
+		through the bottom edge; controls retain their own higher UI layer.
+		The normal, big, small and side-view stylesheets are unaffected. */
 	.zenzaPlayerContainer.is-backComment .commentLayerFrame {
-		position: fixed;
-		top:  0;
-		left: 0;
-		width:  100vw;
-		height: calc(100vh - 40px);
-		right: auto;
-		bottom: auto;
-		z-index: 1;
+		position: absolute;
+		top: 0 !important;
+		left: 0 !important;
+		right: 0;
+		bottom: 0;
+		width: 100% !important;
+		height: 100% !important;
+		z-index: 101 !important;
+		pointer-events: none;
 	}
 	body[data-screen-mode="3D"] .zenzaPlayerContainer .videoPlayer {
 		transform: perspective(600px) rotateX(10deg);
@@ -36026,6 +36333,9 @@ class NicoVideoPlayerDialog extends Emitter {
 				break;
 			case 'commandFilter':
 				filter.commandFilterList = value;
+				break;
+			case 'ngComposite.rules':
+				filter.compositeRules=value;
 				break;
 			case 'filter.fork0':
 			case 'filter.fork1':
@@ -41877,10 +42187,6 @@ css.addStyle(`
 		display: inline-block;
 		padding: 0 8px;
 	}
-	.zenzaScreenMode_normal .is-backComment .zenzaWatchVideoInfoPanel,
-	.zenzaScreenMode_big    .is-backComment .zenzaWatchVideoInfoPanel {
-		opacity: 0.7;
-	}
 	.zenzaWatchVideoInfoPanel .relatedVideoTab .relatedVideoContainer {
 		box-sizing: border-box;
 		position: relative;
@@ -42954,10 +43260,6 @@ VideoHeaderPanel.__css__ = (`
 		}
 		.videoMetaInfoContainer {
 			display: inline-block;
-		}
-		.zenzaScreenMode_normal .is-backComment .zenzaWatchVideoHeaderPanel,
-		.zenzaScreenMode_big    .is-backComment .zenzaWatchVideoHeaderPanel {
-			opacity: 0.7;
 		}
 		.zenzaWatchVideoHeaderPanel .relatedInfoMenuContainer {
 			display: inline-block;

@@ -884,12 +884,6 @@ css.addStyle(`
     padding: 0 8px;
   }
 
-  .zenzaScreenMode_normal .is-backComment .zenzaWatchVideoInfoPanel,
-  .zenzaScreenMode_big    .is-backComment .zenzaWatchVideoInfoPanel {
-    opacity: 0.7;
-  }
-
-
   .zenzaWatchVideoInfoPanel .relatedVideoTab .relatedVideoContainer {
     box-sizing: border-box;
     position: relative;
@@ -2077,11 +2071,6 @@ VideoHeaderPanel.__css__ = (`
 
     .videoMetaInfoContainer {
       display: inline-block;
-    }
-
-    .zenzaScreenMode_normal .is-backComment .zenzaWatchVideoHeaderPanel,
-    .zenzaScreenMode_big    .is-backComment .zenzaWatchVideoHeaderPanel {
-      opacity: 0.7;
     }
 
     .zenzaWatchVideoHeaderPanel .relatedInfoMenuContainer {

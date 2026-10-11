@@ -124,12 +124,20 @@ class ModernAdvancedSettingsUI {
       '.zw-modern-warning { color:#e6bb75; font-size:11px; display:block; margin-top:5px; }',
       '.zw-modern-regex-editor { display:grid; grid-template-columns:1fr; gap:7px; width:100%; max-width:700px; }',
       '.zw-modern-regex-editor label { display:flex; gap:9px; align-items:center; justify-content:flex-start; font-size:12px; }',
-      '.zw-modern-regex-editor input[type=checkbox] { flex:none; width:17px; height:17px; appearance:auto; accent-color:#82bfff; border-radius:3px; }',
+      '.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox] { flex:none; width:17px; height:17px; appearance:checkbox; -webkit-appearance:checkbox; accent-color:#82bfff; border:0; background:transparent; border-radius:0; padding:0; }',
+      '.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox]::after { content:none!important; display:none!important; }',
       '.zw-modern-regex-editor [data-zw-regex-advanced-panel] { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }',
       '.zw-modern-regex-editor [data-zw-regex-advanced-panel][hidden] { display:none!important; }',
       '.zw-modern-regex-editor input[type=text] { width:180px; min-width:0; }',
       '.zw-modern-regex-current { color:var(--zw-dark-muted); font-size:11px; }',
       '.zw-modern-regex-editor small { color:var(--zw-dark-muted); font-size:11px; }',
+      '.zw-modern-command-assist { margin-top:10px; padding:12px; background:#1a293c; border:1px solid #445a71; border-radius:5px; display:grid; gap:10px; }',
+      '.zw-modern-command-assist p { margin:0; color:var(--zw-dark-muted); font-size:12px; line-height:1.6; }',
+      '.zw-modern-command-assist p strong { color:var(--zw-dark-text); }',
+      '.zw-modern-command-group { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }',
+      '.zw-modern-command-group > strong { min-width:65px; font-size:11px; color:#c5d9ed; }',
+      '.zw-modern-command-group button { border:1px solid #526c89; border-radius:5px; color:#ecf5ff; background:#23364d; padding:5px 9px; font-size:11px; }',
+      '.zw-modern-command-group button:disabled { opacity:.55; background:#2f4458; }',
       '.zw-modern-prefix-breakdown { display:flex; gap:5px; flex-wrap:wrap; }',
       '.zw-modern-prefix-breakdown span { font-size:10px; padding:4px 7px; border-radius:4px; border:1px solid #465971; color:#aebed0; background:#1b293a; }',
       '.zw-modern-prefix-presets { display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:100%; justify-content:flex-start; }',
@@ -307,6 +315,16 @@ class ModernAdvancedSettingsUI {
     this.root.addEventListener('input',this._onRelatedInputBound=e=>this._onRelatedBubble(e));
     this.doc.addEventListener('keydown',this._onKeyDownBound=e=>this._onDocumentKeyDown(e),true);
     this.panel.appendChild(this.root);
+    // Keep the fullscreen-comment switch in sync with the player setting
+    // panel and keyboard shortcut without committing other pending edits.
+    this._onBackCommentConfigUpdate=()=>{
+      if(!this.model.syncLiveValue('backComment')){return;}
+      const checked=!!this.model.get('backComment');
+      this.cards.querySelectorAll('input[data-setting-name="backComment"]')
+        .forEach(input=>{input.checked=checked;});
+      this._refreshCards();
+    };
+    this.model.config.onkey?.('backComment',this._onBackCommentConfigUpdate);
     this._unwatchRelatedActions=this.relatedActions?.onChange?.(()=>
       this._refreshRelatedOrderList()) || null;
     this._renderNavigation();
@@ -675,6 +693,18 @@ class ModernAdvancedSettingsUI {
         warning.textContent='⚠ キー重複：'+warns.join('、');
         controls.append(warning);
       }
+    } else if(descriptor.type==='composite-ng') {
+      const host=this.doc.createElement('div');
+      host.className='zw-composite-ng-host';
+      host.style.cssText='width:100%;min-width:0;';
+      controls.append(host);
+      if(typeof NgCompositeRuleEditor!=='undefined'){
+        this._ngCompositeEditor=new NgCompositeRuleEditor(host,
+          this.model.get(descriptor.id),draft=>{
+            this.model.set(descriptor.id,draft);
+            this._refreshFooter();
+          });
+      } else {host.textContent='複合NGエディターを読み込めませんでした。';}
     } else if(descriptor.type==='related-order') {
       controls.append(this._renderRelatedOrderControls());
     } else if(descriptor.type==='related-links') {
@@ -917,6 +947,41 @@ class ModernAdvancedSettingsUI {
       controls.append(tokens);
     }
     card.append(controls);
+    if(descriptor.id==='commandFilter'){
+      const guide=this.doc.createElement('section');
+      guide.className='zw-modern-command-assist';
+      guide.dataset.zwCommandGuide='';
+      const intro=this.doc.createElement('p');
+      intro.textContent='コマンド＝投稿時に指定された色・文字サイズ・表示位置です。下のボタンでNGコマンドを追加できます。1行に1つ記入し、1つでもコマンド欄に含まれるとそのコメントを非表示にします。';
+      const warning=this.doc.createElement('p');
+      warning.textContent='注意：NGワードや別のNGコマンドとは「どれか1つで除外」です。red と big を別行に書いても「赤かつ大文字」にはなりません。本文・色・サイズの組み合わせは別途複合ルールで設定します。';
+      guide.append(intro,warning);
+      const entries=[
+        ['文字色',[['red','赤'],['blue','青'],['green','緑'],['yellow','黄'],
+          ['pink','ピンク'],['cyan','水色'],['black','黒']]],
+        ['文字サイズ',[['big','大きい'],['small','小さい']]],
+        ['表示位置',[['ue','画面上部'],['shita','画面下部']]]
+      ];
+      const activeCommands=new Set(String(this.model.get('commandFilter')??'')
+        .split(/\r?\n/).map(c=>c.trim().toLowerCase()).filter(Boolean));
+      for(const [name,items] of entries){
+        const group=this.doc.createElement('div');
+        group.className='zw-modern-command-group';
+        const heading=this.doc.createElement('strong');
+        heading.textContent=name;
+        group.append(heading);
+        for(const [token,meaning] of items){
+          const button=this._button(token+'（'+meaning+'）',
+            'data-zw-command-preset',token);
+          button.title=meaning+'のコマンドをNG一覧に追加';
+          button.setAttribute('aria-label','NGコマンドに'+token+'（'+meaning+'）を追加');
+          button.disabled=!this.model.isEnabled('commandFilter')||activeCommands.has(token);
+          group.append(button);
+        }
+        guide.append(group);
+      }
+      card.append(guide);
+    }
     const example=this._makeVisualExample(descriptor);
     if(example){card.append(example);}
     if(descriptor.description) {
@@ -1368,6 +1433,8 @@ class ModernAdvancedSettingsUI {
   }
   _renderCards() {
     this._clearTouchOrder();
+    this._ngCompositeEditor?.dispose();
+    this._ngCompositeEditor=null;
     if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
       this.selected.subcategory==='データ管理'){
       this._renderDataPanel();
@@ -1527,6 +1594,13 @@ class ModernAdvancedSettingsUI {
       card.classList.toggle('is-disabled',!active);
       const input=card.querySelector('[data-setting-name]');
       if(input){input.disabled=!active;}
+      if(id==='commandFilter'){
+        const current=new Set(String(this.model.get(id)??'')
+          .split(/\r?\n/).map(value=>value.trim().toLowerCase()).filter(Boolean));
+        card.querySelectorAll('[data-zw-command-preset]').forEach(button=>{
+          button.disabled=!active||current.has(button.dataset.zwCommandPreset);
+        });
+      }
       card.querySelectorAll('[data-zw-choice]').forEach(button=>{
         button.disabled=!active;
       });
@@ -1890,6 +1964,19 @@ class ModernAdvancedSettingsUI {
       this.discardChanges();
       this.onClose();return;
     }
+    if(button.hasAttribute('data-zw-command-preset')){
+      if(!this.model.isEnabled('commandFilter')){return;}
+      const token=button.dataset.zwCommandPreset;
+      if(!['red','blue','green','yellow','pink','cyan','black',
+        'big','small','ue','shita'].includes(token)){return;}
+      const old=String(this.model.get('commandFilter')??'');
+      const existing=new Set(old.split(/\r?\n/)
+        .map(value=>value.trim().toLowerCase()).filter(Boolean));
+      if(existing.has(token)){return;}
+      this.model.set('commandFilter',old.replace(/[\r\n]+$/,'')+
+        (old.trim()?'\n':'')+token);
+      this._renderCards();this._refreshFooter();return;
+    }
     if(button.hasAttribute('data-zw-regex-advanced-toggle')){
       const holder=button.closest('.zw-modern-regex-editor');
       const panel=holder?.querySelector('[data-zw-regex-advanced-panel]');
@@ -2059,6 +2146,8 @@ class ModernAdvancedSettingsUI {
     this.doc.addEventListener('keydown',handler,true);
   }
   dispose() {
+    this._ngCompositeEditor?.dispose();
+    this._ngCompositeEditor=null;
     this.setModalVisible(false);
     if(this._recordCleanup){this._recordCleanup();}
     this.doc.removeEventListener('keydown',this._onKeyDownBound,true);
@@ -2075,6 +2164,7 @@ class ModernAdvancedSettingsUI {
     this.root.removeEventListener('pointerup',this._onTouchOrderUpBound);
     this.root.removeEventListener('pointercancel',this._onTouchOrderCancelBound);
     this._unwatchRelatedActions?.();
+    this.model.config.offkey?.('backComment',this._onBackCommentConfigUpdate);
     this.root.removeEventListener('click',this._onRelatedClickBound);
     this.root.removeEventListener('change',this._onRelatedChangeBound);
     this.root.removeEventListener('input',this._onRelatedInputBound);

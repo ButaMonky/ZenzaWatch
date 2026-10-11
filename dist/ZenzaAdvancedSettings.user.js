@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.52-task399
+// @version     0.3.55-task402
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-11 11:21Z
+// build: 2026-10-11 15:24Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -1105,7 +1105,7 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'openGinza'},
 	{id: 'SAVE_MYMEMORY', category: 'その他', label: '再生位置を「おもいで」に保存',
 		defaultKey: 0, command: 'saveMymemory'},
-	{id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを動画の後ろに流す ON/OFF',
+	{id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを画面全体に流す ON/OFF',
 		defaultKey: 0, command: 'toggle-backComment'},
 	{id: 'TOGGLE_NG_FILTER', category: 'フィルタ/NG', label: 'NGフィルタ全体 ON/OFF',
 		defaultKey: 0, command: 'toggle-enableFilter'},
@@ -3181,6 +3181,225 @@ class UiVisibilityRegistry {
 		return true;
 	}
 }
+const NG_COLOR_HEX = Object.freeze({
+	white:'#FFFFFF',red:'#FF0000',pink:'#FF8080',orange:'#FFC000',
+	yellow:'#FFFF00',green:'#00FF00',cyan:'#00FFFF',blue:'#0000FF',
+	purple:'#C000FF',black:'#000000',white2:'#CCCC99',
+	niconicowhite:'#CCCC99',red2:'#CC0033',truered:'#CC0033',
+	pink2:'#FF33CC',orange2:'#FF6600',passionorange:'#FF6600',
+	yellow2:'#999900',madyellow:'#999900',green2:'#00CC66',
+	elementalgreen:'#00CC66',cyan2:'#00CCCC',blue2:'#3399FF',
+	marineblue:'#3399FF',purple2:'#6633CC',nobleviolet:'#6633CC',
+	black2:'#666666'
+});
+class NgCompositeRules {
+	static get CONFIG_KEY() {return 'ngComposite.rules';}
+	static get COLORS() {return NG_COLOR_HEX;}
+	static get FIELDS() {return ['text','regex','cmd','color','size','user','nicoru','position','fork','score','vpos','video'];}
+	static get ACTIONS() {return ['hide','hideAuthor','replace','strip','normalize','dim','mask'];}
+	static get MAX_RULES() {return 50;}
+	static isSafeRegex(pattern) {
+		if(typeof pattern!=='string'||pattern.length>160){return false;}
+		return !/(\([^)]*[+*][^)]*\))[+*{]/.test(pattern) &&
+			!/(?:\.\*|\.\+){2,}/.test(pattern) && !/\\[1-9]/.test(pattern);
+	}
+	static validate(rules) {
+		if(!Array.isArray(rules)||rules.length>NgCompositeRules.MAX_RULES) {return false;}
+		let count=0;
+		const str=(v,max=200)=>typeof v==='string'&&v.length<=max;
+		const walk=(node,depth)=>{
+			if(!node||typeof node!=='object'||++count>350){return false;}
+			if(node.kind==='group'){
+				return depth<3&&['all','any'].includes(node.mode)&&Array.isArray(node.nodes)&&
+					node.nodes.length<=45&&node.nodes.every(n=>walk(n,depth+1));
+			}
+			if(!NgCompositeRules.FIELDS.includes(node.field)||typeof node.not!=='boolean'||
+					!str(node.value,160)||!['contains','equals','notEquals','starts','ends','regex','gte','lte'].includes(node.cmp)){return false;}
+			if(node.value.trim()===''||(['nicoru','score','vpos'].includes(node.field)&&
+				!['gte','lte','equals'].includes(node.cmp))){return false;}
+			if(node.field==='regex'||node.cmp==='regex'){
+				if(!NgCompositeRules.isSafeRegex(node.value)){return false;}
+				try{new RegExp(node.value,'i');}catch(_){return false;}
+			}
+			if(['nicoru','score','vpos'].includes(node.field)&&
+				!Number.isFinite(Number(node.value))){return false;}
+			return true;
+		};
+		return rules.every(r=>{
+			if(!r||typeof r!=='object'||!str(r.id,80)||!str(r.name,90)||
+					typeof r.enabled!=='boolean'||!['normal','any','owner','easy'].includes(r.scope)||
+					!NgCompositeRules.ACTIONS.includes(r.action)||!['before','after'].includes(r.phase)||
+					typeof r.stopOnMatch!=='boolean'||typeof r.exemptNicoru!=='boolean'||
+					!Number.isInteger(r.nicoruMin)||r.nicoruMin<0||r.nicoruMin>10000000||
+					!['evaluate','skip'].includes(r.unknownPolicy)||
+					typeof r.keepProtectedOnAuthorHide!=='boolean'||!str(r.pattern,160)||
+					!str(r.replacement,800)||!str(r.mask,800)||typeof r.regexReplace!=='boolean'||
+					!str(r.flags,6)||!/^[gimsu]*$/.test(r.flags)||!Array.isArray(r.strip)||
+					r.strip.length>40||r.strip.some(c=>!str(c,40))||
+					!(r.normalizeColor==='keep'||r.normalizeColor in NG_COLOR_HEX)||
+					!['keep','medium','big','small'].includes(r.normalizeSize)||
+					!Number.isFinite(r.dim)||r.dim<5||r.dim>100||
+					!walk(r.conditions,0)){return false;}
+			if(r.action==='replace'&&r.regexReplace){
+				if(!NgCompositeRules.isSafeRegex(r.pattern)){return false;}
+				try{new RegExp(r.pattern,r.flags);}catch(_){return false;}
+			}
+			return true;
+		});
+	}
+	static matchScope(rule,chat) {
+		const fork=Number(chat.fork);
+		return rule.scope==='any'||(rule.scope==='normal'&&fork===0)||
+			(rule.scope==='owner'&&fork===1)||(rule.scope==='easy'&&fork===2);
+	}
+	static nicoru(chat) {
+		if(chat.nicoruKnown===false||chat.nicoru===null||chat.nicoru===undefined){return null;}
+		const value=Number(chat.nicoru);
+		return Number.isFinite(value)&&value>=0?value:null;
+	}
+	static protected(rule,chat) {
+		if(!rule.exemptNicoru){return false;}
+		const value=NgCompositeRules.nicoru(chat);
+		return value===null?rule.unknownPolicy==='skip':value>=rule.nicoruMin;
+	}
+	static commandColor(cmd,base) {
+		let value=(base||'#FFFFFF').toUpperCase();
+		for(const token of String(cmd||'').toLowerCase().split(/\s+/)){
+			if(NG_COLOR_HEX[token]){value=NG_COLOR_HEX[token];}
+			else if(/^#[a-f0-9]{6}$/i.test(token)){value=token.toUpperCase();}
+		}
+		return value;
+	}
+	static matches(node,chat) {
+		if(!node){return false;}
+		let matched=false;
+		let known=true;
+		if(node.kind==='group') {
+			matched=node.nodes.length>0 && (node.mode==='all'?
+				node.nodes.every(n=>NgCompositeRules.matches(n,chat)):
+				node.nodes.some(n=>NgCompositeRules.matches(n,chat)));
+		}else{
+			const f=node.field;
+			let actual;
+			if(f==='text'||f==='regex'){actual=chat.text;}
+			else if(f==='cmd'){actual=chat.cmd;}
+			else if(f==='color'){actual=NgCompositeRules.commandColor(chat.cmd,chat.color);}
+			else if(f==='size'){actual=chat.size;}
+			else if(f==='user'){actual=chat.userId;}
+			else if(f==='nicoru'){actual=NgCompositeRules.nicoru(chat);}
+			else if(f==='position'){actual=chat.type;}
+			else if(f==='fork'){actual=({0:'normal',1:'owner',2:'easy'})[chat.fork]||'other';}
+			else if(f==='score'){actual=chat.score;}
+			else if(f==='vpos'){actual=Number(chat.vpos)/100;}
+			else if(f==='video'){actual=chat.videoId;}
+			const expected=f==='color'?(NG_COLOR_HEX[node.value]||node.value).toUpperCase():node.value;
+			if(actual!==null&&actual!==undefined){
+				if(['gte','lte'].includes(node.cmp)){const a=Number(actual),b=Number(expected);
+					matched=Number.isFinite(a)&&Number.isFinite(b)&&(node.cmp==='gte'?a>=b:a<=b);
+				}else if(node.cmp==='regex'||f==='regex'){
+					try{matched=new RegExp(expected,'i').test(String(actual).slice(0,512));}catch(_){matched=false;}
+				}else{
+					const a=String(actual),b=String(expected);
+					if(node.cmp==='contains'){matched=a.includes(b);}
+					else if(node.cmp==='starts'){matched=a.startsWith(b);}
+					else if(node.cmp==='ends'){matched=a.endsWith(b);}
+					else if(node.cmp==='notEquals'){matched=a!==b;}
+					else {matched=a===b;}
+				}
+			} else {known=false;}
+		}
+		return known?(node.not?!matched:matched):false;
+	}
+	static initialState(chat,videoId='') {
+		const p=chat.props||chat;
+		return {
+			text:String(chat.text||''),cmd:String(chat.cmd||''),color:chat.color||'#FFFFFF',
+			size:chat.size||'medium',type:chat.type||'naka',
+			opacity:Number.isFinite(chat.opacity)?chat.opacity:1,
+			nicoru:chat.nicoru,nicoruKnown:chat.nicoruKnown!==undefined?chat.nicoruKnown:p.nicoruKnown,
+			userId:chat.userId||'',fork:chat.fork,score:chat.score,vpos:chat.vpos,
+			videoId:videoId||'',threadLabel:chat.threadLabel,isCA:chat.isCA
+		};
+	}
+	static applyAction(rule,state) {
+		if(rule.action==='hide'||rule.action==='hideAuthor'){state.hidden=true;return;}
+		if(rule.action==='mask'){state.text=rule.mask;return;}
+		if(rule.action==='dim'){state.opacity*=rule.dim/100;return;}
+		if(rule.action==='replace'){
+			if(!rule.pattern){return;}
+			if(rule.regexReplace){
+				try{const re=new RegExp(rule.pattern,rule.flags);
+					state.text=state.text.replace(re,rule.replacement);
+				}catch(_){/* rejected at validation */}
+			}else {state.text=state.text.split(rule.pattern).join(rule.replacement);}
+			return;
+		}
+		let tokens=state.cmd.split(/\s+/).filter(Boolean);
+		if(rule.action==='strip'){
+			const excluded=new Set(rule.strip.map(v=>v.toLowerCase()));
+			tokens=tokens.filter(v=>!excluded.has(v.toLowerCase()));
+		}else if(rule.action==='normalize'){
+			if(rule.normalizeColor!=='keep'){
+				tokens=tokens.filter(t=>!NG_COLOR_HEX[t.toLowerCase()]&&!/^#[a-f\d]{6}$/i.test(t));
+				if(rule.normalizeColor!=='white'){tokens.push(rule.normalizeColor);}
+			}
+			if(rule.normalizeSize!=='keep'){
+				tokens=tokens.filter(t=>!['big','small'].includes(t.toLowerCase()));
+				if(rule.normalizeSize!=='medium'){tokens.push(rule.normalizeSize);}
+			}
+		}
+		state.cmd=tokens.join(' ');
+		state.color=NgCompositeRules.commandColor(state.cmd,'#FFFFFF');
+		const lower=tokens.map(t=>t.toLowerCase());
+		state.size=lower.includes('big')?'big':lower.includes('small')?'small':'medium';
+		state.type=state.type;
+	}
+	static project(chats,rules,legacyPredicate=()=>true,videoId='',baselines=null) {
+		if(!NgCompositeRules.validate(rules)){return null;}
+		const active=rules.filter(r=>r.enabled);
+		if(!active.length){return null;}
+		const initial=chats.map(chat=>{
+			const baseline=baselines?.get?.(chat);
+			return baseline?{...baseline,nicoru:chat.nicoru,
+				nicoruKnown:chat.nicoruKnown,videoId:videoId||baseline.videoId}:
+				NgCompositeRules.initialState(chat,videoId);
+		});
+		const authorMatches=new Map();
+		for(const rule of active.filter(r=>r.action==='hideAuthor')){
+			const ids=new Set();
+			initial.forEach(s=>{
+				if(!s.userId||!NgCompositeRules.matchScope(rule,s)||NgCompositeRules.protected(rule,s)){return;}
+				if(rule.phase==='after'&&!legacyPredicate(s)){return;}
+				if(NgCompositeRules.matches(rule.conditions,s)){ids.add(s.userId);}
+			});
+			authorMatches.set(rule.id,ids);
+		}
+		const results=new Map();
+		for(let i=0;i<chats.length;i++){
+			const s={...initial[i],hidden:false};
+			let stopped=false;
+			const applyPhase=phase=>{
+				if(stopped){return;}
+				for(const r of active){
+					if(r.phase!==phase){continue;}
+					const ban=r.action==='hideAuthor'&&s.userId&&authorMatches.get(r.id).has(s.userId);
+					if(!ban&&!NgCompositeRules.matchScope(r,s)){continue;}
+					const protectedChat=NgCompositeRules.protected(r,s);
+					if(protectedChat&&!(ban&&r.keepProtectedOnAuthorHide===false)){continue;}
+					const hit=r.action==='hideAuthor'?ban:NgCompositeRules.matches(r.conditions,s);
+					if(!hit){continue;}
+					NgCompositeRules.applyAction(r,s);
+					if(r.stopOnMatch||s.hidden){stopped=true;break;}
+				}
+			};
+			applyPhase('before');
+			const legacySafe=!s.hidden&&legacyPredicate(s);
+			if(legacySafe){applyPhase('after');}
+			results.set(chats[i],{...s,visible:legacySafe&&!s.hidden});
+		}
+		return results;
+	}
+}
 const Config = (() => {
 	const DEFAULT_CONFIG = {
 		debug: false,
@@ -3198,7 +3417,7 @@ const Config = (() => {
 		autoFullScreen: false,
 		autoCloseFullScreen: true, // 再生終了時に自動でフルスクリーン解除するかどうか
 		continueNextPage: false,   // 動画再生中にリロードやページ切り替えしたら続きから開き直す
-		backComment: false,        // コメントの裏流し
+		backComment: false,        // 全画面・ワイド表示でコメントを映像の上に全域表示
 		autoPauseCommentInput: true, // コメント入力時に自動停止する
 		sharedNgLevel: 'MID',      // NG共有の強度 NONE, LOW, MID, HIGH, MAX
 		enablePushState: true,     // ブラウザの履歴に乗せる
@@ -3230,6 +3449,7 @@ const Config = (() => {
 		userIdFilter: '',
 		commandFilter: '',
 		removeNgMatchedUser: false, // NGにマッチしたユーザーのコメント全部消す
+		'ngComposite.rules': [], // 上級者向け複合NG・置換（初期状態は既存挙動のまま）
 		'filter.fork0': true, // 通常コメント
 		'filter.fork1': true, // 投稿者コメント
 		'filter.fork2': true, // かんたんコメント
@@ -3396,6 +3616,10 @@ const Config = (() => {
 				return value;
 			},
 			validateImport: (key, value) => {
+				if (key === 'ngComposite.rules') {
+					return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
+						Array.isArray(value)&&value.length===0;
+				}
 				if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
 				if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
 				if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }
@@ -6251,7 +6475,9 @@ class ModernAdvancedSettingsModel {
 			...(typeof UiVisibilityRegistry==='undefined'?[]:UiVisibilityRegistry.descriptors()),
 			...group('コメント表示','表示・配置',[
 				['showComment','コメントを表示'],
-				['backComment','コメントを映像の後ろに表示'],
+				['backComment','コメントを画面全体に流す',{
+					description:'全画面・ワイド表示時に、動画を縮小せず画面全体へコメントを重ねます。通常表示では従来どおりです。'
+				}],
 				['commentSpeedRate','コメントの移動速度',{type:'number'}],
 				['autoCommentSpeedRate','コメント速度を自動調整'],
 				['commentLayerOpacity','コメントの透明度',slider(0,1)],
@@ -6311,9 +6537,14 @@ class ModernAdvancedSettingsModel {
 				['wordRegFilterFlags','正規表現の適用オプション',{type:'regex-flags',
 					description:'i は大文字・小文字を区別しない設定です。通常は初期値の i をおすすめします。m は ^ と $ を改行ごとの先頭・末尾に、s は「.」に改行も含め、u はUnicodeの文字単位を扱います。'}],
 				['userIdFilter','NGユーザーID一覧',{type:'textarea'}],
-				['commandFilter','NGコマンド一覧',{type:'textarea'}],
+				['commandFilter','NGコマンド一覧',{type:'textarea',
+					description:'コマンドとはコメントの色・大きさ・表示位置などの指定です。1行に1つ記入すると、その文字列を含むコマンドのコメントがNGになります。現在はNGワードなどとの「いずれかに一致」で判定します（AND条件ではありません）。'}],
 				['removeNgMatchedUser','NGに一致する投稿者のコメントを全除外'],
 				['sharedNgLevel','NG共有の強度',sharedNg]
+			]),
+			...group('NG・表示対象','複合NGルール（上級者向け）',[
+				['ngComposite.rules','複合NG・置換ルール',{type:'composite-ng',
+					description:'複数の条件をAND/OR/NOTで組み合わせ、コメントの非表示・置換・装飾解除などを設定します。詳細説明は画面内で開けます。'}]
 			]),
 			...group('NG・表示対象','コメント種別',[
 				['filter.fork0','通常コメントを表示'],
@@ -6444,7 +6675,7 @@ class ModernAdvancedSettingsModel {
 		}
 		if(key.startsWith('filter.') || ['wordFilter','wordRegFilter',
 			'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
-			'removeNgMatchedUser'].includes(key)) { return 'enableFilter'; }
+			'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
 		const direct={
 			'supporterCredit.voice':'supporterCredit.enable',
 			'supporterCredit.gift':'supporterCredit.enable',
@@ -6612,6 +6843,14 @@ class ModernAdvancedSettingsModel {
 		const v=typeof this.config.getValue==='function'?
 			this.config.getValue(id):this.config.props?.[id];
 		return ModernAdvancedSettingsModel._clone(v);
+	}
+	syncLiveValue(id) {
+		if(!this._byId.has(id)){return false;}
+		const live=this._liveValue(id);
+		if(ModernAdvancedSettingsModel._same(this.saved[id],live)){return false;}
+		this.saved[id]=ModernAdvancedSettingsModel._clone(live);
+		this.draft[id]=ModernAdvancedSettingsModel._clone(live);
+		return true;
 	}
 	cancel() {
 		this.saved={};
@@ -6883,12 +7122,20 @@ class ModernAdvancedSettingsUI {
 			'.zw-modern-warning { color:#e6bb75; font-size:11px; display:block; margin-top:5px; }',
 			'.zw-modern-regex-editor { display:grid; grid-template-columns:1fr; gap:7px; width:100%; max-width:700px; }',
 			'.zw-modern-regex-editor label { display:flex; gap:9px; align-items:center; justify-content:flex-start; font-size:12px; }',
-			'.zw-modern-regex-editor input[type=checkbox] { flex:none; width:17px; height:17px; appearance:auto; accent-color:#82bfff; border-radius:3px; }',
+			'.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox] { flex:none; width:17px; height:17px; appearance:checkbox; -webkit-appearance:checkbox; accent-color:#82bfff; border:0; background:transparent; border-radius:0; padding:0; }',
+			'.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox]::after { content:none!important; display:none!important; }',
 			'.zw-modern-regex-editor [data-zw-regex-advanced-panel] { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }',
 			'.zw-modern-regex-editor [data-zw-regex-advanced-panel][hidden] { display:none!important; }',
 			'.zw-modern-regex-editor input[type=text] { width:180px; min-width:0; }',
 			'.zw-modern-regex-current { color:var(--zw-dark-muted); font-size:11px; }',
 			'.zw-modern-regex-editor small { color:var(--zw-dark-muted); font-size:11px; }',
+			'.zw-modern-command-assist { margin-top:10px; padding:12px; background:#1a293c; border:1px solid #445a71; border-radius:5px; display:grid; gap:10px; }',
+			'.zw-modern-command-assist p { margin:0; color:var(--zw-dark-muted); font-size:12px; line-height:1.6; }',
+			'.zw-modern-command-assist p strong { color:var(--zw-dark-text); }',
+			'.zw-modern-command-group { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }',
+			'.zw-modern-command-group > strong { min-width:65px; font-size:11px; color:#c5d9ed; }',
+			'.zw-modern-command-group button { border:1px solid #526c89; border-radius:5px; color:#ecf5ff; background:#23364d; padding:5px 9px; font-size:11px; }',
+			'.zw-modern-command-group button:disabled { opacity:.55; background:#2f4458; }',
 			'.zw-modern-prefix-breakdown { display:flex; gap:5px; flex-wrap:wrap; }',
 			'.zw-modern-prefix-breakdown span { font-size:10px; padding:4px 7px; border-radius:4px; border:1px solid #465971; color:#aebed0; background:#1b293a; }',
 			'.zw-modern-prefix-presets { display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:100%; justify-content:flex-start; }',
@@ -7064,6 +7311,14 @@ class ModernAdvancedSettingsUI {
 		this.root.addEventListener('input',this._onRelatedInputBound=e=>this._onRelatedBubble(e));
 		this.doc.addEventListener('keydown',this._onKeyDownBound=e=>this._onDocumentKeyDown(e),true);
 		this.panel.appendChild(this.root);
+		this._onBackCommentConfigUpdate=()=>{
+			if(!this.model.syncLiveValue('backComment')){return;}
+			const checked=!!this.model.get('backComment');
+			this.cards.querySelectorAll('input[data-setting-name="backComment"]')
+				.forEach(input=>{input.checked=checked;});
+			this._refreshCards();
+		};
+		this.model.config.onkey?.('backComment',this._onBackCommentConfigUpdate);
 		this._unwatchRelatedActions=this.relatedActions?.onChange?.(()=>
 			this._refreshRelatedOrderList()) || null;
 		this._renderNavigation();
@@ -7423,6 +7678,18 @@ class ModernAdvancedSettingsUI {
 				warning.textContent='⚠ キー重複：'+warns.join('、');
 				controls.append(warning);
 			}
+		} else if(descriptor.type==='composite-ng') {
+			const host=this.doc.createElement('div');
+			host.className='zw-composite-ng-host';
+			host.style.cssText='width:100%;min-width:0;';
+			controls.append(host);
+			if(typeof NgCompositeRuleEditor!=='undefined'){
+				this._ngCompositeEditor=new NgCompositeRuleEditor(host,
+					this.model.get(descriptor.id),draft=>{
+						this.model.set(descriptor.id,draft);
+						this._refreshFooter();
+					});
+			} else {host.textContent='複合NGエディターを読み込めませんでした。';}
 		} else if(descriptor.type==='related-order') {
 			controls.append(this._renderRelatedOrderControls());
 		} else if(descriptor.type==='related-links') {
@@ -7665,6 +7932,41 @@ class ModernAdvancedSettingsUI {
 			controls.append(tokens);
 		}
 		card.append(controls);
+		if(descriptor.id==='commandFilter'){
+			const guide=this.doc.createElement('section');
+			guide.className='zw-modern-command-assist';
+			guide.dataset.zwCommandGuide='';
+			const intro=this.doc.createElement('p');
+			intro.textContent='コマンド＝投稿時に指定された色・文字サイズ・表示位置です。下のボタンでNGコマンドを追加できます。1行に1つ記入し、1つでもコマンド欄に含まれるとそのコメントを非表示にします。';
+			const warning=this.doc.createElement('p');
+			warning.textContent='注意：NGワードや別のNGコマンドとは「どれか1つで除外」です。red と big を別行に書いても「赤かつ大文字」にはなりません。本文・色・サイズの組み合わせは別途複合ルールで設定します。';
+			guide.append(intro,warning);
+			const entries=[
+				['文字色',[['red','赤'],['blue','青'],['green','緑'],['yellow','黄'],
+					['pink','ピンク'],['cyan','水色'],['black','黒']]],
+				['文字サイズ',[['big','大きい'],['small','小さい']]],
+				['表示位置',[['ue','画面上部'],['shita','画面下部']]]
+			];
+			const activeCommands=new Set(String(this.model.get('commandFilter')??'')
+				.split(/\r?\n/).map(c=>c.trim().toLowerCase()).filter(Boolean));
+			for(const [name,items] of entries){
+				const group=this.doc.createElement('div');
+				group.className='zw-modern-command-group';
+				const heading=this.doc.createElement('strong');
+				heading.textContent=name;
+				group.append(heading);
+				for(const [token,meaning] of items){
+					const button=this._button(token+'（'+meaning+'）',
+						'data-zw-command-preset',token);
+					button.title=meaning+'のコマンドをNG一覧に追加';
+					button.setAttribute('aria-label','NGコマンドに'+token+'（'+meaning+'）を追加');
+					button.disabled=!this.model.isEnabled('commandFilter')||activeCommands.has(token);
+					group.append(button);
+				}
+				guide.append(group);
+			}
+			card.append(guide);
+		}
 		const example=this._makeVisualExample(descriptor);
 		if(example){card.append(example);}
 		if(descriptor.description) {
@@ -8108,6 +8410,8 @@ class ModernAdvancedSettingsUI {
 	}
 	_renderCards() {
 		this._clearTouchOrder();
+		this._ngCompositeEditor?.dispose();
+		this._ngCompositeEditor=null;
 		if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
 			this.selected.subcategory==='データ管理'){
 			this._renderDataPanel();
@@ -8264,6 +8568,13 @@ class ModernAdvancedSettingsUI {
 			card.classList.toggle('is-disabled',!active);
 			const input=card.querySelector('[data-setting-name]');
 			if(input){input.disabled=!active;}
+			if(id==='commandFilter'){
+				const current=new Set(String(this.model.get(id)??'')
+					.split(/\r?\n/).map(value=>value.trim().toLowerCase()).filter(Boolean));
+				card.querySelectorAll('[data-zw-command-preset]').forEach(button=>{
+					button.disabled=!active||current.has(button.dataset.zwCommandPreset);
+				});
+			}
 			card.querySelectorAll('[data-zw-choice]').forEach(button=>{
 				button.disabled=!active;
 			});
@@ -8627,6 +8938,19 @@ class ModernAdvancedSettingsUI {
 			this.discardChanges();
 			this.onClose();return;
 		}
+		if(button.hasAttribute('data-zw-command-preset')){
+			if(!this.model.isEnabled('commandFilter')){return;}
+			const token=button.dataset.zwCommandPreset;
+			if(!['red','blue','green','yellow','pink','cyan','black',
+				'big','small','ue','shita'].includes(token)){return;}
+			const old=String(this.model.get('commandFilter')??'');
+			const existing=new Set(old.split(/\r?\n/)
+				.map(value=>value.trim().toLowerCase()).filter(Boolean));
+			if(existing.has(token)){return;}
+			this.model.set('commandFilter',old.replace(/[\r\n]+$/,'')+
+				(old.trim()?'\n':'')+token);
+			this._renderCards();this._refreshFooter();return;
+		}
 		if(button.hasAttribute('data-zw-regex-advanced-toggle')){
 			const holder=button.closest('.zw-modern-regex-editor');
 			const panel=holder?.querySelector('[data-zw-regex-advanced-panel]');
@@ -8791,6 +9115,8 @@ class ModernAdvancedSettingsUI {
 		this.doc.addEventListener('keydown',handler,true);
 	}
 	dispose() {
+		this._ngCompositeEditor?.dispose();
+		this._ngCompositeEditor=null;
 		this.setModalVisible(false);
 		if(this._recordCleanup){this._recordCleanup();}
 		this.doc.removeEventListener('keydown',this._onKeyDownBound,true);
@@ -8807,6 +9133,7 @@ class ModernAdvancedSettingsUI {
 		this.root.removeEventListener('pointerup',this._onTouchOrderUpBound);
 		this.root.removeEventListener('pointercancel',this._onTouchOrderCancelBound);
 		this._unwatchRelatedActions?.();
+		this.model.config.offkey?.('backComment',this._onBackCommentConfigUpdate);
 		this.root.removeEventListener('click',this._onRelatedClickBound);
 		this.root.removeEventListener('change',this._onRelatedChangeBound);
 		this.root.removeEventListener('input',this._onRelatedInputBound);
@@ -8830,6 +9157,298 @@ class ModernAdvancedSettingsUI {
 		this.root.remove();
 		this.panel.classList.remove('zw-modern-active');
 	}
+}
+class NgCompositeRuleEditor {
+	constructor(host,saved,onChange){
+		this.host=host;
+		this.onChange=onChange;
+		this.doc=host.ownerDocument;
+		this.shadow=host.shadowRoot||host.attachShadow({mode:'open'});
+		this.rules=NgCompositeRuleEditor.copy(saved);
+		this.selected=this.rules[0]?.id||'';
+		this.serial=0;
+		this.sample={text:'中国の話ｗｗｗ',cmd:'red big ue',userId:'nvc:sample',nicoru:0,score:0,vpos:1500,videoId:'sm9',fork:0};
+		this._makeFrame();
+		this.render();
+	}
+	static copy(v){return JSON.parse(JSON.stringify(v||[]));}
+	static get fields(){return [['text','本文（部分一致）'],['regex','本文（正規表現）'],
+		['cmd','コマンド文字列'],['color','コマンド文字色'],['size','文字サイズ'],
+		['user','ユーザーID'],['nicoru','ニコる数'],['position','表示位置'],
+		['fork','コメント種別'],['score','NG共有スコア'],['vpos','動画内秒数'],['video','動画ID']];}
+	static get colors(){return [['white','白'],['red','赤'],['pink','ピンク'],['orange','オレンジ'],
+		['yellow','黄'],['green','緑'],['cyan','水色'],['blue','青'],['purple','紫'],
+		['black','黒'],['white2','ニコニコホワイト'],['niconicowhite','ニコニコホワイト（別名）'],
+		['red2','濃い赤'],['truered','濃い赤（別名）'],['pink2','ピンク2'],
+		['orange2','オレンジ2'],['passionorange','パッションオレンジ'],['yellow2','濃い黄'],
+		['madyellow','濃い黄（別名）'],['green2','深緑'],['elementalgreen','深緑（別名）'],
+		['cyan2','濃い水色'],['blue2','明るい青'],['marineblue','明るい青（別名）'],
+		['purple2','濃い紫'],['nobleviolet','濃い紫（別名）'],['black2','灰色']];}
+	static newRule(){
+		const id=()=>String(Date.now())+'-'+Math.random().toString(36).slice(2,9);
+		return {id:id(),name:'新しい複合ルール',enabled:false,scope:'normal',
+			phase:'after',stopOnMatch:true,conditions:{id:id(),kind:'group',mode:'all',
+				nodes:[{id:id(),field:'text',cmp:'contains',value:'',not:false}]},
+			exemptNicoru:false,nicoruMin:1,unknownPolicy:'evaluate',keepProtectedOnAuthorHide:true,
+			action:'hide',pattern:'',replacement:'',regexReplace:false,flags:'g',
+			strip:['red','big'],normalizeColor:'white',normalizeSize:'medium',dim:30,mask:'［置換済み］'};
+	}
+	esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+	opt(options,value){return options.map(([id,label])=>
+		'<option value="'+this.esc(id)+'"'+(String(id)===String(value)?' selected':'')+'>'+this.esc(label)+'</option>').join('');}
+	colorSelect(current,key){
+		const pairs=[['keep','変更しない'],...NgCompositeRuleEditor.colors];
+		const items=key==='normalizeColor'?pairs:NgCompositeRuleEditor.colors;
+		return '<span class="ng-color"><span class="ng-dot" style="background:'+
+			this.esc(NgCompositeRules.COLORS[current]||'#8493a4')+'"></span><select data-'+
+			(key==='normalizeColor'?'rule':'node-value')+'="'+this.esc(key==='normalizeColor'?key:key)+'">'+
+			this.opt(items.map(([id,name])=>[id,'● '+name+'（'+id+' / '+(NgCompositeRules.COLORS[id]||'')+'）']),current)+
+			'</select></span>';
+	}
+	current(){return this.rules.find(x=>x.id===this.selected)||null;}
+	find(id,node=this.current()?.conditions){
+		if(!node)return null;
+		if(node.id===id)return node;
+		for(const child of node.nodes||[]){const v=this.find(id,child);if(v)return v;}
+		return null;
+	}
+	parent(id,node=this.current()?.conditions){
+		if(!node||!node.nodes)return null;
+		for(const child of node.nodes){
+			if(child.id===id)return node;
+			const inner=this.parent(id,child);if(inner)return inner;
+		}
+		return null;
+	}
+	_makeFrame(){
+		const style=this.doc.createElement('style');
+		style.textContent=`
+			:host{display:block;min-width:0;max-width:100%;font:13px/1.5 system-ui,"Yu Gothic",Meiryo,sans-serif;color:#edf4ff}
+			*,*::before,*::after{box-sizing:border-box}button,input,select,textarea{font:inherit}
+			button{cursor:pointer;color:#edf4ff;background:#22354a;border:1px solid #4e6989;border-radius:5px;padding:6px 9px}
+			button:hover{border-color:#90c5fc}button:disabled{opacity:.48;cursor:default}
+			input[type=text],input[type=number],select,textarea{max-width:100%;min-width:0;background:#101927;border:1px solid #435c7a;border-radius:5px;color:#edf4ff;padding:7px}
+			input[type=checkbox]{appearance:checkbox;-webkit-appearance:checkbox;width:17px;height:17px;accent-color:#82bfff;vertical-align:middle;margin:0}
+			[hidden]{display:none!important}
+			h4{font-size:15px;margin:0 0 10px}p{margin:6px 0 10px}.ng-sub{color:#acbfd2;font-size:12px}
+			.ng-box{background:#233449;border:1px solid #39506b;border-radius:5px;padding:13px;margin:0 0 12px}
+			.ng-help summary{cursor:pointer;color:#a6ceff;font-weight:650}
+			.ng-help details{margin:12px 0 6px}.ng-help p{line-height:1.75;padding:3px}
+			.ng-layout{display:grid;grid-template-columns:minmax(200px,31%) minmax(0,1fr);gap:12px;min-width:0}
+			.ng-side{background:#132136;border:1px solid #38516b;border-radius:5px;padding:12px;min-width:0}
+			.ng-list{display:grid;gap:6px;margin:10px 0}.ng-line{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+			.ng-rule{display:flex;align-items:center;gap:4px;border:1px solid #45617f;border-radius:5px;padding:6px;margin:7px 0}
+			.ng-rule.selected{border-color:#92c5ff;background:#2b4360}
+			.ng-rule .ng-pick{flex:1;min-width:95px;text-align:left;overflow-wrap:anywhere}
+			.ng-rule small{display:block;color:#abc4d9}.ng-rule button{padding:4px 6px}
+			.ng-field{display:grid;gap:4px;margin:7px 0}.ng-flex{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:8px 0}
+			.ng-flex label{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+			.ng-wide{flex:1;min-width:155px}.ng-wide input{width:100%}
+			.ng-group{margin:8px 0;border-left:3px solid #7baddf;padding:8px;background:#14263b}
+			.ng-condition{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:8px 0;padding:7px;border:1px solid #47627d;border-radius:5px;background:#253950}
+			.ng-condition select,.ng-condition input{flex:1 1 120px}.ng-condition label{display:inline-flex;align-items:center;gap:5px}
+			.ng-group-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ng-group-head strong{flex:1}
+			.ng-color{display:inline-flex;align-items:center;gap:6px;flex:1 1 180px}
+			.ng-dot{width:18px;height:18px;border-radius:50%;border:1px solid #8290a5;flex:none}
+			.ng-color select{flex:1;min-width:100px}
+			.ng-preview{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+			.ng-preview article{background:#101d2d;padding:12px;border:1px solid #425c79;border-radius:5px;min-height:73px}
+			.ng-preview p{white-space:pre-wrap;overflow-wrap:anywhere}
+			.ng-error{color:#ffc986}.ng-ok{color:#9ed8bf}
+			@media(max-width:980px){.ng-layout{grid-template-columns:1fr}.ng-side{max-height:400px;overflow:auto}}
+			@media(max-width:550px){.ng-preview{grid-template-columns:1fr}}
+		`;
+		const el=this.doc.createElement('div');
+		el.className='ng-root';
+		el.innerHTML='<h4>複合NGルール（上級者向け）</h4>'+
+			'<p class="ng-sub">複数条件でコメントの非表示・置換・装飾解除を設定できます。変更は画面下部で保存するまで反映しません。</p>'+
+			this.helpHtml()+
+			'<div class="ng-layout"><aside class="ng-side"><strong>ルール一覧（ドラッグ・上下移動可）</strong>'+
+			'<div data-ng-list class="ng-list"></div><button data-ng-act="add">＋新規ルール</button> '+
+			'<button data-ng-act="duplicate">選択ルールを複製</button></aside>'+
+			'<div><section class="ng-box" data-ng-detail></section>'+
+			'<section class="ng-box"><h4>プレビュー（下書きのまま試せます）</h4><div data-ng-sample></div>'+
+			'<div data-ng-result></div></section></div></div>';
+		this.shadow.replaceChildren(style,el);
+		this.root=el;
+		el.addEventListener('click',e=>this.click(e));
+		el.addEventListener('input',e=>this.input(e));
+		el.addEventListener('change',e=>this.input(e));
+		el.addEventListener('dragstart',e=>{const row=e.target.closest('[data-ng-drag]');if(row)this.dragId=row.dataset.ngDrag;});
+		el.addEventListener('dragover',e=>{if(this.dragId&&e.target.closest('[data-ng-drag]'))e.preventDefault();});
+		el.addEventListener('drop',e=>{
+			const row=e.target.closest('[data-ng-drag]');if(!row||!this.dragId)return;
+			e.preventDefault();this.move(this.dragId,row.dataset.ngDrag);this.dragId=null;
+		});
+	}
+	helpHtml(){
+		return '<details class="ng-box ng-help"><summary>はじめて使う方へ：3つの手順（クリックで詳しく表示）</summary>'+
+			'<p><b>1．ルールを追加：</b>「＋新規ルール」で作成し、名前を付けます。新規ルールは最初は無効なので、条件と処理を確認したあとに有効にします。</p>'+
+			'<p><b>2．条件を指定：</b>「＋条件」で本文、色、文字サイズ、ユーザーID、ニコる数などを指定します。ANDならすべて、ORならどれかに一致すれば対象です。「＋グループ」で条件をまとめられます。</p>'+
+			'<p><b>3．一致したときの処理：</b>非表示、投稿者全コメントを非表示、本文置換、装飾解除などを選びます。ニコる優先保護も設定でき、最後にプレビューと保存を行います。</p>'+
+			'<details><summary>AND・OR・NOT・保護についてさらに詳しく</summary>'+
+			'<p><b>AND：</b>「中国」を含む＋「赤文字」＋「big」なら3条件すべてが必要です。<b>OR：</b>どれか1つで一致します。</p>'+
+			'<p><b>NOT：</b>その条件だけを反転します。OR内の別条件に一致することがあるため、全ルールからの保護にはなりません。</p>'+
+			'<p><b>ニコる数で優先保護：</b>ニコるが指定数以上なら、そのルールをスキップします。保護する数の初期値は1件です。未取得なら通常判定かスキップを選べます。</p>'+
+			'<p><b>投稿者一括NG：</b>一致した投稿者IDの同一動画中のコメントをまとめて非表示にします。永続NGユーザーIDには登録しません。</p>'+
+			'<p><b>既存NGとの関係：</b>従来のNGワード・NGユーザー・共有NGは引き続き有効です。複合ルールの保護は従来のNGを解除しません。</p>'+
+			'<p><b>正規表現と安全性：</b>多数のコメントに適用されるため、複雑すぎる正規表現には制限があります。元の投稿データは変更しません。</p></details></details>';
+	}
+	ruleList(){
+		const target=this.root.querySelector('[data-ng-list]');
+		target.innerHTML=this.rules.length?this.rules.map((r,i)=>
+			'<div class="ng-rule'+(r.id===this.selected?' selected':'')+'" draggable="true" data-ng-drag="'+this.esc(r.id)+'">'+
+			'<button class="ng-pick" data-ng-act="select" data-id="'+this.esc(r.id)+'">'+this.esc(r.name||'（無題）')+
+			'<small>'+(r.enabled?'有効':'無効')+' / '+this.esc(r.action)+'</small></button>'+
+			'<button data-ng-act="up" data-id="'+this.esc(r.id)+'"'+(i===0?' disabled':'')+'>↑</button>'+
+			'<button data-ng-act="down" data-id="'+this.esc(r.id)+'"'+(i===this.rules.length-1?' disabled':'')+'>↓</button></div>').join(''):
+			'<p class="ng-sub">まだルールはありません。左下の「＋新規ルール」から作成してください。</p>';
+	}
+	conditionHtml(c){
+		const f=c.field;
+		const num=['nicoru','score','vpos'].includes(f);
+		const op=num?[['equals','＝'],['gte','以上'],['lte','以下']]:
+			[['contains','含む'],['equals','一致する'],['notEquals','一致しない'],
+			['starts','先頭一致'],['ends','末尾一致'],['regex','正規表現']];
+		const select=f==='color'?this.colorSelect(c.value,c.id):
+			f==='size'?'<select data-node-value="'+this.esc(c.id)+'">'+this.opt([['big','大文字（big）'],['medium','標準'],['small','小文字（small）']],c.value)+'</select>':
+			f==='position'?'<select data-node-value="'+this.esc(c.id)+'">'+this.opt([['ue','上固定'],['naka','通常（流れる）'],['shita','下固定']],c.value)+'</select>':
+			f==='fork'?'<select data-node-value="'+this.esc(c.id)+'">'+this.opt([['normal','通常'],['owner','投稿者'],['easy','かんたん'],['other','その他']],c.value)+'</select>':
+			'<input type="'+(num?'number':'text')+'" data-node-value="'+this.esc(c.id)+'" value="'+this.esc(c.value)+'" placeholder="'+(num?'0':'入力してください')+'">';
+		return '<div class="ng-condition"><label><input type="checkbox" data-node-not="'+this.esc(c.id)+'"'+(c.not?' checked':'')+'>NOT</label>'+
+			'<select data-node-field="'+this.esc(c.id)+'">'+this.opt(NgCompositeRuleEditor.fields,f)+'</select>'+
+			'<select data-node-cmp="'+this.esc(c.id)+'">'+this.opt(op,c.cmp)+'</select>'+
+			select+'<button data-ng-act="remove-node" data-id="'+this.esc(c.id)+'" title="削除">×</button></div>';
+	}
+	groupHtml(g,depth=0){
+		let html='<div class="ng-group"><div class="ng-group-head"><strong>'+(depth?'条件グループ':'全体の条件')+'</strong>'+
+			'<select data-group-mode="'+this.esc(g.id)+'">'+this.opt([['all','AND／すべて'],['any','OR／どれか']],g.mode)+'</select>'+
+			'<button data-ng-act="add-node" data-parent="'+this.esc(g.id)+'">＋条件</button>'+
+			'<button data-ng-act="add-group" data-parent="'+this.esc(g.id)+'"'+(depth>=2?' disabled':'')+'>＋グループ</button></div>';
+		for(const node of g.nodes){
+			html+=node.kind==='group'?this.groupHtml(node,depth+1):this.conditionHtml(node);
+		}
+		return html+'</div>';
+	}
+	detail(){
+		const area=this.root.querySelector('[data-ng-detail]'),r=this.current();
+		if(!r){area.innerHTML='<p>左の「＋新規ルール」を押して開始してください。</p>';return;}
+		const chk=k=>r[k]?' checked':'';
+		const actions=[['hide','コメントを非表示'],['hideAuthor','NG一致投稿者のコメントをすべて非表示'],
+			['replace','本文の置換'],['mask','本文を別の文字列にする'],['strip','指定されたコマンドを解除'],
+			['normalize','色・大きさを標準化'],['dim','薄く表示する']];
+		let extra='';
+		if(r.action==='replace')extra='<div class="ng-flex"><label class="ng-wide">検索文字列<input type="text" data-rule="pattern" value="'+this.esc(r.pattern)+'"></label>'+
+			'<label class="ng-wide">置換後の文字<input type="text" data-rule="replacement" value="'+this.esc(r.replacement)+'"></label></div>'+
+			'<div class="ng-flex"><label><input type="checkbox" data-rule="regexReplace"'+chk('regexReplace')+'>正規表現で置換</label>'+
+			'<label>フラグ<input type="text" data-rule="flags" value="'+this.esc(r.flags)+'" style="width:80px"></label></div>';
+		if(r.action==='mask')extra='<label class="ng-wide">置換する本文<input type="text" data-rule="mask" value="'+this.esc(r.mask)+'"></label>';
+		if(r.action==='strip')extra='<label class="ng-wide">解除するコマンド（カンマで区切る）<input type="text" data-rule="strip" value="'+this.esc(r.strip.join(', '))+'"></label>'+
+			'<p class="ng-sub">例：red, big（色とサイズを解除して位置指定は保持）</p>';
+		if(r.action==='normalize')extra='<div class="ng-flex"><label>色を選ぶ'+this.colorSelect(r.normalizeColor,'normalizeColor')+'</label>'+
+			'<label>文字サイズ<select data-rule="normalizeSize">'+this.opt([['keep','変更しない'],['medium','標準'],['big','big'],['small','small']],r.normalizeSize)+'</select></label></div>';
+		if(r.action==='dim')extra='<label>表示透明度<input type="number" data-rule="dim" min="5" max="100" value="'+this.esc(r.dim)+'">％</label>';
+		area.innerHTML='<h4>ルールの編集</h4>'+
+			'<div class="ng-flex"><label class="ng-wide">名前<input data-rule="name" type="text" value="'+this.esc(r.name)+'"></label>'+
+			'<label><input type="checkbox" data-rule="enabled"'+chk('enabled')+'>ルールを有効にする</label></div>'+
+			'<div class="ng-flex"><label>対象<select data-rule="scope">'+this.opt([['normal','通常コメント'],['any','すべて'],['owner','投稿者コメント'],['easy','かんたんコメント']],r.scope)+'</select></label>'+
+			'<label>適用順<select data-rule="phase">'+this.opt([['after','従来のNGより後'],['before','従来のNGより前']],r.phase)+'</select></label></div>'+
+			'<div class="ng-box"><h4>一致条件</h4>'+this.groupHtml(r.conditions)+'</div>'+
+			'<div class="ng-box"><h4>ニコる数による優先保護（NG除外）</h4>'+
+			'<div class="ng-flex"><label><input type="checkbox" data-rule="exemptNicoru"'+chk('exemptNicoru')+'>指定数以上ならこのルールを適用しない</label></div>'+
+			'<div class="ng-flex"><label>保護するニコる数<input type="number" min="1" max="10000000" data-rule="nicoruMin" value="'+this.esc(r.nicoruMin)+'">件以上</label>'+
+			'<label>未取得の場合<select data-rule="unknownPolicy">'+this.opt([['evaluate','通常どおり判定'],['skip','このルールをスキップ']],r.unknownPolicy)+'</select></label></div>'+
+			'<p class="ng-sub">ORでも優先保護を適用できます。従来のNGからは保護しません。</p></div>'+
+			'<div class="ng-box"><h4>一致したときの動作</h4>'+
+			'<label>動作<select data-rule="action">'+this.opt(actions,r.action)+'</select></label>'+
+			'<div class="ng-flex">'+extra+'</div>'+
+			(r.action==='hideAuthor'?'<label><input type="checkbox" data-rule="keepProtectedOnAuthorHide"'+chk('keepProtectedOnAuthorHide')+'>同じ投稿者でもニコる保護コメントは残す</label><p class="ng-sub">現在の動画内だけ。恒久NGユーザーIDには追加しません。</p>':'')+
+			'<div class="ng-flex"><label><input type="checkbox" data-rule="stopOnMatch"'+chk('stopOnMatch')+'>一致後は後続のルールを適用しない</label></div></div>'+
+			'<button data-ng-act="delete">選択ルールを削除</button>'+
+			(!NgCompositeRules.validate(this.rules)?'<p class="ng-error">入力途中または不正な条件があります。保存前に確認してください。</p>':'');
+	}
+	demoFields(){
+		this.root.querySelector('[data-ng-sample]').innerHTML='<div class="ng-flex">'+
+			'<label class="ng-wide">サンプル本文<input type="text" data-example="text" value="'+this.esc(this.sample.text)+'"></label>'+
+			'<label>コマンド<input type="text" data-example="cmd" value="'+this.esc(this.sample.cmd)+'"></label>'+
+			'<label>ニコる数<input type="number" min="0" data-example="nicoru" value="'+this.esc(this.sample.nicoru)+'"></label>'+
+			'<label>ユーザーID<input type="text" data-example="userId" value="'+this.esc(this.sample.userId)+'"></label></div>';
+	}
+	preview(){
+		const ex=this.sample;
+		const chat={...ex,color:NgCompositeRules.commandColor(ex.cmd),opacity:1,
+			size:ex.cmd.includes('big')?'big':ex.cmd.includes('small')?'small':'medium',
+			type:ex.cmd.includes('ue')?'ue':ex.cmd.includes('shita')?'shita':'naka'};
+		const valid=NgCompositeRules.validate(this.rules);
+		const projected=valid?NgCompositeRules.project([chat],this.rules,()=>true,ex.videoId):null;
+		const result=projected?.get(chat);
+		this.root.querySelector('[data-ng-result]').innerHTML='<div class="ng-preview">'+
+			'<article><small>変更前</small><p>'+this.esc(chat.text)+'</p><small>'+this.esc(chat.cmd)+'</small></article>'+
+			'<article><small>変更後</small><p>'+this.esc(!valid?'不正なルールがあります':!result?'（変更なし）':
+				!result.visible?'［非表示］':result.text)+'</p><small>'+this.esc(result?.cmd||chat.cmd)+'</small></article></div>'+
+			'<p class="'+(valid?'ng-ok':'ng-error')+'">'+(valid?'プレビューは現在の全ルールによる結果です。':'入力内容を修正してください。')+'</p>';
+	}
+	render(){this.ruleList();this.detail();this.demoFields();this.preview();}
+	changed(rebuild){this.onChange(NgCompositeRuleEditor.copy(this.rules));if(rebuild)this.render();else this.preview();}
+	move(id,destination){
+		const a=this.rules.findIndex(r=>r.id===id),b=this.rules.findIndex(r=>r.id===destination);
+		if(a<0||b<0||a===b)return;
+		const item=this.rules.splice(a,1)[0];this.rules.splice(b,0,item);this.changed(true);
+	}
+	click(e){
+		const b=e.target.closest('button[data-ng-act]');if(!b||b.disabled)return;
+		const act=b.dataset.ngAct,id=b.dataset.id;
+		if(act==='add'){if(this.rules.length>=NgCompositeRules.MAX_RULES)return;
+			const r=NgCompositeRuleEditor.newRule();this.rules.push(r);this.selected=r.id;}
+		else if(act==='duplicate'){const r=this.current();if(!r||this.rules.length>=NgCompositeRules.MAX_RULES)return;
+			const copy=NgCompositeRuleEditor.copy(r);copy.id=NgCompositeRuleEditor.newRule().id;copy.name+='（コピー）';this.rules.push(copy);this.selected=copy.id;}
+		else if(act==='select'){this.selected=id;this.render();return;}
+		else if(act==='delete'){this.rules=this.rules.filter(r=>r.id!==this.selected);this.selected=this.rules[0]?.id||'';}
+		else if(act==='up'||act==='down'){const i=this.rules.findIndex(r=>r.id===id),j=i+(act==='up'?-1:1);
+			if(i<0||j<0||j>=this.rules.length)return;
+			const item=this.rules.splice(i,1)[0];this.rules.splice(j,0,item);}
+		else if(act==='add-node'||act==='add-group'){
+			const parent=this.find(b.dataset.parent);if(!parent||!parent.nodes||parent.nodes.length>=45)return;
+			parent.nodes.push(act==='add-node'?{id:NgCompositeRuleEditor.newRule().id,field:'text',cmp:'contains',value:'',not:false}:
+				{id:NgCompositeRuleEditor.newRule().id,kind:'group',mode:'all',nodes:[]});
+		}else if(act==='remove-node'){
+			const parent=this.parent(id);if(!parent)return;parent.nodes=parent.nodes.filter(n=>n.id!==id);
+		}else return;
+		this.changed(true);
+	}
+	input(e){
+		const el=e.target,r=this.current();
+		if(!this.root.contains(el))return;
+		if(el.dataset.example){
+			this.sample[el.dataset.example]=el.type==='number'?Number(el.value):el.value;this.preview();return;
+		}
+		if(!r)return;
+		const key=el.dataset.rule;
+		if(key){
+			if(['enabled','stopOnMatch','exemptNicoru','keepProtectedOnAuthorHide','regexReplace'].includes(key))r[key]=el.checked;
+			else if(['nicoruMin','dim'].includes(key))r[key]=Number(el.value);
+			else if(key==='strip')r.strip=el.value.split(',').map(v=>v.trim()).filter(Boolean);
+			else r[key]=el.value;
+			this.changed(key==='action'||key==='normalizeColor');return;
+		}
+		if(el.dataset.groupMode){const n=this.find(el.dataset.groupMode);if(n)n.mode=el.value;this.changed(false);return;}
+		const nodeId=el.dataset.nodeField||el.dataset.nodeCmp||el.dataset.nodeValue||el.dataset.nodeNot;
+		if(!nodeId)return;
+		const n=this.find(nodeId);if(!n)return;
+		if(el.dataset.nodeField){
+			n.field=el.value;n.value=['nicoru','score','vpos'].includes(n.field)?'1':
+				n.field==='color'?'red':n.field==='size'?'big':n.field==='position'?'ue':
+				n.field==='fork'?'normal':'';
+			n.cmp=['nicoru','score','vpos'].includes(n.field)?'gte':
+				n.field==='regex'?'regex':['text','cmd'].includes(n.field)?'contains':'equals';
+			this.changed(true);
+		}else if(el.dataset.nodeCmp){n.cmp=el.value;this.changed(false);}
+		else if(el.dataset.nodeValue){n.value=el.value;this.changed(false);}
+		else if(el.dataset.nodeNot){n.not=el.checked;this.changed(false);}
+	}
+	getDraft(){return NgCompositeRuleEditor.copy(this.rules);}
+	replaceDraft(value){this.rules=NgCompositeRuleEditor.copy(value);this.selected=this.rules[0]?.id||'';this.render();}
+	dispose(){this.shadow?.replaceChildren();}
 }
     window.ZenzaAdvancedSettings = {
       config: Config
@@ -9743,7 +10362,7 @@ class ModernAdvancedSettingsUI {
       <option value="fullScreen">フルスクリーン ON/OFF</option>
       <option value="toggle-mute">ミュート ON/OFF</option>
       <option value="toggle-showComment">コメント表示 ON/OFF</option>
-      <option value="toggle-backComment">コメントの背面表示 ON/OFF</option>
+      <option value="toggle-backComment">コメントを画面全体に流す ON/OFF</option>
       <option value="toggle-loop">ループ ON/OFF</option>
       <option value="toggle-enableFilter">NG設定 ON/OFF</option>
       <option value="screenShot">スクリーンショット</option>

@@ -58,6 +58,7 @@ class NicoVideoPlayer extends Emitter {
         wordRegFilterFlags: conf.props.wordRegFilterFlags,
         userIdFilter: conf.props.userIdFilter,
         commandFilter: conf.props.commandFilter,
+        compositeRules: conf.props['ngComposite.rules'],
         removeNgMatchedUser: conf.props.removeNgMatchedUser,
         fork0: conf.props['filter.fork0'],
         fork1: conf.props['filter.fork1'],

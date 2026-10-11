@@ -30,15 +30,24 @@ describe('backComment の透明度レイヤー（B-7 / Task 102）', function() 
     );
   });
 
-  it('Task052/095のbackComment配置ルールは維持する', function() {
+  it('Task401では映像を縮小せず画面全面にコメントを重ねる', function() {
     const src = source();
-    assert.ok(
-      /\.is-backComment\s+\.videoPlayer\s*\{[^}]*left:\s*25%;[^}]*top:\s*25%;[^}]*width:\s*50%;[^}]*height:\s*50%/s.test(src),
-      'backCommentの動画縮小ルールが失われている'
-    );
-    assert.ok(
-      /\.zenzaPlayerContainer\.is-backComment\s+\.commentLayerFrame\s*\{[^}]*position:\s*fixed;[^}]*width:\s*100vw;[^}]*height:\s*calc\(100vh - 40px\)/s.test(src),
-      'Task052/095のviewport comment layerルールが失われている'
-    );
+    const fullEnd = src.indexOf("`, {className: 'screenMode for-full', disabled: true});");
+    const fullStart = src.lastIndexOf('util.addStyle(`', fullEnd);
+    const css = src.slice(fullStart, fullEnd);
+    assert.ok(fullStart >= 0 && fullEnd > fullStart);
+    assert.ok(!/\.is-(?:showComment\.is-)?backComment\s+\.videoPlayer\s*\{/.test(css),
+      '旧来の動画50%縮小ルールが残っている');
+    const rule = css.match(/\.zenzaPlayerContainer\.is-backComment\s+\.commentLayerFrame\s*\{([^}]+)\}/s);
+    assert.ok(rule, '画面全体のコメントレイヤールールがない');
+    assert.match(rule[1], /position:\s*absolute/);
+    assert.match(rule[1], /width:\s*100%\s*!important/);
+    assert.match(rule[1], /height:\s*100%\s*!important/);
+    assert.match(rule[1], /z-index:\s*101\s*!important/);
+    assert.match(rule[1], /pointer-events:\s*none/);
+    assert.ok(!rule[1].includes('100vh - 40px'), 'コメントが操作バーの上で切れている');
+    const info = fs.readFileSync(path.join(REPO_ROOT, 'src', 'VideoInfoPanel.js'), 'utf-8');
+    assert.ok(!/\.is-backComment\s+\.zenzaWatchVideo(?:Info|Header)Panel/.test(info),
+      '旧背面モードの情報パネル半透明化が残っている');
   });
 });

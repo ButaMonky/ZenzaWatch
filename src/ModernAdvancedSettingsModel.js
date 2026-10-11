@@ -101,7 +101,9 @@ class ModernAdvancedSettingsModel {
       ...(typeof UiVisibilityRegistry==='undefined'?[]:UiVisibilityRegistry.descriptors()),
       ...group('コメント表示','表示・配置',[
         ['showComment','コメントを表示'],
-        ['backComment','コメントを映像の後ろに表示'],
+        ['backComment','コメントを画面全体に流す',{
+          description:'全画面・ワイド表示時に、動画を縮小せず画面全体へコメントを重ねます。通常表示では従来どおりです。'
+        }],
         ['commentSpeedRate','コメントの移動速度',{type:'number'}],
         ['autoCommentSpeedRate','コメント速度を自動調整'],
         ['commentLayerOpacity','コメントの透明度',slider(0,1)],
@@ -161,9 +163,14 @@ class ModernAdvancedSettingsModel {
         ['wordRegFilterFlags','正規表現の適用オプション',{type:'regex-flags',
           description:'i は大文字・小文字を区別しない設定です。通常は初期値の i をおすすめします。m は ^ と $ を改行ごとの先頭・末尾に、s は「.」に改行も含め、u はUnicodeの文字単位を扱います。'}],
         ['userIdFilter','NGユーザーID一覧',{type:'textarea'}],
-        ['commandFilter','NGコマンド一覧',{type:'textarea'}],
+        ['commandFilter','NGコマンド一覧',{type:'textarea',
+          description:'コマンドとはコメントの色・大きさ・表示位置などの指定です。1行に1つ記入すると、その文字列を含むコマンドのコメントがNGになります。現在はNGワードなどとの「いずれかに一致」で判定します（AND条件ではありません）。'}],
         ['removeNgMatchedUser','NGに一致する投稿者のコメントを全除外'],
         ['sharedNgLevel','NG共有の強度',sharedNg]
+      ]),
+      ...group('NG・表示対象','複合NGルール（上級者向け）',[
+        ['ngComposite.rules','複合NG・置換ルール',{type:'composite-ng',
+          description:'複数の条件をAND/OR/NOTで組み合わせ、コメントの非表示・置換・装飾解除などを設定します。詳細説明は画面内で開けます。'}]
       ]),
       ...group('NG・表示対象','コメント種別',[
         ['filter.fork0','通常コメントを表示'],
@@ -295,7 +302,7 @@ class ModernAdvancedSettingsModel {
     }
     if(key.startsWith('filter.') || ['wordFilter','wordRegFilter',
       'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
-      'removeNgMatchedUser'].includes(key)) { return 'enableFilter'; }
+      'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
     const direct={
       'supporterCredit.voice':'supporterCredit.enable',
       'supporterCredit.gift':'supporterCredit.enable',
@@ -473,6 +480,16 @@ class ModernAdvancedSettingsModel {
     const v=typeof this.config.getValue==='function'?
       this.config.getValue(id):this.config.props?.[id];
     return ModernAdvancedSettingsModel._clone(v);
+  }
+  // A player setting or shortcut can be changed while this editor exists.
+  // Refresh only the externally changed value; keep unrelated drafts intact.
+  syncLiveValue(id) {
+    if(!this._byId.has(id)){return false;}
+    const live=this._liveValue(id);
+    if(ModernAdvancedSettingsModel._same(this.saved[id],live)){return false;}
+    this.saved[id]=ModernAdvancedSettingsModel._clone(live);
+    this.draft[id]=ModernAdvancedSettingsModel._clone(live);
+    return true;
   }
   cancel() {
     this.saved={};

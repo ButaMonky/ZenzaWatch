@@ -253,7 +253,8 @@ const {SettingPanelElement} = (() => {
               <input type="checkbox" class="checkbox"
                 data-setting-name="backComment"
                 ?checked=${conf.backComment}>
-                コメントを動画の後ろに流す
+                コメントを画面全体に流す
+                <small>※ 全画面・ワイド表示時、映像を縮小せず画面の端までコメントを重ねます</small>
             </label>
           </div>
           <div class="control">
@@ -812,8 +813,12 @@ const {SettingPanelElement} = (() => {
     _bindEnableFilterConfig(config) {
       if (this._boundEnableFilterConfig === config) { return; }
       this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+      this._boundEnableFilterConfig?.offkey?.('backComment', this._onEnableFilterConfigUpdate);
       this._boundEnableFilterConfig = config || null;
       this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+      // The advanced settings and shortcuts share the same Config key.
+      // Re-render the open player setting panel when either changes it.
+      this._boundEnableFilterConfig?.onkey?.('backComment', this._onEnableFilterConfigUpdate);
     }
 
     async connectedCallback() {

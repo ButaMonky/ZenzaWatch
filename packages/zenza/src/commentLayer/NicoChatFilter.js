@@ -1,8 +1,10 @@
 import {Emitter} from '../../../lib/src/Emitter';
 import {textUtil} from '../../../lib/src/text/textUtil';
 import {Config} from '../../../../src/Config';
+import {NgCompositeRules} from '../../../../src/NgCompositeRules';
 
 //===BEGIN===
+//@require NgCompositeRules
 class NicoChatFilter extends Emitter {
   constructor(params) {
     super();
@@ -40,9 +42,81 @@ class NicoChatFilter extends Emitter {
     this._userIdReg = null;
     this._commandReg = null;
 
-    this._onChange = _.debounce(this._onChange.bind(this), 50);
+    const notifyChange=_.debounce(this._onChange.bind(this),50);
+    // Invalidate predicates synchronously, even if UI change is debounced.
+    this._onChange=()=>{this._compositeProjection=null;notifyChange();};
+    // Existing callers/tests explicitly cancel the debounced change callback.
+    this._onChange.cancel=()=>notifyChange.cancel?.();
+    // Preserve the debounced callback API used by existing lifecycle code.
+    this._onChange.cancel=()=>notifyChange.cancel?.();
+    this._onChange.flush=()=>notifyChange.flush?.();
 
     this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
+    this._compositeRules=typeof NgCompositeRules!=='undefined' &&
+      NgCompositeRules.validate(params.compositeRules||[])?
+      JSON.parse(JSON.stringify(params.compositeRules||[])):[];
+    this._compositePool=[];
+    this._compositeVideoId='';
+    this._compositeBaselines=new WeakMap();
+    this._compositeProjection=null;
+    this._compositeApplied=false;
+  }
+  get compositeRules(){return JSON.parse(JSON.stringify(this._compositeRules));}
+  set compositeRules(value){
+    if(!NgCompositeRules.validate(value)){return;}
+    this._compositeRules=JSON.parse(JSON.stringify(value));
+    this._compositeProjection=null;
+    this.refresh();
+  }
+  setCompositeChatPool(chats,videoId='') {
+    this._compositePool=chats.slice();
+    this._compositeVideoId=videoId;
+    this._compositeProjection=null;
+    if(this._compositeApplied||this._compositeRules.some(r=>r.enabled)){
+      const prior=this._compositeBaselines;
+      const next=new WeakMap();
+      for(const chat of chats){
+        next.set(chat,prior.get(chat)||NgCompositeRules.initialState(chat,videoId));
+      }
+      this._compositeBaselines=next;
+      this.refresh();
+    }
+  }
+  _applyCompositeState(chat,state) {
+    const baseline=this._compositeBaselines.get(chat);
+    if(!state){state=baseline;}
+    if(!state)return;
+    if(chat.props){
+      if(chat.text!==state.text){chat.text=state.text;}
+      chat.props.cmd=state.cmd;
+      chat.props.color=state.color;
+      chat.props.size=state.size;
+      chat.props.opacity=state.opacity;
+      // Group membership owns vertical placement. Never silently move a comment
+      // to a different group while restoring its display-only decoration.
+    }
+  }
+  _getCompositeProjection(fallback) {
+    if(this._compositeProjection!==null){return this._compositeProjection;}
+    const chats=this._compositePool.length?this._compositePool:fallback;
+    if(!this._enable||!this._compositeRules.some(r=>r.enabled)){
+      if(this._compositeApplied){
+        for(const c of chats){this._applyCompositeState(c,null);}
+        this._compositeApplied=false;
+      }
+      return this._compositeProjection=false;
+    }
+    for(const chat of chats){
+      if(!this._compositeBaselines.has(chat)){
+        this._compositeBaselines.set(chat,NgCompositeRules.initialState(chat,this._compositeVideoId));
+      }
+    }
+    const projection=NgCompositeRules.project(chats,this._compositeRules,
+      this.getFilterFunc(),this._compositeVideoId,this._compositeBaselines);
+    if(!projection){return this._compositeProjection=false;}
+    for(const chat of chats){this._applyCompositeState(chat,projection.get(chat));}
+    this._compositeApplied=true;
+    return this._compositeProjection=projection;
   }
   get isEnable() {
     return this._enable;
@@ -52,6 +126,7 @@ class NicoChatFilter extends Emitter {
       return;
     }
     this._enable = !!v;
+    this._compositeProjection=null;
     this._onChange();
   }
   get removeNgMatchedUser() {
@@ -401,7 +476,9 @@ class NicoChatFilter extends Emitter {
     const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
     if (timeKey) { window.console.time(timeKey); }
     const filterFunc = this.getFilterFunc();
-    let result = nicoChatArray.filter(filterFunc);
+    const composite=this._getCompositeProjection(nicoChatArray);
+    let result=nicoChatArray.filter(chat=>composite instanceof Map?
+      composite.get(chat)?.visible!==false:filterFunc(chat));
     const removedUserIds = new Set();
     if (before !== result.length && this._removeNgMatchedUser) {
       const accepted = new Set(result);
@@ -441,7 +518,9 @@ class NicoChatFilter extends Emitter {
     return result;
   }
   isSafe(nicoChat) {
-    return (this.getFilterFunc())(nicoChat);
+    const composite=this._getCompositeProjection([nicoChat]);
+    return composite instanceof Map?
+      composite.get(nicoChat)?.visible!==false:(this.getFilterFunc())(nicoChat);
   }
   _buildFilterReg(filterList) {
     if (filterList.length < 1) {

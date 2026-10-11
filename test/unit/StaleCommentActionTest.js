@@ -35,16 +35,20 @@ describe('消えたコメントの操作（D-40 / Task106）', function() {
     });
     assert.deepEqual(s.events, []);
   });
-  it('存在する行の数値ID=0でもシーク・コピー・ニコるが従来どおり動く', function() {
+  it('存在する行の数値ID=0でもシーク・コピーと確定したニコるが動く', async function() {
     const s = subject();
     s.panel._onCommand('select', null, 0);
     s.panel._onCommand('clipBoard', null, 0);
     s.panel._onCommand('nicoru', null, 0);
     assert.deepEqual(s.events[0], ['command', 'seek', 12.5]);
     assert.deepEqual(s.copied, ['hello']);
+    assert.equal(s.item.nicoru, 0, 'a pending request does not mutate the row');
+    assert.deepEqual(s.events[2].slice(0, 3), ['command', 'nicoru', s.item.nicoChat]);
+    s.events[2][3].resolve({count: 1});
+    await new Promise(resolve => setImmediate(resolve));
+    await new Promise(resolve => setImmediate(resolve));
     assert.equal(s.item.nicoru, 1);
     assert.equal(s.item.nicotta, true);
-    assert.deepEqual(s.events[2], ['command', 'nicoru', s.item.nicoChat]);
   });
   it('IDを使わない一覧全体の操作はそのまま通す', function() {
     const s = subject();

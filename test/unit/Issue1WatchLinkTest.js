@@ -21,6 +21,46 @@ describe('Issue1 exact video URL classification',()=>{
   it('retains video link '+url,()=>{const f=fixture();try{assert.strictEqual(f.ctx.nico.getWatchId(url),id);}finally{f.dom.window.close();}});
 });
 describe('Issue1 link click ownership',()=>{
+ it('does not intercept a watch link explicitly routed to the official player',()=>{
+  const f=fixture('<a href="/watch/sm9?zenza_official=1&from=100" target="_blank"><span>公式で開く</span></a>');
+  try {
+   const a=f.win.document.querySelector('a');
+   let reached=false;a.addEventListener('click',()=>reached=true);
+   f.menu._overrideWatchLink();
+   const e=click(f,a.querySelector('span'));
+   assert.strictEqual(e.defaultPrevented,false);
+   assert.strictEqual(reached,true,'native new-tab link handler must run');
+   assert.deepStrictEqual(f.opens,[]);
+   assert.deepStrictEqual(f.sent,[]);
+  } finally {f.dom.window.close();}
+ });
+ it('allows an official player anchor inside the real menu shadow DOM',()=>{
+  const f=fixture('<div id="menu-host"></div>');
+  try{
+   const host=f.win.document.querySelector('#menu-host');
+   const shadow=host.attachShadow({mode:'open'});
+   shadow.innerHTML='<a href="/watch/sm9?zenza_official=1&from=42" target="_blank">'+
+     '<span>公式プレイヤーで開く</span></a>';
+   f.menu._overrideWatchLink();
+   const event=new f.win.MouseEvent('click',{
+     bubbles:true,composed:true,cancelable:true,button:0});
+   const target=shadow.querySelector('span');
+   target.dispatchEvent(event);
+   assert.strictEqual(event.defaultPrevented,false);
+   assert.deepStrictEqual(f.opens,[]);
+  }finally{f.dom.window.close();}
+ });
+ it('still opens ordinary watch links when only from= is supplied',()=>{
+  const f=fixture('<a href="/watch/sm9?from=100">video</a>');
+  try {f.menu._overrideWatchLink();assert(click(f,f.win.document.querySelector('a')).defaultPrevented);
+   assert.deepStrictEqual(f.opens,['sm9']);}finally{f.dom.window.close();}
+ });
+ it('keeps official marked links native even when Shift is held',()=>{
+  const f=fixture('<a href="/watch/sm9?zenza_official=1&from=100">original</a>');
+  try {f.menu._overrideWatchLink();const e=click(f,f.win.document.querySelector('a'),{shiftKey:true});
+   assert.strictEqual(e.defaultPrevented,false);assert.deepStrictEqual(f.sent,[]);
+  }finally{f.dom.window.close();}
+ });
  it('claims a header click before its earlier target navigation handler',()=>{const f=fixture('<div id="CommonHeader"><a href="/watch/sm9"><span>video</span></a></div>');try{const a=f.win.document.querySelector('a');let navigations=0;a.addEventListener('click',()=>navigations++);f.menu._overrideWatchLink();const e=click(f,a.querySelector('span'));assert.strictEqual(navigations,0);assert.deepStrictEqual(f.opens,['sm9']);assert(e.defaultPrevented);}finally{f.win.close();}});
  it('does not hijack the shorts search link',()=>{const f=fixture('<a href="/search_shorts/test">short</a>');try{f.menu._overrideWatchLink();assert.strictEqual(click(f,f.win.document.querySelector('a')).defaultPrevented,false);assert.deepStrictEqual(f.opens,[]);}finally{f.win.close();}});
  for(const mods of [{ctrlKey:true},{metaKey:true},{altKey:true},{button:1},{button:2}])

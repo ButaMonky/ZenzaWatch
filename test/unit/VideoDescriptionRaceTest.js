@@ -37,7 +37,7 @@ function subject() {
   const panel = {
     _description: w.document.getElementById('description'),
     _videoHeaderPanel: {clear() {}},
-    classList: {add() {}},
+    classList: {add() {}, remove() {}},
     _$ownerIcon: {raf: {addClass() {}}}
   };
   const update = html => VideoInfoPanel.prototype._updateVideoDescription.call(panel, html);

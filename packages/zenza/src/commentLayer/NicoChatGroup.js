@@ -49,7 +49,8 @@ class NicoChatGroup extends Emitter {
       this.onChange(null);
       return;
     }
-    if (this._nicoChatFilter.isSafe(nicoChat)) {
+    // Match addChatArray/members visibility, including fork and thread-label switches.
+    if (this._nicoChatFilter.applyFilter([nicoChat]).length > 0) {
       this.emit('addChat', nicoChat);
     }
   }

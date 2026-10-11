@@ -64,6 +64,9 @@ class PlayList extends VideoList {
     if (!data || !Array.isArray(data.items)) {
       return false;
     }
+    // A manual session/import restore supersedes pending network replacements.
+    this._replaceLoadGeneration = (this._replaceLoadGeneration || 0) + 1;
+    this._invalidateAdditiveLoads();
     this._initializeView();
     console.log('unserialize: ', data);
     this.model.unserialize(data.items);
@@ -198,13 +201,23 @@ class PlayList extends VideoList {
     if (!data || !Array.isArray(data.items)) {
       return;
     }
+    // A newer import must take ownership of its own delayed resume. Capture
+    // the exact restored row so other list edits cannot turn the old timer
+    // into an unrelated playback request.
+    const importGeneration = this._importCompletionGeneration =
+      (this._importCompletionGeneration || 0) + 1;
     this.emit('command', 'pause');
     this.emit('command', 'notify', 'プレイリストを復元');
     this.unserialize(data);
 
+    const restoredModel = this.model;
+    const index = PlayList.normalizeRestoredIndex(data.index, restoredModel.length, 0);
+    const item = restoredModel.getItemByIndex(index);
+    const selectedItem = this._activeItem;
     window.setTimeout(() => {
-      const index = PlayList.normalizeRestoredIndex(data.index, this.model.length, 0);
-      const item = this.model.getItemByIndex(index);
+      if (this._importCompletionGeneration !== importGeneration ||
+          this.model !== restoredModel || this._activeItem !== selectedItem ||
+          restoredModel.getItemByIndex(index) !== item) { return; }
       if (item) {
         this.setIndex(index, true);
         this.emit('command', 'openNow', item.watchId);
@@ -224,11 +237,15 @@ class PlayList extends VideoList {
     this._refreshIndex();
   }
   _setItemData(listData) {
+    this._invalidateAdditiveLoads();
     const items = listData.map(itemData => new VideoListItem(itemData));
     this.model.setItem(items);
     this.setIndex(items.length > 0 ? 0 : -1);
   }
   _replaceAll(videoListItems, options) {
+    // Committed replacement also invalidates previously started fetches.
+    this._replaceLoadGeneration = (this._replaceLoadGeneration || 0) + 1;
+    this._invalidateAdditiveLoads();
     options = options || {};
     this.model.setItem(videoListItems);
     const item = this.model.findByWatchId(options.watchId);
@@ -353,8 +370,60 @@ class PlayList extends VideoList {
     const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
     return this._insertAll(items, options);
   }
-  load(playlist, options, msgInfo) {
+  _invalidateAdditiveLoads() {
+    // A new list owner invalidates prior append/insert completions.
+    this._additiveListGeneration = (this._additiveListGeneration || 0) + 1;
+    this._additiveLoadTail = null;
+  }
+  _beginAdditiveLoad(options) {
+    if (!options.insert && !options.append) { return null; }
+    const previous = this._additiveLoadTail || Promise.resolve();
+    let release;
+    this._additiveLoadTail = new Promise(resolve => { release = resolve; });
+    return {
+      previous, release,
+      model: this.model,
+      generation: this._additiveListGeneration || 0
+    };
+  }
+  _isStaleAdditiveLoad(owner) {
+    return !!owner && (this.model !== owner.model ||
+      (this._additiveListGeneration || 0) !== owner.generation);
+  }
+  _waitForAdditiveTurn(networkPromise, owner) {
+    if (!owner) { return networkPromise; }
+    // Observe network failures immediately, even while an older add is
+    // pending, so deferred rejection cannot become unhandled.
+    const settled = Promise.resolve(networkPromise).then(
+      value => ({ok: true, value}),
+      error => ({ok: false, error})
+    );
+    return owner.previous.then(() => settled).then(result => {
+      if (result.ok) { return result.value; }
+      throw result.error;
+    });
+  }
+  _beginReplaceLoad(options) {
+    // A newer add/insert request also supersedes an older pending replacement.
+    const generation = this._replaceLoadGeneration =
+      (this._replaceLoadGeneration || 0) + 1;
+    if (options.insert || options.append) { return null; }
+    this._invalidateAdditiveLoads();
+    return {generation, model: this.model};
+  }
+  _isSupersededReplaceLoad(owner) {
+    return !!owner && (this._replaceLoadGeneration !== owner.generation ||
+      this.model !== owner.model);
+  }
+  _isStalePlaylistLoad(owner, isCurrent, additiveOwner) {
+    return this._isSupersededReplaceLoad(owner) ||
+      this._isStaleAdditiveLoad(additiveOwner) ||
+      (typeof isCurrent === 'function' && !isCurrent());
+  }
+  load(playlist, options, msgInfo, isCurrent) {
     this._initializeView();
+    options = options || {};
+    const replaceOwner = this._beginReplaceLoad(options);
 
     if (!this._playlistApiLoader) {
       this._playlistApiLoader = PlaylistApiLoader;
@@ -362,9 +431,13 @@ class PlayList extends VideoList {
     const timeKey = `loadPlaylist: ${playlist.type} ${playlist.id || playlist.options.tag || playlist.options.keyword}`;
     window.console.time(timeKey);
 
-    return this._playlistApiLoader
-      .load(playlist, msgInfo).then(items => {
+    const network = this._playlistApiLoader.load(playlist, msgInfo);
+    const additiveOwner = this._beginAdditiveLoad(options);
+    return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
         window.console.timeEnd(timeKey);
+        if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
+          return {status: 'superseded', message: ''};
+        }
         let videoListItems = items.map(item => VideoListItem.createByMylistItem(item));
 
         if (videoListItems.length < 1) {
@@ -419,6 +492,13 @@ class PlayList extends VideoList {
               `プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
               'プレイリストに読み込みしました'
         });
+      }, error => {
+        if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
+          return {status: 'superseded', message: ''};
+        }
+        throw error;
+      }).finally(() => {
+        if (additiveOwner) { additiveOwner.release(); }
       });
   }
   /**
@@ -443,7 +523,7 @@ class PlayList extends VideoList {
     }
     return notice;
   }
-  loadSearchVideo(word, options, limit = PlayList.SEARCH_LIMIT_DEFAULT) {
+  loadSearchVideo(word, options, limit = PlayList.SEARCH_LIMIT_DEFAULT, isCurrent) {
     this._initializeView();
     limit = PlayList.normalizeSearchLimit(limit);
 
@@ -455,6 +535,7 @@ class PlayList extends VideoList {
     const timerLabel = `loadSearchVideos${word} #${PlayList._searchSeq = (PlayList._searchSeq || 0) + 1}`;
     window.console.time(timerLabel);
     options = options || {};
+    const replaceOwner = this._beginReplaceLoad(options);
 
     // Task 067: 検索は NicoSearchApiV2Loader.searchMore() 側で本家と同じ検索API(nvapi)を
     // 使うようになったため、Task 066で追加した「0件の時にnvapiで取り直す」処理は撤去した
@@ -471,8 +552,13 @@ class PlayList extends VideoList {
         }).map(item => VideoListItem.createByMylistItem(item));
     };
 
-    return loadItems().then(videoListItems => {
+    const network = loadItems();
+    const additiveOwner = this._beginAdditiveLoad(options);
+    return this._waitForAdditiveTurn(network, additiveOwner).then(videoListItems => {
         window.console.timeEnd(timerLabel);
+        if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
+          return {status: 'superseded', message: ''};
+        }
 
         if (videoListItems.length < 1) {
           return Promise.reject({});
@@ -512,6 +598,13 @@ class PlayList extends VideoList {
               `検索結果を${added}件プレイリストに追加しました` :
               '検索結果をプレイリストに読み込みしました') + PlayList.searchNotice(searchResult)
         });
+      }, error => {
+        if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
+          return {status: 'superseded', message: ''};
+        }
+        throw error;
+      }).finally(() => {
+        if (additiveOwner) { additiveOwner.release(); }
       });
   }
   /**
@@ -681,13 +774,25 @@ class PlayList extends VideoList {
     }
 
     const model = this.model;
-    const index = this._index;
+    const anchor = this._activeItem;
+    // The numeric position can change while thumbnail metadata is loading.
+    // Re-resolve the original playing item against the same playlist model.
+    const getInsertIndex = () => {
+      if (this.model !== model) { return null; }
+      if (anchor) {
+        const currentIndex = model.indexOf(anchor);
+        return currentIndex >= 0 ? currentIndex + 1 : null;
+      }
+      return Math.min(model.length, Math.max(0, this._index + 1));
+    };
     return this._thumbInfoLoader.load(watchId).then(info => {
+      const index = getInsertIndex();
+      if (index === null) { return; }
       // APIにwatchIdを指定してもvideoIdが返るので上書きする. バッドノウハウ
       // チャンネル動画はsoXXXXに統一したいのでvideoIdを使う. バッドノウハウ
       info.id = info.isChannel ? info.id : watchId;
       const item = VideoListItem.createByThumbInfo(info);
-      model.insertItem(item, index + 1);
+      model.insertItem(item, index);
       this._refreshIndex(true);
 
       this.emit('update');
@@ -696,8 +801,10 @@ class PlayList extends VideoList {
         `次に再生: <img src="${item.thumbnail}" style="width: 96px;">${textUtil.escapeToZenkaku(item.title)}`
       );
     }).catch(result => {
+      const index = getInsertIndex();
+      if (index === null) { return; }
       const item = VideoListItem.createBlankInfo(watchId);
-      model.insertItem(item, index + 1);
+      model.insertItem(item, index);
       this._refreshIndex(true);
 
       this.emit('update');

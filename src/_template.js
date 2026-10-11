@@ -25,6 +25,7 @@
 // @match          https://feedly.com/*
 // @exclude        *://ads.nicovideo.jp/*
 // @exclude        *://www.nicovideo.jp/watch/*?edit=*
+// @exclude        *://www.nicovideo.jp/watch/*?*zenza_official=1*
 // @exclude        *://ch.nicovideo.jp/tool/*
 // @exclude        *://flapi.nicovideo.jp/*
 // @exclude        *://dic.nicovideo.jp/p/*
@@ -32,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.191-task316
+// @version        2.7.229-task391
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -116,6 +117,15 @@ AntiPrototypeJs();
   const PRODUCT = 'ZenzaWatch';
 // 公式プレイヤーがurlを書き換えてしまうので読み込んでおく
   const START_PAGE_QUERY = (location.search ? location.search.substring(1) : '');
+  // Task350: a user explicitly requesting the official watch page must not
+  // initialize Zenza (or any of its players/worker observers) in that tab.
+  // The legacy named-window case remains for older link handlers.
+  if (location.hostname === 'www.nicovideo.jp' && /^\/watch\/[^/]+/.test(location.pathname) &&
+      (new URLSearchParams(location.search).get('zenza_official') === '1' ||
+        window.name === 'watchGinza')) {
+    if (window.name === 'watchGinza') { window.name = ''; }
+    return;
+  }
   const monkey = async (PRODUCT, START_PAGE_QUERY) /*** (｀・ω・´)9m ***/ => {
     const Array = window.PureArray ? window.PureArray : window.Array;
     let console = window.console;

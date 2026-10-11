@@ -97,3 +97,35 @@ describe('Task316 related-link editor layout interactions',()=>{
     a.panel.dispose();a.dom.window.close();
   });
 });
+describe('Task318 visible custom-link drag feedback',()=>{
+  it('shows faded source and an insertion line, then clears both on drag end',()=>{
+    const a=setup();
+    const grip=a.q('[data-rl-drag="0"]');
+    const start=new a.dom.window.Event('dragstart',{bubbles:true,cancelable:true});
+    start.dataTransfer={effectAllowed:'',setData(){}};
+    grip.dispatchEvent(start);
+    assert(a.rows()[0].classList.contains('rl-is-dragging'));
+    const over=new a.dom.window.Event('dragover',{bubbles:true,cancelable:true});
+    a.rows()[2].dispatchEvent(over);
+    assert(over.defaultPrevented);
+    assert(a.rows()[2].classList.contains('rl-drop-after'));
+    grip.dispatchEvent(new a.dom.window.Event('dragend',{bubbles:true}));
+    assert(!a.q('.rl-is-dragging'));
+    assert(!a.q('.rl-drop-target'));
+    a.panel.dispose();a.dom.window.close();
+  });
+  it('lets keyboard users move a focused handle with Alt+ArrowDown',()=>{
+    const a=setup();
+    const handle=a.q('[data-rl-drag="0"]');
+    handle.focus();
+    const evt=new a.dom.window.KeyboardEvent('keydown',{
+      key:'ArrowDown',altKey:true,bubbles:true,cancelable:true});
+    handle.dispatchEvent(evt);
+    assert(evt.defaultPrevented);
+    assert.deepStrictEqual(a.rows().map(row=>row.querySelector('[data-rl-field="id"]').value),
+      ['user','video','history']);
+    assert.strictEqual(a.dom.window.document.activeElement.dataset.rlDrag,'1');
+    assert.strictEqual(a.config.saved[0].id,'video');
+    a.panel.dispose();a.dom.window.close();
+  });
+});

@@ -48,7 +48,15 @@ class DataStorage {
 
     objUtil.bridge(this, new Emitter());
 
-    this.restore().then(() => {
+    this.restoreError = null;
+    this.restore().catch(error => {
+      // Storage access may be denied before any properties can be restored.
+      // Keep boot readiness usable with defaults rather than hanging forever.
+      this.restoreError = error;
+      this._data = Object.assign({}, defaultData);
+      window.console.error('DataStorage restore failed; using defaults',
+        {name: error && error.name});
+    }).then(() => {
       this.props = this._makeProps(defaultData);
       this.emitResolve('restore');
     });
@@ -165,9 +173,16 @@ class DataStorage {
     const storage = this.storage;
     if (!this.readonly) {
       try {
-        storage[storageKey] = JSON.stringify(value);
+        const json = JSON.stringify(value);
+        if (json === undefined) {
+          throw new TypeError('Cannot serialize DataStorage value');
+        }
+        storage[storageKey] = json;
       } catch (e) {
+        // Never commit an unsaved value to memory or publish an update event.
+        // Otherwise the UI would claim success until the next reload.
         window.console.error(e);
+        return false;
       }
     }
     this._data[key] = value;

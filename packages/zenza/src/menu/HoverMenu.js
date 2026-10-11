@@ -133,7 +133,6 @@ class HoverMenu {
     if (e.ctrlKey) {
       return;
     }
-
     if (e.shiftKey) {
       // 秘密機能。最後にZenzaWatchを開いたウィンドウで開く
       this._send(watchId);
@@ -145,17 +144,19 @@ class HoverMenu {
     this._open(watchId, params);
   }
   async _open (watchId, params) {
-    this._playerOption = Object.assign({
+    // Keep the independent Task376 race fix: own each pending request's options.
+    const option = Object.assign({
       economy: this._playerConfig.getValue('forceEconomy'),
       query: this._query,
       eventType: 'click'
     }, params);
+    this._playerOption = option;
 
     const player = await this._getPlayer();
     if (this._playerConfig.getValue('enableSingleton')) {
-      ZenzaWatch.external.sendOrOpen(watchId, this._playerOption);
+      ZenzaWatch.external.sendOrOpen(watchId, option);
     } else {
-      player.open(watchId, this._playerOption);
+      player.open(watchId, option);
     }
   }
   send (watchId, params) {
@@ -180,6 +181,12 @@ class HoverMenu {
       const ref = this._getWatchReference(target);
       if (!ref) { return; }
       const {watchId, url} = ref;
+      // A deliberate official-player link must bypass this capture-phase handler.
+      // Otherwise preventDefault blocks the native target=_blank navigation and
+      // the current Zenza player simply reopens the same video.
+      if (url.searchParams.get('zenza_official') === '1') { return; }
+      // AUD-08 WONTFIX: never import thumbnail preview time into playback.
+      // The existing preview guard only pauses page media; it does not seek Zenza.
       this._pagePreviewGuard?.claim(target);
       e.preventDefault();
       e.stopImmediatePropagation();

@@ -15,8 +15,10 @@ import {VideoControlState} from './State';
 import {WindowResizeObserver} from '../packages/lib/src/infra/Observable';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
+import {UiVisibilityRegistry} from './UiVisibilityRegistry';
 //===BEGIN===
 //@require ZenzaCommentHistoryCore
+//@require UiVisibilityRegistry
 const historyTriggerKeyGuard = event => {
   if (['Enter', ' ', 'Spacebar'].includes(event.key)) { event.stopPropagation(); }
 };
@@ -194,6 +196,7 @@ const historyTriggerKeyGuard = event => {
       });
 
       $container.append($view);
+      this._visibility = UiVisibilityRegistry.connect(config,this._view,'bar');
       this.emitResolve('dom-ready');
     }
     _initializePlaybackRateSelectMenu() {
@@ -2097,9 +2100,10 @@ util.addStyle(`
       }
       const width = this._mode === 'list' ?
         CommentPreviewView.WIDTH : CommentPreviewView.HOVER_WIDTH;
-      const containerWidth = this._innerWidth = this._innerWidth || global.innerWidth;
-
-      left = Math.min(Math.max(0, left - CommentPreviewView.WIDTH / 2), containerWidth - width);
+      // Resize and mode switches must use the current viewport and preview width.
+      const containerWidth = global.innerWidth;
+      const maxLeft = Math.max(0, containerWidth - width);
+      left = Math.min(Math.max(0, left - width / 2), maxLeft);
       this._left = left;
       this.applyView();
     }

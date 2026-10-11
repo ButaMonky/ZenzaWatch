@@ -4,7 +4,9 @@ import {Emitter} from './baselib';
 import {css} from '../packages/lib/src/css/css';
 import {uq} from '../packages/lib/src/uQuery';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
+import {UiVisibilityRegistry} from './UiVisibilityRegistry';
 //===BEGIN===
+//@require UiVisibilityRegistry
 /*
  * Task 073: コメントコマンドピッカー（案C＋案Aパネル）
  * - 入力欄にフォーカスすると、下の帯（旧「入力時に一時停止」の帯）が広がり、サイズ・位置・基本色を選べる
@@ -119,6 +121,19 @@ class CommentInputPanel extends Emitter {
     this._initializeDom();
 
     this.config.onkey('autoPauseCommentInput', this._onAutoPauseCommentInputChange.bind(this));
+    this._visibility=UiVisibilityRegistry.connect(this.config,this._$view[0],'comment',{
+      beforeHide:()=>this._endFocusBeforeHide()
+    });
+  }
+  _endFocusBeforeHide() {
+    if(this._$view?.[0]?.contains(document.activeElement)){this.blur();}
+    this._togglePopover?.(false);
+  }
+  _applyVisibility() {
+    if(this._visibility){return this._visibility.apply('ui.commentInput');}
+    return UiVisibilityRegistry.apply(this.config,this._$view?.[0],'ui.commentInput',{
+      beforeHide:()=>this._endFocusBeforeHide()
+    });
   }
   _initializeDom() {
     let $container = this._$playerContainer;
@@ -318,7 +333,8 @@ class CommentInputPanel extends Emitter {
     this._hasFocus = true;
   }
   _onBlur() {
-    if (this._$commandInput.hasFocus() || this._$commentInput.hasFocus()) {
+    if (this._$commandInput.hasFocus() || this._$commentInput.hasFocus() ||
+      !this._hasFocus) {
       return;
     }
     this._togglePopover(false);
@@ -326,44 +342,63 @@ class CommentInputPanel extends Emitter {
 
     this._hasFocus = false;
   }
-  _onSubmit() {
+  _onSubmit(e) {
+    e && e.preventDefault();
     this.submit();
   }
-  _onSubmitButtonClick() {
+  _onSubmitButtonClick(e) {
+    e && e.preventDefault();
     this.submit();
   }
   _onAutoPauseCommentInputChange(val) {
     this._$autoPause.prop('checked', !!val);
   }
   submit() {
-    let chat = this._$commentInput.val().trim();
-    let cmd = this._$commandInput.val().trim();
+    // Hold the lock for the entire POST promise, not just the duplicate
+    // form-submit/button-click event turn.
+    if (this._submitPending) {
+      return this._submitPromise;
+    }
+    const originalChat = this._$commentInput.val();
+    const originalCommand = this._$commandInput.val();
+    const chat = originalChat.trim();
+    const cmd = originalCommand.trim();
     if (!chat.length) {
       return;
     }
-    // Task 073: Enterでの送信は「formのsubmit」と「送信ボタンのclick」の両方が同時に起きるため、
-    // 同じコメントが2回送られないよう、入力欄が空になるまでの間の2回目は無視する
-    if (this._submitPending) {
-      return;
-    }
     this._submitPending = true;
+    this._$view.addClass('updating');
 
-    setTimeout(() => {
+    const post = new Promise((resolve, reject) =>
+      this.emit('post', {resolve, reject}, chat, cmd));
+    const settled = post.then(
+      () => {
+        // The POST is now confirmed. Do not erase edits made while it was
+        // pending; a new draft (including command changes) owns the inputs.
+        if (this._$commentInput.val() === originalChat &&
+            this._$commandInput.val() === originalCommand) {
+          this._$commentInput.val('').blur();
+          this._$commandInput.blur();
+          this._togglePopover(false);
+        }
+        return true;
+      },
+      () => false // Keep the draft for retry. The dialog owns failure feedback.
+    );
+    this._submitPromise = settled.finally(() => {
       this._submitPending = false;
-      this._$commentInput.val('').blur();
-      this._$commandInput.blur();
-      this._togglePopover(false);
-
-      let $view = this._$view.addClass('updating');
-      (new Promise((resolve, reject) => this.emit('post', {resolve, reject}, chat, cmd)))
-        .then(() => $view.removeClass('updating'))
-        .catch(() => $view.removeClass('updating'));
-    }, 0);
+      this._submitPromise = null;
+      this._$view.removeClass('updating');
+    });
+    return this._submitPromise;
   }
   get isAutoPause() {
     return this.config.props.autoPauseCommentInput;
   }
   focus() {
+    const value = typeof this.config.getValue === 'function' ?
+      this.config.getValue('ui.commentInput') : this.config.props?.['ui.commentInput'];
+    if (value === false) { return; }
     this._$commentInput.focus();
     this._onFocus();
   }
@@ -377,6 +412,7 @@ CommentInputPanel.CommandPicker = CommandPicker;
 CommentInputPanel.POPOVER_EDGE_MARGIN = 8;
 
 CommentInputPanel.__css__ = (`
+  .commentInputPanel[hidden] { display: none !important; }
   .commentInputPanel {
     position: fixed;
     top:  calc(-50vh + 50% + 100vh);

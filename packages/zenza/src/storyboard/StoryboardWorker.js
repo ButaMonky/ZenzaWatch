@@ -122,6 +122,8 @@ const StoryboardWorker = (() => {
         this.totalWidth = 0;
         this.isReady = false;
         this.boards = [];
+        this._infoGeneration = 0;
+        this._disposed = false;
         this.isAnimating = false;
         this.cls();
         if (info) {
@@ -135,14 +137,24 @@ const StoryboardWorker = (() => {
       set info(infoRawData) { this.setInfo(infoRawData); }
 
       async setInfo(infoRawData) {
+        if (this._disposed) { return; }
+        // Every async update owns its own immutable model snapshot. Reusing and
+        // mutating this._info meant an old A promise could install its images
+        // after B was already current.
+        const generation = ++this._infoGeneration;
+        const current = () => !this._disposed && generation === this._infoGeneration;
         this.isReady = false;
-        this.info ? this._info.update(infoRawData) : (this._info = new StoryboardInfoModel(infoRawData));
-
-        const info = this.info;
+        const info = this._info = new StoryboardInfoModel(infoRawData);
         if (!info.isAvailable) {
+          const previous = this.boards;
+          this.boards = [];
+          this._releaseBoards(previous);
+          this._currentTime = -1;
+          this.totalWidth = 0;
           return this.cls();
         }
-        console.time('BoardView setInfo');
+        const timerLabel = `BoardView setInfo:${this.name}:${generation}`;
+        console.time(timerLabel);
         const cols = info.cols;
         const rows = info.rows;
         const pageWidth  = info.pageWidth;
@@ -154,44 +166,85 @@ const StoryboardWorker = (() => {
         this.totalWidth = Math.ceil(info.duration * 1000 / info.cellIntervalMs) * cellWidth;
         // info.cellCount * info.cellWidth;
 
-        this.boards.forEach(board => board.image && board.image.close && board.image.close());
-        this.boards = (await Promise.all(info.images.map(async (url, idx) => {
-          const image = await this.images.get(url);
-          const boards = [];
-          for (let row = 0; row < rows; row++) {
-            const canvas = getCanvas(pageWidth, cellHeight);
-            const ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
-            ctx.beginPath();
-            const sy = row * cellHeight;
-            image && ctx.drawImage(image,
-              0, sy, pageWidth, cellHeight,
-              0,  0, pageWidth, cellHeight
-            );
-            ctx.strokeStyle = 'rgb(128, 128, 128)';
-            ctx.shadowColor = 'rgb(192, 192, 192)';
-            ctx.shadowOffsetX = -1;
-            for (let col = 0; col < cols; col++) {
-              const x = col * cellWidth;
-              ctx.strokeRect(x, 1, cellWidth - 1 , cellHeight + 2);
+        const boards = (await Promise.all(info.images.map(async (url, idx) => {
+          const generated = [];
+          let image = null;
+          try {
+            try {
+              image = await this.images.get(url);
+            } catch (error) {
+              // A failed image becomes a blank board with normal frame borders.
+              // The other pages, and subsequent videos, must remain usable.
+              console.warn('BoardView image load failed', error);
             }
-
-            boards.push({
-              image: canvas, //.transferToImageBitmap ? canvas.transferToImageBitmap() : canvas, // ImageBitmapじゃないほうが速い？気のせい？
-              left:  idx * boardWidth + row * pageWidth,
-              right: idx * boardWidth + row * pageWidth + pageWidth,
-              width: pageWidth
-            });
+            if (!current()) { return generated; }
+            for (let row = 0; row < rows; row++) {
+              const canvas = getCanvas(pageWidth, cellHeight);
+              const ctx = canvas.getContext('2d', {alpha: false, desynchronized: true});
+              ctx.beginPath();
+              const sy = row * cellHeight;
+              if (image) {
+                try {
+                  ctx.drawImage(image,
+                    0, sy, pageWidth, cellHeight,
+                    0, 0, pageWidth, cellHeight
+                  );
+                } catch (error) {
+                  console.warn('BoardView image draw failed', error);
+                }
+              }
+              ctx.strokeStyle = 'rgb(128, 128, 128)';
+              ctx.shadowColor = 'rgb(192, 192, 192)';
+              ctx.shadowOffsetX = -1;
+              for (let col = 0; col < cols; col++) {
+                const x = col * cellWidth;
+                ctx.strokeRect(x, 1, cellWidth - 1, cellHeight + 2);
+              }
+              generated.push({
+                image: canvas,
+                left: idx * boardWidth + row * pageWidth,
+                right: idx * boardWidth + row * pageWidth + pageWidth,
+                width: pageWidth
+              });
+            }
+            return generated;
+          } finally {
+            // Keep cache references balanced for normal, failed and superseded
+            // requests, including those resolved only after dispose().
+            this.images.release(url);
           }
-          this.images.release(url);
-          return boards;
         }))).flat();
 
+        if (!current()) {
+          this._releaseBoards(boards);
+          console.timeEnd(timerLabel);
+          return;
+        }
+        const previous = this.boards;
+        this.boards = boards;
+        this._releaseBoards(previous);
         this.height = info.cellHeight;
         this._currentTime = -1;
         this.cls();
-        console.timeEnd('BoardView setInfo');
+        console.timeEnd(timerLabel);
         this.isReady = true;
         this.reDraw();
+      }
+      _releaseBoards(boards) {
+        for (const board of boards || []) {
+          const bitmap = board.image;
+          if (!bitmap) { continue; }
+          try {
+            if (typeof bitmap.close === 'function') {
+              bitmap.close();
+            } else {
+              // Canvas / OffscreenCanvas has no close(). Resetting dimensions
+              // lets its pixel buffer go while a superseded async task drains.
+              bitmap.width = 0;
+              bitmap.height = 0;
+            }
+          } catch (_) { /* cleanup must never revive stale ownership */ }
+        }
       }
       reDraw() {
         const left = this._scrollLeft;
@@ -202,6 +255,7 @@ const StoryboardWorker = (() => {
         return this._scrollLeft;
       }
       set scrollLeft(left) {
+        if (this._disposed) { return; }
         left = Math.max(0, Math.min(this.totalWidth - this.width, left));
         if (this._scrollLeft === left) {
           return;
@@ -269,6 +323,7 @@ const StoryboardWorker = (() => {
         this.bufferCanvas.height = height;
       }
       setCurrentTime(sec) {
+        if (this._disposed || !this.info?.isAvailable) { return; }
         this._currentTime = sec;
         const duration = Math.max(1, this.info.duration);
         const per = sec / duration;
@@ -283,6 +338,7 @@ const StoryboardWorker = (() => {
       }
 
       resize({width, height}) {
+        if (this._disposed) { return; }
         width && (this.width = width);
         height && (this.height = height);
         if (this.isReady) {
@@ -323,10 +379,11 @@ const StoryboardWorker = (() => {
         this.isAnimating = true;
         const buffer = this.buffer;
         while (this.isAnimating) {
-          while (!this.isReady) {
+          while (!this.isReady && this.isAnimating && !this._disposed) {
             await new Promise(res => setTimeout(res, 500));
           }
-          while (this.isReady && this.isAnimating && !buffer.paused) {
+          if (!this.isAnimating || this._disposed) { return; }
+          while (this.isReady && this.isAnimating && !this._disposed && !buffer.paused) {
             buffer.wait();
             this.currentTime = this.buffer.currentTime;
             await new Promise(res => requestAnimationFrame(res)); // 結局raf安定だった
@@ -336,20 +393,30 @@ const StoryboardWorker = (() => {
         }
       }
       startAnimation() {
-        if (!this.buffer || this.isAnimating) { return; }
+        if (this._disposed || !this.buffer || this.isAnimating) { return; }
         this.currentTime = this.buffer.currentTime;
         this.execAnimation();
       }
       async stopAnimation() {
         this.isAnimating = false;
+        if (this._disposed) { return; }
         await new Promise(res => requestAnimationFrame(res));
-        this.reDraw();
+        if (!this._disposed) { this.reDraw(); }
       }
 
       dispose() {
-        this.stopAnimation();
+        if (this._disposed) { return; }
+        this._disposed = true;
+        this._infoGeneration++;
+        this.isAnimating = false;
         this.isReady = false;
-        this.boards.length = 0;
+        const oldBoards = this.boards;
+        this.boards = [];
+        this._releaseBoards(oldBoards);
+        this._info = null;
+        this.buffer = null;
+        this.totalWidth = 0;
+        this.cls();
       }
     }
 
@@ -369,6 +436,8 @@ const StoryboardWorker = (() => {
       get info() { return this._info; }
 
       set info(info) {
+        // Invalidate a suspended setCurrentTime() before its old image resolves.
+        this._drawSeq = (this._drawSeq || 0) + 1;
         this.isReady = false;
         this.info && this.info.images.forEach(url => this.images.release(url));
 

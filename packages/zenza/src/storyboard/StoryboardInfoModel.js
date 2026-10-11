@@ -83,14 +83,20 @@ class StoryboardInfoModel extends Emitter {
    * msに相当するサムネは何番目か？を返す
    */
   getIndex(ms) {
-    // msec -> sec
-    const v = Math.max(0, Math.min(this.duration, Math.floor(ms / 1000)));
-
-    // サムネの総数 ÷ 秒数
-    // Math.maxはゼロ除算対策
-    const n = this.cellCount / Math.max(1, this.duration);
-
-    return Math.floor(v * n);
+    // The storyboard, board pointer and thumbnails must use the same declared
+    // interval. Count/duration ratios drift for partial last cells; floor(ms/1000)
+    // also loses subsecond thumbnails.
+    const durationMs = Math.max(0, this.duration * 1000);
+    const boundedMs = Math.max(0, Math.min(ms, durationMs));
+    const intervalMs = this.cellIntervalMs;
+    const index = Number.isFinite(intervalMs) && intervalMs > 0
+      ? Math.floor(boundedMs / intervalMs)
+      // Malformed legacy data with no usable interval: keep the old ratio fallback.
+      : Math.floor(Math.floor(boundedMs / 1000) * this.cellCount /
+        Math.max(1, this.duration));
+    const lastIndex = Math.max(0,
+      (Number.isFinite(this.cellCount) ? this.cellCount : 0) - 1);
+    return Math.max(0, Math.min(Number.isFinite(index) ? index : 0, lastIndex));
   }
 
   /**

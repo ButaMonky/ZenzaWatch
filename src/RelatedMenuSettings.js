@@ -10,13 +10,17 @@ class RelatedMenuSettings {
       ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
   }
 
-  constructor(container, {config, actions, shortcuts = {}}) {
+  constructor(container, {config, actions, shortcuts = {}, embedded = false, onDraftChange = null}) {
     if (!container || !config || !actions) { throw new TypeError('Related-menu settings dependencies missing'); }
     this.container = container;
     this.doc = container.ownerDocument;
     this.config = config;
     this.actions = actions;
     this.shortcuts = shortcuts;
+    // When embedded in the modern settings shell, every edit stays in the
+    // global draft. The bottom Save is the only operation that writes Config.
+    this.embedded = embedded === true;
+    this.onDraftChange = typeof onDraftChange === 'function' ? onDraftChange : null;
     this._recordCleanup = null;
     this.externalChanged = false;
     this.message = '';
@@ -24,14 +28,11 @@ class RelatedMenuSettings {
     this.expandedIds = new Set();
     this.variablesOpen = new Set();
     this._dragFrom = null;
+    this._dragAfter = false;
     this._handleDragStart = e => this._onDragStart(e);
     this._handleDragOver = e => this._onDragOver(e);
     this._handleDrop = e => this._onDrop(e);
-    this._handleDragEnd = () => {
-      this._dragFrom = null;
-      this.container.querySelectorAll('.rl-drop-target').forEach(node =>
-        node.classList.remove('rl-drop-target'));
-    };
+    this._handleDragEnd = () => this._clearDragVisuals();
     this._handleClick = e => this._onClick(e);
     this._handleInput = e => this._onField(e);
     this._handleChange = e => this._onField(e);
@@ -45,6 +46,7 @@ class RelatedMenuSettings {
     container.addEventListener('dragover', this._handleDragOver);
     container.addEventListener('drop', this._handleDrop);
     container.addEventListener('dragend', this._handleDragEnd);
+    container.addEventListener('keydown', this._handleGripKeyDown=e=>this._onGripKeyDown(e));
     if (typeof config.on === 'function') {
       config.on('update', this._handleConfigUpdate);
     }
@@ -62,7 +64,7 @@ class RelatedMenuSettings {
       '.zenzaRelatedLinksEditor .rl-toolbar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:10px 0; }',
       '.zenzaRelatedLinksEditor .rl-toolbar button { padding:7px 12px; }',
       '.zenzaRelatedLinksEditor .rl-toolbar [data-rl-count] { margin-right:auto; opacity:.76; }',
-      '.zenzaRelatedLinksEditor .rl-card { border:1px solid #5c6c80; border-radius:5px; padding:12px; margin:9px 0; background:rgba(96,126,166,.09); }',
+      '.zenzaRelatedLinksEditor .rl-card { position:relative; border:1px solid #5c6c80; border-radius:5px; padding:12px; margin:9px 0; background:rgba(96,126,166,.09); }',
       '.zenzaRelatedLinksEditor .rl-head { display:flex; flex-wrap:wrap; align-items:center; gap:5px; margin-bottom:8px; }',
       '.zenzaRelatedLinksEditor .rl-head strong { margin-right:auto; min-width:80px; overflow-wrap:anywhere; }',
       '.zenzaRelatedLinksEditor .rl-head button { font-size:11px; padding:3px 8px; }',
@@ -71,7 +73,10 @@ class RelatedMenuSettings {
       '.zenzaRelatedLinksEditor .rl-head .rl-summary strong { display:block; }',
       '.zenzaRelatedLinksEditor .rl-head .rl-summary small { display:block; opacity:.75; }',
       '.zenzaRelatedLinksEditor .rl-drag { cursor:grab; color:inherit; touch-action:none; }',
-      '.zenzaRelatedLinksEditor .rl-card.rl-drop-target { outline:2px solid #82bfff; }',
+      '.zenzaRelatedLinksEditor .rl-card.rl-is-dragging { opacity:.4; border-style:dashed; }',
+      '.zenzaRelatedLinksEditor .rl-card.rl-drop-target::before { content:""; position:absolute; left:0; right:0; height:4px; border-radius:4px; background:#82bfff; box-shadow:0 0 8px #82bfff; pointer-events:none; z-index:2; }',
+      '.zenzaRelatedLinksEditor .rl-card.rl-drop-before::before { top:-8px; }',
+      '.zenzaRelatedLinksEditor .rl-card.rl-drop-after::before { bottom:-8px; }',
       '.zenzaRelatedLinksEditor .rl-variables-toggle { margin-top:8px; }',
       '.zenzaRelatedLinksEditor .rl-variables { padding:6px; border:1px solid #4b5f76; border-radius:5px; }',
       '.zenzaRelatedLinksEditor .rl-shortcut-editor { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:9px 0; }',
@@ -145,6 +150,19 @@ class RelatedMenuSettings {
     return '';
   }
 
+  replaceDraftFromParent(value) {
+    if (!Array.isArray(value)) { throw new TypeError('Expected custom link array'); }
+    if (this._recordCleanup) { this._recordCleanup(); }
+    this.draft=value.map(entry=>
+      entry && typeof entry==='object' && !Array.isArray(entry) ? {...entry} : entry);
+    this.expandedIds.clear();
+    this.variablesOpen.clear();
+    this.message='';
+    // Embedded editing mirrors back to the parent's draft via onDraftChange.
+    // Neither rendering nor this operation writes the saved Config.
+    this._render();
+  }
+
   _rowKey(item, index) {
     return item && typeof item.id === 'string' && item.id ? item.id : '__invalid_'+index;
   }
@@ -173,7 +191,7 @@ class RelatedMenuSettings {
       const variablesShown=this.variablesOpen.has(rowKey);
       return '<article class="rl-card" data-rl-row="'+index+'">' +
         '<div class="rl-head">' +
-        '<button type="button" class="rl-drag" data-rl-drag="'+index+'" draggable="true" aria-label="ドラッグで並び替え" title="ドラッグで並び替え">⠿</button>' +
+        '<button type="button" class="rl-drag" data-rl-drag="'+index+'" draggable="true" aria-label="ドラッグで移動。Alt＋上下キーでも移動できます" title="ドラッグかAlt＋↑↓で並び替え">⠿</button>' +
         '<div class="rl-summary"><strong data-rl-summary>'+E(obj.label || 'リンク '+(index+1))+'</strong>' +
         '<small data-rl-summary-status>'+(obj.enabled===false?'無効':'有効')+' ・ '+
         E(this._formatShortcut(obj.shortcutKey))+'</small>' +
@@ -213,8 +231,8 @@ class RelatedMenuSettings {
       '<div data-rl-rows>'+rows+'</div>' +
       '<div class="rl-toolbar"><span data-rl-count></span>' +
       '<button type="button" data-rl-add>＋ リンクを追加</button>' +
-      '<button type="button" data-rl-cancel>変更を破棄</button>' +
-      '<button type="button" class="rl-save" data-rl-save>変更を保存</button>' +
+      '<button type="button" data-rl-cancel '+(this.embedded?'hidden':'')+'>変更を破棄</button>' +
+      '<button type="button" class="rl-save" data-rl-save '+(this.embedded?'hidden':'')+'>変更を保存</button>' +
       '<p class="rl-status" role="status" aria-live="polite" data-rl-status></p></div>' +
       '</section>';
     this._refresh();
@@ -266,6 +284,12 @@ class RelatedMenuSettings {
     this.container.querySelector('[data-rl-save]').disabled=
       !this._dirty() || !validation.valid || invalid.some(Boolean) || this.original===null;
     const status=this.container.querySelector('[data-rl-status]');
+    if (this.embedded && this.onDraftChange && this.original !== null) {
+      // Clone even invalid rows: validation at the global Save must reject
+      // the entire draft instead of dropping malformed rows silently.
+      this.onDraftChange(this.draft.map(item =>
+        item && typeof item === 'object' && !Array.isArray(item) ? {...item} : item));
+    }
     status.textContent=this.externalChanged ?
       '別の画面で設定が更新されました。変更を破棄して再読み込みしてください。' :
       this.message || (!validation.valid ? 'URL・ID・表示名などの入力エラーがあります。保存前に修正してください。' :
@@ -466,12 +490,37 @@ class RelatedMenuSettings {
     this.draft=next;this.message='';this._render();
   }
 
+  _clearDragVisuals() {
+    this._dragFrom=null;
+    this._dragAfter=false;
+    this.container.querySelectorAll('.rl-is-dragging,.rl-drop-target,.rl-drop-before,.rl-drop-after')
+      .forEach(card=>card.classList.remove(
+        'rl-is-dragging','rl-drop-target','rl-drop-before','rl-drop-after'));
+  }
+
+  _onGripKeyDown(e) {
+    const grip=e.target.closest?.('[data-rl-drag]');
+    if (!grip || !e.altKey || !['ArrowUp','ArrowDown'].includes(e.key)) { return; }
+    const from=Number(grip.dataset.rlDrag);
+    const to=from+(e.key==='ArrowUp'?-1:1);
+    if (to<0 || to>=this.draft.length) { return; }
+    e.preventDefault();
+    const next=this.draft.slice();
+    next.splice(to,0,next.splice(from,1)[0]);
+    this.draft=next;
+    this.message='移動しました。下部の保存で確定します。';
+    this._render();
+    this.container.querySelector('[data-rl-drag="'+to+'"]')?.focus();
+  }
+
   _onDragStart(e) {
     const grip=e.target.closest && e.target.closest('[data-rl-drag]');
     if (!grip || !this.container.contains(grip)) { return; }
     const from=Number(grip.dataset.rlDrag);
     if (!Number.isInteger(from) || from<0 || from>=this.draft.length) { return; }
     this._dragFrom=from;
+    this.container.querySelector('[data-rl-row="'+from+'"]')
+      ?.classList.add('rl-is-dragging');
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed='move';
       e.dataTransfer.setData('text/plain',String(from));
@@ -484,9 +533,12 @@ class RelatedMenuSettings {
     if (!card || !this.container.contains(card)) { return; }
     e.preventDefault();
     if (e.dataTransfer) { e.dataTransfer.dropEffect='move'; }
-    this.container.querySelectorAll('.rl-drop-target').forEach(node=>
-      node.classList.remove('rl-drop-target'));
-    card.classList.add('rl-drop-target');
+    const rect=card.getBoundingClientRect();
+    this._dragAfter=rect.height>0 ?
+      e.clientY>rect.top+rect.height/2 : this._dragFrom<Number(card.dataset.rlRow);
+    this.container.querySelectorAll('.rl-drop-target,.rl-drop-before,.rl-drop-after')
+      .forEach(node=>node.classList.remove('rl-drop-target','rl-drop-before','rl-drop-after'));
+    card.classList.add('rl-drop-target',this._dragAfter?'rl-drop-after':'rl-drop-before');
   }
 
   _onDrop(e) {
@@ -496,16 +548,16 @@ class RelatedMenuSettings {
     e.preventDefault();
     const from=this._dragFrom;
     const to=Number(card.dataset.rlRow);
-    this._dragFrom=null;
-    if (!Number.isInteger(to) || to<0 || to>=this.draft.length || from===to) {
-      this.container.querySelectorAll('.rl-drop-target').forEach(node=>
-        node.classList.remove('rl-drop-target'));
-      return;
-    }
+    const after=this._dragAfter;
+    this._clearDragVisuals();
+    if (!Number.isInteger(to) || to<0 || to>=this.draft.length) { return; }
+    const insertion=to+(after?1:0);
+    const destination=from<insertion?insertion-1:insertion;
+    if (from===destination) { return; }
     const next=this.draft.slice();
-    next.splice(to,0,next.splice(from,1)[0]);
+    next.splice(destination,0,next.splice(from,1)[0]);
     this.draft=next;
-    this.message='';
+    this.message='並び順を変更しました。変更を保存すると確定します。';
     this._render();
   }
 
@@ -518,6 +570,7 @@ class RelatedMenuSettings {
     this.container.removeEventListener('dragover',this._handleDragOver);
     this.container.removeEventListener('drop',this._handleDrop);
     this.container.removeEventListener('dragend',this._handleDragEnd);
+    this.container.removeEventListener('keydown',this._handleGripKeyDown);
     if (typeof this.config.off==='function') {
       this.config.off('update',this._handleConfigUpdate);
     }

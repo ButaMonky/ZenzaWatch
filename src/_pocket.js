@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.47-task301
+// @version     0.5.50-task389
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -3599,12 +3599,12 @@ const emitter = util.emitter;
       };
     };
 
-    const initExternal = (dispatcher, hoverMenu, infoView) => {
+    const initExternal = (dispatcher, hoverMenu, infoView, ngLifecycle) => {
       MylistPocket.external = {
         info: watchId => { return dispatcher('info', watchId); },
         load: watchId => { return dispatcher('load', watchId, {expireTime: 60 * 60 * 1000}); },
         getFavStatus: (watchId) => { return dispatcher('fav-status', watchId); },
-        observe: (params /*{query, container, closest}*/) => { initNg(params); },
+        observe: (params /*{query, container, closest}*/) => { ngLifecycle.observe(params); },
         hide: () => {
           hoverMenu.hide();
           infoView.hide();
@@ -3654,8 +3654,12 @@ const emitter = util.emitter;
         }
       };
 
-      const load = function(watchId, item) {
+      const load = function(watchId, item, isCancelled) {
+        // Optional per-NG-session cancellation. Shared hover/favourite calls
+        // without this argument keep their existing queue behavior.
+        const cancelled = () => typeof isCancelled === 'function' && isCancelled();
         const onLoad = info => {
+          if (cancelled()) { return {status: 'cancelled'}; }
           if (item) {
             watchId = info.watchId;
             item.setAttribute('data-watch-id', watchId);
@@ -3664,11 +3668,14 @@ const emitter = util.emitter;
           const sleepTime = info.fromCache ? 0 : 50;
           return (util.getSleepPromise(sleepTime,  'success-' + watchId))(info);
         };
-        const onFail = util.getSleepPromise(1000, 'fail-'    + watchId);
+        const onFail = error => cancelled() ?
+          {status: 'cancelled'} :
+          util.getSleepPromise(1000, 'fail-' + watchId)(error);
 
         return new Promise((resolve, reject) => {
           waiting.push({
             run: () => {
+              if (cancelled()) { return {status: 'cancelled'}; }
               if (item) { item.classList.add('is-ng-current'); }
               return ThumbInfoLoader.load(watchId).then(onLoad, onFail);
             },
@@ -3687,19 +3694,14 @@ const emitter = util.emitter;
       };
     })();
 
-    const waitForDom = (query, timeout = 30000) => {
-      const now = Date.now();
-      return new Promise(async (ok, ng) => {
-        while (now + timeout > Date.now()) {
-          const dom = document.querySelector(query);
-          console.log('waitForDom', query, dom, now + timeout, Date.now());
-          if (dom) {
-            return ok(dom);
-          }
-          await new Promise(wait => setTimeout(wait, 1000));
-        }
-        ng('timeout');
-      });
+    const waitForDom = async (query, timeout = 30000) => {
+      const deadline = Date.now() + timeout;
+      while (Date.now() < deadline) {
+        const dom = document.querySelector(query);
+        if (dom) { return dom; }
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      throw new Error('timeout');
     };
 
     const getNgEnv = async () => {
@@ -3753,14 +3755,17 @@ const emitter = util.emitter;
       return {query: null, container: null};
     };
 
-    const initNgConfig = () => {
+    const initNgConfig = onEnable => {
       const ngConfig = config.namespace('ng');
-      const updateEnable = v => { document.body.classList.toggle('is-ng-disable', !v); };
-      updateEnable(ngConfig.props.enable);
-      if (!ngConfig.props.enable) { return {}; }
-      ngConfig.onkey('enable', updateEnable);
-
       const favConfig = config.namespace('fav');
+      // Keep the subscription alive even when NG is OFF at startup.
+      const updateEnable = v => {
+        const enabled = !!v;
+        document.body.classList.toggle('is-ng-disable', !enabled);
+        if (typeof onEnable === 'function') { onEnable(enabled); }
+      };
+      ngConfig.onkey('enable', updateEnable);
+      updateEnable(ngConfig.props.enable);
       return {ngConfig, favConfig};
     };
 
@@ -3837,8 +3842,13 @@ const emitter = util.emitter;
 
     const initNgDom = ({intersectionObserver, query, closest, container, subtree}) => {
       subtree = typeof subtree !== 'boolean' ? false : subtree;
-      if (!container) { return; }
-      util.addStyle(__ng_css__);
+      if (!container) { return () => {}; }
+      // NG can be enabled repeatedly; do not append another style sheet.
+      if (!initNgDom._styleAdded) {
+        util.addStyle(__ng_css__);
+        initNgDom._styleAdded = true;
+      }
+      const observed = new Set();
 
       const update = container => {
         let items = (container || document).querySelectorAll(query);
@@ -3858,6 +3868,7 @@ const emitter = util.emitter;
           //if (item.offsetLeft < 0) { return; }
           if (item.classList.contains('is-ng-ignore')) { return; }
           item.classList.add('is-ng-wait');
+          observed.add(item);
           intersectionObserver.observe(item);
         });
       };
@@ -3881,21 +3892,36 @@ const emitter = util.emitter;
         );
       });
 
+      return () => {
+        mutationObserver.disconnect();
+        intersectionObserver.disconnect();
+        containers.forEach(container => {
+          delete container.dataset.isWatching;
+        });
+        // A later ON cycle must be allowed to scan these existing DOM nodes.
+        observed.forEach(item => {
+          item.classList.remove('is-ng-wait', 'is-ng-queue', 'is-ng-current');
+        });
+      };
     };
 
-    const initNg = async params => {
-      if (!window.IntersectionObserver) { return; }
+    const initNg = async (params, isCurrent = () => true, ngContext) => {
+      if (!window.IntersectionObserver || !isCurrent()) { return; }
 
       let {query, container, closest, subtree, callback} = params ? params : await getNgEnv();
 
-      if (!query || !container || (Array.isArray(container) && !container.length)) { return; }
+      // Discovery may await page DOM while NG is toggled OFF.
+      if (!isCurrent() || !query || !container ||
+          (Array.isArray(container) && !container.length)) { return; }
 
-      const {ngConfig, favConfig} = initNgConfig();
-      if (!ngConfig) { return; }
+      const {ngConfig, favConfig} = ngContext || initNgConfig();
+      if (!ngConfig || !ngConfig.props.enable || !isCurrent()) { return; }
 
-      const {ngChecker, favChecker} = initNgChecker({ngConfig, favConfig});
+      const {ngChecker, favChecker} = ngContext?.checkers ||
+        initNgChecker({ngConfig, favConfig});
 
       const onItemInview = (item, watchId) => {
+        if (!isCurrent() || !ngConfig.props.enable) { return; }
 
         const loadLazy = () => {
           const lazyImage = item.querySelector('.jsLazyImage');
@@ -3908,9 +3934,15 @@ const emitter = util.emitter;
           }
         };
 
-        QueueLoader.load(watchId, item).then(
+        QueueLoader.load(watchId, item,
+          () => !isCurrent() || !ngConfig.props.enable).then(
           info => {
             item.classList.remove('is-ng-current');
+            if (!isCurrent() || !ngConfig.props.enable ||
+                info?.status === 'cancelled') {
+              loadLazy();
+              return;
+            }
             if (!info || info.status === 'fail' || info.code === 'DELETED') {
               if (info && info.code !== 'COMMUNITY') {
                 console.error('empty data', watchId, info, info ? info.code : 'unknown');
@@ -3921,11 +3953,12 @@ const emitter = util.emitter;
                 return callback(item,
                   {watchId, info, isNg: ngChecker.isNg(info), isFav: favChecker.isMatch(info)});
               }
-              item.classList.add(
-                ngChecker.isNg(info) ? 'is-ng-rejected' : 'is-ng-resolved');
-              if (favChecker.isMatch(info)) {
-                item.classList.add('is-fav-favorited');
-              }
+              // Re-enabling NG may classify a previously processed card again.
+              // Never leave conflicting old and new result classes attached.
+              const rejected = !!ngChecker.isNg(info);
+              item.classList.toggle('is-ng-rejected', rejected);
+              item.classList.toggle('is-ng-resolved', !rejected);
+              item.classList.toggle('is-fav-favorited', !!favChecker.isMatch(info));
 
               for (let img of item.querySelectorAll('img.videoThumbnail.preview')) {
                 img.src = info.thumbnail;
@@ -3958,7 +3991,9 @@ const emitter = util.emitter;
           },
           () => {
             item.classList.remove('is-ng-current');
-            item.classList.add('is-ng-failed');
+            if (isCurrent() && ngConfig.props.enable) {
+              item.classList.add('is-ng-failed');
+            }
             loadLazy();
           }
         );
@@ -3966,13 +4001,71 @@ const emitter = util.emitter;
 
       const intersectionObserver = initIntersectionObserver(onItemInview);
 
-      initNgDom({intersectionObserver, query, container, closest, subtree});
+      return initNgDom({intersectionObserver, query, container, closest, subtree});
+    };
 
-      return ngConfig;
+    const createNgLifecycle = () => {
+      const scopes = [];
+      let generation = 0;
+      let enabled = false;
+      let context;
+
+      const startScope = scope => {
+        if (scope.startedIn === generation) {
+          return scope.pending || Promise.resolve();
+        }
+        scope.startedIn = generation;
+        const session = generation;
+        const isCurrent = () => enabled && generation === session;
+        scope.pending = Promise.resolve()
+          .then(() => initNg(scope.params, isCurrent, context))
+          .then(dispose => {
+            if (!isCurrent()) {
+              if (typeof dispose === 'function') { dispose(); }
+              return;
+            }
+            scope.stop = typeof dispose === 'function' ? dispose : null;
+          })
+          .catch(error => {
+            if (isCurrent()) {
+              window.console.warn('Optional NG observer failed', error);
+            }
+          });
+        return scope.pending;
+      };
+
+      const updateEnabled = value => {
+        const next = !!value;
+        if (enabled === next) { return; }
+        enabled = next;
+        generation++;
+        for (const scope of scopes) {
+          if (scope.stop) { scope.stop(); scope.stop = null; }
+          scope.startedIn = null;
+        }
+        if (enabled) {
+          for (const scope of scopes) { startScope(scope); }
+        }
+      };
+
+      // Exactly one enable listener, even when initially OFF.
+      context = initNgConfig(updateEnabled);
+      context.checkers = initNgChecker(context);
+
+      return {
+        ngConfig: context.ngConfig,
+        observe(params) {
+          const existing = scopes.find(scope => scope.params === params);
+          if (existing) { return existing.pending || Promise.resolve(); }
+          const scope = {params, stop: null, pending: null, startedIn: null};
+          scopes.push(scope);
+          return enabled ? startScope(scope) : Promise.resolve();
+        }
+      };
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.42-task201', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.50-task389', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -4006,9 +4099,10 @@ const emitter = util.emitter;
       });
       MylistPocket.debug.hoverMenu = hoverMenu;
 
-      const ngConfig = await initNg().catch(() => {
+      const ngLifecycle = createNgLifecycle();
+      const ngConfig = ngLifecycle.ngConfig;
+      await ngLifecycle.observe().catch(() => {
         console.warn('Optional NG initialization unavailable');
-        return null;
       });
 
       if (config.props.nicoad.hide) {
@@ -4021,7 +4115,7 @@ const emitter = util.emitter;
         // initExternal() まで届かず MylistPocket.external が作られなかった。
         // その結果、ランキングページで「？」を押すと VideoInfoView の初期化が
         // MylistPocket.external.observe で落ちていた。
-        const ngTag = (ngConfig && ngConfig.props && ngConfig.props.tag) || '';
+        const ngTag = (ngConfig && ngConfig.props && ngConfig.props.enable && ngConfig.props.tag) || '';
         for (const tagName of ngTag.trim().split(/[\r\n]/)) {
           if (!tagName.trim()) { continue; }
           util.addStyle(hideTagCss(tagName));
@@ -4031,7 +4125,7 @@ const emitter = util.emitter;
         }
       }
 
-      initExternal(dispatcher, hoverMenu, infoView);
+      initExternal(dispatcher, hoverMenu, infoView, ngLifecycle);
     };
 
     init();

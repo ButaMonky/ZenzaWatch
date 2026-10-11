@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description ZenzaWatchをゲームパッドで操作
 // @include     *://*.nicovideo.jp/*
-// @version     1.5.3
+// @version     1.5.4-task364
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -1477,12 +1477,12 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
       let ZenzaGamePad = ZenzaWatch.modules ?
         new ZenzaWatch.modules.Emitter() : new Emitter();
 
-      const padIndex = Config.get('deviceIndex') * 1;
-
       const detectGamepad = () => {
         if (activeGamepad) {
           return;
         }
+        // Read the current preference on every detection, not only at startup.
+        const padIndex = Config.get('deviceIndex') * 1;
         const gamepads = navigator.getGamepads();
         if (gamepads.length < 1) {
           return;
@@ -1557,7 +1557,8 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
           console.log('%cgamepad connected id:"%s"', 'background: lightblue;', e.gamepad.id);
           detectGamepad();
         } else {
-          if (activeGamepad) {
+          // A delayed event for a newly selected pad must not release an old model.
+          if (activeGamepad && activeGamepad.getDeviceIndex() === e.gamepad.index) {
             ZenzaGamePad.emit('onDeviceDisconnect', activeGamepad.getDeviceIndex());
             activeGamepad.release();
             activeGamepad = null;
@@ -1574,6 +1575,13 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
           }
           if (Config.get('needFocus') && !document.hasFocus()) {
             return;
+          }
+          // Selection can change while a different pad is already connected.
+          if (activeGamepad && activeGamepad.getDeviceIndex() !== Config.get('deviceIndex') * 1) {
+            ZenzaGamePad.emit('onDeviceDisconnect', activeGamepad.getDeviceIndex());
+            activeGamepad.release();
+            activeGamepad = null;
+            pollingTimer.changeInterval(1000);
           }
           if (!activeGamepad) {
             detectGamepad();

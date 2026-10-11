@@ -4,9 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const {JSDOM} = require('jsdom');
 const {REPO_ROOT} = require('../helpers/buildSandbox');
-const {beginSection, createContext, run} = require('../helpers/extractSource');
+const {beginSection, createContext, run, loadClass} = require('../helpers/extractSource');
 
-function harness(links = []) {
+function harness(links = [], order = [], hidden = [], menuVisible = true) {
   const dom = new JSDOM('<!doctype html><body></body>', {
     url:'https://www.nicovideo.jp/watch/sm9'});
   const win = dom.window;
@@ -22,7 +22,23 @@ function harness(links = []) {
     }
   }
   const config = {
-    getValue: key => key === 'relatedMenu.customLinks' ? links : null,
+    default:{'relatedMenu.customLinks':[], 'relatedMenu.order':[],
+      'relatedMenu.hiddenItems':[], 'ui.relatedMenu':true},
+    storage:win.localStorage,
+    getStorageKey:key=>'ZenzaWatch_'+key,
+    async refresh(key,storage=win.localStorage) {
+      const raw=storage[this.getStorageKey(key)];
+      const value=raw==null?this.default[key]:JSON.parse(raw);
+      if(key==='relatedMenu.customLinks'){links=value;}
+      if(key==='relatedMenu.order'){order=value;}
+      if(key==='relatedMenu.hiddenItems'){hidden=value;}
+      if(key==='ui.relatedMenu'){menuVisible=value;}
+      return value;
+    },
+    getValue: key => key === 'relatedMenu.customLinks' ? links :
+      key === 'relatedMenu.order' ? order :
+      key === 'relatedMenu.hiddenItems' ? hidden :
+      key === 'ui.relatedMenu' ? menuVisible : null,
     onkey: (key, fn) => handlers.push({key,fn})
   };
   const player = {currentTime: 12.1};
@@ -44,6 +60,12 @@ function harness(links = []) {
   run(beginSection('packages/zenza/src/menu/RelatedMenuActions.js')+
     ';globalThis.Actions=RelatedMenuActions;',ctx);
   ctx.RelatedMenuActions=ctx.Actions;
+  run(beginSection('src/RelatedMenuOrder.js')+
+    ';globalThis.MenuOrder=RelatedMenuOrder;',ctx);
+  ctx.RelatedMenuOrder=ctx.MenuOrder;
+  ctx.UiVisibilityRegistry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',ctx);
+  run(beginSection('packages/zenza/src/menu/OfficialPlayerRoute.js')+
+    ';globalThis.OfficialPlayerRoute=OfficialPlayerRoute;',ctx);
   run(beginSection('packages/zenza/src/parts/BaseViewComponent.js')+
     ';globalThis.BaseViewComponent=BaseViewComponent;',ctx);
   const source=fs.readFileSync(path.join(REPO_ROOT,'src/VideoInfoPanel.js'),'utf8');
@@ -52,7 +74,12 @@ function harness(links = []) {
   assert(from>=0 && until>from);
   run(source.slice(from,until)+';globalThis.RelatedInfoMenu=RelatedInfoMenu;',ctx);
   const menu=()=>new ctx.RelatedInfoMenu({parentNode:win.document.body});
-  return {dom,win,ctx,menu,player,handlers,config,setLinks:v=>{links=v;handlers.forEach(h=>h.fn(v));}};
+  return {dom,win,ctx,menu,player,handlers,config,
+    setLinks:v=>{links=v;handlers.forEach(h=>h.fn(v));},
+    setOrder:v=>{order=v;handlers.forEach(h=>h.fn(v));},
+    setHidden:v=>{hidden=v;handlers.forEach(h=>h.fn(v));},
+    setMenuVisible:v=>{menuVisible=v;
+      handlers.filter(h=>h.key==='ui.relatedMenu').forEach(h=>h.fn(v));}};
 }
 const video = (owner={type:'user',id:123,name:'Uploader'})=>({
   videoId:'sm9',watchId:'sm9',title:'Test & Japanese 日本語',
@@ -92,7 +119,7 @@ describe('Task313 RelatedInfoMenu DOM integration', () => {
       assert(disabled);
       assert.strictEqual(disabled.getAttribute('aria-disabled'),'true');
       assert(!disabled.closest('a'));
-      assert.strictEqual(m._customRelatedItems.querySelectorAll('a').length,1);
+      assert.strictEqual(m._customRelatedItems.querySelectorAll('a[data-related-link-id]').length,1);
     }finally{h.dom.window.close();}
   });
   it('uses textContent rather than injecting configured label HTML', () => {
@@ -101,7 +128,7 @@ describe('Task313 RelatedInfoMenu DOM integration', () => {
     try {
       const m=h.menu();m.update(video());
       assert(!m._customRelatedItems.querySelector('img'));
-      assert.strictEqual(m._customRelatedItems.querySelector('a').textContent,
+      assert.strictEqual(m._customRelatedItems.querySelector('a[data-related-link-id]').textContent,
         '<img src=x onerror=alert(1)>');
     }finally{h.dom.window.close();}
   });
@@ -116,7 +143,7 @@ describe('Task313 RelatedInfoMenu DOM integration', () => {
         url:'https://example.com/{videoId}',openInNewTab:false}]);
       for(const m of [a,b]) {
         assert(!m._customRelatedGroup.hidden);
-        assert.strictEqual(m._customRelatedItems.querySelector('a').target,'_self');
+        assert.strictEqual(m._customRelatedItems.querySelector('a[data-related-link-id]').target,'_self');
       }
       h.setLinks([]);
       assert(a._customRelatedGroup.hidden && b._customRelatedGroup.hidden);
@@ -128,7 +155,7 @@ describe('Task313 RelatedInfoMenu DOM integration', () => {
     try {
       const m=h.menu();m.update(video());
       h.player.currentTime=63.7;
-      const link=m._customRelatedItems.querySelector('a');
+      const link=m._customRelatedItems.querySelector('a[data-related-link-id]');
       // Allow the handler to run, but block jsdom external navigation.
       link.addEventListener('click',e=>e.preventDefault(),{capture:true});
       link.dispatchEvent(new h.win.MouseEvent('click',{bubbles:true,cancelable:true}));
@@ -151,6 +178,165 @@ describe('Task313 RelatedInfoMenu DOM integration', () => {
       assert(!calls[0].includes('csrf'));
       off();
       assert(m._customRelatedGroup.hidden);
+    }finally{h.dom.window.close();}
+  });
+});
+
+describe('Task318 unified related menu runtime',()=>{
+  const keys=menu=>Array.from(menu._customRelatedItems.querySelectorAll(
+    'li[data-related-order-key]'),li=>li.dataset.relatedOrderKey);
+  it('reorders built-ins, custom links and registered actions together in both menus',()=>{
+    const h=harness([{id:'history',label:'履歴',url:'https://example.com/history'}],
+      ['link:history','builtin:copy-url','action:external']);
+    try{
+      const calls=[];
+      h.ctx.Actions.register({id:'external',label:'外部機能',
+        action:ctx=>calls.push(ctx.videoId)});
+      const a=h.menu(),b=h.menu();a.update(video());b.update(video());
+      for(const m of [a,b]){
+        assert.deepStrictEqual(keys(m).slice(0,3),
+          ['link:history','builtin:copy-url','action:external']);
+        assert.strictEqual(keys(m).length,9);
+        assert(m._ginzaLink,'official command retains its original node');
+      }
+      h.setOrder(['builtin:official','link:history','action:external']);
+      assert.deepStrictEqual(keys(a).slice(0,3),
+        ['builtin:official','link:history','action:external']);
+      assert.deepStrictEqual(keys(b).slice(0,3),
+        ['builtin:official','link:history','action:external']);
+      const btn=a._customRelatedItems.querySelector('button[data-param="external"]');
+      btn.dispatchEvent(new h.win.MouseEvent('click',{bubbles:true,cancelable:true}));
+      assert.deepStrictEqual(calls,['sm9']);
+    }finally{h.dom.window.close();}
+  });
+  it('keeps standard condition classes and ignores dormant external IDs',()=>{
+    const h=harness([],['action:gone','builtin:tree','builtin:copy-url']);
+    try{
+      const m=h.menu();m.update(video());
+      assert.strictEqual(keys(m)[0],'builtin:tree');
+      assert(!keys(m).includes('action:gone'));
+      const tree=m._customRelatedItems.querySelector('[data-related-order-key="builtin:tree"]');
+      assert(tree.classList.contains('parentVideoMenu'));
+      assert.strictEqual(m._view.classList.contains('is-ParentVideoExist'),false);
+      h.ctx.Actions.register({id:'gone',label:'再登録',action(){}});
+      assert.strictEqual(keys(m)[0],'action:gone');
+    }finally{h.dom.window.close();}
+  });
+});
+describe('Task318 related-menu visibility',()=>{
+  it('hides built-ins, saved links and runtime actions without deleting them',()=>{
+    const h=harness([{id:'history',label:'履歴',url:'https://example.com/history'}],
+      [],['builtin:ad','link:history','action:external']);
+    try{
+      h.ctx.Actions.register({id:'external',label:'外部',action(){}});
+      const a=h.menu(),b=h.menu();
+      a.update(video());b.update(video());
+      for(const m of [a,b]){
+        const rows=[...m._customRelatedItems.querySelectorAll('[data-related-order-key]')];
+        const found=key=>rows.find(row=>row.dataset.relatedOrderKey===key);
+        assert(found('builtin:ad').hidden);
+        assert(found('link:history').hidden);
+        assert(found('action:external').hidden);
+        assert(!found('builtin:official').hidden);
+        assert.strictEqual(rows.length,9);
+      }
+      h.setHidden([]);
+      for(const m of [a,b]){
+        assert(!m._customRelatedItems.querySelector('[data-related-order-key="builtin:ad"]').hidden);
+        assert(!m._customRelatedItems.querySelector('[data-related-order-key="link:history"]').hidden);
+      }
+    }finally{h.dom.window.close();}
+  });
+});
+
+describe('Task318 related-menu container visibility',()=>{
+  it('hides the menu in the header and information panel, then restores both',()=>{
+    const h=harness([{id:'link',label:'追加',url:'https://example.com/{videoId}'}],
+      [],[],false);
+    try{
+      const a=h.menu(),b=h.menu();a.update(video());b.update(video());
+      for(const m of [a,b]){
+        assert(m._view.hidden);
+        assert.strictEqual(m._view.style.display,'none');
+        assert(m._customRelatedItems.querySelector('[data-related-order-key="link:link"]'));
+      }
+      h.setMenuVisible(true);
+      for(const m of [a,b]){
+        assert.strictEqual(m._view.hidden,false);
+        assert.strictEqual(m._view.style.display,'');
+      }
+      a._shadow.open=true;
+      let closed=0;a.on('close',()=>closed++);
+      h.setMenuVisible(false);
+      assert.strictEqual(a._shadow.open,false,'an open menu must close when hidden');
+      assert.strictEqual(closed,1);
+      assert(b._view.hidden);
+      h.setMenuVisible(true);
+      assert(!a._view.hidden);
+    }finally{h.dom.window.close();}
+  });
+});
+
+
+describe('Related menu cross-tab and same-tab settings updates',()=>{
+  const keys=menu=>Array.from(menu._customRelatedItems.querySelectorAll('li[data-related-order-key]'),
+    li=>li.dataset.relatedOrderKey);
+  it('updates both existing menus on browser storage events without reloading',()=>{
+    const h=harness();
+    try {
+      const a=h.menu(),b=h.menu();a.update(video());b.update(video());
+      const change=(key,value)=>{
+        const native='ZenzaWatch_'+key;
+        const oldValue=h.win.localStorage.getItem(native);
+        h.win.localStorage.setItem(native,JSON.stringify(value));
+        h.win.dispatchEvent(new h.win.StorageEvent('storage',{
+          key:native,oldValue,newValue:JSON.stringify(value),
+          storageArea:h.win.localStorage,url:'https://www.nicovideo.jp/my'}));
+      };
+      change('relatedMenu.order',['builtin:copy-url','builtin:official']);
+      assert.strictEqual(keys(a)[0],'builtin:copy-url');
+      assert.strictEqual(keys(b)[0],'builtin:copy-url');
+      change('relatedMenu.hiddenItems',['builtin:ad']);
+      for(const m of [a,b]){
+        assert(m._customRelatedItems.querySelector('[data-related-order-key="builtin:ad"]').hidden);
+      }
+      change('relatedMenu.customLinks',[{id:'chart',label:'Chart',
+        url:'https://example.org/{videoId}',openInNewTab:true}]);
+      for(const m of [a,b]){
+        assert.strictEqual(m._customRelatedItems.querySelector('a[data-related-link-id="chart"]').href,
+          'https://example.org/sm9');
+      }
+      change('ui.relatedMenu',false);
+      assert(a._view.hidden && b._view.hidden);
+      change('ui.relatedMenu',true);
+      assert(!a._view.hidden && !b._view.hidden);
+    }finally{h.dom.window.close();}
+  });
+  it('ignores unrelated/sessionStorage updates and handles a removed order key',()=>{
+    const h=harness([],['builtin:copy-url']);
+    try{
+      const m=h.menu();m.update(video());
+      h.win.dispatchEvent(new h.win.StorageEvent('storage',{
+        key:'Other_app',newValue:'true',storageArea:h.win.localStorage}));
+      h.win.dispatchEvent(new h.win.StorageEvent('storage',{
+        key:'ZenzaWatch_relatedMenu.order',newValue:'[]',
+        storageArea:h.win.sessionStorage}));
+      assert.strictEqual(keys(m)[0],'builtin:copy-url');
+      h.win.dispatchEvent(new h.win.StorageEvent('storage',{
+        key:'ZenzaWatch_relatedMenu.order',newValue:null,storageArea:h.win.localStorage}));
+      assert.strictEqual(keys(m)[0],'builtin:official','removed order returns to default');
+    }finally{h.dom.window.close();}
+  });
+  it('refreshes both menus on same-document settings saved notifications',()=>{
+    const h=harness();
+    try {
+      const a=h.menu(),b=h.menu();a.update(video());b.update(video());
+      h.win.localStorage.setItem('ZenzaWatch_relatedMenu.order',
+        JSON.stringify(['builtin:copy-url','builtin:ad']));
+      h.win.dispatchEvent(new h.win.CustomEvent('ZenzaWatch-advanced-settings-saved',
+        {detail:{keys:['relatedMenu.order']}}));
+      assert.strictEqual(keys(a)[0],'builtin:copy-url');
+      assert.strictEqual(keys(b)[0],'builtin:copy-url');
     }finally{h.dom.window.close();}
   });
 });

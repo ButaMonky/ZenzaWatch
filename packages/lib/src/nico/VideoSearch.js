@@ -855,12 +855,20 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const total = Math.min(first.totalCount || 0, 5000);
         let videos = (first.items || []).map(i => i.essential).filter(Boolean);
         const lastPage = Math.ceil(total / 100);
+        const missingOwnerPages = [];
         for (let pg = 2; pg <= lastPage; pg += 4) {
           const chunk = [];
           for (let k = pg; k < pg + 4 && k <= lastPage; k++) { chunk.push(k); }
-          const pages = await Promise.all(chunk.map(k => fetchUserPage(k).catch(() => null)));
+          // Retry only failed idempotent GET pages once. Keep successful siblings
+          // even if the retry fails, and report the missing page explicitly.
+          const pages = await Promise.all(chunk.map(k =>
+            fetchUserPage(k).catch(() => fetchUserPage(k).catch(() => {
+              missingOwnerPages.push(k);
+              return null;
+            }))));
           for (const data of pages) {
-            if (!data) { break; }
+            // A failed page must not discard successful later siblings in this batch.
+            if (!data) { continue; }
             videos = videos.concat((data.items || []).map(i => i.essential).filter(Boolean));
           }
         }
@@ -915,7 +923,12 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const nvapi = NicoSearchApiV2Loader.nvapi;
         const result = list.slice(0, limit).map(v => nvapi.toLegacyItem(v));
         window.console.info('%c投稿者の動画から検索: "%s" 投稿動画%d件中 %d件一致', 'background: lightgreen;', word, videos.length, list.length);
-        return {status: 'ok', count: list.length, list: result, engine: 'owner', word, params};
+        const response = {status: 'ok', count: list.length, list: result, engine: 'owner', word, params};
+        if (missingOwnerPages.length) {
+          response.isPartial = true;
+          response.missingOwnerPages = missingOwnerPages.sort((a, b) => a - b);
+        }
+        return response;
       }
 
       static async searchMoreBySnapshot(word, params, maxLimit = 300) {

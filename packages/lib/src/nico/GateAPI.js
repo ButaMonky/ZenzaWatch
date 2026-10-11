@@ -128,6 +128,12 @@ const GateAPI = (() => {
       if (localStorage[storageKey] !== val) {
         // window.console.log('bridge save config: %s = %s', storageKey, params.value);
         localStorage.setItem(storageKey, val);
+        // Storage events are not delivered to this frame's BroadcastChannel.
+        // Send the typed value only for our own configuration namespace.
+        if (broadcastChannel && prefix === PREFIX && val !== undefined) {
+          broadcastChannel.postMessage({id: PRODUCT,
+            body: {command: 'configSync', params: {key: params.key, value: params.value}}});
+        }
       }
     };
 
@@ -147,8 +153,15 @@ const GateAPI = (() => {
           const {body} = JSON.parse(newValue);
           return post({status: 'ok', command: 'message', params: body}, {sessionId: body.sessionId || ''});
         }
-        default:
-          return post({status: 'ok', command: 'configSync', params: {key, value: newValue}});
+        default: {
+          let value;
+          try { value = JSON.parse(newValue); }
+          catch (_) {
+            console.warn('Ignoring malformed synchronized config', {key});
+            return;
+          }
+          return post({status: 'ok', command: 'configSync', params: {key, value}});
+        }
       }
     };
 
@@ -207,14 +220,21 @@ const GateAPI = (() => {
 
     const onBroadcastMessage = e => {
       if (!isOk) { return; }
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      const {body, sessionId} = data;
-      if (body.command !== 'message' || !body.params.command) {
-        console.warn('unknown broadcast format', body);
+      let data;
+      try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; }
+      catch (_) { return; }
+      const body = data?.body;
+      if (!body || typeof body !== 'object') { return; }
+      const {sessionId} = data;
+      if (body.command === 'configSync') {
+        const {key, value} = body.params || {};
+        if (typeof key !== 'string' || !key) { return; }
+        return post({status: 'ok', command: 'configSync', params: {key, value}});
+      }
+      if (body.command !== 'message' || !body.params?.command) {
+        console.warn('unknown broadcast format', {command: body.command});
         return;
       }
-      // console.log('%cgate.onBroadcastMessage', 'background: cyan;', isOk, e.data);
-
       return post(body, {sessionId});
     };
 

@@ -196,63 +196,79 @@ VideoCaptureUtil.capture = function(src, sec, {signal, timeout = 30000} = {}) {
 VideoCaptureUtil.initCapTube = function() {
   const iframe = document.querySelector(
     '#ZenzaWatchVideoPlayerContainer iframe[title^=YouTube]');
-  if (!iframe) {
-    return null;
-  }
-  if (this.bridge) {
-    return this.bridge;
-  }
-
+  if (!iframe || !iframe.contentWindow) { return null; }
   const cw = iframe.contentWindow;
+  const targetOrigin = new URL(iframe.src, location.href).origin;
+  // Never send video/capture metadata to an arbitrary embedded origin.
+  if (!/^https:\/\/www\.(?:youtube\.com|youtube-nocookie\.com)$/.test(targetOrigin)) { return null; }
+  if (this.bridge && this.frameWindow === cw) { return this.bridge; }
+
+  if (this.messageHandler) {
+    self.removeEventListener?.('message', this.messageHandler);
+    for (const pending of Object.values(this.promises)) {
+      if (pending.timer !== undefined) { clearTimeout(pending.timer); }
+      pending.reject(new Error('CapTube iframe replaced'));
+    }
+    this.promises = {};
+  }
+  this.frameWindow = cw;
   const promises = this.promises;
-  self.addEventListener('message', e => {
-    if (e.source !== cw) { return; }
-    const {id, body, sessionId, status} = e.data;
-    const {command, params} = body;
-    if (id !== 'CapTube') {
-      return;
+  const handler = e => {
+    if (e.source !== cw || e.origin !== targetOrigin) { return; }
+    const data = e.data;
+    if (!data || typeof data !== 'object' || data.id !== 'CapTube') { return; }
+    const {body, sessionId} = data;
+    if (!body || body.command !== 'commandResult') { return; }
+    const pending = promises[sessionId];
+    if (!pending) { return; }
+    delete promises[sessionId];
+    if (pending.timer !== undefined) { clearTimeout(pending.timer); }
+    if (body.status === 'ok') {
+      pending.resolve(body.params?.result);
+    } else {
+      pending.reject(body.params?.result || new Error('CapTube request failed'));
     }
-    switch (command) {
-      case 'commandResult':
-        if (promises[sessionId]) {
-          if (status === 'ok') {
-            promises[sessionId].resolve(params.result);
-          } else {
-            promises[sessionId].reject(params.result);
-          }
-          delete promises[sessionId];
-        }
-        return;
-    }
-  });
+  };
+  this.messageHandler = handler;
+  self.addEventListener('message', handler);
+  const send = (body, sessionId, options = {}) =>
+    cw.postMessage({body, sessionId}, targetOrigin, options.transfer);
   const post = (body, options = {}) => {
     const sessionId = `send:CapTube:${this.sessionId++}`;
     return new Promise((resolve, reject) => {
-        promises[sessionId] = {resolve, reject};
-        cw.postMessage({body, sessionId}, location.href, options.transfer);
-        if (typeof options.timeout === 'number') {
-          setTimeout(() => {
-            reject({status: 'fail', message: 'timeout'});
+      const pending = {resolve, reject};
+      promises[sessionId] = pending;
+      try {
+        send(body, sessionId, options);
+        if (typeof options.timeout === 'number' && options.timeout > 0) {
+          pending.timer = setTimeout(() => {
+            if (promises[sessionId] !== pending) { return; }
             delete promises[sessionId];
+            reject({status: 'fail', message: 'timeout'});
           }, options.timeout);
         }
-      }).finally(() => { delete promises[sessionId]; });
+      } catch (error) {
+        delete promises[sessionId];
+        reject(error);
+      }
+    });
   };
-  return this.bridge = {post};
-}.bind({promises: {}, sessionId: 1, bridge: null});
+  return this.bridge = {post, send};
+}.bind({promises: {}, sessionId: 1, bridge: null, frameWindow: null, messageHandler: null});
 
 VideoCaptureUtil.capTube = ({title, videoId, author}) => {
   const tube = VideoCaptureUtil.initCapTube();
   if (!tube) { return; }
   const command = 'capTube';
-  tube.post({command, params: {title, videoId, author}}, {timeout: 30000});
+  // Screenshot starts a download in the iframe; it has no acknowledgement.
+  tube.send({command, params: {title, videoId, author}});
 };
 
 VideoCaptureUtil.capTubeThumbnail = (width = 320, height = 180, type = 'image/webp') => {
   const tube = VideoCaptureUtil.initCapTube();
   if (!tube) { return; }
   const command = 'capTubeThumbnail';
-  tube.post({command, params: {width, height, type}}, {timeout: 30000});
+  return tube.post({command, params: {width, height, type}}, {timeout: 30000});
 };
 
 

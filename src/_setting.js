@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.41-task316
+// @version     0.3.47-task391
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -21,6 +21,11 @@ import {SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsBy
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
 import {RelatedMenuSettings} from './RelatedMenuSettings';
+import {RelatedMenuOrder} from './RelatedMenuOrder';
+import {ScreenshotFileName} from './ScreenshotFileName';
+import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
+import {ModernAdvancedSettingsModel} from './ModernAdvancedSettingsModel';
+import {ModernAdvancedSettingsUI} from './ModernAdvancedSettingsUI';
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
 ((window) => { const self = window;
@@ -38,6 +43,11 @@ const $ = uq;
 //@require ScreenFilter
 //@require ZenzaCommentHistorySettings
 //@require RelatedMenuSettings
+//@require RelatedMenuOrder
+//@require ScreenshotFileName
+//@require RelatedMenuActions
+//@require ModernAdvancedSettingsModel
+//@require ModernAdvancedSettingsUI
     window.ZenzaAdvancedSettings = {
       config: Config
     };
@@ -363,6 +373,30 @@ const $ = uq;
             shortcuts: {encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS}}
         );
         $panel.toggleClass('debug', config.props.debug);
+        // Task318: mount the new full-viewport settings only after all legacy
+        // adapters have registered. Existing data sources remain authoritative.
+        const legacyRoot=$panel.find('.settingPanelInner')[0];
+        this._modernModel=new ModernAdvancedSettingsModel({
+          config,legacyRoot,actions:SHORTCUT_ACTIONS,
+          screenFilterParams:ScreenFilter.PARAMS,
+          historySchema:ZenzaCommentHistorySettings.SETTINGS_SCHEMA
+        });
+        this._modernUI=new ModernAdvancedSettingsUI({
+          panel:$panel[0],legacyRoot,model:this._modernModel,
+          relatedEditor:this._relatedMenuLinks,
+          relatedOrder:RelatedMenuOrder,
+          relatedActions:RelatedMenuActions,
+          screenshotFileName:ScreenshotFileName,
+          playlist:window.ZenzaWatch?.external?.playlist,
+          storage:window.localStorage,
+          formatKeyCombo,encodeKeyCombo,
+          onClose:()=>{
+            this._modernModel.cancel();
+            this._relatedMenuLinks._load();
+            this.hide();
+          },
+          confirm:message=>window.confirm(message)
+        });
       }
       _onPlayerConfigUpdate(key, value) {
         switch (key) {
@@ -591,16 +625,23 @@ const $ = uq;
       }
       toggle(v) {
         this._initializeDom();
-        // window.ZenzaWatch.external.execCommand('close');
-        if (!v) {
-          // Task 059: パネルを閉じる時、ショートカットキー記録中の
-          // document捕捉フェーズのkeydownリスナーが残ってしまうと、
-          // パネルを閉じた後もキー入力が全部食われてしまうため、
-          // 必ずキャンセルしてから閉じる。
+        const willShow=typeof v==='boolean'?v:!this._$view.hasClass('show');
+        if (!willShow) {
+          if (this._modernUI.hasPendingEdits() &&
+            !window.confirm('未保存の変更を破棄して閉じますか？')) {
+            return;
+          }
+          // A newly opened empty seek slot is UI-only but must also be discarded.
           this._cancelShortcutRecording();
+          this._modernUI.discardChanges();
+        } else if (!this._modernUI.hasPendingEdits()) {
+          // Import, browser sync and external userscripts can update Config.
+          // Start each opening from the latest committed values.
+          this._modernUI.discardChanges();
         }
-        this._$view.toggleClass('show', v);
-        if (this._$view.hasClass('show')) { this._beforeShow(); }
+        this._$view.toggleClass('show', willShow);
+        this._modernUI.setModalVisible(willShow);
+        if (willShow) { this._beforeShow(); }
       }
       show() {
         this.toggle(true);
@@ -1081,9 +1122,9 @@ const $ = uq;
               検索でプレイリストに読み込む最大件数（推奨: 1000件まで）
               <select data-setting-name="search.limit">
                 <option value="100">100件（軽い）</option>
-                <option value="300">300件（標準・初期値）</option>
+                <option value="300">300件（控えめ）</option>
                 <option value="500">500件</option>
-                <option value="1000">1000件（推奨の上限）</option>
+                <option value="1000">1000件（初期値・推奨の上限）</option>
                 <option value="2000">2000件（重い・読み込みに時間がかかる）</option>
                 <option value="3000">3000件（重い）</option>
                 <option value="5000">5000件（最大・とても重い）</option>

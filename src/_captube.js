@@ -5,7 +5,7 @@
 // @include     https://www.youtube.com/*
 // @include     https://www.youtube.com/embed/*
 // @include     https://youtube.com/*
-// @version     0.0.16-task301
+// @version     0.0.17-task374
 // @grant       none
 // @license     public domain
 // ==/UserScript==
@@ -415,34 +415,37 @@ import {throttle} from '../packages/lib/src/infra/bounce';
       window.console.log('disable bridge');
       return;
     }
-    const origin = document.referrer;
+    const origin = new URL(document.referrer).origin;
     console.log('%cinit embed CapTube', 'background: lightgreen;');
-    window.addEventListener('message', e =>  {
-      if (!HOST_REG.test(parseUrl(e.origin).hostname)) { return; }
-      const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-      const {body, sessionId} = data;
-      const {command, params} = body;
-
-      switch (command || data.command) {
-        case 'capTube': {
-          const {title, videoId, author} = (params || data);
-          saveScreenShot({ title, videoId, author });
-        }
-          break;
-        case 'capTubeThumbnail':{
-          const url = getThumbnailDataURL(params);
-          const body = {
-            command: 'commandResult',
-            status: 'ok',
-            params: {url}
-          };
-          const msg = {id: PRODUCT, sessionId, body};
-          parent.postMessage(msg, origin);
-        }
-          break;
+    window.addEventListener('message', async e => {
+      if (e.source !== parent || e.origin !== origin) { return; }
+      let data;
+      try {
+        data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      } catch (_) { return; }
+      if (!data || typeof data !== 'object' ||
+          !data.body || typeof data.body !== 'object') { return; }
+      const {command, params} = data.body;
+      const {sessionId} = data;
+      if (command === 'capTube') {
+        // Screenshot is an intentional fire-and-forget download.
+        saveScreenShot(params || {});
+        return;
       }
-    });
+      if (command !== 'capTubeThumbnail' || !sessionId) { return; }
 
+      let body;
+      try {
+        const {width = 320, height = 180, type = 'image/webp'} = params || {};
+        const url = await getThumbnailDataURL(width, height, type);
+        if (!url) { throw new Error('thumbnail unavailable'); }
+        body = {command: 'commandResult', status: 'ok', params: {result: url}};
+      } catch (_) {
+        body = {command: 'commandResult', status: 'fail',
+          params: {result: 'thumbnail-unavailable'}};
+      }
+      parent.postMessage({id: PRODUCT, sessionId, body}, origin);
+    });
   };
 
   if (window.top !== window && location.pathname.indexOf('/embed/') === 0) {

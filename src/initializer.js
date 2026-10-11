@@ -9,6 +9,7 @@ import {PlaylistSession} from '../packages/zenza/src/Playlist/PlayListSession';
 import {NicoComment} from './CommentPlayer';
 import {NicoVideoPlayerDialog, PlayerConfig, PlayerState} from './NicoVideoPlayerDialog';
 import {initializeGinzaSlayer} from './GinzaSlayer';
+import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';
 import {CONSTANT} from './constant';
 import {CustomElements} from '../packages/zenza/src/parts/CustomElements';
 import {RootDispatcher} from './RootDispatcher';
@@ -33,11 +34,14 @@ const START_PAGE_QUERY = 'hoge=fuga';
 
 const {initialize} = (() => {
 //@require HoverMenu
+//@require OfficialPlayerRoute
   // GINZAを置き換えるべきか？の判定
   const overrideGinza = async (dialog, query) => {
     // GINZAで視聴のリンクできた場合はスキップ
-    if (window.name === 'watchGinza') {
-      window.name = '';
+    if (OfficialPlayerRoute.isOfficialRequest(query) || window.name === 'watchGinza') {
+      // Retain the legacy named-window fallback, but do not depend on it.
+      // Chrome/Firefox may clear window.name during a navigation.
+      if (window.name === 'watchGinza') { window.name = ''; }
       return;
     }
 

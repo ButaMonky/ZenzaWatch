@@ -12,6 +12,7 @@ import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {AudioAdjuster} from '../packages/zenza/src/audio/AudioAdjuster';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {SupporterCredit} from '../packages/zenza/src/videoPlayer/SupporterCredit';
+import {ScreenshotFileName} from './ScreenshotFileName';
 
 //===BEGIN===
 
@@ -630,8 +631,12 @@ class NicoVideoPlayer extends Emitter {
     const currentTime = this._videoPlayer.currentTime;
     const time = util.secToTime(currentTime).replace(':', '_');
     const prefix = Config.props['screenshot.prefix'] || '';
-
-    return `${prefix}${title} - ${watchId}@${time}${suffix}.png`;
+    return ScreenshotFileName.format({
+      prefix, template: Config.props['screenshot.filenameTemplate'] || '',
+      title, watchId, videoId: this._videoInfo.videoId,
+      uploader: this._videoInfo.owner?.name || '',
+      currentTime, suffix, formatTime: sec => util.secToTime(sec)
+    });
   }
   get isCorsReady() {return this._videoPlayer && this._videoPlayer.isCorsReady;}
   get volume() { return this._videoPlayer.volume;}

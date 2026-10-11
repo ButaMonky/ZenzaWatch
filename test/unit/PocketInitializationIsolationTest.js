@@ -30,7 +30,9 @@ describe('Task301 Pocket bootstrap continuation', () => {
     const c = createContext({config: {promise: async () => {}, props: {nicoad: {hide: false}}},
       initDom() {}, initZenzaBridge() {}, createVideoInfoView: () => ({on() {}}),
       createCommandDispatcher: () => () => {}, HoverMenu: class {on() {}},
-      MylistPocket: {debug: {}}, initNg: async () => { throw new Error('DOM timeout'); },
+      MylistPocket: {debug: {}},
+      createNgLifecycle: () => ({ngConfig: {props: {enable: true, tag: ''}},
+        observe: async () => { throw new Error('DOM timeout'); }}),
       document: {querySelector: () => null}, initExternal() { externalCalls++; },
       console: {log() {}, warn() {}}});
     run(`globalThis.init = ${extract('src/_pocket.js', 'init', 'var')}`, c);

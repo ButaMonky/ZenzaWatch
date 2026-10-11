@@ -56,6 +56,8 @@ function menu() {
       emit() {}
     }
   });
+  run(beginSection('packages/zenza/src/menu/OfficialPlayerRoute.js')+
+    ';globalThis.OfficialPlayerRoute=OfficialPlayerRoute;',context);
   const Menu = loadClass('src/VideoInfoPanel.js', 'RelatedInfoMenu', context);
   const m = Object.create(Menu.prototype);
   Object.assign(m, {_view: {open: true}, _ginzaLink: attr(), _originalLink: attr(), _twitterLink: attr(), _parentVideoLink: attr()});

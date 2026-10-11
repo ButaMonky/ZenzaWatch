@@ -44,10 +44,10 @@ function connect(s, responses) {
     return response;
   };
   s.d.threadLoader = loader;
-  const diagnostics = () => consoleCalls
-    .filter(call => call.args[0] === '[ZenzaWatch][CommentPost]')
-    .map(call => call.args[1]);
-  return {packets, keys, waits, loader, diagnostics, refreshes: () => refreshes};
+  const entries = () => consoleCalls.filter(call => call.args[0] === '[ZenzaWatch][CommentPost]');
+  const diagnostics = () => entries().map(call => call.args[1]);
+  const copyableDiagnostics = () => entries().map(call => call.args[2]);
+  return {packets, keys, waits, loader, diagnostics, copyableDiagnostics, refreshes: () => refreshes};
 }
 const token = code => ({error: {result: {status: 403, errorCode: code}}});
 
@@ -64,6 +64,7 @@ describe('ZW-023/024 posting contract', function() {
     assert.strictEqual(entry[1].event, 'rejected');
     assert.strictEqual(entry[1].reason, 'post-already-in-flight');
     assert.strictEqual(entry[1].videoId, 'smA');
+    assert.strictEqual(JSON.parse(entry[2]).reason, 'post-already-in-flight');
   });
 
   it('EXPIRED_TOKEN from real dialog refreshes once and retries with resolved language and fresh post key', async function() {
@@ -102,6 +103,43 @@ describe('ZW-023/024 posting contract', function() {
     assert(!serialized.includes('diagnostic-fixture-body'));
     assert(!serialized.includes('key-1'));
     assert(!serialized.includes('key-2'));
+  });
+
+  it('Task307 HTTP 400 logs remain readable after copying and do not include posting secrets', async function() {
+    const s = posting();
+    const net = connect(s, [
+      {error: {result: {status: 400, errorCode: 'INVALID_PARAMETER', message: 'private-server-detail'}}},
+      {no: 18, id: 'manual-retry'}
+    ]);
+    const failure = await s.d.addChat('private-comment-body', 'sensitive-command', 12)
+      .then(() => null, error => error);
+    assert(failure);
+    assert.strictEqual(net.packets.length, 1, 'a 400 response never retries automatically');
+    assert.strictEqual(s.h.cachePuts.length, 0);
+    assert.strictEqual(s.h.player.chats.length, 1);
+    assert.strictEqual(s.h.player.chats[0].isPostFail, true, 'failed preview is visibly flagged');
+    assert.strictEqual(s.h.player.chats[0].isUpdating, false);
+
+    const copied = net.copyableDiagnostics();
+    assert(copied.length > 0 && copied.every(line => typeof line === 'string'));
+    const failed = copied.map(JSON.parse).find(d => d.phase === 'post' && d.event === 'failure');
+    assert(failed);
+    assert.strictEqual(failed.statusCode, 400);
+    assert.strictEqual(failed.errorCode, 'INVALID_PARAMETER');
+    assert.strictEqual(failed.attempt, 1);
+    assert.strictEqual(failed.outcome, 'rejected');
+    assert.strictEqual(failed.retryScheduled, false);
+    const transcript = copied.join(' ');
+    for (const secret of ['private-comment-body', 'sensitive-command', 'key-1', 'private-server-detail']) {
+      assert(!transcript.includes(secret), `leaked ${secret}`);
+    }
+    const result = await s.d.addChat('private-comment-body', '', 12);
+    assert.strictEqual(result.no, 18);
+    assert.strictEqual(net.packets.length, 2, 'second POST only after explicit user retry');
+    assert.strictEqual(s.h.player.chats.length, 2);
+    assert.strictEqual(s.h.player.chats[0].isPostFail, true);
+    assert.strictEqual(!!s.h.player.chats[1].isPostFail, false);
+    assert.strictEqual(s.h.cachePuts.length, 1);
   });
 
   it('INVALID_TOKEN refreshes once; a second token rejection ends without a third post', async function() {

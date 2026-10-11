@@ -367,8 +367,7 @@ class CommentListView extends Emitter {
   }
   _onItemClick(e, item) {
     if (e.target.closest('.nicoru-icon')) {
-      item.classList.add('nicotta');
-      item.dataset.nicoru = item.dataset.nicoru ? (item.dataset.nicoru * 1 + 1) : 1;
+      // Display state is committed only after the server accepts the Nicoru.
       this.emit('command', 'nicoru', item, item.dataset.itemId);
       return;
     }
@@ -1439,7 +1438,7 @@ class CommentPanelView extends Emitter {
   _onCommand(command, param, itemId) {
     switch (command) {
       case 'nicoru':
-        param.nicotta = true;
+        // The row remains retryable until the request is confirmed.
         this.emit('command', command, param, itemId);
         break;
       default:
@@ -1703,7 +1702,10 @@ class CommentPanel extends Emitter {
         break;
       case 'removeComment':
         (new Promise((resolve, reject) => this.emit('deleteChat', {resolve, reject}, item.nicoChat)))
-          .then(() => this._model.removeItem(item));
+          .then(() => this._model.removeItem(item))
+          // The dialog has already displayed the server error; keep this row
+          // and consume the expected rejection without an unhandled Promise.
+          .catch(() => {});
         break;
       case 'addUserIdFilter':
         this._model.removeItem(item);
@@ -1728,11 +1730,43 @@ class CommentPanel extends Emitter {
           this.emit('itemDetailResp', item);
         }
         break;
-      case 'nicoru':
-        item.nicotta = true;
-        item.nicoru += 1;
-        this.emit('command', command, item.nicoChat);
+      case 'nicoru': {
+        // One in-flight request per actual row. Do not present success before
+        // the server confirms it, and never revive a row after a list switch.
+        if (!this._nicoruPending) { this._nicoruPending = new WeakSet(); }
+        if (this._nicoruPending.has(item) || item.nicotta) { break; }
+        this._nicoruPending.add(item);
+        const row = param;
+        if (row?.classList) { row.classList.add('is-nicoruPending'); }
+        const chat = item.nicoChat;
+        const oldCount = Number(item.nicoru) || 0;
+        (new Promise((resolve, reject) =>
+          this.emit('command', command, chat, {resolve, reject})))
+          .then(result => {
+            if (this._model.findByItemId(itemId) !== item) { return; }
+            const authoritative = Number(result?.count);
+            const count = Number.isFinite(authoritative) && authoritative >= 0 &&
+              result?.count !== undefined ? authoritative : oldCount + 1;
+            item.nicoru = count;
+            item.nicotta = true;
+            // A test or third-party model need not use the normal property proxies.
+            chat.nicoru = count;
+            chat.nicotta = true;
+            if (row?.isConnected !== false && row?.dataset &&
+                String(row.dataset.itemId) === String(itemId)) {
+              row.dataset.nicoru = count;
+              row.classList.add('nicotta');
+            }
+          })
+          // The dialog already displays the server failure. Leave the row
+          // and its model unchanged so the user can retry.
+          .catch(() => {})
+          .finally(() => {
+            this._nicoruPending.delete(item);
+            if (row?.classList) { row.classList.remove('is-nicoruPending'); }
+          });
         break;
+      }
       default:
         this.emit('command', command, param);
     }

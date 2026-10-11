@@ -5,6 +5,9 @@ import { buildDefaultKeyConfig } from '../packages/zenza/src/ShortcutActions';
 import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
 import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
 import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
+import {RelatedMenuOrder} from './RelatedMenuOrder';
+import {ScreenshotFileName} from './ScreenshotFileName';
+import {UiVisibilityRegistry} from './UiVisibilityRegistry';
 
 const location = {host: 'www.nicovideo.jp'};
 const navigator = {};
@@ -19,6 +22,9 @@ const window = {console: console};
 //@require ZenzaCommentHistorySettings
 //@require CommentDisplayBudget
 //@require RelatedMenuActions
+//@require RelatedMenuOrder
+//@require ScreenshotFileName
+//@require UiVisibilityRegistry
 const Config = (() => {
   const DEFAULT_CONFIG = {
     debug: false,
@@ -57,6 +63,9 @@ const Config = (() => {
     videoInfoPanelTab: 'videoInfoTab',
     fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
     'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
+    'relatedMenu.order': [], // Empty = original seven items, then links and registered actions
+    'relatedMenu.hiddenItems': [], // Per-row display visibility, without deleting actions
+    // Optional UI visibility defaults are maintained in UiVisibilityRegistry.
 
     // Task 063: 以前は`forceEnable`という名前でここに定義されていたが、
     // 実際にコードから読まれていたのは`forceEconomy`という別の名前だった
@@ -175,6 +184,9 @@ const Config = (() => {
     //   'side'    … B: 左にタグ予測、右に動画カードを並べる
     //   'delayed' … C: まずタグ予測だけ出し、入力が止まってから動画カードを追加する
     'videoSearch.videoIdSuggestMode': 'merged',
+    // Search count policy: selected/hovered row by default, all visible suggestions on demand.
+    // 'auto' deliberately performs extra search API requests; 'off' never requests totals.
+    'videoSearch.wordCountMode': 'on-demand',
     // Task 072: 動画ヘッダー（タイトル・タグ欄）の表示位置（通常/大モード）
     //   'auto'            … 従来通り。動画の上に収まる時は外に、はみ出す時は動画に重ねて自動で隠す
     //   'outside'         … 常に動画の外（上）に表示。はみ出す時は画面上端に合わせてずらす（隠れない）
@@ -224,6 +236,7 @@ const Config = (() => {
     'screenFilter.applyToCommentPip': true, // P in P(コメント付き)にも反映する
 
     'screenshot.prefix': '', // スクリーンショットのファイル名の先頭につける文字
+    'screenshot.filenameTemplate': '', // 空は従来書式。トークンでファイル名構成を指定可能
 
     // Task 073: 検索でプレイリストに読み込む最大件数。上級者向け設定で変更できる。
     // 100件ごとにAPIを1回呼ぶので多くするほど遅く・重くなる。推奨は1000件まで、上限5000件
@@ -342,6 +355,7 @@ const Config = (() => {
   // 変更されない。新しいショートカットを追加する場合は
   // packages/zenza/src/ShortcutActions.js のSHORTCUT_ACTIONS配列に
   // エントリを足すだけでよく、ここを直接編集する必要はない。
+  Object.assign(DEFAULT_CONFIG, UiVisibilityRegistry.defaults());
   Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
 
   // Task 065: カスタムシークスロット(CUSTOM_SEEK_1〜10、
@@ -368,6 +382,10 @@ const Config = (() => {
       },
       validateImport: (key, value) => {
         if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
+        if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
+        if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }
+        if (UiVisibilityRegistry.isVisibilityKey(key)) { return typeof value === 'boolean'; }
+        if (key === 'screenshot.filenameTemplate') { return ScreenshotFileName.validateTemplate(value); }
         if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
         if (key.startsWith('commentHistory.')) {
           const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
@@ -382,7 +400,8 @@ const Config = (() => {
           sharedNgLevel: ['NONE', 'LOW', 'MID', 'HIGH', 'MAX'],
           fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
           'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
-          'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed']
+          'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
+          'videoSearch.wordCountMode': ['on-demand', 'auto', 'off']
         };
         const name = key.startsWith('screenMode:') ? 'screenMode' : key;
         if (Object.prototype.hasOwnProperty.call(choices, name)) {

@@ -16,6 +16,9 @@ function configSchema() {
  const c=createContext({ZenzaCommentHistorySettings,PRODUCT:'ZenzaWatch',navigator:{},location:{host:'www.nicovideo.jp'},localStorage:{},buildDefaultKeyConfig:()=>({}),DataStorage:{create(defaults,options){return {default:defaults,options};}}});
  c.CommentDisplayBudget=loadClass('packages/zenza/src/commentLayer/CommentDisplayBudget.js','CommentDisplayBudget',c); // Task 206
  c.RelatedMenuActions=loadClass('packages/zenza/src/menu/RelatedMenuActions.js','RelatedMenuActions',Object.assign(c,{URL}));
+ c.RelatedMenuOrder=loadClass('src/RelatedMenuOrder.js','RelatedMenuOrder',c);
+ c.ScreenshotFileName=loadClass('src/ScreenshotFileName.js','ScreenshotFileName',c);
+ c.UiVisibilityRegistry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',c);
  run('const Config = '+extract('src/Config.js','Config','var')+';this.config=Config;',c);
  return c.config;
 }
@@ -41,6 +44,43 @@ describe('Config import validation',()=>{
   for(const [key,bad,good] of [['volume',1.1,0.5],['playbackRate',0,1],['commentSpeedRate',-1,1],['sharedNgLevel','oops','MID'],['screenMode','oops','normal'],['search.limit',5001,5000],['KEY_PLAY_PAUSE',-1,32],
     ['commentLayer.maxDisplayComment',150,200],['commentLayer.maxDisplayComment','200',800],['commentLayer.maxDisplayComment',20000,40],['commentLayer.protectCA','true',true]]) {
    assert.strictEqual(options.validateImport(key,bad),false,key);assert.strictEqual(options.validateImport(key,good),true,key);
+  }
+ });
+ it('allows only the three supported search count traffic modes',()=>{
+  const {options,default:d}=configSchema();
+  const key='videoSearch.wordCountMode';
+  assert.strictEqual(d[key],'on-demand');
+  for(const mode of ['on-demand','auto','off'])assert.strictEqual(options.validateImport(key,mode),true,mode);
+  for(const mode of [null,false,'always','hover',1])assert.strictEqual(options.validateImport(key,mode),false,String(mode));
+ });
+ it('rejects malformed mixed related-menu orders without touching custom links',()=>{
+  const {options,default:d}=configSchema();
+  assert.deepStrictEqual(Array.from(d['relatedMenu.order']),[]);
+  assert.strictEqual(options.validateImport('relatedMenu.order',
+    ['link:history','builtin:official','action:external']),true);
+  for(const bad of [null,'builtin:official',['builtin:official','builtin:official'],
+    ['builtin:unknown'],['action:<script>']]){
+    assert.strictEqual(options.validateImport('relatedMenu.order',bad),false);
+  }
+ });
+ it('accepts safe screenshot templates and validates per-button visibility',()=>{
+  const {options,default:d}=configSchema();
+  assert.strictEqual(d['screenshot.filenameTemplate'],'');
+  assert.strictEqual(options.validateImport('screenshot.filenameTemplate',
+    '{date}_{watchId}@{time}{suffix}'),true);
+  for(const invalid of ['{invalid}','../oops','file/name','file:bad']){
+    assert.strictEqual(options.validateImport('screenshot.filenameTemplate',invalid),false);
+  }
+  assert.strictEqual(options.validateImport('relatedMenu.hiddenItems',
+    ['builtin:official','link:a']),true);
+  assert.strictEqual(options.validateImport('relatedMenu.hiddenItems',
+    ['builtin:official','builtin:official']),false);
+  assert.strictEqual(options.validateImport('ui.hover.like',false),true);
+  assert.strictEqual(options.validateImport('ui.hover.like','false'),false);
+  for(const key of ['ui.relatedMenu','ui.commentInput']){
+    assert.strictEqual(d[key],true,key);
+    assert.strictEqual(options.validateImport(key,false),true,key);
+    assert.strictEqual(options.validateImport(key,'false'),false,key);
   }
  });
  it('accepts every existing default setting',()=>{const {options,default:d}=configSchema();for(const k of Object.keys(d))assert.strictEqual(options.validateImport(k,d[k]),true,k);});

@@ -398,8 +398,8 @@ class NicoChatFilter extends Emitter {
     if (before < 1) {
       return nicoChatArray;
     }
-    const timeKey = 'applyNgFilter: ' + nicoChatArray[0].type;
-    window.console.time(timeKey);
+    const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
+    if (timeKey) { window.console.time(timeKey); }
     const filterFunc = this.getFilterFunc();
     let result = nicoChatArray.filter(filterFunc);
     const removedUserIds = new Set();
@@ -434,8 +434,10 @@ class NicoChatFilter extends Emitter {
       }
       return !denyTypes.includes(chat.fork) && !denyThreadTypes.includes(chat.threadLabel);
     });
-    window.console.timeEnd(timeKey);
-    window.console.log('NG判定結果: %s/%s', result.length, before);
+    if (timeKey) {
+      window.console.timeEnd(timeKey);
+      window.console.log('NG判定結果: %s/%s', result.length, before);
+    }
     return result;
   }
   isSafe(nicoChat) {

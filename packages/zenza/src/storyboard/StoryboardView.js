@@ -234,7 +234,7 @@ class StoryboardView extends Emitter {
     return this._scrollLeft;
   }
   set scrollLeft(left) {
-    left = Math.min(Math.max(0, left), this.totalWidth - global.innerWidth);
+    left = Math.min(Math.max(0, left), Math.max(0, this.totalWidth - global.innerWidth));
 
     if (this._scrollLeft === left) {
       return;

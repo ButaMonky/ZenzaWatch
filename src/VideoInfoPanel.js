@@ -19,11 +19,17 @@ import {domEvent} from '../packages/lib/src/dom/domEvent';
 import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {MylistPocketDetector} from '../packages/zenza/src/init/MylistPocketDetector';
 import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
+import {RelatedMenuOrder} from './RelatedMenuOrder';
+import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';
 const VideoItemObserver = {
   observe: () => {}
 };
 //===BEGIN===
 //@require RelatedMenuActions
+//@require RelatedMenuOrder
+//@require UiVisibilityRegistry
+//@require OfficialPlayerRoute
 
 class VideoInfoPanel extends Emitter {
   constructor(params) {
@@ -75,6 +81,20 @@ class VideoInfoPanel extends Emitter {
     this._uaaContainer = view.querySelector('.uaaContainer');
     this._uaaView = new UaaView(
       {parentNode: this._uaaContainer});
+
+    this._visibility = UiVisibilityRegistry.connect(Config,view,'info',{
+      beforeHide:entry=>{
+        if(entry.key!=='ui.info.relatedTab' || this._activeTabName!=='relatedVideoTab'){
+          return;
+        }
+        const containerView=this._dialog?._view;
+        if(typeof containerView?.selectTab==='function'){
+          containerView.selectTab('videoInfoTab');
+        }else{
+          this.selectTab('videoInfoTab');
+        }
+      }
+    });
 
     view.addEventListener('mousemove', e => e.stopPropagation());
     view.addEventListener('command', this._onCommandEvent.bind(this));
@@ -128,7 +148,7 @@ class VideoInfoPanel extends Emitter {
     this._updateVideoDescription(videoInfo.description, videoInfo.series);
 
     const classList = this.classList;
-    classList.remove('userVideo', 'channelVideo', 'initializing');
+    classList.remove('userVideo', 'channelVideo', 'initializing', 'is-loadFailed');
     classList.toggle('is-community', this._videoInfo.isCommunityVideo);
     classList.toggle('is-mymemory', this._videoInfo.isMymemory);
     classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
@@ -419,13 +439,27 @@ class VideoInfoPanel extends Emitter {
       this._relatedVideoList.on('command', this._onCommand.bind(this));
     }
 
+    // A newer canplay/video/description invalidates earlier queued switches.
+    const timerGeneration = this._autoZenTubeTimerGeneration =
+      (this._autoZenTubeTimerGeneration || 0) + 1;
     if (this._config.props.autoZenTube && this._zenTubeUrl && !options.isAutoZenTubeDisabled) {
+      const zenTubeUrl = this._zenTubeUrl;
+      const descriptionGeneration = this._descriptionGeneration;
       sleep(100).then(() => {
-        window.console.info('%cAuto ZenTube', this._zenTubeUrl);
-        this.emit('command', 'setVideo', this._zenTubeUrl);
+        if (timerGeneration !== this._autoZenTubeTimerGeneration ||
+            this._videoInfo !== videoInfo ||
+            this._descriptionGeneration !== descriptionGeneration ||
+            this._zenTubeUrl !== zenTubeUrl) { return; }
+        window.console.info('%cAuto ZenTube', zenTubeUrl);
+        this.emit('command', 'setVideo', zenTubeUrl);
       });
     }
     await sleep.idle();
+    // The previously scheduled canplay can resume after a different video
+    // has become active. Never start an obsolete recommendation request.
+    if (this._videoInfo !== videoInfo) {
+      return;
+    }
     this._relatedVideoList.fetchRecommend(videoInfo.videoId, watchId, videoInfo);
   }
   _onVideoCountUpdate(...args) {
@@ -488,10 +522,22 @@ class VideoInfoPanel extends Emitter {
   }
   clear() {
     this._videoHeaderPanel.clear();
+    this.classList.remove('is-loadFailed');
     this.classList.add('initializing');
     this._$ownerIcon.raf.addClass('is-loading');
     this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
     this._description.textContent = '';
+  }
+  onLoadFail() {
+    // A failed metadata request is finished, not still initializing.
+    // Hide stale data from the previous video instead of revealing it.
+    this._videoInfo = null;
+    this._videoHeaderPanel.clear();
+    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+    this._description.textContent = '';
+    this.classList.remove('initializing');
+    this.classList.add('is-loadFailed');
+    this._$ownerIcon.raf.removeClass('is-loading');
   }
   selectTab(tabName) {
     const $view = this._$view;
@@ -625,6 +671,10 @@ css.addStyle(`
     opacity: 0;
     color: #333;
     transition: none;
+  }
+
+  .zenzaWatchVideoInfoPanel.is-loadFailed>* {
+    display: none !important;
   }
 
   .zenzaWatchVideoInfoPanel {
@@ -1390,6 +1440,20 @@ class VideoHeaderPanel extends Emitter {
 
     this._videoMetaInfo = new VideoMetaInfo({
       parentNode: view.querySelector('.videoMetaInfoContainer'),
+    });
+
+    this._visibility = UiVisibilityRegistry.connect(Config,view,'header',{
+      beforeHide:(entry,node)=>{
+        // Avoid keeping keyboard focus inside a hidden search field.
+        if(entry.key==='ui.header.search' && node.contains(document.activeElement)){
+          document.activeElement.blur?.();
+        }
+      },
+      afterApply:()=>{
+        if(!view.isConnected){return;}
+        this._resetHeight();
+        this._onResize();
+      }
     });
 
     classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
@@ -2187,7 +2251,7 @@ class VideoSearchForm extends Emitter {
           'ジャンルの絞り込みを解除しました' :
           `検索のジャンルを「${label ? label.textContent : value}」に設定しました`);
       this._word.focus();
-      this._updateVideoIdSearchRow(true);
+      this._refreshWordCountsAfterFilterChange();
     });
 
     global.emitter.on('searchVideo', ({word}) => {
@@ -2257,6 +2321,7 @@ class VideoSearchForm extends Emitter {
     this._videoIdTagsElm = this._videoIdBox ? this._videoIdBox.querySelector('.searchVideoIdResult-tags') : null;
     this._wordCountCache = new Map();
     this._wordCountSeq = 0;
+    this._autoTagCountGeneration = 0;
     const input = this._word, box = this._videoIdBox;
     if (!input || !box) {
       return;
@@ -2287,14 +2352,29 @@ class VideoSearchForm extends Emitter {
         e.preventDefault();
       }
     });
-    // Task 073: マウスを乗せたタグ候補も「選択中」にする（件数もその候補について数える）
+    // Hover is an explicit request in low-traffic mode; the default search-row
+    // selection during ordinary typing does not trigger a count request.
     box.addEventListener('mouseover', e => {
-      const tag = e.target.closest && e.target.closest('.searchVideoIdResult-tag:not(.is-leaving)');
-      if (!tag) { return; }
-      const key = `tag:${tag.dataset.word}`;
-      if (key !== this._videoIdNavKey) {
-        this._videoIdNavKey = key;
+      const tag = e.target.closest?.('.searchVideoIdResult-tag:not(.is-leaving)');
+      if (tag) {
+        const key = `tag:${tag.dataset.word}`;
+        if (key !== this._videoIdNavKey) {
+          this._videoIdNavKey = key;
+          this._updateVideoIdSelection();
+        }
+        return;
+      }
+      const row = e.target.closest?.('.searchVideoIdResult-search');
+      if (row && !row.contains(e.relatedTarget)) {
+        this._videoIdNavKey = 'search';
         this._updateVideoIdSelection();
+        this._updateVideoIdSearchRow(false,true);
+      }
+    });
+    box.addEventListener('mouseout', e => {
+      const row = e.target.closest?.('.searchVideoIdResult-search');
+      if (row && !row.contains(e.relatedTarget) && this.wordCountMode==='on-demand') {
+        this._cancelSearchRowCount();
       }
     });
     box.addEventListener('click', e => {
@@ -2318,13 +2398,12 @@ class VideoSearchForm extends Emitter {
       this._execVideoIdAction(action, card.dataset.watchId, button || card);
     });
     Array.from(this._form.querySelectorAll('.searchMode')).forEach(radio =>
-      radio.addEventListener('change', () => this._updateVideoIdSearchRow(true)));
+      radio.addEventListener('change', () => this._refreshWordCountsAfterFilterChange()));
     // Task 073: 件数は期間・長さ・ジャンルの絞り込みも反映するので、変えたら数え直す
     ['f_range', 'l_range', 'genre', 'ownerOnly'].forEach(name => {
       const elm = this._form.elements.namedItem(name);
       elm && elm.addEventListener && elm.addEventListener('change', () => {
-        this._updateVideoIdSearchRow(true);
-        this._updateVideoIdSelection();
+        this._refreshWordCountsAfterFilterChange();
       });
     });
     // 起動直後（前回の検索語が入った状態）は、入力を変えるまで予測枠を出さない
@@ -2336,12 +2415,24 @@ class VideoSearchForm extends Emitter {
       this._videoIdKey = '';
       this._updateVideoIdPreview();
     });
+    this._config.onkey('wordCountMode', () => {
+      this._cancelPendingWordCounts();
+      this._clearVisibleWordCounts();
+      if (!this._videoIdBox.classList.contains('is-open')) { return; }
+      this._updateVideoIdSearchRow(true);
+      this._scheduleAutomaticTagCounts();
+    });
     this._updateVideoIdPreview();
   }
 
   get videoIdSuggestMode() {
     const mode = this._config.props.videoIdSuggestMode;
     return VideoSearchForm.VIDEO_ID_SUGGEST_MODES.includes(mode) ? mode : 'merged';
+  }
+
+  get wordCountMode() {
+    const mode = this._config?.props?.wordCountMode;
+    return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'on-demand';
   }
 
   _applyVideoIdSuggestMode() {
@@ -2381,6 +2472,7 @@ class VideoSearchForm extends Emitter {
     window.clearTimeout(this._videoIdCleanupTimer);
     if (!visible) {
       this._videoIdBox.classList.remove('is-open');
+      this._cancelPendingWordCounts();
       this._videoIdNavKey = '';
       window.clearTimeout(this._videoIdWaitTimer);
       this._videoIdTagSeq++;
@@ -2605,7 +2697,7 @@ class VideoSearchForm extends Emitter {
     return first ? `card:${first}` : '';
   }
 
-  _updateVideoIdSelection() {
+  _updateVideoIdSelection(requestCount = true) {
     const items = this._videoIdNavItems();
     if (!this._findVideoIdNavItem(this._videoIdNavKey)) {
       this._videoIdNavKey = this._defaultVideoIdNavKey();
@@ -2621,13 +2713,19 @@ class VideoSearchForm extends Emitter {
     if (selected.type !== 'search' && selected.el.scrollIntoView) {
       selected.el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
     }
-    if (selected.type === 'tag') {
+    if (selected.type === 'tag' && requestCount && this.wordCountMode === 'on-demand') {
       this._requestTagCount(selected.el, selected.word);
+    } else if (this.wordCountMode === 'on-demand') {
+      window.clearTimeout(this._tagCountTimer);
+      this._tagCountGeneration = (this._tagCountGeneration || 0) + 1;
+      this._tagCountPendingElm?.classList.remove('is-counting');
+      this._tagCountPendingElm = null;
     }
   }
 
   // Task 073: ↑↓やマウスで選んでいるタグ候補の件数（入力語と同じく、絞り込み条件を反映）
   _requestTagCount(li, word) {
+    if (this.wordCountMode === 'off' || this.wordCountMode === 'auto') { return; }
     window.clearTimeout(this._tagCountTimer);
     const generation = (this._tagCountGeneration = (this._tagCountGeneration || 0) + 1);
     // 問い合わせ前に別の候補へ移った場合、前の候補の「数えています」表示を消す
@@ -2688,6 +2786,95 @@ class VideoSearchForm extends Emitter {
     }
   }
 
+  _cancelSearchRowCount() {
+    window.clearTimeout(this._wordCountTimer);
+    this._wordCountSeq = (this._wordCountSeq || 0) + 1;
+    this._videoIdBox?.querySelector('.searchVideoIdResult-search')
+      ?.classList.remove('is-counting');
+  }
+
+  _cancelPendingWordCounts() {
+    this._cancelSearchRowCount();
+    window.clearTimeout(this._tagCountTimer);
+    window.clearTimeout(this._autoTagCountTimer);
+    this._tagCountGeneration = (this._tagCountGeneration || 0) + 1;
+    this._autoTagCountGeneration = (this._autoTagCountGeneration || 0) + 1;
+    this._tagCountPendingElm?.classList.remove('is-counting');
+    this._tagCountPendingElm = null;
+  }
+
+  _clearVisibleWordCounts() {
+    const box = this._videoIdBox;
+    if (!box) { return; }
+    const row = box.querySelector('.searchVideoIdResult-search');
+    const count = row?.querySelector('.searchVideoIdResult-searchCount');
+    if (count) { count.textContent = ''; }
+    row?.classList.remove('is-counting');
+    row?.classList.remove('is-empty');
+    box.querySelectorAll('.searchVideoIdResult-tagCount').forEach(el => {
+      el.textContent = '';
+      el.classList.remove('is-counting');
+      el.classList.remove('is-empty');
+    });
+  }
+
+  _refreshWordCountsAfterFilterChange() {
+    this._cancelPendingWordCounts();
+    this._clearVisibleWordCounts();
+    this._updateVideoIdSearchRow(true);
+    this._updateVideoIdSelection(false);
+    this._scheduleAutomaticTagCounts();
+  }
+
+  _scheduleAutomaticTagCounts() {
+    window.clearTimeout(this._autoTagCountTimer);
+    const generation = (this._autoTagCountGeneration =
+      (this._autoTagCountGeneration || 0) + 1);
+    if (this.wordCountMode !== 'auto' || !this._videoIdBox || this.isOwnerOnly) { return; }
+    const items = Array.from(this._videoIdBox.querySelectorAll(
+      '.searchVideoIdResult-tag:not(.is-leaving)')).slice(0, VideoSearchForm.MAX_VIDEO_ID_TAGS);
+    if (!items.length) { return; }
+    const inputWord = this.word, mode = this.searchType, filters = this.filterOptions;
+    const valid = () => generation === this._autoTagCountGeneration &&
+      this.wordCountMode === 'auto' && !this.isOwnerOnly &&
+      this.word === inputWord && this.searchType === mode &&
+      this._videoIdBox.classList.contains('is-open');
+    const render = (li,count) => {
+      if (!valid()) { return; }
+      const elm = li.querySelector('.searchVideoIdResult-tagCount');
+      if (!elm || li.classList.contains('is-leaving')) { return; }
+      elm.classList.remove('is-counting');
+      elm.textContent = typeof count === 'number' ? count.toLocaleString() + '件' : '';
+      elm.classList.toggle('is-empty',count === 0);
+    };
+    const runNext = async index => {
+      if (!valid()) { return; }
+      for (let i=index; i<items.length; i++) {
+        const li=items[i], word=li.dataset.word;
+        const cacheKey=word && this._wordCountCacheKey(word,mode);
+        if (!cacheKey || li.classList.contains('is-leaving')) { continue; }
+        if (this._wordCountCache.has(cacheKey)) {
+          render(li,this._wordCountCache.get(cacheKey));
+          continue;
+        }
+        const elm=li.querySelector('.searchVideoIdResult-tagCount');
+        elm?.classList.add('is-counting');
+        try {
+          const count=await VideoSearchForm.fetchWordCount(word,mode,filters);
+          this._setWordCountCache(cacheKey,count);
+          render(li,count);
+        } catch (_) { render(li,null); }
+        if (valid() && i+1<items.length) {
+          this._autoTagCountTimer=window.setTimeout(() => runNext(i+1),
+            VideoSearchForm.WORD_COUNT_DELAY_MS);
+        }
+        return;
+      }
+    };
+    this._autoTagCountTimer=window.setTimeout(() => runNext(0),
+      VideoSearchForm.WORD_COUNT_DELAY_MS);
+  }
+
   _onVideoIdKeyDown(e) {
     if (e.isComposing || e.keyCode === 229) {
       return;
@@ -2737,6 +2924,11 @@ class VideoSearchForm extends Emitter {
         const index = Math.max(0, items.indexOf(current));
         this._videoIdNavKey = items[(index + delta + items.length) % items.length].key;
         this._updateVideoIdSelection();
+        if (this._videoIdNavKey === 'search') {
+          this._updateVideoIdSearchRow(false,true);
+        } else if (this.wordCountMode === 'on-demand') {
+          this._cancelSearchRowCount();
+        }
         break;
       }
       case 'Escape':
@@ -2809,6 +3001,7 @@ class VideoSearchForm extends Emitter {
     });
     this._videoIdBox.classList.toggle('has-tags', words.length > 0);
     this._updateVideoIdSelection();
+    this._scheduleAutomaticTagCounts();
   }
 
   _selectVideoIdTag(word) {
@@ -2824,7 +3017,7 @@ class VideoSearchForm extends Emitter {
   }
 
   // 素の動画IDを検索語として検索する行（タグ/キーワードのヒット件数も表示）
-  _updateVideoIdSearchRow(force = false) {
+  _updateVideoIdSearchRow(force = false, requestOnDemand = false) {
     const row = this._videoIdBox.querySelector('.searchVideoIdResult-search');
     if (!row) {
       return;
@@ -2838,12 +3031,14 @@ class VideoSearchForm extends Emitter {
     const label = mode === 'tag' ? `タグ「${word}」で検索` : `キーワード「${word}」で検索`;
     const labelElm = row.querySelector('.searchVideoIdResult-searchLabel');
     const countElm = row.querySelector('.searchVideoIdResult-searchCount');
-    if (!force && labelElm.textContent === label) {
+    if (!force && !requestOnDemand && labelElm.textContent === label) {
       return;
     }
     labelElm.textContent = label;
+    const countMode = this.wordCountMode;
     const cacheKey = this._wordCountCacheKey(word, mode);
-    row.title = cacheKey ? label : `${label}（「投稿者の動画のみ」の時は件数を表示しません）`;
+    row.title = countMode === 'off' ? `${label}（件数表示はOFF）` :
+      cacheKey ? label : `${label}（「投稿者の動画のみ」の時は件数を表示しません）`;
     const seq = ++this._wordCountSeq;
     window.clearTimeout(this._wordCountTimer);
     const render = count => {
@@ -2857,7 +3052,7 @@ class VideoSearchForm extends Emitter {
         countElm.classList.add('is-pop');
       }
     };
-    if (!cacheKey) {
+    if (!cacheKey || countMode === 'off') {
       render(null);
       return;
     }
@@ -2865,13 +3060,20 @@ class VideoSearchForm extends Emitter {
       render(this._wordCountCache.get(cacheKey));
       return;
     }
+    // On-demand does not start a count request just because a word was typed
+    // or filters changed; the explicit hover/keyboard selection starts it.
+    if (countMode !== 'auto' && !requestOnDemand) {
+      render(null);
+      return;
+    }
     row.classList.add('is-counting');
     row.classList.remove('is-empty');
     countElm.textContent = '';
-    // Task 073: 普通の単語は1文字ごとに語が変わるので、入力が少し止まってから問い合わせる
     const filters = this.filterOptions;
     this._wordCountTimer = window.setTimeout(() => {
-      if (seq !== this._wordCountSeq) { return; }
+      if (seq !== this._wordCountSeq ||
+        !this._videoIdBox.classList.contains('is-open') ||
+        this.wordCountMode === 'off') { return; }
       VideoSearchForm.fetchWordCount(word, mode, filters)
         .then(count => {
           this._setWordCountCache(cacheKey, count);
@@ -4470,8 +4672,47 @@ class RelatedInfoMenu extends BaseViewComponent {
     this._bound._onBodyClick = _.debounce(this._onBodyClick.bind(this), 0);
     this._unwatchCustomActions = RelatedMenuActions.onChange(() => this._renderCustomMenu());
     Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
+    Config.onkey(RelatedMenuOrder.CONFIG_KEY, () => this._renderCustomMenu());
+    Config.onkey(RelatedMenuOrder.HIDDEN_KEY, () => this._renderCustomMenu());
+    // Config and the advanced-settings userscript each hold their own
+    // DataStorage instance. Local updates use onkey above; another browser
+    // tab uses storage events, which DataStorage itself does not subscribe to.
+    this._relatedStorageKeys=[
+      RelatedMenuActions.CONFIG_KEY,RelatedMenuOrder.CONFIG_KEY,
+      RelatedMenuOrder.HIDDEN_KEY,'ui.relatedMenu'
+    ];
+    if(typeof Config.getStorageKey==='function' && typeof Config.refresh==='function'){
+      this._onRelatedStorage=event=>{
+        if(event.storageArea && event.storageArea!==Config.storage){return;}
+        const key=this._relatedStorageKeys.find(k=>Config.getStorageKey(k)===event.key);
+        if(key){this._refreshRelatedStorageKey(key,event.newValue===null);}
+      };
+      this._onAdvancedSettingsSaved=event=>{
+        const keys=Array.isArray(event.detail?.keys)?event.detail.keys:[];
+        for(const key of keys){
+          if(this._relatedStorageKeys.includes(key)){this._refreshRelatedStorageKey(key);}
+        }
+      };
+      window.addEventListener('storage',this._onRelatedStorage);
+      window.addEventListener('ZenzaWatch-advanced-settings-saved',
+        this._onAdvancedSettingsSaved);
+    }
     this.setState({isHeader});
 
+  }
+
+  _refreshRelatedStorageKey(key,removed=false) {
+    const storageKey=Config.getStorageKey(key);
+    // A deleted key should return to the saved default without writing a new
+    // localStorage value (which would cause cross-tab feedback).
+    const missing=removed && Config.storage?.[storageKey]==null;
+    if(missing && Object.prototype.hasOwnProperty.call(Config.default||{},key)){
+      Config.refresh(key,{[storageKey]:JSON.stringify(Config.default[key])});
+    } else {
+      Config.refresh(key);
+    }
+    if(key==='ui.relatedMenu'){this._visibility?.apply('ui.relatedMenu');}
+    else {this._renderCustomMenu();}
   }
 
   _initDom(...args) {
@@ -4492,13 +4733,37 @@ class RelatedInfoMenu extends BaseViewComponent {
     }, 100));
 
     this._ginzaLink = shadow.querySelector('.ginzaLink');
+    // Use native anchor navigation rather than reopening a named watch tab.
+    // In particular, the official route must not trigger another Zenza reload.
+    this._ginzaLink.addEventListener('click', e => {
+      if(!this._currentWatchId){e.preventDefault();return;}
+      this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
+        this._currentWatchId,this._relatedContext().currentTime);
+      this._onBodyClick();
+      super._onCommand('pause');
+    });
     this._originalLink = shadow.querySelector('.originalLink');
     this._twitterLink = shadow.querySelector('.twitterHashLink');
     this._parentVideoLink = shadow.querySelector('.parentVideoLink');
     this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
     this._customRelatedItems = shadow.querySelector('.customRelatedItems');
+    this._builtinRelatedItems = new Map([...shadow.querySelectorAll(
+      '.relatedMenuItems > li[data-related-order-key]')].map(li=>[
+      li.dataset.relatedOrderKey, li]));
     this._customLinkById = new Map();
-    this._elm.summary.addEventListener('click', () => this._renderCustomMenu());
+    this._elm.summary.addEventListener('click', () => {
+      this._renderCustomMenu();
+      if (this._currentWatchId) {
+        this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
+          this._currentWatchId, this._relatedContext().currentTime);
+      }
+    });
+    this._visibility=UiVisibilityRegistry.connect(Config,this._view,'related',{
+      beforeHide:()=>{
+        const details=this._shadow||this._view;
+        if(details.open){this._onBodyClick();}
+      }
+    });
     shadow.addEventListener('click', e => {
       const link = e.target.closest('a[data-related-link-id]');
       if (!link) { return; }
@@ -4512,6 +4777,10 @@ class RelatedInfoMenu extends BaseViewComponent {
       shadow.open = false;
       this.emit('close');
     });
+  }
+
+  _applyMenuVisibility() {
+    return this._visibility?.apply('ui.relatedMenu');
   }
 
   _onBodyClick() {
@@ -4537,7 +4806,7 @@ class RelatedInfoMenu extends BaseViewComponent {
 
     const vid = this._currentVideoId;
     const wid = this._currentWatchId;
-    this._ginzaLink.setAttribute('href', `//www.nicovideo.jp/watch/${wid}`);
+    this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid));
     this._originalLink.setAttribute('href', `//www.nicovideo.jp/watch/${vid}`);
     this._twitterLink.setAttribute('href', `https://twitter.com/hashtag/${vid}`);
     // Task 043: commons.nicovideo.jp/tree/{id} は廃止された。
@@ -4561,7 +4830,8 @@ class RelatedInfoMenu extends BaseViewComponent {
       .filter(item => item.enabled);
     const context = this._relatedContext();
     const actions = RelatedMenuActions.getActions(context);
-    const body = document.createDocumentFragment();
+    const nodes = new Map(this._builtinRelatedItems || []);
+    let customCount = 0;
     this._customLinkById.clear();
 
     if (this._currentVideoInfo) {
@@ -4583,7 +4853,10 @@ class RelatedInfoMenu extends BaseViewComponent {
             '未取得: ' + resolved.missing.join(', ') : 'URLを開けません';
         }
         li.appendChild(link);
-        body.appendChild(li);
+        const key = 'link:' + item.id;
+        li.dataset.relatedOrderKey = key;
+        nodes.set(key, li);
+        customCount++;
       }
       for (const action of actions) {
         const li = document.createElement('li');
@@ -4595,12 +4868,25 @@ class RelatedInfoMenu extends BaseViewComponent {
         button.dataset.param = action.id;
         button.disabled = !action.enabled;
         li.appendChild(button);
-        body.appendChild(li);
+        const key = 'action:' + action.id;
+        li.dataset.relatedOrderKey = key;
+        nodes.set(key, li);
+        customCount++;
       }
     }
 
-    this._customRelatedItems.replaceChildren(body);
-    this._customRelatedGroup.hidden = this._customRelatedItems.children.length === 0;
+    // Move the original nodes, do not clone their command handlers or replace
+    // eligibility classes (community/mymemory/tree availability).
+    const order = RelatedMenuOrder.orderedKeys(
+      Config.getValue(RelatedMenuOrder.CONFIG_KEY), [...nodes.keys()]);
+    const hiddenItems = Config.getValue(RelatedMenuOrder.HIDDEN_KEY);
+    for (const [key, node] of nodes) {
+      node.hidden = RelatedMenuOrder.isHidden(key, hiddenItems);
+    }
+    this._customRelatedItems.replaceChildren(...order.map(key=>nodes.get(key)),
+      ...(this._customRelatedGroup ? [this._customRelatedGroup] : []));
+    // Legacy marker remains for existing consumers, but contributes no row.
+    if (this._customRelatedGroup) { this._customRelatedGroup.hidden = customCount === 0; }
   }
 
   _onCommand(command, param) {
@@ -4609,9 +4895,15 @@ class RelatedInfoMenu extends BaseViewComponent {
     shadow.open = false;
 
     switch (command) {
-      case 'watch-ginza':
-        window.open(this._ginzaLink.href, 'watchGinza');
+      case 'watch-ginza': {
+        // Resolve at the moment of the click, not when videoInfo was loaded.
+        const currentTime=typeof this._relatedContext==='function' ?
+          this._relatedContext().currentTime : 0;
+        const officialUrl=OfficialPlayerRoute.makeUrl(this._currentWatchId,currentTime);
+        this._ginzaLink.href=officialUrl;
+        window.open(officialUrl, '_blank', 'noopener');
         super._onCommand('pause');
+      }
         break;
       case 'open-uad':
         url = `//nicoad.nicovideo.jp/video/publish/${this._currentWatchId}?frontend_id=6&frontend_version=0&zenza_watch`;
@@ -4693,13 +4985,14 @@ RelatedInfoMenu._shadow_ = (`
         position: absolute;
         transform: translate(-100%, 0);
       }
-      .RelatedInfoMenu .customRelatedGroup[hidden] { display: none; }
+      .RelatedInfoMenu .customRelatedGroup { display: none !important; }
+      .RelatedInfoMenu [data-related-order-key][hidden] { display: none !important; }
       .RelatedInfoMenu .customRelatedHeading {
         display: block;
         font-size: 0.85em;
         opacity: 0.75;
       }
-      .RelatedInfoMenu .customRelatedItems { padding-left: 14px; }
+      .RelatedInfoMenu .customRelatedItems { padding-left: 32px; }
       .RelatedInfoMenu .customRelatedDisabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -4780,39 +5073,36 @@ RelatedInfoMenu._shadow_ = (`
     <details class="root RelatedInfoMenu">
       <summary class="RelatedInfoMenuSummary clickable">関連メニュー</summary>
       <div class="RelatedInfoMenuBody">
-        <ul>
-          <li class="ginzaMenu">
-            <a class="ginzaLink command"
-              rel="noopener" data-command="watch-ginza">公式プレイヤーで開く</a>
+        <ul class="relatedMenuItems customRelatedItems">
+          <li class="ginzaMenu" data-related-order-key="builtin:official">
+            <a class="ginzaLink command" target="_blank"
+              rel="noopener noreferrer">公式プレイヤーで開く</a>
           </li>
-          <li class="uadMenu">
+          <li class="uadMenu" data-related-order-key="builtin:ad">
             <span class="uadLink command"
               rel="noopener" data-command="open-uad">ニコニ広告で宣伝</span>
           </li>
-          <li class="twitterHashMenu">
+          <li class="twitterHashMenu" data-related-order-key="builtin:twitter">
             <a class="twitterHashLink command"
               rel="noopener" data-command="open-twitter-hash">twitterの反応を見る</a>
           </li>
-          <li class="originalLinkMenu">
+          <li class="originalLinkMenu" data-related-order-key="builtin:original">
             <a class="originalLink command"
               rel="noopener" data-command="open-original-video">元動画を開く</a>
           </li>
-          <li class="parentVideoMenu">
+          <li class="parentVideoMenu" data-related-order-key="builtin:tree">
             <a class="parentVideoLink command"
               rel="noopener" data-command="open-parent-video">親作品・コンテンツツリー</a>
           </li>
-          <li class="parentVideoMenu">
+          <li class="parentVideoMenu" data-related-order-key="builtin:tree-playlist">
             <span class="command"
               data-command="playlistSetCommonsTree">親作品・子作品をプレイリストに追加</span>
           </li>
-          <li class="copyVideoWatchUrlMenu">
+          <li class="copyVideoWatchUrlMenu" data-related-order-key="builtin:copy-url">
             <span class="copyVideoWatchUrlLink command"
               rel="noopener" data-command="copy-video-watch-url">動画URLをコピー</span>
           </li>
-          <li class="customRelatedGroup" hidden>
-            <span class="customRelatedHeading">カスタムリンク・アクション</span>
-            <ul class="customRelatedItems"></ul>
-          </li>
+          <li class="customRelatedGroup" hidden aria-hidden="true"></li>
         </ul>
       </div>
     </details>

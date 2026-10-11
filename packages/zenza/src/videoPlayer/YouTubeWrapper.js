@@ -93,59 +93,98 @@ const {YouTubeWrapper} = (() => {
     }
 
     async _initPlayer(videoId, startSeconds = 0) {
+      if (this._playerInitPromise) {
+        return this._playerInitPromise;
+      }
       if (this._player) {
         return {player: this._player};
       }
-
-      const YT = await this._initYT();
-      const {player} = await new Promise(resolve => {
-        this._player = new YT.Player(
-          this._parentNode, {
-            videoId,
-            events: {
-              onReady: () => resolve({player: this._player}),
-              onStateChange: this._onPlayerStateChange.bind(this),
-              onPlaybackQualityChange: e => window.console.info('video quality: ', e.data),
-              onError: e => this.emit('error', e)
-            },
-            playerVars: {
-              autoplay: this.autoplay ? 0 : 1,
-              volume: this._volume * 100,
-              start: startSeconds,
-              fs: 0,
-              loop: 0,
-              controls: 1,
-              disablekb: 1,
-              modestbranding: 0,
-              playsinline: 1,
-              rel: 0,
-              showInfo: 1
-            }
-          });
-      });
-      this._onPlayerReady();
+      // Every same-turn first caller must wait for the same player to become
+      // ready, not allocate an additional iframe.
+      const init = (async () => {
+        const YT = await this._initYT();
+        const {player} = await new Promise(resolve => {
+          this._player = new YT.Player(
+            this._parentNode, {
+              videoId,
+              events: {
+                onReady: () => resolve({player: this._player}),
+                onStateChange: this._onPlayerStateChange.bind(this),
+                onPlaybackQualityChange: e => window.console.info('video quality: ', e.data),
+                onError: e => this.emit('error', e)
+              },
+              playerVars: {
+                autoplay: this._autoplay ? 1 : 0,
+                volume: this._volume * 100,
+                start: startSeconds,
+                fs: 0,
+                loop: 0,
+                controls: 1,
+                disablekb: 1,
+                modestbranding: 0,
+                playsinline: 1,
+                rel: 0,
+                showInfo: 1
+              }
+            });
+        });
+        this._onPlayerReady();
+        return {player};
+      })();
+      this._playerInitPromise = init;
+      try {
+        return await init;
+      } catch (error) {
+        // The next caller may retry a constructor/API failure safely.
+        this._player = null;
+        throw error;
+      } finally {
+        if (this._playerInitPromise === init) { this._playerInitPromise = null; }
+      }
     }
 
     async _initYT() {
-      if (window.YT) {
-        return window.YT;
-      }
-
-      return new Promise(resolve => {
-        if (window.onYouTubeIframeAPIReady) {
-          window.onYouTubeIframeAPIReady_ = window.onYouTubeIframeAPIReady;
-        }
-        window.onYouTubeIframeAPIReady = () => {
-          if (window.onYouTubeIframeAPIReady_) {
-            window.onYouTubeIframeAPIReady = window.onYouTubeIframeAPIReady_;
+      if (window.YT?.Player) { return window.YT; }
+      // Share the IFrame API load across different player instances on this page.
+      if (YouTubeWrapper._ytApiPromise) { return YouTubeWrapper._ytApiPromise; }
+      const loader = new Promise((resolve, reject) => {
+        const previousReady = window.onYouTubeIframeAPIReady;
+        const restore = () => {
+          if (window.onYouTubeIframeAPIReady === onReady) {
+            window.onYouTubeIframeAPIReady = previousReady;
           }
-          resolve(window.YT);
         };
-        const tag = document.createElement('script');
-        tag.src = 'https://www.youtube.com/iframe_api';
-        // tag.onload = () => resolve(window.YT);
-        document.head.append(tag);
+        const onReady = () => {
+          restore();
+          // Do not steal the callback from another script using the same API.
+          if (typeof previousReady === 'function') {
+            try { previousReady(); } catch (e) { console.warn('YouTube prior ready callback failed', e); }
+          }
+          if (window.YT?.Player) {
+            resolve(window.YT);
+          } else {
+            reject(new Error('YouTube IFrame API ready without Player'));
+          }
+        };
+        const onError = error => {
+          restore();
+          reject(error || new Error('YouTube IFrame API unavailable'));
+        };
+        window.onYouTubeIframeAPIReady = onReady;
+        try {
+          const tag = document.createElement('script');
+          tag.src = 'https://www.youtube.com/iframe_api';
+          tag.addEventListener?.('error', onError, {once: true});
+          document.head.append(tag);
+        } catch (error) {
+          onError(error);
+        }
       });
+      YouTubeWrapper._ytApiPromise = loader.catch(error => {
+        YouTubeWrapper._ytApiPromise = null;
+        throw error;
+      });
+      return YouTubeWrapper._ytApiPromise;
     }
 
     _onPlayerReady() {

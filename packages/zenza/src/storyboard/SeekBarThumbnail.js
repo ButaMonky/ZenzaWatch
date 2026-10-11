@@ -18,8 +18,7 @@ class SeekBarThumbnail {
   _onStoryboardUpdate(model) {
     this._model = model;
     if (!model.isAvailable) {
-      this.isAvailable = false;
-      this.hide();
+      this._onStoryboardReset();
       return;
     }
 
@@ -30,7 +29,13 @@ class SeekBarThumbnail {
     this.show();
   }
   _onStoryboardReset() {
+    this.isAvailable = false;
+    this._model = null;
     this.hide();
+    // Also clear the worker model, so an old thumbnail cannot be reused.
+    if (this.thumbnail) {
+      Promise.resolve(this.thumbnail.setInfo(null)).catch(() => {});
+    }
   }
   get isVisible() {
     return this._view ? this.classList.contains('is-visible') : false;

@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.33-task301
+// @version        0.0.34-task391
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
@@ -31,7 +31,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // ==/UserScript==
-// build: 2026-10-08 00:05Z 5266732
+// build: 2026-10-11 04:07Z
 /* eslint-disable */
 
 
@@ -988,12 +988,17 @@ const workerUtil = (() => {
             const req =
               index ?
                 store.index(index).get(key) : store.get(key);
+            let timeoutId;
             req.onsuccess = e => {
+              if (timeoutId !== undefined) { clearTimeout(timeoutId); }
               resolve(e.target.result);
             };
-            req.onerror = reject;
+            req.onerror = e => {
+              if (timeoutId !== undefined) { clearTimeout(timeoutId); }
+              reject(e);
+            };
             if (timeout) {
-              setTimeout(() => reject(`timeout: key${key}`), timeout);
+              timeoutId = setTimeout(() => reject(`timeout: key${key}`), timeout);
             }
           });
         }
@@ -1003,7 +1008,9 @@ const workerUtil = (() => {
             const req =
               index ?
                 store.index(index).count(key) : store.count(key);
+            let timeoutId;
             req.onsuccess = e => {
+              if (timeoutId !== undefined) { clearTimeout(timeoutId); }
               resolve(req.result);
             };
             // 修正前は`err => resolve`で、resolve関数自体を返すだけでresolveを
@@ -1011,9 +1018,12 @@ const workerUtil = (() => {
             // 残っていた（timeout指定時はフォールバックのsetTimeoutで最終的に
             // rejectされるが、無駄に待たされていた。timeout未指定の呼び出し方が
             // あった場合は永久にpendingのままになる）。
-            req.onerror = reject;
+            req.onerror = e => {
+              if (timeoutId !== undefined) { clearTimeout(timeoutId); }
+              reject(e);
+            };
             if (timeout) {
-              setTimeout(() => reject(`timeout: key${key}`), timeout);
+              timeoutId = setTimeout(() => reject(`timeout: key${key}`), timeout);
             }
           });
         }

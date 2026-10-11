@@ -209,6 +209,8 @@ class ModernAdvancedSettingsModel {
         }]
       ]),
       ...group('プレイリスト・検索','関連メニュー › カスタムリンク',[
+        ['relatedMenu.builtinOptions','標準関連メニューの詳細編集',{type:'related-builtin-options',
+          description:'標準機能の表示名、開き方、動画IDコピーなどの設定です。'}],
         ['relatedMenu.order','関連メニューの並び順と表示／非表示',{
           type:'related-order',
           description:'標準7件・カスタムリンク・登録アクションを同じ一覧で移動し、項目ごとに表示を切り替えます。非表示にしても機能や保存したリンクは削除しません。動画固有の表示条件は優先されます。'
@@ -372,10 +374,11 @@ class ModernAdvancedSettingsModel {
       legacyRoot.querySelectorAll('[data-setting-name],[data-history-setting]').forEach(input=>{
         const id=input.dataset.settingName || (input.dataset.historySetting ?
           'commentHistory.'+input.dataset.historySetting : null);
-        if (!id || /^KEY_/.test(id)) { return; }
-        const action=/^PARAM_CUSTOM_SEEK_(\d+)/.exec(id);
-        const category=ModernAdvancedSettingsModel.categoryFor(id,
-          action?{category:'シーク'}:null);
+        // The legacy editor has a PARAM field for every one of the ten seek slots.
+        // The action descriptor below must own these fields, or all ten become
+        // standalone text cards instead of additive composite shortcut cards.
+        if (!id || /^KEY_/.test(id) || /^PARAM_CUSTOM_SEEK_\d+$/.test(id)) { return; }
+        const category=ModernAdvancedSettingsModel.categoryFor(id);
         const labelNode=input.closest('label');
         const labelText=labelNode ? Array.from(labelNode.childNodes)
           .filter(n=>n.nodeType===3)

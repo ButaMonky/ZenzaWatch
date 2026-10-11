@@ -5,6 +5,22 @@ const {createContext,loadClass,read}=require('../helpers/extractSource');
 const Registry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',createContext({}));
 const settings=()=>Registry.ITEMS;
 describe('Task318 centralized visibility manifest',()=>{
+  it('restores Task390 icons for existing items while keeping only seven new Task391 SVG names',()=>{
+    const expected={
+      'ui.bar.fullscreen':'⛶',
+      'ui.bar.settings':'⚙',
+      'ui.header.search':'⌕'
+    };
+    for(const [key,icon] of Object.entries(expected)){
+      assert.strictEqual(Registry.get(key).icon,icon,'Do not redesign pre-existing icon '+key);
+    }
+    assert.deepStrictEqual(Array.from(Registry.SHARED_SETTINGS.map(([id,icon])=>[id,icon])),[
+      ['showComment','comments-video'],['enableCommentPanel','comments-list'],
+      ['enableCommentPreview','comments-preview'],['enableHeatMap','comment-heatmap'],
+      ['enableStoryboard','seek-thumbnail'],['enableStoryboardBar','scene-filmstrip'],
+      ['enableAdDecoration','ad-crown']
+    ]);
+  });
   it('uses unique stable keys, a known scope and one configurable icon per UI item',()=>{
     assert(Registry.assertValidManifest());
     const keys=Array.from(settings(),item=>item.key);
@@ -240,5 +256,48 @@ describe('Task391 saved shared preference runtime sync',()=>{
     assert.deepStrictEqual(updates,[['showComment',false],['enableHeatMap',false]]);
     assert.strictEqual(store.getItem('ZenzaWatch_enableHeatMap'),'false');
     owner.dispose();dom.window.close();
+  });
+});
+
+
+describe('Task396 saved shortcut preference synchronization',()=>{
+  it('notifies the current player of saved numeric keys without rewriting storage',async()=>{
+    const {beginSection,run}=require('../helpers/extractSource');
+    const dom=new JSDOM('<!doctype html><body></body>',{url:'https://www.nicovideo.jp/my'});
+    const win=dom.window,store=win.localStorage;
+    const c=createContext({window:win,document:win.document,localStorage:store,
+      bounce:{time:fn=>fn},objUtil:{bridge:(dest,src)=>{
+        for(const k of Object.getOwnPropertyNames(Object.getPrototypeOf(src))){
+          if(typeof src[k]==='function'){dest[k]=src[k].bind(src);}
+        }
+      }}});
+    run(beginSection('packages/lib/src/Emitter.js'),c);
+    const DataStorage=loadClass('packages/lib/src/infra/DataStorage.js','DataStorage',c);
+    const prefs=new DataStorage({KEY_OPEN_GINZA:0,PARAM_CUSTOM_SEEK_1:0},
+      {storage:store,prefix:'ZenzaWatch'});
+    await prefs.promise('restore');
+    const updates=[];prefs.on('update',(key,value)=>updates.push([key,value]));
+    const owner=Registry.connect(prefs,win.document.body,'bar');
+    try{
+      store.setItem('ZenzaWatch_KEY_OPEN_GINZA','71');
+      store.setItem('ZenzaWatch_PARAM_CUSTOM_SEEK_1','-3');
+      win.dispatchEvent(new win.CustomEvent('ZenzaWatch-advanced-settings-saved',{
+        detail:{keys:['KEY_OPEN_GINZA','PARAM_CUSTOM_SEEK_1']}}));
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert.strictEqual(prefs.getValue('KEY_OPEN_GINZA'),71);
+      assert.strictEqual(prefs.getValue('PARAM_CUSTOM_SEEK_1'),-3);
+      assert.deepStrictEqual(updates,[['KEY_OPEN_GINZA',71],['PARAM_CUSTOM_SEEK_1',-3]]);
+      win.dispatchEvent(new win.CustomEvent('ZenzaWatch-advanced-settings-saved',{
+        detail:{keys:['KEY_OPEN_GINZA']}}));
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert.strictEqual(updates.length,2);
+      store.removeItem('ZenzaWatch_KEY_OPEN_GINZA');
+      win.dispatchEvent(new win.StorageEvent('storage',{
+        key:'ZenzaWatch_KEY_OPEN_GINZA',newValue:null,storageArea:store}));
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert.strictEqual(prefs.getValue('KEY_OPEN_GINZA'),0);
+      assert.strictEqual(store.getItem('ZenzaWatch_KEY_OPEN_GINZA'),null);
+      assert.deepStrictEqual(updates[2],['KEY_OPEN_GINZA',0]);
+    }finally{owner.dispose();dom.window.close();}
   });
 });

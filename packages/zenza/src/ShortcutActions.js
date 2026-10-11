@@ -246,6 +246,9 @@ const SHORTCUT_ACTIONS = [
     defaultKey: 0, command: 'open-twitter-hash'},
   {id: 'OPEN_PARENT_VIDEO', category: 'その他', label: '親作品・コンテンツツリーを開く',
     defaultKey: 0, command: 'open-parent-video'},
+  // Task396: previously the only built-in related-menu item with no keyboard action.
+  {id: 'OPEN_ORIGINAL_VIDEO', category: 'その他', label: '元動画を開く',
+    defaultKey: 0, command: 'open-original-video'},
   // 既存のexecCommandのswitch文(NicoVideoPlayerDialog.js)で既に処理
   // されており、追加の配線が不要な1件。
   {id: 'PLAYLIST_SET_COMMONS_TREE', category: 'プレイリスト', label: '親作品・子作品をプレイリストに追加',

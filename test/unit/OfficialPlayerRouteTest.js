@@ -2,7 +2,10 @@
 const assert=require('assert');
 const parser=require('@babel/parser');
 const traverse=require('@babel/traverse').default;
-const {createContext,beginSection,read,run}=require('../helpers/extractSource');
+const {createContext,beginSection,read,run,loadClass}=require('../helpers/extractSource');
+function loadMenuOrder(){
+  return loadClass('src/RelatedMenuOrder.js','RelatedMenuOrder',createContext({URL}));
+}
 
 function loadOfficialRoute(){
   const c=createContext({URL});
@@ -88,9 +91,9 @@ describe('Task350 official NicoNico player routing',()=>{
     const ctx=createContext({
       document:dom.window.document,window:dom.window,
       navigator:{userAgent:'test'},_:{debounce:fn=>fn},
-      ClassList:()=>({toggle(){}}),Config:{onkey(){}},
+      ClassList:()=>({toggle(){}}),Config:{onkey(){},getValue:()=>({})},
       RelatedMenuActions:{onChange:()=>()=>{},CONFIG_KEY:'relatedMenu.customLinks'},
-      RelatedMenuOrder:{CONFIG_KEY:'relatedMenu.order',HIDDEN_KEY:'relatedMenu.hiddenItems'},
+      RelatedMenuOrder:loadMenuOrder(),
       UiVisibilityRegistry:{connect:()=>({})},
       OfficialPlayerRoute:loadOfficialRoute(),
       BaseViewComponent:class {
@@ -126,11 +129,13 @@ describe('Task350 official NicoNico player routing',()=>{
     const menu=read('src/VideoInfoPanel.js');
     const dialog=read('src/NicoVideoPlayerDialog.js');
     assert(menu.includes("this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid))"));
-    assert(dialog.includes('OfficialPlayerRoute.makeUrl(this._watchId,this.currentTime)'));
-    assert(menu.includes("window.open(officialUrl, '_blank', 'noopener')"));
+    assert(dialog.includes('OfficialPlayerRoute.makeUrl(this._watchId,time)'));
+    assert(dialog.includes('option.includePosition===false?0:this.currentTime'));
+    assert(menu.includes("this._openBuiltinUrl('official',officialUrl)"));
+    assert(menu.includes('RelatedMenuOrder.openUrl('));
     assert(menu.includes('class="ginzaLink command" target="_blank"'));
     assert(!menu.includes('rel="noopener" data-command="watch-ginza"'));
-    assert(dialog.includes("'_blank', 'noopener'"));
+    assert(dialog.includes("RelatedMenuOrder.openUrl('official',url,option"));
   });
 });
 
@@ -139,6 +144,7 @@ describe('Task350 related menu actual command path',()=>{
     const {loadClass}=require('../helpers/extractSource');
     const ctx=createContext({
       OfficialPlayerRoute:loadOfficialRoute(),
+      Config:{getValue:()=>({})},RelatedMenuOrder:loadMenuOrder(),
       window:{open(url,name,features){opened.push([url,name,features]);}},
       BaseViewComponent:class {
         _onCommand(command){otherCommands.push(command);}
@@ -149,12 +155,13 @@ describe('Task350 related menu actual command path',()=>{
     const a={href:'',setAttribute(name,value){if(name==='href')this.href=value;}};
     const entry=()=>({setAttribute(){}});
     const view={open:true};
-    const fake={
+    const fake=Object.assign(Object.create(Menu.prototype),{
       _shadow:view,
       _ginzaLink:a,_originalLink:entry(),_twitterLink:entry(),
       _parentVideoLink:entry(),_renderCustomMenu(){},
+      _relatedContext:()=>({currentTime:0}),
       setState(){},emit(value){emitted.push(value)}
-    };
+    });
     Menu.prototype.update.call(fake,{
       watchId:'sm9',videoId:'sm9',canOpenContentTree:false,
       isCommunityVideo:false,isMymemory:false
@@ -185,24 +192,26 @@ describe('Task350 official seek seconds forwarding',()=>{
     const src=read('src/VideoInfoPanel.js');
     const dialog=read('src/NicoVideoPlayerDialog.js');
     assert(src.includes('OfficialPlayerRoute.makeUrl(this._currentWatchId,currentTime)'));
-    assert(dialog.includes('OfficialPlayerRoute.makeUrl(this._watchId,this.currentTime)'));
+    assert(dialog.includes('OfficialPlayerRoute.makeUrl(this._watchId,time)'));
+    assert(dialog.includes('option.includePosition===false?0:this.currentTime'));
     assert(src.includes('this._relatedContext().currentTime'));
   });
   it('updates the URL on click using latest context time',()=>{
     const {loadClass}=require('../helpers/extractSource');
     const out=[],ctx=createContext({
       OfficialPlayerRoute:loadOfficialRoute(),
+      Config:{getValue:()=>({})},RelatedMenuOrder:loadMenuOrder(),
       window:{open(url,target){out.push([url,target])}},
       BaseViewComponent:class{_onCommand(){}}
     });
     const Menu=loadClass('src/VideoInfoPanel.js','RelatedInfoMenu',ctx);
     let time=12.1;
     const el={href:''};
-    const fake={
+    const fake=Object.assign(Object.create(Menu.prototype),{
       _shadow:{open:true},_ginzaLink:el,_currentWatchId:'sm9',
       _relatedContext(){return {currentTime:time}},
       emit(){}
-    };
+    });
     Menu.prototype._onCommand.call(fake,'watch-ginza');
     assert.strictEqual(new URL(out[0][0]).searchParams.get('from'),'12');
     time=109.9;

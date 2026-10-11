@@ -6,7 +6,7 @@ const {JSDOM} = require('jsdom');
 const {REPO_ROOT} = require('../helpers/buildSandbox');
 const {beginSection, createContext, run, loadClass} = require('../helpers/extractSource');
 
-function harness(links = [], order = [], hidden = [], menuVisible = true) {
+function harness(links = [], order = [], hidden = [], menuVisible = true, builtinOptions = {}) {
   const dom = new JSDOM('<!doctype html><body></body>', {
     url:'https://www.nicovideo.jp/watch/sm9'});
   const win = dom.window;
@@ -23,7 +23,7 @@ function harness(links = [], order = [], hidden = [], menuVisible = true) {
   }
   const config = {
     default:{'relatedMenu.customLinks':[], 'relatedMenu.order':[],
-      'relatedMenu.hiddenItems':[], 'ui.relatedMenu':true},
+      'relatedMenu.hiddenItems':[], 'relatedMenu.builtinOptions':{}, 'ui.relatedMenu':true},
     storage:win.localStorage,
     getStorageKey:key=>'ZenzaWatch_'+key,
     async refresh(key,storage=win.localStorage) {
@@ -32,12 +32,14 @@ function harness(links = [], order = [], hidden = [], menuVisible = true) {
       if(key==='relatedMenu.customLinks'){links=value;}
       if(key==='relatedMenu.order'){order=value;}
       if(key==='relatedMenu.hiddenItems'){hidden=value;}
+      if(key==='relatedMenu.builtinOptions'){builtinOptions=value;}
       if(key==='ui.relatedMenu'){menuVisible=value;}
       return value;
     },
     getValue: key => key === 'relatedMenu.customLinks' ? links :
       key === 'relatedMenu.order' ? order :
       key === 'relatedMenu.hiddenItems' ? hidden :
+      key === 'relatedMenu.builtinOptions' ? builtinOptions :
       key === 'ui.relatedMenu' ? menuVisible : null,
     onkey: (key, fn) => handlers.push({key,fn})
   };
@@ -78,6 +80,8 @@ function harness(links = [], order = [], hidden = [], menuVisible = true) {
     setLinks:v=>{links=v;handlers.forEach(h=>h.fn(v));},
     setOrder:v=>{order=v;handlers.forEach(h=>h.fn(v));},
     setHidden:v=>{hidden=v;handlers.forEach(h=>h.fn(v));},
+    setBuiltinOptions:v=>{builtinOptions=v;
+      handlers.filter(h=>h.key==='relatedMenu.builtinOptions').forEach(h=>h.fn(v));},
     setMenuVisible:v=>{menuVisible=v;
       handlers.filter(h=>h.key==='ui.relatedMenu').forEach(h=>h.fn(v));}};
 }
@@ -337,6 +341,132 @@ describe('Related menu cross-tab and same-tab settings updates',()=>{
         {detail:{keys:['relatedMenu.order']}}));
       assert.strictEqual(keys(a)[0],'builtin:copy-url');
       assert.strictEqual(keys(b)[0],'builtin:copy-url');
+    }finally{h.dom.window.close();}
+  });
+});
+
+describe('Task396 related-menu builtin and browser-opening integration',()=>{
+  it('edits standard labels live without cloning menu nodes or exposing option keys',()=>{
+    const h=harness([],[],[],true,{official:{label:'公式を表示'},
+      twitter:{urlTemplate:'https://example.org/search?q={videoId}'}});
+    try{
+      const a=h.menu(),b=h.menu();a.update(video());b.update(video());
+      for(const m of [a,b]){
+        assert.strictEqual(m._ginzaLink.textContent,'公式を表示');
+        assert.strictEqual(m._twitterLink.href,'https://example.org/search?q=sm9');
+        assert.strictEqual(m._builtinRelatedItems.size,7);
+      }
+      h.setBuiltinOptions({official:{label:'公式で視聴',openMode:'same-tab'}});
+      for(const m of [a,b]){
+        assert.strictEqual(m._ginzaLink.textContent,'公式で視聴');
+        assert.strictEqual(m._ginzaLink.target,'_self');
+      }
+    }finally{h.dom.window.close();}
+  });
+  it('preserves the official bypass marker and chooses per-item window behavior',()=>{
+    const h=harness([],[],[],true,{official:{openMode:'new-window',popupWidth:710,popupHeight:550},
+      ad:{openMode:'new-window',popupWidth:630,popupHeight:610}});
+    try{
+      const m=h.menu();m.update(video());
+      const opened=[];h.win.open=(...args)=>{opened.push(args);return null;};
+      m._onCommand('watch-ginza');
+      assert(opened[0][0].includes('zenza_official=1'));
+      assert(opened[0][2].includes('width=710'));
+      m._onCommand('open-uad');
+      assert(opened[1][0].includes('nicoad.nicovideo.jp'));
+      assert(opened[1][2].includes('height=610'));
+    }finally{h.dom.window.close();}
+  });
+  it('uses a popup only for explicitly opted-in custom links',()=>{
+    const h=harness([{id:'preview',label:'Preview',
+      url:'https://example.org/{videoId}',openMode:'new-window',
+      popupWidth:820,popupHeight:620}]);
+    try{
+      const m=h.menu();m.update(video());
+      const opened=[];h.win.open=(...args)=>{opened.push(args);return null;};
+      const link=m._customRelatedItems.querySelector('a[data-related-link-id="preview"]');
+      assert(link);
+      link.dispatchEvent(new h.win.MouseEvent('click',{bubbles:true,cancelable:true}));
+      assert.strictEqual(opened.length,1);
+      assert(opened[0][0].includes('example.org/sm9'));
+      assert(opened[0][2].includes('width=820'));
+    }finally{h.dom.window.close();}
+  });
+});
+
+
+describe('Task396 live built-in URL ownership',()=>{
+  it('updates and resets both URL overrides without requiring another video load',()=>{
+    const h=harness();
+    try{
+      const a=h.menu(),b=h.menu();a.update(video());b.update(video());
+      h.setBuiltinOptions({twitter:{urlTemplate:'https://example.org/find/{videoId}'},
+        tree:{urlTemplate:'https://example.org/tree/{watchId}'}});
+      for(const m of [a,b]){
+        assert.strictEqual(m._twitterLink.href,'https://example.org/find/sm9');
+        assert.strictEqual(m._parentVideoLink.href,'https://example.org/tree/sm9');
+      }
+      h.setBuiltinOptions({});
+      for(const m of [a,b]){
+        assert.strictEqual(m._twitterLink.href,'https://twitter.com/hashtag/sm9');
+        assert(m._parentVideoLink.href.startsWith('https://commons.nicovideo.jp/works/sm9?'));
+      }
+    }finally{h.dom.window.close();}
+  });
+  it('disables a configured built-in URL when its required owner variable is missing',()=>{
+    const h=harness([],[],[],true,{
+      twitter:{urlTemplate:'https://example.org/{uploaderUserId}'}});
+    try{
+      const m=h.menu();m.update(video({type:'user',id:null,name:'Removed'}));
+      assert.strictEqual(m._twitterLink.getAttribute('aria-disabled'),'true');
+      assert.strictEqual(m._twitterLink.hasAttribute('href'),false);
+      const opened=[];h.win.open=(...args)=>opened.push(args);
+      m._onCommand('open-twitter-hash');
+      assert.strictEqual(opened.length,0,'must not silently open a different fallback URL');
+      h.setBuiltinOptions({});
+      assert.strictEqual(m._twitterLink.getAttribute('aria-disabled'),null);
+      assert.strictEqual(m._twitterLink.href,'https://twitter.com/hashtag/sm9');
+    }finally{h.dom.window.close();}
+  });
+  it('leaves Ctrl-click navigation native while refreshing the current position',()=>{
+    const h=harness([],[],[],true,{twitter:{openMode:'new-window',
+      urlTemplate:'https://example.org/?t={currentTime}'}});
+    try{
+      const m=h.menu();m.update(video());h.player.currentTime=91.7;
+      const opened=[];h.win.open=(...args)=>opened.push(args);
+      m._twitterLink.addEventListener('click',e=>e.preventDefault());
+      m._twitterLink.dispatchEvent(new h.win.MouseEvent('click',
+        {bubbles:true,cancelable:true,ctrlKey:true}));
+      assert.strictEqual(opened.length,0,'Ctrl-click must not also open a scripted window');
+      assert.strictEqual(m._twitterLink.href,'https://example.org/?t=91');
+    }finally{h.dom.window.close();}
+  });
+});
+
+describe('Task398 copy menu runtime',()=>{
+  it('renders a copy button and dispatches literal text only on click at the current position',()=>{
+    const h=harness([{id:'copy',label:'Copy <text>',kind:'copy',copyTemplate:'{videoTitle}\n{videoId} @{currentTime}'}]);
+    try{
+      const a=h.menu(),b=h.menu(),calls=[],opened=[];
+      h.win.open=(...args)=>opened.push(args);
+      a.update(video());b.update(video());
+      a._view.addEventListener('command',e=>calls.push(e.detail));
+      const row=a._customRelatedItems.querySelector('[data-related-order-key="link:copy"]');
+      assert(row);assert(row.querySelector('button'));
+      assert.strictEqual(row.querySelector('a'),null);
+      assert.strictEqual(calls.length,0);
+      h.player.currentTime=92.9;row.querySelector('button').click();
+      const cmd=calls.find(x=>x.command==='copy-related-text');assert(cmd);
+      assert.strictEqual(cmd.param,'Test & Japanese 日本語\nsm9 @92');
+      assert.strictEqual(opened.length,0);
+    }finally{h.dom.window.close();}
+  });
+  it('disables copy items requiring unavailable metadata',()=>{
+    const h=harness([{id:'copy',label:'Copy',kind:'copy',copyTemplate:'{uploaderChannelId}'}]);
+    try{
+      const m=h.menu();m.update(video());
+      const button=m._customRelatedItems.querySelector('[data-related-order-key="link:copy"] button');
+      assert(button);assert.strictEqual(button.disabled,true);
     }finally{h.dom.window.close();}
   });
 });

@@ -3,7 +3,10 @@ const assert=require('assert');
 const {JSDOM}=require('jsdom');
 const {createContext,loadClass}=require('../helpers/extractSource');
 
-const MARKUP='<!doctype html><html><body><div id="root"><div class="settingPanelInner"></div></div></body></html>';
+const legacySeekInputs=Array.from({length:10},(_,i)=>
+  '<div class="shortcutRow customSeekSlotRow"><input type="text" data-setting-name="PARAM_CUSTOM_SEEK_'+(i+1)+'"></div>').join('');
+const MARKUP='<!doctype html><html><body><div id="root"><div class="settingPanelInner">'+
+  legacySeekInputs+'</div></div></body></html>';
 function fixture(configured={}) {
   const dom=new JSDOM(MARKUP,{url:'https://www.nicovideo.jp/my'});
   const context=createContext({document:dom.window.document,window:dom.window,URL});
@@ -39,6 +42,32 @@ function fixture(configured={}) {
 }
 
 describe('Task318 additive custom seek configuration',()=>{
+  it('merges legacy PARAM fields into only the explicitly configured composite cards',()=>{
+    const h=fixture({PARAM_CUSTOM_SEEK_1:3,PARAM_CUSTOM_SEEK_2:-3});
+    try{
+      assert.deepStrictEqual(h.rows().map(x=>x.dataset.zwId),
+        ['KEY_CUSTOM_SEEK_1','KEY_CUSTOM_SEEK_2']);
+      assert.strictEqual(h.ui.root.querySelector('[data-zw-seek-count]').textContent,
+        'カスタムシーク 2 / 10 枠');
+      assert.strictEqual(h.ui.root.querySelectorAll('[data-zw-id^="PARAM_CUSTOM_SEEK_"]').length,0,
+        'legacy seconds inputs must not be rendered as ten separate cards');
+      assert.strictEqual(h.model.descriptor('PARAM_CUSTOM_SEEK_1').type,'seconds');
+      assert.strictEqual(h.model.descriptor('PARAM_CUSTOM_SEEK_1').actionId,'CUSTOM_SEEK_1');
+      const first=h.rows()[0],second=h.rows()[1];
+      assert.strictEqual(first.querySelector('[data-zw-seek-magnitude="PARAM_CUSTOM_SEEK_1"]').value,'3');
+      assert.strictEqual(second.querySelector('[data-zw-seek-magnitude="PARAM_CUSTOM_SEEK_2"]').value,'3');
+      assert.strictEqual(second.querySelector('[data-zw-seek-direction="PARAM_CUSTOM_SEEK_2"]').value,'-1');
+      assert.strictEqual(h.config.writes.length,0);
+      h.click('[data-zw-add-seek]');
+      assert.deepStrictEqual(h.rows().map(x=>x.dataset.zwId),
+        ['KEY_CUSTOM_SEEK_1','KEY_CUSTOM_SEEK_2','KEY_CUSTOM_SEEK_3']);
+      h.click('[data-zw-cancel]');
+      assert.deepStrictEqual(h.rows().map(x=>x.dataset.zwId),
+        ['KEY_CUSTOM_SEEK_1','KEY_CUSTOM_SEEK_2']);
+      assert.strictEqual(h.config.values.PARAM_CUSTOM_SEEK_1,3);
+      assert.strictEqual(h.config.values.PARAM_CUSTOM_SEEK_2,-3);
+    }finally{h.dispose();}
+  });
   it('shows no unused slots and reveals one slot when adding',()=>{
     const h=fixture();
     assert.strictEqual(h.rows().length,0);

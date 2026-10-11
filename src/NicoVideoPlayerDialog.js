@@ -7,6 +7,7 @@ import {Fullscreen, ShortcutKeyEmitter, util} from './util';
 import {SHORTCUT_ACTIONS} from '../packages/zenza/src/ShortcutActions';
 import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+import {RelatedMenuOrder} from './RelatedMenuOrder';
 import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';
 import {NicoVideoPlayer} from './NicoVideoPlayer';
 import {VideoFilter, VideoInfoModel} from './VideoInfo';
@@ -41,6 +42,7 @@ import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated
 //@require SHORTCUT_ACTIONS
 //@require RelatedMenuActions
 //@require UiVisibilityRegistry
+//@require RelatedMenuOrder
 //@require OfficialPlayerRoute
 
 class PlayerConfig {
@@ -2665,9 +2667,14 @@ class NicoVideoPlayerDialog extends Emitter {
       case 'reload':
         this.reload({currentTime: this.currentTime});
         break;
-      case 'openGinza':
-        window.open(OfficialPlayerRoute.makeUrl(this._watchId,this.currentTime), '_blank', 'noopener');
+      case 'openGinza': {
+        const option=RelatedMenuOrder.getOption(
+          this._playerConfig.getValue(RelatedMenuOrder.OPTIONS_KEY),'official');
+        const time=option.includePosition===false?0:this.currentTime;
+        const url=OfficialPlayerRoute.makeUrl(this._watchId,time);
+        RelatedMenuOrder.openUrl('official',url,option,(...args)=>window.open(...args));
         break;
+      }
       case 'reloadComment':
         this.reloadComment(param);
         break;
@@ -2834,8 +2841,9 @@ class NicoVideoPlayerDialog extends Emitter {
         const context=RelatedMenuActions.makeContext(this._state.videoInfo,this.currentTime);
         RelatedMenuActions.openShortcutsByIds(
           this._playerConfig.getValue(RelatedMenuActions.CONFIG_KEY),param,context,
-          (url,target) => window.open(url,target,
-            target === '_blank' ? 'noopener,noreferrer' : undefined)
+          (url,target,features) => window.open(url,target,
+            features || (target === '_blank' ? 'noopener,noreferrer' : undefined)),
+          text=>this.execCommand('copy-related-text',text)
         );
         break;
       }

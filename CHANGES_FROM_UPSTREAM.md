@@ -1,3 +1,13 @@
+## Task398 / 2026-10-11 - Split related-menu inspector and custom copy actions
+
+Restore the approved compact layout: sortable items on the left, exactly one selected detail pane on the right, and stacked panes on narrow screens. Keep drag/keyboard/touch ordering and omit decorative icons.
+Add custom copy items beside links. Copy a video ID, URL, title, or a literal text template with eight video variables and line breaks. Copy items never navigate, honor visibility and shortcuts, and remain drafts until Save.
+Keep existing custom-link IDs, URLs, order and settings. Fix standalone search recovery for the moved custom editor. Versions: ZenzaWatch 2.7.232-task398 / Advanced Settings 0.3.51-task398. Not published.
+
+## Task396 / 関連メニューC案・標準項目の詳細編集
+
+PC上級者設定を省スペースC案へ変更し、ドラッグ・長押し移動・Alt＋上下と従来の順序保存を維持。標準7項目の名前、リンクの開き方、タブ/新規ウィンドウ、コピー形式（動画ID含む）、URL変数8種、既存KEYショートカットの共有と重複警告に対応。新しい標準編集設定は `relatedMenu.builtinOptions` へ別保存し、公式プレイヤー識別子 `zenza_official=1` を残す。GitHub未公開。詳細はCHANGELOGとTask396検証文書を参照。
+
 ## Task391 / 上級者設定の二か所配置・共通スイッチ
 既存7設定を元のカテゴリと「表示・非表示」の両方に置き、下書き・保存・キャンセル・初期値を共有します。新しい保存キーは増やさず、表示一覧は44項目になります。7項目と全画面・歯車・検索の図柄はSVGへ統一しました。
 関連メニューのチェックボックスに重なった白い丸と古い説明文も修正しました。Issue・Discussion照合の結果と未解決事項は[CHANGELOG](./CHANGELOG.md)先頭を参照してください。

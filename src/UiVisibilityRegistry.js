@@ -37,9 +37,9 @@ class UiVisibilityRegistry {
       {key:'ui.bar.quality',scope:'bar',label:'画質・動画サーバー選択',icon:'画',selector:'.videoServerTypeMenu'},
       {key:'ui.bar.screenMode',scope:'bar',label:'画面サイズ・モード選択',icon:'⛶',selector:'.screenModeMenu'},
       {key:'ui.bar.pin',scope:'bar',label:'操作バーの表示モード選択',icon:'📌',selector:'.fullscreenControlBarModeMenu'},
-      {key:'ui.bar.fullscreen',scope:'bar',label:'フルスクリーン切替ボタン',icon:'fullscreen-corners',selector:'.fullscreenSwitch',
+      {key:'ui.bar.fullscreen',scope:'bar',label:'フルスクリーン切替ボタン',icon:'⛶',selector:'.fullscreenSwitch',
         description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
-      {key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'settings-gear',selector:'.settingPanelSwitch',
+      {key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
         description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
       {key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
       {key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
@@ -54,7 +54,7 @@ class UiVisibilityRegistry {
       {key:'ui.header.tags',scope:'header',label:'上部のタグ一覧',icon:'#',selector:'.videoTagsContainer.videoHeader'},
       {key:'ui.header.metadata',scope:'header',label:'上部の動画情報',icon:'ℹ',selector:'.videoMetaInfoContainer'},
       {key:'ui.header.series',scope:'header',label:'上部のシリーズ画像',icon:'▧',selector:'.series-thumbnail-cover'},
-      {key:'ui.header.search',scope:'header',label:'動画検索ウィンドウ',icon:'search-magnifier',selector:'.zenzaVideoSearchPanel',
+      {key:'ui.header.search',scope:'header',label:'動画検索ウィンドウ',icon:'⌕',selector:'.zenzaVideoSearchPanel',
         description:'上部の動画検索欄・候補一覧を隠します。検索文字は削除されません。ニコニコのマイページ（/my）の上級者設定から再表示できます。'}
     ].map(item=>Object.freeze(item)));
   }
@@ -138,10 +138,13 @@ class UiVisibilityRegistry {
     if(scope!=='related' && win?.addEventListener &&
       typeof config.getStorageKey==='function' &&
       typeof config.refresh==='function') {
-      // The single control-bar owner also refreshes the seven shared settings.
-      // Their existing player consumers receive ordinary Config events, not
-      // new visibility keys; no additional localStorage writes are performed.
-      const sharedKeys=new Set(scope==='bar'?this.SHARED_SETTINGS.map(([key])=>key):[]);
+      // One control-bar owner forwards the shared settings and shortcut drafts
+      // saved by the separate settings userscript. Reuse ordinary Config events;
+      // no extra preference keys or localStorage writes are introduced.
+      const shortcutKeys=Object.keys(config.default||{}).filter(key=>
+        /^KEY_|^PARAM_CUSTOM_SEEK_\d+$/.test(key));
+      const sharedKeys=new Set(scope==='bar'?
+        [...this.SHARED_SETTINGS.map(([key])=>key),...shortcutKeys]:[]);
       const ownKeys=new Set([...items.map(item=>item.key),...sharedKeys]);
       const byStorageKey=new Map([...ownKeys].map(key=>[config.getStorageKey(key),key]));
       const sync=(key,removed=false)=>{
@@ -159,7 +162,11 @@ class UiVisibilityRegistry {
               if(disposed){return;}
               if(!sharedKeys.has(key)){api.apply(key);return;}
               const value=config.getValue(key);
-              if(typeof value!=='boolean' || value===previous){return;}
+              const numeric=shortcutKeys.includes(key);
+              const valid=numeric?(typeof value==='number' && Number.isFinite(value) &&
+                (!key.startsWith('KEY_') || (Number.isSafeInteger(value)&&value>=0))):
+                typeof value==='boolean';
+              if(!valid || value===previous){return;}
               config.emit?.('change',new Map([[key,value]]));
               const emit=config.emitAsync?.bind(config)||config.emit?.bind(config);
               emit?.('update',key,value);

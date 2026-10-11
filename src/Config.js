@@ -65,6 +65,7 @@ const Config = (() => {
     'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
     'relatedMenu.order': [], // Empty = original seven items, then links and registered actions
     'relatedMenu.hiddenItems': [], // Per-row display visibility, without deleting actions
+    'relatedMenu.builtinOptions': {}, // Optional labels/open modes/copy format for standard items
     // Optional UI visibility defaults are maintained in UiVisibilityRegistry.
 
     // Task 063: 以前は`forceEnable`という名前でここに定義されていたが、
@@ -384,6 +385,7 @@ const Config = (() => {
         if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
         if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
         if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }
+        if (key === RelatedMenuOrder.OPTIONS_KEY) { return RelatedMenuOrder.validateOptions(value); }
         if (UiVisibilityRegistry.isVisibilityKey(key)) { return typeof value === 'boolean'; }
         if (key === 'screenshot.filenameTemplate') { return ScreenshotFileName.validateTemplate(value); }
         if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }

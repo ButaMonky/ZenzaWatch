@@ -4674,12 +4674,13 @@ class RelatedInfoMenu extends BaseViewComponent {
     Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
     Config.onkey(RelatedMenuOrder.CONFIG_KEY, () => this._renderCustomMenu());
     Config.onkey(RelatedMenuOrder.HIDDEN_KEY, () => this._renderCustomMenu());
+    Config.onkey(RelatedMenuOrder.OPTIONS_KEY, () => this._renderCustomMenu());
     // Config and the advanced-settings userscript each hold their own
     // DataStorage instance. Local updates use onkey above; another browser
     // tab uses storage events, which DataStorage itself does not subscribe to.
     this._relatedStorageKeys=[
       RelatedMenuActions.CONFIG_KEY,RelatedMenuOrder.CONFIG_KEY,
-      RelatedMenuOrder.HIDDEN_KEY,'ui.relatedMenu'
+      RelatedMenuOrder.HIDDEN_KEY,RelatedMenuOrder.OPTIONS_KEY,'ui.relatedMenu'
     ];
     if(typeof Config.getStorageKey==='function' && typeof Config.refresh==='function'){
       this._onRelatedStorage=event=>{
@@ -4738,24 +4739,54 @@ class RelatedInfoMenu extends BaseViewComponent {
     this._ginzaLink.addEventListener('click', e => {
       if(!this._currentWatchId){e.preventDefault();return;}
       this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
-        this._currentWatchId,this._relatedContext().currentTime);
+        this._currentWatchId,this._builtinOptions('official').includePosition===false?
+          0:this._relatedContext().currentTime);
+      const options=this._builtinOptions('official');
+      if(options.openMode&&options.openMode!=='default' && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+        (!Number.isInteger(e.button)||e.button===0)){
+        e.preventDefault();
+        this._openBuiltinUrl('official',this._ginzaLink.href);
+      }
       this._onBodyClick();
       super._onCommand('pause');
     });
     this._originalLink = shadow.querySelector('.originalLink');
     this._twitterLink = shadow.querySelector('.twitterHashLink');
     this._parentVideoLink = shadow.querySelector('.parentVideoLink');
+    this._uadLink = shadow.querySelector('.uadLink');
+    // Real anchors keep Ctrl/middle-click and the browser context menu usable.
+    for(const [id,link] of [['twitter',this._twitterLink],['tree',this._parentVideoLink],['ad',this._uadLink]]){
+      if(!link){continue;}
+      link.removeAttribute('data-command');
+      link.rel='noopener noreferrer';
+      const refresh=()=>this._refreshBuiltinLink(id,link);
+      link.addEventListener('auxclick',refresh);
+      link.addEventListener('contextmenu',refresh);
+      link.addEventListener('click',e=>{
+        refresh();
+        if(!link.hasAttribute('href')){e.preventDefault();return;}
+        const modified=e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button>0;
+        const mode=this._builtinOptions(id).openMode||'default';
+        if(!modified && (mode==='new-window'||(id==='ad'&&mode==='default'))){
+          e.preventDefault();this._openBuiltinUrl(id,link.href);
+        }
+        this._onBodyClick();
+      });
+    }
     this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
     this._customRelatedItems = shadow.querySelector('.customRelatedItems');
     this._builtinRelatedItems = new Map([...shadow.querySelectorAll(
       '.relatedMenuItems > li[data-related-order-key]')].map(li=>[
       li.dataset.relatedOrderKey, li]));
+    this._builtinOriginalLabels=new Map([...this._builtinRelatedItems].map(([key,li])=>
+      [key,li.querySelector('.command')?.textContent||'']));
     this._customLinkById = new Map();
     this._elm.summary.addEventListener('click', () => {
       this._renderCustomMenu();
       if (this._currentWatchId) {
         this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
-          this._currentWatchId, this._relatedContext().currentTime);
+          this._currentWatchId, this._builtinOptions('official').includePosition===false?
+            0:this._relatedContext().currentTime);
       }
     });
     this._visibility=UiVisibilityRegistry.connect(Config,this._view,'related',{
@@ -4774,6 +4805,11 @@ class RelatedInfoMenu extends BaseViewComponent {
         return;
       }
       link.href = result.url;
+      if(item.openMode==='new-window' && !e.ctrlKey && !e.metaKey && !e.shiftKey){
+        e.preventDefault();
+        const features='noopener,noreferrer,width='+(item.popupWidth||760)+',height='+(item.popupHeight||650);
+        window.open(result.url,'_blank',features);
+      }
       shadow.open = false;
       this.emit('close');
     });
@@ -4808,12 +4844,14 @@ class RelatedInfoMenu extends BaseViewComponent {
     const wid = this._currentWatchId;
     this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid));
     this._originalLink.setAttribute('href', `//www.nicovideo.jp/watch/${vid}`);
-    this._twitterLink.setAttribute('href', `https://twitter.com/hashtag/${vid}`);
+    this._twitterLink.setAttribute('href',
+      this._resolveBuiltinUrl('twitter',`https://twitter.com/hashtag/${vid}`));
     // Task 043: commons.nicovideo.jp/tree/{id} は廃止された。
     // 現在の親作品・子作品の表示先は /works/{id} 。クエリはニコニコ動画の
     // 視聴ページからコンテンツツリーを開いた時と同じもの（流入元の記録用）。
     this._parentVideoLink.setAttribute('href',
-      `//commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+      this._resolveBuiltinUrl('tree',
+        `https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`));
     this._renderCustomMenu();
     this.emit('close');
   }
@@ -4824,6 +4862,38 @@ class RelatedInfoMenu extends BaseViewComponent {
     return RelatedMenuActions.makeContext(this._currentVideoInfo, currentTime);
   }
 
+  _builtinOptions(id){
+    return RelatedMenuOrder.getOption(Config.getValue(RelatedMenuOrder.OPTIONS_KEY),id);
+  }
+  _resolveBuiltinUrl(id,original){
+    const template=this._builtinOptions(id).urlTemplate;
+    if(!template){return original;}
+    const resolved=RelatedMenuActions.resolveUrl(template,this._relatedContext());
+    return resolved.url||null;
+  }
+  _refreshBuiltinLink(id,link){
+    if(!link || !this._currentVideoInfo){return;}
+    const vid=this._currentVideoId,wid=this._currentWatchId;
+    const defaults={
+      twitter:`https://twitter.com/hashtag/${vid}`,
+      tree:`https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`,
+      ad:`https://nicoad.nicovideo.jp/video/publish/${wid}?frontend_id=6&frontend_version=0&zenza_watch`
+    };
+    const url=this._resolveBuiltinUrl(id,defaults[id]);
+    if(url){
+      link.href=url;
+      link.target=this._builtinOptions(id).openMode==='same-tab'?'_self':'_blank';
+      link.removeAttribute('aria-disabled');link.removeAttribute('title');
+    }else{
+      link.removeAttribute('href');
+      link.setAttribute('aria-disabled','true');
+      link.title='リンクに必要な動画・投稿者情報を取得できませんでした';
+    }
+  }
+  _openBuiltinUrl(id,url){
+    return RelatedMenuOrder.openUrl(id,url,this._builtinOptions(id),
+      (...args)=>window.open(...args));
+  }
   _renderCustomMenu() {
     if (!this._customRelatedGroup || !this._customRelatedItems) { return; }
     const links = RelatedMenuActions.getLinks(Config.getValue(RelatedMenuActions.CONFIG_KEY))
@@ -4833,17 +4903,43 @@ class RelatedInfoMenu extends BaseViewComponent {
     const nodes = new Map(this._builtinRelatedItems || []);
     let customCount = 0;
     this._customLinkById.clear();
+    for(const [key,li] of this._builtinRelatedItems||[]){
+      const id=key.slice(8);
+      const element=li.querySelector('.command');
+      const label=this._builtinOptions(id).label;
+      if(element){element.textContent=label||this._builtinOriginalLabels?.get(key)||'';}
+    }
+    const officialMode=this._builtinOptions('official').openMode;
+    if(this._ginzaLink){
+      this._ginzaLink.target=officialMode==='same-tab'?'_self':'_blank';
+    }
+    for(const [id,link] of [['twitter',this._twitterLink],['tree',this._parentVideoLink],['ad',this._uadLink]]){
+      this._refreshBuiltinLink(id,link);
+    }
 
     if (this._currentVideoInfo) {
       for (const item of links) {
         const li = document.createElement('li');
+        if(RelatedMenuActions.isCopy(item)){
+          const resolved=RelatedMenuActions.resolveCopy(item.copyTemplate,context);
+          const button=document.createElement('button');
+          button.type='button';button.className='command customRelatedAction';
+          button.textContent=item.label;button.dataset.command='copy-custom-related-item';
+          button.dataset.param=item.id;button.disabled=resolved.text===null;
+          if(button.disabled){button.title='未取得: '+(resolved.missing||[]).join(', ');}
+          li.dataset.relatedOrderKey='link:'+item.id;li.append(button);
+          this._customLinkById.set(item.id,item);nodes.set('link:'+item.id,li);customCount++;
+          continue;
+        }
         const resolved = RelatedMenuActions.resolveUrl(item.url, context);
         const link = document.createElement(resolved.url ? 'a' : 'span');
         link.className = resolved.url ? 'command customRelatedLink' : 'command customRelatedDisabled';
         link.textContent = item.label;
         if (resolved.url) {
           link.href = resolved.url;
-          link.target = item.openInNewTab ? '_blank' : '_self';
+          link.target = item.openMode==='same-tab'?'_self':
+            item.openMode==='new-tab'||item.openMode==='new-window'?'_blank':
+            item.openInNewTab?'_blank':'_self';
           link.rel = 'noopener noreferrer';
           link.dataset.relatedLinkId = item.id;
           this._customLinkById.set(item.id, item);
@@ -4896,24 +4992,23 @@ class RelatedInfoMenu extends BaseViewComponent {
 
     switch (command) {
       case 'watch-ginza': {
-        // Resolve at the moment of the click, not when videoInfo was loaded.
-        const currentTime=typeof this._relatedContext==='function' ?
-          this._relatedContext().currentTime : 0;
+        const currentTime=this._builtinOptions('official').includePosition===false?
+          0:this._relatedContext().currentTime;
         const officialUrl=OfficialPlayerRoute.makeUrl(this._currentWatchId,currentTime);
         this._ginzaLink.href=officialUrl;
-        window.open(officialUrl, '_blank', 'noopener');
+        this._openBuiltinUrl('official',officialUrl);
         super._onCommand('pause');
-      }
         break;
+      }
       case 'open-uad':
         url = `//nicoad.nicovideo.jp/video/publish/${this._currentWatchId}?frontend_id=6&frontend_version=0&zenza_watch`;
-        window.open(url, '', 'width=428, height=600, toolbar=no, scrollbars=1');
+        this._openBuiltinUrl('ad',url);
         break;
       case 'open-twitter-hash':
-        window.open(this._twitterLink.href);
+        this._openBuiltinUrl('twitter',this._resolveBuiltinUrl('twitter',this._twitterLink.href));
         break;
       case 'open-parent-video':
-        window.open(this._parentVideoLink.href);
+        this._openBuiltinUrl('tree',this._resolveBuiltinUrl('tree',this._parentVideoLink.href));
         break;
       case 'copy-video-watch-url':
         super._onCommand(command, param);
@@ -4922,6 +5017,13 @@ class RelatedInfoMenu extends BaseViewComponent {
       case 'open-original-video':
         super._onCommand('openNow', this._currentVideoId);
         break;
+      case 'copy-custom-related-item': {
+        const item=this._customLinkById.get(param);
+        if(!item || !item.enabled || !RelatedMenuActions.isCopy(item)){break;}
+        const result=RelatedMenuActions.resolveCopy(item.copyTemplate,this._relatedContext());
+        if(result.text!==null){super._onCommand('copy-related-text',result.text);}
+        break;
+      }
       case 'run-custom-related-action':
         RelatedMenuActions.invoke(param, this._relatedContext());
         break;
@@ -5079,8 +5181,8 @@ RelatedInfoMenu._shadow_ = (`
               rel="noopener noreferrer">公式プレイヤーで開く</a>
           </li>
           <li class="uadMenu" data-related-order-key="builtin:ad">
-            <span class="uadLink command"
-              rel="noopener" data-command="open-uad">ニコニ広告で宣伝</span>
+            <a class="uadLink command" target="_blank"
+              rel="noopener noreferrer">ニコニ広告で宣伝</a>
           </li>
           <li class="twitterHashMenu" data-related-order-key="builtin:twitter">
             <a class="twitterHashLink command"

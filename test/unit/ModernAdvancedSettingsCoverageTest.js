@@ -55,8 +55,10 @@ describe('Task318 real source setting inventory',()=>{
     const ignored=featureIds.filter(key=>!model.descriptor(key)&&!internalKeys.has(key));
     assert.deepStrictEqual(missing,[]);
     assert.deepStrictEqual(ignored,[]);
-    assert.strictEqual(ctx.actions.length,125);
-    assert.strictEqual(model.descriptors.filter(d=>d.type==='shortcut').length,125);
+    // Task396 adds the previously absent original-video action, unbound by default.
+    assert.strictEqual(ctx.actions.length,126);
+    assert(ctx.actions.some(a=>a.id==='OPEN_ORIGINAL_VIDEO' && a.defaultKey===0));
+    assert.strictEqual(model.descriptors.filter(d=>d.type==='shortcut').length,126);
     assert.strictEqual(model.descriptors.filter(d=>d.type==='seconds').length,10);
     assert(model.descriptors.length>=195);
     assert.strictEqual(model.descriptors.length,

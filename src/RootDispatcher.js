@@ -5,8 +5,12 @@ import {Clipboard} from '../packages/lib/src/dom/Clipboard';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
 import {CommentPictureInPicture} from '../packages/zenza/src/commentLayer/CommentPictureInPicture';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import {RelatedMenuOrder} from './RelatedMenuOrder';
+import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 //===BEGIN===
 //@require CommentPictureInPicture
+//@require RelatedMenuOrder
+//@require RelatedMenuActions
 const RootDispatcher = (() => {
   let config;
   let player;
@@ -42,6 +46,14 @@ const RootDispatcher = (() => {
       });
     }
 
+    static openRelatedUrl(id,original) {
+      const option=RelatedMenuOrder.getOption(config.getValue(RelatedMenuOrder.OPTIONS_KEY),id);
+      const context=RelatedMenuActions.makeContext(playerState.videoInfo,player.currentTime);
+      const url=option.urlTemplate && ['twitter','tree'].includes(id)?
+        RelatedMenuActions.resolveUrl(option.urlTemplate,context).url:original;
+      return RelatedMenuOrder.openUrl(id,url,option,(...args)=>window.open(...args));
+    }
+
     static execCommand(command, params) {
       let result = {status: 'ok'};
       switch(command) {
@@ -57,9 +69,30 @@ const RootDispatcher = (() => {
         case 'alertHtml':
           PopupMessage.alert(params, true);
           break;
-        case 'copy-video-watch-url':
-          Clipboard.copyText(playerState.videoInfo.watchUrl);
+        case 'copy-related-text': {
+          if(typeof params!=='string' || !params || params.length>655360){break;}
+          const failed=()=>PopupMessage.notify('コピーできませんでした。ブラウザの権限を確認してください');
+          try{
+            Promise.resolve(Clipboard.copyText(params)).then(result=>{
+              if(result===false){failed();}else{PopupMessage.notify('コピーしました');}
+            },failed);
+          }catch(_){failed();}
           break;
+        }
+        case 'copy-video-watch-url': {
+          const info=playerState.videoInfo;
+          if(!info){break;}
+          const opts=RelatedMenuOrder.getOption(config.getValue(RelatedMenuOrder.OPTIONS_KEY),'copy-url');
+          const format=opts.copyFormat||'url';
+          const context={
+            videoId:info.videoId,watchId:info.watchId||info.videoId,
+            videoUrl:info.watchUrl,videoTitle:info.title,
+            currentTime:player?.currentTime||0
+          };
+          const value=RelatedMenuOrder.formatCopy(format,context);
+          if(value){Clipboard.copyText(value);}
+          break;
+        }
         case 'tweet':
           nicoUtil.openTweetWindow(playerState.videoInfo);
           break;
@@ -72,22 +105,31 @@ const RootDispatcher = (() => {
         // こちらは現在再生中の動画のplayerState.videoInfo.videoIdから作る、
         // という参照元が違うだけ）。
         case 'open-uad': {
-          const uadVideoId = playerState.videoInfo && playerState.videoInfo.videoId;
+          const info=playerState.videoInfo;
+          const uadVideoId=info && (info.watchId||info.videoId);
           if (!uadVideoId) { break; }
           const uadUrl = `//nicoad.nicovideo.jp/video/publish/${uadVideoId}?frontend_id=6&frontend_version=0&zenza_watch`;
-          window.open(uadUrl, '', 'width=428, height=600, toolbar=no, scrollbars=1');
+          RootDispatcher.openRelatedUrl('ad',uadUrl);
           break;
         }
         case 'open-twitter-hash': {
           const hashVideoId = playerState.videoInfo && playerState.videoInfo.videoId;
           if (!hashVideoId) { break; }
-          window.open(`https://twitter.com/hashtag/${hashVideoId}`);
+          RootDispatcher.openRelatedUrl('twitter',`https://twitter.com/hashtag/${hashVideoId}`);
           break;
         }
         case 'open-parent-video': {
           const parentVideoId = playerState.videoInfo && playerState.videoInfo.videoId;
           if (!parentVideoId) { break; }
-          window.open(`//commons.nicovideo.jp/works/${parentVideoId}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+          RootDispatcher.openRelatedUrl('tree',`https://commons.nicovideo.jp/works/${parentVideoId}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+          break;
+        }
+        case 'open-original-video': {
+          // Match the related menu's internal openNow route (community/mymemory only).
+          const info=playerState.videoInfo;
+          if(info && (info.isCommunityVideo||info.isMymemory) && info.videoId){
+            player.execCommand('openNow',info.videoId);
+          }
           break;
         }
         // Task 060: 「小」モードの位置・サイズを初期状態に戻す機能

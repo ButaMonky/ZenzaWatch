@@ -37,6 +37,24 @@ class RelatedMenuActions {
     const sample = Object.fromEntries(this.VARIABLES.map(key => [key, 'sample']));
     return !!this.resolveUrl(template, sample).url;
   }
+  static isCopy(item) { return item?.kind==='copy'; }
+  static validateCopyTemplate(template) {
+    if(typeof template!=='string' || !template.trim() || template.length>4096 ||
+      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(template)){return false;}
+    const tokens=template.match(/\{[^{}]*\}/g)||[];
+    return tokens.every(token=>this.VARIABLES.includes(token.slice(1,-1))) &&
+      !/[{}]/.test(template.replace(/\{[^{}]*\}/g,''));
+  }
+  static resolveCopy(template,context={}) {
+    if(!this.validateCopyTemplate(template)){return {text:null,missing:[],invalid:['template']};}
+    const missing=[];
+    const text=template.replace(/\{([^{}]+)\}/g,(_,key)=>{
+      const value=context[key];
+      if(value===undefined || value===null || String(value)===''){missing.push(key);return '';}
+      return String(value);
+    });
+    return {text:missing.length || text.length>16384?null:text,missing};
+  }
   static validateLinks(input) {
     const errors = [];
     if (!Array.isArray(input)) {
@@ -50,9 +68,13 @@ class RelatedMenuActions {
           !this._safeId(item.id) || ids.has(item.id) ||
           typeof item.label !== 'string' || !item.label.trim() ||
           item.label.length > 80 ||
-          !this._validateUrlTemplate(item.url) ||
+          (item.kind!==undefined && !['link','copy'].includes(item.kind)) ||
+          (this.isCopy(item)?!this.validateCopyTemplate(item.copyTemplate):!this._validateUrlTemplate(item.url)) ||
           (item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
           (item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean') ||
+          (item.openMode !== undefined && !['default','same-tab','new-tab','new-window'].includes(item.openMode)) ||
+          (item.popupWidth !== undefined && (!Number.isInteger(item.popupWidth) || item.popupWidth<250 || item.popupWidth>1800)) ||
+          (item.popupHeight !== undefined && (!Number.isInteger(item.popupHeight) || item.popupHeight<250 || item.popupHeight>1800)) ||
           (item.shortcutKey !== undefined &&
             (!Number.isSafeInteger(item.shortcutKey) || item.shortcutKey < 0 ||
             item.shortcutKey >= 90000000))) {
@@ -60,40 +82,63 @@ class RelatedMenuActions {
         return;
       }
       ids.add(item.id);
-      const link = {
+      const link = this.isCopy(item)?{
+        id:item.id,label:item.label.trim(),kind:'copy',copyTemplate:item.copyTemplate,
+        enabled:item.enabled!==false
+      }:{
         id: item.id, label: item.label.trim(), url: item.url,
         enabled: item.enabled !== false,
         openInNewTab: item.openInNewTab !== false
       };
+      if(!this.isCopy(item)){
+        if(item.openMode && item.openMode!=='default'){link.openMode=item.openMode;}
+        if(item.popupWidth!==undefined){link.popupWidth=item.popupWidth;}
+        if(item.popupHeight!==undefined){link.popupHeight=item.popupHeight;}
+      }
       if (item.shortcutKey > 0) { link.shortcutKey = item.shortcutKey; }
       links.push(link);
     });
     return {valid: errors.length === 0, errors, links};
   }
   static getLinks(input) { return this.validateLinks(input).links; }
-  static openShortcutsByIds(input, ids, context, opener) {
+  static openShortcutsByIds(input, ids, context, opener, copier) {
     if (!Array.isArray(ids) || typeof opener !== 'function') { return 0; }
     const selected = new Set(ids);
-    const resolved = this.getLinks(input)
-      .filter(item => item.enabled && selected.has(item.id))
+    const items=this.getLinks(input).filter(item=>item.enabled && selected.has(item.id));
+    const copies=items.filter(item=>this.isCopy(item))
+      .map(item=>this.resolveCopy(item.copyTemplate,context).text).filter(text=>text!==null);
+    let copyCount=0;
+    // One clipboard write avoids last-writer races for a shared shortcut.
+    // Run before a same-tab navigation; rendering never invokes the copier.
+    if(copies.length && typeof copier==='function'){
+      try{
+        const result=copier(copies.join('\n'));
+        if(result && typeof result.catch==='function'){result.catch(()=>{});}
+        copyCount=copies.length;
+      }catch(_){ /* A denied clipboard must not prevent independent links. */ }
+    }
+    const resolved = items.filter(item=>!this.isCopy(item))
       .map(item => ({item, value: this.resolveUrl(item.url, context)}))
       .filter(entry => !!entry.value.url);
     // One browser tab cannot navigate to multiple URLs. Keep the final _self
     // entry in the current tab and open all remaining links separately.
     let currentTabIndex = -1;
     resolved.forEach((entry, i) => {
-      if (!entry.item.openInNewTab) { currentTabIndex = i; }
+      if (entry.item.openMode==='same-tab' ||
+        (!entry.item.openMode && !entry.item.openInNewTab)) { currentTabIndex = i; }
     });
-    const safeOpen = (url, target) => {
-      try { opener(url, target); } catch (_) { /* one failed tab must not block others */ }
+    const safeOpen = (url, target, item) => {
+      const popup=item?.openMode==='new-window' ?
+        'noopener,noreferrer,width='+(item.popupWidth||760)+',height='+(item.popupHeight||650) : undefined;
+      try { opener(url,target,popup); } catch (_) { /* one failed tab must not block others */ }
     };
     resolved.forEach((entry, i) => {
-      if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank'); }
+      if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank',entry.item); }
     });
     if (currentTabIndex >= 0) {
-      safeOpen(resolved[currentTabIndex].value.url, '_self');
+      safeOpen(resolved[currentTabIndex].value.url, '_self',resolved[currentTabIndex].item);
     }
-    return resolved.length;
+    return resolved.length+copyCount;
   }
   static makeContext(videoInfo, currentTime = 0) {
     if (!videoInfo || typeof videoInfo !== 'object') { return Object.freeze({}); }

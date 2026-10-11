@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.229-task391
+// @version        2.7.232-task398
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-11 04:07Z
+// build: 2026-10-11 10:06Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.229-task391';
+    var VER = '2.7.232-task398';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-11 04:07Z';
+    var BUILD = '2026-10-11 10:06Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -1030,6 +1030,8 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'open-twitter-hash'},
 	{id: 'OPEN_PARENT_VIDEO', category: 'その他', label: '親作品・コンテンツツリーを開く',
 		defaultKey: 0, command: 'open-parent-video'},
+	{id: 'OPEN_ORIGINAL_VIDEO', category: 'その他', label: '元動画を開く',
+		defaultKey: 0, command: 'open-original-video'},
 	{id: 'PLAYLIST_SET_COMMONS_TREE', category: 'プレイリスト', label: '親作品・子作品をプレイリストに追加',
 		defaultKey: 0, command: 'playlistSetCommonsTree'},
 	{id: 'COPY_WATCH_URL', category: 'その他', label: '動画URLをコピー',
@@ -2442,6 +2444,24 @@ class RelatedMenuActions {
 		const sample = Object.fromEntries(this.VARIABLES.map(key => [key, 'sample']));
 		return !!this.resolveUrl(template, sample).url;
 	}
+	static isCopy(item) { return item?.kind==='copy'; }
+	static validateCopyTemplate(template) {
+		if(typeof template!=='string' || !template.trim() || template.length>4096 ||
+			/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(template)){return false;}
+		const tokens=template.match(/\{[^{}]*\}/g)||[];
+		return tokens.every(token=>this.VARIABLES.includes(token.slice(1,-1))) &&
+			!/[{}]/.test(template.replace(/\{[^{}]*\}/g,''));
+	}
+	static resolveCopy(template,context={}) {
+		if(!this.validateCopyTemplate(template)){return {text:null,missing:[],invalid:['template']};}
+		const missing=[];
+		const text=template.replace(/\{([^{}]+)\}/g,(_,key)=>{
+			const value=context[key];
+			if(value===undefined || value===null || String(value)===''){missing.push(key);return '';}
+			return String(value);
+		});
+		return {text:missing.length || text.length>16384?null:text,missing};
+	}
 	static validateLinks(input) {
 		const errors = [];
 		if (!Array.isArray(input)) {
@@ -2455,9 +2475,13 @@ class RelatedMenuActions {
 					!this._safeId(item.id) || ids.has(item.id) ||
 					typeof item.label !== 'string' || !item.label.trim() ||
 					item.label.length > 80 ||
-					!this._validateUrlTemplate(item.url) ||
+					(item.kind!==undefined && !['link','copy'].includes(item.kind)) ||
+					(this.isCopy(item)?!this.validateCopyTemplate(item.copyTemplate):!this._validateUrlTemplate(item.url)) ||
 					(item.enabled !== undefined && typeof item.enabled !== 'boolean') ||
 					(item.openInNewTab !== undefined && typeof item.openInNewTab !== 'boolean') ||
+					(item.openMode !== undefined && !['default','same-tab','new-tab','new-window'].includes(item.openMode)) ||
+					(item.popupWidth !== undefined && (!Number.isInteger(item.popupWidth) || item.popupWidth<250 || item.popupWidth>1800)) ||
+					(item.popupHeight !== undefined && (!Number.isInteger(item.popupHeight) || item.popupHeight<250 || item.popupHeight>1800)) ||
 					(item.shortcutKey !== undefined &&
 						(!Number.isSafeInteger(item.shortcutKey) || item.shortcutKey < 0 ||
 						item.shortcutKey >= 90000000))) {
@@ -2465,38 +2489,59 @@ class RelatedMenuActions {
 				return;
 			}
 			ids.add(item.id);
-			const link = {
+			const link = this.isCopy(item)?{
+				id:item.id,label:item.label.trim(),kind:'copy',copyTemplate:item.copyTemplate,
+				enabled:item.enabled!==false
+			}:{
 				id: item.id, label: item.label.trim(), url: item.url,
 				enabled: item.enabled !== false,
 				openInNewTab: item.openInNewTab !== false
 			};
+			if(!this.isCopy(item)){
+				if(item.openMode && item.openMode!=='default'){link.openMode=item.openMode;}
+				if(item.popupWidth!==undefined){link.popupWidth=item.popupWidth;}
+				if(item.popupHeight!==undefined){link.popupHeight=item.popupHeight;}
+			}
 			if (item.shortcutKey > 0) { link.shortcutKey = item.shortcutKey; }
 			links.push(link);
 		});
 		return {valid: errors.length === 0, errors, links};
 	}
 	static getLinks(input) { return this.validateLinks(input).links; }
-	static openShortcutsByIds(input, ids, context, opener) {
+	static openShortcutsByIds(input, ids, context, opener, copier) {
 		if (!Array.isArray(ids) || typeof opener !== 'function') { return 0; }
 		const selected = new Set(ids);
-		const resolved = this.getLinks(input)
-			.filter(item => item.enabled && selected.has(item.id))
+		const items=this.getLinks(input).filter(item=>item.enabled && selected.has(item.id));
+		const copies=items.filter(item=>this.isCopy(item))
+			.map(item=>this.resolveCopy(item.copyTemplate,context).text).filter(text=>text!==null);
+		let copyCount=0;
+		if(copies.length && typeof copier==='function'){
+			try{
+				const result=copier(copies.join('\n'));
+				if(result && typeof result.catch==='function'){result.catch(()=>{});}
+				copyCount=copies.length;
+			}catch(_){ /* A denied clipboard must not prevent independent links. */ }
+		}
+		const resolved = items.filter(item=>!this.isCopy(item))
 			.map(item => ({item, value: this.resolveUrl(item.url, context)}))
 			.filter(entry => !!entry.value.url);
 		let currentTabIndex = -1;
 		resolved.forEach((entry, i) => {
-			if (!entry.item.openInNewTab) { currentTabIndex = i; }
+			if (entry.item.openMode==='same-tab' ||
+				(!entry.item.openMode && !entry.item.openInNewTab)) { currentTabIndex = i; }
 		});
-		const safeOpen = (url, target) => {
-			try { opener(url, target); } catch (_) { /* one failed tab must not block others */ }
+		const safeOpen = (url, target, item) => {
+			const popup=item?.openMode==='new-window' ?
+				'noopener,noreferrer,width='+(item.popupWidth||760)+',height='+(item.popupHeight||650) : undefined;
+			try { opener(url,target,popup); } catch (_) { /* one failed tab must not block others */ }
 		};
 		resolved.forEach((entry, i) => {
-			if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank'); }
+			if (i !== currentTabIndex) { safeOpen(entry.value.url, '_blank',entry.item); }
 		});
 		if (currentTabIndex >= 0) {
-			safeOpen(resolved[currentTabIndex].value.url, '_self');
+			safeOpen(resolved[currentTabIndex].value.url, '_self',resolved[currentTabIndex].item);
 		}
-		return resolved.length;
+		return resolved.length+copyCount;
 	}
 	static makeContext(videoInfo, currentTime = 0) {
 		if (!videoInfo || typeof videoInfo !== 'object') { return Object.freeze({}); }
@@ -2602,6 +2647,95 @@ class RelatedMenuActions {
 class RelatedMenuOrder {
 	static get CONFIG_KEY() { return 'relatedMenu.order'; }
 	static get HIDDEN_KEY() { return 'relatedMenu.hiddenItems'; }
+	static get OPTIONS_KEY() { return 'relatedMenu.builtinOptions'; }
+	static get SHORTCUT_ACTION_IDS() {
+		return Object.freeze({
+			official:'OPEN_GINZA',ad:'OPEN_NICOAD',twitter:'OPEN_TWITTER_HASH',
+			original:'OPEN_ORIGINAL_VIDEO',tree:'OPEN_PARENT_VIDEO',
+			'tree-playlist':'PLAYLIST_SET_COMMONS_TREE','copy-url':'COPY_WATCH_URL'
+		});
+	}
+	static get OPEN_MODES() { return ['default','same-tab','new-tab','new-window']; }
+	static get COPY_FORMATS() { return ['url','id','position','title-url','markdown']; }
+	static formatCopy(format,context={}) {
+		const id=String(context.videoId||context.watchId||'');
+		const watchId=String(context.watchId||id);
+		const url=String(context.videoUrl||(watchId?'https://www.nicovideo.jp/watch/'+watchId:''));
+		const title=String(context.videoTitle||'').trim();
+		if(format==='id'){return id;}
+		if(format==='position'){
+			const seconds=Number(context.currentTime);
+			if(!url || !Number.isFinite(seconds) || seconds<=0){return url;}
+			const separator=url.includes('?')?'&':'?';
+			return url+separator+'from='+Math.floor(seconds);
+		}
+		if(format==='title-url'){return title?title+'\n'+url:url;}
+		if(format==='markdown'){
+			const safeTitle=(title||id).replace(/[\[\]\\]/g,'\\$&');
+			return '['+safeTitle+']('+url+')';
+		}
+		return url;
+	}
+	static openUrl(id,url,option={},opener) {
+		if(!url || typeof opener!=='function'){return;}
+		const mode=option.openMode||'default';
+		if(mode==='same-tab'){return opener(url,'_self');}
+		if(mode==='new-tab'){return opener(url,'_blank','noopener,noreferrer');}
+		if(mode==='new-window'){
+			const dimension=(key,fallback)=>Number.isInteger(option[key]) &&
+				option[key]>=250 && option[key]<=1800?option[key]:fallback;
+			const width=dimension('popupWidth',id==='ad'?428:760);
+			const height=dimension('popupHeight',id==='ad'?600:650);
+			return opener(url,'_blank','noopener,noreferrer,width='+width+
+				',height='+height+',scrollbars=yes');
+		}
+		if(id==='ad'){return opener(url,'','width=428, height=600, toolbar=no, scrollbars=1');}
+		if(id==='official'){return opener(url,'_blank','noopener');}
+		return opener(url);
+	}
+	static getOption(options,id) {
+		return options && typeof options==='object' && !Array.isArray(options) &&
+			options[id] && typeof options[id]==='object' && !Array.isArray(options[id]) ?
+			options[id] : {};
+	}
+	static validateOptions(value) {
+		if (!value || typeof value!=='object' || Array.isArray(value)) {return false;}
+		const allowedIds=new Set(this.STANDARD.map(item=>item.id));
+		const allowedFields=new Set(['label','openMode','popupWidth','popupHeight',
+			'copyFormat','urlTemplate','includePosition']);
+		for(const [id,option] of Object.entries(value)){
+			if(!allowedIds.has(id) || !option || typeof option!=='object' || Array.isArray(option) ||
+				Object.keys(option).some(k=>!allowedFields.has(k))){return false;}
+			if(option.label!==undefined && (typeof option.label!=='string' ||
+				!option.label.trim() || option.label.trim().length>80)){return false;}
+			if(option.openMode!==undefined && !this.OPEN_MODES.includes(option.openMode)){return false;}
+			for(const size of ['popupWidth','popupHeight']){
+				if(option[size]!==undefined && (!Number.isInteger(option[size]) ||
+					option[size]<250 || option[size]>1800)){return false;}
+			}
+			if(option.includePosition!==undefined && typeof option.includePosition!=='boolean'){return false;}
+			if(option.copyFormat!==undefined && (id!=='copy-url' ||
+				!this.COPY_FORMATS.includes(option.copyFormat))){return false;}
+			if(option.urlTemplate!==undefined){
+				if(!['twitter','tree'].includes(id) || typeof option.urlTemplate!=='string' ||
+					option.urlTemplate.length>2048){return false;}
+				if(option.urlTemplate){
+					if(!/^https:\/\//i.test(option.urlTemplate) || /[\r\n\t]/.test(option.urlTemplate)){return false;}
+					const vars=new Set(['videoId','watchId','videoUrl','videoTitle',
+						'uploaderUserId','uploaderChannelId','uploaderName','currentTime']);
+					const tokens=option.urlTemplate.match(/\{([^{}]*)\}/g)||[];
+					if(tokens.some(token=>!vars.has(token.slice(1,-1))) ||
+						/[{}]/.test(option.urlTemplate.replace(/\{[^{}]*\}/g,''))){return false;}
+					try{
+						const sample=option.urlTemplate.replace(/\{[^{}]*\}/g,'sample');
+						const url=new URL(sample);
+						if(url.protocol!=='https:' || !url.hostname || url.username || url.password){return false;}
+					}catch(_){return false;}
+				}
+			}
+		}
+		return true;
+	}
 	static get STANDARD() {
 		return [
 			{id:'official',label:'公式プレイヤーで開く'},
@@ -2757,9 +2891,9 @@ class UiVisibilityRegistry {
 			{key:'ui.bar.quality',scope:'bar',label:'画質・動画サーバー選択',icon:'画',selector:'.videoServerTypeMenu'},
 			{key:'ui.bar.screenMode',scope:'bar',label:'画面サイズ・モード選択',icon:'⛶',selector:'.screenModeMenu'},
 			{key:'ui.bar.pin',scope:'bar',label:'操作バーの表示モード選択',icon:'📌',selector:'.fullscreenControlBarModeMenu'},
-			{key:'ui.bar.fullscreen',scope:'bar',label:'フルスクリーン切替ボタン',icon:'fullscreen-corners',selector:'.fullscreenSwitch',
+			{key:'ui.bar.fullscreen',scope:'bar',label:'フルスクリーン切替ボタン',icon:'⛶',selector:'.fullscreenSwitch',
 				description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
-			{key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'settings-gear',selector:'.settingPanelSwitch',
+			{key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
 				description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
 			{key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
 			{key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
@@ -2774,7 +2908,7 @@ class UiVisibilityRegistry {
 			{key:'ui.header.tags',scope:'header',label:'上部のタグ一覧',icon:'#',selector:'.videoTagsContainer.videoHeader'},
 			{key:'ui.header.metadata',scope:'header',label:'上部の動画情報',icon:'ℹ',selector:'.videoMetaInfoContainer'},
 			{key:'ui.header.series',scope:'header',label:'上部のシリーズ画像',icon:'▧',selector:'.series-thumbnail-cover'},
-			{key:'ui.header.search',scope:'header',label:'動画検索ウィンドウ',icon:'search-magnifier',selector:'.zenzaVideoSearchPanel',
+			{key:'ui.header.search',scope:'header',label:'動画検索ウィンドウ',icon:'⌕',selector:'.zenzaVideoSearchPanel',
 				description:'上部の動画検索欄・候補一覧を隠します。検索文字は削除されません。ニコニコのマイページ（/my）の上級者設定から再表示できます。'}
 		].map(item=>Object.freeze(item)));
 	}
@@ -2854,7 +2988,10 @@ class UiVisibilityRegistry {
 		if(scope!=='related' && win?.addEventListener &&
 			typeof config.getStorageKey==='function' &&
 			typeof config.refresh==='function') {
-			const sharedKeys=new Set(scope==='bar'?this.SHARED_SETTINGS.map(([key])=>key):[]);
+			const shortcutKeys=Object.keys(config.default||{}).filter(key=>
+				/^KEY_|^PARAM_CUSTOM_SEEK_\d+$/.test(key));
+			const sharedKeys=new Set(scope==='bar'?
+				[...this.SHARED_SETTINGS.map(([key])=>key),...shortcutKeys]:[]);
 			const ownKeys=new Set([...items.map(item=>item.key),...sharedKeys]);
 			const byStorageKey=new Map([...ownKeys].map(key=>[config.getStorageKey(key),key]));
 			const sync=(key,removed=false)=>{
@@ -2870,7 +3007,11 @@ class UiVisibilityRegistry {
 							if(disposed){return;}
 							if(!sharedKeys.has(key)){api.apply(key);return;}
 							const value=config.getValue(key);
-							if(typeof value!=='boolean' || value===previous){return;}
+							const numeric=shortcutKeys.includes(key);
+							const valid=numeric?(typeof value==='number' && Number.isFinite(value) &&
+								(!key.startsWith('KEY_') || (Number.isSafeInteger(value)&&value>=0))):
+								typeof value==='boolean';
+							if(!valid || value===previous){return;}
 							config.emit?.('change',new Map([[key,value]]));
 							const emit=config.emitAsync?.bind(config)||config.emit?.bind(config);
 							emit?.('update',key,value);
@@ -2959,6 +3100,7 @@ const Config = (() => {
 		'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
 		'relatedMenu.order': [], // Empty = original seven items, then links and registered actions
 		'relatedMenu.hiddenItems': [], // Per-row display visibility, without deleting actions
+		'relatedMenu.builtinOptions': {}, // Optional labels/open modes/copy format for standard items
 		forceEconomy: false, // 動画を強制的にエコノミーモードで開く(HoverMenu.js/initializer.jsが参照)
 		enableFilter: true,
 		wordFilter: '',
@@ -3136,6 +3278,7 @@ const Config = (() => {
 				if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
 				if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
 				if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }
+				if (key === RelatedMenuOrder.OPTIONS_KEY) { return RelatedMenuOrder.validateOptions(value); }
 				if (UiVisibilityRegistry.isVisibilityKey(key)) { return typeof value === 'boolean'; }
 				if (key === 'screenshot.filenameTemplate') { return ScreenshotFileName.validateTemplate(value); }
 				if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
@@ -33414,6 +33557,7 @@ const LikeApi = {
 // already required
 // already required
 // already required
+// already required
 const OfficialPlayerRoute = Object.freeze({
 	PARAM: 'zenza_official',
 	makeUrl(watchId, currentTime = 0) {
@@ -35650,9 +35794,14 @@ class NicoVideoPlayerDialog extends Emitter {
 			case 'reload':
 				this.reload({currentTime: this.currentTime});
 				break;
-			case 'openGinza':
-				window.open(OfficialPlayerRoute.makeUrl(this._watchId,this.currentTime), '_blank', 'noopener');
+			case 'openGinza': {
+				const option=RelatedMenuOrder.getOption(
+					this._playerConfig.getValue(RelatedMenuOrder.OPTIONS_KEY),'official');
+				const time=option.includePosition===false?0:this.currentTime;
+				const url=OfficialPlayerRoute.makeUrl(this._watchId,time);
+				RelatedMenuOrder.openUrl('official',url,option,(...args)=>window.open(...args));
 				break;
+			}
 			case 'reloadComment':
 				this.reloadComment(param);
 				break;
@@ -35815,8 +35964,9 @@ class NicoVideoPlayerDialog extends Emitter {
 				const context=RelatedMenuActions.makeContext(this._state.videoInfo,this.currentTime);
 				RelatedMenuActions.openShortcutsByIds(
 					this._playerConfig.getValue(RelatedMenuActions.CONFIG_KEY),param,context,
-					(url,target) => window.open(url,target,
-						target === '_blank' ? 'noopener,noreferrer' : undefined)
+					(url,target,features) => window.open(url,target,
+						features || (target === '_blank' ? 'noopener,noreferrer' : undefined)),
+					text=>this.execCommand('copy-related-text',text)
 				);
 				break;
 			}
@@ -38781,6 +38931,8 @@ const CommentPictureInPicture = (() => {
 	global.debug.commentPictureInPicture = api;
 	return api;
 })();
+// already required
+// already required
 const RootDispatcher = (() => {
 	let config;
 	let player;
@@ -38814,6 +38966,13 @@ const RootDispatcher = (() => {
 				PopupMessage.alert(`コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
 			});
 		}
+		static openRelatedUrl(id,original) {
+			const option=RelatedMenuOrder.getOption(config.getValue(RelatedMenuOrder.OPTIONS_KEY),id);
+			const context=RelatedMenuActions.makeContext(playerState.videoInfo,player.currentTime);
+			const url=option.urlTemplate && ['twitter','tree'].includes(id)?
+				RelatedMenuActions.resolveUrl(option.urlTemplate,context).url:original;
+			return RelatedMenuOrder.openUrl(id,url,option,(...args)=>window.open(...args));
+		}
 		static execCommand(command, params) {
 			let result = {status: 'ok'};
 			switch(command) {
@@ -38829,29 +38988,58 @@ const RootDispatcher = (() => {
 				case 'alertHtml':
 					PopupMessage.alert(params, true);
 					break;
-				case 'copy-video-watch-url':
-					Clipboard.copyText(playerState.videoInfo.watchUrl);
+				case 'copy-related-text': {
+					if(typeof params!=='string' || !params || params.length>655360){break;}
+					const failed=()=>PopupMessage.notify('コピーできませんでした。ブラウザの権限を確認してください');
+					try{
+						Promise.resolve(Clipboard.copyText(params)).then(result=>{
+							if(result===false){failed();}else{PopupMessage.notify('コピーしました');}
+						},failed);
+					}catch(_){failed();}
 					break;
+				}
+				case 'copy-video-watch-url': {
+					const info=playerState.videoInfo;
+					if(!info){break;}
+					const opts=RelatedMenuOrder.getOption(config.getValue(RelatedMenuOrder.OPTIONS_KEY),'copy-url');
+					const format=opts.copyFormat||'url';
+					const context={
+						videoId:info.videoId,watchId:info.watchId||info.videoId,
+						videoUrl:info.watchUrl,videoTitle:info.title,
+						currentTime:player?.currentTime||0
+					};
+					const value=RelatedMenuOrder.formatCopy(format,context);
+					if(value){Clipboard.copyText(value);}
+					break;
+				}
 				case 'tweet':
 					nicoUtil.openTweetWindow(playerState.videoInfo);
 					break;
 				case 'open-uad': {
-					const uadVideoId = playerState.videoInfo && playerState.videoInfo.videoId;
+					const info=playerState.videoInfo;
+					const uadVideoId=info && (info.watchId||info.videoId);
 					if (!uadVideoId) { break; }
 					const uadUrl = `//nicoad.nicovideo.jp/video/publish/${uadVideoId}?frontend_id=6&frontend_version=0&zenza_watch`;
-					window.open(uadUrl, '', 'width=428, height=600, toolbar=no, scrollbars=1');
+					RootDispatcher.openRelatedUrl('ad',uadUrl);
 					break;
 				}
 				case 'open-twitter-hash': {
 					const hashVideoId = playerState.videoInfo && playerState.videoInfo.videoId;
 					if (!hashVideoId) { break; }
-					window.open(`https://twitter.com/hashtag/${hashVideoId}`);
+					RootDispatcher.openRelatedUrl('twitter',`https://twitter.com/hashtag/${hashVideoId}`);
 					break;
 				}
 				case 'open-parent-video': {
 					const parentVideoId = playerState.videoInfo && playerState.videoInfo.videoId;
 					if (!parentVideoId) { break; }
-					window.open(`//commons.nicovideo.jp/works/${parentVideoId}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+					RootDispatcher.openRelatedUrl('tree',`https://commons.nicovideo.jp/works/${parentVideoId}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+					break;
+				}
+				case 'open-original-video': {
+					const info=playerState.videoInfo;
+					if(info && (info.isCommunityVideo||info.isMymemory) && info.videoId){
+						player.execCommand('openNow',info.videoId);
+					}
 					break;
 				}
 				case 'resetSmallModePosition': {
@@ -45135,9 +45323,10 @@ class RelatedInfoMenu extends BaseViewComponent {
 		Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
 		Config.onkey(RelatedMenuOrder.CONFIG_KEY, () => this._renderCustomMenu());
 		Config.onkey(RelatedMenuOrder.HIDDEN_KEY, () => this._renderCustomMenu());
+		Config.onkey(RelatedMenuOrder.OPTIONS_KEY, () => this._renderCustomMenu());
 		this._relatedStorageKeys=[
 			RelatedMenuActions.CONFIG_KEY,RelatedMenuOrder.CONFIG_KEY,
-			RelatedMenuOrder.HIDDEN_KEY,'ui.relatedMenu'
+			RelatedMenuOrder.HIDDEN_KEY,RelatedMenuOrder.OPTIONS_KEY,'ui.relatedMenu'
 		];
 		if(typeof Config.getStorageKey==='function' && typeof Config.refresh==='function'){
 			this._onRelatedStorage=event=>{
@@ -45187,24 +45376,53 @@ class RelatedInfoMenu extends BaseViewComponent {
 		this._ginzaLink.addEventListener('click', e => {
 			if(!this._currentWatchId){e.preventDefault();return;}
 			this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
-				this._currentWatchId,this._relatedContext().currentTime);
+				this._currentWatchId,this._builtinOptions('official').includePosition===false?
+					0:this._relatedContext().currentTime);
+			const options=this._builtinOptions('official');
+			if(options.openMode&&options.openMode!=='default' && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+				(!Number.isInteger(e.button)||e.button===0)){
+				e.preventDefault();
+				this._openBuiltinUrl('official',this._ginzaLink.href);
+			}
 			this._onBodyClick();
 			super._onCommand('pause');
 		});
 		this._originalLink = shadow.querySelector('.originalLink');
 		this._twitterLink = shadow.querySelector('.twitterHashLink');
 		this._parentVideoLink = shadow.querySelector('.parentVideoLink');
+		this._uadLink = shadow.querySelector('.uadLink');
+		for(const [id,link] of [['twitter',this._twitterLink],['tree',this._parentVideoLink],['ad',this._uadLink]]){
+			if(!link){continue;}
+			link.removeAttribute('data-command');
+			link.rel='noopener noreferrer';
+			const refresh=()=>this._refreshBuiltinLink(id,link);
+			link.addEventListener('auxclick',refresh);
+			link.addEventListener('contextmenu',refresh);
+			link.addEventListener('click',e=>{
+				refresh();
+				if(!link.hasAttribute('href')){e.preventDefault();return;}
+				const modified=e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button>0;
+				const mode=this._builtinOptions(id).openMode||'default';
+				if(!modified && (mode==='new-window'||(id==='ad'&&mode==='default'))){
+					e.preventDefault();this._openBuiltinUrl(id,link.href);
+				}
+				this._onBodyClick();
+			});
+		}
 		this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
 		this._customRelatedItems = shadow.querySelector('.customRelatedItems');
 		this._builtinRelatedItems = new Map([...shadow.querySelectorAll(
 			'.relatedMenuItems > li[data-related-order-key]')].map(li=>[
 			li.dataset.relatedOrderKey, li]));
+		this._builtinOriginalLabels=new Map([...this._builtinRelatedItems].map(([key,li])=>
+			[key,li.querySelector('.command')?.textContent||'']));
 		this._customLinkById = new Map();
 		this._elm.summary.addEventListener('click', () => {
 			this._renderCustomMenu();
 			if (this._currentWatchId) {
 				this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
-					this._currentWatchId, this._relatedContext().currentTime);
+					this._currentWatchId, this._builtinOptions('official').includePosition===false?
+						0:this._relatedContext().currentTime);
 			}
 		});
 		this._visibility=UiVisibilityRegistry.connect(Config,this._view,'related',{
@@ -45223,6 +45441,11 @@ class RelatedInfoMenu extends BaseViewComponent {
 				return;
 			}
 			link.href = result.url;
+			if(item.openMode==='new-window' && !e.ctrlKey && !e.metaKey && !e.shiftKey){
+				e.preventDefault();
+				const features='noopener,noreferrer,width='+(item.popupWidth||760)+',height='+(item.popupHeight||650);
+				window.open(result.url,'_blank',features);
+			}
 			shadow.open = false;
 			this.emit('close');
 		});
@@ -45251,15 +45474,49 @@ class RelatedInfoMenu extends BaseViewComponent {
 		const wid = this._currentWatchId;
 		this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid));
 		this._originalLink.setAttribute('href', `//www.nicovideo.jp/watch/${vid}`);
-		this._twitterLink.setAttribute('href', `https://twitter.com/hashtag/${vid}`);
+		this._twitterLink.setAttribute('href',
+			this._resolveBuiltinUrl('twitter',`https://twitter.com/hashtag/${vid}`));
 		this._parentVideoLink.setAttribute('href',
-			`//commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`);
+			this._resolveBuiltinUrl('tree',
+				`https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`));
 		this._renderCustomMenu();
 		this.emit('close');
 	}
 	_relatedContext() {
 		const currentTime = ZenzaWatch.debug?.videoControlBar?.player?.currentTime;
 		return RelatedMenuActions.makeContext(this._currentVideoInfo, currentTime);
+	}
+	_builtinOptions(id){
+		return RelatedMenuOrder.getOption(Config.getValue(RelatedMenuOrder.OPTIONS_KEY),id);
+	}
+	_resolveBuiltinUrl(id,original){
+		const template=this._builtinOptions(id).urlTemplate;
+		if(!template){return original;}
+		const resolved=RelatedMenuActions.resolveUrl(template,this._relatedContext());
+		return resolved.url||null;
+	}
+	_refreshBuiltinLink(id,link){
+		if(!link || !this._currentVideoInfo){return;}
+		const vid=this._currentVideoId,wid=this._currentWatchId;
+		const defaults={
+			twitter:`https://twitter.com/hashtag/${vid}`,
+			tree:`https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`,
+			ad:`https://nicoad.nicovideo.jp/video/publish/${wid}?frontend_id=6&frontend_version=0&zenza_watch`
+		};
+		const url=this._resolveBuiltinUrl(id,defaults[id]);
+		if(url){
+			link.href=url;
+			link.target=this._builtinOptions(id).openMode==='same-tab'?'_self':'_blank';
+			link.removeAttribute('aria-disabled');link.removeAttribute('title');
+		}else{
+			link.removeAttribute('href');
+			link.setAttribute('aria-disabled','true');
+			link.title='リンクに必要な動画・投稿者情報を取得できませんでした';
+		}
+	}
+	_openBuiltinUrl(id,url){
+		return RelatedMenuOrder.openUrl(id,url,this._builtinOptions(id),
+			(...args)=>window.open(...args));
 	}
 	_renderCustomMenu() {
 		if (!this._customRelatedGroup || !this._customRelatedItems) { return; }
@@ -45270,16 +45527,42 @@ class RelatedInfoMenu extends BaseViewComponent {
 		const nodes = new Map(this._builtinRelatedItems || []);
 		let customCount = 0;
 		this._customLinkById.clear();
+		for(const [key,li] of this._builtinRelatedItems||[]){
+			const id=key.slice(8);
+			const element=li.querySelector('.command');
+			const label=this._builtinOptions(id).label;
+			if(element){element.textContent=label||this._builtinOriginalLabels?.get(key)||'';}
+		}
+		const officialMode=this._builtinOptions('official').openMode;
+		if(this._ginzaLink){
+			this._ginzaLink.target=officialMode==='same-tab'?'_self':'_blank';
+		}
+		for(const [id,link] of [['twitter',this._twitterLink],['tree',this._parentVideoLink],['ad',this._uadLink]]){
+			this._refreshBuiltinLink(id,link);
+		}
 		if (this._currentVideoInfo) {
 			for (const item of links) {
 				const li = document.createElement('li');
+				if(RelatedMenuActions.isCopy(item)){
+					const resolved=RelatedMenuActions.resolveCopy(item.copyTemplate,context);
+					const button=document.createElement('button');
+					button.type='button';button.className='command customRelatedAction';
+					button.textContent=item.label;button.dataset.command='copy-custom-related-item';
+					button.dataset.param=item.id;button.disabled=resolved.text===null;
+					if(button.disabled){button.title='未取得: '+(resolved.missing||[]).join(', ');}
+					li.dataset.relatedOrderKey='link:'+item.id;li.append(button);
+					this._customLinkById.set(item.id,item);nodes.set('link:'+item.id,li);customCount++;
+					continue;
+				}
 				const resolved = RelatedMenuActions.resolveUrl(item.url, context);
 				const link = document.createElement(resolved.url ? 'a' : 'span');
 				link.className = resolved.url ? 'command customRelatedLink' : 'command customRelatedDisabled';
 				link.textContent = item.label;
 				if (resolved.url) {
 					link.href = resolved.url;
-					link.target = item.openInNewTab ? '_blank' : '_self';
+					link.target = item.openMode==='same-tab'?'_self':
+						item.openMode==='new-tab'||item.openMode==='new-window'?'_blank':
+						item.openInNewTab?'_blank':'_self';
 					link.rel = 'noopener noreferrer';
 					link.dataset.relatedLinkId = item.id;
 					this._customLinkById.set(item.id, item);
@@ -45326,23 +45609,23 @@ class RelatedInfoMenu extends BaseViewComponent {
 		shadow.open = false;
 		switch (command) {
 			case 'watch-ginza': {
-				const currentTime=typeof this._relatedContext==='function' ?
-					this._relatedContext().currentTime : 0;
+				const currentTime=this._builtinOptions('official').includePosition===false?
+					0:this._relatedContext().currentTime;
 				const officialUrl=OfficialPlayerRoute.makeUrl(this._currentWatchId,currentTime);
 				this._ginzaLink.href=officialUrl;
-				window.open(officialUrl, '_blank', 'noopener');
+				this._openBuiltinUrl('official',officialUrl);
 				super._onCommand('pause');
-			}
 				break;
+			}
 			case 'open-uad':
 				url = `//nicoad.nicovideo.jp/video/publish/${this._currentWatchId}?frontend_id=6&frontend_version=0&zenza_watch`;
-				window.open(url, '', 'width=428, height=600, toolbar=no, scrollbars=1');
+				this._openBuiltinUrl('ad',url);
 				break;
 			case 'open-twitter-hash':
-				window.open(this._twitterLink.href);
+				this._openBuiltinUrl('twitter',this._resolveBuiltinUrl('twitter',this._twitterLink.href));
 				break;
 			case 'open-parent-video':
-				window.open(this._parentVideoLink.href);
+				this._openBuiltinUrl('tree',this._resolveBuiltinUrl('tree',this._parentVideoLink.href));
 				break;
 			case 'copy-video-watch-url':
 				super._onCommand(command, param);
@@ -45351,6 +45634,13 @@ class RelatedInfoMenu extends BaseViewComponent {
 			case 'open-original-video':
 				super._onCommand('openNow', this._currentVideoId);
 				break;
+			case 'copy-custom-related-item': {
+				const item=this._customLinkById.get(param);
+				if(!item || !item.enabled || !RelatedMenuActions.isCopy(item)){break;}
+				const result=RelatedMenuActions.resolveCopy(item.copyTemplate,this._relatedContext());
+				if(result.text!==null){super._onCommand('copy-related-text',result.text);}
+				break;
+			}
 			case 'run-custom-related-action':
 				RelatedMenuActions.invoke(param, this._relatedContext());
 				break;
@@ -45487,8 +45777,8 @@ RelatedInfoMenu._shadow_ = (`
 							rel="noopener noreferrer">公式プレイヤーで開く</a>
 					</li>
 					<li class="uadMenu" data-related-order-key="builtin:ad">
-						<span class="uadLink command"
-							rel="noopener" data-command="open-uad">ニコニ広告で宣伝</span>
+						<a class="uadLink command" target="_blank"
+							rel="noopener noreferrer">ニコニ広告で宣伝</a>
 					</li>
 					<li class="twitterHashMenu" data-related-order-key="builtin:twitter">
 						<a class="twitterHashLink command"

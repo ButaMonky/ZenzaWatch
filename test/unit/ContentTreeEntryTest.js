@@ -56,6 +56,8 @@ function menu() {
       emit() {}
     }
   });
+  context.Config={getValue:()=>({})};
+  context.RelatedMenuOrder=loadClass('src/RelatedMenuOrder.js','RelatedMenuOrder',context);
   run(beginSection('packages/zenza/src/menu/OfficialPlayerRoute.js')+
     ';globalThis.OfficialPlayerRoute=OfficialPlayerRoute;',context);
   const Menu = loadClass('src/VideoInfoPanel.js', 'RelatedInfoMenu', context);

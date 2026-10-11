@@ -21,6 +21,8 @@ class RelatedMenuSettings {
     // global draft. The bottom Save is the only operation that writes Config.
     this.embedded = embedded === true;
     this.onDraftChange = typeof onDraftChange === 'function' ? onDraftChange : null;
+    this.getDraftShortcutValue=null;
+    this.getDraftShortcutConflicts=null;
     this._recordCleanup = null;
     this.externalChanged = false;
     this.message = '';
@@ -86,6 +88,8 @@ class RelatedMenuSettings {
       '.zenzaRelatedLinksEditor .rl-fields label { display:grid; gap:4px; min-width:0; }',
       '.zenzaRelatedLinksEditor .rl-fields label.rl-full { grid-column:1 / -1; }',
       '.zenzaRelatedLinksEditor .rl-fields input[type=text] { width:100%; box-sizing:border-box; min-width:0; padding:6px 8px; }',
+      '.zenzaRelatedLinksEditor .rl-flags select,.zenzaRelatedLinksEditor .rl-flags input[type=number] { max-width:190px; padding:5px; background:#101927; color:#edf4ff; border:1px solid #445a71; }',
+      '.zenzaRelatedLinksEditor .rl-variables small { flex:1 0 100%; }',
       '.zenzaRelatedLinksEditor .rl-flags { display:flex; gap:18px; flex-wrap:wrap; margin:10px 0; }',
       '.zenzaRelatedLinksEditor .rl-flags label { display:inline-flex; align-items:center; gap:5px; }',
       '.zenzaRelatedLinksEditor .rl-variables { display:flex; flex-wrap:wrap; gap:5px; margin:5px 0; }',
@@ -135,6 +139,10 @@ class RelatedMenuSettings {
     if (typeof item.label !== 'string' || !item.label.trim() || item.label.length > 80) {
       return '表示名は1～80文字で入力してください。';
     }
+    if(this.actions.isCopy(item)){
+      return this.actions.validateLinks([item]).valid?'':
+        'コピー内容を入力してください（4096文字以内・既知の変数のみ使用可能）。';
+    }
     if (typeof item.url !== 'string' || !/^https?:\/\//.test(item.url) ||
       item.url.length > 2048) {
       return 'URLはHTTP(S)の絶対URL（最大2048文字）にしてください。';
@@ -183,7 +191,7 @@ class RelatedMenuSettings {
         videoTitle:'動画タイトル',uploaderUserId:'投稿者ID',uploaderChannelId:'チャンネルID',
         uploaderName:'投稿者名',currentTime:'再生位置（秒）'};
       const variableButtons = this.actions.VARIABLES.map(name =>
-        '<button type="button" data-rl-insert="'+name+'" data-rl-index="'+index+'">'+
+        '<button type="button" data-rl-insert="'+name+'" data-rl-index="'+index+'" title="'+E(names[name]||name)+'をURLに挿入">'+
         E(names[name] || name)+' <code>{'+name+'}</code></button>'
       ).join('');
       const rowKey=this._rowKey(item,index);
@@ -207,17 +215,27 @@ class RelatedMenuSettings {
         '<div class="rl-fields">' +
         field('id','ID（リンク識別子）','maxlength="64"')+
         field('label','表示名','maxlength="80"')+
-        '<label class="rl-full">URLテンプレート<input type="text" data-rl-field="url" maxlength="2048" value="'+E(obj.url)+'" placeholder="https://example.com/watch/{videoId}"></label>' +
+        '<label class="rl-full">項目の動作<select data-rl-field="kind"><option value="link" '+(obj.kind!=='copy'?'selected':'')+'>リンクを開く</option><option value="copy" '+(obj.kind==='copy'?'selected':'')+'>テキストをコピー</option></select></label>'+
+        '<label class="rl-full" data-rl-copy-fields>コピー内容のひな形<select data-rl-copy-preset><option value="">選択して挿入</option><option value="id">動画ID</option><option value="url">動画URL</option><option value="title">動画タイトル</option><option value="title-url">タイトル＋URL</option></select></label>'+
+        '<label class="rl-full" data-rl-copy-fields>コピーするテキスト<textarea data-rl-field="copyTemplate" maxlength="4096" rows="4">'+E(obj.copyTemplate||'{videoId}')+'</textarea><small>変数を組み合わせたり、改行や任意の文字を追加できます。</small></label>'+
+        '<label class="rl-full" data-rl-link-fields>URLテンプレート<input type="text" data-rl-field="url" maxlength="2048" value="'+E(obj.url)+'" placeholder="https://example.com/watch/{videoId}"></label>' +
         '</div><div class="rl-flags">' +
         '<label><input type="checkbox" data-rl-field="enabled" '+(obj.enabled!==false?'checked':'')+'> 有効にする</label>' +
-        '<label><input type="checkbox" data-rl-field="openInNewTab" '+(obj.openInNewTab!==false?'checked':'')+'> 新しいタブで開く</label></div>' +
+        '<label><input type="checkbox" data-rl-field="openInNewTab" '+(obj.openInNewTab!==false?'checked':'')+'> 旧設定：新しいタブ</label>' +
+        '<label>開き方 <select data-rl-field="openMode">'+
+        [['default','旧設定どおり'],['same-tab','同じタブ'],['new-tab','新しいタブ'],['new-window','新しいウィンドウを要求']]
+        .map(([val,label])=>'<option value="'+val+'" '+((obj.openMode||'default')===val?'selected':'')+'>'+label+'</option>').join('')+'</select></label>' +
+        '<label>ウィンドウ横幅 <input type="number" data-rl-field="popupWidth" min="250" max="1800" value="'+E(obj.popupWidth||760)+'"></label>' +
+        '<label>高さ <input type="number" data-rl-field="popupHeight" min="250" max="1800" value="'+E(obj.popupHeight||650)+'"></label></div>' +
         '<div class="rl-shortcut-editor"><span>ショートカット: <strong data-rl-key-text>'+E(this._formatShortcut(obj.shortcutKey))+'</strong></span>' +
         '<button type="button" data-rl-record="'+index+'">変更</button>' +
         '<button type="button" data-rl-key-clear="'+index+'">解除</button>' +
         '<span class="rl-shortcut-warning" data-rl-shortcut-warning></span></div>' +
         '<button type="button" class="rl-variables-toggle" data-rl-variables-toggle="'+index+'" aria-expanded="'+(variablesShown?'true':'false')+'">'+
         '｛ ｝ 変数を挿入 '+(variablesShown?'▴':'▾')+'</button>' +
-        '<div class="rl-variables" data-rl-variables-panel '+(variablesShown?'':'hidden')+'>'+variableButtons+'</div>' +
+        '<div class="rl-variables" data-rl-variables-panel '+(variablesShown?'':'hidden')+'>'+variableButtons+
+        '<small class="rl-help">使える8種類の変数は、動画ID・視聴ID・動画URL・タイトル・ユーザーID・チャンネルID・投稿者名・現在時刻（秒）です。' +
+        'クリックするとURLのカーソル位置に挿入します。取得できない値が必要なリンクは無効になります。</small></div>' +
         '<div class="rl-help">URLプレビュー（サンプル値）</div><code class="rl-preview" data-rl-preview></code>' +
         '<p class="rl-no-owner" data-rl-no-owner></p>' +
         '<p class="rl-error" data-rl-error role="status"></p>' +
@@ -226,11 +244,13 @@ class RelatedMenuSettings {
     this.container.innerHTML =
       '<section class="zenzaRelatedLinksEditor" aria-label="関連メニュー カスタムリンク編集">' +
       '<h3>関連メニュー › カスタムリンク</h3>' +
-      '<p class="rl-help">動画情報パネルと動画上部の関連メニューに表示するリンクです。' +
-      '外部Userscriptで登録したアクションはここでは編集できません。</p>' +
+      '<p class="rl-help">カスタムリンクの詳細編集です。URLに {videoId} のような変数を入れると動画ごとに自動で置き換わります。' +
+      '「編集」→「｛ ｝変数を挿入」で全8種類と説明を開けます。ショートカットは他のキーと共有するため、重複すると警告します。' +
+      '外部Userscriptから登録したアクションの動作は変更できません。</p>' +
       '<div data-rl-rows>'+rows+'</div>' +
       '<div class="rl-toolbar"><span data-rl-count></span>' +
       '<button type="button" data-rl-add>＋ リンクを追加</button>' +
+      '<button type="button" data-rl-add-copy>＋ コピー項目を追加</button>' +
       '<button type="button" data-rl-cancel '+(this.embedded?'hidden':'')+'>変更を破棄</button>' +
       '<button type="button" class="rl-save" data-rl-save '+(this.embedded?'hidden':'')+'>変更を保存</button>' +
       '<p class="rl-status" role="status" aria-live="polite" data-rl-status></p></div>' +
@@ -249,6 +269,15 @@ class RelatedMenuSettings {
     });
     this.container.querySelectorAll('[data-rl-row]').forEach((card,index) => {
       const item=this.draft[index] || {};
+      const isCopy=this.actions.isCopy(item);
+      card.querySelectorAll('[data-rl-copy-fields]').forEach(el=>{el.hidden=!isCopy;});
+      card.querySelectorAll('[data-rl-link-fields]').forEach(el=>{el.hidden=isCopy;});
+      card.querySelectorAll('.rl-flags [data-rl-field]').forEach(el=>{
+        if(el.dataset.rlField!=='enabled'){el.closest('label').hidden=isCopy;}
+      });
+      const popupMode=!isCopy && item.openMode==='new-window';
+      card.querySelectorAll('[data-rl-field="popupWidth"],[data-rl-field="popupHeight"]')
+        .forEach(control=>{control.disabled=!popupMode;});
       card.querySelector('[data-rl-summary]').textContent=item.label || 'リンク '+(index+1);
       card.querySelector('[data-rl-summary-status]').textContent=
         (item.enabled===false?'無効':'有効')+' ・ '+this._formatShortcut(item.shortcutKey);
@@ -258,18 +287,26 @@ class RelatedMenuSettings {
       const sameLinks=this.draft.filter((other,i)=>i!==index &&
         other && Number(other.shortcutKey)===key).map(other=>other.label||other.id);
       const ordinary=(this.shortcuts.actions||[]).filter(action=>
-        this.config.props && Number(this.config.props['KEY_'+action.id])===key)
+        Number(typeof this.getDraftShortcutValue==='function' ?
+          this.getDraftShortcutValue('KEY_'+action.id) :
+          this.config.props?.['KEY_'+action.id])===key)
         .map(action=>action.label||action.id);
-      const warning=key && (sameLinks.length || ordinary.length) ?
-        '⚠ ショートカットが重複: '+sameLinks.concat(ordinary).join('、')+'（すべて実行）' : '';
+      const liveConflicts=key && typeof this.getDraftShortcutConflicts==='function'?
+        this.getDraftShortcutConflicts(key):null;
+      const warning=key && (liveConflicts?liveConflicts.length>1:
+        sameLinks.length || ordinary.length) ?
+        '⚠ ショートカットが重複: '+(liveConflicts||sameLinks.concat(ordinary)).join('、')+
+        '（割り当ては自動で解除しません）' : '';
       card.querySelector('[data-rl-shortcut-warning]').textContent=warning;
       card.querySelector('[data-rl-shortcut-summary-warning]').textContent=warning ? '⚠ キー重複' : '';
       const preview=card.querySelector('[data-rl-preview]');
       const noOwnerView=card.querySelector('[data-rl-no-owner]');
       const err=card.querySelector('[data-rl-error]');
-      const resolved=this.actions.resolveUrl(item.url,sample);
-      preview.textContent=resolved.url || 'プレビューできません（URLまたは変数を確認）';
-      const missing=this.actions.resolveUrl(item.url,noOwner);
+      const resolved=isCopy?this.actions.resolveCopy(item.copyTemplate,sample):
+        this.actions.resolveUrl(item.url,sample);
+      preview.textContent=(isCopy?resolved.text:resolved.url) || 'プレビューできません（内容・変数を確認）';
+      const missing=isCopy?this.actions.resolveCopy(item.copyTemplate,noOwner):
+        this.actions.resolveUrl(item.url,noOwner);
       const ownerDependent=(missing.missing||[]).some(name=>
         ['uploaderUserId','uploaderChannelId','uploaderName'].includes(name));
       noOwnerView.textContent=ownerDependent ?
@@ -279,7 +316,9 @@ class RelatedMenuSettings {
     });
     const count=this.container.querySelector('[data-rl-count]');
     count.textContent=this.draft.length+' / 40 件';
-    this.container.querySelector('[data-rl-add]').disabled=this.draft.length>=40 || this.original===null;
+    this.container.querySelectorAll('[data-rl-add],[data-rl-add-copy]').forEach(button=>{
+      button.disabled=this.draft.length>=40 || this.original===null;
+    });
     this.container.querySelector('[data-rl-cancel]').disabled=!this._dirty() && !this.externalChanged;
     this.container.querySelector('[data-rl-save]').disabled=
       !this._dirty() || !validation.valid || invalid.some(Boolean) || this.original===null;
@@ -290,6 +329,7 @@ class RelatedMenuSettings {
       this.onDraftChange(this.draft.map(item =>
         item && typeof item === 'object' && !Array.isArray(item) ? {...item} : item));
     }
+    if(this._detailId!==undefined){this.showDetail(this._detailId);}
     status.textContent=this.externalChanged ?
       '別の画面で設定が更新されました。変更を破棄して再読み込みしてください。' :
       this.message || (!validation.valid ? 'URL・ID・表示名などの入力エラーがあります。保存前に修正してください。' :
@@ -297,22 +337,64 @@ class RelatedMenuSettings {
   }
 
   _onField(e) {
+    if(e.target.hasAttribute('data-rl-copy-preset')){
+      const presets={id:'{videoId}',url:'{videoUrl}',title:'{videoTitle}',
+        'title-url':'{videoTitle}\n{videoUrl}'};
+      const value=presets[e.target.value],card=e.target.closest('[data-rl-row]');
+      if(value && card){
+        const index=Number(card.dataset.rlRow);
+        this.draft=this.draft.map((item,i)=>i===index?{...item,copyTemplate:value}:item);
+        card.querySelector('[data-rl-field="copyTemplate"]').value=value;
+        this._refresh();
+      }
+      return;
+    }
     const field=e.target.dataset && e.target.dataset.rlField;
     if (!field) { return; }
     const card=e.target.closest('[data-rl-row]');
     if (!card || !this.container.contains(card)) { return; }
     const index=Number(card.dataset.rlRow);
     const item=this.draft[index];
-    const value=e.target.type==='checkbox' ? e.target.checked : e.target.value;
+    const value=e.target.type==='checkbox' ? e.target.checked :
+      e.target.type==='number'?Number(e.target.value):e.target.value;
     if (field==='id' && item && typeof item.id==='string') {
       if (this.expandedIds.delete(item.id)) { this.expandedIds.add(value); }
       if (this.variablesOpen.delete(item.id)) { this.variablesOpen.add(value); }
     }
-    this.draft=this.draft.map((entry,i)=>i===index?Object.assign({},entry,{[field]:value}):entry);
+    this.draft=this.draft.map((entry,i)=>i===index?Object.assign({},entry,{[field]:value},
+      field==='kind'&&value==='copy'&&!entry.copyTemplate?{copyTemplate:'{videoId}'}:{}):entry);
+    if(field==='id' && this._detailId===item?.id){this._detailId=value;}
     this.message='';
     this._refresh();
   }
 
+  showList() {
+    this._detailId=undefined;
+    this.container.hidden=false;
+    this.container.classList.remove('is-detail-only');
+    this.container.querySelectorAll('[data-rl-row]').forEach((card,index)=>{
+      card.hidden=false;
+      const key=this._rowKey(this.draft[index],index);
+      card.querySelector('[data-rl-details]').hidden=!this.expandedIds.has(key);
+    });
+  }
+  showDetail(id) {
+    this._detailId=id;
+    this.container.classList.add('is-detail-only');
+    this.container.querySelectorAll('[data-rl-row]').forEach((card,index)=>{
+      card.hidden=this.draft[index]?.id!==id;
+      if(!card.hidden){card.querySelector('[data-rl-details]').hidden=false;}
+    });
+  }
+  addItem(kind='link') {
+    if(this.draft.length>=40 || this.original===null){return null;}
+    const id=this._uniqueId(kind==='copy'?'copy':'link');
+    const item=kind==='copy'?{id,label:'動画IDをコピー',kind:'copy',copyTemplate:'{videoId}',enabled:true}:
+      {id,label:'',url:'',enabled:true,openInNewTab:true};
+    this.draft=this.draft.concat([item]);this.expandedIds.add(id);
+    if(this._detailId!==undefined){this._detailId=id;}
+    this.message='';this._render();return id;
+  }
   _uniqueId(base='link') {
     const ids=new Set(this.draft.map(item=>item&&item.id));
     let n=1;
@@ -328,13 +410,14 @@ class RelatedMenuSettings {
     if (!this.actions.VARIABLES.includes(name)) { return; }
     const card=this.container.querySelector('[data-rl-row="'+index+'"]');
     if (!card) { return; }
-    const input=card.querySelector('[data-rl-field="url"]');
+    const field=this.actions.isCopy(this.draft[index])?'copyTemplate':'url';
+    const input=card.querySelector('[data-rl-field="'+field+'"]');
     const token='{'+name+'}';
     const start=typeof input.selectionStart==='number'?input.selectionStart:input.value.length;
     const end=typeof input.selectionEnd==='number'?input.selectionEnd:start;
     input.setRangeText(token,start,end,'end');
     this.draft=this.draft.map((item,i)=>i===index?
-      Object.assign({},item,{url:input.value}):item);
+      Object.assign({},item,{[field]:input.value}):item);
     input.focus();
     const rowKey=this._rowKey(this.draft[index],index);
     this.variablesOpen.delete(rowKey);
@@ -453,16 +536,8 @@ class RelatedMenuSettings {
     }
     if (button.hasAttribute('data-rl-save')) { this._save();return; }
     if (button.hasAttribute('data-rl-cancel')) { this._load();return; }
-    if (button.hasAttribute('data-rl-add')) {
-      if (this.draft.length<40 && this.original!==null) {
-        const id=this._uniqueId();
-        this.draft=this.draft.concat([{id,label:'',url:'',
-          enabled:true,openInNewTab:true}]);
-        this.expandedIds.add(id);
-        this.message='';this._render();
-      }
-      return;
-    }
+    if (button.hasAttribute('data-rl-add')) { this.addItem('link');return; }
+    if (button.hasAttribute('data-rl-add-copy')) { this.addItem('copy');return; }
     const operations=['duplicate','delete','up','down'];
     const kind=operations.find(x=>button.hasAttribute('data-rl-'+x));
     if (!kind) { return; }

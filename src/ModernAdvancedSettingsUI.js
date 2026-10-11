@@ -52,7 +52,9 @@ class ModernAdvancedSettingsUI {
       '.zw-modern-card.is-child { margin-left:14px; border-left:2px solid #475e77; }',
       '.zw-modern-cardhead { display:flex; align-items:center; gap:10px; }',
       '.zw-modern-cardhead strong { font-size:13px; font-weight:650; flex:1; overflow-wrap:anywhere; }',
-      '.zw-modern-visibility-icon { display:inline-flex; justify-content:center; align-items:center; flex:none; width:38px; height:32px; background:#23354b; border:1px solid #60748c; border-radius:5px; color:#edf4ff; font:19px/1 system-ui,sans-serif; pointer-events:none; user-select:none; }',
+      '.zw-modern-visibility-icon { display:inline-flex; justify-content:center; align-items:center; flex:none; width:38px; height:32px; background:#23354b; border:1px solid #60748c; border-radius:5px; color:#edf4ff; font:19px/1 system-ui,sans-serif; white-space:nowrap; overflow:hidden; pointer-events:none; user-select:none; }',
+      '.zw-modern-visibility-icon.is-compact-glyph { font-size:12px; letter-spacing:-.25px; }',
+      '.zw-modern-visibility-icon.is-pair-glyph { font-size:15px; }',
       '.zw-modern-visibility-icon.is-tweet { font-weight:750; color:#79c8f8; }',
       '.zw-modern-visibility-icon.is-mylist { font-size:15px; font-weight:750; }',
       '.zw-modern-visibility-icon.is-like { color:#ffc0d8; font-size:26px; }',
@@ -168,7 +170,43 @@ class ModernAdvancedSettingsUI {
       '.zw-modern-order-row.is-missing { opacity:.62; }',
       '.zw-modern-order-row .zw-order-grip { cursor:grab; }',
       '.zw-modern-order-row .zw-order-grip:active { cursor:grabbing; }',
+      '.zw-modern-order-compact .zw-modern-order-row { padding:6px 8px; gap:6px; flex-wrap:wrap; }',
+      '.zw-modern-order-compact .zw-order-name { flex:1 1 175px; font-size:12px; }',
+      '.zw-modern-order-compact .zw-order-key-preview { min-width:75px; font-size:10px; color:#a5b7cb; }',
+      '.zw-modern-order-compact .zw-order-key-preview.is-conflict { color:#ffd28a; }',
+      '.zw-modern-order-compact .zw-order-grip { touch-action:none; user-select:none; }',
+      '.zw-modern-order-compact .zw-order-visible { gap:4px; font-size:11px; }',
+      '.zw-modern-order-compact .zw-order-details { flex:1 0 100%; display:grid; gap:10px; padding:10px 6px 5px; border-top:1px solid #465b72; min-width:0; }',
+      '.zw-modern-order-compact .zw-order-details p { margin:0; color:#c3d3e4; }',
+      '.zw-modern-order-compact .zw-order-details small { color:#a5b7cb; }',
+      '.zw-modern-order-compact .zw-order-field { display:grid; gap:5px; min-width:0; font-size:12px; }',
+      '.zw-modern-order-compact .zw-order-field input[type=text],.zw-modern-order-compact .zw-order-field select,.zw-modern-order-compact .zw-order-field input[type=number] { width:min(100%,650px); min-width:0; padding:6px; background:#101927; border:1px solid #445a71; color:#edf4ff; }',
+      '.zw-modern-order-compact .zw-order-field input[type=checkbox] { appearance:auto; width:17px; height:17px; }',
+      '.zw-modern-order-compact .zw-order-field input[type=checkbox]::after { content:none; }',
+      '.zw-modern-order-compact .zw-order-shortcut-editor,.zw-modern-order-compact .zw-order-sizes { display:flex; flex-wrap:wrap; align-items:center; gap:9px; }',
+      '.zw-modern-order-compact .zw-order-sizes .zw-order-field { flex:1 1 130px; }',
+      '.zw-modern-order-compact .zw-order-variable-palette { display:flex; flex-wrap:wrap; gap:5px; }',
+      '.zw-modern-order-compact .zw-order-variable-palette p,.zw-modern-order-compact .zw-order-variable-palette small { flex:1 0 100%; }',
+      '.zw-modern-order-compact .zw-order-warning { color:#ffcb78; }',
+      '.zw-modern-order-compact .zw-modern-order-row.is-touch-dragging { border-color:#82bfff; box-shadow:0 0 0 1px #82bfff; }',
       '.zw-modern-order-editor [data-zw-order-status] { font-size:12px; color:#a5b7cb; min-height:1.4em; }',
+      '.zw-order-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:3px 0 12px; }',
+      '.zw-order-workspace { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,1fr); gap:16px; align-items:start; width:100%; min-width:0; }',
+      '.zw-order-inspector { min-width:0; background:#1b2c3f; border:1px solid #425b74; border-radius:8px; padding:17px; position:sticky; top:0; max-height:calc(100vh - 220px); overflow:auto; }',
+      '.zw-order-inspector .zw-order-details { border:0; padding:0; } .zw-order-details h3 { font-size:18px; margin:0 0 6px; overflow-wrap:anywhere; }',
+      '.zw-modern-order-compact .zw-order-name { border:0; padding:0; text-align:left; background:transparent; color:inherit; }',
+      '.zw-modern-order-row.is-selected { border-color:#82bfff; background:#253d55; box-shadow:0 0 0 1px #82bfff44; }',
+      '.zw-order-workspace .zw-modern-order-row { flex-wrap:nowrap; min-height:42px; }',
+      '.zw-order-workspace .zw-order-name { flex:1 1 0; min-width:0; font-weight:600; }',
+      '.zw-order-workspace .zw-modern-plainbtn { flex:none; white-space:nowrap; }',
+      '.zw-order-workspace .zw-order-key-preview { min-width:0; max-width:65px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
+      '.zw-order-inspector .is-detail-only .rl-card { padding:0; margin:10px 0 0; border:0; background:transparent; }',
+      '.zw-order-inspector .is-detail-only .rl-fields { grid-template-columns:minmax(0,1fr); }',
+      '.zw-order-inspector .is-detail-only .rl-head .rl-summary,.zw-order-inspector .is-detail-only [data-rl-drag],.zw-order-inspector .is-detail-only [data-rl-expand],.zw-order-inspector .is-detail-only [data-rl-up],.zw-order-inspector .is-detail-only [data-rl-down] { display:none; }',
+      '.zw-order-inspector .is-detail-only .rl-toolbar>button,.zw-order-inspector .is-detail-only [data-rl-count],.zw-order-inspector .is-detail-only .zenzaRelatedLinksEditor>.rl-help { display:none; }',
+      '.zw-order-inspector textarea,.zw-order-inspector select,.zw-order-inspector input[type=text] { max-width:100%; min-width:0!important; width:100%; box-sizing:border-box; }',
+      '.zw-order-inspector [data-rl-preview] { white-space:pre-wrap; }',
+      '@media(max-width:1050px) { .zw-order-workspace { grid-template-columns:minmax(0,1fr); } .zw-order-inspector { position:static; max-height:none; } }',
       '@media(max-width:760px) {.zw-modern-sidebar { position:absolute; top:0; bottom:0; left:0; z-index:5; width:min(290px,88vw); flex-basis:auto; transform:translateX(-100%); box-shadow:6px 0 22px #0007; padding:12px; } .zw-modern-root.is-drawer-open .zw-modern-sidebar { transform:translateX(0); } .zw-modern-root.is-drawer-open .zw-modern-backdrop { display:block; background:#0008; position:absolute; inset:0; z-index:4; } .zw-modern-main { padding:15px 11px; } .zw-modern-card { padding:10px; } .zw-modern-footer { padding:9px; } .zw-modern-footer .zw-modern-dirty { font-size:11px; }}'
     ].join('\n');
     doc.head.append(style);
@@ -186,14 +224,21 @@ class ModernAdvancedSettingsUI {
     this._orderDropKey=null;
     this._orderDropAfter=false;
     this._orderAnnouncement='';
+    this._expandedRelatedOptions=new Set();
+    this._touchOrder=null;
     this.playlist=playlist;
     this.reload=reload || (()=>this.win.location.reload());
     if (relatedEditor) {
+      relatedEditor.getDraftShortcutValue=id=>this.model.get(id);
+      relatedEditor.getDraftShortcutConflicts=key=>[
+        ...this.model.actions.filter(action=>
+          Number(this.model.get('KEY_'+action.id))===key)
+          .map(action=>action.label||action.id),
+        ...relatedEditor.draft.filter(link=>link&&link.enabled!==false &&
+          Number(link.shortcutKey)===key).map(link=>link.label||link.id)
+      ];
       relatedEditor.embedded=true;
-      relatedEditor.onDraftChange=value=>{
-        this.model.set('relatedMenu.customLinks',value);
-        if(this.root){this._refreshFooter();}
-      };
+      relatedEditor.onDraftChange=value=>this._onCustomMenuDraft(value);
     }
     this._relatedOrigin=relatedEditor?{parent:relatedEditor.container.parentNode,
       next:relatedEditor.container.nextSibling}:null;
@@ -253,6 +298,10 @@ class ModernAdvancedSettingsUI {
     this.root.addEventListener('dragover',this._onOrderDragOverBound=e=>this._onOrderDragOver(e));
     this.root.addEventListener('drop',this._onOrderDropBound=e=>this._onOrderDrop(e));
     this.root.addEventListener('dragend',this._onOrderDragEndBound=()=>this._onOrderDragEnd());
+    this.root.addEventListener('pointerdown',this._onTouchOrderDownBound=e=>this._onTouchOrderDown(e));
+    this.root.addEventListener('pointermove',this._onTouchOrderMoveBound=e=>this._onTouchOrderMove(e));
+    this.root.addEventListener('pointerup',this._onTouchOrderUpBound=e=>this._onTouchOrderUp(e));
+    this.root.addEventListener('pointercancel',this._onTouchOrderCancelBound=()=>this._clearTouchOrder());
     this.root.addEventListener('click',this._onRelatedClickBound=e=>this._onRelatedBubble(e));
     this.root.addEventListener('change',this._onRelatedChangeBound=e=>this._onRelatedBubble(e));
     this.root.addEventListener('input',this._onRelatedInputBound=e=>this._onRelatedBubble(e));
@@ -504,10 +553,7 @@ class ModernAdvancedSettingsUI {
       'comment-heatmap':'M3 18h18 M4 16v-3 M8 16V8 M12 16V4 M16 16V9 M20 16v-4',
       'seek-thumbnail':'M4 3h16v13H4z M6 13l4-5 4 4 2-2 2 3 M3 21h18 M12 19v4',
       'scene-filmstrip':'M2 5h20v14H2z M8 5v14 M16 5v14 M2 8h20 M2 16h20',
-      'ad-crown':'M3 7l5 4 4-7 4 7 5-4-2 12H5z M6 22h12',
-      'fullscreen-corners':'M3 9V3h6 M15 3h6v6 M21 15v6h-6 M9 21H3v-6',
-      'settings-gear':'M10 3h4l1 3 3 1 3 3v4l-3 1-1 3-3 3h-4l-1-3-3-1-3-3v-4l3-1 1-3z M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0',
-      'search-magnifier':'M10 3a7 7 0 1 0 0 14 7 7 0 0 0 0-14 M15 15l6 6'
+      'ad-crown':'M3 7l5 4 4-7 4 7 5-4-2 12H5z M6 22h12'
     };
     if(paths[glyph]){
       icon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="'+paths[glyph]+'"/></svg>';
@@ -518,6 +564,13 @@ class ModernAdvancedSettingsUI {
     }else{
       icon.textContent=glyph==='related-menu'?'関連メニュー ▾':
         glyph==='comment-input'?'コメント入力(C)':glyph;
+      // Text is a visual preview of an existing player icon, not a second row.
+      // Keep the original glyphs; only scale ones too wide for the 38px tile.
+      if(id==='ui.bar.speed' || id==='ui.bar.time'){
+        icon.classList.add('is-compact-glyph');
+      }else if(id==='ui.bar.volume' || id==='ui.info.credits'){
+        icon.classList.add('is-pair-glyph');
+      }
       if(glyph==='related-menu'){icon.classList.add('is-related');}
       if(glyph==='comment-input'){icon.classList.add('is-comment-input');}
       if(id==='ui.hover.like'){icon.classList.add('is-like');}
@@ -540,7 +593,8 @@ class ModernAdvancedSettingsUI {
     }
     if(this.model.isDifferentFromDefault(descriptor.id) ||
       (descriptor.type==='related-order' &&
-        this.model.isDifferentFromDefault('relatedMenu.hiddenItems')) ||
+        (this.model.isDifferentFromDefault('relatedMenu.hiddenItems') ||
+         this.model.isDifferentFromDefault('relatedMenu.builtinOptions'))) ||
       (seekDescriptor && this.model.isDifferentFromDefault(seekDescriptor.id))) {
       card.classList.add('is-modified');
     }
@@ -619,6 +673,7 @@ class ModernAdvancedSettingsUI {
       controls.append(this._renderRelatedOrderControls());
     } else if(descriptor.type==='related-links') {
       if(this.relatedEditor) {
+        this.relatedEditor.showList();
         const editor=this.relatedEditor.container;
         editor.querySelector('[data-rl-save]').hidden=true;
         editor.querySelector('[data-rl-cancel]').hidden=true;
@@ -885,6 +940,34 @@ class ModernAdvancedSettingsUI {
     this.cards.querySelectorAll('[data-zw-playlist-export],[data-zw-playlist-import]')
       .forEach(button=>{button.disabled=!this.playlist;});
   }
+  _onCustomMenuDraft(value) {
+    const before=this.model.get('relatedMenu.customLinks')||[];
+    this.model.set('relatedMenu.customLinks',value);
+    if(!this.root){return;}
+    const structure=JSON.stringify(before.map(x=>x?.id))!==JSON.stringify(value.map(x=>x?.id));
+    const keysChanged=JSON.stringify(before.map(x=>x?.shortcutKey))!==JSON.stringify(value.map(x=>x?.shortcutKey));
+    if(structure){
+      const added=value.filter(x=>x && !before.some(old=>old?.id===x.id)).at(-1);
+      const selected=[...this._expandedRelatedOptions][0];
+      if(added){this._expandedRelatedOptions=new Set(['link:'+added.id]);}
+      else if(selected?.startsWith('link:')&&!value.some(x=>'link:'+x?.id===selected)){
+        this._expandedRelatedOptions=new Set(['builtin:official']);
+      }
+    }
+    if(structure||keysChanged){this._refreshRelatedOrderList();}
+    else{
+      // Do not replace the inspector on every keystroke: keep focus and caret.
+      for(const row of this.root.querySelectorAll('[data-zw-order-key]')){
+        const item=value.find(x=>'link:'+x?.id===row.dataset.zwOrderKey);
+        if(item){row.querySelector('.zw-order-name').textContent=item.label||item.id;}
+      }
+      const title=this.root.querySelector('[data-zw-order-detail-title]');
+      const selected=[...this._expandedRelatedOptions][0];
+      const item=value.find(x=>'link:'+x?.id===selected);
+      if(title&&item){title.textContent=item.label||item.id;}
+    }
+    this._refreshFooter();
+  }
   _relatedOrderEntries() {
     if (!this.relatedOrder || !this.model.descriptor('relatedMenu.order')) { return []; }
     const links=this.model.get('relatedMenu.customLinks')||[];
@@ -895,22 +978,65 @@ class ModernAdvancedSettingsUI {
 
   _renderRelatedOrderControls() {
     const holder=this.doc.createElement('div');
-    holder.className='zw-modern-order-editor';
-    if (!this.relatedOrder) {
+    holder.className='zw-modern-order-editor zw-modern-order-compact';
+    if(!this.relatedOrder){
       holder.textContent='関連メニューの並び替えを利用できません。';
       return holder;
     }
-    const hint=this.doc.createElement('p');
-    hint.className='zw-order-hint';
-    hint.textContent='⠿ をドラッグ、または「上へ」「下へ」で移動。Alt＋↑↓キーでも移動できます。変更は画面下部で保存します。';
-    holder.append(hint);
+    const guide=this.doc.createElement('p');
+    guide.className='zw-order-hint';
+    guide.textContent='左の一覧を並べ替え、右側で選択した項目を編集します。⠿をドラッグ（スマホは長押し）／Alt＋↑↓／上下ボタン。変更は下部の保存で確定します。';
+    holder.append(guide);
+    const toolbar=this.doc.createElement('div');toolbar.className='zw-order-toolbar';
     const refresh=this._button('一覧を更新','data-zw-order-refresh','','zw-modern-plainbtn');
-    refresh.title='リンクの追加・名前変更・外部登録の変化を一覧へ反映します（保存はしません）';
-    holder.append(refresh);
+    refresh.title='追加リンクや外部登録アクションを再読み込み（保存はしません）';
+    toolbar.append(refresh);
+    for(const [attr,label,kind] of [['data-zw-order-add-link','＋ リンク','link'],['data-zw-order-add-copy','＋ コピー','copy']]){
+      const button=this._button(label,attr,kind,'zw-modern-plainbtn');
+      button.disabled=!this.relatedEditor || this.relatedEditor.original===null || this.relatedEditor.draft.length>=40;
+      toolbar.append(button);
+    }
+    toolbar.append(this._button('カスタム項目を初期値に戻す','data-zw-reset-item',
+      'relatedMenu.customLinks','zw-modern-plainbtn'));
+    holder.append(toolbar);
+    const workspace=this.doc.createElement('div');workspace.className='zw-order-workspace';
+    const pane=this.doc.createElement('aside');pane.className='zw-order-inspector';
+    pane.dataset.zwOrderDetailPane='';pane.setAttribute('aria-label','選択項目の詳細設定');
     const list=this.doc.createElement('ol');
     list.className='zw-modern-order-list';
     list.setAttribute('aria-label','関連メニューの全項目');
     const entries=this._relatedOrderEntries();
+    const prefs=this.model.get(this.relatedOrder.OPTIONS_KEY)||{};
+    this._expandedRelatedOptions=this._expandedRelatedOptions||new Set();
+    const selected=entries.find(item=>item.present&&this._expandedRelatedOptions.has(item.key)) ||
+      entries.find(item=>item.present);
+    this._expandedRelatedOptions=new Set(selected?[selected.key]:[]);
+    const descriptions={
+      official:'公式視聴ページを開きます。ZenzaWatchの横取りを防ぐ識別子は自動で付けられます。',
+      ad:'ニコニ広告の宣伝画面を開きます。既定は小さな別ウィンドウです。',
+      twitter:'動画IDを含むX（Twitter）の投稿を検索します。必要ならURLテンプレートを変更できます。',
+      original:'コミュニティ動画・マイメモリーの場合だけ元の動画へ移動します。',
+      tree:'親作品・コンテンツツリーを開きます。動画によっては利用できません。',
+      'tree-playlist':'親作品・子作品のリストを現在のプレイリストへ追加します。',
+      'copy-url':'現在の動画からURL・動画IDなどをコピーします。'
+    };
+    const variableNames={
+      videoId:'動画ID（例: sm9）',watchId:'視聴ID（例: sm9）',
+      videoUrl:'動画URL',videoTitle:'動画タイトル',
+      uploaderUserId:'投稿者のユーザーID',uploaderChannelId:'投稿者のチャンネルID',
+      uploaderName:'投稿者名',currentTime:'現在の再生位置（秒）'
+    };
+    const addField=(parent,label,control,desc='')=>{
+      const field=this.doc.createElement('label');
+      field.className='zw-order-field';
+      const name=this.doc.createElement('span');name.textContent=label;
+      field.append(name,control);
+      if(desc){
+        const note=this.doc.createElement('small');note.textContent=desc;field.append(note);
+      }
+      parent.append(field);
+      return control;
+    };
     for(const [index,item] of entries.entries()){
       const row=this.doc.createElement('li');
       row.className='zw-modern-order-row';
@@ -918,35 +1044,170 @@ class ModernAdvancedSettingsUI {
       row.dataset.zwOrderKey=item.key;
       const grip=this._button('⠿','data-zw-order-grip',item.key,'zw-modern-plainbtn zw-order-grip');
       grip.draggable=true;
-      grip.setAttribute('aria-label',item.label+'をドラッグして移動');
-      grip.title='ドラッグまたはAlt＋上下キーで移動';
+      grip.title='ドラッグ・長押し、またはAlt＋上下キーで移動';
+      grip.setAttribute('aria-label',item.label+'を並べ替え');
       row.append(grip);
-      const name=this.doc.createElement('span');
-      name.className='zw-order-name';
-      name.textContent=item.label;
-      const kind=this.doc.createElement('small');
-      kind.textContent=!item.present?'現在利用不可（順序は保持）':
-        item.key==='builtin:original'?'コミュニティ動画・マイメモリーのときだけ表示':
-        item.type==='builtin'?'標準項目（動画条件により非表示）':
-        item.type==='action'?'外部スクリプト登録':'カスタムリンク';
-      name.append(kind);
+      const builtinId=item.type==='builtin'?item.key.slice(8):null;
+      const opts=builtinId?this.relatedOrder.getOption(prefs,builtinId):{};
+      const label=opts.label||item.label;
+      const name=this._button(label,'data-zw-order-edit',item.key,'zw-order-name');
+      name.disabled=!item.present;
+      row.classList.toggle('is-selected',selected?.key===item.key);
       row.append(name);
+      const shortcutId=builtinId&&this.relatedOrder.SHORTCUT_ACTION_IDS[builtinId];
+      const keyId=shortcutId?'KEY_'+shortcutId:null;
+      const shortcutValue=keyId?Number(this.model.get(keyId))||0:
+        item.type==='link'?Number((this.model.get('relatedMenu.customLinks')||[])
+          .find(link=>'link:'+link.id===item.key)?.shortcutKey)||0:0;
+      const keyBadge=this.doc.createElement('small');
+      keyBadge.className='zw-order-key-preview';
+      keyBadge.textContent=shortcutValue?this.formatKeyCombo(shortcutValue):'キー未設定';
+      keyBadge.hidden=!shortcutValue;
+      if(shortcutValue){
+        const warnings=this.model.keyConflicts(shortcutValue);
+        if(warnings.length>1){
+          keyBadge.classList.add('is-conflict');
+          keyBadge.title='⚠ ショートカットの重複: '+warnings.join('、');
+          keyBadge.textContent+=' ⚠重複';
+        }
+      }
+      row.append(keyBadge);
       const visible=this.doc.createElement('label');
       visible.className='zw-order-visible';
-      const check=this.doc.createElement('input');
-      check.type='checkbox';
-      check.dataset.zwOrderVisible=item.key;
-      check.checked=!(this.model.get('relatedMenu.hiddenItems')||[]).includes(item.key);
-      visible.append(check,this.doc.createTextNode('表示する'));
+      const checkbox=this.doc.createElement('input');
+      checkbox.type='checkbox';checkbox.dataset.zwOrderVisible=item.key;
+      checkbox.checked=!(this.model.get('relatedMenu.hiddenItems')||[]).includes(item.key);
+      visible.append(checkbox,this.doc.createTextNode('表示'));
       row.append(visible);
-      const up=this._button('↑ 上へ','data-zw-order-up',item.key,'zw-modern-plainbtn');
-      const down=this._button('↓ 下へ','data-zw-order-down',item.key,'zw-modern-plainbtn');
-      up.disabled=index===0;
-      down.disabled=index===entries.length-1;
+      const edit=this._button(this._expandedRelatedOptions.has(item.key)?'編集中':'編集',
+        'data-zw-order-edit',item.key,'zw-modern-plainbtn');
+      edit.disabled=!item.present;
+      edit.setAttribute('aria-expanded',String(this._expandedRelatedOptions.has(item.key)));
+      row.append(edit);
+      const up=this._button('↑','data-zw-order-up',item.key,'zw-modern-plainbtn');
+      const down=this._button('↓','data-zw-order-down',item.key,'zw-modern-plainbtn');
+      up.disabled=index===0;down.disabled=index===entries.length-1;
+      up.title='1つ上へ';down.title='1つ下へ';
       row.append(up,down);
+      if(this._expandedRelatedOptions.has(item.key)){
+        const details=this.doc.createElement('section');
+        details.className='zw-order-details';details.dataset.zwOrderDetails=item.key;
+        const heading=this.doc.createElement('h3');heading.dataset.zwOrderDetailTitle='';
+        heading.textContent=label;details.append(heading);
+        const help=this.doc.createElement('p');
+        help.textContent=builtinId?descriptions[builtinId]:
+          item.type==='link'?'この項目の動作・内容・ショートカットを編集します。変更は保存するまで下書きです。':
+          '外部スクリプトが登録した機能です。名称・動作の変更は登録元で行います。';
+        details.append(help);
+        if(builtinId){
+          const title=this.doc.createElement('input');
+          title.type='text';title.maxLength=80;title.value=opts.label||'';
+          title.placeholder='標準名を使用: '+item.label;
+          title.dataset.zwBuiltinField='label';title.dataset.zwBuiltinId=builtinId;
+          addField(details,'メニューに表示する名前',title,'空欄に戻すと標準の名前を使用します。');
+          if(keyId&&this.model.descriptor(keyId)){
+            const line=this.doc.createElement('div');
+            line.className='zw-order-shortcut-editor';
+            const caption=this.doc.createElement('span');
+            caption.textContent='ショートカット: '+(shortcutValue?this.formatKeyCombo(shortcutValue):'(未設定)');
+            line.append(caption,
+              this._button('変更','data-zw-record',keyId,'zw-modern-plainbtn'),
+              this._button('解除','data-zw-clear-key',keyId,'zw-modern-plainbtn'));
+            details.append(line);
+            const warning=this.model.keyConflicts(shortcutValue);
+            if(shortcutValue&&warning.length>1){
+              const alert=this.doc.createElement('p');
+              alert.className='zw-order-warning';
+              alert.textContent='⚠ キーが重複しています: '+warning.join('、')+'（既存割り当ては自動解除しません）';
+              details.append(alert);
+            }
+            const sync=this.doc.createElement('small');
+            sync.textContent='「ショートカット」欄と同じ設定値を編集します。変更は保存するまで確定しません。';
+            details.append(sync);
+          }
+          if(['official','ad','twitter','tree'].includes(builtinId)){
+            const select=this.doc.createElement('select');
+            select.dataset.zwBuiltinField='openMode';select.dataset.zwBuiltinId=builtinId;
+            for(const [val,text] of [['default','既定の動作'],['same-tab','現在のタブで開く'],
+              ['new-tab','新しいタブで開く'],['new-window','新しいウィンドウを要求']]){
+              const option=this.doc.createElement('option');
+              option.value=val;option.textContent=text;select.append(option);
+            }
+            select.value=opts.openMode||'default';
+            addField(details,'リンクの開き方',select,
+              '新規ウィンドウはブラウザの設定によってタブになる場合があります。');
+            if(select.value==='new-window'){
+              const sizes=this.doc.createElement('div');sizes.className='zw-order-sizes';
+              for(const [field,label,defaultSize] of [
+                ['popupWidth','横幅',builtinId==='ad'?428:760],
+                ['popupHeight','高さ',builtinId==='ad'?600:650]]){
+                const box=this.doc.createElement('input');
+                box.type='number';box.min='250';box.max='1800';box.step='1';
+                box.value=String(opts[field]||defaultSize);
+                box.dataset.zwBuiltinField=field;box.dataset.zwBuiltinId=builtinId;
+                addField(sizes,label+'（px）',box);
+              }
+              details.append(sizes);
+            }
+          }
+          if(builtinId==='official'){
+            const box=this.doc.createElement('input');
+            box.type='checkbox';box.checked=opts.includePosition!==false;
+            box.dataset.zwBuiltinField='includePosition';box.dataset.zwBuiltinId=builtinId;
+            addField(details,'現在の再生位置を公式プレイヤーへ引き継ぐ',box);
+          }
+          if(builtinId==='copy-url'){
+            const select=this.doc.createElement('select');
+            select.dataset.zwBuiltinField='copyFormat';select.dataset.zwBuiltinId=builtinId;
+            for(const [val,text] of [['url','動画URL（従来どおり）'],['id','動画IDのみ'],
+              ['position','再生位置付き動画URL'],['title-url','動画タイトル＋URL'],
+              ['markdown','Markdown形式のリンク']]){
+              const option=this.doc.createElement('option');
+              option.value=val;option.textContent=text;select.append(option);
+            }
+            select.value=opts.copyFormat||'url';
+            addField(details,'コピーする形式',select,'「動画IDのみ」では sm9 のような識別子だけをコピーします。');
+          }
+          if(['twitter','tree'].includes(builtinId)){
+            const input=this.doc.createElement('input');
+            input.type='text';input.value=opts.urlTemplate||'';
+            input.placeholder='未入力なら既存の公式URLを使用';
+            input.maxLength=2048;input.dataset.zwBuiltinField='urlTemplate';
+            input.dataset.zwBuiltinId=builtinId;
+            addField(details,'URLテンプレート（任意）',input,
+              'https:// から始めてください。空欄なら従来のリンクを使用します。');
+            const palette=this.doc.createElement('div');
+            palette.className='zw-order-variable-palette';
+            const intro=this.doc.createElement('p');
+            intro.textContent='変数を挿入：動画ごとに自動で値を置き換えます。使える変数は8種類すべて表示しています。';
+            palette.append(intro);
+            for(const token of this.relatedActions?.VARIABLES||Object.keys(variableNames)){
+              const button=this._button('{'+token+'}','data-zw-builtin-insert',token,'zw-modern-plainbtn');
+              button.dataset.zwBuiltinId=builtinId;
+              button.title=variableNames[token]||token;
+              palette.append(button);
+            }
+            const explains=this.doc.createElement('small');
+            explains.textContent=Object.entries(variableNames).map(([v,label])=>'{'+v+'} = '+label).join(' / ');
+            palette.append(explains);
+            details.append(palette);
+          }
+          const reset=this._button('この項目の詳細だけ初期値に戻す','data-zw-builtin-reset',builtinId,'zw-modern-plainbtn');
+          details.append(reset);
+        }
+        pane.append(details);
+      }
       list.append(row);
     }
-    holder.append(list);
+    if(this.relatedEditor){
+      const editor=this.relatedEditor.container;
+      editor.querySelector('[data-rl-save]').hidden=true;
+      editor.querySelector('[data-rl-cancel]').hidden=true;
+      editor.hidden=selected?.type!=='link';
+      this.relatedEditor.showDetail(selected?.type==='link'?selected.key.slice(5):null);
+      pane.append(editor);
+    }
+    workspace.append(list,pane);holder.append(workspace);
     const status=this.doc.createElement('p');
     status.dataset.zwOrderStatus='';
     status.setAttribute('role','status');
@@ -958,12 +1219,14 @@ class ModernAdvancedSettingsUI {
 
   _refreshRelatedOrderList() {
     if(!this.root){return;}
+    this._clearTouchOrder();
     const card=this.root.querySelector('[data-zw-id="relatedMenu.order"]');
     const controls=card?.querySelector('.zw-modern-cardcontrols');
     if(controls){controls.replaceChildren(this._renderRelatedOrderControls());}
     card?.classList.toggle('is-modified',
       this.model.isDifferentFromDefault('relatedMenu.order') ||
-      this.model.isDifferentFromDefault('relatedMenu.hiddenItems'));
+      this.model.isDifferentFromDefault('relatedMenu.hiddenItems') ||
+      this.model.isDifferentFromDefault('relatedMenu.builtinOptions'));
   }
 
   _moveRelatedOrder(fromKey,toKey,after=false) {
@@ -1025,6 +1288,58 @@ class ModernAdvancedSettingsUI {
     if(to){this._moveRelatedOrder(from,to,after);}
   }
   _onOrderDragEnd() {this._clearRelatedOrderDrag();}
+  _onTouchOrderDown(e) {
+    if(e.pointerType!=='touch' || this._touchOrder){return;}
+    const grip=e.target.closest?.('[data-zw-order-grip]');
+    if(!grip || !this.root.contains(grip)){return;}
+    const key=grip.dataset.zwOrderGrip;
+    if(!this._relatedOrderEntries().some(item=>item.key===key)){return;}
+    const state={id:e.pointerId,key,grip,active:false,dropKey:null,after:false,timer:null};
+    this._touchOrder=state;
+    state.timer=this.win.setTimeout(()=>{
+      if(this._touchOrder!==state){return;}
+      if(!this.root.contains(grip)){this._clearTouchOrder();return;}
+      try{grip.setPointerCapture?.(e.pointerId);}
+      catch(_){this._clearTouchOrder();return;}
+      state.active=true;
+      grip.closest('.zw-modern-order-row')?.classList.add('is-touch-dragging');
+    },260);
+  }
+  _onTouchOrderMove(e) {
+    const state=this._touchOrder;
+    if(!state || state.id!==e.pointerId || !state.active){return;}
+    e.preventDefault();
+    const hit=this.doc.elementFromPoint?.(e.clientX,e.clientY)||e.target;
+    const row=hit?.closest?.('[data-zw-order-key]');
+    if(!row || !this.root.contains(row)){return;}
+    state.dropKey=row.dataset.zwOrderKey;
+    const bounds=row.getBoundingClientRect();
+    state.after=bounds.height>0?e.clientY>bounds.top+bounds.height/2:
+      this._relatedOrderEntries().findIndex(i=>i.key===state.key) <
+      this._relatedOrderEntries().findIndex(i=>i.key===state.dropKey);
+    this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
+      .forEach(el=>el.classList.remove('is-drop-before','is-drop-after'));
+    row.classList.add(state.after?'is-drop-after':'is-drop-before');
+  }
+  _onTouchOrderUp(e) {
+    const state=this._touchOrder;
+    if(!state || state.id!==e.pointerId){return;}
+    const shouldMove=state.active && state.dropKey && state.dropKey!==state.key;
+    const from=state.key,to=state.dropKey,after=state.after;
+    this._clearTouchOrder();
+    if(shouldMove){this._moveRelatedOrder(from,to,after);}
+  }
+  _clearTouchOrder() {
+    const state=this._touchOrder;
+    if(!state){return;}
+    this._touchOrder=null;
+    this.win.clearTimeout(state.timer);
+    // The pointer may already have ended or its old row may have been removed.
+    try{state.grip.releasePointerCapture?.(state.id);}catch(_){}
+    state.grip.closest('.zw-modern-order-row')?.classList.remove('is-touch-dragging');
+    this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
+      .forEach(el=>el.classList.remove('is-drop-before','is-drop-after'));
+  }
 
   _customSeekSlots() {
     return Array.from({length:10},(_,n)=>n+1).filter(n=>
@@ -1038,6 +1353,7 @@ class ModernAdvancedSettingsUI {
       Number(this.model.get('PARAM_CUSTOM_SEEK_'+n))!==0);
   }
   _renderCards() {
+    this._clearTouchOrder();
     if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
       this.selected.subcategory==='データ管理'){
       this._renderDataPanel();
@@ -1072,7 +1388,8 @@ class ModernAdvancedSettingsUI {
     const visibleEntries=seekSection?entries.filter(d=>{
       const n=Number((d.actionId||'').match(/^CUSTOM_SEEK_(\d+)$/)?.[1]);
       return !n || used.includes(n);
-    }):entries;
+    }):entries.filter(d=>d.type!=='related-builtin-options' &&
+      (d.type!=='related-links' || !entries.some(item=>item.type==='related-order')));
     const rows=[];
     const visibilityMode=!this.searchTerm && this.selected.category==='画面・映像' &&
       this.selected.subcategory==='表示・非表示';
@@ -1338,7 +1655,39 @@ class ModernAdvancedSettingsUI {
     this._refreshCards();
     return true;
   }
+  _setBuiltinOptionDraft(id,field,value) {
+    if(!this.relatedOrder?.STANDARD.some(item=>item.id===id)){return;}
+    const key=this.relatedOrder.OPTIONS_KEY;
+    if(!this.model.descriptor(key)){return;}
+    const all=this.model.get(key)||{};
+    const options={...this.relatedOrder.getOption(all,id)};
+    if(field==='popupWidth' || field==='popupHeight'){
+      options[field]=value===''?0:Number(value);
+    }else if(field==='includePosition'){
+      options[field]=!!value;
+    }else if(value==='' || (field==='openMode'&&value==='default') ||
+      (field==='copyFormat'&&value==='url')){
+      delete options[field];
+    }else{
+      options[field]=value;
+    }
+    const next={...all};
+    if(Object.keys(options).length){next[id]=options;}
+    else{delete next[id];}
+    this.model.set(key,next);
+    this._refreshFooter();
+  }
   _onValue(e) {
+    const builtin=e.target.closest?.('[data-zw-builtin-field]');
+    if(builtin && this.root.contains(builtin)){
+      e.stopPropagation();
+      this._setBuiltinOptionDraft(builtin.dataset.zwBuiltinId,
+        builtin.dataset.zwBuiltinField,builtin.type==='checkbox'?builtin.checked:builtin.value);
+      if(['openMode','copyFormat'].includes(builtin.dataset.zwBuiltinField)){
+        this._refreshRelatedOrderList();
+      }
+      return;
+    }
     const visible=e.target.closest?.('[data-zw-order-visible]');
     if(visible && this.root.contains(visible)){
       e.stopPropagation();
@@ -1355,6 +1704,21 @@ class ModernAdvancedSettingsUI {
     this._interceptValue(e);
   }
   _onInput(e) {
+    const builtin=e.target.closest?.('[data-zw-builtin-field]');
+    if(builtin && this.root.contains(builtin)){
+      e.stopPropagation();
+      this._setBuiltinOptionDraft(builtin.dataset.zwBuiltinId,
+        builtin.dataset.zwBuiltinField,builtin.type==='checkbox'?builtin.checked:builtin.value);
+      if(builtin.dataset.zwBuiltinField==='label'){
+        const row=this.root.querySelector('[data-zw-order-key="builtin:'+builtin.dataset.zwBuiltinId+'"]');
+        const display=row?.querySelector('.zw-order-name');
+        if(display){
+          const original=this.relatedOrder.STANDARD.find(item=>item.id===builtin.dataset.zwBuiltinId)?.label||'';
+          display.textContent=builtin.value.trim()||original;
+        }
+      }
+      return;
+    }
     if(e.target.matches('[data-zw-search]')) {
       this.searchTerm=e.target.value.trim();
       this._renderCards();
@@ -1370,6 +1734,54 @@ class ModernAdvancedSettingsUI {
     }
     const button=e.target.closest('button');
     if(!button||!this.root.contains(button)||button.disabled){return;}
+    if(button.hasAttribute('data-zw-order-add-link') || button.hasAttribute('data-zw-order-add-copy')){
+      const kind=button.hasAttribute('data-zw-order-add-copy')?'copy':'link';
+      const id=this.relatedEditor?.addItem(kind);
+      if(id){this._expandedRelatedOptions=new Set(['link:'+id]);this._refreshRelatedOrderList();}
+      this._refreshFooter();return;
+    }
+    if(button.hasAttribute('data-zw-order-edit')){
+      const key=button.dataset.zwOrderEdit;
+      this._expandedRelatedOptions=new Set([key]);
+      this._refreshRelatedOrderList();
+      this.root.querySelector('[data-zw-order-edit="'+key+'"]')?.focus();
+      return;
+    }
+    if(button.hasAttribute('data-zw-builtin-reset')){
+      const id=button.dataset.zwBuiltinReset;
+      const key=this.relatedOrder?.OPTIONS_KEY;
+      if(!key || !this.model.descriptor(key)){return;}
+      const options={...(this.model.get(key)||{})};
+      delete options[id];
+      this.model.set(key,options);
+      this._refreshRelatedOrderList();this._refreshFooter();
+      return;
+    }
+    if(button.hasAttribute('data-zw-builtin-insert')){
+      const id=button.dataset.zwBuiltinId;
+      const token=button.dataset.zwBuiltinInsert;
+      if(!this.relatedActions?.VARIABLES?.includes(token)){return;}
+      const field=this.root.querySelector('[data-zw-builtin-field="urlTemplate"][data-zw-builtin-id="'+id+'"]');
+      if(!field){return;}
+      const at=typeof field.selectionStart==='number'?field.selectionStart:field.value.length;
+      const end=typeof field.selectionEnd==='number'?field.selectionEnd:at;
+      field.setRangeText('{'+token+'}',at,end,'end');
+      this._setBuiltinOptionDraft(id,'urlTemplate',field.value);
+      field.focus();return;
+    }
+    if(button.hasAttribute('data-zw-open-link-editor')){
+      const id=button.dataset.zwOpenLinkEditor.slice(5);
+      const links=this.model.get('relatedMenu.customLinks')||[];
+      const index=links.findIndex(item=>item.id===id);
+      if(index>=0 && this.relatedEditor){
+        const card=this.relatedEditor.container.querySelector('[data-rl-row="'+index+'"]');
+        const expand=card?.querySelector('[data-rl-expand]');
+        if(expand?.getAttribute('aria-expanded')==='false'){expand.click();}
+        card?.scrollIntoView?.({block:'nearest'});
+        expand?.focus?.();
+      }
+      return;
+    }
     if(button.hasAttribute('data-zw-order-refresh')){
       this._refreshRelatedOrderList();return;
     }
@@ -1574,7 +1986,7 @@ class ModernAdvancedSettingsUI {
     }
     if(button.hasAttribute('data-zw-clear-key')) {
       this.model.set(button.dataset.zwClearKey,0);
-      this._renderCards();this._refreshFooter();return;
+      this._renderCards();this.relatedEditor?._refresh?.();this._refreshFooter();return;
     }
     if(button.hasAttribute('data-zw-choice')) {
       this.model.set(button.dataset.zwChoice,button.dataset.zwValue);
@@ -1619,6 +2031,7 @@ class ModernAdvancedSettingsUI {
       if(Number.isSafeInteger(code)&&code>0&&code<90000000) {
         this.model.set(id,code);
         this._renderCards();
+        this.relatedEditor?._refresh?.();
         this._refreshFooter();
       }
     };
@@ -1641,6 +2054,11 @@ class ModernAdvancedSettingsUI {
     this.root.removeEventListener('dragover',this._onOrderDragOverBound);
     this.root.removeEventListener('drop',this._onOrderDropBound);
     this.root.removeEventListener('dragend',this._onOrderDragEndBound);
+    this._clearTouchOrder();
+    this.root.removeEventListener('pointerdown',this._onTouchOrderDownBound);
+    this.root.removeEventListener('pointermove',this._onTouchOrderMoveBound);
+    this.root.removeEventListener('pointerup',this._onTouchOrderUpBound);
+    this.root.removeEventListener('pointercancel',this._onTouchOrderCancelBound);
     this._unwatchRelatedActions?.();
     this.root.removeEventListener('click',this._onRelatedClickBound);
     this.root.removeEventListener('change',this._onRelatedChangeBound);
@@ -1654,6 +2072,8 @@ class ModernAdvancedSettingsUI {
       editor.querySelector('[data-rl-cancel]').hidden=false;
       this.relatedEditor.embedded=false;
       this.relatedEditor.onDraftChange=null;
+      this.relatedEditor.getDraftShortcutValue=null;
+      this.relatedEditor.getDraftShortcutConflicts=null;
     }
     for(const [node,{parent,next}] of this._moved) {
       if(!parent){continue;}

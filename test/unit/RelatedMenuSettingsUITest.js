@@ -193,3 +193,43 @@ describe('Task314 related-menu custom links settings UI', function(){
     restored.cleanup();h.cleanup();
   });
 });
+
+describe('Task396 popup field rendering safety',()=>{
+  it('renders malformed saved dimensions as text instead of creating HTML',()=>{
+    const h=boot([{...sample(),openMode:'new-window',
+      popupWidth:'"><img data-injected-popup src=x>',
+      popupHeight:'"><span data-injected-popup>bad</span>'}]);
+    try{
+      assert.strictEqual(h.q('[data-injected-popup]'),null);
+      assert.strictEqual(h.q('[data-rl-save]').disabled,true);
+      assert.strictEqual(h.config.calls.length,0);
+    }finally{h.cleanup();}
+  });
+});
+
+describe('Task398 custom copy editor',()=>{
+  it('preserves literal text and inserts variables into the copy template',()=>{
+    const h=boot([{id:'copy',label:'Copy',kind:'copy',copyTemplate:'{videoId}',enabled:true}]);
+    try{
+      const text=h.field(0,'copyTemplate','タイトル: ');text.focus();text.setSelectionRange(6,6);
+      h.click('[data-rl-insert="videoTitle"]');
+      assert.strictEqual(h.panel.draft[0].copyTemplate,'タイトル: {videoTitle}');
+      assert.strictEqual(h.q('[data-rl-link-fields]').hidden,true);
+      assert.strictEqual(h.config.calls.length,0);
+      h.click('[data-rl-save]');
+      assert.strictEqual(h.config.value[0].kind,'copy');
+      assert.strictEqual(h.config.value[0].copyTemplate,'タイトル: {videoTitle}');
+      assert.strictEqual(h.config.value[0].url,undefined);
+    }finally{h.cleanup();}
+  });
+  it('escapes copy text in textarea and blocks invalid variables before saving',()=>{
+    const h=boot([{id:'copy',label:'Copy',kind:'copy',
+      copyTemplate:'</textarea><img data-injected-copy src=x>{videoId}',enabled:true}]);
+    try{
+      assert.strictEqual(h.q('[data-injected-copy]'),null);
+      h.field(0,'copyTemplate','{cookie}');
+      assert.strictEqual(h.q('[data-rl-save]').disabled,true);
+      assert.strictEqual(h.config.calls.length,0);
+    }finally{h.cleanup();}
+  });
+});

@@ -1,3 +1,32 @@
+## Task398 / 2026-10-11 - Split related-menu inspector and custom copy actions
+
+Restore the approved compact layout: sortable items on the left, exactly one selected detail pane on the right, and stacked panes on narrow screens. Keep drag/keyboard/touch ordering and omit decorative icons.
+Add custom copy items beside links. Copy a video ID, URL, title, or a literal text template with eight video variables and line breaks. Copy items never navigate, honor visibility and shortcuts, and remain drafts until Save.
+Keep existing custom-link IDs, URLs, order and settings. Fix standalone search recovery for the moved custom editor. Versions: ZenzaWatch 2.7.232-task398 / Advanced Settings 0.3.51-task398. Not published.
+
+## Task396 / 2026-10-11 — 関連メニューC案・編集とショートカット同期
+
+上級者設定「関連メニュー（全項目）」をアイコンなしの省スペースC案へ変更。既存のドラッグ・↑↓・Alt＋↑↓と、新たに長押しタッチ並べ替えを維持。
+標準7項目の名前変更、リンクの開き方（同じタブ／別タブ／別ウィンドウ要求）、広告や外部リンクのサイズ指定、X/親作品への安全なURLテンプレート設定を追加。公式の `zenza_official=1` 経路は保持。
+動画URLをコピーには「動画IDのみ」を追加。URL／再生位置付きURL／タイトル＋URL／Markdownも選べる。既存のコピーショートカットと共通動作。
+既存のカスタムリンク編集で変数8種類の説明と挿入ボタンを維持し、ウィンドウ指定にも対応。標準の編集ショートカットは既存 `KEY_*` に直結し、保存前の重複も警告。元動画用のショートカットアクションを新設（初期キー未設定）。
+設定は既存保存キーを維持し、標準項目の追加編集だけ `relatedMenu.builtinOptions` に保存。保存・キャンセル・初期値・別タブ同期を保持。
+今回の内部開発版は本体 `2.7.231-task396`、上級者設定 `0.3.50-task396`。GitHub公開はユーザーの指示により実施しない。
+
+## Task395 / 2026-10-11 — 上級者設定の既存文字アイコンを一行に統一
+
+「表示・非表示」にある既存の文字アイコン（再生速度 `1.0×`、再生時間 `1:23`、音量 `━●`、広告 `広告`）が狭い38px枠で折り返される不具合を修正。アイコンの元文字を変えず、折り返し禁止と項目別のフォント縮小で一行表示。Task391で新設した共有7件のSVGや保存キー・実プレイヤーには変更なし。
+上級者設定 `0.3.49-task395`（本体はTask393版のまま）。
+
+## Task393 / 2026-10-11 — 上級者設定のカスタムシーク表示修復と既存アイコン復元
+
+本体 `2.7.230-task393`、上級者設定 `0.3.48-task393`。
+旧設定画面の `PARAM_CUSTOM_SEEK_1〜10` の入力欄を新UIの独立カードとして二重登録しないよう修正。
+カスタムシークのショートカットキーと秒数を同じカードで表示し、キーか秒数が設定されているスロットだけを初期表示する。
+「＋ カスタムシークを追加」で空き枠を開き、保存・キャンセル・削除の既存の下書き契約を保持。既存キーと秒数は書き換えない。
+Task391で新設した共有7設定のSVGアイコンは維持。Task390以前から存在したフルスクリーン・設定歯車・検索の3アイコンは従来の文字記号に戻す。
+この修正は表示のみに限定し、動画プレイヤーの既存アイコンや背景透過を変更しない。
+
 ## Task391 / 2026-10-11 — 上級者設定の共通スイッチと公開前点検
 
 本体 `2.7.229-task391`、上級者設定 `0.3.47-task391`。表示・非表示37項目に、既存7設定の別配置を追加して44項目にしました。

@@ -30,7 +30,10 @@ function boot(saved={},storageValues={}) {
     showComment:true,enableCommentPanel:true,enableCommentPreview:false,
     enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,
     enableAdDecoration:true,
-    KEY_TOGGLE_PLAY:32,
+    KEY_TOGGLE_PLAY:32, KEY_OPEN_GINZA:0, KEY_OPEN_NICOAD:0,
+    KEY_OPEN_TWITTER_HASH:0, KEY_OPEN_ORIGINAL_VIDEO:0, KEY_OPEN_PARENT_VIDEO:0,
+    KEY_PLAYLIST_SET_COMMONS_TREE:0, KEY_COPY_WATCH_URL:0,
+    'relatedMenu.builtinOptions':{},
     'videoSearch.wordCountMode':'on-demand','videoSearch.videoIdSuggestMode':'merged',
     'search.limit':1000,'relatedMenu.order':[],'relatedMenu.hiddenItems':[],
     'ui.hover.like':true,'ui.hover.tweet':true,'ui.hover.mylist':true,
@@ -42,7 +45,10 @@ function boot(saved={},storageValues={}) {
     setValue(k,v){this.values[k]=v;this.writes.push([k,v])},
     options:{validateImport(k,v){return typeof v===typeof defaults[k]}}};
   const actions=[{id:'TOGGLE_PLAY',label:'再生・停止',category:'再生操作',defaultKey:32},
-    {id:'CUSTOM_SEEK_1',label:'カスタムシーク 1',category:'シーク',defaultKey:0,customSeekSlot:true}];
+    {id:'CUSTOM_SEEK_1',label:'カスタムシーク 1',category:'シーク',defaultKey:0,customSeekSlot:true},
+    ...['OPEN_GINZA','OPEN_NICOAD','OPEN_TWITTER_HASH','OPEN_ORIGINAL_VIDEO',
+      'OPEN_PARENT_VIDEO','PLAYLIST_SET_COMMONS_TREE','COPY_WATCH_URL']
+      .map(id=>({id,label:id,category:'その他',defaultKey:0}))];
   const panel=dom.window.document.getElementById('panel');
   const legacy=dom.window.document.getElementById('legacy');
   const oldCheckbox=legacy.querySelector('[data-setting-name="supporterCredit.enable"]');
@@ -281,7 +287,7 @@ describe('Task318 full-viewport advanced-settings shell',()=>{
   it('stages related-link editing until the global Save and hides the local Save',()=>{
     const h=boot();h.click('[data-zw-major="プレイリスト・検索"]');
     h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');
-    const card=h.q('[data-zw-id="relatedMenu.customLinks"]');
+    const card=h.q('[data-zw-order-detail-pane] .relatedMenuCustomLinksContainer');
     assert(card);
     assert(card.querySelector('[data-rl-add]'));
     assert.strictEqual(card.querySelector('[data-rl-save]').hidden,true);
@@ -854,6 +860,48 @@ describe('Task318 clear icon previews and safe container visibility',()=>{
     h.click('[data-zw-major="画面・映像"]');
     h.click('[data-zw-sub="画面・映像|表示・非表示"]');
   };
+  it('keeps long legacy icons on one line without replacing their glyphs',()=>{
+    const h=boot();open(h);
+    try{
+      const cases=[
+        ['ui.bar.speed','1.0×','is-compact-glyph'],
+        ['ui.bar.time','1:23','is-compact-glyph'],
+        ['ui.bar.volume','━●','is-pair-glyph'],
+        ['ui.info.credits','広告','is-pair-glyph']
+      ];
+      for(const [id,glyph,cssClass] of cases){
+        const icon=h.q('[data-zw-id="'+id+'"] [data-zw-visibility-icon]');
+        assert(icon,id);
+        assert.strictEqual(icon.textContent,glyph);
+        assert(icon.classList.contains(cssClass),id);
+        assert.strictEqual(icon.querySelector('svg'),null);
+        assert.strictEqual(h.dom.window.getComputedStyle(icon).whiteSpace,'nowrap',id);
+      }
+      const style=h.dom.window.document.querySelector('style[data-zw-modern-ui]');
+      assert(style.textContent.includes('white-space:nowrap; overflow:hidden'));
+      assert(style.textContent.includes('.zw-modern-visibility-icon.is-compact-glyph'));
+      assert(style.textContent.includes('.zw-modern-visibility-icon.is-pair-glyph'));
+    }finally{h.destroy();}
+  });
+  it('renders exactly seven Task391 SVG additions without replacing the three Task390 glyphs',()=>{
+    const h=boot();open(h);
+    try{
+      const originals=[
+        ['ui.bar.fullscreen','⛶'],['ui.bar.settings','⚙'],['ui.header.search','⌕']
+      ];
+      for(const [id,glyph] of originals){
+        const icon=h.q('[data-zw-id="'+id+'"] [data-zw-visibility-icon]');
+        assert(icon,id);
+        assert.strictEqual(icon.textContent,glyph,id);
+        assert.strictEqual(icon.querySelector('svg'),null,id);
+      }
+      for(const id of ['showComment','enableCommentPanel','enableCommentPreview',
+        'enableHeatMap','enableStoryboard','enableStoryboardBar','enableAdDecoration']){
+        const icon=h.q('[data-zw-id="'+id+'"] [data-zw-visibility-icon] svg');
+        assert(icon&&icon.querySelector('path'),'new shared SVG must remain: '+id);
+      }
+    }finally{h.destroy();}
+  });
   it('shows faithful, decorative icons alongside all eight setting labels',()=>{
     const h=boot();open(h);
     const expected=[
@@ -986,6 +1034,227 @@ describe('Task391 native checkbox presentation',()=>{
         '.zw-modern-order-row .zw-order-visible input[type=checkbox]::after');
       assert(nativeThumb,'native checkbox must explicitly opt out of toggle thumb');
       assert.strictEqual(nativeThumb.style.getPropertyValue('content'),'none');
+    }finally{h.destroy();}
+  });
+});
+
+describe('Task396 C-style compact related-menu editor',()=>{
+  const open=h=>{
+    h.click('[data-zw-major="プレイリスト・検索"]');
+    h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');
+  };
+  it('uses one compact icon-free list with drag grips, editable builtins and draft save',()=>{
+    const h=boot();open(h);
+    try{
+      assert.strictEqual(h.all('.zw-modern-order-row').length,7);
+      assert(h.q('.zw-modern-order-compact'));
+      assert.strictEqual(h.all('.zw-modern-order-row svg').length,0);
+      assert.strictEqual(h.all('[data-zw-order-grip]').length,7);
+      h.click('[data-zw-order-edit="builtin:official"]');
+      const input=h.q('[data-zw-builtin-field="label"][data-zw-builtin-id="official"]');
+      assert(input);
+      input.value='公式で観る';h.dispatch(input,'input');
+      assert.strictEqual(h.q('[data-zw-order-key="builtin:official"] .zw-order-name').textContent,
+        '公式で観る');
+      assert.strictEqual(h.config.writes.length,0);
+      assert.strictEqual(h.model.get('relatedMenu.builtinOptions').official.label,'公式で観る');
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(Object.keys(h.model.get('relatedMenu.builtinOptions')).length,0);
+      if(!h.q('[data-zw-builtin-field="label"][data-zw-builtin-id="official"]')){
+        h.click('[data-zw-order-edit="builtin:official"]');
+      }
+      const text=h.q('[data-zw-builtin-field="label"][data-zw-builtin-id="official"]');
+      text.value='公式で観る';h.dispatch(text,'input');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['relatedMenu.builtinOptions'].official.label,
+        '公式で観る');
+    }finally{h.destroy();}
+  });
+  it('supports new-window dimensions and the video-ID-only copy choice',()=>{
+    const h=boot();open(h);
+    try{
+      h.click('[data-zw-order-edit="builtin:ad"]');
+      const mode=h.q('[data-zw-builtin-field="openMode"][data-zw-builtin-id="ad"]');
+      mode.value='new-window';h.dispatch(mode,'change');
+      const width=h.q('[data-zw-builtin-field="popupWidth"][data-zw-builtin-id="ad"]');
+      assert(width);
+      width.value='650';h.dispatch(width,'input');
+      h.click('[data-zw-order-edit="builtin:copy-url"]');
+      const copy=h.q('[data-zw-builtin-field="copyFormat"][data-zw-builtin-id="copy-url"]');
+      assert([...copy.options].some(option=>option.value==='id'));
+      copy.value='id';h.dispatch(copy,'change');
+      assert.strictEqual(h.model.get('relatedMenu.builtinOptions').ad.popupWidth,650);
+      assert.strictEqual(h.model.get('relatedMenu.builtinOptions')['copy-url'].copyFormat,'id');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['relatedMenu.builtinOptions']['copy-url'].copyFormat,'id');
+      assert.strictEqual(h.config.values['relatedMenu.builtinOptions'].ad.openMode,'new-window');
+    }finally{h.destroy();}
+  });
+  it('keeps all eight URL variables with descriptions and inserts at caret',()=>{
+    const h=boot();open(h);
+    try{
+      h.click('[data-zw-order-edit="builtin:twitter"]');
+      const field=h.q('[data-zw-builtin-field="urlTemplate"][data-zw-builtin-id="twitter"]');
+      field.value='https://example.org/search?q=';
+      h.dispatch(field,'input');
+      const buttons=h.all('[data-zw-builtin-insert][data-zw-builtin-id="twitter"]');
+      assert.strictEqual(buttons.length,8);
+      assert(h.q('.zw-order-variable-palette').textContent.includes('投稿者'));
+      h.click('[data-zw-builtin-insert="videoId"][data-zw-builtin-id="twitter"]');
+      assert.strictEqual(h.model.get('relatedMenu.builtinOptions').twitter.urlTemplate,
+        'https://example.org/search?q={videoId}');
+      assert.strictEqual(h.config.writes.length,0);
+      const customHelp=h.q('.zenzaRelatedLinksEditor .rl-help');
+      assert(customHelp.textContent.includes('8種類'));
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('relatedMenu.builtinOptions').twitter,undefined);
+    }finally{h.destroy();}
+  });
+  it('shares canonical shortcut keys across both editors and warns on duplicate drafts',()=>{
+    const h=boot();open(h);
+    try{
+      h.click('[data-zw-order-edit="builtin:official"]');
+      const record=h.q('[data-zw-record="KEY_OPEN_GINZA"]');
+      assert(record);
+      record.click();
+      h.dom.window.document.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{
+        keyCode:32,key:' ',bubbles:true,cancelable:true}));
+      assert.strictEqual(h.model.get('KEY_OPEN_GINZA'),32);
+      assert.strictEqual(h.config.values.KEY_OPEN_GINZA,0);
+      assert(h.q('[data-zw-order-key="builtin:official"] .zw-order-key-preview')
+        .textContent.includes('重複'));
+      h.click('[data-zw-major="ショートカット"]');
+      h.click('[data-zw-sub="ショートカット|その他"]');
+      assert(h.q('[data-zw-id="KEY_OPEN_GINZA"]'));
+      assert.strictEqual(h.model.get('KEY_OPEN_GINZA'),32);
+      h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');
+      assert(h.q('[data-zw-order-key="builtin:official"] .zw-order-key-preview')
+        .textContent.includes('重複'));
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('KEY_OPEN_GINZA'),0);
+      assert.strictEqual(h.config.values.KEY_OPEN_GINZA,0);
+    }finally{h.destroy();}
+  });
+  it('warns custom links about a canonical shortcut changed only in the draft',()=>{
+    const h=boot();open(h);
+    try{
+      h.model.set('KEY_OPEN_GINZA',86);
+      const editor=h.ui.relatedEditor;
+      editor.draft=[{id:'dup',label:'重複リンク',url:'https://example.org/{videoId}',
+        enabled:true,openInNewTab:true,shortcutKey:86}];
+      editor._render();
+      const warning=h.q('[data-rl-shortcut-warning]');
+      assert(warning.textContent.includes('重複'),warning.textContent);
+      assert(warning.textContent.includes('OPEN_GINZA'),warning.textContent);
+      assert.strictEqual(h.config.values.KEY_OPEN_GINZA,0);
+      assert.strictEqual(h.config.writes.length,0);
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('KEY_OPEN_GINZA'),0);
+    }finally{h.destroy();}
+  });
+  it('clears pending touch ownership when cancel replaces the list',()=>{
+    const h=boot();open(h);
+    try{
+      h.model.set('relatedMenu.hiddenItems',['builtin:ad']);
+      h.ui._refreshFooter();
+      assert.strictEqual(h.q('[data-zw-cancel]').disabled,false);
+      const grip=h.q('[data-zw-order-grip="builtin:ad"]');
+      h.ui._onTouchOrderDown({pointerType:'touch',pointerId:7,target:grip});
+      assert(h.ui._touchOrder);
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.ui._touchOrder,null);
+    }finally{h.destroy();}
+  });
+  it('recovers cleanly when the browser has already released pointer capture',()=>{
+    const h=boot();open(h);
+    try{
+      const grip=h.q('[data-zw-order-grip="builtin:ad"]');
+      h.ui._onTouchOrderDown({pointerType:'touch',pointerId:9,target:grip});
+      grip.releasePointerCapture=()=>{throw new h.dom.window.DOMException('released','NotFoundError');};
+      assert.doesNotThrow(()=>h.ui._clearTouchOrder());
+      assert.strictEqual(h.ui._touchOrder,null);
+    }finally{h.destroy();}
+  });
+  it('retains keyboard drag and long-press touch reorder without immediate saving',async()=>{
+    const h=boot();open(h);
+    try{
+      const grip=h.q('[data-zw-order-grip="builtin:ad"]');
+      h.ui._onTouchOrderDown({pointerType:'touch',pointerId:7,target:grip});
+      await new Promise(resolve=>setTimeout(resolve,300));
+      assert(h.ui._touchOrder?.active);
+      const first=h.q('[data-zw-order-key="builtin:official"]');
+      h.ui.doc.elementFromPoint=()=>first;
+      h.ui._onTouchOrderMove({pointerId:7,target:grip,clientX:20,clientY:15,
+        preventDefault(){}});
+      h.ui._onTouchOrderUp({pointerId:7});
+      assert.strictEqual(h.q('[data-zw-order-key]').dataset.zwOrderKey,'builtin:ad');
+      assert.strictEqual(h.config.writes.length,0);
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.q('[data-zw-order-key]').dataset.zwOrderKey,'builtin:official');
+    }finally{h.destroy();}
+  });
+});
+
+
+describe('Task398 right-hand related menu detail panel',()=>{
+  const open=h=>{
+    h.click('[data-zw-major="プレイリスト・検索"]');
+    h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');
+  };
+  it('keeps exactly one selected detail outside the sortable list',()=>{
+    const h=boot();open(h);
+    try{
+      const split=h.q('.zw-order-workspace');assert(split);
+      const pane=h.q('[data-zw-order-detail-pane]');assert(pane);
+      assert.strictEqual(h.all('.zw-modern-order-list .zw-order-details').length,0);
+      assert.strictEqual(h.all('[data-zw-order-details]').length,1);
+      h.click('[data-zw-order-edit="builtin:copy-url"]');
+      assert(pane.parentNode || h.q('[data-zw-order-detail-pane]'));
+      assert(h.q('[data-zw-order-detail-pane] [data-zw-builtin-field="copyFormat"]'));
+      assert.strictEqual(h.all('[data-zw-order-details]').length,1);
+      assert.strictEqual(h.all('.zw-modern-order-row svg').length,0);
+      h.click('[data-zw-order-up="builtin:copy-url"]');
+      assert(h.q('[data-zw-order-detail-pane] [data-zw-builtin-field="copyFormat"]'));
+    }finally{h.destroy();}
+  });
+  it('adds and edits a copy item in the right pane while keeping the draft until save',()=>{
+    const h=boot();open(h);
+    try{
+      h.click('[data-zw-order-add-copy]');
+      const pane=h.q('[data-zw-order-detail-pane]');
+      const input=pane.querySelector('[data-rl-field="copyTemplate"]');assert(input);
+      input.value='{videoTitle}\n{videoId}';h.dispatch(input,'input');
+      const label=pane.querySelector('[data-rl-field="label"]');
+      label.value='IDとタイトル';h.dispatch(label,'input');
+      const item=h.model.get('relatedMenu.customLinks')[0];
+      assert.strictEqual(item.kind,'copy');
+      assert.strictEqual(item.copyTemplate,'{videoTitle}\n{videoId}');
+      assert.strictEqual(h.config.writes.length,0);
+      h.click('[data-zw-order-edit="builtin:official"]');
+      h.click('[data-zw-order-edit="link:'+item.id+'"]');
+      assert.strictEqual(h.q('[data-zw-order-detail-pane] [data-rl-field="copyTemplate"]').value,
+        '{videoTitle}\n{videoId}');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['relatedMenu.customLinks'][0].kind,'copy');
+      assert.strictEqual(h.config.values['relatedMenu.customLinks'][0].label,'IDとタイトル');
+      h.click('[data-zw-order-add-copy]');h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('relatedMenu.customLinks').length,1);
+    }finally{h.destroy();}
+  });
+});
+
+describe('Task398 custom editor search recovery',()=>{
+  it('leaves the custom editor visible when global search shows it outside the split pane',()=>{
+    const h=boot();
+    try{
+      h.click('[data-zw-major="プレイリスト・検索"]');
+      h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');
+      assert.strictEqual(h.ui.relatedEditor.container.hidden,true);
+      const input=h.q('[data-zw-search]');input.value='カスタム関連メニューのリンク';
+      h.dispatch(input,'input');
+      assert(h.q('[data-zw-id="relatedMenu.customLinks"]'));
+      assert.strictEqual(h.ui.relatedEditor.container.hidden,false);
+      assert.strictEqual(h.ui.relatedEditor.container.classList.contains('is-detail-only'),false);
     }finally{h.destroy();}
   });
 });

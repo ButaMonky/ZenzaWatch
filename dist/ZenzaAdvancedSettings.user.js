@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.51-task398
+// @version     0.3.52-task399
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-11 10:06Z
+// build: 2026-10-11 11:21Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -7146,6 +7146,10 @@ class ModernAdvancedSettingsUI {
 			}
 		}
 	}
+	static _formatNgUserIds(value) {
+		const text=Array.isArray(value)?value.join('\n'):String(value??'');
+		return text.split(/[,\r\n]+/).map(id=>id.trim()).filter(Boolean).join('\n');
+	}
 	static _hexColor(value) {
 		const text=String(value||'').trim().toLowerCase();
 		if(/^#[0-9a-f]{6}$/.test(text)){return text;}
@@ -7581,7 +7585,11 @@ class ModernAdvancedSettingsUI {
 				original.disabled=!this.model.isEnabled(descriptor.id);
 				original.setAttribute('aria-label',descriptor.label);
 				if(original.type==='checkbox'){original.checked=!!this.model.get(descriptor.id);}
-				else {original.value=this.model.get(descriptor.id)??'';}
+				else {
+					const value=this.model.get(descriptor.id);
+					original.value=descriptor.id==='userIdFilter'?
+						ModernAdvancedSettingsUI._formatNgUserIds(value):value??'';
+				}
 				controls.append(original);
 			} else {
 				const input=this.doc.createElement(descriptor.type==='textarea'?'textarea':'input');
@@ -7590,7 +7598,11 @@ class ModernAdvancedSettingsUI {
 						['number','seconds'].includes(descriptor.type)?'number':'text';
 				}
 				if(input.type==='checkbox'){input.checked=!!this.model.get(descriptor.id);}
-				else {input.value=String(this.model.get(descriptor.id)??'');}
+				else {
+					const value=this.model.get(descriptor.id);
+					input.value=descriptor.id==='userIdFilter'?
+						ModernAdvancedSettingsUI._formatNgUserIds(value):String(value??'');
+				}
 				input.dataset.settingName=descriptor.id;
 				input.setAttribute('aria-label',descriptor.label);
 				input.disabled=!this.model.isEnabled(descriptor.id);
@@ -8389,7 +8401,8 @@ class ModernAdvancedSettingsUI {
 		if(typeof e.stopImmediatePropagation==='function'){e.stopImmediatePropagation();}
 		const key=el.dataset.settingName;
 		const value=el.type==='checkbox'?el.checked:el.value;
-		try {this.model.set(key,value);}
+		try {this.model.set(key,key==='userIdFilter'?
+			ModernAdvancedSettingsUI._formatNgUserIds(value):value);}
 		catch(error){this.win.console?.warn?.('Advanced settings input rejected',error);}
 		this._refreshCards();
 		return true;

@@ -1,3 +1,8 @@
+## Task399 / 2026-10-11 — NGユーザーID一覧を1行1件で表示
+
+上級者設定の「NGユーザーID一覧」が配列をカンマ区切りで表示する問題を修正。既存の配列値とカンマ区切り文字列の両方を改行で表示し、入力時は改行区切りへ正規化する。表示しただけで元設定を保存・変換せず、変更は従来どおり「変更を保存」時に反映する。NG判定、NGコマンド、NGワードなどの動作変更はしない。
+上級者設定のみ `0.3.52-task399` に更新。配布用 `ZenzaAdvancedSettings.user.js` を再生成。GitHub未公開。
+
 ## Task398 / 2026-10-11 - Split related-menu inspector and custom copy actions
 
 Restore the approved compact layout: sortable items on the left, exactly one selected detail pane on the right, and stacked panes on narrow screens. Keep drag/keyboard/touch ordering and omit decorative icons.

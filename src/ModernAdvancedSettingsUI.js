@@ -391,6 +391,12 @@ class ModernAdvancedSettingsUI {
       }
     }
   }
+  // The filter accepts newline-delimited IDs, but runtime settings may be an
+  // array (whose implicit textarea conversion would display commas).
+  static _formatNgUserIds(value) {
+    const text=Array.isArray(value)?value.join('\n'):String(value??'');
+    return text.split(/[,\r\n]+/).map(id=>id.trim()).filter(Boolean).join('\n');
+  }
   static _hexColor(value) {
     const text=String(value||'').trim().toLowerCase();
     if(/^#[0-9a-f]{6}$/.test(text)){return text;}
@@ -831,7 +837,11 @@ class ModernAdvancedSettingsUI {
         original.disabled=!this.model.isEnabled(descriptor.id);
         original.setAttribute('aria-label',descriptor.label);
         if(original.type==='checkbox'){original.checked=!!this.model.get(descriptor.id);}
-        else {original.value=this.model.get(descriptor.id)??'';}
+        else {
+          const value=this.model.get(descriptor.id);
+          original.value=descriptor.id==='userIdFilter'?
+            ModernAdvancedSettingsUI._formatNgUserIds(value):value??'';
+        }
         controls.append(original);
       } else {
         const input=this.doc.createElement(descriptor.type==='textarea'?'textarea':'input');
@@ -840,7 +850,11 @@ class ModernAdvancedSettingsUI {
             ['number','seconds'].includes(descriptor.type)?'number':'text';
         }
         if(input.type==='checkbox'){input.checked=!!this.model.get(descriptor.id);}
-        else {input.value=String(this.model.get(descriptor.id)??'');}
+        else {
+          const value=this.model.get(descriptor.id);
+          input.value=descriptor.id==='userIdFilter'?
+            ModernAdvancedSettingsUI._formatNgUserIds(value):String(value??'');
+        }
         input.dataset.settingName=descriptor.id;
         input.setAttribute('aria-label',descriptor.label);
         input.disabled=!this.model.isEnabled(descriptor.id);
@@ -1650,7 +1664,8 @@ class ModernAdvancedSettingsUI {
     if(typeof e.stopImmediatePropagation==='function'){e.stopImmediatePropagation();}
     const key=el.dataset.settingName;
     const value=el.type==='checkbox'?el.checked:el.value;
-    try {this.model.set(key,value);}
+    try {this.model.set(key,key==='userIdFilter'?
+      ModernAdvancedSettingsUI._formatNgUserIds(value):value);}
     catch(error){this.win.console?.warn?.('Advanced settings input rejected',error);}
     this._refreshCards();
     return true;

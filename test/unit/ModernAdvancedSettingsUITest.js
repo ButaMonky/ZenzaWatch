@@ -79,6 +79,45 @@ function boot(saved={},storageValues={}) {
     closes(){return closed},confirms(){return confirmCalls},allowConfirm(v){confirms=v},
     destroy(){ui.dispose();relatedEditor.dispose();dom.window.close()}};
 }
+describe('Task399 NG user ID list editor',()=>{
+  const openUserIds=h=>{
+    h.click('[data-zw-major="NG・表示対象"]');
+    h.click('[data-zw-sub="NG・表示対象|NG条件"]');
+    const field=h.q('[data-zw-id="userIdFilter"] textarea');
+    assert(field,'NG user ID editor must be a textarea');
+    return field;
+  };
+  it('shows existing array entries on separate lines without modifying saved settings',()=>{
+    const ids=['nvc:alpha','nvc:beta','13579'];
+    const h=boot({userIdFilter:ids,commandFilter:'red'});
+    try{
+      assert.strictEqual(openUserIds(h).value,ids.join('\n'));
+      assert.deepStrictEqual(h.model.get('userIdFilter'),ids);
+      assert.strictEqual(h.model.isDirty(),false);
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.writes.length,0);
+      assert.deepStrictEqual(h.config.values.userIdFilter,ids);
+    }finally{h.destroy();}
+  });
+  it('accepts legacy comma values and saves newlines without changing NG commands',()=>{
+    const h=boot({userIdFilter:'nvc:alpha, nvc:beta',commandFilter:'red'});
+    try{
+      const field=openUserIds(h);
+      assert.strictEqual(field.value,'nvc:alpha\nnvc:beta');
+      field.value='nvc:alpha,\nnvc:beta\nnvc:gamma';
+      h.dispatch(field,'input');
+      assert.strictEqual(h.model.get('userIdFilter'),'nvc:alpha\nnvc:beta\nnvc:gamma');
+      assert.strictEqual(h.config.writes.length,0,'editing is only a draft');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values.userIdFilter,'nvc:alpha\nnvc:beta\nnvc:gamma');
+      assert.deepStrictEqual(h.config.writes.map(([key])=>key),['userIdFilter']);
+      assert.strictEqual(h.config.values.commandFilter,'red');
+      assert.strictEqual(h.q('[data-zw-id="userIdFilter"] textarea').value,
+        'nvc:alpha\nnvc:beta\nnvc:gamma');
+    }finally{h.destroy();}
+  });
+});
+
 describe('Task318 full-viewport advanced-settings shell',()=>{
   it('notifies the current document only after a successfully saved change',()=>{
     const h=boot();

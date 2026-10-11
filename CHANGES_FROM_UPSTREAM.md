@@ -1,3 +1,7 @@
+## Task399 / 2026-10-11 — 上級者設定NGユーザー一覧の改行表示
+
+配列型で保存されたNGユーザーIDを1行1件で表示し、旧カンマ区切りも改行表示・編集に対応。入力・保存以外では元データを変更せず、コメントNGの判定ロジックは既存のまま。Advanced Settings `0.3.52-task399` のみ更新・未公開。
+
 ## Task398 / 2026-10-11 - Split related-menu inspector and custom copy actions
 
 Restore the approved compact layout: sortable items on the left, exactly one selected detail pane on the right, and stacked panes on narrow screens. Keep drag/keyboard/touch ordering and omit decorative icons.

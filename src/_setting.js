@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.51-task398
+// @version     0.3.52-task399
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none

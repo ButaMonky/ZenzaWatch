@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description ZenzaWatchをゲームパッドで操作
 // @include     *://*.nicovideo.jp/*
-// @version     1.5.4-task364
+// @version     1.5.5-task414
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -144,7 +144,7 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
                 }
               }
             } catch (e) {
-              window.console.error('config parse error key:"%s" value:"%s" ', key, localStorage.getItem(storageKey), e);
+              window.console.error(PRODUCT + ' config parse failed for key', key);
               config[key] = defaultConfig[key];
             }
           } else {

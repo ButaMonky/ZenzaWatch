@@ -214,12 +214,14 @@ class VideoList extends Emitter {
   _onPlaylistAppend(watchId, itemId) {
     this.emit('command', 'playlistAppend', watchId);
     const item = this.model.findByItemId(itemId) || this.model.findByWatchId(watchId);
+    if (!item) { return; }
     item.isUpdating = true;
     window.setTimeout(() => item.isUpdating = false, 1000);
   }
   _onDeflistAdd(watchId, itemId) {
     this.emit('command', 'deflistAdd', watchId);
     const item = this.model.findByItemId(itemId);
+    if (!item) { return; }
     item.isUpdating = true;
     window.setTimeout(() => item.isUpdating = false, 1000);
   }

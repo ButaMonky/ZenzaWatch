@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.235-task403
+// @version        2.7.242-task418
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-12 03:38Z
+// build: 2026-10-12 12:42Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.235-task403';
+    var VER = '2.7.242-task418';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-12 03:38Z';
+    var BUILD = '2026-10-12 12:42Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -644,8 +644,8 @@ class DataStorage {
 				try {
 					this._data[key] = JSON.parse(storage[storageKey]);
 				} catch (e) {
-					console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-					if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
+					console.error('DataStorage restore parse failed for key', key);
+					if (!this.readonly && !this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
 					this._data[key] = this.default[key];
 				}
 			} else {
@@ -667,7 +667,7 @@ class DataStorage {
 			try {
 				this._data[key] = JSON.parse(storage[storageKey]);
 			} catch (e) {
-				console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
+				console.error('DataStorage refresh parse failed for key', key);
 			}
 		}
 		return this._data[key];
@@ -679,7 +679,7 @@ class DataStorage {
 	deleteValue(key) {
 		key = this.getNativeKey(key);
 		const storageKey = this.getStorageKey(key);
-		this.storage.removeItem(storageKey);
+		if (!this.readonly) { this.storage.removeItem(storageKey); }
 		this._data[key] = this.default[key];
 	}
 	setValue(key, value) {
@@ -692,6 +692,9 @@ class DataStorage {
 		const storage = this.storage;
 		if (!this.readonly) {
 			try {
+				if (typeof value === 'number' && !Number.isFinite(value)) {
+					throw new TypeError('Cannot serialize non-finite DataStorage number');
+				}
 				const json = JSON.stringify(value);
 				if (json === undefined) {
 					throw new TypeError('Cannot serialize DataStorage value');
@@ -778,8 +781,8 @@ class DataStorage {
 			.filter(key => !this._ignoreExportKeys.includes(key)).forEach(key => {
 				const storageKey = this.getStorageKey(key);
 				try {
-					if (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined) {
-						console.log('delete storage', storageKey, storage[storageKey]);
+					if (!this.readonly && (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined)) {
+						console.log('delete storage', storageKey);
 						delete storage[storageKey];
 					}
 					this._data[key] = this.default[key];
@@ -18879,6 +18882,7 @@ const StoryboardWorker = (() => {
 				this.boards = [];
 				this._infoGeneration = 0;
 				this._disposed = false;
+				this._animationGeneration = 0;
 				this.isAnimating = false;
 				this.cls();
 				if (info) {
@@ -19110,18 +19114,20 @@ const StoryboardWorker = (() => {
 			}
 			async execAnimation() { // SharedArrayBufferで遊びたかっただけ. 最適化の余地はありそう
 				this.isAnimating = true;
+				const generation = ++this._animationGeneration;
+				const active = () => this.isAnimating && !this._disposed && generation === this._animationGeneration;
 				const buffer = this.buffer;
-				while (this.isAnimating) {
-					while (!this.isReady && this.isAnimating && !this._disposed) {
+				while (active()) {
+					while (!this.isReady && active()) {
 						await new Promise(res => setTimeout(res, 500));
 					}
-					if (!this.isAnimating || this._disposed) { return; }
-					while (this.isReady && this.isAnimating && !this._disposed && !buffer.paused) {
+					if (!active()) { return; }
+					while (this.isReady && active() && !buffer.paused) {
 						buffer.wait();
 						this.currentTime = this.buffer.currentTime;
 						await new Promise(res => requestAnimationFrame(res)); // 結局raf安定だった
 					}
-					if (!this.isAnimating) { return; }
+					if (!active()) { return; }
 					await new Promise(res => setTimeout(res, 1000));
 				}
 			}
@@ -19131,6 +19137,7 @@ const StoryboardWorker = (() => {
 				this.execAnimation();
 			}
 			async stopAnimation() {
+				this._animationGeneration++;
 				this.isAnimating = false;
 				if (this._disposed) { return; }
 				await new Promise(res => requestAnimationFrame(res));
@@ -19139,6 +19146,7 @@ const StoryboardWorker = (() => {
 			dispose() {
 				if (this._disposed) { return; }
 				this._disposed = true;
+				this._animationGeneration++;
 				this._infoGeneration++;
 				this.isAnimating = false;
 				this.isReady = false;
@@ -19184,7 +19192,7 @@ const StoryboardWorker = (() => {
 			cls() {
 				this.ctx.clearRect(0, 0, this.width, this.height);
 			}
-			get currentTime() { return this.currentTime; }
+			get currentTime() { return this._currentTime; }
 			set currentTime(time) { this.setCurrentTime(time); }
 			get width() {return this.canvas.width;}
 			get height() {return this.canvas.height;}
@@ -19197,7 +19205,10 @@ const StoryboardWorker = (() => {
 					return;
 				}
 				const pos = this.info.getThumbnailPosition(time * 1000);
-				if (Object.keys(pos).every(key => pos[key] === this.lastPos[key])) { return; }
+				if (Object.keys(pos).every(key => pos[key] === this.lastPos[key])) {
+					this._currentTime = time;
+					return;
+				}
 				this.lastPos = pos;
 				this._currentTime = time;
 				const {url, row, col, page} = pos;
@@ -19247,12 +19258,15 @@ const StoryboardWorker = (() => {
 			}
 			sharedMemory() {}
 			async execAnimation() {
-				while (this.isAnimating) {
-					while (!this.isReady) {
+				const generation = ++this._animationGeneration;
+				const active = () => this.isAnimating && generation === this._animationGeneration;
+				while (active()) {
+					while (!this.isReady && active()) {
 						await new Promise(res => setTimeout(res, 500));
 					}
+					if (!active()) { return; }
 					await this.setCurrentTime((this.currentTime + this.info.interval / 1000) % this.info.duration);
-					if (!this.isAnimating) { return; }
+					if (!active()) { return; }
 					await new Promise(res => setTimeout(res, 1000));
 				}
 			}
@@ -19262,6 +19276,7 @@ const StoryboardWorker = (() => {
 				this.execAnimation();
 			}
 			stopAnimation() {
+				this._animationGeneration++;
 				this.isAnimating = false;
 			}
 		}
@@ -32220,12 +32235,14 @@ class VideoList extends Emitter {
 	_onPlaylistAppend(watchId, itemId) {
 		this.emit('command', 'playlistAppend', watchId);
 		const item = this.model.findByItemId(itemId) || this.model.findByWatchId(watchId);
+		if (!item) { return; }
 		item.isUpdating = true;
 		window.setTimeout(() => item.isUpdating = false, 1000);
 	}
 	_onDeflistAdd(watchId, itemId) {
 		this.emit('command', 'deflistAdd', watchId);
 		const item = this.model.findByItemId(itemId);
+		if (!item) { return; }
 		item.isUpdating = true;
 		window.setTimeout(() => item.isUpdating = false, 1000);
 	}
@@ -37087,10 +37104,19 @@ class NicoVideoPlayerDialog extends Emitter {
 	_onToggleLike() {
 		if (!util.isLogin()) { return; }
 		const videoInfo = this._videoInfo;
+		if (!videoInfo) { return; }
+		const pending = this._likePendingModels || (this._likePendingModels = new WeakSet());
+		if (pending.has(videoInfo)) { return; }
+		pending.add(videoInfo);
 		const videoId = videoInfo.videoId;
 		const isLiked = videoInfo.isLiked;
-		(isLiked ? LikeApi.unlike(videoId) : LikeApi.like(videoId))
-			.then(result => {
+		let request;
+		try {
+			request = isLiked ? LikeApi.unlike(videoId) : LikeApi.like(videoId);
+		} catch (error) {
+			request = Promise.reject(error);
+		}
+		Promise.resolve(request).then(result => {
 			if (this._videoInfo !== videoInfo) { return; }
 			const message = result.data ? (result.data.thanksMessage || '') : '';
 			if (message) {
@@ -37104,7 +37130,11 @@ class NicoVideoPlayerDialog extends Emitter {
 			this._state.isLiked = this._videoInfo.isLiked = !isLiked;
 		}).catch(err => {
 			console.warn(err);
-			this.execCommand('alert', (err && err.message) || 'いいね！できなかった');
+			if (this._videoInfo === videoInfo) {
+				this.execCommand('alert', (err && err.message) || 'いいね！できなかった');
+			}
+		}).finally(() => {
+			pending.delete(videoInfo);
 		});
 	}
 	_onMylistAdd(groupId, mylistName) {

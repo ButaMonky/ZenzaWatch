@@ -3443,10 +3443,20 @@ class NicoVideoPlayerDialog extends Emitter {
   _onToggleLike() {
     if (!util.isLogin()) { return; }
     const videoInfo = this._videoInfo;
+    if (!videoInfo) { return; }
+    // Model-specific ownership also survives A -> B -> the same A instance.
+    const pending = this._likePendingModels || (this._likePendingModels = new WeakSet());
+    if (pending.has(videoInfo)) { return; }
+    pending.add(videoInfo);
     const videoId = videoInfo.videoId;
     const isLiked = videoInfo.isLiked;
-    (isLiked ? LikeApi.unlike(videoId) : LikeApi.like(videoId))
-      .then(result => {
+    let request;
+    try {
+      request = isLiked ? LikeApi.unlike(videoId) : LikeApi.like(videoId);
+    } catch (error) {
+      request = Promise.reject(error);
+    }
+    Promise.resolve(request).then(result => {
       // An older video's Like must not mutate or notify the newly opened video.
       if (this._videoInfo !== videoInfo) { return; }
       const message = result.data ? (result.data.thanksMessage || '') : '';
@@ -3463,8 +3473,13 @@ class NicoVideoPlayerDialog extends Emitter {
       this._state.isLiked = this._videoInfo.isLiked = !isLiked;
     }).catch(err => {
       console.warn(err);
-      // Task 066: 失敗理由（HTTPステータス・errorCode）が分かるようにする
-      this.execCommand('alert', (err && err.message) || 'いいね！できなかった');
+      if (this._videoInfo === videoInfo) {
+        // Task 066: 失敗理由（HTTPステータス・errorCode）が分かるようにする
+        this.execCommand('alert', (err && err.message) || 'いいね！できなかった');
+      }
+    }).finally(() => {
+      // Finishing one model must not unlock another model's pending request.
+      pending.delete(videoInfo);
     });
   }
   _onMylistAdd(groupId, mylistName) {

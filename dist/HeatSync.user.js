@@ -15,7 +15,7 @@
 // @exclude     *://ch.nicovideo.jp/tool/*
 // @exclude     *://flapi.nicovideo.jp/*
 // @exclude     *://dic.nicovideo.jp/p/*
-// @version     0.0.20-task152
+// @version     0.0.21-task414
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -25,7 +25,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // ==/UserScript==
-// build: 2026-09-30 15:36Z
+// build: 2026-10-12 12:09Z
 /* eslint-disable */
 
 (() => {
@@ -469,7 +469,7 @@ const ZenzaDetector = (() => {
                 }
               }
             } catch (e) {
-              window.console.error('config parse error key:"%s" value:"%s" ', key, localStorage.getItem(storageKey), e);
+              window.console.error(PRODUCT + ' config parse failed for key', key);
               config[key] = defaultConfig[key];
             }
           } else {

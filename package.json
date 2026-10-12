@@ -78,6 +78,7 @@
     "build": "node ./build.js --dev",
     "watch": "node ./build.js --dev --watch",
     "test": "cross-env NODE_ENV=test mocha --require ./test/setup.js test/**/unit/*.js",
+    "lint:syntax": "eslint --no-eslintrc --env es2022,node,browser --parser-options \"sourceType: module\" --ext .js ./src ./packages",
     "test:browser": "webpack-dev-server --inline",
     "build:production": "node ./build.js",
     "build:monkey": "node ./build.js --dev",

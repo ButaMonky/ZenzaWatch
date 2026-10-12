@@ -20,32 +20,42 @@ function beginSection(rel) {
   return parts[1].split('//===END===')[0];
 }
 
-// Keep only extracted text, never ASTs, classes or live VM state.
+// Index source offsets once per file content. Do not retain Babel nodes or scopes.
+function indexSource(text) {
+  const ranges = new Map();
+  const remember = (kind, name, node) => {
+    const key = `${kind}:${name}`;
+    if (!ranges.has(key)) {
+      ranges.set(key, node ? [node.start, node.end] : null);
+    }
+  };
+  traverse(parser.parse(text, {sourceType: 'unambiguous', plugins: ['classProperties']}), {
+    noScope: true,
+    ClassDeclaration(p) {
+      if (p.node.id) { remember('class', p.node.id.name, p.node); }
+    },
+    VariableDeclarator(p) {
+      if (p.node.id.type === 'Identifier') { remember('var', p.node.id.name, p.node.init); }
+    }
+  });
+  return ranges;
+}
+
+// Keep only source offsets/text, never ASTs, classes or live VM state.
 const extractionCache = new Map();
 function extract(rel, name, kind = 'class') {
   const text = read(rel);
   let cached = extractionCache.get(rel);
   if (!cached || cached.text !== text) {
-    cached = {text, results: new Map()};
+    cached = {text, ranges: indexSource(text), results: new Map()};
     extractionCache.set(rel, cached);
   }
   const key = `${kind}:${name}`;
   if (cached.results.has(key)) { return cached.results.get(key); }
-  let out;
-  traverse(parser.parse(text, {sourceType: 'unambiguous', plugins: ['classProperties']}), {
-    noScope: true, // Extraction needs positions, not lexical binding analysis.
-    ClassDeclaration(p) {
-      if (kind === 'class' && p.node.id && p.node.id.name === name && out === undefined) {
-        out = text.slice(p.node.start, p.node.end);
-      }
-    },
-    VariableDeclarator(p) {
-      if (kind === 'var' && p.node.id.name === name && out === undefined) {
-        out = text.slice(p.node.init.start, p.node.init.end);
-      }
-    }
-  });
-  if (out === undefined) { throw new Error(`${rel} に ${name} が見つからない`); }
+  const range = cached.ranges.get(key);
+  if (range === undefined) { throw new Error(`${rel} に ${name} が見つからない`); }
+  if (range === null) { throw new TypeError(`${rel}: ${name} has no initializer`); }
+  const out = text.slice(range[0], range[1]);
   cached.results.set(key, out);
   return out;
 }

@@ -124,6 +124,7 @@ const StoryboardWorker = (() => {
         this.boards = [];
         this._infoGeneration = 0;
         this._disposed = false;
+        this._animationGeneration = 0;
         this.isAnimating = false;
         this.cls();
         if (info) {
@@ -377,18 +378,20 @@ const StoryboardWorker = (() => {
 
       async execAnimation() { // SharedArrayBufferで遊びたかっただけ. 最適化の余地はありそう
         this.isAnimating = true;
+        const generation = ++this._animationGeneration;
+        const active = () => this.isAnimating && !this._disposed && generation === this._animationGeneration;
         const buffer = this.buffer;
-        while (this.isAnimating) {
-          while (!this.isReady && this.isAnimating && !this._disposed) {
+        while (active()) {
+          while (!this.isReady && active()) {
             await new Promise(res => setTimeout(res, 500));
           }
-          if (!this.isAnimating || this._disposed) { return; }
-          while (this.isReady && this.isAnimating && !this._disposed && !buffer.paused) {
+          if (!active()) { return; }
+          while (this.isReady && active() && !buffer.paused) {
             buffer.wait();
             this.currentTime = this.buffer.currentTime;
             await new Promise(res => requestAnimationFrame(res)); // 結局raf安定だった
           }
-          if (!this.isAnimating) { return; }
+          if (!active()) { return; }
           await new Promise(res => setTimeout(res, 1000));
         }
       }
@@ -398,6 +401,7 @@ const StoryboardWorker = (() => {
         this.execAnimation();
       }
       async stopAnimation() {
+        this._animationGeneration++;
         this.isAnimating = false;
         if (this._disposed) { return; }
         await new Promise(res => requestAnimationFrame(res));
@@ -407,6 +411,7 @@ const StoryboardWorker = (() => {
       dispose() {
         if (this._disposed) { return; }
         this._disposed = true;
+        this._animationGeneration++;
         this._infoGeneration++;
         this.isAnimating = false;
         this.isReady = false;
@@ -456,7 +461,7 @@ const StoryboardWorker = (() => {
       cls() {
         this.ctx.clearRect(0, 0, this.width, this.height);
       }
-      get currentTime() { return this.currentTime; }
+      get currentTime() { return this._currentTime; }
       set currentTime(time) { this.setCurrentTime(time); }
       get width() {return this.canvas.width;}
       get height() {return this.canvas.height;}
@@ -470,7 +475,10 @@ const StoryboardWorker = (() => {
           return;
         }
         const pos = this.info.getThumbnailPosition(time * 1000);
-        if (Object.keys(pos).every(key => pos[key] === this.lastPos[key])) { return; }
+        if (Object.keys(pos).every(key => pos[key] === this.lastPos[key])) {
+          this._currentTime = time;
+          return;
+        }
         this.lastPos = pos;
         this._currentTime = time;
         const {url, row, col, page} = pos;
@@ -525,12 +533,15 @@ const StoryboardWorker = (() => {
       sharedMemory() {}
 
       async execAnimation() {
-        while (this.isAnimating) {
-          while (!this.isReady) {
+        const generation = ++this._animationGeneration;
+        const active = () => this.isAnimating && generation === this._animationGeneration;
+        while (active()) {
+          while (!this.isReady && active()) {
             await new Promise(res => setTimeout(res, 500));
           }
+          if (!active()) { return; }
           await this.setCurrentTime((this.currentTime + this.info.interval / 1000) % this.info.duration);
-          if (!this.isAnimating) { return; }
+          if (!active()) { return; }
           await new Promise(res => setTimeout(res, 1000));
         }
       }
@@ -540,6 +551,7 @@ const StoryboardWorker = (() => {
         this.execAnimation();
       }
       stopAnimation() {
+        this._animationGeneration++;
         this.isAnimating = false;
       }
     }

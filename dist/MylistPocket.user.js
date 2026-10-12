@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.50-task389
+// @version     0.5.52-task413
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-11 01:18Z 52cf339
+// build: 2026-10-12 11:53Z
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -3118,8 +3118,8 @@ class DataStorage {
 				try {
 					this._data[key] = JSON.parse(storage[storageKey]);
 				} catch (e) {
-					console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-					if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
+					console.error('DataStorage restore parse failed for key', key);
+					if (!this.readonly && !this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
 					this._data[key] = this.default[key];
 				}
 			} else {
@@ -3141,7 +3141,7 @@ class DataStorage {
 			try {
 				this._data[key] = JSON.parse(storage[storageKey]);
 			} catch (e) {
-				console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
+				console.error('DataStorage refresh parse failed for key', key);
 			}
 		}
 		return this._data[key];
@@ -3153,7 +3153,7 @@ class DataStorage {
 	deleteValue(key) {
 		key = this.getNativeKey(key);
 		const storageKey = this.getStorageKey(key);
-		this.storage.removeItem(storageKey);
+		if (!this.readonly) { this.storage.removeItem(storageKey); }
 		this._data[key] = this.default[key];
 	}
 	setValue(key, value) {
@@ -3166,6 +3166,9 @@ class DataStorage {
 		const storage = this.storage;
 		if (!this.readonly) {
 			try {
+				if (typeof value === 'number' && !Number.isFinite(value)) {
+					throw new TypeError('Cannot serialize non-finite DataStorage number');
+				}
 				const json = JSON.stringify(value);
 				if (json === undefined) {
 					throw new TypeError('Cannot serialize DataStorage value');
@@ -3252,8 +3255,8 @@ class DataStorage {
 			.filter(key => !this._ignoreExportKeys.includes(key)).forEach(key => {
 				const storageKey = this.getStorageKey(key);
 				try {
-					if (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined) {
-						console.log('delete storage', storageKey, storage[storageKey]);
+					if (!this.readonly && (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined)) {
+						console.log('delete storage', storageKey);
 						delete storage[storageKey];
 					}
 					this._data[key] = this.default[key];
@@ -6011,7 +6014,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.50-task389', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.52-task413', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

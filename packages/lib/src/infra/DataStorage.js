@@ -119,8 +119,8 @@ class DataStorage {
         try {
           this._data[key] = JSON.parse(storage[storageKey]);
         } catch (e) {
-          console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
-          if (!this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
+          console.error('DataStorage restore parse failed for key', key);
+          if (!this.readonly && !this.options?.preserveInvalidKeys?.includes(key)) { delete storage[storageKey]; }
           this._data[key] = this.default[key];
         }
       } else {
@@ -145,7 +145,7 @@ class DataStorage {
       try {
         this._data[key] = JSON.parse(storage[storageKey]);
       } catch (e) {
-        console.error('config parse error key:"%s" value:"%s" ', key, storage[storageKey], e);
+        console.error('DataStorage refresh parse failed for key', key);
       }
     }
     return this._data[key];
@@ -159,7 +159,7 @@ class DataStorage {
   deleteValue(key) {
     key = this.getNativeKey(key);
     const storageKey = this.getStorageKey(key);
-    this.storage.removeItem(storageKey);
+    if (!this.readonly) { this.storage.removeItem(storageKey); }
     this._data[key] = this.default[key];
   }
 
@@ -173,6 +173,11 @@ class DataStorage {
     const storage = this.storage;
     if (!this.readonly) {
       try {
+        // JSON.stringify silently turns non-finite numbers into null.
+        // Reject before committing a value that cannot survive reload unchanged.
+        if (typeof value === 'number' && !Number.isFinite(value)) {
+          throw new TypeError('Cannot serialize non-finite DataStorage number');
+        }
         const json = JSON.stringify(value);
         if (json === undefined) {
           throw new TypeError('Cannot serialize DataStorage value');
@@ -275,8 +280,8 @@ class DataStorage {
       .filter(key => !this._ignoreExportKeys.includes(key)).forEach(key => {
         const storageKey = this.getStorageKey(key);
         try {
-          if (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined) {
-            console.log('delete storage', storageKey, storage[storageKey]);
+          if (!this.readonly && (storage.hasOwnProperty(storageKey) || storage[storageKey] !== undefined)) {
+            console.log('delete storage', storageKey);
             delete storage[storageKey];
           }
           this._data[key] = this.default[key];

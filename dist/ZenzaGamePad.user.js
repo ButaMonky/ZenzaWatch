@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description ZenzaWatchをゲームパッドで操作
 // @include     *://*.nicovideo.jp/*
-// @version     1.5.4-task364
+// @version     1.5.5-task414
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -13,7 +13,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaGamePad.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaGamePad.user.js
 // ==/UserScript==
-// build: 2026-10-09 19:21Z 4d2a768
+// build: 2026-10-12 12:09Z
 /* eslint-disable */
 
 
@@ -149,7 +149,7 @@
                 }
               }
             } catch (e) {
-              window.console.error('config parse error key:"%s" value:"%s" ', key, localStorage.getItem(storageKey), e);
+              window.console.error(PRODUCT + ' config parse failed for key', key);
               config[key] = defaultConfig[key];
             }
           } else {

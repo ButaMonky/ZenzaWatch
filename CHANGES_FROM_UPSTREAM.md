@@ -1,3 +1,31 @@
+## Task418 ? guard missing rows after list commands
+
+Skip row-marking when the looked-up row no longer exists after playlist/deflist command emission. Keep the command, existing lookup rules and valid-row 1000ms timer unchanged. Do not introduce new fallback or timer ownership semantics. Add source/generated 16-case coverage. ZenzaWatch2.7.242-task418.
+
+## Task414 — protect standalone GamePad and HeatSync configuration diagnostics
+
+Keep product/operation/key metadata but omit stored values and parse exceptions from both standalone configuration loaders. Avoid a second failing storage read while reporting an error, allowing the existing default fallback to complete. Preserve normal set/get/refresh notifications, input handling and playback behavior. Add source/generated-script privacy and state controls. Versions: GamePad 1.5.5-task414 and HeatSync 0.0.21-task414. Not published.
+
+## Task413 — apply stored-value diagnostic protection after Task412
+
+Carry the validated Task411 diagnostic-only changes onto the current Like-ownership baseline without importing obsolete generated code. Keep operation and setting keys, omit stored contents and parse exceptions, and preserve persistence/fallback/readonly behavior. Align Pocket's console banner with metadata. Versions: ZenzaWatch 2.7.241-task413, MylistPocket 0.5.52-task413, Advanced Settings 0.3.58-task413. Not published by this task.
+
+## Task412 / 2.7.240-task412 — complete Task360 Like request ownership
+
+Track unresolved Like/Unlike requests per video model, preserving A -> B -> same-A ownership and independent reopened models. Suppress obsolete failure alerts and release only the settling model on success, rejection or synchronous API failure. Retain existing request arguments, active-video notifications and UI. Recover the preserved Task360 intent without its old generated bundle; add source/generated reentry and failure regression tests. No live account mutations or publication.
+
+## Task410 — preserve persistent data in readonly mode
+
+Honor the existing in-memory-only DataStorage contract during deleteValue, clearConfig and malformed-JSON recovery. Writable storage deletion/recovery and ignored-key behavior remain unchanged. Add source and three generated-script controls without touching live user preferences. Versions: ZenzaWatch 2.7.238-task410, MylistPocket 0.5.51-task410, Advanced Settings 0.3.57-task410. Not published by this task.
+
+## Task407 / 2.7.237-task407 — keep the internal thumbnail clock current within one cell
+
+If consecutive seeks resolve to the same storyboard cell, update the existing `_currentTime` field without reloading or redrawing that same cell. Adds source/generated-dev regression assertions for the latest requested time and unchanged image fetch count. No playback, cache ownership, animation or visible UI redesign. Not published.
+
+## Task406 / 2.7.236-task406 — recover the internal thumbnail clock getter
+
+Forward-port the preserved Task392 one-line getter fix onto the current Task403–405 baseline and regenerate the development userscript. Return the existing `_currentTime` field; retain normal seek/render/cache behavior. Source and generated-artifact regression tests cover the initial/backing clock and clamped seeks. Dormant thumbnail animation initialization/interval and shared image ownership remain separate open findings. No publication in this task.
+
 ## Task403 / 2026-10-12 — 複合NGの安全性・増分処理・実描画の修復
 
 条件・置換・importで危険な正規表現、不正色、重複ID、不正leaf構造を共通検証し、欠損数値のNOTを非一致に保つ。グループNOTと位置解除は未対応として拒否。設定世代ごとのRegExp再利用とコメント増分更新により、1,000件逐次追加の判定を1,001,000回から2,000回へ削減。投稿者一括NGの過去コメントへの反映・原因削除時の復元・動画切替・ニコる保護を維持する。

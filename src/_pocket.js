@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.50-task389
+// @version     0.5.52-task413
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -4065,7 +4065,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.50-task389', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.52-task413', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

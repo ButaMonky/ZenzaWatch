@@ -89,3 +89,33 @@ describe('Task402 composite NG runtime integration',()=>{
   assert.strictEqual(filter.isSafe(second),false);
  });
 });
+
+describe('Task402 live nicoru and video identity',()=>{
+ it('refreshes an active composite rule when a NicoChat nicoru count changes',()=>{
+  const r=rule('hide',undefined,{exemptNicoru:true,nicoruMin:1});
+  const {filter}=setup([r]),c=chat('n');
+  c.props.group={_nicoChatFilter:filter};
+  filter.setCompositeChatPool([c],'sm9');
+  assert.strictEqual(filter.isSafe(c),false);
+  const ctx=createContext();
+  run(beginSection('packages/zenza/src/commentLayer/NicoChat.js')+
+    '\nglobalThis.ChatClass=NicoChat;',ctx);
+  const setter=Object.getOwnPropertyDescriptor(ctx.ChatClass.prototype,'nicoru').set;
+  setter.call(c,1);
+  assert.strictEqual(filter.isSafe(c),true);
+ });
+ it('passes the video watch ID from the active dialog into comment loading options',()=>{
+  const fs=require('fs'),path=require('path');
+  const src=fs.readFileSync(path.join(__dirname,'../../src/NicoVideoPlayerDialog.js'),'utf8');
+  const start=src.indexOf('  _onCommentLoadSuccess(requestId, result) {');
+  assert(start>=0);
+  const block=src.slice(start,start+850);
+  assert(block.includes('watchId: this._watchId'));
+  const {filter}=setup([rule('hide',group(node('video','sm9')))]);
+  const c=chat('v');
+  filter.setCompositeChatPool([c],'sm9');
+  assert.strictEqual(filter.isSafe(c),false);
+  filter.setCompositeChatPool([c],'sm10');
+  assert.strictEqual(filter.isSafe(c),true);
+ });
+});

@@ -125,7 +125,7 @@ class NicoChatCss3View {
         (1000 + beginL * 1000 + chat.fork * 1000000);
     zIndex = isSub ? zIndex: zIndex * 2;
     // let time3d = '0';//`${delay * 10}px`; //${chat.time3dp * 100}px`;
-    const opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity};` : '';
+    const opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity}; --chat-opacity: ${chat.opacity};` : '';
 
     // 4:3ベースに計算されたタイミングを16:9に補正する
     // scale無指定だとChromeでフォントがぼけるので1.0の時も指定だけする
@@ -207,7 +207,7 @@ class NicoChatCss3View {
         (1000 + beginL * 1000 + chat.fork * 1000000);
     zIndex = isSub ? zIndex: zIndex * 2;
     let time3d = '0';//`${delay * 10}px`; //${chat.time3dp * 100}px`;
-    let opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity};` : '';
+    let opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity}; --chat-opacity: ${chat.opacity};` : '';
 
     let top;
     let transY;

@@ -3982,6 +3982,8 @@ class NicoVideoPlayerDialog extends Emitter {
       // Task 081: 提供画面を出す設定なら、動画の後ろ（提供画面の間）のコメントを詰めない
       creditDuration: this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
       mainThreadId: result.threadInfo.threadId,
+      // Composite NG video-ID predicates need the original watch identity.
+      watchId: this._watchId,
       format: result.format
     };
     this._nicoVideoPlayer.closeCommentPlayer();

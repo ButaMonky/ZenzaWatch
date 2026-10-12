@@ -24,12 +24,12 @@ function subject() {
     ['change', 'addChat', 'addChatArray'].forEach(name => group.on(name, () => events.push(name)));`, c);
   return c;
 }
-function readTwice(c, expected) {
+function readTwice(c, expected, recomputations = 1) {
   const before = c.calls;
   const a = c.group.members, b = c.group.members;
   assert.strictEqual(a, b, 'cached array reused, including empty arrays');
   assert.deepStrictEqual(Array.from(a, x => x.no), expected);
-  assert.strictEqual(c.calls - before, 1, 'one full recomputation per dirty state');
+  assert.strictEqual(c.calls - before, recomputations, 'recompute dirty caches once; reuse incrementally updated caches');
 }
 describe('ZW-076 filtered group cache', () => {
   it('caches zero comments and all-NG, some-NG and no-NG results', () => {
@@ -46,10 +46,20 @@ describe('ZW-076 filtered group cache', () => {
     run("filter.wordFilterList = 'blocked'; group.addChatArray([chat(4), chat(5, 'blocked')]);", c);
     readTwice(c, [2, 3, 4]);
   });
-  it('invalidates full results after array and single additions', () => {
+  it('updates cached full results incrementally after array and single additions', () => {
     const c = subject(); readTwice(c, []);
-    run('group.addChat(chat(1));', c); readTwice(c, [1]);
-    run("group.addChatArray([chat(2), chat(3, 'blocked')]);", c); readTwice(c, [1, 2]);
+    run(`globalThis.checkedInputs = [];
+      const checkedApply = filter.applyFilter.bind(filter);
+      filter.applyFilter = chats => {
+        checkedInputs.push(chats.map(chat => chat.no));
+        return checkedApply(chats);
+      };`, c);
+    run('group.addChat(chat(1));', c); readTwice(c, [1], 0);
+    run("group.addChatArray([chat(2), chat(3, 'blocked')]);", c); readTwice(c, [1, 2], 0);
+    run("group.addChat(chat(4, 'blocked'));", c); readTwice(c, [1, 2], 0);
+    assert.deepStrictEqual(Array.from(c.checkedInputs, values => Array.from(values)), [[1], [2, 3], [4]],
+      'only newly added comments enter the filter while the full result cache is valid');
+    assert.deepStrictEqual(Array.from(c.group.nonFilteredMembers, chat => chat.no), [1, 2, 3, 4]);
     assert.deepStrictEqual(Array.from(c.events), ['addChat', 'addChatArray']);
   });
   it('invalidates hidden and visible removals, while preserving change notifications', () => {

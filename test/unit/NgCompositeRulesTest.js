@@ -109,7 +109,9 @@ describe('Task402 composite NG engine',()=>{
 describe('Task402 advanced rule input safety and missing values',()=>{
   it('rejects ambiguous quantified groups that could freeze comment rendering',()=>{
     const E=setup();
-    for(const pattern of ['(a|aa)+$','(ab)+','(foo|bar)*','(a+)+','a.*.*b']){
+    // Prefix-ambiguous alternatives and nested/overlapping repetitions are unsafe.
+    // Deterministic (ab)+ and disjoint (foo|bar)* are covered as allowed below.
+    for(const pattern of ['(a|aa)+$','(a+)+','a.*.*b']){
       assert.strictEqual(E.isSafeRegex(pattern),false,pattern);
     }
     assert.strictEqual(E.isSafeRegex('中国.*'),true);
@@ -139,5 +141,27 @@ describe('Task402 advanced rule input safety and missing values',()=>{
     assert.strictEqual(E.validate([r]),true);
     r.strip=['ue'];
     assert.strictEqual(E.validate([r]),false);
+  });
+});
+
+describe('Task402 styling preserves unrelated comment attributes',()=>{
+  it('stripping red preserves an independently chosen small comment size',()=>{
+    const E=setup(),r=rule('strip');
+    r.strip=['red'];
+    const c=chat('中国','red ue',0,'A');c.size='small';
+    const out=E.project([c],[r]).get(c);
+    assert.strictEqual(out.cmd,'ue');
+    assert.strictEqual(out.color,'#FFFFFF');
+    assert.strictEqual(out.size,'small');
+  });
+  it('stripping big preserves independently assigned comment colors',()=>{
+    const E=setup(),r=rule('strip');
+    r.strip=['big'];
+    const c=chat('中国','big ue',0,'A');c.color='#ABCDEF';
+    const out=E.project([c],[r]).get(c);
+    assert.strictEqual(out.cmd,'ue');
+    assert.strictEqual(out.color,'#ABCDEF');
+    assert.strictEqual(out.size,'medium');
+    assert.strictEqual(out.type,'ue');
   });
 });

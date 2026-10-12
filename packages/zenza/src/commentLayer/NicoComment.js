@@ -286,10 +286,6 @@ class NicoComment extends Emitter {
         break;
     }
 
-    this._nicoChatFilter?.setCompositeChatPool?.([
-      ...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
-      ...this.bottomGroup.nonFilteredMembers,nicoChat
-    ],this._nicoChatFilter._compositeVideoId);
     group.addChat(nicoChat, group);
     this.emit('addChat');
   }
@@ -308,10 +304,7 @@ class NicoComment extends Emitter {
     }
 
     group.removeChat(nicoChat, group);
-    this._nicoChatFilter?.setCompositeChatPool?.([
-      ...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
-      ...this.bottomGroup.nonFilteredMembers
-    ],this._nicoChatFilter._compositeVideoId);
+
   }
   /**
    * コメントの内容が変化した通知

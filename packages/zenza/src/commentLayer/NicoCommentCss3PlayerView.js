@@ -714,15 +714,15 @@ body.in-capture .commentLayer {
 .debug .mingLiu { background: rgba(0, 0, 128, 0.3); }
 
 @keyframes fixed {
-   0% { opacity: 1; visibility: visible; }
-  95% { opacity: 1; }
+   0% { opacity: var(--chat-opacity, 1); visibility: visible; }
+  95% { opacity: var(--chat-opacity, 1); }
  100% { opacity: 0; visibility: hidden;}
 }
 
 @keyframes show-hide {
- 0% { visibility: visible; opacity: 1; }
+ 0% { visibility: visible; opacity: var(--chat-opacity, 1); }
  /* Chrome 73のバグ？対策 hidden が適用されない */
- 95% { visibility: visible; opacity: 1; }
+ 95% { visibility: visible; opacity: var(--chat-opacity, 1); }
  100% { visibility: hidden; opacity: 0; }
 
  /*100% { visibility: hidden; }*/
@@ -1026,11 +1026,11 @@ body.in-capture .commentLayer {
 }
 
 .nicoChat.fork2 {
-  opacity: var(--easy-comment-opacity, ${easyCommentOpacity}) !important;
+  opacity: calc(var(--easy-comment-opacity, ${easyCommentOpacity}) * var(--chat-opacity, 1)) !important;
 }
 
 .nicoChat.fork3 {
-  opacity: var(--ai-comment-opacity, ${aiCommentOpacity}) !important;
+  opacity: calc(var(--ai-comment-opacity, ${aiCommentOpacity}) * var(--chat-opacity, 1)) !important;
 }
 
 .nicoChat.blink {

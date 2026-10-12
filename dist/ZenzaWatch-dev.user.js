@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.234-task402
+// @version        2.7.235-task403
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-11 15:24Z
+// build: 2026-10-12 03:38Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.234-task402';
+    var VER = '2.7.235-task403';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-11 15:24Z';
+    var BUILD = '2026-10-12 03:38Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3077,35 +3077,179 @@ class NgCompositeRules {
 	static get FIELDS() {return ['text','regex','cmd','color','size','user','nicoru','position','fork','score','vpos','video'];}
 	static get ACTIONS() {return ['hide','hideAuthor','replace','strip','normalize','dim','mask'];}
 	static get MAX_RULES() {return 50;}
-	static isSafeRegex(pattern) {
-		if(typeof pattern!=='string'||pattern.length>160){return false;}
-		return !/(\([^)]*[+*][^)]*\))[+*{]/.test(pattern) &&
-			!/(?:\.\*|\.\+){2,}/.test(pattern) && !/\\[1-9]/.test(pattern);
+	static isSafeRegex(pattern,flags='i') {
+		if(typeof pattern!=='string'||!pattern||pattern.length>160||!NgCompositeRules.validFlags(flags))return false;
+		const ANY=null,empty=()=>new Set(),union=(a,b)=>a===ANY||b===ANY?ANY:new Set([...a,...b]);
+		const ignoreCase=flags.includes('i'),proofFlags=(ignoreCase?'i':'')+(flags.includes('u')?'u':'');
+		const proofCache=new Map();
+		const literalTest=(word,value,prefix=false)=>{
+			const key=JSON.stringify([word,prefix]);let re=proofCache.get(key);
+			if(!re){
+				const escaped=word.replace(/[.*+?^$(){}|[\]\\]/g,'\\$&');
+				re=new RegExp('^(?:'+escaped+')'+(prefix?'':'$'),proofFlags);proofCache.set(key,re);
+			}
+			return re.test(value);
+		};
+		const overlap=(a,b)=>{
+			if(a===ANY||b===ANY)return true;
+			for(const c of a){
+				if(b.has(c))return true;
+				if(ignoreCase)for(const d of b)if(literalTest(c,d))return true;
+			}
+			return false;
+		};
+		const atom=(chars,word,min=1)=>({first:chars,chars,min,variable:false,ambiguous:false,words:word===null?null:[word]});
+		const literal=s=>/[\ud800-\udfff]/.test(s)?atom(ANY,null):atom(new Set([s]),s);
+		const zero=()=>atom(empty(),'',0);
+		const wordsJoin=(a,b)=>!a||!b||a.length*b.length>32||
+			a.some(x=>b.some(y=>x.length+y.length>160))?null:a.flatMap(x=>b.map(y=>x+y));
+		const prefixFree=(a,b)=>a&&b&&!a.some(x=>b.some(y=>ignoreCase?
+			literalTest(x,y,true)||literalTest(y,x,true):x.startsWith(y)||y.startsWith(x)));
+		let i=0,depth=0;
+		const fail=()=>{throw new Error('Unsupported or ambiguous regexp');};
+		const sequence=()=>{
+			const parts=[];
+			while(i<pattern.length&&![')', '|'].includes(pattern[i])){
+				let a=readAtom(),min=1,max=1;
+				const q=pattern[i];
+				if(q==='*'||q==='+'||q==='?'){i++;min=q==='+'?1:0;max=q==='?'?1:Infinity;}
+				else if(q==='{'){
+					const m=/^\{(\d+)(?:,(\d*))?\}/.exec(pattern.slice(i));
+					if(m){i+=m[0].length;min=Number(m[1]);max=m[2]===undefined?min:m[2]===''?Infinity:Number(m[2]);}
+				}
+				if(min>1024||max!==Infinity&&max>1024||max<min)fail();
+				if(max>1&&(a.min===0||a.variable||a.ambiguous))fail();
+				if(min!==1||max!==1){
+					if(pattern[i]==='?')i++;
+					a={...a,min:a.min*min,variable:a.variable||min!==max,
+						words:min===max&&min<=4?Array.from({length:min}).reduce(w=>wordsJoin(w,a.words),['']):null};
+				}
+				parts.push(a);
+			}
+			for(let p=0;p<parts.length;p++)if(parts[p].variable){
+				for(let q=p+1;q<parts.length;q++)if(parts[q].variable&&overlap(parts[p].chars,parts[q].chars)){
+					if(!parts.slice(p+1,q).some(x=>x.min>0&&!overlap(x.chars,parts[p].chars)))fail();
+				}
+			}
+			let out=zero(),nullable=true;
+			for(const a of parts){
+				if(nullable)out.first=union(out.first,a.first);
+				nullable=nullable&&a.min===0;out.chars=union(out.chars,a.chars);out.min+=a.min;
+				out.variable=out.variable||a.variable;out.ambiguous=out.ambiguous||a.ambiguous;
+				out.words=wordsJoin(out.words,a.words);
+			}
+			return out;
+		};
+		const expression=()=>{
+			const branches=[sequence()];
+			while(pattern[i]==='|'){i++;branches.push(sequence());}
+			const out={...branches[0]};
+			for(let p=0;p<branches.length;p++)for(let q=p+1;q<branches.length;q++){
+				if(overlap(branches[p].first,branches[q].first)&&!prefixFree(branches[p].words,branches[q].words))out.ambiguous=true;
+			}
+			for(const a of branches.slice(1)){
+				out.first=union(out.first,a.first);out.chars=union(out.chars,a.chars);out.min=Math.min(out.min,a.min);
+				out.variable=out.variable||a.variable;out.ambiguous=out.ambiguous||a.ambiguous;
+				out.words=out.words&&a.words&&out.words.length+a.words.length<=32?[...out.words,...a.words]:null;
+			}
+			return out;
+		};
+		const readAtom=()=>{
+			const ch=pattern[i++];
+			if(ch==='('){
+				if(++depth>12)fail();
+				if(pattern.slice(i,i+2)==='?:')i+=2;
+				else if(pattern[i]==='?')fail(); // Lookarounds/named groups are outside this initial subset.
+				const a=expression();if(pattern[i++]!==')')fail();depth--;return a;
+			}
+			if(ch==='['){
+				const start=i-1;
+				while(i<pattern.length){if(pattern[i]==='\\'){i+=2;continue;}if(pattern[i++]===']')break;}
+				const raw=pattern.slice(start,i);if(!raw.endsWith(']'))fail();
+				if(raw[1]==='^'||/\\|[^\x00-\x7f]/.test(raw))return atom(ANY,null);
+				const re=new RegExp('^(?:'+raw+')$',proofFlags),chars=empty();
+				for(let n=0;n<128;n++){const c=String.fromCharCode(n);if(re.test(c))chars.add(c);}
+				return atom(chars,null);
+			}
+			if(ch==='.')return atom(ANY,null);
+			if(ch==='^'||ch==='$')return zero();
+			if(ch==='\\'){
+				const e=pattern[i++];if(!e||/[1-9k]/.test(e))fail();
+				if(e==='b'||e==='B')return zero();
+				if(e==='d')return atom(new Set('0123456789'),null);
+				if(e==='w')return atom(new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'),null);
+				if(e==='s')return atom(new Set([' ','\t','\n','\r','\f','\v','\u00a0','\u1680',
+					'\u2000','\u2001','\u2002','\u2003','\u2004','\u2005','\u2006','\u2007','\u2008',
+					'\u2009','\u200a','\u2028','\u2029','\u202f','\u205f','\u3000','\ufeff']),null);
+				if(/[DSW]/.test(e))return atom(ANY,null);
+				if(e==='p'||e==='P'){
+					const m=/^\{[A-Za-z_=]+\}/.exec(pattern.slice(i));if(!m||!flags.includes('u'))fail();i+=m[0].length;return atom(ANY,null);
+				}
+				if(e==='x'||e==='u'){
+					const size=e==='x'?2:4;
+					const hex=pattern.slice(i,i+size);if(!new RegExp('^[0-9a-f]{'+size+'}$','i').test(hex))fail();
+					i+=size;return literal(String.fromCharCode(parseInt(hex,16)));
+				}
+				if(e==='0'){if(/\d/.test(pattern[i]||''))fail();return literal('\0');}
+				if(e==='c')fail();
+				return literal(({n:'\n',r:'\r',t:'\t',f:'\f',v:'\v'})[e]||e);
+			}
+			if(!ch||'*+?)'.includes(ch))fail();
+			return literal(ch);
+		};
+		try{expression();if(i!==pattern.length)return false;new RegExp(pattern,flags);return true;}
+		catch(_){return false;}
+	}
+	static validFlags(flags){
+		return typeof flags==='string'&&/^[gimsu]*$/.test(flags)&&new Set(flags).size===flags.length;
+	}
+	static get MAX_REGEX_INPUT(){return 2048;}
+	static color(value){
+		if(typeof value!=='string')return null;
+		const key=value.toLowerCase();
+		if(Object.prototype.hasOwnProperty.call(NG_COLOR_HEX,key))return NG_COLOR_HEX[key];
+		return /^#[0-9a-f]{6}$/i.test(value)?value.toUpperCase():null;
+	}
+	static number(value){
+		if(typeof value==='number')return Number.isFinite(value)?value:null;
+		if(typeof value==='string'&&/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())){
+			const n=Number(value);return Number.isFinite(n)?n:null;
+		}
+		return null;
 	}
 	static validate(rules) {
+		try{return NgCompositeRules._validate(rules);}catch(_){return false;}
+	}
+	static _validate(rules) {
 		if(!Array.isArray(rules)||rules.length>NgCompositeRules.MAX_RULES) {return false;}
-		let count=0;
+		let count=0,nodeIds=new Set();
 		const str=(v,max=200)=>typeof v==='string'&&v.length<=max;
 		const walk=(node,depth)=>{
-			if(!node||typeof node!=='object'||++count>350){return false;}
+			if(!node||typeof node!=='object'||++count>350||typeof node.id!=='string'||
+					!node.id.trim()||node.id.length>80||nodeIds.has(node.id)){return false;}
+			nodeIds.add(node.id);
 			if(node.kind==='group'){
-				return depth<3&&['all','any'].includes(node.mode)&&Array.isArray(node.nodes)&&
-					node.nodes.length<=45&&node.nodes.every(n=>walk(n,depth+1));
+				return (node.not===undefined||node.not===false)&&depth<3&&['all','any'].includes(node.mode)&&Array.isArray(node.nodes)&&
+					node.nodes.length>0&&node.nodes.length<=45&&node.nodes.every(n=>walk(n,depth+1));
 			}
-			if(!NgCompositeRules.FIELDS.includes(node.field)||typeof node.not!=='boolean'||
+			if(Object.prototype.hasOwnProperty.call(node,'nodes')||!NgCompositeRules.FIELDS.includes(node.field)||typeof node.not!=='boolean'||
 					!str(node.value,160)||!['contains','equals','notEquals','starts','ends','regex','gte','lte'].includes(node.cmp)){return false;}
 			if(node.value.trim()===''||(['nicoru','score','vpos'].includes(node.field)&&
 				!['gte','lte','equals'].includes(node.cmp))){return false;}
+			if(node.field==='color'&&!NgCompositeRules.color(node.value)){return false;}
 			if(node.field==='regex'||node.cmp==='regex'){
 				if(!NgCompositeRules.isSafeRegex(node.value)){return false;}
 				try{new RegExp(node.value,'i');}catch(_){return false;}
 			}
 			if(['nicoru','score','vpos'].includes(node.field)&&
-				!Number.isFinite(Number(node.value))){return false;}
+				NgCompositeRules.number(node.value)===null){return false;}
 			return true;
 		};
+		const ruleIds=new Set();
 		return rules.every(r=>{
-			if(!r||typeof r!=='object'||!str(r.id,80)||!str(r.name,90)||
+			nodeIds=new Set();
+			if(!r||typeof r!=='object'||!str(r.id,80)||!r.id.trim()||ruleIds.has(r.id)||
+					!str(r.name,90)||
 					typeof r.enabled!=='boolean'||!['normal','any','owner','easy'].includes(r.scope)||
 					!NgCompositeRules.ACTIONS.includes(r.action)||!['before','after'].includes(r.phase)||
 					typeof r.stopOnMatch!=='boolean'||typeof r.exemptNicoru!=='boolean'||
@@ -3113,16 +3257,21 @@ class NgCompositeRules {
 					!['evaluate','skip'].includes(r.unknownPolicy)||
 					typeof r.keepProtectedOnAuthorHide!=='boolean'||!str(r.pattern,160)||
 					!str(r.replacement,800)||!str(r.mask,800)||typeof r.regexReplace!=='boolean'||
-					!str(r.flags,6)||!/^[gimsu]*$/.test(r.flags)||!Array.isArray(r.strip)||
-					r.strip.length>40||r.strip.some(c=>!str(c,40))||
-					!(r.normalizeColor==='keep'||r.normalizeColor in NG_COLOR_HEX)||
+					!str(r.flags,5)||!NgCompositeRules.validFlags(r.flags)||!Array.isArray(r.strip)||
+					r.strip.length>40||r.strip.some(c=>!str(c,40)||
+						!Object.prototype.hasOwnProperty.call(NG_COLOR_HEX,c.toLowerCase())&&
+						!['big','small'].includes(c.toLowerCase())&&
+						!/^#[0-9a-f]{6}$/i.test(c))||
+					!(r.normalizeColor==='keep'||NgCompositeRules.color(r.normalizeColor))||
 					!['keep','medium','big','small'].includes(r.normalizeSize)||
 					!Number.isFinite(r.dim)||r.dim<5||r.dim>100||
-					!walk(r.conditions,0)){return false;}
+					r.conditions?.kind!=='group'||!walk(r.conditions,0)){return false;}
+			if(r.action==='replace'&&!r.pattern){return false;}
 			if(r.action==='replace'&&r.regexReplace){
-				if(!NgCompositeRules.isSafeRegex(r.pattern)){return false;}
+				if(!NgCompositeRules.isSafeRegex(r.pattern,r.flags)){return false;}
 				try{new RegExp(r.pattern,r.flags);}catch(_){return false;}
 			}
+			ruleIds.add(r.id);
 			return true;
 		});
 	}
@@ -3133,8 +3282,8 @@ class NgCompositeRules {
 	}
 	static nicoru(chat) {
 		if(chat.nicoruKnown===false||chat.nicoru===null||chat.nicoru===undefined){return null;}
-		const value=Number(chat.nicoru);
-		return Number.isFinite(value)&&value>=0?value:null;
+		const value=NgCompositeRules.number(chat.nicoru);
+		return value!==null&&value>=0?value:null;
 	}
 	static protected(rule,chat) {
 		if(!rule.exemptNicoru){return false;}
@@ -3142,21 +3291,22 @@ class NgCompositeRules {
 		return value===null?rule.unknownPolicy==='skip':value>=rule.nicoruMin;
 	}
 	static commandColor(cmd,base) {
-		let value=(base||'#FFFFFF').toUpperCase();
+		let value=NgCompositeRules.color(base)||'#FFFFFF';
 		for(const token of String(cmd||'').toLowerCase().split(/\s+/)){
-			if(NG_COLOR_HEX[token]){value=NG_COLOR_HEX[token];}
+			if(Object.prototype.hasOwnProperty.call(NG_COLOR_HEX,token)){value=NG_COLOR_HEX[token];}
 			else if(/^#[a-f0-9]{6}$/i.test(token)){value=token.toUpperCase();}
 		}
 		return value;
 	}
-	static matches(node,chat) {
+	static matches(node,chat,regexCache=null) {
 		if(!node){return false;}
 		let matched=false;
 		let known=true;
 		if(node.kind==='group') {
+			if(node.not!==undefined&&node.not!==false)return false;
 			matched=node.nodes.length>0 && (node.mode==='all'?
-				node.nodes.every(n=>NgCompositeRules.matches(n,chat)):
-				node.nodes.some(n=>NgCompositeRules.matches(n,chat)));
+				node.nodes.every(n=>NgCompositeRules.matches(n,chat,regexCache)):
+				node.nodes.some(n=>NgCompositeRules.matches(n,chat,regexCache)));
 		}else{
 			const f=node.field;
 			let actual;
@@ -3169,14 +3319,28 @@ class NgCompositeRules {
 			else if(f==='position'){actual=chat.type;}
 			else if(f==='fork'){actual=({0:'normal',1:'owner',2:'easy'})[chat.fork]||'other';}
 			else if(f==='score'){actual=chat.score;}
-			else if(f==='vpos'){actual=Number(chat.vpos)/100;}
+			else if(f==='vpos'){const n=NgCompositeRules.number(chat.vpos);actual=n===null?null:n/100;}
 			else if(f==='video'){actual=chat.videoId;}
-			const expected=f==='color'?(NG_COLOR_HEX[node.value]||node.value).toUpperCase():node.value;
-			if(actual!==null&&actual!==undefined){
-				if(['gte','lte'].includes(node.cmp)){const a=Number(actual),b=Number(expected);
-					matched=Number.isFinite(a)&&Number.isFinite(b)&&(node.cmp==='gte'?a>=b:a<=b);
+			const expected=f==='color'?NgCompositeRules.color(node.value):node.value;
+			if(f==='color'&&expected===null)return false;
+			if(actual!==null&&actual!==undefined&&
+					(!['score','vpos'].includes(f)||Number.isFinite(Number(actual)))){
+				if(['nicoru','score','vpos'].includes(f)){
+					const a=NgCompositeRules.number(actual),b=NgCompositeRules.number(expected);
+					known=a!==null&&b!==null;
+					matched=known&&(node.cmp==='gte'?a>=b:node.cmp==='lte'?a<=b:a===b);
 				}else if(node.cmp==='regex'||f==='regex'){
-					try{matched=new RegExp(expected,'i').test(String(actual).slice(0,512));}catch(_){matched=false;}
+					try{
+						const cacheKey=JSON.stringify([expected,'i']);
+						let regexp=regexCache?.get(cacheKey);
+						if(!regexp){
+							if(!NgCompositeRules.isSafeRegex(expected,'i'))return false;
+							regexp=new RegExp(expected,'i');regexCache?.set(cacheKey,regexp);
+						}
+						const text=String(actual);
+						if(text.length>NgCompositeRules.MAX_REGEX_INPUT)return false;
+						regexp.lastIndex=0;matched=regexp.test(text);regexp.lastIndex=0;
+					}catch(_){known=false;matched=false;}
 				}else{
 					const a=String(actual),b=String(expected);
 					if(node.cmp==='contains'){matched=a.includes(b);}
@@ -3200,83 +3364,135 @@ class NgCompositeRules {
 			videoId:videoId||'',threadLabel:chat.threadLabel,isCA:chat.isCA
 		};
 	}
-	static applyAction(rule,state) {
+	static applyAction(rule,state,regexCache=null) {
 		if(rule.action==='hide'||rule.action==='hideAuthor'){state.hidden=true;return;}
 		if(rule.action==='mask'){state.text=rule.mask;return;}
 		if(rule.action==='dim'){state.opacity*=rule.dim/100;return;}
 		if(rule.action==='replace'){
 			if(!rule.pattern){return;}
 			if(rule.regexReplace){
-				try{const re=new RegExp(rule.pattern,rule.flags);
-					state.text=state.text.replace(re,rule.replacement);
-				}catch(_){/* rejected at validation */}
-			}else {state.text=state.text.split(rule.pattern).join(rule.replacement);}
+				if(state.text.length>NgCompositeRules.MAX_REGEX_INPUT)return false;
+				try{
+					const key=JSON.stringify([rule.pattern,rule.flags]);
+					let re=regexCache?.get(key);
+					if(!re){
+						if(!NgCompositeRules.isSafeRegex(rule.pattern,rule.flags))return false;
+						re=new RegExp(rule.pattern,rule.flags);regexCache?.set(key,re);
+					}
+					re.lastIndex=0;
+					const replaced=state.text.replace(re,rule.replacement);
+					re.lastIndex=0;
+					if(replaced.length>8192)return false;
+					state.text=replaced;
+				}catch(_){return false;}
+			}else {
+				if(state.text.length>8192)return false;
+				const replaced=state.text.split(rule.pattern).join(rule.replacement);
+				if(replaced.length>8192)return false;state.text=replaced;
+			}
 			return;
 		}
+		if(rule.action==='normalize'&&rule.normalizeColor==='keep'&&rule.normalizeSize==='keep')return;
 		let tokens=state.cmd.split(/\s+/).filter(Boolean);
+		let colorChanged=false,sizeChanged=false;
 		if(rule.action==='strip'){
 			const excluded=new Set(rule.strip.map(v=>v.toLowerCase()));
+			const removed=tokens.filter(v=>excluded.has(v.toLowerCase()));
+			if(!removed.length)return;
+			colorChanged=removed.some(t=>Object.prototype.hasOwnProperty.call(
+				NG_COLOR_HEX,t.toLowerCase())||/^#[a-f\d]{6}$/i.test(t));
+			sizeChanged=removed.some(t=>['big','small'].includes(t.toLowerCase()));
 			tokens=tokens.filter(v=>!excluded.has(v.toLowerCase()));
 		}else if(rule.action==='normalize'){
-			if(rule.normalizeColor!=='keep'){
-				tokens=tokens.filter(t=>!NG_COLOR_HEX[t.toLowerCase()]&&!/^#[a-f\d]{6}$/i.test(t));
+			colorChanged=rule.normalizeColor!=='keep';
+			sizeChanged=rule.normalizeSize!=='keep';
+			if(colorChanged){
+				tokens=tokens.filter(t=>!Object.prototype.hasOwnProperty.call(
+					NG_COLOR_HEX,t.toLowerCase())&&!/^#[a-f\d]{6}$/i.test(t));
 				if(rule.normalizeColor!=='white'){tokens.push(rule.normalizeColor);}
 			}
-			if(rule.normalizeSize!=='keep'){
+			if(sizeChanged){
 				tokens=tokens.filter(t=>!['big','small'].includes(t.toLowerCase()));
 				if(rule.normalizeSize!=='medium'){tokens.push(rule.normalizeSize);}
 			}
 		}
 		state.cmd=tokens.join(' ');
-		state.color=NgCompositeRules.commandColor(state.cmd,'#FFFFFF');
-		const lower=tokens.map(t=>t.toLowerCase());
-		state.size=lower.includes('big')?'big':lower.includes('small')?'small':'medium';
-		state.type=state.type;
+		if(colorChanged){state.color=NgCompositeRules.commandColor(state.cmd,'#FFFFFF');}
+		if(sizeChanged){
+			const lower=tokens.map(t=>t.toLowerCase());
+			state.size=lower.includes('big')?'big':lower.includes('small')?'small':'medium';
+		}
+	}
+	static compile(input) {
+		if(NgCompositeRules._programs?.has(input))return input;
+		let rules;
+		try{rules=JSON.parse(JSON.stringify(input));}catch(_){return null;}
+		if(!NgCompositeRules.validate(rules))return null;
+		const regexCache=new Map();
+		const add=(source,flags)=>{
+			const key=JSON.stringify([source,flags]);
+			if(!regexCache.has(key))regexCache.set(key,new RegExp(source,flags));
+		};
+		const walk=n=>{
+			if(n.kind==='group')n.nodes.forEach(walk);
+			else if(n.field==='regex'||n.cmp==='regex')add(n.value,'i');
+		};
+		for(const r of rules){walk(r.conditions);if(r.action==='replace'&&r.regexReplace)add(r.pattern,r.flags);}
+		const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}};
+		freeze(rules);
+		const active=rules.filter(r=>r.enabled);
+		const program=Object.freeze({rules,active:Object.freeze(active),regexCache,
+			before:Object.freeze(active.filter(r=>r.phase==='before')),
+			after:Object.freeze(active.filter(r=>r.phase==='after')),
+			hasAuthors:active.some(r=>r.action==='hideAuthor')});
+		if(!NgCompositeRules._programs)NgCompositeRules._programs=new WeakSet();
+		NgCompositeRules._programs.add(program);
+		return program;
 	}
 	static project(chats,rules,legacyPredicate=()=>true,videoId='',baselines=null) {
-		if(!NgCompositeRules.validate(rules)){return null;}
-		const active=rules.filter(r=>r.enabled);
-		if(!active.length){return null;}
-		const initial=chats.map(chat=>{
-			const baseline=baselines?.get?.(chat);
-			return baseline?{...baseline,nicoru:chat.nicoru,
-				nicoruKnown:chat.nicoruKnown,videoId:videoId||baseline.videoId}:
-				NgCompositeRules.initialState(chat,videoId);
+		return NgCompositeRules.projectWithMeta(chats,rules,legacyPredicate,videoId,baselines)?.results||null;
+	}
+	static projectWithMeta(chats,rules,legacyPredicate=()=>true,videoId='',baselines=null,seedBans=null) {
+		const program=NgCompositeRules.compile(rules);
+		if(!program||!program.active.length)return null;
+		const rows=chats.map(chat=>{
+			const live=NgCompositeRules.initialState(chat,videoId),old=baselines?.get(chat);
+			if(old)for(const key of ['text','cmd','color','size','opacity'])live[key]=old[key];
+			return {...live,hidden:false,visible:true,stopped:false,legacyRejected:false};
 		});
 		const authorMatches=new Map();
-		for(const rule of active.filter(r=>r.action==='hideAuthor')){
-			const ids=new Set();
-			initial.forEach(s=>{
-				if(!s.userId||!NgCompositeRules.matchScope(rule,s)||NgCompositeRules.protected(rule,s)){return;}
-				if(rule.phase==='after'&&!legacyPredicate(s)){return;}
-				if(NgCompositeRules.matches(rule.conditions,s)){ids.add(s.userId);}
-			});
-			authorMatches.set(rule.id,ids);
-		}
-		const results=new Map();
-		for(let i=0;i<chats.length;i++){
-			const s={...initial[i],hidden:false};
-			let stopped=false;
-			const applyPhase=phase=>{
-				if(stopped){return;}
-				for(const r of active){
-					if(r.phase!==phase){continue;}
-					const ban=r.action==='hideAuthor'&&s.userId&&authorMatches.get(r.id).has(s.userId);
-					if(!ban&&!NgCompositeRules.matchScope(r,s)){continue;}
-					const protectedChat=NgCompositeRules.protected(r,s);
-					if(protectedChat&&!(ban&&r.keepProtectedOnAuthorHide===false)){continue;}
-					const hit=r.action==='hideAuthor'?ban:NgCompositeRules.matches(r.conditions,s);
-					if(!hit){continue;}
-					NgCompositeRules.applyAction(r,s);
-					if(r.stopOnMatch||s.hidden){stopped=true;break;}
+		const eligible=(s,r)=>!s.hidden&&!s.stopped&&(r.phase==='before'||!s.legacyRejected);
+		const phase=rulesInPhase=>{
+			for(const r of rulesInPhase){
+				if(r.action==='hideAuthor'){
+					const ids=new Set(seedBans?.get(r.id)||[]);
+					for(const s of rows){
+						if(!eligible(s,r)||!s.userId||!NgCompositeRules.matchScope(r,s)||NgCompositeRules.protected(r,s))continue;
+						if(NgCompositeRules.matches(r.conditions,s,program.regexCache))ids.add(s.userId);
+					}
+					authorMatches.set(r.id,ids);
+					for(const s of rows){
+						if(!eligible(s,r)||!s.userId||!ids.has(s.userId))continue;
+						if(r.keepProtectedOnAuthorHide&&NgCompositeRules.protected(r,s))continue;
+						s.hidden=true;s.stopped=true;
+					}
+				}else for(const s of rows){
+					if(!eligible(s,r)||!NgCompositeRules.matchScope(r,s)||NgCompositeRules.protected(r,s))continue;
+					if(!NgCompositeRules.matches(r.conditions,s,program.regexCache))continue;
+					if(NgCompositeRules.applyAction(r,s,program.regexCache)===false)continue;
+					if(r.stopOnMatch||s.hidden)s.stopped=true;
 				}
-			};
-			applyPhase('before');
-			const legacySafe=!s.hidden&&legacyPredicate(s);
-			if(legacySafe){applyPhase('after');}
-			results.set(chats[i],{...s,visible:legacySafe&&!s.hidden});
+			}
+		};
+		phase(program.before);
+		for(const s of rows){
+			s.legacyRejected=!legacyPredicate(s);
+			s.visible=!s.hidden&&!s.legacyRejected;
 		}
-		return results;
+		phase(program.after);
+		const results=new Map();
+		rows.forEach((s,i)=>{s.visible=!s.hidden&&!s.legacyRejected;results.set(chats[i],s);});
+		return {results,authorMatches};
 	}
 }
 const Config = (() => {
@@ -24253,6 +24469,7 @@ class NicoChat {
 	get id() {return this.props.id;}
 	get text() {return this.props.text;}
 	set text(v) {
+		this.props.group?._nicoChatFilter?.recordCompositeEdit?.(this,'text',v);
 		this.props.text = v;
 		this.props.htmlText = null;
 	}
@@ -24288,9 +24505,9 @@ class NicoChat {
 	get beginTime() {return this.vpos / 100;}
 	get isDeleted() {return !!this.props.deleted;}
 	get color() {return this.props.color;}
-	set color(v) {this.props.color = v;}
+	set color(v) {this.props.group?._nicoChatFilter?.recordCompositeEdit?.(this,'color',v);this.props.color = v;}
 	get size() {return this.props.size;}
-	set size(v) {this.props.size = v;}
+	set size(v) {this.props.group?._nicoChatFilter?.recordCompositeEdit?.(this,'size',v);this.props.size = v;}
 	get type() {return this.props.type;}
 	set type(v) {this.props.type = v;}
 	get score() {return this.props.score;}
@@ -24312,7 +24529,14 @@ class NicoChat {
 	get threadLabel() {return this.props.threadLabel;}
 	get nicoru() {return this.props.nicoru;}
 	get nicoruKnown(){return !!this.props.nicoruKnown;}
-	set nicoru(v) {this.props.nicoru = v;this.props.nicoruKnown=true;}
+	set nicoru(v) {
+		const changed=this.props.nicoru!==v||!this.props.nicoruKnown;
+		this.props.nicoru=v;
+		this.props.nicoruKnown=true;
+		if(changed&&this.props.group?._nicoChatFilter?.hasActiveCompositeRules){
+			this.props.group._nicoChatFilter.updateCompositeChat(this);
+		}
+	}
 	get nicotta() { return !!this.props.nicotta;}
 	set nicotta(v) { this.props.nicotta = v;
 	}
@@ -25110,7 +25334,7 @@ class NicoChatCss3View {
 				(slot * 1000 + chat.fork * 1000000 + 1) :
 				(1000 + beginL * 1000 + chat.fork * 1000000);
 		zIndex = isSub ? zIndex: zIndex * 2;
-		const opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity};` : '';
+		const opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity}; --chat-opacity: ${chat.opacity};` : '';
 		const outerScreenWidth = CommentLayer.SCREEN.OUTER_WIDTH_FULL;
 		const screenDiff = outerScreenWidth - screenWidth;
 		const leftPos = screenWidth + screenDiff / 2;
@@ -25181,7 +25405,7 @@ class NicoChatCss3View {
 				(1000 + beginL * 1000 + chat.fork * 1000000);
 		zIndex = isSub ? zIndex: zIndex * 2;
 		let time3d = '0';//`${delay * 10}px`; //${chat.time3dp * 100}px`;
-		let opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity};` : '';
+		let opacity = chat.opacity !== 1 ? `opacity: ${chat.opacity}; --chat-opacity: ${chat.opacity};` : '';
 		let top;
 		let transY;
 		if ((commentVer === 'html5' && height >= screenHeight - fontSizePx / 2 /*|| chat.isOverflow*/) ||
@@ -25213,7 +25437,7 @@ class NicoChatCss3View {
 		return {inline};
 	}
 }
-// already required
+//@require NgCompositeRules
 class NicoChatFilter extends Emitter {
 	constructor(params) {
 		super();
@@ -25246,74 +25470,155 @@ class NicoChatFilter extends Emitter {
 		this._userIdReg = null;
 		this._commandReg = null;
 		const notifyChange=_.debounce(this._onChange.bind(this),50);
-		this._onChange=()=>{this._compositeProjection=null;notifyChange();};
-		this._onChange.cancel=()=>notifyChange.cancel?.();
+		this._onChange=()=>{this._invalidateComposite();notifyChange();};
 		this._onChange.cancel=()=>notifyChange.cancel?.();
 		this._onChange.flush=()=>notifyChange.flush?.();
 		this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
-		this._compositeRules=typeof NgCompositeRules!=='undefined' &&
-			NgCompositeRules.validate(params.compositeRules||[])?
-			JSON.parse(JSON.stringify(params.compositeRules||[])):[];
-		this._compositePool=[];
-		this._compositeVideoId='';
-		this._compositeBaselines=new WeakMap();
-		this._compositeProjection=null;
-		this._compositeApplied=false;
+		this._compositeProgram=typeof NgCompositeRules==='undefined'?null:NgCompositeRules.compile(params.compositeRules||[]);
+		this._compositeRules=this._compositeProgram?.rules||[];
+		this._compositePool=new Set();this._compositeVideoId='';
+		this._compositeBaselines=new WeakMap();this._compositeLast=new WeakMap();
+		this._compositeAuthors=new Map();this._compositeAuthorKeys=new WeakMap();
+		this._compositeBans=new Map();this._compositeProjection=null;
+		this._compositeDirty=true;this._compositeApplied=false;this._compositeWriting=false;
 	}
+	get hasActiveCompositeRules(){return this._enable&&!!this._compositeProgram?.active.length;}
+	get compositeRevision(){return this._compositeRevision||0;}
 	get compositeRules(){return JSON.parse(JSON.stringify(this._compositeRules));}
 	set compositeRules(value){
-		if(!NgCompositeRules.validate(value)){return;}
-		this._compositeRules=JSON.parse(JSON.stringify(value));
-		this._compositeProjection=null;
-		this.refresh();
+		const program=NgCompositeRules.compile(value);if(!program)return;
+		this._compositeProgram=program;this._compositeRules=program.rules;this.refresh();
 	}
-	setCompositeChatPool(chats,videoId='') {
-		this._compositePool=chats.slice();
-		this._compositeVideoId=videoId;
-		this._compositeProjection=null;
-		if(this._compositeApplied||this._compositeRules.some(r=>r.enabled)){
-			const prior=this._compositeBaselines;
-			const next=new WeakMap();
-			for(const chat of chats){
-				next.set(chat,prior.get(chat)||NgCompositeRules.initialState(chat,videoId));
+	_invalidateComposite(){
+		this._compositeDirty=true;this._compositeProjection=null;
+		this._compositeRevision=(this._compositeRevision||0)+1;
+	}
+	_compositeKey(chat){return chat.userId||chat;}
+	_registerCompositeAuthor(chat){
+		const key=this._compositeKey(chat);this._compositeAuthorKeys.set(chat,key);
+		if(!this._compositeAuthors.has(key))this._compositeAuthors.set(key,new Set());
+		this._compositeAuthors.get(key).add(chat);return key;
+	}
+	_baselineComposite(chat){
+		if(!this._compositeBaselines.has(chat))this._compositeBaselines.set(chat,
+			NgCompositeRules.initialState(chat,this._compositeVideoId));
+	}
+	setCompositeChatPool(chats,videoId=''){
+		const next=new Set(chats),old=this._compositePool;
+		if(this._compositeApplied)for(const c of old||[])if(!next.has(c))this._applyCompositeState(c,null);
+		this._compositePool=next;this._compositeVideoId=videoId;
+		this._compositeAuthors.clear();this._compositeBans.clear();
+		this._invalidateComposite();
+		if(this.hasActiveCompositeRules||this._compositeApplied)this.refresh();
+	}
+	recordCompositeEdit(chat,key,value){
+		if(this._compositeWriting)return;
+		const base=this._compositeBaselines.get(chat);if(base)base[key]=value;
+	}
+	_captureCompositeEdit(chat){
+		const base=this._compositeBaselines.get(chat),last=this._compositeLast.get(chat);
+		if(!base||!last)return;
+		for(const key of ['text','cmd','color','size','opacity'])if(chat[key]!==last[key])base[key]=chat[key];
+	}
+	_applyCompositeState(chat,state){
+		state=state||this._compositeBaselines.get(chat);if(!state||!chat.props)return;
+		this._compositeWriting=true;
+		try{
+			if(chat.text!==state.text)chat.text=state.text;
+			for(const key of ['cmd','color','size','opacity'])chat.props[key]=state[key];
+			this._compositeLast.set(chat,state);
+		}finally{this._compositeWriting=false;}
+	}
+	_bansFor(key,authorMatches){
+		return new Set([...authorMatches].filter(([,ids])=>ids.has(key)).map(([id])=>id));
+	}
+	_ensureComposite(){
+		if(!this._compositeDirty)return this._compositeProjection;
+		this._compositeDirty=false;
+		this._compositeAuthors.clear();this._compositeBans.clear();
+		if(!this.hasActiveCompositeRules){
+			if(this._compositeApplied)for(const c of this._compositePool)this._applyCompositeState(c,null);
+			this._compositeApplied=false;return this._compositeProjection=false;
+		}
+		for(const c of this._compositePool){
+			this._baselineComposite(c);if(this._compositeProgram.hasAuthors)this._registerCompositeAuthor(c);
+		}
+		this._compositeLegacy=this.getFilterFunc();
+		const output=NgCompositeRules.projectWithMeta([...this._compositePool],this._compositeProgram,
+			this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
+		this._compositeProjection=output.results;this._compositeApplied=true;
+		for(const [c,state] of output.results)this._applyCompositeState(c,state);
+		for(const key of this._compositeAuthors.keys())this._compositeBans.set(key,this._bansFor(key,output.authorMatches));
+		return this._compositeProjection;
+	}
+	_storeComposite(output,changed){
+		for(const [c,state] of output.results){
+			const old=this._compositeProjection.get(c);
+			if(old&&['visible','text','cmd','color','size','opacity'].some(k=>old[k]!==state[k])){
+				if(c.group)changed.add(c.group);
 			}
-			this._compositeBaselines=next;
-			this.refresh();
+			this._compositeProjection.set(c,state);this._applyCompositeState(c,state);
 		}
 	}
-	_applyCompositeState(chat,state) {
-		const baseline=this._compositeBaselines.get(chat);
-		if(!state){state=baseline;}
-		if(!state)return;
-		if(chat.props){
-			if(chat.text!==state.text){chat.text=state.text;}
-			chat.props.cmd=state.cmd;
-			chat.props.color=state.color;
-			chat.props.size=state.size;
-			chat.props.opacity=state.opacity;
+	_reprojectCompositeAuthor(key,changed){
+		const members=this._compositeAuthors.get(key);
+		if(!members?.size){this._compositeAuthors.delete(key);this._compositeBans.delete(key);return;}
+		const output=NgCompositeRules.projectWithMeta([...members],this._compositeProgram,
+			this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
+		this._compositeBans.set(key,this._bansFor(key,output.authorMatches));this._storeComposite(output,changed);
+	}
+	_notifyCompositeGroups(changed){
+		for(const group of changed){
+			if(group._onCompositeChange)group._onCompositeChange();
+			else group.onChange?.({composite:true});
 		}
 	}
-	_getCompositeProjection(fallback) {
-		if(this._compositeProjection!==null){return this._compositeProjection;}
-		const chats=this._compositePool.length?this._compositePool:fallback;
-		if(!this._enable||!this._compositeRules.some(r=>r.enabled)){
-			if(this._compositeApplied){
-				for(const c of chats){this._applyCompositeState(c,null);}
-				this._compositeApplied=false;
-			}
-			return this._compositeProjection=false;
+	addCompositeChat(chat){
+		const changed=new Set();
+		if(this._compositePool.has(chat)){this._ensureComposite();return changed;}
+		this._compositePool.add(chat);
+		if(!this.hasActiveCompositeRules){this._ensureComposite();return changed;}
+		if(this._compositeDirty){this._ensureComposite();return changed;}
+		this._baselineComposite(chat);
+		const key=this._compositeProgram.hasAuthors?this._registerCompositeAuthor(chat):null;
+		const prior=this._compositeBans.get(key)||new Set(),seed=new Map();
+		for(const id of prior)seed.set(id,new Set([key]));
+		const output=NgCompositeRules.projectWithMeta([chat],this._compositeProgram,
+			this._compositeLegacy,this._compositeVideoId,this._compositeBaselines,seed);
+		const next=this._bansFor(key,output.authorMatches);
+		if(this._compositeProgram.hasAuthors&&(next.size!==prior.size||[...next].some(id=>!prior.has(id)))){
+			this._reprojectCompositeAuthor(key,changed);
+		}else this._storeComposite(output,changed);
+		this._notifyCompositeGroups(changed);return changed;
+	}
+	removeCompositeChat(chat){
+		const changed=new Set();if(!this._compositePool.has(chat))return changed;
+		this._ensureComposite();const key=this._compositeAuthorKeys.get(chat);
+		this._compositePool.delete(chat);this._compositeProjection?.delete?.(chat);
+		this._compositeAuthors.get(key)?.delete(chat);
+		this._applyCompositeState(chat,null);
+		this._compositeBaselines.delete(chat);this._compositeLast.delete(chat);this._compositeAuthorKeys.delete(chat);
+		if(this.hasActiveCompositeRules&&this._compositeProgram.hasAuthors)this._reprojectCompositeAuthor(key,changed);
+		this._notifyCompositeGroups(changed);return changed;
+	}
+	updateCompositeChat(chat){
+		const changed=new Set();if(!this._compositePool.has(chat)||this._compositeWriting)return changed;
+		this._captureCompositeEdit(chat);this._ensureComposite();
+		if(!this.hasActiveCompositeRules)return changed;
+		if(this._compositeProgram.hasAuthors){
+			const old=this._compositeAuthorKeys.get(chat),key=this._compositeKey(chat);
+			if(old!==key){this._compositeAuthors.get(old)?.delete(chat);this._registerCompositeAuthor(chat);this._reprojectCompositeAuthor(old,changed);}
+			this._reprojectCompositeAuthor(key,changed);
+		}else{
+			const output=NgCompositeRules.projectWithMeta([chat],this._compositeProgram,
+				this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
+			this._storeComposite(output,changed);
 		}
-		for(const chat of chats){
-			if(!this._compositeBaselines.has(chat)){
-				this._compositeBaselines.set(chat,NgCompositeRules.initialState(chat,this._compositeVideoId));
-			}
-		}
-		const projection=NgCompositeRules.project(chats,this._compositeRules,
-			this.getFilterFunc(),this._compositeVideoId,this._compositeBaselines);
-		if(!projection){return this._compositeProjection=false;}
-		for(const chat of chats){this._applyCompositeState(chat,projection.get(chat));}
-		this._compositeApplied=true;
-		return this._compositeProjection=projection;
+		this._notifyCompositeGroups(changed);return changed;
+	}
+	_getCompositeProjection(fallback){
+		if(this.hasActiveCompositeRules)for(const c of fallback)if(!this._compositePool.has(c))this.addCompositeChat(c);
+		return this._ensureComposite();
 	}
 	get isEnable() {
 		return this._enable;
@@ -25652,15 +25957,15 @@ class NicoChatFilter extends Emitter {
 		}
 		const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
 		if (timeKey) { window.console.time(timeKey); }
-		const filterFunc = this.getFilterFunc();
 		const composite=this._getCompositeProjection(nicoChatArray);
+		const filterFunc=composite?this._compositeLegacy:this.getFilterFunc();
 		let result=nicoChatArray.filter(chat=>composite instanceof Map?
-			composite.get(chat)?.visible!==false:filterFunc(chat));
+			composite.get(chat)?.visible===true:filterFunc(chat));
 		const removedUserIds = new Set();
 		if (before !== result.length && this._removeNgMatchedUser) {
 			const accepted = new Set(result);
 			for (const chat of nicoChatArray) {
-				if (!accepted.has(chat)) { removedUserIds.add(chat.userId); }
+				if (composite?composite.get(chat)?.legacyRejected:!accepted.has(chat)) { removedUserIds.add(chat.userId); }
 			}
 		}
 		const denyTypes = [
@@ -25697,7 +26002,7 @@ class NicoChatFilter extends Emitter {
 	isSafe(nicoChat) {
 		const composite=this._getCompositeProjection([nicoChat]);
 		return composite instanceof Map?
-			composite.get(nicoChat)?.visible!==false:(this.getFilterFunc())(nicoChat);
+			composite.get(nicoChat)?.visible===true:(this.getFilterFunc())(nicoChat);
 	}
 	_buildFilterReg(filterList) {
 		if (filterList.length < 1) {
@@ -26107,10 +26412,6 @@ class NicoComment extends Emitter {
 				group = this.nakaGroup;
 				break;
 		}
-		this._nicoChatFilter?.setCompositeChatPool?.([
-			...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
-			...this.bottomGroup.nonFilteredMembers,nicoChat
-		],this._nicoChatFilter._compositeVideoId);
 		group.addChat(nicoChat, group);
 		this.emit('addChat');
 	}
@@ -26128,10 +26429,6 @@ class NicoComment extends Emitter {
 				break;
 		}
 		group.removeChat(nicoChat, group);
-		this._nicoChatFilter?.setCompositeChatPool?.([
-			...this.topGroup.nonFilteredMembers,...this.nakaGroup.nonFilteredMembers,
-			...this.bottomGroup.nonFilteredMembers
-		],this._nicoChatFilter._compositeVideoId);
 	}
 	_onChange(e) {
 		console.log('NicoComment.onChange: ', e);
@@ -26519,34 +26816,34 @@ class NicoChatGroup extends Emitter {
 		this._filteredMembersValid = false;
 	}
 	addChatArray(nicoChatArray) {
-		this._filteredMembersValid = false;
-		let members = this._members;
-		let newMembers = [];
-		for (const nicoChat of nicoChatArray) {
-			newMembers.push(nicoChat);
-			members.push(nicoChat);
-			nicoChat.group = this;
+		const filter=this._nicoChatFilter;
+		const cached=this._filteredMembersValid&&this._filteredRevision===(filter.compositeRevision||0);
+		let changedHere=false;
+		for(const chat of nicoChatArray){
+			this._members.push(chat);chat.group=this;
+			if(filter.addCompositeChat?.(chat)?.has(this))changedHere=true;
 		}
-		if (nicoChatArray.length && this._nicoChatFilter.removeNgMatchedUser) {
-			this.onChange(null);
-			return;
+		if(nicoChatArray.length&&(filter.removeNgMatchedUser||changedHere)){
+			this.onChange(null);return;
 		}
-		newMembers = this._nicoChatFilter.applyFilter(nicoChatArray);
-		if (newMembers.length > 0) {
-			this.emit('addChatArray', newMembers);
-		}
+		const accepted=filter.applyFilter(nicoChatArray);
+		if(cached&&this._filteredMembersValid)this._filteredMembers.push(...accepted);
+		else this._filteredMembersValid=false;
+		this._filteredRevision=filter.compositeRevision||0;
+		if(accepted.length)this.emit('addChatArray',accepted);
 	}
 	addChat(nicoChat) {
-		this._filteredMembersValid = false;
-		this._members.push(nicoChat);
-		nicoChat.group = this;
-		if (this._nicoChatFilter.removeNgMatchedUser) {
-			this.onChange(null);
-			return;
-		}
-		if (this._nicoChatFilter.applyFilter([nicoChat]).length > 0) {
-			this.emit('addChat', nicoChat);
-		}
+		const filter=this._nicoChatFilter;
+		const cached=this._filteredMembersValid&&this._filteredRevision===(filter.compositeRevision||0);
+		this._members.push(nicoChat);nicoChat.group=this;
+		const changed=filter.addCompositeChat?.(nicoChat);
+		if(filter.removeNgMatchedUser){this.onChange(null);return;}
+		if(changed?.has(this))return; // Retroactive change already notified this group.
+		const accepted=filter.applyFilter([nicoChat]);
+		if(cached&&this._filteredMembersValid){if(accepted.length)this._filteredMembers.push(nicoChat);}
+		else this._filteredMembersValid=false;
+		this._filteredRevision=filter.compositeRevision||0;
+		if(accepted.length)this.emit('addChat',nicoChat);
 	}
 	_getChat(nicoChat) {
 		return (chat) => chat.threadId === nicoChat.threadId && chat.fork === nicoChat.fork && chat.no === nicoChat.no
@@ -26556,22 +26853,28 @@ class NicoChatGroup extends Emitter {
 		const index = this._members.findIndex(getChat);
 		if (index < 0) { return; }
 		this._filteredMembersValid = false;
-		this._members.splice(index, 1);
+		const removed=this._members[index];
+		const wasVisible=this._nicoChatFilter.isSafe(removed);
+		this._members.splice(index,1);
+		const changed=this._nicoChatFilter.removeCompositeChat?.(removed);
 		nicoChat.group = this;
-		if (this._nicoChatFilter.removeNgMatchedUser || this._nicoChatFilter.isSafe(nicoChat)) {
+		if (!changed?.has(this)&&(this._nicoChatFilter.removeNgMatchedUser||wasVisible)) {
 			this.onChange(null);
 		}
 	}
 	get type() {return this._type;}
 	get members() {
-		if (!this._filteredMembersValid) {
-			this._filteredMembers = this._nicoChatFilter.applyFilter(this._members);
+		if (!this._filteredMembersValid||this._filteredRevision!==(this._nicoChatFilter.compositeRevision||0)) {
+			const accepted=this._nicoChatFilter.applyFilter(this._members);
+			this._filteredMembers=accepted===this._members?accepted.slice():accepted;
 			this._filteredMembersValid = true;
+			this._filteredRevision=this._nicoChatFilter.compositeRevision||0;
 		}
 		return this._filteredMembers;
 	}
 	get nonFilteredMembers() { return this._members; }
 	onChange(e) {
+		if(e?.chat&&!e.composite&&this._nicoChatFilter.updateCompositeChat?.(e.chat)?.has(this))return;
 		console.log('NicoChatGroup.onChange: ', e);
 		this._filteredMembers = [];
 		this._filteredMembersValid = false;
@@ -26580,6 +26883,7 @@ class NicoChatGroup extends Emitter {
 			group: this
 		});
 	}
+	_onCompositeChange(){this.onChange({composite:true});}
 	_onFilterChange() {
 		this._filteredMembers = [];
 		this.onChange(null);
@@ -27470,14 +27774,14 @@ body.in-capture .commentLayer {
 .debug .gulim   { background: rgba(0, 128, 0, 0.3); }
 .debug .mingLiu { background: rgba(0, 0, 128, 0.3); }
 @keyframes fixed {
-	0% { opacity: 1; visibility: visible; }
-	95% { opacity: 1; }
+	0% { opacity: var(--chat-opacity, 1); visibility: visible; }
+	95% { opacity: var(--chat-opacity, 1); }
 100% { opacity: 0; visibility: hidden;}
 }
 @keyframes show-hide {
-0% { visibility: visible; opacity: 1; }
+0% { visibility: visible; opacity: var(--chat-opacity, 1); }
 /* Chrome 73のバグ？対策 hidden が適用されない */
-95% { visibility: visible; opacity: 1; }
+95% { visibility: visible; opacity: var(--chat-opacity, 1); }
 100% { visibility: hidden; opacity: 0; }
 /*100% { visibility: hidden; }*/
 }
@@ -27745,10 +28049,10 @@ body.in-capture .commentLayer {
 	-webkit-text-stroke: unset;
 }
 .nicoChat.fork2 {
-	opacity: var(--easy-comment-opacity, ${easyCommentOpacity}) !important;
+	opacity: calc(var(--easy-comment-opacity, ${easyCommentOpacity}) * var(--chat-opacity, 1)) !important;
 }
 .nicoChat.fork3 {
-	opacity: var(--ai-comment-opacity, ${aiCommentOpacity}) !important;
+	opacity: calc(var(--ai-comment-opacity, ${aiCommentOpacity}) * var(--chat-opacity, 1)) !important;
 }
 .nicoChat.blink {
 	border: 1px solid #f00;
@@ -37259,6 +37563,7 @@ class NicoVideoPlayerDialog extends Emitter {
 			duration: this._videoInfo.duration,
 			creditDuration: this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
 			mainThreadId: result.threadInfo.threadId,
+			watchId: this._watchId,
 			format: result.format
 		};
 		this._nicoVideoPlayer.closeCommentPlayer();

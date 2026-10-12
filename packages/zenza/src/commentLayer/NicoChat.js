@@ -280,6 +280,7 @@ class NicoChat {
   get id() {return this.props.id;}
   get text() {return this.props.text;}
   set text(v) {
+    this.props.group?._nicoChatFilter?.recordCompositeEdit?.(this,'text',v);
     this.props.text = v;
     this.props.htmlText = null;
   }
@@ -315,9 +316,9 @@ class NicoChat {
   get beginTime() {return this.vpos / 100;}
   get isDeleted() {return !!this.props.deleted;}
   get color() {return this.props.color;}
-  set color(v) {this.props.color = v;}
+  set color(v) {this.props.group?._nicoChatFilter?.recordCompositeEdit?.(this,'color',v);this.props.color = v;}
   get size() {return this.props.size;}
-  set size(v) {this.props.size = v;}
+  set size(v) {this.props.group?._nicoChatFilter?.recordCompositeEdit?.(this,'size',v);this.props.size = v;}
   get type() {return this.props.type;}
   set type(v) {this.props.type = v;}
   get score() {return this.props.score;}
@@ -339,7 +340,16 @@ class NicoChat {
   get threadLabel() {return this.props.threadLabel;}
   get nicoru() {return this.props.nicoru;}
   get nicoruKnown(){return !!this.props.nicoruKnown;}
-  set nicoru(v) {this.props.nicoru = v;this.props.nicoruKnown=true;}
+  set nicoru(v) {
+    const changed=this.props.nicoru!==v||!this.props.nicoruKnown;
+    this.props.nicoru=v;
+    this.props.nicoruKnown=true;
+    // A new nicoru count can change whether this comment triggers an
+    // uploader-wide NG. Re-evaluate all groups only while composite rules run.
+    if(changed&&this.props.group?._nicoChatFilter?.hasActiveCompositeRules){
+      this.props.group._nicoChatFilter.updateCompositeChat(this);
+    }
+  }
   get nicotta() { return !!this.props.nicotta;}
   set nicotta(v) { this.props.nicotta = v;
     // this.onChange();

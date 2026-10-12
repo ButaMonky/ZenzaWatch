@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.55-task402
+// @version     0.3.56-task403
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-11 15:24Z
+// build: 2026-10-12 03:38Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -3198,35 +3198,179 @@ class NgCompositeRules {
 	static get FIELDS() {return ['text','regex','cmd','color','size','user','nicoru','position','fork','score','vpos','video'];}
 	static get ACTIONS() {return ['hide','hideAuthor','replace','strip','normalize','dim','mask'];}
 	static get MAX_RULES() {return 50;}
-	static isSafeRegex(pattern) {
-		if(typeof pattern!=='string'||pattern.length>160){return false;}
-		return !/(\([^)]*[+*][^)]*\))[+*{]/.test(pattern) &&
-			!/(?:\.\*|\.\+){2,}/.test(pattern) && !/\\[1-9]/.test(pattern);
+	static isSafeRegex(pattern,flags='i') {
+		if(typeof pattern!=='string'||!pattern||pattern.length>160||!NgCompositeRules.validFlags(flags))return false;
+		const ANY=null,empty=()=>new Set(),union=(a,b)=>a===ANY||b===ANY?ANY:new Set([...a,...b]);
+		const ignoreCase=flags.includes('i'),proofFlags=(ignoreCase?'i':'')+(flags.includes('u')?'u':'');
+		const proofCache=new Map();
+		const literalTest=(word,value,prefix=false)=>{
+			const key=JSON.stringify([word,prefix]);let re=proofCache.get(key);
+			if(!re){
+				const escaped=word.replace(/[.*+?^$(){}|[\]\\]/g,'\\$&');
+				re=new RegExp('^(?:'+escaped+')'+(prefix?'':'$'),proofFlags);proofCache.set(key,re);
+			}
+			return re.test(value);
+		};
+		const overlap=(a,b)=>{
+			if(a===ANY||b===ANY)return true;
+			for(const c of a){
+				if(b.has(c))return true;
+				if(ignoreCase)for(const d of b)if(literalTest(c,d))return true;
+			}
+			return false;
+		};
+		const atom=(chars,word,min=1)=>({first:chars,chars,min,variable:false,ambiguous:false,words:word===null?null:[word]});
+		const literal=s=>/[\ud800-\udfff]/.test(s)?atom(ANY,null):atom(new Set([s]),s);
+		const zero=()=>atom(empty(),'',0);
+		const wordsJoin=(a,b)=>!a||!b||a.length*b.length>32||
+			a.some(x=>b.some(y=>x.length+y.length>160))?null:a.flatMap(x=>b.map(y=>x+y));
+		const prefixFree=(a,b)=>a&&b&&!a.some(x=>b.some(y=>ignoreCase?
+			literalTest(x,y,true)||literalTest(y,x,true):x.startsWith(y)||y.startsWith(x)));
+		let i=0,depth=0;
+		const fail=()=>{throw new Error('Unsupported or ambiguous regexp');};
+		const sequence=()=>{
+			const parts=[];
+			while(i<pattern.length&&![')', '|'].includes(pattern[i])){
+				let a=readAtom(),min=1,max=1;
+				const q=pattern[i];
+				if(q==='*'||q==='+'||q==='?'){i++;min=q==='+'?1:0;max=q==='?'?1:Infinity;}
+				else if(q==='{'){
+					const m=/^\{(\d+)(?:,(\d*))?\}/.exec(pattern.slice(i));
+					if(m){i+=m[0].length;min=Number(m[1]);max=m[2]===undefined?min:m[2]===''?Infinity:Number(m[2]);}
+				}
+				if(min>1024||max!==Infinity&&max>1024||max<min)fail();
+				if(max>1&&(a.min===0||a.variable||a.ambiguous))fail();
+				if(min!==1||max!==1){
+					if(pattern[i]==='?')i++;
+					a={...a,min:a.min*min,variable:a.variable||min!==max,
+						words:min===max&&min<=4?Array.from({length:min}).reduce(w=>wordsJoin(w,a.words),['']):null};
+				}
+				parts.push(a);
+			}
+			for(let p=0;p<parts.length;p++)if(parts[p].variable){
+				for(let q=p+1;q<parts.length;q++)if(parts[q].variable&&overlap(parts[p].chars,parts[q].chars)){
+					if(!parts.slice(p+1,q).some(x=>x.min>0&&!overlap(x.chars,parts[p].chars)))fail();
+				}
+			}
+			let out=zero(),nullable=true;
+			for(const a of parts){
+				if(nullable)out.first=union(out.first,a.first);
+				nullable=nullable&&a.min===0;out.chars=union(out.chars,a.chars);out.min+=a.min;
+				out.variable=out.variable||a.variable;out.ambiguous=out.ambiguous||a.ambiguous;
+				out.words=wordsJoin(out.words,a.words);
+			}
+			return out;
+		};
+		const expression=()=>{
+			const branches=[sequence()];
+			while(pattern[i]==='|'){i++;branches.push(sequence());}
+			const out={...branches[0]};
+			for(let p=0;p<branches.length;p++)for(let q=p+1;q<branches.length;q++){
+				if(overlap(branches[p].first,branches[q].first)&&!prefixFree(branches[p].words,branches[q].words))out.ambiguous=true;
+			}
+			for(const a of branches.slice(1)){
+				out.first=union(out.first,a.first);out.chars=union(out.chars,a.chars);out.min=Math.min(out.min,a.min);
+				out.variable=out.variable||a.variable;out.ambiguous=out.ambiguous||a.ambiguous;
+				out.words=out.words&&a.words&&out.words.length+a.words.length<=32?[...out.words,...a.words]:null;
+			}
+			return out;
+		};
+		const readAtom=()=>{
+			const ch=pattern[i++];
+			if(ch==='('){
+				if(++depth>12)fail();
+				if(pattern.slice(i,i+2)==='?:')i+=2;
+				else if(pattern[i]==='?')fail(); // Lookarounds/named groups are outside this initial subset.
+				const a=expression();if(pattern[i++]!==')')fail();depth--;return a;
+			}
+			if(ch==='['){
+				const start=i-1;
+				while(i<pattern.length){if(pattern[i]==='\\'){i+=2;continue;}if(pattern[i++]===']')break;}
+				const raw=pattern.slice(start,i);if(!raw.endsWith(']'))fail();
+				if(raw[1]==='^'||/\\|[^\x00-\x7f]/.test(raw))return atom(ANY,null);
+				const re=new RegExp('^(?:'+raw+')$',proofFlags),chars=empty();
+				for(let n=0;n<128;n++){const c=String.fromCharCode(n);if(re.test(c))chars.add(c);}
+				return atom(chars,null);
+			}
+			if(ch==='.')return atom(ANY,null);
+			if(ch==='^'||ch==='$')return zero();
+			if(ch==='\\'){
+				const e=pattern[i++];if(!e||/[1-9k]/.test(e))fail();
+				if(e==='b'||e==='B')return zero();
+				if(e==='d')return atom(new Set('0123456789'),null);
+				if(e==='w')return atom(new Set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_'),null);
+				if(e==='s')return atom(new Set([' ','\t','\n','\r','\f','\v','\u00a0','\u1680',
+					'\u2000','\u2001','\u2002','\u2003','\u2004','\u2005','\u2006','\u2007','\u2008',
+					'\u2009','\u200a','\u2028','\u2029','\u202f','\u205f','\u3000','\ufeff']),null);
+				if(/[DSW]/.test(e))return atom(ANY,null);
+				if(e==='p'||e==='P'){
+					const m=/^\{[A-Za-z_=]+\}/.exec(pattern.slice(i));if(!m||!flags.includes('u'))fail();i+=m[0].length;return atom(ANY,null);
+				}
+				if(e==='x'||e==='u'){
+					const size=e==='x'?2:4;
+					const hex=pattern.slice(i,i+size);if(!new RegExp('^[0-9a-f]{'+size+'}$','i').test(hex))fail();
+					i+=size;return literal(String.fromCharCode(parseInt(hex,16)));
+				}
+				if(e==='0'){if(/\d/.test(pattern[i]||''))fail();return literal('\0');}
+				if(e==='c')fail();
+				return literal(({n:'\n',r:'\r',t:'\t',f:'\f',v:'\v'})[e]||e);
+			}
+			if(!ch||'*+?)'.includes(ch))fail();
+			return literal(ch);
+		};
+		try{expression();if(i!==pattern.length)return false;new RegExp(pattern,flags);return true;}
+		catch(_){return false;}
+	}
+	static validFlags(flags){
+		return typeof flags==='string'&&/^[gimsu]*$/.test(flags)&&new Set(flags).size===flags.length;
+	}
+	static get MAX_REGEX_INPUT(){return 2048;}
+	static color(value){
+		if(typeof value!=='string')return null;
+		const key=value.toLowerCase();
+		if(Object.prototype.hasOwnProperty.call(NG_COLOR_HEX,key))return NG_COLOR_HEX[key];
+		return /^#[0-9a-f]{6}$/i.test(value)?value.toUpperCase():null;
+	}
+	static number(value){
+		if(typeof value==='number')return Number.isFinite(value)?value:null;
+		if(typeof value==='string'&&/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(value.trim())){
+			const n=Number(value);return Number.isFinite(n)?n:null;
+		}
+		return null;
 	}
 	static validate(rules) {
+		try{return NgCompositeRules._validate(rules);}catch(_){return false;}
+	}
+	static _validate(rules) {
 		if(!Array.isArray(rules)||rules.length>NgCompositeRules.MAX_RULES) {return false;}
-		let count=0;
+		let count=0,nodeIds=new Set();
 		const str=(v,max=200)=>typeof v==='string'&&v.length<=max;
 		const walk=(node,depth)=>{
-			if(!node||typeof node!=='object'||++count>350){return false;}
+			if(!node||typeof node!=='object'||++count>350||typeof node.id!=='string'||
+					!node.id.trim()||node.id.length>80||nodeIds.has(node.id)){return false;}
+			nodeIds.add(node.id);
 			if(node.kind==='group'){
-				return depth<3&&['all','any'].includes(node.mode)&&Array.isArray(node.nodes)&&
-					node.nodes.length<=45&&node.nodes.every(n=>walk(n,depth+1));
+				return (node.not===undefined||node.not===false)&&depth<3&&['all','any'].includes(node.mode)&&Array.isArray(node.nodes)&&
+					node.nodes.length>0&&node.nodes.length<=45&&node.nodes.every(n=>walk(n,depth+1));
 			}
-			if(!NgCompositeRules.FIELDS.includes(node.field)||typeof node.not!=='boolean'||
+			if(Object.prototype.hasOwnProperty.call(node,'nodes')||!NgCompositeRules.FIELDS.includes(node.field)||typeof node.not!=='boolean'||
 					!str(node.value,160)||!['contains','equals','notEquals','starts','ends','regex','gte','lte'].includes(node.cmp)){return false;}
 			if(node.value.trim()===''||(['nicoru','score','vpos'].includes(node.field)&&
 				!['gte','lte','equals'].includes(node.cmp))){return false;}
+			if(node.field==='color'&&!NgCompositeRules.color(node.value)){return false;}
 			if(node.field==='regex'||node.cmp==='regex'){
 				if(!NgCompositeRules.isSafeRegex(node.value)){return false;}
 				try{new RegExp(node.value,'i');}catch(_){return false;}
 			}
 			if(['nicoru','score','vpos'].includes(node.field)&&
-				!Number.isFinite(Number(node.value))){return false;}
+				NgCompositeRules.number(node.value)===null){return false;}
 			return true;
 		};
+		const ruleIds=new Set();
 		return rules.every(r=>{
-			if(!r||typeof r!=='object'||!str(r.id,80)||!str(r.name,90)||
+			nodeIds=new Set();
+			if(!r||typeof r!=='object'||!str(r.id,80)||!r.id.trim()||ruleIds.has(r.id)||
+					!str(r.name,90)||
 					typeof r.enabled!=='boolean'||!['normal','any','owner','easy'].includes(r.scope)||
 					!NgCompositeRules.ACTIONS.includes(r.action)||!['before','after'].includes(r.phase)||
 					typeof r.stopOnMatch!=='boolean'||typeof r.exemptNicoru!=='boolean'||
@@ -3234,16 +3378,21 @@ class NgCompositeRules {
 					!['evaluate','skip'].includes(r.unknownPolicy)||
 					typeof r.keepProtectedOnAuthorHide!=='boolean'||!str(r.pattern,160)||
 					!str(r.replacement,800)||!str(r.mask,800)||typeof r.regexReplace!=='boolean'||
-					!str(r.flags,6)||!/^[gimsu]*$/.test(r.flags)||!Array.isArray(r.strip)||
-					r.strip.length>40||r.strip.some(c=>!str(c,40))||
-					!(r.normalizeColor==='keep'||r.normalizeColor in NG_COLOR_HEX)||
+					!str(r.flags,5)||!NgCompositeRules.validFlags(r.flags)||!Array.isArray(r.strip)||
+					r.strip.length>40||r.strip.some(c=>!str(c,40)||
+						!Object.prototype.hasOwnProperty.call(NG_COLOR_HEX,c.toLowerCase())&&
+						!['big','small'].includes(c.toLowerCase())&&
+						!/^#[0-9a-f]{6}$/i.test(c))||
+					!(r.normalizeColor==='keep'||NgCompositeRules.color(r.normalizeColor))||
 					!['keep','medium','big','small'].includes(r.normalizeSize)||
 					!Number.isFinite(r.dim)||r.dim<5||r.dim>100||
-					!walk(r.conditions,0)){return false;}
+					r.conditions?.kind!=='group'||!walk(r.conditions,0)){return false;}
+			if(r.action==='replace'&&!r.pattern){return false;}
 			if(r.action==='replace'&&r.regexReplace){
-				if(!NgCompositeRules.isSafeRegex(r.pattern)){return false;}
+				if(!NgCompositeRules.isSafeRegex(r.pattern,r.flags)){return false;}
 				try{new RegExp(r.pattern,r.flags);}catch(_){return false;}
 			}
+			ruleIds.add(r.id);
 			return true;
 		});
 	}
@@ -3254,8 +3403,8 @@ class NgCompositeRules {
 	}
 	static nicoru(chat) {
 		if(chat.nicoruKnown===false||chat.nicoru===null||chat.nicoru===undefined){return null;}
-		const value=Number(chat.nicoru);
-		return Number.isFinite(value)&&value>=0?value:null;
+		const value=NgCompositeRules.number(chat.nicoru);
+		return value!==null&&value>=0?value:null;
 	}
 	static protected(rule,chat) {
 		if(!rule.exemptNicoru){return false;}
@@ -3263,21 +3412,22 @@ class NgCompositeRules {
 		return value===null?rule.unknownPolicy==='skip':value>=rule.nicoruMin;
 	}
 	static commandColor(cmd,base) {
-		let value=(base||'#FFFFFF').toUpperCase();
+		let value=NgCompositeRules.color(base)||'#FFFFFF';
 		for(const token of String(cmd||'').toLowerCase().split(/\s+/)){
-			if(NG_COLOR_HEX[token]){value=NG_COLOR_HEX[token];}
+			if(Object.prototype.hasOwnProperty.call(NG_COLOR_HEX,token)){value=NG_COLOR_HEX[token];}
 			else if(/^#[a-f0-9]{6}$/i.test(token)){value=token.toUpperCase();}
 		}
 		return value;
 	}
-	static matches(node,chat) {
+	static matches(node,chat,regexCache=null) {
 		if(!node){return false;}
 		let matched=false;
 		let known=true;
 		if(node.kind==='group') {
+			if(node.not!==undefined&&node.not!==false)return false;
 			matched=node.nodes.length>0 && (node.mode==='all'?
-				node.nodes.every(n=>NgCompositeRules.matches(n,chat)):
-				node.nodes.some(n=>NgCompositeRules.matches(n,chat)));
+				node.nodes.every(n=>NgCompositeRules.matches(n,chat,regexCache)):
+				node.nodes.some(n=>NgCompositeRules.matches(n,chat,regexCache)));
 		}else{
 			const f=node.field;
 			let actual;
@@ -3290,14 +3440,28 @@ class NgCompositeRules {
 			else if(f==='position'){actual=chat.type;}
 			else if(f==='fork'){actual=({0:'normal',1:'owner',2:'easy'})[chat.fork]||'other';}
 			else if(f==='score'){actual=chat.score;}
-			else if(f==='vpos'){actual=Number(chat.vpos)/100;}
+			else if(f==='vpos'){const n=NgCompositeRules.number(chat.vpos);actual=n===null?null:n/100;}
 			else if(f==='video'){actual=chat.videoId;}
-			const expected=f==='color'?(NG_COLOR_HEX[node.value]||node.value).toUpperCase():node.value;
-			if(actual!==null&&actual!==undefined){
-				if(['gte','lte'].includes(node.cmp)){const a=Number(actual),b=Number(expected);
-					matched=Number.isFinite(a)&&Number.isFinite(b)&&(node.cmp==='gte'?a>=b:a<=b);
+			const expected=f==='color'?NgCompositeRules.color(node.value):node.value;
+			if(f==='color'&&expected===null)return false;
+			if(actual!==null&&actual!==undefined&&
+					(!['score','vpos'].includes(f)||Number.isFinite(Number(actual)))){
+				if(['nicoru','score','vpos'].includes(f)){
+					const a=NgCompositeRules.number(actual),b=NgCompositeRules.number(expected);
+					known=a!==null&&b!==null;
+					matched=known&&(node.cmp==='gte'?a>=b:node.cmp==='lte'?a<=b:a===b);
 				}else if(node.cmp==='regex'||f==='regex'){
-					try{matched=new RegExp(expected,'i').test(String(actual).slice(0,512));}catch(_){matched=false;}
+					try{
+						const cacheKey=JSON.stringify([expected,'i']);
+						let regexp=regexCache?.get(cacheKey);
+						if(!regexp){
+							if(!NgCompositeRules.isSafeRegex(expected,'i'))return false;
+							regexp=new RegExp(expected,'i');regexCache?.set(cacheKey,regexp);
+						}
+						const text=String(actual);
+						if(text.length>NgCompositeRules.MAX_REGEX_INPUT)return false;
+						regexp.lastIndex=0;matched=regexp.test(text);regexp.lastIndex=0;
+					}catch(_){known=false;matched=false;}
 				}else{
 					const a=String(actual),b=String(expected);
 					if(node.cmp==='contains'){matched=a.includes(b);}
@@ -3321,83 +3485,135 @@ class NgCompositeRules {
 			videoId:videoId||'',threadLabel:chat.threadLabel,isCA:chat.isCA
 		};
 	}
-	static applyAction(rule,state) {
+	static applyAction(rule,state,regexCache=null) {
 		if(rule.action==='hide'||rule.action==='hideAuthor'){state.hidden=true;return;}
 		if(rule.action==='mask'){state.text=rule.mask;return;}
 		if(rule.action==='dim'){state.opacity*=rule.dim/100;return;}
 		if(rule.action==='replace'){
 			if(!rule.pattern){return;}
 			if(rule.regexReplace){
-				try{const re=new RegExp(rule.pattern,rule.flags);
-					state.text=state.text.replace(re,rule.replacement);
-				}catch(_){/* rejected at validation */}
-			}else {state.text=state.text.split(rule.pattern).join(rule.replacement);}
+				if(state.text.length>NgCompositeRules.MAX_REGEX_INPUT)return false;
+				try{
+					const key=JSON.stringify([rule.pattern,rule.flags]);
+					let re=regexCache?.get(key);
+					if(!re){
+						if(!NgCompositeRules.isSafeRegex(rule.pattern,rule.flags))return false;
+						re=new RegExp(rule.pattern,rule.flags);regexCache?.set(key,re);
+					}
+					re.lastIndex=0;
+					const replaced=state.text.replace(re,rule.replacement);
+					re.lastIndex=0;
+					if(replaced.length>8192)return false;
+					state.text=replaced;
+				}catch(_){return false;}
+			}else {
+				if(state.text.length>8192)return false;
+				const replaced=state.text.split(rule.pattern).join(rule.replacement);
+				if(replaced.length>8192)return false;state.text=replaced;
+			}
 			return;
 		}
+		if(rule.action==='normalize'&&rule.normalizeColor==='keep'&&rule.normalizeSize==='keep')return;
 		let tokens=state.cmd.split(/\s+/).filter(Boolean);
+		let colorChanged=false,sizeChanged=false;
 		if(rule.action==='strip'){
 			const excluded=new Set(rule.strip.map(v=>v.toLowerCase()));
+			const removed=tokens.filter(v=>excluded.has(v.toLowerCase()));
+			if(!removed.length)return;
+			colorChanged=removed.some(t=>Object.prototype.hasOwnProperty.call(
+				NG_COLOR_HEX,t.toLowerCase())||/^#[a-f\d]{6}$/i.test(t));
+			sizeChanged=removed.some(t=>['big','small'].includes(t.toLowerCase()));
 			tokens=tokens.filter(v=>!excluded.has(v.toLowerCase()));
 		}else if(rule.action==='normalize'){
-			if(rule.normalizeColor!=='keep'){
-				tokens=tokens.filter(t=>!NG_COLOR_HEX[t.toLowerCase()]&&!/^#[a-f\d]{6}$/i.test(t));
+			colorChanged=rule.normalizeColor!=='keep';
+			sizeChanged=rule.normalizeSize!=='keep';
+			if(colorChanged){
+				tokens=tokens.filter(t=>!Object.prototype.hasOwnProperty.call(
+					NG_COLOR_HEX,t.toLowerCase())&&!/^#[a-f\d]{6}$/i.test(t));
 				if(rule.normalizeColor!=='white'){tokens.push(rule.normalizeColor);}
 			}
-			if(rule.normalizeSize!=='keep'){
+			if(sizeChanged){
 				tokens=tokens.filter(t=>!['big','small'].includes(t.toLowerCase()));
 				if(rule.normalizeSize!=='medium'){tokens.push(rule.normalizeSize);}
 			}
 		}
 		state.cmd=tokens.join(' ');
-		state.color=NgCompositeRules.commandColor(state.cmd,'#FFFFFF');
-		const lower=tokens.map(t=>t.toLowerCase());
-		state.size=lower.includes('big')?'big':lower.includes('small')?'small':'medium';
-		state.type=state.type;
+		if(colorChanged){state.color=NgCompositeRules.commandColor(state.cmd,'#FFFFFF');}
+		if(sizeChanged){
+			const lower=tokens.map(t=>t.toLowerCase());
+			state.size=lower.includes('big')?'big':lower.includes('small')?'small':'medium';
+		}
+	}
+	static compile(input) {
+		if(NgCompositeRules._programs?.has(input))return input;
+		let rules;
+		try{rules=JSON.parse(JSON.stringify(input));}catch(_){return null;}
+		if(!NgCompositeRules.validate(rules))return null;
+		const regexCache=new Map();
+		const add=(source,flags)=>{
+			const key=JSON.stringify([source,flags]);
+			if(!regexCache.has(key))regexCache.set(key,new RegExp(source,flags));
+		};
+		const walk=n=>{
+			if(n.kind==='group')n.nodes.forEach(walk);
+			else if(n.field==='regex'||n.cmp==='regex')add(n.value,'i');
+		};
+		for(const r of rules){walk(r.conditions);if(r.action==='replace'&&r.regexReplace)add(r.pattern,r.flags);}
+		const freeze=value=>{if(value&&typeof value==='object'){Object.values(value).forEach(freeze);Object.freeze(value);}};
+		freeze(rules);
+		const active=rules.filter(r=>r.enabled);
+		const program=Object.freeze({rules,active:Object.freeze(active),regexCache,
+			before:Object.freeze(active.filter(r=>r.phase==='before')),
+			after:Object.freeze(active.filter(r=>r.phase==='after')),
+			hasAuthors:active.some(r=>r.action==='hideAuthor')});
+		if(!NgCompositeRules._programs)NgCompositeRules._programs=new WeakSet();
+		NgCompositeRules._programs.add(program);
+		return program;
 	}
 	static project(chats,rules,legacyPredicate=()=>true,videoId='',baselines=null) {
-		if(!NgCompositeRules.validate(rules)){return null;}
-		const active=rules.filter(r=>r.enabled);
-		if(!active.length){return null;}
-		const initial=chats.map(chat=>{
-			const baseline=baselines?.get?.(chat);
-			return baseline?{...baseline,nicoru:chat.nicoru,
-				nicoruKnown:chat.nicoruKnown,videoId:videoId||baseline.videoId}:
-				NgCompositeRules.initialState(chat,videoId);
+		return NgCompositeRules.projectWithMeta(chats,rules,legacyPredicate,videoId,baselines)?.results||null;
+	}
+	static projectWithMeta(chats,rules,legacyPredicate=()=>true,videoId='',baselines=null,seedBans=null) {
+		const program=NgCompositeRules.compile(rules);
+		if(!program||!program.active.length)return null;
+		const rows=chats.map(chat=>{
+			const live=NgCompositeRules.initialState(chat,videoId),old=baselines?.get(chat);
+			if(old)for(const key of ['text','cmd','color','size','opacity'])live[key]=old[key];
+			return {...live,hidden:false,visible:true,stopped:false,legacyRejected:false};
 		});
 		const authorMatches=new Map();
-		for(const rule of active.filter(r=>r.action==='hideAuthor')){
-			const ids=new Set();
-			initial.forEach(s=>{
-				if(!s.userId||!NgCompositeRules.matchScope(rule,s)||NgCompositeRules.protected(rule,s)){return;}
-				if(rule.phase==='after'&&!legacyPredicate(s)){return;}
-				if(NgCompositeRules.matches(rule.conditions,s)){ids.add(s.userId);}
-			});
-			authorMatches.set(rule.id,ids);
-		}
-		const results=new Map();
-		for(let i=0;i<chats.length;i++){
-			const s={...initial[i],hidden:false};
-			let stopped=false;
-			const applyPhase=phase=>{
-				if(stopped){return;}
-				for(const r of active){
-					if(r.phase!==phase){continue;}
-					const ban=r.action==='hideAuthor'&&s.userId&&authorMatches.get(r.id).has(s.userId);
-					if(!ban&&!NgCompositeRules.matchScope(r,s)){continue;}
-					const protectedChat=NgCompositeRules.protected(r,s);
-					if(protectedChat&&!(ban&&r.keepProtectedOnAuthorHide===false)){continue;}
-					const hit=r.action==='hideAuthor'?ban:NgCompositeRules.matches(r.conditions,s);
-					if(!hit){continue;}
-					NgCompositeRules.applyAction(r,s);
-					if(r.stopOnMatch||s.hidden){stopped=true;break;}
+		const eligible=(s,r)=>!s.hidden&&!s.stopped&&(r.phase==='before'||!s.legacyRejected);
+		const phase=rulesInPhase=>{
+			for(const r of rulesInPhase){
+				if(r.action==='hideAuthor'){
+					const ids=new Set(seedBans?.get(r.id)||[]);
+					for(const s of rows){
+						if(!eligible(s,r)||!s.userId||!NgCompositeRules.matchScope(r,s)||NgCompositeRules.protected(r,s))continue;
+						if(NgCompositeRules.matches(r.conditions,s,program.regexCache))ids.add(s.userId);
+					}
+					authorMatches.set(r.id,ids);
+					for(const s of rows){
+						if(!eligible(s,r)||!s.userId||!ids.has(s.userId))continue;
+						if(r.keepProtectedOnAuthorHide&&NgCompositeRules.protected(r,s))continue;
+						s.hidden=true;s.stopped=true;
+					}
+				}else for(const s of rows){
+					if(!eligible(s,r)||!NgCompositeRules.matchScope(r,s)||NgCompositeRules.protected(r,s))continue;
+					if(!NgCompositeRules.matches(r.conditions,s,program.regexCache))continue;
+					if(NgCompositeRules.applyAction(r,s,program.regexCache)===false)continue;
+					if(r.stopOnMatch||s.hidden)s.stopped=true;
 				}
-			};
-			applyPhase('before');
-			const legacySafe=!s.hidden&&legacyPredicate(s);
-			if(legacySafe){applyPhase('after');}
-			results.set(chats[i],{...s,visible:legacySafe&&!s.hidden});
+			}
+		};
+		phase(program.before);
+		for(const s of rows){
+			s.legacyRejected=!legacyPredicate(s);
+			s.visible=!s.hidden&&!s.legacyRejected;
 		}
-		return results;
+		phase(program.after);
+		const results=new Map();
+		rows.forEach((s,i)=>{s.visible=!s.hidden&&!s.legacyRejected;results.set(chats[i],s);});
+		return {results,authorMatches};
 	}
 }
 const Config = (() => {
@@ -9164,7 +9380,9 @@ class NgCompositeRuleEditor {
 		this.onChange=onChange;
 		this.doc=host.ownerDocument;
 		this.shadow=host.shadowRoot||host.attachShadow({mode:'open'});
-		this.rules=NgCompositeRuleEditor.copy(saved);
+		this.invalidSaved=false;
+		try{this.rules=NgCompositeRuleEditor.prepareDraft(saved||[]);}
+		catch(_){this.rules=[];this.invalidSaved=true;}
 		this.selected=this.rules[0]?.id||'';
 		this.serial=0;
 		this.sample={text:'中国の話ｗｗｗ',cmd:'red big ue',userId:'nvc:sample',nicoru:0,score:0,vpos:1500,videoId:'sm9',fork:0};
@@ -9172,6 +9390,42 @@ class NgCompositeRuleEditor {
 		this.render();
 	}
 	static copy(v){return JSON.parse(JSON.stringify(v||[]));}
+	static prepareDraft(value){
+		const rules=NgCompositeRuleEditor.copy(value),ids=new Set();let count=0;
+		const fail=()=>{throw new TypeError('複合NGの構造または識別子が不正です。元の設定は保持しました。');};
+		const id=(value,seen)=>{
+			if(typeof value!=='string'||!value.trim()||value.length>80||seen.has(value))fail();seen.add(value);
+		};
+		if(!Array.isArray(rules)||rules.length>NgCompositeRules.MAX_RULES)fail();
+		for(const r of rules){
+			if(!r||typeof r!=='object')fail();id(r.id,ids);
+			for(const key of ['name','scope','phase','action','pattern','replacement','flags','normalizeColor','normalizeSize','mask','unknownPolicy']){
+				if(typeof r[key]!=='string'||r[key].length>8192)fail();
+			}
+			if(!Array.isArray(r.strip)||r.strip.length>40||r.strip.some(x=>typeof x!=='string'))fail();
+			for(const key of ['enabled','stopOnMatch','exemptNicoru','keepProtectedOnAuthorHide','regexReplace'])if(typeof r[key]!=='boolean')fail();
+			const nodeIds=new Set();
+			const walk=(n,depth)=>{
+				if(!n||typeof n!=='object'||++count>350)fail();id(n.id,nodeIds);
+				if(n.kind==='group'){
+					if(depth>=3||!['all','any'].includes(n.mode)||!Array.isArray(n.nodes)||n.nodes.length>45||n.not===true)fail();
+					n.nodes.forEach(child=>walk(child,depth+1));
+				}else if(Object.prototype.hasOwnProperty.call(n,'nodes')||!NgCompositeRules.FIELDS.includes(n.field)||typeof n.value!=='string'||typeof n.cmp!=='string'||typeof n.not!=='boolean')fail();
+			};
+			if(r.conditions?.kind!=='group')fail();walk(r.conditions,0);
+		}
+		return rules;
+	}
+	static freshId(used=new Set()){
+		let id;do{id='ng-'+Date.now().toString(36)+'-'+((this._idSequence=(this._idSequence||0)+1).toString(36));}while(used.has(id));
+		used.add(id);return id;
+	}
+	usedIds(){
+		const ids=new Set();
+		for(const r of this.rules){ids.add(r.id);const walk=n=>{ids.add(n.id);n.nodes?.forEach(walk);};walk(r.conditions);}
+		return ids;
+	}
+	nextId(){return NgCompositeRuleEditor.freshId(this.usedIds());}
 	static get fields(){return [['text','本文（部分一致）'],['regex','本文（正規表現）'],
 		['cmd','コマンド文字列'],['color','コマンド文字色'],['size','文字サイズ'],
 		['user','ユーザーID'],['nicoru','ニコる数'],['position','表示位置'],
@@ -9184,8 +9438,8 @@ class NgCompositeRuleEditor {
 		['madyellow','濃い黄（別名）'],['green2','深緑'],['elementalgreen','深緑（別名）'],
 		['cyan2','濃い水色'],['blue2','明るい青'],['marineblue','明るい青（別名）'],
 		['purple2','濃い紫'],['nobleviolet','濃い紫（別名）'],['black2','灰色']];}
-	static newRule(){
-		const id=()=>String(Date.now())+'-'+Math.random().toString(36).slice(2,9);
+	static newRule(used=new Set()){
+		const id=()=>NgCompositeRuleEditor.freshId(used);
 		return {id:id(),name:'新しい複合ルール',enabled:false,scope:'normal',
 			phase:'after',stopOnMatch:true,conditions:{id:id(),kind:'group',mode:'all',
 				nodes:[{id:id(),field:'text',cmp:'contains',value:'',not:false}]},
@@ -9199,10 +9453,11 @@ class NgCompositeRuleEditor {
 	colorSelect(current,key){
 		const pairs=[['keep','変更しない'],...NgCompositeRuleEditor.colors];
 		const items=key==='normalizeColor'?pairs:NgCompositeRuleEditor.colors;
+		if(NgCompositeRules.color(current)&&!items.some(([value])=>value===current))items.push([current,'指定した色']);
 		return '<span class="ng-color"><span class="ng-dot" style="background:'+
-			this.esc(NgCompositeRules.COLORS[current]||'#8493a4')+'"></span><select data-'+
+			this.esc(NgCompositeRules.color(current)||'#8493a4')+'"></span><select data-'+
 			(key==='normalizeColor'?'rule':'node-value')+'="'+this.esc(key==='normalizeColor'?key:key)+'">'+
-			this.opt(items.map(([id,name])=>[id,'● '+name+'（'+id+' / '+(NgCompositeRules.COLORS[id]||'')+'）']),current)+
+			this.opt(items.map(([id,name])=>[id,'● '+name+'（'+id+' / '+(NgCompositeRules.color(id)||'')+'）']),current)+
 			'</select></span>';
 	}
 	current(){return this.rules.find(x=>x.id===this.selected)||null;}
@@ -9344,7 +9599,7 @@ class NgCompositeRuleEditor {
 			'<label>フラグ<input type="text" data-rule="flags" value="'+this.esc(r.flags)+'" style="width:80px"></label></div>';
 		if(r.action==='mask')extra='<label class="ng-wide">置換する本文<input type="text" data-rule="mask" value="'+this.esc(r.mask)+'"></label>';
 		if(r.action==='strip')extra='<label class="ng-wide">解除するコマンド（カンマで区切る）<input type="text" data-rule="strip" value="'+this.esc(r.strip.join(', '))+'"></label>'+
-			'<p class="ng-sub">例：red, big（色とサイズを解除して位置指定は保持）</p>';
+			'<p class="ng-sub">現在は色とサイズのコマンドだけ解除できます。例：red, big。画面上部・下部の位置指定はそのまま保持します。</p>';
 		if(r.action==='normalize')extra='<div class="ng-flex"><label>色を選ぶ'+this.colorSelect(r.normalizeColor,'normalizeColor')+'</label>'+
 			'<label>文字サイズ<select data-rule="normalizeSize">'+this.opt([['keep','変更しない'],['medium','標準'],['big','big'],['small','small']],r.normalizeSize)+'</select></label></div>';
 		if(r.action==='dim')extra='<label>表示透明度<input type="number" data-rule="dim" min="5" max="100" value="'+this.esc(r.dim)+'">％</label>';
@@ -9388,8 +9643,14 @@ class NgCompositeRuleEditor {
 				!result.visible?'［非表示］':result.text)+'</p><small>'+this.esc(result?.cmd||chat.cmd)+'</small></article></div>'+
 			'<p class="'+(valid?'ng-ok':'ng-error')+'">'+(valid?'プレビューは現在の全ルールによる結果です。':'入力内容を修正してください。')+'</p>';
 	}
-	render(){this.ruleList();this.detail();this.demoFields();this.preview();}
-	changed(rebuild){this.onChange(NgCompositeRuleEditor.copy(this.rules));if(rebuild)this.render();else this.preview();}
+	render(){
+		this.ruleList();this.detail();this.demoFields();this.preview();
+		if(this.invalidSaved){
+			this.root.querySelector('[data-ng-detail]').innerHTML='<p class="ng-error" data-ng-invalid-saved>保存データの構造が不正です。元のデータは上書きしていません。バックアップを確認してから復元してください。</p>';
+			this.root.querySelectorAll('button,input,select').forEach(el=>{el.disabled=true;});
+		}
+	}
+	changed(rebuild){if(this.invalidSaved)return;this.onChange(NgCompositeRuleEditor.copy(this.rules));if(rebuild)this.render();else this.preview();}
 	move(id,destination){
 		const a=this.rules.findIndex(r=>r.id===id),b=this.rules.findIndex(r=>r.id===destination);
 		if(a<0||b<0||a===b)return;
@@ -9399,9 +9660,11 @@ class NgCompositeRuleEditor {
 		const b=e.target.closest('button[data-ng-act]');if(!b||b.disabled)return;
 		const act=b.dataset.ngAct,id=b.dataset.id;
 		if(act==='add'){if(this.rules.length>=NgCompositeRules.MAX_RULES)return;
-			const r=NgCompositeRuleEditor.newRule();this.rules.push(r);this.selected=r.id;}
+			const r=NgCompositeRuleEditor.newRule(this.usedIds());this.rules.push(r);this.selected=r.id;}
 		else if(act==='duplicate'){const r=this.current();if(!r||this.rules.length>=NgCompositeRules.MAX_RULES)return;
-			const copy=NgCompositeRuleEditor.copy(r);copy.id=NgCompositeRuleEditor.newRule().id;copy.name+='（コピー）';this.rules.push(copy);this.selected=copy.id;}
+			const copy=NgCompositeRuleEditor.copy(r),used=this.usedIds();copy.id=NgCompositeRuleEditor.freshId(used);
+			const rekey=n=>{n.id=NgCompositeRuleEditor.freshId(used);n.nodes?.forEach(rekey);};rekey(copy.conditions);
+			copy.name=copy.name.slice(0,85)+'（コピー）';this.rules.push(copy);this.selected=copy.id;}
 		else if(act==='select'){this.selected=id;this.render();return;}
 		else if(act==='delete'){this.rules=this.rules.filter(r=>r.id!==this.selected);this.selected=this.rules[0]?.id||'';}
 		else if(act==='up'||act==='down'){const i=this.rules.findIndex(r=>r.id===id),j=i+(act==='up'?-1:1);
@@ -9409,8 +9672,8 @@ class NgCompositeRuleEditor {
 			const item=this.rules.splice(i,1)[0];this.rules.splice(j,0,item);}
 		else if(act==='add-node'||act==='add-group'){
 			const parent=this.find(b.dataset.parent);if(!parent||!parent.nodes||parent.nodes.length>=45)return;
-			parent.nodes.push(act==='add-node'?{id:NgCompositeRuleEditor.newRule().id,field:'text',cmp:'contains',value:'',not:false}:
-				{id:NgCompositeRuleEditor.newRule().id,kind:'group',mode:'all',nodes:[]});
+			parent.nodes.push(act==='add-node'?{id:this.nextId(),field:'text',cmp:'contains',value:'',not:false}:
+				{id:this.nextId(),kind:'group',mode:'all',nodes:[]});
 		}else if(act==='remove-node'){
 			const parent=this.parent(id);if(!parent)return;parent.nodes=parent.nodes.filter(n=>n.id!==id);
 		}else return;
@@ -9447,7 +9710,10 @@ class NgCompositeRuleEditor {
 		else if(el.dataset.nodeNot){n.not=el.checked;this.changed(false);}
 	}
 	getDraft(){return NgCompositeRuleEditor.copy(this.rules);}
-	replaceDraft(value){this.rules=NgCompositeRuleEditor.copy(value);this.selected=this.rules[0]?.id||'';this.render();}
+	replaceDraft(value){
+		const next=NgCompositeRuleEditor.prepareDraft(value);
+		this.rules=next;this.invalidSaved=false;this.selected=this.rules[0]?.id||'';this.render();
+	}
 	dispose(){this.shadow?.replaceChildren();}
 }
     window.ZenzaAdvancedSettings = {

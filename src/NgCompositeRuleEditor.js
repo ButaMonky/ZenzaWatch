@@ -6,7 +6,9 @@ class NgCompositeRuleEditor {
     this.onChange=onChange;
     this.doc=host.ownerDocument;
     this.shadow=host.shadowRoot||host.attachShadow({mode:'open'});
-    this.rules=NgCompositeRuleEditor.copy(saved);
+    this.invalidSaved=false;
+    try{this.rules=NgCompositeRuleEditor.prepareDraft(saved||[]);}
+    catch(_){this.rules=[];this.invalidSaved=true;}
     this.selected=this.rules[0]?.id||'';
     this.serial=0;
     this.sample={text:'中国の話ｗｗｗ',cmd:'red big ue',userId:'nvc:sample',nicoru:0,score:0,vpos:1500,videoId:'sm9',fork:0};
@@ -14,6 +16,42 @@ class NgCompositeRuleEditor {
     this.render();
   }
   static copy(v){return JSON.parse(JSON.stringify(v||[]));}
+  static prepareDraft(value){
+    const rules=NgCompositeRuleEditor.copy(value),ids=new Set();let count=0;
+    const fail=()=>{throw new TypeError('複合NGの構造または識別子が不正です。元の設定は保持しました。');};
+    const id=(value,seen)=>{
+      if(typeof value!=='string'||!value.trim()||value.length>80||seen.has(value))fail();seen.add(value);
+    };
+    if(!Array.isArray(rules)||rules.length>NgCompositeRules.MAX_RULES)fail();
+    for(const r of rules){
+      if(!r||typeof r!=='object')fail();id(r.id,ids);
+      for(const key of ['name','scope','phase','action','pattern','replacement','flags','normalizeColor','normalizeSize','mask','unknownPolicy']){
+        if(typeof r[key]!=='string'||r[key].length>8192)fail();
+      }
+      if(!Array.isArray(r.strip)||r.strip.length>40||r.strip.some(x=>typeof x!=='string'))fail();
+      for(const key of ['enabled','stopOnMatch','exemptNicoru','keepProtectedOnAuthorHide','regexReplace'])if(typeof r[key]!=='boolean')fail();
+      const nodeIds=new Set();
+      const walk=(n,depth)=>{
+        if(!n||typeof n!=='object'||++count>350)fail();id(n.id,nodeIds);
+        if(n.kind==='group'){
+          if(depth>=3||!['all','any'].includes(n.mode)||!Array.isArray(n.nodes)||n.nodes.length>45||n.not===true)fail();
+          n.nodes.forEach(child=>walk(child,depth+1));
+        }else if(Object.prototype.hasOwnProperty.call(n,'nodes')||!NgCompositeRules.FIELDS.includes(n.field)||typeof n.value!=='string'||typeof n.cmp!=='string'||typeof n.not!=='boolean')fail();
+      };
+      if(r.conditions?.kind!=='group')fail();walk(r.conditions,0);
+    }
+    return rules;
+  }
+  static freshId(used=new Set()){
+    let id;do{id='ng-'+Date.now().toString(36)+'-'+((this._idSequence=(this._idSequence||0)+1).toString(36));}while(used.has(id));
+    used.add(id);return id;
+  }
+  usedIds(){
+    const ids=new Set();
+    for(const r of this.rules){ids.add(r.id);const walk=n=>{ids.add(n.id);n.nodes?.forEach(walk);};walk(r.conditions);}
+    return ids;
+  }
+  nextId(){return NgCompositeRuleEditor.freshId(this.usedIds());}
   static get fields(){return [['text','本文（部分一致）'],['regex','本文（正規表現）'],
     ['cmd','コマンド文字列'],['color','コマンド文字色'],['size','文字サイズ'],
     ['user','ユーザーID'],['nicoru','ニコる数'],['position','表示位置'],
@@ -26,8 +64,8 @@ class NgCompositeRuleEditor {
     ['madyellow','濃い黄（別名）'],['green2','深緑'],['elementalgreen','深緑（別名）'],
     ['cyan2','濃い水色'],['blue2','明るい青'],['marineblue','明るい青（別名）'],
     ['purple2','濃い紫'],['nobleviolet','濃い紫（別名）'],['black2','灰色']];}
-  static newRule(){
-    const id=()=>String(Date.now())+'-'+Math.random().toString(36).slice(2,9);
+  static newRule(used=new Set()){
+    const id=()=>NgCompositeRuleEditor.freshId(used);
     return {id:id(),name:'新しい複合ルール',enabled:false,scope:'normal',
       phase:'after',stopOnMatch:true,conditions:{id:id(),kind:'group',mode:'all',
         nodes:[{id:id(),field:'text',cmp:'contains',value:'',not:false}]},
@@ -41,10 +79,11 @@ class NgCompositeRuleEditor {
   colorSelect(current,key){
     const pairs=[['keep','変更しない'],...NgCompositeRuleEditor.colors];
     const items=key==='normalizeColor'?pairs:NgCompositeRuleEditor.colors;
+    if(NgCompositeRules.color(current)&&!items.some(([value])=>value===current))items.push([current,'指定した色']);
     return '<span class="ng-color"><span class="ng-dot" style="background:'+
-      this.esc(NgCompositeRules.COLORS[current]||'#8493a4')+'"></span><select data-'+
+      this.esc(NgCompositeRules.color(current)||'#8493a4')+'"></span><select data-'+
       (key==='normalizeColor'?'rule':'node-value')+'="'+this.esc(key==='normalizeColor'?key:key)+'">'+
-      this.opt(items.map(([id,name])=>[id,'● '+name+'（'+id+' / '+(NgCompositeRules.COLORS[id]||'')+'）']),current)+
+      this.opt(items.map(([id,name])=>[id,'● '+name+'（'+id+' / '+(NgCompositeRules.color(id)||'')+'）']),current)+
       '</select></span>';
   }
   current(){return this.rules.find(x=>x.id===this.selected)||null;}
@@ -187,7 +226,7 @@ class NgCompositeRuleEditor {
       '<label>フラグ<input type="text" data-rule="flags" value="'+this.esc(r.flags)+'" style="width:80px"></label></div>';
     if(r.action==='mask')extra='<label class="ng-wide">置換する本文<input type="text" data-rule="mask" value="'+this.esc(r.mask)+'"></label>';
     if(r.action==='strip')extra='<label class="ng-wide">解除するコマンド（カンマで区切る）<input type="text" data-rule="strip" value="'+this.esc(r.strip.join(', '))+'"></label>'+
-      '<p class="ng-sub">例：red, big（色とサイズを解除して位置指定は保持）</p>';
+      '<p class="ng-sub">現在は色とサイズのコマンドだけ解除できます。例：red, big。画面上部・下部の位置指定はそのまま保持します。</p>';
     if(r.action==='normalize')extra='<div class="ng-flex"><label>色を選ぶ'+this.colorSelect(r.normalizeColor,'normalizeColor')+'</label>'+
       '<label>文字サイズ<select data-rule="normalizeSize">'+this.opt([['keep','変更しない'],['medium','標準'],['big','big'],['small','small']],r.normalizeSize)+'</select></label></div>';
     if(r.action==='dim')extra='<label>表示透明度<input type="number" data-rule="dim" min="5" max="100" value="'+this.esc(r.dim)+'">％</label>';
@@ -231,8 +270,14 @@ class NgCompositeRuleEditor {
         !result.visible?'［非表示］':result.text)+'</p><small>'+this.esc(result?.cmd||chat.cmd)+'</small></article></div>'+
       '<p class="'+(valid?'ng-ok':'ng-error')+'">'+(valid?'プレビューは現在の全ルールによる結果です。':'入力内容を修正してください。')+'</p>';
   }
-  render(){this.ruleList();this.detail();this.demoFields();this.preview();}
-  changed(rebuild){this.onChange(NgCompositeRuleEditor.copy(this.rules));if(rebuild)this.render();else this.preview();}
+  render(){
+    this.ruleList();this.detail();this.demoFields();this.preview();
+    if(this.invalidSaved){
+      this.root.querySelector('[data-ng-detail]').innerHTML='<p class="ng-error" data-ng-invalid-saved>保存データの構造が不正です。元のデータは上書きしていません。バックアップを確認してから復元してください。</p>';
+      this.root.querySelectorAll('button,input,select').forEach(el=>{el.disabled=true;});
+    }
+  }
+  changed(rebuild){if(this.invalidSaved)return;this.onChange(NgCompositeRuleEditor.copy(this.rules));if(rebuild)this.render();else this.preview();}
   move(id,destination){
     const a=this.rules.findIndex(r=>r.id===id),b=this.rules.findIndex(r=>r.id===destination);
     if(a<0||b<0||a===b)return;
@@ -242,9 +287,11 @@ class NgCompositeRuleEditor {
     const b=e.target.closest('button[data-ng-act]');if(!b||b.disabled)return;
     const act=b.dataset.ngAct,id=b.dataset.id;
     if(act==='add'){if(this.rules.length>=NgCompositeRules.MAX_RULES)return;
-      const r=NgCompositeRuleEditor.newRule();this.rules.push(r);this.selected=r.id;}
+      const r=NgCompositeRuleEditor.newRule(this.usedIds());this.rules.push(r);this.selected=r.id;}
     else if(act==='duplicate'){const r=this.current();if(!r||this.rules.length>=NgCompositeRules.MAX_RULES)return;
-      const copy=NgCompositeRuleEditor.copy(r);copy.id=NgCompositeRuleEditor.newRule().id;copy.name+='（コピー）';this.rules.push(copy);this.selected=copy.id;}
+      const copy=NgCompositeRuleEditor.copy(r),used=this.usedIds();copy.id=NgCompositeRuleEditor.freshId(used);
+      const rekey=n=>{n.id=NgCompositeRuleEditor.freshId(used);n.nodes?.forEach(rekey);};rekey(copy.conditions);
+      copy.name=copy.name.slice(0,85)+'（コピー）';this.rules.push(copy);this.selected=copy.id;}
     else if(act==='select'){this.selected=id;this.render();return;}
     else if(act==='delete'){this.rules=this.rules.filter(r=>r.id!==this.selected);this.selected=this.rules[0]?.id||'';}
     else if(act==='up'||act==='down'){const i=this.rules.findIndex(r=>r.id===id),j=i+(act==='up'?-1:1);
@@ -252,8 +299,8 @@ class NgCompositeRuleEditor {
       const item=this.rules.splice(i,1)[0];this.rules.splice(j,0,item);}
     else if(act==='add-node'||act==='add-group'){
       const parent=this.find(b.dataset.parent);if(!parent||!parent.nodes||parent.nodes.length>=45)return;
-      parent.nodes.push(act==='add-node'?{id:NgCompositeRuleEditor.newRule().id,field:'text',cmp:'contains',value:'',not:false}:
-        {id:NgCompositeRuleEditor.newRule().id,kind:'group',mode:'all',nodes:[]});
+      parent.nodes.push(act==='add-node'?{id:this.nextId(),field:'text',cmp:'contains',value:'',not:false}:
+        {id:this.nextId(),kind:'group',mode:'all',nodes:[]});
     }else if(act==='remove-node'){
       const parent=this.parent(id);if(!parent)return;parent.nodes=parent.nodes.filter(n=>n.id!==id);
     }else return;
@@ -290,7 +337,10 @@ class NgCompositeRuleEditor {
     else if(el.dataset.nodeNot){n.not=el.checked;this.changed(false);}
   }
   getDraft(){return NgCompositeRuleEditor.copy(this.rules);}
-  replaceDraft(value){this.rules=NgCompositeRuleEditor.copy(value);this.selected=this.rules[0]?.id||'';this.render();}
+  replaceDraft(value){
+    const next=NgCompositeRuleEditor.prepareDraft(value);
+    this.rules=next;this.invalidSaved=false;this.selected=this.rules[0]?.id||'';this.render();
+  }
   dispose(){this.shadow?.replaceChildren();}
 }
 //===END===

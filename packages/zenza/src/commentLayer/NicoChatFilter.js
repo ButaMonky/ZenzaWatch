@@ -44,79 +44,157 @@ class NicoChatFilter extends Emitter {
 
     const notifyChange=_.debounce(this._onChange.bind(this),50);
     // Invalidate predicates synchronously, even if UI change is debounced.
-    this._onChange=()=>{this._compositeProjection=null;notifyChange();};
-    // Existing callers/tests explicitly cancel the debounced change callback.
-    this._onChange.cancel=()=>notifyChange.cancel?.();
+    this._onChange=()=>{this._invalidateComposite();notifyChange();};
     // Preserve the debounced callback API used by existing lifecycle code.
     this._onChange.cancel=()=>notifyChange.cancel?.();
     this._onChange.flush=()=>notifyChange.flush?.();
 
     this.setWordRegFilter(params.wordRegFilter || '', params.wordRegFilterFlags);
-    this._compositeRules=typeof NgCompositeRules!=='undefined' &&
-      NgCompositeRules.validate(params.compositeRules||[])?
-      JSON.parse(JSON.stringify(params.compositeRules||[])):[];
-    this._compositePool=[];
-    this._compositeVideoId='';
-    this._compositeBaselines=new WeakMap();
-    this._compositeProjection=null;
-    this._compositeApplied=false;
+    this._compositeProgram=typeof NgCompositeRules==='undefined'?null:NgCompositeRules.compile(params.compositeRules||[]);
+    this._compositeRules=this._compositeProgram?.rules||[];
+    this._compositePool=new Set();this._compositeVideoId='';
+    this._compositeBaselines=new WeakMap();this._compositeLast=new WeakMap();
+    this._compositeAuthors=new Map();this._compositeAuthorKeys=new WeakMap();
+    this._compositeBans=new Map();this._compositeProjection=null;
+    this._compositeDirty=true;this._compositeApplied=false;this._compositeWriting=false;
   }
+  get hasActiveCompositeRules(){return this._enable&&!!this._compositeProgram?.active.length;}
+  get compositeRevision(){return this._compositeRevision||0;}
   get compositeRules(){return JSON.parse(JSON.stringify(this._compositeRules));}
   set compositeRules(value){
-    if(!NgCompositeRules.validate(value)){return;}
-    this._compositeRules=JSON.parse(JSON.stringify(value));
-    this._compositeProjection=null;
-    this.refresh();
+    const program=NgCompositeRules.compile(value);if(!program)return;
+    this._compositeProgram=program;this._compositeRules=program.rules;this.refresh();
   }
-  setCompositeChatPool(chats,videoId='') {
-    this._compositePool=chats.slice();
-    this._compositeVideoId=videoId;
-    this._compositeProjection=null;
-    if(this._compositeApplied||this._compositeRules.some(r=>r.enabled)){
-      const prior=this._compositeBaselines;
-      const next=new WeakMap();
-      for(const chat of chats){
-        next.set(chat,prior.get(chat)||NgCompositeRules.initialState(chat,videoId));
+  _invalidateComposite(){
+    this._compositeDirty=true;this._compositeProjection=null;
+    this._compositeRevision=(this._compositeRevision||0)+1;
+  }
+  _compositeKey(chat){return chat.userId||chat;}
+  _registerCompositeAuthor(chat){
+    const key=this._compositeKey(chat);this._compositeAuthorKeys.set(chat,key);
+    if(!this._compositeAuthors.has(key))this._compositeAuthors.set(key,new Set());
+    this._compositeAuthors.get(key).add(chat);return key;
+  }
+  _baselineComposite(chat){
+    if(!this._compositeBaselines.has(chat))this._compositeBaselines.set(chat,
+      NgCompositeRules.initialState(chat,this._compositeVideoId));
+  }
+  setCompositeChatPool(chats,videoId=''){
+    const next=new Set(chats),old=this._compositePool;
+    if(this._compositeApplied)for(const c of old||[])if(!next.has(c))this._applyCompositeState(c,null);
+    this._compositePool=next;this._compositeVideoId=videoId;
+    this._compositeAuthors.clear();this._compositeBans.clear();
+    this._invalidateComposite();
+    if(this.hasActiveCompositeRules||this._compositeApplied)this.refresh();
+  }
+  recordCompositeEdit(chat,key,value){
+    if(this._compositeWriting)return;
+    const base=this._compositeBaselines.get(chat);if(base)base[key]=value;
+  }
+  _captureCompositeEdit(chat){
+    const base=this._compositeBaselines.get(chat),last=this._compositeLast.get(chat);
+    if(!base||!last)return;
+    for(const key of ['text','cmd','color','size','opacity'])if(chat[key]!==last[key])base[key]=chat[key];
+  }
+  _applyCompositeState(chat,state){
+    state=state||this._compositeBaselines.get(chat);if(!state||!chat.props)return;
+    this._compositeWriting=true;
+    try{
+      if(chat.text!==state.text)chat.text=state.text;
+      for(const key of ['cmd','color','size','opacity'])chat.props[key]=state[key];
+      this._compositeLast.set(chat,state);
+    }finally{this._compositeWriting=false;}
+  }
+  _bansFor(key,authorMatches){
+    return new Set([...authorMatches].filter(([,ids])=>ids.has(key)).map(([id])=>id));
+  }
+  _ensureComposite(){
+    if(!this._compositeDirty)return this._compositeProjection;
+    this._compositeDirty=false;
+    this._compositeAuthors.clear();this._compositeBans.clear();
+    if(!this.hasActiveCompositeRules){
+      if(this._compositeApplied)for(const c of this._compositePool)this._applyCompositeState(c,null);
+      this._compositeApplied=false;return this._compositeProjection=false;
+    }
+    for(const c of this._compositePool){
+      this._baselineComposite(c);if(this._compositeProgram.hasAuthors)this._registerCompositeAuthor(c);
+    }
+    this._compositeLegacy=this.getFilterFunc();
+    const output=NgCompositeRules.projectWithMeta([...this._compositePool],this._compositeProgram,
+      this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
+    this._compositeProjection=output.results;this._compositeApplied=true;
+    for(const [c,state] of output.results)this._applyCompositeState(c,state);
+    for(const key of this._compositeAuthors.keys())this._compositeBans.set(key,this._bansFor(key,output.authorMatches));
+    return this._compositeProjection;
+  }
+  _storeComposite(output,changed){
+    for(const [c,state] of output.results){
+      const old=this._compositeProjection.get(c);
+      if(old&&['visible','text','cmd','color','size','opacity'].some(k=>old[k]!==state[k])){
+        if(c.group)changed.add(c.group);
       }
-      this._compositeBaselines=next;
-      this.refresh();
+      this._compositeProjection.set(c,state);this._applyCompositeState(c,state);
     }
   }
-  _applyCompositeState(chat,state) {
-    const baseline=this._compositeBaselines.get(chat);
-    if(!state){state=baseline;}
-    if(!state)return;
-    if(chat.props){
-      if(chat.text!==state.text){chat.text=state.text;}
-      chat.props.cmd=state.cmd;
-      chat.props.color=state.color;
-      chat.props.size=state.size;
-      chat.props.opacity=state.opacity;
-      // Group membership owns vertical placement. Never silently move a comment
-      // to a different group while restoring its display-only decoration.
+  _reprojectCompositeAuthor(key,changed){
+    const members=this._compositeAuthors.get(key);
+    if(!members?.size){this._compositeAuthors.delete(key);this._compositeBans.delete(key);return;}
+    const output=NgCompositeRules.projectWithMeta([...members],this._compositeProgram,
+      this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
+    this._compositeBans.set(key,this._bansFor(key,output.authorMatches));this._storeComposite(output,changed);
+  }
+  _notifyCompositeGroups(changed){
+    for(const group of changed){
+      if(group._onCompositeChange)group._onCompositeChange();
+      else group.onChange?.({composite:true});
     }
   }
-  _getCompositeProjection(fallback) {
-    if(this._compositeProjection!==null){return this._compositeProjection;}
-    const chats=this._compositePool.length?this._compositePool:fallback;
-    if(!this._enable||!this._compositeRules.some(r=>r.enabled)){
-      if(this._compositeApplied){
-        for(const c of chats){this._applyCompositeState(c,null);}
-        this._compositeApplied=false;
-      }
-      return this._compositeProjection=false;
+  addCompositeChat(chat){
+    const changed=new Set();
+    if(this._compositePool.has(chat)){this._ensureComposite();return changed;}
+    this._compositePool.add(chat);
+    if(!this.hasActiveCompositeRules){this._ensureComposite();return changed;}
+    if(this._compositeDirty){this._ensureComposite();return changed;}
+    this._baselineComposite(chat);
+    const key=this._compositeProgram.hasAuthors?this._registerCompositeAuthor(chat):null;
+    const prior=this._compositeBans.get(key)||new Set(),seed=new Map();
+    for(const id of prior)seed.set(id,new Set([key]));
+    const output=NgCompositeRules.projectWithMeta([chat],this._compositeProgram,
+      this._compositeLegacy,this._compositeVideoId,this._compositeBaselines,seed);
+    const next=this._bansFor(key,output.authorMatches);
+    if(this._compositeProgram.hasAuthors&&(next.size!==prior.size||[...next].some(id=>!prior.has(id)))){
+      this._reprojectCompositeAuthor(key,changed);
+    }else this._storeComposite(output,changed);
+    this._notifyCompositeGroups(changed);return changed;
+  }
+  removeCompositeChat(chat){
+    const changed=new Set();if(!this._compositePool.has(chat))return changed;
+    this._ensureComposite();const key=this._compositeAuthorKeys.get(chat);
+    this._compositePool.delete(chat);this._compositeProjection?.delete?.(chat);
+    this._compositeAuthors.get(key)?.delete(chat);
+    this._applyCompositeState(chat,null);
+    this._compositeBaselines.delete(chat);this._compositeLast.delete(chat);this._compositeAuthorKeys.delete(chat);
+    if(this.hasActiveCompositeRules&&this._compositeProgram.hasAuthors)this._reprojectCompositeAuthor(key,changed);
+    this._notifyCompositeGroups(changed);return changed;
+  }
+  updateCompositeChat(chat){
+    const changed=new Set();if(!this._compositePool.has(chat)||this._compositeWriting)return changed;
+    this._captureCompositeEdit(chat);this._ensureComposite();
+    if(!this.hasActiveCompositeRules)return changed;
+    if(this._compositeProgram.hasAuthors){
+      const old=this._compositeAuthorKeys.get(chat),key=this._compositeKey(chat);
+      if(old!==key){this._compositeAuthors.get(old)?.delete(chat);this._registerCompositeAuthor(chat);this._reprojectCompositeAuthor(old,changed);}
+      this._reprojectCompositeAuthor(key,changed);
+    }else{
+      const output=NgCompositeRules.projectWithMeta([chat],this._compositeProgram,
+        this._compositeLegacy,this._compositeVideoId,this._compositeBaselines);
+      this._storeComposite(output,changed);
     }
-    for(const chat of chats){
-      if(!this._compositeBaselines.has(chat)){
-        this._compositeBaselines.set(chat,NgCompositeRules.initialState(chat,this._compositeVideoId));
-      }
-    }
-    const projection=NgCompositeRules.project(chats,this._compositeRules,
-      this.getFilterFunc(),this._compositeVideoId,this._compositeBaselines);
-    if(!projection){return this._compositeProjection=false;}
-    for(const chat of chats){this._applyCompositeState(chat,projection.get(chat));}
-    this._compositeApplied=true;
-    return this._compositeProjection=projection;
+    this._notifyCompositeGroups(changed);return changed;
+  }
+  _getCompositeProjection(fallback){
+    if(this.hasActiveCompositeRules)for(const c of fallback)if(!this._compositePool.has(c))this.addCompositeChat(c);
+    return this._ensureComposite();
   }
   get isEnable() {
     return this._enable;
@@ -475,15 +553,15 @@ class NicoChatFilter extends Emitter {
     }
     const timeKey = before > 1 ? 'applyNgFilter: ' + nicoChatArray[0].type : null;
     if (timeKey) { window.console.time(timeKey); }
-    const filterFunc = this.getFilterFunc();
     const composite=this._getCompositeProjection(nicoChatArray);
+    const filterFunc=composite?this._compositeLegacy:this.getFilterFunc();
     let result=nicoChatArray.filter(chat=>composite instanceof Map?
-      composite.get(chat)?.visible!==false:filterFunc(chat));
+      composite.get(chat)?.visible===true:filterFunc(chat));
     const removedUserIds = new Set();
     if (before !== result.length && this._removeNgMatchedUser) {
       const accepted = new Set(result);
       for (const chat of nicoChatArray) {
-        if (!accepted.has(chat)) { removedUserIds.add(chat.userId); }
+        if (composite?composite.get(chat)?.legacyRejected:!accepted.has(chat)) { removedUserIds.add(chat.userId); }
       }
     }
     const denyTypes = [
@@ -520,7 +598,7 @@ class NicoChatFilter extends Emitter {
   isSafe(nicoChat) {
     const composite=this._getCompositeProjection([nicoChat]);
     return composite instanceof Map?
-      composite.get(nicoChat)?.visible!==false:(this.getFilterFunc())(nicoChat);
+      composite.get(nicoChat)?.visible===true:(this.getFilterFunc())(nicoChat);
   }
   _buildFilterReg(filterList) {
     if (filterList.length < 1) {

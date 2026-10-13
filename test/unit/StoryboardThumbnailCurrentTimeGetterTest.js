@@ -43,7 +43,8 @@ describe('AUD-56 ThumbnailView currentTime getter consistency',()=>{
       assert.strictEqual(view.currentTime,60);
       await view.setCurrentTime(-5);
       assert.strictEqual(view.currentTime,0);
-      assert.deepStrictEqual(gets,['P0','P0','P0']);
+      // Clock updates across cells must not reacquire the same page lease.
+      assert.deepStrictEqual(gets,['P0']);
     });
     it(label+' preserves the latest seek time within one storyboard cell',async()=>{
       const {view,gets}=createView(file);

@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.242-task418
+// @version        2.7.246-task423
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-12 12:42Z
+// build: 2026-10-13 09:28Z 6803d50
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.242-task418';
+    var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-12 12:42Z';
+    var BUILD = '2026-10-13 09:28Z 6803d50';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -18835,13 +18835,12 @@ const StoryboardWorker = (() => {
 				this.gc(src);
 				return (await cache.promise) || BLANK_IMG;
 			}
-			release(src) {
+			release(src, expectedCache) {
 				const cache = this.map.get(src);
-				if (!cache) {
-					return;
-				}
+				if (!cache || (expectedCache && cache !== expectedCache)) { return; }
+				if (cache.ref <= 0) { return; }
 				cache.ref--;
-				if (cache.ref <= 0) {
+				if (cache.ref === 0) {
 					cache.promise.then(image => image && image.close && image.close());
 					this.map.delete(src);
 				}
@@ -18852,7 +18851,7 @@ const StoryboardWorker = (() => {
 				if (map.size <= MAX) {
 					return;
 				}
-				const sorted = [...map].filter(([src]) => src !== except)
+				const sorted = [...map].filter(([src, cache]) => src !== except && cache.ref <= 0)
 					.sort((a, b) => a[1].updated - b[1].updated);
 				while (map.size > MAX && sorted.length) {
 					const [src, cache] = sorted.shift();
@@ -18920,9 +18919,12 @@ const StoryboardWorker = (() => {
 				const boards = (await Promise.all(info.images.map(async (url, idx) => {
 					const generated = [];
 					let image = null;
+					let imageCacheEntry;
 					try {
 						try {
-							image = await this.images.get(url);
+							const pendingImage = this.images.get(url);
+							imageCacheEntry = this.images.map?.get(url);
+							image = await pendingImage;
 						} catch (error) {
 							console.warn('BoardView image load failed', error);
 						}
@@ -18958,7 +18960,7 @@ const StoryboardWorker = (() => {
 						}
 						return generated;
 					} finally {
-						this.images.release(url);
+						this.images.release(url, imageCacheEntry);
 					}
 				}))).flat();
 				if (!current()) {
@@ -19171,12 +19173,57 @@ const StoryboardWorker = (() => {
 				this.cls();
 				this.isInitialized = Promise.resolve();
 				this.isAnimating = false;
+				this._imageLeases = new Map();
+				this._disposed = false;
+			}
+			_releaseImageLeases() {
+				if (!this._imageLeases) { return; }
+				for (const [src, lease] of this._imageLeases) {
+					this.images.release(src, lease.cache);
+				}
+				this._imageLeases.clear();
+			}
+			_releaseUnusedImageLeases(keep) {
+				if (!this._imageLeases) { return; }
+				for (const [src, lease] of this._imageLeases) {
+					if (keep.has(src)) { continue; }
+					this._imageLeases.delete(src);
+					this.images.release(src, lease.cache);
+				}
+			}
+			_hasCurrentImageLease(src) {
+				const lease = this._imageLeases?.get(src);
+				return !!lease && this.images.has(src) &&
+					(!lease.cache || !this.images.map || this.images.map.get(src) === lease.cache);
+			}
+			_getImageWithLease(src) {
+				this._imageLeases = this._imageLeases || new Map();
+				if (this._hasCurrentImageLease(src)) { return this._imageLeases.get(src).request; }
+				const obsolete = this._imageLeases.get(src);
+				if (obsolete) {
+					this._imageLeases.delete(src);
+					this.images.release(src, obsolete.cache);
+				}
+				const request = Promise.resolve(this.images.get(src));
+				const lease = {request, cache: this.images.map?.get(src)};
+				this._imageLeases.set(src, lease);
+				const releaseFailed = () => {
+					if (this._imageLeases.get(src) === lease) {
+						this._imageLeases.delete(src);
+						this.images.release(src, lease.cache);
+					}
+				};
+				request.then(image => {
+					if (image === BLANK_IMG || !this.images.has(src)) { releaseFailed(); }
+				}, releaseFailed);
+				return request;
 			}
 			get info() { return this._info; }
 			set info(info) {
+				if (this._disposed) { return; }
 				this._drawSeq = (this._drawSeq || 0) + 1;
 				this.isReady = false;
-				this.info && this.info.images.forEach(url => this.images.release(url));
+				this._releaseImageLeases();
 				this._info.update(info);
 				this._currentTime = -1;
 				this.lastPos = {};
@@ -19199,23 +19246,34 @@ const StoryboardWorker = (() => {
 			set width(width) {this.canvas.width = width;}
 			set height(height) {this.canvas.height = height;}
 			async setCurrentTime(time) {
+				if (this._disposed) { return; }
 				time > this.info.duration && (time = this.info.duration);
 				time < 0 && (time = 0);
-				if (this._currentTime === time) {
+				if (this._currentTime === time &&
+						this._hasCurrentImageLease(this.lastPos.url)) {
 					return;
 				}
 				const pos = this.info.getThumbnailPosition(time * 1000);
-				if (Object.keys(pos).every(key => pos[key] === this.lastPos[key])) {
+				if (Object.keys(pos).every(key => pos[key] === this.lastPos[key]) &&
+						this._hasCurrentImageLease(pos.url)) {
 					this._currentTime = time;
 					return;
 				}
+				const keep = new Set([pos.url]);
+				for (const neighbor of [pos.page - 1, pos.page + 1]) {
+					if (neighbor >= 0 && neighbor < this.info.pageCount) {
+						const src = this.info.getPage(neighbor);
+						if (typeof src === 'string') { keep.add(src); }
+					}
+				}
+				this._releaseUnusedImageLeases(keep);
 				this.lastPos = pos;
 				this._currentTime = time;
 				const {url, row, col, page} = pos;
 				const cellWidth = this.info.cellWidth;
 				const cellHeight = this.info.cellHeight;
 				const seq = this._drawSeq = (this._drawSeq || 0) + 1;
-				const image = await this.images.get(url);
+				const image = await this._getImageWithLease(url);
 				if (seq !== this._drawSeq || !image) {
 					return;
 				}
@@ -19238,14 +19296,12 @@ const StoryboardWorker = (() => {
 				}
 			}
 			prefetch(page) {
-				if (!this.info || page < 0 || page >= this.info.pageCount) {
+				if (this._disposed || !this.info || page < 0 || page >= this.info.pageCount) {
 					return;
 				}
 				const src = this.info.getPage(page);
-				if (typeof src !== 'string' || this.images.has(src)) {
-					return;
-				}
-				this.images.get(src).catch(() => {});
+				if (typeof src !== 'string' || this.images.has(src)) { return; }
+				this._getImageWithLease(src).catch(() => {});
 			}
 			resize({width, height}) {
 				this.width = width;
@@ -19253,8 +19309,10 @@ const StoryboardWorker = (() => {
 				this.cls();
 			}
 			dispose() {
-				this.info && this.info.images.forEach(url => this.images.release(url));
-				this.info = null;
+				if (this._disposed) { return; }
+				this.stopAnimation();
+				this.info = null; // releases only this view's actual image leases, once
+				this._disposed = true;
 			}
 			sharedMemory() {}
 			async execAnimation() {
@@ -19271,7 +19329,7 @@ const StoryboardWorker = (() => {
 				}
 			}
 			startAnimation() {
-				if (this.isAnimating) { return; }
+				if (this._disposed || this.isAnimating) { return; }
 				this.isAnimating = true;
 				this.execAnimation();
 			}
@@ -19408,16 +19466,25 @@ const StoryboardWorker = (() => {
 		canvas.dataset.name = name;
 		canvas.classList.add('is-loading');
 		const layer = isOffscreenCanvasAvailable ? canvas.transferControlToOffscreen() : canvas;
+		let loadingGeneration = 0, isDisposed = false;
+		const finishLoading = generation => {
+			if (!isDisposed && generation === loadingGeneration) {
+				canvas.classList.remove('is-loading');
+			}
+		};
 		const promiseSetup = (async () => {
-			const worker = await initWorker();
-			const result = await worker.post(
-				{command:
-					type === 'thumbnail' ? 'createThumbnail' : 'createBoard',
-					params: {canvas: layer, info, style, name}},
-				{transfer: [layer]}
-			);
-			canvas.classList.remove('is-loading');
-			return result.id;
+			try {
+				const worker = await initWorker();
+				const result = await worker.post(
+					{command:
+						type === 'thumbnail' ? 'createThumbnail' : 'createBoard',
+						params: {canvas: layer, info, style, name}},
+					{transfer: [layer]}
+				);
+				return result.id;
+			} finally {
+				finishLoading(0);
+			}
 		})();
 		let currentTime = -1, scrollLeft = -1, isAnimating = false;
 		const post = async ({command, params}, transfer = {}) => {
@@ -19430,11 +19497,13 @@ const StoryboardWorker = (() => {
 			container,
 			canvas,
 			setInfo(info) {
+				if (isDisposed) { return Promise.resolve(); }
+				const generation = ++loadingGeneration;
 				currentTime = -1;
 				scrollLeft = -1;
 				canvas.classList.add('is-loading');
 				return post({command: 'info', params: {info}})
-					.then(() => canvas.classList.remove('is-loading'));
+					.finally(() => finishLoading(generation));
 			},
 			resize({width, height}) {
 				scrollLeft = -1;
@@ -19457,7 +19526,11 @@ const StoryboardWorker = (() => {
 				post({command: 'currentTime', params: {currentTime}});
 			},
 			dispose() {
-				post({command: 'dispose', params: {}});
+				if (isDisposed) { return; }
+				isDisposed = true;
+				loadingGeneration++;
+				canvas.classList.remove('is-loading');
+				post({command: 'dispose', params: {}}).catch(() => {});
 			},
 			sharedMemory({MAP, buffer}) {
 				post({command: 'sharedMemory', params: {MAP, buffer}});

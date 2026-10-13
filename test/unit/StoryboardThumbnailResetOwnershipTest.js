@@ -96,7 +96,8 @@ describe('Task327 AUD-56 storyboard thumbnail reset + async ownership',()=>{
       h.resolveA({src:'A-p0'});
       await pending;
       assert.deepStrictEqual(h.draws,[],'no A draw after B update');
-      assert.deepStrictEqual(h.released,['A-p0','A-p1']);
+      // Only A-p0 was acquired; never release an unowned sibling page.
+      assert.deepStrictEqual(h.released,['A-p0']);
       await h.worker.setCurrentTime(45);
       assert.deepStrictEqual(h.draws,['B-p0'],'B still renders');
     });

@@ -1,0 +1,24 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 2
+    groups:
+      development-tooling:
+        patterns:
+          - "*"
+    # Deliberately do not auto-merge. Older Babel/Gulp/Webpack packages
+    # must pass the compatibility and full regression workflows first.
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: weekly
+      day: monday
+      time: '09:30'
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 1

@@ -1,0 +1,45 @@
+name: ZenzaWatch working-tree secret gate
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+  workflow_dispatch:
+
+# No secret upload, Git history rewrite, deployment or PR comments.
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  current-tree-gitleaks:
+    name: Reject secrets from checked-out files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      # Gitleaks CLI checks CURRENT files, not all previous public commits.
+      # The separate historical review currently has unresolved findings.
+      # Do not silently add global path allowlists or suppress new secrets.
+      - name: Obtain pinned Gitleaks CLI and verify upstream archive SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --show-error --silent --retry 3 \
+            --output "${RUNNER_TEMP}/gitleaks.tar.gz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  ${RUNNER_TEMP}/gitleaks.tar.gz" \
+            | sha256sum --check -
+          tar -xzf "${RUNNER_TEMP}/gitleaks.tar.gz" -C "${RUNNER_TEMP}" gitleaks
+          chmod 700 "${RUNNER_TEMP}/gitleaks"
+      - name: Reject secret-like strings in tracked working-tree state
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${RUNNER_TEMP}/gitleaks" dir . --no-banner --redact --exit-code 1

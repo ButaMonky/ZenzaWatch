@@ -15,8 +15,8 @@ const {beginSection, createContext, run, read} = require('../helpers/extractSour
 const SECRETS = {
   postKey: 'SYNTH-POSTKEY-7f3a',
   threadKey: 'SYNTH-THREADKEY-91c2',
-  retryThreadKey: 'SYNTH-THREADKEY-RETRY-55aa',
-  nicoruKey: 'SYNTH-NICORUKEY-0b1e',
+  retryThreadKey: 'SYNTH-RETRY-91c2',
+  nicoruKey: 'MOCK_NI',
   deleteKey: 'SYNTH-DELETEKEY-c4d5',
   text: 'SYNTH-BODY-こんにちは-8e9f',
   command: 'SYNTH-COMMAND-private-55ef',

@@ -31,8 +31,8 @@ jobs:
       # which requires the root @babel/parser dependency. Windows had it installed.
       - name: Install root dependencies for shared test helpers
         run: npm ci --no-audit --no-fund
-      - name: Structural contract changes and regression fixtures
-        run: node --test test/compat/nico-contract.test.mjs
+      - name: Structural and negative-path protocol contract fixtures
+        run: node --test test/compat/nico-contract.test.mjs test/compat/nico-failure-modes.test.mjs
       - name: Generate local comment-history bundles and run all protocol tests
         run: npm --prefix packages/comment-history test
 

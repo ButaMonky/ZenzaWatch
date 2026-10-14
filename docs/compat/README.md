@@ -1,6 +1,6 @@
 # ZenzaWatch 品質ゲートとニコニコ互換性テスト（公開用）
 
-対象ブランチ: `infra/nicocompat-ci-20261014`。2026-10-14 JST 時点の計画。
+公開用 `develop` に導入済みの品質ゲートの説明（2026-10-14 更新）。ニコニコの契約テストはオフライン実行。
 **新規スケジュール型のニコニコ監視は行わない。** GitHubへpush / PR / 手動ワークフロー実行があった場合だけCIが起動する。
 
 ## 自動検査
@@ -10,7 +10,7 @@
 | `.github/workflows/quality.yml` | 動画・コメントの合成契約テスト、コメント履歴パッケージのビルド+217テスト、ZenzaWatch全体のMocha回帰 | ニコニコの実サイトは操作せず、APIの将来変更そのものは検出できない |
 | `.github/workflows/security.yml` | Gitleaksで**現在のチェックアウトされたファイル**に秘密らしい文字列が混入していないか調査 | 過去の公開コミットを削除するものではない |
 | `.github/dependabot.yml` | npmとGitHub Actionsの依存更新PR提案。自動マージなし、件数を制限 | 依存アップデートが安全かは人間の確認・テストが必要 |
-| `test/compat/nico-contract.test.mjs` | 読み込み済みの**合成**watch/nvComment fixturesと主要なソース所有箇所を検査 | API/Domand/HLSの通信・ログインは行わない |
+| `test/compat/nico-contract.test.mjs` / `nico-failure-modes.test.mjs` | 合成watch/nvCommentの19件の正常・異常契約と17件の追加不正応答（別動画ID、誤ホスト、スレッド、時刻、APIエラー等）を検証 | 外部ニコニコの最新仕様や実通信・ログインを検証するものではない |
 
 GitHub Actions権限は `contents: read`、チェックアウト時の認証情報保存を抑止する。秘密情報のレポートはartifactやPRコメントとして出力しない。Gitleaksはv8.30.1の公式リリースtarを固定SHA256で検証して起動する。
 
@@ -19,13 +19,17 @@ GitHub Actions権限は `contents: read`、チェックアウト時の認証情�
 ```powershell
 cd <ZenzaWatch のルート>
 npm ci --no-audit --no-fund
-node --test test/compat/nico-contract.test.mjs
+node --test test/compat/nico-contract.test.mjs test/compat/nico-failure-modes.test.mjs
 npm --prefix packages/comment-history test
 npm test -- --timeout 15000 --reporter dot
 gitleaks dir . --no-banner --redact --exit-code 1
 ```
 
 すでにパッケージ導入済みなら `npm ci` は省略可。Gitleaksは別途PC全体へ導入済み。
+
+## NICOCOMPAT-02 異常応答契約の追加
+
+既存の隔離ブランチ `infra/nicocompat-failure-recovery-20261014` のコミット `8fef80e` で既に完成・確認されていた17件を、現在の公開用 `develop` を基点に選択的に取り込む。元の作業領域は変更しない。動画ID不一致、エラー応答、別ホスト、スレッド所有、入力型不整合などを、追加の通信なしに明確な失敗として固定する。既存19件と合計36件をCIで実施する。
 
 ## 既存Fixtureの秘密情報候補
 
@@ -53,4 +57,4 @@ Gitleaks v8.30.1 の初回チェックでは、旧モック/テストに10件の
 
 このインフラブランチは**公開済みの develop （6803d50）から作成**した。未公開の開発用 develop （328コミット先行）や Task424/SCUI worktree を混ぜていない。
 
-CI整備の完了には、手元でのアクション設定静的検査・秘密検査・契約/全体テストに加え、公開リモートのGitHub Actionsが実際に緑になることの確認が必要。現時点ではこれらのファイルを公開用developへ統合していない。
+品質ゲート本体は PR #12 で公開用 `develop` に統合され、GitHub Linux上の品質・現行ファイルGitleaks検査が成功済み。追加の異常応答テストも独立PRで検証し、既存UI・Task424・SCUI・開発側の未公開履歴は含めない。

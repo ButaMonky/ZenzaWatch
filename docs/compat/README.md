@@ -35,6 +35,12 @@ Gitleaks v8.30.1 の初回チェックでは、旧モック/テストに10件の
 
 ただし、**Git履歴717コミットからは別途21件の検出候補が残った**。履歴は変更しておらず、このゲートの `gitleaks dir` により削除されたことにはならない。過去の値が本物であれば、キー所有者による失効・再発行が必要。履歴の書き換えは、並行作業とリモート利用者へ重大な影響があるため別途明示承認なしに行わない。履歴監査の証跡は私的なDevTools-Shared資料に保存する。
 
+## GitHub Linux CI 初回実行で判明した依存準備の修正
+
+2026-10-14 のPR #12 初回実行では、契約19件はPASSしたがコメント履歴テストの `heatmap.test.mjs` が `Cannot find module '@babel/parser'` でFAILした。原因はこのテストがプロジェクトルート `test/helpers/extractSource.js` を通してルートの開発依存にアクセスする一方、契約ジョブで `npm ci` していなかったこと。Windowsでは既存 `node_modules` に隠れていた。
+
+修正: `protocol-contracts` ジョブもNode24 + npm cache + `npm ci --no-audit --no-fund` の後に契約テストとコメント履歴テストを実行する。単体の `packages/comment-history` だけをインストールしてもルート依存を用意できない。CIの再実行結果が緑になった時点でクラウド検証済みとする。
+
 ## 不具合やAPI仕様変更が起きた際の対応
 
 - テストが失敗した場合、どの `WATCH_SCHEMA`、`COMMENT_SCHEMA`、`RESPONSE_SCHEMA` 等に該当するかを区分する。

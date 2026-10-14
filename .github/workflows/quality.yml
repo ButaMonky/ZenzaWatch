@@ -26,6 +26,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
+          cache: npm
+      # comment-history/heatmap.test.mjs imports root test/helpers/extractSource.js,
+      # which requires the root @babel/parser dependency. Windows had it installed.
+      - name: Install root dependencies for shared test helpers
+        run: npm ci --no-audit --no-fund
       - name: Structural contract changes and regression fixtures
         run: node --test test/compat/nico-contract.test.mjs
       - name: Generate local comment-history bundles and run all protocol tests

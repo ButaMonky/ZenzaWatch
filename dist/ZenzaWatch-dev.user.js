@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-13 09:28Z 6803d50
+// build: 2026-10-14 14:49Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-13 09:28Z 6803d50';
+    var BUILD = '2026-10-14 14:49Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -13268,6 +13268,50 @@ const {ThreadLoader} = (() => {
 		2: 'easy',
 		3: 'ai',
 	}
+	const commentSchemaError = reason =>
+		({kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason});
+	const CommentReadAdapter = Object.freeze({
+		threadKey(data) {
+			if (!data || typeof data.threadKey !== 'string' || !data.threadKey.trim()) {
+				throw commentSchemaError('missing-thread-key');
+			}
+			return data;
+		},
+		threads(data, msgInfo) {
+			if (!data || typeof data !== 'object' || Array.isArray(data) ||
+					!Array.isArray(data.globalComments) || !Array.isArray(data.threads) ||
+					!Array.isArray(msgInfo?.threads)) {
+				throw commentSchemaError('invalid-thread-envelope');
+			}
+			if (data.globalComments.some(entry =>
+				!entry || !Number.isSafeInteger(entry.count) || entry.count < 0)) {
+				throw commentSchemaError('invalid-global-count');
+			}
+			const expected = new Set(msgInfo.threads.map(thread => {
+				const fork = thread && (thread.forkLabel ||
+					(typeof thread.fork === 'string' ? thread.fork : FORK_LABEL[thread.fork]));
+				return thread && thread.id != null && fork ?
+					`${String(thread.id)}:${fork}` : null;
+			}).filter(Boolean));
+			const seen = new Set();
+			for (const thread of data.threads) {
+				const id = thread && thread.id;
+				const validId = (typeof id === 'string' && /^[0-9]+$/.test(id)) ||
+					(Number.isSafeInteger(id) && id >= 0);
+				const fork = thread && thread.fork;
+				const key = `${String(id)}:${fork}`;
+				if (!validId || !['main', 'owner', 'easy', 'ai'].includes(fork) ||
+						!expected.has(key) || seen.has(key) ||
+						!Number.isSafeInteger(thread.commentCount) || thread.commentCount < 0 ||
+						!Array.isArray(thread.comments) ||
+						thread.comments.some(comment => !comment || typeof comment !== 'object')) {
+					throw commentSchemaError('invalid-thread-target');
+				}
+				seen.add(key);
+			}
+			return data;
+		}
+	});
 	const POST_TIMEOUT_MS = 30 * 1000;
 	let commentPostDiagnosticSeq = 0;
 	const safeStatusCode = value => {
@@ -13405,8 +13449,17 @@ const {ThreadLoader} = (() => {
 			throw error;
 		}
 		checkAbort(options.signal);
-		if (body.meta.status >= 300 || response.status >= 400) {
-			const failure = body.meta.status >= 300 ? body.meta : {status: response.status};
+		const apiStatus = body?.meta?.status;
+		if (Number.isInteger(response?.status) && response.status >= 400 &&
+				(!Number.isInteger(apiStatus) || apiStatus < 300)) {
+			const failure = {status: response.status};
+			throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
+		}
+		if (!Number.isInteger(apiStatus) || apiStatus < 200) {
+			throw commentSchemaError('invalid-api-meta');
+		}
+		if (apiStatus >= 300) {
+			const failure = body.meta;
 			throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
 		}
 		return body;
@@ -13431,8 +13484,9 @@ const {ThreadLoader} = (() => {
 					throw meta
 				}
 				checkAbort(options.signal);
-				this._threadKeys[videoId] = data.threadKey;
-				return data
+				const validData = CommentReadAdapter.threadKey(data);
+				this._threadKeys[videoId] = validData.threadKey;
+				return validData
 			} catch (result) {
 				throw { result, message: `ThreadKeyの取得失敗 ${videoId}` }
 			}
@@ -13542,8 +13596,9 @@ const {ThreadLoader} = (() => {
 					throw meta;
 				}
 				checkAbort(options.signal);
-				data.__usedLanguage = packet.params.language;
-				return data;
+				const validData = CommentReadAdapter.threads(data, msgInfo);
+				validData.__usedLanguage = packet.params.language;
+				return validData;
 			} catch (result) {
 				checkAbort(options.signal);
 				window.console.error(
@@ -13584,6 +13639,7 @@ const {ThreadLoader} = (() => {
 					console.timeEnd(timeKey);
 					const failure = e && e.result || e;
 					if (failure && failure.name === 'AbortError') { throw failure; }
+					if (failure && failure.kind === 'schema') { break; }
 					const status = Number(failure && failure.status);
 					const invalidLanguage = failure && failure.errorCode === 'INVALID_PARAMETER';
 					const serverLanguage = msgInfo.nvComment && msgInfo.nvComment.params && msgInfo.nvComment.params.language;

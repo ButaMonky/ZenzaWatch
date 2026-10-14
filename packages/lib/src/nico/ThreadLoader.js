@@ -21,6 +21,54 @@ const {ThreadLoader} = (() => {
     3: 'ai',
   }
 
+  // NICOCOMPAT-04 / Task452: validate a read response before changing any
+  // current-video state. Never invent an empty list when the schema changes.
+  // Error objects contain only stable codes, never the raw response or keys.
+  const commentSchemaError = reason =>
+    ({kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason});
+  const CommentReadAdapter = Object.freeze({
+    threadKey(data) {
+      if (!data || typeof data.threadKey !== 'string' || !data.threadKey.trim()) {
+        throw commentSchemaError('missing-thread-key');
+      }
+      return data;
+    },
+    threads(data, msgInfo) {
+      if (!data || typeof data !== 'object' || Array.isArray(data) ||
+          !Array.isArray(data.globalComments) || !Array.isArray(data.threads) ||
+          !Array.isArray(msgInfo?.threads)) {
+        throw commentSchemaError('invalid-thread-envelope');
+      }
+      if (data.globalComments.some(entry =>
+        !entry || !Number.isSafeInteger(entry.count) || entry.count < 0)) {
+        throw commentSchemaError('invalid-global-count');
+      }
+      const expected = new Set(msgInfo.threads.map(thread => {
+        const fork = thread && (thread.forkLabel ||
+          (typeof thread.fork === 'string' ? thread.fork : FORK_LABEL[thread.fork]));
+        return thread && thread.id != null && fork ?
+          `${String(thread.id)}:${fork}` : null;
+      }).filter(Boolean));
+      const seen = new Set();
+      for (const thread of data.threads) {
+        const id = thread && thread.id;
+        const validId = (typeof id === 'string' && /^[0-9]+$/.test(id)) ||
+          (Number.isSafeInteger(id) && id >= 0);
+        const fork = thread && thread.fork;
+        const key = `${String(id)}:${fork}`;
+        if (!validId || !['main', 'owner', 'easy', 'ai'].includes(fork) ||
+            !expected.has(key) || seen.has(key) ||
+            !Number.isSafeInteger(thread.commentCount) || thread.commentCount < 0 ||
+            !Array.isArray(thread.comments) ||
+            thread.comments.some(comment => !comment || typeof comment !== 'object')) {
+          throw commentSchemaError('invalid-thread-target');
+        }
+        seen.add(key);
+      }
+      return data;
+    }
+  });
+
   // Task185 (F11): the fetch timeout used to stop once response headers arrived, so a
   // body that never finished kept a post "in progress" forever. This bounds headers AND
   // body with one deadline and classifies the failure (network / header-timeout /
@@ -172,8 +220,17 @@ const {ThreadLoader} = (() => {
       throw error;
     }
     checkAbort(options.signal);
-    if (body.meta.status >= 300 || response.status >= 400) {
-      const failure = body.meta.status >= 300 ? body.meta : {status: response.status};
+    const apiStatus = body?.meta?.status;
+    if (Number.isInteger(response?.status) && response.status >= 400 &&
+        (!Number.isInteger(apiStatus) || apiStatus < 300)) {
+      const failure = {status: response.status};
+      throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
+    }
+    if (!Number.isInteger(apiStatus) || apiStatus < 200) {
+      throw commentSchemaError('invalid-api-meta');
+    }
+    if (apiStatus >= 300) {
+      const failure = body.meta;
       throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
     }
     return body;
@@ -202,8 +259,10 @@ const {ThreadLoader} = (() => {
           throw meta
         }
         checkAbort(options.signal);
-        this._threadKeys[videoId] = data.threadKey;
-        return data
+        // A malformed key response must never replace the last known good key.
+        const validData = CommentReadAdapter.threadKey(data);
+        this._threadKeys[videoId] = validData.threadKey;
+        return validData
       } catch (result) {
         throw { result, message: `ThreadKeyの取得失敗 ${videoId}` }
       }
@@ -335,11 +394,14 @@ const {ThreadLoader} = (() => {
           throw meta;
         }
         checkAbort(options.signal);
+        // Fail before changing the current video or accepting a foreign thread.
+        // Unknown shapes are not retried as transient network failures.
+        const validData = CommentReadAdapter.threads(data, msgInfo);
         // 実際にサーバーへ送った言語をload()側に伝え、フォールバックが
         // 発生した場合に msgInfo.language / threadInfo.language を
         // 実態に合わせて更新できるようにする（Task B-5 追加調査）。
-        data.__usedLanguage = packet.params.language;
-        return data;
+        validData.__usedLanguage = packet.params.language;
+        return validData;
       } catch (result) {
         checkAbort(options.signal);
         // 400/INVALID_TOKEN 等が起きた時にすぐ切り分けられるよう、
@@ -393,6 +455,7 @@ const {ThreadLoader} = (() => {
           console.timeEnd(timeKey);
           const failure = e && e.result || e;
           if (failure && failure.name === 'AbortError') { throw failure; }
+          if (failure && failure.kind === 'schema') { break; }
           const status = Number(failure && failure.status);
           const invalidLanguage = failure && failure.errorCode === 'INVALID_PARAMETER';
           const serverLanguage = msgInfo.nvComment && msgInfo.nvComment.params && msgInfo.nvComment.params.language;

@@ -8,7 +8,7 @@
       "description": "レッツゴー！陰陽師（フルコーラスバージョン）",
       "postedAt": "2007-03-06T00:33:00+09:00",
       "thumbnail": "https://nicovideo.cdn.nimg.jp/thumbnails/9/9",
-      "largeThumbnail": "https://img.cdn.nimg.jp/s/nicovideo/thumbnails/9/9.original/a960x540l?key=00208e6cfc9ead0306cfa0291c2734a15cdea8f58df302b5ac8ed05428ef1190",
+      "largeThumbnail": "https://img.cdn.nimg.jp/s/nicovideo/thumbnails/9/9.original/a960x540l?key=SYNTHETIC_TEST_KEY",
       "length": 320,
       "commons_tree_exists": true,
       "isChannel": null,
@@ -145,7 +145,7 @@
       "tagEdit": {
         "isEditable": true,
         "uneditableReason": null,
-        "editKey": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJqdGkiOiI2YTllNzI5MDdkMWI5IiwiZXhwIjoxNzg4NzcwNzEyLjUxMjQxMzAyNDkwMjM0Mzc1LCJ0eXAiOiJUYWctRWRpdC1LZXkiLCJ2aWQiOiJzbTkiLCJ0aWQiOiIxMTczMTA4NzgwIiwidWlkIjozMTc0ODk0N30.mO-M_vX2FO_CJIDfzCtjmCwx7I-swVEFTuuEPTwGMiqe_eXiMBUPeE4sPbc_XPAZkTX3050FsL6YV-Q4_XhV1Q"
+        "editKey": "SYNTHETIC_OFFLINE_FIXTURE_ONLY"
       }
     },
     "viewerInfo": {
@@ -316,7 +316,7 @@
       }
     ],
     "isStoryboardAvailable": true,
-    "accessRightKey": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJqdGkiOiI2YTllNzI5MDg4OGQxIiwiZXhwIjoxNzg4NzY5NTEyLjQ5NjM1NTA1Njc2MjY5NTMxMjUsInR5cCI6IkFjY2Vzcy1SaWdodC1LZXkiLCJ2aWQiOiJzbTkiLCJyaWQiOiJuaWNvdmlkZW8tc205IiwiZmlkIjo2LCJ1aWQiOiIzMTc0ODk0NyIsImQiOjMyMCwidiI6WyJ2aWRlby1oMjY0LTM2MHAiLCJ2aWRlby1oMjY0LTM2MHAtbG93ZXN0Il0sImEiOlsiYXVkaW8tYWFjLTEyOGticHMiLCJhdWRpby1hYWMtNjRrYnBzIl0sInMiOnRydWUsInNoIjpmYWxzZX0.XeXvwSViS9YC0KeD29KIjNkHOVd1FxqqST8AMEUrOB3G5bhEcBUef_1iixR2M_TPpVBeYSlNzi7ytaMakHCPzg"
+    "accessRightKey": "SYNTHETIC_OFFLINE_FIXTURE_ONLY"
   },
   "dmcInfo": null,
   "msgInfo": {

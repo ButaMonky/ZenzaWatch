@@ -1055,7 +1055,7 @@ export const VideoInfoRawData = {
   'thumbnail': 'https://tn.smilevideo.jp/smile?i=34200478.L',
   'csrfToken': '1472081-1561883185-9a36090f4aee7c4303f76febf3a707de44c9d466',
   'watchAuthKey': '1:1561796785:1542690907:c694b0db01ecdc02cb9f95225d083cf3ce5bbf7a75b26fd07d4517545efb80a1',
-  'playlistToken': '1472081_1561796785_83827136516fb85838bed2f819b980bc3759cb4d',
+  'playlistToken': 'SYNTH-PLAYLIST-TOKEN',
   'series': null,
   'isNeedPayment': false,
   'resumeInfo': {

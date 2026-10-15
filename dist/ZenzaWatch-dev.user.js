@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 02:58Z
+// build: 2026-10-15 03:30Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 02:58Z';
+    var BUILD = '2026-10-15 03:30Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -49059,8 +49059,8 @@ const StoryboardCacheDb = (() => {
 		const cacheDb = db['cache'];
 		instance = {
 			async put(watchId, sbInfo = {}) {
-				if (sbInfo.status !== 'ok') {
-					console.warn('invalid sbInfo', watchId, sbInfo);
+				if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
+					console.warn('Storyboard cache rejected non-ok payload');
 					return;
 				}
 				const record = {

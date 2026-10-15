@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 02:19Z
+// build: 2026-10-15 02:58Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 02:19Z';
+    var BUILD = '2026-10-15 02:58Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -50098,6 +50098,35 @@ const VideoSessionWorker = (() => {
 		promise,
 		new Promise(res => setTimeout(() => res(null), ms))
 	]);
+	const isUsableStoryboardCache = (data, watchId, serverType) => {
+		const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
+		const positiveInt = value => Number.isSafeInteger(value) && value > 0;
+		if (!record(data) || data.status !== 'ok' || data.watchId !== watchId ||
+				data.format !== serverType || !Number.isFinite(data.duration) ||
+				data.duration < 0 || !record(data.storyboard)) { return false; }
+		const board = data.storyboard;
+		const {rows, columns, interval, count, images, thumbnail} = board;
+		if (!record(thumbnail) || !positiveInt(rows) || !positiveInt(columns) ||
+				!positiveInt(thumbnail.width) || !positiveInt(thumbnail.height) ||
+				!Number.isFinite(interval) || interval <= 0 ||
+				!Number.isSafeInteger(count) || count < 0 ||
+				rows > 256 || columns > 256 || rows * columns > 16384 ||
+				thumbnail.width > 4096 || thumbnail.height > 4096 ||
+				thumbnail.width * thumbnail.height * rows * columns > 16 * 1024 * 1024 ||
+				!Array.isArray(images) || !images.length || images.length > 512 ||
+				count > rows * columns * images.length) { return false; }
+		return images.every(image => {
+			if (!record(image) || typeof image.url !== 'string' || image.isFail ||
+					Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]') {
+				return false;
+			}
+			try {
+				const uri = new URL(image.url.startsWith('//') ? 'https:' + image.url : image.url);
+				return ['http:', 'https:'].includes(uri.protocol) && !!uri.hostname &&
+					!uri.username && !uri.password;
+			} catch (_) { return false; }
+		});
+	};
 	const storyboard = async ({type, info}) => {
 		const videoInfo = info.toJSON();
 		const cacheId = `${videoInfo.watchId}_${type}`;
@@ -50106,14 +50135,20 @@ const VideoSessionWorker = (() => {
 		const workerPromise = initWorker();
 		const cache = await cachePromise;
 		if (cache && cache.status === 'ok') {
-			return {...cache, fromCache: true};
+			if (isUsableStoryboardCache(cache, videoInfo.watchId, type)) {
+				return {...cache, fromCache: true};
+			}
+			await withTimeout(
+				Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null),
+				2000
+			);
 		}
 		await workerPromise;
 		const params = {videoInfo, serverType: type, withImages: false};
 		const result = await worker.post({command: 'storyboard', params});
 		if (result && result.status === 'ok') {
 			worker.post({command: 'storyboardImages', params: {sbInfo: result}})
-				.then(full => full && full.status === 'ok' && StoryboardCacheDb.put(cacheId, full))
+				.then(full => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
 				.catch(err => console.warn('storyboard image cache fail', err));
 		}
 		return result;

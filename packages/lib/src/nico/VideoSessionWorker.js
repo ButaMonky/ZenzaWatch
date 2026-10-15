@@ -1204,7 +1204,11 @@ const VideoSessionWorker = (() => {
     const cacheId = `${videoInfo.watchId}_${type}`;
     const cachePromise = withTimeout(
       StoryboardCacheDb.get(cacheId).catch(() => null), 2000);
-    const workerPromise = initWorker();
+    // Start Worker construction in parallel with the IndexedDB lookup, but
+    // a synchronous startup error must not prevent use of a valid cached preview.
+    // If no usable cache exists, preserve the original startup failure.
+    let workerInitError = null;
+    try { initWorker(); } catch (error) { workerInitError = error; }
     const cache = await cachePromise;
     if (cache && cache.status === 'ok') {
       if (isUsableStoryboardCache(cache, videoInfo.watchId, type)) {
@@ -1217,7 +1221,7 @@ const VideoSessionWorker = (() => {
         2000
       );
     }
-    await workerPromise;
+    if (workerInitError) { throw workerInitError; }
     const params = {videoInfo, serverType: type, withImages: false};
     const result = await worker.post({command: 'storyboard', params});
     if (result && result.status === 'ok') {

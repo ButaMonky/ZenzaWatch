@@ -50,3 +50,22 @@
 
 **これらの実機確認と選択的リリース検査が済むまで、
 公開developへマージしたり正式リリース済みとは扱わないでください。**
+
+## 2026-10-15 公開用develop反映・開発版更新の追記
+
+この文書の冒頭にある「公開develop未反映」はレビュー作成時の履歴です。
+2026-10-15にユーザーからシーンサーチの**実機OK**報告があり、
+検証済みの公開レビュー `66e311b2a37beb203d78918a892c8e1201086a82`
+（65ファイル）を公開用 `develop` へfast-forward統合・pushしました。
+リモートSHA一致と公開作業ツリーcleanを確認済みです。
+
+続く開発版の更新通知用として、ZenzaWatch開発userscriptの
+`src/_template.js` / `dist/ZenzaWatch-dev.user.js` の版番号を
+`2.7.246-task423`から`2.7.269-scui`に更新する専用release
+ブランチで、実コード・build/metadata・回帰テストを検証します。
+`@downloadURL`/`@updateURL`は従来の公開developを維持します。
+**安定版 `dist/ZenzaWatch.user.js` 2.6.2は変更しません**。
+
+Task424 (Issue #3)の別修復ブランチは実機最終QAと公開検証が
+未完了のため、このSCUI-only公開に混入させていません。
+レビューbranchの未コミット試験用二本とQAメモには触れていません。

@@ -34,8 +34,8 @@ const StoryboardCacheDb = (() => {
     const cacheDb = db['cache'];
     instance = {
       async put(watchId, sbInfo = {}) {
-        if (sbInfo.status !== 'ok') {
-          console.warn('invalid sbInfo', watchId, sbInfo);
+        if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
+          console.warn('Storyboard cache rejected non-ok payload');
           return;
         }
         const record = {

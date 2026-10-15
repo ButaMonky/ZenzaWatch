@@ -16,6 +16,35 @@ import {StoryboardCacheDb} from './StoryboardCacheDb';
 // (docs/design-pack/24_TASK_018_STORYBOARD_TEST_BLOCKED.md) for why they
 // used to be un-exportable and how this factory fixes that.
 const createStoryboardClasses = (util) => {
+  // Task476: validate storyboard sprite URLs and geometry *before* issuing
+  // concurrent image requests. Do not include API metadata or signed URLs
+  // in errors, and do not guess undocumented CDN host allowlists.
+  const MAX_STORYBOARD_PAGES = 512;
+  const storyboardSchemaError = () => Object.assign(
+    new Error('storyboard response schema unsupported'),
+    {kind: 'schema', errorCode: 'STORYBOARD_SCHEMA'}
+  );
+  const storyboardRecord = value =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const validStoryboardUrl = value => {
+    if (typeof value !== 'string' || !value.trim() ||
+        !/^(https?:\/\/|\/\/)/i.test(value)) { return false; }
+    try {
+      const url = new URL(value.startsWith('//') ? 'https:' + value : value);
+      return (url.protocol === 'https:' || url.protocol === 'http:') &&
+        !!url.hostname && !url.username && !url.password;
+    } catch (_) { return false; }
+  };
+  const validateStoryboardImageList = images => {
+    if (!Array.isArray(images) || !images.length ||
+        images.length > MAX_STORYBOARD_PAGES ||
+        !images.every(image => storyboardRecord(image) &&
+          validStoryboardUrl(image.url))) {
+      throw storyboardSchemaError();
+    }
+    return images;
+  };
+
   class StoryboardInfoLoader {
     static create({type, ...params}) {
       switch (type) {
@@ -64,12 +93,29 @@ const createStoryboardClasses = (util) => {
     }
 
     getStoryboardWithUrls() {
-      const storyboard = this.storyboard;
-      const count = Math.ceil(this.duration * 1000 / storyboard.interval);
-      return {
-        ...storyboard,
-        count,
-      };
+      let storyboard;
+      try { storyboard = this.storyboard; }
+      catch (_) { throw storyboardSchemaError(); }
+      const dimensions = storyboard?.thumbnail;
+      const rows = Number(storyboard?.rows), cols = Number(storyboard?.columns);
+      const width = Number(dimensions?.width), height = Number(dimensions?.height);
+      const interval = Number(storyboard?.interval), duration = Number(this.duration);
+      if (!storyboardRecord(storyboard) || !storyboardRecord(dimensions) ||
+          ![rows, cols, width, height, interval, duration].every(Number.isFinite) ||
+          ![rows, cols, width, height].every(Number.isSafeInteger) ||
+          rows < 1 || cols < 1 || width < 1 || height < 1 ||
+          rows > 256 || cols > 256 || width > 4096 || height > 4096 ||
+          interval <= 0 || duration < 0 || rows * cols > 16384 ||
+          rows * cols * width * height > 16 * 1024 * 1024) {
+        throw storyboardSchemaError();
+      }
+      const images = validateStoryboardImageList(storyboard.images);
+      const count = Math.ceil(duration * 1000 / interval);
+      if (!Number.isSafeInteger(count) || count < 0 ||
+          count > images.length * rows * cols) {
+        throw storyboardSchemaError();
+      }
+      return {...storyboard, count};
     }
 
     async getStoryboardWithImages() {
@@ -82,6 +128,9 @@ const createStoryboardClasses = (util) => {
 
     // Task 070: 画像（1枚 約0.5MB・10x10コマ）は全ページ同時に取得する。認証は不要（credentials omit で取得可）。
     static async fetchImages(images) {
+      // This entry is also used directly by the separate storyboardImages
+      // worker command, so validate again even if a caller skipped getInfo().
+      validateStoryboardImageList(images);
       return Promise.all(images.map(async image => {
         if (image.buffer) {
           return image;
@@ -146,8 +195,15 @@ const createStoryboardClasses = (util) => {
     }
 
     get storyboard() {
-      if (this._rawData == null) {
-        return null;
+      // DOMAND often sends paths relative to storyboard.json. Check the raw
+      // array first: mapping a missing URL would otherwise invent "undefined".
+      if (!storyboardRecord(this._rawData) ||
+          !Array.isArray(this._rawData.images) ||
+          !this._rawData.images.length ||
+          this._rawData.images.length > MAX_STORYBOARD_PAGES ||
+          !this._rawData.images.every(image => storyboardRecord(image) &&
+            typeof image.url === 'string' && !!image.url.trim())) {
+        throw storyboardSchemaError();
       }
       const {
         thumbnailWidth: width,
@@ -196,7 +252,11 @@ const createStoryboardClasses = (util) => {
 
     async load() {
       const result = await util.fetch(this._url, {credentials: 'include'}).then(res => res.json());
-      if (result.meta.status && result.meta.status >= 300) {
+      if (!storyboardRecord(result) || !storyboardRecord(result.meta) ||
+          !Number.isInteger(result.meta.status) || !storyboardRecord(result.data)) {
+        throw storyboardSchemaError();
+      }
+      if (result.meta.status >= 300) {
         throw 'storyboard request fail';
       }
       this._rawData = result.data;

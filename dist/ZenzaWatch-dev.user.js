@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-14 14:49Z
+// build: 2026-10-14 16:34Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-14 14:49Z';
+    var BUILD = '2026-10-14 16:34Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -9412,12 +9412,34 @@ const CacheStorage = (() => {
 })();
 const VideoInfoLoader = (function () {
 	const cacheStorage = new CacheStorage(sessionStorage);
+	const validWatchV4Structure = data => {
+		const record = value => value !== null && typeof value === 'object' &&
+			!Array.isArray(value);
+		return record(data) &&
+			record(data.client) &&
+			typeof data.client.watchId === 'string' && !!data.client.watchId &&
+			(data.client.watchTrackId === undefined ||
+				typeof data.client.watchTrackId === 'string') &&
+			record(data.video) && typeof data.video.id === 'string' && !!data.video.id &&
+			typeof data.video.title === 'string' &&
+			typeof data.video.duration === 'number' &&
+			Number.isFinite(data.video.duration) && data.video.duration >= 0 &&
+			record(data.video.count) &&
+			(data.video.thumbnail == null || record(data.video.thumbnail)) &&
+			record(data.player) && record(data.genre) &&
+			record(data.tags) && Array.isArray(data.tags.items) &&
+			data.tags.items.every(record);
+	};
 	const normalizeWatchV4 = async (response, requestedWatchId) => {
 		const data = response?.$watchV4?.data;
 		if (!data || response.errorCode) return response;
-		if (data.errorCode || !data.client) return data;
+		if (data.errorCode) return data;
+		if (!validWatchV4Structure(data)) {
+			return {errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4'};
+		}
 		let lazy = {};
-		if (data.lazy?.authKey) {
+		if (data.lazy?.authKey && typeof data.client.watchTrackId === 'string' &&
+				!!data.client.watchTrackId) {
 			try {
 				const result = await netUtil.fetch(
 					`https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
@@ -9935,6 +9957,11 @@ const VideoInfoLoader = (function () {
 				}
 				if (err.reason === 'forbidden' || err.reason === 'not found') {
 					return Promise.reject({...err, watchId});
+				} else if (err.reason === 'watch api' && err.errorCode === 'WATCH_SCHEMA') {
+					return Promise.reject({
+						watchId, reason: 'watch api', errorCode: 'WATCH_SCHEMA',
+						message: err.message || '動画情報の形式が変更されました'
+					});
 				} else if (err.reason === 'network') {
 					return createSleep(5000).then(() => {
 						window.console.warn('network error & retry');

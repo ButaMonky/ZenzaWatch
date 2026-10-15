@@ -562,6 +562,37 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         };
       };
 
+      // NICOCOMPAT-04 / Task458: reject changed nvapi response shapes before
+      // converting items to legacy cards. A malformed page is not "0 results".
+      // Diagnostics have only stable codes, never user data or server payloads.
+      const searchSchemaError = () => Object.assign(
+        new Error('nvapi search returned an unexpected schema'),
+        {status: 'schema', kind: 'schema', errorCode: 'SEARCH_SCHEMA'}
+      );
+      const isSearchRecord = value =>
+        value !== null && typeof value === 'object' && !Array.isArray(value);
+      const validSearchItem = item => isSearchRecord(item) &&
+        typeof item.id === 'string' && !!item.id.trim() && item.id.length <= 128 &&
+        (item.title == null || typeof item.title === 'string') &&
+        (item.shortDescription == null || typeof item.shortDescription === 'string') &&
+        (item.duration == null || (typeof item.duration === 'number' &&
+          Number.isFinite(item.duration) && item.duration >= 0)) &&
+        (item.registeredAt == null || typeof item.registeredAt === 'string') &&
+        (item.count == null || isSearchRecord(item.count)) &&
+        (item.thumbnail == null || isSearchRecord(item.thumbnail));
+      const validateSearchPage = data => {
+        if (!isSearchRecord(data) || !Array.isArray(data.items) ||
+            !Number.isSafeInteger(data.totalCount) || data.totalCount < 0 ||
+            (data.hasNext != null && typeof data.hasNext !== 'boolean') ||
+            data.items.some(item => !validSearchItem(item)) ||
+            (data.additionals != null && (!isSearchRecord(data.additionals) ||
+              (data.additionals.suggestedVideo != null &&
+                !validSearchItem(data.additionals.suggestedVideo))))) {
+          throw searchSchemaError();
+        }
+        return data;
+      };
+
       const fetchPage = async (query, page, pageSize) => {
         const qs = new URLSearchParams(Object.assign({}, query, {pageSize, page}));
         const net = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o)};
@@ -569,17 +600,19 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
           credentials: 'include',
           headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
         });
+        // HTTP failure must not be hidden by a misleading JSON meta.status=200.
+        if (Number.isInteger(res?.status) && res.status >= 400) {
+          throw Object.assign(new Error('nvapi search HTTP failure'),
+            {status: res.status, kind: 'http'});
+        }
         const json = await res.json();
         if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
           throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`),
             {status: json && json.meta && json.meta.status});
         }
-        // Task190（検索追補Q02）: itemsが無い・配列でない、総件数が数値でない応答は「正常な0件」にしない
-        const data = json.data;
-        if (!Array.isArray(data.items) || !Number.isFinite(data.totalCount) || data.totalCount < 0) {
-          throw Object.assign(new Error('nvapi search returned an unexpected schema'), {status: 'schema', kind: 'schema'});
-        }
-        return data;
+        // Task190/Q02 and Task458: verify every page before any result is
+        // displayed. Later malformed pages retain the previous contiguous prefix.
+        return validateSearchPage(json.data);
       };
 
       /**

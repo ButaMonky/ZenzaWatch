@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 01:44Z
+// build: 2026-10-15 02:19Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 01:44Z';
+    var BUILD = '2026-10-15 02:19Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -49092,6 +49092,31 @@ const StoryboardCacheDb = (() => {
 	return {initWorker, open, put, get, delete: del, close, gc, db, api};
 })();
 const createStoryboardClasses = (util) => {
+	const MAX_STORYBOARD_PAGES = 512;
+	const storyboardSchemaError = () => Object.assign(
+		new Error('storyboard response schema unsupported'),
+		{kind: 'schema', errorCode: 'STORYBOARD_SCHEMA'}
+	);
+	const storyboardRecord = value =>
+		value !== null && typeof value === 'object' && !Array.isArray(value);
+	const validStoryboardUrl = value => {
+		if (typeof value !== 'string' || !value.trim() ||
+				!/^(https?:\/\/|\/\/)/i.test(value)) { return false; }
+		try {
+			const url = new URL(value.startsWith('//') ? 'https:' + value : value);
+			return (url.protocol === 'https:' || url.protocol === 'http:') &&
+				!!url.hostname && !url.username && !url.password;
+		} catch (_) { return false; }
+	};
+	const validateStoryboardImageList = images => {
+		if (!Array.isArray(images) || !images.length ||
+				images.length > MAX_STORYBOARD_PAGES ||
+				!images.every(image => storyboardRecord(image) &&
+					validStoryboardUrl(image.url))) {
+			throw storyboardSchemaError();
+		}
+		return images;
+	};
 	class StoryboardInfoLoader {
 		static create({type, ...params}) {
 			switch (type) {
@@ -49134,12 +49159,29 @@ const createStoryboardClasses = (util) => {
 			this._duration = value;
 		}
 		getStoryboardWithUrls() {
-			const storyboard = this.storyboard;
-			const count = Math.ceil(this.duration * 1000 / storyboard.interval);
-			return {
-				...storyboard,
-				count,
-			};
+			let storyboard;
+			try { storyboard = this.storyboard; }
+			catch (_) { throw storyboardSchemaError(); }
+			const dimensions = storyboard?.thumbnail;
+			const rows = Number(storyboard?.rows), cols = Number(storyboard?.columns);
+			const width = Number(dimensions?.width), height = Number(dimensions?.height);
+			const interval = Number(storyboard?.interval), duration = Number(this.duration);
+			if (!storyboardRecord(storyboard) || !storyboardRecord(dimensions) ||
+					![rows, cols, width, height, interval, duration].every(Number.isFinite) ||
+					![rows, cols, width, height].every(Number.isSafeInteger) ||
+					rows < 1 || cols < 1 || width < 1 || height < 1 ||
+					rows > 256 || cols > 256 || width > 4096 || height > 4096 ||
+					interval <= 0 || duration < 0 || rows * cols > 16384 ||
+					rows * cols * width * height > 16 * 1024 * 1024) {
+				throw storyboardSchemaError();
+			}
+			const images = validateStoryboardImageList(storyboard.images);
+			const count = Math.ceil(duration * 1000 / interval);
+			if (!Number.isSafeInteger(count) || count < 0 ||
+					count > images.length * rows * cols) {
+				throw storyboardSchemaError();
+			}
+			return {...storyboard, count};
 		}
 		async getStoryboardWithImages() {
 			const storyboard = this.getStoryboardWithUrls();
@@ -49149,6 +49191,7 @@ const createStoryboardClasses = (util) => {
 			};
 		}
 		static async fetchImages(images) {
+			validateStoryboardImageList(images);
 			return Promise.all(images.map(async image => {
 				if (image.buffer) {
 					return image;
@@ -49206,8 +49249,13 @@ const createStoryboardClasses = (util) => {
 			}
 		}
 		get storyboard() {
-			if (this._rawData == null) {
-				return null;
+			if (!storyboardRecord(this._rawData) ||
+					!Array.isArray(this._rawData.images) ||
+					!this._rawData.images.length ||
+					this._rawData.images.length > MAX_STORYBOARD_PAGES ||
+					!this._rawData.images.every(image => storyboardRecord(image) &&
+						typeof image.url === 'string' && !!image.url.trim())) {
+				throw storyboardSchemaError();
 			}
 			const {
 				thumbnailWidth: width,
@@ -49251,7 +49299,11 @@ const createStoryboardClasses = (util) => {
 		}
 		async load() {
 			const result = await util.fetch(this._url, {credentials: 'include'}).then(res => res.json());
-			if (result.meta.status && result.meta.status >= 300) {
+			if (!storyboardRecord(result) || !storyboardRecord(result.meta) ||
+					!Number.isInteger(result.meta.status) || !storyboardRecord(result.data)) {
+				throw storyboardSchemaError();
+			}
+			if (result.meta.status >= 300) {
 				throw 'storyboard request fail';
 			}
 			this._rawData = result.data;

@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 04:27Z
+// build: 2026-10-15 05:03Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 04:27Z';
+    var BUILD = '2026-10-15 05:03Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -50132,7 +50132,8 @@ const VideoSessionWorker = (() => {
 		const cacheId = `${videoInfo.watchId}_${type}`;
 		const cachePromise = withTimeout(
 			StoryboardCacheDb.get(cacheId).catch(() => null), 2000);
-		const workerPromise = initWorker();
+		let workerInitError = null;
+		try { initWorker(); } catch (error) { workerInitError = error; }
 		const cache = await cachePromise;
 		if (cache && cache.status === 'ok') {
 			if (isUsableStoryboardCache(cache, videoInfo.watchId, type)) {
@@ -50143,7 +50144,7 @@ const VideoSessionWorker = (() => {
 				2000
 			);
 		}
-		await workerPromise;
+		if (workerInitError) { throw workerInitError; }
 		const params = {videoInfo, serverType: type, withImages: false};
 		const result = await worker.post({command: 'storyboard', params});
 		if (result && result.status === 'ok') {

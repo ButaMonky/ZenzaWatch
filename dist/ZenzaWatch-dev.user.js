@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 06:09Z
+// build: 2026-10-15 06:37Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 06:09Z';
+    var BUILD = '2026-10-15 06:37Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -49044,44 +49044,54 @@ const StoryboardCacheDb = (() => {
 		]
 	};
 	let db, instance, NicoVideoApi;
+	let dbOpening, instanceOpening;
 	const initWorker = async () => {
 		if (db) { return db; }
-		if (location.host === 'www.nicovideo.jp') {
-			db = db || await IndexedDbStorage.open(WATCH_INFO);
-		} else {
-			db = db || await NicoVideoApi.bridgeDb(WATCH_INFO);
-		}
-		return db;
+		if (dbOpening) { return dbOpening; }
+		dbOpening = (async () => {
+			const connection = location.host === 'www.nicovideo.jp' ?
+				await IndexedDbStorage.open(WATCH_INFO) :
+				await NicoVideoApi.bridgeDb(WATCH_INFO);
+			db = connection;
+			return connection;
+		})();
+		try { return await dbOpening; }
+		finally { dbOpening = null; }
 	};
 	const open = async () => {
 		if (instance) { return instance; }
-		await initWorker();
-		const cacheDb = db['cache'];
-		instance = {
-			async put(watchId, sbInfo = {}) {
-				if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
-					console.warn('Storyboard cache rejected non-ok payload');
-					return;
-				}
-				const record = {
-					watchId,
-					updatedAt: Date.now(),
-					sbInfo
-				};
-				await cacheDb.put(record);
-				return record;
-			},
-			async get(watchId) {
-				const record = await cacheDb.updateTime({key: watchId});
-				if (!record) { return null; }
-				return record.sbInfo;
-			},
-			delete(watchId) { return cacheDb.delete({key: watchId}); },
-			close() { return cacheDb.close(); },
-			gc(expireTime) { return cacheDb.gc(expireTime); }
-		};
-		instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
-		return instance;
+		if (instanceOpening) { return instanceOpening; }
+		instanceOpening = (async () => {
+			await initWorker();
+			const cacheDb = db['cache'];
+			instance = {
+				async put(watchId, sbInfo = {}) {
+					if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
+						console.warn('Storyboard cache rejected non-ok payload');
+						return;
+					}
+					const record = {
+						watchId,
+						updatedAt: Date.now(),
+						sbInfo
+					};
+					await cacheDb.put(record);
+					return record;
+				},
+				async get(watchId) {
+					const record = await cacheDb.updateTime({key: watchId});
+					if (!record) { return null; }
+					return record.sbInfo;
+				},
+				delete(watchId) { return cacheDb.delete({key: watchId}); },
+				close() { return cacheDb.close(); },
+				gc(expireTime) { return cacheDb.gc(expireTime); }
+			};
+			instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
+			return instance;
+		})();
+		try { return await instanceOpening; }
+		finally { instanceOpening = null; }
 	};
 	const put = (watchId, sbInfo = {}) => open().then(db => db.put(watchId, sbInfo));
 	const get = watchId => open().then(db => db.get(watchId));

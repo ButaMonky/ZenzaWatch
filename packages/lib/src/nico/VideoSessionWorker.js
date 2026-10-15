@@ -1166,6 +1166,39 @@ const VideoSessionWorker = (() => {
   //  1. キャッシュ(IndexedDB)の確認とセッション作成を同時に始める（キャッシュが無い時に待たない）
   //  2. セッション作成後、画像を待たずにURLだけの情報で表示を始める（シーク時に必要なページだけ描画側が取得）
   //  3. 画像本体は裏で一括取得し、揃ったらキャッシュに保存する（次回から通信なしで即表示）
+  // Task484: old IndexedDB records can report success despite wrong video
+  // ownership, missing image buffers or outdated storyboard geometry.
+  // Validate before serving a cached preview, not just when rendering it.
+  const isUsableStoryboardCache = (data, watchId, serverType) => {
+    const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
+    const positiveInt = value => Number.isSafeInteger(value) && value > 0;
+    if (!record(data) || data.status !== 'ok' || data.watchId !== watchId ||
+        data.format !== serverType || !Number.isFinite(data.duration) ||
+        data.duration < 0 || !record(data.storyboard)) { return false; }
+    const board = data.storyboard;
+    const {rows, columns, interval, count, images, thumbnail} = board;
+    if (!record(thumbnail) || !positiveInt(rows) || !positiveInt(columns) ||
+        !positiveInt(thumbnail.width) || !positiveInt(thumbnail.height) ||
+        !Number.isFinite(interval) || interval <= 0 ||
+        !Number.isSafeInteger(count) || count < 0 ||
+        rows > 256 || columns > 256 || rows * columns > 16384 ||
+        thumbnail.width > 4096 || thumbnail.height > 4096 ||
+        thumbnail.width * thumbnail.height * rows * columns > 16 * 1024 * 1024 ||
+        !Array.isArray(images) || !images.length || images.length > 512 ||
+        count > rows * columns * images.length) { return false; }
+    return images.every(image => {
+      if (!record(image) || typeof image.url !== 'string' || image.isFail ||
+          Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]') {
+        return false;
+      }
+      try {
+        const uri = new URL(image.url.startsWith('//') ? 'https:' + image.url : image.url);
+        return ['http:', 'https:'].includes(uri.protocol) && !!uri.hostname &&
+          !uri.username && !uri.password;
+      } catch (_) { return false; }
+    });
+  };
+
   const storyboard = async ({type, info}) => {
     const videoInfo = info.toJSON();
     const cacheId = `${videoInfo.watchId}_${type}`;
@@ -1174,14 +1207,22 @@ const VideoSessionWorker = (() => {
     const workerPromise = initWorker();
     const cache = await cachePromise;
     if (cache && cache.status === 'ok') {
-      return {...cache, fromCache: true};
+      if (isUsableStoryboardCache(cache, videoInfo.watchId, type)) {
+        return {...cache, fromCache: true};
+      }
+      // Evict only a provably invalid record. Cache maintenance is optional:
+      // network recovery must continue even if IndexedDB is unavailable.
+      await withTimeout(
+        Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null),
+        2000
+      );
     }
     await workerPromise;
     const params = {videoInfo, serverType: type, withImages: false};
     const result = await worker.post({command: 'storyboard', params});
     if (result && result.status === 'ok') {
       worker.post({command: 'storyboardImages', params: {sbInfo: result}})
-        .then(full => full && full.status === 'ok' && StoryboardCacheDb.put(cacheId, full))
+        .then(full => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
         .catch(err => console.warn('storyboard image cache fail', err));
     }
     return result;

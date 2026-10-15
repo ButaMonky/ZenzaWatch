@@ -1157,10 +1157,15 @@ const VideoSessionWorker = (() => {
     });
   };
 
-  const withTimeout = (promise, ms) => Promise.race([
-    promise,
-    new Promise(res => setTimeout(() => res(null), ms))
-  ]);
+  const withTimeout = (promise, ms) => {
+    // The timer protects truly slow IndexedDB operations, but should not
+    // remain armed for two seconds after an ordinary cache hit or miss.
+    let timer;
+    const cutoff = new Promise(resolve => {
+      timer = setTimeout(() => resolve(null), ms);
+    });
+    return Promise.race([promise, cutoff]).finally(() => clearTimeout(timer));
+  };
 
   // Task 070: 高速化
   //  1. キャッシュ(IndexedDB)の確認とセッション作成を同時に始める（キャッシュが無い時に待たない）

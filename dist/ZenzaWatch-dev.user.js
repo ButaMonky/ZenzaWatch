@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 03:30Z
+// build: 2026-10-15 04:27Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 03:30Z';
+    var BUILD = '2026-10-15 04:27Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -50149,7 +50149,7 @@ const VideoSessionWorker = (() => {
 		if (result && result.status === 'ok') {
 			worker.post({command: 'storyboardImages', params: {sbInfo: result}})
 				.then(full => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
-				.catch(err => console.warn('storyboard image cache fail', err));
+				.catch(() => console.warn('storyboard image cache fail'));
 		}
 		return result;
 	};

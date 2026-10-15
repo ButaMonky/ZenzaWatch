@@ -1223,7 +1223,7 @@ const VideoSessionWorker = (() => {
     if (result && result.status === 'ok') {
       worker.post({command: 'storyboardImages', params: {sbInfo: result}})
         .then(full => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
-        .catch(err => console.warn('storyboard image cache fail', err));
+        .catch(() => console.warn('storyboard image cache fail'));
     }
     return result;
   };

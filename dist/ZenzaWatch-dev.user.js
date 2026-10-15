@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 05:32Z
+// build: 2026-10-15 06:09Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 05:32Z';
+    var BUILD = '2026-10-15 06:09Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -50094,10 +50094,13 @@ const VideoSessionWorker = (() => {
 			close: () => worker.post({command: 'close', params: {sessionId}})
 		});
 	};
-	const withTimeout = (promise, ms) => Promise.race([
-		promise,
-		new Promise(res => setTimeout(() => res(null), ms))
-	]);
+	const withTimeout = (promise, ms) => {
+		let timer;
+		const cutoff = new Promise(resolve => {
+			timer = setTimeout(() => resolve(null), ms);
+		});
+		return Promise.race([promise, cutoff]).finally(() => clearTimeout(timer));
+	};
 	const isUsableStoryboardCache = (data, watchId, serverType) => {
 		const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
 		const positiveInt = value => Number.isSafeInteger(value) && value > 0;

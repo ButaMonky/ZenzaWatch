@@ -14,6 +14,7 @@ import {VideoFilter, VideoInfoModel} from './VideoInfo';
 import {CommentInputPanel} from './CommentInputPanel';
 import {CommentPanel} from './CommentPanel';
 import {VideoControlBar} from './VideoControlBar';
+import {SceneSearchPlayerBinding} from '../packages/zenza/src/sceneSearch/SceneSearchPlayerBinding';
 import {VideoInfoPanel} from './VideoInfoPanel';
 import {PlayList, PlayListSession} from '../packages/zenza/src/Playlist/PlayList';
 import {Emitter} from './baselib';
@@ -44,6 +45,7 @@ import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated
 //@require UiVisibilityRegistry
 //@require RelatedMenuOrder
 //@require OfficialPlayerRoute
+//@require SceneSearchPlayerBinding
 
 class PlayerConfig {
   static getInstance(config) {
@@ -365,6 +367,13 @@ class NicoVideoPlayerDialogView extends Emitter {
       currentTimeGetter: this._currentTimeGetter
     });
     this.videoControlBar.on('command', onCommand);
+    // SCUI-18: the existing seekbar/worker stays owned by VideoControlBar.
+    this.sceneSearchBinding = new SceneSearchPlayerBinding({
+      view:this,dialog:this._dialog,document,container,
+      events:global.emitter,isFullscreen:()=>Fullscreen.now(),
+      onError:code=>console.warn('[SCUI]',code)
+    });
+    this.sceneSearchBinding.attach();
 
     this._$errorMessageContainer = $container.find('.errorMessageContainer');
     // Task 049: 「小」モードの読み込み中背景を.loadingMessageContainer側にも
@@ -2516,6 +2525,9 @@ class NicoVideoPlayerDialog extends Emitter {
     return this._onCommand(command, param);
   }
   _onCommand(command, param, request) {
+    if(typeof command==='string'&&command.startsWith('sceneSearch-')){
+      return this._view?.sceneSearchBinding?.handleShortcut(command)===true;
+    }
     let v;
     switch (command) {
       case 'volume':

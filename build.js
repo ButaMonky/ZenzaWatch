@@ -187,7 +187,8 @@ function requireFile(srcDir, file, params, parent = '') {
     // 入力が欠けたら例外にしてビルド全体を失敗させ、dist は書き換えない（Task 084）。
     throw new Error(`入力ファイルがありません: "${srcFile}"（required by "${parent}"）`);
   }
-  fs.readFileSync(srcFile, 'utf-8').split('\n').some(function(line) {
+  // Normalize CRLF before parsing //@require and //@dev-require directives.
+  fs.readFileSync(srcFile, 'utf-8').split(/\r?\n/).some(function(line) {
     let lt = line.trim();
     if (!begin && line.trim().match(/^import\s+\{?(.+)\}?\s+from\s+['"](.+)['"]/)) {
       const [$1, $2] = [RegExp.$1, RegExp.$2];
@@ -294,7 +295,8 @@ function loadTemplateFile(srcDir, indexFile, outFile, params) {
   const srcFile = path.join(srcDir, indexFile);
   BUILD_INPUTS.add(path.resolve(srcFile));
 
-  fs.readFileSync(srcFile, 'utf-8').split('\n').some(function(line) {
+  // Normalize CRLF before parsing //@require and //@dev-require directives.
+  fs.readFileSync(srcFile, 'utf-8').split(/\r?\n/).some(function(line) {
     if (line.trim().match(/^import\s+\{?(.+)\}?\s+from\s+['"](.+)['"]/)) {
       const [$1, $2] = [RegExp.$1, RegExp.$2];
       const modules = $1.split(/[\s,]+/).map(m => m.replace(/[{}*]/g, '').trim()).filter(m => m);

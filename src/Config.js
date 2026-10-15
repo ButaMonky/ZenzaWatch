@@ -360,6 +360,22 @@ const Config = (() => {
   // packages/zenza/src/ShortcutActions.js のSHORTCUT_ACTIONS配列に
   // エントリを足すだけでよく、ここを直接編集する必要はない。
   Object.assign(DEFAULT_CONFIG, UiVisibilityRegistry.defaults());
+
+  // SCUI-02: add-only scene-search settings. Layout 01 preserves the old UI
+  // until the user explicitly selects a different normal/fullscreen layout.
+  // These are presentation preferences; no extra preview is mounted here.
+  Object.assign(DEFAULT_CONFIG, {
+    'sceneSearch.layout.normal': '01',
+    'sceneSearch.layout.fullscreen': '01',
+    'sceneSearch.layout.linkFullscreen': false,
+    'sceneSearch.seekStepSeconds': 5,
+    // Discussion #6: 0 disables idle hiding; 2 seconds is the recommended default.
+    'sceneSearch.idleHideSeconds': 2,
+    'sceneSearch.controlsReveal': 'hover-focus',
+    'sceneSearch.animation': 'subtle',
+    'sceneSearch.commentPreviewVisible': true
+  });
+
   Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
 
   // Task 065: カスタムシークスロット(CUSTOM_SEEK_1〜10、
@@ -385,6 +401,30 @@ const Config = (() => {
         return value;
       },
       validateImport: (key, value) => {
+        // Reject non-finite, non-integral and unknown enum values before
+        // DataStorage writes any part of a settings import.
+        if (key === 'sceneSearch.layout.normal' ||
+            key === 'sceneSearch.layout.fullscreen') {
+          return typeof value === 'string' && /^(0[1-9]|10)$/.test(value);
+        }
+        if (key === 'sceneSearch.layout.linkFullscreen' ||
+            key === 'sceneSearch.commentPreviewVisible') {
+          return typeof value === 'boolean';
+        }
+        if (key === 'sceneSearch.seekStepSeconds') {
+          return Number.isSafeInteger(value) && value >= 0 && value <= 600;
+        }
+        if (key === 'sceneSearch.idleHideSeconds') {
+          return typeof value === 'number' && Number.isFinite(value) &&
+            value >= 0 && value <= 30 && Number.isInteger(value * 2);
+        }
+        if (key === 'sceneSearch.controlsReveal') {
+          return ['hover-focus', 'click', 'always'].includes(value);
+        }
+        if (key === 'sceneSearch.animation') {
+          return ['off', 'subtle', 'full'].includes(value);
+        }
+        if (key.startsWith('sceneSearch.')) { return false; }
         if (key === 'ngComposite.rules') {
           return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
             Array.isArray(value)&&value.length===0;

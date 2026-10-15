@@ -41,6 +41,22 @@ class UiVisibilityRegistry {
         description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
       {key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
         description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
+      // SCUI-07: Scene-search controls have their own visibility scope.
+      // Hiding a button changes appearance only, never disables its command.
+      {key:'ui.scene.panel',scope:'scene',label:'シーンサーチのプレビュー枠',
+        icon:'▣',selector:'.zenzaSceneSearchHost'},
+      {key:'ui.scene.pin',scope:'scene',label:'シーンサーチのピン固定ボタン',
+        icon:'📌',selector:'.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]'},
+      {key:'ui.scene.seekArrows',scope:'scene',label:'シーンサーチの前後矢印',
+        icon:'↔',selector:'.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]'},
+      {key:'ui.scene.seekSeconds',scope:'scene',label:'シーンサーチの移動秒数ボタン',
+        icon:'5s',selector:'.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]'},
+      {key:'ui.scene.commentToggle',scope:'scene',label:'シーンサーチのコメント表示切替ボタン',
+        icon:'💬',selector:'.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]'},
+      {key:'ui.scene.commentSearch',scope:'scene',label:'シーンサーチのコメント検索ボタン',
+        icon:'⌕',selector:'.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]'},
+      {key:'ui.scene.more',scope:'scene',label:'シーンサーチの操作メニュー展開ボタン',
+        icon:'⋯',selector:'.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]'},
       {key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
       {key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
       {key:'ui.info.series',scope:'info',label:'シリーズ情報',icon:'▤',selector:'.seriesList'},
@@ -96,6 +112,14 @@ class UiVisibilityRegistry {
           priority:node.style.getPropertyPriority('display'),
           hidden:node.hidden
         });
+        node.hidden=true;
+        node.style.setProperty('display','none','important');
+        changed++;
+      }else if(!visible && saved && (node.hidden!==true ||
+        node.style.getPropertyValue('display')!=='none' ||
+        node.style.getPropertyPriority('display')!=='important')){
+        // The current layout may redraw a hidden control: preserve its original
+        // restoration snapshot but enforce the user's visibility setting again.
         node.hidden=true;
         node.style.setProperty('display','none','important');
         changed++;

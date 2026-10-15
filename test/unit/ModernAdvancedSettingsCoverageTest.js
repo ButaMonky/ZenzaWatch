@@ -56,9 +56,15 @@ describe('Task318 real source setting inventory',()=>{
     assert.deepStrictEqual(missing,[]);
     assert.deepStrictEqual(ignored,[]);
     // Task396 adds the previously absent original-video action, unbound by default.
-    assert.strictEqual(ctx.actions.length,126);
+    assert.strictEqual(ctx.actions.filter(a=>!a.id.startsWith('SCENE_')).length,126,
+      'keep all 126 original actions intact');
+    const sceneActions=ctx.actions.filter(a=>a.id.startsWith('SCENE_'));
+    assert.strictEqual(sceneActions.length,12,'register all twelve new scene actions');
+    assert(sceneActions.every(a=>a.defaultKey===0),
+      'never introduce new default key conflicts');
     assert(ctx.actions.some(a=>a.id==='OPEN_ORIGINAL_VIDEO' && a.defaultKey===0));
-    assert.strictEqual(model.descriptors.filter(d=>d.type==='shortcut').length,126);
+    assert.strictEqual(model.descriptors.filter(d=>d.type==='shortcut').length,
+      ctx.actions.length,'every registered shortcut must appear once in advanced settings');
     assert.strictEqual(model.descriptors.filter(d=>d.type==='seconds').length,10);
     assert(model.descriptors.length>=195);
     assert.strictEqual(model.descriptors.length,

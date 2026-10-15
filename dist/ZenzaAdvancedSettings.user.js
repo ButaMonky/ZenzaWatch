@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.58-task413
+// @version     0.3.59-scui489
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-12 11:53Z
+// build: 2026-10-15 08:22Z 0797487
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -1148,6 +1148,30 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'toggle-removeNgMatchedUser'},
 	{id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'コメント欄プレビュー ON/OFF',
 		defaultKey: 0, command: 'toggle-enableCommentPreview'},
+	{id: 'SCENE_PIN', category: '画面', label: 'シーンサーチ: プレビューの固定/解除',
+		defaultKey: 0, command: 'sceneSearch-togglePin'},
+	{id: 'SCENE_SHOW', category: '画面', label: 'シーンサーチ: 表示/非表示',
+		defaultKey: 0, command: 'sceneSearch-togglePanel'},
+	{id: 'SCENE_CONTROLS', category: '画面', label: 'シーンサーチ: 操作ボタンを展開/収納',
+		defaultKey: 0, command: 'sceneSearch-toggleControls'},
+	{id: 'SCENE_LAYOUT_NEXT', category: '画面', label: 'シーンサーチ: 次のレイアウト',
+		defaultKey: 0, command: 'sceneSearch-nextLayout'},
+	{id: 'SCENE_LAYOUT_PREV', category: '画面', label: 'シーンサーチ: 前のレイアウト',
+		defaultKey: 0, command: 'sceneSearch-prevLayout'},
+	{id: 'SCENE_SEEK_BACK', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ戻る',
+		defaultKey: 0, command: 'sceneSearch-seekBack'},
+	{id: 'SCENE_SEEK_FORWARD', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ進む',
+		defaultKey: 0, command: 'sceneSearch-seekForward'},
+	{id: 'SCENE_STEP_UP', category: 'シーク', label: 'シーンサーチ: 移動秒数を増やす',
+		defaultKey: 0, command: 'sceneSearch-stepUp'},
+	{id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
+		defaultKey: 0, command: 'sceneSearch-stepDown'},
+	{id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメントプレビュー表示/非表示',
+		defaultKey: 0, command: 'sceneSearch-toggleCommentPreview'},
+	{id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
+		defaultKey: 0, command: 'sceneSearch-toggleCommentSearch'},
+	{id: 'SCENE_IDLE_HIDE', category: '画面', label: 'シーンサーチ: 静止中サムネ自動非表示のON/OFF',
+		defaultKey: 0, command: 'sceneSearch-toggleIdleHide'},
 	{id: 'OPEN_NICOAD', category: 'その他', label: 'ニコニ広告で宣伝',
 		defaultKey: 0, command: 'open-uad'},
 	{id: 'OPEN_TWITTER_HASH', category: 'その他', label: 'twitterの反応を見る',
@@ -3019,6 +3043,20 @@ class UiVisibilityRegistry {
 				description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
 			{key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
 				description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
+			{key:'ui.scene.panel',scope:'scene',label:'シーンサーチのプレビュー枠',
+				icon:'▣',selector:'.zenzaSceneSearchHost'},
+			{key:'ui.scene.pin',scope:'scene',label:'シーンサーチのピン固定ボタン',
+				icon:'📌',selector:'.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]'},
+			{key:'ui.scene.seekArrows',scope:'scene',label:'シーンサーチの前後矢印',
+				icon:'↔',selector:'.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]'},
+			{key:'ui.scene.seekSeconds',scope:'scene',label:'シーンサーチの移動秒数ボタン',
+				icon:'5s',selector:'.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]'},
+			{key:'ui.scene.commentToggle',scope:'scene',label:'シーンサーチのコメント表示切替ボタン',
+				icon:'💬',selector:'.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]'},
+			{key:'ui.scene.commentSearch',scope:'scene',label:'シーンサーチのコメント検索ボタン',
+				icon:'⌕',selector:'.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]'},
+			{key:'ui.scene.more',scope:'scene',label:'シーンサーチの操作メニュー展開ボタン',
+				icon:'⋯',selector:'.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]'},
 			{key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
 			{key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
 			{key:'ui.info.series',scope:'info',label:'シリーズ情報',icon:'▤',selector:'.seriesList'},
@@ -3074,6 +3112,12 @@ class UiVisibilityRegistry {
 					priority:node.style.getPropertyPriority('display'),
 					hidden:node.hidden
 				});
+				node.hidden=true;
+				node.style.setProperty('display','none','important');
+				changed++;
+			}else if(!visible && saved && (node.hidden!==true ||
+				node.style.getPropertyValue('display')!=='none' ||
+				node.style.getPropertyPriority('display')!=='important')){
 				node.hidden=true;
 				node.style.setProperty('display','none','important');
 				changed++;
@@ -3821,6 +3865,16 @@ const Config = (() => {
 		DEFAULT_CONFIG['uaa.enable'] = false;
 	}
 	Object.assign(DEFAULT_CONFIG, UiVisibilityRegistry.defaults());
+	Object.assign(DEFAULT_CONFIG, {
+		'sceneSearch.layout.normal': '01',
+		'sceneSearch.layout.fullscreen': '01',
+		'sceneSearch.layout.linkFullscreen': false,
+		'sceneSearch.seekStepSeconds': 5,
+		'sceneSearch.idleHideSeconds': 2,
+		'sceneSearch.controlsReveal': 'hover-focus',
+		'sceneSearch.animation': 'subtle',
+		'sceneSearch.commentPreviewVisible': true
+	});
 	Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
 	for (let i = 1; i <= 10; i++) {
 		DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
@@ -3835,6 +3889,28 @@ const Config = (() => {
 				return value;
 			},
 			validateImport: (key, value) => {
+				if (key === 'sceneSearch.layout.normal' ||
+						key === 'sceneSearch.layout.fullscreen') {
+					return typeof value === 'string' && /^(0[1-9]|10)$/.test(value);
+				}
+				if (key === 'sceneSearch.layout.linkFullscreen' ||
+						key === 'sceneSearch.commentPreviewVisible') {
+					return typeof value === 'boolean';
+				}
+				if (key === 'sceneSearch.seekStepSeconds') {
+					return Number.isSafeInteger(value) && value >= 0 && value <= 600;
+				}
+				if (key === 'sceneSearch.idleHideSeconds') {
+					return typeof value === 'number' && Number.isFinite(value) &&
+						value >= 0 && value <= 30 && Number.isInteger(value * 2);
+				}
+				if (key === 'sceneSearch.controlsReveal') {
+					return ['hover-focus', 'click', 'always'].includes(value);
+				}
+				if (key === 'sceneSearch.animation') {
+					return ['off', 'subtle', 'full'].includes(value);
+				}
+				if (key.startsWith('sceneSearch.')) { return false; }
 				if (key === 'ngComposite.rules') {
 					return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
 						Array.isArray(value)&&value.length===0;
@@ -6683,6 +6759,42 @@ class ModernAdvancedSettingsModel {
 				['enableStoryboardBar','シーンサーチバーを表示'],
 				['menuScale','操作メニューの拡大率',{type:'number'}]
 			]),
+			...group('画面・映像','シーンサーチ',[
+				['sceneSearch.layout.normal','通常表示のシーンサーチUI',{
+					...select([
+						['01','01 クラシック追従'],['02','02 左右ツインパネル'],
+						['03','03 サイドシェルフ'],['04','04 トップエッジ'],
+						['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
+						['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
+						['09','09 分離リモコン'],['10','10 スマート自動回避']
+					]),description:'通常時のレイアウトです。動画の再生位置や設定値は変更しません。'}],
+				['sceneSearch.layout.linkFullscreen','フルスクリーンも通常表示と同じUIを使う',{
+					description:'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'}],
+				['sceneSearch.layout.fullscreen','フルスクリーン時のシーンサーチUI',{
+					...select([
+						['01','01 クラシック追従'],['02','02 左右ツインパネル'],
+						['03','03 サイドシェルフ'],['04','04 トップエッジ'],
+						['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
+						['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
+						['09','09 分離リモコン'],['10','10 スマート自動回避']
+					]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
+				['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
+					type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
+				['sceneSearch.commentPreviewVisible','コメントプレビューを表示',{
+					description:'表示そのもののON/OFFです。「コメント一覧」内の既存のホバー／一覧モード設定とは独立しています。'}],
+				['sceneSearch.controlsReveal','追加ボタンの開き方',{
+					...select([
+						['hover-focus','マウスを乗せるかフォーカスで開く'],
+						['click','クリックで開く'],['always','常に表示']
+					])}],
+				['sceneSearch.animation','UIのアニメーション',{
+					...select([
+						['off','無効（動きなし）'],['subtle','控えめ（推奨）'],['full','通常']
+					])}],
+				['sceneSearch.idleHideSeconds','サムネイルを自動で隠すまでの時間',{
+					...slider(0,30,0.5),unit:'秒',
+					description:'シークバー上にマウスを置き続けたとき、同じサムネイルを表示する時間です。既定2秒。0秒にすると自動非表示を無効化します。ピン固定・ドラッグ・ボタン操作中は隠しません。'}]
+			]),
 			...group('画面・映像','スクリーンショット',[
 				['screenshot.prefix','保存ファイル名の先頭に追加する文字',{type:'text',
 					description:'任意の文字に加え {date}（保存日）や {watchId}（動画ID）などの変数も使えます。'}],
@@ -6707,7 +6819,8 @@ class ModernAdvancedSettingsModel {
 			...group('コメント表示','コメント一覧',[
 				['enableCommentPanel','コメント一覧を表示'],
 				['enableCommentPanelAutoScroll','コメント一覧を自動スクロール'],
-				['enableCommentPreview','コメントプレビューを有効化']
+				['enableCommentPreview','コメントプレビューを一覧モードに切り替える',{
+					description:'OFFはホバー時に流れるコメント表示、ONはスクロールできるコメント一覧です。完全に非表示にする場合は「画面・映像 > シーンサーチ」の表示設定を使います。'}]
 			]),
 			...group('コメント表示','文字・装飾',[
 				['commentLanguage','コメントの言語',select([
@@ -6838,7 +6951,7 @@ class ModernAdvancedSettingsModel {
 	static subcategoryPriority(category,subcategory) {
 		const order={
 			'再生・音声':['再生動作','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
-			'画面・映像':['表示モード','動画ヘッダー','プレイヤーの操作表示','表示・非表示','画面フィルター','スクリーンショット'],
+			'画面・映像':['表示モード','動画ヘッダー','プレイヤーの操作表示','シーンサーチ','表示・非表示','画面フィルター','スクリーンショット'],
 			'コメント表示':['表示・配置','コメント一覧','文字・装飾','追加取得'],
 			'NG・表示対象':['NG条件','コメント種別','動画の除外'],
 			'プレイリスト・検索':['プレイリスト','検索','リンク・移動',
@@ -7106,6 +7219,8 @@ class ModernAdvancedSettingsModel {
 		return this;
 	}
 	isEnabled(id) {
+		if(id==='sceneSearch.layout.fullscreen' &&
+			this.get('sceneSearch.layout.linkFullscreen')===true){return false;}
 		const d=this.descriptor(id);
 		return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
 			!!this.draft[d.dependsOn];
@@ -7431,6 +7546,33 @@ class ModernAdvancedSettingsUI {
 			'.zw-order-inspector .is-detail-only .rl-toolbar>button,.zw-order-inspector .is-detail-only [data-rl-count],.zw-order-inspector .is-detail-only .zenzaRelatedLinksEditor>.rl-help { display:none; }',
 			'.zw-order-inspector textarea,.zw-order-inspector select,.zw-order-inspector input[type=text] { max-width:100%; min-width:0!important; width:100%; box-sizing:border-box; }',
 			'.zw-order-inspector [data-rl-preview] { white-space:pre-wrap; }',
+			/* SCUI-10: miniature diagrams are layout previews only: no duplicate video players. */
+			'.zw-scui-picker { padding:14px; margin-bottom:13px; border:1px solid #4b6079; border-radius:12px; background:#182536; }',
+			'.zw-scui-pickerhead { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:12px; }',
+			'.zw-scui-tabs { display:flex; gap:5px; background:#101d2e; padding:4px; border-radius:9px; }',
+			'.zw-scui-tabs button { border:1px solid transparent; border-radius:6px; padding:8px 10px; color:#ddd; background:transparent; cursor:pointer; }',
+			'.zw-scui-tabs button[aria-pressed=true] { background:#45698b; border-color:#8bb9e7; color:#fff; }',
+			'.zw-scui-layout-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(142px,1fr)); gap:8px; }',
+			'.zw-scui-layout-option { display:flex; flex-direction:column; gap:5px; background:#101a2a; border:2px solid #35475f; border-radius:9px; color:#ddd; padding:8px; text-align:left; cursor:pointer; min-width:0; }',
+			'.zw-scui-layout-option[aria-pressed=true] { border-color:#76c9ff; background:#1b3654; box-shadow:0 0 0 1px #76c9ff60; }',
+			'.zw-scui-layout-option:focus-visible,.zw-scui-tabs button:focus-visible { outline:2px solid #e5c075; outline-offset:2px; }',
+			'.zw-scui-layout-option:disabled { opacity:.48; cursor:not-allowed; }',
+			'.zw-scui-layout-option strong { font-size:11px; white-space:normal; line-height:1.35; }',
+			'.zw-scui-mini { position:relative; display:block; height:62px; background:linear-gradient(135deg,#4d6486,#1c2842); border:1px solid #65768d; border-radius:6px; overflow:hidden; }',
+			'.zw-scui-mini > i { position:absolute; display:block; background:#0c1725; border:1px solid #8ab8de; border-radius:3px; width:38%; height:22px; bottom:8px; left:30%; }',
+			'.zw-scui-mini > b { position:absolute; display:block; background:#1b3560a8; border:1px solid #a4b7d0; border-radius:3px; width:29%; height:16px; bottom:9px; left:8px; }',
+			'.zw-scui-mini > em { position:absolute; display:block; background:#6faee4; height:3px; bottom:3px; width:66%; left:17%; }',
+			'.zw-scui-mini[data-layout="02"] > i { left:6px; bottom:18px; } .zw-scui-mini[data-layout="02"] > b { left:auto; right:6px; bottom:18px; }',
+			'.zw-scui-mini[data-layout="03"] > i { left:auto; right:6px; bottom:9px; }',
+			'.zw-scui-mini[data-layout="04"] > i { left:31%; bottom:auto; top:5px; }',
+			'.zw-scui-mini[data-layout="05"] > i { width:85%; left:7%; height:21px; bottom:9px; }',
+			'.zw-scui-mini[data-layout="06"] > i { width:25%; left:37%; height:17px; }',
+			'.zw-scui-mini[data-layout="07"] > i { width:25%; left:37%; } .zw-scui-mini[data-layout="07"] > b { width:23%; left:7%; }',
+			'.zw-scui-mini[data-layout="08"] > i { left:auto; right:3px; width:27%; height:51px; bottom:5px; }',
+			'.zw-scui-mini[data-layout="09"] > i { left:10%; bottom:14px; } .zw-scui-mini[data-layout="09"] > b { right:5%; left:auto; }',
+			'.zw-scui-mini[data-layout="10"] > i { left:62%; bottom:24px; width:31%; } .zw-scui-mini[data-layout="10"] > b { left:13%; bottom:8px; }',
+			'.zw-scui-note { display:block; font-size:12px; line-height:1.5; color:#bdcfe0; padding-top:9px; }',
+			'@media(max-width:760px) {.zw-scui-layout-grid { grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); }}',
 			'@media(max-width:1050px) { .zw-order-workspace { grid-template-columns:minmax(0,1fr); } .zw-order-inspector { position:static; max-height:none; } }',
 			'@media(max-width:760px) {.zw-modern-sidebar { position:absolute; top:0; bottom:0; left:0; z-index:5; width:min(290px,88vw); flex-basis:auto; transform:translateX(-100%); box-shadow:6px 0 22px #0007; padding:12px; } .zw-modern-root.is-drawer-open .zw-modern-sidebar { transform:translateX(0); } .zw-modern-root.is-drawer-open .zw-modern-backdrop { display:block; background:#0008; position:absolute; inset:0; z-index:4; } .zw-modern-main { padding:15px 11px; } .zw-modern-card { padding:10px; } .zw-modern-footer { padding:9px; } .zw-modern-footer .zw-modern-dirty { font-size:11px; }}'
 		].join('\n');
@@ -7478,6 +7620,7 @@ class ModernAdvancedSettingsUI {
 		this._moved=new Map();
 		this._seekDirections=new Map();
 		this._visibleSeekSlots=new Set();
+		this._sceneLayoutTab='normal';
 		this._recordCleanup=null;
 		this.searchTerm='';
 		this._setupSelection();
@@ -8627,6 +8770,59 @@ class ModernAdvancedSettingsUI {
 			Number(this.model.get('KEY_CUSTOM_SEEK_'+n))!==0 ||
 			Number(this.model.get('PARAM_CUSTOM_SEEK_'+n))!==0);
 	}
+	_createSceneLayoutPicker() {
+		const wrap=this.doc.createElement('section');
+		wrap.className='zw-scui-picker';
+		wrap.dataset.zwSceneLayoutGallery='';
+		wrap.setAttribute('aria-label','シーンサーチのレイアウトを選択');
+		const header=this.doc.createElement('div');
+		header.className='zw-scui-pickerhead';
+		const heading=this.doc.createElement('strong');
+		heading.textContent='表示モードごとのUIデザイン';
+		const tabs=this.doc.createElement('div');
+		tabs.className='zw-scui-tabs';
+		tabs.setAttribute('role','group');
+		tabs.setAttribute('aria-label','デザインを設定する画面モード');
+		for(const [mode,label] of [['normal','通常表示'],['fullscreen','フルスクリーン']]){
+			const b=this._button(label,'data-zw-scene-layout-mode',mode);
+			b.setAttribute('aria-pressed',String(this._sceneLayoutTab===mode));
+			tabs.append(b);
+		}
+		header.append(heading,tabs);
+		wrap.append(header);
+		const mode=this._sceneLayoutTab;
+		const key='sceneSearch.layout.'+mode;
+		const current=String(this.model.get(key)||'01');
+		const linked=mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')===true;
+		const grid=this.doc.createElement('div');
+		grid.className='zw-scui-layout-grid';
+		grid.setAttribute('role','group');
+		grid.setAttribute('aria-label',mode==='fullscreen'?'全画面の10案':'通常表示の10案');
+		const descriptor=this.model.descriptor(key);
+		for(const option of descriptor?.options||[]){
+			const b=this._button('','data-zw-scene-layout',option.value,'zw-scui-layout-option');
+			b.dataset.zwSceneLayoutMode=mode;
+			b.setAttribute('aria-pressed',String(current===option.value));
+			b.setAttribute('aria-label',option.label+(current===option.value?' 選択中':''));
+			b.disabled=linked;
+			const mini=this.doc.createElement('span');
+			mini.className='zw-scui-mini';
+			mini.dataset.layout=option.value;
+			mini.innerHTML='<i></i><b></b><em></em>';
+			const label=this.doc.createElement('strong');
+			label.textContent=option.label;
+			b.append(mini,label);
+			grid.append(b);
+		}
+		wrap.append(grid);
+		const note=this.doc.createElement('small');
+		note.className='zw-scui-note';
+		note.textContent=linked?
+			'「通常表示と同じUIを使う」がONです。全画面用の保存値は保持しています。設定をOFFにすると変更できます。':
+			'選択は未保存の編集です。実際の映像は切り替えず、画面下部の「変更を保存」で確定します。';
+		wrap.append(note);
+		return wrap;
+	}
 	_renderCards() {
 		this._clearTouchOrder();
 		this._ngCompositeEditor?.dispose();
@@ -8669,13 +8865,19 @@ class ModernAdvancedSettingsUI {
 		const rows=[];
 		const visibilityMode=!this.searchTerm && this.selected.category==='画面・映像' &&
 			this.selected.subcategory==='表示・非表示';
+		const sceneSection=!this.searchTerm && this.selected.category==='画面・映像' &&
+			this.selected.subcategory==='シーンサーチ';
 		const groupNames={
 			hover:'動画の上に重なるボタン',related:'関連メニュー',comment:'コメント入力',
+			scene:'シーンサーチの操作ボタン',
 			bar:'再生操作バー',info:'動画情報パネル',header:'動画上部のヘッダー',
 			shared:'コメント・補助表示（元の設定画面と共通）'
 		};
 		let lastScope=null;
 		for(const d of visibleEntries.filter(item=>item.type!=='related-visibility')){
+			if(sceneSection && ['sceneSearch.layout.normal','sceneSearch.layout.fullscreen'].includes(d.id)){
+				continue; // One canonical draft; the visual gallery replaces redundant select cards.
+			}
 			if(visibilityMode && d.visibilityScope && d.visibilityScope!==lastScope){
 				const heading=this.doc.createElement('h4');
 				heading.className='zw-modern-visibility-group';
@@ -8686,6 +8888,7 @@ class ModernAdvancedSettingsUI {
 			}
 			rows.push(this._createCard(d));
 		}
+		if(sceneSection){rows.unshift(this._createSceneLayoutPicker());}
 		if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
 			this.selected.subcategory==='検索') {
 			const guide=this.doc.createElement('section');
@@ -8934,7 +9137,11 @@ class ModernAdvancedSettingsUI {
 		try {this.model.set(key,key==='userIdFilter'?
 			ModernAdvancedSettingsUI._formatNgUserIds(value):value);}
 		catch(error){this.win.console?.warn?.('Advanced settings input rejected',error);}
-		this._refreshCards();
+		if(key==='sceneSearch.layout.linkFullscreen'){
+			this._renderCards();this._refreshFooter();
+		}else{
+			this._refreshCards();
+		}
 		return true;
 	}
 	_setBuiltinOptionDraft(id,field,value) {
@@ -9016,6 +9223,25 @@ class ModernAdvancedSettingsUI {
 		}
 		const button=e.target.closest('button');
 		if(!button||!this.root.contains(button)||button.disabled){return;}
+		if(button.hasAttribute('data-zw-scene-layout-mode') &&
+			!button.hasAttribute('data-zw-scene-layout')){
+			const mode=button.dataset.zwSceneLayoutMode;
+			if(['normal','fullscreen'].includes(mode)){
+				this._sceneLayoutTab=mode;
+				this._renderCards();this._refreshFooter();
+			}
+			return;
+		}
+		if(button.hasAttribute('data-zw-scene-layout')){
+			const id=button.dataset.zwSceneLayout;
+			const mode=button.dataset.zwSceneLayoutMode;
+			if(!/^(0[1-9]|10)$/.test(id)||!['normal','fullscreen'].includes(mode) ||
+				mode!==this._sceneLayoutTab){return;}
+			if(mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')){return;}
+			this.model.set('sceneSearch.layout.'+mode,id);
+			this._renderCards();this._refreshFooter();
+			return;
+		}
 		if(button.hasAttribute('data-zw-order-add-link') || button.hasAttribute('data-zw-order-add-copy')){
 			const kind=button.hasAttribute('data-zw-order-add-copy')?'copy':'link';
 			const id=this.relatedEditor?.addItem(kind);

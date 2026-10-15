@@ -214,6 +214,33 @@ class ModernAdvancedSettingsUI {
       '.zw-order-inspector .is-detail-only .rl-toolbar>button,.zw-order-inspector .is-detail-only [data-rl-count],.zw-order-inspector .is-detail-only .zenzaRelatedLinksEditor>.rl-help { display:none; }',
       '.zw-order-inspector textarea,.zw-order-inspector select,.zw-order-inspector input[type=text] { max-width:100%; min-width:0!important; width:100%; box-sizing:border-box; }',
       '.zw-order-inspector [data-rl-preview] { white-space:pre-wrap; }',
+      /* SCUI-10: miniature diagrams are layout previews only: no duplicate video players. */
+      '.zw-scui-picker { padding:14px; margin-bottom:13px; border:1px solid #4b6079; border-radius:12px; background:#182536; }',
+      '.zw-scui-pickerhead { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:12px; }',
+      '.zw-scui-tabs { display:flex; gap:5px; background:#101d2e; padding:4px; border-radius:9px; }',
+      '.zw-scui-tabs button { border:1px solid transparent; border-radius:6px; padding:8px 10px; color:#ddd; background:transparent; cursor:pointer; }',
+      '.zw-scui-tabs button[aria-pressed=true] { background:#45698b; border-color:#8bb9e7; color:#fff; }',
+      '.zw-scui-layout-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(142px,1fr)); gap:8px; }',
+      '.zw-scui-layout-option { display:flex; flex-direction:column; gap:5px; background:#101a2a; border:2px solid #35475f; border-radius:9px; color:#ddd; padding:8px; text-align:left; cursor:pointer; min-width:0; }',
+      '.zw-scui-layout-option[aria-pressed=true] { border-color:#76c9ff; background:#1b3654; box-shadow:0 0 0 1px #76c9ff60; }',
+      '.zw-scui-layout-option:focus-visible,.zw-scui-tabs button:focus-visible { outline:2px solid #e5c075; outline-offset:2px; }',
+      '.zw-scui-layout-option:disabled { opacity:.48; cursor:not-allowed; }',
+      '.zw-scui-layout-option strong { font-size:11px; white-space:normal; line-height:1.35; }',
+      '.zw-scui-mini { position:relative; display:block; height:62px; background:linear-gradient(135deg,#4d6486,#1c2842); border:1px solid #65768d; border-radius:6px; overflow:hidden; }',
+      '.zw-scui-mini > i { position:absolute; display:block; background:#0c1725; border:1px solid #8ab8de; border-radius:3px; width:38%; height:22px; bottom:8px; left:30%; }',
+      '.zw-scui-mini > b { position:absolute; display:block; background:#1b3560a8; border:1px solid #a4b7d0; border-radius:3px; width:29%; height:16px; bottom:9px; left:8px; }',
+      '.zw-scui-mini > em { position:absolute; display:block; background:#6faee4; height:3px; bottom:3px; width:66%; left:17%; }',
+      '.zw-scui-mini[data-layout="02"] > i { left:6px; bottom:18px; } .zw-scui-mini[data-layout="02"] > b { left:auto; right:6px; bottom:18px; }',
+      '.zw-scui-mini[data-layout="03"] > i { left:auto; right:6px; bottom:9px; }',
+      '.zw-scui-mini[data-layout="04"] > i { left:31%; bottom:auto; top:5px; }',
+      '.zw-scui-mini[data-layout="05"] > i { width:85%; left:7%; height:21px; bottom:9px; }',
+      '.zw-scui-mini[data-layout="06"] > i { width:25%; left:37%; height:17px; }',
+      '.zw-scui-mini[data-layout="07"] > i { width:25%; left:37%; } .zw-scui-mini[data-layout="07"] > b { width:23%; left:7%; }',
+      '.zw-scui-mini[data-layout="08"] > i { left:auto; right:3px; width:27%; height:51px; bottom:5px; }',
+      '.zw-scui-mini[data-layout="09"] > i { left:10%; bottom:14px; } .zw-scui-mini[data-layout="09"] > b { right:5%; left:auto; }',
+      '.zw-scui-mini[data-layout="10"] > i { left:62%; bottom:24px; width:31%; } .zw-scui-mini[data-layout="10"] > b { left:13%; bottom:8px; }',
+      '.zw-scui-note { display:block; font-size:12px; line-height:1.5; color:#bdcfe0; padding-top:9px; }',
+      '@media(max-width:760px) {.zw-scui-layout-grid { grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); }}',
       '@media(max-width:1050px) { .zw-order-workspace { grid-template-columns:minmax(0,1fr); } .zw-order-inspector { position:static; max-height:none; } }',
       '@media(max-width:760px) {.zw-modern-sidebar { position:absolute; top:0; bottom:0; left:0; z-index:5; width:min(290px,88vw); flex-basis:auto; transform:translateX(-100%); box-shadow:6px 0 22px #0007; padding:12px; } .zw-modern-root.is-drawer-open .zw-modern-sidebar { transform:translateX(0); } .zw-modern-root.is-drawer-open .zw-modern-backdrop { display:block; background:#0008; position:absolute; inset:0; z-index:4; } .zw-modern-main { padding:15px 11px; } .zw-modern-card { padding:10px; } .zw-modern-footer { padding:9px; } .zw-modern-footer .zw-modern-dirty { font-size:11px; }}'
     ].join('\n');
@@ -263,6 +290,7 @@ class ModernAdvancedSettingsUI {
     // Empty custom seek slots are hidden until the user chooses Add.
     // No placeholder configuration keys are written to storage.
     this._visibleSeekSlots=new Set();
+    this._sceneLayoutTab='normal';
     this._recordCleanup=null;
     this.searchTerm='';
     this._setupSelection();
@@ -1431,6 +1459,60 @@ class ModernAdvancedSettingsUI {
       Number(this.model.get('KEY_CUSTOM_SEEK_'+n))!==0 ||
       Number(this.model.get('PARAM_CUSTOM_SEEK_'+n))!==0);
   }
+  _createSceneLayoutPicker() {
+    const wrap=this.doc.createElement('section');
+    wrap.className='zw-scui-picker';
+    wrap.dataset.zwSceneLayoutGallery='';
+    wrap.setAttribute('aria-label','シーンサーチのレイアウトを選択');
+    const header=this.doc.createElement('div');
+    header.className='zw-scui-pickerhead';
+    const heading=this.doc.createElement('strong');
+    heading.textContent='表示モードごとのUIデザイン';
+    const tabs=this.doc.createElement('div');
+    tabs.className='zw-scui-tabs';
+    tabs.setAttribute('role','group');
+    tabs.setAttribute('aria-label','デザインを設定する画面モード');
+    for(const [mode,label] of [['normal','通常表示'],['fullscreen','フルスクリーン']]){
+      const b=this._button(label,'data-zw-scene-layout-mode',mode);
+      b.setAttribute('aria-pressed',String(this._sceneLayoutTab===mode));
+      tabs.append(b);
+    }
+    header.append(heading,tabs);
+    wrap.append(header);
+    const mode=this._sceneLayoutTab;
+    const key='sceneSearch.layout.'+mode;
+    const current=String(this.model.get(key)||'01');
+    const linked=mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')===true;
+    const grid=this.doc.createElement('div');
+    grid.className='zw-scui-layout-grid';
+    grid.setAttribute('role','group');
+    grid.setAttribute('aria-label',mode==='fullscreen'?'全画面の10案':'通常表示の10案');
+    const descriptor=this.model.descriptor(key);
+    for(const option of descriptor?.options||[]){
+      const b=this._button('','data-zw-scene-layout',option.value,'zw-scui-layout-option');
+      b.dataset.zwSceneLayoutMode=mode;
+      b.setAttribute('aria-pressed',String(current===option.value));
+      b.setAttribute('aria-label',option.label+(current===option.value?' 選択中':''));
+      b.disabled=linked;
+      const mini=this.doc.createElement('span');
+      mini.className='zw-scui-mini';
+      mini.dataset.layout=option.value;
+      // Diagrams use static primitives, not running video/image network calls.
+      mini.innerHTML='<i></i><b></b><em></em>';
+      const label=this.doc.createElement('strong');
+      label.textContent=option.label;
+      b.append(mini,label);
+      grid.append(b);
+    }
+    wrap.append(grid);
+    const note=this.doc.createElement('small');
+    note.className='zw-scui-note';
+    note.textContent=linked?
+      '「通常表示と同じUIを使う」がONです。全画面用の保存値は保持しています。設定をOFFにすると変更できます。':
+      '選択は未保存の編集です。実際の映像は切り替えず、画面下部の「変更を保存」で確定します。';
+    wrap.append(note);
+    return wrap;
+  }
   _renderCards() {
     this._clearTouchOrder();
     this._ngCompositeEditor?.dispose();
@@ -1474,13 +1556,19 @@ class ModernAdvancedSettingsUI {
     const rows=[];
     const visibilityMode=!this.searchTerm && this.selected.category==='画面・映像' &&
       this.selected.subcategory==='表示・非表示';
+    const sceneSection=!this.searchTerm && this.selected.category==='画面・映像' &&
+      this.selected.subcategory==='シーンサーチ';
     const groupNames={
       hover:'動画の上に重なるボタン',related:'関連メニュー',comment:'コメント入力',
+      scene:'シーンサーチの操作ボタン',
       bar:'再生操作バー',info:'動画情報パネル',header:'動画上部のヘッダー',
       shared:'コメント・補助表示（元の設定画面と共通）'
     };
     let lastScope=null;
     for(const d of visibleEntries.filter(item=>item.type!=='related-visibility')){
+      if(sceneSection && ['sceneSearch.layout.normal','sceneSearch.layout.fullscreen'].includes(d.id)){
+        continue; // One canonical draft; the visual gallery replaces redundant select cards.
+      }
       if(visibilityMode && d.visibilityScope && d.visibilityScope!==lastScope){
         const heading=this.doc.createElement('h4');
         heading.className='zw-modern-visibility-group';
@@ -1491,6 +1579,7 @@ class ModernAdvancedSettingsUI {
       }
       rows.push(this._createCard(d));
     }
+    if(sceneSection){rows.unshift(this._createSceneLayoutPicker());}
     if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
       this.selected.subcategory==='検索') {
       const guide=this.doc.createElement('section');
@@ -1741,7 +1830,11 @@ class ModernAdvancedSettingsUI {
     try {this.model.set(key,key==='userIdFilter'?
       ModernAdvancedSettingsUI._formatNgUserIds(value):value);}
     catch(error){this.win.console?.warn?.('Advanced settings input rejected',error);}
-    this._refreshCards();
+    if(key==='sceneSearch.layout.linkFullscreen'){
+      this._renderCards();this._refreshFooter();
+    }else{
+      this._refreshCards();
+    }
     return true;
   }
   _setBuiltinOptionDraft(id,field,value) {
@@ -1823,6 +1916,25 @@ class ModernAdvancedSettingsUI {
     }
     const button=e.target.closest('button');
     if(!button||!this.root.contains(button)||button.disabled){return;}
+    if(button.hasAttribute('data-zw-scene-layout-mode') &&
+       !button.hasAttribute('data-zw-scene-layout')){
+      const mode=button.dataset.zwSceneLayoutMode;
+      if(['normal','fullscreen'].includes(mode)){
+        this._sceneLayoutTab=mode;
+        this._renderCards();this._refreshFooter();
+      }
+      return;
+    }
+    if(button.hasAttribute('data-zw-scene-layout')){
+      const id=button.dataset.zwSceneLayout;
+      const mode=button.dataset.zwSceneLayoutMode;
+      if(!/^(0[1-9]|10)$/.test(id)||!['normal','fullscreen'].includes(mode) ||
+         mode!==this._sceneLayoutTab){return;}
+      if(mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')){return;}
+      this.model.set('sceneSearch.layout.'+mode,id);
+      this._renderCards();this._refreshFooter();
+      return;
+    }
     if(button.hasAttribute('data-zw-order-add-link') || button.hasAttribute('data-zw-order-add-copy')){
       const kind=button.hasAttribute('data-zw-order-add-copy')?'copy':'link';
       const id=this.relatedEditor?.addItem(kind);

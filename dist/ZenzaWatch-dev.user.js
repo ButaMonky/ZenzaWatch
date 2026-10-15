@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-13 09:28Z 6803d50
+// build: 2026-10-15 08:22Z 0797487
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-13 09:28Z 6803d50';
+    var BUILD = '2026-10-15 08:22Z 0797487';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -1027,6 +1027,30 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'toggle-removeNgMatchedUser'},
 	{id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'コメント欄プレビュー ON/OFF',
 		defaultKey: 0, command: 'toggle-enableCommentPreview'},
+	{id: 'SCENE_PIN', category: '画面', label: 'シーンサーチ: プレビューの固定/解除',
+		defaultKey: 0, command: 'sceneSearch-togglePin'},
+	{id: 'SCENE_SHOW', category: '画面', label: 'シーンサーチ: 表示/非表示',
+		defaultKey: 0, command: 'sceneSearch-togglePanel'},
+	{id: 'SCENE_CONTROLS', category: '画面', label: 'シーンサーチ: 操作ボタンを展開/収納',
+		defaultKey: 0, command: 'sceneSearch-toggleControls'},
+	{id: 'SCENE_LAYOUT_NEXT', category: '画面', label: 'シーンサーチ: 次のレイアウト',
+		defaultKey: 0, command: 'sceneSearch-nextLayout'},
+	{id: 'SCENE_LAYOUT_PREV', category: '画面', label: 'シーンサーチ: 前のレイアウト',
+		defaultKey: 0, command: 'sceneSearch-prevLayout'},
+	{id: 'SCENE_SEEK_BACK', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ戻る',
+		defaultKey: 0, command: 'sceneSearch-seekBack'},
+	{id: 'SCENE_SEEK_FORWARD', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ進む',
+		defaultKey: 0, command: 'sceneSearch-seekForward'},
+	{id: 'SCENE_STEP_UP', category: 'シーク', label: 'シーンサーチ: 移動秒数を増やす',
+		defaultKey: 0, command: 'sceneSearch-stepUp'},
+	{id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
+		defaultKey: 0, command: 'sceneSearch-stepDown'},
+	{id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメントプレビュー表示/非表示',
+		defaultKey: 0, command: 'sceneSearch-toggleCommentPreview'},
+	{id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
+		defaultKey: 0, command: 'sceneSearch-toggleCommentSearch'},
+	{id: 'SCENE_IDLE_HIDE', category: '画面', label: 'シーンサーチ: 静止中サムネ自動非表示のON/OFF',
+		defaultKey: 0, command: 'sceneSearch-toggleIdleHide'},
 	{id: 'OPEN_NICOAD', category: 'その他', label: 'ニコニ広告で宣伝',
 		defaultKey: 0, command: 'open-uad'},
 	{id: 'OPEN_TWITTER_HASH', category: 'その他', label: 'twitterの反応を見る',
@@ -2898,6 +2922,20 @@ class UiVisibilityRegistry {
 				description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
 			{key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
 				description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
+			{key:'ui.scene.panel',scope:'scene',label:'シーンサーチのプレビュー枠',
+				icon:'▣',selector:'.zenzaSceneSearchHost'},
+			{key:'ui.scene.pin',scope:'scene',label:'シーンサーチのピン固定ボタン',
+				icon:'📌',selector:'.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]'},
+			{key:'ui.scene.seekArrows',scope:'scene',label:'シーンサーチの前後矢印',
+				icon:'↔',selector:'.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]'},
+			{key:'ui.scene.seekSeconds',scope:'scene',label:'シーンサーチの移動秒数ボタン',
+				icon:'5s',selector:'.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]'},
+			{key:'ui.scene.commentToggle',scope:'scene',label:'シーンサーチのコメント表示切替ボタン',
+				icon:'💬',selector:'.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]'},
+			{key:'ui.scene.commentSearch',scope:'scene',label:'シーンサーチのコメント検索ボタン',
+				icon:'⌕',selector:'.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]'},
+			{key:'ui.scene.more',scope:'scene',label:'シーンサーチの操作メニュー展開ボタン',
+				icon:'⋯',selector:'.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]'},
 			{key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
 			{key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
 			{key:'ui.info.series',scope:'info',label:'シリーズ情報',icon:'▤',selector:'.seriesList'},
@@ -2953,6 +2991,12 @@ class UiVisibilityRegistry {
 					priority:node.style.getPropertyPriority('display'),
 					hidden:node.hidden
 				});
+				node.hidden=true;
+				node.style.setProperty('display','none','important');
+				changed++;
+			}else if(!visible && saved && (node.hidden!==true ||
+				node.style.getPropertyValue('display')!=='none' ||
+				node.style.getPropertyPriority('display')!=='important')){
 				node.hidden=true;
 				node.style.setProperty('display','none','important');
 				changed++;
@@ -3700,6 +3744,16 @@ const Config = (() => {
 		DEFAULT_CONFIG['uaa.enable'] = false;
 	}
 	Object.assign(DEFAULT_CONFIG, UiVisibilityRegistry.defaults());
+	Object.assign(DEFAULT_CONFIG, {
+		'sceneSearch.layout.normal': '01',
+		'sceneSearch.layout.fullscreen': '01',
+		'sceneSearch.layout.linkFullscreen': false,
+		'sceneSearch.seekStepSeconds': 5,
+		'sceneSearch.idleHideSeconds': 2,
+		'sceneSearch.controlsReveal': 'hover-focus',
+		'sceneSearch.animation': 'subtle',
+		'sceneSearch.commentPreviewVisible': true
+	});
 	Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
 	for (let i = 1; i <= 10; i++) {
 		DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
@@ -3714,6 +3768,28 @@ const Config = (() => {
 				return value;
 			},
 			validateImport: (key, value) => {
+				if (key === 'sceneSearch.layout.normal' ||
+						key === 'sceneSearch.layout.fullscreen') {
+					return typeof value === 'string' && /^(0[1-9]|10)$/.test(value);
+				}
+				if (key === 'sceneSearch.layout.linkFullscreen' ||
+						key === 'sceneSearch.commentPreviewVisible') {
+					return typeof value === 'boolean';
+				}
+				if (key === 'sceneSearch.seekStepSeconds') {
+					return Number.isSafeInteger(value) && value >= 0 && value <= 600;
+				}
+				if (key === 'sceneSearch.idleHideSeconds') {
+					return typeof value === 'number' && Number.isFinite(value) &&
+						value >= 0 && value <= 30 && Number.isInteger(value * 2);
+				}
+				if (key === 'sceneSearch.controlsReveal') {
+					return ['hover-focus', 'click', 'always'].includes(value);
+				}
+				if (key === 'sceneSearch.animation') {
+					return ['off', 'subtle', 'full'].includes(value);
+				}
+				if (key.startsWith('sceneSearch.')) { return false; }
 				if (key === 'ngComposite.rules') {
 					return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
 						Array.isArray(value)&&value.length===0;
@@ -25525,7 +25601,7 @@ class NicoChatCss3View {
 		return {inline};
 	}
 }
-//@require NgCompositeRules
+// already required
 class NicoChatFilter extends Emitter {
 	constructor(params) {
 		super();
@@ -34292,6 +34368,2806 @@ const OfficialPlayerRoute = Object.freeze({
 		return query != null && query.zenza_official === '1';
 	}
 });
+class SceneSearchLegacyAdapter {
+	constructor({Bridge,classes,registry,controlBar,dialog,document,container,
+		clock,onError,defer}={}) {
+		const seek=controlBar?._seekBar;
+		const cfg=controlBar?._playerConfig;
+		const player=controlBar?.player;
+		if(typeof Bridge!=='function'||!classes||!registry||!seek||
+			!cfg||!player||typeof dialog?.execCommand!=='function'||
+			!document||!container) {
+			throw new TypeError('Legacy scene adapter requires the real seekbar, player, config and commands');
+		}
+		this.Bridge=Bridge;
+		this.classes=classes;
+		this.registry=registry;
+		this.bar=controlBar;
+		this.dialog=dialog;
+		this.document=document;
+		this.container=container;
+		this.clock=clock;
+		this._onError=typeof onError==='function'?onError:()=>{};
+		this._defer=typeof defer==='function'?defer:
+			callback=>Promise.resolve().then(callback);
+		this._bridge=null;
+		this._owners=[];
+		this._generation=0;
+		this._disposed=false;
+	}
+	static seekTime(element,event,duration) {
+		if(!Number.isFinite(duration)||duration<=0){return null;}
+		const rect=element?.getBoundingClientRect?.();
+		if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.width)||
+			rect.width<=0){return null;}
+		const x=event?.clientX;
+		if(!Number.isFinite(x)){return null;}
+		return Math.max(0,Math.min(1,(x-rect.left)/rect.width))*duration;
+	}
+	get seekElement(){return this.bar._seekBar;}
+	get currentVideoId(){
+		return this.bar.player?.watchId||null;
+	}
+	get duration(){
+		for(const n of [this.bar._duration,this.bar.player?.duration,this.dialog?.duration]){
+			if(Number.isFinite(n)&&n>0){return n;}
+		}
+		return 0;
+	}
+	get commentData(){
+		const existing=this.bar._commentPreview?._model?._chatList;
+		if(Array.isArray(existing)){return existing;}
+		const raw=this.bar.player?.chatList;
+		return Array.isArray(raw)?raw:[];
+	}
+	_makeOptions(){
+		const seek=this.seekElement;
+		const legacy=this.bar._seekBarToolTip;
+		return {
+			classes:this.classes,
+			registry:this.registry,
+			document:this.document,
+			container:this.container,
+			seekElement:seek,
+			legacyTooltipElement:legacy?._$view?.[0]||null,
+			getThumbnailElement:()=>legacy?._seekBarThumbnail?._view||null,
+			commentPreviewElement:this.bar._commentPreview?._view?._view||null,
+			config:this.bar._playerConfig,
+			clock:this.clock,
+			getChats:()=>this.commentData,
+			layoutSettings:{getDuration:()=>this.duration},
+			getSeekTime:e=>SceneSearchLegacyAdapter.seekTime(seek,e,this.duration),
+			onSeekRelative:delta=>this.dialog.execCommand('seekBy',delta),
+			onSeekAbsolute:sec=>this.dialog.execCommand('seek',sec),
+			onError:(error,key)=>this._onError(error,key)
+		};
+	}
+	get bridge(){return this._bridge;}
+	_subscribe(owner,event,callback){
+		if(typeof owner?.on!=='function'||typeof owner?.off!=='function'){
+			throw new TypeError('Legacy emitter '+event+' requires on/off lifecycle');
+		}
+		owner.on(event,callback);
+		this._owners.push([owner,event,callback]);
+	}
+	_onStoryboardEvent(){
+		const generation=this._generation;
+		const active=this._bridge;
+		this._defer(()=>{
+			if(this._disposed||this._generation!==generation||this._bridge!==active){return;}
+			this._bridge?.refreshSharedThumbnail?.();
+		});
+	}
+	start(mode='normal'){
+		if(this._disposed){throw new Error('Legacy adapter disposed');}
+		if(this._bridge){return this._bridge;}
+		const bridge=new this.Bridge(this._makeOptions());
+		this._bridge=bridge;
+		try{
+			bridge.start(mode);
+			bridge.setVideo(this.currentVideoId);
+			const player=this.bar.player;
+			this._subscribe(player,'open',watchId=>{
+				if(!this._disposed){bridge.setVideo(watchId);}
+			});
+			this._subscribe(player,'close',()=>{
+				if(!this._disposed){bridge.setVideo(null);}
+			});
+			const storyboard=this.bar.storyboard;
+			if(storyboard){
+				this._subscribe(storyboard,'update',()=>this._onStoryboardEvent());
+				this._subscribe(storyboard,'reset',()=>this._onStoryboardEvent());
+			}
+		}catch(error){
+			this.dispose();
+			throw error;
+		}
+		return bridge;
+	}
+	screenModeChanged(mode){
+		if(this._disposed||!this._bridge){return false;}
+		this._generation++; // obsolete outstanding storyboard async notifications
+		this._bridge.setMode(mode==='fullscreen'?'fullscreen':'normal');
+		this._bridge.refreshSharedThumbnail?.();
+		return true;
+	}
+	dispose(){
+		if(this._disposed){return;}
+		this._disposed=true;
+		this._generation++;
+		for(const [owner,event,callback] of this._owners){
+			try{owner.off(event,callback);}
+			catch(error){this._onError(error,'unsubscribe:'+event);}
+		}
+		this._owners.length=0;
+		this._bridge?.dispose();
+		this._bridge=null;
+	}
+}
+class SceneSearchIntegrationBridge {
+	constructor({classes,document,container,seekElement,commentPreviewElement,
+		legacyTooltipElement,getThumbnailElement,config,registry,clock,layoutSettings,
+		getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError}={}) {
+		if(!document||!container||!seekElement||!config||!registry||
+			typeof config.getValue!=='function'||typeof config.setValue!=='function'||
+			typeof onSeekRelative!=='function'||typeof onSeekAbsolute!=='function'){
+			throw new TypeError('Scene search integration requires DOM, config, registry and seek callbacks');
+		}
+		const required=['Controller','Interaction','IdleLimiter','SeekStepControl',
+			'CommentSearch','CommentSearchPanel','ShortcutRouter','VisibilityRegistry'];
+		if(!classes||required.some(name=>typeof classes[name]!=='function'&&
+			!(name==='VisibilityRegistry'&&typeof classes[name]?.connect==='function'))){
+			throw new TypeError('Missing scene-search integration dependencies');
+		}
+		this.document=document;
+		this.container=container;
+		this.seekElement=seekElement;
+		this._commentPreviewElement=commentPreviewElement||null;
+		this._commentPreviewOriginal=null;
+		this._legacyTooltipElement=legacyTooltipElement||null;
+		this._legacyTooltipOriginal=null;
+		this._getThumbnailElement=typeof getThumbnailElement==='function'?
+			getThumbnailElement:null;
+		this._sharedThumbnail=null;
+		this.config=config;
+		this.registry=registry;
+		this.layoutSettings=layoutSettings||{};
+		this._clock=clock||null;
+		this._classes=classes;
+		this._getChats=typeof getChats==='function'?getChats:()=>[];
+		this._getSeekTime=typeof getSeekTime==='function'?getSeekTime:null;
+		this._onSeekRelative=onSeekRelative;
+		this._onSeekAbsolute=onSeekAbsolute;
+		this._onError=typeof onError==='function'?onError:()=>{};
+		this._active=null;
+		this._cardCleanup=null;
+		this._visibility=null;
+		this._subscriptions=[];
+		this._activePointers=new Set();
+		this._onPointerFinish=this._finishPointer.bind(this);
+		this._running=false;
+		this._disposed=false;
+		this._style=null;
+		this._seekListeners={
+			mouseenter:e=>this.interaction.seekEnter(e),
+			mousemove:e=>{
+				this.interaction.seekMove(e);
+				const seconds=this._getSeekTime?.(e);
+				if(Number.isFinite(seconds)&&seconds>=0){this.controller.setTime(seconds);}
+			},
+			mouseleave:e=>this.interaction.seekLeave(e),
+			pointerdown:e=>this._startPointer(e)
+		};
+		this.controller=new classes.Controller({
+			getPreference:key=>config.getValue(key),
+			createLayout:({id,mode})=>this._createLayout({id,mode}),
+			loadPreview:loadPreview||null,
+			onSeek:delta=>this._onSeekRelative(delta),
+			onError:(error,key)=>this._onError(error,key)
+		});
+		this.commentSearch=new classes.CommentSearch({
+			getChats:()=>this._getChats(),
+			getVideoId:()=>this.controller.snapshot.videoId,
+			seekTo:seconds=>this._onSeekAbsolute(seconds)
+		});
+		this.idleLimiter=new classes.IdleLimiter({
+			controller:this.controller,
+			getSeconds:()=>config.getValue('sceneSearch.idleHideSeconds'),
+			clock:this._clock||undefined,
+			onIdleHidden:hidden=>this._active?.root?.classList.toggle('is-idle-suppressed',hidden)
+		});
+		this.interaction=new classes.Interaction({
+			controller:this.controller,
+			getPreviewRect:()=>{
+				const root=this._active?.root;
+				return root?.getBoundingClientRect?.()||null;
+			},
+			subscribePointerMove:listener=>{
+				document.addEventListener('mousemove',listener,true);
+				return ()=>document.removeEventListener('mousemove',listener,true);
+			},
+			clock:this._clock||undefined,
+			idleLimiter:this.idleLimiter
+		});
+		this.router=new classes.ShortcutRouter({
+			controller:this.controller,interaction:this.interaction,
+			getPreference:key=>config.getValue(key),
+			setPreference:(key,value)=>config.setValue(key,value),
+			onToggleControls:()=>this._active?.root?.classList.toggle('is-expanded'),
+			onError:(error,key)=>this._onError(error,key)
+		});
+	}
+	_startPointer(e) {
+		if(this._disposed){return;}
+		const id=e?.pointerId??'main';
+		const empty=this._activePointers.size===0;
+		this._activePointers.add(id);
+		if(empty && this._activePointers.size===1){
+			this.document.addEventListener('pointerup',this._onPointerFinish,true);
+			this.document.addEventListener('pointercancel',this._onPointerFinish,true);
+			this.interaction.setDragging(true);
+		}
+	}
+	_finishPointer(e) {
+		const id=e?.pointerId??'main';
+		if(!this._activePointers.delete(id)){return;}
+		if(!this._activePointers.size){this._clearPointers();}
+	}
+	_clearPointers() {
+		const active=this._activePointers.size>0;
+		this._activePointers.clear();
+		this.document.removeEventListener('pointerup',this._onPointerFinish,true);
+		this.document.removeEventListener('pointercancel',this._onPointerFinish,true);
+		if(active || this._running){this.interaction.setDragging(false);}
+	}
+	_createLayout({id,mode}) {
+		const card=this.registry.create({id,mode,document:this.document,
+			container:this.container,settings:this.layoutSettings,
+			onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
+		return {
+			get root(){return card.root;},
+			mount:state=>{
+				card.mount(state);
+				this._active=card;
+				try{this._mountCardControls(card);}catch(error){
+					this._releaseCard(card);card.dispose();throw error;
+				}
+			},
+			render:state=>{
+				card.render(state);
+				this._visibility?.refresh?.();
+				if(card.root){
+					const reveal=this.config.getValue('sceneSearch.controlsReveal');
+					const animation=this.config.getValue('sceneSearch.animation');
+					card.root.dataset.sceneReveal=['click','always'].includes(reveal)?reveal:'hover-focus';
+					card.root.dataset.sceneAnimation=['off','full'].includes(animation)?animation:'subtle';
+				}
+			},
+			onPreview:(asset,request)=>{
+				card.onPreview?.(asset,request);
+				if(this._sharedThumbnail?.node && card.root?.contains(this._sharedThumbnail.node)){
+					const slot=card.root.querySelector('.zenzaSceneImageBox');
+					if(slot){
+						const image=slot.querySelector('.zenzaSceneImage');
+						const placeholder=slot.querySelector('.zenzaSceneImagePlaceholder');
+						if(image){image.hidden=true;}
+						if(placeholder){placeholder.hidden=true;}
+					}
+				}
+			},
+			dispose:()=>{
+				this._releaseCard(card);
+				card.dispose();
+			}
+		};
+	}
+	_onCardAction(action) {
+		const commands={
+			'seek-back':'sceneSearch-seekBack',
+			'seek-forward':'sceneSearch-seekForward',
+			pin:'sceneSearch-togglePin',
+			'comment-toggle':'sceneSearch-toggleCommentPreview',
+			'comment-search':'sceneSearch-toggleCommentSearch'
+		};
+		if(action==='seek-step'){
+			this._stepWidget?.openMenu();
+			return;
+		}
+		if(commands[action]){this.router.handle(commands[action]);}
+	}
+	_mountCardControls(card) {
+		const root=card.root;
+		if(!root){throw new Error('Cannot wire unmounted scene card');}
+		const classNames={
+			pin:'zenzaSceneSearchPin',
+			'comment-toggle':'zenzaSceneCommentToggle',
+			'comment-search':'zenzaSceneCommentSearchToggle',
+			more:'zenzaSceneSearchMore'
+		};
+		for(const [action,css] of Object.entries(classNames)){
+			root.querySelector('[data-scui-action="'+action+'"]')?.classList.add(css);
+		}
+		const actionList=root.querySelector('.zenzaSceneActions');
+		if(!actionList){throw new Error('Scene controls missing');}
+		actionList.classList.add('zenzaSceneSeekStepControl');
+		for(const [action,tag] of [
+			['seek-back','back'],['seek-forward','forward'],['seek-step','open']
+		]){
+			const button=root.querySelector('[data-scui-action="'+action+'"]');
+			if(button){button.dataset.scui=tag;}
+		}
+		const C=this._classes;
+		const step=new C.SeekStepControl({
+			document:this.document,
+			getSeconds:()=>this.config.getValue('sceneSearch.seekStepSeconds'),
+			setSeconds:value=>{
+				this.config.setValue('sceneSearch.seekStepSeconds',value);
+				this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds');
+			},
+			onSeek:delta=>this._onSeekRelative(delta),
+			onCompactChange:()=>this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds'),
+			onMenuChange:open=>{
+				if(this._disposed){return;}
+				this.idleLimiter.pause('step-menu',open);
+				if(open){this.interaction.previewEnter();}
+				else{this.interaction.previewLeave();}
+			},
+			onError:error=>this._onError(error,'sceneSearch.seekStepSeconds')
+		});
+		step.mount(actionList);
+		this._stepWidget=step;
+		const searchPanel=new C.CommentSearchPanel({
+			document:this.document,search:this.commentSearch
+		});
+		searchPanel.mount(root);
+		this._commentPanel=searchPanel;
+		this.router.seekStepControl=step;
+		this.router.commentSearchPanel=searchPanel;
+		const enter=()=>this.interaction.previewEnter();
+		const leave=()=>this.interaction.previewLeave();
+		const focusin=()=>this.interaction.previewFocus(true);
+		const focusout=e=>{
+			if(!root.contains(e.relatedTarget)){this.interaction.previewFocus(false);}
+		};
+		for(const [event,handler] of [
+			['mouseenter',enter],['mouseleave',leave],
+			['focusin',focusin],['focusout',focusout]
+		])root.addEventListener(event,handler);
+		this._cardCleanup=()=>{
+			for(const [event,handler] of [
+				['mouseenter',enter],['mouseleave',leave],
+				['focusin',focusin],['focusout',focusout]
+			])root.removeEventListener(event,handler);
+		};
+		this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
+		this.refreshSharedThumbnail();
+	}
+	_releaseCard(card) {
+		if(this._active!==card){return;}
+		this._restoreSharedThumbnail();
+		this._cardCleanup?.();
+		this._cardCleanup=null;
+		this._visibility?.dispose?.();
+		this._visibility=null;
+		this._commentPanel?.dispose?.();
+		this._commentPanel=null;
+		this._stepWidget?.dispose?.();
+		this._stepWidget=null;
+		this.router.seekStepControl=null;
+		this.router.commentSearchPanel=null;
+		this._active=null;
+	}
+	refreshSharedThumbnail() {
+		if(this._disposed||!this._active?.root||!this._getThumbnailElement){
+			return false;
+		}
+		let node;
+		try{node=this._getThumbnailElement();}
+		catch(error){
+			this._restoreSharedThumbnail();
+			this._hideLegacyTooltip();
+			this._onError(error,'existing-seek-thumbnail');
+			return false;
+		}
+		if(!node||!node.parentNode){
+			this._restoreSharedThumbnail();
+			this._hideLegacyTooltip();
+			return false;
+		}
+		const slot=this._active.root.querySelector('.zenzaSceneImageBox');
+		if(!slot){return false;}
+		if(this._sharedThumbnail?.node===node&&slot.contains(node)){return true;}
+		if(!node.querySelector?.('canvas')){return false;}
+		this._restoreSharedThumbnail();
+		const parent=node.parentNode,nextSibling=node.nextSibling;
+		slot.appendChild(node); // Move the original worker canvas, never clone it.
+		this._sharedThumbnail={node,parent,nextSibling};
+		slot.querySelector('.zenzaSceneImage')?.setAttribute('hidden','');
+		slot.querySelector('.zenzaSceneImagePlaceholder')?.setAttribute('hidden','');
+		this._hideLegacyTooltip();
+		return true;
+	}
+	_restoreSharedThumbnail() {
+		const old=this._sharedThumbnail;
+		if(old){
+			if(old.parent?.insertBefore){
+				if(old.nextSibling?.parentNode===old.parent){
+					old.parent.insertBefore(old.node,old.nextSibling);
+				}else{old.parent.appendChild(old.node);}
+			}
+			this._sharedThumbnail=null;
+			const slot=this._active?.root?.querySelector('.zenzaSceneImageBox');
+			const image=slot?.querySelector('.zenzaSceneImage');
+			const placeholder=slot?.querySelector('.zenzaSceneImagePlaceholder');
+			const hasImage=!!image?.getAttribute('src');
+			if(image){image.hidden=!hasImage;}
+			if(placeholder){placeholder.hidden=hasImage;}
+		}
+	}
+	_hideLegacyTooltip() {
+		const tooltip=this._legacyTooltipElement;
+		if(!tooltip?.style||this._legacyTooltipOriginal){return;}
+		this._legacyTooltipOriginal={
+			hidden:tooltip.hidden,
+			display:tooltip.style.getPropertyValue('display'),
+			priority:tooltip.style.getPropertyPriority('display')
+		};
+		tooltip.hidden=true;
+		tooltip.style.setProperty('display','none','important');
+	}
+	_restoreLegacyTooltip() {
+		const tooltip=this._legacyTooltipElement,previous=this._legacyTooltipOriginal;
+		if(tooltip?.style&&previous){
+			if(previous.display){
+				tooltip.style.setProperty('display',previous.display,previous.priority);
+			}else{tooltip.style.removeProperty('display');}
+			tooltip.hidden=previous.hidden;
+		}
+		this._legacyTooltipOriginal=null;
+	}
+	_syncCommentPreviewVisibility() {
+		const node=this._commentPreviewElement;
+		if(!node?.style){return;}
+		const visible=this.config.getValue('sceneSearch.commentPreviewVisible')!==false;
+		if(!visible){
+			if(!this._commentPreviewOriginal){
+				this._commentPreviewOriginal={
+					hidden:node.hidden,
+					display:node.style.getPropertyValue('display'),
+					priority:node.style.getPropertyPriority('display')
+				};
+			}
+			node.hidden=true;
+			node.style.setProperty('display','none','important');
+		}else{
+			this._restoreCommentPreviewVisibility();
+		}
+	}
+	_restoreCommentPreviewVisibility() {
+		const node=this._commentPreviewElement;
+		const old=this._commentPreviewOriginal;
+		if(!node?.style||!old){return;}
+		if(old.display){node.style.setProperty('display',old.display,old.priority);}
+		else{node.style.removeProperty('display');}
+		node.hidden=old.hidden;
+		this._commentPreviewOriginal=null;
+	}
+	start(mode='normal') {
+		if(this._disposed){throw new Error('Integration bridge disposed');}
+		if(this._running){return this.controller.snapshot;}
+		this._running=true;
+		const style=this.document.createElement('style');
+		style.dataset.scuiBridgeStyle='1';
+		style.textContent=SceneSearchIntegrationBridge.CSS;
+		this.document.head.appendChild(style);
+		this._style=style;
+		try{
+			this._hideLegacyTooltip();
+			this.controller.start(mode);
+			for(const [event,handler] of Object.entries(this._seekListeners)){
+				this.seekElement.addEventListener(event,handler);
+			}
+			const keys=['sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
+				'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
+				'sceneSearch.commentPreviewVisible','sceneSearch.idleHideSeconds',
+				'sceneSearch.controlsReveal','sceneSearch.animation'];
+			if(typeof this.config.onkey==='function'){
+				for(const key of keys){
+					const callback=()=>{
+						this.controller.onPreferencesChanged(key);
+						if(key==='sceneSearch.commentPreviewVisible'){
+							this._syncCommentPreviewVisibility();
+						}
+						if(key==='sceneSearch.idleHideSeconds')this.interaction.idlePreferencesChanged();
+						if(key==='sceneSearch.seekStepSeconds')this._stepWidget?.updateFromConfig();
+					};
+					this.config.onkey(key,callback);
+					this._subscriptions.push([key,callback]);
+				}
+			}
+			this._syncCommentPreviewVisibility();
+		}catch(error){
+			this.dispose();
+			throw error;
+		}
+		return this.controller.snapshot;
+	}
+	setMode(mode){
+		this._clearPointers();
+		this.interaction.reset();
+		return this.controller.setMode(mode);
+	}
+	setVideo(videoId){
+		this._clearPointers();
+		this.interaction.reset();
+		this.commentSearch.reset();
+		return this.controller.onVideoChange(videoId);
+	}
+	setTime(seconds){return this.controller.setTime(seconds);}
+	previewAt(seconds,token){
+		const promise=this.controller.previewAt(seconds);
+		return Promise.resolve(promise).then(ok=>{
+			if(ok && token!==undefined)this.interaction.thumbnailChanged(token);
+			return ok;
+		});
+	}
+	get state(){return this.controller.snapshot;}
+	handleShortcut(command){return this.router.handle(command);}
+	dispose(){
+		if(this._disposed){return;}
+		this._clearPointers();
+		this._disposed=true;
+		this._restoreSharedThumbnail();
+		this._restoreLegacyTooltip();
+		this._restoreCommentPreviewVisibility();
+		if(this._running){
+			for(const [event,handler] of Object.entries(this._seekListeners)){
+				this.seekElement.removeEventListener(event,handler);
+			}
+		}
+		this.interaction.dispose();
+		this.controller.dispose();
+		this.commentSearch.dispose();
+		if(typeof this.config.offkey==='function'){
+			for(const [key,handler] of this._subscriptions){
+				this.config.offkey(key,handler);
+			}
+		}
+		this._subscriptions.length=0;
+		this._style?.remove();
+		this._style=null;
+		this._running=false;
+	}
+	static get CSS(){
+		return `
+/* The original seekbar remains the sole seek click owner. */
+.zenzaSceneSearchHost[data-scene-animation="off"],
+.zenzaSceneSearchHost[data-scene-animation="off"] *{transition:none!important;animation:none!important}
+.zenzaSceneSearchHost[data-scene-animation="full"] .zenzaSceneBtn{transition-duration:.22s}
+.zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneActions,
+.zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneBtn{
+opacity:1!important;visibility:visible!important;pointer-events:auto!important;transform:none!important
+}
+.zenzaSceneSearchHost[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step),
+.zenzaSceneEdgeDrawer[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) .zenzaSceneActions{
+opacity:0!important;visibility:hidden!important;pointer-events:none!important
+}
+.zenzaSceneSearchHost .zenzaSceneActions > .zenzaSceneSeekStepControl
+>[data-scui="back"],
+.zenzaSceneSearchHost .zenzaSceneActions > .zenzaSceneSeekStepControl
+>[data-scui="forward"],
+.zenzaSceneSearchHost .zenzaSceneActions > .zenzaSceneSeekStepControl
+>[data-scui="open"]{display:none!important}
+.zenzaSceneSearchHost .zenzaSceneSeekStepControl .zenzaSceneStepPopup{
+position:absolute;min-width:164px;max-width:min(280px,calc(100vw - 24px));
+bottom:calc(100% + 6px);right:0;
+padding:7px;z-index:320;background:#101824;color:#fff;
+border:1px solid #64748b;border-radius:6px;
+box-shadow:0 8px 20px #0009
+}
+.zenzaSceneSearchHost .zenzaSceneStepPopup[hidden]{display:none!important}
+.zenzaSceneSearchHost .zenzaSceneStepPresets{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.zenzaSceneSearchHost .zenzaSceneStepPopup button{cursor:pointer}
+.zenzaSceneSearchHost.is-idle-suppressed{display:none!important}
+`;
+	}
+}
+class SceneSearchLayoutCard {
+	constructor({document,container,id,mode,layoutClass='',extraCss='',onAction}={}) {
+		if(!document || !container || !/^(0[1-9]|10)$/.test(id) ||
+			!['normal','fullscreen'].includes(mode)){
+			throw new TypeError('SceneSearchLayoutCard requires DOM, layout and mode');
+		}
+		this.document=document;
+		this.container=container;
+		this.id=id;
+		this.mode=mode;
+		this.layoutClass=layoutClass;
+		this.extraCss=extraCss;
+		this.onAction=typeof onAction==='function'?onAction:()=>{};
+		this.root=null;
+		this.style=null;
+		this._lastState=null;
+		this._handlers={
+			click:this._onClick.bind(this),
+			keydown:this._onKeyDown.bind(this)
+		};
+	}
+	static button(doc,name,text,label) {
+		const b=doc.createElement('button');
+		b.type='button';
+		b.dataset.scuiAction=name;
+		b.className='zenzaSceneBtn scene-'+name;
+		b.textContent=text;
+		b.setAttribute('aria-label',label);
+		b.title=label;
+		if(name==='more'){
+			b.setAttribute('aria-haspopup','true');
+			b.setAttribute('aria-expanded','false');
+		}
+		return b;
+	}
+	mount(state) {
+		if(this.root){throw new Error('Already mounted');}
+		const d=this.document;
+		const style=d.createElement('style');
+		style.dataset.scuiLayoutStyle=this.id;
+		style.textContent=SceneSearchLayoutCard.CSS+'\n'+this.extraCss;
+		d.head.appendChild(style);
+		this.style=style;
+		try {
+			const root=d.createElement('section');
+			root.className='zenzaSceneSearchHost '+this.layoutClass;
+			root.dataset.layout=this.id;
+			root.dataset.mode=this.mode;
+			root.setAttribute('role','group');
+			root.setAttribute('aria-label','シーンサーチ');
+			const imageBox=d.createElement('div');
+			imageBox.className='zenzaSceneImageBox';
+			const image=d.createElement('img');
+			image.className='zenzaSceneImage';
+			image.alt='現在のシーンサーチ画像';
+			image.hidden=true;
+			imageBox.appendChild(image);
+			const message=d.createElement('span');
+			message.className='zenzaSceneImagePlaceholder';
+			message.textContent='プレビュー画像なし';
+			imageBox.appendChild(message);
+			const foot=d.createElement('div');
+			foot.className='zenzaSceneFoot';
+			const label=d.createElement('span');
+			label.className='zenzaSceneTime';
+			label.textContent='0:00';
+			foot.appendChild(label);
+			const buttons=d.createElement('div');
+			buttons.className='zenzaSceneActions';
+			for(const [name,symbol,aria] of [
+				['seek-back','‹','指定秒数戻る'],
+				['seek-forward','›','指定秒数進む'],
+				['more','⋯','シーンサーチの追加操作'],
+				['pin','📌','シーンサーチを固定'],
+				['comment-toggle','💬','コメントプレビュー表示切替'],
+				['comment-search','⌕','コメント検索'],
+				['seek-step','5秒','移動秒数設定']
+			])buttons.appendChild(SceneSearchLayoutCard.button(d,name,symbol,aria));
+			foot.appendChild(buttons);
+			root.appendChild(imageBox);
+			root.appendChild(foot);
+			root.addEventListener('click',this._handlers.click);
+			root.addEventListener('keydown',this._handlers.keydown);
+			this.container.appendChild(root);
+			this.root=root;
+			this.render(state);
+		}catch(e){this.dispose();throw e;}
+	}
+	_onClick(e) {
+		const button=e.target.closest?.('button[data-scui-action]');
+		if(!button || !this.root?.contains(button) || button.disabled){return;}
+		const action=button.dataset.scuiAction;
+		if(action==='more') {
+			this.root.classList.toggle('is-expanded');
+			button.setAttribute('aria-expanded',
+				String(this.root.classList.contains('is-expanded')));
+		}
+		this.onAction(action,{layoutId:this.id,mode:this.mode},e);
+	}
+	_onKeyDown(e) {
+		if(e.key==='Escape' && this.root?.classList.contains('is-expanded')){
+			this.root.classList.remove('is-expanded');
+			const more=this.root.querySelector('[data-scui-action="more"]');
+			more?.setAttribute('aria-expanded','false');
+			more?.focus();
+			e.preventDefault();
+			e.stopPropagation();
+		}
+	}
+	render(state) {
+		if(!this.root){return;}
+		state=state||{};
+		this._lastState=state;
+		this.root.dataset.mode=this.mode;
+		this.root.hidden=state.shown===false && !state.pinned;
+		this.root.classList.toggle('is-pinned',state.pinned===true);
+		const seconds=state.seekStepSeconds;
+		const compact=seconds===0;
+		this.root.classList.toggle('is-compact',compact);
+		this.root.style.setProperty('--scene-preview-min-width',compact?'124px':'180px');
+		for(const action of ['seek-back','seek-forward']){
+			const button=this.root.querySelector('[data-scui-action="'+action+'"]');
+			button.hidden=compact;
+			button.disabled=compact;
+			button.style.display=compact?'none':'';
+		}
+		const time=Number.isFinite(state.time)&&state.time>=0?Math.floor(state.time):0;
+		this.root.querySelector('.zenzaSceneTime').textContent=
+			String(Math.floor(time/60))+':'+String(time%60).padStart(2,'0');
+		this.root.querySelector('[data-scui-action="seek-step"]').textContent=
+			String(Number.isSafeInteger(seconds)?seconds:5)+'秒';
+		const pin=this.root.querySelector('[data-scui-action="pin"]');
+		pin.setAttribute('aria-pressed',String(state.pinned===true));
+		pin.title=state.pinned?'固定解除':'シーンサーチを固定';
+		const comment=this.root.querySelector('[data-scui-action="comment-toggle"]');
+		comment.setAttribute('aria-pressed',String(state.commentPreviewVisible!==false));
+	}
+	onPreview(asset) {
+		if(!this.root){return;}
+		const image=this.root.querySelector('.zenzaSceneImage');
+		const placeholder=this.root.querySelector('.zenzaSceneImagePlaceholder');
+		const url=typeof asset==='string'?asset:
+			typeof asset?.imageUrl==='string'?asset.imageUrl:null;
+		if(url && /^(https?:\/\/|blob:|data:image\/)/i.test(url)){
+			image.src=url;
+			image.hidden=false;
+			placeholder.hidden=true;
+		}else{
+			image.removeAttribute('src');
+			image.hidden=true;
+			placeholder.hidden=false;
+		}
+	}
+	dispose() {
+		if(this.root){
+			this.root.removeEventListener('click',this._handlers.click);
+			this.root.removeEventListener('keydown',this._handlers.keydown);
+			this.root.remove();
+			this.root=null;
+		}
+		this.style?.remove();
+		this.style=null;
+		this._lastState=null;
+	}
+	static get CSS() { return `
+.zenzaSceneSearchHost {
+	--scene-preview-min-width:180px;
+	position:absolute;
+	box-sizing:border-box;
+	left:var(--scene-x,50%);
+	bottom:var(--scene-bottom,64px);
+	width:var(--scene-preview-min-width);
+	max-width:calc(100% - 12px);
+	transform:translateX(-50%);
+	z-index:150;
+	border-radius:5px;
+	padding:4px;
+	border:1px solid rgba(204,204,204,.55);
+	background:#000;
+	color:#eee;
+	font:12px/1.35 system-ui,sans-serif;
+	box-shadow:0 4px 14px rgba(0,0,0,.25);
+}
+.zenzaSceneSearchHost[hidden],.zenzaSceneBtn[hidden]{display:none!important}
+.zenzaSceneImageBox{min-height:42px;overflow:hidden;display:grid;place-items:center;background:#17181b}
+.zenzaSceneImage{display:block;width:100%;height:auto;max-height:120px;object-fit:contain}
+.zenzaSceneImage[hidden],.zenzaSceneImagePlaceholder[hidden]{display:none}
+.zenzaSceneImagePlaceholder{font-size:11px;color:#9fa5af}
+.zenzaSceneFoot{display:flex;align-items:center;justify-content:space-between;min-width:0;gap:5px}
+.zenzaSceneTime{white-space:nowrap;font-variant-numeric:tabular-nums}
+.zenzaSceneActions{display:flex;align-items:center;gap:2px;position:static;flex:0 0 auto}
+.zenzaSceneBtn{border:0;border-radius:4px;background:rgba(35,42,54,.88);color:inherit;
+	min-width:23px;height:24px;padding:1px 3px;cursor:pointer}
+.zenzaSceneBtn:focus-visible{outline:2px solid #8ed8ff;outline-offset:1px}
+.zenzaSceneBtn[aria-pressed="true"]{background:#315977;color:#fff}
+.zenzaSceneBtn.scene-more{display:inline-grid;place-items:center}
+.zenzaSceneBtn.scene-pin,.zenzaSceneBtn.scene-comment-toggle,
+.zenzaSceneBtn.scene-comment-search,.zenzaSceneBtn.scene-seek-step{
+	position:absolute;bottom:100%;
+	opacity:0;visibility:hidden;pointer-events:none;
+	transition:opacity .13s ease,visibility .13s}
+.zenzaSceneBtn.scene-pin{right:0}
+.zenzaSceneBtn.scene-comment-toggle{right:27px}
+.zenzaSceneBtn.scene-comment-search{right:54px}
+.zenzaSceneBtn.scene-seek-step{right:81px}
+.zenzaSceneSearchHost:is(:hover,:focus-within,.is-expanded) .zenzaSceneBtn{
+	opacity:1;visibility:visible;pointer-events:auto}
+.zenzaSceneSearchHost.is-compact .zenzaSceneImageBox{min-height:28px}
+.zenzaSceneSearchHost.is-compact .zenzaSceneImage{max-height:75px}
+.zenzaSceneSearchHost .zenzaSeekThumbnail-image{max-width:100%}
+.zenzaSceneSearchHost .zenzaSeekThumbnail-thumbnail{max-width:100%;height:auto}
+/* The original worker always paints 160x90. Scale visually, do not resize its backing store. */
+.zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail-image,
+.zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail-thumbnail{width:112px;height:63px}
+.zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail{max-width:100%;margin:0 auto}
+@media (prefers-reduced-motion: reduce) {
+	.zenzaSceneSearchHost *{transition:none!important;animation:none!important}
+}
+`; }
+}
+class SceneSearchLayoutRegistry {
+	constructor() {
+		this._items=new Map();
+	}
+	static validId(id) {
+		return typeof id==='string' && /^(0[1-9]|10)$/.test(id);
+	}
+	register({id,label,description='',factory}={}) {
+		if(!SceneSearchLayoutRegistry.validId(id) || typeof label!=='string' ||
+			!label || typeof factory!=='function' || this._items.has(id)) {
+			throw new TypeError('Invalid or duplicate SceneSearch layout: '+String(id));
+		}
+		this._items.set(id,Object.freeze({id,label,description,factory}));
+		return this;
+	}
+	get(id) {
+		return this._items.get(id)||null;
+	}
+	list() {
+		return Array.from(this._items.values(),
+			({id,label,description})=>Object.freeze({id,label,description}));
+	}
+	has(id) {return this._items.has(id);}
+	create({id,mode='normal',document,container,onAction,settings}={}) {
+		const definition=this.get(id);
+		if(!definition) {throw new RangeError('Layout not registered: '+String(id));}
+		if(!document || !container || !['normal','fullscreen'].includes(mode)) {
+			throw new TypeError('Layout requires DOM container and screen mode');
+		}
+		const result=definition.factory({id,mode,document,container,onAction,settings});
+		if(!result || typeof result.mount!=='function' ||
+			typeof result.render!=='function' || typeof result.dispose!=='function') {
+			throw new TypeError('Layout factory does not implement mount/render/dispose: '+id);
+		}
+		return result;
+	}
+	makeFactory(shared) {
+		return ({id,mode})=>this.create({...shared,id,mode});
+	}
+}
+class SceneSearchLayoutCatalog {
+	static get IDS() {
+		return ['01','02','03','04','05','06','07','08','09','10'];
+	}
+	static install(registry,{
+		Card,registerClassic,SideShelf,PlaybackDeck,Filmstrip,Drawer,SmartAvoid,
+		clock,allowPartial=false
+	}={}) {
+		if(!registry||typeof registry.list!=='function'||
+			typeof registry.register!=='function'||typeof Card!=='function'){
+			throw new TypeError('Scene layout catalog requires a registry and card');
+		}
+		const staging=new registry.constructor();
+		if(typeof staging.register!=='function'||typeof staging.get!=='function'){
+			throw new TypeError('Registry must support isolated staging');
+		}
+		const providers=[
+			{name:'01/02',ids:['01','02'],call:registerClassic&&
+				(()=>registerClassic(staging))},
+			{name:'03/04',ids:['03','04'],call:SideShelf?.install&&
+				(()=>SideShelf.install(staging,Card))},
+			{name:'05/06',ids:['05','06'],call:PlaybackDeck?.register&&
+				(()=>PlaybackDeck.register(staging,{Card}))},
+			{name:'07',ids:['07'],call:Filmstrip?.install&&
+				(()=>Filmstrip.install(staging,Card))},
+			{name:'08/09',ids:['08','09'],call:Drawer?.install?
+				(()=>Drawer.install(staging,Card)):
+				Drawer?.register?(()=>Drawer.register(staging,{Card})):null},
+			{name:'10',ids:['10'],call:SmartAvoid?.register&&
+				(()=>SmartAvoid.register(staging,{Card,clock}))}
+		];
+		const missing=providers.filter(p=>typeof p.call!=='function');
+		if(missing.length&&!allowPartial){
+			throw new Error('Scene layout providers missing: '+
+				missing.map(p=>p.name).join(', '));
+		}
+		const taken=new Set(registry.list().map(item=>item.id));
+		for(const group of providers){
+			if(!group.call){continue;}
+			for(const id of group.ids){
+				if(taken.has(id)){throw new Error('Already registered: '+id);}
+			}
+		}
+		for(const group of providers){
+			if(!group.call){continue;}
+			const before=new Set(staging.list().map(item=>item.id));
+			group.call();
+			const added=staging.list().filter(item=>!before.has(item.id))
+				.map(item=>item.id).sort();
+			const expected=group.ids.slice().sort();
+			if(added.join(',')!==expected.join(',')){
+				throw new Error('Scene layout provider '+group.name+
+					' registered '+added.join(',')+' instead of '+expected.join(','));
+			}
+		}
+		const installed=staging.list().map(item=>item.id).sort();
+		const absent=SceneSearchLayoutCatalog.IDS.filter(id=>!installed.includes(id));
+		if(absent.length&&!allowPartial){
+			throw new Error('Scene layout coverage incomplete: '+absent.join(','));
+		}
+		for(const id of installed){registry.register(staging.get(id));}
+		return Object.freeze({
+			registered:Object.freeze(installed),
+			missing:Object.freeze(absent),
+			complete:absent.length===0
+		});
+	}
+}
+// already required
+const SCENE_01_02_TOOLS_CSS=`
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneActions,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .zenzaSceneActions{
+	position:relative;min-width:26px;flex:0 0 auto;gap:2px;
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-pin,
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-comment-toggle,
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-comment-search,
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-seek-step,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-pin,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-comment-toggle,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-comment-search,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-seek-step{
+	position:absolute;z-index:1;right:-29px;min-width:25px;
+	transform:translateY(6px);transition:opacity .16s ease,transform .16s ease,visibility .16s;
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-pin,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-pin{bottom:0}
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-comment-toggle,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-comment-toggle{bottom:27px}
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-comment-search,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-comment-search{bottom:54px}
+.zenzaSceneSearchHost.zenzaSceneLayout01 .scene-seek-step,
+.zenzaSceneSearchHost.zenzaSceneLayout02 .scene-seek-step{bottom:81px}
+.zenzaSceneSearchHost:is(.zenzaSceneLayout01,.zenzaSceneLayout02):is(:hover,:focus-within,.is-expanded,.is-pinned)
+	.zenzaSceneActions>.zenzaSceneBtn{transform:translateY(0)}
+.zenzaSceneSearchHost:is(.zenzaSceneLayout01,.zenzaSceneLayout02) .zenzaSceneFoot{
+	gap:3px;min-width:0
+}
+.zenzaSceneSearchHost:is(.zenzaSceneLayout01,.zenzaSceneLayout02) .scene-more{
+	opacity:1;visibility:visible;pointer-events:auto
+}
+@media(prefers-reduced-motion:reduce){
+	.zenzaSceneSearchHost:is(.zenzaSceneLayout01,.zenzaSceneLayout02) .zenzaSceneBtn{
+		transition:none!important;transform:none!important
+	}
+}
+`;
+const SCENE_LAYOUT01_CSS=`
+.zenzaSceneSearchHost.zenzaSceneLayout01{
+	width:var(--scene-preview-min-width);
+	left:var(--scene-x,50%);
+	bottom:var(--scene-bottom,60px);
+	transform:translateX(-50%);
+	border-radius:6px;box-shadow:none;
+}
+.zenzaSceneLayout01[data-mode="fullscreen"]{
+	--scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
+}
+.zenzaSceneLayout01[data-mode="normal"]{--scene-bottom:38px}
+`;
+const SCENE_LAYOUT02_CSS=`
+.zenzaSceneSearchHost.zenzaSceneLayout02{
+	width:var(--scene-preview-min-width);
+	left:12px;bottom:var(--scene-bottom,64px);transform:none;
+	border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.16);
+}
+.zenzaSceneLayout02[data-mode="normal"]{--scene-bottom:42px}
+.zenzaSceneLayout02[data-mode="fullscreen"]{
+	--scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
+}
+/* The comment preview stays separate on the right, without losing
+	its original click-through stacking relative to the scene preview. */
+[data-scene-search-layout="02"] .zenzaCommentPreview{
+	left:auto!important;right:12px;max-width:calc(100% - 24px);
+	bottom:var(--scene-bottom,64px)!important;
+	transform:none!important;
+}
+[data-scene-search-layout="02"][data-scene-narrow="true"] .zenzaCommentPreview{
+	right:12px;bottom:calc(var(--scene-bottom,64px) + 140px)!important;
+}
+`;
+function registerSceneLayouts01_02(registry) {
+	if(!registry||typeof registry.register!=='function'){
+		throw new TypeError('A scene layout registry is required');
+	}
+	for(const item of [
+		{id:'01',name:'クラシック追従',
+			description:'シーク位置へ追従する小型プレビュー。通常表示と全画面で下端を調整',
+			layoutClass:'zenzaSceneLayout01',css:SCENE_LAYOUT01_CSS},
+		{id:'02',name:'左右ツインパネル',
+			description:'シーンを左、コメントを右へ分離。狭い画面は上下に退避',
+			layoutClass:'zenzaSceneLayout02',css:SCENE_LAYOUT02_CSS}
+	]){
+		registry.register({id:item.id,label:item.name,description:item.description,
+			factory:options=>{
+				const card=new SceneSearchLayoutCard({...options,
+					layoutClass:item.layoutClass,
+					extraCss:SCENE_01_02_TOOLS_CSS+'\n'+item.css});
+				const container=options.container,settings=options.settings||{};
+				const render=card.render.bind(card),mount=card.mount.bind(card);
+				const dispose=card.dispose.bind(card);
+				return {
+					get root(){return card.root;},
+					mount(state){
+						mount(state);
+						container.dataset.sceneSearchLayout=item.id;
+						container.dataset.sceneMode=options.mode;
+						this.render(state);
+					},
+					render(state){
+						render(state);
+						if(!card.root)return;
+						const width=container.getBoundingClientRect?.().width ||
+							container.clientWidth||800;
+						const compact=state.seekStepSeconds===0;
+						const frameWidth=compact?124:180;
+						if(item.id==='01'){
+							const duration=typeof settings.getDuration==='function'?
+								settings.getDuration():settings.duration;
+							const pct=Number.isFinite(duration)&&duration>0?
+								Math.max(0,Math.min(1,state.time/duration)):0.5;
+							const usable=Math.max(0,Math.min(frameWidth,width-12));
+							const minX=usable/2+6,maxX=Math.max(minX,width-usable/2-35);
+							const x=Math.max(minX,Math.min(maxX,width*pct));
+							const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
+							const fixed=state.pinned===true&&Number.isFinite(previous)?
+								Math.max(minX,Math.min(maxX,previous)):x;
+							card.root.style.setProperty('--scene-x',Math.round(fixed)+'px');
+						}else{
+							container.dataset.sceneNarrow=String(width<580);
+							container.style.setProperty('--scene-bottom',
+								options.mode==='fullscreen'?
+									'calc(var(--zenza-control-bar-height,40px) + 28px)':'42px');
+						}
+					},
+					onPreview:(asset,meta)=>card.onPreview(asset,meta),
+					dispose(){
+						dispose();
+						if(container.dataset.sceneSearchLayout===item.id){
+							delete container.dataset.sceneSearchLayout;
+							delete container.dataset.sceneMode;
+							delete container.dataset.sceneNarrow;
+							container.style.removeProperty('--scene-bottom');
+						}
+					}
+				};
+			}
+		});
+	}
+	return registry;
+}
+class SceneSearchLayouts03_04 {
+	static get DESCRIPTORS() {
+		return [
+			{id:'03',label:'サイドシェルフ',
+				description:'通常画面は動画右端、全画面は右下端の専用棚。縦移動を短くする'},
+			{id:'04',label:'トップエッジ',
+				description:'通常は動画上部付近、全画面では安全余白を取った上端固定'}
+		];
+	}
+	static install(registry,Card) {
+		if(!registry?.register || typeof Card!=='function'){
+			throw new TypeError('Side shelf layouts require the common registry and card');
+		}
+		const [shelf,top]=this.DESCRIPTORS;
+		registry.register({...shelf,factory:args=>new Card({...args,
+			layoutClass:'zenzaSceneSideShelf',extraCss:this.SHELF_STYLE})});
+		registry.register({...top,factory:args=>new Card({...args,
+			layoutClass:'zenzaSceneTopEdge',extraCss:this.TOP_STYLE})});
+		return registry;
+	}
+	static get SHELF_STYLE() {
+		return `
+/* 03: compact side shelf; no invisible full-width input layer */
+.zenzaSceneSearchHost.zenzaSceneSideShelf {
+	left:auto;right:12px;transform:none;
+	width:min(220px,calc(100% - 24px));
+	bottom:calc(var(--scene-bottom,64px) + 18px);
+	border-left:3px solid #7fbce8;
+	transform-origin:right bottom;
+	animation:zenzaShelfEnter .17s ease-out both;
+}
+.zenzaSceneSearchHost.zenzaSceneSideShelf[data-mode="fullscreen"] {
+	position:fixed;
+	right:max(12px,env(safe-area-inset-right));
+	bottom:calc(var(--scene-bottom,64px) + 26px);
+	width:min(232px,calc(100vw - 24px));
+}
+.zenzaSceneSearchHost.zenzaSceneSideShelf .zenzaSceneFoot{
+	display:grid;grid-template-columns:auto 1fr;gap:5px;
+}
+.zenzaSceneSearchHost.zenzaSceneSideShelf .zenzaSceneActions{justify-content:end}
+.zenzaSceneSearchHost.zenzaSceneSideShelf.is-compact {
+	width:min(124px,calc(100% - 24px));
+}
+@keyframes zenzaShelfEnter{
+	from{opacity:.3;translate:6px 0}
+	to{opacity:1;translate:0 0}
+}
+@media (max-width:600px){
+.zenzaSceneSearchHost.zenzaSceneSideShelf,
+.zenzaSceneSearchHost.zenzaSceneSideShelf[data-mode="fullscreen"]{
+	right:6px;bottom:calc(var(--scene-bottom,64px) + 6px);
+	max-width:calc(100vw - 12px)}
+}
+@media (prefers-reduced-motion:reduce){
+.zenzaSceneSearchHost.zenzaSceneSideShelf{animation:none}
+}
+`;
+	}
+	static get TOP_STYLE() {
+		return `
+/* 04: anchored near the video top, away from busy playback buttons */
+.zenzaSceneSearchHost.zenzaSceneTopEdge {
+	left:50%;right:auto;top:auto;
+	bottom:calc(var(--scene-video-height,360px) - 16px);
+	width:min(238px,calc(100% - 24px));
+	transform:translate(-50%,0);
+	transform-origin:center top;
+	border-top:3px solid #8bb6d8;
+	animation:zenzaTopCardEnter .16s ease-out both;
+}
+.zenzaSceneSearchHost.zenzaSceneTopEdge[data-mode="fullscreen"] {
+	position:fixed;
+	left:50%;top:max(12px,env(safe-area-inset-top));bottom:auto;
+	width:min(260px,calc(100vw - 32px));
+}
+/* A top-edge card unfolds tools downward, never outside the top viewport. */
+.zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneBtn.scene-pin,
+.zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneBtn.scene-comment-toggle,
+.zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneBtn.scene-comment-search,
+.zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneBtn.scene-seek-step{
+	top:100%;bottom:auto;
+}
+.zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneImage{
+	max-height:110px;
+}
+.zenzaSceneSearchHost.zenzaSceneTopEdge.is-compact{
+	width:min(124px,calc(100% - 24px));
+}
+@keyframes zenzaTopCardEnter{
+	from{opacity:.3;translate:0 -5px}
+	to{opacity:1;translate:0 0}
+}
+@media (max-width:600px){
+.zenzaSceneSearchHost.zenzaSceneTopEdge{
+	bottom:calc(var(--scene-bottom,64px) + 60px)}
+.zenzaSceneSearchHost.zenzaSceneTopEdge[data-mode="fullscreen"]{
+	top:max(5px,env(safe-area-inset-top));bottom:auto}
+}
+@media (prefers-reduced-motion:reduce){
+.zenzaSceneSearchHost.zenzaSceneTopEdge{animation:none}
+}
+`;
+	}
+}
+class SceneSearchLayouts05_06 {
+	static register(registry,{Card}={}) {
+		if(!registry || typeof registry.register!=='function' ||
+			typeof Card!=='function') {
+			throw new TypeError('Layout registry and shared semantic Card are required');
+		}
+		for(const [id,label,description,css] of [
+			['05','プレイバック・デッキ',
+				'サムネイルと再生操作を横並びのコンパクトな操作デッキにまとめる。',
+				SceneSearchLayouts05_06.CSS_05],
+			['06','マイクロ・カプセル',
+				'小さなサムネイルと時刻だけを常時表示し、ボタンは操作時に展開する。',
+				SceneSearchLayouts05_06.CSS_06]
+		]){
+			registry.register({id,label,description,
+				factory:({document,container,mode,onAction})=>new Card({
+					document,container,id,mode,
+					layoutClass:'zenzaLayout'+id,
+					extraCss:css,
+					onAction
+				})});
+		}
+		return registry;
+	}
+	static get CSS_05() {return `
+/* 05: A stable horizontal playback deck in either viewing mode. */
+.zenzaSceneSearchHost[data-layout="05"]{
+	--scene-bottom:70px;
+	width:min(620px,calc(100% - 20px));
+	max-width:calc(100% - 20px);
+	display:grid;
+	grid-template-columns:minmax(110px,162px) minmax(0,1fr);
+	align-items:center;
+	gap:10px;
+	padding:8px;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneImageBox{
+	min-width:0;
+	min-height:72px;
+	border-radius:4px;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneImage{
+	height:74px;
+	max-height:74px;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneFoot{
+	display:flex;
+	flex-direction:column;
+	align-items:stretch;
+	justify-content:center;
+	gap:9px;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneTime{
+	font-size:17px;
+	font-weight:600;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneActions{
+	flex-wrap:wrap;
+	gap:5px;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneBtn{
+	min-width:27px;
+	min-height:27px;
+}
+.zenzaSceneSearchHost[data-layout="05"][data-mode="fullscreen"]{
+	--scene-bottom:82px;
+	width:min(720px,calc(100% - 28px));
+	grid-template-columns:minmax(130px,200px) minmax(0,1fr);
+}
+.zenzaSceneSearchHost[data-layout="05"].is-compact{
+	width:min(325px,calc(100% - 20px));
+	grid-template-columns:minmax(65px,94px) minmax(0,1fr);
+	gap:6px;
+	padding:5px;
+}
+.zenzaSceneSearchHost[data-layout="05"].is-compact .zenzaSceneImageBox{
+	min-height:39px;
+}
+.zenzaSceneSearchHost[data-layout="05"].is-compact .zenzaSceneImage{
+	height:40px;
+	max-height:40px;
+}
+.zenzaSceneSearchHost[data-layout="05"].is-compact .zenzaSceneTime{
+	font-size:13px;
+}
+@media(max-width:420px){
+.zenzaSceneSearchHost[data-layout="05"]{
+	grid-template-columns:minmax(65px,90px) minmax(0,1fr);
+	gap:5px;padding:5px;
+}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneActions{gap:2px}
+.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneBtn{min-width:24px}
+}
+`;}
+	static get CSS_06() {return `
+/* 06: Minimal floating capsule; no extra permanent control row. */
+.zenzaSceneSearchHost[data-layout="06"]{
+	--scene-bottom:70px;
+	width:min(180px,calc(100% - 12px));
+	max-width:calc(100% - 12px);
+	border-radius:13px;
+	padding:4px 5px;
+	box-shadow:0 3px 14px #0006;
+}
+.zenzaSceneSearchHost[data-layout="06"] .zenzaSceneImageBox{
+	min-height:55px;
+	border-radius:8px;
+}
+.zenzaSceneSearchHost[data-layout="06"] .zenzaSceneImage{
+	height:60px;max-height:60px;object-fit:cover;
+}
+.zenzaSceneSearchHost[data-layout="06"] .zenzaSceneFoot{
+	min-height:24px;gap:3px;
+}
+.zenzaSceneSearchHost[data-layout="06"] .zenzaSceneActions{
+	justify-content:end;flex-wrap:wrap;gap:2px;
+}
+.zenzaSceneSearchHost[data-layout="06"] .zenzaSceneBtn{
+	min-width:21px;height:22px;border-radius:10px;
+}
+.zenzaSceneSearchHost[data-layout="06"][data-mode="fullscreen"]{
+	--scene-bottom:84px;
+}
+.zenzaSceneSearchHost[data-layout="06"].is-compact{
+	width:min(124px,calc(100% - 12px));
+	padding:3px;
+	border-radius:10px;
+}
+.zenzaSceneSearchHost[data-layout="06"].is-compact .zenzaSceneImageBox{
+	min-height:35px;
+}
+.zenzaSceneSearchHost[data-layout="06"].is-compact .zenzaSceneImage{
+	height:38px;max-height:38px;
+}
+.zenzaSceneSearchHost[data-layout="06"]:not(:hover):not(:focus-within):not(.is-expanded):not(.is-pinned)
+	.zenzaSceneBtn:not(.scene-more){visibility:hidden;opacity:0;pointer-events:none;}
+`;}
+}
+class SceneSearchLayout07 {
+	static install(registry,Card) {
+		if(typeof registry?.register!=='function'||typeof Card!=='function'){
+			throw new TypeError('Three-frame filmstrip needs registry and common card');
+		}
+		class FilmstripCard extends Card {
+			constructor(args) {
+				super({...args,layoutClass:'zenzaSceneFilmstrip',
+					extraCss:SceneSearchLayout07.CSS});
+				this._frameNodes=null;
+			}
+			_makeSideFrame(which) {
+				const d=this.document;
+				const fig=d.createElement('figure');
+				fig.className='zenzaSceneFilmFrame scene-'+which;
+				fig.dataset.frame=which;
+				const img=d.createElement('img');
+				img.alt=which==='previous'?'前の場面':'次の場面';
+				img.hidden=true;
+				fig.appendChild(img);
+				const placeholder=d.createElement('span');
+				placeholder.className='zenzaSceneFilmMissing';
+				placeholder.textContent='—';
+				fig.appendChild(placeholder);
+				const label=d.createElement('figcaption');
+				label.className='zenzaSceneFilmFrameTime';
+				label.textContent='';
+				fig.appendChild(label);
+				return {fig,img,placeholder,label};
+			}
+			mount(state) {
+				super.mount(state);
+				try {
+					const center=this.root.querySelector('.zenzaSceneImageBox');
+					const wrap=this.document.createElement('div');
+					wrap.className='zenzaSceneFilmstripFrames';
+					const previous=this._makeSideFrame('previous');
+					const next=this._makeSideFrame('next');
+					const current=this.document.createElement('figure');
+					current.className='zenzaSceneFilmFrame scene-current';
+					current.dataset.frame='current';
+					center.parentNode.insertBefore(wrap,center);
+					current.appendChild(center);
+					const caption=this.document.createElement('figcaption');
+					caption.className='zenzaSceneFilmFrameTime';
+					current.appendChild(caption);
+					wrap.append(previous.fig,current,next.fig);
+					this._frameNodes={previous,next,current,caption};
+					this.render(state);
+				}catch(e){this.dispose();throw e;}
+			}
+			static timeLabel(value) {
+				if(!Number.isFinite(value)||value<0){return '';}
+				const n=Math.floor(value);
+				return String(Math.floor(n/60))+':'+String(n%60).padStart(2,'0');
+			}
+			_setSide(which,data) {
+				const node=this._frameNodes?.[which];
+				if(!node){return;}
+				const src=typeof data==='string'?data:
+					typeof data?.imageUrl==='string'?data.imageUrl:null;
+				if(src&&/^(https?:\/\/|blob:|data:image\/)/i.test(src)){
+					node.img.src=src;
+					node.img.hidden=false;
+					node.placeholder.hidden=true;
+				}else{
+					node.img.removeAttribute('src');
+					node.img.hidden=true;
+					node.placeholder.hidden=false;
+				}
+				node.label.textContent=FilmstripCard.timeLabel(data?.time);
+			}
+			onPreview(asset) {
+				super.onPreview(asset);
+				const frames=asset?.frames;
+				this._setSide('previous',frames?.previous);
+				this._setSide('next',frames?.next);
+				if(this._frameNodes){
+					this._frameNodes.caption.textContent=
+						FilmstripCard.timeLabel(asset?.time);
+				}
+			}
+			render(state) {
+				super.render(state);
+				if(!this._frameNodes){return;}
+				const compact=state?.seekStepSeconds===0;
+				this._frameNodes.previous.fig.hidden=compact;
+				this._frameNodes.next.fig.hidden=compact;
+			}
+			dispose() {
+				super.dispose();
+				this._frameNodes=null;
+			}
+		}
+		registry.register({id:'07',label:'3コマ・フィルム',
+			description:'前後のキャッシュ済みシーンと現在のシーンを一列で比較',
+			factory:args=>new FilmstripCard(args)});
+		return registry;
+	}
+	static get CSS() {
+		return `
+.zenzaSceneSearchHost.zenzaSceneFilmstrip {
+	width:min(470px,calc(100% - 16px));
+	bottom:calc(var(--scene-bottom,64px) + 16px);
+	border-top:2px solid #94bbd6;
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip[data-mode="fullscreen"] {
+	position:fixed;
+	width:min(530px,calc(100vw - 24px));
+	bottom:calc(var(--scene-bottom,64px) + 24px);
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmstripFrames {
+	display:grid;
+	grid-template-columns:minmax(0,1fr) minmax(0,1.3fr) minmax(0,1fr);
+	gap:4px;
+	min-width:0;
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame {
+	box-sizing:border-box;
+	margin:0;
+	min-width:0;
+	padding:2px;
+	background:#101720;
+	overflow:hidden;
+	display:flex;
+	flex-direction:column;
+	align-items:center;
+	justify-content:center;
+	border-radius:3px;
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame img {
+	display:block;
+	width:100%;
+	max-height:88px;
+	height:60px;
+	object-fit:contain;
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame img[hidden],
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame[hidden] {
+	display:none!important
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame.scene-current {
+	box-shadow:inset 0 0 0 1px rgba(166,217,249,.68)
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrameTime {
+	font-size:10px;min-height:12px;color:#cbd5e1;
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmMissing {
+	min-height:60px;display:grid;place-items:center;color:#8593a7;
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmMissing[hidden] {display:none}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip.is-compact {
+	width:min(124px,calc(100% - 12px));
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip.is-compact .zenzaSceneFilmstripFrames {
+	grid-template-columns:minmax(0,1fr)
+}
+@media (max-width:600px) {
+.zenzaSceneSearchHost.zenzaSceneFilmstrip {
+	width:min(330px,calc(100% - 12px));
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip[data-mode="fullscreen"]{
+	width:min(360px,calc(100vw - 12px))
+}
+.zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame img {height:45px}
+}
+`;
+	}
+}
+class SceneSearchLayouts08_09 {
+	static get DESCRIPTORS() {
+		return [
+			{id:'08',label:'片側引き出し',
+				description:'シーン画像の横に操作用引き出しを配置。狭い画面は下段へ折り返す'},
+			{id:'09',label:'分離リモコン',
+				description:'シーン画像と操作ボタンを視覚的に分離。通常・全画面とも端で退避'}
+		];
+	}
+	static install(registry,Card) {
+		if(typeof registry?.register!=='function'||typeof Card!=='function') {
+			throw new TypeError('Drawer layouts require the shared registry and card');
+		}
+		const [drawer,remote]=SceneSearchLayouts08_09.DESCRIPTORS;
+		registry.register({...drawer,
+			factory:args=>new SceneSearchLayouts08_09({
+				...args,Card,layoutId:drawer.id
+			})});
+		registry.register({...remote,
+			factory:args=>new SceneSearchLayouts08_09({
+				...args,Card,layoutId:remote.id
+			})});
+		return registry;
+	}
+	static get CSS() {return `
+/* No transparent cover or second full-width pointer layer. */
+.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote) {
+	--scene-bottom:62px;
+	left:var(--scene-x,50%);
+	transform:translateX(-50%);
+	max-width:calc(100% - 16px);
+	isolation:isolate;
+}
+.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote)[data-mode="fullscreen"] {
+	--scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px);
+}
+.zenzaSceneSearchHost.zenzaSceneEdgeDrawer {
+	width:min(205px,calc(100% - 16px));
+	border-radius:6px;
+}
+.zenzaSceneEdgeDrawer .zenzaSceneActions {
+	position:absolute;left:100%;right:auto;bottom:0;
+	width:110px;min-width:0;display:flex;flex-wrap:wrap;gap:3px;
+	padding:4px;border-radius:6px;background:#111b28;
+	box-shadow:0 2px 11px #0008;
+	opacity:0;visibility:hidden;pointer-events:none;
+	transform:translateX(-8px);
+	transition:transform .14s ease,opacity .14s ease,visibility .14s;
+}
+.zenzaSceneEdgeDrawer .zenzaSceneActions .zenzaSceneBtn,
+.zenzaSceneDetachedRemote .zenzaSceneActions .zenzaSceneBtn {
+	position:static;opacity:1;visibility:visible;pointer-events:auto;
+	transform:none;flex:0 0 auto;
+}
+.zenzaSceneEdgeDrawer:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
+	opacity:1;visibility:visible;pointer-events:auto;transform:translateX(0);
+}
+.zenzaSceneEdgeDrawer[data-scui-side="left"] .zenzaSceneActions {
+	left:auto;right:100%;transform:translateX(8px);
+}
+.zenzaSceneEdgeDrawer[data-scui-side="left"]:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
+	transform:translateX(0);
+}
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote {
+	width:min(195px,calc(100% - 16px));border-radius:6px;
+}
+.zenzaSceneDetachedRemote .zenzaSceneRemoteControls {
+	position:absolute;left:calc(100% + 8px);top:0;
+	min-width:126px;max-width:144px;padding:4px;
+	border:1px solid #4b6077;border-radius:7px;
+	background:#111b28;box-shadow:0 3px 12px #0009;
+}
+.zenzaSceneDetachedRemote .zenzaSceneRemoteControls .zenzaSceneActions {
+	position:static;display:flex;flex-wrap:wrap;justify-content:center;
+	gap:3px;opacity:1;visibility:visible;pointer-events:auto;
+}
+.zenzaSceneDetachedRemote[data-scui-side="left"] .zenzaSceneRemoteControls {
+	left:auto;right:calc(100% + 8px);
+}
+.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact {
+	width:min(124px,calc(100% - 12px));
+}
+.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact .scene-seek-back,
+.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact .scene-seek-forward {
+	display:none!important;pointer-events:none;
+}
+.zenzaSceneEdgeDrawer .scene-more {
+	position:static;opacity:1;visibility:visible;pointer-events:auto;
+}
+.zenzaSceneEdgeDrawer[data-scui-side="stack"] .zenzaSceneActions {
+	left:0;right:auto;bottom:auto;top:calc(100% + 5px);
+	width:min(200px,calc(100vw - 16px));transform:translateY(-5px);
+}
+.zenzaSceneEdgeDrawer[data-scui-side="stack"]:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
+	transform:translateY(0);
+}
+.zenzaSceneDetachedRemote[data-scui-side="stack"] .zenzaSceneRemoteControls {
+	left:0;right:auto;top:calc(100% + 5px);
+	max-width:calc(100vw - 16px);
+}
+@media(max-width:460px) {
+	.zenzaSceneEdgeDrawer .zenzaSceneActions,
+	.zenzaSceneEdgeDrawer[data-scui-side="left"] .zenzaSceneActions {
+		left:0;right:auto;bottom:auto;top:calc(100% + 5px);
+		width:min(200px,calc(100vw - 16px));transform:translateY(-5px);
+	}
+	.zenzaSceneEdgeDrawer:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
+		transform:translateY(0);
+	}
+	.zenzaSceneDetachedRemote .zenzaSceneRemoteControls,
+	.zenzaSceneDetachedRemote[data-scui-side="left"] .zenzaSceneRemoteControls {
+		left:0;right:auto;top:calc(100% + 5px);
+		max-width:calc(100vw - 16px);
+	}
+}
+@media(prefers-reduced-motion:reduce) {
+	.zenzaSceneEdgeDrawer .zenzaSceneActions {transition:none}
+}
+`;}
+	constructor({Card,layoutId,document,container,mode,onAction,settings}={}) {
+		if(typeof Card!=='function'||!document||!container||
+			!['08','09'].includes(layoutId)){
+			throw new TypeError('Drawer layouts require ID, DOM and Card');
+		}
+		this.id=layoutId;
+		this.container=container;
+		this.mode=mode;
+		this.card=new Card({document,container,id:layoutId,mode,onAction,settings,
+			layoutClass:layoutId==='08'?'zenzaSceneEdgeDrawer':'zenzaSceneDetachedRemote',
+			extraCss:SceneSearchLayouts08_09.CSS});
+		this.root=null;this._disposed=false;this._remote=null;
+	}
+	mount(state) {
+		if(this._disposed){throw new Error('Layout disposed');}
+		this.card.mount(state);this.root=this.card.root;
+		try {
+			if(this.id==='08') {
+				const handle=this.root.querySelector('.scene-more');
+				const actions=this.root.querySelector('.zenzaSceneActions');
+				const foot=this.root.querySelector('.zenzaSceneFoot');
+				foot.insertBefore(handle,actions);
+			}
+			if(this.id==='09') {
+				const actions=this.root.querySelector('.zenzaSceneActions');
+				const holder=this.card.document.createElement('aside');
+				holder.className='zenzaSceneRemoteControls';
+				holder.setAttribute('role','toolbar');
+				holder.setAttribute('aria-label','シーンサーチ分離リモコン');
+				holder.append(actions);
+				this.root.append(holder);
+				this._remote=holder;
+			}
+			this.render(state);
+		} catch(error) {this.dispose();throw error;}
+	}
+	render(state) {
+		if(this._disposed||!this.root){return;}
+		this.card.render(state);
+		const width=this.container.getBoundingClientRect?.().width||
+			this.container.clientWidth||800;
+		const cardWidth=state?.seekStepSeconds===0?124:this.id==='08'?205:195;
+		const remoteWidth=this.id==='08'?126:152;
+		const x=Number(this.root.style.getPropertyValue('--scene-x').replace('px',''));
+		const center=Number.isFinite(x)&&x>0?x:width/2;
+		const limit=cardWidth/2+8;
+		const clamped=Math.min(Math.max(center,limit),Math.max(limit,width-limit));
+		const rightSpace=width-clamped-cardWidth/2;
+		const leftSpace=clamped-cardWidth/2;
+		const side=rightSpace>=remoteWidth+12?'right':
+			leftSpace>=remoteWidth+12?'left':'stack';
+		this.root.dataset.scuiSide=side;
+		if(Number.isFinite(clamped)&&Math.abs(clamped-center)>0.5){
+			this.root.style.setProperty('--scene-x',Math.round(clamped)+'px');
+		}
+	}
+	onPreview(asset,context){this.card.onPreview(asset,context);}
+	dispose(){
+		if(this._disposed){return;}
+		this._disposed=true;
+		this.card.dispose();
+		this.root=null;this._remote=null;
+	}
+}
+class SceneSearchLayout10 {
+	static get STYLE() {return `
+.zenzaSceneSearchHost[data-layout="10"]{
+	--scene-bottom:78px;max-width:calc(100% - 14px);
+	transition:left .12s ease-out,bottom .12s ease-out;
+}
+.zenzaSceneSearchHost[data-layout="10"].is-compact{
+	width:min(124px,calc(100% - 14px));
+}
+.zenzaSceneSearchHost[data-layout="10"][data-mode="fullscreen"]{
+	--scene-bottom:88px;
+}
+@media(prefers-reduced-motion:reduce){
+.zenzaSceneSearchHost[data-layout="10"]{transition:none}
+}
+`;}
+	static validRect(r){
+		return !!r&&[r.x,r.y,r.width,r.height].every(Number.isFinite)&&
+			r.width>=0&&r.height>=0;
+	}
+	static overlap(a,b){
+		return Math.max(0,Math.min(a.right,b.x+b.width)-Math.max(a.left,b.x))*
+			Math.max(0,Math.min(a.bottom,b.y+b.height)-Math.max(a.top,b.y));
+	}
+	static choose({width,height,sceneWidth,sceneHeight,cursorX,obstacles=[],
+		previous=null,baseBottom=78}={}){
+		if(![width,height,sceneWidth,sceneHeight].every(Number.isFinite)||
+			width<=0||height<=0||sceneWidth<=0||sceneHeight<=0){return null;}
+		const margin=7;
+		const clamp=x=>Math.min(width-sceneWidth/2-margin,
+			Math.max(sceneWidth/2+margin,x));
+		const target=clamp(Number.isFinite(cursorX)?cursorX:width/2);
+		const base=Math.max(0,baseBottom);
+		const raised=base+sceneHeight+12;
+		const choices=[
+			{x:target,bottom:base,slot:'cursor'},
+			{x:clamp(width*.24),bottom:base,slot:'left'},
+			{x:clamp(width*.76),bottom:base,slot:'right'},
+			{x:clamp(width*.5),bottom:raised,slot:'raised'},
+			{x:target,bottom:raised,slot:'above-cursor'}
+		];
+		let winner=null,best=Infinity;
+		for(const c of choices){
+			if(c.bottom+sceneHeight+margin>height){continue;}
+			const box={left:c.x-sceneWidth/2,right:c.x+sceneWidth/2,
+				top:height-c.bottom-sceneHeight,bottom:height-c.bottom};
+			const overlap=obstacles.filter(SceneSearchLayout10.validRect)
+				.reduce((sum,r)=>sum+SceneSearchLayout10.overlap(box,r),0);
+			const shift=Math.abs(c.x-target)*.07+
+				Math.max(0,c.bottom-base)*.06;
+			const sticky=previous?.slot===c.slot?-50:0;
+			const score=overlap*100+shift+sticky;
+			if(score<best){winner={...c,overlap,score};best=score;}
+		}
+		return winner;
+	}
+	static register(registry,{Card,clock}={}){
+		if(!registry||typeof registry.register!=='function'||typeof Card!=='function'){
+			throw new TypeError('Layout10 requires registry and shared Card');
+		}
+		registry.register({id:'10',label:'スマート自動回避',
+			description:'コメントプレビューとの衝突を低頻度で検出し自動配置する',
+			factory:args=>new SceneSearchLayout10({...args,Card,clock})});
+		return registry;
+	}
+	constructor({document,container,mode,onAction,settings={},Card,clock}={}){
+		if(!Card||!document||!container){throw new TypeError('Missing shared card');}
+		this.document=document;this.container=container;this.mode=mode;
+		this.settings=settings||{};
+		this.clock=clock||{now:()=>Date.now()};
+		this.card=new Card({document,container,mode,id:'10',
+			layoutClass:'zenzaSceneSmartAvoid',
+			extraCss:SceneSearchLayout10.STYLE,onAction});
+		this.root=null;this._lastCheck=-Infinity;this._previous=null;this._disposed=false;
+	}
+	mount(state){
+		if(this._disposed){throw new Error('Layout10 disposed');}
+		this.card.mount(state);this.root=this.card.root;this.render(state);
+	}
+	geometry(){
+		if(typeof this.settings.measure==='function'){
+			return this.settings.measure(this.root,this.container,this.mode);
+		}
+		const frame=this.container.getBoundingClientRect();
+		const card=this.root.getBoundingClientRect();
+		if(!frame.width||!frame.height||!card.width||!card.height){return null;}
+		return {width:frame.width,height:frame.height,
+			sceneWidth:card.width,sceneHeight:card.height,cursorX:frame.width/2,
+			obstacles:Array.from(this.container.querySelectorAll('.zenzaCommentPreview'))
+				.filter(el=>!el.hidden).map(el=>{
+					const r=el.getBoundingClientRect();
+					return {x:r.x-frame.x,y:r.y-frame.y,width:r.width,height:r.height};
+				})};
+	}
+	render(state){
+		if(this._disposed){return;}
+		this.card.render(state);
+		if(!this.root||this.root.hidden){return;}
+		const now=this.clock.now();
+		if(Number.isFinite(now)&&now-this._lastCheck<160){return;}
+		this._lastCheck=Number.isFinite(now)?now:Date.now();
+		const input=this.geometry();if(!input){return;}
+		const next=SceneSearchLayout10.choose({...input,
+			baseBottom:this.mode==='fullscreen'?88:78,previous:this._previous});
+		if(!next){return;}
+		if(!this._previous||this._previous.x!==next.x||
+			this._previous.bottom!==next.bottom){
+			this.root.style.setProperty('--scene-x',next.x+'px');
+			this.root.style.setProperty('--scene-bottom',next.bottom+'px');
+		}
+		this._previous=next;
+	}
+	onPreview(asset,context){this.card.onPreview(asset,context);}
+	dispose(){
+		if(this._disposed){return;}
+		this._disposed=true;this.card.dispose();this.root=null;this._previous=null;
+	}
+}
+function createSceneSearchLayoutRegistry({clock}={}) {
+	const registry=new SceneSearchLayoutRegistry();
+	const coverage=SceneSearchLayoutCatalog.install(registry,{
+		Card:SceneSearchLayoutCard,
+		registerClassic:registerSceneLayouts01_02,
+		SideShelf:SceneSearchLayouts03_04,
+		PlaybackDeck:SceneSearchLayouts05_06,
+		Filmstrip:SceneSearchLayout07,
+		Drawer:SceneSearchLayouts08_09,
+		SmartAvoid:SceneSearchLayout10,
+		clock
+	});
+	if(!coverage.complete||registry.list().length!==10){
+		throw new Error('Scene layout bootstrap must include all ten providers');
+	}
+	return registry;
+}
+class SceneSearchController {
+	constructor({getPreference,createLayout,loadPreview,onSeek,onError}={}) {
+		if(typeof getPreference!=='function'||typeof createLayout!=='function'){
+			throw new TypeError('SceneSearchController requires preferences and a layout factory');
+		}
+		this._getPreference=getPreference;
+		this._createLayout=createLayout;
+		this._loadPreview=loadPreview||null;
+		this._onSeek=typeof onSeek==='function'?onSeek:null;
+		this._onError=typeof onError==='function'?onError:null;
+		this._mode='normal';
+		this._videoId=null;
+		this._time=0;
+		this._pinned=false;
+		this._shown=false;
+		this._started=false;
+		this._disposed=false;
+		this._layout=null;
+		this._layoutId=null;
+		this._epoch=0;
+		this._abort=null;
+	}
+	_pref(key,fallback) {
+		const value=this._getPreference(key);
+		return value===undefined?fallback:value;
+	}
+	_layoutFor(mode) {
+		const linked=this._pref('sceneSearch.layout.linkFullscreen',false)===true;
+		const key=mode==='fullscreen'&&!linked?
+			'sceneSearch.layout.fullscreen':'sceneSearch.layout.normal';
+		const id=this._pref(key,'01');
+		return typeof id==='string'&&/^(0[1-9]|10)$/.test(id)?id:'01';
+	}
+	_stepSeconds() {
+		const v=this._pref('sceneSearch.seekStepSeconds',5);
+		return Number.isSafeInteger(v)&&v>=0&&v<=600?v:5;
+	}
+	_previewEnabled() {
+		return this._pref('sceneSearch.commentPreviewVisible',true)!==false;
+	}
+	get snapshot() {
+		return Object.freeze({mode:this._mode,layoutId:this._layoutId,
+			videoId:this._videoId,time:this._time,pinned:this._pinned,
+			shown:this._shown,seekStepSeconds:this._stepSeconds(),
+			commentPreviewVisible:this._previewEnabled()});
+	}
+	_ensureReady() {
+		if(this._disposed){throw new Error('SceneSearchController has been disposed');}
+	}
+	start(mode='normal') {
+		this._ensureReady();
+		if(this._started){return this.setMode(mode);}
+		this._mode=mode==='fullscreen'?'fullscreen':'normal';
+		this._started=true;
+		this._activateLayout();
+		return this.snapshot;
+	}
+	_cancelPreview() {
+		this._epoch++;
+		this._abort?.abort();
+		this._abort=null;
+	}
+	_activateLayout() {
+		this._cancelPreview();
+		this._layout?.dispose?.();
+		this._layout=null;
+		const desired=this._layoutFor(this._mode);
+		const create=id=>{
+			const candidate=this._createLayout({id,mode:this._mode});
+			if(!candidate||typeof candidate.dispose!=='function'){
+				throw new TypeError('Layout '+id+' must supply dispose()');
+			}
+			try{candidate.mount?.(this.snapshot);}catch(error){
+				candidate.dispose();throw error;
+			}
+			return candidate;
+		};
+		try{
+			this._layoutId=desired;
+			this._layout=create(desired);
+		}catch(error){
+			this._onError?.(error,desired);
+			if(desired==='01'){this._layoutId=null;throw error;}
+			this._layoutId='01';
+			this._layout=create('01');
+		}
+		this._render();
+	}
+	_render() {
+		if(!this._started||this._disposed){return;}
+		this._layout?.render?.(this.snapshot);
+	}
+	setMode(mode) {
+		this._ensureReady();
+		if(mode!=='normal'&&mode!=='fullscreen'){throw new RangeError('Unknown display mode');}
+		if(!this._started){return this.start(mode);}
+		if(this._mode===mode){return this.snapshot;}
+		this._mode=mode;
+		this._pinned=false;
+		this._activateLayout();
+		return this.snapshot;
+	}
+	onPreferencesChanged(key) {
+		this._ensureReady();
+		if(!this._started){return this.snapshot;}
+		if(key?.startsWith('sceneSearch.layout.')) {
+			if(this._layoutFor(this._mode)!==this._layoutId){
+				this._activateLayout();
+				return this.snapshot;
+			}
+		}
+		this._render();
+		return this.snapshot;
+	}
+	onVideoChange(videoId) {
+		this._ensureReady();
+		if(this._videoId===videoId){return this.snapshot;}
+		this._cancelPreview();
+		this._videoId=videoId||null;
+		this._time=0;
+		this._pinned=false;
+		this._shown=false;
+		this._render();
+		return this.snapshot;
+	}
+	setTime(seconds) {
+		this._ensureReady();
+		if(!Number.isFinite(seconds)||seconds<0||this._time===seconds){
+			return this.snapshot;
+		}
+		this._time=seconds;
+		this._render();
+		return this.snapshot;
+	}
+	show(value=true) {
+		this._ensureReady();
+		const next=value!==false;
+		if(this._shown===next&&(next||!this._pinned)){return this.snapshot;}
+		this._shown=next;
+		if(!this._shown){this._pinned=false;}
+		this._render();
+		return this.snapshot;
+	}
+	pin(value) {
+		this._ensureReady();
+		const next=value===undefined?!this._pinned:!!value;
+		if(this._pinned===next&&(!next||this._shown)){return this.snapshot;}
+		this._pinned=next;
+		if(this._pinned){this._shown=true;}
+		this._render();
+		return this.snapshot;
+	}
+	seekBy(direction) {
+		this._ensureReady();
+		if(!this._started||!this._onSeek){return false;}
+		const step=this._stepSeconds();
+		const sign=Math.sign(Number(direction));
+		if(!step||!Number.isFinite(sign)||!sign){return false;}
+		this._onSeek(sign*step);
+		return true;
+	}
+	async previewAt(seconds) {
+		this._ensureReady();
+		if(!this._started||!this._videoId||!this._loadPreview||
+			!Number.isFinite(seconds)||seconds<0){return false;}
+		this._cancelPreview();
+		const epoch=this._epoch;
+		const videoId=this._videoId;
+		const time=seconds;
+		if(typeof AbortController==='function'){this._abort=new AbortController();}
+		const signal=this._abort?.signal;
+		let asset;
+		try {
+			asset=await this._loadPreview({videoId,time,signal});
+		}catch(error){
+			if(this._disposed||epoch!==this._epoch){return false;}
+			this._onError?.(error,{videoId,time});
+			return false;
+		}
+		if(this._disposed||epoch!==this._epoch||videoId!==this._videoId){
+			return false;
+		}
+		this._layout?.onPreview?.(asset,{videoId,time});
+		return true;
+	}
+	dispose() {
+		if(this._disposed){return;}
+		this._disposed=true;
+		this._cancelPreview();
+		this._layout?.dispose?.();
+		this._layout=null;
+		this._layoutId=null;
+		this._started=false;
+	}
+}
+class SceneSearchInteraction {
+	constructor({controller,getPreviewRect,subscribePointerMove,clock,idleLimiter}={}) {
+		if(!controller || typeof getPreviewRect!=='function' ||
+			typeof subscribePointerMove!=='function'){
+			throw new TypeError('Interaction requires a controller and geometry hooks');
+		}
+		this.controller=controller;
+		this._idle=idleLimiter||null;
+		this._getPreviewRect=getPreviewRect;
+		this._subscribe=subscribePointerMove;
+		this._clock=clock||{setTimeout:(fn,ms)=>globalThis.setTimeout(fn,ms),
+			clearTimeout:id=>globalThis.clearTimeout(id)};
+		this._overSeek=false;
+		this._overPreview=false;
+		this._dragging=false;
+		this._anchor=null;
+		this._timer=null;
+		this._unsubscribe=null;
+		this._disposed=false;
+	}
+	static insideCorridor(anchor,rect,x,y) {
+		if(!anchor||!rect || !Number.isFinite(x)||!Number.isFinite(y)||
+			!Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
+			!Number.isFinite(rect.top)||!Number.isFinite(rect.bottom)){return false;}
+		if(y<rect.top-18||y>anchor.y+25){return false;}
+		const rise=Math.max(1,anchor.y-rect.bottom);
+		const t=Math.max(0,Math.min(1,(anchor.y-y)/rise));
+		const left=anchor.x-30+t*(rect.left-18-(anchor.x-30));
+		const right=anchor.x+30+t*(rect.right+18-(anchor.x+30));
+		return x>=left&&x<=right;
+	}
+	_clearTimer() {
+		if(this._timer!==null){this._clock.clearTimeout(this._timer);this._timer=null;}
+	}
+	_stopTracking() {
+		this._unsubscribe?.();
+		this._unsubscribe=null;
+		this._anchor=null;
+	}
+	_armHide(delay) {
+		this._clearTimer();
+		if(this._disposed||this.controller.snapshot.pinned||this._overSeek||
+			this._overPreview||this._dragging){return;}
+		this._timer=this._clock.setTimeout(()=>{
+			this._timer=null;
+			if(this._disposed||this.controller.snapshot.pinned||this._overSeek||
+				this._overPreview||this._dragging){return;}
+			this._stopTracking();
+			this.controller.show(false);
+		},delay);
+	}
+	seekEnter(point) {
+		if(this._disposed){return;}
+		this._overSeek=true;
+		this._clearTimer();
+		this._stopTracking();
+		this.controller.show(true);
+		this._idle?.seekEnter(point);
+	}
+	seekMove(point) {
+		this._idle?.seekMove(point);
+	}
+	thumbnailChanged(token) {
+		this._idle?.previewChanged(token);
+	}
+	idlePreferencesChanged() {
+		this._idle?.updateSeconds();
+	}
+	seekLeave(point) {
+		if(this._disposed){return;}
+		this._overSeek=false;
+		this._idle?.seekLeave();
+		if(this._overPreview||this._dragging||this.controller.snapshot.pinned){return;}
+		const x=Number(point?.clientX),y=Number(point?.clientY);
+		if(!Number.isFinite(x)||!Number.isFinite(y)){this._armHide(250);return;}
+		this._stopTracking();
+		this._anchor={x,y};
+		this._unsubscribe=this._subscribe(e=>this.pointerMove(e));
+		this._armHide(850);
+	}
+	pointerMove(e) {
+		if(this._disposed||!this._anchor||this._overPreview||
+			this.controller.snapshot.pinned){return;}
+		let rect;
+		try{rect=this._getPreviewRect();}
+		catch(_){this._armHide(180);return;}
+		const inside=SceneSearchInteraction.insideCorridor(
+			this._anchor,rect,e?.clientX,e?.clientY);
+		this._armHide(inside?850:180);
+	}
+	previewEnter() {
+		if(this._disposed){return;}
+		this._overPreview=true;
+		this._idle?.pause('preview',true);
+		this._clearTimer();
+		this._stopTracking();
+		this.controller.show(true);
+	}
+	previewLeave() {
+		if(this._disposed){return;}
+		this._overPreview=false;
+		this._idle?.pause('preview',false);
+		this._armHide(450);
+	}
+	previewFocus(active) {
+		if(active){this.previewEnter();}else{this.previewLeave();}
+		this._idle?.pause('focus',!!active);
+	}
+	setDragging(value) {
+		if(this._disposed){return;}
+		this._dragging=!!value;
+		this._idle?.pause('drag',this._dragging);
+		if(this._dragging){
+			this._clearTimer();
+			this._stopTracking();
+			this.controller.show(true);
+		}else{this._armHide(450);}
+	}
+	togglePin() {
+		if(this._disposed){return null;}
+		const snapshot=this.controller.pin();
+		this._idle?.pause('pin',snapshot.pinned);
+		if(snapshot.pinned){
+			this._clearTimer();
+			this._stopTracking();
+		}else{this._armHide(450);}
+		return snapshot;
+	}
+	reset() {
+		if(this._disposed){return;}
+		this._idle?.reset();
+		this._clearTimer();
+		this._stopTracking();
+		this._overSeek=false;
+		this._overPreview=false;
+		this._dragging=false;
+		this.controller.pin(false);
+		this.controller.show(false);
+	}
+	dispose() {
+		if(this._disposed){return;}
+		this.reset();
+		this._idle?.dispose();
+		this._disposed=true;
+	}
+}
+class ScenePreviewIdleLimiter {
+	constructor({controller,getSeconds,clock,onIdleHidden}={}) {
+		if(!controller||typeof getSeconds!=='function'){
+			throw new TypeError('ScenePreviewIdleLimiter needs controller/preferences');
+		}
+		this.controller=controller;
+		this._getSeconds=getSeconds;
+		this._clock=clock||{setTimeout:(fn,ms)=>globalThis.setTimeout(fn,ms),
+			clearTimeout:id=>globalThis.clearTimeout(id)};
+		this._onIdleHidden=onIdleHidden||null;
+		this._timer=null;
+		this._generation=0;
+		this._insideSeek=false;
+		this._anchor=null;
+		this._contentToken=null;
+		this._hold=new Set();
+		this._idleHidden=false;
+		this._disposed=false;
+	}
+	static validSeconds(value) {
+		return typeof value==='number'&&Number.isFinite(value)&&
+			value>=0&&value<=30&&Number.isInteger(value*2);
+	}
+	_seconds() {
+		const value=this._getSeconds();
+		return ScenePreviewIdleLimiter.validSeconds(value)?value:2;
+	}
+	get hiddenByIdle() {return this._idleHidden;}
+	get timerActive() {return this._timer!==null;}
+	_clearTimer() {
+		this._generation++;
+		if(this._timer!==null){this._clock.clearTimeout(this._timer);this._timer=null;}
+	}
+	_notifyHidden(hidden) {
+		if(this._idleHidden===hidden){return;}
+		this._idleHidden=hidden;
+		this._onIdleHidden?.(hidden);
+	}
+	_arm() {
+		this._clearTimer();
+		const sec=this._seconds();
+		if(this._disposed||!this._insideSeek||this._hold.size||!sec){return;}
+		const generation=this._generation;
+		this._timer=this._clock.setTimeout(()=>{
+			if(this._disposed||generation!==this._generation||
+				!this._insideSeek||this._hold.size){return;}
+			this._timer=null;
+			this._notifyHidden(true);
+			this.controller.show(false);
+		},sec*1000);
+	}
+	_resumed() {
+		if(this._disposed){return;}
+		this._notifyHidden(false);
+		this.controller.show(true);
+		this._arm();
+	}
+	seekEnter(point) {
+		if(this._disposed){return;}
+		this._insideSeek=true;
+		this._anchor=ScenePreviewIdleLimiter._point(point);
+		this._resumed();
+	}
+	static _point(value) {
+		if(!value||!Number.isFinite(value.clientX)||
+			!Number.isFinite(value.clientY)){return null;}
+		return {x:value.clientX,y:value.clientY};
+	}
+	seekMove(point) {
+		if(this._disposed||!this._insideSeek){return false;}
+		const next=ScenePreviewIdleLimiter._point(point);
+		if(!next){return false;}
+		const prior=this._anchor;
+		if(!prior){
+			this._anchor=next;
+			this._resumed();
+			return true;
+		}
+		const dx=next.x-prior.x,dy=next.y-prior.y;
+		if(dx*dx+dy*dy<16){return false;}
+		this._anchor=next;
+		this._resumed();
+		return true;
+	}
+	previewChanged(token) {
+		if(this._disposed||!this._insideSeek||token===this._contentToken){return;}
+		this._contentToken=token;
+		this._resumed();
+	}
+	pause(reason,active=true) {
+		if(this._disposed||typeof reason!=='string'||!reason){return;}
+		if(active){
+			this._hold.add(reason);
+			this._clearTimer();
+			this._notifyHidden(false);
+			this.controller.show(true);
+		}else{
+			this._hold.delete(reason);
+			if(!this._hold.size&&this._insideSeek){this._arm();}
+		}
+	}
+	updateSeconds() {
+		if(this._disposed){return;}
+		this._notifyHidden(false);
+		if(this._insideSeek){this.controller.show(true);}
+		this._arm();
+	}
+	seekLeave() {
+		if(this._disposed){return;}
+		this._clearTimer();
+		this._insideSeek=false;
+		this._anchor=null;
+		this._contentToken=null;
+		this._notifyHidden(false);
+	}
+	reset() {
+		if(this._disposed){return;}
+		this.seekLeave();
+		this._hold.clear();
+	}
+	dispose() {
+		if(this._disposed){return;}
+		this.reset();
+		this._disposed=true;
+	}
+}
+class SceneSeekStepControl {
+	static get PRESETS() { return [0,1,3,5,10,15,30,60]; }
+	static validStep(value) {
+		return Number.isSafeInteger(value) && value>=0 && value<=600;
+	}
+	constructor({document,getSeconds,setSeconds,onSeek,onCompactChange,onMenuChange,onError}={}) {
+		if(!document || typeof getSeconds!=='function' ||
+			typeof setSeconds!=='function' || typeof onSeek!=='function'){
+			throw new TypeError('SeekStepControl requires document and callbacks');
+		}
+		this.document=document;
+		this._getSeconds=getSeconds;
+		this._setSeconds=setSeconds;
+		this._onSeek=onSeek;
+		this._onCompactChange=onCompactChange||null;
+		this._onMenuChange=typeof onMenuChange==='function'?onMenuChange:null;
+		this._onError=onError||null;
+		this._seconds=5;
+		this._compact=null;
+		this.root=null;
+		this._opened=false;
+		this._onClick=this._handleClick.bind(this);
+		this._onKey=this._handleKey.bind(this);
+		this._onOutside=this._handleOutside.bind(this);
+	}
+	mount(container) {
+		if(!container || typeof container.appendChild!=='function'){
+			throw new TypeError('A mounting container is required');
+		}
+		if(this.root){throw new Error('Control already mounted');}
+		const root=this.document.createElement('div');
+		root.className='zenzaSceneSeekStepControl';
+		root.setAttribute('role','group');
+		root.setAttribute('aria-label','シーンサーチの移動秒数');
+		root.innerHTML=`
+			<button type="button" data-scui="back" aria-label="指定秒数戻る">‹</button>
+			<button type="button" data-scui="open" aria-haspopup="true"
+				aria-expanded="false" aria-label="移動秒数を変更">5秒</button>
+			<button type="button" data-scui="forward" aria-label="指定秒数進む">›</button>
+			<section class="zenzaSceneStepPopup" data-scui="panel" hidden>
+				<div class="zenzaSceneStepPresets" data-scui="presets"></div>
+				<label>秒数 <input type="number" data-scui="custom"
+					min="0" max="600" step="1" aria-label="移動秒数（0〜600秒）"></label>
+				<button type="button" data-scui="save">適用</button>
+				<button type="button" data-scui="cancel">閉じる</button>
+			</section>`;
+		const list=root.querySelector('[data-scui="presets"]');
+		for(const step of SceneSeekStepControl.PRESETS){
+			const button=this.document.createElement('button');
+			button.type='button';
+			button.dataset.scui='preset';
+			button.dataset.seconds=String(step);
+			button.textContent=step+'秒';
+			list.appendChild(button);
+		}
+		root.addEventListener('click',this._onClick);
+		root.addEventListener('keydown',this._onKey);
+		container.appendChild(root);
+		this.root=root;
+		this.updateFromConfig();
+		return root;
+	}
+	_node(action) {return this.root?.querySelector('[data-scui="'+action+'"]');}
+	get seconds() {return this._seconds;}
+	updateFromConfig() {
+		const value=this._getSeconds();
+		this._seconds=SceneSeekStepControl.validStep(value)?value:5;
+		this._render();
+		return this._seconds;
+	}
+	setStep(value) {
+		if(!SceneSeekStepControl.validStep(value)){
+			this._node('custom')?.setAttribute('aria-invalid','true');
+			return false;
+		}
+		try{this._setSeconds(value);}catch(error){
+			this._onError?.(error);return false;
+		}
+		this._seconds=value;
+		this._node('custom')?.removeAttribute('aria-invalid');
+		this._render();
+		return true;
+	}
+	_render() {
+		if(!this.root){return;}
+		const compact=this._seconds===0;
+		this.root.classList.toggle('is-compact',compact);
+		this.root.style.setProperty('--scene-preview-min-width',
+			compact?'124px':'180px');
+		for(const id of ['back','forward']){
+			const control=this._node(id);
+			control.hidden=compact;
+			control.style.display=compact?'none':'';
+			control.disabled=compact;
+		}
+		this._node('open').textContent=this._seconds+'秒';
+		this._node('custom').value=String(this._seconds);
+		this.root.querySelectorAll('[data-scui="preset"]').forEach(button=>{
+			button.setAttribute('aria-pressed',String(
+				Number(button.dataset.seconds)===this._seconds));
+		});
+		if(this._compact!==compact){
+			this._compact=compact;
+			this._onCompactChange?.(compact,{minPreviewWidth:compact?124:180});
+		}
+	}
+	seek(direction) {
+		if(!this._seconds){return false;}
+		const sign=Math.sign(Number(direction));
+		if(!Number.isFinite(sign)||sign===0){return false;}
+		this._onSeek(sign*this._seconds);
+		return true;
+	}
+	openMenu() {
+		if(!this.root||this._opened){return;}
+		this._opened=true;
+		this._node('panel').hidden=false;
+		this._node('open').setAttribute('aria-expanded','true');
+		this.document.addEventListener('pointerdown',this._onOutside,true);
+		this._onMenuChange?.(true);
+		this._node('custom').focus();
+	}
+	closeMenu() {
+		if(!this.root||!this._opened){return;}
+		this._opened=false;
+		this._node('panel').hidden=true;
+		this._node('open').setAttribute('aria-expanded','false');
+		this.document.removeEventListener('pointerdown',this._onOutside,true);
+		this._onMenuChange?.(false);
+	}
+	_handleOutside(e) {
+		if(this.root&&!this.root.contains(e.target)){this.closeMenu();}
+	}
+	_applyCustom() {
+		const input=this._node('custom');
+		const raw=input?.value.trim();
+		if(!raw||!/^\d+$/.test(raw)){
+			input?.setAttribute('aria-invalid','true');return false;
+		}
+		const value=Number(raw);
+		if(!this.setStep(value)){return false;}
+		this.closeMenu();return true;
+	}
+	_handleClick(e) {
+		const button=e.target.closest?.('button[data-scui]');
+		if(!button||!this.root?.contains(button)){return;}
+		const action=button.dataset.scui;
+		if(action==='back'||action==='forward'){
+			this.seek(action==='back'?-1:1);
+		}else if(action==='open'){
+			this._opened?this.closeMenu():this.openMenu();
+		}else if(action==='preset'){
+			if(this.setStep(Number(button.dataset.seconds))){this.closeMenu();}
+		}else if(action==='save'){
+			this._applyCustom();
+		}else if(action==='cancel'){
+			this.closeMenu();
+		}
+	}
+	_handleKey(e) {
+		if(!this._opened){return;}
+		if(e.key==='Escape'){
+			e.preventDefault();e.stopPropagation();this.closeMenu();
+			this._node('open').focus();
+		}else if(e.key==='Enter'&&e.target===this._node('custom')){
+			e.preventDefault();e.stopPropagation();this._applyCustom();
+		}else if(e.target===this._node('custom')){
+			e.stopPropagation(); // Do not forward text edits to player shortcuts.
+		}
+	}
+	dispose() {
+		if(!this.root){return;}
+		this.closeMenu();
+		this.root.removeEventListener('click',this._onClick);
+		this.root.removeEventListener('keydown',this._onKey);
+		this.root.remove();
+		this.root=null;
+		this._compact=null;
+	}
+}
+class SceneCommentSearch {
+	constructor({getChats,getVideoId,seekTo,onResults,limit=100}={}) {
+		if(typeof getChats!=='function'||typeof getVideoId!=='function'||
+			typeof seekTo!=='function') {
+			throw new TypeError('Comment search requires loaded chats, video ID and seek action');
+		}
+		this._getChats=getChats;
+		this._getVideoId=getVideoId;
+		this._seekTo=seekTo;
+		this._onResults=onResults||null;
+		this._limit=Number.isSafeInteger(limit)&&limit>=1&&limit<=500?limit:100;
+		this._videoId=null;
+		this._hits=[];
+		this._query='';
+		this._total=0;
+		this._disposed=false;
+	}
+	static normalize(value) {
+		return String(value??'').normalize('NFKC').toLocaleLowerCase().trim();
+	}
+	get state() {
+		return {videoId:this._videoId,query:this._query,total:this._total,
+			hits:this._hits.slice(),truncated:this._total>this._hits.length};
+	}
+	search(query) {
+		if(this._disposed){return this.state;}
+		const videoId=this._getVideoId()??null;
+		if(videoId!==this._videoId){this._hits=[];this._query='';this._total=0;}
+		this._videoId=videoId;
+		const normalized=SceneCommentSearch.normalize(query).slice(0,128);
+		this._query=normalized;
+		this._hits=[];
+		this._total=0;
+		if(!videoId||!normalized){
+			this._onResults?.(this.state);
+			return this.state;
+		}
+		const chats=this._getChats();
+		if(!Array.isArray(chats)){this._onResults?.(this.state);return this.state;}
+		for(let i=0;i<chats.length;i++){
+			const chat=chats[i];
+			if(!chat||typeof chat.text!=='string'||!Number.isFinite(chat.vpos)||
+				chat.vpos<0){continue;}
+			if(!SceneCommentSearch.normalize(chat.text).includes(normalized)){continue;}
+			this._total++;
+			if(this._hits.length<this._limit){
+				this._hits.push({text:chat.text,vpos:chat.vpos,
+					time:chat.vpos/100,no:chat.no,uniqNo:chat.uniqNo});
+			}
+		}
+		this._onResults?.(this.state);
+		return this.state;
+	}
+	select(index) {
+		if(this._disposed||!Number.isSafeInteger(index)||index<0||
+			index>=this._hits.length||this._videoId!==this._getVideoId()){return false;}
+		const hit=this._hits[index];
+		this._seekTo(hit.time,hit);
+		return true;
+	}
+	reset(){
+		if(this._disposed){return;}
+		this._hits=[];this._total=0;this._query='';this._videoId=null;
+		this._onResults?.(this.state);
+	}
+	dispose(){
+		if(this._disposed){return;}
+		this.reset();
+		this._disposed=true;
+		this._onResults=null;
+	}
+}
+class SceneCommentSearchPanel {
+	constructor({document,search}={}) {
+		if(!document||!search||typeof search.search!=='function'){
+			throw new TypeError('Search panel needs document and comment search model');
+		}
+		this.document=document;
+		this.search=search;
+		this.root=null;
+		this._open=false;
+		this._onInput=this._handleInput.bind(this);
+		this._onClick=this._handleClick.bind(this);
+		this._onKey=this._handleKey.bind(this);
+	}
+	mount(container) {
+		if(!container||this.root){throw new Error('Search panel cannot be mounted');}
+		const root=this.document.createElement('section');
+		root.className='zenzaSceneCommentSearch';
+		root.setAttribute('role','search');
+		root.setAttribute('aria-label','読み込み済みコメントを検索');
+		root.hidden=true;
+		const label=this.document.createElement('label');
+		label.textContent='コメントを検索';
+		const input=this.document.createElement('input');
+		input.type='search';
+		input.maxLength=128;
+		input.setAttribute('data-scui','query');
+		input.setAttribute('autocomplete','off');
+		label.appendChild(input);
+		root.appendChild(label);
+		const info=this.document.createElement('output');
+		info.setAttribute('data-scui','count');
+		root.appendChild(info);
+		const list=this.document.createElement('ul');
+		list.setAttribute('data-scui','hits');
+		list.setAttribute('aria-label','コメント検索結果');
+		root.appendChild(list);
+		root.addEventListener('input',this._onInput);
+		root.addEventListener('click',this._onClick);
+		root.addEventListener('keydown',this._onKey);
+		container.appendChild(root);
+		this.root=root;
+		return root;
+	}
+	open() {
+		if(!this.root){return false;}
+		this._open=true;
+		this.root.hidden=false;
+		const input=this.root.querySelector('[data-scui="query"]');
+		input.focus();
+		this.refresh();
+		return true;
+	}
+	close() {
+		if(!this.root){return;}
+		this._open=false;
+		this.root.hidden=true;
+	}
+	toggle(){if(this._open){this.close();}else{this.open();}}
+	reset() {
+		this.search.reset();
+		if(!this.root){return;}
+		this.root.querySelector('[data-scui="query"]').value='';
+		this._render(this.search.state);
+	}
+	refresh() {
+		if(!this.root){return;}
+		const input=this.root.querySelector('[data-scui="query"]');
+		this._render(this.search.search(input.value));
+	}
+	_render(state) {
+		const list=this.root?.querySelector('[data-scui="hits"]');
+		if(!list){return;}
+		list.replaceChildren();
+		const count=this.root.querySelector('[data-scui="count"]');
+		count.textContent=state.query?
+			`${state.total}件${state.truncated?'（先頭'+state.hits.length+'件を表示）':''}`:
+			'読み込み済みのコメントから検索します';
+		state.hits.forEach((hit,index)=>{
+			const li=this.document.createElement('li');
+			const button=this.document.createElement('button');
+			button.type='button';
+			button.dataset.scui='result';
+			button.dataset.index=String(index);
+			button.textContent=`${Math.floor(hit.time/60)}:${String(Math.floor(hit.time%60)).padStart(2,'0')}  ${hit.text}`;
+			button.title='このコメントの時刻へ移動';
+			li.appendChild(button);
+			list.appendChild(li);
+		});
+	}
+	_handleInput(event){
+		if(event.target?.dataset?.scui==='query'){this.refresh();}
+	}
+	_handleClick(event){
+		const button=event.target.closest?.('[data-scui="result"]');
+		if(button&&this.root?.contains(button)){
+			if(this.search.select(Number(button.dataset.index))){this.close();}
+		}
+	}
+	_handleKey(event){
+		if(event.key==='Escape'){
+			event.preventDefault();event.stopPropagation();this.close();return;
+		}
+		if(event.target?.dataset?.scui==='query'){
+			event.stopPropagation(); // Search text is never a playback shortcut.
+			if(event.key==='Enter'){
+				event.preventDefault();
+				if(this.search.select(0)){this.close();}
+			}
+		}
+	}
+	dispose(){
+		if(!this.root){return;}
+		this.root.removeEventListener('input',this._onInput);
+		this.root.removeEventListener('click',this._onClick);
+		this.root.removeEventListener('keydown',this._onKey);
+		this.root.remove();
+		this.root=null;
+		this._open=false;
+	}
+}
+class SceneSearchShortcutRouter {
+	constructor({controller,interaction,seekStepControl,commentSearchPanel,
+		getPreference,setPreference,onToggleControls,onError}={}) {
+		if(!controller||typeof getPreference!=='function'||
+			typeof setPreference!=='function') {
+			throw new TypeError('Scene search shortcuts require an active controller/config');
+		}
+		this.controller=controller;
+		this.interaction=interaction||null;
+		this.seekStepControl=seekStepControl||null;
+		this.commentSearchPanel=commentSearchPanel||null;
+		this._get=getPreference;
+		this._set=setPreference;
+		this._toggleControls=onToggleControls||null;
+		this._error=onError||null;
+		this._previousTimeout=null;
+	}
+	_save(key,value) {
+		try {
+			this._set(key,value);
+			this.controller.onPreferencesChanged(key);
+			return true;
+		} catch(error) {
+			this._error?.(error,key);
+			return false;
+		}
+	}
+	_stepChange(direction) {
+		if(!this.seekStepControl){return false;}
+		const current=this.seekStepControl.seconds;
+		const choices=[0,1,3,5,10,15,30,60,120,300,600];
+		const idx=choices.findIndex(v=>v>=current);
+		if(direction>0) {
+			const next=idx<0?600:choices[Math.min(choices.length-1,
+				choices[idx]===current?idx+1:idx)];
+			return this.seekStepControl.setStep(next);
+		}
+		const next=idx<0?600:choices[Math.max(0,
+			choices[idx]===current?idx-1:idx-1)];
+		return this.seekStepControl.setStep(next);
+	}
+	_layout(direction) {
+		const full=this.controller.snapshot.mode==='fullscreen' &&
+			this._get('sceneSearch.layout.linkFullscreen')!==true;
+		const key=full?'sceneSearch.layout.fullscreen':'sceneSearch.layout.normal';
+		const value=this._get(key);
+		const index=/^(0[1-9]|10)$/.test(value)?Number(value):1;
+		const next=((index-1+(direction>0?1:9))%10)+1;
+		return this._save(key,String(next).padStart(2,'0'));
+	}
+	handle(command) {
+		if(typeof command!=='string')return false;
+		switch(command) {
+			case 'sceneSearch-togglePin':
+				return !!this.interaction?.togglePin();
+			case 'sceneSearch-togglePanel':
+				this.controller.show(!this.controller.snapshot.shown);return true;
+			case 'sceneSearch-toggleControls':
+				if(!this._toggleControls)return false;
+				this._toggleControls();return true;
+			case 'sceneSearch-nextLayout':return this._layout(1);
+			case 'sceneSearch-prevLayout':return this._layout(-1);
+			case 'sceneSearch-seekBack':return this.controller.seekBy(-1);
+			case 'sceneSearch-seekForward':return this.controller.seekBy(1);
+			case 'sceneSearch-stepUp':return this._stepChange(1);
+			case 'sceneSearch-stepDown':return this._stepChange(-1);
+			case 'sceneSearch-toggleCommentPreview':
+				return this._save('sceneSearch.commentPreviewVisible',
+					this._get('sceneSearch.commentPreviewVisible')===false);
+			case 'sceneSearch-toggleCommentSearch':
+				if(!this.commentSearchPanel)return false;
+				this.commentSearchPanel.toggle();return true;
+			case 'sceneSearch-toggleIdleHide': {
+				const current=this._get('sceneSearch.idleHideSeconds');
+				if(typeof current!=='number'||!Number.isFinite(current))return false;
+				if(current>0)this._previousTimeout=current;
+				const value=current===0?(this._previousTimeout||2):0;
+				if(!this._save('sceneSearch.idleHideSeconds',value))return false;
+				this.interaction?.idlePreferencesChanged();
+				return true;
+			}
+			default:return false;
+		}
+	}
+}
+// already required
+class SceneSearchPlayerBinding {
+	constructor({view,dialog,document,container,events,isFullscreen,onError,
+		Adapter,Bridge,classes,createRegistry}={}) {
+		if(!view||!dialog||!document||!container||typeof dialog.on!=='function'||
+			typeof dialog.off!=='function'){
+			throw new TypeError('Scene player binding requires a disposable player lifecycle');
+		}
+		this.view=view;this.dialog=dialog;this.document=document;this.container=container;
+		this.events=events;this.isFullscreen=isFullscreen||(()=>false);
+		this.onError=typeof onError==='function'?onError:()=>{};
+		this.Adapter=Adapter||SceneSearchLegacyAdapter;
+		this.Bridge=Bridge||SceneSearchIntegrationBridge;
+		this.createRegistry=createRegistry||createSceneSearchLayoutRegistry;
+		this.classes=classes||{Controller:SceneSearchController,Interaction:SceneSearchInteraction,
+			IdleLimiter:ScenePreviewIdleLimiter,SeekStepControl:SceneSeekStepControl,
+			CommentSearch:SceneCommentSearch,CommentSearchPanel:SceneCommentSearchPanel,
+			ShortcutRouter:SceneSearchShortcutRouter,VisibilityRegistry:UiVisibilityRegistry};
+		this.adapter=null;this._subscriptions=[];this._attached=false;this._disposed=false;
+		this._pagehide=()=>this.dispose();
+	}
+	_listen(owner,event,fn){
+		if(typeof owner?.on!=='function'||typeof owner?.off!=='function'){return;}
+		owner.on(event,fn);this._subscriptions.push([owner,event,fn]);
+	}
+	attach(){
+		if(this._attached||this._disposed){return this;}
+		this._attached=true;
+		this._listen(this.dialog,'open',()=>this._start());
+		this._listen(this.dialog,'close',()=>this._stop());
+		this._listen(this.dialog,'screenModeChange',()=>this._mode());
+		this._listen(this.events,'fullscreenStatusChange',()=>this._mode());
+		this.document.defaultView?.addEventListener('pagehide',this._pagehide);
+		if(this.dialog.isOpen){this._start();}
+		return this;
+	}
+	_mode(){
+		if(this._disposed||!this.adapter){return;}
+		try{this.adapter.screenModeChanged(this.isFullscreen()?'fullscreen':'normal');}
+		catch(_){this._stop();this.onError('SCENE_MODE_FAILED');}
+	}
+	_start(){
+		if(this._disposed||this.adapter){return;}
+		try{
+			const adapter=new this.Adapter({Bridge:this.Bridge,classes:this.classes,
+				registry:this.createRegistry(),controlBar:this.view.videoControlBar,
+				dialog:this.dialog,document:this.document,container:this.container,
+				onError:()=>this.onError('SCENE_ADAPTER_FAILED')});
+			this.adapter=adapter;
+			adapter.start(this.isFullscreen()?'fullscreen':'normal');
+		}catch(_){this._stop();this.onError('SCENE_START_FAILED');}
+	}
+	_stop(){
+		const adapter=this.adapter;this.adapter=null;
+		try{adapter?.dispose();}catch(_){this.onError('SCENE_DISPOSE_FAILED');}
+	}
+	handleShortcut(command){
+		if(this._disposed||typeof command!=='string'||!command.startsWith('sceneSearch-')){
+			return false;
+		}
+		if(!this.adapter&&this.dialog.isOpen){this._start();}
+		return this.adapter?.bridge?.handleShortcut(command)===true;
+	}
+	dispose(){
+		if(this._disposed){return;}
+		this._disposed=true;this._stop();
+		for(const [owner,event,fn] of this._subscriptions){owner.off(event,fn);}
+		this._subscriptions.length=0;
+		this.document.defaultView?.removeEventListener('pagehide',this._pagehide);
+	}
+}
 class PlayerConfig {
 	static getInstance(config) {
 		if (!PlayerConfig.instance) {
@@ -34567,6 +37443,12 @@ class NicoVideoPlayerDialogView extends Emitter {
 			currentTimeGetter: this._currentTimeGetter
 		});
 		this.videoControlBar.on('command', onCommand);
+		this.sceneSearchBinding = new SceneSearchPlayerBinding({
+			view:this,dialog:this._dialog,document,container,
+			events:global.emitter,isFullscreen:()=>Fullscreen.now(),
+			onError:code=>console.warn('[SCUI]',code)
+		});
+		this.sceneSearchBinding.attach();
 		this._$errorMessageContainer = $container.find('.errorMessageContainer');
 		this._$loadingMessageContainer = $container.find('.loadingMessageContainer');
 		await sleep.idle();
@@ -36360,6 +39242,9 @@ class NicoVideoPlayerDialog extends Emitter {
 		return this._onCommand(command, param);
 	}
 	_onCommand(command, param, request) {
+		if(typeof command==='string'&&command.startsWith('sceneSearch-')){
+			return this._view?.sceneSearchBinding?.handleShortcut(command)===true;
+		}
 		let v;
 		switch (command) {
 			case 'volume':

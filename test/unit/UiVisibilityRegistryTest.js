@@ -28,7 +28,9 @@ describe('Task318 centralized visibility manifest',()=>{
     assert(keys.length>=30);
     assert.deepStrictEqual(Array.from(Object.keys(Registry.defaults())),keys);
     assert(Object.values(Registry.defaults()).every(value=>value===true));
-    assert(settings().every(item=>['hover','bar','info','header','related','comment'].includes(item.scope)));
+    assert(settings().every(item=>['hover','bar','info','header','related','comment','scene'].includes(item.scope)));
+    assert.strictEqual(settings().filter(item=>item.scope==='scene').length,7,
+      'all seven new scene controls remain independently hideable');
   });
   it('keeps essential play/seek/close controls while allowing recoverable buttons to hide',()=>{
     const selectors=settings().map(item=>item.selector).join(',');
@@ -48,7 +50,9 @@ describe('Task318 centralized visibility manifest',()=>{
       assert(entry.description.includes('上級者設定') || entry.description.includes('検索'),
         'The recovery path must be described: '+key);
     }
-    assert.strictEqual(settings().length,37);
+    assert.strictEqual(settings().filter(item=>item.scope!=='scene').length,37,
+      'preserve the original thirty-seven visibility settings');
+    assert.strictEqual(settings().filter(item=>item.scope==='scene').length,7);
   });
   it('hides each newly optional control and restores original state without losing content',()=>{
     const dom=new JSDOM('<!doctype html><html><body>'+
@@ -206,7 +210,12 @@ describe('Task318 centralized visibility manifest',()=>{
       info:read('src/VideoInfoPanel.js'),
       header:read('src/VideoInfoPanel.js'),
       related:read('src/VideoInfoPanel.js'),
-      comment:read('src/CommentInputPanel.js')
+      comment:read('src/CommentInputPanel.js'),
+      scene:[
+        read('packages/zenza/src/sceneSearch/SceneSearchLayoutCard.js'),
+        read('packages/zenza/src/sceneSearch/SceneSearchIntegrationBridge.js'),
+        read('packages/zenza/src/sceneSearch/SceneSeekStepControl.js')
+      ].join('\n')
     };
     for(const entry of settings()){
       for(const selector of entry.selector.split(',')){

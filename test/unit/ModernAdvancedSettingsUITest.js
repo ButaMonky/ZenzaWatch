@@ -1119,7 +1119,7 @@ describe('Task318 centralized visibility groups',()=>{
     assert(registry.length>=30);
     assert.strictEqual(h.all('[data-zw-visibility-icon]').length,registry.length+7);
     assert.deepStrictEqual(h.all('[data-zw-visibility-group]').map(x=>x.dataset.zwVisibilityGroup),
-      ['hover','related','comment','bar','info','header','shared']);
+      ['hover','related','comment','bar','scene','info','header','shared']);
     for(const d of registry){
       assert(h.q('[data-zw-id="'+d.id+'"] [data-zw-visibility-icon]'),d.id);
       assert.strictEqual(h.model.get(d.id),true);

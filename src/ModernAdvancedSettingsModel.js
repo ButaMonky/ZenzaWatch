@@ -90,6 +90,42 @@ class ModernAdvancedSettingsModel {
         ['enableStoryboardBar','シーンサーチバーを表示'],
         ['menuScale','操作メニューの拡大率',{type:'number'}]
       ]),
+      ...group('画面・映像','シーンサーチ',[
+        ['sceneSearch.layout.normal','通常表示のシーンサーチUI',{
+          ...select([
+            ['01','01 クラシック追従'],['02','02 左右ツインパネル'],
+            ['03','03 サイドシェルフ'],['04','04 トップエッジ'],
+            ['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
+            ['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
+            ['09','09 分離リモコン'],['10','10 スマート自動回避']
+          ]),description:'通常時のレイアウトです。動画の再生位置や設定値は変更しません。'}],
+        ['sceneSearch.layout.linkFullscreen','フルスクリーンも通常表示と同じUIを使う',{
+          description:'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'}],
+        ['sceneSearch.layout.fullscreen','フルスクリーン時のシーンサーチUI',{
+          ...select([
+            ['01','01 クラシック追従'],['02','02 左右ツインパネル'],
+            ['03','03 サイドシェルフ'],['04','04 トップエッジ'],
+            ['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
+            ['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
+            ['09','09 分離リモコン'],['10','10 スマート自動回避']
+          ]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
+        ['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
+          type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
+        ['sceneSearch.commentPreviewVisible','コメントプレビューを表示',{
+          description:'表示そのもののON/OFFです。「コメント一覧」内の既存のホバー／一覧モード設定とは独立しています。'}],
+        ['sceneSearch.controlsReveal','追加ボタンの開き方',{
+          ...select([
+            ['hover-focus','マウスを乗せるかフォーカスで開く'],
+            ['click','クリックで開く'],['always','常に表示']
+          ])}],
+        ['sceneSearch.animation','UIのアニメーション',{
+          ...select([
+            ['off','無効（動きなし）'],['subtle','控えめ（推奨）'],['full','通常']
+          ])}],
+        ['sceneSearch.idleHideSeconds','サムネイルを自動で隠すまでの時間',{
+          ...slider(0,30,0.5),unit:'秒',
+          description:'シークバー上にマウスを置き続けたとき、同じサムネイルを表示する時間です。既定2秒。0秒にすると自動非表示を無効化します。ピン固定・ドラッグ・ボタン操作中は隠しません。'}]
+      ]),
       ...group('画面・映像','スクリーンショット',[
         ['screenshot.prefix','保存ファイル名の先頭に追加する文字',{type:'text',
           description:'任意の文字に加え {date}（保存日）や {watchId}（動画ID）などの変数も使えます。'}],
@@ -114,7 +150,8 @@ class ModernAdvancedSettingsModel {
       ...group('コメント表示','コメント一覧',[
         ['enableCommentPanel','コメント一覧を表示'],
         ['enableCommentPanelAutoScroll','コメント一覧を自動スクロール'],
-        ['enableCommentPreview','コメントプレビューを有効化']
+        ['enableCommentPreview','コメントプレビューを一覧モードに切り替える',{
+          description:'OFFはホバー時に流れるコメント表示、ONはスクロールできるコメント一覧です。完全に非表示にする場合は「画面・映像 > シーンサーチ」の表示設定を使います。'}]
       ]),
       ...group('コメント表示','文字・装飾',[
         ['commentLanguage','コメントの言語',select([
@@ -246,7 +283,7 @@ class ModernAdvancedSettingsModel {
     // The left-hand navigation must not move when legacy DOM order changes.
     const order={
       '再生・音声':['再生動作','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
-      '画面・映像':['表示モード','動画ヘッダー','プレイヤーの操作表示','表示・非表示','画面フィルター','スクリーンショット'],
+      '画面・映像':['表示モード','動画ヘッダー','プレイヤーの操作表示','シーンサーチ','表示・非表示','画面フィルター','スクリーンショット'],
       'コメント表示':['表示・配置','コメント一覧','文字・装飾','追加取得'],
       'NG・表示対象':['NG条件','コメント種別','動画の除外'],
       'プレイリスト・検索':['プレイリスト','検索','リンク・移動',
@@ -526,6 +563,10 @@ class ModernAdvancedSettingsModel {
     return this;
   }
   isEnabled(id) {
+    // A linked fullscreen layout is preserved in the draft, but cannot be edited
+    // while the normal layout is the active source of truth.
+    if(id==='sceneSearch.layout.fullscreen' &&
+      this.get('sceneSearch.layout.linkFullscreen')===true){return false;}
     const d=this.descriptor(id);
     return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
       !!this.draft[d.dependsOn];

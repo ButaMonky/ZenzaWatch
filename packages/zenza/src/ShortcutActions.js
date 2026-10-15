@@ -236,6 +236,34 @@ const SHORTCUT_ACTIONS = [
   {id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'コメント欄プレビュー ON/OFF',
     defaultKey: 0, command: 'toggle-enableCommentPreview'},
 
+  // SCUI-08: scene-search actions use a shared command contract consumed by
+  // SCUI-11's registered scene-search owner. All defaults are unassigned (0).
+  // Distinguish existing hover/list mode from separate visibility controls.
+  {id: 'SCENE_PIN', category: '画面', label: 'シーンサーチ: プレビューの固定/解除',
+    defaultKey: 0, command: 'sceneSearch-togglePin'},
+  {id: 'SCENE_SHOW', category: '画面', label: 'シーンサーチ: 表示/非表示',
+    defaultKey: 0, command: 'sceneSearch-togglePanel'},
+  {id: 'SCENE_CONTROLS', category: '画面', label: 'シーンサーチ: 操作ボタンを展開/収納',
+    defaultKey: 0, command: 'sceneSearch-toggleControls'},
+  {id: 'SCENE_LAYOUT_NEXT', category: '画面', label: 'シーンサーチ: 次のレイアウト',
+    defaultKey: 0, command: 'sceneSearch-nextLayout'},
+  {id: 'SCENE_LAYOUT_PREV', category: '画面', label: 'シーンサーチ: 前のレイアウト',
+    defaultKey: 0, command: 'sceneSearch-prevLayout'},
+  {id: 'SCENE_SEEK_BACK', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ戻る',
+    defaultKey: 0, command: 'sceneSearch-seekBack'},
+  {id: 'SCENE_SEEK_FORWARD', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ進む',
+    defaultKey: 0, command: 'sceneSearch-seekForward'},
+  {id: 'SCENE_STEP_UP', category: 'シーク', label: 'シーンサーチ: 移動秒数を増やす',
+    defaultKey: 0, command: 'sceneSearch-stepUp'},
+  {id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
+    defaultKey: 0, command: 'sceneSearch-stepDown'},
+  {id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメントプレビュー表示/非表示',
+    defaultKey: 0, command: 'sceneSearch-toggleCommentPreview'},
+  {id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
+    defaultKey: 0, command: 'sceneSearch-toggleCommentSearch'},
+  {id: 'SCENE_IDLE_HIDE', category: '画面', label: 'シーンサーチ: 静止中サムネ自動非表示のON/OFF',
+    defaultKey: 0, command: 'sceneSearch-toggleIdleHide'},
+
   // ---- ここから新規(Task 060)。既定キーは全て未設定(0)。 ----
   // 既存の関連メニュー(RelatedInfoMenu)の項目で、これまでクリック操作
   // でしか実行できなかったもの。RootDispatcher.js側に新しくcaseを

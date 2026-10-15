@@ -83,7 +83,10 @@ class Storyboard extends Emitter {
     this.model.update(rawData);
     this.emit('update', this.model);
 
-    this.state.isStoryboardAvailable = true;
+    // A successful HTTP/Worker reply can still contain malformed storyboard
+    // geometry. Never advertise unavailable images or block future retries.
+    this.state.isStoryboardAvailable = this.model.isAvailable;
+    if (!this.model.isAvailable) { this._loadingWatchId = null; }
   }
   _onStoryboardInfoLoadFail(resuestId, err) {
     console.warn('onStoryboardInfoFail',this._watchId, err);

@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 00:44Z
+// build: 2026-10-15 01:44Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.246-task423';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 00:44Z';
+    var BUILD = '2026-10-15 01:44Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -18245,12 +18245,38 @@ class StoryboardInfoModel extends Emitter {
 			}
 		};
 	}
+	static isUsableData(data) {
+		const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
+		const finite = value => value != null && value !== '' && Number.isFinite(Number(value));
+		const integer = value => finite(value) && Number.isSafeInteger(Number(value));
+		const board = data && data.storyboard;
+		if (!object(board) || !object(board.thumbnail) || !finite(data.duration) ||
+				Number(data.duration) < 0) { return false; }
+		const {width, height} = board.thumbnail;
+		const {rows, columns, interval, count, images} = board;
+		if (!integer(width) || !integer(height) || !integer(rows) ||
+				!integer(columns) || !integer(count) || !finite(interval)) { return false; }
+		const w = Number(width), h = Number(height);
+		const r = Number(rows), c = Number(columns), n = Number(count);
+		const step = Number(interval);
+		if (w <= 0 || h <= 0 || w > 4096 || h > 4096 ||
+				r <= 0 || c <= 0 || r > 256 || c > 256 || n < 0 ||
+				step < 0 || r * c > 16384 || w * h * r * c > 16 * 1024 * 1024 ||
+				!Array.isArray(images) || images.length === 0 || images.length > 8192 ||
+				n > images.length * r * c) { return false; }
+		for (const image of images) {
+			if (!object(image) || typeof image.url !== 'string' || !image.url.trim()) {
+				return false;
+			}
+		}
+		return true;
+	}
 	constructor(rawData) {
 		super();
 		this.update(rawData);
 	}
 	update(rawData) {
-		if (!rawData || rawData.status !== 'ok') {
+		if (!rawData || rawData.status !== 'ok' || !this.constructor.isUsableData(rawData)) {
 			this._rawData = this.constructor.blankData;
 		} else {
 			this._rawData = rawData;
@@ -18261,6 +18287,7 @@ class StoryboardInfoModel extends Emitter {
 	}
 	reset() {
 		this._rawData = this.constructor.blankData;
+		this.primary = this._rawData.storyboard;
 		this.emit('reset');
 	}
 	get rawData() {
@@ -18278,7 +18305,14 @@ class StoryboardInfoModel extends Emitter {
 	}
 	get cellWidth() { return this.primary.thumbnail.width * 1; }
 	get cellHeight() { return this.primary.thumbnail.height * 1; }
-	get cellIntervalMs() { return this.primary.interval * 1; }
+	get cellIntervalMs() {
+		const rawInterval = this.primary.interval * 1;
+		if (Number.isFinite(rawInterval) && rawInterval > 0) { return rawInterval; }
+		const lengthMs = this.duration * 1000;
+		const count = this.cellCount;
+		return Number.isFinite(lengthMs) && lengthMs > 0 &&
+			Number.isFinite(count) && count > 0 ? Math.max(1, lengthMs / count) : 1000;
+	}
 	get cellCount() { return this.primary.count * 1; }
 	get rows() { return this.primary.rows * 1; }
 	get cols() { return this.primary.columns * 1; }
@@ -18294,7 +18328,7 @@ class StoryboardInfoModel extends Emitter {
 	getIndex(ms) {
 		const durationMs = Math.max(0, this.duration * 1000);
 		const boundedMs = Math.max(0, Math.min(ms, durationMs));
-		const intervalMs = this.cellIntervalMs;
+		const intervalMs = this.primary.interval * 1;
 		const index = Number.isFinite(intervalMs) && intervalMs > 0
 			? Math.floor(boundedMs / intervalMs)
 			: Math.floor(Math.floor(boundedMs / 1000) * this.cellCount /
@@ -19728,7 +19762,8 @@ class Storyboard extends Emitter {
 		if (resuestId !== this._requestId) {return;} // video changed
 		this.model.update(rawData);
 		this.emit('update', this.model);
-		this.state.isStoryboardAvailable = true;
+		this.state.isStoryboardAvailable = this.model.isAvailable;
+		if (!this.model.isAvailable) { this._loadingWatchId = null; }
 	}
 	_onStoryboardInfoLoadFail(resuestId, err) {
 		console.warn('onStoryboardInfoFail',this._watchId, err);

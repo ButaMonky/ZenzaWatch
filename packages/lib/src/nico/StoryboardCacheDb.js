@@ -18,45 +18,58 @@ const StoryboardCacheDb = (() => {
   };
 
   let db, instance, NicoVideoApi;
+  let dbOpening, instanceOpening;
   const initWorker = async () => {
     if (db) { return db; }
-    if (location.host === 'www.nicovideo.jp') {
-      db = db || await IndexedDbStorage.open(WATCH_INFO);
-    } else {
-      db = db || await NicoVideoApi.bridgeDb(WATCH_INFO);
-    }
-    return db;
+    if (dbOpening) { return dbOpening; }
+    // Share an in-flight IndexedDB/bridge open across simultaneous callers.
+    // Rejected attempts must be cleared so a later request can retry.
+    dbOpening = (async () => {
+      const connection = location.host === 'www.nicovideo.jp' ?
+        await IndexedDbStorage.open(WATCH_INFO) :
+        await NicoVideoApi.bridgeDb(WATCH_INFO);
+      db = connection;
+      return connection;
+    })();
+    try { return await dbOpening; }
+    finally { dbOpening = null; }
   };
 
   const open = async () => {
     if (instance) { return instance; }
-    await initWorker();
-    const cacheDb = db['cache'];
-    instance = {
-      async put(watchId, sbInfo = {}) {
-        if (sbInfo.status !== 'ok') {
-          console.warn('invalid sbInfo', watchId, sbInfo);
-          return;
-        }
-        const record = {
-          watchId,
-          updatedAt: Date.now(),
-          sbInfo
-        };
-        await cacheDb.put(record);
-        return record;
-      },
-      async get(watchId) {
-        const record = await cacheDb.updateTime({key: watchId});
-        if (!record) { return null; }
-        return record.sbInfo;
-      },
-      delete(watchId) { return cacheDb.delete({key: watchId}); },
-      close() { return cacheDb.close(); },
-      gc(expireTime) { return cacheDb.gc(expireTime); }
-    };
-    instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
-    return instance;
+    if (instanceOpening) { return instanceOpening; }
+    // Initialize the facade once, and schedule the initial GC only once.
+    instanceOpening = (async () => {
+      await initWorker();
+      const cacheDb = db['cache'];
+      instance = {
+        async put(watchId, sbInfo = {}) {
+          if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
+            console.warn('Storyboard cache rejected non-ok payload');
+            return;
+          }
+          const record = {
+            watchId,
+            updatedAt: Date.now(),
+            sbInfo
+          };
+          await cacheDb.put(record);
+          return record;
+        },
+        async get(watchId) {
+          const record = await cacheDb.updateTime({key: watchId});
+          if (!record) { return null; }
+          return record.sbInfo;
+        },
+        delete(watchId) { return cacheDb.delete({key: watchId}); },
+        close() { return cacheDb.close(); },
+        gc(expireTime) { return cacheDb.gc(expireTime); }
+      };
+      instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
+      return instance;
+    })();
+    try { return await instanceOpening; }
+    finally { instanceOpening = null; }
   };
   const put = (watchId, sbInfo = {}) => open().then(db => db.put(watchId, sbInfo));
   const get = watchId => open().then(db => db.get(watchId));

@@ -19,7 +19,7 @@ const NVApi = {
           'X-Request-with': NVApi.REQUEST_WITH
         }
       })
-      .catch(err => console.warn('nvapi fail', {err, url, params}));
+      .catch(() => { console.warn('nvapi fail'); return undefined; });
   }
 };
 

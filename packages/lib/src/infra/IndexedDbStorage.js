@@ -122,17 +122,27 @@ const IndexedDbStorage = (() => {
       },
       async get({name, storeName, data: {key, index, timeout}}) {
         const {store} = await this.getStore({name, storeName});
-        // console.log('get', {name, storeName, key, index, timeout});
         return new Promise((resolve, reject) => {
-          const req =
-            index ?
-              store.index(index).get(key) : store.get(key);
-          req.onsuccess = e => resolve(e.target.result);
-          req.onerror = reject;
+          const req = index ? store.index(index).get(key) : store.get(key);
+          let timer;
+          let settled = false;
+          // Release the timer and request callbacks on any settlement. The
+          // IndexedDB request itself cannot be canceled, but late completion
+          // must not keep this closure or key alive after a timeout.
+          const finish = (callback, result) => {
+            if (settled) { return; }
+            settled = true;
+            if (timer !== undefined) {
+              clearTimeout(timer);
+              timer = undefined;
+            }
+            req.onsuccess = req.onerror = null;
+            callback(result);
+          };
+          req.onsuccess = event => finish(resolve, event.target.result);
+          req.onerror = event => finish(reject, event);
           if (timeout) {
-            setTimeout(() => {
-              reject(`timeout: key${key}`);
-            }, timeout);
+            timer = setTimeout(() => finish(reject, 'IndexedDB get timed out'), timeout);
           }
         });
       },

@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-16 02:30Z
+// build: 2026-10-16 03:30Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.269-scui';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-16 02:30Z';
+    var BUILD = '2026-10-16 03:30Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -51576,15 +51576,23 @@ const IndexedDbStorage = (() => {
 			async get({name, storeName, data: {key, index, timeout}}) {
 				const {store} = await this.getStore({name, storeName});
 				return new Promise((resolve, reject) => {
-					const req =
-						index ?
-							store.index(index).get(key) : store.get(key);
-					req.onsuccess = e => resolve(e.target.result);
-					req.onerror = reject;
+					const req = index ? store.index(index).get(key) : store.get(key);
+					let timer;
+					let settled = false;
+					const finish = (callback, result) => {
+						if (settled) { return; }
+						settled = true;
+						if (timer !== undefined) {
+							clearTimeout(timer);
+							timer = undefined;
+						}
+						req.onsuccess = req.onerror = null;
+						callback(result);
+					};
+					req.onsuccess = event => finish(resolve, event.target.result);
+					req.onerror = event => finish(reject, event);
 					if (timeout) {
-						setTimeout(() => {
-							reject(`timeout: key${key}`);
-						}, timeout);
+						timer = setTimeout(() => finish(reject, 'IndexedDB get timed out'), timeout);
 					}
 				});
 			},

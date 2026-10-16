@@ -15,16 +15,43 @@ const debug = {};
 const VideoInfoLoader = (function () {
   const cacheStorage = new CacheStorage(sessionStorage);
 
+  // NICOCOMPAT-04 / Task455: validate only the structural fields that the
+  // existing V4-to-legacy conversion must dereference. A missing optional
+  // comment/media/owner section is not itself a schema failure.
+  const validWatchV4Structure = data => {
+    const record = value => value !== null && typeof value === 'object' &&
+      !Array.isArray(value);
+    return record(data) &&
+      record(data.client) &&
+      typeof data.client.watchId === 'string' && !!data.client.watchId &&
+      (data.client.watchTrackId === undefined ||
+        typeof data.client.watchTrackId === 'string') &&
+      record(data.video) && typeof data.video.id === 'string' && !!data.video.id &&
+      typeof data.video.title === 'string' &&
+      typeof data.video.duration === 'number' &&
+      Number.isFinite(data.video.duration) && data.video.duration >= 0 &&
+      record(data.video.count) &&
+      (data.video.thumbnail == null || record(data.video.thumbnail)) &&
+      record(data.player) && record(data.genre) &&
+      record(data.tags) && Array.isArray(data.tags.items) &&
+      data.tags.items.every(record);
+  };
+
   // Task153: adapt watch v4 at the boundary; keep the existing player contract.
   const normalizeWatchV4 = async (response, requestedWatchId) => {
     const data = response?.$watchV4?.data;
     if (!data || response.errorCode) return response;
-    if (data.errorCode || !data.client) return data;
+    if (data.errorCode) return data;
+    if (!validWatchV4Structure(data)) {
+      // Never retain raw responses, URLs or key material in diagnostics.
+      return {errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4'};
+    }
 
     // Lazy keys are bound to the requested ID (including numeric channel IDs).
     // Optional owner/series metadata must not make otherwise playable media fail.
     let lazy = {};
-    if (data.lazy?.authKey) {
+    if (data.lazy?.authKey && typeof data.client.watchTrackId === 'string' &&
+        !!data.client.watchTrackId) {
       try {
         const result = await netUtil.fetch(
           `https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
@@ -672,6 +699,11 @@ const VideoInfoLoader = (function () {
 
         if (err.reason === 'forbidden' || err.reason === 'not found') {
           return Promise.reject({...err, watchId});
+        } else if (err.reason === 'watch api' && err.errorCode === 'WATCH_SCHEMA') {
+          return Promise.reject({
+            watchId, reason: 'watch api', errorCode: 'WATCH_SCHEMA',
+            message: err.message || '動画情報の形式が変更されました'
+          });
         } else if (err.reason === 'network') {
           return createSleep(5000).then(() => {
             window.console.warn('network error & retry');

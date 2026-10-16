@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-15 11:36Z 66e311b
+// build: 2026-10-16 02:30Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.269-scui';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-15 11:36Z 66e311b';
+    var BUILD = '2026-10-16 02:30Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -9488,12 +9488,34 @@ const CacheStorage = (() => {
 })();
 const VideoInfoLoader = (function () {
 	const cacheStorage = new CacheStorage(sessionStorage);
+	const validWatchV4Structure = data => {
+		const record = value => value !== null && typeof value === 'object' &&
+			!Array.isArray(value);
+		return record(data) &&
+			record(data.client) &&
+			typeof data.client.watchId === 'string' && !!data.client.watchId &&
+			(data.client.watchTrackId === undefined ||
+				typeof data.client.watchTrackId === 'string') &&
+			record(data.video) && typeof data.video.id === 'string' && !!data.video.id &&
+			typeof data.video.title === 'string' &&
+			typeof data.video.duration === 'number' &&
+			Number.isFinite(data.video.duration) && data.video.duration >= 0 &&
+			record(data.video.count) &&
+			(data.video.thumbnail == null || record(data.video.thumbnail)) &&
+			record(data.player) && record(data.genre) &&
+			record(data.tags) && Array.isArray(data.tags.items) &&
+			data.tags.items.every(record);
+	};
 	const normalizeWatchV4 = async (response, requestedWatchId) => {
 		const data = response?.$watchV4?.data;
 		if (!data || response.errorCode) return response;
-		if (data.errorCode || !data.client) return data;
+		if (data.errorCode) return data;
+		if (!validWatchV4Structure(data)) {
+			return {errorCode: 'WATCH_SCHEMA', reasonCode: 'MALFORMED_WATCH_V4'};
+		}
 		let lazy = {};
-		if (data.lazy?.authKey) {
+		if (data.lazy?.authKey && typeof data.client.watchTrackId === 'string' &&
+				!!data.client.watchTrackId) {
 			try {
 				const result = await netUtil.fetch(
 					`https://nvapi.nicovideo.jp/v4/watch/lazy/${encodeURIComponent(requestedWatchId)}`, {
@@ -10011,6 +10033,11 @@ const VideoInfoLoader = (function () {
 				}
 				if (err.reason === 'forbidden' || err.reason === 'not found') {
 					return Promise.reject({...err, watchId});
+				} else if (err.reason === 'watch api' && err.errorCode === 'WATCH_SCHEMA') {
+					return Promise.reject({
+						watchId, reason: 'watch api', errorCode: 'WATCH_SCHEMA',
+						message: err.message || '動画情報の形式が変更されました'
+					});
 				} else if (err.reason === 'network') {
 					return createSleep(5000).then(() => {
 						window.console.warn('network error & retry');
@@ -12511,6 +12538,33 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 					is_middle_thumbnail: !!(thumb.listingUrl || thumb.middleUrl)
 				};
 			};
+			const searchSchemaError = () => Object.assign(
+				new Error('nvapi search returned an unexpected schema'),
+				{status: 'schema', kind: 'schema', errorCode: 'SEARCH_SCHEMA'}
+			);
+			const isSearchRecord = value =>
+				value !== null && typeof value === 'object' && !Array.isArray(value);
+			const validSearchItem = item => isSearchRecord(item) &&
+				typeof item.id === 'string' && !!item.id.trim() && item.id.length <= 128 &&
+				(item.title == null || typeof item.title === 'string') &&
+				(item.shortDescription == null || typeof item.shortDescription === 'string') &&
+				(item.duration == null || (typeof item.duration === 'number' &&
+					Number.isFinite(item.duration) && item.duration >= 0)) &&
+				(item.registeredAt == null || typeof item.registeredAt === 'string') &&
+				(item.count == null || isSearchRecord(item.count)) &&
+				(item.thumbnail == null || isSearchRecord(item.thumbnail));
+			const validateSearchPage = data => {
+				if (!isSearchRecord(data) || !Array.isArray(data.items) ||
+						!Number.isSafeInteger(data.totalCount) || data.totalCount < 0 ||
+						(data.hasNext != null && typeof data.hasNext !== 'boolean') ||
+						data.items.some(item => !validSearchItem(item)) ||
+						(data.additionals != null && (!isSearchRecord(data.additionals) ||
+							(data.additionals.suggestedVideo != null &&
+								!validSearchItem(data.additionals.suggestedVideo))))) {
+					throw searchSchemaError();
+				}
+				return data;
+			};
 			const fetchPage = async (query, page, pageSize) => {
 				const qs = new URLSearchParams(Object.assign({}, query, {pageSize, page}));
 				const net = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o)};
@@ -12518,16 +12572,16 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 					credentials: 'include',
 					headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
 				});
+				if (Number.isInteger(res?.status) && res.status >= 400) {
+					throw Object.assign(new Error('nvapi search HTTP failure'),
+						{status: res.status, kind: 'http'});
+				}
 				const json = await res.json();
 				if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
 					throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`),
 						{status: json && json.meta && json.meta.status});
 				}
-				const data = json.data;
-				if (!Array.isArray(data.items) || !Number.isFinite(data.totalCount) || data.totalCount < 0) {
-					throw Object.assign(new Error('nvapi search returned an unexpected schema'), {status: 'schema', kind: 'schema'});
-				}
-				return data;
+				return validateSearchPage(json.data);
 			};
 			const search = async (word, params = {}, maxLimit = 100) => {
 				const query = buildQuery(word, params);
@@ -13344,6 +13398,50 @@ const {ThreadLoader} = (() => {
 		2: 'easy',
 		3: 'ai',
 	}
+	const commentSchemaError = reason =>
+		({kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason});
+	const CommentReadAdapter = Object.freeze({
+		threadKey(data) {
+			if (!data || typeof data.threadKey !== 'string' || !data.threadKey.trim()) {
+				throw commentSchemaError('missing-thread-key');
+			}
+			return data;
+		},
+		threads(data, msgInfo) {
+			if (!data || typeof data !== 'object' || Array.isArray(data) ||
+					!Array.isArray(data.globalComments) || !Array.isArray(data.threads) ||
+					!Array.isArray(msgInfo?.threads)) {
+				throw commentSchemaError('invalid-thread-envelope');
+			}
+			if (data.globalComments.some(entry =>
+				!entry || !Number.isSafeInteger(entry.count) || entry.count < 0)) {
+				throw commentSchemaError('invalid-global-count');
+			}
+			const expected = new Set(msgInfo.threads.map(thread => {
+				const fork = thread && (thread.forkLabel ||
+					(typeof thread.fork === 'string' ? thread.fork : FORK_LABEL[thread.fork]));
+				return thread && thread.id != null && fork ?
+					`${String(thread.id)}:${fork}` : null;
+			}).filter(Boolean));
+			const seen = new Set();
+			for (const thread of data.threads) {
+				const id = thread && thread.id;
+				const validId = (typeof id === 'string' && /^[0-9]+$/.test(id)) ||
+					(Number.isSafeInteger(id) && id >= 0);
+				const fork = thread && thread.fork;
+				const key = `${String(id)}:${fork}`;
+				if (!validId || !['main', 'owner', 'easy', 'ai'].includes(fork) ||
+						!expected.has(key) || seen.has(key) ||
+						!Number.isSafeInteger(thread.commentCount) || thread.commentCount < 0 ||
+						!Array.isArray(thread.comments) ||
+						thread.comments.some(comment => !comment || typeof comment !== 'object')) {
+					throw commentSchemaError('invalid-thread-target');
+				}
+				seen.add(key);
+			}
+			return data;
+		}
+	});
 	const POST_TIMEOUT_MS = 30 * 1000;
 	let commentPostDiagnosticSeq = 0;
 	const safeStatusCode = value => {
@@ -13481,8 +13579,17 @@ const {ThreadLoader} = (() => {
 			throw error;
 		}
 		checkAbort(options.signal);
-		if (body.meta.status >= 300 || response.status >= 400) {
-			const failure = body.meta.status >= 300 ? body.meta : {status: response.status};
+		const apiStatus = body?.meta?.status;
+		if (Number.isInteger(response?.status) && response.status >= 400 &&
+				(!Number.isInteger(apiStatus) || apiStatus < 300)) {
+			const failure = {status: response.status};
+			throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
+		}
+		if (!Number.isInteger(apiStatus) || apiStatus < 200) {
+			throw commentSchemaError('invalid-api-meta');
+		}
+		if (apiStatus >= 300) {
+			const failure = body.meta;
 			throw retryAfterMs === undefined ? failure : {...failure, retryAfterMs};
 		}
 		return body;
@@ -13507,8 +13614,9 @@ const {ThreadLoader} = (() => {
 					throw meta
 				}
 				checkAbort(options.signal);
-				this._threadKeys[videoId] = data.threadKey;
-				return data
+				const validData = CommentReadAdapter.threadKey(data);
+				this._threadKeys[videoId] = validData.threadKey;
+				return validData
 			} catch (result) {
 				throw { result, message: `ThreadKeyの取得失敗 ${videoId}` }
 			}
@@ -13618,8 +13726,9 @@ const {ThreadLoader} = (() => {
 					throw meta;
 				}
 				checkAbort(options.signal);
-				data.__usedLanguage = packet.params.language;
-				return data;
+				const validData = CommentReadAdapter.threads(data, msgInfo);
+				validData.__usedLanguage = packet.params.language;
+				return validData;
 			} catch (result) {
 				checkAbort(options.signal);
 				window.console.error(
@@ -13660,6 +13769,7 @@ const {ThreadLoader} = (() => {
 					console.timeEnd(timeKey);
 					const failure = e && e.result || e;
 					if (failure && failure.name === 'AbortError') { throw failure; }
+					if (failure && failure.kind === 'schema') { break; }
 					const status = Number(failure && failure.status);
 					const invalidLanguage = failure && failure.errorCode === 'INVALID_PARAMETER';
 					const serverLanguage = msgInfo.nvComment && msgInfo.nvComment.params && msgInfo.nvComment.params.language;
@@ -18211,12 +18321,38 @@ class StoryboardInfoModel extends Emitter {
 			}
 		};
 	}
+	static isUsableData(data) {
+		const object = value => !!value && typeof value === 'object' && !Array.isArray(value);
+		const finite = value => value != null && value !== '' && Number.isFinite(Number(value));
+		const integer = value => finite(value) && Number.isSafeInteger(Number(value));
+		const board = data && data.storyboard;
+		if (!object(board) || !object(board.thumbnail) || !finite(data.duration) ||
+				Number(data.duration) < 0) { return false; }
+		const {width, height} = board.thumbnail;
+		const {rows, columns, interval, count, images} = board;
+		if (!integer(width) || !integer(height) || !integer(rows) ||
+				!integer(columns) || !integer(count) || !finite(interval)) { return false; }
+		const w = Number(width), h = Number(height);
+		const r = Number(rows), c = Number(columns), n = Number(count);
+		const step = Number(interval);
+		if (w <= 0 || h <= 0 || w > 4096 || h > 4096 ||
+				r <= 0 || c <= 0 || r > 256 || c > 256 || n < 0 ||
+				step < 0 || r * c > 16384 || w * h * r * c > 16 * 1024 * 1024 ||
+				!Array.isArray(images) || images.length === 0 || images.length > 8192 ||
+				n > images.length * r * c) { return false; }
+		for (const image of images) {
+			if (!object(image) || typeof image.url !== 'string' || !image.url.trim()) {
+				return false;
+			}
+		}
+		return true;
+	}
 	constructor(rawData) {
 		super();
 		this.update(rawData);
 	}
 	update(rawData) {
-		if (!rawData || rawData.status !== 'ok') {
+		if (!rawData || rawData.status !== 'ok' || !this.constructor.isUsableData(rawData)) {
 			this._rawData = this.constructor.blankData;
 		} else {
 			this._rawData = rawData;
@@ -18227,6 +18363,7 @@ class StoryboardInfoModel extends Emitter {
 	}
 	reset() {
 		this._rawData = this.constructor.blankData;
+		this.primary = this._rawData.storyboard;
 		this.emit('reset');
 	}
 	get rawData() {
@@ -18244,7 +18381,14 @@ class StoryboardInfoModel extends Emitter {
 	}
 	get cellWidth() { return this.primary.thumbnail.width * 1; }
 	get cellHeight() { return this.primary.thumbnail.height * 1; }
-	get cellIntervalMs() { return this.primary.interval * 1; }
+	get cellIntervalMs() {
+		const rawInterval = this.primary.interval * 1;
+		if (Number.isFinite(rawInterval) && rawInterval > 0) { return rawInterval; }
+		const lengthMs = this.duration * 1000;
+		const count = this.cellCount;
+		return Number.isFinite(lengthMs) && lengthMs > 0 &&
+			Number.isFinite(count) && count > 0 ? Math.max(1, lengthMs / count) : 1000;
+	}
 	get cellCount() { return this.primary.count * 1; }
 	get rows() { return this.primary.rows * 1; }
 	get cols() { return this.primary.columns * 1; }
@@ -18260,7 +18404,7 @@ class StoryboardInfoModel extends Emitter {
 	getIndex(ms) {
 		const durationMs = Math.max(0, this.duration * 1000);
 		const boundedMs = Math.max(0, Math.min(ms, durationMs));
-		const intervalMs = this.cellIntervalMs;
+		const intervalMs = this.primary.interval * 1;
 		const index = Number.isFinite(intervalMs) && intervalMs > 0
 			? Math.floor(boundedMs / intervalMs)
 			: Math.floor(Math.floor(boundedMs / 1000) * this.cellCount /
@@ -19694,7 +19838,8 @@ class Storyboard extends Emitter {
 		if (resuestId !== this._requestId) {return;} // video changed
 		this.model.update(rawData);
 		this.emit('update', this.model);
-		this.state.isStoryboardAvailable = true;
+		this.state.isStoryboardAvailable = this.model.isAvailable;
+		if (!this.model.isAvailable) { this._loadingWatchId = null; }
 	}
 	_onStoryboardInfoLoadFail(resuestId, err) {
 		console.warn('onStoryboardInfoFail',this._watchId, err);
@@ -34314,7 +34459,7 @@ const NVApi = {
 					'X-Request-with': NVApi.REQUEST_WITH
 				}
 			})
-			.catch(err => console.warn('nvapi fail', {err, url, params}));
+			.catch(() => { console.warn('nvapi fail'); return undefined; });
 	}
 };
 const LikeApi = {
@@ -51784,44 +51929,54 @@ const StoryboardCacheDb = (() => {
 		]
 	};
 	let db, instance, NicoVideoApi;
+	let dbOpening, instanceOpening;
 	const initWorker = async () => {
 		if (db) { return db; }
-		if (location.host === 'www.nicovideo.jp') {
-			db = db || await IndexedDbStorage.open(WATCH_INFO);
-		} else {
-			db = db || await NicoVideoApi.bridgeDb(WATCH_INFO);
-		}
-		return db;
+		if (dbOpening) { return dbOpening; }
+		dbOpening = (async () => {
+			const connection = location.host === 'www.nicovideo.jp' ?
+				await IndexedDbStorage.open(WATCH_INFO) :
+				await NicoVideoApi.bridgeDb(WATCH_INFO);
+			db = connection;
+			return connection;
+		})();
+		try { return await dbOpening; }
+		finally { dbOpening = null; }
 	};
 	const open = async () => {
 		if (instance) { return instance; }
-		await initWorker();
-		const cacheDb = db['cache'];
-		instance = {
-			async put(watchId, sbInfo = {}) {
-				if (sbInfo.status !== 'ok') {
-					console.warn('invalid sbInfo', watchId, sbInfo);
-					return;
-				}
-				const record = {
-					watchId,
-					updatedAt: Date.now(),
-					sbInfo
-				};
-				await cacheDb.put(record);
-				return record;
-			},
-			async get(watchId) {
-				const record = await cacheDb.updateTime({key: watchId});
-				if (!record) { return null; }
-				return record.sbInfo;
-			},
-			delete(watchId) { return cacheDb.delete({key: watchId}); },
-			close() { return cacheDb.close(); },
-			gc(expireTime) { return cacheDb.gc(expireTime); }
-		};
-		instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
-		return instance;
+		if (instanceOpening) { return instanceOpening; }
+		instanceOpening = (async () => {
+			await initWorker();
+			const cacheDb = db['cache'];
+			instance = {
+				async put(watchId, sbInfo = {}) {
+					if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
+						console.warn('Storyboard cache rejected non-ok payload');
+						return;
+					}
+					const record = {
+						watchId,
+						updatedAt: Date.now(),
+						sbInfo
+					};
+					await cacheDb.put(record);
+					return record;
+				},
+				async get(watchId) {
+					const record = await cacheDb.updateTime({key: watchId});
+					if (!record) { return null; }
+					return record.sbInfo;
+				},
+				delete(watchId) { return cacheDb.delete({key: watchId}); },
+				close() { return cacheDb.close(); },
+				gc(expireTime) { return cacheDb.gc(expireTime); }
+			};
+			instance.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
+			return instance;
+		})();
+		try { return await instanceOpening; }
+		finally { instanceOpening = null; }
 	};
 	const put = (watchId, sbInfo = {}) => open().then(db => db.put(watchId, sbInfo));
 	const get = watchId => open().then(db => db.get(watchId));
@@ -51832,6 +51987,31 @@ const StoryboardCacheDb = (() => {
 	return {initWorker, open, put, get, delete: del, close, gc, db, api};
 })();
 const createStoryboardClasses = (util) => {
+	const MAX_STORYBOARD_PAGES = 512;
+	const storyboardSchemaError = () => Object.assign(
+		new Error('storyboard response schema unsupported'),
+		{kind: 'schema', errorCode: 'STORYBOARD_SCHEMA'}
+	);
+	const storyboardRecord = value =>
+		value !== null && typeof value === 'object' && !Array.isArray(value);
+	const validStoryboardUrl = value => {
+		if (typeof value !== 'string' || !value.trim() ||
+				!/^(https?:\/\/|\/\/)/i.test(value)) { return false; }
+		try {
+			const url = new URL(value.startsWith('//') ? 'https:' + value : value);
+			return (url.protocol === 'https:' || url.protocol === 'http:') &&
+				!!url.hostname && !url.username && !url.password;
+		} catch (_) { return false; }
+	};
+	const validateStoryboardImageList = images => {
+		if (!Array.isArray(images) || !images.length ||
+				images.length > MAX_STORYBOARD_PAGES ||
+				!images.every(image => storyboardRecord(image) &&
+					validStoryboardUrl(image.url))) {
+			throw storyboardSchemaError();
+		}
+		return images;
+	};
 	class StoryboardInfoLoader {
 		static create({type, ...params}) {
 			switch (type) {
@@ -51874,12 +52054,29 @@ const createStoryboardClasses = (util) => {
 			this._duration = value;
 		}
 		getStoryboardWithUrls() {
-			const storyboard = this.storyboard;
-			const count = Math.ceil(this.duration * 1000 / storyboard.interval);
-			return {
-				...storyboard,
-				count,
-			};
+			let storyboard;
+			try { storyboard = this.storyboard; }
+			catch (_) { throw storyboardSchemaError(); }
+			const dimensions = storyboard?.thumbnail;
+			const rows = Number(storyboard?.rows), cols = Number(storyboard?.columns);
+			const width = Number(dimensions?.width), height = Number(dimensions?.height);
+			const interval = Number(storyboard?.interval), duration = Number(this.duration);
+			if (!storyboardRecord(storyboard) || !storyboardRecord(dimensions) ||
+					![rows, cols, width, height, interval, duration].every(Number.isFinite) ||
+					![rows, cols, width, height].every(Number.isSafeInteger) ||
+					rows < 1 || cols < 1 || width < 1 || height < 1 ||
+					rows > 256 || cols > 256 || width > 4096 || height > 4096 ||
+					interval <= 0 || duration < 0 || rows * cols > 16384 ||
+					rows * cols * width * height > 16 * 1024 * 1024) {
+				throw storyboardSchemaError();
+			}
+			const images = validateStoryboardImageList(storyboard.images);
+			const count = Math.ceil(duration * 1000 / interval);
+			if (!Number.isSafeInteger(count) || count < 0 ||
+					count > images.length * rows * cols) {
+				throw storyboardSchemaError();
+			}
+			return {...storyboard, count};
 		}
 		async getStoryboardWithImages() {
 			const storyboard = this.getStoryboardWithUrls();
@@ -51889,6 +52086,7 @@ const createStoryboardClasses = (util) => {
 			};
 		}
 		static async fetchImages(images) {
+			validateStoryboardImageList(images);
 			return Promise.all(images.map(async image => {
 				if (image.buffer) {
 					return image;
@@ -51946,8 +52144,13 @@ const createStoryboardClasses = (util) => {
 			}
 		}
 		get storyboard() {
-			if (this._rawData == null) {
-				return null;
+			if (!storyboardRecord(this._rawData) ||
+					!Array.isArray(this._rawData.images) ||
+					!this._rawData.images.length ||
+					this._rawData.images.length > MAX_STORYBOARD_PAGES ||
+					!this._rawData.images.every(image => storyboardRecord(image) &&
+						typeof image.url === 'string' && !!image.url.trim())) {
+				throw storyboardSchemaError();
 			}
 			const {
 				thumbnailWidth: width,
@@ -51991,7 +52194,11 @@ const createStoryboardClasses = (util) => {
 		}
 		async load() {
 			const result = await util.fetch(this._url, {credentials: 'include'}).then(res => res.json());
-			if (result.meta.status && result.meta.status >= 300) {
+			if (!storyboardRecord(result) || !storyboardRecord(result.meta) ||
+					!Number.isInteger(result.meta.status) || !storyboardRecord(result.data)) {
+				throw storyboardSchemaError();
+			}
+			if (result.meta.status >= 300) {
 				throw 'storyboard request fail';
 			}
 			this._rawData = result.data;
@@ -52782,27 +52989,66 @@ const VideoSessionWorker = (() => {
 			close: () => worker.post({command: 'close', params: {sessionId}})
 		});
 	};
-	const withTimeout = (promise, ms) => Promise.race([
-		promise,
-		new Promise(res => setTimeout(() => res(null), ms))
-	]);
+	const withTimeout = (promise, ms) => {
+		let timer;
+		const cutoff = new Promise(resolve => {
+			timer = setTimeout(() => resolve(null), ms);
+		});
+		return Promise.race([promise, cutoff]).finally(() => clearTimeout(timer));
+	};
+	const isUsableStoryboardCache = (data, watchId, serverType) => {
+		const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
+		const positiveInt = value => Number.isSafeInteger(value) && value > 0;
+		if (!record(data) || data.status !== 'ok' || data.watchId !== watchId ||
+				data.format !== serverType || !Number.isFinite(data.duration) ||
+				data.duration < 0 || !record(data.storyboard)) { return false; }
+		const board = data.storyboard;
+		const {rows, columns, interval, count, images, thumbnail} = board;
+		if (!record(thumbnail) || !positiveInt(rows) || !positiveInt(columns) ||
+				!positiveInt(thumbnail.width) || !positiveInt(thumbnail.height) ||
+				!Number.isFinite(interval) || interval <= 0 ||
+				!Number.isSafeInteger(count) || count < 0 ||
+				rows > 256 || columns > 256 || rows * columns > 16384 ||
+				thumbnail.width > 4096 || thumbnail.height > 4096 ||
+				thumbnail.width * thumbnail.height * rows * columns > 16 * 1024 * 1024 ||
+				!Array.isArray(images) || !images.length || images.length > 512 ||
+				count > rows * columns * images.length) { return false; }
+		return images.every(image => {
+			if (!record(image) || typeof image.url !== 'string' || image.isFail ||
+					Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]') {
+				return false;
+			}
+			try {
+				const uri = new URL(image.url.startsWith('//') ? 'https:' + image.url : image.url);
+				return ['http:', 'https:'].includes(uri.protocol) && !!uri.hostname &&
+					!uri.username && !uri.password;
+			} catch (_) { return false; }
+		});
+	};
 	const storyboard = async ({type, info}) => {
 		const videoInfo = info.toJSON();
 		const cacheId = `${videoInfo.watchId}_${type}`;
 		const cachePromise = withTimeout(
 			StoryboardCacheDb.get(cacheId).catch(() => null), 2000);
-		const workerPromise = initWorker();
+		let workerInitError = null;
+		try { initWorker(); } catch (error) { workerInitError = error; }
 		const cache = await cachePromise;
 		if (cache && cache.status === 'ok') {
-			return {...cache, fromCache: true};
+			if (isUsableStoryboardCache(cache, videoInfo.watchId, type)) {
+				return {...cache, fromCache: true};
+			}
+			await withTimeout(
+				Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null),
+				2000
+			);
 		}
-		await workerPromise;
+		if (workerInitError) { throw workerInitError; }
 		const params = {videoInfo, serverType: type, withImages: false};
 		const result = await worker.post({command: 'storyboard', params});
 		if (result && result.status === 'ok') {
 			worker.post({command: 'storyboardImages', params: {sbInfo: result}})
-				.then(full => full && full.status === 'ok' && StoryboardCacheDb.put(cacheId, full))
-				.catch(err => console.warn('storyboard image cache fail', err));
+				.then(full => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
+				.catch(() => console.warn('storyboard image cache fail'));
 		}
 		return result;
 	};

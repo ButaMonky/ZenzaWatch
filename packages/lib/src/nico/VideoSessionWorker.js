@@ -16,6 +16,35 @@ import {StoryboardCacheDb} from './StoryboardCacheDb';
 // (docs/design-pack/24_TASK_018_STORYBOARD_TEST_BLOCKED.md) for why they
 // used to be un-exportable and how this factory fixes that.
 const createStoryboardClasses = (util) => {
+  // Task476: validate storyboard sprite URLs and geometry *before* issuing
+  // concurrent image requests. Do not include API metadata or signed URLs
+  // in errors, and do not guess undocumented CDN host allowlists.
+  const MAX_STORYBOARD_PAGES = 512;
+  const storyboardSchemaError = () => Object.assign(
+    new Error('storyboard response schema unsupported'),
+    {kind: 'schema', errorCode: 'STORYBOARD_SCHEMA'}
+  );
+  const storyboardRecord = value =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+  const validStoryboardUrl = value => {
+    if (typeof value !== 'string' || !value.trim() ||
+        !/^(https?:\/\/|\/\/)/i.test(value)) { return false; }
+    try {
+      const url = new URL(value.startsWith('//') ? 'https:' + value : value);
+      return (url.protocol === 'https:' || url.protocol === 'http:') &&
+        !!url.hostname && !url.username && !url.password;
+    } catch (_) { return false; }
+  };
+  const validateStoryboardImageList = images => {
+    if (!Array.isArray(images) || !images.length ||
+        images.length > MAX_STORYBOARD_PAGES ||
+        !images.every(image => storyboardRecord(image) &&
+          validStoryboardUrl(image.url))) {
+      throw storyboardSchemaError();
+    }
+    return images;
+  };
+
   class StoryboardInfoLoader {
     static create({type, ...params}) {
       switch (type) {
@@ -64,12 +93,29 @@ const createStoryboardClasses = (util) => {
     }
 
     getStoryboardWithUrls() {
-      const storyboard = this.storyboard;
-      const count = Math.ceil(this.duration * 1000 / storyboard.interval);
-      return {
-        ...storyboard,
-        count,
-      };
+      let storyboard;
+      try { storyboard = this.storyboard; }
+      catch (_) { throw storyboardSchemaError(); }
+      const dimensions = storyboard?.thumbnail;
+      const rows = Number(storyboard?.rows), cols = Number(storyboard?.columns);
+      const width = Number(dimensions?.width), height = Number(dimensions?.height);
+      const interval = Number(storyboard?.interval), duration = Number(this.duration);
+      if (!storyboardRecord(storyboard) || !storyboardRecord(dimensions) ||
+          ![rows, cols, width, height, interval, duration].every(Number.isFinite) ||
+          ![rows, cols, width, height].every(Number.isSafeInteger) ||
+          rows < 1 || cols < 1 || width < 1 || height < 1 ||
+          rows > 256 || cols > 256 || width > 4096 || height > 4096 ||
+          interval <= 0 || duration < 0 || rows * cols > 16384 ||
+          rows * cols * width * height > 16 * 1024 * 1024) {
+        throw storyboardSchemaError();
+      }
+      const images = validateStoryboardImageList(storyboard.images);
+      const count = Math.ceil(duration * 1000 / interval);
+      if (!Number.isSafeInteger(count) || count < 0 ||
+          count > images.length * rows * cols) {
+        throw storyboardSchemaError();
+      }
+      return {...storyboard, count};
     }
 
     async getStoryboardWithImages() {
@@ -82,6 +128,9 @@ const createStoryboardClasses = (util) => {
 
     // Task 070: 画像（1枚 約0.5MB・10x10コマ）は全ページ同時に取得する。認証は不要（credentials omit で取得可）。
     static async fetchImages(images) {
+      // This entry is also used directly by the separate storyboardImages
+      // worker command, so validate again even if a caller skipped getInfo().
+      validateStoryboardImageList(images);
       return Promise.all(images.map(async image => {
         if (image.buffer) {
           return image;
@@ -146,8 +195,15 @@ const createStoryboardClasses = (util) => {
     }
 
     get storyboard() {
-      if (this._rawData == null) {
-        return null;
+      // DOMAND often sends paths relative to storyboard.json. Check the raw
+      // array first: mapping a missing URL would otherwise invent "undefined".
+      if (!storyboardRecord(this._rawData) ||
+          !Array.isArray(this._rawData.images) ||
+          !this._rawData.images.length ||
+          this._rawData.images.length > MAX_STORYBOARD_PAGES ||
+          !this._rawData.images.every(image => storyboardRecord(image) &&
+            typeof image.url === 'string' && !!image.url.trim())) {
+        throw storyboardSchemaError();
       }
       const {
         thumbnailWidth: width,
@@ -196,7 +252,11 @@ const createStoryboardClasses = (util) => {
 
     async load() {
       const result = await util.fetch(this._url, {credentials: 'include'}).then(res => res.json());
-      if (result.meta.status && result.meta.status >= 300) {
+      if (!storyboardRecord(result) || !storyboardRecord(result.meta) ||
+          !Number.isInteger(result.meta.status) || !storyboardRecord(result.data)) {
+        throw storyboardSchemaError();
+      }
+      if (result.meta.status >= 300) {
         throw 'storyboard request fail';
       }
       this._rawData = result.data;
@@ -1097,32 +1157,82 @@ const VideoSessionWorker = (() => {
     });
   };
 
-  const withTimeout = (promise, ms) => Promise.race([
-    promise,
-    new Promise(res => setTimeout(() => res(null), ms))
-  ]);
+  const withTimeout = (promise, ms) => {
+    // The timer protects truly slow IndexedDB operations, but should not
+    // remain armed for two seconds after an ordinary cache hit or miss.
+    let timer;
+    const cutoff = new Promise(resolve => {
+      timer = setTimeout(() => resolve(null), ms);
+    });
+    return Promise.race([promise, cutoff]).finally(() => clearTimeout(timer));
+  };
 
   // Task 070: 高速化
   //  1. キャッシュ(IndexedDB)の確認とセッション作成を同時に始める（キャッシュが無い時に待たない）
   //  2. セッション作成後、画像を待たずにURLだけの情報で表示を始める（シーク時に必要なページだけ描画側が取得）
   //  3. 画像本体は裏で一括取得し、揃ったらキャッシュに保存する（次回から通信なしで即表示）
+  // Task484: old IndexedDB records can report success despite wrong video
+  // ownership, missing image buffers or outdated storyboard geometry.
+  // Validate before serving a cached preview, not just when rendering it.
+  const isUsableStoryboardCache = (data, watchId, serverType) => {
+    const record = value => !!value && typeof value === 'object' && !Array.isArray(value);
+    const positiveInt = value => Number.isSafeInteger(value) && value > 0;
+    if (!record(data) || data.status !== 'ok' || data.watchId !== watchId ||
+        data.format !== serverType || !Number.isFinite(data.duration) ||
+        data.duration < 0 || !record(data.storyboard)) { return false; }
+    const board = data.storyboard;
+    const {rows, columns, interval, count, images, thumbnail} = board;
+    if (!record(thumbnail) || !positiveInt(rows) || !positiveInt(columns) ||
+        !positiveInt(thumbnail.width) || !positiveInt(thumbnail.height) ||
+        !Number.isFinite(interval) || interval <= 0 ||
+        !Number.isSafeInteger(count) || count < 0 ||
+        rows > 256 || columns > 256 || rows * columns > 16384 ||
+        thumbnail.width > 4096 || thumbnail.height > 4096 ||
+        thumbnail.width * thumbnail.height * rows * columns > 16 * 1024 * 1024 ||
+        !Array.isArray(images) || !images.length || images.length > 512 ||
+        count > rows * columns * images.length) { return false; }
+    return images.every(image => {
+      if (!record(image) || typeof image.url !== 'string' || image.isFail ||
+          Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]') {
+        return false;
+      }
+      try {
+        const uri = new URL(image.url.startsWith('//') ? 'https:' + image.url : image.url);
+        return ['http:', 'https:'].includes(uri.protocol) && !!uri.hostname &&
+          !uri.username && !uri.password;
+      } catch (_) { return false; }
+    });
+  };
+
   const storyboard = async ({type, info}) => {
     const videoInfo = info.toJSON();
     const cacheId = `${videoInfo.watchId}_${type}`;
     const cachePromise = withTimeout(
       StoryboardCacheDb.get(cacheId).catch(() => null), 2000);
-    const workerPromise = initWorker();
+    // Start Worker construction in parallel with the IndexedDB lookup, but
+    // a synchronous startup error must not prevent use of a valid cached preview.
+    // If no usable cache exists, preserve the original startup failure.
+    let workerInitError = null;
+    try { initWorker(); } catch (error) { workerInitError = error; }
     const cache = await cachePromise;
     if (cache && cache.status === 'ok') {
-      return {...cache, fromCache: true};
+      if (isUsableStoryboardCache(cache, videoInfo.watchId, type)) {
+        return {...cache, fromCache: true};
+      }
+      // Evict only a provably invalid record. Cache maintenance is optional:
+      // network recovery must continue even if IndexedDB is unavailable.
+      await withTimeout(
+        Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null),
+        2000
+      );
     }
-    await workerPromise;
+    if (workerInitError) { throw workerInitError; }
     const params = {videoInfo, serverType: type, withImages: false};
     const result = await worker.post({command: 'storyboard', params});
     if (result && result.status === 'ok') {
       worker.post({command: 'storyboardImages', params: {sbInfo: result}})
-        .then(full => full && full.status === 'ok' && StoryboardCacheDb.put(cacheId, full))
-        .catch(err => console.warn('storyboard image cache fail', err));
+        .then(full => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
+        .catch(() => console.warn('storyboard image cache fail'));
     }
     return result;
   };

@@ -38,8 +38,8 @@
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
-// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
-// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
+// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task724-scui01-legacy-follow/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task724-scui01-legacy-follow/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
 // build: 2026-10-17 14:39Z 0607129
 /* eslint-disable */

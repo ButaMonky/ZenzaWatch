@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.52-task413
+// @version     0.5.59-task714
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -49,6 +49,7 @@ import {reg} from '../packages/lib/src/text/reg';
 import {parseThumbInfo} from '../packages/lib/src/nico/parseThumbInfo';
 import {OwnerSupplement} from '../packages/lib/src/nico/OwnerSupplement';
 import {ThumbInfoCacheDb} from '../packages/lib/src/nico/ThumbInfoCacheDb';
+import {PocketThumbnail} from '../packages/zenza/src/pocket/PocketThumbnail';
 import {MylistApiLoader} from '../packages/lib/src/nico/MylistApiLoader';
 import {objUtil} from '../packages/lib/src/infra/objUtil';
 import {bounce} from '../packages/lib/src/infra/bounce';
@@ -57,6 +58,9 @@ AntiPrototypeJs().then(() => {
   const PRODUCT = 'MylistPocket';
 
   const monkey = (PRODUCT) => {
+    // The monkey function is stringified and injected into the page world.
+    // Its dependencies must live inside this function, not the outer userscript.
+//@require PocketThumbnail
     const console = window.console;
     const {workerUtil} = window.MylistPocketLib;
     //const $ = window.jQuery;
@@ -3202,10 +3206,9 @@ const emitter = util.emitter;
 
     class VideoInfo {
       static createByThumbInfo(thumbInfo) {
-        let thumbnail = thumbInfo.thumbnail;
-        if (util.hasLargeThumbnail(thumbInfo.videoId)) {
-          thumbnail = thumbnail.replace(/\.[ML]$/) + '.L';
-        }
+        const candidates = PocketThumbnail.legacyUrls(
+          thumbInfo.thumbnail, util.hasLargeThumbnail(thumbInfo.videoId));
+        const thumbnail = candidates[0] || thumbInfo.thumbnail || '';
         const owner = thumbInfo.owner || {};
         const isChannel = thumbInfo.isChannel;
         const rawData = {
@@ -3453,21 +3456,48 @@ const emitter = util.emitter;
     };
 
     const createVideoInfoLoader = vv => {
+      let requestGeneration = 0;
 
-      const onVideoInfoLoad = thumbInfo => {
+      const onVideoInfoLoad = (thumbInfo, requestedWatchId, generation) => {
+        if (generation !== requestGeneration) { return; }
         const vi = VideoInfo.createByThumbInfo(thumbInfo);
         vv.bind(vi);
+
+        const image = vv._slot && vv._slot['video-thumbnail'];
+        if (!image) { return; }
+        const hasLarge = util.hasLargeThumbnail(thumbInfo.videoId || thumbInfo.id || requestedWatchId);
+        const legacy = PocketThumbnail.legacyUrls(thumbInfo.thumbnail, hasLarge);
+        const isCurrent = () => generation === requestGeneration &&
+          vv._videoInfo === vi && image.isConnected &&
+          (!vv._hostDom || vv._hostDom.classList.contains('show'));
+        // The old thumbnail remains visible immediately. High-quality metadata
+        // is requested only for an explicitly opened popup, not for all cards.
+        PocketThumbnail.install(image, legacy, isCurrent);
+        PocketThumbnail.getHighQuality(
+          vi.watchId || requestedWatchId,
+          (url, options) => netUtil.fetch(url, options),
+          location.hostname
+        ).then(urls => {
+          if (urls.length && isCurrent()) {
+            PocketThumbnail.install(image, [...urls, ...legacy], isCurrent);
+          }
+        }).catch(() => {});
       };
 
-      const onVideoInfoFail = () => {
+      const onVideoInfoFail = generation => {
+        if (generation !== requestGeneration) { return; }
         vv.bind({status: 'fail', description: '通信失敗'});
-        return Promise.resolve();
       };
 
       return watchId => {
+        const generation = ++requestGeneration;
         vv.reset();
         vv.show();
-        return ThumbInfoLoader.load(watchId, {expireTime: 60 * 60 * 1000}).then(onVideoInfoLoad, onVideoInfoFail);
+        return ThumbInfoLoader.load(watchId, {expireTime: 60 * 60 * 1000})
+          .then(thumbInfo => onVideoInfoLoad(thumbInfo, watchId, generation))
+          // A synchronous display failure in the resolved handler must also
+          // dismiss the loading state, not leave the information popup spinning.
+          .catch(() => onVideoInfoFail(generation));
       };
     };
 
@@ -3961,7 +3991,10 @@ const emitter = util.emitter;
               item.classList.toggle('is-fav-favorited', !!favChecker.isMatch(info));
 
               for (let img of item.querySelectorAll('img.videoThumbnail.preview')) {
-                img.src = info.thumbnail;
+                // Preview cards only use already-known legacy metadata: never
+                // flood the watch API with calls for every list item.
+                PocketThumbnail.install(img, PocketThumbnail.legacyUrls(
+                  info.thumbnail, util.hasLargeThumbnail(info.id || info.watchId || watchId)));
               }
 
               let label = item.querySelector('.label');
@@ -4065,7 +4098,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.52-task413', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.59-task714', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

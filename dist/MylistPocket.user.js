@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.52-task413
+// @version     0.5.59-task714
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-12 11:53Z
+// build: 2026-10-17 09:32Z b9e21e3
 /* eslint-disable */
 
 const AntiPrototypeJs = function() {
@@ -74,6 +74,131 @@ AntiPrototypeJs().then(() => {
   const PRODUCT = 'MylistPocket';
 
   const monkey = (PRODUCT) => {
+    // The monkey function is stringified and injected into the page world.
+    // Its dependencies must live inside this function, not the outer userscript.
+const PocketThumbnail = (() => {
+		const CACHE_MS = 5 * 60 * 1000;
+		const NEGATIVE_MS = 60 * 1000;
+		const MAX_CACHE = 64;
+		const cache = new Map();
+		const pending = new Map();
+		const imageOwners = new WeakMap();
+		const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) ?
+				value : null;
+		const normalize = (values) => {
+				const urls = [];
+				for (const value of values) {
+						if (typeof value !== 'string' || !value.trim()) {
+								continue;
+						}
+						try {
+								const url = new URL(value);
+								if (url.protocol === 'https:' || url.protocol === 'http:') {
+										const safe = url.protocol === 'http:' ? 'https:' + url.href.slice(5) : url.href;
+										if (!urls.includes(safe)) {
+												urls.push(safe);
+										}
+								}
+						}
+						catch (_) { /* skip malformed image URL */ }
+				}
+				return urls;
+		};
+		const watchUrls = (payload) => {
+				const outer = record(payload);
+				const data = record(outer?.data);
+				const response = record(data?.response) || record(outer?.response);
+				const v4 = record(record(response?.$watchV4)?.data);
+				const thumb = record(record((v4 || response)?.video)?.thumbnail);
+				if (!thumb) {
+						return [];
+				}
+				return normalize([
+						thumb.ogp, thumb.player, thumb.large, thumb.largeUrl,
+						thumb.middle, thumb.middleUrl, thumb.normal, thumb.url
+				]);
+		};
+		const legacyUrls = (thumbnail, hasLarge = false) => {
+				const normal = normalize([thumbnail]);
+				if (!normal.length) {
+						return [];
+				}
+				const original = normal[0];
+				const large = hasLarge &&
+						/^https:\/\/(?:nicovideo\.cdn\.nimg\.jp|tn\.smilevideo\.jp)\//.test(original) &&
+						!/[?#]/.test(original) ?
+						original.replace(/\.[ML]$/, '') + '.L' : '';
+				return normalize([large, original]);
+		};
+		const install = (image, urls, isCurrent = () => true) => {
+				const sources = normalize(urls);
+				if (!sources.length || !isCurrent()) {
+						return;
+				}
+				const token = {};
+				imageOwners.set(image, token);
+				let cursor = 0;
+				const next = () => {
+						if (imageOwners.get(image) !== token || !isCurrent()) {
+								return;
+						}
+						if (cursor >= sources.length) {
+								image.onerror = null;
+								return;
+						}
+						const url = sources[cursor++];
+						image.onerror = () => { next(); };
+						image.src = url;
+				};
+				next();
+		};
+		const getHighQuality = async (watchId, fetcher, hostname) => {
+				if (hostname !== 'www.nicovideo.jp' ||
+						!/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/.test(watchId)) {
+						return [];
+				}
+				const now = Date.now();
+				const saved = cache.get(watchId);
+				if (saved && saved.until > now) {
+						return [...saved.urls];
+				}
+				const existing = pending.get(watchId);
+				if (existing) {
+						return [...await existing];
+				}
+				const job = (async () => {
+						let urls = [];
+						try {
+								const url = 'https://www.nicovideo.jp/watch/' +
+										encodeURIComponent(watchId) + '?responseType=json';
+								const response = await fetcher(url, { credentials: 'include', timeout: 4000 });
+								if (response.ok) {
+										urls = watchUrls(await response.json());
+								}
+						}
+						catch (_) {
+						}
+						if (cache.size >= MAX_CACHE) {
+								const first = cache.keys().next().value;
+								if (first !== undefined) {
+										cache.delete(first);
+								}
+						}
+						cache.set(watchId, { until: Date.now() + (urls.length ? CACHE_MS : NEGATIVE_MS), urls });
+						return urls;
+				})();
+				pending.set(watchId, job);
+				try {
+						return [...await job];
+				}
+				finally {
+						if (pending.get(watchId) === job) {
+								pending.delete(watchId);
+						}
+				}
+		};
+		return { normalize, watchUrls, legacyUrls, install, getHighQuality };
+})();
     const console = window.console;
     const {workerUtil} = window.MylistPocketLib;
     //const $ = window.jQuery;
@@ -5151,10 +5276,9 @@ const MylistApiLoader = (() => {
 
     class VideoInfo {
       static createByThumbInfo(thumbInfo) {
-        let thumbnail = thumbInfo.thumbnail;
-        if (util.hasLargeThumbnail(thumbInfo.videoId)) {
-          thumbnail = thumbnail.replace(/\.[ML]$/) + '.L';
-        }
+        const candidates = PocketThumbnail.legacyUrls(
+          thumbInfo.thumbnail, util.hasLargeThumbnail(thumbInfo.videoId));
+        const thumbnail = candidates[0] || thumbInfo.thumbnail || '';
         const owner = thumbInfo.owner || {};
         const isChannel = thumbInfo.isChannel;
         const rawData = {
@@ -5402,21 +5526,48 @@ const MylistApiLoader = (() => {
     };
 
     const createVideoInfoLoader = vv => {
+      let requestGeneration = 0;
 
-      const onVideoInfoLoad = thumbInfo => {
+      const onVideoInfoLoad = (thumbInfo, requestedWatchId, generation) => {
+        if (generation !== requestGeneration) { return; }
         const vi = VideoInfo.createByThumbInfo(thumbInfo);
         vv.bind(vi);
+
+        const image = vv._slot && vv._slot['video-thumbnail'];
+        if (!image) { return; }
+        const hasLarge = util.hasLargeThumbnail(thumbInfo.videoId || thumbInfo.id || requestedWatchId);
+        const legacy = PocketThumbnail.legacyUrls(thumbInfo.thumbnail, hasLarge);
+        const isCurrent = () => generation === requestGeneration &&
+          vv._videoInfo === vi && image.isConnected &&
+          (!vv._hostDom || vv._hostDom.classList.contains('show'));
+        // The old thumbnail remains visible immediately. High-quality metadata
+        // is requested only for an explicitly opened popup, not for all cards.
+        PocketThumbnail.install(image, legacy, isCurrent);
+        PocketThumbnail.getHighQuality(
+          vi.watchId || requestedWatchId,
+          (url, options) => netUtil.fetch(url, options),
+          location.hostname
+        ).then(urls => {
+          if (urls.length && isCurrent()) {
+            PocketThumbnail.install(image, [...urls, ...legacy], isCurrent);
+          }
+        }).catch(() => {});
       };
 
-      const onVideoInfoFail = () => {
+      const onVideoInfoFail = generation => {
+        if (generation !== requestGeneration) { return; }
         vv.bind({status: 'fail', description: '通信失敗'});
-        return Promise.resolve();
       };
 
       return watchId => {
+        const generation = ++requestGeneration;
         vv.reset();
         vv.show();
-        return ThumbInfoLoader.load(watchId, {expireTime: 60 * 60 * 1000}).then(onVideoInfoLoad, onVideoInfoFail);
+        return ThumbInfoLoader.load(watchId, {expireTime: 60 * 60 * 1000})
+          .then(thumbInfo => onVideoInfoLoad(thumbInfo, watchId, generation))
+          // A synchronous display failure in the resolved handler must also
+          // dismiss the loading state, not leave the information popup spinning.
+          .catch(() => onVideoInfoFail(generation));
       };
     };
 
@@ -5910,7 +6061,10 @@ const MylistApiLoader = (() => {
               item.classList.toggle('is-fav-favorited', !!favChecker.isMatch(info));
 
               for (let img of item.querySelectorAll('img.videoThumbnail.preview')) {
-                img.src = info.thumbnail;
+                // Preview cards only use already-known legacy metadata: never
+                // flood the watch API with calls for every list item.
+                PocketThumbnail.install(img, PocketThumbnail.legacyUrls(
+                  info.thumbnail, util.hasLargeThumbnail(info.id || info.watchId || watchId)));
               }
 
               let label = item.querySelector('.label');
@@ -6014,7 +6168,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.52-task413', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.59-task714', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

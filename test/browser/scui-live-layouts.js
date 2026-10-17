@@ -110,12 +110,10 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     }
   }
   record(label+'/flow-owner',
-    (id==='01'
-      ?commentView.parentNode===root&&
-       !root.querySelector('.zenzaSceneImageBox')?.contains(commentView)&&
-       commentView.classList.contains('is-scui-classic-side')
-      :root.querySelector('.zenzaSceneImageBox')?.contains(commentView)===true)&&
-    commentView.classList.contains('is-scui-active'),{});
+    root.querySelector('.zenzaSceneImageBox')?.contains(commentView)===true&&
+    commentView.classList.contains('is-scui-flow')&&
+    commentView.classList.contains('is-scui-active')&&
+    (id!=='01'||!commentView.classList.contains('is-scui-classic-side')),{});
   // Native SeekBarThumbnail.is-visible has z-index:100 and is a CSS grid item.
   // The attached mini-comment must paint ABOVE that thumbnail, not underneath it.
   const sharedThumb=document.getElementById('thumb');
@@ -123,42 +121,38 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
   sharedThumb.style.setProperty('z-index','100');
   const thumbZ=Number(getComputedStyle(sharedThumb).zIndex);
   const commentZ=Number(getComputedStyle(commentView).zIndex);
-  if(id!=='01'){
-    record(label+'/flow-foreground-stacking',
-      commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
-      sharedThumb.parentNode===commentView.parentNode&&
-      Number.isFinite(commentZ)&&commentZ>thumbZ,
-      {commentZ,thumbZ,mode:commentView.className});
-  }
+  record(label+'/flow-foreground-stacking',
+    commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
+    sharedThumb.parentNode===commentView.parentNode&&
+    Number.isFinite(commentZ)&&commentZ>thumbZ,
+    {commentZ,thumbZ,mode:commentView.className});
   if(previousThumbZ){sharedThumb.style.setProperty('z-index',previousThumbZ);}
   else{sharedThumb.style.removeProperty('z-index');}
   if(id==='01'){
-    const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
+    const imageBox=root.querySelector('.zenzaSceneImageBox');
+    const image=imageBox.getBoundingClientRect();
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
-    const gap=parseFloat(root.style.getPropertyValue('--scui-side-gap'))||8;
-    const separate=placement==='right'&&side.left>=image.right+gap-2;
-    record(label+'/classic-flow-scene-left',separate&&side.top>=-1&&
-      side.left>=7&&side.right<=innerWidth-7,
-      {placement,image:image.toJSON(),side:side.toJSON()});
-    // Task727: image and mini-comment MUST be visually adjacent, not 40px
-    // apart. Old tests considered the 40px drift "normal" and missed live QA.
-    const visualGap=side.left-image.right;
-    record(label+'/classic-mini-right-shift',visualGap>=3&&visualGap<=18,
-      {visualGap,imageRight:image.right,commentLeft:side.left,
-       mode,seekPercent:pct,layout:root.dataset.layout});
+    // This was the missing contract in Task716-727. The ORIGINAL flowing
+    // CommentPreviewView must physically OVERLAP the storyboard image.
+    const overImage=commentView.parentNode===imageBox&&
+      placement==='overlay'&&!commentView.classList.contains('is-scui-classic-side')&&
+      Math.abs(side.left-image.left)<=2&&
+      Math.abs(side.right-image.right)<=2&&
+      Math.abs(side.top-image.top)<=2&&
+      Math.abs(side.bottom-image.bottom)<=2;
+    record(label+'/classic-mini-OVER-thumbnail',overImage,
+      {image:image.toJSON(),mini:side.toJSON(),placement,mode,pct});
     if(portal){
-      // Both normal and narrow layouts use the same short 8px rail-free
-      // gap; virtual comments retain their original independent animation.
-      record(label+'/fixed-panel-order',placement==='right'&&
-        side.left>=image.right+gap-2&&side.right<=innerWidth-7,
-        {placement,gap,scene:image.toJSON(),comment:side.toJSON()});
+      record(label+'/flow-no-right-panel-reservation',
+        root.style.getPropertyValue('--scui-side-width')==='0px'&&
+        root.style.getPropertyValue('--scui-side-gap')==='0px',
+        {width:root.style.getPropertyValue('--scui-side-width'),
+         gap:root.style.getPropertyValue('--scui-side-gap')});
       if(pct>=.95){
-        record(label+'/right-edge-group-visible',
-          Math.abs(side.right-(innerWidth-8))<=3&&
-          rect.left>=7&&side.left>=rect.right+5,
-          {sceneRight:rect.right,commentRight:side.right,
-           viewport:innerWidth,cursor:x});
+        record(label+'/flow-fullwidth-thumbnail-follow',
+          Math.abs(rect.right-(innerWidth-8))<=3,
+          {sceneRight:rect.right,viewport:innerWidth,cursor:x});
       }
     }
     const paneStyle=getComputedStyle(commentView);
@@ -223,8 +217,16 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const separate=placement==='right'&&side.left>=image.right+gap-2;
     record(label+'/classic-list-side-and-interaction',separate&&side.top>=-1&&
       side.left>=7&&side.right<=innerWidth-7&&
+      commentView.parentNode===root&&
+      !root.querySelector('.zenzaSceneImageBox').contains(commentView)&&
+      commentView.classList.contains('is-scui-classic-side')&&
       getComputedStyle(commentView).pointerEvents!=='none',
       {placement,image:image.toJSON(),side:side.toJSON()});
+    if(portal&&pct>=.95){
+      record(label+'/list-group-clamp-right-edge',
+        Math.abs(side.right-(innerWidth-8))<=3,
+        {commentRight:side.right,viewport:innerWidth});
+    }
     const listStyle=getComputedStyle(commentView);
     const commentToggle=root.querySelector('.scene-comment-toggle');
     const toggleRect=commentToggle?.getBoundingClientRect();
@@ -252,9 +254,11 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       hit===commentView||commentView.contains(hit),
       {placement,hit:hit?.className||hit?.tagName});
     config.setValue('enableCommentPreview',false);
-    record(label+'/classic-flow-restored',
-      commentView.parentNode===root&&commentView.classList.contains('is-scui-flow')&&
-      commentView.classList.contains('is-scui-classic-side'),{});
+    record(label+'/classic-flow-restored-OVER-image',
+      commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
+      commentView.classList.contains('is-scui-flow')&&
+      !commentView.classList.contains('is-scui-classic-side')&&
+      root.dataset.scuiSidePlacement==='overlay',{});
   }
   if(id==='02'){
     const player=host.getBoundingClientRect();

@@ -33,15 +33,15 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.293-scui01-mini-align
+// @version        2.7.294-scui01-mini-overlay
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
-// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task727-scui01-mini-align/dist/ZenzaWatch-dev.user.js
-// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task727-scui01-mini-align/dist/ZenzaWatch-dev.user.js
+// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task728-scui01-overlay/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task728-scui01-overlay/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 16:58Z 697fe09
+// build: 2026-10-17 17:40Z edb4e1d
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.293-scui01-mini-align';
+    var VER = '2.7.294-scui01-mini-overlay';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 16:58Z 697fe09';
+    var BUILD = '2026-10-17 17:40Z edb4e1d';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35049,19 +35049,21 @@ class SceneSearchIntegrationBridge {
 		}
 		const list=this.config.getValue('enableCommentPreview')===true;
 		const classic=root.dataset.layout==='01';
-		const target=classic?root:
-			list?this.container:root.querySelector('.zenzaSceneImageBox');
+		const image=root.querySelector('.zenzaSceneImageBox');
+		const target=classic?(list?root:image):
+			list?this.container:image;
 		if(target&&node.parentNode!==target)target.appendChild(node);
 		node.classList.add('zenzaSceneCommentAttached');
 		node.classList.toggle('is-scui-list',list);
 		node.classList.toggle('is-scui-flow',!list);
-		node.classList.toggle('is-scui-classic-side',classic);
+		node.classList.toggle('is-scui-classic-side',classic&&list);
 		const active=(state?.shown!==false||state?.pinned===true)&&
 			this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
 			!root.classList.contains('is-idle-suppressed');
 		node.classList.toggle('is-scui-active',active);
 		if(classic){
-			this._positionClassicCommentSide(root,list);
+			if(list)this._positionClassicCommentSide(root,list);
+			else root.dataset.scuiSidePlacement='overlay';
 		}else if(list){
 			const x=Number.parseFloat(root.style.getPropertyValue('--scene-x'));
 			if(Number.isFinite(x))this.container.style.setProperty('--scui-list-x',x+'px');
@@ -35087,13 +35089,6 @@ class SceneSearchIntegrationBridge {
 		root.dataset.scuiSidePlacement='right';
 		root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
 		root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
-		const imageRect=root.querySelector('.zenzaSceneImageBox')?.getBoundingClientRect?.();
-		const imageTop=Number.isFinite(imageRect?.top)?
-			(imageRect.top-rect.top)/scale:0;
-		const imageHeight=Number.isFinite(imageRect?.height)&&imageRect.height>0?
-			imageRect.height/scale:90;
-		root.style.setProperty('--scui-mini-top',imageTop.toFixed(2)+'px');
-		root.style.setProperty('--scui-mini-height',imageHeight.toFixed(2)+'px');
 	}
 	_restoreCommentPreviewDock(){
 		const old=this._commentDock,node=this._commentPreviewElement;
@@ -35347,40 +35342,37 @@ class SceneSearchIntegrationBridge {
 	position:absolute;z-index:250;max-height:200px;
 	pointer-events:auto!important;overflow:auto;transform:none!important
 }
-/* UI01: the original native comment panel is a SIBLING of the image,
-	always on its RIGHT. Never reparent virtual chat rows or swap panes. */
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side{
-	position:absolute!important;
-	left:var(--scui-side-left,calc(100% + 8px))!important;
-	right:auto!important;top:auto!important;bottom:0!important;
-	width:var(--scui-side-width,180px)!important;
-	max-width:calc(100vw - 16px)!important;
-	margin:0!important;transform:none!important;box-sizing:border-box;
-	z-index:160
-}
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow{
-	/* Never paint a panel behind native moving mini-comments. Preserve the
-		comment text and its existing color/animation, without dimming opacity. */
+/* UI01 FLOW: use the ORIGINAL CommentPreviewView over the actual
+	storyboard canvas, not as a right-side sibling. The shared image-box
+	absolute-position rule sets inset:0 and z-index:200 above the canvas.
+	Preserve UI00's native rows, durations and preview-text-moving animation. */
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
+	>.zenzaCommentPreview.is-scui-flow{
 	opacity:1!important;filter:none!important;
 	background:transparent!important;background-image:none!important;
 	border:0!important;box-shadow:none!important;
-	/* The image itself is shorter than the card's image+clock+buttons. */
-	top:var(--scui-mini-top,0px)!important;bottom:auto!important;
-	height:var(--scui-mini-height,90px)!important;max-height:none!important;
-	overflow:hidden!important;pointer-events:none!important
+	pointer-events:none!important
 }
-/* Preserve UI00's ORIGINAL CommentPreviewView virtual rows. Task721's
-	flex, fixed row-height and nth-child caps changed their native movement.
-	Only the pane geometry and transparent background may differ here. */
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer{
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
+	>.zenzaCommentPreview.is-scui-flow .listContainer{
 	width:100%!important;height:100%!important;
 	background:transparent!important;background-image:none!important;
 	box-shadow:none!important
 }
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat .text{
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
+	>.zenzaCommentPreview.is-scui-flow .listContainer>.nicoChat .text{
 	animation-play-state:running!important
 }
+/* UI01 LIST only: the SAME native DOM becomes a separate scrollable panel
+	to the RIGHT of the scene card. No side reversal or vertical fallback. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
+	position:absolute!important;
+	left:var(--scui-side-left,calc(100% + 8px))!important;
+	right:auto!important;top:auto!important;bottom:0!important;
+	width:var(--scui-side-width,350px)!important;
+	max-width:calc(100vw - 16px)!important;
+	margin:0!important;transform:none!important;box-sizing:border-box;
+	z-index:250;
 	height:200px!important;max-height:200px!important;
 	overflow:auto!important;pointer-events:auto!important;
 	opacity:1!important;background:rgba(0,0,0,.96)!important
@@ -36371,10 +36363,12 @@ function registerSceneLayouts01_02(registry) {
 									const rootWidth=card.root.getBoundingClientRect?.().width||
 										card.root.offsetWidth||frameWidth;
 									const margin=8;
-									const desiredPaneWidth=state.commentListMode===true?350:180;
-									const gap=8;
-									const paneWidth=Math.max(1,Math.min(desiredPaneWidth,
-										viewport-margin*2-rootWidth-gap));
+									const listMode=state.commentListMode===true;
+									const desiredPaneWidth=listMode?350:0;
+									const gap=listMode?8:0;
+									const paneWidth=listMode?
+										Math.max(1,Math.min(desiredPaneWidth,
+											viewport-margin*2-rootWidth-gap)):0;
 									const half=rootWidth/2;
 									const minCenter=margin+half;
 									const maxCenter=viewport-margin-gap-paneWidth-half;

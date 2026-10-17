@@ -48,10 +48,16 @@ describe('SCUI-18 complete real bridge/player integration',()=>{
      'the original comment model remains owned by the preview card');
    assert.equal(h.dom.window.getComputedStyle(root).position,'fixed');
    h.move(80);
-   assert.strictEqual(root.dataset.scuiSidePlacement,'right');
+   assert.strictEqual(root.dataset.scuiSidePlacement,'overlay',
+     'flow mode must overlay the thumbnail from the first seek position');
    h.move(899);
+   assert.strictEqual(root.dataset.scuiSidePlacement,'overlay',
+     'flowing mini-comments never detach from the thumbnail near the edge');
+   h.config.setValue('enableCommentPreview',true);
    assert.strictEqual(root.dataset.scuiSidePlacement,'right',
-     'never switch left/right order mid-seek');
+     'only the comment LIST should become a right-side panel');
+   h.config.setValue('enableCommentPreview',false);
+   assert.strictEqual(root.dataset.scuiSidePlacement,'overlay');
    assert.notStrictEqual(root.style.getPropertyValue('--scene-viewport-x'),'',
      'scene must use viewport coordinates for the full seek track');
    h.setMode('fullscreen');
@@ -61,46 +67,57 @@ describe('SCUI-18 complete real bridge/player integration',()=>{
    assert.equal(h.d.querySelector('.zenzaSceneSearchHost'),null);
   }finally{h.close();}
  });
- it('UI01 docks native flowing and list comments beside, never inside thumbnail',()=>{
+ it('UI01 overlays native flowing mini-comments on the actual storyboard image and keeps list beside it',()=>{
   const h=fixture('01');try{
    h.move(450);
    const root=h.host.querySelector('.zenzaSceneLayout01');
    const comment=h.d.querySelector('.zenzaCommentPreview');
    const image=root.querySelector('.zenzaSceneImageBox');
-   assert.strictEqual(comment.parentNode,root,'classic comments must be a sibling of image');
-   assert.strictEqual(image.contains(comment),false);
-   assert(comment.classList.contains('is-scui-classic-side'));
+   assert.strictEqual(comment.parentNode,image,
+     'flowing mini-comments MUST overlay the thumbnail image, not sit to the right');
+   assert(image.contains(comment));
    assert(comment.classList.contains('is-scui-flow'));
+   assert(!comment.classList.contains('is-scui-classic-side'));
+   assert.strictEqual(root.dataset.scuiSidePlacement,'overlay');
    h.config.setValue('enableCommentPreview',true);
-   assert.strictEqual(comment.parentNode,root,'list must remain a separate side pane');
+   assert.strictEqual(comment.parentNode,root,
+     'list view alone uses a separate right-side panel');
+   assert(!image.contains(comment));
    assert(comment.classList.contains('is-scui-list'));
    assert(comment.classList.contains('is-scui-classic-side'));
+   assert.strictEqual(root.dataset.scuiSidePlacement,'right');
    h.config.setValue('enableCommentPreview',false);
-   assert.strictEqual(comment.parentNode,root);
+   assert.strictEqual(comment.parentNode,image,
+     'restoring flow must put original native DOM back on the image');
+   assert(!comment.classList.contains('is-scui-classic-side'));
    h.setMode('fullscreen');
-   assert.strictEqual(h.host.querySelector('.zenzaSceneImageBox').contains(comment),false);
+   assert(h.host.querySelector('.zenzaSceneImageBox').contains(comment),
+     'fullscreen flow must retain original comment overlay');
    h.player.emit('close');
-   assert.strictEqual(comment.parentNode,h.host,'dispose restores original comment owner');
+   assert.strictEqual(comment.parentNode,h.host,'dispose restores original owner');
    assert.strictEqual(comment.classList.contains('is-scui-classic-side'),false);
   }finally{h.close();}
  });
- it('UI01 remeasures the actual image box after a late storyboard resize',()=>{
+ it('UI01 flow overlay follows its image box without any independent mini-coordinate offsets',()=>{
   const h=fixture('01');try{
-   const bridge=h.binding.adapter.bridge;
    const root=h.host.querySelector('.zenzaSceneLayout01');
    const image=root.querySelector('.zenzaSceneImageBox');
-   Object.defineProperty(root,'offsetWidth',{configurable:true,value:180});
-   root.getBoundingClientRect=()=>({left:320,right:500,width:180,top:400,height:140});
-   image.getBoundingClientRect=()=>({left:324,right:496,width:172,top:405,height:90});
-   bridge._positionClassicCommentSide(root,false);
-   assert.strictEqual(root.style.getPropertyValue('--scui-mini-top'),'5.00px');
-   assert.strictEqual(root.style.getPropertyValue('--scui-mini-height'),'90.00px');
+   const comment=h.d.querySelector('.zenzaCommentPreview');
+   assert.strictEqual(comment.parentNode,image);
    image.getBoundingClientRect=()=>({left:324,right:496,width:172,top:408,height:112});
-   bridge._positionClassicCommentSide(root,false);
-   assert.strictEqual(root.style.getPropertyValue('--scui-mini-top'),'8.00px');
-   assert.strictEqual(root.style.getPropertyValue('--scui-mini-height'),'112.00px');
+   h.move(460);
+   assert.strictEqual(comment.parentNode,image,
+     'native mini flow overlay must remain image-owned after storyboard resize');
+   assert.strictEqual(root.style.getPropertyValue('--scui-mini-top'),'');
+   assert.strictEqual(root.style.getPropertyValue('--scui-mini-height'),'');
+   assert.strictEqual(root.style.getPropertyValue('--scui-side-width'),'',
+     'no independent sidepane width is needed without viewport portal');
+   h.config.setValue('enableCommentPreview',true);
+   assert.strictEqual(comment.parentNode,root);
+   h.config.setValue('enableCommentPreview',false);
+   assert.strictEqual(comment.parentNode,image);
    assert.equal(h.host.querySelectorAll('#thumb canvas').length,1,
-     'thumbnail owner must remain single');
+     'only one original storyboard canvas may exist');
   }finally{h.close();}
  });
  it('follows the actual seek position using the real player duration',()=>{

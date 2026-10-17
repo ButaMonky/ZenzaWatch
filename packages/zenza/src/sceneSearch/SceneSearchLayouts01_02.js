@@ -226,13 +226,15 @@ function registerSceneLayouts01_02(registry) {
                   const rootWidth=card.root.getBoundingClientRect?.().width||
                     card.root.offsetWidth||frameWidth;
                   const margin=8;
-                  const desiredPaneWidth=state.commentListMode===true?350:180;
-                  // Task727: keep the native mini-comment pane adjacent to
-                  // the image. The old 40px tool-rail reservation visibly
-                  // shifted comments right on the actual NicoNico player.
-                  const gap=8;
-                  const paneWidth=Math.max(1,Math.min(desiredPaneWidth,
-                    viewport-margin*2-rootWidth-gap));
+                  // Flow comments OVERLAY the scene image, so they occupy
+                  // NO extra horizontal width. Only LIST mode reserves a
+                  // separate right panel and stops the group at its edge.
+                  const listMode=state.commentListMode===true;
+                  const desiredPaneWidth=listMode?350:0;
+                  const gap=listMode?8:0;
+                  const paneWidth=listMode?
+                    Math.max(1,Math.min(desiredPaneWidth,
+                      viewport-margin*2-rootWidth-gap)):0;
                   const half=rootWidth/2;
                   const minCenter=margin+half;
                   const maxCenter=viewport-margin-gap-paneWidth-half;

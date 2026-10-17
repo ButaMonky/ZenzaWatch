@@ -86,7 +86,12 @@ async function evalValue(expr,options={}){
    'const root=document.querySelector(".zenzaSceneLayout01");',
    'const comment=document.querySelector(".zenzaCommentPreview");',
    'if(!root||!comment)return {missing:true};',
+   'const image=root.querySelector(".zenzaSceneImageBox");',
    'const r=root.getBoundingClientRect(),c=comment.getBoundingClientRect();',
+   'const i=image?.getBoundingClientRect();',
+   'const overlay=comment.parentNode===image&&',
+   ' i&&Math.abs(c.left-i.left)<=2&&Math.abs(c.right-i.right)<=2&&',
+   ' Math.abs(c.top-i.top)<=2&&Math.abs(c.bottom-i.bottom)<=2;',
    'const target=document.fullscreenElement;',
    'const hit=document.elementFromPoint(r.left+r.width/2,r.top+Math.min(30,r.height/2));',
    'return {native:target===host,descendant:host.contains(root),',
@@ -95,16 +100,31 @@ async function evalValue(expr,options={}){
    'opacity:getComputedStyle(root).opacity,',
    'hitWithinRoot:hit===root||root.contains(hit),',
    'sceneLeft:r.left,sceneRight:r.right,commentLeft:c.left,commentRight:c.right,',
-   'viewportWidth:innerWidth};})()'
+   'overlay:!!overlay,viewportWidth:innerWidth};})()'
   ].join('');
   const result=await evalValue(expression);
   console.log('NATIVE_FULLSCREEN_RESULT='+JSON.stringify(result));
   if(!result.native||!result.descendant||!result.commentDescendant||
    result.display==='none'||result.visibility==='hidden'||
-   !result.hitWithinRoot||result.commentLeft<result.sceneRight||
-   result.commentRight>result.viewportWidth+2)throw Error('Native fullscreen visible UI01 contract failed');
+   !result.hitWithinRoot||!result.overlay)
+   throw Error('Native fullscreen mini-comment OVERLAY contract failed');
+  const list=await evalValue([
+   '(()=>{const root=document.querySelector(".zenzaSceneLayout01");',
+   'const button=root.querySelector(".scene-comment-toggle");button.click();',
+   'const comment=document.querySelector(".zenzaCommentPreview");',
+   'const image=root.querySelector(".zenzaSceneImageBox");',
+   'const rect=comment.getBoundingClientRect(),frame=root.getBoundingClientRect();',
+   'return {listOwner:comment.parentNode===root,',
+   'flowDetached:!image.contains(comment),',
+   'rightOfImage:rect.left>=frame.right+4,',
+   'viewportBounded:rect.right<=innerWidth+2};})()'
+  ].join(''));
+  console.log('NATIVE_FULLSCREEN_LIST='+JSON.stringify(list));
+  if(!list.listOwner||!list.flowDetached||!list.rightOfImage||!list.viewportBounded)
+   throw Error('Native fullscreen list-side contract failed');
+  await evalValue('document.querySelector(".zenzaSceneLayout01 .scene-comment-toggle").click()');
   const shot=await connection.send('Page.captureScreenshot',{format:'png'});
-  fs.writeFileSync(path.join(out,'task725-native-fullscreen.png'),Buffer.from(shot.data,'base64'));
+  fs.writeFileSync(path.join(out,'task728-native-fullscreen-overlay.png'),Buffer.from(shot.data,'base64'));
   console.log('NATIVE_FULLSCREEN_PASS');
  }finally{
   connection?.close();chrome?.kill();

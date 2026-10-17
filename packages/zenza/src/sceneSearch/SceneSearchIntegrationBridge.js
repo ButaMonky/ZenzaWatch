@@ -542,21 +542,24 @@ class SceneSearchIntegrationBridge {
     }
     const list=this.config.getValue('enableCommentPreview')===true;
     const classic=root.dataset.layout==='01';
-    // Classic follows the seek cursor, with a second adjacent pane.
-    // Do not overlay the thumbnail or detach the original comment model.
-    const target=classic?root:
-      list?this.container:root.querySelector('.zenzaSceneImageBox');
+    // Task728: the ORIGINAL CommentPreviewView flows ON TOP of the
+    // storyboard image in UI01. ONLY the scrollable LIST moves to the right
+    // sibling pane. Never clone native chat rows or replace their animation.
+    const image=root.querySelector('.zenzaSceneImageBox');
+    const target=classic?(list?root:image):
+      list?this.container:image;
     if(target&&node.parentNode!==target)target.appendChild(node);
     node.classList.add('zenzaSceneCommentAttached');
     node.classList.toggle('is-scui-list',list);
     node.classList.toggle('is-scui-flow',!list);
-    node.classList.toggle('is-scui-classic-side',classic);
+    node.classList.toggle('is-scui-classic-side',classic&&list);
     const active=(state?.shown!==false||state?.pinned===true)&&
       this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
       !root.classList.contains('is-idle-suppressed');
     node.classList.toggle('is-scui-active',active);
     if(classic){
-      this._positionClassicCommentSide(root,list);
+      if(list)this._positionClassicCommentSide(root,list);
+      else root.dataset.scuiSidePlacement='overlay';
     }else if(list){
       const x=Number.parseFloat(root.style.getPropertyValue('--scene-x'));
       if(Number.isFinite(x))this.container.style.setProperty('--scui-list-x',x+'px');
@@ -587,16 +590,8 @@ class SceneSearchIntegrationBridge {
     root.dataset.scuiSidePlacement='right';
     root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
     root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
-    // The thumbnail occupies only the image box; the scene card also has a
-    // clock and tool rail. Align the flowing comment pane with the IMAGE,
-    // not the overall card. Re-measure on each render / storyboard update.
-    const imageRect=root.querySelector('.zenzaSceneImageBox')?.getBoundingClientRect?.();
-    const imageTop=Number.isFinite(imageRect?.top)?
-      (imageRect.top-rect.top)/scale:0;
-    const imageHeight=Number.isFinite(imageRect?.height)&&imageRect.height>0?
-      imageRect.height/scale:90;
-    root.style.setProperty('--scui-mini-top',imageTop.toFixed(2)+'px');
-    root.style.setProperty('--scui-mini-height',imageHeight.toFixed(2)+'px');
+    // Flow mode has no independent pane or coordinate offset. Its ORIGINAL
+    // CommentPreviewView is positioned directly inside .zenzaSceneImageBox.
   }
   _restoreCommentPreviewDock(){
     const old=this._commentDock,node=this._commentPreviewElement;
@@ -855,40 +850,37 @@ class SceneSearchIntegrationBridge {
   position:absolute;z-index:250;max-height:200px;
   pointer-events:auto!important;overflow:auto;transform:none!important
 }
-/* UI01: the original native comment panel is a SIBLING of the image,
-   always on its RIGHT. Never reparent virtual chat rows or swap panes. */
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side{
-  position:absolute!important;
-  left:var(--scui-side-left,calc(100% + 8px))!important;
-  right:auto!important;top:auto!important;bottom:0!important;
-  width:var(--scui-side-width,180px)!important;
-  max-width:calc(100vw - 16px)!important;
-  margin:0!important;transform:none!important;box-sizing:border-box;
-  z-index:160
-}
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow{
-  /* Never paint a panel behind native moving mini-comments. Preserve the
-     comment text and its existing color/animation, without dimming opacity. */
+/* UI01 FLOW: use the ORIGINAL CommentPreviewView over the actual
+   storyboard canvas, not as a right-side sibling. The shared image-box
+   absolute-position rule sets inset:0 and z-index:200 above the canvas.
+   Preserve UI00's native rows, durations and preview-text-moving animation. */
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
+  >.zenzaCommentPreview.is-scui-flow{
   opacity:1!important;filter:none!important;
   background:transparent!important;background-image:none!important;
   border:0!important;box-shadow:none!important;
-  /* The image itself is shorter than the card's image+clock+buttons. */
-  top:var(--scui-mini-top,0px)!important;bottom:auto!important;
-  height:var(--scui-mini-height,90px)!important;max-height:none!important;
-  overflow:hidden!important;pointer-events:none!important
+  pointer-events:none!important
 }
-/* Preserve UI00's ORIGINAL CommentPreviewView virtual rows. Task721's
-   flex, fixed row-height and nth-child caps changed their native movement.
-   Only the pane geometry and transparent background may differ here. */
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer{
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
+  >.zenzaCommentPreview.is-scui-flow .listContainer{
   width:100%!important;height:100%!important;
   background:transparent!important;background-image:none!important;
   box-shadow:none!important
 }
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat .text{
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
+  >.zenzaCommentPreview.is-scui-flow .listContainer>.nicoChat .text{
   animation-play-state:running!important
 }
+/* UI01 LIST only: the SAME native DOM becomes a separate scrollable panel
+   to the RIGHT of the scene card. No side reversal or vertical fallback. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
+  position:absolute!important;
+  left:var(--scui-side-left,calc(100% + 8px))!important;
+  right:auto!important;top:auto!important;bottom:0!important;
+  width:var(--scui-side-width,350px)!important;
+  max-width:calc(100vw - 16px)!important;
+  margin:0!important;transform:none!important;box-sizing:border-box;
+  z-index:250;
   height:200px!important;max-height:200px!important;
   overflow:auto!important;pointer-events:auto!important;
   opacity:1!important;background:rgba(0,0,0,.96)!important

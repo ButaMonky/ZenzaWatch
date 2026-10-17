@@ -4,11 +4,13 @@ import {PlayerConfig} from './NicoVideoPlayerDialog';
 import {Clipboard} from '../packages/lib/src/dom/Clipboard';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
 import {CommentPictureInPicture} from '../packages/zenza/src/commentLayer/CommentPictureInPicture';
+import {PipPageThumbnail} from '../packages/zenza/src/videoPlayer/PipPageThumbnail';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {RelatedMenuOrder} from './RelatedMenuOrder';
 import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
 //===BEGIN===
 //@require CommentPictureInPicture
+//@require PipPageThumbnail
 //@require RelatedMenuOrder
 //@require RelatedMenuActions
 const RootDispatcher = (() => {
@@ -21,8 +23,35 @@ const RootDispatcher = (() => {
       playerState = ZenzaWatch.state.player;
       config = PlayerConfig.getInstance(config);
       config.on('update', RootDispatcher.onConfigUpdate);
+      PipPageThumbnail.initialize({
+        document,
+        config,
+        state: playerState,
+        getContainer: () => player?._nicoVideoPlayer?._videoPlayer?._body,
+        getVideo: () => player?._nicoVideoPlayer?._videoPlayer?.videoElement
+      });
       player.on('command', RootDispatcher.execCommand);
-      player.on('close', () => CommentPictureInPicture.stop());
+      player.on('close', () => {
+        // Task712: the video dialog is gone, so its *native* PiP must also
+        // close. Stopping the comment-PiP session alone does not close it.
+        // Capture ownership first: never dismiss another site's PiP window.
+        const active = document.pictureInPictureElement;
+        const ownVideo = player?._nicoVideoPlayer?._videoPlayer?.videoElement;
+        const closeNative = !!active && active === ownVideo &&
+          active.classList?.contains('zenzaWatchVideoElement');
+        CommentPictureInPicture.stop();
+        PipPageThumbnail.stop();
+        if (closeNative && document.pictureInPictureElement === active &&
+            typeof document.exitPictureInPicture === 'function') {
+          try {
+            Promise.resolve(document.exitPictureInPicture()).catch(error => {
+              console.warn('native picture-in-picture close failed', error);
+            });
+          } catch (error) {
+            console.warn('native picture-in-picture close failed', error);
+          }
+        }
+      });
     }
 
     static toggleCommentPictureInPicture() {
@@ -39,7 +68,9 @@ const RootDispatcher = (() => {
         getVideo: () => player._nicoVideoPlayer && player._nicoVideoPlayer.drawableVideoElement,
         getViewModel: () => player._nicoVideoPlayer && player._nicoVideoPlayer.commentViewModel,
         onPlay: () => player.execCommand('play'),
-        onPause: () => player.execCommand('pause')
+        onPause: () => player.execCommand('pause'),
+        // Comment PiP removes its auxiliary video before the browser may emit leave.
+        onEnd: () => PipPageThumbnail.stop()
       }).catch(err => {
         console.warn('comment picture-in-picture fail', err);
         PopupMessage.alert(`コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
@@ -150,10 +181,31 @@ const RootDispatcher = (() => {
           config.props[params] = !config.props[params];
           break;
         }
-        case 'picture-in-picture':
+        case 'picture-in-picture': {
           CommentPictureInPicture.stop();
-          document.querySelector('.zenzaWatchVideoElement').requestPictureInPicture();
+          const video = player?._nicoVideoPlayer?._videoPlayer?.videoElement ||
+            document.querySelector('.zenzaWatchVideoElement');
+          if (!video || typeof video.requestPictureInPicture !== 'function') {
+            PopupMessage.alert('この動画ではピクチャーインピクチャーを開始できません');
+            break;
+          }
+          // Keep this call synchronous with the user's click (user activation).
+          // Some Chrome/HLS paths do not deliver the non-bubbling enter event
+          // to document. Also activate the page thumbnail on confirmed success.
+          try {
+            Promise.resolve(video.requestPictureInPicture()).then(() => {
+              if (document.pictureInPictureElement === video) {
+                PipPageThumbnail.activate(video);
+              }
+            }, error => {
+              PipPageThumbnail.stopFor(video);
+              console.warn('picture-in-picture start failed', error);
+            });
+          } catch (error) {
+            console.warn('picture-in-picture start failed', error);
+          }
           break;
+        }
         // Task 070: 流れるコメントも一緒に映るPiP（もう一度実行すると閉じる）
         case 'picture-in-picture-comment':
           RootDispatcher.toggleCommentPictureInPicture();

@@ -9,9 +9,11 @@ function setup(kind,options={},links=[]){
     watchUrl:'https://www.nicovideo.jp/watch/sm9',owner:{type:'user',id:123,name:'Uploader'}};
   const state={isOpen:true,videoInfo:info};
   const ctx=createContext({Emitter:class {},window:{open:(...a)=>opened.push(a)},
+    document:{},
     ZenzaWatch:{state:{player:state}},PlayerConfig:{getInstance:()=>config},
     Clipboard:{copyText:text=>copied.push(text)},PopupMessage:{notify(){},alert(){}},
-    CommentPictureInPicture:{stop(){}}});
+    CommentPictureInPicture:{stop(){}},
+    PipPageThumbnail:{initialize(){},stop(){}}});
   const file=source=>kind==='source'?source:'dist/ZenzaWatch-dev.user.js';
   ctx.RelatedMenuOrder=loadClass(file('src/RelatedMenuOrder.js'),'RelatedMenuOrder',ctx);
   ctx.RelatedMenuActions=loadClass(file('packages/zenza/src/menu/RelatedMenuActions.js'),'RelatedMenuActions',ctx);

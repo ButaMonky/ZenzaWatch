@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.275-scui00-idle
+// @version        2.7.282-task712
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 04:19Z 1e28825
+// build: 2026-10-17 07:55Z 7eebb97
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.275-scui00-idle';
+    var VER = '2.7.282-task712';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 04:19Z 1e28825';
+    var BUILD = '2026-10-17 07:55Z 7eebb97';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -43758,6 +43758,210 @@ const CommentPictureInPicture = (() => {
 	global.debug.commentPictureInPicture = api;
 	return api;
 })();
+const PipPageThumbnail = (() => {
+	class Controller {
+		constructor({document, state, config, getContainer, getVideo}) {
+			this.document = document;
+			this._window = document.defaultView || null;
+			this._pipStateTimer = null;
+			this.state = state;
+			this.config = config;
+			this.getContainer = getContainer;
+			this.getVideo = getVideo;
+			this.activePip = null;
+			this.overlay = null;
+			this.image = null;
+			this.nativePipElement = null;
+			this._imageSources = [];
+			this._imageIndex = 0;
+			this._sourcesKey = '';
+			this._onEnter = this._onEnter.bind(this);
+			this._onLeave = this._onLeave.bind(this);
+			this._refresh = this._refresh.bind(this);
+			this._checkPipState = this._checkPipState.bind(this);
+			document.addEventListener('enterpictureinpicture', this._onEnter, true);
+			document.addEventListener('leavepictureinpicture', this._onLeave, true);
+			document.addEventListener('visibilitychange', this._checkPipState);
+			if (this._window) {
+				this._window.addEventListener('focus', this._checkPipState);
+				this._window.addEventListener('pageshow', this._checkPipState);
+			}
+			state.on('update-videoInfo', this._refresh);
+			config.on('update', this._refresh);
+		}
+		_isPlayerPip(target) {
+			if (!target || !target.classList) { return false; }
+			if (target.classList.contains('zenzaCommentPipVideo')) { return true; }
+			if (!target.classList.contains('zenzaWatchVideoElement')) { return false; }
+			const root = this.getContainer();
+			return target === this.getVideo() || !!(root && root.contains(target));
+		}
+		_getThumbnailUrls() {
+			const info = this.state.videoInfo;
+			const detail = info && info._videoDetail;
+			const rawData = info && info._rawData;
+			const thumbnail = rawData && rawData._data &&
+				rawData._data.video && rawData._data.video.thumbnail;
+			const video = this.getVideo();
+			const candidates = [
+				thumbnail && thumbnail.ogp,
+				thumbnail && thumbnail.player,
+				detail && detail.largeThumbnail,
+				info && info.largeThumbnail,
+				thumbnail && thumbnail.largeUrl,
+				rawData && rawData.thumbnailUrl,
+				thumbnail && thumbnail.middleUrl,
+				info && info.betterThumbnail,
+				info && info.thumbnail,
+				thumbnail && thumbnail.url,
+				this.state.thumbnail,
+				video && video.getAttribute('poster')
+			];
+			const result = [];
+			for (const raw of candidates) {
+				if (typeof raw !== 'string' || !raw.trim()) { continue; }
+				try {
+					const url = new URL(raw, this.document.baseURI);
+					if (/^https?:$/.test(url.protocol) && !result.includes(url.href)) {
+						result.push(url.href);
+					}
+				} catch (_) { /* invalid metadata: try the next candidate */ }
+			}
+			return result;
+		}
+		activate(target) {
+			if (!this._isPlayerPip(target)) { return false; }
+			if (this.activePip !== target) {
+				this.stop();
+				this.activePip = target;
+				if (target.classList.contains('zenzaWatchVideoElement')) {
+					this.nativePipElement = target;
+					target.addEventListener('leavepictureinpicture', this._onLeave);
+				}
+				this._startPipStateWatch();
+			}
+			this._refresh();
+			return true;
+		}
+		_onEnter(event) { this.activate(event.target); }
+		_onLeave(event) {
+			if (event.target === this.activePip) { this.stop(); }
+		}
+		_startPipStateWatch() {
+			if (this._pipStateTimer !== null || !this._window ||
+					typeof this._window.setInterval !== 'function' ||
+					this.document.pictureInPictureElement === undefined) { return; }
+			this._pipStateTimer = this._window.setInterval(this._checkPipState, 500);
+		}
+		_checkPipState() {
+			if (!this.activePip) { return; }
+			const actual = this.document.pictureInPictureElement;
+			if (actual !== undefined && actual !== this.activePip) {
+				this.stop();
+			}
+		}
+		_refresh() {
+			if (!this.activePip) { return; }
+			if (!this._isPlayerPip(this.activePip)) {
+				this.stop();
+				return;
+			}
+			const root = this.getContainer();
+			const urls = this._getThumbnailUrls();
+			const key = urls.join('\n');
+			if (key !== this._sourcesKey) {
+				this._sourcesKey = key;
+				this._imageSources = urls;
+				this._imageIndex = 0;
+			}
+			if (this.config.props.pipPageThumbnail === false || !root ||
+					this._imageIndex >= this._imageSources.length) {
+				this._removeOverlay();
+				return;
+			}
+			if (!this.overlay || this.overlay.parentNode !== root) {
+				this._removeOverlay();
+				const overlay = this.document.createElement('div');
+				overlay.className = 'zenzaPipPageThumbnail';
+				overlay.setAttribute('aria-hidden', 'true');
+				overlay.style.cssText = 'position:absolute;inset:0;z-index:6;' +
+					'pointer-events:none;overflow:hidden;background:#000;';
+				root.appendChild(overlay);
+				this.overlay = overlay;
+			}
+			this._showImage(this._imageSources[this._imageIndex]);
+		}
+		_showImage(url) {
+			if (this.image && this.image.getAttribute('src') === url) { return; }
+			const image = this.document.createElement('img');
+			image.alt = '';
+			image.style.cssText = 'display:block;width:100%;height:100%;' +
+				'object-fit:contain;';
+			image.onerror = () => {
+				if (this.image !== image) { return; }
+				this._imageIndex++;
+				if (this._imageIndex < this._imageSources.length) {
+					this._showImage(this._imageSources[this._imageIndex]);
+				} else {
+					this._removeOverlay();
+				}
+			};
+			const previous = this.image;
+			this.image = image;
+			this.overlay.appendChild(image);
+			image.setAttribute('src', url);
+			if (previous) {
+				previous.onerror = null;
+				previous.remove();
+			}
+		}
+		_removeOverlay() {
+			if (this.image) { this.image.onerror = null; }
+			if (this.overlay) { this.overlay.remove(); }
+			this.overlay = this.image = null;
+		}
+		stop() {
+			this.activePip = null;
+			if (this._pipStateTimer !== null && this._window) {
+				this._window.clearInterval(this._pipStateTimer);
+			}
+			this._pipStateTimer = null;
+			if (this.nativePipElement) {
+				this.nativePipElement.removeEventListener(
+					'leavepictureinpicture', this._onLeave);
+				this.nativePipElement = null;
+			}
+			this._sourcesKey = '';
+			this._imageSources = [];
+			this._imageIndex = 0;
+			this._removeOverlay();
+		}
+		dispose() {
+			this.stop();
+			this.document.removeEventListener('enterpictureinpicture', this._onEnter, true);
+			this.document.removeEventListener('leavepictureinpicture', this._onLeave, true);
+			this.document.removeEventListener('visibilitychange', this._checkPipState);
+			if (this._window) {
+				this._window.removeEventListener('focus', this._checkPipState);
+				this._window.removeEventListener('pageshow', this._checkPipState);
+			}
+			if (this.state.off) { this.state.off('update-videoInfo', this._refresh); }
+			if (this.config.off) { this.config.off('update', this._refresh); }
+		}
+	}
+	let current = null;
+	return {
+		initialize(params) {
+			if (current) { current.dispose(); }
+			return (current = new Controller(params));
+		},
+		stop() { if (current) { current.stop(); } },
+		stopFor(target) {
+			if (current && current.activePip === target) { current.stop(); }
+		},
+		activate(target) { return !!(current && current.activate(target)); }
+	};
+})();
 // already required
 // already required
 const RootDispatcher = (() => {
@@ -43770,8 +43974,32 @@ const RootDispatcher = (() => {
 			playerState = ZenzaWatch.state.player;
 			config = PlayerConfig.getInstance(config);
 			config.on('update', RootDispatcher.onConfigUpdate);
+			PipPageThumbnail.initialize({
+				document,
+				config,
+				state: playerState,
+				getContainer: () => player?._nicoVideoPlayer?._videoPlayer?._body,
+				getVideo: () => player?._nicoVideoPlayer?._videoPlayer?.videoElement
+			});
 			player.on('command', RootDispatcher.execCommand);
-			player.on('close', () => CommentPictureInPicture.stop());
+			player.on('close', () => {
+				const active = document.pictureInPictureElement;
+				const ownVideo = player?._nicoVideoPlayer?._videoPlayer?.videoElement;
+				const closeNative = !!active && active === ownVideo &&
+					active.classList?.contains('zenzaWatchVideoElement');
+				CommentPictureInPicture.stop();
+				PipPageThumbnail.stop();
+				if (closeNative && document.pictureInPictureElement === active &&
+						typeof document.exitPictureInPicture === 'function') {
+					try {
+						Promise.resolve(document.exitPictureInPicture()).catch(error => {
+							console.warn('native picture-in-picture close failed', error);
+						});
+					} catch (error) {
+						console.warn('native picture-in-picture close failed', error);
+					}
+				}
+			});
 		}
 		static toggleCommentPictureInPicture() {
 			const nicoVideoPlayer = player && player._nicoVideoPlayer;
@@ -43787,7 +44015,8 @@ const RootDispatcher = (() => {
 				getVideo: () => player._nicoVideoPlayer && player._nicoVideoPlayer.drawableVideoElement,
 				getViewModel: () => player._nicoVideoPlayer && player._nicoVideoPlayer.commentViewModel,
 				onPlay: () => player.execCommand('play'),
-				onPause: () => player.execCommand('pause')
+				onPause: () => player.execCommand('pause'),
+				onEnd: () => PipPageThumbnail.stop()
 			}).catch(err => {
 				console.warn('comment picture-in-picture fail', err);
 				PopupMessage.alert(`コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
@@ -43881,10 +44110,28 @@ const RootDispatcher = (() => {
 					config.props[params] = !config.props[params];
 					break;
 				}
-				case 'picture-in-picture':
+				case 'picture-in-picture': {
 					CommentPictureInPicture.stop();
-					document.querySelector('.zenzaWatchVideoElement').requestPictureInPicture();
+					const video = player?._nicoVideoPlayer?._videoPlayer?.videoElement ||
+						document.querySelector('.zenzaWatchVideoElement');
+					if (!video || typeof video.requestPictureInPicture !== 'function') {
+						PopupMessage.alert('この動画ではピクチャーインピクチャーを開始できません');
+						break;
+					}
+					try {
+						Promise.resolve(video.requestPictureInPicture()).then(() => {
+							if (document.pictureInPictureElement === video) {
+								PipPageThumbnail.activate(video);
+							}
+						}, error => {
+							PipPageThumbnail.stopFor(video);
+							console.warn('picture-in-picture start failed', error);
+						});
+					} catch (error) {
+						console.warn('picture-in-picture start failed', error);
+					}
 					break;
+				}
 				case 'picture-in-picture-comment':
 					RootDispatcher.toggleCommentPictureInPicture();
 					break;

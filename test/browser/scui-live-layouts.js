@@ -54,6 +54,20 @@ function measure(id,mode,pct){
   record(label+'/flow-overlay',
     root.querySelector('.zenzaSceneImageBox')?.contains(commentView)===true&&
     commentView.classList.contains('is-scui-active'),{});
+  // Native SeekBarThumbnail.is-visible has z-index:100 and is a CSS grid item.
+  // The attached mini-comment must paint ABOVE that thumbnail, not underneath it.
+  const sharedThumb=document.getElementById('thumb');
+  const previousThumbZ=sharedThumb.style.getPropertyValue('z-index');
+  sharedThumb.style.setProperty('z-index','100');
+  const thumbZ=Number(getComputedStyle(sharedThumb).zIndex);
+  const commentZ=Number(getComputedStyle(commentView).zIndex);
+  record(label+'/flow-foreground-stacking',
+    commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
+    sharedThumb.parentNode===commentView.parentNode&&
+    Number.isFinite(commentZ)&&commentZ>thumbZ,
+    {commentZ,thumbZ,mode:commentView.className});
+  if(previousThumbZ){sharedThumb.style.setProperty('z-index',previousThumbZ);}
+  else{sharedThumb.style.removeProperty('z-index');}
   config.setValue('enableCommentPreview',true);
   record(label+'/list-owner',
     commentView.parentNode===host&&

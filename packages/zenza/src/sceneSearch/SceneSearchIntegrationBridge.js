@@ -800,7 +800,9 @@ class SceneSearchIntegrationBridge {
   left:0!important;right:0!important;top:0!important;bottom:0!important;
   width:100%!important;height:100%!important;max-height:none!important;
   margin:0!important;transform:none!important;overflow:hidden!important;
-  z-index:2;background:transparent!important;border:0!important;
+  /* The original thumbnail is a grid item with z-index:100; keep flowing
+     mini-comments above its opaque canvas without changing the card/list layers. */
+  z-index:200;background:transparent!important;border:0!important;
   pointer-events:none!important
 }
 .zenzaSceneSearchHost .zenzaSceneImageBox >.zenzaCommentPreview.is-scui-flow .listContainer{

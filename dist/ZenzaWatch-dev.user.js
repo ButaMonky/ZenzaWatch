@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.283-scui01-track
+// @version        2.7.284-scui-mini-front
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 10:35Z bc9e8fa
+// build: 2026-10-17 10:54Z eaa0014
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.283-scui01-track';
+    var VER = '2.7.284-scui-mini-front';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 10:35Z bc9e8fa';
+    var BUILD = '2026-10-17 10:54Z eaa0014';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35302,7 +35302,9 @@ class SceneSearchIntegrationBridge {
 	left:0!important;right:0!important;top:0!important;bottom:0!important;
 	width:100%!important;height:100%!important;max-height:none!important;
 	margin:0!important;transform:none!important;overflow:hidden!important;
-	z-index:2;background:transparent!important;border:0!important;
+	/* The original thumbnail is a grid item with z-index:100; keep flowing
+		mini-comments above its opaque canvas without changing the card/list layers. */
+	z-index:200;background:transparent!important;border:0!important;
 	pointer-events:none!important
 }
 .zenzaSceneSearchHost .zenzaSceneImageBox >.zenzaCommentPreview.is-scui-flow .listContainer{

@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.284-scui-mini-front
+// @version        2.7.285-scui01-side
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 10:54Z eaa0014
+// build: 2026-10-17 11:20Z 3d6db8d
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.284-scui-mini-front';
+    var VER = '2.7.285-scui01-side';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 10:54Z eaa0014';
+    var BUILD = '2026-10-17 11:20Z 3d6db8d';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35048,19 +35048,51 @@ class SceneSearchIntegrationBridge {
 			};
 		}
 		const list=this.config.getValue('enableCommentPreview')===true;
-		const target=list?this.container:root.querySelector('.zenzaSceneImageBox');
+		const classic=root.dataset.layout==='01';
+		const target=classic?root:
+			list?this.container:root.querySelector('.zenzaSceneImageBox');
 		if(target&&node.parentNode!==target)target.appendChild(node);
 		node.classList.add('zenzaSceneCommentAttached');
 		node.classList.toggle('is-scui-list',list);
 		node.classList.toggle('is-scui-flow',!list);
+		node.classList.toggle('is-scui-classic-side',classic);
 		const active=(state?.shown!==false||state?.pinned===true)&&
 			this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
 			!root.classList.contains('is-idle-suppressed');
 		node.classList.toggle('is-scui-active',active);
-		if(list){
+		if(classic){
+			this._positionClassicCommentSide(root,list);
+		}else if(list){
 			const x=Number.parseFloat(root.style.getPropertyValue('--scene-x'));
 			if(Number.isFinite(x))this.container.style.setProperty('--scui-list-x',x+'px');
 		}
+	}
+	_positionClassicCommentSide(root,list) {
+		const rect=root.getBoundingClientRect?.();
+		const viewport=this.document.defaultView?.innerWidth||
+			this.document.documentElement?.clientWidth||0;
+		if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
+			!Number.isFinite(viewport)||viewport<=0)return;
+		const scale=rect.width>0&&root.offsetWidth>0?
+			rect.width/root.offsetWidth:1;
+		const gap=40,margin=8;
+		const panelWidth=Math.min(list?350:180,Math.max(40,(viewport-2*margin)/scale));
+		const sidePixels=panelWidth*scale+gap*scale;
+		const roomRight=viewport-margin-rect.right;
+		const roomLeft=rect.left-margin;
+		let direction=roomRight>=sidePixels?'right':
+			roomLeft>=sidePixels?'left':'above';
+		let left;
+		if(direction==='right')left=(root.offsetWidth||rect.width/scale)+gap;
+		else if(direction==='left')left=-panelWidth-gap;
+		else{
+			const desired=rect.left+(rect.width-panelWidth*scale)/2;
+			const screenLeft=Math.max(margin,Math.min(viewport-margin-panelWidth*scale,desired));
+			left=(screenLeft-rect.left)/scale;
+		}
+		root.dataset.scuiSidePlacement=direction;
+		root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
+		root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
 	}
 	_restoreCommentPreviewDock(){
 		const old=this._commentDock,node=this._commentPreviewElement;
@@ -35068,7 +35100,7 @@ class SceneSearchIntegrationBridge {
 		this._commentHoverCleanup?.();
 		this._commentHoverCleanup=null;
 		node.classList.remove('zenzaSceneCommentAttached','is-scui-flow',
-			'is-scui-list','is-scui-active');
+			'is-scui-list','is-scui-active','is-scui-classic-side');
 		if(old.parent){
 			if(old.next?.parentNode===old.parent)old.parent.insertBefore(node,old.next);
 			else old.parent.appendChild(node);
@@ -35314,11 +35346,29 @@ class SceneSearchIntegrationBridge {
 	position:absolute;z-index:250;max-height:200px;
 	pointer-events:auto!important;overflow:auto;transform:none!important
 }
-[data-scene-search-layout="01"] >.zenzaCommentPreview.is-scui-list{
-	left:clamp(8px,calc(var(--scui-list-x,50%) - 175px),
-		calc(100% - 355px))!important;
-	right:auto!important;top:auto!important;bottom:96px!important;
-	width:min(350px,calc(100% - 16px))!important
+/* UI01: native comment panel is a SIBLING of the image, not an overlay.
+	Keep seek-thumbnail tracking unchanged; flip the side near viewport edges. */
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side{
+	position:absolute!important;
+	left:var(--scui-side-left,calc(100% + 8px))!important;
+	right:auto!important;top:auto!important;bottom:0!important;
+	width:var(--scui-side-width,180px)!important;
+	max-width:calc(100vw - 16px)!important;
+	margin:0!important;transform:none!important;box-sizing:border-box;
+	z-index:160
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow{
+	height:140px!important;max-height:140px!important;
+	overflow:hidden!important;pointer-events:none!important;
+	background:rgba(0,0,0,.76)!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
+	height:200px!important;max-height:200px!important;
+	overflow:auto!important;pointer-events:auto!important;
+	background:rgba(0,0,0,.91)!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-side-placement="above"] >.zenzaCommentPreview.is-scui-classic-side{
+	bottom:calc(100% + 8px)!important
 }
 /* The original seekbar remains the sole seek click owner. */
 .zenzaSceneSearchHost[data-scene-animation="off"],

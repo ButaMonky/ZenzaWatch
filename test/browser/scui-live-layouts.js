@@ -51,8 +51,12 @@ function measure(id,mode,pct){
   }
   record(label+'/shared-canvas',root.contains(document.getElementById('thumb')),{});
   const commentView=document.getElementById('comments');
-  record(label+'/flow-overlay',
-    root.querySelector('.zenzaSceneImageBox')?.contains(commentView)===true&&
+  record(label+'/flow-owner',
+    (id==='01'
+      ?commentView.parentNode===root&&
+       !root.querySelector('.zenzaSceneImageBox')?.contains(commentView)&&
+       commentView.classList.contains('is-scui-classic-side')
+      :root.querySelector('.zenzaSceneImageBox')?.contains(commentView)===true)&&
     commentView.classList.contains('is-scui-active'),{});
   // Native SeekBarThumbnail.is-visible has z-index:100 and is a CSS grid item.
   // The attached mini-comment must paint ABOVE that thumbnail, not underneath it.
@@ -61,18 +65,53 @@ function measure(id,mode,pct){
   sharedThumb.style.setProperty('z-index','100');
   const thumbZ=Number(getComputedStyle(sharedThumb).zIndex);
   const commentZ=Number(getComputedStyle(commentView).zIndex);
-  record(label+'/flow-foreground-stacking',
-    commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
-    sharedThumb.parentNode===commentView.parentNode&&
-    Number.isFinite(commentZ)&&commentZ>thumbZ,
-    {commentZ,thumbZ,mode:commentView.className});
+  if(id!=='01'){
+    record(label+'/flow-foreground-stacking',
+      commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
+      sharedThumb.parentNode===commentView.parentNode&&
+      Number.isFinite(commentZ)&&commentZ>thumbZ,
+      {commentZ,thumbZ,mode:commentView.className});
+  }
   if(previousThumbZ){sharedThumb.style.setProperty('z-index',previousThumbZ);}
   else{sharedThumb.style.removeProperty('z-index');}
+  if(id==='01'){
+    const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
+    const side=commentView.getBoundingClientRect();
+    const placement=root.dataset.scuiSidePlacement;
+    const separate=placement==='right'?side.left>=image.right+32:
+      placement==='left'?side.right<=image.left-32:
+      placement==='above'?side.bottom<=root.getBoundingClientRect().top-5:false;
+    record(label+'/classic-flow-nonoverlap',separate&&
+      side.left>=7&&side.right<=innerWidth-7&&side.top>=-1,
+      {placement,image:image.toJSON(),side:side.toJSON()});
+  }
   config.setValue('enableCommentPreview',true);
   record(label+'/list-owner',
-    commentView.parentNode===host&&
+    (id==='01'?commentView.parentNode===root&&
+      commentView.classList.contains('is-scui-classic-side'):
+      commentView.parentNode===host)&&
     commentView.classList.contains('is-scui-list')&&
     getComputedStyle(commentView).display!=='none',{});
+  if(id==='01'){
+    const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
+    const side=commentView.getBoundingClientRect();
+    const placement=root.dataset.scuiSidePlacement;
+    const separate=placement==='right'?side.left>=image.right+32:
+      placement==='left'?side.right<=image.left-32:
+      placement==='above'?side.bottom<=root.getBoundingClientRect().top-5:false;
+    record(label+'/classic-list-nonoverlap',separate&&
+      side.left>=7&&side.right<=innerWidth-7&&side.top>=-1&&
+      getComputedStyle(commentView).pointerEvents!=='none',
+      {placement,image:image.toJSON(),side:side.toJSON()});
+    const hit=document.elementFromPoint(side.left+side.width/2,side.top+side.height/2);
+    record(label+'/classic-list-hit-target',
+      hit===commentView||commentView.contains(hit),
+      {placement,hit:hit?.className||hit?.tagName});
+    config.setValue('enableCommentPreview',false);
+    record(label+'/classic-flow-restored',
+      commentView.parentNode===root&&commentView.classList.contains('is-scui-flow')&&
+      commentView.classList.contains('is-scui-classic-side'),{});
+  }
   if(id==='02'){
     const player=host.getBoundingClientRect();
     const comment=document.getElementById('comments').getBoundingClientRect();

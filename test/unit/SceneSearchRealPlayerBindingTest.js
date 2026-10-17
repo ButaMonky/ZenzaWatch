@@ -2,6 +2,29 @@
 const assert=require('assert');
 const {fixture}=require('../helpers/scenePlayerFixture');
 describe('SCUI-18 complete real bridge/player integration',()=>{
+ it('UI01 docks native flowing and list comments beside, never inside thumbnail',()=>{
+  const h=fixture('01');try{
+   h.move(450);
+   const root=h.host.querySelector('.zenzaSceneLayout01');
+   const comment=h.d.querySelector('.zenzaCommentPreview');
+   const image=root.querySelector('.zenzaSceneImageBox');
+   assert.strictEqual(comment.parentNode,root,'classic comments must be a sibling of image');
+   assert.strictEqual(image.contains(comment),false);
+   assert(comment.classList.contains('is-scui-classic-side'));
+   assert(comment.classList.contains('is-scui-flow'));
+   h.config.setValue('enableCommentPreview',true);
+   assert.strictEqual(comment.parentNode,root,'list must remain a separate side pane');
+   assert(comment.classList.contains('is-scui-list'));
+   assert(comment.classList.contains('is-scui-classic-side'));
+   h.config.setValue('enableCommentPreview',false);
+   assert.strictEqual(comment.parentNode,root);
+   h.setMode('fullscreen');
+   assert.strictEqual(h.host.querySelector('.zenzaSceneImageBox').contains(comment),false);
+   h.player.emit('close');
+   assert.strictEqual(comment.parentNode,h.host,'dispose restores original comment owner');
+   assert.strictEqual(comment.classList.contains('is-scui-classic-side'),false);
+  }finally{h.close();}
+ });
  it('follows the actual seek position using the real player duration',()=>{
   const h=fixture('01');try{h.move(891);
    const card=h.host.querySelector('.zenzaSceneSearchHost');assert(card);

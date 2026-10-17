@@ -1488,7 +1488,7 @@ class ModernAdvancedSettingsUI {
     const grid=this.doc.createElement('div');
     grid.className='zw-scui-layout-grid';
     grid.setAttribute('role','group');
-    grid.setAttribute('aria-label',mode==='fullscreen'?'全画面の10案':'通常表示の10案');
+    grid.setAttribute('aria-label',mode==='fullscreen'?'全画面の11案':'通常表示の11案');
     const descriptor=this.model.descriptor(key);
     for(const option of descriptor?.options||[]){
       const b=this._button('','data-zw-scene-layout',option.value,'zw-scui-layout-option');
@@ -1930,7 +1930,7 @@ class ModernAdvancedSettingsUI {
     if(button.hasAttribute('data-zw-scene-layout')){
       const id=button.dataset.zwSceneLayout;
       const mode=button.dataset.zwSceneLayoutMode;
-      if(!/^(0[1-9]|10)$/.test(id)||!['normal','fullscreen'].includes(mode) ||
+      if(!/^(00|0[1-9]|10)$/.test(id)||!['normal','fullscreen'].includes(mode) ||
          mode!==this._sceneLayoutTab){return;}
       if(mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')){return;}
       this.model.set('sceneSearch.layout.'+mode,id);

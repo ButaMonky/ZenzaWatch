@@ -32,6 +32,8 @@ function boot(saved={},storageValues={}) {
     sharedNgLevel:'MID','filter.fork0':true,screenMode:'normal',
     showComment:true,backComment:false,enableCommentPanel:true,enableCommentPreview:false,
     enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,
+    'sceneSearch.layout.normal':'01','sceneSearch.layout.fullscreen':'01',
+    'sceneSearch.layout.linkFullscreen':false,
     enableAdDecoration:true,
     KEY_TOGGLE_PLAY:32, KEY_OPEN_GINZA:0, KEY_OPEN_NICOAD:0,
     KEY_OPEN_TWITTER_HASH:0, KEY_OPEN_ORIGINAL_VIDEO:0, KEY_OPEN_PARENT_VIDEO:0,
@@ -1460,5 +1462,73 @@ describe('Task401 full-viewport comment setting synchronization',()=>{
       h.destroy();
       assert.strictEqual(h.config.listeners.get('backComment').size,0);
     }
+  });
+});
+
+
+describe('Task710 SCUI00 gallery click regression',function(){
+  this.timeout(20000); // Cold JSDOM/advanced-settings initialization can exceed Mocha's 2s default.
+  const open=h=>{
+    h.click('[data-zw-major="画面・映像"]');
+    h.click('[data-zw-sub="画面・映像|シーンサーチ"]');
+  };
+  const option=(mode,id)=>'[data-zw-scene-layout="'+id+'"]'+
+    '[data-zw-scene-layout-mode="'+mode+'"]';
+  const tab=mode=>'button[data-zw-scene-layout-mode="'+mode+'"]'+
+    ':not([data-zw-scene-layout])';
+  it('allows 00 from 01, stages a single edit and persists only on Save',()=>{
+    const h=boot({'sceneSearch.layout.normal':'01'});open(h);
+    try{
+      assert.strictEqual(h.q(option('normal','00')).disabled,false);
+      assert.strictEqual(h.q(option('normal','00')).getAttribute('aria-pressed'),'false');
+      h.click(option('normal','00'));
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'00');
+      assert.strictEqual(h.config.getValue('sceneSearch.layout.normal'),'01');
+      assert.strictEqual(h.q(option('normal','00')).getAttribute('aria-pressed'),'true');
+      assert.strictEqual(h.model.changes().map(change=>change.id).join(','),
+        'sceneSearch.layout.normal');
+      assert(h.q('[data-zw-dirty]').textContent.includes('1件'));
+      h.click('[data-zw-save]');
+      assert.deepStrictEqual(h.config.writes,[['sceneSearch.layout.normal','00']]);
+    }finally{h.destroy();}
+  });
+  it('accepts fullscreen 00 independently and honors linked fullscreen lock',()=>{
+    const h=boot({'sceneSearch.layout.normal':'01',
+      'sceneSearch.layout.fullscreen':'02'});open(h);
+    try{
+      h.click(tab('fullscreen'));
+      h.click(option('fullscreen','00'));
+      assert.strictEqual(h.model.get('sceneSearch.layout.fullscreen'),'00');
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'01');
+      h.model.set('sceneSearch.layout.linkFullscreen',true);
+      h.ui._renderCards();
+      assert.strictEqual(h.q(option('fullscreen','00')).disabled,true);
+      h.click(option('fullscreen','01'));
+      assert.strictEqual(h.model.get('sceneSearch.layout.fullscreen'),'00');
+      h.model.set('sceneSearch.layout.linkFullscreen',false);
+      h.ui._renderCards();
+      h.click(tab('normal'));
+      h.click(option('normal','00'));
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'00');
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'01');
+      assert.strictEqual(h.model.get('sceneSearch.layout.fullscreen'),'02');
+      assert.strictEqual(h.config.writes.length,0);
+    }finally{h.destroy();}
+  });
+  it('retains 01 to 10 options and rejects malformed layout ids',()=>{
+    const h=boot();open(h);
+    try{
+      assert.strictEqual(h.all('[data-zw-scene-layout]').length,11);
+      h.click(option('normal','10'));
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'10');
+      h.click(option('normal','01'));
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'01');
+      const fake=h.q(option('normal','00'));
+      fake.dataset.zwSceneLayout='xx';
+      fake.click();
+      assert.strictEqual(h.model.get('sceneSearch.layout.normal'),'01');
+      assert.strictEqual(h.config.writes.length,0);
+    }finally{h.destroy();}
   });
 });

@@ -72,6 +72,12 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
   if(portal){
     record(label+'/escapes-video-layer',root.parentElement===dialog &&
       getComputedStyle(root).position==='fixed', {parent:root.parentElement?.className});
+    const hostBottom=host.getBoundingClientRect().bottom;
+    const targetBottom=hostBottom-(mode==='normal'?38:68);
+    record(label+'/restored-video-relative-height',
+      Math.abs(rect.bottom-targetBottom)<2,
+      {sceneBottom:rect.bottom,originalVideoBottom:targetBottom,
+       viewportBottom:innerHeight-(mode==='normal'?38:68)});
     const imageRect=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
     const sidebarRect=sidebar.getBoundingClientRect();
     const ix=Math.max(sidebarRect.left+3,imageRect.left+4);

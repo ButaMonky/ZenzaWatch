@@ -53,6 +53,9 @@ const SCENE_LAYOUT01_CSS=`
 .zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-portal="1"]{
   position:fixed!important;
   left:var(--scene-viewport-x,50%)!important;
+  /* The portal uses viewport positioning. Retain the original bottom
+     measured from the video container, not the viewport itself. */
+  bottom:var(--scene-viewport-bottom,var(--scene-bottom,60px))!important;
   z-index:2800!important;
   pointer-events:auto!important
 }
@@ -125,11 +128,20 @@ function registerSceneLayouts01_02(registry) {
           container.closest?.('.zenzaVideoPlayerDialog'):null;
         const render=card.render.bind(card),mount=card.mount.bind(card);
         const dispose=card.dispose.bind(card);
+        // The legacy bottom is resolved BEFORE moving the card from its
+        // original player containing block into the viewport-level portal.
+        let originalPlayerBottom=options.mode==='normal'?38:68;
         return {
           get root(){return card.root;},
           mount(state){
             mount(state);
             if(portal&&card.root){
+              const oldComputed=options.document.defaultView?.
+                getComputedStyle?.(card.root);
+              const measured=Number.parseFloat(oldComputed?.bottom);
+              if(Number.isFinite(measured)&&measured>=0){
+                originalPlayerBottom=measured;
+              }
               card.root.dataset.scuiPortal='1';
               portal.appendChild(card.root);
             }
@@ -185,6 +197,20 @@ function registerSceneLayouts01_02(registry) {
               // right edge reaches the viewport, as standard tooltips do.
               if(portal){
                 const frameRect=container.getBoundingClientRect?.();
+                const portalRect=portal.getBoundingClientRect?.();
+                if(Number.isFinite(frameRect?.bottom)&&
+                    Number.isFinite(portalRect?.bottom)){
+                  const videoScale=container.offsetHeight>0&&frameRect.height>0?
+                    frameRect.height/container.offsetHeight:1;
+                  const portalScale=portal.offsetHeight>0&&portalRect.height>0?
+                    portalRect.height/portal.offsetHeight:1;
+                  const restoredBottom=(portalRect.bottom-frameRect.bottom+
+                    originalPlayerBottom*videoScale)/portalScale;
+                  if(Number.isFinite(restoredBottom)){
+                    card.root.style.setProperty('--scene-viewport-bottom',
+                      Math.round(restoredBottom)+'px');
+                  }
+                }
                 const viewport=options.document.defaultView?.innerWidth||0;
                 const screenScale=frameRect?.width>0?
                   frameRect.width/(container.offsetWidth||frameRect.width):1;

@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.289-scui01-fullwidth
+// @version        2.7.290-scui01-height-restored
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 13:16Z c62efcf
+// build: 2026-10-17 14:12Z b230d92
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.289-scui01-fullwidth';
+    var VER = '2.7.290-scui01-height-restored';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 13:16Z c62efcf';
+    var BUILD = '2026-10-17 14:12Z b230d92';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -36242,6 +36242,9 @@ const SCENE_LAYOUT01_CSS=`
 .zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-portal="1"]{
 	position:fixed!important;
 	left:var(--scene-viewport-x,50%)!important;
+	/* The portal uses viewport positioning. Retain the original bottom
+		measured from the video container, not the viewport itself. */
+	bottom:var(--scene-viewport-bottom,var(--scene-bottom,60px))!important;
 	z-index:2800!important;
 	pointer-events:auto!important
 }
@@ -36311,11 +36314,18 @@ function registerSceneLayouts01_02(registry) {
 					container.closest?.('.zenzaVideoPlayerDialog'):null;
 				const render=card.render.bind(card),mount=card.mount.bind(card);
 				const dispose=card.dispose.bind(card);
+				let originalPlayerBottom=options.mode==='normal'?38:68;
 				return {
 					get root(){return card.root;},
 					mount(state){
 						mount(state);
 						if(portal&&card.root){
+							const oldComputed=options.document.defaultView?.
+								getComputedStyle?.(card.root);
+							const measured=Number.parseFloat(oldComputed?.bottom);
+							if(Number.isFinite(measured)&&measured>=0){
+								originalPlayerBottom=measured;
+							}
 							card.root.dataset.scuiPortal='1';
 							portal.appendChild(card.root);
 						}
@@ -36360,6 +36370,20 @@ function registerSceneLayouts01_02(registry) {
 							const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
 							if(portal){
 								const frameRect=container.getBoundingClientRect?.();
+								const portalRect=portal.getBoundingClientRect?.();
+								if(Number.isFinite(frameRect?.bottom)&&
+										Number.isFinite(portalRect?.bottom)){
+									const videoScale=container.offsetHeight>0&&frameRect.height>0?
+										frameRect.height/container.offsetHeight:1;
+									const portalScale=portal.offsetHeight>0&&portalRect.height>0?
+										portalRect.height/portal.offsetHeight:1;
+									const restoredBottom=(portalRect.bottom-frameRect.bottom+
+										originalPlayerBottom*videoScale)/portalScale;
+									if(Number.isFinite(restoredBottom)){
+										card.root.style.setProperty('--scene-viewport-bottom',
+											Math.round(restoredBottom)+'px');
+									}
+								}
 								const viewport=options.document.defaultView?.innerWidth||0;
 								const screenScale=frameRect?.width>0?
 									frameRect.width/(container.offsetWidth||frameRect.width):1;

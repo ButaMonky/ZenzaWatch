@@ -2,6 +2,21 @@
 const assert=require('assert');
 const {fixture}=require('../helpers/scenePlayerFixture');
 describe('SCUI-18 complete real bridge/player integration',()=>{
+ it('UI01 portal preserves the original video-relative bottom across vertical moves',()=>{
+  const h=fixture('01','normal',{portal:true});try{
+   const root=h.d.querySelector('.zenzaSceneLayout01');
+   const host=h.host,dialog=h.d.querySelector('.zenzaVideoPlayerDialog');
+   dialog.getBoundingClientRect=()=>({top:0,bottom:960,height:960,width:1450,left:0,right:1450});
+   host.getBoundingClientRect=()=>({left:0,right:900,width:900,top:180,bottom:700,height:520});
+   h.move(480);
+   assert.strictEqual(root.style.getPropertyValue('--scene-viewport-bottom'),'298px',
+     'original video-bottom offset 38px must be preserved, not viewport-bottom 38px');
+   host.getBoundingClientRect=()=>({left:0,right:900,width:900,top:220,bottom:740,height:520});
+   h.move(485);
+   assert.strictEqual(root.style.getPropertyValue('--scene-viewport-bottom'),'258px',
+     'resize and video movement must update the offset');
+  }finally{h.close();}
+ });
  it('UI01 portal escapes narrow video layer and keeps scene LEFT of comments at every seek',()=>{
   const h=fixture('01','normal',{portal:true});try{
    const dialog=h.d.querySelector('.zenzaVideoPlayerDialog');

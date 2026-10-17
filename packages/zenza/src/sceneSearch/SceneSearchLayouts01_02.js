@@ -190,11 +190,10 @@ function registerSceneLayouts01_02(registry) {
                 (visibleLeft+visibleRight)/2;
               let x=clamp(rawX);
               const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
-              // The two original previews are one visual group:
-              // scene thumbnail ALWAYS left, native comments ALWAYS right.
-              // Clamp the group to the FULL viewport (never to video width).
-              // This also means the card naturally stops once the group's
-              // right edge reaches the viewport, as standard tooltips do.
+              // Match UI00: clamp only the THUMBNAIL width to the visible
+              // seek viewport. Reserving 180-350px for a second comment pane
+              // stopped the scene ~400px before the pointer (Task722).
+              // Comment remains to the RIGHT; never reorder the two panes.
               if(portal){
                 const frameRect=container.getBoundingClientRect?.();
                 const portalRect=portal.getBoundingClientRect?.();
@@ -215,16 +214,15 @@ function registerSceneLayouts01_02(registry) {
                 const screenScale=frameRect?.width>0?
                   frameRect.width/(container.offsetWidth||frameRect.width):1;
                 if(viewport>0&&frameRect&&screenScale>0){
-                  const rootWidth=compact?124:180, gap=40, margin=8;
-                  const commentWidth=state.commentListMode===true?350:180;
-                  const canFit=viewport>=rootWidth+gap+commentWidth+margin*2;
-                  const minScreen=margin+rootWidth/2;
-                  const maxScreen=Math.max(minScreen,viewport-margin-
-                    rootWidth/2-(canFit?gap+commentWidth:0));
+                  // UI00 places the 180px native tooltip at pointerX-90
+                  // and clamps its OWN bounds, not those of another panel.
+                  const rootWidth=card.root.getBoundingClientRect?.().width||
+                    card.root.offsetWidth||frameWidth;
+                  const half=Math.min(viewport,rootWidth)/2;
                   const desired=frameRect.left+rawX*screenScale;
                   const last=state.pinned===true&&Number.isFinite(previous)?
                     frameRect.left+previous*screenScale:desired;
-                  const screenX=Math.max(minScreen,Math.min(maxScreen,last));
+                  const screenX=Math.max(half,Math.min(viewport-half,last));
                   x=(screenX-frameRect.left)/screenScale;
                   card.root.style.setProperty('--scene-viewport-x',
                     Math.round(screenX)+'px');

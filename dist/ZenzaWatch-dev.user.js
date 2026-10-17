@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.290-scui01-height-restored
+// @version        2.7.291-scui01-legacy-follow
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 14:12Z b230d92
+// build: 2026-10-17 14:39Z 0607129
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.290-scui01-height-restored';
+    var VER = '2.7.291-scui01-legacy-follow';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 14:12Z b230d92';
+    var BUILD = '2026-10-17 14:39Z 0607129';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35076,20 +35076,11 @@ class SceneSearchIntegrationBridge {
 		const scale=rect.width>0&&root.offsetWidth>0?
 			rect.width/root.offsetWidth:1;
 		const gap=40,margin=8;
-		const panelWidth=Math.min(list?350:180,Math.max(40,(viewport-2*margin)/scale));
-		const sidePixels=panelWidth*scale+gap*scale;
+		const room=(viewport-margin-rect.right-gap*scale)/scale;
+		const panelWidth=Math.min(list?350:180,Math.max(40,room));
 		const cardWidth=rect.width/scale;
-		const direction=viewport>=cardWidth*scale+sidePixels+2*margin?
-			'right':'above';
-		let left;
-		if(direction==='right')left=(root.offsetWidth||cardWidth)+gap;
-		else{
-			const desired=rect.left+(rect.width-panelWidth*scale)/2;
-			const screenLeft=Math.max(margin,
-				Math.min(viewport-margin-panelWidth*scale,desired));
-			left=(screenLeft-rect.left)/scale;
-		}
-		root.dataset.scuiSidePlacement=direction;
+		const left=(root.offsetWidth||cardWidth)+gap;
+		root.dataset.scuiSidePlacement='right';
 		root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
 		root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
 		const imageRect=root.querySelector('.zenzaSceneImageBox')?.getBoundingClientRect?.();
@@ -35374,34 +35365,13 @@ class SceneSearchIntegrationBridge {
 	height:var(--scui-mini-height,90px)!important;max-height:none!important;
 	overflow:hidden!important;pointer-events:none!important
 }
-/* Native hover rules use absolute top:auto for every virtual row, so
-	rows coincide at the same Y, with nth-child(8+) shifted upward by 144px.
-	For UI01's independent mini-pane, lay out up to five original comment
-	nodes in normal flow and keep their moving TEXT animation active. */
+/* Preserve UI00's ORIGINAL CommentPreviewView virtual rows. Task721's
+	flex, fixed row-height and nth-child caps changed their native movement.
+	Only the pane geometry and transparent background may differ here. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer{
-	display:flex!important;flex-direction:column!important;
-	justify-content:center!important;align-items:stretch!important;
-	padding:0!important;margin:0!important;
 	width:100%!important;height:100%!important;
-	overflow:hidden!important;
 	background:transparent!important;background-image:none!important;
 	box-shadow:none!important
-}
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat{
-	position:relative!important;top:auto!important;left:auto!important;
-	display:block!important;width:100%!important;
-	height:18px!important;line-height:18px!important;
-	flex:0 0 18px!important;
-	transform:none!important;
-	background:transparent!important;background-image:none!important;
-	box-shadow:none!important
-}
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat:nth-child(n+6){
-	display:none!important
-}
-/* Compact thumbnail is only 112×63; at most three full 18px rows fit. */
-.zenzaSceneSearchHost.zenzaSceneLayout01.is-compact >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat:nth-child(n+4){
-	display:none!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat .text{
 	animation-play-state:running!important
@@ -35411,12 +35381,16 @@ class SceneSearchIntegrationBridge {
 	overflow:auto!important;pointer-events:auto!important;
 	opacity:1!important;background:rgba(0,0,0,.96)!important
 }
-.zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-side-placement="above"] >.zenzaCommentPreview.is-scui-classic-side{
-	top:auto!important;bottom:calc(100% + 8px)!important
-}
 /* The original seekbar remains the sole seek click owner. */
+/* "off" applies to SCUI card transitions only. UI01's original
+	CommentPreviewView motion is an independent native feature (same as UI00).
+	Previously the universal "*" silently canceled preview-text-moving. */
 .zenzaSceneSearchHost[data-scene-animation="off"],
-.zenzaSceneSearchHost[data-scene-animation="off"] *{transition:none!important;animation:none!important}
+.zenzaSceneSearchHost:not(.zenzaSceneLayout01)[data-scene-animation="off"] *,
+.zenzaSceneSearchHost.zenzaSceneLayout01[data-scene-animation="off"]
+	:not(.zenzaCommentPreview):not(.zenzaCommentPreview *){
+	transition:none!important;animation:none!important
+}
 .zenzaSceneSearchHost[data-scene-animation="full"] .zenzaSceneBtn{transition-duration:.22s}
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneActions,
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneBtn{
@@ -36388,16 +36362,13 @@ function registerSceneLayouts01_02(registry) {
 								const screenScale=frameRect?.width>0?
 									frameRect.width/(container.offsetWidth||frameRect.width):1;
 								if(viewport>0&&frameRect&&screenScale>0){
-									const rootWidth=compact?124:180, gap=40, margin=8;
-									const commentWidth=state.commentListMode===true?350:180;
-									const canFit=viewport>=rootWidth+gap+commentWidth+margin*2;
-									const minScreen=margin+rootWidth/2;
-									const maxScreen=Math.max(minScreen,viewport-margin-
-										rootWidth/2-(canFit?gap+commentWidth:0));
+									const rootWidth=card.root.getBoundingClientRect?.().width||
+										card.root.offsetWidth||frameWidth;
+									const half=Math.min(viewport,rootWidth)/2;
 									const desired=frameRect.left+rawX*screenScale;
 									const last=state.pinned===true&&Number.isFinite(previous)?
 										frameRect.left+previous*screenScale:desired;
-									const screenX=Math.max(minScreen,Math.min(maxScreen,last));
+									const screenX=Math.max(half,Math.min(viewport-half,last));
 									x=(screenX-frameRect.left)/screenScale;
 									card.root.style.setProperty('--scene-viewport-x',
 										Math.round(screenX)+'px');

@@ -573,23 +573,17 @@ class SceneSearchIntegrationBridge {
     // The original classic control rail extends 29px outside the thumbnail.
     // Leave room for that rail when placing the adjacent comment panel.
     const gap=40,margin=8;
-    const panelWidth=Math.min(list?350:180,Math.max(40,(viewport-2*margin)/scale));
-    const sidePixels=panelWidth*scale+gap*scale;
-    // The panel order must NEVER reverse during seeking. Move both panes
-    // together by clamping the scene CARD as a group (layout01 render).
-    // Narrow screens use one consistent above position, independent of cursor.
+    // Shrink the right pane to available space without moving the thumbnail;
+    // neither list nor flow width may be reserved in the thumbnail clamp.
+    const room=(viewport-margin-rect.right-gap*scale)/scale;
+    const panelWidth=Math.min(list?350:180,Math.max(40,room));
+    // Never switch sides (or stack above) while seeking. The original
+    // CommentPreviewView node stays separate, strictly to the RIGHT.
+    // Its pane may be clipped at the physical viewport edge; the thumbnail
+    // must never stop ~400px early just to reserve that extra width.
     const cardWidth=rect.width/scale;
-    const direction=viewport>=cardWidth*scale+sidePixels+2*margin?
-      'right':'above';
-    let left;
-    if(direction==='right')left=(root.offsetWidth||cardWidth)+gap;
-    else{
-      const desired=rect.left+(rect.width-panelWidth*scale)/2;
-      const screenLeft=Math.max(margin,
-        Math.min(viewport-margin-panelWidth*scale,desired));
-      left=(screenLeft-rect.left)/scale;
-    }
-    root.dataset.scuiSidePlacement=direction;
+    const left=(root.offsetWidth||cardWidth)+gap;
+    root.dataset.scuiSidePlacement='right';
     root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
     root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
     // The thumbnail occupies only the image box; the scene card also has a
@@ -882,34 +876,13 @@ class SceneSearchIntegrationBridge {
   height:var(--scui-mini-height,90px)!important;max-height:none!important;
   overflow:hidden!important;pointer-events:none!important
 }
-/* Native hover rules use absolute top:auto for every virtual row, so
-   rows coincide at the same Y, with nth-child(8+) shifted upward by 144px.
-   For UI01's independent mini-pane, lay out up to five original comment
-   nodes in normal flow and keep their moving TEXT animation active. */
+/* Preserve UI00's ORIGINAL CommentPreviewView virtual rows. Task721's
+   flex, fixed row-height and nth-child caps changed their native movement.
+   Only the pane geometry and transparent background may differ here. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer{
-  display:flex!important;flex-direction:column!important;
-  justify-content:center!important;align-items:stretch!important;
-  padding:0!important;margin:0!important;
   width:100%!important;height:100%!important;
-  overflow:hidden!important;
   background:transparent!important;background-image:none!important;
   box-shadow:none!important
-}
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat{
-  position:relative!important;top:auto!important;left:auto!important;
-  display:block!important;width:100%!important;
-  height:18px!important;line-height:18px!important;
-  flex:0 0 18px!important;
-  transform:none!important;
-  background:transparent!important;background-image:none!important;
-  box-shadow:none!important
-}
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat:nth-child(n+6){
-  display:none!important
-}
-/* Compact thumbnail is only 112×63; at most three full 18px rows fit. */
-.zenzaSceneSearchHost.zenzaSceneLayout01.is-compact >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat:nth-child(n+4){
-  display:none!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat .text{
   animation-play-state:running!important
@@ -919,13 +892,17 @@ class SceneSearchIntegrationBridge {
   overflow:auto!important;pointer-events:auto!important;
   opacity:1!important;background:rgba(0,0,0,.96)!important
 }
-.zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-side-placement="above"] >.zenzaCommentPreview.is-scui-classic-side{
-  top:auto!important;bottom:calc(100% + 8px)!important
-}
 
 /* The original seekbar remains the sole seek click owner. */
+/* "off" applies to SCUI card transitions only. UI01's original
+   CommentPreviewView motion is an independent native feature (same as UI00).
+   Previously the universal "*" silently canceled preview-text-moving. */
 .zenzaSceneSearchHost[data-scene-animation="off"],
-.zenzaSceneSearchHost[data-scene-animation="off"] *{transition:none!important;animation:none!important}
+.zenzaSceneSearchHost:not(.zenzaSceneLayout01)[data-scene-animation="off"] *,
+.zenzaSceneSearchHost.zenzaSceneLayout01[data-scene-animation="off"]
+  :not(.zenzaCommentPreview):not(.zenzaCommentPreview *){
+  transition:none!important;animation:none!important
+}
 .zenzaSceneSearchHost[data-scene-animation="full"] .zenzaSceneBtn{transition-duration:.22s}
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneActions,
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneBtn{

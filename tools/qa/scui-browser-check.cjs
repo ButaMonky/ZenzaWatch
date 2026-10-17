@@ -18,6 +18,17 @@ const cssBegin=native.indexOf('  .zenzaCommentPreview {\n    bottom: 24px;');
 const cssEnd=native.indexOf("`, {className: 'commentPreview hover', disabled: true}",cssBegin);
 if(cssBegin<0||cssEnd<0)throw Error('Legacy comment hover stylesheet changed');
 const nativeHoverCss=native.slice(cssBegin,cssEnd);
+// Reproduce the real native base/list styles too, rather than a fabricated
+// single CSS rule. The original UI switches these stylesheets on list toggle.
+function nativeStyle(name){
+  const end=native.indexOf("`, {className: '"+name+"'",0);
+  const start=native.lastIndexOf('util.addStyle(`',end);
+  if(end<0||start<0)throw Error('Native comment CSS missing: '+name);
+  return native.slice(start+'util.addStyle(`'.length,end)
+    .replace(/\\$\\{CommentPreviewView\\.ITEM_HEIGHT\\}/g,'20');
+}
+const nativeBaseCss=nativeStyle('commentPreview');
+const nativeListCss=nativeStyle('commentPreview list');
 const miniRows=Array.from({length:9},(_,i)=>
   '<li class="nicoChat" style="top:'+(i*20)+'px;--duration:12s;--vpos-time:'+i+'s">'+
   '<span class="text">fixture moving comment '+(i+1)+'</span></li>').join('');
@@ -31,6 +42,8 @@ const html='<!doctype html><meta charset="utf-8"><title>SCUI offline QA</title>'
  '.zenzaCommentPreview .listContainer .nicoChat{position:absolute;left:0;top:5px;width:100%;height:18px;overflow:hidden;white-space:nowrap}'+
  '#comments{position:absolute;right:10px;bottom:70px;width:160px;height:40px;background:#586476}'+
  '#qa-result{white-space:pre-wrap;font-size:10px}</style>'+
+ '<style id="native-comment-base">'+nativeBaseCss+'</style>'+
+ '<style id="native-comment-list" disabled>'+nativeListCss+'</style>'+
  '<style id="native-comment-hover">'+nativeHoverCss+'</style>'+
  '<div id="player"><div id="seek"></div><aside id="comments" class="zenzaCommentPreview">'+
  '<div class="listContainer">'+miniRows+'</div></aside>'+

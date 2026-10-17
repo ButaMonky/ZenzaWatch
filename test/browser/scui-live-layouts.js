@@ -8,7 +8,13 @@ const host=document.getElementById('player');
 const vals={'sceneSearch.seekStepSeconds':5,'sceneSearch.idleHideSeconds':0,
  'sceneSearch.animation':'off','sceneSearch.controlsReveal':'always',...UiVisibilityRegistry.defaults()};
 const onkeys=new Map();const config={getValue:k=>vals[k],setValue(k,v){vals[k]=v;
- for(const f of onkeys.get(k)||[])f(v);},onkey(k,f){if(!onkeys.has(k))onkeys.set(k,new Set());onkeys.get(k).add(f);},
+ for(const f of onkeys.get(k)||[])f(v);
+ // The actual CommentPreviewView uses StyleSwitcher for these two styles.
+ // Mock the switch, not the comment content or its animations.
+ if(k==='enableCommentPreview'){
+   document.getElementById('native-comment-list').disabled=v!==true;
+   document.getElementById('native-comment-hover').disabled=v===true;
+ }},onkey(k,f){if(!onkeys.has(k))onkeys.set(k,new Set());onkeys.get(k).add(f);},
  offkey(k,f){onkeys.get(k)?.delete(f);}};
 const player=Object.assign(events(),{isOpen:true,watchId:'sm9',duration:1000,
  chatList:[{text:'local browser fixture',vpos:1200,uniqNo:'fixture'}],execCommand:()=>{}});
@@ -35,7 +41,9 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
  const b=new SceneSearchPlayerBinding({Adapter:TraceAdapter,view:{videoControlBar:bar},dialog:player,document,
  container:host,events:events(),isFullscreen:()=>mode==='fullscreen',onError:code=>failures.push({code})});
  vals['sceneSearch.layout.normal']=id;vals['sceneSearch.layout.fullscreen']=id;
- vals.enableCommentPreview=false;b.attach();
+ // Reset both stored mode AND original hover/list stylesheet before
+ // every new fixture; a direct vals assignment does not notify StyleSwitcher.
+ config.setValue('enableCommentPreview',false);b.attach();
  const seek=bar._seekBar,r=seek.getBoundingClientRect(),x=r.left+r.width*pct;
  seek.dispatchEvent(new MouseEvent('mouseenter',{clientX:x,bubbles:true}));
  seek.dispatchEvent(new MouseEvent('mousemove',{clientX:x,bubbles:true}));
@@ -50,16 +58,12 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
    {rect:rect.toJSON(),width:innerWidth,height:innerHeight});
   if(id==='01'&&r.width>host.getBoundingClientRect().width+64){
     const half=rect.width/2;
-    const normalWidth=vals['sceneSearch.seekStepSeconds']===0?124:180;
-    const fullGroupFits=innerWidth>=normalWidth+40+180+16;
-    const expected=portal?
-      Math.max(8+half,Math.min(innerWidth-8-half-
-        (fullGroupFits?220:0),x)):
+    // Same clamp as UI00: only half the thumbnail's own width is reserved.
+    const expected=portal?Math.max(half,Math.min(innerWidth-half,x)):
       Math.max(half+6,Math.min(innerWidth-half-6,x));
     const actual=rect.left+half;
-    record(label+'/full-seek-group-follow',Math.abs(actual-expected)<2,
-      {expected,actual,track:r.toJSON(),host:host.getBoundingClientRect().toJSON(),
-       fullGroupFits});
+    record(label+'/ui00-thumbnail-follow',Math.abs(actual-expected)<2,
+      {expected,actual,track:r.toJSON(),host:host.getBoundingClientRect().toJSON()});
   }
   for(const btn of root.querySelectorAll('button[data-scui-action]')){
    const s=getComputedStyle(btn);if(btn.hidden||s.display==='none'||s.visibility==='hidden')continue;
@@ -116,22 +120,20 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
-    const separate=placement==='right'?side.left>=image.right+32:
-      placement==='above'?side.bottom<=root.getBoundingClientRect().top-5:false;
-    record(label+'/classic-flow-nonoverlap',separate&&
-      side.left>=7&&side.right<=innerWidth-7&&side.top>=-1,
-      {placement,image:image.toJSON(),side:side.toJSON()});
+    const separate=placement==='right'&&side.left>=image.right+32;
+    record(label+'/classic-flow-scene-left',separate&&side.top>=-1,
+      {placement,image:image.toJSON(),side:side.toJSON(),
+       clippedAtRight:side.right>innerWidth});
     if(portal){
       // Placement is determined only by available viewport WIDTH, never by
       // cursor X. The scene must ALWAYS remain left of the comment pane.
-      const expectedPlacement=innerWidth>=rect.width+40+180+16?
-        'right':'above';
-      record(label+'/fixed-panel-order',placement===expectedPlacement,
-        {placement,expectedPlacement,scene:image.toJSON(),comment:side.toJSON()});
-      if(pct>=.95 && placement==='right'){
-        record(label+'/full-viewport-group-right-edge',
-          Math.abs(side.right-(innerWidth-8))<=3,
-          {end:side.right,viewport:innerWidth,cursor:x});
+      record(label+'/fixed-panel-order',placement==='right'&&
+        side.left>=image.right+32,
+        {placement,scene:image.toJSON(),comment:side.toJSON()});
+      if(pct>=.95){
+        record(label+'/right-end-thumbnail-follows',
+          Math.abs(rect.right-innerWidth)<=3,
+          {sceneRight:rect.right,viewport:innerWidth,cursor:x});
       }
     }
     const paneStyle=getComputedStyle(commentView);
@@ -146,7 +148,7 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       {opacity:paneStyle.opacity,bg:paneStyle.backgroundColor,alpha,
         innerColor,innerAlpha});
     record(label+'/classic-flow-image-top-align',
-      placement==='above'?side.bottom<=image.top-5:Math.abs(side.top-image.top)<=2,
+      Math.abs(side.top-image.top)<=2,
       {imageTop:image.top,paneTop:side.top,offset:side.top-image.top,placement});
     record(label+'/classic-flow-image-height-align',Math.abs(side.height-image.height)<=2,
       {imageHeight:image.height,paneHeight:side.height});
@@ -165,15 +167,21 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       drawn.length>=1&&rowTop>=side.top-1&&
       rowTop<=side.top+Math.max(7,side.height*.32),
       {rowTop,paneTop:side.top,paneHeight:side.height,count:drawn.length});
-    record(label+'/classic-native-rows-no-pileup',
-      drawn.length<=5&&boxes.every((box,i)=>
-        box.top>=side.top-1&&box.bottom<=side.bottom+1&&
-        (i===0||box.top>=boxes[i-1].bottom-1)),
-      {boxes:boxes.map(b=>b.toJSON()),pane:side.toJSON()});
+    // Native UI00 hover rows overlap temporally by design; their animation
+    // timing is based on vpos, NOT a fabricated flex-column row limit.
+    record(label+'/native-virtual-rows-preserved',
+      drawn.length===9&&drawn.every(el=>getComputedStyle(el).position==='absolute')&&
+      Math.abs(boxes[7].top-(boxes[0].top-144))<=1,
+      {drawn:drawn.length,top0:boxes[0].top,top7:boxes[7].top});
     const firstText=drawn[0]?.querySelector('.text');
     record(label+'/classic-native-text-running',firstText&&
       getComputedStyle(firstText).animationPlayState==='running',
       {playState:firstText&&getComputedStyle(firstText).animationPlayState});
+    // The scene-card "animation off" preference must NOT cancel native
+    // CommentPreviewView movement, which UI00 keeps completely independent.
+    record(label+'/classic-original-animation-name',firstText&&
+      getComputedStyle(firstText).animationName==='preview-text-moving',
+      {animationName:firstText&&getComputedStyle(firstText).animationName});
   }
   config.setValue('enableCommentPreview',true);
   record(label+'/list-owner',
@@ -186,19 +194,23 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
-    const separate=placement==='right'?side.left>=image.right+32:
-      placement==='above'?side.bottom<=root.getBoundingClientRect().top-5:false;
-    record(label+'/classic-list-nonoverlap',separate&&
-      side.left>=7&&side.right<=innerWidth-7&&side.top>=-1&&
+    const separate=placement==='right'&&side.left>=image.right+32;
+    record(label+'/classic-list-side-and-interaction',separate&&side.top>=-1&&
       getComputedStyle(commentView).pointerEvents!=='none',
-      {placement,image:image.toJSON(),side:side.toJSON()});
+      {placement,image:image.toJSON(),side:side.toJSON(),
+       clippedAtRight:side.right>innerWidth});
     const listStyle=getComputedStyle(commentView);
     const listChannels=(listStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
     const listAlpha=listChannels.length>=4?listChannels[3]:1;
     record(label+'/classic-list-contrast',Number(listStyle.opacity)>=.99&&
       listAlpha>=.92,{opacity:listStyle.opacity,bg:listStyle.backgroundColor});
-    const hit=document.elementFromPoint(side.left+side.width/2,side.top+side.height/2);
-    record(label+'/classic-list-hit-target',
+    // An off-viewport pane cannot receive mouse events. Verify hit testing
+    // whenever the pointer location leaves physical space for a side pane.
+    const canClick=side.left<innerWidth-12&&side.top>=0;
+    const hit=canClick?document.elementFromPoint(
+      Math.min(side.left+side.width/2,innerWidth-4),
+      side.top+side.height/2):null;
+    if(canClick)record(label+'/classic-list-hit-target',
       hit===commentView||commentView.contains(hit),
       {placement,hit:hit?.className||hit?.tagName});
     config.setValue('enableCommentPreview',false);
@@ -263,10 +275,9 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const rows=[...commentView.querySelectorAll('.listContainer>.nicoChat')]
       .filter(row=>getComputedStyle(row).display!=='none');
     const boxes=rows.map(row=>row.getBoundingClientRect());
-    record(label+'/classic-compact-native-rows',rows.length<=3&&
-      boxes.every((b,i)=>b.top>=pane.top-1&&b.bottom<=pane.bottom+1&&
-        (i===0||b.top>=boxes[i-1].bottom-1)),
-      {pane:pane.toJSON(),rows:boxes.map(b=>b.toJSON())});
+    record(label+'/compact-keeps-native-rows',rows.length===9&&
+      rows.every(row=>getComputedStyle(row).position==='absolute'),
+      {pane:pane.toJSON(),rowCount:rows.length});
   }
   config.setValue('sceneSearch.seekStepSeconds',5);
  }

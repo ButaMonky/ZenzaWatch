@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.285-scui01-side
+// @version        2.7.286-scui01-comment-pane
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==

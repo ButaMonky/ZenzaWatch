@@ -84,6 +84,21 @@ function measure(id,mode,pct){
     record(label+'/classic-flow-nonoverlap',separate&&
       side.left>=7&&side.right<=innerWidth-7&&side.top>=-1,
       {placement,image:image.toJSON(),side:side.toJSON()});
+    const paneStyle=getComputedStyle(commentView);
+    const channels=(paneStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
+    const alpha=channels.length>=4?channels[3]:1;
+    record(label+'/classic-flow-opaque',Number(paneStyle.opacity)>=.99&&alpha>=.92,
+      {opacity:paneStyle.opacity,bg:paneStyle.backgroundColor,alpha});
+    record(label+'/classic-flow-top-align',
+      placement==='above'?side.bottom<=rect.top-5:Math.abs(side.top-rect.top)<=4,
+      {cardTop:rect.top,paneTop:side.top,offset:side.top-rect.top,placement});
+    record(label+'/classic-flow-height-align',Math.abs(side.height-rect.height)<=5,
+      {cardHeight:rect.height,paneHeight:side.height});
+    const mini=commentView.querySelector('.nicoChat'),miniRect=mini?.getBoundingClientRect();
+    record(label+'/classic-mini-inside-pane',!!miniRect&&
+      miniRect.left>=side.left-1&&miniRect.right<=side.right+1&&
+      miniRect.top>=side.top-1&&miniRect.bottom<=side.bottom+1,
+      {mini:miniRect?.toJSON(),pane:side.toJSON()});
   }
   config.setValue('enableCommentPreview',true);
   record(label+'/list-owner',
@@ -103,6 +118,11 @@ function measure(id,mode,pct){
       side.left>=7&&side.right<=innerWidth-7&&side.top>=-1&&
       getComputedStyle(commentView).pointerEvents!=='none',
       {placement,image:image.toJSON(),side:side.toJSON()});
+    const listStyle=getComputedStyle(commentView);
+    const listChannels=(listStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
+    const listAlpha=listChannels.length>=4?listChannels[3]:1;
+    record(label+'/classic-list-contrast',Number(listStyle.opacity)>=.99&&
+      listAlpha>=.92,{opacity:listStyle.opacity,bg:listStyle.backgroundColor});
     const hit=document.elementFromPoint(side.left+side.width/2,side.top+side.height/2);
     record(label+'/classic-list-hit-target',
       hit===commentView||commentView.contains(hit),

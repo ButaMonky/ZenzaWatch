@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.285-scui01-side
+// @version        2.7.286-scui01-comment-pane
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 11:20Z 3d6db8d
+// build: 2026-10-17 11:41Z a8fe1f2
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.285-scui01-side';
+    var VER = '2.7.286-scui01-comment-pane';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 11:20Z 3d6db8d';
+    var BUILD = '2026-10-17 11:41Z a8fe1f2';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35358,17 +35358,24 @@ class SceneSearchIntegrationBridge {
 	z-index:160
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow{
-	height:140px!important;max-height:140px!important;
-	overflow:hidden!important;pointer-events:none!important;
-	background:rgba(0,0,0,.76)!important
+	/* Native hover CSS applies opacity:.6 to the WHOLE preview. Together with
+		a translucent background it looked like a grey rectangle on light video.
+		Keep the preview itself opaque; comments retain their original colors. */
+	opacity:1!important;filter:none!important;
+	background:rgba(0,0,0,.96)!important;
+	/* Position and size both panes from the same card top edge. The old 140px
+		panel was taller than the 127px scene card and drifted upward. */
+	top:0!important;bottom:auto!important;
+	height:100%!important;max-height:none!important;
+	overflow:hidden!important;pointer-events:none!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
 	height:200px!important;max-height:200px!important;
 	overflow:auto!important;pointer-events:auto!important;
-	background:rgba(0,0,0,.91)!important
+	opacity:1!important;background:rgba(0,0,0,.96)!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-side-placement="above"] >.zenzaCommentPreview.is-scui-classic-side{
-	bottom:calc(100% + 8px)!important
+	top:auto!important;bottom:calc(100% + 8px)!important
 }
 /* The original seekbar remains the sole seek click owner. */
 .zenzaSceneSearchHost[data-scene-animation="off"],

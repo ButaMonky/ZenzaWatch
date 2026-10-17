@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.282-task712
+// @version        2.7.283-scui01-track
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 07:55Z 7eebb97
+// build: 2026-10-17 10:35Z bc9e8fa
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.282-task712';
+    var VER = '2.7.283-scui01-track';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 07:55Z 7eebb97';
+    var BUILD = '2026-10-17 10:35Z bc9e8fa';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -34556,6 +34556,7 @@ class SceneSearchIntegrationBridge {
 		this.registry=registry;
 		this.layoutSettings={...(layoutSettings||{}),
 			getSeekGeometry:()=>this._getSeekGeometry(),
+			getSeekGeometryUnclipped:()=>this._getSeekGeometry(true),
 			getLegacyTooltip:()=>this._legacyTooltipElement,
 			getLegacyComment:()=>this._commentPreviewElement,
 			getMiniCommentMode:()=>this.config.getValue('sceneSearch.miniCommentMode'),
@@ -34632,7 +34633,7 @@ class SceneSearchIntegrationBridge {
 			onError:(error,key)=>this._onError(error,key)
 		});
 	}
-	_getSeekGeometry() {
+	_getSeekGeometry(unclipped=false) {
 		const seek=this.seekElement.getBoundingClientRect?.();
 		const frame=this.container.getBoundingClientRect?.();
 		if(!seek||!frame||!Number.isFinite(seek.left)||
@@ -34643,9 +34644,10 @@ class SceneSearchIntegrationBridge {
 		const scale=width/frame.width;
 		const viewportWidth=this.document.defaultView?.innerWidth;
 		const visibleLeft=Number.isFinite(viewportWidth)?
-			Math.max(0,-frame.left*scale):0;
+			(unclipped?-frame.left*scale:Math.max(0,-frame.left*scale)):0;
 		const visibleRight=Number.isFinite(viewportWidth)?
-			Math.min(width,(viewportWidth-frame.left)*scale):width;
+			(unclipped?(viewportWidth-frame.left)*scale:
+				Math.min(width,(viewportWidth-frame.left)*scale)):width;
 		return {
 			seekLeft:(seek.left-frame.left)*scale,
 			seekWidth:seek.width*scale,
@@ -36214,7 +36216,9 @@ function registerSceneLayouts01_02(registry) {
 					render(state){
 						render(state);
 						if(!card.root)return;
-						const geometry=settings.getSeekGeometry?.();
+						const geometry=(item.id==='01'?
+							settings.getSeekGeometryUnclipped?.():null) ||
+							settings.getSeekGeometry?.();
 						const width=container.offsetWidth ||
 							container.getBoundingClientRect?.().width ||
 							container.clientWidth||800;
@@ -36225,10 +36229,11 @@ function registerSceneLayouts01_02(registry) {
 								settings.getDuration():settings.duration;
 							const pct=Number.isFinite(duration)&&duration>0?
 								Math.max(0,Math.min(1,state.time/duration)):0.5;
-							const visibleLeft=Math.max(0,Math.min(width,
-								Number.isFinite(geometry?.visibleLeft)?geometry.visibleLeft:0));
-							const visibleRight=Math.max(visibleLeft,Math.min(width,
-								Number.isFinite(geometry?.visibleRight)?geometry.visibleRight:width));
+							const validViewport=Number.isFinite(geometry?.visibleLeft)&&
+								Number.isFinite(geometry?.visibleRight)&&
+								geometry.visibleRight>geometry.visibleLeft;
+							const visibleLeft=validViewport?geometry.visibleLeft:0;
+							const visibleRight=validViewport?geometry.visibleRight:width;
 							const available=visibleRight-visibleLeft;
 							const usable=Math.max(0,Math.min(frameWidth,available-12));
 							const minX=visibleLeft+usable/2+6;

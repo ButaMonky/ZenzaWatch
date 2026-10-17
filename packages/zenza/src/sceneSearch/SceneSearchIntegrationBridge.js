@@ -36,6 +36,7 @@ class SceneSearchIntegrationBridge {
     this.registry=registry;
     this.layoutSettings={...(layoutSettings||{}),
       getSeekGeometry:()=>this._getSeekGeometry(),
+      getSeekGeometryUnclipped:()=>this._getSeekGeometry(true),
       getLegacyTooltip:()=>this._legacyTooltipElement,
       getLegacyComment:()=>this._commentPreviewElement,
       getMiniCommentMode:()=>this.config.getValue('sceneSearch.miniCommentMode'),
@@ -112,7 +113,7 @@ class SceneSearchIntegrationBridge {
       onError:(error,key)=>this._onError(error,key)
     });
   }
-  _getSeekGeometry() {
+  _getSeekGeometry(unclipped=false) {
     const seek=this.seekElement.getBoundingClientRect?.();
     const frame=this.container.getBoundingClientRect?.();
     if(!seek||!frame||!Number.isFinite(seek.left)||
@@ -122,10 +123,13 @@ class SceneSearchIntegrationBridge {
     const width=this.container.offsetWidth||frame.width;
     const scale=width/frame.width;
     const viewportWidth=this.document.defaultView?.innerWidth;
+    // Only UI01 uses unclipped screen bounds for a full-width seekRange.
+    // Preserve the old video-box clamps for layouts 02..10.
     const visibleLeft=Number.isFinite(viewportWidth)?
-      Math.max(0,-frame.left*scale):0;
+      (unclipped?-frame.left*scale:Math.max(0,-frame.left*scale)):0;
     const visibleRight=Number.isFinite(viewportWidth)?
-      Math.min(width,(viewportWidth-frame.left)*scale):width;
+      (unclipped?(viewportWidth-frame.left)*scale:
+        Math.min(width,(viewportWidth-frame.left)*scale)):width;
     return {
       seekLeft:(seek.left-frame.left)*scale,
       seekWidth:seek.width*scale,

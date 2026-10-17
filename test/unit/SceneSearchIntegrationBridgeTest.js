@@ -103,6 +103,23 @@ function harness(options={}){
   close(){bridge.dispose();dom.window.close();}};
 }
 describe('SCUI-18 standalone bridge preflight without touching legacy player',()=>{
+ it('reports actual full seek and screen bounds beyond a narrow video box (R547-01)',()=>{
+  const h=harness();
+  const frame=h.d.getElementById('mount');
+  const seek=h.d.getElementById('seek');
+  frame.getBoundingClientRect=()=>({left:16,width:1075,right:1091});
+  seek.getBoundingClientRect=()=>({left:0,width:1460,right:1460});
+  Object.defineProperty(h.dom.window,'innerWidth',{configurable:true,value:1460});
+  const g=h.bridge._getSeekGeometry(true);
+  assert.strictEqual(h.bridge._getSeekGeometry().visibleRight,1075,
+    'other layouts must retain the original video-box clamp');
+  assert.strictEqual(g.seekLeft,-16);
+  assert.strictEqual(g.seekWidth,1460);
+  assert.strictEqual(g.visibleLeft,-16);
+  assert.strictEqual(g.visibleRight,1444,
+    'right edge must not be limited to video width 1075');
+  h.close();
+ });
  it('mounts only selected mode/card and leaves seek clicks owned by player',()=>{
   const h=harness();let clicks=0;
   h.d.getElementById('seek').addEventListener('mousedown',()=>clicks++);

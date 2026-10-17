@@ -123,7 +123,9 @@ function registerSceneLayouts01_02(registry) {
           render(state){
             render(state);
             if(!card.root)return;
-            const geometry=settings.getSeekGeometry?.();
+            const geometry=(item.id==='01'?
+              settings.getSeekGeometryUnclipped?.():null) ||
+              settings.getSeekGeometry?.();
             const width=container.offsetWidth ||
               container.getBoundingClientRect?.().width ||
               container.clientWidth||800;
@@ -137,10 +139,14 @@ function registerSceneLayouts01_02(registry) {
               // Use the actual seekbar's screen geometry. In embedded/small
               // modes the seekbar and the player container need not have equal
               // widths or origins; the old width*pct assumption drifted.
-              const visibleLeft=Math.max(0,Math.min(width,
-                Number.isFinite(geometry?.visibleLeft)?geometry.visibleLeft:0));
-              const visibleRight=Math.max(visibleLeft,Math.min(width,
-                Number.isFinite(geometry?.visibleRight)?geometry.visibleRight:width));
+              // Geometry is expressed in the host's CSS coordinate space.
+              // The native seek track can extend beyond the video container,
+              // so only the real viewport bounds (not the video width) apply.
+              const validViewport=Number.isFinite(geometry?.visibleLeft)&&
+                Number.isFinite(geometry?.visibleRight)&&
+                geometry.visibleRight>geometry.visibleLeft;
+              const visibleLeft=validViewport?geometry.visibleLeft:0;
+              const visibleRight=validViewport?geometry.visibleRight:width;
               const available=visibleRight-visibleLeft;
               const usable=Math.max(0,Math.min(frameWidth,available-12));
               const minX=visibleLeft+usable/2+6;

@@ -48,6 +48,21 @@ describe('SCUI-12 classic and twin scene layouts',()=>{
   assert.strictEqual(root.style.getPropertyValue('--scene-x'),'400px');
   layout.dispose();h.dom.window.close();
  });
+ it('R547-01 follows seek width wider than a video container without losing the right tools',()=>{
+  const h=harness(1075);
+  h.opts.settings.getSeekGeometry=()=>({
+    seekLeft:0,seekWidth:1460,visibleLeft:0,visibleRight:1460
+  });
+  const a=h.registry.create({...h.opts,id:'01',mode:'normal'});
+  a.mount({...h.state,time:500});
+  assert.strictEqual(a.root.style.getPropertyValue('--scene-x'),'730px');
+  a.render({...h.state,time:950});
+  assert.strictEqual(a.root.style.getPropertyValue('--scene-x'),'1364px');
+  assert(a.root.classList.contains('is-tools-left'));
+  a.render({...h.state,time:950,seekStepSeconds:0});
+  assert.strictEqual(a.root.style.getPropertyValue('--scene-x'),'1387px');
+  a.dispose();h.dom.window.close();
+ });
  it('classic on fullscreen changes position by mode without touching comment overlay',()=>{
   const h=harness(1000);
   const a=h.registry.create({...h.opts,id:'01',mode:'fullscreen'});

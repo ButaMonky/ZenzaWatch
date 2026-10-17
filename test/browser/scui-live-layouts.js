@@ -36,6 +36,13 @@ function measure(id,mode,pct){
   const rect=root.getBoundingClientRect();
   record(label+'/card-bounds',rect.left>=-1&&rect.right<=innerWidth+1&&rect.top>=-1&&rect.bottom<=innerHeight+1,
    {rect:rect.toJSON(),width:innerWidth,height:innerHeight});
+  if(id==='01'&&r.width>host.getBoundingClientRect().width+64){
+    const half=rect.width/2;
+    const expected=Math.max(half+6,Math.min(innerWidth-half-6,x));
+    const actual=rect.left+half;
+    record(label+'/seek-track-centered',Math.abs(actual-expected)<2,
+      {expected,actual,track:r.toJSON(),host:host.getBoundingClientRect().toJSON()});
+  }
   for(const btn of root.querySelectorAll('button[data-scui-action]')){
    const s=getComputedStyle(btn);if(btn.hidden||s.display==='none'||s.visibility==='hidden')continue;
    const z=btn.getBoundingClientRect();
@@ -114,6 +121,15 @@ function measure(id,mode,pct){
 try{for(const mode of ['normal','fullscreen'])for(let n=1;n<=10;n++){
  if(new URLSearchParams(location.search).has('one') && (n!==1||mode!=='normal'))continue;
  for(const pct of new URLSearchParams(location.search).has('one')?[0.5]:[0.05,0.5,0.95,0.99])measure(String(n).padStart(2,'0'),mode,pct);
+  if(!new URLSearchParams(location.search).has('one')){
+    const seek=document.getElementById('seek');
+    const oldHostWidth=host.style.width,oldSeekWidth=seek.style.width;
+    try{
+      host.style.width='calc(100vw - min(30vw, 385px))';
+      seek.style.width='calc(100vw - 32px)';
+      for(const pct of [0.05,0.5,0.95,0.99])measure('01','normal',pct);
+    }finally{host.style.width=oldHostWidth;seek.style.width=oldSeekWidth;}
+  }
 }}catch(e){failures.push({exception:String(e),stack:e.stack});}
 document.getElementById('qa-result').textContent=JSON.stringify({
  width:innerWidth,height:innerHeight,checks:results.length,failures});

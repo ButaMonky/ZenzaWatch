@@ -105,6 +105,25 @@ function measure(id,mode,pct){
       miniRect.left>=side.left-1&&miniRect.right<=side.right+1&&
       miniRect.top>=side.top-1&&miniRect.bottom<=side.bottom+1,
       {mini:miniRect?.toJSON(),pane:side.toJSON()});
+    // Test the original native hover CSS with NINE virtual rows, not an
+    // invented single row at top:5px. This catches lower-edge piling up.
+    const nativeRows=[...commentView.querySelectorAll('.listContainer>.nicoChat')];
+    const drawn=nativeRows.filter(el=>getComputedStyle(el).display!=='none');
+    const boxes=drawn.map(el=>el.getBoundingClientRect());
+    const rowTop=boxes[0]?.top;
+    record(label+'/classic-native-row-top',
+      drawn.length>=1&&rowTop>=side.top-1&&
+      rowTop<=side.top+Math.max(7,side.height*.32),
+      {rowTop,paneTop:side.top,paneHeight:side.height,count:drawn.length});
+    record(label+'/classic-native-rows-no-pileup',
+      drawn.length<=5&&boxes.every((box,i)=>
+        box.top>=side.top-1&&box.bottom<=side.bottom+1&&
+        (i===0||box.top>=boxes[i-1].bottom-1)),
+      {boxes:boxes.map(b=>b.toJSON()),pane:side.toJSON()});
+    const firstText=drawn[0]?.querySelector('.text');
+    record(label+'/classic-native-text-running',firstText&&
+      getComputedStyle(firstText).animationPlayState==='running',
+      {playState:firstText&&getComputedStyle(firstText).animationPlayState});
   }
   config.setValue('enableCommentPreview',true);
   record(label+'/list-owner',
@@ -190,6 +209,16 @@ function measure(id,mode,pct){
   }
   config.setValue('sceneSearch.seekStepSeconds',0);
   record(label+'/zero',root.querySelector('.scene-seek-back').getBoundingClientRect().width===0,{});
+  if(id==='01'){
+    const pane=commentView.getBoundingClientRect();
+    const rows=[...commentView.querySelectorAll('.listContainer>.nicoChat')]
+      .filter(row=>getComputedStyle(row).display!=='none');
+    const boxes=rows.map(row=>row.getBoundingClientRect());
+    record(label+'/classic-compact-native-rows',rows.length<=3&&
+      boxes.every((b,i)=>b.top>=pane.top-1&&b.bottom<=pane.bottom+1&&
+        (i===0||b.top>=boxes[i-1].bottom-1)),
+      {pane:pane.toJSON(),rows:boxes.map(b=>b.toJSON())});
+  }
   config.setValue('sceneSearch.seekStepSeconds',5);
  }
  b.dispose();record(label+'/cleanup',!host.querySelector('.zenzaSceneSearchHost')&&

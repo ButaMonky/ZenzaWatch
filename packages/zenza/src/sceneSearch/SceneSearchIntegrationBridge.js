@@ -880,10 +880,37 @@ class SceneSearchIntegrationBridge {
   height:var(--scui-mini-height,90px)!important;max-height:none!important;
   overflow:hidden!important;pointer-events:none!important
 }
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer,
-.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .nicoChat{
+/* Native hover rules use absolute top:auto for every virtual row, so
+   rows coincide at the same Y, with nth-child(8+) shifted upward by 144px.
+   For UI01's independent mini-pane, lay out up to five original comment
+   nodes in normal flow and keep their moving TEXT animation active. */
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer{
+  display:flex!important;flex-direction:column!important;
+  justify-content:center!important;align-items:stretch!important;
+  padding:0!important;margin:0!important;
+  width:100%!important;height:100%!important;
+  overflow:hidden!important;
   background:transparent!important;background-image:none!important;
   box-shadow:none!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat{
+  position:relative!important;top:auto!important;left:auto!important;
+  display:block!important;width:100%!important;
+  height:18px!important;line-height:18px!important;
+  flex:0 0 18px!important;
+  transform:none!important;
+  background:transparent!important;background-image:none!important;
+  box-shadow:none!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat:nth-child(n+6){
+  display:none!important
+}
+/* Compact thumbnail is only 112×63; at most three full 18px rows fit. */
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-compact >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat:nth-child(n+4){
+  display:none!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer>.nicoChat .text{
+  animation-play-state:running!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
   height:200px!important;max-height:200px!important;

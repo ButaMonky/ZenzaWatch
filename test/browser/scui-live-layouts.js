@@ -16,8 +16,19 @@ const bar={player,_playerConfig:config,_duration:1000,_seekBar:document.getEleme
  storyboard:events(),_seekBarToolTip:{_$view:[document.getElementById('old')],
  _seekBarThumbnail:{_view:document.getElementById('thumb')}},
  _commentPreview:{_model:{_chatList:player.chatList},_view:{_view:document.getElementById('comments')}}};
-function measure(id,mode,pct){
- console.log('QA_PHASE '+id+'/'+mode+'/'+pct+' begin');
+function measure(id,mode,pct,{portal=id==='01'}={}){
+ console.log('QA_PHASE '+id+'/'+mode+'/'+pct+(portal?'/portal':'')+' begin');
+ let dialog=null,sidebar=null,originalParent=null,originalNext=null;
+ if(portal){
+  originalParent=host.parentNode;originalNext=host.nextSibling;
+  dialog=document.createElement('div');dialog.className='zenzaVideoPlayerDialog zen-family';
+  dialog.style.cssText='position:fixed;inset:0;z-index:10000;pointer-events:none';
+  originalParent.insertBefore(dialog,host);dialog.appendChild(host);
+  sidebar=document.createElement('aside');sidebar.id='qa-info-sidebar';
+  sidebar.style.cssText='position:absolute;right:0;top:0;bottom:0;'+
+   'width:min(30vw,385px);background:#263238;z-index:1200;pointer-events:auto';
+  dialog.appendChild(sidebar);
+ }
  class TraceAdapter extends SceneSearchLegacyAdapter {
   start(mode){try{return super.start(mode);}catch(e){console.error('ADAPTER_TRACE '+e.stack);throw e;}}
  }
@@ -28,8 +39,9 @@ function measure(id,mode,pct){
  const seek=bar._seekBar,r=seek.getBoundingClientRect(),x=r.left+r.width*pct;
  seek.dispatchEvent(new MouseEvent('mouseenter',{clientX:x,bubbles:true}));
  seek.dispatchEvent(new MouseEvent('mousemove',{clientX:x,bubbles:true}));
- const root=host.querySelector('.zenzaSceneSearchHost');
- const label=id+'/'+mode+'/'+pct;
+ const root=portal?dialog.querySelector('.zenzaSceneSearchHost'):
+  host.querySelector('.zenzaSceneSearchHost');
+ const label=id+'/'+mode+'/'+pct+(portal?'/portal':'');
  console.log('QA_PHASE '+label+' mounted');
  record(label+'/mounted',!!root,{});
  if(root){
@@ -38,10 +50,16 @@ function measure(id,mode,pct){
    {rect:rect.toJSON(),width:innerWidth,height:innerHeight});
   if(id==='01'&&r.width>host.getBoundingClientRect().width+64){
     const half=rect.width/2;
-    const expected=Math.max(half+6,Math.min(innerWidth-half-6,x));
+    const normalWidth=vals['sceneSearch.seekStepSeconds']===0?124:180;
+    const fullGroupFits=innerWidth>=normalWidth+40+180+16;
+    const expected=portal?
+      Math.max(8+half,Math.min(innerWidth-8-half-
+        (fullGroupFits?220:0),x)):
+      Math.max(half+6,Math.min(innerWidth-half-6,x));
     const actual=rect.left+half;
-    record(label+'/seek-track-centered',Math.abs(actual-expected)<2,
-      {expected,actual,track:r.toJSON(),host:host.getBoundingClientRect().toJSON()});
+    record(label+'/full-seek-group-follow',Math.abs(actual-expected)<2,
+      {expected,actual,track:r.toJSON(),host:host.getBoundingClientRect().toJSON(),
+       fullGroupFits});
   }
   for(const btn of root.querySelectorAll('button[data-scui-action]')){
    const s=getComputedStyle(btn);if(btn.hidden||s.display==='none'||s.visibility==='hidden')continue;
@@ -51,6 +69,20 @@ function measure(id,mode,pct){
   }
   record(label+'/shared-canvas',root.contains(document.getElementById('thumb')),{});
   const commentView=document.getElementById('comments');
+  if(portal){
+    record(label+'/escapes-video-layer',root.parentElement===dialog &&
+      getComputedStyle(root).position==='fixed', {parent:root.parentElement?.className});
+    const imageRect=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
+    const sidebarRect=sidebar.getBoundingClientRect();
+    const ix=Math.max(sidebarRect.left+3,imageRect.left+4);
+    const iy=imageRect.top+Math.min(imageRect.height/2,30);
+    if(ix<imageRect.right-2){
+      const above=document.elementFromPoint(ix,iy);
+      record(label+'/paints-above-sidebar',above===root||root.contains(above),
+       {x:ix,y:iy,hit:above?.className||above?.tagName,
+        scene:imageRect.toJSON(),sidebar:sidebarRect.toJSON()});
+    }
+  }
   record(label+'/flow-owner',
     (id==='01'
       ?commentView.parentNode===root&&
@@ -79,11 +111,23 @@ function measure(id,mode,pct){
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
     const separate=placement==='right'?side.left>=image.right+32:
-      placement==='left'?side.right<=image.left-32:
       placement==='above'?side.bottom<=root.getBoundingClientRect().top-5:false;
     record(label+'/classic-flow-nonoverlap',separate&&
       side.left>=7&&side.right<=innerWidth-7&&side.top>=-1,
       {placement,image:image.toJSON(),side:side.toJSON()});
+    if(portal){
+      // Placement is determined only by available viewport WIDTH, never by
+      // cursor X. The scene must ALWAYS remain left of the comment pane.
+      const expectedPlacement=innerWidth>=rect.width+40+180+16?
+        'right':'above';
+      record(label+'/fixed-panel-order',placement===expectedPlacement,
+        {placement,expectedPlacement,scene:image.toJSON(),comment:side.toJSON()});
+      if(pct>=.95 && placement==='right'){
+        record(label+'/full-viewport-group-right-edge',
+          Math.abs(side.right-(innerWidth-8))<=3,
+          {end:side.right,viewport:innerWidth,cursor:x});
+      }
+    }
     const paneStyle=getComputedStyle(commentView);
     const channels=(paneStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
     const alpha=channels.length>=4?channels[3]:1;
@@ -137,7 +181,6 @@ function measure(id,mode,pct){
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
     const separate=placement==='right'?side.left>=image.right+32:
-      placement==='left'?side.right<=image.left-32:
       placement==='above'?side.bottom<=root.getBoundingClientRect().top-5:false;
     record(label+'/classic-list-nonoverlap',separate&&
       side.left>=7&&side.right<=innerWidth-7&&side.top>=-1&&
@@ -221,10 +264,14 @@ function measure(id,mode,pct){
   }
   config.setValue('sceneSearch.seekStepSeconds',5);
  }
- b.dispose();record(label+'/cleanup',!host.querySelector('.zenzaSceneSearchHost')&&
+ b.dispose();record(label+'/cleanup',!document.querySelector('.zenzaSceneSearchHost')&&
  document.querySelectorAll('style[data-scui-layout-style]').length===0&&
  !host.dataset.sceneSearchLayout&&!host.dataset.sceneMode&&!host.dataset.scenePlacement,
  {dataset:{...host.dataset}});
+ if(portal){
+   originalParent.insertBefore(host,originalNext);
+   dialog.remove();
+ }
 }
 try{for(const mode of ['normal','fullscreen'])for(let n=1;n<=10;n++){
  if(new URLSearchParams(location.search).has('one') && (n!==1||mode!=='normal'))continue;
@@ -235,7 +282,8 @@ try{for(const mode of ['normal','fullscreen'])for(let n=1;n<=10;n++){
     try{
       host.style.width='calc(100vw - min(30vw, 385px))';
       seek.style.width='calc(100vw - 32px)';
-      for(const pct of [0.05,0.5,0.95,0.99])measure('01','normal',pct);
+      for(const pct of [0.05,0.5,0.95,0.99])
+        measure('01','normal',pct,{portal:true});
     }finally{host.style.width=oldHostWidth;seek.style.width=oldSeekWidth;}
   }
 }}catch(e){failures.push({exception:String(e),stack:e.stack});}

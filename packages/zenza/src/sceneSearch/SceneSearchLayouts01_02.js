@@ -48,6 +48,14 @@ const SCENE_LAYOUT01_CSS=`
   transform:translateX(-50%);
   border-radius:6px;box-shadow:none;
 }
+/* Above the video container AND the independent right information panel.
+   The dialog spans the viewport, unlike its narrow .zenzaPlayerContainer. */
+.zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-portal="1"]{
+  position:fixed!important;
+  left:var(--scene-viewport-x,50%)!important;
+  z-index:2800!important;
+  pointer-events:auto!important
+}
 .zenzaSceneLayout01[data-mode="fullscreen"]{
   --scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
 }
@@ -110,12 +118,21 @@ function registerSceneLayouts01_02(registry) {
           layoutClass:item.layoutClass,
           extraCss:SCENE_01_02_TOOLS_CSS+'\n'+item.css});
         const container=options.container,settings=options.settings||{};
+        // Original video container can be narrower than the native 100vw
+        // seek range and is painted BEHIND the right-side info panel.
+        // UI01 alone uses a top-level Zenza dialog overlay for real playback.
+        const portal=item.id==='01'?
+          container.closest?.('.zenzaVideoPlayerDialog'):null;
         const render=card.render.bind(card),mount=card.mount.bind(card);
         const dispose=card.dispose.bind(card);
         return {
           get root(){return card.root;},
           mount(state){
             mount(state);
+            if(portal&&card.root){
+              card.root.dataset.scuiPortal='1';
+              portal.appendChild(card.root);
+            }
             container.dataset.sceneSearchLayout=item.id;
             container.dataset.sceneMode=options.mode;
             this.render(state);
@@ -159,18 +176,44 @@ function registerSceneLayouts01_02(registry) {
               const clamp=x=>maxX>=minX?
                 Math.max(minX,Math.min(maxX,x)):
                 (visibleLeft+visibleRight)/2;
-              const x=clamp(rawX);
+              let x=clamp(rawX);
               const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
-              const fixed=state.pinned===true&&Number.isFinite(previous)?
-                clamp(previous):x;
-              // The original HTML flips its tool rail to the left at the
-              // right edge instead of permanently losing 35px of seek range.
+              // The two original previews are one visual group:
+              // scene thumbnail ALWAYS left, native comments ALWAYS right.
+              // Clamp the group to the FULL viewport (never to video width).
+              // This also means the card naturally stops once the group's
+              // right edge reaches the viewport, as standard tooltips do.
+              if(portal){
+                const frameRect=container.getBoundingClientRect?.();
+                const viewport=options.document.defaultView?.innerWidth||0;
+                const screenScale=frameRect?.width>0?
+                  frameRect.width/(container.offsetWidth||frameRect.width):1;
+                if(viewport>0&&frameRect&&screenScale>0){
+                  const rootWidth=compact?124:180, gap=40, margin=8;
+                  const commentWidth=state.commentListMode===true?350:180;
+                  const canFit=viewport>=rootWidth+gap+commentWidth+margin*2;
+                  const minScreen=margin+rootWidth/2;
+                  const maxScreen=Math.max(minScreen,viewport-margin-
+                    rootWidth/2-(canFit?gap+commentWidth:0));
+                  const desired=frameRect.left+rawX*screenScale;
+                  const last=state.pinned===true&&Number.isFinite(previous)?
+                    frameRect.left+previous*screenScale:desired;
+                  const screenX=Math.max(minScreen,Math.min(maxScreen,last));
+                  x=(screenX-frameRect.left)/screenScale;
+                  card.root.style.setProperty('--scene-viewport-x',
+                    Math.round(screenX)+'px');
+                }
+              }else if(state.pinned===true&&Number.isFinite(previous)){
+                x=clamp(previous);
+              }
+              // Only tool buttons (not the comment pane) may flip their
+              // rail to remain reachable near the viewport edge.
               const railClearance=usable/2+35;
-              const canRight=visibleRight-fixed>=railClearance;
-              const canLeft=fixed-visibleLeft>=railClearance;
+              const canRight=visibleRight-x>=railClearance;
+              const canLeft=x-visibleLeft>=railClearance;
               card.root.classList.toggle('is-tools-left',!canRight&&canLeft);
               card.root.classList.toggle('is-tools-overlap',!canRight&&!canLeft);
-              card.root.style.setProperty('--scene-x',Math.round(fixed)+'px');
+              card.root.style.setProperty('--scene-x',Math.round(x)+'px');
             }else{
               container.dataset.sceneNarrow=String(width<580);
               container.style.setProperty('--scene-bottom',

@@ -2,6 +2,29 @@
 const assert=require('assert');
 const {fixture}=require('../helpers/scenePlayerFixture');
 describe('SCUI-18 complete real bridge/player integration',()=>{
+ it('UI01 portal escapes narrow video layer and keeps scene LEFT of comments at every seek',()=>{
+  const h=fixture('01','normal',{portal:true});try{
+   const dialog=h.d.querySelector('.zenzaVideoPlayerDialog');
+   const root=h.d.querySelector('.zenzaSceneLayout01');
+   const comment=h.d.querySelector('.zenzaCommentPreview');
+   assert.strictEqual(root.parentElement,dialog,
+     'scene must leave the clipping video box and paint above the sidebar');
+   assert.strictEqual(root.contains(comment),true,
+     'the original comment model remains owned by the preview card');
+   assert.equal(h.dom.window.getComputedStyle(root).position,'fixed');
+   h.move(80);
+   assert.strictEqual(root.dataset.scuiSidePlacement,'right');
+   h.move(899);
+   assert.strictEqual(root.dataset.scuiSidePlacement,'right',
+     'never switch left/right order mid-seek');
+   assert.notStrictEqual(root.style.getPropertyValue('--scene-viewport-x'),'',
+     'scene must use viewport coordinates for the full seek track');
+   h.setMode('fullscreen');
+   assert.strictEqual(h.d.querySelector('.zenzaSceneLayout01').parentElement,dialog);
+   h.player.emit('close');
+   assert.equal(h.d.querySelector('.zenzaSceneSearchHost'),null);
+  }finally{h.close();}
+ });
  it('UI01 docks native flowing and list comments beside, never inside thumbnail',()=>{
   const h=fixture('01');try{
    h.move(450);

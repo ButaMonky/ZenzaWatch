@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.288-scui01-native-rows
+// @version        2.7.289-scui01-fullwidth
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 12:19Z 1106b5d
+// build: 2026-10-17 13:16Z c62efcf
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.288-scui01-native-rows';
+    var VER = '2.7.289-scui01-fullwidth';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 12:19Z 1106b5d';
+    var BUILD = '2026-10-17 13:16Z c62efcf';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35078,16 +35078,15 @@ class SceneSearchIntegrationBridge {
 		const gap=40,margin=8;
 		const panelWidth=Math.min(list?350:180,Math.max(40,(viewport-2*margin)/scale));
 		const sidePixels=panelWidth*scale+gap*scale;
-		const roomRight=viewport-margin-rect.right;
-		const roomLeft=rect.left-margin;
-		let direction=roomRight>=sidePixels?'right':
-			roomLeft>=sidePixels?'left':'above';
+		const cardWidth=rect.width/scale;
+		const direction=viewport>=cardWidth*scale+sidePixels+2*margin?
+			'right':'above';
 		let left;
-		if(direction==='right')left=(root.offsetWidth||rect.width/scale)+gap;
-		else if(direction==='left')left=-panelWidth-gap;
+		if(direction==='right')left=(root.offsetWidth||cardWidth)+gap;
 		else{
 			const desired=rect.left+(rect.width-panelWidth*scale)/2;
-			const screenLeft=Math.max(margin,Math.min(viewport-margin-panelWidth*scale,desired));
+			const screenLeft=Math.max(margin,
+				Math.min(viewport-margin-panelWidth*scale,desired));
 			left=(screenLeft-rect.left)/scale;
 		}
 		root.dataset.scuiSidePlacement=direction;
@@ -36238,6 +36237,14 @@ const SCENE_LAYOUT01_CSS=`
 	transform:translateX(-50%);
 	border-radius:6px;box-shadow:none;
 }
+/* Above the video container AND the independent right information panel.
+	The dialog spans the viewport, unlike its narrow .zenzaPlayerContainer. */
+.zenzaSceneSearchHost.zenzaSceneLayout01[data-scui-portal="1"]{
+	position:fixed!important;
+	left:var(--scene-viewport-x,50%)!important;
+	z-index:2800!important;
+	pointer-events:auto!important
+}
 .zenzaSceneLayout01[data-mode="fullscreen"]{
 	--scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
 }
@@ -36300,12 +36307,18 @@ function registerSceneLayouts01_02(registry) {
 					layoutClass:item.layoutClass,
 					extraCss:SCENE_01_02_TOOLS_CSS+'\n'+item.css});
 				const container=options.container,settings=options.settings||{};
+				const portal=item.id==='01'?
+					container.closest?.('.zenzaVideoPlayerDialog'):null;
 				const render=card.render.bind(card),mount=card.mount.bind(card);
 				const dispose=card.dispose.bind(card);
 				return {
 					get root(){return card.root;},
 					mount(state){
 						mount(state);
+						if(portal&&card.root){
+							card.root.dataset.scuiPortal='1';
+							portal.appendChild(card.root);
+						}
 						container.dataset.sceneSearchLayout=item.id;
 						container.dataset.sceneMode=options.mode;
 						this.render(state);
@@ -36343,16 +36356,37 @@ function registerSceneLayouts01_02(registry) {
 							const clamp=x=>maxX>=minX?
 								Math.max(minX,Math.min(maxX,x)):
 								(visibleLeft+visibleRight)/2;
-							const x=clamp(rawX);
+							let x=clamp(rawX);
 							const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
-							const fixed=state.pinned===true&&Number.isFinite(previous)?
-								clamp(previous):x;
+							if(portal){
+								const frameRect=container.getBoundingClientRect?.();
+								const viewport=options.document.defaultView?.innerWidth||0;
+								const screenScale=frameRect?.width>0?
+									frameRect.width/(container.offsetWidth||frameRect.width):1;
+								if(viewport>0&&frameRect&&screenScale>0){
+									const rootWidth=compact?124:180, gap=40, margin=8;
+									const commentWidth=state.commentListMode===true?350:180;
+									const canFit=viewport>=rootWidth+gap+commentWidth+margin*2;
+									const minScreen=margin+rootWidth/2;
+									const maxScreen=Math.max(minScreen,viewport-margin-
+										rootWidth/2-(canFit?gap+commentWidth:0));
+									const desired=frameRect.left+rawX*screenScale;
+									const last=state.pinned===true&&Number.isFinite(previous)?
+										frameRect.left+previous*screenScale:desired;
+									const screenX=Math.max(minScreen,Math.min(maxScreen,last));
+									x=(screenX-frameRect.left)/screenScale;
+									card.root.style.setProperty('--scene-viewport-x',
+										Math.round(screenX)+'px');
+								}
+							}else if(state.pinned===true&&Number.isFinite(previous)){
+								x=clamp(previous);
+							}
 							const railClearance=usable/2+35;
-							const canRight=visibleRight-fixed>=railClearance;
-							const canLeft=fixed-visibleLeft>=railClearance;
+							const canRight=visibleRight-x>=railClearance;
+							const canLeft=x-visibleLeft>=railClearance;
 							card.root.classList.toggle('is-tools-left',!canRight&&canLeft);
 							card.root.classList.toggle('is-tools-overlap',!canRight&&!canLeft);
-							card.root.style.setProperty('--scene-x',Math.round(fixed)+'px');
+							card.root.style.setProperty('--scene-x',Math.round(x)+'px');
 						}else{
 							container.dataset.sceneNarrow=String(width<580);
 							container.style.setProperty('--scene-bottom',

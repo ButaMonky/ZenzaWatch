@@ -575,16 +575,18 @@ class SceneSearchIntegrationBridge {
     const gap=40,margin=8;
     const panelWidth=Math.min(list?350:180,Math.max(40,(viewport-2*margin)/scale));
     const sidePixels=panelWidth*scale+gap*scale;
-    const roomRight=viewport-margin-rect.right;
-    const roomLeft=rect.left-margin;
-    let direction=roomRight>=sidePixels?'right':
-      roomLeft>=sidePixels?'left':'above';
+    // The panel order must NEVER reverse during seeking. Move both panes
+    // together by clamping the scene CARD as a group (layout01 render).
+    // Narrow screens use one consistent above position, independent of cursor.
+    const cardWidth=rect.width/scale;
+    const direction=viewport>=cardWidth*scale+sidePixels+2*margin?
+      'right':'above';
     let left;
-    if(direction==='right')left=(root.offsetWidth||rect.width/scale)+gap;
-    else if(direction==='left')left=-panelWidth-gap;
+    if(direction==='right')left=(root.offsetWidth||cardWidth)+gap;
     else{
       const desired=rect.left+(rect.width-panelWidth*scale)/2;
-      const screenLeft=Math.max(margin,Math.min(viewport-margin-panelWidth*scale,desired));
+      const screenLeft=Math.max(margin,
+        Math.min(viewport-margin-panelWidth*scale,desired));
       left=(screenLeft-rect.left)/scale;
     }
     root.dataset.scuiSidePlacement=direction;

@@ -18,7 +18,7 @@ function emitter(){
  off(k,f){rows.get(k)?.delete(f);},emit(k,...a){for(const f of [...rows.get(k)||[]])f(...a);},
  count(){return [...rows.values()].reduce((n,s)=>n+s.size,0);}};
 }
-function fixture(id='01',mode='normal'){
+function fixture(id='01',mode='normal',{portal=false}={}){
  const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
  const dom=new JSDOM('<!doctype html><html><head></head><body>'+
   '<div id="player" style="position:relative;width:900px;height:520px">'+
@@ -42,6 +42,10 @@ function fixture(id='01',mode='normal'){
  const commands=[];player.execCommand=(command,value)=>commands.push([command,value]);
  const events=emitter(),storyboard=emitter();let fullscreen=mode==='fullscreen';
  const host=d.getElementById('player'),seek=d.getElementById('seek');
+ if(portal){
+   const dialog=d.createElement('div');dialog.className='zenzaVideoPlayerDialog';
+   d.body.appendChild(dialog);dialog.appendChild(host);
+ }
  if(id==='00'){
    // The UI00 native layout reuses the exact seekbar/tooltip DOM owned by VideoControlBar.
    const old=d.getElementById('old'),thumb=d.getElementById('thumb');

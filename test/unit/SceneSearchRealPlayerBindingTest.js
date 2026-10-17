@@ -25,6 +25,25 @@ describe('SCUI-18 complete real bridge/player integration',()=>{
    assert.strictEqual(comment.classList.contains('is-scui-classic-side'),false);
   }finally{h.close();}
  });
+ it('UI01 remeasures the actual image box after a late storyboard resize',()=>{
+  const h=fixture('01');try{
+   const bridge=h.binding.adapter.bridge;
+   const root=h.host.querySelector('.zenzaSceneLayout01');
+   const image=root.querySelector('.zenzaSceneImageBox');
+   Object.defineProperty(root,'offsetWidth',{configurable:true,value:180});
+   root.getBoundingClientRect=()=>({left:320,right:500,width:180,top:400,height:140});
+   image.getBoundingClientRect=()=>({left:324,right:496,width:172,top:405,height:90});
+   bridge._positionClassicCommentSide(root,false);
+   assert.strictEqual(root.style.getPropertyValue('--scui-mini-top'),'5.00px');
+   assert.strictEqual(root.style.getPropertyValue('--scui-mini-height'),'90.00px');
+   image.getBoundingClientRect=()=>({left:324,right:496,width:172,top:408,height:112});
+   bridge._positionClassicCommentSide(root,false);
+   assert.strictEqual(root.style.getPropertyValue('--scui-mini-top'),'8.00px');
+   assert.strictEqual(root.style.getPropertyValue('--scui-mini-height'),'112.00px');
+   assert.equal(h.host.querySelectorAll('#thumb canvas').length,1,
+     'thumbnail owner must remain single');
+  }finally{h.close();}
+ });
  it('follows the actual seek position using the real player duration',()=>{
   const h=fixture('01');try{h.move(891);
    const card=h.host.querySelector('.zenzaSceneSearchHost');assert(card);

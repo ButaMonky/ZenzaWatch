@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.286-scui01-comment-pane
+// @version        2.7.287-scui01-transparent-mini
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 11:41Z a8fe1f2
+// build: 2026-10-17 11:59Z 206beae
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.286-scui01-comment-pane';
+    var VER = '2.7.287-scui01-transparent-mini';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 11:41Z a8fe1f2';
+    var BUILD = '2026-10-17 11:59Z 206beae';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35093,6 +35093,13 @@ class SceneSearchIntegrationBridge {
 		root.dataset.scuiSidePlacement=direction;
 		root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
 		root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
+		const imageRect=root.querySelector('.zenzaSceneImageBox')?.getBoundingClientRect?.();
+		const imageTop=Number.isFinite(imageRect?.top)?
+			(imageRect.top-rect.top)/scale:0;
+		const imageHeight=Number.isFinite(imageRect?.height)&&imageRect.height>0?
+			imageRect.height/scale:90;
+		root.style.setProperty('--scui-mini-top',imageTop.toFixed(2)+'px');
+		root.style.setProperty('--scui-mini-height',imageHeight.toFixed(2)+'px');
 	}
 	_restoreCommentPreviewDock(){
 		const old=this._commentDock,node=this._commentPreviewElement;
@@ -35358,16 +35365,20 @@ class SceneSearchIntegrationBridge {
 	z-index:160
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow{
-	/* Native hover CSS applies opacity:.6 to the WHOLE preview. Together with
-		a translucent background it looked like a grey rectangle on light video.
-		Keep the preview itself opaque; comments retain their original colors. */
+	/* Never paint a panel behind native moving mini-comments. Preserve the
+		comment text and its existing color/animation, without dimming opacity. */
 	opacity:1!important;filter:none!important;
-	background:rgba(0,0,0,.96)!important;
-	/* Position and size both panes from the same card top edge. The old 140px
-		panel was taller than the 127px scene card and drifted upward. */
-	top:0!important;bottom:auto!important;
-	height:100%!important;max-height:none!important;
+	background:transparent!important;background-image:none!important;
+	border:0!important;box-shadow:none!important;
+	/* The image itself is shorter than the card's image+clock+buttons. */
+	top:var(--scui-mini-top,0px)!important;bottom:auto!important;
+	height:var(--scui-mini-height,90px)!important;max-height:none!important;
 	overflow:hidden!important;pointer-events:none!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer,
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .nicoChat{
+	background:transparent!important;background-image:none!important;
+	box-shadow:none!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
 	height:200px!important;max-height:200px!important;

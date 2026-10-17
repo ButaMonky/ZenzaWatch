@@ -87,13 +87,19 @@ function measure(id,mode,pct){
     const paneStyle=getComputedStyle(commentView);
     const channels=(paneStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
     const alpha=channels.length>=4?channels[3]:1;
-    record(label+'/classic-flow-opaque',Number(paneStyle.opacity)>=.99&&alpha>=.92,
-      {opacity:paneStyle.opacity,bg:paneStyle.backgroundColor,alpha});
-    record(label+'/classic-flow-top-align',
-      placement==='above'?side.bottom<=rect.top-5:Math.abs(side.top-rect.top)<=4,
-      {cardTop:rect.top,paneTop:side.top,offset:side.top-rect.top,placement});
-    record(label+'/classic-flow-height-align',Math.abs(side.height-rect.height)<=5,
-      {cardHeight:rect.height,paneHeight:side.height});
+    const innerColor=getComputedStyle(commentView.querySelector('.listContainer')).backgroundColor;
+    const innerChannels=(innerColor.match(/[\d.]+/g)||[]).map(Number);
+    const innerAlpha=innerChannels.length>=4?innerChannels[3]:innerColor==='transparent'?0:1;
+    record(label+'/classic-flow-transparent-background',
+      Number(paneStyle.opacity)>=.99 && alpha===0 &&
+      paneStyle.backgroundImage==='none' && innerAlpha===0,
+      {opacity:paneStyle.opacity,bg:paneStyle.backgroundColor,alpha,
+        innerColor,innerAlpha});
+    record(label+'/classic-flow-image-top-align',
+      placement==='above'?side.bottom<=image.top-5:Math.abs(side.top-image.top)<=2,
+      {imageTop:image.top,paneTop:side.top,offset:side.top-image.top,placement});
+    record(label+'/classic-flow-image-height-align',Math.abs(side.height-image.height)<=2,
+      {imageHeight:image.height,paneHeight:side.height});
     const mini=commentView.querySelector('.nicoChat'),miniRect=mini?.getBoundingClientRect();
     record(label+'/classic-mini-inside-pane',!!miniRect&&
       miniRect.left>=side.left-1&&miniRect.right<=side.right+1&&

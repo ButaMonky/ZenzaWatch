@@ -590,6 +590,16 @@ class SceneSearchIntegrationBridge {
     root.dataset.scuiSidePlacement=direction;
     root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
     root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
+    // The thumbnail occupies only the image box; the scene card also has a
+    // clock and tool rail. Align the flowing comment pane with the IMAGE,
+    // not the overall card. Re-measure on each render / storyboard update.
+    const imageRect=root.querySelector('.zenzaSceneImageBox')?.getBoundingClientRect?.();
+    const imageTop=Number.isFinite(imageRect?.top)?
+      (imageRect.top-rect.top)/scale:0;
+    const imageHeight=Number.isFinite(imageRect?.height)&&imageRect.height>0?
+      imageRect.height/scale:90;
+    root.style.setProperty('--scui-mini-top',imageTop.toFixed(2)+'px');
+    root.style.setProperty('--scui-mini-height',imageHeight.toFixed(2)+'px');
   }
   _restoreCommentPreviewDock(){
     const old=this._commentDock,node=this._commentPreviewElement;
@@ -860,16 +870,20 @@ class SceneSearchIntegrationBridge {
   z-index:160
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow{
-  /* Native hover CSS applies opacity:.6 to the WHOLE preview. Together with
-     a translucent background it looked like a grey rectangle on light video.
-     Keep the preview itself opaque; comments retain their original colors. */
+  /* Never paint a panel behind native moving mini-comments. Preserve the
+     comment text and its existing color/animation, without dimming opacity. */
   opacity:1!important;filter:none!important;
-  background:rgba(0,0,0,.96)!important;
-  /* Position and size both panes from the same card top edge. The old 140px
-     panel was taller than the 127px scene card and drifted upward. */
-  top:0!important;bottom:auto!important;
-  height:100%!important;max-height:none!important;
+  background:transparent!important;background-image:none!important;
+  border:0!important;box-shadow:none!important;
+  /* The image itself is shorter than the card's image+clock+buttons. */
+  top:var(--scui-mini-top,0px)!important;bottom:auto!important;
+  height:var(--scui-mini-height,90px)!important;max-height:none!important;
   overflow:hidden!important;pointer-events:none!important
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .listContainer,
+.zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-flow .nicoChat{
+  background:transparent!important;background-image:none!important;
+  box-shadow:none!important
 }
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side.is-scui-list{
   height:200px!important;max-height:200px!important;

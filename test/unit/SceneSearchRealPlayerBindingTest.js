@@ -17,6 +17,26 @@ describe('SCUI-18 complete real bridge/player integration',()=>{
      'resize and video movement must update the offset');
   }finally{h.close();}
  });
+ it('UI01 fullscreen keeps preview inside the real fullscreen video subtree',()=>{
+  const h=fixture('01','normal',{portal:true});
+  try{
+    const dialog=h.d.querySelector('.zenzaVideoPlayerDialog');
+    const original=h.d.querySelector('.zenzaSceneLayout01');
+    assert.strictEqual(original.parentElement,dialog,
+      'normal mode must still escape the right info panel');
+    h.setMode('fullscreen');
+    const full=h.d.querySelector('.zenzaSceneLayout01');
+    assert(full,'UI01 must still be mounted in fullscreen');
+    assert.strictEqual(full.parentElement,h.host,
+      'native requestFullscreen targets NicoVideoPlayer._parentNode = player container');
+    assert(h.host.contains(full),'fullscreen subtree must own the card');
+    assert(h.host.contains(h.d.querySelector('.zenzaCommentPreview')),
+      'native CommentPreviewView also must appear in fullscreen subtree');
+    h.setMode('normal');
+    assert.strictEqual(h.d.querySelector('.zenzaSceneLayout01').parentElement,dialog,
+      'normal mode must return to the viewport overlay');
+  } finally {h.close();}
+ });
  it('UI01 portal escapes narrow video layer and keeps scene LEFT of comments at every seek',()=>{
   const h=fixture('01','normal',{portal:true});try{
    const dialog=h.d.querySelector('.zenzaVideoPlayerDialog');
@@ -35,7 +55,8 @@ describe('SCUI-18 complete real bridge/player integration',()=>{
    assert.notStrictEqual(root.style.getPropertyValue('--scene-viewport-x'),'',
      'scene must use viewport coordinates for the full seek track');
    h.setMode('fullscreen');
-   assert.strictEqual(h.d.querySelector('.zenzaSceneLayout01').parentElement,dialog);
+   assert.strictEqual(h.d.querySelector('.zenzaSceneLayout01').parentElement,h.host,
+     'native Fullscreen API displays only the player-container subtree');
    h.player.emit('close');
    assert.equal(h.d.querySelector('.zenzaSceneSearchHost'),null);
   }finally{h.close();}

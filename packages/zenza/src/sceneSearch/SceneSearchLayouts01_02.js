@@ -143,7 +143,11 @@ function registerSceneLayouts01_02(registry) {
                 originalPlayerBottom=measured;
               }
               card.root.dataset.scuiPortal='1';
-              portal.appendChild(card.root);
+              // Native fullscreen targets NicoVideoPlayer._parentNode, which
+              // is THIS player container, not the outer Zenza dialog.
+              // Portal nodes outside that subtree disappear in fullscreen.
+              const owner=options.mode==='fullscreen'?container:portal;
+              owner.appendChild(card.root);
             }
             container.dataset.sceneSearchLayout=item.id;
             container.dataset.sceneMode=options.mode;
@@ -190,19 +194,20 @@ function registerSceneLayouts01_02(registry) {
                 (visibleLeft+visibleRight)/2;
               let x=clamp(rawX);
               const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
-              // Match UI00: clamp only the THUMBNAIL width to the visible
-              // seek viewport. Reserving 180-350px for a second comment pane
-              // stopped the scene ~400px before the pointer (Task722).
-              // Comment remains to the RIGHT; never reorder the two panes.
+              // User-approved right-edge rule: keep the thumbnail LEFT of
+              // the original comment pane and stop their GROUP at the screen
+              // boundary. Neither side-switching nor above-stack is allowed.
+              // Only UI01's coordinate calculation is changed.
               if(portal){
                 const frameRect=container.getBoundingClientRect?.();
-                const portalRect=portal.getBoundingClientRect?.();
+                const owner=options.mode==='fullscreen'?container:portal;
+                const portalRect=owner.getBoundingClientRect?.();
                 if(Number.isFinite(frameRect?.bottom)&&
                     Number.isFinite(portalRect?.bottom)){
                   const videoScale=container.offsetHeight>0&&frameRect.height>0?
                     frameRect.height/container.offsetHeight:1;
-                  const portalScale=portal.offsetHeight>0&&portalRect.height>0?
-                    portalRect.height/portal.offsetHeight:1;
+                  const portalScale=owner.offsetHeight>0&&portalRect.height>0?
+                    portalRect.height/owner.offsetHeight:1;
                   const restoredBottom=(portalRect.bottom-frameRect.bottom+
                     originalPlayerBottom*videoScale)/portalScale;
                   if(Number.isFinite(restoredBottom)){
@@ -214,18 +219,33 @@ function registerSceneLayouts01_02(registry) {
                 const screenScale=frameRect?.width>0?
                   frameRect.width/(container.offsetWidth||frameRect.width):1;
                 if(viewport>0&&frameRect&&screenScale>0){
-                  // UI00 places the 180px native tooltip at pointerX-90
-                  // and clamps its OWN bounds, not those of another panel.
+                  // Clamp the fixed-order pair as one group, so both panes
+                  // remain visible even when the pointer reaches 95-100%.
+                  // At narrow widths shrink the comment pane, not the seek
+                  // range. Mode-specific list width is the native 350px cap.
                   const rootWidth=card.root.getBoundingClientRect?.().width||
                     card.root.offsetWidth||frameWidth;
-                  const half=Math.min(viewport,rootWidth)/2;
+                  const margin=8;
+                  const desiredPaneWidth=state.commentListMode===true?350:180;
+                  const gap=viewport>=rootWidth+40+desiredPaneWidth+margin*2?
+                    40:8;
+                  const paneWidth=Math.max(1,Math.min(desiredPaneWidth,
+                    viewport-margin*2-rootWidth-gap));
+                  const half=rootWidth/2;
+                  const minCenter=margin+half;
+                  const maxCenter=viewport-margin-gap-paneWidth-half;
                   const desired=frameRect.left+rawX*screenScale;
                   const last=state.pinned===true&&Number.isFinite(previous)?
                     frameRect.left+previous*screenScale:desired;
-                  const screenX=Math.max(half,Math.min(viewport-half,last));
+                  const screenX=maxCenter>=minCenter?
+                    Math.max(minCenter,Math.min(maxCenter,last)):minCenter;
                   x=(screenX-frameRect.left)/screenScale;
                   card.root.style.setProperty('--scene-viewport-x',
                     Math.round(screenX)+'px');
+                  card.root.style.setProperty('--scui-side-gap',
+                    gap+'px');
+                  card.root.style.setProperty('--scui-side-width',
+                    paneWidth+'px');
                 }
               }else if(state.pinned===true&&Number.isFinite(previous)){
                 x=clamp(previous);

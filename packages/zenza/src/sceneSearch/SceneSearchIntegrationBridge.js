@@ -570,17 +570,18 @@ class SceneSearchIntegrationBridge {
       !Number.isFinite(viewport)||viewport<=0)return;
     const scale=rect.width>0&&root.offsetWidth>0?
       rect.width/root.offsetWidth:1;
-    // The original classic control rail extends 29px outside the thumbnail.
-    // Leave room for that rail when placing the adjacent comment panel.
-    const gap=40,margin=8;
-    // Shrink the right pane to available space without moving the thumbnail;
-    // neither list nor flow width may be reserved in the thumbnail clamp.
+    // Layout01 precomputes a group clamp and pane width with the SAME
+    // viewport geometry. Reuse these values; calculating a second, different
+    // clamp here caused the native comment view to leave the right edge.
+    const configuredGap=Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
+    const configuredWidth=Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
+    const gap=Number.isFinite(configuredGap)?configuredGap:40;
+    const margin=8;
     const room=(viewport-margin-rect.right-gap*scale)/scale;
-    const panelWidth=Math.min(list?350:180,Math.max(40,room));
-    // Never switch sides (or stack above) while seeking. The original
-    // CommentPreviewView node stays separate, strictly to the RIGHT.
-    // Its pane may be clipped at the physical viewport edge; the thumbnail
-    // must never stop ~400px early just to reserve that extra width.
+    const panelWidth=Number.isFinite(configuredWidth)&&configuredWidth>0?
+      configuredWidth:Math.min(list?350:180,Math.max(1,room));
+    // Never swap to the left or move above; on the right edge, the entire
+    // group stops together while CommentPreviewView retains native owners.
     const cardWidth=rect.width/scale;
     const left=(root.offsetWidth||cardWidth)+gap;
     root.dataset.scuiSidePlacement='right';

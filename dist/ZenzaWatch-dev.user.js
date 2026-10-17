@@ -33,15 +33,15 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.291-scui01-legacy-follow
+// @version        2.7.292-scui01-clamp-fullscreen
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
-// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task724-scui01-legacy-follow/dist/ZenzaWatch-dev.user.js
-// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task724-scui01-legacy-follow/dist/ZenzaWatch-dev.user.js
+// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task725-scui01-clamp-fullscreen/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task725-scui01-clamp-fullscreen/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 14:39Z 0607129
+// build: 2026-10-17 16:15Z 76cb347
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.291-scui01-legacy-follow';
+    var VER = '2.7.292-scui01-clamp-fullscreen';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 14:39Z 0607129';
+    var BUILD = '2026-10-17 16:15Z 76cb347';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35075,9 +35075,13 @@ class SceneSearchIntegrationBridge {
 			!Number.isFinite(viewport)||viewport<=0)return;
 		const scale=rect.width>0&&root.offsetWidth>0?
 			rect.width/root.offsetWidth:1;
-		const gap=40,margin=8;
+		const configuredGap=Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
+		const configuredWidth=Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
+		const gap=Number.isFinite(configuredGap)?configuredGap:40;
+		const margin=8;
 		const room=(viewport-margin-rect.right-gap*scale)/scale;
-		const panelWidth=Math.min(list?350:180,Math.max(40,room));
+		const panelWidth=Number.isFinite(configuredWidth)&&configuredWidth>0?
+			configuredWidth:Math.min(list?350:180,Math.max(1,room));
 		const cardWidth=rect.width/scale;
 		const left=(root.offsetWidth||cardWidth)+gap;
 		root.dataset.scuiSidePlacement='right';
@@ -36301,7 +36305,8 @@ function registerSceneLayouts01_02(registry) {
 								originalPlayerBottom=measured;
 							}
 							card.root.dataset.scuiPortal='1';
-							portal.appendChild(card.root);
+							const owner=options.mode==='fullscreen'?container:portal;
+							owner.appendChild(card.root);
 						}
 						container.dataset.sceneSearchLayout=item.id;
 						container.dataset.sceneMode=options.mode;
@@ -36344,13 +36349,14 @@ function registerSceneLayouts01_02(registry) {
 							const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
 							if(portal){
 								const frameRect=container.getBoundingClientRect?.();
-								const portalRect=portal.getBoundingClientRect?.();
+								const owner=options.mode==='fullscreen'?container:portal;
+								const portalRect=owner.getBoundingClientRect?.();
 								if(Number.isFinite(frameRect?.bottom)&&
 										Number.isFinite(portalRect?.bottom)){
 									const videoScale=container.offsetHeight>0&&frameRect.height>0?
 										frameRect.height/container.offsetHeight:1;
-									const portalScale=portal.offsetHeight>0&&portalRect.height>0?
-										portalRect.height/portal.offsetHeight:1;
+									const portalScale=owner.offsetHeight>0&&portalRect.height>0?
+										portalRect.height/owner.offsetHeight:1;
 									const restoredBottom=(portalRect.bottom-frameRect.bottom+
 										originalPlayerBottom*videoScale)/portalScale;
 									if(Number.isFinite(restoredBottom)){
@@ -36364,14 +36370,27 @@ function registerSceneLayouts01_02(registry) {
 								if(viewport>0&&frameRect&&screenScale>0){
 									const rootWidth=card.root.getBoundingClientRect?.().width||
 										card.root.offsetWidth||frameWidth;
-									const half=Math.min(viewport,rootWidth)/2;
+									const margin=8;
+									const desiredPaneWidth=state.commentListMode===true?350:180;
+									const gap=viewport>=rootWidth+40+desiredPaneWidth+margin*2?
+										40:8;
+									const paneWidth=Math.max(1,Math.min(desiredPaneWidth,
+										viewport-margin*2-rootWidth-gap));
+									const half=rootWidth/2;
+									const minCenter=margin+half;
+									const maxCenter=viewport-margin-gap-paneWidth-half;
 									const desired=frameRect.left+rawX*screenScale;
 									const last=state.pinned===true&&Number.isFinite(previous)?
 										frameRect.left+previous*screenScale:desired;
-									const screenX=Math.max(half,Math.min(viewport-half,last));
+									const screenX=maxCenter>=minCenter?
+										Math.max(minCenter,Math.min(maxCenter,last)):minCenter;
 									x=(screenX-frameRect.left)/screenScale;
 									card.root.style.setProperty('--scene-viewport-x',
 										Math.round(screenX)+'px');
+									card.root.style.setProperty('--scui-side-gap',
+										gap+'px');
+									card.root.style.setProperty('--scui-side-width',
+										paneWidth+'px');
 								}
 							}else if(state.pinned===true&&Number.isFinite(previous)){
 								x=clamp(previous);

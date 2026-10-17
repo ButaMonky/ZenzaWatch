@@ -25,6 +25,7 @@ const bar={player,_playerConfig:config,_duration:1000,_seekBar:document.getEleme
 function measure(id,mode,pct,{portal=id==='01'}={}){
  console.log('QA_PHASE '+id+'/'+mode+'/'+pct+(portal?'/portal':'')+' begin');
  let dialog=null,sidebar=null,originalParent=null,originalNext=null;
+ const originalHostStyle=host.style.cssText;
  if(portal){
   originalParent=host.parentNode;originalNext=host.nextSibling;
   dialog=document.createElement('div');dialog.className='zenzaVideoPlayerDialog zen-family';
@@ -34,6 +35,12 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
   sidebar.style.cssText='position:absolute;right:0;top:0;bottom:0;'+
    'width:min(30vw,385px);background:#263238;z-index:1200;pointer-events:auto';
   dialog.appendChild(sidebar);
+  if(mode==='fullscreen'){
+   // The real Fullscreen.request targets .zenzaPlayerContainer, not dialog.
+   // Chromium only paints descendants of the fullscreen element.
+   host.style.cssText+=';position:fixed;inset:0;margin:0;width:100vw;height:100vh;contain:layout size';
+   sidebar.style.display='none'; // outside the fullscreen top-layer subtree
+  }
  }
  class TraceAdapter extends SceneSearchLegacyAdapter {
   start(mode){try{return super.start(mode);}catch(e){console.error('ADAPTER_TRACE '+e.stack);throw e;}}
@@ -58,12 +65,17 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
    {rect:rect.toJSON(),width:innerWidth,height:innerHeight});
   if(id==='01'&&r.width>host.getBoundingClientRect().width+64){
     const half=rect.width/2;
-    // Same clamp as UI00: only half the thumbnail's own width is reserved.
-    const expected=portal?Math.max(half,Math.min(innerWidth-half,x)):
+    // Thumbnail and right pane have a single viewport clamp. Cursor
+    // tracking stops once both panels reach the physical right margin.
+    const paneWidth=parseFloat(root.style.getPropertyValue('--scui-side-width'));
+    const gap=parseFloat(root.style.getPropertyValue('--scui-side-gap'));
+    const expected=portal?
+      Math.max(8+half,Math.min(innerWidth-8-half-gap-paneWidth,x)):
       Math.max(half+6,Math.min(innerWidth-half-6,x));
     const actual=rect.left+half;
-    record(label+'/ui00-thumbnail-follow',Math.abs(actual-expected)<2,
-      {expected,actual,track:r.toJSON(),host:host.getBoundingClientRect().toJSON()});
+    record(label+'/group-follows-then-stops',Math.abs(actual-expected)<2,
+      {expected,actual,paneWidth,gap,track:r.toJSON(),
+       host:host.getBoundingClientRect().toJSON()});
   }
   for(const btn of root.querySelectorAll('button[data-scui-action]')){
    const s=getComputedStyle(btn);if(btn.hidden||s.display==='none'||s.visibility==='hidden')continue;
@@ -74,8 +86,12 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
   record(label+'/shared-canvas',root.contains(document.getElementById('thumb')),{});
   const commentView=document.getElementById('comments');
   if(portal){
-    record(label+'/escapes-video-layer',root.parentElement===dialog &&
-      getComputedStyle(root).position==='fixed', {parent:root.parentElement?.className});
+    const expectedOwner=mode==='fullscreen'?host:dialog;
+    record(label+'/fullscreen-dom-subtree',
+      root.parentElement===expectedOwner &&
+      getComputedStyle(root).position==='fixed',
+      {parent:root.parentElement?.className,mode,
+       fullscreenSubtree:mode==='fullscreen'?host.contains(root):null});
     const hostBottom=host.getBoundingClientRect().bottom;
     const targetBottom=hostBottom-(mode==='normal'?38:68);
     record(label+'/restored-video-relative-height',
@@ -86,7 +102,7 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const sidebarRect=sidebar.getBoundingClientRect();
     const ix=Math.max(sidebarRect.left+3,imageRect.left+4);
     const iy=imageRect.top+Math.min(imageRect.height/2,30);
-    if(ix<imageRect.right-2){
+    if(mode==='normal'&&ix<imageRect.right-2){
       const above=document.elementFromPoint(ix,iy);
       record(label+'/paints-above-sidebar',above===root||root.contains(above),
        {x:ix,y:iy,hit:above?.className||above?.tagName,
@@ -120,20 +136,23 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
-    const separate=placement==='right'&&side.left>=image.right+32;
-    record(label+'/classic-flow-scene-left',separate&&side.top>=-1,
-      {placement,image:image.toJSON(),side:side.toJSON(),
-       clippedAtRight:side.right>innerWidth});
+    const gap=parseFloat(root.style.getPropertyValue('--scui-side-gap'))||8;
+    const separate=placement==='right'&&side.left>=image.right+gap-2;
+    record(label+'/classic-flow-scene-left',separate&&side.top>=-1&&
+      side.left>=7&&side.right<=innerWidth-7,
+      {placement,image:image.toJSON(),side:side.toJSON()});
     if(portal){
-      // Placement is determined only by available viewport WIDTH, never by
-      // cursor X. The scene must ALWAYS remain left of the comment pane.
+      // The original order never reverses. Narrow viewports reduce the gap
+      // from 40px to 8px so the right pane still fits on screen.
       record(label+'/fixed-panel-order',placement==='right'&&
-        side.left>=image.right+32,
-        {placement,scene:image.toJSON(),comment:side.toJSON()});
+        side.left>=image.right+gap-2&&side.right<=innerWidth-7,
+        {placement,gap,scene:image.toJSON(),comment:side.toJSON()});
       if(pct>=.95){
-        record(label+'/right-end-thumbnail-follows',
-          Math.abs(rect.right-innerWidth)<=3,
-          {sceneRight:rect.right,viewport:innerWidth,cursor:x});
+        record(label+'/right-edge-group-visible',
+          Math.abs(side.right-(innerWidth-8))<=3&&
+          rect.left>=7&&side.left>=rect.right+5,
+          {sceneRight:rect.right,commentRight:side.right,
+           viewport:innerWidth,cursor:x});
       }
     }
     const paneStyle=getComputedStyle(commentView);
@@ -194,11 +213,12 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
     const side=commentView.getBoundingClientRect();
     const placement=root.dataset.scuiSidePlacement;
-    const separate=placement==='right'&&side.left>=image.right+32;
+    const gap=parseFloat(root.style.getPropertyValue('--scui-side-gap'))||8;
+    const separate=placement==='right'&&side.left>=image.right+gap-2;
     record(label+'/classic-list-side-and-interaction',separate&&side.top>=-1&&
+      side.left>=7&&side.right<=innerWidth-7&&
       getComputedStyle(commentView).pointerEvents!=='none',
-      {placement,image:image.toJSON(),side:side.toJSON(),
-       clippedAtRight:side.right>innerWidth});
+      {placement,image:image.toJSON(),side:side.toJSON()});
     const listStyle=getComputedStyle(commentView);
     const listChannels=(listStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
     const listAlpha=listChannels.length>=4?listChannels[3]:1;
@@ -286,6 +306,7 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
  !host.dataset.sceneSearchLayout&&!host.dataset.sceneMode&&!host.dataset.scenePlacement,
  {dataset:{...host.dataset}});
  if(portal){
+   host.style.cssText=originalHostStyle;
    originalParent.insertBefore(host,originalNext);
    dialog.remove();
  }

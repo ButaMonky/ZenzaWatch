@@ -10,6 +10,7 @@ import {SceneCommentSearch} from './SceneCommentSearch';
 import {SceneCommentSearchPanel} from './SceneCommentSearchPanel';
 import {SceneSearchShortcutRouter} from './SceneSearchShortcutRouter';
 import {UiVisibilityRegistry} from '../../../../src/UiVisibilityRegistry';
+import {StoryboardWorker} from '../storyboard/StoryboardWorker';
 //===BEGIN===
 //@require SceneSearchLegacyAdapter
 //@require SceneSearchIntegrationBridge
@@ -22,6 +23,7 @@ import {UiVisibilityRegistry} from '../../../../src/UiVisibilityRegistry';
 //@require SceneCommentSearchPanel
 //@require SceneSearchShortcutRouter
 //@require UiVisibilityRegistry
+//@require StoryboardWorker
 class SceneSearchPlayerBinding {
   constructor({view,dialog,document,container,events,isFullscreen,onError,
     Adapter,Bridge,classes,createRegistry}={}) {
@@ -70,7 +72,24 @@ class SceneSearchPlayerBinding {
         dialog:this.dialog,document:this.document,container:this.container,
         onError:()=>this.onError('SCENE_ADAPTER_FAILED')});
       this.adapter=adapter;
-      adapter.start(this.isFullscreen()?'fullscreen':'normal');
+      const bridge=adapter.start(this.isFullscreen()?'fullscreen':'normal');
+      // UI07 shares the existing StoryboardWorker/image cache, but owns only
+      // two lazily-created adjacent canvases while its layout is selected.
+      // Avoid the separate LegacyAdapter owner (Task532).
+      if(bridge?.layoutSettings && this.view.videoControlBar?.storyboard){
+        const bar=this.view.videoControlBar;
+        bridge.layoutSettings.getStoryboardModel=()=>{
+          const board=bar.storyboard;
+          const videoId=bar.player?.watchId;
+          return videoId && board?._watchId===videoId &&
+            board.model?.isAvailable ? board.model:null;
+        };
+        bridge.layoutSettings.createFilmstripThumbnail=options=>
+          StoryboardWorker.createThumbnail(options);
+        if(bridge.state?.layoutId==='07'){
+          bridge.controller?.onPreferencesChanged?.('sceneSearch.idleHideSeconds');
+        }
+      }
     }catch(_){this._stop();this.onError('SCENE_START_FAILED');}
   }
   _stop(){

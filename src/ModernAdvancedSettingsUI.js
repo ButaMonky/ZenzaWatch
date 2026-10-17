@@ -230,6 +230,8 @@ class ModernAdvancedSettingsUI {
       '.zw-scui-mini > i { position:absolute; display:block; background:#0c1725; border:1px solid #8ab8de; border-radius:3px; width:38%; height:22px; bottom:8px; left:30%; }',
       '.zw-scui-mini > b { position:absolute; display:block; background:#1b3560a8; border:1px solid #a4b7d0; border-radius:3px; width:29%; height:16px; bottom:9px; left:8px; }',
       '.zw-scui-mini > em { position:absolute; display:block; background:#6faee4; height:3px; bottom:3px; width:66%; left:17%; }',
+      '.zw-scui-mini[data-layout="00"] > i { width:42%; left:29%; height:26px; bottom:9px; }',
+      '.zw-scui-mini[data-layout="00"] > b { width:24%; left:37%; height:9px; bottom:24px; border-color:#ffe0ab; background:#efd9a588; }',
       '.zw-scui-mini[data-layout="02"] > i { left:6px; bottom:18px; } .zw-scui-mini[data-layout="02"] > b { left:auto; right:6px; bottom:18px; }',
       '.zw-scui-mini[data-layout="03"] > i { left:auto; right:6px; bottom:9px; }',
       '.zw-scui-mini[data-layout="04"] > i { left:31%; bottom:auto; top:5px; }',

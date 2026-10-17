@@ -20,8 +20,13 @@ class SceneSearchIntegrationBridge {
     this.document=document;
     this.container=container;
     this.seekElement=seekElement;
+    // Pointer coordinates are measured against the real seekbar, not against
+    // the video duration or the width of the whole player container.
+    this._seekClientX=null;
     this._commentPreviewElement=commentPreviewElement||null;
     this._commentPreviewOriginal=null;
+    this._commentDock=null;
+    this._commentHoverCleanup=null;
     this._legacyTooltipElement=legacyTooltipElement||null;
     this._legacyTooltipOriginal=null;
     this._getThumbnailElement=typeof getThumbnailElement==='function'?
@@ -29,7 +34,12 @@ class SceneSearchIntegrationBridge {
     this._sharedThumbnail=null;
     this.config=config;
     this.registry=registry;
-    this.layoutSettings=layoutSettings||{};
+    this.layoutSettings={...(layoutSettings||{}),
+      getSeekGeometry:()=>this._getSeekGeometry(),
+      getLegacyTooltip:()=>this._legacyTooltipElement,
+      getLegacyComment:()=>this._commentPreviewElement,
+      getMiniCommentMode:()=>this.config.getValue('sceneSearch.miniCommentMode'),
+      getSeekBarContainer:()=>this.seekElement.closest?.('.seekBarContainer')||null};
     this._clock=clock||null;
     this._classes=classes;
     this._getChats=typeof getChats==='function'?getChats:()=>[];
@@ -47,13 +57,20 @@ class SceneSearchIntegrationBridge {
     this._disposed=false;
     this._style=null;
     this._seekListeners={
-      mouseenter:e=>this.interaction.seekEnter(e),
+      mouseenter:e=>{
+        this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
+        this.interaction.seekEnter(e);
+      },
       mousemove:e=>{
+        this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
         this.interaction.seekMove(e);
         const seconds=this._getSeekTime?.(e);
         if(Number.isFinite(seconds)&&seconds>=0){this.controller.setTime(seconds);}
       },
-      mouseleave:e=>this.interaction.seekLeave(e),
+      mouseleave:e=>{
+        this.interaction.seekLeave(e);
+        this._seekClientX=null;
+      },
       pointerdown:e=>this._startPointer(e)
     };
     this.controller=new classes.Controller({
@@ -95,6 +112,28 @@ class SceneSearchIntegrationBridge {
       onError:(error,key)=>this._onError(error,key)
     });
   }
+  _getSeekGeometry() {
+    const seek=this.seekElement.getBoundingClientRect?.();
+    const frame=this.container.getBoundingClientRect?.();
+    if(!seek||!frame||!Number.isFinite(seek.left)||
+       !Number.isFinite(seek.width)||seek.width<=0||
+       !Number.isFinite(frame.left)||!Number.isFinite(frame.width)||
+       frame.width<=0){return null;}
+    const width=this.container.offsetWidth||frame.width;
+    const scale=width/frame.width;
+    const viewportWidth=this.document.defaultView?.innerWidth;
+    const visibleLeft=Number.isFinite(viewportWidth)?
+      Math.max(0,-frame.left*scale):0;
+    const visibleRight=Number.isFinite(viewportWidth)?
+      Math.min(width,(viewportWidth-frame.left)*scale):width;
+    return {
+      seekLeft:(seek.left-frame.left)*scale,
+      seekWidth:seek.width*scale,
+      pointerX:Number.isFinite(this._seekClientX)?
+        (this._seekClientX-frame.left)*scale:null,
+      visibleLeft,visibleRight
+    };
+  }
   _startPointer(e) {
     if(this._disposed){return;}
     const id=e?.pointerId??'main';
@@ -126,7 +165,21 @@ class SceneSearchIntegrationBridge {
     return {
       get root(){return card.root;},
       mount:state=>{
+        if(id==='00'){
+          this._restoreSharedThumbnail();
+          this._restoreCommentPreviewDock();
+          this._restoreLegacyTooltip();
+        }
         card.mount(state);
+        if(id==='00'){
+          this._active=card;
+          return;
+        }
+        this._hideLegacyTooltip();
+        if(id!=='01'&&id!=='02'){
+          this.container.dataset.sceneSearchLayout=id;
+          this.container.dataset.sceneMode=mode;
+        }
         this._active=card;
         try{this._mountCardControls(card);}catch(error){
           this._releaseCard(card);card.dispose();throw error;
@@ -134,6 +187,32 @@ class SceneSearchIntegrationBridge {
       },
       render:state=>{
         card.render(state);
+        if(id==='00')return; // Original tooltip/comment renderer owns UI00.
+        this._syncCommentPreviewDock(card,state);
+        if(id==='02'){
+          const player=this.container.getBoundingClientRect?.();
+          const windowHeight=this.document.defaultView?.innerHeight;
+          const width=player?.width||this.container.clientWidth||800;
+          const room=Number.isFinite(windowHeight)&&Number.isFinite(player?.bottom)?
+            windowHeight-player.bottom:0;
+          const enough=mode==='normal'&&room>=(width<580?300:180);
+          this.container.dataset.scenePlacement=enough?'below':'visible-fallback';
+          this._updateTwinCommentPlacement(enough,player);
+        }
+        if(id!=='01'&&id!=='02'){
+          const width=this.container.offsetWidth||
+            this.container.getBoundingClientRect?.().width||
+            this.container.clientWidth||800;
+          this.container.dataset.sceneNarrow=String(width<580);
+          this.container.dataset.sceneWide=String(width>=980);
+          this.container.dataset.scenePlacement=
+            card.root?.dataset.scuiPlacement||'overlay';
+          if(id==='10'){
+            const raw=Number.parseFloat(card.root?.style.getPropertyValue('--scene-x'));
+            this.container.dataset.sceneCommentSide=Number.isFinite(raw)&&
+              raw>width*.55?'left':'right';
+          }
+        }
         this._visibility?.refresh?.();
         if(card.root){
           const reveal=this.config.getValue('sceneSearch.controlsReveal');
@@ -143,6 +222,7 @@ class SceneSearchIntegrationBridge {
         }
       },
       onPreview:(asset,request)=>{
+        if(id==='00')return; // Existing seekbar still owns storyboard canvas.
         card.onPreview?.(asset,request);
         if(this._sharedThumbnail?.node && card.root?.contains(this._sharedThumbnail.node)){
           const slot=card.root.querySelector('.zenzaSceneImageBox');
@@ -155,17 +235,72 @@ class SceneSearchIntegrationBridge {
         }
       },
       dispose:()=>{
+        if(id==='00'){
+          card.dispose(); // restores the exact original seekbar/comment owners
+          if(this._active===card)this._active=null;
+          return;
+        }
+        this._restoreCommentPreviewDock();
         this._releaseCard(card);
         card.dispose();
+        if(id==='02'){
+          delete this.container.dataset.scenePlacement;
+          this.container.style.removeProperty('--scui-twin-comment-top');
+        }
+        if(id!=='01'&&id!=='02'&&
+          this.container.dataset.sceneSearchLayout===id){
+          delete this.container.dataset.sceneSearchLayout;
+          delete this.container.dataset.sceneMode;
+          delete this.container.dataset.sceneNarrow;
+          delete this.container.dataset.sceneWide;
+          delete this.container.dataset.scenePlacement;
+          delete this.container.dataset.sceneCommentSide;
+        }
       }
     };
   }
-  _onCardAction(action) {
+  _updateTwinCommentPlacement(below,player){
+    if(!below||!player){
+      this.container.style.removeProperty('--scui-twin-comment-top');
+      return;
+    }
+    const comment=this._commentPreviewElement;
+    const owner=comment?.offsetParent||comment?.parentElement;
+    const origin=owner?.getBoundingClientRect?.();
+    if(!origin||!Number.isFinite(origin.top)||!Number.isFinite(player.bottom)){
+      return;
+    }
+    const scale=origin.width&&owner.offsetWidth?
+      owner.offsetWidth/origin.width:1;
+    const width=this.container.offsetWidth||player.width;
+    const stack=width<580;
+    const top=(player.bottom-origin.top)*scale+(stack?157:15);
+    if(Number.isFinite(top)){
+      this.container.style.setProperty('--scui-twin-comment-top',
+        Math.round(Math.max(0,top))+'px');
+    }
+  }
+  _onCardAction(action,context) {
+    if(action==='comment-toggle'){
+      // Legacy tooltip button selects flowing/list mode, NOT global visibility.
+      this.config.setValue('enableCommentPreview',
+        this.config.getValue('enableCommentPreview')!==true);
+      this.controller.onPreferencesChanged('enableCommentPreview');
+      return;
+    }
+    if(action==='frame-seek'){
+      const seconds=context?.time;
+      if(!Number.isFinite(seconds)||seconds<0){return;}
+      const duration=typeof this.layoutSettings.getDuration==='function'?
+        this.layoutSettings.getDuration():this.layoutSettings.duration;
+      this._onSeekAbsolute(Number.isFinite(duration)&&duration>0?
+        Math.min(seconds,duration):seconds);
+      return;
+    }
     const commands={
       'seek-back':'sceneSearch-seekBack',
       'seek-forward':'sceneSearch-seekForward',
       pin:'sceneSearch-togglePin',
-      'comment-toggle':'sceneSearch-toggleCommentPreview',
       'comment-search':'sceneSearch-toggleCommentSearch'
     };
     if(action==='seek-step'){
@@ -188,6 +323,13 @@ class SceneSearchIntegrationBridge {
     }
     const actionList=root.querySelector('.zenzaSceneActions');
     if(!actionList){throw new Error('Scene controls missing');}
+    if(root.dataset.layout==='02'){
+      // Keep the expander accessible when the twin-panel action tray is
+      // collapsed below the preview card. Do not edit Task532's provider.
+      const foot=root.querySelector('.zenzaSceneFoot');
+      const more=actionList.querySelector('.scene-more');
+      if(foot&&more)foot.insertBefore(more,actionList);
+    }
     actionList.classList.add('zenzaSceneSeekStepControl');
     for(const [action,tag] of [
       ['seek-back','back'],['seek-forward','forward'],['seek-step','open']
@@ -257,6 +399,17 @@ class SceneSearchIntegrationBridge {
     this._active=null;
   }
   refreshSharedThumbnail() {
+    if(this.controller.snapshot.layoutId==='00'){
+      // The legacy StoryboardWorker can create its 160x90 canvas after mount.
+      // Retry attachment of the original flowing-comment DOM at that moment.
+      this._active?.render?.(this.controller.snapshot);
+      return false;
+    }
+    // The same storyboard update must refresh UI07 side frames even when
+    // the shared central canvas itself is already mounted.
+    if(!this._disposed&&this.controller.snapshot.layoutId==='07'){
+      this.controller.onPreferencesChanged('sceneSearch.idleHideSeconds');
+    }
     if(this._disposed||!this._active?.root||!this._getThumbnailElement){
       return false;
     }
@@ -324,6 +477,53 @@ class SceneSearchIntegrationBridge {
     }
     this._legacyTooltipOriginal=null;
   }
+  _syncCommentPreviewDock(card,state) {
+    const node=this._commentPreviewElement,root=card?.root;
+    if(!node||!root)return;
+    if(!this._commentDock){
+      this._commentDock={parent:node.parentNode,next:node.nextSibling};
+      const enter=()=>this.interaction.previewEnter();
+      const leave=()=>this.interaction.previewLeave();
+      const focus=()=>this.interaction.previewFocus(true);
+      const blur=e=>{
+        if(!node.contains(e.relatedTarget))this.interaction.previewFocus(false);
+      };
+      const listeners=[['mouseenter',enter],['mouseleave',leave],
+        ['focusin',focus],['focusout',blur]];
+      for(const [name,handler] of listeners)node.addEventListener(name,handler);
+      this._commentHoverCleanup=()=>{
+        for(const [name,handler] of listeners)node.removeEventListener(name,handler);
+      };
+    }
+    const list=this.config.getValue('enableCommentPreview')===true;
+    const target=list?this.container:root.querySelector('.zenzaSceneImageBox');
+    if(target&&node.parentNode!==target)target.appendChild(node);
+    node.classList.add('zenzaSceneCommentAttached');
+    node.classList.toggle('is-scui-list',list);
+    node.classList.toggle('is-scui-flow',!list);
+    const active=(state?.shown!==false||state?.pinned===true)&&
+      this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
+      !root.classList.contains('is-idle-suppressed');
+    node.classList.toggle('is-scui-active',active);
+    if(list){
+      const x=Number.parseFloat(root.style.getPropertyValue('--scene-x'));
+      if(Number.isFinite(x))this.container.style.setProperty('--scui-list-x',x+'px');
+    }
+  }
+  _restoreCommentPreviewDock(){
+    const old=this._commentDock,node=this._commentPreviewElement;
+    if(!old||!node)return;
+    this._commentHoverCleanup?.();
+    this._commentHoverCleanup=null;
+    node.classList.remove('zenzaSceneCommentAttached','is-scui-flow',
+      'is-scui-list','is-scui-active');
+    if(old.parent){
+      if(old.next?.parentNode===old.parent)old.parent.insertBefore(node,old.next);
+      else old.parent.appendChild(node);
+    }
+    this.container.style.removeProperty('--scui-list-x');
+    this._commentDock=null;
+  }
   _syncCommentPreviewVisibility() {
     const node=this._commentPreviewElement;
     if(!node?.style){return;}
@@ -352,6 +552,107 @@ class SceneSearchIntegrationBridge {
     node.hidden=old.hidden;
     this._commentPreviewOriginal=null;
   }
+  static validSavedPreference(key,value) {
+    if(key==='sceneSearch.layout.normal'||key==='sceneSearch.layout.fullscreen'){
+      return typeof value==='string'&&/^(00|0[1-9]|10)$/.test(value);
+    }
+    if(key==='sceneSearch.miniCommentMode'){
+      return ['flow','static','hidden'].includes(value);
+    }
+    if(key==='enableCommentPreview'||key==='sceneSearch.layout.linkFullscreen'||
+      key==='sceneSearch.commentPreviewVisible'){
+      return typeof value==='boolean';
+    }
+    if(key==='sceneSearch.seekStepSeconds'){
+      return Number.isSafeInteger(value)&&value>=0&&value<=600;
+    }
+    if(key==='sceneSearch.idleHideSeconds'){
+      return typeof value==='number'&&Number.isFinite(value)&&value>=0&&
+        value<=30&&Number.isInteger(value*2);
+    }
+    if(key==='sceneSearch.controlsReveal')return ['hover-focus','click','always'].includes(value);
+    if(key==='sceneSearch.animation')return ['off','subtle','full'].includes(value);
+    return false;
+  }
+  _refreshSavedPreferenceViews(keys) {
+    if(this._disposed||!keys.length){return;}
+    const layoutKey=keys.find(key=>key.startsWith('sceneSearch.layout.'));
+    this.controller.onPreferencesChanged(layoutKey||keys[0]);
+    if(keys.includes('sceneSearch.commentPreviewVisible'))this._syncCommentPreviewVisibility();
+    if(keys.includes('sceneSearch.idleHideSeconds'))this.interaction.idlePreferencesChanged();
+    if(keys.includes('sceneSearch.seekStepSeconds'))this._stepWidget?.updateFromConfig();
+  }
+  _connectSavedPreferences(keys) {
+    const win=this.document.defaultView,config=this.config;
+    if(!win?.addEventListener||!config.storage||
+      typeof config.getStorageKey!=='function'||typeof config.refresh!=='function')return;
+    const allowed=new Set(keys);
+    const storageKeys=new Map(keys.map(key=>[config.getStorageKey(key),key]));
+    let queue=Promise.resolve();
+    const sync=async requested=>{
+      if(this._disposed)return;
+      const changes=[],saved={},before={}; // DataStorage.refresh requires hasOwnProperty.
+      // Read and validate the ENTIRE batch before mutating in-memory Config.
+      // Event detail contains keys only, never trusted values or executable data.
+      for(const key of requested){
+        const sk=config.getStorageKey(key),raw=config.storage[sk];
+        const value=raw===undefined||raw===null?config.default?.[key]:JSON.parse(raw);
+        if(!SceneSearchIntegrationBridge.validSavedPreference(key,value)||
+          (config.options?.validateImport&&!config.options.validateImport(key,value))){
+          throw new TypeError('Invalid saved scene preference: '+key);
+        }
+        if(Object.is(value,config.getValue(key)))continue;
+        saved[sk]=JSON.stringify(value);before[sk]=JSON.stringify(config.getValue(key));
+        changes.push([key,value]);
+      }
+      if(this._disposed||!changes.length)return;
+      const loaded=[];
+      try{
+        for(const [key] of changes){
+          if(this._disposed)return;
+          loaded.push(key);
+          await config.refresh(key,saved); // read-only, no setValue/localStorage echo
+        }
+      }catch(error){
+        // A failing custom storage adapter must not leave a half-applied batch.
+        for(const key of loaded){
+          try{await config.refresh(key,before);}catch(_){}
+        }
+        throw error;
+      }
+      if(this._disposed)return;
+      this._externalSettingsBatch=true;
+      try{
+        config.emit?.('change',new Map(changes));
+        for(const [key,value] of changes){
+          config.emit?.('update',key,value);
+          config.emit?.('update-'+key,value);
+        }
+      }finally{this._externalSettingsBatch=false;}
+      this._refreshSavedPreferenceViews(changes.map(([key])=>key));
+    };
+    const enqueue=requested=>{
+      if(this._disposed||!Array.isArray(requested))return;
+      const selected=[...new Set(requested.filter(key=>allowed.has(key)))];
+      if(!selected.length)return;
+      // Serialized fresh reads prevent an older async save overtaking a newer one.
+      queue=queue.then(()=>sync(selected)).catch(error=>{
+        if(!this._disposed)this._onError(error,'saved-scene-settings');
+      });
+    };
+    const onSaved=event=>enqueue(event.detail?.keys);
+    const onStorage=event=>{
+      if(event.storageArea&&event.storageArea!==config.storage)return;
+      if(event.key===null){enqueue(keys);return;}
+      const key=storageKeys.get(event.key);if(key)enqueue([key]);
+    };
+    win.addEventListener('ZenzaWatch-advanced-settings-saved',onSaved);
+    win.addEventListener('storage',onStorage);
+    this._savedPreferencesCleanup=()=>{
+      win.removeEventListener('ZenzaWatch-advanced-settings-saved',onSaved);
+      win.removeEventListener('storage',onStorage);
+    };
+  }
   start(mode='normal') {
     if(this._disposed){throw new Error('Integration bridge disposed');}
     if(this._running){return this.controller.snapshot;}
@@ -362,18 +663,18 @@ class SceneSearchIntegrationBridge {
     this.document.head.appendChild(style);
     this._style=style;
     try{
-      this._hideLegacyTooltip();
       this.controller.start(mode);
       for(const [event,handler] of Object.entries(this._seekListeners)){
         this.seekElement.addEventListener(event,handler);
       }
       const keys=['sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
         'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
-        'sceneSearch.commentPreviewVisible','sceneSearch.idleHideSeconds',
-        'sceneSearch.controlsReveal','sceneSearch.animation'];
+        'sceneSearch.commentPreviewVisible','sceneSearch.miniCommentMode','sceneSearch.idleHideSeconds',
+        'sceneSearch.controlsReveal','sceneSearch.animation','enableCommentPreview'];
       if(typeof this.config.onkey==='function'){
         for(const key of keys){
           const callback=()=>{
+            if(this._disposed||this._externalSettingsBatch)return;
             this.controller.onPreferencesChanged(key);
             if(key==='sceneSearch.commentPreviewVisible'){
               this._syncCommentPreviewVisibility();
@@ -385,6 +686,7 @@ class SceneSearchIntegrationBridge {
           this._subscriptions.push([key,callback]);
         }
       }
+      this._connectSavedPreferences(keys);
       this._syncCommentPreviewVisibility();
     }catch(error){
       this.dispose();
@@ -417,6 +719,9 @@ class SceneSearchIntegrationBridge {
     if(this._disposed){return;}
     this._clearPointers();
     this._disposed=true;
+    this._restoreCommentPreviewDock();
+    this._savedPreferencesCleanup?.();
+    this._savedPreferencesCleanup=null;
     this._restoreSharedThumbnail();
     this._restoreLegacyTooltip();
     this._restoreCommentPreviewVisibility();
@@ -440,13 +745,45 @@ class SceneSearchIntegrationBridge {
   }
   static get CSS(){
     return `
+/* Old seekbar-only hover rules hide previews when the pointer enters a new
+   card. Reuse the actual CommentPreviewView node without cloning its data. */
+.zenzaSceneSearchHost .zenzaSceneImageBox{position:relative}
+.zenzaCommentPreview.zenzaSceneCommentAttached{display:none!important}
+.zenzaCommentPreview.zenzaSceneCommentAttached.is-scui-active{display:block!important}
+.zenzaSceneSearchHost .zenzaSceneImageBox >.zenzaCommentPreview.is-scui-flow{
+  position:absolute!important;inset:0!important;
+  left:0!important;right:0!important;top:0!important;bottom:0!important;
+  width:100%!important;height:100%!important;max-height:none!important;
+  margin:0!important;transform:none!important;overflow:hidden!important;
+  z-index:2;background:transparent!important;border:0!important;
+  pointer-events:none!important
+}
+.zenzaSceneSearchHost .zenzaSceneImageBox >.zenzaCommentPreview.is-scui-flow .listContainer{
+  width:100%;height:100%;pointer-events:none!important
+}
+.zenzaCommentPreview.zenzaSceneCommentAttached.is-scui-list{
+  position:absolute;z-index:250;max-height:200px;
+  pointer-events:auto!important;overflow:auto;transform:none!important
+}
+[data-scene-search-layout="01"] >.zenzaCommentPreview.is-scui-list{
+  left:clamp(8px,calc(var(--scui-list-x,50%) - 175px),
+    calc(100% - 355px))!important;
+  right:auto!important;top:auto!important;bottom:96px!important;
+  width:min(350px,calc(100% - 16px))!important
+}
+
 /* The original seekbar remains the sole seek click owner. */
 .zenzaSceneSearchHost[data-scene-animation="off"],
 .zenzaSceneSearchHost[data-scene-animation="off"] *{transition:none!important;animation:none!important}
 .zenzaSceneSearchHost[data-scene-animation="full"] .zenzaSceneBtn{transition-duration:.22s}
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneActions,
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneBtn{
- opacity:1!important;visibility:visible!important;pointer-events:auto!important;transform:none!important
+ opacity:1!important;visibility:visible!important;pointer-events:auto!important
+}
+/* Keep the layout tray's translateX(-50%) and side-drawer transforms.
+   Resetting ALL transforms clipped the 04/06 actions at the viewport edge. */
+.zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneBtn{
+ transform:none!important
 }
 .zenzaSceneSearchHost[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step),
 .zenzaSceneEdgeDrawer[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) .zenzaSceneActions{
@@ -469,6 +806,162 @@ class SceneSearchIntegrationBridge {
 .zenzaSceneSearchHost .zenzaSceneStepPresets{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
 .zenzaSceneSearchHost .zenzaSceneStepPopup button{cursor:pointer}
 .zenzaSceneSearchHost.is-idle-suppressed{display:none!important}
+/* Task544: restore the original UI02 twin-panel design without touching
+   the separately reserved Layout01_02/LegacyAdapter owner (Task532).
+   Normal = two separate panels outside video, full = inside both edges. */
+[data-scene-search-layout="02"] .zenzaSceneSearchHost.zenzaSceneLayout02{
+  width:min(245px,calc(100% - 24px))!important;
+}
+[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaSceneLayout02{
+  left:23%!important;right:auto!important;top:calc(100% + 15px)!important;
+  bottom:auto!important;transform:translateX(-50%)!important;
+}
+[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="visible-fallback"] .zenzaSceneLayout02{
+  left:12px!important;right:auto!important;top:auto!important;
+  bottom:94px!important;transform:none!important;
+}
+[data-scene-search-layout="02"][data-scene-mode="fullscreen"] .zenzaSceneLayout02{
+  left:17px!important;right:auto!important;top:auto!important;
+  bottom:94px!important;transform:none!important;
+}
+/* The per-layout action row opens below the scene card, not off its right
+   edge. The visible 'more' handle stays inside .zenzaSceneFoot. */
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .zenzaSceneActions{
+  position:absolute!important;left:8px!important;right:auto!important;
+  top:calc(100% - 1px)!important;bottom:auto!important;
+  width:max-content;max-width:calc(100% - 16px);
+  min-width:0;display:flex;flex-flow:row wrap;justify-content:center;
+  padding:5px;gap:4px;border-radius:9px;border:1px solid #536e88;
+  background:#101c2c;box-shadow:0 8px 20px #0008;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:translateY(-8px);
+  transition:opacity .16s,transform .16s,visibility .16s;
+}
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .zenzaSceneActions>.zenzaSceneBtn{
+  position:static!important;left:auto!important;right:auto!important;
+  top:auto!important;bottom:auto!important;min-width:25px;
+  opacity:1;visibility:inherit;pointer-events:inherit;
+  transform:none!important;
+}
+[data-scene-search-layout="02"] .zenzaSceneLayout02:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions{
+  opacity:1;visibility:visible;pointer-events:auto;
+  transform:translateY(0);
+}
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .scene-more{
+  position:static!important;opacity:1;visibility:visible;pointer-events:auto;
+}
+/* Preserve the real comment owner's hover/list/scroll and click behavior. */
+[data-scene-search-layout="02"] .zenzaCommentPreview{
+  left:auto!important;right:14px!important;top:auto!important;
+  bottom:94px!important;max-width:calc(100% - 24px);
+  transform:none!important;
+}
+[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  left:auto!important;right:15%!important;
+  top:var(--scui-twin-comment-top,calc(100% + 15px))!important;
+  bottom:auto!important;max-width:min(256px,calc(50% - 20px));
+}
+[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaSceneLayout02{
+  left:50%!important;transform:translateX(-50%)!important;
+}
+[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  left:12px!important;right:12px!important;max-width:calc(100% - 24px);
+}
+[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-placement="visible-fallback"] .zenzaCommentPreview,
+[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;bottom:234px!important;
+}
+/* Task542: real comment list stays in the legacy seekbar owner; only
+   selected layout's coordinates change. Keep its hover/list modes,
+   click actions, scroll, visibility and other event owners untouched. */
+[data-scene-search-layout="03"] .zenzaCommentPreview,
+[data-scene-search-layout="04"] .zenzaCommentPreview,
+[data-scene-search-layout="05"] .zenzaCommentPreview,
+[data-scene-search-layout="06"] .zenzaCommentPreview,
+[data-scene-search-layout="07"] .zenzaCommentPreview,
+[data-scene-search-layout="08"] .zenzaCommentPreview,
+[data-scene-search-layout="09"] .zenzaCommentPreview,
+[data-scene-search-layout="10"] .zenzaCommentPreview{
+  box-sizing:border-box;max-width:calc(100% - 24px);
+  transform:none!important;
+}
+/* 03 right shelf / 04 top edge: comments on the opposite edge. */
+[data-scene-search-layout="03"][data-scene-mode="normal"] .zenzaCommentPreview{
+  left:18px!important;right:auto!important;top:auto!important;bottom:90px!important;
+}
+[data-scene-search-layout="03"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
+  left:auto!important;right:20px!important;top:auto!important;bottom:95px!important;
+}
+[data-scene-search-layout="04"][data-scene-mode="normal"] .zenzaCommentPreview{
+  left:15px!important;right:auto!important;top:auto!important;bottom:87px!important;
+}
+[data-scene-search-layout="04"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
+  left:auto!important;right:19px!important;top:auto!important;bottom:90px!important;
+}
+/* 05 deck: beside the below-video controls only while there is room.
+   In Zenza's viewport-filling modes, keep comments inside the player. */
+[data-scene-search-layout="05"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;top:auto!important;bottom:90px!important;
+}
+[data-scene-search-layout="05"][data-scene-mode="normal"][data-scene-placement="below"][data-scene-wide="true"] .zenzaCommentPreview{
+  left:calc(50% + 280px)!important;right:auto!important;
+  top:calc(100% + 9px)!important;bottom:auto!important;
+  max-width:calc(50% - 20px);
+}
+/* 06 capsule: a separate right-hand comment list (seek card follows cursor). */
+[data-scene-search-layout="06"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;top:auto!important;bottom:91px!important;
+}
+/* 07 original filmstrip: list below video, opposite the left filmstrip.
+   Fullscreen or clipped below-video layout uses the right lower overlay. */
+[data-scene-search-layout="07"] .zenzaCommentPreview{
+  left:auto!important;right:13px!important;top:auto!important;bottom:94px!important;
+}
+[data-scene-search-layout="07"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  left:auto!important;right:5px!important;top:calc(100% + 10px)!important;bottom:auto!important;
+}
+/* 08 drawer changes sides between normal and fullscreen. */
+[data-scene-search-layout="08"][data-scene-mode="normal"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;top:auto!important;bottom:87px!important;
+}
+[data-scene-search-layout="08"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
+  left:12px!important;right:auto!important;top:auto!important;bottom:91px!important;
+}
+/* 09 remote: separated right-side controller with comments beneath it. */
+[data-scene-search-layout="09"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;top:auto!important;bottom:153px!important;
+}
+[data-scene-search-layout="09"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;top:calc(100% + 74px)!important;bottom:auto!important;
+}
+/* 10 smart placement: put comments on the opposite side of the chosen card. */
+[data-scene-search-layout="10"] .zenzaCommentPreview{
+  left:auto!important;right:12px!important;top:auto!important;bottom:91px!important;
+}
+[data-scene-search-layout="10"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
+  bottom:96px!important;
+}
+[data-scene-search-layout="10"][data-scene-comment-side="left"] .zenzaCommentPreview{
+  left:12px!important;right:auto!important;
+}
+/* Narrow viewports: preserve the existing 350/180px comment modes while
+   preventing off-screen panels. Avoid covering a below-video filmstrip. */
+[data-scene-narrow="true"][data-scene-search-layout="05"] .zenzaCommentPreview,
+[data-scene-narrow="true"][data-scene-search-layout="07"] .zenzaCommentPreview,
+[data-scene-narrow="true"][data-scene-search-layout="09"] .zenzaCommentPreview{
+  left:12px!important;right:12px!important;
+  max-width:calc(100% - 24px);
+  transform:none!important;
+}
+[data-scene-narrow="true"][data-scene-search-layout="05"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  top:calc(100% + 111px)!important;bottom:auto!important;
+}
+[data-scene-narrow="true"][data-scene-search-layout="07"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  top:calc(100% + 157px)!important;bottom:auto!important;
+}
+[data-scene-narrow="true"][data-scene-search-layout="09"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
+  top:calc(100% + 112px)!important;bottom:auto!important;
+}
 `;
   }
 }

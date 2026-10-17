@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.59-scui489
+// @version     0.3.60-scui00
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-15 08:22Z 0797487
+// build: 2026-10-17 03:31Z c46975b
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -1146,7 +1146,7 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'toggle-enableFullScreenOnDoubleClick'},
 	{id: 'TOGGLE_REMOVE_NG_MATCHED_USER', category: 'フィルタ/NG', label: 'NGマッチしたユーザーのコメントを全部消す ON/OFF',
 		defaultKey: 0, command: 'toggle-removeNgMatchedUser'},
-	{id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'コメント欄プレビュー ON/OFF',
+	{id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'シーンサーチ: 流れるコメント／一覧を切替',
 		defaultKey: 0, command: 'toggle-enableCommentPreview'},
 	{id: 'SCENE_PIN', category: '画面', label: 'シーンサーチ: プレビューの固定/解除',
 		defaultKey: 0, command: 'sceneSearch-togglePin'},
@@ -1166,7 +1166,7 @@ const SHORTCUT_ACTIONS = [
 		defaultKey: 0, command: 'sceneSearch-stepUp'},
 	{id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
 		defaultKey: 0, command: 'sceneSearch-stepDown'},
-	{id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメントプレビュー表示/非表示',
+	{id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメント全体の表示/非表示（流れる表示・一覧共通）',
 		defaultKey: 0, command: 'sceneSearch-toggleCommentPreview'},
 	{id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
 		defaultKey: 0, command: 'sceneSearch-toggleCommentSearch'},
@@ -3873,7 +3873,8 @@ const Config = (() => {
 		'sceneSearch.idleHideSeconds': 2,
 		'sceneSearch.controlsReveal': 'hover-focus',
 		'sceneSearch.animation': 'subtle',
-		'sceneSearch.commentPreviewVisible': true
+		'sceneSearch.commentPreviewVisible': true,
+		'sceneSearch.miniCommentMode': 'flow'
 	});
 	Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
 	for (let i = 1; i <= 10; i++) {
@@ -3891,11 +3892,14 @@ const Config = (() => {
 			validateImport: (key, value) => {
 				if (key === 'sceneSearch.layout.normal' ||
 						key === 'sceneSearch.layout.fullscreen') {
-					return typeof value === 'string' && /^(0[1-9]|10)$/.test(value);
+					return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
 				}
 				if (key === 'sceneSearch.layout.linkFullscreen' ||
 						key === 'sceneSearch.commentPreviewVisible') {
 					return typeof value === 'boolean';
+				}
+				if (key === 'sceneSearch.miniCommentMode') {
+					return ['flow','static','hidden'].includes(value);
 				}
 				if (key === 'sceneSearch.seekStepSeconds') {
 					return Number.isSafeInteger(value) && value >= 0 && value <= 600;
@@ -6762,6 +6766,7 @@ class ModernAdvancedSettingsModel {
 			...group('画面・映像','シーンサーチ',[
 				['sceneSearch.layout.normal','通常表示のシーンサーチUI',{
 					...select([
+						['00','00 旧式表示（検証中）'],
 						['01','01 クラシック追従'],['02','02 左右ツインパネル'],
 						['03','03 サイドシェルフ'],['04','04 トップエッジ'],
 						['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
@@ -6772,6 +6777,7 @@ class ModernAdvancedSettingsModel {
 					description:'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'}],
 				['sceneSearch.layout.fullscreen','フルスクリーン時のシーンサーチUI',{
 					...select([
+						['00','00 旧式表示（検証中）'],
 						['01','01 クラシック追従'],['02','02 左右ツインパネル'],
 						['03','03 サイドシェルフ'],['04','04 トップエッジ'],
 						['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
@@ -6780,8 +6786,17 @@ class ModernAdvancedSettingsModel {
 					]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
 				['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
 					type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
-				['sceneSearch.commentPreviewVisible','コメントプレビューを表示',{
-					description:'表示そのもののON/OFFです。「コメント一覧」内の既存のホバー／一覧モード設定とは独立しています。'}],
+				['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示（流れる表示・一覧共通）',{
+					description:'ONはサムネイルの流れるミニコメントと一覧を表示、OFFは両方を非表示にします。右側の動画コメント欄とは別です。'}],
+				['sceneSearch.miniCommentMode','画像上のミニコメントの表示方式',{
+					...select([
+						['flow','流れる（旧版と同じ）'],
+						['static','静止表示（最大5行）'],
+						['hidden','ミニコメントを表示しない']
+					]),
+					description:'UI00の画像プレビュー中だけ変更します。コメントボタンで開く一覧は対象外です。共通のシーンサーチコメント表示がOFFなら、どの方式でも見えません。保存後すぐ反映します。'}],
+				['enableCommentPreview','シーンサーチのコメントを一覧表示にする',{
+					description:'OFF＝画像と流れるミニコメント、ON＝スクロール可能な一覧。元のコメント切替ボタンでも変更できます。共通コメント表示OFFの間は両方非表示です。'}],
 				['sceneSearch.controlsReveal','追加ボタンの開き方',{
 					...select([
 						['hover-focus','マウスを乗せるかフォーカスで開く'],
@@ -6818,9 +6833,7 @@ class ModernAdvancedSettingsModel {
 			]),
 			...group('コメント表示','コメント一覧',[
 				['enableCommentPanel','コメント一覧を表示'],
-				['enableCommentPanelAutoScroll','コメント一覧を自動スクロール'],
-				['enableCommentPreview','コメントプレビューを一覧モードに切り替える',{
-					description:'OFFはホバー時に流れるコメント表示、ONはスクロールできるコメント一覧です。完全に非表示にする場合は「画面・映像 > シーンサーチ」の表示設定を使います。'}]
+				['enableCommentPanelAutoScroll','コメント一覧を自動スクロール']
 			]),
 			...group('コメント表示','文字・装飾',[
 				['commentLanguage','コメントの言語',select([
@@ -7562,6 +7575,8 @@ class ModernAdvancedSettingsUI {
 			'.zw-scui-mini > i { position:absolute; display:block; background:#0c1725; border:1px solid #8ab8de; border-radius:3px; width:38%; height:22px; bottom:8px; left:30%; }',
 			'.zw-scui-mini > b { position:absolute; display:block; background:#1b3560a8; border:1px solid #a4b7d0; border-radius:3px; width:29%; height:16px; bottom:9px; left:8px; }',
 			'.zw-scui-mini > em { position:absolute; display:block; background:#6faee4; height:3px; bottom:3px; width:66%; left:17%; }',
+			'.zw-scui-mini[data-layout="00"] > i { width:42%; left:29%; height:26px; bottom:9px; }',
+			'.zw-scui-mini[data-layout="00"] > b { width:24%; left:37%; height:9px; bottom:24px; border-color:#ffe0ab; background:#efd9a588; }',
 			'.zw-scui-mini[data-layout="02"] > i { left:6px; bottom:18px; } .zw-scui-mini[data-layout="02"] > b { left:auto; right:6px; bottom:18px; }',
 			'.zw-scui-mini[data-layout="03"] > i { left:auto; right:6px; bottom:9px; }',
 			'.zw-scui-mini[data-layout="04"] > i { left:31%; bottom:auto; top:5px; }',

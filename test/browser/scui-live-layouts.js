@@ -23,7 +23,8 @@ function measure(id,mode,pct){
  }
  const b=new SceneSearchPlayerBinding({Adapter:TraceAdapter,view:{videoControlBar:bar},dialog:player,document,
  container:host,events:events(),isFullscreen:()=>mode==='fullscreen',onError:code=>failures.push({code})});
- vals['sceneSearch.layout.normal']=id;vals['sceneSearch.layout.fullscreen']=id;b.attach();
+ vals['sceneSearch.layout.normal']=id;vals['sceneSearch.layout.fullscreen']=id;
+ vals.enableCommentPreview=false;b.attach();
  const seek=bar._seekBar,r=seek.getBoundingClientRect(),x=r.left+r.width*pct;
  seek.dispatchEvent(new MouseEvent('mouseenter',{clientX:x,bubbles:true}));
  seek.dispatchEvent(new MouseEvent('mousemove',{clientX:x,bubbles:true}));
@@ -42,12 +43,73 @@ function measure(id,mode,pct){
     {rect:z.toJSON(),width:innerWidth,height:innerHeight});
   }
   record(label+'/shared-canvas',root.contains(document.getElementById('thumb')),{});
+  const commentView=document.getElementById('comments');
+  record(label+'/flow-overlay',
+    root.querySelector('.zenzaSceneImageBox')?.contains(commentView)===true&&
+    commentView.classList.contains('is-scui-active'),{});
+  config.setValue('enableCommentPreview',true);
+  record(label+'/list-owner',
+    commentView.parentNode===host&&
+    commentView.classList.contains('is-scui-list')&&
+    getComputedStyle(commentView).display!=='none',{});
+  if(id==='02'){
+    const player=host.getBoundingClientRect();
+    const comment=document.getElementById('comments').getBoundingClientRect();
+    const below=host.dataset.scenePlacement==='below';
+    const isNarrow=host.dataset.sceneNarrow==='true';
+    const placed=mode==='normal'?
+      below?(rect.top>=player.bottom+9):
+        rect.bottom<=player.bottom-65:
+      rect.left<=player.left+30&&rect.bottom<=player.bottom-65;
+    record(label+'/twin-original-placement',placed,{
+      mode,below,rect:rect.toJSON(),player:player.toJSON()
+    });
+    if(mode==='normal'&&below){
+      const separated=isNarrow?comment.top>=rect.bottom+3:
+        comment.left>=rect.right-4&&Math.abs(comment.top-rect.top)<=14;
+      record(label+'/twin-separated-comments',separated,{
+        isNarrow,scene:rect.toJSON(),comment:comment.toJSON()
+      });
+    }
+    const handle=root.querySelector('.scene-more');
+    record(label+'/twin-exposed-expander',
+      !!handle&&!root.querySelector('.zenzaSceneActions')?.contains(handle),{});
+  }
+  if(Number(id)>=3){
+    const comment=document.getElementById('comments');
+    const c=comment.getBoundingClientRect(),style=getComputedStyle(comment);
+    const dataset=host.dataset;
+    record(label+'/comment-layout-owner',
+      dataset.sceneSearchLayout===id&&dataset.sceneMode===mode,{
+        owner:dataset.sceneSearchLayout,mode:dataset.sceneMode
+      });
+    record(label+'/comment-bounds',
+      c.left>=-1&&c.right<=innerWidth+1&&c.top>=-1&&c.bottom<=innerHeight+1,{
+        rect:c.toJSON(),width:innerWidth,height:innerHeight
+      });
+    // The original Zenza comment element must remain owned by the original
+    // control bar. Layouts alter location only, never display or click logic.
+    const expected={
+      '03':mode==='normal'?['left','18px']:['right','20px'],
+      '04':mode==='normal'?['left','15px']:['right','19px'],
+      '06':['right','12px'],
+      '08':mode==='normal'?['right','12px']:['left','12px'],
+      '10':dataset.sceneCommentSide==='left'?['left','12px']:['right','12px']
+    }[id];
+    if(expected){
+      record(label+'/comment-anchor',style[expected[0]]===expected[1],{
+        property:expected[0],actual:style[expected[0]],expected:expected[1]
+      });
+    }
+  }
   config.setValue('sceneSearch.seekStepSeconds',0);
   record(label+'/zero',root.querySelector('.scene-seek-back').getBoundingClientRect().width===0,{});
   config.setValue('sceneSearch.seekStepSeconds',5);
  }
  b.dispose();record(label+'/cleanup',!host.querySelector('.zenzaSceneSearchHost')&&
- document.querySelectorAll('style[data-scui-layout-style]').length===0,{});
+ document.querySelectorAll('style[data-scui-layout-style]').length===0&&
+ !host.dataset.sceneSearchLayout&&!host.dataset.sceneMode&&!host.dataset.scenePlacement,
+ {dataset:{...host.dataset}});
 }
 try{for(const mode of ['normal','fullscreen'])for(let n=1;n<=10;n++){
  if(new URLSearchParams(location.search).has('one') && (n!==1||mode!=='normal'))continue;

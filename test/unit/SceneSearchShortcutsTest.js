@@ -115,11 +115,11 @@ describe('SCUI-08 shared command routing before live binding',()=>{
   h.router.handle('sceneSearch-nextLayout');
   assert.strictEqual(h.options['sceneSearch.layout.fullscreen'],'10');
   h.router.handle('sceneSearch-nextLayout');
-  assert.strictEqual(h.options['sceneSearch.layout.fullscreen'],'01');
+  assert.strictEqual(h.options['sceneSearch.layout.fullscreen'],'00');
   h.options['sceneSearch.layout.linkFullscreen']=true;
   h.router.handle('sceneSearch-nextLayout');
   assert.strictEqual(h.options['sceneSearch.layout.normal'],'03');
-  assert.strictEqual(h.options['sceneSearch.layout.fullscreen'],'01');
+  assert.strictEqual(h.options['sceneSearch.layout.fullscreen'],'00');
  });
  it('preserves configured preview/idle settings and step cycling',()=>{
   const h=routing();

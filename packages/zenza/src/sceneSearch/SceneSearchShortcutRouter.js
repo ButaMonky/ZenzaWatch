@@ -47,8 +47,8 @@ class SceneSearchShortcutRouter {
       this._get('sceneSearch.layout.linkFullscreen')!==true;
     const key=full?'sceneSearch.layout.fullscreen':'sceneSearch.layout.normal';
     const value=this._get(key);
-    const index=/^(0[1-9]|10)$/.test(value)?Number(value):1;
-    const next=((index-1+(direction>0?1:9))%10)+1;
+    const index=/^(00|0[1-9]|10)$/.test(value)?Number(value):1;
+    const next=(index+(direction>0?1:10))%11;
     return this._save(key,String(next).padStart(2,'0'));
   }
   handle(command) {

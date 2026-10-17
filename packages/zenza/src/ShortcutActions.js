@@ -233,7 +233,7 @@ const SHORTCUT_ACTIONS = [
     defaultKey: 0, command: 'toggle-enableFullScreenOnDoubleClick'},
   {id: 'TOGGLE_REMOVE_NG_MATCHED_USER', category: 'フィルタ/NG', label: 'NGマッチしたユーザーのコメントを全部消す ON/OFF',
     defaultKey: 0, command: 'toggle-removeNgMatchedUser'},
-  {id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'コメント欄プレビュー ON/OFF',
+  {id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'シーンサーチ: 流れるコメント／一覧を切替',
     defaultKey: 0, command: 'toggle-enableCommentPreview'},
 
   // SCUI-08: scene-search actions use a shared command contract consumed by
@@ -257,7 +257,7 @@ const SHORTCUT_ACTIONS = [
     defaultKey: 0, command: 'sceneSearch-stepUp'},
   {id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
     defaultKey: 0, command: 'sceneSearch-stepDown'},
-  {id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメントプレビュー表示/非表示',
+  {id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメント全体の表示/非表示（流れる表示・一覧共通）',
     defaultKey: 0, command: 'sceneSearch-toggleCommentPreview'},
   {id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
     defaultKey: 0, command: 'sceneSearch-toggleCommentSearch'},

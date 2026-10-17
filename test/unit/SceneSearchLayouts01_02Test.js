@@ -38,9 +38,11 @@ describe('SCUI-12 classic and twin scene layouts',()=>{
   layout.render({...h.state,time:0});
   assert.strictEqual(root.style.getPropertyValue('--scene-x'),'96px');
   layout.render({...h.state,time:1000});
-  assert.strictEqual(root.style.getPropertyValue('--scene-x'),'675px');
+  assert.strictEqual(root.style.getPropertyValue('--scene-x'),'704px');
+  assert(root.classList.contains('is-tools-left'),
+   'right-edge preview must flip the tool rail left');
   layout.render({...h.state,time:500,pinned:true});
-  assert.strictEqual(root.style.getPropertyValue('--scene-x'),'675px',
+  assert.strictEqual(root.style.getPropertyValue('--scene-x'),'704px',
    'pin freezes position');
   layout.render({...h.state,time:500,pinned:false});
   assert.strictEqual(root.style.getPropertyValue('--scene-x'),'400px');
@@ -83,6 +85,31 @@ describe('SCUI-12 classic and twin scene layouts',()=>{
   a.dispose();
   assert.strictEqual(h.host.style.getPropertyValue('--scene-bottom'),'');
   h.dom.window.close();
+ });
+ it('uses pointer coordinates and seekbar geometry instead of player width',()=>{
+  const h=harness(800);
+  let pointerX=330;
+  h.opts.settings.getSeekGeometry=()=>({
+    seekLeft:90,seekWidth:600,pointerX,visibleLeft:0,visibleRight:800
+  });
+  const layout=h.registry.create({...h.opts,id:'01',mode:'normal'});
+  layout.mount(h.state);
+  assert.strictEqual(layout.root.style.getPropertyValue('--scene-x'),'330px');
+  pointerX=null;
+  layout.render({...h.state,time:1000});
+  assert.strictEqual(layout.root.style.getPropertyValue('--scene-x'),'690px');
+  layout.dispose();h.dom.window.close();
+ });
+ it('clamps the card to visible viewport edges when player is clipped',()=>{
+  const h=harness(800);
+  h.opts.settings.getSeekGeometry=()=>({
+    seekLeft:45,seekWidth:660,pointerX:780,visibleLeft:120,visibleRight:520
+  });
+  const layout=h.registry.create({...h.opts,id:'01',mode:'normal'});
+  layout.mount(h.state);
+  assert.strictEqual(layout.root.style.getPropertyValue('--scene-x'),'424px');
+  assert(layout.root.classList.contains('is-tools-left'));
+  layout.dispose();h.dom.window.close();
  });
  it('narrow viewport clamps follow position even if pinned during resize',()=>{
   const h=harness(120),a=h.registry.create({...h.opts,id:'01',mode:'normal'});

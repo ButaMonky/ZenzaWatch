@@ -41,8 +41,8 @@ describe('SCUI-10 advanced scene-search normal/fullscreen visual layout picker',
  it('shows ten miniature layouts in a regular-mode gallery',()=>{
    const h=fixture();
    try{
-     assert.strictEqual(h.all('[data-zw-scene-layout]').length,10);
-     assert.strictEqual(h.all('.zw-scui-mini').length,10);
+     assert.strictEqual(h.all('[data-zw-scene-layout]').length,11);
+     assert.strictEqual(h.all('.zw-scui-mini').length,11);
      assert.strictEqual(h.q('[data-zw-scene-layout="01"]').getAttribute('aria-pressed'),'true');
      assert.strictEqual(h.q('[data-zw-scene-layout-mode="normal"]').getAttribute('aria-pressed'),'true');
      assert.strictEqual(h.q('[data-zw-scene-layout="07"] .zw-scui-mini').dataset.layout,'07');

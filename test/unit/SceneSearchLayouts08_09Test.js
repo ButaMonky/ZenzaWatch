@@ -60,14 +60,18 @@ describe('SCUI-16 layouts 08 edge drawer and 09 separated remote',()=>{
         assert.strictEqual(card.root.querySelectorAll('.zenzaSceneImageBox').length,1);
         assert.strictEqual(card.root.querySelectorAll('[data-scui-action]').length,7);
         assert.strictEqual(card.root.querySelector('.zenzaSceneTime').textContent,'1:11');
-        assert.strictEqual(card.root.dataset.scuiSide,'right');
+        assert.strictEqual(card.root.dataset.scuiSide,
+          id==='08'?(mode==='fullscreen'?'left':'right'):'dock');
         card.root.querySelector('[data-scui-action="seek-forward"]').click();
         assert.deepStrictEqual(h.actions.map(x=>x[0]),['seek-forward']);
         const style=h.d.querySelector('style').textContent;
         assert(style.includes('.zenzaSceneEdgeDrawer'));
         assert(style.includes('.zenzaSceneDetachedRemote'));
         assert(style.includes('prefers-reduced-motion:reduce'));
-        assert(style.includes('zenza-control-bar-height'));
+        assert(style.includes('left:10px;right:auto;top:29%'));
+        assert(style.includes('left:auto;right:14px;top:32%'));
+        assert(style.includes('left:16%;right:auto;top:calc(100% + 15px)'));
+        assert(style.includes('left:16px;right:auto;top:auto;bottom:96px'));
         if(id==='08'){
           const handle=card.root.querySelector('.scene-more');
           const buttons=card.root.querySelector('.zenzaSceneActions');
@@ -82,8 +86,13 @@ describe('SCUI-16 layouts 08 edge drawer and 09 separated remote',()=>{
           assert.strictEqual(card.root.classList.contains('is-expanded'),false);
         }else{
           assert.strictEqual(card.root.querySelectorAll('.zenzaSceneRemoteControls').length,1);
-          assert(card.root.querySelector('[role="toolbar"]').contains(
-            card.root.querySelector('.scene-seek-forward')));
+          const remote=card.root.querySelector('[role="toolbar"]');
+          assert(remote.contains(card.root.querySelector('.scene-seek-forward')));
+          assert(remote.contains(card.root.querySelector('.scene-more')));
+          assert(!remote.querySelector('.zenzaSceneActions').contains(
+            card.root.querySelector('.scene-more')));
+          assert(card.root.style.getPropertyValue('--scene-remote-offset'),
+            'remote must be aligned to the right-hand edge, not adjacent to image');
         }
         card.dispose();
         card.dispose();
@@ -111,21 +120,29 @@ describe('SCUI-16 layouts 08 edge drawer and 09 separated remote',()=>{
       assert.strictEqual(c.root.querySelector('.zenzaSceneImage').hidden,false);
       c.dispose();h.close();
     });
-    it('chooses an available side when the cursor placement nears the edge: '+id,()=>{
-      const h=setup(900);
-      const c=h.create(id);c.mount(h.state);
-      c.root.style.setProperty('--scene-x','860px');
-      c.render(h.state);
-      assert.strictEqual(c.root.dataset.scuiSide,'left');
+    it('follows the original left/right mode anchors and stacks in narrow players: '+id,()=>{
+      const h=setup(900),c=h.create(id);
+      c.mount(h.state);
+      assert.strictEqual(c.root.dataset.scuiSide,id==='08'?'right':'dock');
       h.width(320);c.render(h.state);
-      assert.strictEqual(c.root.dataset.scuiSide,'stack',
-        'when neither side fits, controls must stack under the preview');
-      assert(parseFloat(c.root.style.getPropertyValue('--scene-x'))<=320,
-        'clamp the card center within the narrow video frame');
-      h.width(470);c.render(h.state);
-      assert.strictEqual(c.root.dataset.scuiSide,id==='09'?'stack':'right',
-        'medium-width video must use an available side or stack controls');
-      assert.strictEqual(h.d.querySelectorAll('.zenzaSceneSearchHost').length,1);
+      assert.strictEqual(c.root.dataset.scuiSide,'stack');
+      if(id==='09'){
+        assert(c.card.style.textContent.includes(
+          '.zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-scui-side="stack"]'),
+          'narrow preview must override the 16% left + 40% transform origin');
+        assert(c.card.style.textContent.includes('left:12px;right:auto;transform:none'));
+      }
+      h.width(900);c.render(h.state);
+      assert.strictEqual(c.root.dataset.scuiSide,id==='08'?'right':'dock');
+      if(id==='09'){
+        const remote=c.root.querySelector('.zenzaSceneRemoteControls');
+        c.render({...h.state,shown:false});
+        assert.equal(c.root.hidden,false,'remote must survive thumbnail timeout');
+        assert(c.root.classList.contains('is-preview-suppressed'));
+        assert(c.root.contains(remote));
+        c.render(h.state);
+        assert(!c.root.classList.contains('is-preview-suppressed'));
+      }
       c.dispose();h.close();
     });
   }
@@ -164,6 +181,8 @@ describe('SCUI-18 strict catalog with the real 08/09 implementation',()=>{
     const cls=(file,name)=>loadClass(file,name,ctx);
     const opts={
       Card:ctx.Card,registerClassic:ctx.registerClassic,
+      Legacy:cls('packages/zenza/src/sceneSearch/SceneSearchLayout00.js',
+        'SceneSearchLayout00'),
       SideShelf:cls('packages/zenza/src/sceneSearch/layouts/SceneSearchLayouts03_04.js',
         'SceneSearchLayouts03_04'),
       PlaybackDeck:cls('packages/zenza/src/sceneSearch/layouts/SceneSearchLayouts05_06.js',
@@ -185,10 +204,10 @@ describe('SCUI-18 strict catalog with the real 08/09 implementation',()=>{
     const installed=Catalog.install(registry,opts);
     assert.strictEqual(installed.complete,true);
     assert.deepStrictEqual(Array.from(installed.registered),[
-      '01','02','03','04','05','06','07','08','09','10'
+      '00','01','02','03','04','05','06','07','08','09','10'
     ]);
     for(const mode of ['normal','fullscreen']){
-      for(const id of installed.registered){
+      for(const id of installed.registered.filter(id=>id!=='00')){
         const item=registry.create({id,mode,document:d,container:host,
           settings:{duration:3600}});
         item.mount({shown:true,pinned:false,time:150,
@@ -216,6 +235,7 @@ describe('SCUI-18 ten-layout bootstrap dependency boundary',()=>{
     const context=createContext({document:dom.window.document});
     const sources=[
       'SceneSearchLayoutCard.js',
+      'SceneSearchLayout00.js',
       'SceneSearchLayoutRegistry.js',
       'SceneSearchLayoutCatalog.js',
       'SceneSearchLayouts01_02.js',
@@ -232,7 +252,7 @@ describe('SCUI-18 ten-layout bootstrap dependency boundary',()=>{
     run('globalThis.bootstrap=createSceneSearchLayoutRegistry;',context);
     const registry=context.bootstrap();
     assert.deepStrictEqual(Array.from(registry.list(),x=>x.id),[
-      '01','02','03','04','05','06','07','08','09','10'
+      '00','01','02','03','04','05','06','07','08','09','10'
     ]);
     assert.strictEqual(dom.window.document.querySelectorAll('style').length,0,
       'bootstrap is lazy and does not write to the DOM');

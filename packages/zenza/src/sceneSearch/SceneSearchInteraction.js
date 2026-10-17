@@ -26,6 +26,18 @@ class SceneSearchInteraction {
     if(!anchor||!rect || !Number.isFinite(x)||!Number.isFinite(y)||
       !Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
       !Number.isFinite(rect.top)||!Number.isFinite(rect.bottom)){return false;}
+    // The initial interaction corridor assumed every preview was ABOVE
+    // the seekbar. UI02/05/07/09 intentionally sit BELOW the video.
+    // Mirror the tapered corridor vertically instead of requiring the
+    // pointer to move upward through an impossible hit-test region.
+    if(rect.top>=anchor.y){
+      if(y<anchor.y-25||y>rect.bottom+18){return false;}
+      const travel=Math.max(1,rect.top-anchor.y);
+      const t=Math.max(0,Math.min(1,(y-anchor.y)/travel));
+      const left=anchor.x-30+t*(rect.left-18-(anchor.x-30));
+      const right=anchor.x+30+t*(rect.right+18-(anchor.x+30));
+      return x>=left&&x<=right;
+    }
     if(y<rect.top-18||y>anchor.y+25){return false;}
     const rise=Math.max(1,anchor.y-rect.bottom);
     const t=Math.max(0,Math.min(1,(anchor.y-y)/rise));

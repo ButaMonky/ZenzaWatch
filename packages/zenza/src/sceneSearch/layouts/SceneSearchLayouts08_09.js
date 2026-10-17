@@ -6,9 +6,9 @@ class SceneSearchLayouts08_09 {
   static get DESCRIPTORS() {
     return [
       {id:'08',label:'片側引き出し',
-        description:'シーン画像の横に操作用引き出しを配置。狭い画面は下段へ折り返す'},
+        description:'通常は動画の左縁、全画面は右縁。操作列を画面内側へ引き出す'},
       {id:'09',label:'分離リモコン',
-        description:'シーン画像と操作ボタンを視覚的に分離。通常・全画面とも端で退避'}
+        description:'左の画像と右の独立操作ドックを分離。狭い画面は上下に退避'}
     ];
   }
   static install(registry,Card) {
@@ -27,98 +27,128 @@ class SceneSearchLayouts08_09 {
     return registry;
   }
   static get CSS() {return `
-/* No transparent cover or second full-width pointer layer. */
-.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote) {
-  --scene-bottom:62px;
-  left:var(--scene-x,50%);
-  transform:translateX(-50%);
-  max-width:calc(100% - 16px);
-  isolation:isolate;
+/* Original 08: left shelf normal, right shelf fullscreen, tools inward. */
+.zenzaSceneSearchHost.zenzaSceneEdgeDrawer{
+  position:absolute;left:10px;right:auto;top:29%;bottom:auto;
+  transform:none;width:min(204px,calc(100% - 20px));
+  border-radius:8px;background:#07111af2;isolation:isolate;
 }
-.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote)[data-mode="fullscreen"] {
-  --scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px);
+.zenzaSceneSearchHost.zenzaSceneEdgeDrawer[data-mode="fullscreen"]{
+  left:auto;right:14px;top:32%;bottom:auto;
 }
-.zenzaSceneSearchHost.zenzaSceneEdgeDrawer {
-  width:min(205px,calc(100% - 16px));
-  border-radius:6px;
-}
-.zenzaSceneEdgeDrawer .zenzaSceneActions {
-  position:absolute;left:100%;right:auto;bottom:0;
-  width:110px;min-width:0;display:flex;flex-wrap:wrap;gap:3px;
-  padding:4px;border-radius:6px;background:#111b28;
-  box-shadow:0 2px 11px #0008;
+.zenzaSceneEdgeDrawer .zenzaSceneFoot{justify-content:space-between}
+.zenzaSceneEdgeDrawer .zenzaSceneActions{
+  position:absolute;left:calc(100% - 1px);right:auto;top:0;bottom:auto;
+  width:124px;min-width:0;display:flex;flex-flow:row wrap;gap:3px;
+  padding:4px;border:1px solid #56748a;border-radius:7px;
+  background:#111b28;box-shadow:0 2px 11px #0008;
   opacity:0;visibility:hidden;pointer-events:none;
   transform:translateX(-8px);
   transition:transform .14s ease,opacity .14s ease,visibility .14s;
 }
-.zenzaSceneEdgeDrawer .zenzaSceneActions .zenzaSceneBtn,
-.zenzaSceneDetachedRemote .zenzaSceneActions .zenzaSceneBtn {
-  position:static;opacity:1;visibility:visible;pointer-events:auto;
+.zenzaSceneEdgeDrawer[data-mode="fullscreen"] .zenzaSceneActions{
+  left:auto;right:calc(100% - 1px);transform:translateX(8px);
+}
+.zenzaSceneEdgeDrawer .zenzaSceneActions>.zenzaSceneBtn,
+.zenzaSceneDetachedRemote .zenzaSceneActions>.zenzaSceneBtn{
+  position:static;left:auto;right:auto;top:auto;bottom:auto;
+  opacity:1;visibility:inherit;pointer-events:inherit;
   transform:none;flex:0 0 auto;
 }
-.zenzaSceneEdgeDrawer:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
+.zenzaSceneEdgeDrawer:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions{
   opacity:1;visibility:visible;pointer-events:auto;transform:translateX(0);
 }
-.zenzaSceneEdgeDrawer[data-scui-side="left"] .zenzaSceneActions {
-  left:auto;right:100%;transform:translateX(8px);
+.zenzaSceneEdgeDrawer[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) .zenzaSceneActions{
+  opacity:0!important;visibility:hidden!important;pointer-events:none!important;
 }
-.zenzaSceneEdgeDrawer[data-scui-side="left"]:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
-  transform:translateX(0);
-}
-.zenzaSceneSearchHost.zenzaSceneDetachedRemote {
-  width:min(195px,calc(100% - 16px));border-radius:6px;
-}
-.zenzaSceneDetachedRemote .zenzaSceneRemoteControls {
-  position:absolute;left:calc(100% + 8px);top:0;
-  min-width:126px;max-width:144px;padding:4px;
-  border:1px solid #4b6077;border-radius:7px;
-  background:#111b28;box-shadow:0 3px 12px #0009;
-}
-.zenzaSceneDetachedRemote .zenzaSceneRemoteControls .zenzaSceneActions {
-  position:static;display:flex;flex-wrap:wrap;justify-content:center;
-  gap:3px;opacity:1;visibility:visible;pointer-events:auto;
-}
-.zenzaSceneDetachedRemote[data-scui-side="left"] .zenzaSceneRemoteControls {
-  left:auto;right:calc(100% + 8px);
-}
-.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact {
-  width:min(124px,calc(100% - 12px));
-}
-.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact .scene-seek-back,
-.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact .scene-seek-forward {
-  display:none!important;pointer-events:none;
-}
-.zenzaSceneEdgeDrawer .scene-more {
+.zenzaSceneEdgeDrawer .scene-more,
+.zenzaSceneDetachedRemote .scene-more{
   position:static;opacity:1;visibility:visible;pointer-events:auto;
 }
-.zenzaSceneEdgeDrawer[data-scui-side="stack"] .zenzaSceneActions {
-  left:0;right:auto;bottom:auto;top:calc(100% + 5px);
-  width:min(200px,calc(100vw - 16px));transform:translateY(-5px);
+.zenzaSceneSearchHost.zenzaSceneEdgeDrawer.is-compact{
+  width:min(117px,calc(100% - 16px));
 }
-.zenzaSceneEdgeDrawer[data-scui-side="stack"]:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
+/* On narrow player sizes, stack buttons directly below the drawer.
+   No full-screen transparent hit test layer is added. */
+.zenzaSceneEdgeDrawer[data-scui-side="stack"] .zenzaSceneActions{
+  left:0;right:auto;top:calc(100% - 1px);bottom:auto;
+  width:100%;box-sizing:border-box;transform:translateY(-7px);
+}
+.zenzaSceneEdgeDrawer[data-scui-side="stack"]:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions{
   transform:translateY(0);
 }
-.zenzaSceneDetachedRemote[data-scui-side="stack"] .zenzaSceneRemoteControls {
-  left:0;right:auto;top:calc(100% + 5px);
-  max-width:calc(100vw - 16px);
+/* Original 09: preview left and a separately reachable remote at right. */
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote{
+  position:absolute;left:16%;right:auto;top:calc(100% + 15px);bottom:auto;
+  transform:translateX(-40%);
+  width:min(205px,calc(100% - 16px));
+  border-radius:7px;isolation:isolate;
 }
-@media(max-width:460px) {
-  .zenzaSceneEdgeDrawer .zenzaSceneActions,
-  .zenzaSceneEdgeDrawer[data-scui-side="left"] .zenzaSceneActions {
-    left:0;right:auto;bottom:auto;top:calc(100% + 5px);
-    width:min(200px,calc(100vw - 16px));transform:translateY(-5px);
-  }
-  .zenzaSceneEdgeDrawer:is(:hover,:focus-within,.is-expanded,.is-pinned) .zenzaSceneActions {
-    transform:translateY(0);
-  }
-  .zenzaSceneDetachedRemote .zenzaSceneRemoteControls,
-  .zenzaSceneDetachedRemote[data-scui-side="left"] .zenzaSceneRemoteControls {
-    left:0;right:auto;top:calc(100% + 5px);
-    max-width:calc(100vw - 16px);
-  }
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-mode="fullscreen"]{
+  left:16px;right:auto;top:auto;bottom:96px;transform:none;
 }
-@media(prefers-reduced-motion:reduce) {
-  .zenzaSceneEdgeDrawer .zenzaSceneActions {transition:none}
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-scui-placement="visible-fallback"]{
+  top:auto;bottom:96px;
+}
+/* When thumbnail auto-hides, the independently placed right-hand remote
+   stays operable. Only the image card is collapsed. */
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote.is-preview-suppressed{
+  width:0!important;min-width:0!important;max-width:0!important;height:0!important;
+  padding:0!important;border:0!important;background:transparent!important;
+  box-shadow:none!important;overflow:visible;
+}
+.zenzaSceneDetachedRemote.is-preview-suppressed>.zenzaSceneImageBox,
+.zenzaSceneDetachedRemote.is-preview-suppressed>.zenzaSceneFoot{
+  display:none!important;
+}
+.zenzaSceneDetachedRemote .zenzaSceneRemoteControls{
+  position:absolute;left:var(--scene-remote-offset,calc(100% + 8px));
+  right:auto;top:auto;bottom:0;
+  width:174px;max-width:calc(100vw - 16px);
+  padding:6px;border:1px solid #4b6077;border-radius:11px;
+  background:#111b28;box-shadow:0 3px 12px #0009;
+  display:flex;align-items:center;justify-content:center;gap:4px;
+}
+.zenzaSceneDetachedRemote .zenzaSceneRemoteControls .zenzaSceneActions{
+  position:static;display:flex;flex-flow:row wrap;justify-content:center;
+  gap:3px;width:auto;min-width:0;padding:0;
+  opacity:0;visibility:hidden;pointer-events:none;
+}
+.zenzaSceneDetachedRemote .zenzaSceneRemoteControls:is(:hover,:focus-within),
+.zenzaSceneDetachedRemote.is-expanded .zenzaSceneRemoteControls,
+.zenzaSceneDetachedRemote.is-pinned .zenzaSceneRemoteControls{
+  border-color:#8abddd;
+}
+.zenzaSceneDetachedRemote .zenzaSceneRemoteControls:is(:hover,:focus-within) .zenzaSceneActions,
+.zenzaSceneDetachedRemote:is(.is-expanded,.is-pinned) .zenzaSceneActions{
+  opacity:1;visibility:visible;pointer-events:auto;
+}
+.zenzaSceneDetachedRemote[data-scene-reveal="always"] .zenzaSceneActions{
+  opacity:1!important;visibility:visible!important;pointer-events:auto!important;
+}
+.zenzaSceneDetachedRemote[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) .zenzaSceneActions{
+  opacity:0!important;visibility:hidden!important;pointer-events:none!important;
+}
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote.is-compact{
+  width:min(119px,calc(100% - 12px));
+}
+.zenzaSceneSearchHost:is(.zenzaSceneEdgeDrawer,.zenzaSceneDetachedRemote).is-compact :is(.scene-seek-back,.scene-seek-forward){
+  display:none!important;pointer-events:none!important;
+}
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-scui-side="stack"]{
+  left:12px;right:auto;transform:none;
+}
+.zenzaSceneDetachedRemote[data-scui-side="stack"] .zenzaSceneRemoteControls{
+  left:0;right:auto;top:calc(100% - 1px);bottom:auto;
+  width:100%;box-sizing:border-box;max-width:100%;
+}
+/* When the image is auto-hidden on narrow screens, the toolbar may still
+   be accessed at the bottom dock position rather than a stale image gap. */
+.zenzaSceneDetachedRemote[data-scui-side="stack"].is-preview-suppressed .zenzaSceneRemoteControls{
+  left:0;top:0;
+}
+@media(prefers-reduced-motion:reduce){
+  .zenzaSceneEdgeDrawer .zenzaSceneActions{transition:none}
 }
 `;}
   constructor({Card,layoutId,document,container,mode,onAction,settings}={}) {
@@ -151,6 +181,8 @@ class SceneSearchLayouts08_09 {
         holder.className='zenzaSceneRemoteControls';
         holder.setAttribute('role','toolbar');
         holder.setAttribute('aria-label','シーンサーチ分離リモコン');
+        const more=actions.querySelector('.scene-more');
+        if(more)holder.append(more);
         holder.append(actions);
         this.root.append(holder);
         this._remote=holder;
@@ -161,23 +193,37 @@ class SceneSearchLayouts08_09 {
   render(state) {
     if(this._disposed||!this.root){return;}
     this.card.render(state);
-    const width=this.container.getBoundingClientRect?.().width||
+    const frame=this.container.getBoundingClientRect?.();
+    const width=this.container.offsetWidth||frame?.width||
       this.container.clientWidth||800;
-    const cardWidth=state?.seekStepSeconds===0?124:this.id==='08'?205:195;
-    const remoteWidth=this.id==='08'?126:152;
-    const x=Number(this.root.style.getPropertyValue('--scene-x').replace('px',''));
-    const center=Number.isFinite(x)&&x>0?x:width/2;
-    const limit=cardWidth/2+8;
-    const clamped=Math.min(Math.max(center,limit),Math.max(limit,width-limit));
-    const rightSpace=width-clamped-cardWidth/2;
-    const leftSpace=clamped-cardWidth/2;
-    const side=rightSpace>=remoteWidth+12?'right':
-      leftSpace>=remoteWidth+12?'left':'stack';
-    this.root.dataset.scuiSide=side;
-    if(Number.isFinite(clamped)&&Math.abs(clamped-center)>0.5){
-      this.root.style.setProperty('--scene-x',Math.round(clamped)+'px');
+    if(this.id==='08'){
+      this.root.dataset.scuiSide=width<360?'stack':
+        this.mode==='fullscreen'?'left':'right';
+      return;
     }
-    // On narrow viewports or with no side space, CSS stacks the controls below.
+    // The independent remote remains usable after thumbnail hover expires.
+    const suppressed=state?.shown===false&&!state?.pinned;
+    this.root.hidden=false;
+    this.root.classList.toggle('is-preview-suppressed',suppressed);
+    const viewportHeight=this.card.document.defaultView?.innerHeight;
+    const room=Number.isFinite(viewportHeight)&&Number.isFinite(frame?.bottom)?
+      viewportHeight-frame.bottom:Infinity;
+    this.root.dataset.scuiPlacement=this.mode==='normal'&&room<165?
+      'visible-fallback':'below';
+    const stack=width<500;
+    this.root.dataset.scuiSide=stack?'stack':'dock';
+    const rootRect=this.root.getBoundingClientRect?.();
+    const scale=frame?.width?width/frame.width:1;
+    const cardWidth=state?.seekStepSeconds===0?119:205;
+    const fallbackX=this.mode==='fullscreen'?16:width*.16-cardWidth*.4;
+    const rootX=Number.isFinite(rootRect?.left)&&rootRect?.width>0&&
+      Number.isFinite(frame?.left)?
+        (rootRect.left-frame.left)*scale:fallbackX;
+    // The remote is still a child for one-event-owner semantics, but its
+    // visual position is computed relative to the far RIGHT of the player.
+    const rightDock=width-12-174-rootX;
+    this.root.style.setProperty('--scene-remote-offset',
+      Math.round(Math.max(0,rightDock))+'px');
   }
   onPreview(asset,context){this.card.onPreview(asset,context);}
   dispose(){

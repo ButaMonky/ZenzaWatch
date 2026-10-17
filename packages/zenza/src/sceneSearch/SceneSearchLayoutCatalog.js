@@ -3,10 +3,10 @@
 //===BEGIN===
 class SceneSearchLayoutCatalog {
   static get IDS() {
-    return ['01','02','03','04','05','06','07','08','09','10'];
+    return ['00','01','02','03','04','05','06','07','08','09','10'];
   }
   static install(registry,{
-    Card,registerClassic,SideShelf,PlaybackDeck,Filmstrip,Drawer,SmartAvoid,
+    Card,Legacy,registerClassic,SideShelf,PlaybackDeck,Filmstrip,Drawer,SmartAvoid,
     clock,allowPartial=false
   }={}) {
     if(!registry||typeof registry.list!=='function'||
@@ -19,6 +19,8 @@ class SceneSearchLayoutCatalog {
       throw new TypeError('Registry must support isolated staging');
     }
     const providers=[
+      {name:'00',ids:['00'],call:Legacy?.install&&
+        (()=>Legacy.install(staging))},
       {name:'01/02',ids:['01','02'],call:registerClassic&&
         (()=>registerClassic(staging))},
       {name:'03/04',ids:['03','04'],call:SideShelf?.install&&

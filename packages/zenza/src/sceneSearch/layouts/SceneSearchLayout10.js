@@ -32,15 +32,22 @@ class SceneSearchLayout10 {
     const margin=7;
     const clamp=x=>Math.min(width-sceneWidth/2-margin,
       Math.max(sceneWidth/2+margin,x));
-    const target=clamp(Number.isFinite(cursorX)?cursorX:width/2);
+    const cursor=clamp(Number.isFinite(cursorX)?cursorX:width/2);
+    // Original UI10 intentionally parks the card on the opposite side of
+    // the pointer (left when seeking right; right when seeking left).
+    const leftSide=cursor>width*.57;
+    const preferred=clamp(width*(leftSide?.29:.68));
+    const opposite=clamp(width*(leftSide?.68:.29));
     const base=Math.max(0,baseBottom);
     const raised=base+sceneHeight+12;
     const choices=[
-      {x:target,bottom:base,slot:'cursor'},
-      {x:clamp(width*.24),bottom:base,slot:'left'},
-      {x:clamp(width*.76),bottom:base,slot:'right'},
+      {x:preferred,bottom:base,slot:leftSide?'left':'right'},
+      {x:opposite,bottom:base,slot:leftSide?'right':'left'},
+      {x:clamp(width*.22),bottom:base,slot:'far-left'},
+      {x:clamp(width*.78),bottom:base,slot:'far-right'},
+      {x:cursor,bottom:base,slot:'cursor'},
       {x:clamp(width*.5),bottom:raised,slot:'raised'},
-      {x:target,bottom:raised,slot:'above-cursor'}
+      {x:preferred,bottom:raised,slot:'above-smart'}
     ];
     let winner=null,best=Infinity;
     for(const c of choices){
@@ -49,11 +56,15 @@ class SceneSearchLayout10 {
         top:height-c.bottom-sceneHeight,bottom:height-c.bottom};
       const overlap=obstacles.filter(SceneSearchLayout10.validRect)
         .reduce((sum,r)=>sum+SceneSearchLayout10.overlap(box,r),0);
-      const shift=Math.abs(c.x-target)*.07+
-        Math.max(0,c.bottom-base)*.06;
-      const sticky=previous?.slot===c.slot?-50:0;
+      // Prefer horizontal escape to elevating a large card over the image.
+      const shift=Math.abs(c.x-preferred)*.07+
+        Math.max(0,c.bottom-base)*.65;
+      const pointerSide=leftSide?'left':'right';
+      // A deliberate cursor crossing cancels the old side's hysteresis.
+      const sticky=previous?.pointerSide===pointerSide&&
+        previous?.slot===c.slot?-50:0;
       const score=overlap*100+shift+sticky;
-      if(score<best){winner={...c,overlap,score};best=score;}
+      if(score<best){winner={...c,overlap,score,pointerSide};best=score;}
     }
     return winner;
   }
@@ -87,8 +98,12 @@ class SceneSearchLayout10 {
     const frame=this.container.getBoundingClientRect();
     const card=this.root.getBoundingClientRect();
     if(!frame.width||!frame.height||!card.width||!card.height){return null;}
+    const seek=this.settings.getSeekGeometry?.();
+    const cursorX=Number.isFinite(seek?.pointerX)?seek.pointerX:
+      Number.isFinite(seek?.seekLeft)&&Number.isFinite(seek?.seekWidth)?
+        seek.seekLeft+seek.seekWidth/2:frame.width/2;
     return {width:frame.width,height:frame.height,
-      sceneWidth:card.width,sceneHeight:card.height,cursorX:frame.width/2,
+      sceneWidth:card.width,sceneHeight:card.height,cursorX,
       obstacles:Array.from(this.container.querySelectorAll('.zenzaCommentPreview'))
         .filter(el=>!el.hidden).map(el=>{
           const r=el.getBoundingClientRect();
@@ -99,6 +114,7 @@ class SceneSearchLayout10 {
     if(this._disposed){return;}
     this.card.render(state);
     if(!this.root||this.root.hidden){return;}
+    if(state?.pinned&&this._previous){return;}
     const now=this.clock.now();
     if(Number.isFinite(now)&&now-this._lastCheck<160){return;}
     this._lastCheck=Number.isFinite(now)?now:Date.now();

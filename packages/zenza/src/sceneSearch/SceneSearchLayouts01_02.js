@@ -52,6 +52,24 @@ const SCENE_LAYOUT01_CSS=`
   --scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
 }
 .zenzaSceneLayout01[data-mode="normal"]{--scene-bottom:38px}
+/* Keep the tool rail inside the viewport at the right edge. */
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-left .zenzaSceneActions,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-overlap .zenzaSceneActions{
+  position:static;
+}
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-left .zenzaSceneActions>.scene-pin,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-left .zenzaSceneActions>.scene-comment-toggle,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-left .zenzaSceneActions>.scene-comment-search,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-left .zenzaSceneActions>.scene-seek-step{
+  right:auto;left:-29px;
+}
+/* Below one card width, keep the controls within its hit-test rectangle. */
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-overlap .zenzaSceneActions>.scene-pin,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-overlap .zenzaSceneActions>.scene-comment-toggle,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-overlap .zenzaSceneActions>.scene-comment-search,
+.zenzaSceneSearchHost.zenzaSceneLayout01.is-tools-overlap .zenzaSceneActions>.scene-seek-step{
+  left:auto;right:3px;
+}
 `;
 const SCENE_LAYOUT02_CSS=`
 .zenzaSceneSearchHost.zenzaSceneLayout02{
@@ -105,7 +123,9 @@ function registerSceneLayouts01_02(registry) {
           render(state){
             render(state);
             if(!card.root)return;
-            const width=container.getBoundingClientRect?.().width ||
+            const geometry=settings.getSeekGeometry?.();
+            const width=container.offsetWidth ||
+              container.getBoundingClientRect?.().width ||
               container.clientWidth||800;
             const compact=state.seekStepSeconds===0;
             const frameWidth=compact?124:180;
@@ -114,13 +134,36 @@ function registerSceneLayouts01_02(registry) {
                 settings.getDuration():settings.duration;
               const pct=Number.isFinite(duration)&&duration>0?
                 Math.max(0,Math.min(1,state.time/duration)):0.5;
-              const usable=Math.max(0,Math.min(frameWidth,width-12));
-              // Reserve the 29px tool rail as well as the image card at the right edge.
-              const minX=usable/2+6,maxX=Math.max(minX,width-usable/2-35);
-              const x=Math.max(minX,Math.min(maxX,width*pct));
+              // Use the actual seekbar's screen geometry. In embedded/small
+              // modes the seekbar and the player container need not have equal
+              // widths or origins; the old width*pct assumption drifted.
+              const visibleLeft=Math.max(0,Math.min(width,
+                Number.isFinite(geometry?.visibleLeft)?geometry.visibleLeft:0));
+              const visibleRight=Math.max(visibleLeft,Math.min(width,
+                Number.isFinite(geometry?.visibleRight)?geometry.visibleRight:width));
+              const available=visibleRight-visibleLeft;
+              const usable=Math.max(0,Math.min(frameWidth,available-12));
+              const minX=visibleLeft+usable/2+6;
+              const maxX=visibleRight-usable/2-6;
+              const rawX=Number.isFinite(geometry?.pointerX)?
+                geometry.pointerX:
+                Number.isFinite(geometry?.seekLeft)&&
+                Number.isFinite(geometry?.seekWidth)?
+                  geometry.seekLeft+geometry.seekWidth*pct:width*pct;
+              const clamp=x=>maxX>=minX?
+                Math.max(minX,Math.min(maxX,x)):
+                (visibleLeft+visibleRight)/2;
+              const x=clamp(rawX);
               const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
               const fixed=state.pinned===true&&Number.isFinite(previous)?
-                Math.max(minX,Math.min(maxX,previous)):x;
+                clamp(previous):x;
+              // The original HTML flips its tool rail to the left at the
+              // right edge instead of permanently losing 35px of seek range.
+              const railClearance=usable/2+35;
+              const canRight=visibleRight-fixed>=railClearance;
+              const canLeft=fixed-visibleLeft>=railClearance;
+              card.root.classList.toggle('is-tools-left',!canRight&&canLeft);
+              card.root.classList.toggle('is-tools-overlap',!canRight&&!canLeft);
               card.root.style.setProperty('--scene-x',Math.round(fixed)+'px');
             }else{
               container.dataset.sceneNarrow=String(width<580);

@@ -1898,15 +1898,19 @@ util.addStyle(`
       return this.getVposIndex(this._vpos);
     }
     getVposIndex(vpos) {
+      // chatList setter already sorts by vpos. The old reverse scan was O(N)
+      // per mousemove (twice for each CommentPreviewView._onVpos).
       const list = this._chatList;
-      if (!list) { return -1; }
-      for (let i = list.length - 1; i >= 0; i--) {
-        const chat = list[i], cv = chat.vpos;
-        if (cv <= vpos - 400) {
-          return i + 1;
-        }
+      if (!list || !list.length) { return -1; }
+      const threshold = vpos - 400;
+      let low = 0, high = list.length;
+      while (low < high) {
+        const middle = low + Math.floor((high - low) / 2);
+        if (list[middle].vpos <= threshold) { low = middle + 1; }
+        else { high = middle; }
       }
-      return -1;
+      // The original returns -1 when no item satisfies vpos<=threshold.
+      return low > 0 ? low : -1;
     }
     get currentChatList() {
       if (this._vpos < 0 || !this._chatReady) {
@@ -1975,7 +1979,19 @@ util.addStyle(`
         util.StyleSwitcher.update({
           on: '.commentPreview.hover', off: '.commentPreview.list'});
       }
+      const previous = this._mode;
       this._mode = v;
+      if (previous !== v && this._chatList?.length) {
+        // Switching hover/list changes the virtual row window. Recalculate
+        // immediately on the existing seek position; users must not need
+        // another mouse movement just to see their comments.
+        const vpos = this._model?._vpos;
+        if (Number.isFinite(vpos) && vpos >= 0) {
+          this._onVpos(vpos);
+        } else if (v === 'list') {
+          this._refreshInviewElements(0);
+        }
+      }
     }
     _onClick(e) {
       e.stopPropagation();
@@ -2012,6 +2028,15 @@ util.addStyle(`
     }
     _onUpdate() {
       this.updateList();
+      // Comments can arrive after the mouse stops on the seekbar. Previously
+      // updateList only resized the virtual list; rows stayed empty until the
+      // next vpos event (another mouse move).
+      const vpos = this._model && this._model._vpos;
+      if (Number.isFinite(vpos) && vpos >= 0) {
+        this._onVpos(vpos);
+      } else if (this._mode === 'list') {
+        this._refreshInviewElements(0);
+      }
     }
     _onVpos(vpos) {
       const itemHeight = CommentPreviewView.ITEM_HEIGHT;
@@ -2075,13 +2100,14 @@ util.addStyle(`
         inviewTable.set(i, listItem);
       }
 
-      if (newItems.length < 1) { return; }
-
+      // Remove stale virtual rows even when the new range introduces no new
+      // items; otherwise old comments can remain visible after navigation.
       for (const i of inviewTable.keys()) {
-        if (i >= startIndex && i <= endIndex) { continue; }
+        if (i >= startIndex && i < endIndex) { continue; }
         inviewTable.get(i).remove();
         inviewTable.delete(i);
       }
+      if (newItems.length < 1) { return; }
 
       this._newListElements = this._newListElements || document.createDocumentFragment();
       this._newListElements.append(...newItems);

@@ -3,7 +3,8 @@ const {JSDOM,VirtualConsole}=require('jsdom');
 const {createContext,run,beginSection}=require('./extractSource');
 const scene='packages/zenza/src/sceneSearch/';
 const modules=['src/UiVisibilityRegistry.js',...[
- 'SceneSearchLayoutCard.js','SceneSearchLayoutRegistry.js','SceneSearchLayoutCatalog.js',
+ 'SceneSearchLayoutCard.js','SceneSearchLayout00.js',
+ 'SceneSearchLayoutRegistry.js','SceneSearchLayoutCatalog.js',
  'SceneSearchLayouts01_02.js','layouts/SceneSearchLayouts03_04.js',
  'layouts/SceneSearchLayouts05_06.js','layouts/SceneSearchLayout07.js',
  'layouts/SceneSearchLayouts08_09.js','layouts/SceneSearchLayout10.js',
@@ -41,6 +42,22 @@ function fixture(id='01',mode='normal'){
  const commands=[];player.execCommand=(command,value)=>commands.push([command,value]);
  const events=emitter(),storyboard=emitter();let fullscreen=mode==='fullscreen';
  const host=d.getElementById('player'),seek=d.getElementById('seek');
+ if(id==='00'){
+   // The UI00 native layout reuses the exact seekbar/tooltip DOM owned by VideoControlBar.
+   const old=d.getElementById('old'),thumb=d.getElementById('thumb');
+   const holder=d.createElement('div');holder.className='seekBarThumbnailContainer';
+   old.insertBefore(holder,thumb);holder.appendChild(thumb);
+   thumb.classList.add('zenzaSeekThumbnail','is-visible');
+   const image=d.createElement('div');image.className='zenzaSeekThumbnail-image';
+   while(thumb.firstChild)image.appendChild(thumb.firstChild);
+   thumb.appendChild(image);
+   old.classList.add('seekBarToolTip');
+   const buttons=d.createElement('div');buttons.className='seekBarToolTipButtonContainer';
+   const toggle=d.createElement('button');toggle.className='toggleCommentPreview';
+   toggle.title='original';buttons.appendChild(toggle);old.appendChild(buttons);
+   seek.classList.add('seekBarContainer');
+   seek.append(old,d.querySelector('.zenzaCommentPreview'));
+ }
  host.getBoundingClientRect=()=>({left:0,top:0,x:0,y:0,width:900,height:520,right:900,bottom:520});
  seek.getBoundingClientRect=()=>({left:0,top:500,x:0,y:500,width:900,height:20,right:900,bottom:520});
  const bar={player,_duration:1000,_playerConfig:config,_seekBar:seek,storyboard,

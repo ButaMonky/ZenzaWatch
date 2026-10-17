@@ -373,7 +373,8 @@ const Config = (() => {
     'sceneSearch.idleHideSeconds': 2,
     'sceneSearch.controlsReveal': 'hover-focus',
     'sceneSearch.animation': 'subtle',
-    'sceneSearch.commentPreviewVisible': true
+    'sceneSearch.commentPreviewVisible': true,
+    'sceneSearch.miniCommentMode': 'flow'
   });
 
   Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
@@ -405,11 +406,14 @@ const Config = (() => {
         // DataStorage writes any part of a settings import.
         if (key === 'sceneSearch.layout.normal' ||
             key === 'sceneSearch.layout.fullscreen') {
-          return typeof value === 'string' && /^(0[1-9]|10)$/.test(value);
+          return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
         }
         if (key === 'sceneSearch.layout.linkFullscreen' ||
             key === 'sceneSearch.commentPreviewVisible') {
           return typeof value === 'boolean';
+        }
+        if (key === 'sceneSearch.miniCommentMode') {
+          return ['flow','static','hidden'].includes(value);
         }
         if (key === 'sceneSearch.seekStepSeconds') {
           return Number.isSafeInteger(value) && value >= 0 && value <= 600;

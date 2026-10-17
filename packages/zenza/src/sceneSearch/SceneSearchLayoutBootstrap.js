@@ -1,6 +1,7 @@
 // SCUI-18: dependency-complete ten-layout bootstrap.
 // Safe to import: no DOM access, player hooks or network work until create().
 import {SceneSearchLayoutCard} from './SceneSearchLayoutCard';
+import {SceneSearchLayout00} from './SceneSearchLayout00';
 import {SceneSearchLayoutRegistry} from './SceneSearchLayoutRegistry';
 import {SceneSearchLayoutCatalog} from './SceneSearchLayoutCatalog';
 import {registerSceneLayouts01_02} from './SceneSearchLayouts01_02';
@@ -11,6 +12,7 @@ import {SceneSearchLayouts08_09} from './layouts/SceneSearchLayouts08_09';
 import {SceneSearchLayout10} from './layouts/SceneSearchLayout10';
 //===BEGIN===
 //@require SceneSearchLayoutCard
+//@require SceneSearchLayout00
 //@require SceneSearchLayoutRegistry
 //@require SceneSearchLayoutCatalog
 //@require registerSceneLayouts01_02
@@ -23,6 +25,7 @@ function createSceneSearchLayoutRegistry({clock}={}) {
   const registry=new SceneSearchLayoutRegistry();
   const coverage=SceneSearchLayoutCatalog.install(registry,{
     Card:SceneSearchLayoutCard,
+    Legacy:SceneSearchLayout00,
     registerClassic:registerSceneLayouts01_02,
     SideShelf:SceneSearchLayouts03_04,
     PlaybackDeck:SceneSearchLayouts05_06,
@@ -31,7 +34,7 @@ function createSceneSearchLayoutRegistry({clock}={}) {
     SmartAvoid:SceneSearchLayout10,
     clock
   });
-  if(!coverage.complete||registry.list().length!==10){
+  if(!coverage.complete||registry.list().length!==11){
     throw new Error('Scene layout bootstrap must include all ten providers');
   }
   return registry;

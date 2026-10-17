@@ -29,11 +29,14 @@ describe('SCUI-17 smart position avoiding comment preview without polling',()=>{
    assert.strictEqual(r.list().length,1);
    assert.throws(()=>Smart.register(r,{Card}),/duplicate/);
  });
- it('prefers the cursor when there are no comment obstructions',()=>{
-   const choice=Smart.choose(defaults);
-   assert.strictEqual(choice.slot,'cursor');
-   assert.strictEqual(choice.overlap,0);
-   assert.strictEqual(choice.x,500);
+ it('prefers the opposite side of the real seekbar cursor when free',()=>{
+   const leftCursor=Smart.choose({...defaults,cursorX:180});
+   const rightCursor=Smart.choose({...defaults,cursorX:860});
+   assert.strictEqual(leftCursor.slot,'right');
+   assert.strictEqual(leftCursor.x,680);
+   assert.strictEqual(rightCursor.slot,'left');
+   assert.strictEqual(rightCursor.x,290);
+   assert.strictEqual(leftCursor.overlap,0);
  });
  it('moves the scene card away from a centered comment preview',()=>{
    const choice=Smart.choose({...defaults,
@@ -48,6 +51,29 @@ describe('SCUI-17 smart position avoiding comment preview without polling',()=>{
    const after=Smart.choose({...defaults,cursorX:515,previous:original,
      obstacles:[{x:410,y:400,width:200,height:140}]});
    assert.strictEqual(after.slot,original.slot);
+ });
+ it('retains pointer geometry and locks the selected slot while pinned',()=>{
+   const h=fixture('normal',{cursorX:130});
+   try{
+     h.card.mount(state());
+     const saved=h.card.root.style.getPropertyValue('--scene-x');
+     h.metrics.cursorX=870;
+     h.now(200);h.card.render({...state(),pinned:true});
+     assert.strictEqual(h.card.root.style.getPropertyValue('--scene-x'),saved);
+     h.now(400);h.card.render({...state(),pinned:false});
+     assert.notStrictEqual(h.card.root.style.getPropertyValue('--scene-x'),saved);
+   }finally{h.dispose();}
+ });
+ it('uses the injected real seekbar geometry instead of the frame midpoint',()=>{
+   const h=fixture();
+   try{
+     h.card.mount(state());
+     delete h.card.settings.measure;
+     h.card.settings.getSeekGeometry=()=>({pointerX:870});
+     h.card.container.getBoundingClientRect=()=>({x:0,y:0,left:0,top:0,width:1000,height:600});
+     h.card.root.getBoundingClientRect=()=>({x:290,y:390,width:180,height:105});
+     assert.strictEqual(h.card.geometry().cursorX,870);
+   }finally{h.dispose();}
  });
  it('ignores invalid geometry and does not invent a position',()=>{
    assert.strictEqual(Smart.choose({width:0,height:200,sceneWidth:180,sceneHeight:100}),null);

@@ -93,6 +93,7 @@ class ModernAdvancedSettingsModel {
       ...group('画面・映像','シーンサーチ',[
         ['sceneSearch.layout.normal','通常表示のシーンサーチUI',{
           ...select([
+            ['00','00 旧式表示（検証中）'],
             ['01','01 クラシック追従'],['02','02 左右ツインパネル'],
             ['03','03 サイドシェルフ'],['04','04 トップエッジ'],
             ['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
@@ -103,6 +104,7 @@ class ModernAdvancedSettingsModel {
           description:'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'}],
         ['sceneSearch.layout.fullscreen','フルスクリーン時のシーンサーチUI',{
           ...select([
+            ['00','00 旧式表示（検証中）'],
             ['01','01 クラシック追従'],['02','02 左右ツインパネル'],
             ['03','03 サイドシェルフ'],['04','04 トップエッジ'],
             ['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
@@ -111,8 +113,17 @@ class ModernAdvancedSettingsModel {
           ]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
         ['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
           type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
-        ['sceneSearch.commentPreviewVisible','コメントプレビューを表示',{
-          description:'表示そのもののON/OFFです。「コメント一覧」内の既存のホバー／一覧モード設定とは独立しています。'}],
+        ['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示（流れる表示・一覧共通）',{
+          description:'ONはサムネイルの流れるミニコメントと一覧を表示、OFFは両方を非表示にします。右側の動画コメント欄とは別です。'}],
+        ['sceneSearch.miniCommentMode','画像上のミニコメントの表示方式',{
+          ...select([
+            ['flow','流れる（旧版と同じ）'],
+            ['static','静止表示（最大5行）'],
+            ['hidden','ミニコメントを表示しない']
+          ]),
+          description:'UI00の画像プレビュー中だけ変更します。コメントボタンで開く一覧は対象外です。共通のシーンサーチコメント表示がOFFなら、どの方式でも見えません。保存後すぐ反映します。'}],
+        ['enableCommentPreview','シーンサーチのコメントを一覧表示にする',{
+          description:'OFF＝画像と流れるミニコメント、ON＝スクロール可能な一覧。元のコメント切替ボタンでも変更できます。共通コメント表示OFFの間は両方非表示です。'}],
         ['sceneSearch.controlsReveal','追加ボタンの開き方',{
           ...select([
             ['hover-focus','マウスを乗せるかフォーカスで開く'],
@@ -149,9 +160,7 @@ class ModernAdvancedSettingsModel {
       ]),
       ...group('コメント表示','コメント一覧',[
         ['enableCommentPanel','コメント一覧を表示'],
-        ['enableCommentPanelAutoScroll','コメント一覧を自動スクロール'],
-        ['enableCommentPreview','コメントプレビューを一覧モードに切り替える',{
-          description:'OFFはホバー時に流れるコメント表示、ONはスクロールできるコメント一覧です。完全に非表示にする場合は「画面・映像 > シーンサーチ」の表示設定を使います。'}]
+        ['enableCommentPanelAutoScroll','コメント一覧を自動スクロール']
       ]),
       ...group('コメント表示','文字・装飾',[
         ['commentLanguage','コメントの言語',select([

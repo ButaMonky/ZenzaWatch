@@ -8,13 +8,13 @@ const Card=loadClass('packages/zenza/src/sceneSearch/SceneSearchLayoutCard.js',
   'SceneSearchLayoutCard',createContext());
 const Pair=loadClass('packages/zenza/src/sceneSearch/layouts/SceneSearchLayouts05_06.js',
   'SceneSearchLayouts05_06',createContext());
-function fixture(mode='normal',id='05'){
+function fixture(mode='normal',id='05',settings={}){
  const dom=new JSDOM('<!doctype html><html><head></head><body><div id="container"></div></body></html>');
  const document=dom.window.document,actions=[];
  const registry=new Registry();
  Pair.register(registry,{Card});
  const container=document.getElementById('container');
- const card=registry.create({id,mode,document,container,
+ const card=registry.create({id,mode,document,container,settings,
    onAction:(name,meta)=>actions.push([name,meta.layoutId,meta.mode])});
  return {dom,document,registry,container,card,actions,dispose(){card.dispose();dom.window.close();}};
 }
@@ -64,15 +64,49 @@ describe('SCUI-14 05 playback deck / 06 micro capsule',()=>{
    assert(css.includes('grid-template-columns'));
    assert(css.includes('[data-mode="fullscreen"]'));
    assert(css.includes('.is-compact'));
-   assert(css.includes('325px'));
+   assert(css.includes('245px'));
    assert(css.includes('max-width:calc(100% - 20px)'));
+   assert(css.includes('top:calc(100% + 12px);bottom:auto'));
+   assert(css.includes('[data-scui-placement="visible-fallback"]'));
+   assert(css.includes('[data-mode="fullscreen"]'));
  });
  it('06 is a small capsule with controls hidden until hovered/focused',()=>{
    const css=Pair.CSS_06;
-   assert(css.includes('width:min(180px'));
-   assert(css.includes('width:min(124px'));
+   assert(css.includes('width:min(166px'));
+   assert(css.includes('width:min(98px'));
    assert(css.includes(':focus-within'));
    assert(css.includes('pointer-events:none'));
+ });
+ it('05 keeps its seek buttons accessible and adapts if there is no room below the viewport',()=>{
+   const h=fixture('normal','05');
+   h.container.getBoundingClientRect=()=>({left:0,right:480,top:80,bottom:760,width:480,height:680});
+   h.card.mount(state());
+   assert.strictEqual(h.card.root.dataset.scuiPlacement,'visible-fallback');
+   const tray=h.card.root.querySelector('.zenzaSceneActions');
+   for(const action of ['seek-back','seek-forward','more']){
+     assert(!tray.contains(h.card.root.querySelector('[data-scui-action="'+action+'"]')));
+   }
+   assert(h.card.style.textContent.includes('bottom:70px'));
+   h.dispose();
+ });
+ it('06 uses real mouse X, keeps pinned X and clamps near the seekbar end',()=>{
+   let x=320;
+   const h=fixture('normal','06',{
+     getDuration:()=>1000,
+     getSeekGeometry:()=>({
+       seekLeft:100,seekWidth:600,pointerX:x,
+       visibleLeft:0,visibleRight:800
+     })
+   });
+   h.card.mount(state());
+   assert.strictEqual(h.card.root.style.getPropertyValue('--scene-x'),'320px');
+   x=790;h.card.render(state());
+   assert.strictEqual(h.card.root.style.getPropertyValue('--scene-x'),'711px');
+   x=120;h.card.render({...state(),pinned:true});
+   assert.strictEqual(h.card.root.style.getPropertyValue('--scene-x'),'711px');
+   h.card.render({...state(),pinned:false,seekStepSeconds:0});
+   assert.strictEqual(h.card.root.style.getPropertyValue('--scene-x'),'120px');
+   h.dispose();
  });
  it('never mounts an unselected layout and preserves focus escape affordance',()=>{
    const registry=new Registry();

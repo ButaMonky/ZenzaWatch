@@ -27,7 +27,9 @@ function fixture(){
  const host=dom.window.document.getElementById('host');
  host.getBoundingClientRect=()=>({x:0,y:0,left:0,top:0,right:900,bottom:520,
    width:900,height:520});
- const opts={Card:ctx.Card,registerClassic:ctx.registerClassic,
+ const Legacy={install(registry){registry.register({id:'00',label:'00 legacy',
+   factory:o=>new ctx.Card({...o,layoutClass:'legacy-test-double'})});}};
+ const opts={Card:ctx.Card,Legacy,registerClassic:ctx.registerClassic,
    SideShelf,PlaybackDeck,Filmstrip,SmartAvoid,
    clock:{now:()=>500}};
  const makeRegistry=()=>new ctx.Registry();
@@ -50,9 +52,9 @@ describe('SCUI-18 catalog registration for real scene layout implementations',()
    assert.strictEqual(reg.list().length,0,'strict install must be all-or-nothing at input gate');
    const result=h.Catalog.install(reg,{...h.opts,allowPartial:true});
    assert.strictEqual(result.complete,false);
-   assert.strictEqual(result.registered.length,8);
+   assert.strictEqual(result.registered.length,9);
    assert.strictEqual(result.missing.join(','),'08,09');
-   assert.strictEqual(reg.list().length,8);
+   assert.strictEqual(reg.list().length,9);
    h.dom.window.close();
  });
  it('registers exactly ten with an explicit 08/09 test double',()=>{
@@ -60,7 +62,7 @@ describe('SCUI-18 catalog registration for real scene layout implementations',()
    const result=h.Catalog.install(reg,{...h.opts,Drawer:h.stubDrawer});
    assert.strictEqual(result.complete,true);
    assert.strictEqual(result.registered.join(','),
-     '01,02,03,04,05,06,07,08,09,10');
+     '00,01,02,03,04,05,06,07,08,09,10');
    assert.strictEqual(result.missing.length,0);
    h.dom.window.close();
  });
@@ -69,7 +71,7 @@ describe('SCUI-18 catalog registration for real scene layout implementations',()
    const result=h.Catalog.install(reg,{...h.opts,allowPartial:true});
    let mountCount=0;
    for(const mode of ['normal','fullscreen']){
-     for(const id of result.registered){
+     for(const id of result.registered.filter(id=>id!=='00')){
        const card=reg.create({id,mode,document:h.dom.window.document,
          container:h.host,settings:{getDuration:()=>1000}});
        const s={...state,mode,layoutId:id};

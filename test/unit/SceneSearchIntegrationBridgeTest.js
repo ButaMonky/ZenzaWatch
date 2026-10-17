@@ -122,6 +122,14 @@ describe('SCUI-18 standalone bridge preflight without touching legacy player',()
   assert.strictEqual(h.d.querySelectorAll('.zenzaSceneSearchHost').length,1);
   h.close();
  });
+ it('dispatches clicked filmstrip frame timestamps through the real absolute seek callback',()=>{
+  const h=harness();h.bridge.start();
+  h.bridge._onCardAction('frame-seek',{time:82.5});
+  h.bridge._onCardAction('frame-seek',{time:-1});
+  h.bridge._onCardAction('frame-seek',{time:NaN});
+  assert.deepStrictEqual(h.absolute,[82.5]);
+  h.close();
+ });
  it('pins/unpins and exposes keyboard-safe scene actions and shortcut routing',()=>{
   const h=harness();h.bridge.start();h.send('mouseenter');
   h.button('pin').click();
@@ -132,8 +140,9 @@ describe('SCUI-18 standalone bridge preflight without touching legacy player',()
   h.button('seek-back').click();h.button('seek-forward').click();
   assert.deepStrictEqual(h.delta,[-5,5]);
   h.button('comment-toggle').click();
-  assert.strictEqual(h.values['sceneSearch.commentPreviewVisible'],false);
-  assert.strictEqual(h.button('comment-toggle').getAttribute('aria-pressed'),'false');
+  assert.strictEqual(h.values.enableCommentPreview,true);
+  assert.strictEqual(h.values['sceneSearch.commentPreviewVisible'],true);
+  assert.strictEqual(h.button('comment-toggle').getAttribute('aria-pressed'),'true');
   h.close();
  });
  it('selects 0 seconds, really hides seek buttons and restores them',()=>{

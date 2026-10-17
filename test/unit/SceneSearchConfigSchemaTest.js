@@ -48,11 +48,11 @@ describe('SCUI-02 scene-search preference schema and compatibility',function(){
   it('allows only stable layout IDs 01 through 10 on both screen modes',()=>{
     const {options}=configSchema();
     for(const key of ['sceneSearch.layout.normal','sceneSearch.layout.fullscreen']){
-      for(let i=1;i<=10;i++){
+      for(let i=0;i<=10;i++){
         const id=String(i).padStart(2,'0');
         assert.strictEqual(options.validateImport(key,id),true,key+':'+id);
       }
-      for(const invalid of ['00','11','1','010',1,null,[],{},false,'<script>']){
+      for(const invalid of ['11','1','010',1,null,[],{},false,'<script>']){
         assert.strictEqual(options.validateImport(key,invalid),false,key+':'+invalid);
       }
     }

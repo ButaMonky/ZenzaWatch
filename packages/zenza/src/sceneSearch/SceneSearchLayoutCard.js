@@ -75,7 +75,7 @@ class SceneSearchLayoutCard {
         ['seek-forward','›','指定秒数進む'],
         ['more','⋯','シーンサーチの追加操作'],
         ['pin','📌','シーンサーチを固定'],
-        ['comment-toggle','💬','コメントプレビュー表示切替'],
+        ['comment-toggle','💬','流れるコメント／一覧の切替'],
         ['comment-search','⌕','コメント検索'],
         ['seek-step','5秒','移動秒数設定']
       ])buttons.appendChild(SceneSearchLayoutCard.button(d,name,symbol,aria));
@@ -136,7 +136,11 @@ class SceneSearchLayoutCard {
     pin.setAttribute('aria-pressed',String(state.pinned===true));
     pin.title=state.pinned?'固定解除':'シーンサーチを固定';
     const comment=this.root.querySelector('[data-scui-action="comment-toggle"]');
-    comment.setAttribute('aria-pressed',String(state.commentPreviewVisible!==false));
+    comment.setAttribute('aria-pressed',String(state.commentListMode===true));
+    const modeAction=state.commentListMode?'サムネイルに重ねて流れるコメントに切り替え':
+      'シーンサーチのコメント一覧に切り替え';
+    comment.setAttribute('aria-label',modeAction);
+    comment.title=modeAction+(state.commentPreviewVisible===false?'（コメント表示はOFF）':'');
   }
   onPreview(asset) {
     if(!this.root){return;}

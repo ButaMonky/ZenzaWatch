@@ -33,7 +33,7 @@ class SceneSearchController {
     const key=mode==='fullscreen'&&!linked?
       'sceneSearch.layout.fullscreen':'sceneSearch.layout.normal';
     const id=this._pref(key,'01');
-    return typeof id==='string'&&/^(0[1-9]|10)$/.test(id)?id:'01';
+    return typeof id==='string'&&/^(00|0[1-9]|10)$/.test(id)?id:'01';
   }
   _stepSeconds() {
     const v=this._pref('sceneSearch.seekStepSeconds',5);
@@ -46,7 +46,8 @@ class SceneSearchController {
     return Object.freeze({mode:this._mode,layoutId:this._layoutId,
       videoId:this._videoId,time:this._time,pinned:this._pinned,
       shown:this._shown,seekStepSeconds:this._stepSeconds(),
-      commentPreviewVisible:this._previewEnabled()});
+      commentPreviewVisible:this._previewEnabled(),
+      commentListMode:this._pref('enableCommentPreview',false)===true});
   }
   _ensureReady() {
     if(this._disposed){throw new Error('SceneSearchController has been disposed');}

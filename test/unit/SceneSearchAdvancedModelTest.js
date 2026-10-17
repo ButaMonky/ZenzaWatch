@@ -43,8 +43,8 @@ describe('SCUI-09 advanced scene-search descriptors and shared settings',()=>{
  it('has eight canonical keys under 画面・映像 > シーンサーチ',()=>{
    const {model}=fixture();
    const entries=model.sectionDescriptors('画面・映像','シーンサーチ');
-   assert.strictEqual(entries.length,8);
-   assert.strictEqual(new Set(entries.map(x=>x.id)).size,8);
+   assert.strictEqual(entries.length,9);
+   assert.strictEqual(new Set(entries.map(x=>x.id)).size,9);
    for(const k of Object.keys(prefs).filter(x=>x.startsWith('sceneSearch.'))){
      const d=model.descriptor(k);
      assert(d,k);
@@ -58,7 +58,7 @@ describe('SCUI-09 advanced scene-search descriptors and shared settings',()=>{
      const d=model.descriptor('sceneSearch.layout.'+mode);
      assert.strictEqual(d.type,'select');
      assert.deepStrictEqual(Array.from(d.options,x=>x.value),
-       Array.from({length:10},(_,i)=>String(i+1).padStart(2,'0')));
+       Array.from({length:11},(_,i)=>String(i).padStart(2,'0')));
    }
  });
  it('links fullscreen without deleting its saved choice',()=>{

@@ -227,8 +227,10 @@ function registerSceneLayouts01_02(registry) {
                     card.root.offsetWidth||frameWidth;
                   const margin=8;
                   const desiredPaneWidth=state.commentListMode===true?350:180;
-                  const gap=viewport>=rootWidth+40+desiredPaneWidth+margin*2?
-                    40:8;
+                  // Task727: keep the native mini-comment pane adjacent to
+                  // the image. The old 40px tool-rail reservation visibly
+                  // shifted comments right on the actual NicoNico player.
+                  const gap=8;
                   const paneWidth=Math.max(1,Math.min(desiredPaneWidth,
                     viewport-margin*2-rootWidth-gap));
                   const half=rootWidth/2;
@@ -250,13 +252,14 @@ function registerSceneLayouts01_02(registry) {
               }else if(state.pinned===true&&Number.isFinite(previous)){
                 x=clamp(previous);
               }
-              // Only tool buttons (not the comment pane) may flip their
-              // rail to remain reachable near the viewport edge.
-              const railClearance=usable/2+35;
-              const canRight=visibleRight-x>=railClearance;
-              const canLeft=x-visibleLeft>=railClearance;
-              card.root.classList.toggle('is-tools-left',!canRight&&canLeft);
-              card.root.classList.toggle('is-tools-overlap',!canRight&&!canLeft);
+              // The tool rail used to live in a 40px empty strip BETWEEN
+              // thumbnail and comments. Now keep it LEFT of the thumbnail.
+              // At the physical left edge use its existing inside-card
+              // fallback so no button goes outside the viewport. The scene
+              // and comment pane NEVER reverse sides.
+              const railFitsLeft=x-visibleLeft>=usable/2+31;
+              card.root.classList.toggle('is-tools-left',railFitsLeft);
+              card.root.classList.toggle('is-tools-overlap',!railFitsLeft);
               card.root.style.setProperty('--scene-x',Math.round(x)+'px');
             }else{
               container.dataset.sceneNarrow=String(width<580);

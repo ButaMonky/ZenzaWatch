@@ -575,7 +575,7 @@ class SceneSearchIntegrationBridge {
     // clamp here caused the native comment view to leave the right edge.
     const configuredGap=Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
     const configuredWidth=Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
-    const gap=Number.isFinite(configuredGap)?configuredGap:40;
+    const gap=Number.isFinite(configuredGap)?configuredGap:8;
     const margin=8;
     const room=(viewport-margin-rect.right-gap*scale)/scale;
     const panelWidth=Number.isFinite(configuredWidth)&&configuredWidth>0?
@@ -855,8 +855,8 @@ class SceneSearchIntegrationBridge {
   position:absolute;z-index:250;max-height:200px;
   pointer-events:auto!important;overflow:auto;transform:none!important
 }
-/* UI01: native comment panel is a SIBLING of the image, not an overlay.
-   Keep seek-thumbnail tracking unchanged; flip the side near viewport edges. */
+/* UI01: the original native comment panel is a SIBLING of the image,
+   always on its RIGHT. Never reparent virtual chat rows or swap panes. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side{
   position:absolute!important;
   left:var(--scui-side-left,calc(100% + 8px))!important;

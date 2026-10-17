@@ -141,9 +141,15 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     record(label+'/classic-flow-scene-left',separate&&side.top>=-1&&
       side.left>=7&&side.right<=innerWidth-7,
       {placement,image:image.toJSON(),side:side.toJSON()});
+    // Task727: image and mini-comment MUST be visually adjacent, not 40px
+    // apart. Old tests considered the 40px drift "normal" and missed live QA.
+    const visualGap=side.left-image.right;
+    record(label+'/classic-mini-right-shift',visualGap>=3&&visualGap<=18,
+      {visualGap,imageRight:image.right,commentLeft:side.left,
+       mode,seekPercent:pct,layout:root.dataset.layout});
     if(portal){
-      // The original order never reverses. Narrow viewports reduce the gap
-      // from 40px to 8px so the right pane still fits on screen.
+      // Both normal and narrow layouts use the same short 8px rail-free
+      // gap; virtual comments retain their original independent animation.
       record(label+'/fixed-panel-order',placement==='right'&&
         side.left>=image.right+gap-2&&side.right<=innerWidth-7,
         {placement,gap,scene:image.toJSON(),comment:side.toJSON()});
@@ -220,6 +226,18 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       getComputedStyle(commentView).pointerEvents!=='none',
       {placement,image:image.toJSON(),side:side.toJSON()});
     const listStyle=getComputedStyle(commentView);
+    const commentToggle=root.querySelector('.scene-comment-toggle');
+    const toggleRect=commentToggle?.getBoundingClientRect();
+    const toggleStyle=commentToggle?getComputedStyle(commentToggle):null;
+    if(toggleRect&&toggleStyle.display!=='none'&&
+      toggleStyle.visibility==='visible'){
+      const hit=document.elementFromPoint(toggleRect.left+toggleRect.width/2,
+        toggleRect.top+toggleRect.height/2);
+      record(label+'/classic-mode-toggle-hit',hit===commentToggle||
+        commentToggle.contains(hit),
+        {button:toggleRect.toJSON(),hit:hit?.className||hit?.tagName,
+         pane:side.toJSON()});
+    }
     const listChannels=(listStyle.backgroundColor.match(/[\d.]+/g)||[]).map(Number);
     const listAlpha=listChannels.length>=4?listChannels[3]:1;
     record(label+'/classic-list-contrast',Number(listStyle.opacity)>=.99&&

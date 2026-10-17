@@ -33,15 +33,15 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.292-scui01-clamp-fullscreen
+// @version        2.7.293-scui01-mini-align
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
-// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task725-scui01-clamp-fullscreen/dist/ZenzaWatch-dev.user.js
-// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task725-scui01-clamp-fullscreen/dist/ZenzaWatch-dev.user.js
+// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task727-scui01-mini-align/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task727-scui01-mini-align/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 16:15Z 76cb347
+// build: 2026-10-17 16:58Z 697fe09
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.292-scui01-clamp-fullscreen';
+    var VER = '2.7.293-scui01-mini-align';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 16:15Z 76cb347';
+    var BUILD = '2026-10-17 16:58Z 697fe09';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35077,7 +35077,7 @@ class SceneSearchIntegrationBridge {
 			rect.width/root.offsetWidth:1;
 		const configuredGap=Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
 		const configuredWidth=Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
-		const gap=Number.isFinite(configuredGap)?configuredGap:40;
+		const gap=Number.isFinite(configuredGap)?configuredGap:8;
 		const margin=8;
 		const room=(viewport-margin-rect.right-gap*scale)/scale;
 		const panelWidth=Number.isFinite(configuredWidth)&&configuredWidth>0?
@@ -35347,8 +35347,8 @@ class SceneSearchIntegrationBridge {
 	position:absolute;z-index:250;max-height:200px;
 	pointer-events:auto!important;overflow:auto;transform:none!important
 }
-/* UI01: native comment panel is a SIBLING of the image, not an overlay.
-	Keep seek-thumbnail tracking unchanged; flip the side near viewport edges. */
+/* UI01: the original native comment panel is a SIBLING of the image,
+	always on its RIGHT. Never reparent virtual chat rows or swap panes. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 >.zenzaCommentPreview.is-scui-classic-side{
 	position:absolute!important;
 	left:var(--scui-side-left,calc(100% + 8px))!important;
@@ -36372,8 +36372,7 @@ function registerSceneLayouts01_02(registry) {
 										card.root.offsetWidth||frameWidth;
 									const margin=8;
 									const desiredPaneWidth=state.commentListMode===true?350:180;
-									const gap=viewport>=rootWidth+40+desiredPaneWidth+margin*2?
-										40:8;
+									const gap=8;
 									const paneWidth=Math.max(1,Math.min(desiredPaneWidth,
 										viewport-margin*2-rootWidth-gap));
 									const half=rootWidth/2;
@@ -36395,11 +36394,9 @@ function registerSceneLayouts01_02(registry) {
 							}else if(state.pinned===true&&Number.isFinite(previous)){
 								x=clamp(previous);
 							}
-							const railClearance=usable/2+35;
-							const canRight=visibleRight-x>=railClearance;
-							const canLeft=x-visibleLeft>=railClearance;
-							card.root.classList.toggle('is-tools-left',!canRight&&canLeft);
-							card.root.classList.toggle('is-tools-overlap',!canRight&&!canLeft);
+							const railFitsLeft=x-visibleLeft>=usable/2+31;
+							card.root.classList.toggle('is-tools-left',railFitsLeft);
+							card.root.classList.toggle('is-tools-overlap',!railFitsLeft);
 							card.root.style.setProperty('--scene-x',Math.round(x)+'px');
 						}else{
 							container.dataset.sceneNarrow=String(width<580);

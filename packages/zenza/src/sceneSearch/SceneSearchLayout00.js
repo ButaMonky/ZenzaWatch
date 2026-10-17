@@ -70,6 +70,10 @@ class SceneSearchLayout00 {
         const mini = this.settings.getMiniCommentMode?.() || 'flow';
         this.container.classList.toggle('is-scui00-mini-static', mini === 'static');
         this.container.classList.toggle('is-scui00-mini-hidden', mini === 'hidden');
+        // Unlike modern cards, UI00 reuses the native tooltip and sibling comment
+        // view. The native seek:hover CSS ignores controller.shown; suppress both
+        // siblings explicitly until the shared idle limiter resumes the preview.
+        this.container.classList.toggle('is-scui00-inactive', state?.shown === false);
         const image = this.tooltip?.querySelector('.zenzaSeekThumbnail.is-visible .zenzaSeekThumbnail-image') || null;
         if (image !== this.lastImage)
             this.syncMiniGeometry();
@@ -145,11 +149,11 @@ class SceneSearchLayout00 {
         this.onResize = null;
         this.geometry = null;
         this.tooltip?.style.removeProperty('--scui00-position');
-        this.tooltip?.classList.remove('is-scui00-root');
+        this.tooltip?.classList.remove('is-scui00-root', 'is-idle-suppressed');
         this.seekOwner?.style.removeProperty('--scui00-comment-x');
         this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
         this.lastImage = null;
-        this.container.classList.remove('is-scui00-active', 'is-scui00-mini-static', 'is-scui00-mini-hidden');
+        this.container.classList.remove('is-scui00-active', 'is-scui00-mini-static', 'is-scui00-mini-hidden', 'is-scui00-inactive');
         this.style?.remove();
         this.track = null;
         this.onMove = null;
@@ -242,6 +246,15 @@ class SceneSearchLayout00 {
 /* No floating comments without the corresponding Storyboard picture. */
 .is-scui00-active .seekBarContainer:not(.enableCommentPreview):not(:has(.zenzaSeekThumbnail.is-visible))
   >.zenzaCommentPreview{display:none!important;}
+/* The shared idle limiter controls shown=false. Native VideoControlBar hover
+   CSS otherwise keeps the image and list visible forever while the pointer
+   stays over the seekbar. Suppress both ORIGINAL sibling nodes, never clone. */
+.is-scui00-active.is-scui00-inactive .seekBarToolTip.is-scui00-root{
+  opacity:0!important;visibility:hidden!important;pointer-events:none!important;
+}
+.is-scui00-active.is-scui00-inactive .seekBarContainer>.zenzaCommentPreview{
+  display:none!important;visibility:hidden!important;pointer-events:none!important;
+}
 `;
     }
 }

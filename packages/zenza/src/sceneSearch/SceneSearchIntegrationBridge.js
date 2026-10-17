@@ -173,6 +173,7 @@ class SceneSearchIntegrationBridge {
         card.mount(state);
         if(id==='00'){
           this._active=card;
+          this._mountLegacyControls(card);
           return;
         }
         this._hideLegacyTooltip();
@@ -236,6 +237,8 @@ class SceneSearchIntegrationBridge {
       },
       dispose:()=>{
         if(id==='00'){
+          this._cardCleanup?.();
+          this._cardCleanup=null;
           card.dispose(); // restores the exact original seekbar/comment owners
           if(this._active===card)this._active=null;
           return;
@@ -382,6 +385,44 @@ class SceneSearchIntegrationBridge {
     };
     this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
     this.refreshSharedThumbnail();
+  }
+  _mountLegacyControls(card) {
+    // UI00 deliberately has no new scene card. Its native seek tooltip
+    // buttons and the separate scrollable CommentPreview are still controls:
+    // hovering/focusing either must pause BOTH leave/corridor and idle timers.
+    const nodes=[card?.root,this._commentPreviewElement].filter(Boolean);
+    let hovered=false,focused=false,active=false;
+    const owns=node=>nodes.some(root=>root===node||root.contains?.(node));
+    const sync=()=>{
+      const next=hovered||focused;
+      if(next===active)return;
+      active=next;
+      if(next)this.interaction.previewEnter();
+      else this.interaction.previewLeave();
+    };
+    const onEnter=()=>{hovered=true;sync();};
+    const onLeave=e=>{
+      if(owns(e?.relatedTarget))return;
+      hovered=false;sync();
+    };
+    const onFocusIn=()=>{focused=true;sync();};
+    const onFocusOut=e=>{
+      if(owns(e?.relatedTarget))return;
+      focused=false;sync();
+    };
+    const bindings=[
+      ['mouseenter',onEnter],['mouseleave',onLeave],
+      ['focusin',onFocusIn],['focusout',onFocusOut]
+    ];
+    for(const node of nodes)for(const [key,handler] of bindings){
+      node.addEventListener(key,handler);
+    }
+    this._cardCleanup=()=>{
+      for(const node of nodes)for(const [key,handler] of bindings){
+        node.removeEventListener(key,handler);
+      }
+      if(active){active=false;this.interaction.previewLeave();}
+    };
   }
   _releaseCard(card) {
     if(this._active!==card){return;}

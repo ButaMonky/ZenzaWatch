@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.274-scui00
+// @version        2.7.275-scui00-idle
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 03:31Z c46975b
+// build: 2026-10-17 04:19Z 1e28825
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.274-scui00';
+    var VER = '2.7.275-scui00-idle';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 03:31Z c46975b';
+    var BUILD = '2026-10-17 04:19Z 1e28825';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -34692,6 +34692,7 @@ class SceneSearchIntegrationBridge {
 				card.mount(state);
 				if(id==='00'){
 					this._active=card;
+					this._mountLegacyControls(card);
 					return;
 				}
 				this._hideLegacyTooltip();
@@ -34755,6 +34756,8 @@ class SceneSearchIntegrationBridge {
 			},
 			dispose:()=>{
 				if(id==='00'){
+					this._cardCleanup?.();
+					this._cardCleanup=null;
 					card.dispose(); // restores the exact original seekbar/comment owners
 					if(this._active===card)this._active=null;
 					return;
@@ -34898,6 +34901,41 @@ class SceneSearchIntegrationBridge {
 		};
 		this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
 		this.refreshSharedThumbnail();
+	}
+	_mountLegacyControls(card) {
+		const nodes=[card?.root,this._commentPreviewElement].filter(Boolean);
+		let hovered=false,focused=false,active=false;
+		const owns=node=>nodes.some(root=>root===node||root.contains?.(node));
+		const sync=()=>{
+			const next=hovered||focused;
+			if(next===active)return;
+			active=next;
+			if(next)this.interaction.previewEnter();
+			else this.interaction.previewLeave();
+		};
+		const onEnter=()=>{hovered=true;sync();};
+		const onLeave=e=>{
+			if(owns(e?.relatedTarget))return;
+			hovered=false;sync();
+		};
+		const onFocusIn=()=>{focused=true;sync();};
+		const onFocusOut=e=>{
+			if(owns(e?.relatedTarget))return;
+			focused=false;sync();
+		};
+		const bindings=[
+			['mouseenter',onEnter],['mouseleave',onLeave],
+			['focusin',onFocusIn],['focusout',onFocusOut]
+		];
+		for(const node of nodes)for(const [key,handler] of bindings){
+			node.addEventListener(key,handler);
+		}
+		this._cardCleanup=()=>{
+			for(const node of nodes)for(const [key,handler] of bindings){
+				node.removeEventListener(key,handler);
+			}
+			if(active){active=false;this.interaction.previewLeave();}
+		};
 	}
 	_releaseCard(card) {
 		if(this._active!==card){return;}
@@ -35759,6 +35797,7 @@ class SceneSearchLayout00 {
 				const mini = this.settings.getMiniCommentMode?.() || 'flow';
 				this.container.classList.toggle('is-scui00-mini-static', mini === 'static');
 				this.container.classList.toggle('is-scui00-mini-hidden', mini === 'hidden');
+				this.container.classList.toggle('is-scui00-inactive', state?.shown === false);
 				const image = this.tooltip?.querySelector('.zenzaSeekThumbnail.is-visible .zenzaSeekThumbnail-image') || null;
 				if (image !== this.lastImage)
 						this.syncMiniGeometry();
@@ -35834,11 +35873,11 @@ class SceneSearchLayout00 {
 				this.onResize = null;
 				this.geometry = null;
 				this.tooltip?.style.removeProperty('--scui00-position');
-				this.tooltip?.classList.remove('is-scui00-root');
+				this.tooltip?.classList.remove('is-scui00-root', 'is-idle-suppressed');
 				this.seekOwner?.style.removeProperty('--scui00-comment-x');
 				this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
 				this.lastImage = null;
-				this.container.classList.remove('is-scui00-active', 'is-scui00-mini-static', 'is-scui00-mini-hidden');
+				this.container.classList.remove('is-scui00-active', 'is-scui00-mini-static', 'is-scui00-mini-hidden', 'is-scui00-inactive');
 				this.style?.remove();
 				this.track = null;
 				this.onMove = null;
@@ -35931,6 +35970,15 @@ class SceneSearchLayout00 {
 /* No floating comments without the corresponding Storyboard picture. */
 .is-scui00-active .seekBarContainer:not(.enableCommentPreview):not(:has(.zenzaSeekThumbnail.is-visible))
 	>.zenzaCommentPreview{display:none!important;}
+/* The shared idle limiter controls shown=false. Native VideoControlBar hover
+	CSS otherwise keeps the image and list visible forever while the pointer
+	stays over the seekbar. Suppress both ORIGINAL sibling nodes, never clone. */
+.is-scui00-active.is-scui00-inactive .seekBarToolTip.is-scui00-root{
+	opacity:0!important;visibility:hidden!important;pointer-events:none!important;
+}
+.is-scui00-active.is-scui00-inactive .seekBarContainer>.zenzaCommentPreview{
+	display:none!important;visibility:hidden!important;pointer-events:none!important;
+}
 `;
 		}
 }

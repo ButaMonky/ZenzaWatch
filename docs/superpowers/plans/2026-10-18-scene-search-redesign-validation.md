@@ -1,5 +1,53 @@
 # シーンサーチ Task801：実機指摘への修正確認版
 
+## 2.7.309-task801：プレイヤー外と誤判定される入力無効化を修正
+
+ユーザー提供の診断revision 2で、表示中の「…」と前後ボタンにclick listenerが存在しても、pointer-eventsがnoneになり、クリックが背後のtouchWrapper等へ届いていることを確認した。適用元はNicoVideoPlayerDialogの `body.zenzaScreenMode_* >*:not(.zen-family) *` 規則。body直下へ追加する新プレビューのportalにzen-familyがなく、プレイヤー外のページとして入力・アニメーションの無効化とcontain指定を受けていた。
+
+修正はSceneSearchIntegrationBridgeのportalへ既存のプレイヤー識別クラスzen-familyを付けること。portal自体のpointer-events:noneは維持し、空白領域が画面全体の操作を遮らないようにする。新しいボタンや入力経路は追加していない。従来表示は既存プレイヤー内にあるため、この原因と同一とは扱わない。
+
+検証：
+
+- 実ソースから当該CSS規則を取り込んだオフラインChrome環境で、配布済み2.7.308の「…」クリックとヒット判定の失敗を再現（RED）。従来のfixtureはこの規則を含まず、見逃していた。
+- 修正後の配布物から28宣言を抽出して検証：860項目成功、終了コード0。追従・固定、通常・全画面・小画面、画面幅320/768/1536を含む。通常・ワイド・大画面・3D・小画面の入力規則、背景ページの入力保護、「…」のマウス・Enter操作、前進による既存seekBy呼び出しを確認。
+- 関連ユニットテスト：319 passing、終了コード0。全体テストはこの版で再実行していない。
+- サンドボックスビルド成功。変更された配布物はZenzaWatch-dev.user.jsのみ。設定単体版は0.3.63-task801で不変。@versionと起動ログを2.7.309-task801へ更新。
+
+成果物：`review/task801/ZenzaWatch-dev.user.js`。SHA256: `06425d86ac2ef43bfe9fa5175cf9349cd9782623b3b43878e8ded2f689f2134b`。
+証跡：`C:/Users/Saito/Documents/WanzaWatch-project/verify-logs/task801-309-20261018/`。
+
+実サイト全体や実際の再生位置更新はオフライン検証の対象外。実機修復完了とはせず、ユーザーによる「…」と前後ボタンの確認待ち。developへの統合・pushは行わない。以下の調査記録は各時点の経過として保持する。
+
+## 2.7.308 実機確認失敗・操作経路の再調査
+
+ユーザーは2.7.308-task801でも「…」と前後シークが反応しないと報告した。下記のオフライン検証合格を、実機修復完了と扱ってはならない。統合は引き続き保留。
+
+ユーザー方針：旧版と同じ機能には旧版の処理を共用する。新しいUI案・ボタン追加・更新配布の整備より、操作不良の修復を優先する。
+
+コード上で確認した共用範囲：
+
+- ミニコメントは既存のCommentPreviewView、サムネイルは既存のSeekBarThumbnailを使用する。独立一覧も既存CommentPreviewのcreateListViewを使用する。
+- 従来の前後ボタンはSeekBarToolTip._onMouseDownからcommandイベントを送り、プレイヤーのseekByへ到達する。
+- 新しい前後ボタンはSceneSearchPreviewView → IntegrationBridge → ShortcutRouter → Controller → LegacyAdapterからdialog.execCommand('seekBy', delta)を呼ぶ。最終的な再生位置変更は既存処理を使用しているが、入力を受け取る手前の経路は異なる。
+- 新しい一覧の行クリックは既存CommentPreviewViewのcommandイベントをポータルから元のプレイヤーへ転送している。
+- 文字入力による検索欄SceneCommentSearch / SceneCommentSearchPanelは、SCUI導入時の追加実装（履歴66e311b）。既存のフィルター済みコメントを検索し、選択後は既存seekへ接続する。元のVideoControlBar / CommentPanelには同等の文字入力検索を確認できていない。「コメントサーチ」がプレビュー一覧を意味する場合、一覧自体は上記の既存部品を使っている。
+
+検証の不足：現在のブラウザーfixtureはexecCommandを呼び出し記録へ置換し、元のtooltipの切替も簡略化している。実プレイヤー全体の入力経路と再生位置更新の検証にはなっていない。マウスのヒット判定とボタン処理を切り分けるため、現行版でTab/Enterによる「…」操作の結果をユーザーへ確認中。原因を特定する前に、イベント方式の変更を修正版として配布しない。
+
+追加確認：ユーザーはキーボードでも「…」が開かないと回答。マウスの座標だけで説明できる問題とは扱わない。
+
+- ブラウザー検証に `--distribution` を追加。配布済みの `review/task801/ZenzaWatch-dev.user.js` から28個の宣言を抽出して同じfixtureへ読み込み、ソースだけを検証していた不足を補った。ページ全体やTampermonkeyの実行環境の再現ではない。
+- 「…」のEnter操作と、前後操作のうち進むボタンがseekByを1回呼ぶことを追加検証。配布済み2.7.308の部品では800件成功（終了コード0）。実機では依然失敗しているため、修復成功とは扱わない。ログ：`C:/Users/Saito/Documents/WanzaWatch-project/verify-logs/task801-308-distribution-input.log`。初回のEnterテストはCDP入力に文字イベントが不足したテスト側の不備で失敗し、実際のEnter入力に修正して再実行した。
+- 製品コード・配布物は変更していない。実画面でのクリック直後のConsoleエラーの確認が次の調査に必要。実サイトの自動接続拒否を別手段で回避しない。
+
+ユーザー提供Consoleログを確認：2.7.308-task801の起動あり。広告・計測通信のERR_BLOCKED_BY_CLIENT、広告情報APIの404、iframe sandbox警告、外部inject.jsの警告があるが、SCUIのボタン操作に対応する例外は見当たらない。これらを原因と断定しない。ログ内の個人識別子や閲覧情報はこの報告へ転記しない。
+
+`review/task801/scene-input-diagnostic.js` を用意した。ユーザーがConsoleで手動実行する一時診断で、製品の更新ではない。プレビュー操作に限定してdocument capture / root bubble / 操作後の開閉状態 / 中央のヒット対象 / 取得可能なら既存click listener数を記録する。コメント本文・アカウント・URL・保存設定を読まず、通信・保存・再生操作もしない。30秒で自動解除。構文確認と独立DOMでのイベント観測・既存操作の維持・解除を検証済み。次はユーザー提供の `[SCUI診断]` 出力を確認する。
+
+初回診断のユーザー結果：topDocument=true、followのroot clickListeners=1、events=0。開始・終了ともボタンのwidth/height=0で、pointerEvents=none。表示中の測定がないためnoneを原因と断定しない。初回診断はプレビュー外へ通り抜けたイベントを除外しており、表示時点の情報も記録していなかった。
+
+診断revision 2では最大2分間プレビューの表示を待ち、表示検出後の30秒を観測する。表示時のgeometry・ヒット対象・ボタンからbodyまでのpointer-eventsと一致するCSS規則を記録。プレビュー領域内で別要素へ届いたクリックも記録し、全体のpointerdownは件数のみ数える。独立DOMで非表示→表示の検出、下層要素への通過クリック、既存処理の維持、解除を検証済み。製品コードと配布版は引き続き変更していない。
+
 ## 2.7.308-task801（2026-10-18）
 
 修復を優先するユーザー指示に従い、追加ボタンの新設、設定画面の再設計、更新配布の仕組み、developへの統合は保留。

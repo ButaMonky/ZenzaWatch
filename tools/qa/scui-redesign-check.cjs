@@ -9,10 +9,45 @@ const oldTest=fs.readFileSync('test/browser/scui-live-layouts.js','utf8');
 html=html.replace(oldTest,'const nativeTooltipTemplate='+JSON.stringify(css('src/VideoControlBar.js','SeekBarToolTip.__tpl__'))+';\n'+fs.readFileSync('tools/qa/scui-redesign-fixture.js','utf8'));
 function css(file,tag){const source=fs.readFileSync(file,'utf8'),start=source.indexOf(tag+' = (\x60');
  if(start<0)throw Error('Native CSS missing '+tag);const a=source.indexOf('\x60',start)+1,b=source.indexOf('\x60).trim()',a);return source.slice(a,b);}
+const nativeDialog=fs.readFileSync('src/NicoVideoPlayerDialog.js','utf8');
+const pageInputGuard=nativeDialog.match(/body\.zenzaScreenMode_big >\*:not\(\.zen-family\)[\s\S]*?\}/)?.[0];
+if(!pageInputGuard?.includes('pointer-events: none'))throw Error('Native page input guard missing');
 html=html.replace('</style>','</style><style>'+css('src/VideoControlBar.js','SeekBarToolTip.__css__')+
  css('packages/zenza/src/storyboard/SeekBarThumbnail.js','SeekBarThumbnail.__css__')+
+ pageInputGuard+
  '#player:fullscreen{margin:0;width:100vw;height:100vh}#seek{z-index:20} .videoPlayer{pointer-events:auto}</style>');
 const baseline=process.argv.includes('--baseline');
+const distribution=process.argv.includes('--distribution');
+if(distribution){
+ if(baseline)throw Error('Choose either baseline or distribution');
+ const parser=require('@babel/parser'),traverse=require('@babel/traverse').default;
+ const {modules}=require('../../test/helpers/scenePlayerFixture');
+ const {beginSection}=require('../../test/helpers/extractSource');
+ const bundle=fs.readFileSync('review/task801/ZenzaWatch-dev.user.js','utf8'),declarations=new Map();
+ const remember=node=>{
+  const name=node.id?.name;if(!name)return;
+  if(!declarations.has(name))declarations.set(name,[]);
+  declarations.get(name).push(bundle.slice(node.start,node.end));
+ };
+ traverse(parser.parse(bundle,{sourceType:'script'}),{noScope:true,
+  ClassDeclaration:p=>remember(p.node),FunctionDeclaration:p=>remember(p.node),VariableDeclarator:p=>remember(p.node)});
+ let count=0;
+ for(const file of modules){
+  const original=beginSection(file),ast=parser.parse(original,{sourceType:'script'});
+  let replacement=original;
+  for(const node of [...ast.program.body].reverse()){
+   const nodes=node.type==='VariableDeclaration'?node.declarations:[node];
+   for(const part of [...nodes].reverse()){
+    if(!part.id?.name)continue;
+    const matches=declarations.get(part.id.name);
+    if(matches?.length!==1)throw Error('Ambiguous/missing distribution declaration: '+part.id.name);
+    replacement=replacement.slice(0,part.start)+matches[0]+replacement.slice(part.end);count++;
+   }
+  }
+  html=html.replace(original,replacement);
+ }
+ console.log('DISTRIBUTION_DECLARATIONS '+count);
+}
 if(baseline){
  const {modules}=require('../../test/helpers/scenePlayerFixture');
  const {beginSection}=require('../../test/helpers/extractSource');
@@ -23,7 +58,7 @@ if(baseline){
   if(section)html=html.replace(beginSection(file),section);
  }
 }
-const fixture=path.join(out,baseline?'redesign-baseline.html':'redesign.html');fs.writeFileSync(fixture,html);
+const fixture=path.join(out,baseline?'redesign-baseline.html':distribution?'redesign-distribution.html':'redesign.html');fs.writeFileSync(fixture,html);
 const profile=fs.mkdtempSync(path.join(os.tmpdir(),'scui801-'));let chrome;
 async function client(url){
  const ws=new WebSocket(url),waiting=new Map(),errors=[];let seq=0;
@@ -92,6 +127,12 @@ async function client(url){
     await move(anchor.x,anchor.y);await frame();
     const beforeLeave=await state();
     record(width+'/'+mode+'/'+layout+'/collapsed-height',beforeLeave.footer.height<=40&&beforeLeave.rect.height<=145,beforeLeave);
+    for(const screen of ['normal','wide','big','3D','small']){
+     await evaluate("document.body.className='zenzaScreenMode_"+screen+"';true");await frame();
+     const guard=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=more]'),r=b.getBoundingClientRect(),probe=document.createElement('div'),child=document.createElement('button');probe.append(child);document.body.append(probe);const background=getComputedStyle(child).pointerEvents;probe.remove();return {button:getComputedStyle(b).pointerEvents,hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),background,portal:getComputedStyle(root.parentElement).pointerEvents};})()");
+     record(width+'/'+mode+'/'+layout+'/native-input-guard/'+screen,guard.button==='auto'&&guard.hit&&guard.portal==='none'&&(screen==='small'||guard.background==='none'),guard);
+    }
+    await evaluate("document.body.className='zenzaScreenMode_big';true");await frame();
     await move(width-2,2);await frame();
     await evaluate("qaBinding.adapter.bridge.updatePlacementContext({context:'normal'});true");await frame();
     const afterLeave=await state();
@@ -104,6 +145,13 @@ async function client(url){
      await click('[data-scui-action="more"]');
      const more=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect();return {expanded:root.classList.contains('is-expanded'),hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),style:getComputedStyle(b).visibility};})()");
      record(width+'/'+mode+'/'+layout+'/more-click/'+reveal,more.expanded&&more.hit,more);
+     await evaluate("qaBinding.adapter.bridge._active.root.classList.remove('is-expanded');document.querySelector('[data-scui-action=more]').focus();true");
+     await c.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
+     await c.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});await frame();
+     record(width+'/'+mode+'/'+layout+'/more-keyboard/'+reveal,await evaluate("qaBinding.adapter.bridge._active.root.classList.contains('is-expanded')"),{});
+     await evaluate('qaNativeCommands.length=0;true');
+     await click('[data-scui-action=seek-forward]');
+     record(width+'/'+mode+'/'+layout+'/seek-command/'+reveal,await evaluate("qaNativeCommands.length===1&&qaNativeCommands[0][0]==='seekBy'&&qaNativeCommands[0][1]===5"),await evaluate('qaNativeCommands'));
      await click('[data-scui-action=seek-step]');
      const stepAccess=await evaluate("(()=>{const p=document.querySelector('.zenzaSceneStepPopup'),r=p.getBoundingClientRect(),root=qaBinding.adapter.bridge._active.root.getBoundingClientRect();return {height:r.height,inside:r.top>=root.top&&r.bottom<=root.bottom,visible:!p.hidden};})()");
      record(width+'/'+mode+'/'+layout+'/more-step/'+reveal,stepAccess.visible&&stepAccess.inside&&stepAccess.height>=64,stepAccess);
@@ -250,5 +298,5 @@ async function client(url){
  }
  record('no-browser-exceptions',c.errors.length===0,c.errors);
  console.log('TASK801_BROWSER_PASS '+checks.length);
- }finally{fs.writeFileSync(path.join(out,baseline?'task801-baseline.json':'task801-browser.json'),JSON.stringify({passed:checks.filter(c=>c.ok).length,failed:checks.filter(c=>!c.ok).length,cases:checks},null,2));c.close();chrome.kill();fs.closeSync(log);}
+ }finally{fs.writeFileSync(path.join(out,baseline?'task801-baseline.json':distribution?'task801-distribution.json':'task801-browser.json'),JSON.stringify({passed:checks.filter(c=>c.ok).length,failed:checks.filter(c=>!c.ok).length,cases:checks},null,2));c.close();chrome.kill();fs.closeSync(log);}
 })().catch(e=>{console.error('TASK801_BROWSER_FAIL '+e.stack);chrome?.kill();process.exitCode=1;});

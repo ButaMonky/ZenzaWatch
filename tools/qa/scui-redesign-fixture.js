@@ -2,6 +2,8 @@
 function events(){const m=new Map();return {on(k,f){if(!m.has(k))m.set(k,new Set());m.get(k).add(f);},
  off(k,f){m.get(k)?.delete(f);},emit(k,...a){for(const f of [...m.get(k)||[]])f(...a);}};}
 const host=document.getElementById('player'),seek=document.getElementById('seek');
+// Production exempts only player-owned body children from its page input guard.
+host.classList.add('zen-family');document.body.classList.add('zenzaScreenMode_big');
 const old=document.getElementById('old'),thumb=document.getElementById('thumb');
 old.className='seekBarToolTip';
 const tooltipTemplate=document.createElement('template');tooltipTemplate.innerHTML=nativeTooltipTemplate;

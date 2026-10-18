@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.308-task801
+// @version        2.7.309-task801
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 11:31Z
+// build: 2026-10-18 12:17Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.308-task801';
+    var VER = '2.7.309-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 11:31Z';
+    var BUILD = '2026-10-18 12:17Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35070,7 +35070,7 @@ class SceneSearchIntegrationBridge {
 	}
 	_createModernLayout({id,mode}){
 		const d=this.document,portal=d.createElement('div');
-		portal.className='zenzaScenePreviewPortal';
+		portal.className='zenzaScenePreviewPortal zen-family';
 		portal.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
 		(d.fullscreenElement||d.body).append(portal);
 		portal.addEventListener('command',event=>{

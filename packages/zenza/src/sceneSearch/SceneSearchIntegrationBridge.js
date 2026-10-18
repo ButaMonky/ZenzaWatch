@@ -283,7 +283,9 @@ class SceneSearchIntegrationBridge {
   }
   _createModernLayout({id,mode}){
     const d=this.document,portal=d.createElement('div');
-    portal.className='zenzaScenePreviewPortal';
+    // The native player disables input/animation on non-player body children.
+    // This portal owns player controls even when it is outside the dialog DOM.
+    portal.className='zenzaScenePreviewPortal zen-family';
     portal.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
     (d.fullscreenElement||d.body).append(portal);
     // Native row actions (seek / NG) still enter the original player dispatcher.

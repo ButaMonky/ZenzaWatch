@@ -6,7 +6,7 @@ process.chdir(root);
 require('./scui-browser-check.cjs');
 let html=fs.readFileSync(path.join(out,'fixture.html'),'utf8');
 const oldTest=fs.readFileSync('test/browser/scui-live-layouts.js','utf8');
-html=html.replace(oldTest,fs.readFileSync('tools/qa/scui-redesign-fixture.js','utf8'));
+html=html.replace(oldTest,'const nativeTooltipTemplate='+JSON.stringify(css('src/VideoControlBar.js','SeekBarToolTip.__tpl__'))+';\n'+fs.readFileSync('tools/qa/scui-redesign-fixture.js','utf8'));
 function css(file,tag){const source=fs.readFileSync(file,'utf8'),start=source.indexOf(tag+' = (\x60');
  if(start<0)throw Error('Native CSS missing '+tag);const a=source.indexOf('\x60',start)+1,b=source.indexOf('\x60).trim()',a);return source.slice(a,b);}
 html=html.replace('</style>','</style><style>'+css('src/VideoControlBar.js','SeekBarToolTip.__css__')+
@@ -79,6 +79,21 @@ async function client(url){
     await click('#seek');
     await evaluate("config.setValue('enableCommentPreview',true);true");await frame();
     record(width+'/'+mode+'/'+layout+'/semantic-layout',(await state()).layout===layout,await state());
+    await evaluate("config.setValue('sceneSearch.controlsReveal','click');config.setValue('sceneSearch.thumbnailScale',100);config.setValue('enableCommentPreview',false);true");await frame();
+    const anchor=await evaluate("(()=>{const r=seek.getBoundingClientRect();return {x:r.left+r.width*.2,y:r.top+r.height/2};})()");
+    await move(anchor.x,anchor.y);await frame();
+    const beforeLeave=await state();
+    record(width+'/'+mode+'/'+layout+'/collapsed-height',beforeLeave.footer.height<=40&&beforeLeave.rect.height<=145,beforeLeave);
+    await move(width-2,2);await frame();
+    await evaluate("qaBinding.adapter.bridge.updatePlacementContext({context:'normal'});true");await frame();
+    const afterLeave=await state();
+    record(width+'/'+mode+'/'+layout+'/leave-anchor',Math.abs(beforeLeave.rect.left-afterLeave.rect.left)<1,{beforeLeave,afterLeave});
+    await click('[data-scui-action="more"]');
+    const more=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect();return {expanded:root.classList.contains('is-expanded'),hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),style:getComputedStyle(b).visibility};})()");
+    record(width+'/'+mode+'/'+layout+'/more-click',more.expanded&&more.hit,more);
+    await click('[data-scui-action=comment-toggle]');
+    record(width+'/'+mode+'/'+layout+'/expanded-comment-click',!(await state()).listHidden,await state());
+    await evaluate("config.setValue('sceneSearch.controlsReveal','always');config.setValue('enableCommentPreview',true);true");await click('#seek');
     for(const scale of [50,100,150,200]){
      await evaluate("config.setValue('sceneSearch.thumbnailScale',"+scale+");true");await frame();
      let s=await state(),label=width+'/'+mode+'/'+layout+'/'+scale;
@@ -127,10 +142,23 @@ async function client(url){
    await evaluate("config.setValue('sceneSearch.presentation.'+(document.fullscreenElement?'fullscreen':'normal'),'legacy');config.setValue('enableCommentPreview',false);true");await frame();
    for(const scale of [50,100,150,200]){
     await evaluate("config.setValue('sceneSearch.thumbnailScale',"+scale+");true");await click('#seek');
-    const s=await evaluate("(()=>{const mini=bar._commentPreview._view._view,im=thumb.querySelector('canvas');return {mini:mini.getBoundingClientRect().toJSON(),image:im.getBoundingClientRect().toJSON(),owner:mini.parentNode===seek,scale:im.getBoundingClientRect().width/160};})()");
-    record(width+'/'+mode+'/legacy-scale'+scale,s.owner&&Math.abs(s.scale-s.mini.width/180)<.01&&Math.abs(s.mini.bottom-s.image.bottom)<2,s);
+    const s=await evaluate("(()=>{const mini=bar._commentPreview._view._view,im=thumb.querySelector('canvas');return {mini:mini.getBoundingClientRect().toJSON(),image:im.getBoundingClientRect().toJSON(),owner:mini.parentNode===seek,tip:old.getBoundingClientRect().toJSON(),scale:im.getBoundingClientRect().width/160};})()");
+    record(width+'/'+mode+'/legacy-scale'+scale,s.owner&&Math.abs(s.scale-s.mini.width/180)<.01&&Math.abs(s.mini.bottom-s.image.bottom)<2&&Math.abs((s.mini.left+s.mini.right)-(s.image.left+s.image.right))<2&&s.image.left>=s.tip.left&&s.image.right<=s.tip.right,s);
+    for(const edge of [2,width-2]){
+     const point=await evaluate('(()=>{const r=seek.getBoundingClientRect();return {x:Math.max(r.left+1,Math.min(r.right-1,'+edge+')),y:r.top+10};})()');
+     await move(point.x,point.y);await frame();
+     const aligned=await evaluate("(()=>{const m=bar._commentPreview._view._view.getBoundingClientRect(),i=thumb.querySelector('canvas').getBoundingClientRect();return {mini:m.toJSON(),image:i.toJSON(),error:Math.abs((m.left+m.right-i.left-i.right)/2)};})()");
+     record(width+'/'+mode+'/legacy-edge'+scale+'/'+edge,aligned.error<1.1,aligned);
+    }
+
    }
    await evaluate("config.setValue('enableCommentPreview',true);config.setValue('sceneSearch.commentListBackgroundOpacity',40);true");await click('#seek');
+   for(const scale of [50,100,150,200]){
+    await evaluate("config.setValue('sceneSearch.thumbnailScale',"+scale+");true");await frame();
+    const g=await evaluate("(()=>{const list=bar._commentPreview._view._view,t=old.querySelector('.seekBarThumbnailContainer');return {list:list.getBoundingClientRect().toJSON(),tip:old.getBoundingClientRect().toJSON(),thumbnailHidden:getComputedStyle(t).display==='none'};})()");
+    record(width+'/'+mode+'/legacy-switch'+scale,g.thumbnailHidden&&g.list.bottom<=g.tip.top-2,g);
+   }
+   if(width===768){const shot=await c.send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(out,'task801-'+mode+'-legacy-list.png'),Buffer.from(shot.data,'base64'));}
    record(width+'/'+mode+'/legacy-list-alpha',await evaluate("getComputedStyle(bar._commentPreview._view._view).backgroundColor==='rgba(7, 13, 24, 0.4)'"),{});
    await evaluate("config.setValue('sceneSearch.idleHideSeconds',0.5);true");await move(2,2);await click('#seek');await pause(700);
    record(width+'/'+mode+'/legacy-idle',await evaluate("!qaBinding.adapter.bridge.state.shown&&getComputedStyle(old).visibility==='hidden'&&getComputedStyle(bar._commentPreview._view._view).display==='none'"),{});

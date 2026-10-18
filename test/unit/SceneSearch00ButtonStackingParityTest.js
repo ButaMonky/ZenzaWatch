@@ -21,12 +21,12 @@ describe('Task637: UI00 original list switch-button stacking parity',()=>{
   assert(/z-index\s*:\s*160\s*!important/i.test(flowing),'native mini preview must be 160');
   assert(/z-index\s*:\s*100\s*!important/i.test(list),'native list must be behind exit button');
  });
- it('restores the native 24px transparent lower mouse corridor',()=>{
+ it('keeps list content above native controls without a painted transparent corridor',()=>{
   const css=Layout.CSS;
   const list=rule('.is-scui00-active .seekBarContainer.enableCommentPreview>.zenzaCommentPreview',css);
-  assert(/bottom\s*:\s*16px\s*!important/i.test(list));
-  assert(/border-bottom\s*:\s*24px solid transparent\s*!important/i.test(list),
-    'original VideoControlBar list uses a transparent bottom border near tooltip');
+  assert(list.includes("bottom:var(--scui00-list-bottom,76px)!important"));
+  assert(/border-bottom\s*:\s*0\s*!important/i.test(list),
+    'list must not paint a background behind the native controls');
   assert(/pointer-events\s*:\s*auto\s*!important/i.test(list),
     'comment rows remain clickable for seek');
  });

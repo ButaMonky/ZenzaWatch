@@ -4,7 +4,10 @@ function events(){const m=new Map();return {on(k,f){if(!m.has(k))m.set(k,new Set
 const host=document.getElementById('player'),seek=document.getElementById('seek');
 const old=document.getElementById('old'),thumb=document.getElementById('thumb');
 old.className='seekBarToolTip';
-old.innerHTML='<div class="seekBarThumbnailContainer"></div><div class="seekBarToolTipInner"><span class="currentTime">0:02</span><button class="controlButton toggleCommentPreview">💬</button></div>';
+const tooltipTemplate=document.createElement('template');tooltipTemplate.innerHTML=nativeTooltipTemplate;
+old.replaceChildren(...tooltipTemplate.content.firstElementChild.childNodes);
+old.querySelector('.currentTime').textContent='0:02';
+old.querySelector('.currentTime').style.width='50px';
 old.querySelector('.seekBarThumbnailContainer').append(thumb);
 thumb.classList.add('is-visible');
 thumb.innerHTML='<div class="zenzaSeekThumbnail-image"><canvas width="160" height="90" class="zenzaSeekThumbnail-thumbnail"></canvas></div>';
@@ -34,7 +37,7 @@ bar._commentPreview.chatList={top:[],bottom:[],naka:Array.from({length:40},(_,i)
  vpos:i*10,uniqNo:'browser'+i,text:'コメント '+i+'　★  ＡＡ',no:i,date:1600000000,
  userId:'fixture',duration:12,color:'#fff',fork:0}))};
 bar._commentPreview.currentTime=2;bar._commentPreview._view._onUpdate();bar._commentPreview._view.applyView();
-old.querySelector('button').onclick=()=>config.setValue('enableCommentPreview',!vals.enableCommentPreview);
+old.querySelector('.toggleCommentPreview').onclick=()=>config.setValue('enableCommentPreview',!vals.enableCommentPreview);
 seek.addEventListener('mousemove',e=>{
  const time=bar._sceneSearchPinnedTime?.()??2;
  bar._commentPreview.currentTime=time;bar._commentPreview.update(e.clientX);

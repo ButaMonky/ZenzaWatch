@@ -73,7 +73,7 @@ export class SceneSearchLayout00 {
   this.onResize=()=>{
    this.geometry=null;
    this.lastImage=null;
-   this.syncMiniGeometry();
+   this.syncMiniGeometry();this.syncListGeometry();
    if(this.currentClientX!==null)this.followPointer(this.currentClientX);
   };
   this.document.defaultView?.addEventListener('resize',this.onResize);
@@ -88,6 +88,7 @@ export class SceneSearchLayout00 {
   const mode=state?.commentListMode===true;
   const changed=mode!==this.listMode;
   this.listMode=mode;
+  if(changed){this.geometry=null;this.lastImage=null;}
   // Presentation-only. The VideoControlBar owns the data and the hover/list
   // selector; never reparent comments, toggle enableCommentPreview or change
   // the separate master sceneSearch.commentPreviewVisible setting.
@@ -115,7 +116,17 @@ export class SceneSearchLayout00 {
   this.container.classList.toggle('is-scui00-inactive',state?.shown===false);
   const image=this.tooltip?.querySelector('.zenzaSeekThumbnail.is-visible .zenzaSeekThumbnail-image')||null;
   if(image!==this.lastImage)this.syncMiniGeometry();
-  if(changed&&this.currentClientX!==null)this.followPointer(this.currentClientX);
+  if(this.listMode)this.syncListGeometry();
+  if((changed||!this.geometry)&&this.currentClientX!==null)this.followPointer(this.currentClientX);
+ }
+ syncListGeometry():void{
+  const seek=this.seekOwner,tip=this.tooltip;if(!seek||!tip)return;
+  const origin=seek.getBoundingClientRect(),rect=tip.getBoundingClientRect();
+  const scale=origin.width/(seek.offsetWidth||origin.width);
+  if(!Number.isFinite(scale)||scale<=0||rect.height<=0)return;
+  // The list replaces the entire thumbnail slot; keep native controls below it.
+  seek.style.setProperty('--scui00-list-bottom',((origin.bottom-rect.top)/scale+4)+'px');
+  seek.style.setProperty('--scui00-list-height',Math.max(24,Math.min(200,(rect.top-12)/scale))+'px');
  }
  syncMiniGeometry():void{
   const seek=this.seekOwner,tip=this.tooltip;
@@ -167,9 +178,12 @@ export class SceneSearchLayout00 {
      visibleLeft+(v-width)/2);
   };
   const tooltipWidth=g.tooltipWidth;
-  const commentWidth=this.listMode?Math.min(350,Math.max(120,viewportWidth-16)):tooltipWidth;
-  tip.style.setProperty('--scui00-position',place(tooltipWidth)+'px');
-  seek.style.setProperty('--scui00-comment-x',place(commentWidth)+'px');
+  const commentWidth=this.listMode?Math.min(350,Math.max(120,viewportWidth-16)):180*this.appearanceScale;
+  const tooltipLeft=place(tooltipWidth);
+  tip.style.setProperty('--scui00-position',tooltipLeft+'px');
+  // Flow overlays the image even when its wider controls stop at an edge.
+  const commentLeft=this.listMode?place(commentWidth):tooltipLeft+(tooltipWidth-commentWidth)/2;
+  seek.style.setProperty('--scui00-comment-x',commentLeft+'px');
  }
  dispose():void{
   this.restoreCommentControl();this.commentControl=null;
@@ -182,6 +196,8 @@ export class SceneSearchLayout00 {
   this.tooltip?.classList.remove('is-scui00-root','is-idle-suppressed');
   this.seekOwner?.style.removeProperty('--scui00-comment-x');
   this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
+  this.seekOwner?.style.removeProperty('--scui00-list-bottom');
+  this.seekOwner?.style.removeProperty('--scui00-list-height');
   this.lastImage=null;
   for(const {name,value,priority} of this.appearanceStyles){
    if(value)this.seekOwner?.style.setProperty(name,value,priority);
@@ -212,14 +228,24 @@ export class SceneSearchLayout00 {
   z-index:150!important;
 }
 .is-scui00-active .seekBarToolTip.is-scui00-root{
-  width:calc(180px * var(--scene-thumbnail-scale,1))!important;
+  width:max(180px,calc(180px * var(--scene-thumbnail-scale,1) + 10px))!important;
+}
+.is-scui00-active .seekBarContainer.enableCommentPreview .seekBarThumbnailContainer{
+  display:none!important;
+}
+.is-scui00-active .seekBarContainer.enableCommentPreview .seekBarToolTip.is-scui00-root{
+  width:180px!important;
 }
 .is-scui00-active .seekBarThumbnailContainer,
 .is-scui00-active .seekBarThumbnailContainer>.zenzaSeekThumbnail{
   width:calc(180px * var(--scene-thumbnail-scale,1))!important;
   height:calc(90px * var(--scene-thumbnail-scale,1))!important;
+  margin-inline:auto!important;
+  position:relative;
 }
 .is-scui00-active .seekBarThumbnailContainer .zenzaSeekThumbnail-image{
+  position:absolute!important;left:50%!important;top:0!important;
+  margin-left:-80px!important;margin-right:0!important;
   transform:scale(var(--scene-thumbnail-scale,1));
   transform-origin:center top;
 }
@@ -276,11 +302,9 @@ export class SceneSearchLayout00 {
 /* The native list remains scrollable with its original CSS and click actions. */
 .is-scui00-active .seekBarContainer.enableCommentPreview>.zenzaCommentPreview{
   width:min(350px,calc(100vw - 16px))!important;
-  height:200px!important;max-height:200px!important;
-  /* Original VideoControlBar: bottom:16px plus a 24px transparent
-     mouse corridor. Keep the tooltip controls (z-index:150) above list:100. */
-  bottom:16px!important;
-  border-bottom:24px solid transparent!important;
+  height:var(--scui00-list-height,200px)!important;max-height:200px!important;
+  bottom:var(--scui00-list-bottom,76px)!important;
+  border-bottom:0!important;
   z-index:100!important;
   opacity:1!important;display:block!important;
   background:rgba(7,13,24,var(--scene-list-alpha,.9))!important;

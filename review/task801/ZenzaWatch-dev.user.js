@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.306-task801
+// @version        2.7.307-task801
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 09:57Z
+// build: 2026-10-18 10:27Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.306-task801';
+    var VER = '2.7.307-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 09:57Z';
+    var BUILD = '2026-10-18 10:27Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -34594,7 +34594,8 @@ class SceneSearchPlacement {
 				let listWidth = listOpen ? clamp(availableW - padding - gap - Math.max(minLeft, iw * requested), 160, 280) : 0;
 				let imageScale = Math.min(requested, Math.max(.05, (availableW - padding - (listOpen ? gap + listWidth : 0)) / iw), Math.max(.05, (availableH - padding - 158) / ih));
 				const leftWidth = Math.max(minLeft, iw * imageScale);
-				const footer = Math.ceil(7 / Math.max(1, Math.floor((leftWidth + 2) / 38))) * 34 + 26;
+				const footer = Number.isFinite(input.footerHeight) ? Math.max(36, input.footerHeight) :
+						Math.ceil(7 / Math.max(1, Math.floor((leftWidth + 2) / 38))) * 34 + 26;
 				const width = Math.min(availableW, padding + leftWidth + (listOpen ? gap + listWidth : 0));
 				const height = Math.min(availableH, padding + Math.max(ih * imageScale + footer, listOpen ? 240 : 0));
 				const listMaxHeight = Math.max(32, height - padding);
@@ -34869,7 +34870,6 @@ class SceneSearchIntegrationBridge {
 			},
 			mouseleave:e=>{
 				this.interaction.seekLeave(e);
-				this._seekClientX=null;
 			},
 			pointerdown:e=>this._startPointer(e)
 		};
@@ -35086,12 +35086,12 @@ class SceneSearchIntegrationBridge {
 				list=this._createCommentList(portal);card.setListView(list);
 			}
 			card.render({...state,...prefs});
-			this._placeModern(card,state);
 			if(card.root){
 				card.root.dataset.sceneReveal=this.config.getValue('sceneSearch.controlsReveal')||'hover-focus';
 				card.root.dataset.sceneAnimation=this.config.getValue('sceneSearch.animation')||'subtle';
 			}
 			this._visibility?.refresh?.();
+			this._placeModern(card,state);
 			if(!state.shown&&!state.pinned)this.interaction?.clearCorridor?.();
 		};
 		return {get root(){return card.root;},
@@ -35133,9 +35133,11 @@ class SceneSearchIntegrationBridge {
 		}
 		const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
 		const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
-		const result=this._classes.Placement.compute({...g,layout:state.layoutId,context:this._placementContext,
+		const input={...g,layout:state.layoutId,context:this._placementContext,
 			imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,
-			anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold});
+			anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold};
+		let result=this._classes.Placement.compute(input);
+		if(card.measureFooter)result=this._classes.Placement.compute({...input,footerHeight:card.measureFooter(result.imageScale)});
 		this._placementResult=result;card.fit(result);
 		const x=g.origin.width&&portal?.clientWidth?portal.clientWidth/g.origin.width:1;
 		const y=g.origin.height&&portal?.clientHeight?portal.clientHeight/g.origin.height:1;
@@ -35165,6 +35167,7 @@ class SceneSearchIntegrationBridge {
 		}
 	}
 	_onCardAction(action,context) {
+		if(action==='more'){this._resumePlacement();return;}
 		if(action==='comment-toggle'){
 			if(this.config.resolveSceneSearch?.()?.listAllowed===false)return;
 			this.config.setValue('enableCommentPreview',
@@ -35389,9 +35392,9 @@ class SceneSearchIntegrationBridge {
 		if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
 	}
 	_bindPreviewSurface(node) {
-		const enter=()=>this.interaction.previewEnter(node);
+		const enter=()=>{this.interaction.previewEnter(node);this._resumePlacement();};
 		const leave=e=>{this.interaction.previewLeave(node,e);this._resumePlacement();};
-		const focus=()=>this.interaction.previewFocus(true,node);
+		const focus=()=>{this.interaction.previewFocus(true,node);this._resumePlacement();};
 		const blur=e=>{
 			if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
 		};
@@ -36069,6 +36072,7 @@ class SceneSearchPreviewView {
 								const button = this.root.querySelector('[data-scui-action="more"]');
 								button?.setAttribute('aria-expanded', 'false');
 								button?.focus();
+								this.onAction('more', { layoutId: this.id }, event);
 								event.preventDefault();
 								event.stopPropagation();
 						}
@@ -36254,6 +36258,15 @@ class SceneSearchPreviewView {
 				const step = root.querySelector('[data-scui-action="seek-step"]');
 				if (step)
 						step.textContent = (state.seekStepSeconds ?? 5) + '秒';
+		}
+		measureFooter(imageScale) {
+				const left = this.root?.querySelector('.zenzaSceneLeft');
+				const foot = this.root?.querySelector('.zenzaSceneFoot');
+				if (!left || !foot)
+						return 36;
+				left.style.width = Math.max(104, 180 * imageScale) + 'px';
+				foot.style.height = 'auto';
+				return Math.max(32, foot.scrollHeight) + 4;
 		}
 		fit({ imageScale, listWidth, listMaxHeight, footerHeight = 94 }) {
 				if (!this.logical || !this.imageBox || !this.listSlot || this.disposed)
@@ -36646,6 +36659,7 @@ class SceneSearchLayout00 {
 						this.geometry = null;
 						this.lastImage = null;
 						this.syncMiniGeometry();
+						this.syncListGeometry();
 						if (this.currentClientX !== null)
 								this.followPointer(this.currentClientX);
 				};
@@ -36658,6 +36672,10 @@ class SceneSearchLayout00 {
 				const mode = state?.commentListMode === true;
 				const changed = mode !== this.listMode;
 				this.listMode = mode;
+				if (changed) {
+						this.geometry = null;
+						this.lastImage = null;
+				}
 				const appearance = this.settings.getAppearance?.();
 				this.restoreCommentControl();
 				if (appearance?.listAllowed === false && this.commentControl) {
@@ -36683,8 +36701,21 @@ class SceneSearchLayout00 {
 				const image = this.tooltip?.querySelector('.zenzaSeekThumbnail.is-visible .zenzaSeekThumbnail-image') || null;
 				if (image !== this.lastImage)
 						this.syncMiniGeometry();
-				if (changed && this.currentClientX !== null)
+				if (this.listMode)
+						this.syncListGeometry();
+				if ((changed || !this.geometry) && this.currentClientX !== null)
 						this.followPointer(this.currentClientX);
+		}
+		syncListGeometry() {
+				const seek = this.seekOwner, tip = this.tooltip;
+				if (!seek || !tip)
+						return;
+				const origin = seek.getBoundingClientRect(), rect = tip.getBoundingClientRect();
+				const scale = origin.width / (seek.offsetWidth || origin.width);
+				if (!Number.isFinite(scale) || scale <= 0 || rect.height <= 0)
+						return;
+				seek.style.setProperty('--scui00-list-bottom', ((origin.bottom - rect.top) / scale + 4) + 'px');
+				seek.style.setProperty('--scui00-list-height', Math.max(24, Math.min(200, (rect.top - 12) / scale)) + 'px');
 		}
 		syncMiniGeometry() {
 				const seek = this.seekOwner, tip = this.tooltip;
@@ -36742,9 +36773,11 @@ class SceneSearchLayout00 {
 								visibleLeft + (v - width) / 2);
 				};
 				const tooltipWidth = g.tooltipWidth;
-				const commentWidth = this.listMode ? Math.min(350, Math.max(120, viewportWidth - 16)) : tooltipWidth;
-				tip.style.setProperty('--scui00-position', place(tooltipWidth) + 'px');
-				seek.style.setProperty('--scui00-comment-x', place(commentWidth) + 'px');
+				const commentWidth = this.listMode ? Math.min(350, Math.max(120, viewportWidth - 16)) : 180 * this.appearanceScale;
+				const tooltipLeft = place(tooltipWidth);
+				tip.style.setProperty('--scui00-position', tooltipLeft + 'px');
+				const commentLeft = this.listMode ? place(commentWidth) : tooltipLeft + (tooltipWidth - commentWidth) / 2;
+				seek.style.setProperty('--scui00-comment-x', commentLeft + 'px');
 		}
 		dispose() {
 				this.restoreCommentControl();
@@ -36760,6 +36793,8 @@ class SceneSearchLayout00 {
 				this.tooltip?.classList.remove('is-scui00-root', 'is-idle-suppressed');
 				this.seekOwner?.style.removeProperty('--scui00-comment-x');
 				this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
+				this.seekOwner?.style.removeProperty('--scui00-list-bottom');
+				this.seekOwner?.style.removeProperty('--scui00-list-height');
 				this.lastImage = null;
 				for (const { name, value, priority } of this.appearanceStyles) {
 						if (value)
@@ -36795,14 +36830,24 @@ class SceneSearchLayout00 {
 	z-index:150!important;
 }
 .is-scui00-active .seekBarToolTip.is-scui00-root{
-	width:calc(180px * var(--scene-thumbnail-scale,1))!important;
+	width:max(180px,calc(180px * var(--scene-thumbnail-scale,1) + 10px))!important;
+}
+.is-scui00-active .seekBarContainer.enableCommentPreview .seekBarThumbnailContainer{
+	display:none!important;
+}
+.is-scui00-active .seekBarContainer.enableCommentPreview .seekBarToolTip.is-scui00-root{
+	width:180px!important;
 }
 .is-scui00-active .seekBarThumbnailContainer,
 .is-scui00-active .seekBarThumbnailContainer>.zenzaSeekThumbnail{
 	width:calc(180px * var(--scene-thumbnail-scale,1))!important;
 	height:calc(90px * var(--scene-thumbnail-scale,1))!important;
+	margin-inline:auto!important;
+	position:relative;
 }
 .is-scui00-active .seekBarThumbnailContainer .zenzaSeekThumbnail-image{
+	position:absolute!important;left:50%!important;top:0!important;
+	margin-left:-80px!important;margin-right:0!important;
 	transform:scale(var(--scene-thumbnail-scale,1));
 	transform-origin:center top;
 }
@@ -36859,11 +36904,9 @@ class SceneSearchLayout00 {
 /* The native list remains scrollable with its original CSS and click actions. */
 .is-scui00-active .seekBarContainer.enableCommentPreview>.zenzaCommentPreview{
 	width:min(350px,calc(100vw - 16px))!important;
-	height:200px!important;max-height:200px!important;
-	/* Original VideoControlBar: bottom:16px plus a 24px transparent
-		mouse corridor. Keep the tooltip controls (z-index:150) above list:100. */
-	bottom:16px!important;
-	border-bottom:24px solid transparent!important;
+	height:var(--scui00-list-height,200px)!important;max-height:200px!important;
+	bottom:var(--scui00-list-bottom,76px)!important;
+	border-bottom:0!important;
 	z-index:100!important;
 	opacity:1!important;display:block!important;
 	background:rgba(7,13,24,var(--scene-list-alpha,.9))!important;

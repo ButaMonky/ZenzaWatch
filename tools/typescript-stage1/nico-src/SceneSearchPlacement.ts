@@ -3,7 +3,7 @@ type PlacementResult={rect:SceneRect;imageScale:number;listWidth:number;listMaxH
 type PlacementInput={layout:'follow'|'fixed';context:'normal'|'small'|'fullscreen';
  viewport:SceneRect;player:SceneRect;seekbar:SceneRect;obstacles:SceneRect[];anchorX:number;
  imageSize:{width:number;height:number};requestedScale:number;listOpen:boolean;
- previous:PlacementResult|null;hold:boolean};
+ previous:PlacementResult|null;hold:boolean;footerHeight?:number};
 export class SceneSearchPlacement {
  static overlap(a:SceneRect,b:SceneRect):number{
   return Math.max(0,Math.min(a.left+a.width,b.left+b.width)-Math.max(a.left,b.left))*
@@ -24,7 +24,8 @@ export class SceneSearchPlacement {
   let imageScale=Math.min(requested,Math.max(.05,(availableW-padding-(listOpen?gap+listWidth:0))/iw),
    Math.max(.05,(availableH-padding-158)/ih));
   const leftWidth=Math.max(minLeft,iw*imageScale);
-  const footer=Math.ceil(7/Math.max(1,Math.floor((leftWidth+2)/38)))*34+26;
+  const footer=Number.isFinite(input.footerHeight)?Math.max(36,input.footerHeight!):
+   Math.ceil(7/Math.max(1,Math.floor((leftWidth+2)/38)))*34+26;
   const width=Math.min(availableW,padding+leftWidth+(listOpen?gap+listWidth:0));
   const height=Math.min(availableH,padding+Math.max(ih*imageScale+footer,listOpen?240:0));
   const listMaxHeight=Math.max(32,height-padding);

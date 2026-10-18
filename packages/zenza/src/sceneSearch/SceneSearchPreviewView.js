@@ -46,6 +46,7 @@ class SceneSearchPreviewView {
                 const button = this.root.querySelector('[data-scui-action="more"]');
                 button?.setAttribute('aria-expanded', 'false');
                 button?.focus();
+                this.onAction('more', { layoutId: this.id }, event);
                 event.preventDefault();
                 event.stopPropagation();
             }
@@ -231,6 +232,15 @@ class SceneSearchPreviewView {
         const step = root.querySelector('[data-scui-action="seek-step"]');
         if (step)
             step.textContent = (state.seekStepSeconds ?? 5) + '秒';
+    }
+    measureFooter(imageScale) {
+        const left = this.root?.querySelector('.zenzaSceneLeft');
+        const foot = this.root?.querySelector('.zenzaSceneFoot');
+        if (!left || !foot)
+            return 36;
+        left.style.width = Math.max(104, 180 * imageScale) + 'px';
+        foot.style.height = 'auto';
+        return Math.max(32, foot.scrollHeight) + 4;
     }
     fit({ imageScale, listWidth, listMaxHeight, footerHeight = 94 }) {
         if (!this.logical || !this.imageBox || !this.listSlot || this.disposed)

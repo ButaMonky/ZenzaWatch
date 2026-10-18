@@ -76,7 +76,7 @@ class SceneSearchIntegrationBridge {
       },
       mouseleave:e=>{
         this.interaction.seekLeave(e);
-        this._seekClientX=null;
+        // Retain the last seek anchor while travelling to preview controls.
       },
       pointerdown:e=>this._startPointer(e)
     };
@@ -300,12 +300,12 @@ class SceneSearchIntegrationBridge {
         list=this._createCommentList(portal);card.setListView(list);
       }
       card.render({...state,...prefs});
-      this._placeModern(card,state);
       if(card.root){
         card.root.dataset.sceneReveal=this.config.getValue('sceneSearch.controlsReveal')||'hover-focus';
         card.root.dataset.sceneAnimation=this.config.getValue('sceneSearch.animation')||'subtle';
       }
       this._visibility?.refresh?.();
+      this._placeModern(card,state);
       if(!state.shown&&!state.pinned)this.interaction?.clearCorridor?.();
     };
     return {get root(){return card.root;},
@@ -347,9 +347,11 @@ class SceneSearchIntegrationBridge {
     }
     const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
     const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
-    const result=this._classes.Placement.compute({...g,layout:state.layoutId,context:this._placementContext,
+    const input={...g,layout:state.layoutId,context:this._placementContext,
       imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,
-      anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold});
+      anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold};
+    let result=this._classes.Placement.compute(input);
+    if(card.measureFooter)result=this._classes.Placement.compute({...input,footerHeight:card.measureFooter(result.imageScale)});
     this._placementResult=result;card.fit(result);
     const x=g.origin.width&&portal?.clientWidth?portal.clientWidth/g.origin.width:1;
     const y=g.origin.height&&portal?.clientHeight?portal.clientHeight/g.origin.height:1;
@@ -379,6 +381,7 @@ class SceneSearchIntegrationBridge {
     }
   }
   _onCardAction(action,context) {
+    if(action==='more'){this._resumePlacement();return;}
     if(action==='comment-toggle'){
       if(this.config.resolveSceneSearch?.()?.listAllowed===false)return;
       // Legacy tooltip button selects flowing/list mode, NOT global visibility.
@@ -615,9 +618,9 @@ class SceneSearchIntegrationBridge {
     if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
   }
   _bindPreviewSurface(node) {
-    const enter=()=>this.interaction.previewEnter(node);
+    const enter=()=>{this.interaction.previewEnter(node);this._resumePlacement();};
     const leave=e=>{this.interaction.previewLeave(node,e);this._resumePlacement();};
-    const focus=()=>this.interaction.previewFocus(true,node);
+    const focus=()=>{this.interaction.previewFocus(true,node);this._resumePlacement();};
     const blur=e=>{
       if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
     };

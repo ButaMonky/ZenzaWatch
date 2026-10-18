@@ -635,17 +635,32 @@ class SceneSearchIntegrationBridge {
     if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
   }
   _bindPreviewSurface(node) {
+    let pointerFocus=false;
     const enter=()=>{this.interaction.previewEnter(node);this._resumePlacement();};
-    const leave=e=>{this.interaction.previewLeave(node,e);this._resumePlacement();};
+    const leave=e=>{
+      const active=this.document.activeElement;
+      // Clicked buttons retain DOM focus after the mouse leaves. That is not
+      // continued keyboard interaction and must not freeze following or idle.
+      // Editable search fields and keyboard navigation keep their focus hold.
+      const editing=active?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+      if(pointerFocus&&node.contains(active)&&!editing){
+        active.blur?.();this.interaction.previewFocus(false,node);
+      }
+      this.interaction.previewLeave(node,e);this._resumePlacement();
+    };
     const focus=()=>{this.interaction.previewFocus(true,node);this._resumePlacement();};
     const blur=e=>{
       if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
     };
-    const pointer=e=>this._startPointer(e);
+    const pointer=e=>{pointerFocus=true;this._startPointer(e);};
+    const keyboard=()=>{pointerFocus=false;};
+    // Tab can enter this surface from outside, before it receives key events.
+    this.document.addEventListener('keydown',keyboard,true);
     const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
       ['pointerdown',pointer]];
     for(const [event,fn] of listeners)node.addEventListener(event,fn);
     return ()=>{
+      this.document.removeEventListener('keydown',keyboard,true);
       for(const [event,fn] of listeners)node.removeEventListener(event,fn);
       this.interaction.previewLeave(node);
       this.interaction.previewFocus(false,node);

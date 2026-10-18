@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.310-task801
+// @version        2.7.311-task801
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 12:41Z
+// build: 2026-10-18 12:58Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.310-task801';
+    var VER = '2.7.311-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 12:41Z';
+    var BUILD = '2026-10-18 12:58Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -35404,17 +35404,28 @@ class SceneSearchIntegrationBridge {
 		if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
 	}
 	_bindPreviewSurface(node) {
+		let pointerFocus=false;
 		const enter=()=>{this.interaction.previewEnter(node);this._resumePlacement();};
-		const leave=e=>{this.interaction.previewLeave(node,e);this._resumePlacement();};
+		const leave=e=>{
+			const active=this.document.activeElement;
+			const editing=active?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+			if(pointerFocus&&node.contains(active)&&!editing){
+				active.blur?.();this.interaction.previewFocus(false,node);
+			}
+			this.interaction.previewLeave(node,e);this._resumePlacement();
+		};
 		const focus=()=>{this.interaction.previewFocus(true,node);this._resumePlacement();};
 		const blur=e=>{
 			if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
 		};
-		const pointer=e=>this._startPointer(e);
+		const pointer=e=>{pointerFocus=true;this._startPointer(e);};
+		const keyboard=()=>{pointerFocus=false;};
+		this.document.addEventListener('keydown',keyboard,true);
 		const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
 			['pointerdown',pointer]];
 		for(const [event,fn] of listeners)node.addEventListener(event,fn);
 		return ()=>{
+			this.document.removeEventListener('keydown',keyboard,true);
 			for(const [event,fn] of listeners)node.removeEventListener(event,fn);
 			this.interaction.previewLeave(node);
 			this.interaction.previewFocus(false,node);

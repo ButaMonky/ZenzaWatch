@@ -92,7 +92,7 @@ async function client(url){
  const state=()=>evaluate(`(()=>{
  const bridge=qaBinding.adapter.bridge,card=bridge._active.root,mini=bar._commentPreview._view._view;
  const list=card.querySelector('.zenzaSceneNativeList'),image=thumb.querySelector('canvas'),text=mini.querySelector('.text');
- return {layout:bridge.state.layoutId,shown:bridge.state.shown,rect:card.getBoundingClientRect().toJSON(),
+ return {layout:bridge.state.layoutId,time:bridge.state.time,shown:bridge.state.shown,positionLeft:card.style.left,rect:card.getBoundingClientRect().toJSON(),
  mini:mini.getBoundingClientRect().toJSON(),image:image.getBoundingClientRect().toJSON(),
  imageScale:image.getBoundingClientRect().width/160,miniScale:mini.getBoundingClientRect().width/180,
  list:list?.getBoundingClientRect().toJSON(),alpha:list&&getComputedStyle(list).backgroundColor,
@@ -136,10 +136,10 @@ async function client(url){
     await move(width-2,2);await frame();
     await evaluate("qaBinding.adapter.bridge.updatePlacementContext({context:'normal'});true");await frame();
     const afterLeave=await state();
-    record(width+'/'+mode+'/'+layout+'/leave-anchor',Math.abs(beforeLeave.rect.left-afterLeave.rect.left)<1,{beforeLeave,afterLeave});
+    record(width+'/'+mode+'/'+layout+'/leave-anchor',beforeLeave.positionLeft===afterLeave.positionLeft,{beforeLeave,afterLeave});
     for(const reveal of ['hover-focus','click','always']){
      await evaluate("document.activeElement.blur();config.setValue('sceneSearch.controlsReveal',"+JSON.stringify(reveal)+");config.setValue('enableCommentPreview',false);true");
-     await move(width-2,2);await frame();
+     await click('#seek');
      await click('[data-scui-action="comment-toggle"]');
      record(width+'/'+mode+'/'+layout+'/comment-click/'+reveal,!(await state()).listHidden,await state());
      await evaluate("document.querySelector('[data-scui-action=comment-toggle]').focus();true");
@@ -149,6 +149,17 @@ async function client(url){
      await evaluate('qaNativeCommands.length=0;true');
      await click('[data-scui-action=seek-back]');await click('[data-scui-action=seek-forward]');
      record(width+'/'+mode+'/'+layout+'/seek-command/'+reveal,await evaluate("JSON.stringify(qaNativeCommands)===JSON.stringify([['seekBy',-5],['seekBy',5]])"),await evaluate('qaNativeCommands'));
+    }
+    for(const action of ['comment-toggle','seek-back','seek-forward']){
+     await click('#seek');await evaluate("config.setValue('enableCommentPreview',true);config.setValue('sceneSearch.idleHideSeconds',0.5);true");await frame();
+     await click('[data-scui-action="'+action+'"]');await move(2,2);await frame();
+     record(width+'/'+mode+'/'+layout+'/'+action+'/mouse-releases-focus',await evaluate('!qaBinding.adapter.bridge.interaction.holdingPreview'),{});
+     const points=await evaluate('(()=>{const r=seek.getBoundingClientRect();return {left:r.left+r.width*.25,right:r.left+r.width*.75,y:r.top+r.height/2};})()');
+     await move(points.left,points.y);await frame();const first=await state();
+     await move(points.right,points.y);await frame();const second=await state();
+     record(width+'/'+mode+'/'+layout+'/'+action+'/resume-tracking',first.time!==second.time&&(layout==='fixed'||first.rect.width>=width-16||Math.abs(first.rect.left-second.rect.left)>1),{first:first.rect,second:second.rect,times:[first.time,second.time]});
+     await pause(700);record(width+'/'+mode+'/'+layout+'/'+action+'/resume-idle',(await state()).hidden,await state());
+     await evaluate("config.setValue('sceneSearch.idleHideSeconds',0);true");
     }
     await evaluate("config.setValue('sceneSearch.controlsReveal','always');config.setValue('enableCommentPreview',true);true");await click('#seek');
     for(const scale of [50,100,150,200]){
@@ -181,7 +192,7 @@ async function client(url){
     let off=await state();record(width+'/'+mode+'/'+layout+'/parent-off',off.miniHidden&&off.listHidden,off);
     await evaluate("config.setValue('sceneSearch.commentPreviewVisible',true);true");await frame();
     off=await state();record(width+'/'+mode+'/'+layout+'/parent-restore',!off.miniHidden&&!off.listHidden,off);
-    await evaluate("config.setValue('sceneSearch.idleHideSeconds',0.5);document.querySelector('.zenzaSceneNativeList').focus();true");
+    await evaluate("config.setValue('sceneSearch.idleHideSeconds',0.5);document.querySelector('.zenzaSceneNativeList').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));document.querySelector('.zenzaSceneNativeList').focus();true");
     await move(2,2);await pause(700);record(width+'/'+mode+'/'+layout+'/focus-hold',(await state()).shown,await state());
     await evaluate("document.activeElement.blur();true");await click('#seek');await pause(700);
     const hidden=await state();record(width+'/'+mode+'/'+layout+'/idle',!hidden.shown&&hidden.hidden&&hidden.hitRects===0,hidden);

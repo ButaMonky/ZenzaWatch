@@ -26,6 +26,34 @@ function harness(layout='follow'){
  };
 }
 describe('semantic scene preview production binding',()=>{
+ for(const action of ['comment-toggle','seek-back','seek-forward'])it(action+' releases mouse focus on leave so tracking and idle resume',()=>{
+  const h=harness();try{
+   h.move(400);h.config.setValue('enableCommentPreview',true);
+   const root=h.bridge._active.root,button=root.querySelector('[data-scui-action="'+action+'"]');
+   h.fire(h.seek,'mouseleave');h.fire(root,'mouseenter');h.fire(button,'pointerdown');
+   button.focus();button.click();h.fire(h.d,'pointerup');
+   h.fire(root,'mouseleave');
+   assert.strictEqual(h.bridge.interaction.holdingPreview,false,'mouse focus must not hold the preview after leaving');
+   const before=root.style.left;h.move(800);
+   assert.notStrictEqual(root.style.left,before,'following must resume without another click');
+   h.tick(2000);assert(root.hidden,'idle timeout must resume without clicking elsewhere');
+  }finally{h.close();}
+ });
+ it('retains focus holds when a pointer user switches to keyboard or edits search',()=>{
+  const h=harness();try{
+   h.move(400);const root=h.bridge._active.root,button=root.querySelector('[data-scui-action="comment-toggle"]');
+   h.fire(h.seek,'mouseleave');h.fire(root,'mouseenter');h.fire(button,'pointerdown');button.focus();h.fire(h.d,'pointerup');
+   h.d.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Tab',bubbles:true}));
+   h.fire(root,'mouseleave');h.tick(5000);
+   assert(h.bridge.interaction.holdingPreview&&!root.hidden);
+   h.config.setValue('enableCommentPreview',true);
+   const search=root.querySelector('[data-scui-action="comment-search"]');
+   h.fire(root,'mouseenter');h.fire(search,'pointerdown');search.focus();search.click();h.fire(h.d,'pointerup');
+   assert.strictEqual(h.d.activeElement.tagName,'INPUT');
+   h.fire(root,'mouseleave');h.tick(5000);
+   assert(h.bridge.interaction.holdingPreview&&!root.hidden);
+  }finally{h.close();}
+ });
  it('keeps search inside the list and uses settings for the three icon controls',()=>{
   const h=harness();try{
    h.move(400);const root=h.bridge._active.root;

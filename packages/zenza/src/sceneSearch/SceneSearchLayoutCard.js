@@ -113,7 +113,19 @@ class SceneSearchLayoutCard {
   render(state) {
     if(!this.root){return;}
     state=state||{};
+    const previous=this._lastState;
     this._lastState=state;
+    const time=Number.isFinite(state.time)&&state.time>=0?Math.floor(state.time):0;
+    if(!previous||Math.floor(previous.time)!==time){
+      this.root.querySelector('.zenzaSceneTime').textContent=
+        String(Math.floor(time/60))+':'+String(time%60).padStart(2,'0');
+    }
+    if(previous&&previous.shown===state.shown&&previous.pinned===state.pinned&&
+      previous.seekStepSeconds===state.seekStepSeconds&&
+      previous.commentPreviewVisible===state.commentPreviewVisible&&
+      previous.commentListMode===state.commentListMode&&previous.videoId===state.videoId){
+      return; // Layout subclass still updates geometry; unchanged controls do not.
+    }
     this.root.dataset.mode=this.mode;
     this.root.hidden=state.shown===false && !state.pinned;
     this.root.classList.toggle('is-pinned',state.pinned===true);
@@ -127,9 +139,6 @@ class SceneSearchLayoutCard {
       button.disabled=compact;
       button.style.display=compact?'none':'';
     }
-    const time=Number.isFinite(state.time)&&state.time>=0?Math.floor(state.time):0;
-    this.root.querySelector('.zenzaSceneTime').textContent=
-      String(Math.floor(time/60))+':'+String(time%60).padStart(2,'0');
     this.root.querySelector('[data-scui-action="seek-step"]').textContent=
       String(Number.isSafeInteger(seconds)?seconds:5)+'秒';
     const pin=this.root.querySelector('[data-scui-action="pin"]');
@@ -221,7 +230,11 @@ class SceneSearchLayoutCard {
 .zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail-thumbnail{width:112px;height:63px}
 .zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail{max-width:100%;margin:0 auto}
 @media (prefers-reduced-motion: reduce) {
-  .zenzaSceneSearchHost *{transition:none!important;animation:none!important}
+  /* Turn off decorative SCUI motion, not the ORIGINAL CommentPreviewView.
+     UI00 also keeps its native comment timing under this preference. */
+  .zenzaSceneSearchHost :not(.zenzaCommentPreview):not(.zenzaCommentPreview *){
+    transition:none!important;animation:none!important
+  }
 }
 `; }
 }

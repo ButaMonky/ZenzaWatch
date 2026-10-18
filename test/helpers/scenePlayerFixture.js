@@ -18,7 +18,7 @@ function emitter(){
  off(k,f){rows.get(k)?.delete(f);},emit(k,...a){for(const f of [...rows.get(k)||[]])f(...a);},
  count(){return [...rows.values()].reduce((n,s)=>n+s.size,0);}};
 }
-function fixture(id='01',mode='normal',{portal=false}={}){
+function fixture(id='01',mode='normal',{portal=false,beforeAttach}={}){
  const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
  const dom=new JSDOM('<!doctype html><html><head></head><body>'+
   '<div id="player" style="position:relative;width:900px;height:520px">'+
@@ -69,6 +69,7 @@ function fixture(id='01',mode='normal',{portal=false}={}){
   _commentPreview:{_view:{_view:d.querySelector('.zenzaCommentPreview')},_model:{_chatList:player.chatList}}};
  const binding=new ctx.Binding({view:{videoControlBar:bar},dialog:player,document:d,
   container:host,events,isFullscreen:()=>fullscreen,onError:code=>errors.push(code)});
+ beforeAttach?.({dom,d,host,seek,binding,player,bar,config,events,storyboard});
  binding.attach();
  return {dom,d,host,seek,binding,player,bar,config,events,storyboard,commands,errors,
   move(x){seek.dispatchEvent(new dom.window.MouseEvent('mouseenter',{clientX:x,bubbles:true}));

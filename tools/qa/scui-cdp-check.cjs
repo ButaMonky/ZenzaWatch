@@ -33,6 +33,10 @@ async function client(url){
  const c=await client(tab.webSocketDebuggerUrl);const reports=[];
  try{
   await c.send('Page.enable');await c.send('Runtime.enable');
+  if(process.argv.includes('--reduced')){
+   await c.send('Emulation.setEmulatedMedia',{
+    features:[{name:'prefers-reduced-motion',value:'reduce'}]});
+  }
   console.log('EVAL_PROBE '+JSON.stringify(await c.send('Runtime.evaluate',{expression:'1+1',returnByValue:true})));
   for(const width of (process.argv.includes('--one')?[768]:[320,768,1536])){
    await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});

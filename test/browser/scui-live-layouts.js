@@ -48,9 +48,20 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
  const b=new SceneSearchPlayerBinding({Adapter:TraceAdapter,view:{videoControlBar:bar},dialog:player,document,
  container:host,events:events(),isFullscreen:()=>mode==='fullscreen',onError:code=>failures.push({code})});
  vals['sceneSearch.layout.normal']=id;vals['sceneSearch.layout.fullscreen']=id;
- // Reset both stored mode AND original hover/list stylesheet before
- // every new fixture; a direct vals assignment does not notify StyleSwitcher.
- config.setValue('enableCommentPreview',false);b.attach();
+ // Capture native typography/shadow before moving the ORIGINAL CommentPreview
+ // out of VideoControlBar. Task728's card inherits "system-ui", which must
+ // never silently change the preview's fonts or CA whitespace metrics.
+ config.setValue('enableCommentPreview',false);
+ const nativePreview=document.getElementById('comments');
+ const nativeComputed=getComputedStyle(nativePreview);
+ const nativeInlineFont=nativePreview.style.getPropertyValue('font-family');
+ const nativeInlineSize=nativePreview.style.getPropertyValue('font-size');
+ const nativeInlineLine=nativePreview.style.getPropertyValue('line-height');
+ const nativeFont=nativeComputed.fontFamily;
+ const nativeFontSize=nativeComputed.fontSize;
+ const nativeLineHeight=nativeComputed.lineHeight;
+ const nativeFilter=nativeComputed.filter;
+ b.attach();
  const seek=bar._seekBar,r=seek.getBoundingClientRect(),x=r.left+r.width*pct;
  seek.dispatchEvent(new MouseEvent('mouseenter',{clientX:x,bubbles:true}));
  seek.dispatchEvent(new MouseEvent('mousemove',{clientX:x,bubbles:true}));
@@ -114,6 +125,25 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
     commentView.classList.contains('is-scui-flow')&&
     commentView.classList.contains('is-scui-active')&&
     (id!=='01'||!commentView.classList.contains('is-scui-classic-side')),{});
+  const dockedComputed=getComputedStyle(commentView);
+  record(label+'/native-font-preserved',
+    dockedComputed.fontFamily===nativeFont&&
+    dockedComputed.fontSize===nativeFontSize&&
+    dockedComputed.lineHeight===nativeLineHeight,
+    {nativeFont,font:dockedComputed.fontFamily,
+     nativeFontSize,fontSize:dockedComputed.fontSize,
+     nativeLineHeight,lineHeight:dockedComputed.lineHeight});
+  if(id==='01')record(label+'/native-shadow-preserved',
+    dockedComputed.filter===nativeFilter,
+    {nativeFilter,filter:dockedComputed.filter});
+  // The animation-off and OS reduced-motion flags may suppress decorative
+  // SCUI transitions but must NOT break CommentPreviewView's native flow.
+  // UI00 remains the behavioral oracle for the original preview motion.
+  const nativeText=commentView.querySelector('.nicoChat .text');
+  record(label+'/native-preview-animation-preserved',
+    !!nativeText&&getComputedStyle(nativeText).animationName==='preview-text-moving',
+    {name:nativeText&&getComputedStyle(nativeText).animationName,
+     reduced:matchMedia('(prefers-reduced-motion: reduce)').matches});
   // Native SeekBarThumbnail.is-visible has z-index:100 and is a CSS grid item.
   // The attached mini-comment must paint ABOVE that thumbnail, not underneath it.
   const sharedThumb=document.getElementById('thumb');
@@ -327,6 +357,12 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
  document.querySelectorAll('style[data-scui-layout-style]').length===0&&
  !host.dataset.sceneSearchLayout&&!host.dataset.sceneMode&&!host.dataset.scenePlacement,
  {dataset:{...host.dataset}});
+ record(label+'/native-inline-font-restored',
+  nativePreview.style.getPropertyValue('font-family')===nativeInlineFont&&
+  nativePreview.style.getPropertyValue('font-size')===nativeInlineSize&&
+  nativePreview.style.getPropertyValue('line-height')===nativeInlineLine,
+  {font:nativePreview.style.fontFamily,size:nativePreview.style.fontSize,
+   line:nativePreview.style.lineHeight});
  if(portal){
    host.style.cssText=originalHostStyle;
    originalParent.insertBefore(host,originalNext);

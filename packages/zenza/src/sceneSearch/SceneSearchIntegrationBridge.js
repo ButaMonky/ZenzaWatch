@@ -166,7 +166,7 @@ class SceneSearchIntegrationBridge {
     const card=this.registry.create({id,mode,document:this.document,
       container:this.container,settings:this.layoutSettings,
       onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
-    return {
+    const wired={
       get root(){return card.root;},
       mount:state=>{
         if(id==='00'){
@@ -190,10 +190,16 @@ class SceneSearchIntegrationBridge {
           this._releaseCard(card);card.dispose();throw error;
         }
       },
-      render:state=>{
+      renderTime:state=>wired.render(state,true),
+      render:(state,timeOnly=false)=>{
         card.render(state);
         if(id==='00')return; // Original tooltip/comment renderer owns UI00.
-        this._syncCommentPreviewDock(card,state);
+        // The original VideoControlBar already advances flowing mini rows
+        // on mousemove. Leave its DOM untouched on time-only renders. A
+        // separately docked list still needs the card's updated position.
+        if(!timeOnly||state.commentListMode===true){
+          this._syncCommentPreviewDock(card,state);
+        }
         if(id==='02'){
           const player=this.container.getBoundingClientRect?.();
           const windowHeight=this.document.defaultView?.innerHeight;
@@ -218,8 +224,8 @@ class SceneSearchIntegrationBridge {
               raw>width*.55?'left':'right';
           }
         }
-        this._visibility?.refresh?.();
-        if(card.root){
+        if(!timeOnly)this._visibility?.refresh?.();
+        if(card.root&&!timeOnly){
           const reveal=this.config.getValue('sceneSearch.controlsReveal');
           const animation=this.config.getValue('sceneSearch.animation');
           card.root.dataset.sceneReveal=['click','always'].includes(reveal)?reveal:'hover-focus';
@@ -265,6 +271,7 @@ class SceneSearchIntegrationBridge {
         }
       }
     };
+    return wired;
   }
   _updateTwinCommentPlacement(below,player){
     if(!below||!player){
@@ -526,7 +533,23 @@ class SceneSearchIntegrationBridge {
     const node=this._commentPreviewElement,root=card?.root;
     if(!node||!root)return;
     if(!this._commentDock){
-      this._commentDock={parent:node.parentNode,next:node.nextSibling};
+      // CommentPreviewView normally inherits the *player* typography.
+      // Modern scene cards use 12px system-ui: reparenting its original DOM
+      // silently changed every 16px mini row and broke alignment/CA spaces.
+      // Snapshot the native computed typography BEFORE the first move.
+      const computed=this.document.defaultView?.getComputedStyle?.(node);
+      const props=['font-family','font-size','line-height',
+        'font-weight','letter-spacing','word-spacing'];
+      const typography=props.map(name=>({
+        name,value:node.style.getPropertyValue(name),
+        priority:node.style.getPropertyPriority(name),
+        native:computed?.getPropertyValue(name)||''
+      }));
+      this._commentDock={parent:node.parentNode,next:node.nextSibling,
+        typography};
+      for(const {name,native} of typography){
+        if(native)node.style.setProperty(name,native);
+      }
       const enter=()=>this.interaction.previewEnter();
       const leave=()=>this.interaction.previewLeave();
       const focus=()=>this.interaction.previewFocus(true);
@@ -603,6 +626,12 @@ class SceneSearchIntegrationBridge {
     if(old.parent){
       if(old.next?.parentNode===old.parent)old.parent.insertBefore(node,old.next);
       else old.parent.appendChild(node);
+    }
+    // UI00 and the regular VideoControlBar must not inherit any inline font
+    // overrides when switching back from modern layouts.
+    for(const {name,value,priority} of old.typography||[]){
+      if(value)node.style.setProperty(name,value,priority);
+      else node.style.removeProperty(name);
     }
     this.container.style.removeProperty('--scui-list-x');
     this._commentDock=null;
@@ -748,7 +777,9 @@ class SceneSearchIntegrationBridge {
     try{
       this.controller.start(mode);
       for(const [event,handler] of Object.entries(this._seekListeners)){
-        this.seekElement.addEventListener(event,handler);
+        // Match UI00: update follow geometry before the older bubble-phase
+        // comment/thumbnail handler. Do not intercept media click ownership.
+        this.seekElement.addEventListener(event,handler,event==='mousemove');
       }
       const keys=['sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
         'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
@@ -810,7 +841,7 @@ class SceneSearchIntegrationBridge {
     this._restoreCommentPreviewVisibility();
     if(this._running){
       for(const [event,handler] of Object.entries(this._seekListeners)){
-        this.seekElement.removeEventListener(event,handler);
+        this.seekElement.removeEventListener(event,handler,event==='mousemove');
       }
     }
     this.interaction.dispose();
@@ -856,7 +887,8 @@ class SceneSearchIntegrationBridge {
    Preserve UI00's native rows, durations and preview-text-moving animation. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
   >.zenzaCommentPreview.is-scui-flow{
-  opacity:1!important;filter:none!important;
+  /* Same bright native UI00 mini, keep its original drop-shadow filter. */
+  opacity:1!important;
   background:transparent!important;background-image:none!important;
   border:0!important;box-shadow:none!important;
   pointer-events:none!important
@@ -887,12 +919,11 @@ class SceneSearchIntegrationBridge {
 }
 
 /* The original seekbar remains the sole seek click owner. */
-/* "off" applies to SCUI card transitions only. UI01's original
-   CommentPreviewView motion is an independent native feature (same as UI00).
-   Previously the universal "*" silently canceled preview-text-moving. */
+/* "off" suppresses SCUI decorations across ALL layouts 01..10, never the
+   native CommentPreviewView flow/list timing. The previous selector canceled
+   preview-text-moving for UI02..10 even in the default non-reduced mode. */
 .zenzaSceneSearchHost[data-scene-animation="off"],
-.zenzaSceneSearchHost:not(.zenzaSceneLayout01)[data-scene-animation="off"] *,
-.zenzaSceneSearchHost.zenzaSceneLayout01[data-scene-animation="off"]
+.zenzaSceneSearchHost[data-scene-animation="off"]
   :not(.zenzaCommentPreview):not(.zenzaCommentPreview *){
   transition:none!important;animation:none!important
 }

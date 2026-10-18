@@ -134,7 +134,11 @@ class SceneSearchController {
       return this.snapshot;
     }
     this._time=seconds;
-    this._render();
+    // A pointer-time update is not a settings change. Layouts may keep their
+    // geometry/time label current without rebuilding visibility or controls.
+    if(this._started&&typeof this._layout?.renderTime==='function'){
+      this._layout.renderTime(this.snapshot);
+    }else{this._render();}
     return this.snapshot;
   }
   show(value=true) {

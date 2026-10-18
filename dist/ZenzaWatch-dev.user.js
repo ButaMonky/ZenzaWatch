@@ -33,15 +33,15 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.294-scui01-mini-overlay
+// @version        2.7.295-scui-native-follow
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
-// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task728-scui01-overlay/dist/ZenzaWatch-dev.user.js
-// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task728-scui01-overlay/dist/ZenzaWatch-dev.user.js
+// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task729-scui-native-foundation/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task729-scui-native-foundation/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 17:40Z edb4e1d
+// build: 2026-10-18 04:18Z d8e4a4f
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.294-scui01-mini-overlay';
+    var VER = '2.7.295-scui-native-follow';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 17:40Z edb4e1d';
+    var BUILD = '2026-10-18 04:18Z d8e4a4f';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -34683,7 +34683,7 @@ class SceneSearchIntegrationBridge {
 		const card=this.registry.create({id,mode,document:this.document,
 			container:this.container,settings:this.layoutSettings,
 			onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
-		return {
+		const wired={
 			get root(){return card.root;},
 			mount:state=>{
 				if(id==='00'){
@@ -34707,10 +34707,13 @@ class SceneSearchIntegrationBridge {
 					this._releaseCard(card);card.dispose();throw error;
 				}
 			},
-			render:state=>{
+			renderTime:state=>wired.render(state,true),
+			render:(state,timeOnly=false)=>{
 				card.render(state);
 				if(id==='00')return; // Original tooltip/comment renderer owns UI00.
-				this._syncCommentPreviewDock(card,state);
+				if(!timeOnly||state.commentListMode===true){
+					this._syncCommentPreviewDock(card,state);
+				}
 				if(id==='02'){
 					const player=this.container.getBoundingClientRect?.();
 					const windowHeight=this.document.defaultView?.innerHeight;
@@ -34735,8 +34738,8 @@ class SceneSearchIntegrationBridge {
 							raw>width*.55?'left':'right';
 					}
 				}
-				this._visibility?.refresh?.();
-				if(card.root){
+				if(!timeOnly)this._visibility?.refresh?.();
+				if(card.root&&!timeOnly){
 					const reveal=this.config.getValue('sceneSearch.controlsReveal');
 					const animation=this.config.getValue('sceneSearch.animation');
 					card.root.dataset.sceneReveal=['click','always'].includes(reveal)?reveal:'hover-focus';
@@ -34782,6 +34785,7 @@ class SceneSearchIntegrationBridge {
 				}
 			}
 		};
+		return wired;
 	}
 	_updateTwinCommentPlacement(below,player){
 		if(!below||!player){
@@ -35033,7 +35037,19 @@ class SceneSearchIntegrationBridge {
 		const node=this._commentPreviewElement,root=card?.root;
 		if(!node||!root)return;
 		if(!this._commentDock){
-			this._commentDock={parent:node.parentNode,next:node.nextSibling};
+			const computed=this.document.defaultView?.getComputedStyle?.(node);
+			const props=['font-family','font-size','line-height',
+				'font-weight','letter-spacing','word-spacing'];
+			const typography=props.map(name=>({
+				name,value:node.style.getPropertyValue(name),
+				priority:node.style.getPropertyPriority(name),
+				native:computed?.getPropertyValue(name)||''
+			}));
+			this._commentDock={parent:node.parentNode,next:node.nextSibling,
+				typography};
+			for(const {name,native} of typography){
+				if(native)node.style.setProperty(name,native);
+			}
 			const enter=()=>this.interaction.previewEnter();
 			const leave=()=>this.interaction.previewLeave();
 			const focus=()=>this.interaction.previewFocus(true);
@@ -35100,6 +35116,10 @@ class SceneSearchIntegrationBridge {
 		if(old.parent){
 			if(old.next?.parentNode===old.parent)old.parent.insertBefore(node,old.next);
 			else old.parent.appendChild(node);
+		}
+		for(const {name,value,priority} of old.typography||[]){
+			if(value)node.style.setProperty(name,value,priority);
+			else node.style.removeProperty(name);
 		}
 		this.container.style.removeProperty('--scui-list-x');
 		this._commentDock=null;
@@ -35240,7 +35260,7 @@ class SceneSearchIntegrationBridge {
 		try{
 			this.controller.start(mode);
 			for(const [event,handler] of Object.entries(this._seekListeners)){
-				this.seekElement.addEventListener(event,handler);
+				this.seekElement.addEventListener(event,handler,event==='mousemove');
 			}
 			const keys=['sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
 				'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
@@ -35302,7 +35322,7 @@ class SceneSearchIntegrationBridge {
 		this._restoreCommentPreviewVisibility();
 		if(this._running){
 			for(const [event,handler] of Object.entries(this._seekListeners)){
-				this.seekElement.removeEventListener(event,handler);
+				this.seekElement.removeEventListener(event,handler,event==='mousemove');
 			}
 		}
 		this.interaction.dispose();
@@ -35348,7 +35368,8 @@ class SceneSearchIntegrationBridge {
 	Preserve UI00's native rows, durations and preview-text-moving animation. */
 .zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox
 	>.zenzaCommentPreview.is-scui-flow{
-	opacity:1!important;filter:none!important;
+	/* Same bright native UI00 mini, keep its original drop-shadow filter. */
+	opacity:1!important;
 	background:transparent!important;background-image:none!important;
 	border:0!important;box-shadow:none!important;
 	pointer-events:none!important
@@ -35378,12 +35399,11 @@ class SceneSearchIntegrationBridge {
 	opacity:1!important;background:rgba(0,0,0,.96)!important
 }
 /* The original seekbar remains the sole seek click owner. */
-/* "off" applies to SCUI card transitions only. UI01's original
-	CommentPreviewView motion is an independent native feature (same as UI00).
-	Previously the universal "*" silently canceled preview-text-moving. */
+/* "off" suppresses SCUI decorations across ALL layouts 01..10, never the
+	native CommentPreviewView flow/list timing. The previous selector canceled
+	preview-text-moving for UI02..10 even in the default non-reduced mode. */
 .zenzaSceneSearchHost[data-scene-animation="off"],
-.zenzaSceneSearchHost:not(.zenzaSceneLayout01)[data-scene-animation="off"] *,
-.zenzaSceneSearchHost.zenzaSceneLayout01[data-scene-animation="off"]
+.zenzaSceneSearchHost[data-scene-animation="off"]
 	:not(.zenzaCommentPreview):not(.zenzaCommentPreview *){
 	transition:none!important;animation:none!important
 }
@@ -35689,7 +35709,19 @@ class SceneSearchLayoutCard {
 	render(state) {
 		if(!this.root){return;}
 		state=state||{};
+		const previous=this._lastState;
 		this._lastState=state;
+		const time=Number.isFinite(state.time)&&state.time>=0?Math.floor(state.time):0;
+		if(!previous||Math.floor(previous.time)!==time){
+			this.root.querySelector('.zenzaSceneTime').textContent=
+				String(Math.floor(time/60))+':'+String(time%60).padStart(2,'0');
+		}
+		if(previous&&previous.shown===state.shown&&previous.pinned===state.pinned&&
+			previous.seekStepSeconds===state.seekStepSeconds&&
+			previous.commentPreviewVisible===state.commentPreviewVisible&&
+			previous.commentListMode===state.commentListMode&&previous.videoId===state.videoId){
+			return; // Layout subclass still updates geometry; unchanged controls do not.
+		}
 		this.root.dataset.mode=this.mode;
 		this.root.hidden=state.shown===false && !state.pinned;
 		this.root.classList.toggle('is-pinned',state.pinned===true);
@@ -35703,9 +35735,6 @@ class SceneSearchLayoutCard {
 			button.disabled=compact;
 			button.style.display=compact?'none':'';
 		}
-		const time=Number.isFinite(state.time)&&state.time>=0?Math.floor(state.time):0;
-		this.root.querySelector('.zenzaSceneTime').textContent=
-			String(Math.floor(time/60))+':'+String(time%60).padStart(2,'0');
 		this.root.querySelector('[data-scui-action="seek-step"]').textContent=
 			String(Number.isSafeInteger(seconds)?seconds:5)+'秒';
 		const pin=this.root.querySelector('[data-scui-action="pin"]');
@@ -35797,7 +35826,11 @@ class SceneSearchLayoutCard {
 .zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail-thumbnail{width:112px;height:63px}
 .zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail{max-width:100%;margin:0 auto}
 @media (prefers-reduced-motion: reduce) {
-	.zenzaSceneSearchHost *{transition:none!important;animation:none!important}
+	/* Turn off decorative SCUI motion, not the ORIGINAL CommentPreviewView.
+		UI00 also keeps its native comment timing under this preference. */
+	.zenzaSceneSearchHost :not(.zenzaCommentPreview):not(.zenzaCommentPreview *){
+		transition:none!important;animation:none!important
+	}
 }
 `; }
 }
@@ -37646,7 +37679,9 @@ class SceneSearchController {
 			return this.snapshot;
 		}
 		this._time=seconds;
-		this._render();
+		if(this._started&&typeof this._layout?.renderTime==='function'){
+			this._layout.renderTime(this.snapshot);
+		}else{this._render();}
 		return this.snapshot;
 	}
 	show(value=true) {

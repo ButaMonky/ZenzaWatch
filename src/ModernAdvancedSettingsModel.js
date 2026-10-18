@@ -91,7 +91,11 @@ class ModernAdvancedSettingsModel {
         ['menuScale','操作メニューの拡大率',{type:'number'}]
       ]),
       ...group('画面・映像','シーンサーチ',[
-        ['sceneSearch.layout.normal','通常表示のシーンサーチUI',{
+        ['sceneSearch.presentation.normal','通常表示のシーンサーチ',{
+          ...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示〈互換用〉']])}],
+        ['sceneSearch.presentation.fullscreen','全画面のシーンサーチ',{
+          ...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示〈互換用〉']])}],
+        ['sceneSearch.layout.normal','旧形式の通常表示',{hidden:true,
           ...select([
             ['00','00 旧式表示（検証中）'],
             ['01','01 クラシック追従'],['02','02 左右ツインパネル'],
@@ -100,9 +104,9 @@ class ModernAdvancedSettingsModel {
             ['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
             ['09','09 分離リモコン'],['10','10 スマート自動回避']
           ]),description:'通常時のレイアウトです。動画の再生位置や設定値は変更しません。'}],
-        ['sceneSearch.layout.linkFullscreen','フルスクリーンも通常表示と同じUIを使う',{
+        ['sceneSearch.layout.linkFullscreen','全画面も同じ表示方式を使う',{
           description:'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'}],
-        ['sceneSearch.layout.fullscreen','フルスクリーン時のシーンサーチUI',{
+        ['sceneSearch.layout.fullscreen','旧形式の全画面表示',{hidden:true,
           ...select([
             ['00','00 旧式表示（検証中）'],
             ['01','01 クラシック追従'],['02','02 左右ツインパネル'],
@@ -129,11 +133,11 @@ class ModernAdvancedSettingsModel {
           ...select([
             ['flow','流れる（旧版と同じ）'],
             ['static','静止表示（最大5行）'],
-            ['hidden','ミニコメントを表示しない']
+            ['hidden','旧版の非表示設定（引き継ぎ用）']
           ]),
-          description:'UI00の画像プレビュー中だけ変更します。コメントボタンで開く一覧は対象外です。共通のシーンサーチコメント表示がOFFなら、どの方式でも見えません。保存後すぐ反映します。'}],
+          description:'ミニコメントの動き方を選びます。表示のON/OFFは上の子スイッチを使います。旧版の静止表示設定も引き継ぎます。'}],
         ['enableCommentPreview','シーンサーチのコメントを一覧表示にする',{
-          description:'OFF＝画像と流れるミニコメント、ON＝スクロール可能な一覧。元のコメント切替ボタンでも変更できます。共通コメント表示OFFの間は両方非表示です。'}],
+          description:'コメントボタンによる一覧の開閉と共通です。追従・固定は画像の隣に一覧を表示し、従来表示は切り替えます。上の許可スイッチがOFFの間は閉じた状態になります。'}],
         ['sceneSearch.controlsReveal','追加ボタンの開き方',{
           ...select([
             ['hover-focus','マウスを乗せるかフォーカスで開く'],
@@ -529,7 +533,7 @@ class ModernAdvancedSettingsModel {
     // Canonical descriptors retain their original category and are saved once.
     const aliases=ModernAdvancedSettingsModel.SHARED_VISIBILITY.map(([id,icon])=>{
       const original=this.descriptor(id);
-      return original?{...original,category,subcategory,icon,visibilityScope:'shared',
+      return original?{...original,category,subcategory,icon,visibilityScope:id.startsWith('sceneSearch.')?'scene-comments':'shared',
         sharedWith:original.category+' / '+original.subcategory}:null;
     }).filter(Boolean);
     return [...entries,...aliases];
@@ -594,7 +598,7 @@ class ModernAdvancedSettingsModel {
   isEnabled(id) {
     // A linked fullscreen layout is preserved in the draft, but cannot be edited
     // while the normal layout is the active source of truth.
-    if(id==='sceneSearch.layout.fullscreen' &&
+    if(['sceneSearch.layout.fullscreen','sceneSearch.presentation.fullscreen'].includes(id) &&
       this.get('sceneSearch.layout.linkFullscreen')===true){return false;}
     const d=this.descriptor(id);
     return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
@@ -691,8 +695,8 @@ class ModernAdvancedSettingsModel {
   }
   search(query) {
     const q=String(query||'').trim().toLocaleLowerCase();
-    if (!q) { return this.descriptors.slice(); }
-    return this.descriptors.filter(d=>
+    if (!q) { return this.descriptors.filter(d=>!d.hidden); }
+    return this.descriptors.filter(d=>!d.hidden &&
       [d.id,d.label,d.category,d.subcategory,d.description,...(d.aliases||[])]
         .join(' ').toLocaleLowerCase().includes(q));
   }

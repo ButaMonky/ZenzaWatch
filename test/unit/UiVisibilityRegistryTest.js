@@ -18,7 +18,10 @@ describe('Task318 centralized visibility manifest',()=>{
       ['showComment','comments-video'],['enableCommentPanel','comments-list'],
       ['enableCommentPreview','comments-preview'],['enableHeatMap','comment-heatmap'],
       ['enableStoryboard','seek-thumbnail'],['enableStoryboardBar','scene-filmstrip'],
-      ['enableAdDecoration','ad-crown']
+      ['enableAdDecoration','ad-crown'],
+      ['sceneSearch.commentPreviewVisible','comments-preview'],
+      ['sceneSearch.miniCommentVisible','comments-video'],
+      ['sceneSearch.commentListVisible','comments-list']
     ]);
   });
   it('uses unique stable keys, a known scope and one configurable icon per UI item',()=>{

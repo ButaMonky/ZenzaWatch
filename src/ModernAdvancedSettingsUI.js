@@ -241,6 +241,14 @@ class ModernAdvancedSettingsUI {
       '.zw-scui-mini[data-layout="08"] > i { left:auto; right:3px; width:27%; height:51px; bottom:5px; }',
       '.zw-scui-mini[data-layout="09"] > i { left:10%; bottom:14px; } .zw-scui-mini[data-layout="09"] > b { right:5%; left:auto; }',
       '.zw-scui-mini[data-layout="10"] > i { left:62%; bottom:24px; width:31%; } .zw-scui-mini[data-layout="10"] > b { left:13%; bottom:8px; }',
+      '.zw-scui-picker.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
+      '.zw-scui-layout-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }',
+      '.zw-scui-mini[data-layout=follow]>i,.zw-scui-mini[data-layout=fixed]>i { left:12%; width:34%; height:30px; bottom:10px; }',
+      '.zw-scui-mini[data-layout=follow]>b,.zw-scui-mini[data-layout=fixed]>b { left:48%; width:36%; height:30px; bottom:10px; color:white; font:9px/14px sans-serif; }',
+      '.zw-scui-mini i span { display:block; color:white; font:9px/25px sans-serif; white-space:nowrap; font-style:normal; text-shadow:1px 1px black; }',
+      '.zw-scui-layout-option small { font-size:11px; line-height:1.5; }',
+      '[data-zw-scene-compat] { margin-top:12px; } [data-zw-scene-compat] summary { cursor:pointer; }',
+      '.zw-modern-cardcontrols input[type=checkbox]:focus-visible { outline:2px solid #e5c075; outline-offset:3px; }',
       '.zw-scui-note { display:block; font-size:12px; line-height:1.5; color:#bdcfe0; padding-top:9px; }',
       '@media(max-width:760px) {.zw-scui-layout-grid { grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); }}',
       '@media(max-width:1050px) { .zw-order-workspace { grid-template-columns:minmax(0,1fr); } .zw-order-inspector { position:static; max-height:none; } }',
@@ -1465,54 +1473,76 @@ class ModernAdvancedSettingsUI {
     const wrap=this.doc.createElement('section');
     wrap.className='zw-scui-picker';
     wrap.dataset.zwSceneLayoutGallery='';
-    wrap.setAttribute('aria-label','シーンサーチのレイアウトを選択');
-    const header=this.doc.createElement('div');
-    header.className='zw-scui-pickerhead';
-    const heading=this.doc.createElement('strong');
-    heading.textContent='表示モードごとのUIデザイン';
-    const tabs=this.doc.createElement('div');
-    tabs.className='zw-scui-tabs';
-    tabs.setAttribute('role','group');
-    tabs.setAttribute('aria-label','デザインを設定する画面モード');
-    for(const [mode,label] of [['normal','通常表示'],['fullscreen','フルスクリーン']]){
-      const b=this._button(label,'data-zw-scene-layout-mode',mode);
-      b.setAttribute('aria-pressed',String(this._sceneLayoutTab===mode));
-      tabs.append(b);
-    }
-    header.append(heading,tabs);
-    wrap.append(header);
+    wrap.setAttribute('aria-label','シーンサーチの表示方式');
     const mode=this._sceneLayoutTab;
-    const key='sceneSearch.layout.'+mode;
-    const current=String(this.model.get(key)||'01');
+    const key='sceneSearch.presentation.'+mode;
+    const current=String(this.model.get(key)||'follow');
     const linked=mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')===true;
-    const grid=this.doc.createElement('div');
-    grid.className='zw-scui-layout-grid';
-    grid.setAttribute('role','group');
-    grid.setAttribute('aria-label',mode==='fullscreen'?'全画面の11案':'通常表示の11案');
-    const descriptor=this.model.descriptor(key);
-    for(const option of descriptor?.options||[]){
-      const b=this._button('','data-zw-scene-layout',option.value,'zw-scui-layout-option');
-      b.dataset.zwSceneLayoutMode=mode;
-      b.setAttribute('aria-pressed',String(current===option.value));
-      b.setAttribute('aria-label',option.label+(current===option.value?' 選択中':''));
-      b.disabled=linked;
-      const mini=this.doc.createElement('span');
-      mini.className='zw-scui-mini';
-      mini.dataset.layout=option.value;
-      // Diagrams use static primitives, not running video/image network calls.
-      mini.innerHTML='<i></i><b></b><em></em>';
-      const label=this.doc.createElement('strong');
-      label.textContent=option.label;
-      b.append(mini,label);
-      grid.append(b);
+    wrap.classList.toggle('is-modified',this.model.isDifferentFromDefault(key));
+    const header=this.doc.createElement('div');header.className='zw-scui-pickerhead';
+    const heading=this.doc.createElement('strong');heading.textContent='プレビューの表示方式';
+    const tabs=this.doc.createElement('div');tabs.className='zw-scui-tabs';
+    tabs.setAttribute('role','group');tabs.setAttribute('aria-label','設定する画面');
+    for(const [value,label] of [['normal','通常表示'],['fullscreen','全画面']]){
+      const b=this._button(label,'data-zw-scene-layout-mode',value);
+      b.setAttribute('aria-pressed',String(mode===value));tabs.append(b);
+    }
+    header.append(heading,tabs);wrap.append(header);
+    this._sceneMainLayouts=this._sceneMainLayouts||{};
+    if(current!=='legacy'){this._sceneMainLayouts[mode]=current;}
+    const grid=this.doc.createElement('div');grid.className='zw-scui-layout-grid';
+    grid.setAttribute('role','group');grid.setAttribute('aria-label','プレビューの2つの表示方式');
+    for(const [value,label,description] of [
+      ['follow','シーク位置に追従','シーク先の上に表示。端では画面内に収めます。'],
+      ['fixed','位置を固定','同じ場所で確認。小画面ではシークバー付近の空き領域を使います。']
+    ]){
+      const b=this._button('','data-zw-scene-layout',value,'zw-scui-layout-option');
+      b.dataset.zwSceneLayoutMode=mode;b.disabled=linked;
+      b.setAttribute('aria-pressed',String(current===value));b.setAttribute('aria-label',label);
+      const mini=this.doc.createElement('span');mini.className='zw-scui-mini';mini.dataset.layout=value;
+      mini.innerHTML='<i><span>ミニコメント</span></i><b>コメント<br>一覧</b><em></em>';
+      const factor=Math.min(1.5,Math.max(.5,Number(this.model.get('sceneSearch.thumbnailScale')||100)/100));
+      const imageWidth=28*factor,left=(100-imageWidth-38)/2;
+      Object.assign(mini.querySelector('i').style,{left:left+'%',width:imageWidth+'%',height:24*factor+'px'});
+      Object.assign(mini.querySelector('i span').style,{fontSize:9*factor+'px',lineHeight:24*factor+'px'});
+      mini.querySelector('b').style.left=(left+imageWidth+2)+'%';
+      const master=this.model.get('sceneSearch.commentPreviewVisible')!==false;
+      mini.querySelector('i span').hidden=!master||this.model.get('sceneSearch.miniCommentVisible')===false;
+      mini.querySelector('b').style.opacity=master&&this.model.get('sceneSearch.commentListVisible')!==false?'1':'.25';
+      mini.querySelector('b').style.backgroundColor='rgba(0,0,0,'+(Number(this.model.get('sceneSearch.commentListBackgroundOpacity')??90)/100)+')';
+      const title=this.doc.createElement('strong');title.textContent=label;
+      const detail=this.doc.createElement('small');detail.textContent=description;
+      b.append(mini,title,detail);grid.append(b);
     }
     wrap.append(grid);
-    const note=this.doc.createElement('small');
-    note.className='zw-scui-note';
-    note.textContent=linked?
-      '「通常表示と同じUIを使う」がONです。全画面用の保存値は保持しています。設定をOFFにすると変更できます。':
-      '選択は未保存の編集です。実際の映像は切り替えず、画面下部の「変更を保存」で確定します。';
+    const compat=this.doc.createElement('details');compat.dataset.zwSceneCompat='';
+    compat.open=current==='legacy';
+    const summary=this.doc.createElement('summary');summary.textContent='旧版との互換';
+    const row=this.doc.createElement('label');row.className='zw-modern-card is-inline';
+    const title=this.doc.createElement('span');title.className='zw-modern-cardhead';title.textContent='従来表示を使う';
+    const controls=this.doc.createElement('span');controls.className='zw-modern-cardcontrols';
+    const toggle=this.doc.createElement('input');toggle.type='checkbox';
+    toggle.dataset.zwSceneLegacy=mode;toggle.checked=current==='legacy';toggle.disabled=linked;
+    toggle.setAttribute('aria-label','従来表示を使う');controls.append(toggle);
+    row.append(title,controls);compat.append(summary,row);wrap.append(compat);
+    const note=this.doc.createElement('small');note.className='zw-scui-note';
+    note.textContent=linked?'通常表示の方式を使用します。全画面用の選択は保持しています。':
+      '一覧はコメントボタンで開閉します。「位置を一時固定」は場面と位置の両方を保持します。変更は「変更を保存」で反映します。';
     wrap.append(note);
+    const config=this.model.config;
+    const migration=config.resolveSceneSearch?.()?.migration||[];
+    if(migration.length&&config.getValue('sceneSearch.presentation.migrationAcknowledged')!==true){
+      const info=this.doc.createElement('aside');info.dataset.zwSceneMigration='';info.className='zw-scui-note';
+      const names={follow:'シーク位置に追従',fixed:'位置を固定',legacy:'従来表示'};
+      info.append('表示方式を整理しました。');
+      for(const item of migration){
+        const old=this.model.descriptor(item.key.replace('presentation','layout'))?.options?.find(o=>o.value===item.oldValue)?.label||item.oldValue;
+        const line=this.doc.createElement('div');
+        line.textContent=old+' → '+names[item.newValue];info.append(line);
+      }
+      info.append(this._button('確認した','data-zw-scene-migration-ack',''));
+      wrap.append(info);
+    }
     return wrap;
   }
   _renderCards() {
@@ -1562,13 +1592,13 @@ class ModernAdvancedSettingsUI {
       this.selected.subcategory==='シーンサーチ';
     const groupNames={
       hover:'動画の上に重なるボタン',related:'関連メニュー',comment:'コメント入力',
-      scene:'シーンサーチの操作ボタン',
+      scene:'シーンサーチの操作ボタン','scene-comments':'シーンサーチのコメント表示',
       bar:'再生操作バー',info:'動画情報パネル',header:'動画上部のヘッダー',
       shared:'コメント・補助表示（元の設定画面と共通）'
     };
     let lastScope=null;
-    for(const d of visibleEntries.filter(item=>item.type!=='related-visibility')){
-      if(sceneSection && ['sceneSearch.layout.normal','sceneSearch.layout.fullscreen'].includes(d.id)){
+    for(const d of visibleEntries.filter(item=>!item.hidden&&item.type!=='related-visibility')){
+      if(sceneSection && ['sceneSearch.layout.normal','sceneSearch.layout.fullscreen','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen'].includes(d.id)){
         continue; // One canonical draft; the visual gallery replaces redundant select cards.
       }
       if(visibilityMode && d.visibilityScope && d.visibilityScope!==lastScope){
@@ -1604,7 +1634,7 @@ class ModernAdvancedSettingsUI {
         '<strong>プレイヤーの表示を自分好みに整理</strong>',
         '<p>動画上・操作バー・動画情報・ヘッダーごとに項目をまとめました。OFFでも再生機能やショートカットは削除されません。</p>',
         '<p>再生・停止、シークバー、閉じる、エラー復旧は残ります。歯車を隠した場合も、マイページの上級者設定から再表示できます。</p>',
-        '<p>「共通設定」の7項目は元の場所と同じ値です。変更・キャンセル・初期値への復帰も両方に反映されます。</p>',
+        '<p>共通設定の'+ModernAdvancedSettingsModel.SHARED_VISIBILITY.length+'項目は元の場所と同じ値です。変更・キャンセル・初期値への復帰も両方に反映されます。</p>',
         '<p>変更は画面下部の「変更を保存」で確定します。いつでも表示に戻せます。</p>'
       ].join('');
       rows.unshift(guide);
@@ -1767,10 +1797,23 @@ class ModernAdvancedSettingsUI {
         if(text){text.textContent=this.formatKeyCombo(this.model.get(id));}
       }
     }
+    const gallery=this.cards.querySelector('[data-zw-scene-layout-gallery]');
+    if(gallery){gallery.replaceWith(this._createSceneLayoutPicker());}
     this._refreshFooter();
   }
   _interceptValue(e) {
     const el=e.target;
+    if(el?.hasAttribute?.('data-zw-scene-legacy')&&this.root.contains(el)){
+      e.stopPropagation();e.stopImmediatePropagation?.();
+      const mode=el.dataset.zwSceneLegacy;
+      if(!el.disabled&&['normal','fullscreen'].includes(mode)){
+        const value=el.checked?'legacy':this._sceneMainLayouts?.[mode]||'follow';
+        this.model.set('sceneSearch.presentation.'+mode,value);
+        this._renderCards();this._refreshFooter();
+        this.root.querySelector('[data-zw-scene-legacy]')?.focus();
+      }
+      return true;
+    }
     if(el?.dataset?.zwRegexFlag && this.root.contains(el)){
       e.stopPropagation();e.stopImmediatePropagation?.();
       const id=el.dataset.zwRegexId;
@@ -1918,6 +1961,16 @@ class ModernAdvancedSettingsUI {
     }
     const button=e.target.closest('button');
     if(!button||!this.root.contains(button)||button.disabled){return;}
+    if(button.hasAttribute('data-zw-scene-migration-ack')){
+      try {
+        this.model.config.persistSceneSearchSelection({'sceneSearch.presentation.migrationAcknowledged':true});
+        this._renderCards();
+      } catch(error) {
+        const info=button.closest('[data-zw-scene-migration]');
+        if(info){const note=this.doc.createElement('span');note.setAttribute('role','alert');note.textContent='保存できませんでした。もう一度お試しください。';info.append(note);}
+      }
+      return;
+    }
     if(button.hasAttribute('data-zw-scene-layout-mode') &&
        !button.hasAttribute('data-zw-scene-layout')){
       const mode=button.dataset.zwSceneLayoutMode;
@@ -1930,10 +1983,10 @@ class ModernAdvancedSettingsUI {
     if(button.hasAttribute('data-zw-scene-layout')){
       const id=button.dataset.zwSceneLayout;
       const mode=button.dataset.zwSceneLayoutMode;
-      if(!/^(00|0[1-9]|10)$/.test(id)||!['normal','fullscreen'].includes(mode) ||
+      if(!['follow','fixed'].includes(id)||!['normal','fullscreen'].includes(mode) ||
          mode!==this._sceneLayoutTab){return;}
       if(mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')){return;}
-      this.model.set('sceneSearch.layout.'+mode,id);
+      this.model.set('sceneSearch.presentation.'+mode,id);
       this._renderCards();this._refreshFooter();
       return;
     }

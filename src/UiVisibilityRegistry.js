@@ -7,7 +7,10 @@ class UiVisibilityRegistry {
       ['showComment','comments-video'],['enableCommentPanel','comments-list'],
       ['enableCommentPreview','comments-preview'],['enableHeatMap','comment-heatmap'],
       ['enableStoryboard','seek-thumbnail'],['enableStoryboardBar','scene-filmstrip'],
-      ['enableAdDecoration','ad-crown']
+      ['enableAdDecoration','ad-crown'],
+      ['sceneSearch.commentPreviewVisible','comments-preview'],
+      ['sceneSearch.miniCommentVisible','comments-video'],
+      ['sceneSearch.commentListVisible','comments-list']
     ];
   }
   static get ITEMS() {

@@ -22,7 +22,7 @@
 - TS正本を修正し、nico:syncで生成。2回のsandbox生成でBUILDIDを除いた内容の一致を確認。
 - 実際のニコニコへのブラウザー接続はサイト安全ポリシーで拒否された。回避は行っておらず、ログイン済み実環境での修正確認はユーザーによる確認待ち。
 
-確認版：review/task801/ZenzaWatch-dev.user.js  
+確認版：review/task801/ZenzaWatch-dev.user.js
 SHA-256：b6466f49794398e9a2c82463bc440445bb6bce5e9117544f072103e56bb20765
 
 実機確認は起動ログが2.7.307-task801になったことを確かめ、以下を優先する。

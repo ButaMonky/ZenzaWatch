@@ -18,14 +18,14 @@ function emitter(){
  off(k,f){rows.get(k)?.delete(f);},emit(k,...a){for(const f of [...rows.get(k)||[]])f(...a);},
  count(){return [...rows.values()].reduce((n,s)=>n+s.size,0);}};
 }
-function fixture(id='01',mode='normal',{portal=false,beforeAttach}={}){
+function fixture(id='01',mode='normal',{portal=false,beforeAttach,clock}={}){
  const errors=[],vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));
  const dom=new JSDOM('<!doctype html><html><head></head><body>'+
   '<div id="player" style="position:relative;width:900px;height:520px">'+
   '<div id="seek"></div><aside class="zenzaCommentPreview"></aside>'+
   '<div id="old"><div id="thumb" class="zenzaSeekThumbnail"><canvas width="160" height="90"></canvas></div></div>'+
   '</div></body></html>',{url:'https://example.invalid/',virtualConsole:vc});
- const d=dom.window.document,ctx=createContext({document:d});
+ const d=dom.window.document,ctx=createContext({document:d,...(clock||{})});
  for(const file of modules)run(beginSection(file),ctx);
  run('globalThis.Binding=SceneSearchPlayerBinding;globalThis.Visibility=UiVisibilityRegistry;',ctx);
  const values={'sceneSearch.layout.normal':id,'sceneSearch.layout.fullscreen':id,

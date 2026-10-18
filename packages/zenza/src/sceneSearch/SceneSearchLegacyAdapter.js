@@ -68,6 +68,7 @@ class SceneSearchLegacyAdapter {
       legacyTooltipElement:legacy?._$view?.[0]||null,
       getThumbnailElement:()=>legacy?._seekBarThumbnail?._view||null,
       commentPreviewElement:this.bar._commentPreview?._view?._view||null,
+      createCommentList:container=>this.bar._commentPreview?.createListView?.(container),
       config:this.bar._playerConfig,
       clock:this.clock,
       getChats:()=>this.commentData,

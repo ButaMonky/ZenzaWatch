@@ -33,15 +33,15 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.295-scui-native-follow
+// @version        2.7.304-scui02-twin-idle
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
-// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/publication/task729-scui-native-foundation/dist/ZenzaWatch-dev.user.js
-// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/publication/task729-scui-native-foundation/dist/ZenzaWatch-dev.user.js
+// @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
+// @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 04:18Z d8e4a4f
+// build: 2026-10-18 07:22Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.295-scui-native-follow';
+    var VER = '2.7.304-scui02-twin-idle';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 04:18Z d8e4a4f';
+    var BUILD = '2026-10-18 07:22Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -23149,13 +23149,19 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 		constructor(params) {
 			const model = this._model = params.model;
 			this._$parent = params.$container;
+			this._disposed = false;
+			this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
 			this._inviewTable = new Map;
 			this._chatList = [];
 			this._initializeDom(this._$parent);
-			model.on('reset',  this._onReset.bind(this));
-			model.on('update', _.debounce(this._onUpdate.bind(this), 10));
-			model.on('vpos', this._onVpos.bind(this));
+			this._subscriptions = [
+				['reset', this._onReset.bind(this)],
+				['update', _.debounce(this._onUpdate.bind(this), 10)],
+				['vpos', this._onVpos.bind(this)]
+			];
+			for (const [event, handler] of this._subscriptions) { model.on(event, handler); }
 			this._mode = 'hover';
+			this._view.dataset.commentPreviewMode = 'hover';
 			this._left = 0;
 			this.update = _.throttle(this.update.bind(this), 200);
 			this.applyView = throttle.raf(this.applyView.bind(this));
@@ -23168,20 +23174,20 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			const $view = util.$.html(CommentPreviewView.__tpl__);
 			const view = this._view = $view[0];
 			this._list = view.querySelector('.listContainer');
-			$view.on('click', this._onClick.bind(this))
-				.on('wheel', e => e.stopPropagation(), {passive: true})
-				.on('scroll',
-				_.throttle(this._onScroll.bind(this), 50, {trailing: false}), {passive: true});
+			this._domListeners = [
+				['click', this._onClick.bind(this)],
+				['wheel', e => e.stopPropagation(), {passive: true}],
+				['scroll', _.throttle(this._onScroll.bind(this), 50, {trailing: false}), {passive: true}]
+			];
+			for (const [event, handler, options] of this._domListeners) {
+				view.addEventListener(event, handler, options);
+			}
 			$parent.append($view);
 		}
 		set mode(v) {
-			if (v === 'list') {
-				util.StyleSwitcher.update({
-					on: '.commentPreview.list', off: '.commentPreview.hover'});
-			} else {
-				util.StyleSwitcher.update({
-					on: '.commentPreview.hover', off: '.commentPreview.list'});
-			}
+			if (this._disposed) { return; }
+			v = v === 'list' ? 'list' : 'hover';
+			this._view.dataset.commentPreviewMode = v;
 			const previous = this._mode;
 			this._mode = v;
 			if (previous !== v && this._chatList?.length) {
@@ -23204,7 +23210,10 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			const nicoChat  = this._model.getItemByUniqNo(uniqNo);
 			if (command && nicoChat) {
 				view.classList.add('is-updating');
-				window.setTimeout(() => view.classList.remove('is-updating'), 3000);
+				window.clearTimeout(this._updatingTimer);
+				this._updatingTimer = window.setTimeout(() => {
+					if (!this._disposed) { view.classList.remove('is-updating'); }
+				}, 3000);
 				switch (command) {
 					case 'addUserIdFilter':
 						util.dispatchCommand(e.target, command, nicoChat.userId);
@@ -23224,6 +23233,7 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			}
 		}
 		_onUpdate() {
+			if (this._disposed || this._model._chatReady === false) { return; }
 			this.updateList();
 			const vpos = this._model && this._model._vpos;
 			if (Number.isFinite(vpos) && vpos >= 0) {
@@ -23233,12 +23243,14 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			}
 		}
 		_onVpos(vpos) {
+			if (this._disposed) { return; }
 			const itemHeight = CommentPreviewView.ITEM_HEIGHT;
 			const index = this._currentStartIndex = Math.max(0, this._model.currentIndex);
 			this._currentEndIndex = Math.max(0, this._model.getVposIndex(vpos + 400));
 			this._scrollTop = itemHeight * index;
 			this._currentTime = vpos / 100;
 			this._refreshInviewElements(this._scrollTop);
+			this.applyView();
 		}
 		_onResize() {
 			this._refreshInviewElements();
@@ -23285,6 +23297,7 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 				const chat = chatList[i];
 				if (inviewTable.has(i) || !chat) { continue; }
 				const listItem = CommentPreviewChatItem.create(chat, i);
+				listItem.id = 'commentPreview' + this._viewId + '-item' + i;
 				newItems.push(listItem);
 				inviewTable.set(i, listItem);
 			}
@@ -23302,6 +23315,7 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			return this._chatList.length < 1;
 		}
 		update(left) {
+			if (this._disposed) { return; }
 			if (this._isListUpdated) {
 				this.updateList();
 			}
@@ -23317,6 +23331,7 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			this.applyView();
 		}
 		applyView() {
+			if (this._disposed) { return; }
 			const view = this._view;
 			cssUtil.setProps(
 				[view, '--current-time', cssUtil.s(this._currentTime)],
@@ -23332,6 +23347,23 @@ const heatMapCacheEntry = (payload, currentWatchId) => {
 			}
 		}
 		hide() {
+		}
+		dispose() {
+			if (this._disposed) { return; }
+			this._disposed = true;
+			for (const [event, handler] of this._subscriptions || []) {
+				this._model.off(event, handler);
+				handler.cancel?.();
+			}
+			for (const [event, handler, options] of this._domListeners || []) {
+				this._view.removeEventListener(event, handler, options);
+				handler.cancel?.();
+			}
+			this.update.cancel?.();
+			this.applyView.cancel?.();
+			window.clearTimeout(this._updatingTimer);
+			this._onReset();
+			this._view.remove();
 		}
 	}
 	class CommentPreviewChatItem {
@@ -23424,32 +23456,32 @@ util.addStyle(`
 	}
 `, {className: 'commentPreview'});
 util.addStyle(`
-	.zenzaCommentPreview {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
 		border-bottom: 24px solid transparent;
 		background: rgba(0, 0, 0, 0.4);
 		z-index: 100;
 		overflow: auto;
 	}
-	.zenzaCommentPreview:hover {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]):hover {
 		background: black;
 	}
-	.zenzaCommentPreview.is-updating {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]).is-updating {
 		transition: opacity 0.2s ease;
 		opacity: 0.3;
 		cursor: wait;
 	}
-	.zenzaCommentPreview.is-updating * {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]).is-updating * {
 		pointer-events: none;
 	}
-	.listContainer {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer {
 		bottom: auto;
 		padding: 4px;
 		pointer-events: none;
 	}
-	.zenzaCommentPreview:hover .listContainer {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]):hover .listContainer {
 		pointer-events: auto;
 	}
-	.listContainer .nicoChat {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat {
 		position: absolute;
 		left: 0;
 		display: block;
@@ -23474,36 +23506,36 @@ util.addStyle(`
 			color: #ffc;
 		}
 	}
-	.listContainer:hover .nicoChat.odd {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer:hover .nicoChat.odd {
 		background: #333;
 	}
-	.listContainer .nicoChat.fork1 .vposTime {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat.fork1 .vposTime {
 		color: #6f6;
 	}
-	.listContainer .nicoChat:where(.fork2, .fork3) .vposTime {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:where(.fork2, .fork3) .vposTime {
 		color: #66f;
 	}
-	.listContainer .nicoChat .no,
-	.listContainer .nicoChat .date,
-	.listContainer .nicoChat .userId {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .no,
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .date,
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .userId {
 		display: none;
 	}
-	.listContainer .nicoChat:hover .no,
-	.listContainer .nicoChat:hover .date,
-	.listContainer .nicoChat:hover .userId {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .no,
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .date,
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .userId {
 		display: inline-block;
 		white-space: nowrap;
 	}
-	.listContainer .nicoChat .text {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .text {
 		color: inherit !important;
 	}
-	.listContainer .nicoChat:hover .text {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .text {
 		color: #fff !important;
 	}
-	.listContainer .nicoChat .text:hover {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .text:hover {
 		text-decoration: underline;
 	}
-	.listContainer .nicoChat .addFilter {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter {
 		display: none;
 		position: absolute;
 		font-size: 10px;
@@ -23512,29 +23544,29 @@ util.addStyle(`
 		cursor: pointer;
 		top: 0;
 	}
-	.listContainer .nicoChat:hover .addFilter {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .addFilter {
 		display: inline-block;
 		border: 1px solid #ccc;
 		box-shadow: 2px 2px 2px #333;
 	}
-	.listContainer .nicoChat .addFilter.addUserIdFilter {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter.addUserIdFilter {
 		right: 8px;
 		width: 48px;
 	}
-	.listContainer .nicoChat .addFilter.addWordFilter {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter.addWordFilter {
 		right: 64px;
 		width: 48px;
 	}
-	.listContainer .nicoChat .addFilter:active {
+	.zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter:active {
 		transform: translateY(2px);
 	}
-	.zenzaScreenMode_sideView .zenzaCommentPreview,
-	.zenzaScreenMode_small .zenzaCommentPreview {
+	.zenzaScreenMode_sideView .zenzaCommentPreview:where([data-comment-preview-mode="list"]),
+	.zenzaScreenMode_small .zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
 		background: rgba(0, 0, 0, 0.9);
 	}
 `, {className: 'commentPreview list'});
 util.addStyle(`
-	.zenzaCommentPreview {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) {
 		bottom: 24px;
 		box-sizing: border-box;
 		height: 140px;
@@ -23548,7 +23580,7 @@ util.addStyle(`
 		contain: layout style size paint;
 		filter: drop-shadow(0 0 1px #000);
 	}
-	.listContainer {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer {
 		bottom: auto;
 		width: 100%;
 		height: 100% !important;
@@ -23556,7 +23588,7 @@ util.addStyle(`
 		border: none;
 		contain: layout style size paint;
 	}
-	.listContainer .nicoChat {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat {
 		display: block;
 		top: auto !important;
 		font-size: 16px;
@@ -23564,13 +23596,13 @@ util.addStyle(`
 		height: 18px;
 		white-space: nowrap;
 	}
-	.listContainer .nicoChat:nth-child(n + 8) {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat:nth-child(n + 8) {
 		transform: translateY(-144px);
 	}
-	.listContainer .nicoChat:nth-child(n + 16) {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat:nth-child(n + 16) {
 		transform: translateY(-288px);
 	}
-	.listContainer .nicoChat .text {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat .text {
 		display: inline-block;
 		text-shadow: 1px 1px 1px #fff;
 		transform: translateX(260px);
@@ -23583,8 +23615,8 @@ util.addStyle(`
 		animation-timing-function: linear;
 		animation-fill-mode: forwards;
 	}
-	.listContainer .nicoChat .vposTime,
-	.listContainer .nicoChat .addFilter {
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat .vposTime,
+	.zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat .addFilter {
 		display: none !important;
 	}
 	@keyframes preview-text-moving {
@@ -23596,7 +23628,7 @@ util.addStyle(`
 			transform: translateX(85px) translateX(-100%);
 		}
 	}
-`, {className: 'commentPreview hover', disabled: true});
+`, {className: 'commentPreview hover'});
 	class CommentPreview {
 		constructor(params) {
 			this._model = new CommentPreviewModel({});
@@ -23624,7 +23656,32 @@ util.addStyle(`
 		set mode(v) {
 			if (v === this._mode) { return; }
 			this._mode = v;
-			this._view.mode = v;
+			this._view.mode = this._twinList ? 'hover' : v;
+		}
+		createListView(container) {
+			if (this._twinList) { return this._twinList; }
+			const view = new CommentPreviewView({
+				model: this._model, $container: util.$(container)
+			});
+			view.mode = 'list';
+			view._onUpdate();
+			this._view._onUpdate();
+			this._view.mode = 'hover';
+			let disposed = false;
+			const handle = {
+				element: view._view,
+				dispose: () => {
+					if (disposed) { return; }
+					disposed = true;
+					view.dispose();
+					if (this._twinList === handle) {
+						this._twinList = null;
+						this._view.mode = this._mode;
+					}
+				}
+			};
+			this._twinList = handle;
+			return handle;
 		}
 		get mode() {
 			return this._mode;
@@ -34452,6 +34509,7 @@ class SceneSearchLegacyAdapter {
 			legacyTooltipElement:legacy?._$view?.[0]||null,
 			getThumbnailElement:()=>legacy?._seekBarThumbnail?._view||null,
 			commentPreviewElement:this.bar._commentPreview?._view?._view||null,
+			createCommentList:container=>this.bar._commentPreview?.createListView?.(container),
 			config:this.bar._playerConfig,
 			clock:this.clock,
 			getChats:()=>this.commentData,
@@ -34527,7 +34585,7 @@ class SceneSearchLegacyAdapter {
 class SceneSearchIntegrationBridge {
 	constructor({classes,document,container,seekElement,commentPreviewElement,
 		legacyTooltipElement,getThumbnailElement,config,registry,clock,layoutSettings,
-		getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError}={}) {
+		getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError,createCommentList}={}) {
 		if(!document||!container||!seekElement||!config||!registry||
 			typeof config.getValue!=='function'||typeof config.setValue!=='function'||
 			typeof onSeekRelative!=='function'||typeof onSeekAbsolute!=='function'){
@@ -34546,6 +34604,9 @@ class SceneSearchIntegrationBridge {
 		this._commentPreviewElement=commentPreviewElement||null;
 		this._commentPreviewOriginal=null;
 		this._commentDock=null;
+		this._createCommentList=createCommentList||null;
+		this._twinList=null;
+		this._twinListCleanup=null;
 		this._commentHoverCleanup=null;
 		this._legacyTooltipElement=legacyTooltipElement||null;
 		this._legacyTooltipOriginal=null;
@@ -34614,10 +34675,7 @@ class SceneSearchIntegrationBridge {
 		});
 		this.interaction=new classes.Interaction({
 			controller:this.controller,
-			getPreviewRect:()=>{
-				const root=this._active?.root;
-				return root?.getBoundingClientRect?.()||null;
-			},
+			getPreviewRect:()=>this._previewRects(),
 			subscribePointerMove:listener=>{
 				document.addEventListener('mousemove',listener,true);
 				return ()=>document.removeEventListener('mousemove',listener,true);
@@ -34720,7 +34778,7 @@ class SceneSearchIntegrationBridge {
 					const width=player?.width||this.container.clientWidth||800;
 					const room=Number.isFinite(windowHeight)&&Number.isFinite(player?.bottom)?
 						windowHeight-player.bottom:0;
-					const enough=mode==='normal'&&room>=(width<580?300:180);
+					const enough=mode==='normal'&&room>=230;
 					this.container.dataset.scenePlacement=enough?'below':'visible-fallback';
 					this._updateTwinCommentPlacement(enough,player);
 				}
@@ -34792,7 +34850,7 @@ class SceneSearchIntegrationBridge {
 			this.container.style.removeProperty('--scui-twin-comment-top');
 			return;
 		}
-		const comment=this._commentPreviewElement;
+		const comment=this._twinList?.element||this._commentPreviewElement;
 		const owner=comment?.offsetParent||comment?.parentElement;
 		const origin=owner?.getBoundingClientRect?.();
 		if(!origin||!Number.isFinite(origin.top)||!Number.isFinite(player.bottom)){
@@ -34800,9 +34858,7 @@ class SceneSearchIntegrationBridge {
 		}
 		const scale=origin.width&&owner.offsetWidth?
 			owner.offsetWidth/origin.width:1;
-		const width=this.container.offsetWidth||player.width;
-		const stack=width<580;
-		const top=(player.bottom-origin.top)*scale+(stack?157:15);
+		const top=(player.bottom-origin.top)*scale+15;
 		if(Number.isFinite(top)){
 			this.container.style.setProperty('--scui-twin-comment-top',
 				Math.round(Math.max(0,top))+'px');
@@ -34875,8 +34931,14 @@ class SceneSearchIntegrationBridge {
 			onMenuChange:open=>{
 				if(this._disposed){return;}
 				this.idleLimiter.pause('step-menu',open);
-				if(open){this.interaction.previewEnter();}
-				else{this.interaction.previewLeave();}
+				if(open){this.interaction.previewEnter('step-menu');}
+				else{
+					this.interaction.previewLeave('step-menu');
+					const focused=this.document.activeElement;
+					if(root.contains(focused)&&focused.closest('[hidden]')){
+						this.interaction.previewFocus(false,root);
+					}
+				}
 			},
 			onError:error=>this._onError(error,'sceneSearch.seekStepSeconds')
 		});
@@ -34889,22 +34951,7 @@ class SceneSearchIntegrationBridge {
 		this._commentPanel=searchPanel;
 		this.router.seekStepControl=step;
 		this.router.commentSearchPanel=searchPanel;
-		const enter=()=>this.interaction.previewEnter();
-		const leave=()=>this.interaction.previewLeave();
-		const focusin=()=>this.interaction.previewFocus(true);
-		const focusout=e=>{
-			if(!root.contains(e.relatedTarget)){this.interaction.previewFocus(false);}
-		};
-		for(const [event,handler] of [
-			['mouseenter',enter],['mouseleave',leave],
-			['focusin',focusin],['focusout',focusout]
-		])root.addEventListener(event,handler);
-		this._cardCleanup=()=>{
-			for(const [event,handler] of [
-				['mouseenter',enter],['mouseleave',leave],
-				['focusin',focusin],['focusout',focusout]
-			])root.removeEventListener(event,handler);
-		};
+		this._cardCleanup=this._bindPreviewSurface(root);
 		this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
 		this.refreshSharedThumbnail();
 	}
@@ -35033,6 +35080,49 @@ class SceneSearchIntegrationBridge {
 		}
 		this._legacyTooltipOriginal=null;
 	}
+	_bindPreviewSurface(node) {
+		const enter=()=>this.interaction.previewEnter(node);
+		const leave=e=>this.interaction.previewLeave(node,e);
+		const focus=()=>this.interaction.previewFocus(true,node);
+		const blur=e=>{
+			if(!node.contains(e.relatedTarget))this.interaction.previewFocus(false,node);
+		};
+		const pointer=e=>this._startPointer(e);
+		const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
+			['pointerdown',pointer]];
+		for(const [event,fn] of listeners)node.addEventListener(event,fn);
+		return ()=>{
+			for(const [event,fn] of listeners)node.removeEventListener(event,fn);
+			this.interaction.previewLeave(node);
+			this.interaction.previewFocus(false,node);
+		};
+	}
+	_restoreTwinList() {
+		const handle=this._twinList;
+		if(!handle)return;
+		this._twinList=null;
+		handle.element?.classList.remove('is-scui-active');
+		this._twinListCleanup?.();
+		this._twinListCleanup=null;
+		handle.dispose();
+	}
+	_previewRects() {
+		const root=this._active?.root;
+		const nodes=[root,root?.querySelector('.zenzaSceneActions'),
+			root?.querySelector('.zenzaSceneRemoteControls'),this._commentPreviewElement,
+			this._twinList?.element].filter(Boolean);
+		const regions=[];
+		for(const node of new Set(nodes)){
+			if(node.hidden||node.closest('[hidden],.is-idle-suppressed'))continue;
+			if(node.classList.contains('zenzaSceneCommentAttached')&&
+				!node.classList.contains('is-scui-active'))continue;
+			const css=this.document.defaultView?.getComputedStyle?.(node);
+			if(css&&(css.display==='none'||css.visibility==='hidden'||css.opacity==='0'))continue;
+			const rect=node.getBoundingClientRect?.();
+			if(rect?.width>0&&rect.height>0)regions.push(rect);
+		}
+		return regions;
+	}
 	_syncCommentPreviewDock(card,state) {
 		const node=this._commentPreviewElement,root=card?.root;
 		if(!node||!root)return;
@@ -35050,20 +35140,25 @@ class SceneSearchIntegrationBridge {
 			for(const {name,native} of typography){
 				if(native)node.style.setProperty(name,native);
 			}
-			const enter=()=>this.interaction.previewEnter();
-			const leave=()=>this.interaction.previewLeave();
-			const focus=()=>this.interaction.previewFocus(true);
-			const blur=e=>{
-				if(!node.contains(e.relatedTarget))this.interaction.previewFocus(false);
-			};
-			const listeners=[['mouseenter',enter],['mouseleave',leave],
-				['focusin',focus],['focusout',blur]];
-			for(const [name,handler] of listeners)node.addEventListener(name,handler);
-			this._commentHoverCleanup=()=>{
-				for(const [name,handler] of listeners)node.removeEventListener(name,handler);
-			};
+			this._commentHoverCleanup=this._bindPreviewSurface(node);
 		}
-		const list=this.config.getValue('enableCommentPreview')===true;
+		const listRequested=this.config.getValue('enableCommentPreview')===true;
+		const twin=root.dataset.layout==='02'&&typeof this._createCommentList==='function';
+		if(twin&&listRequested&&!this._twinList){
+			this._twinList=this._createCommentList(this.container)||null;
+			if(this._twinList?.element){
+				const panel=this._twinList.element;
+				panel.classList.add('zenzaSceneTwinList','zenzaSceneCommentAttached','is-scui-list');
+				panel.tabIndex=0;
+				panel.setAttribute('aria-label','シーンのコメント一覧');
+				for(const {name,native} of this._commentDock.typography||[]){
+					if(native)panel.style.setProperty(name,native);
+				}
+				this._twinListCleanup=this._bindPreviewSurface(panel);
+			}
+		}
+		if(!listRequested)this._restoreTwinList();
+		const list=listRequested&&!(twin&&this._twinList);
 		const classic=root.dataset.layout==='01';
 		const image=root.querySelector('.zenzaSceneImageBox');
 		const target=classic?(list?root:image):
@@ -35077,6 +35172,16 @@ class SceneSearchIntegrationBridge {
 			this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
 			!root.classList.contains('is-idle-suppressed');
 		node.classList.toggle('is-scui-active',active);
+		if(this._twinList?.element){
+			this._twinList.element.classList.toggle('is-scui-active',active&&listRequested);
+		}
+		if(twin){
+			const toggle=root.querySelector('[data-scui-action="comment-toggle"]');
+			const label=listRequested?'コメント一覧を閉じる':'コメント一覧を表示';
+			toggle?.setAttribute('aria-label',label);
+			toggle?.setAttribute('title',label);
+			toggle?.setAttribute('aria-expanded',String(listRequested));
+		}
 		if(classic){
 			if(list)this._positionClassicCommentSide(root,list);
 			else root.dataset.scuiSidePlacement='overlay';
@@ -35107,6 +35212,7 @@ class SceneSearchIntegrationBridge {
 		root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
 	}
 	_restoreCommentPreviewDock(){
+		this._restoreTwinList();
 		const old=this._commentDock,node=this._commentPreviewElement;
 		if(!old||!node)return;
 		this._commentHoverCleanup?.();
@@ -35442,11 +35548,11 @@ box-shadow:0 8px 20px #0009
 	the separately reserved Layout01_02/LegacyAdapter owner (Task532).
 	Normal = two separate panels outside video, full = inside both edges. */
 [data-scene-search-layout="02"] .zenzaSceneSearchHost.zenzaSceneLayout02{
-	width:min(245px,calc(100% - 24px))!important;
+	width:min(245px,calc(50% - 20px))!important;
 }
 [data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaSceneLayout02{
-	left:23%!important;right:auto!important;top:calc(100% + 15px)!important;
-	bottom:auto!important;transform:translateX(-50%)!important;
+	left:12px!important;right:auto!important;top:calc(100% + 15px)!important;
+	bottom:auto!important;transform:none!important;
 }
 [data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="visible-fallback"] .zenzaSceneLayout02{
 	left:12px!important;right:auto!important;top:auto!important;
@@ -35482,26 +35588,23 @@ box-shadow:0 8px 20px #0009
 [data-scene-search-layout="02"] .zenzaSceneLayout02 .scene-more{
 	position:static!important;opacity:1;visibility:visible;pointer-events:auto;
 }
-/* Preserve the real comment owner's hover/list/scroll and click behavior. */
-[data-scene-search-layout="02"] .zenzaCommentPreview{
-	left:auto!important;right:14px!important;top:auto!important;
-	bottom:94px!important;max-width:calc(100% - 24px);
-	transform:none!important;
+/* UI02 secondary native list shares the card's visibility and stays adjacent. */
+[data-scene-search-layout="02"] .zenzaCommentPreview.is-scui-list{
+	position:absolute;left:auto!important;right:12px!important;top:auto!important;
+	bottom:94px!important;transform:none!important;
+	width:min(350px,calc(50% - 20px))!important;
+	max-width:calc(50% - 20px)!important;height:200px;box-sizing:border-box;
 }
-[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
-	left:auto!important;right:15%!important;
+[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview.is-scui-list{
 	top:var(--scui-twin-comment-top,calc(100% + 15px))!important;
-	bottom:auto!important;max-width:min(256px,calc(50% - 20px));
+	bottom:auto!important;
 }
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaSceneLayout02{
-	left:50%!important;transform:translateX(-50%)!important;
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .zenzaSceneImageBox
+>.zenzaCommentPreview.is-scui-flow{
+	background:transparent!important;opacity:1!important;
 }
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
-	left:12px!important;right:12px!important;max-width:calc(100% - 24px);
-}
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-placement="visible-fallback"] .zenzaCommentPreview,
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
-	left:auto!important;right:12px!important;bottom:234px!important;
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .is-scui-flow .text{
+	animation-play-state:running!important;
 }
 /* Task542: real comment list stays in the legacy seekbar owner; only
 	selected layout's coordinates change. Keep its hover/list modes,
@@ -36284,16 +36387,8 @@ const SCENE_LAYOUT02_CSS=`
 .zenzaSceneLayout02[data-mode="fullscreen"]{
 	--scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
 }
-/* The comment preview stays separate on the right, without losing
-	its original click-through stacking relative to the scene preview. */
-[data-scene-search-layout="02"] .zenzaCommentPreview{
-	left:auto!important;right:12px;max-width:calc(100% - 24px);
-	bottom:var(--scene-bottom,64px)!important;
-	transform:none!important;
-}
-[data-scene-search-layout="02"][data-scene-narrow="true"] .zenzaCommentPreview{
-	right:12px;bottom:calc(var(--scene-bottom,64px) + 140px)!important;
-}
+/* The integration bridge places the independent native comment list.
+	This provider owns only the scene card, including narrow layouts. */
 `;
 function registerSceneLayouts01_02(registry) {
 	if(!registry||typeof registry.register!=='function'){
@@ -36304,7 +36399,7 @@ function registerSceneLayouts01_02(registry) {
 			description:'シーク位置へ追従する小型プレビュー。通常表示と全画面で下端を調整',
 			layoutClass:'zenzaSceneLayout01',css:SCENE_LAYOUT01_CSS},
 		{id:'02',name:'左右ツインパネル',
-			description:'シーンを左、コメントを右へ分離。狭い画面は上下に退避',
+			description:'シーンを左、コメント一覧を右に同時表示',
 			layoutClass:'zenzaSceneLayout02',css:SCENE_LAYOUT02_CSS}
 	]){
 		registry.register({id:item.id,label:item.name,description:item.description,
@@ -37759,6 +37854,8 @@ class SceneSearchInteraction {
 			clearTimeout:id=>globalThis.clearTimeout(id)};
 		this._overSeek=false;
 		this._overPreview=false;
+		this._hoverSources=new Set();
+		this._focusSources=new Set();
 		this._dragging=false;
 		this._anchor=null;
 		this._timer=null;
@@ -37769,6 +37866,18 @@ class SceneSearchInteraction {
 		if(!anchor||!rect || !Number.isFinite(x)||!Number.isFinite(y)||
 			!Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
 			!Number.isFinite(rect.top)||!Number.isFinite(rect.bottom)){return false;}
+		if(anchor.y>=rect.top&&anchor.y<=rect.bottom&&
+			(anchor.x<rect.left||anchor.x>rect.right)){
+			const rightward=anchor.x<rect.left;
+			const edge=rightward?rect.left:rect.right;
+			const distance=Math.max(1,Math.abs(edge-anchor.x));
+			const progress=(rightward?x-anchor.x:anchor.x-x)/distance;
+			if(progress<0||x<Math.min(anchor.x,rect.left)-18||
+				x>Math.max(anchor.x,rect.right)+18)return false;
+			const t=Math.min(1,progress);
+			return y>=anchor.y-25+t*(rect.top-18-(anchor.y-25))&&
+				y<=anchor.y+25+t*(rect.bottom+18-(anchor.y+25));
+		}
 		if(rect.top>=anchor.y){
 			if(y<anchor.y-25||y>rect.bottom+18){return false;}
 			const travel=Math.max(1,rect.top-anchor.y);
@@ -37839,27 +37948,44 @@ class SceneSearchInteraction {
 		let rect;
 		try{rect=this._getPreviewRect();}
 		catch(_){this._armHide(180);return;}
-		const inside=SceneSearchInteraction.insideCorridor(
-			this._anchor,rect,e?.clientX,e?.clientY);
+		const regions=Array.isArray(rect)?rect:[rect];
+		const inside=regions.some(region=>SceneSearchInteraction.insideCorridor(
+			this._anchor,region,e?.clientX,e?.clientY));
 		this._armHide(inside?850:180);
 	}
-	previewEnter() {
-		if(this._disposed){return;}
-		this._overPreview=true;
-		this._idle?.pause('preview',true);
-		this._clearTimer();
-		this._stopTracking();
-		this.controller.show(true);
+	_syncPreviewHold() {
+		this._overPreview=this._hoverSources.size>0||this._focusSources.size>0;
+		this._idle?.pause('preview',this._hoverSources.size>0);
+		this._idle?.pause('focus',this._focusSources.size>0);
+		if(this._overPreview){
+			this._clearTimer();
+			this._stopTracking();
+			this.controller.show(true);
+		}else{this._armHide(450);}
 	}
-	previewLeave() {
+	previewEnter(source='preview') {
 		if(this._disposed){return;}
-		this._overPreview=false;
-		this._idle?.pause('preview',false);
-		this._armHide(450);
+		this._hoverSources.add(source);
+		this._syncPreviewHold();
 	}
-	previewFocus(active) {
-		if(active){this.previewEnter();}else{this.previewLeave();}
-		this._idle?.pause('focus',!!active);
+	previewLeave(source='preview',point) {
+		if(this._disposed){return;}
+		this._hoverSources.delete(source);
+		this._syncPreviewHold();
+		if(!this._overPreview&&!this._overSeek&&!this._dragging&&
+			!this.controller.snapshot.pinned&&Number.isFinite(point?.clientX)&&
+			Number.isFinite(point?.clientY)){
+			this._stopTracking();
+			this._anchor={x:point.clientX,y:point.clientY};
+			this._unsubscribe=this._subscribe(e=>this.pointerMove(e));
+			this._armHide(850);
+		}
+	}
+	previewFocus(active,source='preview') {
+		if(this._disposed){return;}
+		if(active){this._focusSources.add(source);}
+		else{this._focusSources.delete(source);}
+		this._syncPreviewHold();
 	}
 	setDragging(value) {
 		if(this._disposed){return;}
@@ -37888,6 +38014,8 @@ class SceneSearchInteraction {
 		this._stopTracking();
 		this._overSeek=false;
 		this._overPreview=false;
+		this._hoverSources.clear();
+		this._focusSources.clear();
 		this._dragging=false;
 		this.controller.pin(false);
 		this.controller.show(false);

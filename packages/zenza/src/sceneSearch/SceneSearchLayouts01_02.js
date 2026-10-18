@@ -92,16 +92,8 @@ const SCENE_LAYOUT02_CSS=`
 .zenzaSceneLayout02[data-mode="fullscreen"]{
   --scene-bottom:calc(var(--zenza-control-bar-height,40px) + 28px)
 }
-/* The comment preview stays separate on the right, without losing
-   its original click-through stacking relative to the scene preview. */
-[data-scene-search-layout="02"] .zenzaCommentPreview{
-  left:auto!important;right:12px;max-width:calc(100% - 24px);
-  bottom:var(--scene-bottom,64px)!important;
-  transform:none!important;
-}
-[data-scene-search-layout="02"][data-scene-narrow="true"] .zenzaCommentPreview{
-  right:12px;bottom:calc(var(--scene-bottom,64px) + 140px)!important;
-}
+/* The integration bridge places the independent native comment list.
+   This provider owns only the scene card, including narrow layouts. */
 `;
 function registerSceneLayouts01_02(registry) {
   if(!registry||typeof registry.register!=='function'){
@@ -112,7 +104,7 @@ function registerSceneLayouts01_02(registry) {
       description:'シーク位置へ追従する小型プレビュー。通常表示と全画面で下端を調整',
       layoutClass:'zenzaSceneLayout01',css:SCENE_LAYOUT01_CSS},
     {id:'02',name:'左右ツインパネル',
-      description:'シーンを左、コメントを右へ分離。狭い画面は上下に退避',
+      description:'シーンを左、コメント一覧を右に同時表示',
       layoutClass:'zenzaSceneLayout02',css:SCENE_LAYOUT02_CSS}
   ]){
     registry.register({id:item.id,label:item.name,description:item.description,

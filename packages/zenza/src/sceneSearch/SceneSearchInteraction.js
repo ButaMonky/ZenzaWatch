@@ -16,6 +16,8 @@ class SceneSearchInteraction {
       clearTimeout:id=>globalThis.clearTimeout(id)};
     this._overSeek=false;
     this._overPreview=false;
+    this._hoverSources=new Set();
+    this._focusSources=new Set();
     this._dragging=false;
     this._anchor=null;
     this._timer=null;
@@ -26,6 +28,20 @@ class SceneSearchInteraction {
     if(!anchor||!rect || !Number.isFinite(x)||!Number.isFinite(y)||
       !Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
       !Number.isFinite(rect.top)||!Number.isFinite(rect.bottom)){return false;}
+    // Travel between separated panels can be horizontal. The corridor is
+    // transient pointer tracking, never an element spanning the empty gap.
+    if(anchor.y>=rect.top&&anchor.y<=rect.bottom&&
+       (anchor.x<rect.left||anchor.x>rect.right)){
+      const rightward=anchor.x<rect.left;
+      const edge=rightward?rect.left:rect.right;
+      const distance=Math.max(1,Math.abs(edge-anchor.x));
+      const progress=(rightward?x-anchor.x:anchor.x-x)/distance;
+      if(progress<0||x<Math.min(anchor.x,rect.left)-18||
+         x>Math.max(anchor.x,rect.right)+18)return false;
+      const t=Math.min(1,progress);
+      return y>=anchor.y-25+t*(rect.top-18-(anchor.y-25))&&
+        y<=anchor.y+25+t*(rect.bottom+18-(anchor.y+25));
+    }
     // The initial interaction corridor assumed every preview was ABOVE
     // the seekbar. UI02/05/07/09 intentionally sit BELOW the video.
     // Mirror the tapered corridor vertically instead of requiring the
@@ -100,29 +116,46 @@ class SceneSearchInteraction {
     let rect;
     try{rect=this._getPreviewRect();}
     catch(_){this._armHide(180);return;}
-    const inside=SceneSearchInteraction.insideCorridor(
-      this._anchor,rect,e?.clientX,e?.clientY);
+    const regions=Array.isArray(rect)?rect:[rect];
+    const inside=regions.some(region=>SceneSearchInteraction.insideCorridor(
+      this._anchor,region,e?.clientX,e?.clientY));
     // Activity toward the card renews the deadline. Off-path cursor
     // movements retain a short grace period, not a ghost hit-test overlay.
     this._armHide(inside?850:180);
   }
-  previewEnter() {
-    if(this._disposed){return;}
-    this._overPreview=true;
-    this._idle?.pause('preview',true);
-    this._clearTimer();
-    this._stopTracking();
-    this.controller.show(true);
+  _syncPreviewHold() {
+    this._overPreview=this._hoverSources.size>0||this._focusSources.size>0;
+    this._idle?.pause('preview',this._hoverSources.size>0);
+    this._idle?.pause('focus',this._focusSources.size>0);
+    if(this._overPreview){
+      this._clearTimer();
+      this._stopTracking();
+      this.controller.show(true);
+    }else{this._armHide(450);}
   }
-  previewLeave() {
+  previewEnter(source='preview') {
     if(this._disposed){return;}
-    this._overPreview=false;
-    this._idle?.pause('preview',false);
-    this._armHide(450);
+    this._hoverSources.add(source);
+    this._syncPreviewHold();
   }
-  previewFocus(active) {
-    if(active){this.previewEnter();}else{this.previewLeave();}
-    this._idle?.pause('focus',!!active);
+  previewLeave(source='preview',point) {
+    if(this._disposed){return;}
+    this._hoverSources.delete(source);
+    this._syncPreviewHold();
+    if(!this._overPreview&&!this._overSeek&&!this._dragging&&
+       !this.controller.snapshot.pinned&&Number.isFinite(point?.clientX)&&
+       Number.isFinite(point?.clientY)){
+      this._stopTracking();
+      this._anchor={x:point.clientX,y:point.clientY};
+      this._unsubscribe=this._subscribe(e=>this.pointerMove(e));
+      this._armHide(850);
+    }
+  }
+  previewFocus(active,source='preview') {
+    if(this._disposed){return;}
+    if(active){this._focusSources.add(source);}
+    else{this._focusSources.delete(source);}
+    this._syncPreviewHold();
   }
   setDragging(value) {
     if(this._disposed){return;}
@@ -151,6 +184,8 @@ class SceneSearchInteraction {
     this._stopTracking();
     this._overSeek=false;
     this._overPreview=false;
+    this._hoverSources.clear();
+    this._focusSources.clear();
     this._dragging=false;
     this.controller.pin(false);
     this.controller.show(false);

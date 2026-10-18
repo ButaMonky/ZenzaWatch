@@ -73,7 +73,7 @@ describe('SCUI-12 classic and twin scene layouts',()=>{
   assert.strictEqual(h.host.dataset.sceneMode,'fullscreen');
   a.dispose();h.dom.window.close();
  });
- it('twin separates scene and comments on both normal and fullscreen',()=>{
+ it('twin publishes mode ownership for the bridge in normal and fullscreen',()=>{
   for(const mode of ['normal','fullscreen']){
    const h=harness(900);
    const a=h.registry.create({...h.opts,id:'02',mode});
@@ -81,8 +81,8 @@ describe('SCUI-12 classic and twin scene layouts',()=>{
    assert.strictEqual(h.host.dataset.sceneSearchLayout,'02');
    assert.strictEqual(h.host.dataset.sceneNarrow,'false');
    const css=h.dom.window.document.querySelector('style[data-scui-layout-style]').textContent;
-   assert(css.includes('[data-scene-search-layout="02"] .zenzaCommentPreview'));
-   assert(css.includes('right:12px'));
+   assert(!css.includes('[data-scene-search-layout="02"] .zenzaCommentPreview'),
+    'UI02 list geometry belongs to the integration bridge');
    assert(css.includes('.zenzaSceneLayout02[data-mode="'+mode+'"]'));
    a.dispose();
    assert(!h.host.dataset.sceneSearchLayout);
@@ -90,13 +90,13 @@ describe('SCUI-12 classic and twin scene layouts',()=>{
    h.dom.window.close();
   }
  });
- it('small viewport stacks the twin comment preview and never leaves old mode classes',()=>{
+ it('small viewport records narrow state without restoring obsolete vertical stacking',()=>{
   const h=harness(350);
   const a=h.registry.create({...h.opts,id:'02',mode:'fullscreen'});
   a.mount({...h.state,layoutId:'02',mode:'fullscreen'});
   assert.strictEqual(h.host.dataset.sceneNarrow,'true');
-  assert(h.dom.window.document.querySelector('style').textContent.includes(
-    '[data-scene-narrow="true"] .zenzaCommentPreview'));
+  assert(!h.dom.window.document.querySelector('style').textContent.includes('+ 140px'),
+    'UI02 stays side by side at narrow widths');
   a.dispose();
   assert.strictEqual(h.host.style.getPropertyValue('--scene-bottom'),'');
   h.dom.window.close();

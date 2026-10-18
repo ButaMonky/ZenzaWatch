@@ -1,0 +1,21 @@
+# Task791 UI02 simultaneous preview and safe shared idle behavior
+User-approved spec (2026-10-18): UI02 keeps miniature native comments over the thumbnail; its comment button opens/closes an independent adjacent comment list. Shared existing idle seconds apply to both, while real hover/focus/pin/drag keeps the preview usable. Preserve UI00 and Task728 overlay. User explicitly requested continuous inline execution.
+Base: public Task729 2b711e6. No develop integration before live approval.
+Implementation: reuse CommentPreviewModel/CommentPreviewView/CommentPreviewChatItem; give each view its own CSS mode, row window and DOM. Add a disposable secondary native list. Do not clone live rows or recreate comment rendering. Bridge owns placement/visibility and passes creation through LegacyAdapter. Separate hovered sources and focused sources in Interaction; test individual visible regions, including separate docks, instead of a bounding rectangle spanning empty space.
+Files: src/VideoControlBar.js, sceneSearch/SceneSearchLegacyAdapter.js, SceneSearchIntegrationBridge.js, SceneSearchInteraction.js; focused native/interaction tests and browser fixture.
+Task A: RED tests for native hover+list coexistence, mode switching, shared data/time, teardown and original mode restoration. Implement instance CSS modes, subscriptions/cancellable callbacks and createListView lifecycle. Verify focused tests.
+Task B: RED UI02 real button test: list opens while original overlay stays in image; close, fullscreen/remount/video reset/dispose restore ownership; preserve layouts00/01. Wire factory/Bridge and scoped twin geometry.
+Task C: RED interaction tests: hover+focus independent; leaving one of two regions preserves other; gaps not permanent hit targets; region corridors for below/above/remote; drag/pin; configured idle hides both together. Implement source holds and rect lists; preserve legacy leave grace vs stationary idle distinction.
+Task D: native-CSS Chrome at320/768/1536 with actual native model/view data, real click and actual Fullscreen API, boundary seeks and timer behavior; capture screenshots. Root suite at final gate, report preexisting failures by name.
+Task E: build in isolated sandbox, QA version newer than private2.7.300, verify metadata/startup, review fresh agent, scoped commit and backup normal push; record UAT_PENDING.
+Review focus: stale timer after disposal; hover loss while focused; native list CSS affecting flow; fullscreen portal subtree; hidden panels becoming hit targets.
+Ruling: no new timeout setting. Stationary idle remains existing0..30 seconds in0.5 increments. Existing leave/corridor grace is separate and retained so mouse travel remains usable. Hover/focus over any actual active surface pauses idle; blank space is never an invisible overlay.
+Ruling: at320px, keep UI02 left/right by shrinking panels to available width; list stays scrollable rather than covering thumbnail. This implements user's explicit side-by-side instruction.
+Ruling: private Task730 TS commit remains an independent migration; Task791 does not duplicate or overwrite it.
+Progress: fresh isolated Task791 tree, base focused tests started. Dependency junction first attempt failed because Target was an array; fixed explicit existing dependency path. No dependency installation.
+
+Progress 2026-10-18 16:00 JST: product and regression implementation complete; focused21/browser14911 PASS. Actual native fullscreen/input running; fresh review dispatched. User idle spec approved. Original UI02 sizing provider added to scope because unscoped list rule clipped miniature. Interruption/recovery and evidence recorded in shared ledger.
+
+User checkpoint (2026-10-18): finish UI02 and hand over its review build BEFORE starting repairs to any other UI. Wait for the user's check. Existing other-layout tests are regression checks only. Private non-UI merge work remains authorized.
+
+Final validation2026-10-18: root3219PASS/78existingpending/0FAIL; native real-input+Fullscreen52PASS; native-CSS sweep8960 checks with only6 independently reproduced pre-existingUI07 narrow overflows. Fresh product review closed. Canonical sandbox build and review-body equality PASS. Detailed limits in review/task791/REPORT.md. Await userUI02check; no otherUIrepair or SCUIdevelop integration.

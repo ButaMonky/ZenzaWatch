@@ -10,7 +10,13 @@ function harness(file) {
   const timers = [];
   const context = createContext({
     util: {dispatchCommand: (target, command, arg) => sent.push({target, command, arg})},
-    window: {setTimeout: (fn, delay) => timers.push({fn, delay})}
+    window: {
+      setTimeout: (fn, delay) => {
+        timers.push({fn, delay});
+        return dom.window.setTimeout(fn, delay);
+      },
+      clearTimeout: dom.window.clearTimeout.bind(dom.window)
+    }
   });
   const View = loadClass(file, 'CommentPreviewView', context);
   const view = Object.create(View.prototype);

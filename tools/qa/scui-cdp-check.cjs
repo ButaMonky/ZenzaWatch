@@ -21,7 +21,8 @@ async function client(url){
 (async()=>{
  const exe=path.join(process.env.LOCALAPPDATA,'Google/Chrome/Application/chrome.exe');
  const log=fs.openSync(path.join(out,'cdp-browser.log'),'w');
- chrome=spawn(exe,['--headless=new','--no-first-run','--disable-extensions',
+ // Fullscreen uses the virtual screen, not only CDP viewport emulation.
+ chrome=spawn(exe,['--headless=new','--screen-info={1600x1000}','--no-first-run','--disable-extensions',
   '--disable-background-networking','--remote-debugging-port=0',
   '--remote-debugging-address=127.0.0.1','--user-data-dir='+profile,'about:blank'],
   {windowsHide:true,stdio:['ignore','ignore',log]});
@@ -42,7 +43,7 @@ async function client(url){
    await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
    await c.send('Page.navigate',{url:pathToFileURL(path.join(out,'fixture.html')).href+'?w='+width+(process.argv.includes('--one')?'&one=1':'')});
    let report;
-   for(let i=0;i<60;i++){
+   for(let i=0;i<240;i++){
     await new Promise(r=>setTimeout(r,250));
     const x=await c.send('Runtime.evaluate',{expression:"document.getElementById('qa-result')?.textContent",returnByValue:true,allowUnsafeEvalBlockedByCSP:false});
     const value=x.result?.value;if(typeof value==='string'&&value.startsWith('{')){report=JSON.parse(value);break;}

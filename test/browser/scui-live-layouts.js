@@ -1,6 +1,33 @@
 // Run inside an isolated headless Chromium page, no NicoNico request or login.
 const failures=[],results=[];
 const record=(test,ok,data)=>{results.push({test,ok});if(!ok)failures.push({test,...data});};
+// Read the unmodified native hover geometry before the bridge reparents it.
+// This oracle keeps the actual CSS contract, including normal-flow row layout.
+function captureNativeRows(panel){
+ const rows=[...panel.querySelectorAll('.listContainer>.nicoChat')]
+  .filter(row=>getComputedStyle(row).display!=='none');
+ const origin=rows[0]?.getBoundingClientRect().top;
+ return rows.map(row=>{
+  const box=row.getBoundingClientRect(),css=getComputedStyle(row);
+  return {position:css.position,display:css.display,transform:css.transform,
+   height:box.height,offsetTop:box.top-origin};
+ });
+}
+function captureNativeRowOracle(panel){
+ const display=panel.style.getPropertyValue('display');
+ const priority=panel.style.getPropertyPriority('display');
+ try{panel.style.setProperty('display','block','important');return captureNativeRows(panel);}
+ finally{
+  if(display)panel.style.setProperty('display',display,priority);
+  else panel.style.removeProperty('display');
+ }
+}
+function nativeRowsMatch(actual,expected){
+ return actual.length===9&&expected.length===9&&actual.every((row,i)=>
+  row.position===expected[i].position&&row.display===expected[i].display&&
+  row.transform===expected[i].transform&&Math.abs(row.height-expected[i].height)<=1&&
+  Math.abs(row.offsetTop-expected[i].offsetTop)<=1);
+}
 function events(){const m=new Map();return {
  on(k,f){if(!m.has(k))m.set(k,new Set());m.get(k).add(f);},off(k,f){m.get(k)?.delete(f);},
  emit(k,...v){for(const f of [...m.get(k)||[]])f(...v);}};}
@@ -9,12 +36,8 @@ const vals={'sceneSearch.seekStepSeconds':5,'sceneSearch.idleHideSeconds':0,
  'sceneSearch.animation':'off','sceneSearch.controlsReveal':'always',...UiVisibilityRegistry.defaults()};
 const onkeys=new Map();const config={getValue:k=>vals[k],setValue(k,v){vals[k]=v;
  for(const f of onkeys.get(k)||[])f(v);
- // The actual CommentPreviewView uses StyleSwitcher for these two styles.
- // Mock the switch, not the comment content or its animations.
- if(k==='enableCommentPreview'){
-   document.getElementById('native-comment-list').disabled=v!==true;
-   document.getElementById('native-comment-hover').disabled=v===true;
- }},onkey(k,f){if(!onkeys.has(k))onkeys.set(k,new Set());onkeys.get(k).add(f);},
+ if(k==='enableCommentPreview')bar._commentPreview.mode=v?'list':'hover';
+ },onkey(k,f){if(!onkeys.has(k))onkeys.set(k,new Set());onkeys.get(k).add(f);},
  offkey(k,f){onkeys.get(k)?.delete(f);}};
 const player=Object.assign(events(),{isOpen:true,watchId:'sm9',duration:1000,
  chatList:[{text:'local browser fixture',vpos:1200,uniqNo:'fixture'}],execCommand:()=>{}});
@@ -22,7 +45,17 @@ const bar={player,_playerConfig:config,_duration:1000,_seekBar:document.getEleme
  storyboard:events(),_seekBarToolTip:{_$view:[document.getElementById('old')],
  _seekBarThumbnail:{_view:document.getElementById('thumb')}},
  _commentPreview:{_model:{_chatList:player.chatList},_view:{_view:document.getElementById('comments')}}};
-function measure(id,mode,pct,{portal=id==='01'}={}){
+// Exercise real native rows and mode isolation, including native click handling.
+const previousPreview=document.getElementById('comments');previousPreview.remove();
+bar._commentPreview=new CommentPreview({$container:wrap(host)});
+bar._commentPreview._view._view.id='comments';
+bar._commentPreview.chatList={top:[],bottom:[],naka:Array.from({length:9},(_,i)=>({
+ vpos:0,uniqNo:'browser'+i,text:'native comment '+(i+1),no:i+1,date:1600000000,
+ userId:'fixture',duration:12,color:'#fff',fork:0}))};
+bar._commentPreview.currentTime=2;
+bar._commentPreview._view._onUpdate();
+bar._commentPreview._view.applyView();
+async function measure(id,mode,pct,{portal=id==='01'}={}){
  console.log('QA_PHASE '+id+'/'+mode+'/'+pct+(portal?'/portal':'')+' begin');
  let dialog=null,sidebar=null,originalParent=null,originalNext=null;
  const originalHostStyle=host.style.cssText;
@@ -53,6 +86,8 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
  // never silently change the preview's fonts or CA whitespace metrics.
  config.setValue('enableCommentPreview',false);
  const nativePreview=document.getElementById('comments');
+ await new Promise(requestAnimationFrame);
+ const nativeRowOracle=captureNativeRowOracle(nativePreview);
  const nativeComputed=getComputedStyle(nativePreview);
  const nativeInlineFont=nativePreview.style.getPropertyValue('font-family');
  const nativeInlineSize=nativePreview.style.getPropertyValue('font-size');
@@ -65,6 +100,7 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
  const seek=bar._seekBar,r=seek.getBoundingClientRect(),x=r.left+r.width*pct;
  seek.dispatchEvent(new MouseEvent('mouseenter',{clientX:x,bubbles:true}));
  seek.dispatchEvent(new MouseEvent('mousemove',{clientX:x,bubbles:true}));
+ await new Promise(requestAnimationFrame);
  const root=portal?dialog.querySelector('.zenzaSceneSearchHost'):
   host.querySelector('.zenzaSceneSearchHost');
  const label=id+'/'+mode+'/'+pct+(portal?'/portal':'');
@@ -218,10 +254,10 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       {rowTop,paneTop:side.top,paneHeight:side.height,count:drawn.length});
     // Native UI00 hover rows overlap temporally by design; their animation
     // timing is based on vpos, NOT a fabricated flex-column row limit.
+    const nativeRowsActual=captureNativeRows(commentView);
     record(label+'/native-virtual-rows-preserved',
-      drawn.length===9&&drawn.every(el=>getComputedStyle(el).position==='absolute')&&
-      Math.abs(boxes[7].top-(boxes[0].top-144))<=1,
-      {drawn:drawn.length,top0:boxes[0].top,top7:boxes[7].top});
+      nativeRowsMatch(nativeRowsActual,nativeRowOracle),
+      {expected:nativeRowOracle,actual:nativeRowsActual});
     const firstText=drawn[0]?.querySelector('.text');
     record(label+'/classic-native-text-running',firstText&&
       getComputedStyle(firstText).animationPlayState==='running',
@@ -233,12 +269,14 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       {animationName:firstText&&getComputedStyle(firstText).animationName});
   }
   config.setValue('enableCommentPreview',true);
+  await new Promise(requestAnimationFrame);
+  const listView=id==='02'?host.querySelector('.zenzaSceneTwinList'):commentView;
   record(label+'/list-owner',
     (id==='01'?commentView.parentNode===root&&
       commentView.classList.contains('is-scui-classic-side'):
-      commentView.parentNode===host)&&
-    commentView.classList.contains('is-scui-list')&&
-    getComputedStyle(commentView).display!=='none',{});
+      listView?.parentNode===host)&&
+    listView.classList.contains('is-scui-list')&&
+    getComputedStyle(listView).display!=='none',{});
   if(id==='01'){
     const image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect();
     const side=commentView.getBoundingClientRect();
@@ -284,6 +322,7 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       hit===commentView||commentView.contains(hit),
       {placement,hit:hit?.className||hit?.tagName});
     config.setValue('enableCommentPreview',false);
+    await new Promise(requestAnimationFrame);
     record(label+'/classic-flow-restored-OVER-image',
       commentView.parentNode===root.querySelector('.zenzaSceneImageBox')&&
       commentView.classList.contains('is-scui-flow')&&
@@ -292,7 +331,7 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
   }
   if(id==='02'){
     const player=host.getBoundingClientRect();
-    const comment=document.getElementById('comments').getBoundingClientRect();
+    const comment=listView.getBoundingClientRect();
     const below=host.dataset.scenePlacement==='below';
     const isNarrow=host.dataset.sceneNarrow==='true';
     const placed=mode==='normal'?
@@ -303,12 +342,26 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
       mode,below,rect:rect.toJSON(),player:player.toJSON()
     });
     if(mode==='normal'&&below){
-      const separated=isNarrow?comment.top>=rect.bottom+3:
-        comment.left>=rect.right-4&&Math.abs(comment.top-rect.top)<=14;
+      const separated=comment.left>=rect.right-4&&Math.abs(comment.top-rect.top)<=14;
       record(label+'/twin-separated-comments',separated,{
         isNarrow,scene:rect.toJSON(),comment:comment.toJSON()
       });
     }
+    if(mode==='fullscreen'||!below){
+      record(label+'/twin-bottom-alignment',Math.abs(comment.bottom-rect.bottom)<2,
+        {scene:rect.toJSON(),comment:comment.toJSON()});
+    }
+    const image=root.querySelector('.zenzaSceneImageBox');
+    const miniRect=commentView.getBoundingClientRect(),imageRect=image.getBoundingClientRect();
+    record(label+'/twin-mini-remains-over-image',commentView.parentNode===image&&
+      commentView.dataset.commentPreviewMode==='hover'&&
+      Math.abs(miniRect.left-imageRect.left)<2&&Math.abs(miniRect.top-imageRect.top)<2&&
+      getComputedStyle(commentView.querySelector('.text')).animationPlayState==='running',
+      {mini:miniRect.toJSON(),image:imageRect.toJSON()});
+    record(label+'/twin-list-bounds',comment.left>=0&&comment.right<=innerWidth&&
+      comment.top>=0&&comment.bottom<=innerHeight,{comment:comment.toJSON()});
+    record(label+'/twin-horizontal-separation',comment.left>=rect.right-1,
+      {scene:rect.toJSON(),comment:comment.toJSON()});
     const handle=root.querySelector('.scene-more');
     record(label+'/twin-exposed-expander',
       !!handle&&!root.querySelector('.zenzaSceneActions')?.contains(handle),{});
@@ -344,12 +397,10 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
   record(label+'/zero',root.querySelector('.scene-seek-back').getBoundingClientRect().width===0,{});
   if(id==='01'){
     const pane=commentView.getBoundingClientRect();
-    const rows=[...commentView.querySelectorAll('.listContainer>.nicoChat')]
-      .filter(row=>getComputedStyle(row).display!=='none');
-    const boxes=rows.map(row=>row.getBoundingClientRect());
-    record(label+'/compact-keeps-native-rows',rows.length===9&&
-      rows.every(row=>getComputedStyle(row).position==='absolute'),
-      {pane:pane.toJSON(),rowCount:rows.length});
+    const compactRowsActual=captureNativeRows(commentView);
+    record(label+'/compact-keeps-native-rows',
+      nativeRowsMatch(compactRowsActual,nativeRowOracle),
+      {pane:pane.toJSON(),expected:nativeRowOracle,actual:compactRowsActual});
   }
   config.setValue('sceneSearch.seekStepSeconds',5);
  }
@@ -369,20 +420,27 @@ function measure(id,mode,pct,{portal=id==='01'}={}){
    dialog.remove();
  }
 }
-try{for(const mode of ['normal','fullscreen'])for(let n=1;n<=10;n++){
+(async()=>{
+if(new URLSearchParams(location.search).has('interactive'))return;
+try{
+for(const mode of ['normal','fullscreen'])for(let n=1;n<=10;n++){
  if(new URLSearchParams(location.search).has('one') && (n!==1||mode!=='normal'))continue;
- for(const pct of new URLSearchParams(location.search).has('one')?[0.5]:[0.05,0.5,0.95,0.99])measure(String(n).padStart(2,'0'),mode,pct);
+ for(const pct of new URLSearchParams(location.search).has('one')?[0.5]:[0,0.05,0.5,0.95,0.99,1])await measure(String(n).padStart(2,'0'),mode,pct);
+}
   if(!new URLSearchParams(location.search).has('one')){
     const seek=document.getElementById('seek');
     const oldHostWidth=host.style.width,oldSeekWidth=seek.style.width;
     try{
       host.style.width='calc(100vw - min(30vw, 385px))';
       seek.style.width='calc(100vw - 32px)';
-      for(const pct of [0.05,0.5,0.95,0.99])
-        measure('01','normal',pct,{portal:true});
+      for(const pct of [0,0.05,0.5,0.95,0.99,1])
+        await measure('01','normal',pct,{portal:true});
     }finally{host.style.width=oldHostWidth;seek.style.width=oldSeekWidth;}
   }
-}}catch(e){failures.push({exception:String(e),stack:e.stack});}
+
+}catch(e){failures.push({exception:String(e),stack:e.stack});}
 document.getElementById('qa-result').textContent=JSON.stringify({
  width:innerWidth,height:innerHeight,checks:results.length,failures});
 document.documentElement.dataset.qa=failures.length?'FAIL':'PASS';
+
+})().catch(e=>{document.getElementById('qa-result').textContent=JSON.stringify({checks:results.length,failures:[{error:String(e),stack:e.stack}]});});

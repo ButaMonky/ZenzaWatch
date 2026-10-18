@@ -69,7 +69,7 @@ describe('Full comment identity (ZW-073)', function() {
   it('selects the right comment through actual DOM preview click and model lookup', function() {
     const dom = new JSDOM('<div class="preview"><div class="nicoChat"><button data-command="addUserIdFilter">NG</button></div></div>');
     try {
-      const sent = [], h = env({window: {setTimeout(){}}, util: {dispatchCommand: (target, command, value) => sent.push([command, value])}});
+      const sent = [], h = env({window: dom.window, util: {dispatchCommand: (target, command, value) => sent.push([command, value])}});
       const Model = loadClass('src/VideoControlBar.js', 'CommentPreviewModel', h.c);
       const View = loadClass('src/VideoControlBar.js', 'CommentPreviewView', h.c);
       const a = chat({user_id: 'a'}), b = chat({no: 10001, user_id: 'b'});

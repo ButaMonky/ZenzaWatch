@@ -1942,15 +1942,20 @@ util.addStyle(`
       const model = this._model = params.model;
       this._$parent = params.$container;
 
+      this._disposed = false;
+      this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
       this._inviewTable = new Map;
       this._chatList = [];
       this._initializeDom(this._$parent);
 
-      model.on('reset',  this._onReset.bind(this));
-      model.on('update', _.debounce(this._onUpdate.bind(this), 10));
-      model.on('vpos', this._onVpos.bind(this));
-
+      this._subscriptions = [
+        ['reset', this._onReset.bind(this)],
+        ['update', _.debounce(this._onUpdate.bind(this), 10)],
+        ['vpos', this._onVpos.bind(this)]
+      ];
+      for (const [event, handler] of this._subscriptions) { model.on(event, handler); }
       this._mode = 'hover';
+      this._view.dataset.commentPreviewMode = 'hover';
 
       this._left = 0;
       this.update = _.throttle(this.update.bind(this), 200);
@@ -1964,21 +1969,22 @@ util.addStyle(`
       const $view = util.$.html(CommentPreviewView.__tpl__);
       const view = this._view = $view[0];
       this._list = view.querySelector('.listContainer');
-      $view.on('click', this._onClick.bind(this))
-        .on('wheel', e => e.stopPropagation(), {passive: true})
-        .on('scroll',
-        _.throttle(this._onScroll.bind(this), 50, {trailing: false}), {passive: true});
+      this._domListeners = [
+        ['click', this._onClick.bind(this)],
+        ['wheel', e => e.stopPropagation(), {passive: true}],
+        ['scroll', _.throttle(this._onScroll.bind(this), 50, {trailing: false}), {passive: true}]
+      ];
+      for (const [event, handler, options] of this._domListeners) {
+        view.addEventListener(event, handler, options);
+      }
 
       $parent.append($view);
     }
     set mode(v) {
-      if (v === 'list') {
-        util.StyleSwitcher.update({
-          on: '.commentPreview.list', off: '.commentPreview.hover'});
-      } else {
-        util.StyleSwitcher.update({
-          on: '.commentPreview.hover', off: '.commentPreview.list'});
-      }
+      if (this._disposed) { return; }
+      v = v === 'list' ? 'list' : 'hover';
+      // A mode belongs to one view. UI02 has two native views at once.
+      this._view.dataset.commentPreviewMode = v;
       const previous = this._mode;
       this._mode = v;
       if (previous !== v && this._chatList?.length) {
@@ -2006,7 +2012,10 @@ util.addStyle(`
       if (command && nicoChat) {
         view.classList.add('is-updating');
 
-        window.setTimeout(() => view.classList.remove('is-updating'), 3000);
+        window.clearTimeout(this._updatingTimer);
+        this._updatingTimer = window.setTimeout(() => {
+          if (!this._disposed) { view.classList.remove('is-updating'); }
+        }, 3000);
 
         switch (command) {
           case 'addUserIdFilter':
@@ -2027,6 +2036,9 @@ util.addStyle(`
       }
     }
     _onUpdate() {
+      // reset retains the model cache until the next video's comments arrive.
+      // A new list or a pending debounce must not hydrate that stale cache.
+      if (this._disposed || this._model._chatReady === false) { return; }
       this.updateList();
       // Comments can arrive after the mouse stops on the seekbar. Previously
       // updateList only resized the virtual list; rows stayed empty until the
@@ -2039,12 +2051,14 @@ util.addStyle(`
       }
     }
     _onVpos(vpos) {
+      if (this._disposed) { return; }
       const itemHeight = CommentPreviewView.ITEM_HEIGHT;
       const index = this._currentStartIndex = Math.max(0, this._model.currentIndex);
       this._currentEndIndex = Math.max(0, this._model.getVposIndex(vpos + 400));
       this._scrollTop = itemHeight * index;
       this._currentTime = vpos / 100;
       this._refreshInviewElements(this._scrollTop);
+      this.applyView();
     }
     _onResize() {
       this._refreshInviewElements();
@@ -2096,6 +2110,7 @@ util.addStyle(`
         const chat = chatList[i];
         if (inviewTable.has(i) || !chat) { continue; }
         const listItem = CommentPreviewChatItem.create(chat, i);
+        listItem.id = 'commentPreview' + this._viewId + '-item' + i;
         newItems.push(listItem);
         inviewTable.set(i, listItem);
       }
@@ -2118,6 +2133,7 @@ util.addStyle(`
       return this._chatList.length < 1;
     }
     update(left) {
+      if (this._disposed) { return; }
       if (this._isListUpdated) {
         this.updateList();
       }
@@ -2134,6 +2150,7 @@ util.addStyle(`
       this.applyView();
     }
     applyView() {
+      if (this._disposed) { return; }
       const view = this._view;
       cssUtil.setProps(
         [view, '--current-time', cssUtil.s(this._currentTime)],
@@ -2150,6 +2167,23 @@ util.addStyle(`
 
     }
     hide() {
+    }
+    dispose() {
+      if (this._disposed) { return; }
+      this._disposed = true;
+      for (const [event, handler] of this._subscriptions || []) {
+        this._model.off(event, handler);
+        handler.cancel?.();
+      }
+      for (const [event, handler, options] of this._domListeners || []) {
+        this._view.removeEventListener(event, handler, options);
+        handler.cancel?.();
+      }
+      this.update.cancel?.();
+      this.applyView.cancel?.();
+      window.clearTimeout(this._updatingTimer);
+      this._onReset();
+      this._view.remove();
     }
   }
 
@@ -2254,32 +2288,32 @@ util.addStyle(`
 `, {className: 'commentPreview'});
 
 util.addStyle(`
-  .zenzaCommentPreview {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
     border-bottom: 24px solid transparent;
     background: rgba(0, 0, 0, 0.4);
     z-index: 100;
     overflow: auto;
   }
-  .zenzaCommentPreview:hover {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]):hover {
     background: black;
   }
-  .zenzaCommentPreview.is-updating {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]).is-updating {
     transition: opacity 0.2s ease;
     opacity: 0.3;
     cursor: wait;
   }
-  .zenzaCommentPreview.is-updating * {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]).is-updating * {
     pointer-events: none;
   }
-  .listContainer {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer {
     bottom: auto;
     padding: 4px;
     pointer-events: none;
   }
-  .zenzaCommentPreview:hover .listContainer {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]):hover .listContainer {
     pointer-events: auto;
   }
-  .listContainer .nicoChat {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat {
     position: absolute;
     left: 0;
     display: block;
@@ -2305,41 +2339,41 @@ util.addStyle(`
     }
   }
 
-  .listContainer:hover .nicoChat.odd {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer:hover .nicoChat.odd {
     background: #333;
   }
-  .listContainer .nicoChat.fork1 .vposTime {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat.fork1 .vposTime {
     color: #6f6;
   }
-  .listContainer .nicoChat:where(.fork2, .fork3) .vposTime {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:where(.fork2, .fork3) .vposTime {
     color: #66f;
   }
 
-  .listContainer .nicoChat .no,
-  .listContainer .nicoChat .date,
-  .listContainer .nicoChat .userId {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .no,
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .date,
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .userId {
     display: none;
   }
 
-  .listContainer .nicoChat:hover .no,
-  .listContainer .nicoChat:hover .date,
-  .listContainer .nicoChat:hover .userId {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .no,
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .date,
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .userId {
     display: inline-block;
     white-space: nowrap;
   }
 
-  .listContainer .nicoChat .text {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .text {
     color: inherit !important;
   }
-  .listContainer .nicoChat:hover .text {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .text {
     color: #fff !important;
   }
 
-  .listContainer .nicoChat .text:hover {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .text:hover {
     text-decoration: underline;
   }
 
-  .listContainer .nicoChat .addFilter {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter {
     display: none;
     position: absolute;
     font-size: 10px;
@@ -2349,32 +2383,32 @@ util.addStyle(`
     top: 0;
   }
 
-  .listContainer .nicoChat:hover .addFilter {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat:hover .addFilter {
     display: inline-block;
     border: 1px solid #ccc;
     box-shadow: 2px 2px 2px #333;
   }
 
-  .listContainer .nicoChat .addFilter.addUserIdFilter {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter.addUserIdFilter {
     right: 8px;
     width: 48px;
   }
-  .listContainer .nicoChat .addFilter.addWordFilter {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter.addWordFilter {
     right: 64px;
     width: 48px;
   }
-  .listContainer .nicoChat .addFilter:active {
+  .zenzaCommentPreview:where([data-comment-preview-mode="list"]) .listContainer .nicoChat .addFilter:active {
     transform: translateY(2px);
   }
 
-  .zenzaScreenMode_sideView .zenzaCommentPreview,
-  .zenzaScreenMode_small .zenzaCommentPreview {
+  .zenzaScreenMode_sideView .zenzaCommentPreview:where([data-comment-preview-mode="list"]),
+  .zenzaScreenMode_small .zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
     background: rgba(0, 0, 0, 0.9);
   }
 `, {className: 'commentPreview list'});
 
 util.addStyle(`
-  .zenzaCommentPreview {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) {
     bottom: 24px;
     box-sizing: border-box;
     height: 140px;
@@ -2388,7 +2422,7 @@ util.addStyle(`
     contain: layout style size paint;
     filter: drop-shadow(0 0 1px #000);
   }
-  .listContainer {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer {
     bottom: auto;
     width: 100%;
     height: 100% !important;
@@ -2396,7 +2430,7 @@ util.addStyle(`
     border: none;
     contain: layout style size paint;
   }
-  .listContainer .nicoChat {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat {
     display: block;
     top: auto !important;
     font-size: 16px;
@@ -2404,13 +2438,13 @@ util.addStyle(`
     height: 18px;
     white-space: nowrap;
   }
-  .listContainer .nicoChat:nth-child(n + 8) {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat:nth-child(n + 8) {
     transform: translateY(-144px);
   }
-  .listContainer .nicoChat:nth-child(n + 16) {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat:nth-child(n + 16) {
     transform: translateY(-288px);
   }
-  .listContainer .nicoChat .text {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat .text {
     display: inline-block;
     text-shadow: 1px 1px 1px #fff;
 
@@ -2424,8 +2458,8 @@ util.addStyle(`
     animation-timing-function: linear;
     animation-fill-mode: forwards;
   }
-  .listContainer .nicoChat .vposTime,
-  .listContainer .nicoChat .addFilter {
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat .vposTime,
+  .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) .listContainer .nicoChat .addFilter {
     display: none !important;
   }
 
@@ -2439,7 +2473,7 @@ util.addStyle(`
     }
   }
 
-`, {className: 'commentPreview hover', disabled: true});
+`, {className: 'commentPreview hover'});
 
 
   class CommentPreview {
@@ -2470,7 +2504,32 @@ util.addStyle(`
     set mode(v) {
       if (v === this._mode) { return; }
       this._mode = v;
-      this._view.mode = v;
+      this._view.mode = this._twinList ? 'hover' : v;
+    }
+    createListView(container) {
+      if (this._twinList) { return this._twinList; }
+      const view = new CommentPreviewView({
+        model: this._model, $container: util.$(container)
+      });
+      view.mode = 'list';
+      view._onUpdate();
+      this._view._onUpdate();
+      this._view.mode = 'hover';
+      let disposed = false;
+      const handle = {
+        element: view._view,
+        dispose: () => {
+          if (disposed) { return; }
+          disposed = true;
+          view.dispose();
+          if (this._twinList === handle) {
+            this._twinList = null;
+            this._view.mode = this._mode;
+          }
+        }
+      };
+      this._twinList = handle;
+      return handle;
     }
     get mode() {
       return this._mode;

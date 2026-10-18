@@ -5,7 +5,7 @@
 class SceneSearchIntegrationBridge {
   constructor({classes,document,container,seekElement,commentPreviewElement,
     legacyTooltipElement,getThumbnailElement,config,registry,clock,layoutSettings,
-    getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError}={}) {
+    getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError,createCommentList}={}) {
     if(!document||!container||!seekElement||!config||!registry||
        typeof config.getValue!=='function'||typeof config.setValue!=='function'||
        typeof onSeekRelative!=='function'||typeof onSeekAbsolute!=='function'){
@@ -26,6 +26,9 @@ class SceneSearchIntegrationBridge {
     this._commentPreviewElement=commentPreviewElement||null;
     this._commentPreviewOriginal=null;
     this._commentDock=null;
+    this._createCommentList=createCommentList||null;
+    this._twinList=null;
+    this._twinListCleanup=null;
     this._commentHoverCleanup=null;
     this._legacyTooltipElement=legacyTooltipElement||null;
     this._legacyTooltipOriginal=null;
@@ -94,10 +97,7 @@ class SceneSearchIntegrationBridge {
     });
     this.interaction=new classes.Interaction({
       controller:this.controller,
-      getPreviewRect:()=>{
-        const root=this._active?.root;
-        return root?.getBoundingClientRect?.()||null;
-      },
+      getPreviewRect:()=>this._previewRects(),
       subscribePointerMove:listener=>{
         document.addEventListener('mousemove',listener,true);
         return ()=>document.removeEventListener('mousemove',listener,true);
@@ -206,7 +206,7 @@ class SceneSearchIntegrationBridge {
           const width=player?.width||this.container.clientWidth||800;
           const room=Number.isFinite(windowHeight)&&Number.isFinite(player?.bottom)?
             windowHeight-player.bottom:0;
-          const enough=mode==='normal'&&room>=(width<580?300:180);
+          const enough=mode==='normal'&&room>=230;
           this.container.dataset.scenePlacement=enough?'below':'visible-fallback';
           this._updateTwinCommentPlacement(enough,player);
         }
@@ -278,7 +278,7 @@ class SceneSearchIntegrationBridge {
       this.container.style.removeProperty('--scui-twin-comment-top');
       return;
     }
-    const comment=this._commentPreviewElement;
+    const comment=this._twinList?.element||this._commentPreviewElement;
     const owner=comment?.offsetParent||comment?.parentElement;
     const origin=owner?.getBoundingClientRect?.();
     if(!origin||!Number.isFinite(origin.top)||!Number.isFinite(player.bottom)){
@@ -286,9 +286,7 @@ class SceneSearchIntegrationBridge {
     }
     const scale=origin.width&&owner.offsetWidth?
       owner.offsetWidth/origin.width:1;
-    const width=this.container.offsetWidth||player.width;
-    const stack=width<580;
-    const top=(player.bottom-origin.top)*scale+(stack?157:15);
+    const top=(player.bottom-origin.top)*scale+15;
     if(Number.isFinite(top)){
       this.container.style.setProperty('--scui-twin-comment-top',
         Math.round(Math.max(0,top))+'px');
@@ -364,8 +362,16 @@ class SceneSearchIntegrationBridge {
       onMenuChange:open=>{
         if(this._disposed){return;}
         this.idleLimiter.pause('step-menu',open);
-        if(open){this.interaction.previewEnter();}
-        else{this.interaction.previewLeave();}
+        if(open){this.interaction.previewEnter('step-menu');}
+        else{
+          this.interaction.previewLeave('step-menu');
+          // Some DOM hosts retain activeElement inside a newly hidden popup.
+          // Release only that stale focus, preserving any visible control.
+          const focused=this.document.activeElement;
+          if(root.contains(focused)&&focused.closest('[hidden]')){
+            this.interaction.previewFocus(false,root);
+          }
+        }
       },
       onError:error=>this._onError(error,'sceneSearch.seekStepSeconds')
     });
@@ -378,22 +384,7 @@ class SceneSearchIntegrationBridge {
     this._commentPanel=searchPanel;
     this.router.seekStepControl=step;
     this.router.commentSearchPanel=searchPanel;
-    const enter=()=>this.interaction.previewEnter();
-    const leave=()=>this.interaction.previewLeave();
-    const focusin=()=>this.interaction.previewFocus(true);
-    const focusout=e=>{
-      if(!root.contains(e.relatedTarget)){this.interaction.previewFocus(false);}
-    };
-    for(const [event,handler] of [
-      ['mouseenter',enter],['mouseleave',leave],
-      ['focusin',focusin],['focusout',focusout]
-    ])root.addEventListener(event,handler);
-    this._cardCleanup=()=>{
-      for(const [event,handler] of [
-        ['mouseenter',enter],['mouseleave',leave],
-        ['focusin',focusin],['focusout',focusout]
-      ])root.removeEventListener(event,handler);
-    };
+    this._cardCleanup=this._bindPreviewSurface(root);
     this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
     this.refreshSharedThumbnail();
   }
@@ -529,6 +520,49 @@ class SceneSearchIntegrationBridge {
     }
     this._legacyTooltipOriginal=null;
   }
+  _bindPreviewSurface(node) {
+    const enter=()=>this.interaction.previewEnter(node);
+    const leave=e=>this.interaction.previewLeave(node,e);
+    const focus=()=>this.interaction.previewFocus(true,node);
+    const blur=e=>{
+      if(!node.contains(e.relatedTarget))this.interaction.previewFocus(false,node);
+    };
+    const pointer=e=>this._startPointer(e);
+    const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
+      ['pointerdown',pointer]];
+    for(const [event,fn] of listeners)node.addEventListener(event,fn);
+    return ()=>{
+      for(const [event,fn] of listeners)node.removeEventListener(event,fn);
+      this.interaction.previewLeave(node);
+      this.interaction.previewFocus(false,node);
+    };
+  }
+  _restoreTwinList() {
+    const handle=this._twinList;
+    if(!handle)return;
+    this._twinList=null;
+    handle.element?.classList.remove('is-scui-active');
+    this._twinListCleanup?.();
+    this._twinListCleanup=null;
+    handle.dispose();
+  }
+  _previewRects() {
+    const root=this._active?.root;
+    const nodes=[root,root?.querySelector('.zenzaSceneActions'),
+      root?.querySelector('.zenzaSceneRemoteControls'),this._commentPreviewElement,
+      this._twinList?.element].filter(Boolean);
+    const regions=[];
+    for(const node of new Set(nodes)){
+      if(node.hidden||node.closest('[hidden],.is-idle-suppressed'))continue;
+      if(node.classList.contains('zenzaSceneCommentAttached')&&
+         !node.classList.contains('is-scui-active'))continue;
+      const css=this.document.defaultView?.getComputedStyle?.(node);
+      if(css&&(css.display==='none'||css.visibility==='hidden'||css.opacity==='0'))continue;
+      const rect=node.getBoundingClientRect?.();
+      if(rect?.width>0&&rect.height>0)regions.push(rect);
+    }
+    return regions;
+  }
   _syncCommentPreviewDock(card,state) {
     const node=this._commentPreviewElement,root=card?.root;
     if(!node||!root)return;
@@ -550,20 +584,25 @@ class SceneSearchIntegrationBridge {
       for(const {name,native} of typography){
         if(native)node.style.setProperty(name,native);
       }
-      const enter=()=>this.interaction.previewEnter();
-      const leave=()=>this.interaction.previewLeave();
-      const focus=()=>this.interaction.previewFocus(true);
-      const blur=e=>{
-        if(!node.contains(e.relatedTarget))this.interaction.previewFocus(false);
-      };
-      const listeners=[['mouseenter',enter],['mouseleave',leave],
-        ['focusin',focus],['focusout',blur]];
-      for(const [name,handler] of listeners)node.addEventListener(name,handler);
-      this._commentHoverCleanup=()=>{
-        for(const [name,handler] of listeners)node.removeEventListener(name,handler);
-      };
+      this._commentHoverCleanup=this._bindPreviewSurface(node);
     }
-    const list=this.config.getValue('enableCommentPreview')===true;
+    const listRequested=this.config.getValue('enableCommentPreview')===true;
+    const twin=root.dataset.layout==='02'&&typeof this._createCommentList==='function';
+    if(twin&&listRequested&&!this._twinList){
+      this._twinList=this._createCommentList(this.container)||null;
+      if(this._twinList?.element){
+        const panel=this._twinList.element;
+        panel.classList.add('zenzaSceneTwinList','zenzaSceneCommentAttached','is-scui-list');
+        panel.tabIndex=0;
+        panel.setAttribute('aria-label','シーンのコメント一覧');
+        for(const {name,native} of this._commentDock.typography||[]){
+          if(native)panel.style.setProperty(name,native);
+        }
+        this._twinListCleanup=this._bindPreviewSurface(panel);
+      }
+    }
+    if(!listRequested)this._restoreTwinList();
+    const list=listRequested&&!(twin&&this._twinList);
     const classic=root.dataset.layout==='01';
     // Task728: the ORIGINAL CommentPreviewView flows ON TOP of the
     // storyboard image in UI01. ONLY the scrollable LIST moves to the right
@@ -580,6 +619,16 @@ class SceneSearchIntegrationBridge {
       this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
       !root.classList.contains('is-idle-suppressed');
     node.classList.toggle('is-scui-active',active);
+    if(this._twinList?.element){
+      this._twinList.element.classList.toggle('is-scui-active',active&&listRequested);
+    }
+    if(twin){
+      const toggle=root.querySelector('[data-scui-action="comment-toggle"]');
+      const label=listRequested?'コメント一覧を閉じる':'コメント一覧を表示';
+      toggle?.setAttribute('aria-label',label);
+      toggle?.setAttribute('title',label);
+      toggle?.setAttribute('aria-expanded',String(listRequested));
+    }
     if(classic){
       if(list)this._positionClassicCommentSide(root,list);
       else root.dataset.scuiSidePlacement='overlay';
@@ -617,6 +666,7 @@ class SceneSearchIntegrationBridge {
     // CommentPreviewView is positioned directly inside .zenzaSceneImageBox.
   }
   _restoreCommentPreviewDock(){
+    this._restoreTwinList();
     const old=this._commentDock,node=this._commentPreviewElement;
     if(!old||!node)return;
     this._commentHoverCleanup?.();
@@ -962,11 +1012,11 @@ class SceneSearchIntegrationBridge {
    the separately reserved Layout01_02/LegacyAdapter owner (Task532).
    Normal = two separate panels outside video, full = inside both edges. */
 [data-scene-search-layout="02"] .zenzaSceneSearchHost.zenzaSceneLayout02{
-  width:min(245px,calc(100% - 24px))!important;
+  width:min(245px,calc(50% - 20px))!important;
 }
 [data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaSceneLayout02{
-  left:23%!important;right:auto!important;top:calc(100% + 15px)!important;
-  bottom:auto!important;transform:translateX(-50%)!important;
+  left:12px!important;right:auto!important;top:calc(100% + 15px)!important;
+  bottom:auto!important;transform:none!important;
 }
 [data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="visible-fallback"] .zenzaSceneLayout02{
   left:12px!important;right:auto!important;top:auto!important;
@@ -1002,26 +1052,23 @@ class SceneSearchIntegrationBridge {
 [data-scene-search-layout="02"] .zenzaSceneLayout02 .scene-more{
   position:static!important;opacity:1;visibility:visible;pointer-events:auto;
 }
-/* Preserve the real comment owner's hover/list/scroll and click behavior. */
-[data-scene-search-layout="02"] .zenzaCommentPreview{
-  left:auto!important;right:14px!important;top:auto!important;
-  bottom:94px!important;max-width:calc(100% - 24px);
-  transform:none!important;
+/* UI02 secondary native list shares the card's visibility and stays adjacent. */
+[data-scene-search-layout="02"] .zenzaCommentPreview.is-scui-list{
+  position:absolute;left:auto!important;right:12px!important;top:auto!important;
+  bottom:94px!important;transform:none!important;
+  width:min(350px,calc(50% - 20px))!important;
+  max-width:calc(50% - 20px)!important;height:200px;box-sizing:border-box;
 }
-[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
-  left:auto!important;right:15%!important;
+[data-scene-search-layout="02"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview.is-scui-list{
   top:var(--scui-twin-comment-top,calc(100% + 15px))!important;
-  bottom:auto!important;max-width:min(256px,calc(50% - 20px));
+  bottom:auto!important;
 }
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaSceneLayout02{
-  left:50%!important;transform:translateX(-50%)!important;
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .zenzaSceneImageBox
+ >.zenzaCommentPreview.is-scui-flow{
+  background:transparent!important;opacity:1!important;
 }
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="normal"][data-scene-placement="below"] .zenzaCommentPreview{
-  left:12px!important;right:12px!important;max-width:calc(100% - 24px);
-}
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-placement="visible-fallback"] .zenzaCommentPreview,
-[data-scene-search-layout="02"][data-scene-narrow="true"][data-scene-mode="fullscreen"] .zenzaCommentPreview{
-  left:auto!important;right:12px!important;bottom:234px!important;
+[data-scene-search-layout="02"] .zenzaSceneLayout02 .is-scui-flow .text{
+  animation-play-state:running!important;
 }
 /* Task542: real comment list stays in the legacy seekbar owner; only
    selected layout's coordinates change. Keep its hover/list modes,

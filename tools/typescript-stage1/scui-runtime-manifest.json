@@ -16,5 +16,11 @@
     "runtime": "packages/zenza/src/sceneSearch/SceneSearchPreviewView.js",
     "sourceSha256": "f365947fb33f4a926b22ac26a255bf27026fbeee728cbd595636a31255d084da",
     "runtimeSha256": "90cadd0e6fb5de7383ed7a72005a9385b5309f5797e04dec6897832618bf882f"
+  },
+  "SceneSearchPlacement": {
+    "source": "tools/typescript-stage1/nico-src/SceneSearchPlacement.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneSearchPlacement.js",
+    "sourceSha256": "a4e5e675cd916497b0a0596bc16587caab47b6e152523a8dd2653175fad34ee4",
+    "runtimeSha256": "07048677c2d37cbf2ef2848d40924991160cceee60f6ee66ef5c4759866ec0fa"
   }
 }

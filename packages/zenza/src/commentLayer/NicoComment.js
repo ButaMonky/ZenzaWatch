@@ -147,9 +147,12 @@ class NicoComment extends Emitter {
       maxTime = Math.max(maxTime, c.date);
     }
     const timeDepth = maxTime - minTime;
+    // Issue #29: one comment (or all comments posted at the same time)
+    // has zero time depth; represent its relative posting time as zero.
+    const hasTimeDepth = Number.isFinite(timeDepth) && timeDepth > 0;
     for (const c of nicoChats) {
       c.time3d = c.date - minTime;
-      c.time3dp = c.time3d / timeDepth;
+      c.time3dp = hasTimeDepth ? c.time3d / timeDepth : 0;
     }
 
     if (!nicoScripter.isEmpty) {

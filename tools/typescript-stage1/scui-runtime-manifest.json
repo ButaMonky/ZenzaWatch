@@ -2,13 +2,19 @@
   "SceneSearchLayout00": {
     "source": "tools/typescript-stage1/nico-src/SceneSearchLayout00.ts",
     "runtime": "packages/zenza/src/sceneSearch/SceneSearchLayout00.js",
-    "sourceSha256": "4eeb9d8f7b20d5432c050e998e65d7f96513519ce9f0032226b812b8a6ad903d",
-    "runtimeSha256": "cba4b3a11c4e1c80317362b654cb033ddb32e35813ee34e0e6382d427ddaf3e5"
+    "sourceSha256": "8aab47218b28388772624fba9ef81d37934dd95fdf98ed3a57dac1b5f1c0ef81",
+    "runtimeSha256": "5c3856ec341af90018bd3ae230624264128928e30bee74ba4084dd5317155d1e"
   },
   "SceneSearchPreferences": {
     "source": "tools/typescript-stage1/nico-src/SceneSearchPreferences.ts",
     "runtime": "packages/zenza/src/sceneSearch/SceneSearchPreferences.js",
     "sourceSha256": "1b9485aa5392c3bae18e52c8ca4f2fc937385892541bb37b42c53fae5bd92e8f",
     "runtimeSha256": "2e2967d42e9bd4bc93eef77e4e2ea33dce611e8d4ab0fe7a63f92fed33ae14a8"
+  },
+  "SceneSearchPreviewView": {
+    "source": "tools/typescript-stage1/nico-src/SceneSearchPreviewView.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneSearchPreviewView.js",
+    "sourceSha256": "f365947fb33f4a926b22ac26a255bf27026fbeee728cbd595636a31255d084da",
+    "runtimeSha256": "90cadd0e6fb5de7383ed7a72005a9385b5309f5797e04dec6897832618bf882f"
   }
 }

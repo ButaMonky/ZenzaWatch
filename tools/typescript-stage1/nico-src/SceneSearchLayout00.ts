@@ -7,6 +7,7 @@ type Legacy00Settings = {
  getLegacyComment?:()=>HTMLElement|null;
  getSeekBarContainer?:()=>HTMLElement|null;
  getMiniCommentMode?:()=>string|null;
+ getAppearance?:()=>{scale:number;opacity:number;miniEnabled:boolean;miniStyle:'flow'|'static'};
 };
 type Legacy00State = {commentListMode?:boolean;shown?:boolean};
 type Legacy00Options = {
@@ -26,6 +27,8 @@ export class SceneSearchLayout00 {
  private onMove:((event:MouseEvent)=>void)|null=null;
  private currentClientX:number|null=null;
  private listMode=false;
+ private appearanceScale=1;
+ private appearanceStyles:Array<{name:string;value:string;priority:string}>=[];
  private geometry:{originLeft:number;scale:number;visibleLeft:number;
   visibleRight:number;tooltipWidth:number;viewportWidth:number}|null=null;
  private onResize:(()=>void)|null=null;
@@ -44,6 +47,8 @@ export class SceneSearchLayout00 {
    throw new Error('Native legacy tooltip/comment seekbar owners missing');
   }
   this.tooltip=tooltip;this.comment=comment;this.seekOwner=seekOwner;
+  this.appearanceStyles=['--scene-thumbnail-scale','--scene-list-alpha'].map(name=>({
+   name,value:seekOwner.style.getPropertyValue(name),priority:seekOwner.style.getPropertyPriority(name)}));
   this.track=seekOwner.querySelector<HTMLElement>('.seekRange')||seekOwner;
   this.root=tooltip;
   this.container.classList.add('is-scui00-active');
@@ -75,7 +80,17 @@ export class SceneSearchLayout00 {
   // Presentation-only. The VideoControlBar owns the data and the hover/list
   // selector; never reparent comments, toggle enableCommentPreview or change
   // the separate master sceneSearch.commentPreviewVisible setting.
-  const mini=this.settings.getMiniCommentMode?.()||'flow';
+  const appearance=this.settings.getAppearance?.();
+  if(appearance&&this.seekOwner){
+   const available=Math.max(16,(this.document.defaultView?.innerWidth||800)-16);
+   const scale=Math.min(appearance.scale/100,available/180);
+   if(scale!==this.appearanceScale){this.geometry=null;this.lastImage=null;}
+   this.appearanceScale=scale;
+   this.seekOwner.style.setProperty('--scene-thumbnail-scale',String(scale));
+   this.seekOwner.style.setProperty('--scene-list-alpha',String(appearance.opacity/100));
+  }
+  const mini=appearance?(appearance.miniEnabled?appearance.miniStyle:'hidden'):
+    this.settings.getMiniCommentMode?.()||'flow';
   this.container.classList.toggle('is-scui00-mini-static',mini==='static');
   this.container.classList.toggle('is-scui00-mini-hidden',mini==='hidden');
   // Unlike modern cards, UI00 reuses the native tooltip and sibling comment
@@ -136,7 +151,7 @@ export class SceneSearchLayout00 {
      visibleLeft+(v-width)/2);
   };
   const tooltipWidth=g.tooltipWidth;
-  const commentWidth=this.listMode?Math.min(350,Math.max(120,viewportWidth-16)):180;
+  const commentWidth=this.listMode?Math.min(350,Math.max(120,viewportWidth-16)):tooltipWidth;
   tip.style.setProperty('--scui00-position',place(tooltipWidth)+'px');
   seek.style.setProperty('--scui00-comment-x',place(commentWidth)+'px');
  }
@@ -151,6 +166,11 @@ export class SceneSearchLayout00 {
   this.seekOwner?.style.removeProperty('--scui00-comment-x');
   this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
   this.lastImage=null;
+  for(const {name,value,priority} of this.appearanceStyles){
+   if(value)this.seekOwner?.style.setProperty(name,value,priority);
+   else this.seekOwner?.style.removeProperty(name);
+  }
+  this.appearanceStyles=[];this.appearanceScale=1;
   this.container.classList.remove('is-scui00-active',
    'is-scui00-mini-static','is-scui00-mini-hidden','is-scui00-inactive');
   this.style?.remove();
@@ -173,6 +193,18 @@ export class SceneSearchLayout00 {
   transition:none!important;
   z-index:150!important;
 }
+.is-scui00-active .seekBarToolTip.is-scui00-root{
+  width:calc(180px * var(--scene-thumbnail-scale,1))!important;
+}
+.is-scui00-active .seekBarThumbnailContainer,
+.is-scui00-active .seekBarThumbnailContainer>.zenzaSeekThumbnail{
+  width:calc(180px * var(--scene-thumbnail-scale,1))!important;
+  height:calc(90px * var(--scene-thumbnail-scale,1))!important;
+}
+.is-scui00-active .seekBarThumbnailContainer .zenzaSeekThumbnail-image{
+  transform:scale(var(--scene-thumbnail-scale,1));
+  transform-origin:center top;
+}
 /* Both native seekbar siblings now track the real full-width range. */
 .is-scui00-active .seekBarContainer>.zenzaCommentPreview{
   transform:translate(var(--scui00-comment-x,var(--trans-x-pp)),0)!important;
@@ -183,6 +215,8 @@ export class SceneSearchLayout00 {
 /* Hover flows in its own original view over the native tooltip. */
 .is-scui00-active .seekBarContainer:not(.enableCommentPreview)>.zenzaCommentPreview{
   width:180px!important;height:90px!important;
+  transform:translate(var(--scui00-comment-x,var(--trans-x-pp)),0) scale(var(--scene-thumbnail-scale,1))!important;
+  transform-origin:left bottom!important;
   bottom:var(--scui00-mini-bottom,70px)!important;
   opacity:1!important;
   background:transparent!important;
@@ -231,7 +265,7 @@ export class SceneSearchLayout00 {
   border-bottom:24px solid transparent!important;
   z-index:100!important;
   opacity:1!important;display:block!important;
-  background:rgba(7,13,24,.94)!important;
+  background:rgba(7,13,24,var(--scene-list-alpha,.9))!important;
   overflow-y:auto!important;overflow-x:hidden!important;
   pointer-events:auto!important;
 }

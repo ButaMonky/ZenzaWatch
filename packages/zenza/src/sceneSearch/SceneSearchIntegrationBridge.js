@@ -112,7 +112,8 @@ class SceneSearchIntegrationBridge {
     this.router=new classes.ShortcutRouter({
       controller:this.controller,interaction:this.interaction,
       getPreference:key=>config.getValue(key),
-      setPreference:(key,value)=>config.setValue(key,value),
+      setPreference:(key,value)=>key.startsWith('sceneSearch.')&&typeof config.persistSceneSearchSelection==='function'?
+        config.persistSceneSearchSelection({[key]:value}):config.setValue(key,value),
       onToggleControls:()=>this._active?.root?.classList.toggle('is-expanded'),
       onError:(error,key)=>this._onError(error,key)
     });
@@ -863,7 +864,11 @@ class SceneSearchIntegrationBridge {
           (config.options?.validateImport&&!config.options.validateImport(key,value))){
           throw new TypeError('Invalid saved scene preference: '+key);
         }
-        if(Object.is(value,config.getValue(key)))continue;
+        // Saved presence participates in migration even when the raw default is unchanged.
+        const presenceSensitive=typeof config.resolveSceneSearch==='function'&&[
+          'sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen','sceneSearch.miniCommentVisible'
+        ].includes(key);
+        if(Object.is(value,config.getValue(key))&&!presenceSensitive)continue;
         saved[sk]=JSON.stringify(value);before[sk]=JSON.stringify(config.getValue(key));
         changes.push([key,value]);
       }

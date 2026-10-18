@@ -72,6 +72,16 @@ describe('shared scene native preview',function(){
    h.view.render(state);assert.strictEqual(h.view.root,null);
   }finally{h.done();}
  });
+ it('refreshes mini availability when native storyboard reuses its image element',()=>{
+  const h=setup();try{
+   h.image.classList.remove('is-visible');h.view.render({...state,pinned:true});
+   assert(h.mini.hidden);
+   h.image.classList.add('is-visible');h.view.setImage(h.image);
+   assert.strictEqual(h.mini.hidden,false);
+   h.image.classList.remove('is-visible');h.view.setImage(h.image);
+   assert.strictEqual(h.mini.hidden,true);
+  }finally{h.done();}
+ });
  it('accepts a later native image and restores both old and replacement image owners',()=>{
   const h=setup();try{
    h.view.render(state);

@@ -13,6 +13,17 @@ function compute(input){assert(fs.existsSync(path),'placement source must be gen
  Placement=Placement||loadClass(path,'SceneSearchPlacement',createContext());
  return Placement.compute(input);}
 describe('scene placement in viewport coordinates',()=>{
+ it('fits short viewports above protected seek controls for both modern layouts',()=>{
+  for(const context of ['normal','small','fullscreen'])for(const layout of ['follow','fixed'])
+   for(const height of [200,240,320])for(const hold of [false,true]){
+    const input=fixture({layout,context,viewport:rect(0,0,320,height),player:rect(0,0,160,90),
+     seekbar:rect(0,height-40,320,40),requestedScale:200,hold});
+    if(hold)input.previous=compute(fixture());
+    const r=compute(input);
+    assert.strictEqual(overlap(r.rect,input.seekbar),0,JSON.stringify({context,layout,height,hold,r}));
+    assert(r.rect.top>=8&&r.rect.top+r.rect.height<=height-48);
+   }
+ });
  it('keeps a safe fixed position across seeking and holds during drag',()=>{
   const input=fixture(),a=compute(input),b=compute({...input,anchorX:1279,previous:a});
   assert.deepStrictEqual(a,b);assert.strictEqual(overlap(a.rect,input.seekbar),0);

@@ -13,7 +13,11 @@ export class SceneSearchPlacement {
   const {viewport:v,player,seekbar,listOpen,previous}=input;
   const gap=8,padding=10,minLeft=104;
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(Math.max(a,b),n));
-  const availableW=Math.max(1,v.width-gap*2),availableH=Math.max(1,v.height-gap*2);
+  const availableW=Math.max(1,v.width-gap*2),viewportH=Math.max(1,v.height-gap*2);
+  const aboveSpace=clamp(seekbar.top-v.top-gap*2,0,viewportH);
+  const belowSpace=clamp(v.top+v.height-seekbar.top-seekbar.height-gap*2,0,viewportH);
+  const protectsBar=seekbar.width>0&&seekbar.height>0&&seekbar.top<v.top+v.height&&seekbar.top+seekbar.height>v.top;
+  const availableH=protectsBar?Math.max(1,aboveSpace,belowSpace):viewportH;
   const iw=Math.max(1,input.imageSize.width),ih=Math.max(1,input.imageSize.height);
   const requested=clamp(Number.isFinite(input.requestedScale)?input.requestedScale:100,50,200)/100;
   let listWidth=listOpen?clamp(availableW-padding-gap-Math.max(minLeft,iw*requested),160,280):0;
@@ -25,8 +29,15 @@ export class SceneSearchPlacement {
   const height=Math.min(availableH,padding+Math.max(ih*imageScale+footer,listOpen?240:0));
   const listMaxHeight=Math.max(32,height-padding);
   // Very short viewports scroll inside the panel; no stored setting is rewritten.
-  const make=(x:number,y:number):SceneRect=>({left:clamp(x,v.left+gap,v.left+v.width-gap-width),
-   top:clamp(y,v.top+gap,v.top+v.height-gap-height),width,height});
+  const make=(x:number,y:number):SceneRect=>{
+   const rect={left:clamp(x,v.left+gap,v.left+v.width-gap-width),
+    top:clamp(y,v.top+gap,v.top+v.height-gap-height),width,height};
+   if(protectsBar&&this.overlap(rect,seekbar)>0){
+    if(height<=aboveSpace)rect.top=clamp(rect.top,v.top+gap,seekbar.top-gap-height);
+    else if(height<=belowSpace)rect.top=clamp(rect.top,seekbar.top+seekbar.height+gap,v.top+v.height-gap-height);
+   }
+   return rect;
+  };
   const result=(rect:SceneRect):PlacementResult=>({rect,imageScale,listWidth,listMaxHeight,footerHeight:footer,
    overlapsVideo:this.overlap(rect,player)>0});
   if(input.hold&&previous)return result(make(previous.rect.left,previous.rect.top));

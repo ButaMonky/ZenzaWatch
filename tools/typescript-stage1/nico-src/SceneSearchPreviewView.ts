@@ -103,7 +103,8 @@ export class SceneSearchPreviewView {
   this.fit({imageScale:1,listWidth:280,listMaxHeight:240});
  }
  setImage(image:HTMLElement|null):void{
-  if(this.disposed||this.image===image)return;
+  if(this.disposed)return;
+  if(this.image===image){if(this.state)this.render(this.state);return;}
   if(this.image)this.restore(this.image);
   this.image=image;
   if(image&&this.logical){this.remember(image);this.logical.prepend(image);}

@@ -221,6 +221,10 @@ assert.strictEqual(h.pendingTimerCount(), 0);
 - [ ] 最終差分とテスト結果を独立レビューし、指摘修正後は関係する検証を再実行する。成果物と検証記録だけを明示stageして `build: prepare scene search redesign review package` でcommitする。
 - [ ] 確認版と通常/全画面/小画面の確認手順を渡す。公開push先・対象差分を確認し、既存の承認範囲を満たす場合だけ通常pushする。私有資料・全非公開ブランチは送らない。実機合格後のdevelop統合は別工程とし、その時点で最新develop merge・全テスト・所定integrateを実施する。
 
+## 実装状況
+
+2026-10-18: Task1〜6の実装、独立レビュー指摘の修正、最終検証を完了。確認版2.7.306-task801は実機確認待ち。統合・公開pushは未実施。検証結果と計画との差分は同ディレクトリのscene-search-redesign-validation.mdを参照。
+
 ## 自己レビューと受け渡し
 
 - 設計書の表示/互換/共通設定はTask1〜3、拡縮はTask3/4、idleと所有はTask5、小画面と実全画面はTask4〜6、公開境界と実機判定はTask6に対応する。

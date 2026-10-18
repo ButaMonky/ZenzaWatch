@@ -156,8 +156,13 @@ class SceneSearchPreviewView {
         this.fit({ imageScale: 1, listWidth: 280, listMaxHeight: 240 });
     }
     setImage(image) {
-        if (this.disposed || this.image === image)
+        if (this.disposed)
             return;
+        if (this.image === image) {
+            if (this.state)
+                this.render(this.state);
+            return;
+        }
         if (this.image)
             this.restore(this.image);
         this.image = image;

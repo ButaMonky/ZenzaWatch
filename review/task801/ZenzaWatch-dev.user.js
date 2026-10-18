@@ -41,7 +41,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 09:33Z
+// build: 2026-10-18 09:57Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.306-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 09:33Z';
+    var BUILD = '2026-10-18 09:57Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -23858,7 +23858,7 @@ util.addStyle(`
 				return;
 			}
 			const {command, param, repeat} = target.dataset;
-			if (!command) { return; }
+			if (!command || target.getAttribute('aria-disabled') === 'true') { return; }
 			util.dispatchCommand(e.target, command, param);
 			if (repeat === 'on') {
 				this._beginRepeat(command, param);
@@ -34584,7 +34584,11 @@ class SceneSearchPlacement {
 				const { viewport: v, player, seekbar, listOpen, previous } = input;
 				const gap = 8, padding = 10, minLeft = 104;
 				const clamp = (n, a, b) => Math.max(a, Math.min(Math.max(a, b), n));
-				const availableW = Math.max(1, v.width - gap * 2), availableH = Math.max(1, v.height - gap * 2);
+				const availableW = Math.max(1, v.width - gap * 2), viewportH = Math.max(1, v.height - gap * 2);
+				const aboveSpace = clamp(seekbar.top - v.top - gap * 2, 0, viewportH);
+				const belowSpace = clamp(v.top + v.height - seekbar.top - seekbar.height - gap * 2, 0, viewportH);
+				const protectsBar = seekbar.width > 0 && seekbar.height > 0 && seekbar.top < v.top + v.height && seekbar.top + seekbar.height > v.top;
+				const availableH = protectsBar ? Math.max(1, aboveSpace, belowSpace) : viewportH;
 				const iw = Math.max(1, input.imageSize.width), ih = Math.max(1, input.imageSize.height);
 				const requested = clamp(Number.isFinite(input.requestedScale) ? input.requestedScale : 100, 50, 200) / 100;
 				let listWidth = listOpen ? clamp(availableW - padding - gap - Math.max(minLeft, iw * requested), 160, 280) : 0;
@@ -34594,8 +34598,17 @@ class SceneSearchPlacement {
 				const width = Math.min(availableW, padding + leftWidth + (listOpen ? gap + listWidth : 0));
 				const height = Math.min(availableH, padding + Math.max(ih * imageScale + footer, listOpen ? 240 : 0));
 				const listMaxHeight = Math.max(32, height - padding);
-				const make = (x, y) => ({ left: clamp(x, v.left + gap, v.left + v.width - gap - width),
-						top: clamp(y, v.top + gap, v.top + v.height - gap - height), width, height });
+				const make = (x, y) => {
+						const rect = { left: clamp(x, v.left + gap, v.left + v.width - gap - width),
+								top: clamp(y, v.top + gap, v.top + v.height - gap - height), width, height };
+						if (protectsBar && this.overlap(rect, seekbar) > 0) {
+								if (height <= aboveSpace)
+										rect.top = clamp(rect.top, v.top + gap, seekbar.top - gap - height);
+								else if (height <= belowSpace)
+										rect.top = clamp(rect.top, seekbar.top + seekbar.height + gap, v.top + v.height - gap - height);
+						}
+						return rect;
+				};
 				const result = (rect) => ({ rect, imageScale, listWidth, listMaxHeight, footerHeight: footer,
 						overlapsVideo: this.overlap(rect, player) > 0 });
 				if (input.hold && previous)
@@ -34892,7 +34905,8 @@ class SceneSearchIntegrationBridge {
 		this.router=new classes.ShortcutRouter({
 			controller:this.controller,interaction:this.interaction,
 			getPreference:key=>config.getValue(key),
-			setPreference:(key,value)=>config.setValue(key,value),
+			setPreference:(key,value)=>key.startsWith('sceneSearch.')&&typeof config.persistSceneSearchSelection==='function'?
+				config.persistSceneSearchSelection({[key]:value}):config.setValue(key,value),
 			onToggleControls:()=>this._active?.root?.classList.toggle('is-expanded'),
 			onError:(error,key)=>this._onError(error,key)
 		});
@@ -35605,7 +35619,10 @@ class SceneSearchIntegrationBridge {
 					(config.options?.validateImport&&!config.options.validateImport(key,value))){
 					throw new TypeError('Invalid saved scene preference: '+key);
 				}
-				if(Object.is(value,config.getValue(key)))continue;
+				const presenceSensitive=typeof config.resolveSceneSearch==='function'&&[
+					'sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen','sceneSearch.miniCommentVisible'
+				].includes(key);
+				if(Object.is(value,config.getValue(key))&&!presenceSensitive)continue;
 				saved[sk]=JSON.stringify(value);before[sk]=JSON.stringify(config.getValue(key));
 				changes.push([key,value]);
 			}
@@ -36162,8 +36179,13 @@ class SceneSearchPreviewView {
 				this.fit({ imageScale: 1, listWidth: 280, listMaxHeight: 240 });
 		}
 		setImage(image) {
-				if (this.disposed || this.image === image)
+				if (this.disposed)
 						return;
+				if (this.image === image) {
+						if (this.state)
+								this.render(this.state);
+						return;
+				}
 				if (this.image)
 						this.restore(this.image);
 				this.image = image;
@@ -36573,6 +36595,18 @@ class SceneSearchLayout00 {
 		geometry = null;
 		onResize = null;
 		lastImage = null;
+		commentControl = null;
+		restoreCommentControl() {
+				const original = this.commentControl;
+				if (!original)
+						return;
+				for (const [name, value] of [['title', original.title], ['aria-disabled', original.disabled]]) {
+						if (value === null)
+								original.node.removeAttribute(name);
+						else
+								original.node.setAttribute(name, value);
+				}
+		}
 		constructor({ document, container, mode = 'normal', settings = {} }) {
 				this.document = document;
 				this.container = container;
@@ -36591,6 +36625,9 @@ class SceneSearchLayout00 {
 				this.tooltip = tooltip;
 				this.comment = comment;
 				this.seekOwner = seekOwner;
+				const control = tooltip.querySelector('.toggleCommentPreview');
+				if (control)
+						this.commentControl = { node: control, title: control.getAttribute('title'), disabled: control.getAttribute('aria-disabled') };
 				this.appearanceStyles = ['--scene-thumbnail-scale', '--scene-list-alpha'].map(name => ({
 						name, value: seekOwner.style.getPropertyValue(name), priority: seekOwner.style.getPropertyPriority(name)
 				}));
@@ -36622,6 +36659,11 @@ class SceneSearchLayout00 {
 				const changed = mode !== this.listMode;
 				this.listMode = mode;
 				const appearance = this.settings.getAppearance?.();
+				this.restoreCommentControl();
+				if (appearance?.listAllowed === false && this.commentControl) {
+						this.commentControl.node.setAttribute('aria-disabled', 'true');
+						this.commentControl.node.title = '上級者設定でコメントプレビューがOFFです';
+				}
 				if (appearance && this.seekOwner) {
 						const available = Math.max(16, (this.document.defaultView?.innerWidth || 800) - 16);
 						const scale = Math.min(appearance.scale / 100, available / 180);
@@ -36705,6 +36747,8 @@ class SceneSearchLayout00 {
 				seek.style.setProperty('--scui00-comment-x', place(commentWidth) + 'px');
 		}
 		dispose() {
+				this.restoreCommentControl();
+				this.commentControl = null;
 				if (this.track && this.onMove) {
 						this.track.removeEventListener('mousemove', this.onMove, true);
 				}
@@ -36744,6 +36788,7 @@ class SceneSearchLayout00 {
 		static get CSS() {
 				return `
 /* Do not replace original CommentPreviewView modes or reparent its DOM. */
+.is-scui00-active .toggleCommentPreview[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 .is-scui00-active .seekBarToolTip.is-scui00-root{
 	transform:translate(var(--scui00-position,var(--trans-x-pp)),0)!important;
 	transition:none!important;
@@ -39328,7 +39373,7 @@ class SceneSearchPlayerBinding {
 		this.document.defaultView?.addEventListener('pagehide',this._pagehide);
 		this.document.defaultView?.addEventListener('resize',this._geometryChanged);
 		this.document.addEventListener('fullscreenchange',this._fullscreenChanged);
-		this._listen(this.dialog,'sceneSearchGeometryChange',event=>{
+		this._listen(this.view,'sceneSearchGeometryChange',event=>{
 			this._manipulating=event?.active===true;this._scheduleGeometry();
 		});
 		if(this.dialog.isOpen){this._start();}

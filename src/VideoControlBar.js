@@ -2587,7 +2587,7 @@ util.addStyle(`
         return;
       }
       const {command, param, repeat} = target.dataset;
-      if (!command) { return; }
+      if (!command || target.getAttribute('aria-disabled') === 'true') { return; }
 
       util.dispatchCommand(e.target, command, param);
       if (repeat === 'on') {

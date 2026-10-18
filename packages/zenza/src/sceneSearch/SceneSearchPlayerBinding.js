@@ -64,7 +64,7 @@ class SceneSearchPlayerBinding {
     this.document.defaultView?.addEventListener('pagehide',this._pagehide);
     this.document.defaultView?.addEventListener('resize',this._geometryChanged);
     this.document.addEventListener('fullscreenchange',this._fullscreenChanged);
-    this._listen(this.dialog,'sceneSearchGeometryChange',event=>{
+    this._listen(this.view,'sceneSearchGeometryChange',event=>{
       this._manipulating=event?.active===true;this._scheduleGeometry();
     });
     if(this.dialog.isOpen){this._start();}

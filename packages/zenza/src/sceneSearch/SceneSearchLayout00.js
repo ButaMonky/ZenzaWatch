@@ -20,6 +20,18 @@ class SceneSearchLayout00 {
     geometry = null;
     onResize = null;
     lastImage = null;
+    commentControl = null;
+    restoreCommentControl() {
+        const original = this.commentControl;
+        if (!original)
+            return;
+        for (const [name, value] of [['title', original.title], ['aria-disabled', original.disabled]]) {
+            if (value === null)
+                original.node.removeAttribute(name);
+            else
+                original.node.setAttribute(name, value);
+        }
+    }
     constructor({ document, container, mode = 'normal', settings = {} }) {
         this.document = document;
         this.container = container;
@@ -38,6 +50,9 @@ class SceneSearchLayout00 {
         this.tooltip = tooltip;
         this.comment = comment;
         this.seekOwner = seekOwner;
+        const control = tooltip.querySelector('.toggleCommentPreview');
+        if (control)
+            this.commentControl = { node: control, title: control.getAttribute('title'), disabled: control.getAttribute('aria-disabled') };
         this.appearanceStyles = ['--scene-thumbnail-scale', '--scene-list-alpha'].map(name => ({
             name, value: seekOwner.style.getPropertyValue(name), priority: seekOwner.style.getPropertyPriority(name)
         }));
@@ -75,6 +90,11 @@ class SceneSearchLayout00 {
         // selector; never reparent comments, toggle enableCommentPreview or change
         // the separate master sceneSearch.commentPreviewVisible setting.
         const appearance = this.settings.getAppearance?.();
+        this.restoreCommentControl();
+        if (appearance?.listAllowed === false && this.commentControl) {
+            this.commentControl.node.setAttribute('aria-disabled', 'true');
+            this.commentControl.node.title = '上級者設定でコメントプレビューがOFFです';
+        }
         if (appearance && this.seekOwner) {
             const available = Math.max(16, (this.document.defaultView?.innerWidth || 800) - 16);
             const scale = Math.min(appearance.scale / 100, available / 180);
@@ -161,6 +181,8 @@ class SceneSearchLayout00 {
         seek.style.setProperty('--scui00-comment-x', place(commentWidth) + 'px');
     }
     dispose() {
+        this.restoreCommentControl();
+        this.commentControl = null;
         if (this.track && this.onMove) {
             this.track.removeEventListener('mousemove', this.onMove, true);
         }
@@ -200,6 +222,7 @@ class SceneSearchLayout00 {
     static get CSS() {
         return `
 /* Do not replace original CommentPreviewView modes or reparent its DOM. */
+.is-scui00-active .toggleCommentPreview[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 .is-scui00-active .seekBarToolTip.is-scui00-root{
   transform:translate(var(--scui00-position,var(--trans-x-pp)),0)!important;
   transition:none!important;

@@ -141,15 +141,15 @@ async function client(url){
   await evaluate("config.setValue('sceneSearch.presentation.normal','fixed');config.setValue('sceneSearch.presentation.fullscreen','fixed');config.setValue('sceneSearch.thumbnailScale',100);config.setValue('enableCommentPreview',true);player.screenMode='small';seek.style.cssText='position:fixed;left:0;bottom:0;width:100vw;height:40px;z-index:20';true");await frame();
   for(const [x,y,w,h] of [[0,0,400,225],[width-400,0,400,225],[0,620,400,225],[width-400,620,400,225],
     [width/2-200,330,400,225],[width-160,740,160,90],[0,80,200,600],[0,0,width*.9,780]]){
-   await evaluate("video.style.cssText="+JSON.stringify('position:fixed;left:'+Math.max(0,x)+'px;top:'+y+'px;width:'+Math.min(width,w)+'px;height:'+h+'px;bottom:auto;background:#28536a')+";player.emit('sceneSearchGeometryChange',{active:false});true");await frame();await click('#seek');
+   await evaluate("video.style.cssText="+JSON.stringify('position:fixed;left:'+Math.max(0,x)+'px;top:'+y+'px;width:'+Math.min(width,w)+'px;height:'+h+'px;bottom:auto;background:#28536a')+";playerView.emit('sceneSearchGeometryChange',{active:false});true");await frame();await click('#seek');
    const s=await state();
    record(width+'/small/'+x+','+y+','+w+','+h,s.rect.left>=7&&s.rect.right<=width-7&&s.rect.bottom<=852&&s.rect.top>=7,s);
   }
   const held=await state();
-  await evaluate("player.emit('sceneSearchGeometryChange',{active:true});true");await frame();
+  await evaluate("playerView.emit('sceneSearchGeometryChange',{active:true});true");await frame();
   await evaluate("video.style.left='0px';video.style.top='600px';true");await frame();
   const during=await state();record(width+'/small/drag-hold',held.rect.x===during.rect.x&&held.rect.y===during.rect.y,{held,during});
-  await evaluate("player.emit('sceneSearchGeometryChange',{active:false});true");await frame();
+  await evaluate("playerView.emit('sceneSearchGeometryChange',{active:false});true");await frame();
   await evaluate("host.requestFullscreen()");await frame();
   record(width+'/small/to-fullscreen',(await state()).inside&&(await state()).fullscreen,await state());
   await evaluate("document.exitFullscreen()");await frame();
@@ -161,7 +161,7 @@ async function client(url){
     if(!input){input=document.createElement('div');input.className='commentInputPanel';input.innerHTML='<input aria-label="コメント入力"><div class="commandPopover">コマンド</div>';host.append(input);}
     input.style.cssText='position:fixed;left:0;top:'+( ${JSON.stringify(side)}==='above'?580:250)+'px;width:'+Math.min(innerWidth,400)+'px;height:32px;background:#aaa';
     input.querySelector('.commandPopover').style.cssText='position:absolute;left:0;top:'+( ${JSON.stringify(side)}==='above'?-140:32)+'px;width:240px;height:140px;background:#777';
-    input.querySelector('input').focus();player.emit('sceneSearchGeometryChange',{active:false});return true;
+    input.querySelector('input').focus();playerView.emit('sceneSearchGeometryChange',{active:false});return true;
    })()`);await frame();
    const geometry=await evaluate(`(()=>{
     const r=qaBinding.adapter.bridge._active.root.getBoundingClientRect();
@@ -170,7 +170,7 @@ async function client(url){
    })()`);
    record(width+'/small/input-'+side,geometry.every(g=>g.overlap===0),geometry);
   }
-  await evaluate("host.querySelector('.commentInputPanel').remove();player.emit('sceneSearchGeometryChange',{active:false});true");await frame();
+  await evaluate("host.querySelector('.commentInputPanel').remove();playerView.emit('sceneSearchGeometryChange',{active:false});true");await frame();
   for(const layout of ['follow','legacy']){
    await evaluate("config.setValue('sceneSearch.presentation.normal',"+JSON.stringify(layout)+");true");await frame();
    await click('#seek');
@@ -183,6 +183,20 @@ async function client(url){
    const s=await state();record('small/pinned-viewport-shrink',s.rect.left>=7&&s.rect.right<=313,s);
    await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});await frame();
    await evaluate('qaBinding.adapter.bridge.interaction.togglePin();true');
+  }
+  if(width===320){
+   await c.send('Emulation.setDeviceMetricsOverride',{width,height:240,deviceScaleFactor:1,mobile:false});
+   for(const mode of ['normal','small','fullscreen'])for(const layout of ['follow','fixed']){
+    await evaluate("config.setValue('sceneSearch.presentation.normal',"+JSON.stringify(layout)+");config.setValue('sceneSearch.presentation.fullscreen',"+JSON.stringify(layout)+");config.setValue('sceneSearch.thumbnailScale',200);config.setValue('enableCommentPreview',true);player.screenMode="+JSON.stringify(mode==='small'?'small':'normal')+";video.style.cssText='position:fixed;left:0;top:0;width:160px;height:90px';player.emit('screenModeChange');true");
+    if(mode==='fullscreen')await evaluate('host.requestFullscreen()');
+    await frame();await click('#seek');await frame();
+    const short=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,r=root.getBoundingClientRect(),b=seek.getBoundingClientRect(),hit=document.elementFromPoint(160,220);return {rect:r.toJSON(),bar:b.toJSON(),hit:seek===hit||seek.contains(hit)};})()");
+    record('short/'+mode+'/'+layout+'/seekbar',short.rect.bottom<=192.1&&short.rect.top>=7&&short.hit,short);
+    const scroll=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root;root.scrollTop=root.scrollHeight;const el=root.querySelector('[data-scui-action=seek-step]'),r=el.getBoundingClientRect(),outer=root.getBoundingClientRect();return {inside:r.top>=outer.top&&r.bottom<=outer.bottom,hit:el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};})()");
+    record('short/'+mode+'/'+layout+'/scroll-controls',scroll.inside&&scroll.hit,scroll);
+    if(mode==='fullscreen'){await evaluate('document.exitFullscreen()');await frame();}
+   }
+   await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});await frame();
   }
   await evaluate('qaBinding.dispose();true');record(width+'/teardown',await evaluate("!document.querySelector('.zenzaScenePreviewPortal')&&bar._commentPreview._model._events.get('vpos').size===1"),{});
  }

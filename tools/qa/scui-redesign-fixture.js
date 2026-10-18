@@ -39,7 +39,8 @@ seek.addEventListener('mousemove',e=>{
  const time=bar._sceneSearchPinnedTime?.()??2;
  bar._commentPreview.currentTime=time;bar._commentPreview.update(e.clientX);
 });
-const qaBinding=new SceneSearchPlayerBinding({view:{videoControlBar:bar},dialog:player,document,container:host,events:events(),
+const playerView=Object.assign(events(),{videoControlBar:bar});
+const qaBinding=new SceneSearchPlayerBinding({view:playerView,dialog:player,document,container:host,events:events(),
  isFullscreen:()=>!!document.fullscreenElement,onError:code=>{throw Error(code);}});
 qaBinding.attach();
 window.qaReady=true;

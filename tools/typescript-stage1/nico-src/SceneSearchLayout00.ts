@@ -7,7 +7,7 @@ type Legacy00Settings = {
  getLegacyComment?:()=>HTMLElement|null;
  getSeekBarContainer?:()=>HTMLElement|null;
  getMiniCommentMode?:()=>string|null;
- getAppearance?:()=>{scale:number;opacity:number;miniEnabled:boolean;miniStyle:'flow'|'static'};
+ getAppearance?:()=>{scale:number;opacity:number;miniEnabled:boolean;miniStyle:'flow'|'static';listAllowed?:boolean};
 };
 type Legacy00State = {commentListMode?:boolean;shown?:boolean;pinned?:boolean};
 type Legacy00Options = {
@@ -34,6 +34,13 @@ export class SceneSearchLayout00 {
   visibleRight:number;tooltipWidth:number;viewportWidth:number}|null=null;
  private onResize:(()=>void)|null=null;
  private lastImage:Element|null=null;
+ private commentControl:{node:HTMLElement;title:string|null;disabled:string|null}|null=null;
+ private restoreCommentControl():void{
+  const original=this.commentControl;if(!original)return;
+  for(const [name,value] of [['title',original.title],['aria-disabled',original.disabled]] as const){
+   if(value===null)original.node.removeAttribute(name);else original.node.setAttribute(name,value);
+  }
+ }
 
  constructor({document,container,mode='normal',settings={}}:Legacy00Options){
   this.document=document;this.container=container;this.mode=mode;this.settings=settings;
@@ -48,6 +55,8 @@ export class SceneSearchLayout00 {
    throw new Error('Native legacy tooltip/comment seekbar owners missing');
   }
   this.tooltip=tooltip;this.comment=comment;this.seekOwner=seekOwner;
+  const control=tooltip.querySelector<HTMLElement>('.toggleCommentPreview');
+  if(control)this.commentControl={node:control,title:control.getAttribute('title'),disabled:control.getAttribute('aria-disabled')};
   this.appearanceStyles=['--scene-thumbnail-scale','--scene-list-alpha'].map(name=>({
    name,value:seekOwner.style.getPropertyValue(name),priority:seekOwner.style.getPropertyPriority(name)}));
   this.track=seekOwner.querySelector<HTMLElement>('.seekRange')||seekOwner;
@@ -83,6 +92,11 @@ export class SceneSearchLayout00 {
   // selector; never reparent comments, toggle enableCommentPreview or change
   // the separate master sceneSearch.commentPreviewVisible setting.
   const appearance=this.settings.getAppearance?.();
+  this.restoreCommentControl();
+  if(appearance?.listAllowed===false&&this.commentControl){
+   this.commentControl.node.setAttribute('aria-disabled','true');
+   this.commentControl.node.title='上級者設定でコメントプレビューがOFFです';
+  }
   if(appearance&&this.seekOwner){
    const available=Math.max(16,(this.document.defaultView?.innerWidth||800)-16);
    const scale=Math.min(appearance.scale/100,available/180);
@@ -158,6 +172,7 @@ export class SceneSearchLayout00 {
   seek.style.setProperty('--scui00-comment-x',place(commentWidth)+'px');
  }
  dispose():void{
+  this.restoreCommentControl();this.commentControl=null;
   if(this.track&&this.onMove){
    this.track.removeEventListener('mousemove',this.onMove,true);
   }
@@ -190,6 +205,7 @@ export class SceneSearchLayout00 {
  }
  static get CSS():string{return `
 /* Do not replace original CommentPreviewView modes or reparent its DOM. */
+.is-scui00-active .toggleCommentPreview[aria-disabled="true"]{opacity:.45;cursor:not-allowed}
 .is-scui00-active .seekBarToolTip.is-scui00-root{
   transform:translate(var(--scui00-position,var(--trans-x-pp)),0)!important;
   transition:none!important;

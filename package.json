@@ -82,6 +82,8 @@
     "test:browser": "webpack-dev-server --inline",
     "build:production": "node ./build.js",
     "build:monkey": "node ./build.js --dev",
-    "watch:monkey": "node ./build.js --dev --watch"
+    "watch:monkey": "node ./build.js --dev --watch",
+    "nico:sync": "npm --prefix tools/typescript-stage1 run nico:sync",
+    "nico:verify": "npm --prefix tools/typescript-stage1 run nico:verify"
   }
 }

@@ -17,5 +17,7 @@ session/*
 ./lib/*
 ./botsu/*
 # 開発用の内部ツール・公開状態の記録は公開しない
-/tools/
+/tools/*
+!/tools/typescript-stage1/
+/tools/typescript-stage1/.generated/
 /.publish-state/

@@ -8,6 +8,7 @@ import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions'
 import {RelatedMenuOrder} from './RelatedMenuOrder';
 import {ScreenshotFileName} from './ScreenshotFileName';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+import {SceneSearchPreferences} from '../packages/zenza/src/sceneSearch/SceneSearchPreferences';
 import {NgCompositeRules} from './NgCompositeRules';
 
 const location = {host: 'www.nicovideo.jp'};
@@ -25,6 +26,7 @@ const window = {console: console};
 //@require RelatedMenuActions
 //@require RelatedMenuOrder
 //@require ScreenshotFileName
+//@require SceneSearchPreferences
 //@require UiVisibilityRegistry
 //@require NgCompositeRules
 const Config = (() => {
@@ -365,6 +367,9 @@ const Config = (() => {
   // until the user explicitly selects a different normal/fullscreen layout.
   // These are presentation preferences; no extra preview is mounted here.
   Object.assign(DEFAULT_CONFIG, {
+    'sceneSearch.presentation.normal': 'follow',
+    'sceneSearch.presentation.fullscreen': 'follow',
+    'sceneSearch.presentation.migrationAcknowledged': false,
     'sceneSearch.layout.normal': '01',
     'sceneSearch.layout.fullscreen': '01',
     'sceneSearch.layout.linkFullscreen': false,
@@ -374,6 +379,10 @@ const Config = (() => {
     'sceneSearch.controlsReveal': 'hover-focus',
     'sceneSearch.animation': 'subtle',
     'sceneSearch.commentPreviewVisible': true,
+    'sceneSearch.miniCommentVisible': true,
+    'sceneSearch.commentListVisible': true,
+    'sceneSearch.commentListBackgroundOpacity': 90,
+    'sceneSearch.thumbnailScale': 100,
     'sceneSearch.miniCommentMode': 'flow'
   });
 
@@ -391,7 +400,7 @@ const Config = (() => {
 
   Object.assign(DEFAULT_CONFIG, ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS);
 
-  return DataStorage.create(
+  const config = DataStorage.create(
     DEFAULT_CONFIG,
     {
       // Import checks are intentionally independent of normal live updates.
@@ -404,12 +413,18 @@ const Config = (() => {
       validateImport: (key, value) => {
         // Reject non-finite, non-integral and unknown enum values before
         // DataStorage writes any part of a settings import.
+        if (key === 'sceneSearch.presentation.normal' || key === 'sceneSearch.presentation.fullscreen') {
+          return ['follow','fixed','legacy'].includes(value);
+        }
+        if (key === 'sceneSearch.presentation.migrationAcknowledged') { return typeof value === 'boolean'; }
         if (key === 'sceneSearch.layout.normal' ||
             key === 'sceneSearch.layout.fullscreen') {
           return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
         }
         if (key === 'sceneSearch.layout.linkFullscreen' ||
-            key === 'sceneSearch.commentPreviewVisible') {
+            key === 'sceneSearch.commentPreviewVisible' ||
+            key === 'sceneSearch.miniCommentVisible' ||
+            key === 'sceneSearch.commentListVisible') {
           return typeof value === 'boolean';
         }
         if (key === 'sceneSearch.miniCommentMode') {
@@ -421,6 +436,12 @@ const Config = (() => {
         if (key === 'sceneSearch.idleHideSeconds') {
           return typeof value === 'number' && Number.isFinite(value) &&
             value >= 0 && value <= 30 && Number.isInteger(value * 2);
+        }
+        if (key === 'sceneSearch.commentListBackgroundOpacity') {
+          return Number.isSafeInteger(value) && value >= 0 && value <= 100;
+        }
+        if (key === 'sceneSearch.thumbnailScale') {
+          return Number.isSafeInteger(value) && value >= 50 && value <= 200;
         }
         if (key === 'sceneSearch.controlsReveal') {
           return ['hover-focus', 'click', 'always'].includes(value);
@@ -483,6 +504,74 @@ const Config = (() => {
       storage: localStorage
     }
   );
+  config.hasStoredValue = function(key) {
+    try {
+      const text = this.storage[this.getStorageKey(key)];
+      if (typeof text !== 'string') { return false; }
+      const value = JSON.parse(text);
+      return Object.prototype.hasOwnProperty.call(this.default,key) &&
+        typeof value === typeof this.default[key] && this.options.validateImport(key,value);
+    } catch (_) { return false; }
+  };
+  config.resolveSceneSearch = function() {
+    return typeof SceneSearchPreferences === 'undefined' ? null :
+      SceneSearchPreferences.resolve(key=>this.getValue(key),key=>this.hasStoredValue(key));
+  };
+  config.persistSceneSearchSelection = function(values) {
+    if(this.readonly) { throw new Error('設定は読み取り専用です'); }
+    const entries=Object.entries(values).map(([key,value])=>{
+      if(!key.startsWith('sceneSearch.') || !Object.prototype.hasOwnProperty.call(this.default,key) ||
+        typeof value!==typeof this.default[key] || !this.options.validateImport(key,value)){
+        throw new TypeError('無効なシーンサーチ設定: '+key);
+      }
+      const storageKey=this.getStorageKey(key);
+      return {key,value,storageKey,before:this.storage[storageKey],json:JSON.stringify(value)};
+    });
+    const written=[];
+    try {
+      for(const entry of entries){
+        written.push(entry);
+        this.storage[entry.storageKey]=entry.json;
+        if(this.storage[entry.storageKey]!==entry.json) { throw new Error('設定を保存できません: '+entry.key); }
+      }
+    } catch(error) {
+      for(const entry of written.reverse()){
+        try {
+          if(entry.before===undefined){delete this.storage[entry.storageKey];}
+          else {this.storage[entry.storageKey]=entry.before;}
+        } catch (_) { /* Preserve the write error; never report success. */ }
+      }
+      throw error;
+    }
+    for(const {key,value} of entries){
+      this._data[key]=value;
+      if(!this.silently){this._changed.set(key,value);}
+    }
+    if(!this.silently && entries.length){this._onChange();}
+  };
+  config.import = function(data) {
+    let input=data;
+    if(data && typeof data==='object' && !Array.isArray(data) && typeof SceneSearchPreferences!=='undefined'){
+      const owns=key=>Object.prototype.hasOwnProperty.call(data,key);
+      const resolved=SceneSearchPreferences.resolve(key=>data[key],owns);
+      input={...data};
+      for(const [key,value] of [
+        ['sceneSearch.presentation.normal',resolved.normal],
+        ['sceneSearch.presentation.fullscreen',resolved.fullscreen],
+        ['sceneSearch.miniCommentVisible',resolved.miniVisible]
+      ]) { if(!owns(key)) input[key]=value; }
+    }
+    return Object.getPrototypeOf(this).import.call(this,input);
+  };
+  config.export = function(isAll=false) {
+    const data=Object.getPrototypeOf(this).export.call(this,isAll);
+    for(const key of ['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
+      'sceneSearch.miniCommentVisible']) {
+      if(this.hasStoredValue(key)){data[key]=this.getValue(key);}
+    }
+    return data;
+  };
+  return config;
 })();
 Config.exportConfig = () => Config.export();
 Config.importConfig = v => Config.import(v);

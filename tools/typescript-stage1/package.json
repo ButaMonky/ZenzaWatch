@@ -1,0 +1,14 @@
+{
+  "name": "zenzawatch-scene-typescript",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "nico:emit": "tsc --project tsconfig.scui.json",
+    "nico:sync": "npm run nico:emit && node scripts/sync-scui.mjs --write",
+    "nico:verify": "npm run nico:emit && node scripts/sync-scui.mjs --check"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

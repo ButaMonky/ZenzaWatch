@@ -113,8 +113,18 @@ class ModernAdvancedSettingsModel {
           ]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
         ['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
           type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
-        ['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示（流れる表示・一覧共通）',{
-          description:'ONはサムネイルの流れるミニコメントと一覧を表示、OFFは両方を非表示にします。右側の動画コメント欄とは別です。'}],
+        ['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示',{
+          description:'ミニコメントとコメントプレビューの共通スイッチです。OFFの間は両方を隠し、下の個別設定は保持します。右側の動画コメント欄とは別です。'}],
+        ['sceneSearch.miniCommentVisible','ミニコメントを表示する',{
+          description:'サムネイル画像上のミニコメントを表示します。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
+        ['sceneSearch.commentListVisible','コメントプレビューを表示する',{
+          description:'コメントボタンで一覧を開けるようにします。ONにしても一覧は自動では開きません。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
+        ['sceneSearch.commentListBackgroundOpacity','コメント一覧の背景の濃さ',{
+          ...slider(0,100,1),unit:'%',
+          description:'一覧の背景だけを調整します。文字の濃さは変わりません。0%は透明、100%は不透明です。すべての表示方式で、通常表示・全画面共通です。'}],
+        ['sceneSearch.thumbnailScale','サムネイルの大きさ',{
+          ...slider(50,200,1),unit:'%',
+          description:'サムネイル画像と画像上のミニコメントを一緒に拡大・縮小します。操作ボタンの大きさは変わりません。画面に収まる範囲で表示します。すべての表示方式で、通常表示・全画面共通です。'}],
         ['sceneSearch.miniCommentMode','画像上のミニコメントの表示方式',{
           ...select([
             ['flow','流れる（旧版と同じ）'],
@@ -133,9 +143,9 @@ class ModernAdvancedSettingsModel {
           ...select([
             ['off','無効（動きなし）'],['subtle','控えめ（推奨）'],['full','通常']
           ])}],
-        ['sceneSearch.idleHideSeconds','サムネイルを自動で隠すまでの時間',{
+        ['sceneSearch.idleHideSeconds','プレビューを自動で隠すまでの時間',{
           ...slider(0,30,0.5),unit:'秒',
-          description:'シークバー上にマウスを置き続けたとき、同じサムネイルを表示する時間です。既定2秒。0秒にすると自動非表示を無効化します。ピン固定・ドラッグ・ボタン操作中は隠しません。'}]
+          description:'シークバー上にマウスを置き続けたとき、同じプレビューを表示する時間です。画像とコメント一覧で共通です。既定2秒。0秒にすると自動非表示を無効化します。ピン固定・ドラッグ・ボタン操作中は隠しません。'}]
       ]),
       ...group('画面・映像','スクリーンショット',[
         ['screenshot.prefix','保存ファイル名の先頭に追加する文字',{type:'text',
@@ -350,6 +360,8 @@ class ModernAdvancedSettingsModel {
       'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
       'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
     const direct={
+      'sceneSearch.miniCommentVisible':'sceneSearch.commentPreviewVisible',
+      'sceneSearch.commentListVisible':'sceneSearch.commentPreviewVisible',
       'supporterCredit.voice':'supporterCredit.enable',
       'supporterCredit.gift':'supporterCredit.enable',
       'supporterCredit.skipInPlaylist':'supporterCredit.enable',
@@ -523,6 +535,14 @@ class ModernAdvancedSettingsModel {
     return [...entries,...aliases];
   }
   _liveValue(id) {
+    if(typeof this.config.resolveSceneSearch==='function'){
+      const scene=this.config.resolveSceneSearch();
+      if(scene){
+        if(id==='sceneSearch.presentation.normal')return scene.normal;
+        if(id==='sceneSearch.presentation.fullscreen')return scene.fullscreen;
+        if(id==='sceneSearch.miniCommentVisible')return scene.miniVisible;
+      }
+    }
     const v=typeof this.config.getValue==='function'?
       this.config.getValue(id):this.config.props?.[id];
     return ModernAdvancedSettingsModel._clone(v);
@@ -644,7 +664,9 @@ class ModernAdvancedSettingsModel {
     try {
       for(const {id,value} of changes) {
         attempted.push(id);
-        this.config.setValue(id,ModernAdvancedSettingsModel._clone(value));
+        if(id.startsWith('sceneSearch.') && typeof this.config.persistSceneSearchSelection==='function'){
+          this.config.persistSceneSearchSelection({[id]:ModernAdvancedSettingsModel._clone(value)});
+        }else {this.config.setValue(id,ModernAdvancedSettingsModel._clone(value));}
         // DataStorage.setValue catches localStorage exceptions and can update
         // memory even when the disk write fails. Never report success unless
         // the persisted value matches the requested change.

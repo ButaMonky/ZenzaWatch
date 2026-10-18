@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmitOnError": true,
+    "types": [],
+    "rootDir": "nico-src",
+    "outDir": ".generated/scui"
+  },
+  "include": [
+    "nico-src/SceneSearch*.ts"
+  ]
+}

@@ -223,7 +223,7 @@ assert.strictEqual(h.pendingTimerCount(), 0);
 
 ## 実装状況
 
-2026-10-18: Task1〜6の実装、独立レビュー指摘の修正、最終検証を完了。確認版2.7.306-task801は実機確認待ち。統合・公開pushは未実施。検証結果と計画との差分は同ディレクトリのscene-search-redesign-validation.mdを参照。
+2026-10-18: Task1〜6の実装と独立レビュー後、実機指摘を2.7.307〜311で修復。ユーザーが2.7.311の追従停止・自動非表示の修復を確認した。統合前の全体テストは実行時timeoutを10秒として3282 passing / 78 pending / 0 failing、nico:verifyも成功。公開pushは未実施。検証結果と計画との差分は同ディレクトリのscene-search-redesign-validation.mdを参照。
 
 ## 自己レビューと受け渡し
 

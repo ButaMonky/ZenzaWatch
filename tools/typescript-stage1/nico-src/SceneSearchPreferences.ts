@@ -19,7 +19,8 @@ export class SceneSearchPreferences {
    const result=old==='00'?'legacy':old==='01'||old==='06'?'follow':'fixed';
    migration.push({key,oldValue:old,newValue:result});return result;
   };
-  const enabled=read('sceneSearch.enabled')!==false;
+  const enabled=hasSaved('sceneSearch.enabled')?read('sceneSearch.enabled')!==false:
+    read('sceneSearch.enabled')!==false&&read('ui.scene.panel')!==false;
   const master=enabled&&read('sceneSearch.commentPreviewVisible')!==false;
   const oldMini=read('sceneSearch.miniCommentMode');
   const miniVisible=hasSaved('sceneSearch.miniCommentVisible')?

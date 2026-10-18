@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.64-task801
+// @version     0.3.65-task801
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaAdvancedSettings.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-18 15:21Z
+// build: 2026-10-18 16:03Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -3020,7 +3020,8 @@ class SceneSearchPreferences {
 						migration.push({ key, oldValue: old, newValue: result });
 						return result;
 				};
-				const enabled = read('sceneSearch.enabled') !== false;
+				const enabled = hasSaved('sceneSearch.enabled') ? read('sceneSearch.enabled') !== false :
+						read('sceneSearch.enabled') !== false && read('ui.scene.panel') !== false;
 				const master = enabled && read('sceneSearch.commentPreviewVisible') !== false;
 				const oldMini = read('sceneSearch.miniCommentMode');
 				const miniVisible = hasSaved('sceneSearch.miniCommentVisible') ?
@@ -3083,19 +3084,19 @@ class UiVisibilityRegistry {
 				description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
 			{key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
 				description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
-			{key:'ui.scene.panel',scope:'scene',label:'シーンサーチのプレビュー枠',
+			{key:'ui.scene.panel',scope:'scene',hidden:true,label:'シーンサーチのプレビュー枠',
 				icon:'▣',selector:'.zenzaSceneSearchHost'},
-			{key:'ui.scene.pin',scope:'scene',label:'シーンサーチのピン固定ボタン',
+			{key:'ui.scene.pin',scope:'scene',hidden:true,label:'シーンサーチのピン固定ボタン',
 				icon:'📌',selector:'.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]'},
 			{key:'ui.scene.seekArrows',scope:'scene',label:'シーンサーチの前後矢印',
 				icon:'↔',selector:'.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]'},
-			{key:'ui.scene.seekSeconds',scope:'scene',label:'シーンサーチの移動秒数ボタン',
+			{key:'ui.scene.seekSeconds',scope:'scene',hidden:true,label:'シーンサーチの移動秒数ボタン',
 				icon:'5s',selector:'.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]'},
 			{key:'ui.scene.commentToggle',scope:'scene',label:'シーンサーチのコメント表示切替ボタン',
 				icon:'💬',selector:'.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]'},
 			{key:'ui.scene.commentSearch',scope:'scene',label:'シーンサーチのコメント検索ボタン',
 				icon:'⌕',selector:'.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]'},
-			{key:'ui.scene.more',scope:'scene',label:'シーンサーチの操作メニュー展開ボタン',
+			{key:'ui.scene.more',scope:'scene',hidden:true,label:'シーンサーチの操作メニュー展開ボタン',
 				icon:'⋯',selector:'.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]'},
 			{key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
 			{key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
@@ -3126,7 +3127,7 @@ class UiVisibilityRegistry {
 		return this.ITEMS.map(item=>({
 			id:item.key,label:item.label+'を表示',category:'画面・映像',
 			subcategory:'表示・非表示',type:'boolean',
-			icon:item.icon,visibilityScope:item.scope,
+			icon:item.icon,visibilityScope:item.scope,hidden:item.hidden===true,
 			description:item.description||'画面上の表示のみ切り替えます。機能・操作コマンド自体は削除しません。'
 		}));
 	}
@@ -3137,8 +3138,11 @@ class UiVisibilityRegistry {
 	static apply(config,root,key,{beforeHide,afterApply}={}) {
 		const entry=this.get(key);
 		if(!entry || !root || !config){return 0;}
-		const visible=(typeof config.getValue==='function'?
-			config.getValue(key):config.props?.[key])!==false;
+		if(key==='ui.scene.panel'&&root.matches?.('.zenzaSceneSharedPreview'))return 0;
+		const read=k=>typeof config.getValue==='function'?config.getValue(k):config.props?.[k];
+		const sceneEnabled=entry.scope!=='scene'||(config.resolveSceneSearch?.()?.enabled??read('sceneSearch.enabled')!==false);
+		const visible=(entry.scope!=='scene'||sceneEnabled)&&
+			(key==='ui.scene.panel'&&(typeof config.resolveSceneSearch==='function'||read('sceneSearch.enabled')!==undefined)?sceneEnabled:read(key)!==false);
 		const nodes=[];
 		if(root.matches?.(entry.selector)){nodes.push(root);}
 		root.querySelectorAll?.(entry.selector).forEach(node=>nodes.push(node));
@@ -3185,6 +3189,10 @@ class UiVisibilityRegistry {
 			}
 		};
 		const subscriptions=[];
+		if(items.some(item=>item.scope==='scene')){
+			const listener=()=>api.refresh();config.onkey?.('sceneSearch.enabled',listener);
+			subscriptions.push(['sceneSearch.enabled',listener]);
+		}
 		for(const item of items){
 			const listener=()=>api.apply(item.key);
 			config.onkey?.(item.key,listener);
@@ -4085,6 +4093,7 @@ const Config = (() => {
 			const resolved=SceneSearchPreferences.resolve(key=>data[key],owns);
 			input={...data};
 			for(const [key,value] of [
+				['sceneSearch.enabled',resolved.enabled],
 				['sceneSearch.presentation.normal',resolved.normal],
 				['sceneSearch.presentation.fullscreen',resolved.fullscreen],
 				['sceneSearch.miniCommentVisible',resolved.miniVisible]
@@ -4094,7 +4103,7 @@ const Config = (() => {
 	};
 	config.export = function(isAll=false) {
 		const data=Object.getPrototypeOf(this).export.call(this,isAll);
-		for(const key of ['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
+		for(const key of ['sceneSearch.enabled','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
 			'sceneSearch.miniCommentVisible']) {
 			if(this.hasStoredValue(key)){data[key]=this.getValue(key);}
 		}
@@ -6945,9 +6954,9 @@ class ModernAdvancedSettingsModel {
 						['hidden','旧版の非表示設定（引き継ぎ用）']
 					]),
 					description:'ミニコメントの動き方を選びます。表示のON/OFFは上の子スイッチを使います。旧版の静止表示設定も引き継ぎます。'}],
-				['enableCommentPreview','シーンサーチのコメントを一覧表示にする',{
+				['enableCommentPreview','コメントプレビューを開いた状態にする',{
 					description:'コメントボタンによる一覧の開閉と共通です。追従・固定は画像の隣に一覧を表示し、従来表示は切り替えます。上の許可スイッチがOFFの間は閉じた状態になります。'}],
-				['sceneSearch.controlsReveal','追加ボタンの開き方',{
+				['sceneSearch.controlsReveal','追加ボタンの開き方',{hidden:true,
 					...select([
 						['hover-focus','マウスを乗せるかフォーカスで開く'],
 						['click','クリックで開く'],['always','常に表示']
@@ -7165,6 +7174,11 @@ class ModernAdvancedSettingsModel {
 		return ['再生・音声','再生動作'];
 	}
 	static dependencyFor(key) {
+		if(key==='ui.scene.commentToggle'||key==='ui.scene.commentSearch'||key==='enableCommentPreview')return 'sceneSearch.commentListVisible';
+		if(key.startsWith('ui.scene.'))return 'sceneSearch.enabled';
+		if(key==='sceneSearch.miniCommentMode')return 'sceneSearch.miniCommentVisible';
+		if(key==='sceneSearch.commentListScale'||key==='sceneSearch.commentListBackgroundOpacity')return 'sceneSearch.commentListVisible';
+		if(key.startsWith('sceneSearch.')&&!['sceneSearch.enabled','sceneSearch.commentPreviewVisible','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible'].includes(key))return 'sceneSearch.enabled';
 		if(key.startsWith('commentHistory.') && key!=='commentHistory.enabled') {
 			return 'commentHistory.enabled';
 		}
@@ -7335,12 +7349,18 @@ class ModernAdvancedSettingsModel {
 			return original?{...original,category,subcategory,icon,visibilityScope:id.startsWith('sceneSearch.')?'scene-comments':'shared',
 				sharedWith:original.category+' / '+original.subcategory}:null;
 		}).filter(Boolean);
-		return [...entries,...aliases];
+		const scene=entries.filter(d=>d.visibilityScope==='scene');
+		const sceneAliases=aliases.filter(d=>d.visibilityScope==='scene-comments');
+		const firstScene=entries.findIndex(d=>d.visibilityScope==='scene');
+		const ordered=entries.filter(d=>d.visibilityScope!=='scene');
+		ordered.splice(firstScene<0?ordered.length:firstScene,0,...sceneAliases,...scene);
+		return [...ordered,...aliases.filter(d=>d.visibilityScope!=='scene-comments')];
 	}
 	_liveValue(id) {
 		if(typeof this.config.resolveSceneSearch==='function'){
 			const scene=this.config.resolveSceneSearch();
 			if(scene){
+				if(id==='sceneSearch.enabled')return scene.enabled;
 				if(id==='sceneSearch.presentation.normal')return scene.normal;
 				if(id==='sceneSearch.presentation.fullscreen')return scene.fullscreen;
 				if(id==='sceneSearch.miniCommentVisible')return scene.miniVisible;
@@ -9082,7 +9102,7 @@ class ModernAdvancedSettingsUI {
 			['legacy','従来表示','コメントボタンで画像とコメントプレビューを切り替えます。']
 		]){
 			const b=this._button('','data-zw-scene-layout',value,'zw-scui-layout-option');
-			b.dataset.zwSceneLayoutMode=mode;b.disabled=linked;
+			b.dataset.zwSceneLayoutMode=mode;b.disabled=linked||!this.model.isEnabled(key);
 			b.setAttribute('aria-pressed',String(current===value));b.setAttribute('aria-label',label);
 			const mini=this.doc.createElement('span');mini.className='zw-scui-mini';mini.dataset.layout=value;
 			mini.innerHTML='<i><span>☁</span></i><b>☰</b><em></em>';

@@ -47,19 +47,19 @@ class UiVisibilityRegistry {
         description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
       // SCUI-07: Scene-search controls have their own visibility scope.
       // Hiding a button changes appearance only, never disables its command.
-      {key:'ui.scene.panel',scope:'scene',label:'シーンサーチのプレビュー枠',
+      {key:'ui.scene.panel',scope:'scene',hidden:true,label:'シーンサーチのプレビュー枠',
         icon:'▣',selector:'.zenzaSceneSearchHost'},
-      {key:'ui.scene.pin',scope:'scene',label:'シーンサーチのピン固定ボタン',
+      {key:'ui.scene.pin',scope:'scene',hidden:true,label:'シーンサーチのピン固定ボタン',
         icon:'📌',selector:'.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]'},
       {key:'ui.scene.seekArrows',scope:'scene',label:'シーンサーチの前後矢印',
         icon:'↔',selector:'.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]'},
-      {key:'ui.scene.seekSeconds',scope:'scene',label:'シーンサーチの移動秒数ボタン',
+      {key:'ui.scene.seekSeconds',scope:'scene',hidden:true,label:'シーンサーチの移動秒数ボタン',
         icon:'5s',selector:'.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]'},
       {key:'ui.scene.commentToggle',scope:'scene',label:'シーンサーチのコメント表示切替ボタン',
         icon:'💬',selector:'.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]'},
       {key:'ui.scene.commentSearch',scope:'scene',label:'シーンサーチのコメント検索ボタン',
         icon:'⌕',selector:'.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]'},
-      {key:'ui.scene.more',scope:'scene',label:'シーンサーチの操作メニュー展開ボタン',
+      {key:'ui.scene.more',scope:'scene',hidden:true,label:'シーンサーチの操作メニュー展開ボタン',
         icon:'⋯',selector:'.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]'},
       {key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
       {key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
@@ -90,7 +90,7 @@ class UiVisibilityRegistry {
     return this.ITEMS.map(item=>({
       id:item.key,label:item.label+'を表示',category:'画面・映像',
       subcategory:'表示・非表示',type:'boolean',
-      icon:item.icon,visibilityScope:item.scope,
+      icon:item.icon,visibilityScope:item.scope,hidden:item.hidden===true,
       description:item.description||'画面上の表示のみ切り替えます。機能・操作コマンド自体は削除しません。'
     }));
   }
@@ -101,8 +101,13 @@ class UiVisibilityRegistry {
   static apply(config,root,key,{beforeHide,afterApply}={}) {
     const entry=this.get(key);
     if(!entry || !root || !config){return 0;}
-    const visible=(typeof config.getValue==='function'?
-      config.getValue(key):config.props?.[key])!==false;
+    // The semantic preview controller owns the root's hidden state (idle/pin/
+    // parent visibility). Do not restore an obsolete panel snapshot over it.
+    if(key==='ui.scene.panel'&&root.matches?.('.zenzaSceneSharedPreview'))return 0;
+    const read=k=>typeof config.getValue==='function'?config.getValue(k):config.props?.[k];
+    const sceneEnabled=entry.scope!=='scene'||(config.resolveSceneSearch?.()?.enabled??read('sceneSearch.enabled')!==false);
+    const visible=(entry.scope!=='scene'||sceneEnabled)&&
+      (key==='ui.scene.panel'&&(typeof config.resolveSceneSearch==='function'||read('sceneSearch.enabled')!==undefined)?sceneEnabled:read(key)!==false);
     const nodes=[];
     if(root.matches?.(entry.selector)){nodes.push(root);}
     root.querySelectorAll?.(entry.selector).forEach(node=>nodes.push(node));
@@ -151,6 +156,10 @@ class UiVisibilityRegistry {
       }
     };
     const subscriptions=[];
+    if(items.some(item=>item.scope==='scene')){
+      const listener=()=>api.refresh();config.onkey?.('sceneSearch.enabled',listener);
+      subscriptions.push(['sceneSearch.enabled',listener]);
+    }
     for(const item of items){
       const listener=()=>api.apply(item.key);
       config.onkey?.(item.key,listener);

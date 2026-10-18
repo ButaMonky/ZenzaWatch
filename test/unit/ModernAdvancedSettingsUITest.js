@@ -1081,7 +1081,7 @@ describe('Task318 clear icon previews and safe container visibility',()=>{
     const shield=h.q('[data-zw-id="ui.hover.ngFilter"] .zw-modern-visibility-icon svg');
     assert(shield && shield.querySelectorAll('path').length===2);
     assert.strictEqual(h.all('[data-zw-visibility-icon]').length,
-      h.ui.model.sectionDescriptors('画面・映像','表示・非表示').length);
+      h.ui.model.sectionDescriptors('画面・映像','表示・非表示').filter(d=>!d.hidden).length);
     assert(h.all('[data-zw-visibility-icon]').length>=30);
     h.destroy();
   });
@@ -1117,7 +1117,7 @@ describe('Task318 centralized visibility groups',()=>{
   };
   it('presents every manifest entry with an icon and stable groups',()=>{
     const h=boot();open(h);
-    const registry=h.ui.model.descriptors.filter(item=>item.visibilityScope);
+    const registry=h.ui.model.descriptors.filter(item=>item.visibilityScope&&!item.hidden);
     assert(registry.length>=30);
     assert.strictEqual(h.all('[data-zw-visibility-icon]').length,registry.length+7);
     assert.deepStrictEqual(h.all('[data-zw-visibility-group]').map(x=>x.dataset.zwVisibilityGroup),

@@ -561,6 +561,7 @@ const Config = (() => {
       const resolved=SceneSearchPreferences.resolve(key=>data[key],owns);
       input={...data};
       for(const [key,value] of [
+        ['sceneSearch.enabled',resolved.enabled],
         ['sceneSearch.presentation.normal',resolved.normal],
         ['sceneSearch.presentation.fullscreen',resolved.fullscreen],
         ['sceneSearch.miniCommentVisible',resolved.miniVisible]
@@ -570,7 +571,7 @@ const Config = (() => {
   };
   config.export = function(isAll=false) {
     const data=Object.getPrototypeOf(this).export.call(this,isAll);
-    for(const key of ['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
+    for(const key of ['sceneSearch.enabled','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
       'sceneSearch.miniCommentVisible']) {
       if(this.hasStoredValue(key)){data[key]=this.getValue(key);}
     }

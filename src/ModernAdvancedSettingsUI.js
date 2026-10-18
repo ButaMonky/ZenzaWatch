@@ -1595,7 +1595,7 @@ class ModernAdvancedSettingsUI {
       ['legacy','従来表示','コメントボタンで画像とコメントプレビューを切り替えます。']
     ]){
       const b=this._button('','data-zw-scene-layout',value,'zw-scui-layout-option');
-      b.dataset.zwSceneLayoutMode=mode;b.disabled=linked;
+      b.dataset.zwSceneLayoutMode=mode;b.disabled=linked||!this.model.isEnabled(key);
       b.setAttribute('aria-pressed',String(current===value));b.setAttribute('aria-label',label);
       const mini=this.doc.createElement('span');mini.className='zw-scui-mini';mini.dataset.layout=value;
       mini.innerHTML='<i><span>☁</span></i><b>☰</b><em></em>';

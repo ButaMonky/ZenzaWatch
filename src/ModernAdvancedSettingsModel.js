@@ -140,9 +140,9 @@ class ModernAdvancedSettingsModel {
             ['hidden','旧版の非表示設定（引き継ぎ用）']
           ]),
           description:'ミニコメントの動き方を選びます。表示のON/OFFは上の子スイッチを使います。旧版の静止表示設定も引き継ぎます。'}],
-        ['enableCommentPreview','シーンサーチのコメントを一覧表示にする',{
+        ['enableCommentPreview','コメントプレビューを開いた状態にする',{
           description:'コメントボタンによる一覧の開閉と共通です。追従・固定は画像の隣に一覧を表示し、従来表示は切り替えます。上の許可スイッチがOFFの間は閉じた状態になります。'}],
-        ['sceneSearch.controlsReveal','追加ボタンの開き方',{
+        ['sceneSearch.controlsReveal','追加ボタンの開き方',{hidden:true,
           ...select([
             ['hover-focus','マウスを乗せるかフォーカスで開く'],
             ['click','クリックで開く'],['always','常に表示']
@@ -361,6 +361,11 @@ class ModernAdvancedSettingsModel {
     return ['再生・音声','再生動作'];
   }
   static dependencyFor(key) {
+    if(key==='ui.scene.commentToggle'||key==='ui.scene.commentSearch'||key==='enableCommentPreview')return 'sceneSearch.commentListVisible';
+    if(key.startsWith('ui.scene.'))return 'sceneSearch.enabled';
+    if(key==='sceneSearch.miniCommentMode')return 'sceneSearch.miniCommentVisible';
+    if(key==='sceneSearch.commentListScale'||key==='sceneSearch.commentListBackgroundOpacity')return 'sceneSearch.commentListVisible';
+    if(key.startsWith('sceneSearch.')&&!['sceneSearch.enabled','sceneSearch.commentPreviewVisible','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible'].includes(key))return 'sceneSearch.enabled';
     if(key.startsWith('commentHistory.') && key!=='commentHistory.enabled') {
       return 'commentHistory.enabled';
     }
@@ -541,12 +546,18 @@ class ModernAdvancedSettingsModel {
       return original?{...original,category,subcategory,icon,visibilityScope:id.startsWith('sceneSearch.')?'scene-comments':'shared',
         sharedWith:original.category+' / '+original.subcategory}:null;
     }).filter(Boolean);
-    return [...entries,...aliases];
+    const scene=entries.filter(d=>d.visibilityScope==='scene');
+    const sceneAliases=aliases.filter(d=>d.visibilityScope==='scene-comments');
+    const firstScene=entries.findIndex(d=>d.visibilityScope==='scene');
+    const ordered=entries.filter(d=>d.visibilityScope!=='scene');
+    ordered.splice(firstScene<0?ordered.length:firstScene,0,...sceneAliases,...scene);
+    return [...ordered,...aliases.filter(d=>d.visibilityScope!=='scene-comments')];
   }
   _liveValue(id) {
     if(typeof this.config.resolveSceneSearch==='function'){
       const scene=this.config.resolveSceneSearch();
       if(scene){
+        if(id==='sceneSearch.enabled')return scene.enabled;
         if(id==='sceneSearch.presentation.normal')return scene.normal;
         if(id==='sceneSearch.presentation.fullscreen')return scene.fullscreen;
         if(id==='sceneSearch.miniCommentVisible')return scene.miniVisible;

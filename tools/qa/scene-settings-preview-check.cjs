@@ -10,7 +10,7 @@ const out=path.resolve('tools/typescript-stage1/.generated/scene-settings');fs.m
  for(const e of h.panel.querySelectorAll('input[type=checkbox]'))e.toggleAttribute('checked',e.checked);
  let html=h.dom.serialize();h.dispose();
  const script=source+`;const values=${defaults};const ui=Object.create(ModernAdvancedSettingsUI.prototype);
- Object.assign(ui,{doc:document,root:document.querySelector('.zw-modern-root'),cards:document.querySelector('[data-zw-cards]'),_sceneLayoutTab:'normal',model:{get:k=>values[k],isDifferentFromDefault:k=>false,config:{resolveSceneSearch:()=>({})}}});
+ Object.assign(ui,{doc:document,root:document.querySelector('.zw-modern-root'),cards:document.querySelector('[data-zw-cards]'),_sceneLayoutTab:'normal',model:{get:k=>values[k],isEnabled:()=>values['sceneSearch.enabled']!==false,isDifferentFromDefault:k=>false,config:{resolveSceneSearch:()=>({})}}});
  const rows=[...ui.cards.querySelectorAll('[data-zw-id]')];ui.cards.replaceChildren(ui._createSceneSettingsPanel(rows));ui._updateSceneSettingsPreview();
  window.changeSetting=(key,value)=>{values[key]=value;ui._updateSceneSettingsPreview();};
  document.querySelector('[data-zw-title]').textContent='シーンサーチ';

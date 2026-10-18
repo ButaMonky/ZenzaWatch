@@ -902,7 +902,7 @@ class SceneSearchIntegrationBridge {
         }
         // Saved presence participates in migration even when the raw default is unchanged.
         const presenceSensitive=typeof config.resolveSceneSearch==='function'&&[
-          'sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen','sceneSearch.miniCommentVisible'
+          'sceneSearch.enabled','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen','sceneSearch.miniCommentVisible'
         ].includes(key);
         if(Object.is(value,config.getValue(key))&&!presenceSensitive)continue;
         saved[sk]=JSON.stringify(value);before[sk]=JSON.stringify(config.getValue(key));

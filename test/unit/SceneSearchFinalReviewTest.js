@@ -4,9 +4,9 @@ const {fixture:playerFixture}=require('../helpers/scenePlayerFixture');
 const {fixture:settingsFixture}=require('../helpers/sceneSearchSettingsFixture');
 const {loadClass,createContext}=require('../helpers/extractSource');
 const wait=()=>new Promise(resolve=>setTimeout(resolve,25));
-async function live(old='02'){
+async function live(old='02',extra={}){
  const s=settingsFixture({'SC_sceneSearch.layout.normal':JSON.stringify(old),
-  'SC_sceneSearch.miniCommentMode':'"hidden"'});await s.config.restore();
+  'SC_sceneSearch.miniCommentMode':'"hidden"',...extra});await s.config.restore();
  const view=new EventEmitter();
  const h=playerFixture('00','normal',{beforeAttach({bar,binding}){
   bar._playerConfig=s.config;Object.assign(view,{videoControlBar:bar});binding.view=view;
@@ -15,6 +15,16 @@ async function live(old='02'){
 }
 describe('Task801 final review integration regressions',function(){
  this.timeout(20000);
+ for(const channel of ['saved','storage'])it('restores an inherited hidden panel when an explicit default is saved through '+channel,async()=>{
+  const h=await live('02',{'SC_ui.scene.panel':'false'});try{
+   h.move(400);assert(h.bridge._active.root.hidden);
+   const key='sceneSearch.enabled';h.storage[h.config.getStorageKey(key)]='true';
+   h.dom.window.dispatchEvent(channel==='saved'?
+    new h.dom.window.CustomEvent('ZenzaWatch-advanced-settings-saved',{detail:{keys:[key]}}):
+    new h.dom.window.StorageEvent('storage',{key:h.config.getStorageKey(key)}));
+   await wait();assert(!h.bridge._active.root.hidden);assert.notStrictEqual(h.bridge._active.root.style.display,'none');
+  }finally{h.close();}
+ });
  it('holds placement using separate real View and Dialog event owners and releases listeners',async()=>{
   const h=await live();try{
    h.player.screenMode='small';h.move(400);await wait();

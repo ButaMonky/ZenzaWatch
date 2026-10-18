@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-17 07:55Z 7eebb97
+// build: 2026-10-18 18:26Z e686992
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.282-task712';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-17 07:55Z 7eebb97';
+    var BUILD = '2026-10-18 18:26Z e686992';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -12871,10 +12871,12 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 				const midThumbnailThreshold = 23608629; // .Mのついた最小ID?
 				data.data.forEach(item => {
 					let description = item.description ? item.description.replace(/<.*?>/g, '') : '';
-					if (item.thumbnailUrl.indexOf('.M') >= 0) {
-						item.thumbnail_url = item.thumbnail_url.replace(/\.M$/, '');
+					if (typeof item.thumbnailUrl === 'string' &&
+						item.thumbnailUrl.indexOf('.M') >= 0) {
+						item.thumbnailUrl = item.thumbnailUrl.replace(/\.M$/, '');
 						item.is_middle_thumbnail = true;
-					} else if (item.thumbnailUrl.indexOf('.M') < 0 &&
+					} else if (typeof item.thumbnailUrl === 'string' &&
+						item.thumbnailUrl.indexOf('.M') < 0 &&
 						item.contentId.indexOf('sm') === 0) {
 						let _id = parseInt(item.contentId.substring(2), 10);
 						if (_id >= midThumbnailThreshold) {

@@ -996,10 +996,14 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const midThumbnailThreshold = 23608629; // .Mのついた最小ID?
         data.data.forEach(item => {
           let description = item.description ? item.description.replace(/<.*?>/g, '') : '';
-          if (item.thumbnailUrl.indexOf('.M') >= 0) {
-            item.thumbnail_url = item.thumbnail_url.replace(/\.M$/, '');
+          // Snapshot API uses camelCase thumbnailUrl; thumbnail_url is our
+          // normalized output field, not a property on the API response.
+          if (typeof item.thumbnailUrl === 'string' &&
+            item.thumbnailUrl.indexOf('.M') >= 0) {
+            item.thumbnailUrl = item.thumbnailUrl.replace(/\.M$/, '');
             item.is_middle_thumbnail = true;
-          } else if (item.thumbnailUrl.indexOf('.M') < 0 &&
+          } else if (typeof item.thumbnailUrl === 'string' &&
+            item.thumbnailUrl.indexOf('.M') < 0 &&
             item.contentId.indexOf('sm') === 0) {
             let _id = parseInt(item.contentId.substring(2), 10);
             if (_id >= midThumbnailThreshold) {

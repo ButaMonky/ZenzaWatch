@@ -30,7 +30,7 @@ describe('scene placement in viewport coordinates',()=>{
     const before=JSON.stringify(input),r=compute(input),b=r.rect;
     assert(b.left>=8&&b.top>=8&&b.left+b.width<=width-8+.001&&b.top+b.height<=712);
     assert(r.imageScale>0&&r.imageScale<=scale/100);assert.strictEqual(JSON.stringify(input),before);
-    if(listOpen)assert(r.listWidth>=120);
+    if(listOpen)assert(r.listWidth>=160);
     assert.strictEqual(overlap(b,input.seekbar),0);
    }
  });

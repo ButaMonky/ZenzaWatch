@@ -92,9 +92,9 @@ class ModernAdvancedSettingsModel {
       ]),
       ...group('画面・映像','シーンサーチ',[
         ['sceneSearch.presentation.normal','通常表示のシーンサーチ',{
-          ...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示〈互換用〉']])}],
+          ...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示']])}],
         ['sceneSearch.presentation.fullscreen','全画面のシーンサーチ',{
-          ...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示〈互換用〉']])}],
+          ...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示']])}],
         ['sceneSearch.layout.normal','旧形式の通常表示',{hidden:true,
           ...select([
             ['00','00 旧式表示（検証中）'],
@@ -117,13 +117,17 @@ class ModernAdvancedSettingsModel {
           ]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
         ['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
           type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
+        ['sceneSearch.enabled','シーンサーチを表示',{
+          description:'シーンサーチ全体を表示します。OFFでもコメントの個別設定や大きさは保持します。'}],
+        ['sceneSearch.commentListScale','コメントプレビューの大きさ',{
+          ...slider(100,200,1),unit:'%',description:'文字サイズは変えず、表示領域を広げて一度に見えるコメントを増やします。画面に収まる範囲で適用します。'}],
         ['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示',{
           description:'ミニコメントとコメントプレビューの共通スイッチです。OFFの間は両方を隠し、下の個別設定は保持します。右側の動画コメント欄とは別です。'}],
         ['sceneSearch.miniCommentVisible','ミニコメントを表示する',{
           description:'サムネイル画像上のミニコメントを表示します。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
         ['sceneSearch.commentListVisible','コメントプレビューを表示する',{
           description:'コメントボタンで一覧を開けるようにします。ONにしても一覧は自動では開きません。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
-        ['sceneSearch.commentListBackgroundOpacity','コメント一覧の背景の濃さ',{
+        ['sceneSearch.commentListBackgroundOpacity','コメントプレビューの背景濃度',{
           ...slider(0,100,1),unit:'%',
           description:'一覧の背景だけを調整します。文字の濃さは変わりません。0%は透明、100%は不透明です。すべての表示方式で、通常表示・全画面共通です。'}],
         ['sceneSearch.thumbnailScale','サムネイルの大きさ',{
@@ -364,6 +368,7 @@ class ModernAdvancedSettingsModel {
       'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
       'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
     const direct={
+      'sceneSearch.commentPreviewVisible':'sceneSearch.enabled',
       'sceneSearch.miniCommentVisible':'sceneSearch.commentPreviewVisible',
       'sceneSearch.commentListVisible':'sceneSearch.commentPreviewVisible',
       'supporterCredit.voice':'supporterCredit.enable',
@@ -602,7 +607,7 @@ class ModernAdvancedSettingsModel {
       this.get('sceneSearch.layout.linkFullscreen')===true){return false;}
     const d=this.descriptor(id);
     return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
-      !!this.draft[d.dependsOn];
+      (!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
   }
   isDifferentFromDefault(id) {
     return this._byId.has(id) && !ModernAdvancedSettingsModel._same(

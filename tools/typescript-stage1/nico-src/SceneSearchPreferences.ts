@@ -2,7 +2,7 @@ type SceneLayout = 'follow'|'fixed'|'legacy';
 type ScenePreferences = {
  normal:SceneLayout; fullscreen:SceneLayout; linked:boolean; miniStyle:'flow'|'static';
  miniVisible:boolean; listVisible:boolean; miniEnabled:boolean; listAllowed:boolean;
- listOpen:boolean; opacity:number; scale:number;
+ listOpen:boolean; opacity:number; scale:number; listScale:number; enabled:boolean;
  migration:Array<{key:string;oldValue:string;newValue:SceneLayout}>;
 };
 export class SceneSearchPreferences {
@@ -19,7 +19,8 @@ export class SceneSearchPreferences {
    const result=old==='00'?'legacy':old==='01'||old==='06'?'follow':'fixed';
    migration.push({key,oldValue:old,newValue:result});return result;
   };
-  const master=read('sceneSearch.commentPreviewVisible')!==false;
+  const enabled=read('sceneSearch.enabled')!==false;
+  const master=enabled&&read('sceneSearch.commentPreviewVisible')!==false;
   const oldMini=read('sceneSearch.miniCommentMode');
   const miniVisible=hasSaved('sceneSearch.miniCommentVisible')?
     read('sceneSearch.miniCommentVisible')!==false:oldMini!=='hidden';
@@ -28,7 +29,7 @@ export class SceneSearchPreferences {
    const value=read(key);
    return typeof value==='number'&&Number.isSafeInteger(value)&&value>=min&&value<=max?value:fallback;
   };
-  return {normal:layout('normal'),fullscreen:layout('fullscreen'),
+  return {enabled,listScale:bounded('sceneSearch.commentListScale',100,200,100),normal:layout('normal'),fullscreen:layout('fullscreen'),
    linked:read('sceneSearch.layout.linkFullscreen')===true,
    miniStyle:oldMini==='static'?'static':'flow',miniVisible,listVisible,
    miniEnabled:master&&miniVisible,listAllowed:master&&listVisible,

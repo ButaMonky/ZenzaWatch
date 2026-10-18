@@ -137,7 +137,10 @@ class SceneSearchLayout00 {
             return;
         // The list replaces the entire thumbnail slot; keep native controls below it.
         seek.style.setProperty('--scui00-list-bottom', ((origin.bottom - rect.top) / scale + 4) + 'px');
-        seek.style.setProperty('--scui00-list-height', Math.max(24, Math.min(200, (rect.top - 12) / scale)) + 'px');
+        const listScale = Math.max(1, Math.min(2, (this.settings.getAppearance?.().listScale || 100) / 100));
+        const availableWidth = Math.max(1, ((this.document.defaultView?.innerWidth || 800) - 16) / scale);
+        seek.style.setProperty('--scui00-list-width', Math.min(350 * listScale, availableWidth) + 'px');
+        seek.style.setProperty('--scui00-list-height', Math.max(24, Math.min(200 * listScale, (rect.top - 12) / scale)) + 'px');
     }
     syncMiniGeometry() {
         const seek = this.seekOwner, tip = this.tooltip;
@@ -198,11 +201,13 @@ class SceneSearchLayout00 {
                 visibleLeft + (v - width) / 2);
         };
         const tooltipWidth = g.tooltipWidth;
-        const commentWidth = this.listMode ? Math.min(350, Math.max(120, viewportWidth - 16)) : 180 * this.appearanceScale;
+        const listScale = Math.max(1, Math.min(2, (this.settings.getAppearance?.().listScale || 100) / 100));
+        const commentWidth = this.listMode ? Math.min(350 * listScale, Math.max(1, (viewportWidth - 16) / g.scale)) : 180 * this.appearanceScale;
         const tooltipLeft = place(tooltipWidth);
         tip.style.setProperty('--scui00-position', tooltipLeft + 'px');
         // Flow overlays the image even when its wider controls stop at an edge.
-        const commentLeft = this.listMode ? place(commentWidth) : tooltipLeft + (tooltipWidth - commentWidth) / 2;
+        const commentLeft = this.listMode ? Math.max(-g.originLeft / g.scale, Math.min(place(commentWidth), (viewportWidth - g.originLeft) / g.scale - commentWidth)) :
+            tooltipLeft + (tooltipWidth - commentWidth) / 2;
         seek.style.setProperty('--scui00-comment-x', commentLeft + 'px');
     }
     dispose() {
@@ -221,6 +226,7 @@ class SceneSearchLayout00 {
         this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
         this.seekOwner?.style.removeProperty('--scui00-list-bottom');
         this.seekOwner?.style.removeProperty('--scui00-list-height');
+        this.seekOwner?.style.removeProperty('--scui00-list-width');
         this.lastImage = null;
         for (const { name, value, priority } of this.appearanceStyles) {
             if (value)
@@ -332,8 +338,8 @@ class SceneSearchLayout00 {
 }
 /* The native list remains scrollable with its original CSS and click actions. */
 .is-scui00-active .seekBarContainer.enableCommentPreview>.zenzaCommentPreview{
-  width:min(350px,calc(100vw - 16px))!important;
-  height:var(--scui00-list-height,200px)!important;max-height:200px!important;
+ width:min(var(--scui00-list-width,350px),calc(100vw - 16px))!important;
+ height:var(--scui00-list-height,200px)!important;max-height:calc(100vh - 16px)!important;
   bottom:var(--scui00-list-bottom,76px)!important;
   border-bottom:0!important;
   z-index:100!important;

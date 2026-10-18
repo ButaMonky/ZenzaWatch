@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.63-task801
+// @version     0.3.64-task801
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaAdvancedSettings.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-18 09:33Z
+// build: 2026-10-18 15:21Z
 /* eslint-disable */
 
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
@@ -3020,7 +3020,8 @@ class SceneSearchPreferences {
 						migration.push({ key, oldValue: old, newValue: result });
 						return result;
 				};
-				const master = read('sceneSearch.commentPreviewVisible') !== false;
+				const enabled = read('sceneSearch.enabled') !== false;
+				const master = enabled && read('sceneSearch.commentPreviewVisible') !== false;
 				const oldMini = read('sceneSearch.miniCommentMode');
 				const miniVisible = hasSaved('sceneSearch.miniCommentVisible') ?
 						read('sceneSearch.miniCommentVisible') !== false : oldMini !== 'hidden';
@@ -3029,7 +3030,7 @@ class SceneSearchPreferences {
 						const value = read(key);
 						return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
 				};
-				return { normal: layout('normal'), fullscreen: layout('fullscreen'),
+				return { enabled, listScale: bounded('sceneSearch.commentListScale', 100, 200, 100), normal: layout('normal'), fullscreen: layout('fullscreen'),
 						linked: read('sceneSearch.layout.linkFullscreen') === true,
 						miniStyle: oldMini === 'static' ? 'static' : 'flow', miniVisible, listVisible,
 						miniEnabled: master && miniVisible, listAllowed: master && listVisible,
@@ -3045,6 +3046,7 @@ class UiVisibilityRegistry {
 			['enableCommentPreview','comments-preview'],['enableHeatMap','comment-heatmap'],
 			['enableStoryboard','seek-thumbnail'],['enableStoryboardBar','scene-filmstrip'],
 			['enableAdDecoration','ad-crown'],
+			['sceneSearch.enabled','seek-thumbnail'],
 			['sceneSearch.commentPreviewVisible','comments-preview'],
 			['sceneSearch.miniCommentVisible','comments-video'],
 			['sceneSearch.commentListVisible','comments-list']
@@ -3914,6 +3916,8 @@ const Config = (() => {
 		'sceneSearch.idleHideSeconds': 2,
 		'sceneSearch.controlsReveal': 'hover-focus',
 		'sceneSearch.animation': 'subtle',
+		'sceneSearch.enabled': true,
+		'sceneSearch.commentListScale': 100,
 		'sceneSearch.commentPreviewVisible': true,
 		'sceneSearch.miniCommentVisible': true,
 		'sceneSearch.commentListVisible': true,
@@ -3943,7 +3947,7 @@ const Config = (() => {
 						key === 'sceneSearch.layout.fullscreen') {
 					return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
 				}
-				if (key === 'sceneSearch.layout.linkFullscreen' ||
+				if (key === 'sceneSearch.enabled' || key === 'sceneSearch.layout.linkFullscreen' ||
 						key === 'sceneSearch.commentPreviewVisible' ||
 						key === 'sceneSearch.miniCommentVisible' ||
 						key === 'sceneSearch.commentListVisible') {
@@ -3961,6 +3965,9 @@ const Config = (() => {
 				}
 				if (key === 'sceneSearch.commentListBackgroundOpacity') {
 					return Number.isSafeInteger(value) && value >= 0 && value <= 100;
+				}
+				if (key === 'sceneSearch.commentListScale') {
+					return Number.isSafeInteger(value) && value >= 100 && value <= 200;
 				}
 				if (key === 'sceneSearch.thumbnailScale') {
 					return Number.isSafeInteger(value) && value >= 50 && value <= 200;
@@ -6890,9 +6897,9 @@ class ModernAdvancedSettingsModel {
 			]),
 			...group('画面・映像','シーンサーチ',[
 				['sceneSearch.presentation.normal','通常表示のシーンサーチ',{
-					...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示〈互換用〉']])}],
+					...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示']])}],
 				['sceneSearch.presentation.fullscreen','全画面のシーンサーチ',{
-					...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示〈互換用〉']])}],
+					...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示']])}],
 				['sceneSearch.layout.normal','旧形式の通常表示',{hidden:true,
 					...select([
 						['00','00 旧式表示（検証中）'],
@@ -6915,13 +6922,17 @@ class ModernAdvancedSettingsModel {
 					]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
 				['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
 					type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
+				['sceneSearch.enabled','シーンサーチを表示',{
+					description:'シーンサーチ全体を表示します。OFFでもコメントの個別設定や大きさは保持します。'}],
+				['sceneSearch.commentListScale','コメントプレビューの大きさ',{
+					...slider(100,200,1),unit:'%',description:'文字サイズは変えず、表示領域を広げて一度に見えるコメントを増やします。画面に収まる範囲で適用します。'}],
 				['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示',{
 					description:'ミニコメントとコメントプレビューの共通スイッチです。OFFの間は両方を隠し、下の個別設定は保持します。右側の動画コメント欄とは別です。'}],
 				['sceneSearch.miniCommentVisible','ミニコメントを表示する',{
 					description:'サムネイル画像上のミニコメントを表示します。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
 				['sceneSearch.commentListVisible','コメントプレビューを表示する',{
 					description:'コメントボタンで一覧を開けるようにします。ONにしても一覧は自動では開きません。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
-				['sceneSearch.commentListBackgroundOpacity','コメント一覧の背景の濃さ',{
+				['sceneSearch.commentListBackgroundOpacity','コメントプレビューの背景濃度',{
 					...slider(0,100,1),unit:'%',
 					description:'一覧の背景だけを調整します。文字の濃さは変わりません。0%は透明、100%は不透明です。すべての表示方式で、通常表示・全画面共通です。'}],
 				['sceneSearch.thumbnailScale','サムネイルの大きさ',{
@@ -7161,6 +7172,7 @@ class ModernAdvancedSettingsModel {
 			'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
 			'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
 		const direct={
+			'sceneSearch.commentPreviewVisible':'sceneSearch.enabled',
 			'sceneSearch.miniCommentVisible':'sceneSearch.commentPreviewVisible',
 			'sceneSearch.commentListVisible':'sceneSearch.commentPreviewVisible',
 			'supporterCredit.voice':'supporterCredit.enable',
@@ -7385,7 +7397,7 @@ class ModernAdvancedSettingsModel {
 			this.get('sceneSearch.layout.linkFullscreen')===true){return false;}
 		const d=this.descriptor(id);
 		return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
-			!!this.draft[d.dependsOn];
+			(!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
 	}
 	isDifferentFromDefault(id) {
 		return this._byId.has(id) && !ModernAdvancedSettingsModel._same(
@@ -8944,6 +8956,103 @@ class ModernAdvancedSettingsUI {
 			Number(this.model.get('KEY_CUSTOM_SEEK_'+n))!==0 ||
 			Number(this.model.get('PARAM_CUSTOM_SEEK_'+n))!==0);
 	}
+	_createSceneSettingsPanel(rows) {
+		const wrap=this.doc.createElement('div');wrap.className='zw-scene-settings';
+		const style=this.doc.createElement('style');style.textContent=`
+			.zw-scene-settings{display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1fr);gap:20px;align-items:start}
+			.zw-scene-settings .zw-scui-layout-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+			.zw-scene-settings .zw-scui-layout-option{background:#182b40;color:#dce8f6;border:1px solid #445b72;border-radius:10px;padding:10px;text-align:left;cursor:pointer}
+			.zw-scene-settings .zw-scui-layout-option[aria-pressed=true]{background:#203f5b;border-color:#79c8f5;box-shadow:0 0 10px #68baff30}
+			.zw-scene-settings .zw-scui-layout-option:disabled{opacity:.5;cursor:default}
+			.zw-scene-settings .zw-scui-mini{height:68px;margin-bottom:8px}
+			.zw-scene-settings .zw-scui-mini[data-layout=legacy] b{left:25%!important;width:50%}
+			.zw-scene-settings .zw-scui-mini[data-layout=legacy] i{display:none}
+			.zw-scene-settings h4{margin:22px 0 10px;color:#b9d7ee;font-size:14px}
+			.zw-scene-settings .zw-modern-card{margin-bottom:10px}
+			.zw-scene-settings .zw-scene-extra{margin-top:18px}
+			.zw-scene-settings .zw-scene-extra summary{cursor:pointer;padding:12px 0}
+			.zw-scene-demo{position:sticky;top:12px;background:#152336;border:1px solid #40566e;border-radius:14px;padding:16px;min-width:0}
+			.zw-scene-demo p{color:#a9bdd2;font-size:12px;line-height:1.7}
+			.zw-scene-demo button{background:#263d55;color:#e6f2ff;border:1px solid #506780;border-radius:7px;padding:7px 10px;cursor:pointer}
+			.zw-scene-demo button[aria-pressed=true]{background:#346086;border-color:#8bd2ff}
+			.zw-scene-demo button:focus-visible{outline:2px solid #93d7ff;outline-offset:2px}
+			.zw-scene-demo nav{display:flex;gap:6px;margin:12px 0;flex-wrap:wrap}
+			.zw-scene-demo-stage{height:340px;position:relative;overflow:hidden;background:#0a131f;border:1px solid #3d5067;border-radius:9px}
+			.zw-scene-demo-video{position:absolute;inset:14px 28% 70px 10px;background:linear-gradient(150deg,#35657b,#203b55 45%,#766d55);display:grid;place-items:center;color:#d1e3eb;font-size:13px;border-radius:5px;transition:inset .15s}
+			.zw-scene-demo-stage[data-screen=fullscreen] .zw-scene-demo-video{inset:0 0 30px;border-radius:0}
+			.zw-scene-demo-stage[data-screen=small] .zw-scene-demo-video{inset:12px 42% 56% 12px}
+			.zw-scene-demo-panels{position:absolute;bottom:40px;display:flex;gap:6px;align-items:flex-start;max-width:calc(100% - 12px)}
+			.zw-scene-demo [hidden]{display:none!important}
+			.zw-scene-demo-thumb{background:#0d1927;border:1px solid #48627b;border-radius:6px;overflow:hidden;flex:none}
+			.zw-scene-demo-image{background:linear-gradient(145deg,#427d90,#213f57 55%,#c29a63);position:relative;overflow:hidden;display:grid;place-items:center;color:#b7cbd9}
+			.zw-scene-demo-mini{position:absolute;left:8%;top:25%;white-space:nowrap;color:white;text-shadow:1px 1px 2px black;font-size:11px}
+			.zw-scene-demo-time{text-align:center;padding:4px;font-size:11px;color:#d9e9f6}
+			.zw-scene-demo-controls{display:flex;gap:3px;padding:0 3px 3px}
+			.zw-scene-demo-controls button{flex:1;padding:5px 3px}
+			.zw-scene-demo-list{box-sizing:border-box;border:1px solid #4f6882;border-radius:6px;overflow:hidden;flex-shrink:1;color:#e4edf6;font-size:11px;line-height:21px}
+			.zw-scene-demo-list strong{display:block;padding:4px 7px;border-bottom:1px solid #52677b;font-size:11px}
+			.zw-scene-demo-list div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 7px}
+			.zw-scene-demo-seek{position:absolute;bottom:9px;left:3%;width:94%;accent-color:#80caff}
+			@media(max-width:1100px){.zw-scene-settings{grid-template-columns:minmax(0,1fr)}.zw-scene-demo{position:static;grid-row:1}}
+		`;
+		const controls=this.doc.createElement('div');controls.append(this._createSceneLayoutPicker());
+		const remaining=new Map(rows.map(row=>[row.dataset.zwId,row]));
+		for(const [title,keys] of [
+			['画面ごとの表示',['sceneSearch.layout.linkFullscreen']],
+			['表示するもの',['sceneSearch.enabled','sceneSearch.commentPreviewVisible','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible']],
+			['大きさと背景',['sceneSearch.thumbnailScale','sceneSearch.commentListScale','sceneSearch.commentListBackgroundOpacity']],
+			['操作と自動非表示',['sceneSearch.seekStepSeconds','sceneSearch.idleHideSeconds']]
+		]){
+			const heading=this.doc.createElement('h4');heading.textContent=title;controls.append(heading);
+			for(const key of keys){const row=remaining.get(key);if(row){controls.append(row);remaining.delete(key);}}
+		}
+		if(remaining.size){const extra=this.doc.createElement('details');extra.className='zw-scene-extra';
+			const summary=this.doc.createElement('summary');summary.textContent='その他のシーンサーチ設定';extra.append(summary,...remaining.values());controls.append(extra);}
+		const demo=this.doc.createElement('aside');demo.className='zw-scene-demo';demo.dataset.zwSceneDemo='';
+		demo.setAttribute('aria-label','設定のプレビュー');
+		demo.innerHTML='<strong>見ながら調整</strong><p>設定の見え方を確認する見本です。下のシークバーとコメントボタンを試せます。</p><nav aria-label="見本の画面"></nav><div class="zw-scene-demo-stage" data-zw-demo-stage><div class="zw-scene-demo-video">動画</div><div class="zw-scene-demo-panels" data-zw-demo-panels><div class="zw-scene-demo-thumb"><div class="zw-scene-demo-image">サムネイル<span class="zw-scene-demo-mini">ここ好き　いいね！</span></div><div class="zw-scene-demo-time">01:24</div><div class="zw-scene-demo-controls"><button type="button" data-demo-back aria-label="前へ">‹</button><button type="button" data-demo-comments aria-label="コメントプレビューを開閉">☁</button><button type="button" data-demo-next aria-label="次へ">›</button></div></div><div class="zw-scene-demo-list"><strong>コメントプレビュー</strong></div></div><input class="zw-scene-demo-seek" type="range" min="0" max="100" aria-label="見本のシーク位置"></div><p data-demo-caption></p>';
+		this._sceneDemoState=this._sceneDemoState||{screen:'normal',seek:35,list:true};
+		const nav=demo.querySelector('nav');
+		for(const [screen,label] of [['normal','通常表示'],['fullscreen','全画面'],['small','小画面']]){
+			const b=this.doc.createElement('button');b.type='button';b.textContent=label;b.dataset.demoScreen=screen;
+			b.addEventListener('click',()=>{this._sceneDemoState.screen=screen;this._sceneLayoutTab=screen==='fullscreen'?'fullscreen':'normal';
+				this.cards.querySelector('[data-zw-scene-layout-gallery]')?.replaceWith(this._createSceneLayoutPicker());this._updateSceneSettingsPreview();});nav.append(b);
+		}
+		const seek=demo.querySelector('input');seek.value=String(this._sceneDemoState.seek);
+		seek.addEventListener('input',()=>{this._sceneDemoState.seek=Number(seek.value);this._updateSceneSettingsPreview();});
+		demo.querySelector('[data-demo-comments]').addEventListener('click',()=>{this._sceneDemoState.list=!this._sceneDemoState.list;this._updateSceneSettingsPreview();});
+		for(const [selector,sign] of [['[data-demo-back]',-1],['[data-demo-next]',1]]){
+			demo.querySelector(selector).addEventListener('click',()=>{this._sceneDemoState.seek=Math.max(0,Math.min(100,this._sceneDemoState.seek+sign*Number(this.model.get('sceneSearch.seekStepSeconds')||0)));seek.value=String(this._sceneDemoState.seek);this._updateSceneSettingsPreview();});
+		}
+		wrap.append(style,controls,demo);return wrap;
+	}
+	_updateSceneSettingsPreview() {
+		const demo=this.cards?.querySelector('[data-zw-scene-demo]');if(!demo)return;
+		const state=this._sceneDemoState,get=key=>this.model.get('sceneSearch.'+key);
+		const screen=state.screen,mode=get('presentation.'+(screen==='fullscreen'&&!get('layout.linkFullscreen')?'fullscreen':'normal'));
+		const stage=demo.querySelector('[data-zw-demo-stage]');stage.dataset.screen=screen;
+		for(const b of demo.querySelectorAll('[data-demo-screen]'))b.setAttribute('aria-pressed',String(b.dataset.demoScreen===screen));
+		const panels=demo.querySelector('[data-zw-demo-panels]');panels.hidden=get('enabled')===false;
+		const master=get('commentPreviewVisible')!==false,allowed=master&&get('commentListVisible')!==false;
+		const open=allowed&&state.list,legacy=mode==='legacy';
+		const scale=Math.max(.5,Math.min(2,Number(get('thumbnailScale'))/100||1));
+		const listScale=Math.max(1,Math.min(2,Number(get('commentListScale'))/100||1));
+		const image=demo.querySelector('.zw-scene-demo-image'),thumb=demo.querySelector('.zw-scene-demo-thumb'),list=demo.querySelector('.zw-scene-demo-list');
+		image.hidden=legacy&&open;image.style.width=120*scale+'px';image.style.height=60*scale+'px';
+		const mini=demo.querySelector('.zw-scene-demo-mini');mini.hidden=!master||get('miniCommentVisible')===false;
+		mini.style.fontSize=11*scale+'px';
+		list.hidden=!open;list.style.width=155*listScale+'px';list.style.height=140*listScale+'px';
+		list.style.backgroundColor='rgba(7,13,24,'+Math.max(0,Math.min(100,Number(get('commentListBackgroundOpacity'))))/100+')';
+		for(const row of list.querySelectorAll('div'))row.remove();
+		for(let i=0;i<24;i++){const row=this.doc.createElement('div');row.textContent='01:'+String(20+i).padStart(2,'0')+'  '+['この場面が好き','いいね！','もう一度見たい','ここから楽しみ'][i%4];list.append(row);}
+		if(legacy&&open){thumb.prepend(list);thumb.style.width=155*listScale+'px';}else{panels.append(list);thumb.style.width='';}
+		const button=demo.querySelector('[data-demo-comments]');button.disabled=!allowed;button.setAttribute('aria-pressed',String(open));
+		for(const b of demo.querySelectorAll('[data-demo-back],[data-demo-next]'))b.hidden=Number(get('seekStepSeconds'))===0;
+		const width=stage.clientWidth||400,total=(legacy?(open?155*listScale:120*scale):120*scale+(open?161*listScale:0))+4;
+		panels.style.left=Math.max(6,Math.min(width-total-6,mode==='fixed'?10:width*state.seek/100-total/2))+'px';
+		demo.querySelector('[data-demo-caption]').textContent=panels.hidden?'シーンサーチは非表示です。個別設定は保持されます。':
+			(legacy?'従来表示：画像とコメントプレビューを切り替えます。':mode==='fixed'?'位置を固定：同じ場所に表示します。':'シーク位置に追従：シーク先に合わせて動きます。')+' 文字サイズを保ったまま、表示領域を調整します。';
+	}
 	_createSceneLayoutPicker() {
 		const wrap=this.doc.createElement('section');
 		wrap.className='zw-scui-picker';
@@ -8966,16 +9075,17 @@ class ModernAdvancedSettingsUI {
 		this._sceneMainLayouts=this._sceneMainLayouts||{};
 		if(current!=='legacy'){this._sceneMainLayouts[mode]=current;}
 		const grid=this.doc.createElement('div');grid.className='zw-scui-layout-grid';
-		grid.setAttribute('role','group');grid.setAttribute('aria-label','プレビューの2つの表示方式');
+		grid.setAttribute('role','group');grid.setAttribute('aria-label','プレビューの3つの表示方式');
 		for(const [value,label,description] of [
 			['follow','シーク位置に追従','シーク先の上に表示。端では画面内に収めます。'],
-			['fixed','位置を固定','同じ場所で確認。小画面ではシークバー付近の空き領域を使います。']
+			['fixed','位置を固定','同じ場所で確認。小画面ではシークバー付近の空き領域を使います。'],
+			['legacy','従来表示','コメントボタンで画像とコメントプレビューを切り替えます。']
 		]){
 			const b=this._button('','data-zw-scene-layout',value,'zw-scui-layout-option');
 			b.dataset.zwSceneLayoutMode=mode;b.disabled=linked;
 			b.setAttribute('aria-pressed',String(current===value));b.setAttribute('aria-label',label);
 			const mini=this.doc.createElement('span');mini.className='zw-scui-mini';mini.dataset.layout=value;
-			mini.innerHTML='<i><span>ミニコメント</span></i><b>コメント<br>一覧</b><em></em>';
+			mini.innerHTML='<i><span>☁</span></i><b>☰</b><em></em>';
 			const factor=Math.min(1.5,Math.max(.5,Number(this.model.get('sceneSearch.thumbnailScale')||100)/100));
 			const imageWidth=28*factor,left=(100-imageWidth-38)/2;
 			Object.assign(mini.querySelector('i').style,{left:left+'%',width:imageWidth+'%',height:24*factor+'px'});
@@ -8990,19 +9100,9 @@ class ModernAdvancedSettingsUI {
 			b.append(mini,title,detail);grid.append(b);
 		}
 		wrap.append(grid);
-		const compat=this.doc.createElement('details');compat.dataset.zwSceneCompat='';
-		compat.open=current==='legacy';
-		const summary=this.doc.createElement('summary');summary.textContent='旧版との互換';
-		const row=this.doc.createElement('label');row.className='zw-modern-card is-inline';
-		const title=this.doc.createElement('span');title.className='zw-modern-cardhead';title.textContent='従来表示を使う';
-		const controls=this.doc.createElement('span');controls.className='zw-modern-cardcontrols';
-		const toggle=this.doc.createElement('input');toggle.type='checkbox';
-		toggle.dataset.zwSceneLegacy=mode;toggle.checked=current==='legacy';toggle.disabled=linked;
-		toggle.setAttribute('aria-label','従来表示を使う');controls.append(toggle);
-		row.append(title,controls);compat.append(summary,row);wrap.append(compat);
 		const note=this.doc.createElement('small');note.className='zw-scui-note';
 		note.textContent=linked?'通常表示の方式を使用します。全画面用の選択は保持しています。':
-			'一覧はコメントボタンで開閉します。「位置を一時固定」は場面と位置の両方を保持します。変更は「変更を保存」で反映します。';
+			'中央のコメントボタンで開閉します。変更は「変更を保存」で反映します。';
 		wrap.append(note);
 		const config=this.model.config;
 		const migration=config.resolveSceneSearch?.()?.migration||[];
@@ -9066,7 +9166,7 @@ class ModernAdvancedSettingsUI {
 			this.selected.subcategory==='シーンサーチ';
 		const groupNames={
 			hover:'動画の上に重なるボタン',related:'関連メニュー',comment:'コメント入力',
-			scene:'シーンサーチの操作ボタン','scene-comments':'シーンサーチのコメント表示',
+			scene:'シーンサーチの操作ボタン','scene-comments':'シーンサーチの表示',
 			bar:'再生操作バー',info:'動画情報パネル',header:'動画上部のヘッダー',
 			shared:'コメント・補助表示（元の設定画面と共通）'
 		};
@@ -9085,7 +9185,7 @@ class ModernAdvancedSettingsUI {
 			}
 			rows.push(this._createCard(d));
 		}
-		if(sceneSection){rows.unshift(this._createSceneLayoutPicker());}
+		if(sceneSection){rows.splice(0,rows.length,this._createSceneSettingsPanel(rows));}
 		if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
 			this.selected.subcategory==='検索') {
 			const guide=this.doc.createElement('section');
@@ -9127,6 +9227,7 @@ class ModernAdvancedSettingsUI {
 		}else{
 			this.cards.replaceChildren(...rows);
 		}
+		this._updateSceneSettingsPreview();
 	}
 	_applyRelatedDraftFromModel() {
 		if(!this.relatedEditor) {return;}
@@ -9271,6 +9372,7 @@ class ModernAdvancedSettingsUI {
 		}
 		const gallery=this.cards.querySelector('[data-zw-scene-layout-gallery]');
 		if(gallery){gallery.replaceWith(this._createSceneLayoutPicker());}
+		this._updateSceneSettingsPreview();
 		this._refreshFooter();
 	}
 	_interceptValue(e) {
@@ -9448,6 +9550,7 @@ class ModernAdvancedSettingsUI {
 			const mode=button.dataset.zwSceneLayoutMode;
 			if(['normal','fullscreen'].includes(mode)){
 				this._sceneLayoutTab=mode;
+				if(this._sceneDemoState)this._sceneDemoState.screen=mode;
 				this._renderCards();this._refreshFooter();
 			}
 			return;
@@ -9455,7 +9558,7 @@ class ModernAdvancedSettingsUI {
 		if(button.hasAttribute('data-zw-scene-layout')){
 			const id=button.dataset.zwSceneLayout;
 			const mode=button.dataset.zwSceneLayoutMode;
-			if(!['follow','fixed'].includes(id)||!['normal','fullscreen'].includes(mode) ||
+			if(!['follow','fixed','legacy'].includes(id)||!['normal','fullscreen'].includes(mode) ||
 				mode!==this._sceneLayoutTab){return;}
 			if(mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')){return;}
 			this.model.set('sceneSearch.presentation.'+mode,id);

@@ -26,6 +26,20 @@ function harness(layout='follow'){
  };
 }
 describe('semantic scene preview production binding',()=>{
+ for(const layout of ['follow','fixed','legacy'])it(layout+' obeys the shared scene visibility switch and restores child choices',()=>{
+  const h=harness(layout);try{
+   h.move(400);h.config.setValue('enableCommentPreview',true);
+   h.config.setValue('sceneSearch.enabled',false);h.move(450);
+   assert.strictEqual(h.bridge.state.shown,false);
+   if(layout==='legacy')assert(h.bridge._active.container.classList.contains('is-scui00-inactive'));
+   else assert(h.bridge._active.root.hidden);
+   assert.strictEqual(h.config.getValue('enableCommentPreview'),true);
+   h.config.setValue('sceneSearch.enabled',true);h.move(470);assert(h.bridge.state.shown);
+   if(layout!=='legacy')assert(!h.bridge._active.root.hidden);
+   h.bridge.interaction.togglePin();h.config.setValue('sceneSearch.enabled',false);
+   if(layout!=='legacy')assert(h.bridge._active.root.hidden,'parent OFF must override a pinned preview');
+  }finally{h.close();}
+ });
  for(const action of ['comment-toggle','seek-back','seek-forward'])it(action+' releases mouse focus on leave so tracking and idle resume',()=>{
   const h=harness();try{
    h.move(400);h.config.setValue('enableCommentPreview',true);

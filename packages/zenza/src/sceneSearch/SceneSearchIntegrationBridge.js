@@ -353,7 +353,7 @@ class SceneSearchIntegrationBridge {
     const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
     const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
     const input={...g,layout:state.layoutId,context:this._placementContext,
-      imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,
+      imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,listScale:prefs.listScale,
       anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold};
     let result=this._classes.Placement.compute(input);
     if(card.measureFooter)result=this._classes.Placement.compute({...input,footerHeight:card.measureFooter(result.imageScale)});
@@ -848,7 +848,8 @@ class SceneSearchIntegrationBridge {
   static validSavedPreference(key,value) {
     if(key==='sceneSearch.presentation.normal'||key==='sceneSearch.presentation.fullscreen')
       return ['follow','fixed','legacy'].includes(value);
-    if(key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
+    if(key==='sceneSearch.enabled'||key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
+    if(key==='sceneSearch.commentListScale')return Number.isInteger(value)&&value>=100&&value<=200;
     if(key==='sceneSearch.thumbnailScale')return Number.isInteger(value)&&value>=50&&value<=200;
     if(key==='sceneSearch.commentListBackgroundOpacity')return Number.isInteger(value)&&value>=0&&value<=100;
     if(key==='sceneSearch.layout.normal'||key==='sceneSearch.layout.fullscreen'){
@@ -972,7 +973,7 @@ class SceneSearchIntegrationBridge {
         this.seekElement.addEventListener(event,handler,event==='mousemove');
       }
       const keys=['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
-        'sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
+        'sceneSearch.enabled','sceneSearch.commentListScale','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
         'sceneSearch.thumbnailScale','sceneSearch.commentListBackgroundOpacity',
         'sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
         'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',

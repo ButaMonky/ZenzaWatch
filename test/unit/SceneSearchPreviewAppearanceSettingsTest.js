@@ -22,7 +22,7 @@ describe('Task801 shared scene-search preview appearance settings',()=>{
   it('exposes one percent slider per setting with the approved range and labels',()=>{
     const {model}=fixture();
     for(const [id,label,min,max] of [
-      [opacity,'コメント一覧の背景の濃さ',0,100],
+      [opacity,'コメントプレビューの背景濃度',0,100],
       [scale,'サムネイルの大きさ',50,200]]){
       const d=model.descriptor(id);
       assert(d,id);

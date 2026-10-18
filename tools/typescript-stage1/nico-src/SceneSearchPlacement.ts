@@ -3,7 +3,7 @@ type PlacementResult={rect:SceneRect;imageScale:number;listWidth:number;listMaxH
 type PlacementInput={layout:'follow'|'fixed';context:'normal'|'small'|'fullscreen';
  viewport:SceneRect;player:SceneRect;seekbar:SceneRect;obstacles:SceneRect[];anchorX:number;
  imageSize:{width:number;height:number};requestedScale:number;listOpen:boolean;
- previous:PlacementResult|null;hold:boolean;footerHeight?:number};
+ previous:PlacementResult|null;hold:boolean;footerHeight?:number;listScale?:number};
 export class SceneSearchPlacement {
  static overlap(a:SceneRect,b:SceneRect):number{
   return Math.max(0,Math.min(a.left+a.width,b.left+b.width)-Math.max(a.left,b.left))*
@@ -20,13 +20,14 @@ export class SceneSearchPlacement {
   const availableH=protectsBar?Math.max(1,aboveSpace,belowSpace):viewportH;
   const iw=Math.max(1,input.imageSize.width),ih=Math.max(1,input.imageSize.height);
   const requested=clamp(Number.isFinite(input.requestedScale)?input.requestedScale:100,50,200)/100;
-  let listWidth=listOpen?clamp(availableW-padding-gap-Math.max(minLeft,iw*requested),160,280):0;
+  const listScale=clamp(Number.isFinite(input.listScale)?input.listScale!:100,100,200)/100;
+  let listWidth=listOpen?clamp(availableW-padding-gap-Math.max(minLeft,iw*requested),160,280*listScale):0;
   const footer=Number.isFinite(input.footerHeight)?Math.max(36,input.footerHeight!):54;
   let imageScale=Math.min(requested,Math.max(.05,(availableW-padding-(listOpen?gap+listWidth:0))/iw),
    Math.max(.05,(availableH-padding-footer)/ih));
   const leftWidth=Math.max(minLeft,iw*imageScale);
   const width=Math.min(availableW,padding+leftWidth+(listOpen?gap+listWidth:0));
-  const height=Math.min(availableH,padding+Math.max(ih*imageScale+footer,listOpen?240:0));
+  const height=Math.min(availableH,padding+Math.max(ih*imageScale+footer,listOpen?240*listScale:0));
   const listMaxHeight=Math.max(32,height-padding);
   // Very short viewports scroll inside the panel; no stored setting is rewritten.
   const make=(x:number,y:number):SceneRect=>{

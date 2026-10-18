@@ -1,14 +1,14 @@
 'use strict';
 const assert=require('assert');
 const {uiFixture}=require('../helpers/sceneSearchUIFixture');
-describe('scene search two-mode picker with legacy compatibility',function(){
+describe('scene search three-mode picker',function(){
  this.timeout(20000);
- it('offers two adjacent-preview diagrams and a separate native legacy switch',async()=>{
+ it('offers three peer choices including the legacy switch presentation',async()=>{
   const h=await uiFixture();try{
-   assert.deepStrictEqual(h.all('[data-zw-scene-layout]').map(x=>x.dataset.zwSceneLayout),['follow','fixed']);
-   assert(h.q('[data-zw-scene-legacy]'));assert(h.q('details[data-zw-scene-compat]'));
+   assert.deepStrictEqual(h.all('[data-zw-scene-layout]').map(x=>x.dataset.zwSceneLayout),['follow','fixed','legacy']);
+   assert(!h.q('[data-zw-scene-legacy]'));assert(!h.q('details[data-zw-scene-compat]'));
    assert.strictEqual(h.q('[data-zw-scene-layout="follow"]').getAttribute('aria-pressed'),'true');
-   assert.strictEqual(h.q('[data-zw-scene-legacy]').checked,false);
+   assert.strictEqual(h.q('[data-zw-scene-layout="legacy"]').getAttribute('aria-pressed'),'false');
   }finally{h.dispose();}
  });
  it('keeps normal and fullscreen drafts independent until saved and retains linked selection',async()=>{
@@ -27,13 +27,11 @@ describe('scene search two-mode picker with legacy compatibility',function(){
    assert.strictEqual(h.config.resolveSceneSearch().fullscreen,'follow');
   }finally{h.dispose();}
  });
- it('switches compatibility on/off while retaining the most recent main choice',async()=>{
+ it('selects legacy as a peer and cancels all unsaved choices',async()=>{
   const h=await uiFixture();try{
    h.click('[data-zw-scene-layout="fixed"]');
-   const change=value=>{const el=h.q('[data-zw-scene-legacy]');el.checked=value;
-    el.dispatchEvent(new h.dom.window.Event('change',{bubbles:true}));};
-   change(true);assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'legacy');
-   change(false);assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'fixed');
+   h.click('[data-zw-scene-layout="legacy"]');assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'legacy');
+   h.click('[data-zw-scene-layout="fixed"]');assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'fixed');
    h.click('[data-zw-cancel]');assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'follow');
   }finally{h.dispose();}
  });

@@ -13,6 +13,15 @@ function compute(input){assert(fs.existsSync(path),'placement source must be gen
  Placement=Placement||loadClass(path,'SceneSearchPlacement',createContext());
  return Placement.compute(input);}
 describe('scene placement in viewport coordinates',()=>{
+ it('enlarges the comment viewport independently and still protects the seekbar',()=>{
+  const base=fixture(),small=compute(base),large=compute({...base,listScale:200});
+  assert(large.listWidth>small.listWidth);assert(large.listMaxHeight>small.listMaxHeight);
+  assert.strictEqual(large.imageScale,small.imageScale);
+  for(const width of [320,768,1536])for(const context of ['normal','small','fullscreen']){
+   const input=fixture({context,listScale:200,viewport:rect(0,0,width,320),seekbar:rect(0,280,width,40)}),r=compute(input);
+   assert.strictEqual(overlap(r.rect,input.seekbar),0);assert(r.rect.left+r.rect.width<=width-8);
+  }
+ });
  it('fits short viewports above protected seek controls for both modern layouts',()=>{
   for(const context of ['normal','small','fullscreen'])for(const layout of ['follow','fixed'])
    for(const height of [200,240,320])for(const hold of [false,true]){

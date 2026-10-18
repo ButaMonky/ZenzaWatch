@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.311-task801
+// @version        2.7.312-task801
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 12:58Z
+// build: 2026-10-18 15:21Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.311-task801';
+    var VER = '2.7.312-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 12:58Z';
+    var BUILD = '2026-10-18 15:21Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -2899,7 +2899,8 @@ class SceneSearchPreferences {
 						migration.push({ key, oldValue: old, newValue: result });
 						return result;
 				};
-				const master = read('sceneSearch.commentPreviewVisible') !== false;
+				const enabled = read('sceneSearch.enabled') !== false;
+				const master = enabled && read('sceneSearch.commentPreviewVisible') !== false;
 				const oldMini = read('sceneSearch.miniCommentMode');
 				const miniVisible = hasSaved('sceneSearch.miniCommentVisible') ?
 						read('sceneSearch.miniCommentVisible') !== false : oldMini !== 'hidden';
@@ -2908,7 +2909,7 @@ class SceneSearchPreferences {
 						const value = read(key);
 						return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback;
 				};
-				return { normal: layout('normal'), fullscreen: layout('fullscreen'),
+				return { enabled, listScale: bounded('sceneSearch.commentListScale', 100, 200, 100), normal: layout('normal'), fullscreen: layout('fullscreen'),
 						linked: read('sceneSearch.layout.linkFullscreen') === true,
 						miniStyle: oldMini === 'static' ? 'static' : 'flow', miniVisible, listVisible,
 						miniEnabled: master && miniVisible, listAllowed: master && listVisible,
@@ -2924,6 +2925,7 @@ class UiVisibilityRegistry {
 			['enableCommentPreview','comments-preview'],['enableHeatMap','comment-heatmap'],
 			['enableStoryboard','seek-thumbnail'],['enableStoryboardBar','scene-filmstrip'],
 			['enableAdDecoration','ad-crown'],
+			['sceneSearch.enabled','seek-thumbnail'],
 			['sceneSearch.commentPreviewVisible','comments-preview'],
 			['sceneSearch.miniCommentVisible','comments-video'],
 			['sceneSearch.commentListVisible','comments-list']
@@ -3793,6 +3795,8 @@ const Config = (() => {
 		'sceneSearch.idleHideSeconds': 2,
 		'sceneSearch.controlsReveal': 'hover-focus',
 		'sceneSearch.animation': 'subtle',
+		'sceneSearch.enabled': true,
+		'sceneSearch.commentListScale': 100,
 		'sceneSearch.commentPreviewVisible': true,
 		'sceneSearch.miniCommentVisible': true,
 		'sceneSearch.commentListVisible': true,
@@ -3822,7 +3826,7 @@ const Config = (() => {
 						key === 'sceneSearch.layout.fullscreen') {
 					return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
 				}
-				if (key === 'sceneSearch.layout.linkFullscreen' ||
+				if (key === 'sceneSearch.enabled' || key === 'sceneSearch.layout.linkFullscreen' ||
 						key === 'sceneSearch.commentPreviewVisible' ||
 						key === 'sceneSearch.miniCommentVisible' ||
 						key === 'sceneSearch.commentListVisible') {
@@ -3840,6 +3844,9 @@ const Config = (() => {
 				}
 				if (key === 'sceneSearch.commentListBackgroundOpacity') {
 					return Number.isSafeInteger(value) && value >= 0 && value <= 100;
+				}
+				if (key === 'sceneSearch.commentListScale') {
+					return Number.isSafeInteger(value) && value >= 100 && value <= 200;
 				}
 				if (key === 'sceneSearch.thumbnailScale') {
 					return Number.isSafeInteger(value) && value >= 50 && value <= 200;
@@ -34591,12 +34598,13 @@ class SceneSearchPlacement {
 				const availableH = protectsBar ? Math.max(1, aboveSpace, belowSpace) : viewportH;
 				const iw = Math.max(1, input.imageSize.width), ih = Math.max(1, input.imageSize.height);
 				const requested = clamp(Number.isFinite(input.requestedScale) ? input.requestedScale : 100, 50, 200) / 100;
-				let listWidth = listOpen ? clamp(availableW - padding - gap - Math.max(minLeft, iw * requested), 160, 280) : 0;
+				const listScale = clamp(Number.isFinite(input.listScale) ? input.listScale : 100, 100, 200) / 100;
+				let listWidth = listOpen ? clamp(availableW - padding - gap - Math.max(minLeft, iw * requested), 160, 280 * listScale) : 0;
 				const footer = Number.isFinite(input.footerHeight) ? Math.max(36, input.footerHeight) : 54;
 				let imageScale = Math.min(requested, Math.max(.05, (availableW - padding - (listOpen ? gap + listWidth : 0)) / iw), Math.max(.05, (availableH - padding - footer) / ih));
 				const leftWidth = Math.max(minLeft, iw * imageScale);
 				const width = Math.min(availableW, padding + leftWidth + (listOpen ? gap + listWidth : 0));
-				const height = Math.min(availableH, padding + Math.max(ih * imageScale + footer, listOpen ? 240 : 0));
+				const height = Math.min(availableH, padding + Math.max(ih * imageScale + footer, listOpen ? 240 * listScale : 0));
 				const listMaxHeight = Math.max(32, height - padding);
 				const make = (x, y) => {
 						const rect = { left: clamp(x, v.left + gap, v.left + v.width - gap - width),
@@ -35136,7 +35144,7 @@ class SceneSearchIntegrationBridge {
 		const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
 		const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
 		const input={...g,layout:state.layoutId,context:this._placementContext,
-			imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,
+			imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,listScale:prefs.listScale,
 			anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold};
 		let result=this._classes.Placement.compute(input);
 		if(card.measureFooter)result=this._classes.Placement.compute({...input,footerHeight:card.measureFooter(result.imageScale)});
@@ -35596,7 +35604,8 @@ class SceneSearchIntegrationBridge {
 	static validSavedPreference(key,value) {
 		if(key==='sceneSearch.presentation.normal'||key==='sceneSearch.presentation.fullscreen')
 			return ['follow','fixed','legacy'].includes(value);
-		if(key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
+		if(key==='sceneSearch.enabled'||key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
+		if(key==='sceneSearch.commentListScale')return Number.isInteger(value)&&value>=100&&value<=200;
 		if(key==='sceneSearch.thumbnailScale')return Number.isInteger(value)&&value>=50&&value<=200;
 		if(key==='sceneSearch.commentListBackgroundOpacity')return Number.isInteger(value)&&value>=0&&value<=100;
 		if(key==='sceneSearch.layout.normal'||key==='sceneSearch.layout.fullscreen'){
@@ -35713,7 +35722,7 @@ class SceneSearchIntegrationBridge {
 				this.seekElement.addEventListener(event,handler,event==='mousemove');
 			}
 			const keys=['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
-				'sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
+				'sceneSearch.enabled','sceneSearch.commentListScale','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
 				'sceneSearch.thumbnailScale','sceneSearch.commentListBackgroundOpacity',
 				'sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
 				'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
@@ -36729,7 +36738,10 @@ class SceneSearchLayout00 {
 				if (!Number.isFinite(scale) || scale <= 0 || rect.height <= 0)
 						return;
 				seek.style.setProperty('--scui00-list-bottom', ((origin.bottom - rect.top) / scale + 4) + 'px');
-				seek.style.setProperty('--scui00-list-height', Math.max(24, Math.min(200, (rect.top - 12) / scale)) + 'px');
+				const listScale = Math.max(1, Math.min(2, (this.settings.getAppearance?.().listScale || 100) / 100));
+				const availableWidth = Math.max(1, ((this.document.defaultView?.innerWidth || 800) - 16) / scale);
+				seek.style.setProperty('--scui00-list-width', Math.min(350 * listScale, availableWidth) + 'px');
+				seek.style.setProperty('--scui00-list-height', Math.max(24, Math.min(200 * listScale, (rect.top - 12) / scale)) + 'px');
 		}
 		syncMiniGeometry() {
 				const seek = this.seekOwner, tip = this.tooltip;
@@ -36788,10 +36800,12 @@ class SceneSearchLayout00 {
 								visibleLeft + (v - width) / 2);
 				};
 				const tooltipWidth = g.tooltipWidth;
-				const commentWidth = this.listMode ? Math.min(350, Math.max(120, viewportWidth - 16)) : 180 * this.appearanceScale;
+				const listScale = Math.max(1, Math.min(2, (this.settings.getAppearance?.().listScale || 100) / 100));
+				const commentWidth = this.listMode ? Math.min(350 * listScale, Math.max(1, (viewportWidth - 16) / g.scale)) : 180 * this.appearanceScale;
 				const tooltipLeft = place(tooltipWidth);
 				tip.style.setProperty('--scui00-position', tooltipLeft + 'px');
-				const commentLeft = this.listMode ? place(commentWidth) : tooltipLeft + (tooltipWidth - commentWidth) / 2;
+				const commentLeft = this.listMode ? Math.max(-g.originLeft / g.scale, Math.min(place(commentWidth), (viewportWidth - g.originLeft) / g.scale - commentWidth)) :
+						tooltipLeft + (tooltipWidth - commentWidth) / 2;
 				seek.style.setProperty('--scui00-comment-x', commentLeft + 'px');
 		}
 		dispose() {
@@ -36810,6 +36824,7 @@ class SceneSearchLayout00 {
 				this.seekOwner?.style.removeProperty('--scui00-mini-bottom');
 				this.seekOwner?.style.removeProperty('--scui00-list-bottom');
 				this.seekOwner?.style.removeProperty('--scui00-list-height');
+				this.seekOwner?.style.removeProperty('--scui00-list-width');
 				this.lastImage = null;
 				for (const { name, value, priority } of this.appearanceStyles) {
 						if (value)
@@ -36921,8 +36936,8 @@ class SceneSearchLayout00 {
 }
 /* The native list remains scrollable with its original CSS and click actions. */
 .is-scui00-active .seekBarContainer.enableCommentPreview>.zenzaCommentPreview{
-	width:min(350px,calc(100vw - 16px))!important;
-	height:var(--scui00-list-height,200px)!important;max-height:200px!important;
+width:min(var(--scui00-list-width,350px),calc(100vw - 16px))!important;
+height:var(--scui00-list-height,200px)!important;max-height:calc(100vh - 16px)!important;
 	bottom:var(--scui00-list-bottom,76px)!important;
 	border-bottom:0!important;
 	z-index:100!important;
@@ -38459,9 +38474,10 @@ class SceneSearchController {
 		return this._pref('sceneSearch.commentPreviewVisible',true)!==false;
 	}
 	get snapshot() {
+		const enabled=this._pref('sceneSearch.enabled',true)!==false;
 		return Object.freeze({mode:this._mode,layoutId:this._layoutId,
-			videoId:this._videoId,time:this._time,pinned:this._pinned,
-			shown:this._shown,seekStepSeconds:this._stepSeconds(),
+			videoId:this._videoId,time:this._time,pinned:this._pinned&&enabled,
+			shown:this._shown&&enabled,seekStepSeconds:this._stepSeconds(),
 			commentPreviewVisible:this._previewEnabled(),
 			commentListMode:this._resolvePreferences?.()?.listOpen??(this._pref('enableCommentPreview',false)===true)});
 	}

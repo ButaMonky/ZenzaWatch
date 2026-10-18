@@ -107,6 +107,22 @@ async function client(url){
   await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
   await c.send('Page.navigate',{url:pathToFileURL(fixture).href});
   for(let i=0;i<100;i++){if(await evaluate('window.qaReady===true'))break;await pause(100);}
+  if(process.argv.includes('--settings-only')){
+   for(const layout of ['follow','fixed','legacy']){
+    await evaluate("config.setValue('sceneSearch.presentation.normal',"+JSON.stringify(layout)+");config.setValue('enableCommentPreview',true);config.setValue('sceneSearch.commentListScale',100);true");
+    await click('#seek');await frame();
+    const measure=()=>evaluate(`(()=>{const e=${layout==='legacy'?'bar._commentPreview._view._view':"qaBinding.adapter.bridge._active.root.querySelector('.zenzaSceneNativeList')"};const r=e.getBoundingClientRect(),row=e.querySelector('.nicoChat');return {left:r.left,right:r.right,height:r.height,font:row?getComputedStyle(row).fontSize:null};})()`);
+    const small=await measure();await evaluate("config.setValue('sceneSearch.commentListScale',200);true");await click('#seek');await frame();
+    const big=await measure();record(width+'/'+layout+'/list-viewport-size',big.height>small.height&&big.font===small.font,{small,big});
+    await move(width-2,await evaluate('seek.getBoundingClientRect().top+4'));await frame();
+    const edge=await measure();record(width+'/'+layout+'/large-list-edge',edge.left>=-1&&edge.right<=width+1,edge);
+    await evaluate("qaBinding.adapter.bridge.interaction.togglePin();config.setValue('sceneSearch.enabled',false);true");await frame();
+    const hidden=await evaluate(`(()=>{const e=${layout==='legacy'?'bar._commentPreview._view._view':'qaBinding.adapter.bridge._active.root'};return getComputedStyle(e).display==='none'||e.hidden||e.getBoundingClientRect().height===0;})()`);
+    record(width+'/'+layout+'/disabled-while-pinned',hidden,hidden);
+    await evaluate("config.setValue('sceneSearch.enabled',true);qaBinding.adapter.bridge.interaction.togglePin();config.setValue('sceneSearch.commentListScale',100);true");
+   }
+   continue;
+  }
   await evaluate("config.setValue('sceneSearch.presentation.normal','legacy');true");await click('#seek');
   await evaluate("seek.style.height='35px';qaBinding.adapter.bridge._active.render(qaBinding.adapter.bridge.state);true");await frame();
   const resizedMini=await evaluate("(()=>{const m=bar._commentPreview._view._view.getBoundingClientRect(),i=thumb.querySelector('canvas').getBoundingClientRect();return {mini:m.toJSON(),image:i.toJSON(),error:Math.abs(m.bottom-i.bottom)};})()");

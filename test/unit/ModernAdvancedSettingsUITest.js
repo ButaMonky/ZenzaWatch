@@ -1469,17 +1469,16 @@ describe('Task401 full-viewport comment setting synchronization',()=>{
 describe('Task710 gallery regression after semantic presentation migration',function(){
   this.timeout(20000);
   const {uiFixture}=require('../helpers/sceneSearchUIFixture');
-  const legacy=(h,value)=>{const el=h.q('[data-zw-scene-legacy]');el.checked=value;
-    el.dispatchEvent(new h.dom.window.Event('change',{bubbles:true}));};
+  const legacy=h=>h.click('[data-zw-scene-layout="legacy"]');
   it('allows legacy from follow, stages one edit and persists only on Save',async()=>{
     const h=await uiFixture({'sceneSearch.layout.normal':'01'});
     try{
-      assert.strictEqual(h.q('[data-zw-scene-legacy]').disabled,false);
-      assert.strictEqual(h.q('[data-zw-scene-legacy]').checked,false);
+      assert.strictEqual(h.q('[data-zw-scene-layout="legacy"]').disabled,false);
+      assert.strictEqual(h.q('[data-zw-scene-layout="legacy"]').getAttribute('aria-pressed'),'false');
       legacy(h,true);
       assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'legacy');
       assert.strictEqual(h.config.resolveSceneSearch().normal,'follow');
-      assert.strictEqual(h.q('[data-zw-scene-legacy]').checked,true);
+      assert.strictEqual(h.q('[data-zw-scene-layout="legacy"]').getAttribute('aria-pressed'),'true');
       assert.strictEqual(h.model.changes().map(change=>change.id).join(','),
         'sceneSearch.presentation.normal');
       assert(h.q('[data-zw-dirty]').textContent.includes('1件'));
@@ -1496,7 +1495,7 @@ describe('Task710 gallery regression after semantic presentation migration',func
       assert.strictEqual(h.model.get('sceneSearch.presentation.fullscreen'),'legacy');
       assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'follow');
       h.toggle('sceneSearch.layout.linkFullscreen',true);
-      assert.strictEqual(h.q('[data-zw-scene-legacy]').disabled,true);
+      assert.strictEqual(h.q('[data-zw-scene-layout="legacy"]').disabled,true);
       h.click('[data-zw-scene-layout="follow"]');
       assert.strictEqual(h.model.get('sceneSearch.presentation.fullscreen'),'legacy');
       h.toggle('sceneSearch.layout.linkFullscreen',false);
@@ -1510,10 +1509,10 @@ describe('Task710 gallery regression after semantic presentation migration',func
       assert.strictEqual(h.config.hasStoredValue('sceneSearch.presentation.fullscreen'),false);
     }finally{h.dispose();}
   });
-  it('offers two primary choices and rejects malformed layout ids',async()=>{
+  it('offers three peer choices and rejects malformed layout ids',async()=>{
     const h=await uiFixture();
     try{
-      assert.deepStrictEqual(h.all('[data-zw-scene-layout]').map(x=>x.dataset.zwSceneLayout),['follow','fixed']);
+      assert.deepStrictEqual(h.all('[data-zw-scene-layout]').map(x=>x.dataset.zwSceneLayout),['follow','fixed','legacy']);
       h.click('[data-zw-scene-layout="fixed"]');
       assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'fixed');
       h.click('[data-zw-scene-layout="follow"]');

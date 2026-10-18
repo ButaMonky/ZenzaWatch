@@ -378,6 +378,8 @@ const Config = (() => {
     'sceneSearch.idleHideSeconds': 2,
     'sceneSearch.controlsReveal': 'hover-focus',
     'sceneSearch.animation': 'subtle',
+    'sceneSearch.enabled': true,
+    'sceneSearch.commentListScale': 100,
     'sceneSearch.commentPreviewVisible': true,
     'sceneSearch.miniCommentVisible': true,
     'sceneSearch.commentListVisible': true,
@@ -421,7 +423,7 @@ const Config = (() => {
             key === 'sceneSearch.layout.fullscreen') {
           return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
         }
-        if (key === 'sceneSearch.layout.linkFullscreen' ||
+        if (key === 'sceneSearch.enabled' || key === 'sceneSearch.layout.linkFullscreen' ||
             key === 'sceneSearch.commentPreviewVisible' ||
             key === 'sceneSearch.miniCommentVisible' ||
             key === 'sceneSearch.commentListVisible') {
@@ -439,6 +441,9 @@ const Config = (() => {
         }
         if (key === 'sceneSearch.commentListBackgroundOpacity') {
           return Number.isSafeInteger(value) && value >= 0 && value <= 100;
+        }
+        if (key === 'sceneSearch.commentListScale') {
+          return Number.isSafeInteger(value) && value >= 100 && value <= 200;
         }
         if (key === 'sceneSearch.thumbnailScale') {
           return Number.isSafeInteger(value) && value >= 50 && value <= 200;

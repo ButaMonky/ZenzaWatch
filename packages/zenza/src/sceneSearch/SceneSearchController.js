@@ -46,9 +46,10 @@ class SceneSearchController {
     return this._pref('sceneSearch.commentPreviewVisible',true)!==false;
   }
   get snapshot() {
+    const enabled=this._pref('sceneSearch.enabled',true)!==false;
     return Object.freeze({mode:this._mode,layoutId:this._layoutId,
-      videoId:this._videoId,time:this._time,pinned:this._pinned,
-      shown:this._shown,seekStepSeconds:this._stepSeconds(),
+      videoId:this._videoId,time:this._time,pinned:this._pinned&&enabled,
+      shown:this._shown&&enabled,seekStepSeconds:this._stepSeconds(),
       commentPreviewVisible:this._previewEnabled(),
       commentListMode:this._resolvePreferences?.()?.listOpen??(this._pref('enableCommentPreview',false)===true)});
   }

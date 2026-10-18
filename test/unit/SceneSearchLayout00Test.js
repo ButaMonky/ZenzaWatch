@@ -35,6 +35,17 @@ function setGeometry(h){
  return track;
 }
 describe('SCUI 00 real native experience is TypeScript-backed',()=>{
+ it('keeps an enlarged legacy list within the viewport at the right edge',()=>{
+  for(const width of [500,1460]){
+   const h=scene(),C=load();setGeometry(h);
+   Object.defineProperty(h.dom.window,'innerWidth',{value:width,configurable:true});
+   h.settings.getAppearance=()=>({scale:100,opacity:90,miniEnabled:true,miniStyle:'flow',listScale:200});
+   const v=new C({document:h.d,container:h.p,settings:h.settings});v.mount({commentListMode:true});v.followPointer(width);
+   const left=parseFloat(h.seek.style.getPropertyValue('--scui00-comment-x')),actualWidth=Math.min(700,width-16);
+   assert(left>=0&&left+actualWidth<=width,JSON.stringify({left,actualWidth,width}));
+   v.dispose();h.dom.window.close();
+  }
+ });
  it('keeps the original thumbnail and comment list as separate siblings',()=>{
   const h=scene(),C=load(),node=h.comments,button=h.tooltip.querySelector('.toggleCommentPreview');
   const v=new C({document:h.d,container:h.p,settings:h.settings});

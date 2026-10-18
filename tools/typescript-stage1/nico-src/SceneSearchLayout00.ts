@@ -132,7 +132,9 @@ export class SceneSearchLayout00 {
   const seek=this.seekOwner,tip=this.tooltip;
   if(!seek||!tip)return;
   const image=tip.querySelector('.zenzaSeekThumbnail.is-visible .zenzaSeekThumbnail-image');
-  this.lastImage=image;
+  // A hidden native tooltip has no measurable image. Retry when it appears,
+  // even when Storyboard reuses exactly the same DOM node.
+  this.lastImage=null;
   if(!image){
    seek.style.removeProperty('--scui00-mini-bottom');
    return;
@@ -143,6 +145,7 @@ export class SceneSearchLayout00 {
   const bottom=(origin.bottom-rect.bottom)/scale;
   if(Number.isFinite(bottom)){
    seek.style.setProperty('--scui00-mini-bottom',Math.round(bottom)+'px');
+   this.lastImage=image;
   }
  }
  followPointer(clientX:number):void{
@@ -266,6 +269,9 @@ export class SceneSearchLayout00 {
   background:transparent!important;
   z-index:160!important;
   overflow:hidden!important;pointer-events:none!important;
+  /* Native flow uses a 180px lane around a centered 160px image. Clip paint
+     to that image without changing the timing or positions of native rows. */
+  clip-path:inset(0 10px)!important;
 }
 .is-scui00-active .seekBarContainer:not(.enableCommentPreview)
   >.zenzaCommentPreview .listContainer .nicoChat .text{

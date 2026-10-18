@@ -7,8 +7,8 @@ describe('Task801 review package',()=>{
   const review=fs.readFileSync(path,'utf8'),dist=fs.readFileSync('dist/ZenzaWatch-dev.user.js','utf8');
   const marker='// ==/UserScript==',body=s=>s.slice(s.indexOf(marker));
   assert.strictEqual(body(review),body(dist));
-  assert(review.includes('// @version        2.7.307-task801'));
-  assert(/var VER\s*=\s*'2\.7\.307-task801'/.test(review));
+  assert(review.includes('// @version        2.7.308-task801'));
+  assert(/var VER\s*=\s*'2\.7\.308-task801'/.test(review));
   for(const key of ['downloadURL','updateURL'])assert(new RegExp('// @'+key+'\\s+https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js').test(review));
   for(const name of ['SceneSearchPreferences','SceneSearchPreviewView','SceneSearchPlacement'])assert(dist.includes('class '+name));
  });

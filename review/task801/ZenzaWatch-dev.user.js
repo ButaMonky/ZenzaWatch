@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.307-task801
+// @version        2.7.308-task801
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 10:27Z
+// build: 2026-10-18 11:31Z
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.307-task801';
+    var VER = '2.7.308-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 10:27Z';
+    var BUILD = '2026-10-18 11:31Z';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -36135,6 +36135,8 @@ class SceneSearchPreviewView {
 				foot.append(time);
 				const actions = d.createElement('div');
 				actions.className = 'zenzaSceneActions';
+				const extra = d.createElement('div');
+				extra.className = 'zenzaSceneMoreActions';
 				for (const [action, symbol, label] of [
 						['seek-back', '‹', '指定秒数戻る'], ['seek-forward', '›', '指定秒数進む'],
 						['more', '⋯', '追加操作'], ['pin', '📌', '場面と位置を一時固定'],
@@ -36151,8 +36153,9 @@ class SceneSearchPreviewView {
 						if (action === 'more') {
 								button.setAttribute('aria-expanded', 'false');
 						}
-						actions.append(button);
+						(['seek-back', 'seek-forward', 'more'].includes(action) ? actions : extra).append(button);
 				}
+				actions.append(extra);
 				foot.append(actions);
 				left.append(this.imageBox, foot);
 				this.listSlot = d.createElement('div');
@@ -36275,12 +36278,14 @@ class SceneSearchPreviewView {
 				this.logical.style.transform = 'scale(' + scale + ')';
 				this.imageBox.style.width = 180 * scale + 'px';
 				this.imageBox.style.height = 90 * scale + 'px';
+				this.root?.style.setProperty('--scene-image-height', 90 * scale + 'px');
 				const left = this.root?.querySelector('.zenzaSceneLeft');
 				if (left)
 						left.style.width = Math.max(104, 180 * scale) + 'px';
 				const foot = this.root?.querySelector('.zenzaSceneFoot');
 				if (foot)
 						foot.style.height = Math.max(32, footerHeight - 4) + 'px';
+				this.root?.style.setProperty('--scene-footer-height', Math.max(36, footerHeight) + 'px');
 				this.listSlot.style.width = Math.max(1, listWidth) + 'px';
 				this.listSlot.style.maxHeight = Math.max(32, listMaxHeight) + 'px';
 				if (this.listView) {
@@ -36320,7 +36325,7 @@ class SceneSearchPreviewView {
 .zenzaSceneSharedPreview{position:absolute;box-sizing:border-box;z-index:150;left:0;top:0;bottom:auto;transform:none;width:max-content;max-width:calc(100vw - 16px);padding:4px;border:1px solid #586879;border-radius:6px;background:transparent;color:#eee;font:12px/1.35 system-ui,sans-serif;pointer-events:none;overflow:auto}
 .zenzaSceneSharedPreview[hidden],.zenzaSceneSharedPreview [hidden],.zenzaSceneSharedPreview.is-idle-suppressed{display:none!important}
 .zenzaSceneSharedPreview .zenzaSceneMedia{display:flex;align-items:flex-start;gap:8px}
-.zenzaSceneSharedPreview .zenzaSceneLeft{min-width:104px;flex-shrink:0;background:#101722;pointer-events:auto}
+.zenzaSceneSharedPreview .zenzaSceneLeft{position:relative;min-width:104px;flex-shrink:0;background:#101722;pointer-events:auto}
 .zenzaSceneSharedPreview .zenzaSceneImageBox{position:relative;overflow:hidden;background:#101114;min-height:0;margin:auto}
 .zenzaSceneSharedPreview .zenzaSceneLogical{position:absolute;left:0;top:0;width:180px;height:90px;transform-origin:0 0}
 .zenzaSceneSharedPreview .zenzaSceneLogical>.zenzaSeekThumbnail{position:absolute!important;left:10px!important;top:0!important;width:160px!important;height:90px!important;margin:0!important}
@@ -36333,6 +36338,8 @@ class SceneSearchPreviewView {
 .zenzaSceneSharedPreview .zenzaSceneNativeList .listContainer{pointer-events:auto!important}
 .zenzaSceneSharedPreview .zenzaSceneFoot{position:static;display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin-top:4px;height:90px;overflow:visible;align-content:flex-start}
 .zenzaSceneSharedPreview .zenzaSceneActions{display:flex;flex-wrap:wrap;gap:2px;position:static;max-width:100%}
+.zenzaSceneSharedPreview .zenzaSceneMoreActions{position:absolute;left:0;bottom:var(--scene-footer-height,36px);box-sizing:border-box;width:100%;max-height:var(--scene-image-height,90px);display:flex;flex-wrap:wrap;gap:2px;padding:3px;background:#101824;border:1px solid #586879;border-radius:4px;overflow:auto;z-index:300;pointer-events:auto}
+.zenzaSceneSharedPreview[data-scene-reveal=always] .zenzaSceneMoreActions{position:static;max-height:none}
 .zenzaSceneSharedPreview .zenzaSceneBtn{position:static;box-sizing:border-box;min-width:32px;height:32px;padding:2px 5px;border:0;border-radius:4px;background:#243346;color:inherit;font:12px system-ui;cursor:pointer}
 .zenzaSceneSharedPreview .zenzaSceneCommentSearch,.zenzaSceneSharedPreview .zenzaSceneStepPopup{position:absolute!important;box-sizing:border-box;top:4px!important;bottom:auto!important;left:4px!important;right:auto!important;max-width:calc(100% - 8px)!important;max-height:calc(100% - 8px);overflow:auto;z-index:400;pointer-events:auto;background:#101824;color:#fff;padding:7px;border:1px solid #64748b;border-radius:4px}
 .zenzaSceneSharedPreview .zenzaSceneCommentSearch{width:calc(100% - 8px)}
@@ -36341,8 +36348,8 @@ class SceneSearchPreviewView {
 .zenzaSceneSharedPreview .zenzaSceneBtn:disabled{opacity:.5;cursor:default}
 .zenzaSceneSharedPreview .zenzaSceneBtn:focus-visible{outline:2px solid #8ed8ff}
 .zenzaSceneSharedPreview .zenzaSceneBtn[aria-pressed=true]{background:#456b8d}
-.zenzaSceneSharedPreview:not(.is-expanded):not([data-scene-reveal=always]):not(:hover):not(:focus-within) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step){display:none}
-.zenzaSceneSharedPreview[data-scene-reveal=click]:not(.is-expanded) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step){display:none}
+.zenzaSceneSharedPreview:not(.is-expanded):not([data-scene-reveal=always]):not(:hover):not(:focus-within) .zenzaSceneMoreActions{display:none}
+.zenzaSceneSharedPreview[data-scene-reveal=click]:not(.is-expanded) .zenzaSceneMoreActions{display:none}
 .zenzaSceneSharedPreview[data-mini-style=flow] .zenzaSceneNativeMini .text{animation-play-state:running!important}
 .zenzaSceneSharedPreview[data-mini-style=static] .zenzaSceneNativeMini .listContainer{display:flex!important;flex-direction:column!important;height:90px!important}
 .zenzaSceneSharedPreview[data-mini-style=static] .zenzaSceneNativeMini .nicoChat{position:relative!important;top:auto!important;transform:none!important;flex:0 0 18px!important;height:18px!important}
@@ -36722,7 +36729,7 @@ class SceneSearchLayout00 {
 				if (!seek || !tip)
 						return;
 				const image = tip.querySelector('.zenzaSeekThumbnail.is-visible .zenzaSeekThumbnail-image');
-				this.lastImage = image;
+				this.lastImage = null;
 				if (!image) {
 						seek.style.removeProperty('--scui00-mini-bottom');
 						return;
@@ -36734,6 +36741,7 @@ class SceneSearchLayout00 {
 				const bottom = (origin.bottom - rect.bottom) / scale;
 				if (Number.isFinite(bottom)) {
 						seek.style.setProperty('--scui00-mini-bottom', Math.round(bottom) + 'px');
+						this.lastImage = image;
 				}
 		}
 		followPointer(clientX) {
@@ -36868,6 +36876,9 @@ class SceneSearchLayout00 {
 	background:transparent!important;
 	z-index:160!important;
 	overflow:hidden!important;pointer-events:none!important;
+	/* Native flow uses a 180px lane around a centered 160px image. Clip paint
+		to that image without changing the timing or positions of native rows. */
+	clip-path:inset(0 10px)!important;
 }
 .is-scui00-active .seekBarContainer:not(.enableCommentPreview)
 	>.zenzaCommentPreview .listContainer .nicoChat .text{

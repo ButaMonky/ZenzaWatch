@@ -72,6 +72,14 @@ async function client(url){
   await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});
   await c.send('Page.navigate',{url:pathToFileURL(fixture).href});
   for(let i=0;i<100;i++){if(await evaluate('window.qaReady===true'))break;await pause(100);}
+  await evaluate("config.setValue('sceneSearch.presentation.normal','legacy');true");await click('#seek');
+  await evaluate("seek.style.height='35px';qaBinding.adapter.bridge._active.render(qaBinding.adapter.bridge.state);true");await frame();
+  const resizedMini=await evaluate("(()=>{const m=bar._commentPreview._view._view.getBoundingClientRect(),i=thumb.querySelector('canvas').getBoundingClientRect();return {mini:m.toJSON(),image:i.toJSON(),error:Math.abs(m.bottom-i.bottom)};})()");
+  record(width+'/legacy-live-resize',resizedMini.error<2,resizedMini);
+  await evaluate("seek.style.height='';true");await frame();
+  await evaluate("old.style.display='none';seek.style.removeProperty('--scui00-mini-bottom');qaBinding.adapter.bridge._active.syncMiniGeometry();old.style.display='';qaBinding.adapter.bridge._active.render(qaBinding.adapter.bridge.state);true");await frame();
+  const revealedMini=await evaluate("(()=>{const m=bar._commentPreview._view._view.getBoundingClientRect(),i=thumb.querySelector('canvas').getBoundingClientRect();return {mini:m.toJSON(),image:i.toJSON(),error:Math.abs(m.bottom-i.bottom)};})()");
+  record(width+'/legacy-hidden-image-reveal',revealedMini.error<2,revealedMini);
   for(const mode of ['normal','fullscreen']){
    if(mode==='fullscreen'){await evaluate('host.requestFullscreen()');await frame();}
    for(const layout of ['follow','fixed']){
@@ -88,9 +96,19 @@ async function client(url){
     await evaluate("qaBinding.adapter.bridge.updatePlacementContext({context:'normal'});true");await frame();
     const afterLeave=await state();
     record(width+'/'+mode+'/'+layout+'/leave-anchor',Math.abs(beforeLeave.rect.left-afterLeave.rect.left)<1,{beforeLeave,afterLeave});
-    await click('[data-scui-action="more"]');
-    const more=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect();return {expanded:root.classList.contains('is-expanded'),hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),style:getComputedStyle(b).visibility};})()");
-    record(width+'/'+mode+'/'+layout+'/more-click',more.expanded&&more.hit,more);
+    for(const reveal of ['hover-focus','click','always']){
+     await evaluate("document.activeElement.blur();qaBinding.adapter.bridge._active.root.classList.remove('is-expanded');config.setValue('sceneSearch.controlsReveal',"+JSON.stringify(reveal)+");true");
+     await move(width-2,2);await frame();
+     // Deliberately use the pre-hover coordinates. Re-querying after hover
+     // would conceal the bug where opening controls moves the clicked button.
+     await click('[data-scui-action="more"]');
+     const more=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect();return {expanded:root.classList.contains('is-expanded'),hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),style:getComputedStyle(b).visibility};})()");
+     record(width+'/'+mode+'/'+layout+'/more-click/'+reveal,more.expanded&&more.hit,more);
+     await click('[data-scui-action=seek-step]');
+     const stepAccess=await evaluate("(()=>{const p=document.querySelector('.zenzaSceneStepPopup'),r=p.getBoundingClientRect(),root=qaBinding.adapter.bridge._active.root.getBoundingClientRect();return {height:r.height,inside:r.top>=root.top&&r.bottom<=root.bottom,visible:!p.hidden};})()");
+     record(width+'/'+mode+'/'+layout+'/more-step/'+reveal,stepAccess.visible&&stepAccess.inside&&stepAccess.height>=64,stepAccess);
+     await click('.zenzaSceneStepPopup [data-scui=cancel]');
+    }
     await click('[data-scui-action=comment-toggle]');
     record(width+'/'+mode+'/'+layout+'/expanded-comment-click',!(await state()).listHidden,await state());
     await evaluate("config.setValue('sceneSearch.controlsReveal','always');config.setValue('enableCommentPreview',true);true");await click('#seek');
@@ -144,6 +162,8 @@ async function client(url){
     await evaluate("config.setValue('sceneSearch.thumbnailScale',"+scale+");true");await click('#seek');
     const s=await evaluate("(()=>{const mini=bar._commentPreview._view._view,im=thumb.querySelector('canvas');return {mini:mini.getBoundingClientRect().toJSON(),image:im.getBoundingClientRect().toJSON(),owner:mini.parentNode===seek,tip:old.getBoundingClientRect().toJSON(),scale:im.getBoundingClientRect().width/160};})()");
     record(width+'/'+mode+'/legacy-scale'+scale,s.owner&&Math.abs(s.scale-s.mini.width/180)<.01&&Math.abs(s.mini.bottom-s.image.bottom)<2&&Math.abs((s.mini.left+s.mini.right)-(s.image.left+s.image.right))<2&&s.image.left>=s.tip.left&&s.image.right<=s.tip.right,s);
+    const clipped=await evaluate("(()=>{const m=bar._commentPreview._view._view,i=thumb.querySelector('canvas').getBoundingClientRect(),r=m.getBoundingClientRect(),probe=document.createElement('span');probe.style.cssText='position:absolute;inset:0;z-index:9999;pointer-events:auto!important;background:magenta';m.append(probe);const hit=(x,y)=>document.elementFromPoint(x,y)===probe;const result={center:hit((i.left+i.right)/2,(i.top+i.bottom)/2),outside:hit(r.left+1,(i.top+i.bottom)/2)||hit(r.right-1,(i.top+i.bottom)/2)||hit((i.left+i.right)/2,i.bottom+2)};probe.remove();return result;})()");
+    record(width+'/'+mode+'/legacy-image-clip'+scale,clipped.center&&!clipped.outside,clipped);
     for(const edge of [2,width-2]){
      const point=await evaluate('(()=>{const r=seek.getBoundingClientRect();return {x:Math.max(r.left+1,Math.min(r.right-1,'+edge+')),y:r.top+10};})()');
      await move(point.x,point.y);await frame();

@@ -3,11 +3,12 @@
 // UI adapters are created only for the selected layout and are disposable.
 //===BEGIN===
 class SceneSearchController {
-  constructor({getPreference,createLayout,loadPreview,onSeek,onError}={}) {
+  constructor({getPreference,resolvePreferences,createLayout,loadPreview,onSeek,onError}={}) {
     if(typeof getPreference!=='function'||typeof createLayout!=='function'){
       throw new TypeError('SceneSearchController requires preferences and a layout factory');
     }
     this._getPreference=getPreference;
+    this._resolvePreferences=resolvePreferences||null;
     this._createLayout=createLayout;
     this._loadPreview=loadPreview||null;
     this._onSeek=typeof onSeek==='function'?onSeek:null;
@@ -29,6 +30,8 @@ class SceneSearchController {
     return value===undefined?fallback:value;
   }
   _layoutFor(mode) {
+    const settings=this._resolvePreferences?.();
+    if(settings)return mode==='fullscreen'&&!settings.linked?settings.fullscreen:settings.normal;
     const linked=this._pref('sceneSearch.layout.linkFullscreen',false)===true;
     const key=mode==='fullscreen'&&!linked?
       'sceneSearch.layout.fullscreen':'sceneSearch.layout.normal';
@@ -47,7 +50,7 @@ class SceneSearchController {
       videoId:this._videoId,time:this._time,pinned:this._pinned,
       shown:this._shown,seekStepSeconds:this._stepSeconds(),
       commentPreviewVisible:this._previewEnabled(),
-      commentListMode:this._pref('enableCommentPreview',false)===true});
+      commentListMode:this._resolvePreferences?.()?.listOpen??(this._pref('enableCommentPreview',false)===true)});
   }
   _ensureReady() {
     if(this._disposed){throw new Error('SceneSearchController has been disposed');}
@@ -85,9 +88,10 @@ class SceneSearchController {
       this._layout=create(desired);
     }catch(error){
       this._onError?.(error,desired);
-      if(desired==='01'){this._layoutId=null;throw error;}
-      this._layoutId='01';
-      this._layout=create('01');
+      const fallback=this._resolvePreferences?'follow':'01';
+      if(desired===fallback){this._layoutId=null;throw error;}
+      this._layoutId=fallback;
+      this._layout=create(fallback);
     }
     this._render();
   }
@@ -108,7 +112,7 @@ class SceneSearchController {
   onPreferencesChanged(key) {
     this._ensureReady();
     if(!this._started){return this.snapshot;}
-    if(key?.startsWith('sceneSearch.layout.')) {
+    if(key?.startsWith('sceneSearch.layout.')||key?.startsWith('sceneSearch.presentation.')) {
       if(this._layoutFor(this._mode)!==this._layoutId){
         this._activateLayout();
         return this.snapshot;
@@ -130,7 +134,7 @@ class SceneSearchController {
   }
   setTime(seconds) {
     this._ensureReady();
-    if(!Number.isFinite(seconds)||seconds<0||this._time===seconds){
+    if(this._pinned||!Number.isFinite(seconds)||seconds<0||this._time===seconds){
       return this.snapshot;
     }
     this._time=seconds;

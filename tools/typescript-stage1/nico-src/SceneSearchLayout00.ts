@@ -9,7 +9,7 @@ type Legacy00Settings = {
  getMiniCommentMode?:()=>string|null;
  getAppearance?:()=>{scale:number;opacity:number;miniEnabled:boolean;miniStyle:'flow'|'static'};
 };
-type Legacy00State = {commentListMode?:boolean;shown?:boolean};
+type Legacy00State = {commentListMode?:boolean;shown?:boolean;pinned?:boolean};
 type Legacy00Options = {
  document:Document;container:HTMLElement;mode?:string;settings?:Legacy00Settings;
 };
@@ -27,6 +27,7 @@ export class SceneSearchLayout00 {
  private onMove:((event:MouseEvent)=>void)|null=null;
  private currentClientX:number|null=null;
  private listMode=false;
+ private pinned=false;
  private appearanceScale=1;
  private appearanceStyles:Array<{name:string;value:string;priority:string}>=[];
  private geometry:{originLeft:number;scale:number;visibleLeft:number;
@@ -74,6 +75,7 @@ export class SceneSearchLayout00 {
   // Native VideoControlBar toggles enableCommentPreview on its seekbar and
   // the original CommentPreviewView switches CSS + row behavior.
   // Never move, recreate, or independently toggle the original elements.
+  this.pinned=state?.pinned===true;
   const mode=state?.commentListMode===true;
   const changed=mode!==this.listMode;
   this.listMode=mode;
@@ -119,7 +121,7 @@ export class SceneSearchLayout00 {
   }
  }
  followPointer(clientX:number):void{
-  if(!Number.isFinite(clientX))return;
+  if(this.pinned||!Number.isFinite(clientX))return;
   const seek=this.seekOwner,track=this.track,tip=this.tooltip,comment=this.comment;
   const win=this.document.defaultView;
   if(!seek||!track||!tip||!comment||!win)return;

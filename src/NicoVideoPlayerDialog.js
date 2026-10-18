@@ -678,6 +678,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         }
         dragging = true;
         classList.add('is-smallModeDragging');
+        this.emit('sceneSearchGeometryChange',{active:true});
         try { container.setPointerCapture(dragPointerId); } catch (err) { /* noop */ }
       }
       const [x, y] = clampOffset(baseOffsetX + dx, baseOffsetY + dy);
@@ -699,6 +700,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       try { container.releasePointerCapture(dragPointerId); } catch (err) { /* noop */ }
       dragPointerId = null;
       classList.remove('is-smallModeDragging');
+      this.emit('sceneSearchGeometryChange',{active:false});
       container.removeEventListener('pointermove', onDragMove);
       container.removeEventListener('pointerup', endDrag);
       container.removeEventListener('pointercancel', endDrag);
@@ -798,6 +800,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       try { resizeHandle.releasePointerCapture(resizePointerId); } catch (err) { /* noop */ }
       resizePointerId = null;
       classList.remove('is-smallModeResizing');
+      this.emit('sceneSearchGeometryChange',{active:false});
       resizeHandle.removeEventListener('pointermove', onResizeMove);
       resizeHandle.removeEventListener('pointerup', endResize);
       resizeHandle.removeEventListener('pointercancel', endResize);
@@ -817,6 +820,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       baseWidth = rect.width;
       baseHeight = rect.height;
       classList.add('is-smallModeResizing');
+      this.emit('sceneSearchGeometryChange',{active:true});
       try { resizeHandle.setPointerCapture(resizePointerId); } catch (err) { /* noop */ }
       resizeHandle.addEventListener('pointermove', onResizeMove);
       resizeHandle.addEventListener('pointerup', endResize);
@@ -857,6 +861,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       e.stopPropagation();
       applyOffset(0, 0);
       applySize(0, 0);
+      this.emit('sceneSearchGeometryChange',{active:false});
       persistPosition();
       persistSize();
       updateCommentInputLayout();

@@ -14,6 +14,7 @@ class SceneSearchLayout00 {
     onMove = null;
     currentClientX = null;
     listMode = false;
+    pinned = false;
     appearanceScale = 1;
     appearanceStyles = [];
     geometry = null;
@@ -66,6 +67,7 @@ class SceneSearchLayout00 {
         // Native VideoControlBar toggles enableCommentPreview on its seekbar and
         // the original CommentPreviewView switches CSS + row behavior.
         // Never move, recreate, or independently toggle the original elements.
+        this.pinned = state?.pinned === true;
         const mode = state?.commentListMode === true;
         const changed = mode !== this.listMode;
         this.listMode = mode;
@@ -118,7 +120,7 @@ class SceneSearchLayout00 {
         }
     }
     followPointer(clientX) {
-        if (!Number.isFinite(clientX))
+        if (this.pinned || !Number.isFinite(clientX))
             return;
         const seek = this.seekOwner, track = this.track, tip = this.tooltip, comment = this.comment;
         const win = this.document.defaultView;

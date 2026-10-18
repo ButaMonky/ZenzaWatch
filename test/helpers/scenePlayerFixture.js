@@ -4,6 +4,7 @@ const {createContext,run,beginSection}=require('./extractSource');
 const scene='packages/zenza/src/sceneSearch/';
 const modules=['src/UiVisibilityRegistry.js',...[
  'SceneSearchLayoutCard.js','SceneSearchLayout00.js',
+ 'SceneSearchPreferences.js','SceneSearchPreviewView.js','SceneSearchPlacement.js',
  'SceneSearchLayoutRegistry.js','SceneSearchLayoutCatalog.js',
  'SceneSearchLayouts01_02.js','layouts/SceneSearchLayouts03_04.js',
  'layouts/SceneSearchLayouts05_06.js','layouts/SceneSearchLayout07.js',

@@ -227,13 +227,19 @@ class SceneSearchPreviewView {
         if (step)
             step.textContent = (state.seekStepSeconds ?? 5) + '秒';
     }
-    fit({ imageScale, listWidth, listMaxHeight }) {
+    fit({ imageScale, listWidth, listMaxHeight, footerHeight = 94 }) {
         if (!this.logical || !this.imageBox || !this.listSlot || this.disposed)
             return;
         const scale = Number.isFinite(imageScale) ? Math.max(.05, Math.min(2, imageScale)) : 1;
         this.logical.style.transform = 'scale(' + scale + ')';
         this.imageBox.style.width = 180 * scale + 'px';
         this.imageBox.style.height = 90 * scale + 'px';
+        const left = this.root?.querySelector('.zenzaSceneLeft');
+        if (left)
+            left.style.width = Math.max(104, 180 * scale) + 'px';
+        const foot = this.root?.querySelector('.zenzaSceneFoot');
+        if (foot)
+            foot.style.height = Math.max(32, footerHeight - 4) + 'px';
         this.listSlot.style.width = Math.max(1, listWidth) + 'px';
         this.listSlot.style.maxHeight = Math.max(32, listMaxHeight) + 'px';
         if (this.listView) {
@@ -243,7 +249,7 @@ class SceneSearchPreviewView {
     getRects() {
         if (!this.root || this.root.hidden || this.disposed || this.root.classList.contains('is-idle-suppressed'))
             return [];
-        return [this.root, ...this.root.querySelectorAll('.zenzaSceneNativeList,.zenzaSceneActions')]
+        return [...this.root.querySelectorAll('.zenzaSceneLeft,.zenzaSceneNativeList,.zenzaSceneActions,.zenzaSceneCommentSearch,.zenzaSceneStepPopup')]
             .filter(node => !node.hidden && !node.closest('[hidden]')).map(node => node.getBoundingClientRect())
             .filter(rect => rect.width > 0 && rect.height > 0);
     }
@@ -270,28 +276,33 @@ class SceneSearchPreviewView {
     }
     static get CSS() {
         return `
-.zenzaSceneSharedPreview{position:absolute;box-sizing:border-box;z-index:150;left:0;top:0;bottom:auto;transform:none;width:max-content;max-width:calc(100vw - 16px);padding:4px;border:1px solid #586879;border-radius:6px;background:#101722;color:#eee;font:12px/1.35 system-ui,sans-serif;pointer-events:auto}
+.zenzaSceneSharedPreview{position:absolute;box-sizing:border-box;z-index:150;left:0;top:0;bottom:auto;transform:none;width:max-content;max-width:calc(100vw - 16px);padding:4px;border:1px solid #586879;border-radius:6px;background:transparent;color:#eee;font:12px/1.35 system-ui,sans-serif;pointer-events:none;overflow:auto}
 .zenzaSceneSharedPreview[hidden],.zenzaSceneSharedPreview [hidden],.zenzaSceneSharedPreview.is-idle-suppressed{display:none!important}
 .zenzaSceneSharedPreview .zenzaSceneMedia{display:flex;align-items:flex-start;gap:8px}
-.zenzaSceneSharedPreview .zenzaSceneLeft{min-width:80px;flex-shrink:0}
-.zenzaSceneSharedPreview .zenzaSceneImageBox{position:relative;overflow:hidden;background:#101114;min-height:0}
+.zenzaSceneSharedPreview .zenzaSceneLeft{min-width:104px;flex-shrink:0;background:#101722;pointer-events:auto}
+.zenzaSceneSharedPreview .zenzaSceneImageBox{position:relative;overflow:hidden;background:#101114;min-height:0;margin:auto}
 .zenzaSceneSharedPreview .zenzaSceneLogical{position:absolute;left:0;top:0;width:180px;height:90px;transform-origin:0 0}
 .zenzaSceneSharedPreview .zenzaSceneLogical>.zenzaSeekThumbnail{position:absolute!important;left:10px!important;top:0!important;width:160px!important;height:90px!important;margin:0!important}
 .zenzaSceneSharedPreview .zenzaSceneLogical>.zenzaSeekThumbnail.is-visible{display:block!important}
 .zenzaSceneSharedPreview .zenzaSeekThumbnail-image,.zenzaSceneSharedPreview canvas.zenzaSeekThumbnail-thumbnail{width:160px!important;height:90px!important;max-width:none!important}
-.zenzaSceneSharedPreview .zenzaSceneNativeMini{display:block!important;position:absolute!important;left:0!important;top:0!important;bottom:auto!important;width:180px!important;height:90px!important;max-height:90px!important;transform:none!important;opacity:1!important;background:transparent!important;overflow:hidden!important;pointer-events:none!important}
+.zenzaSceneSharedPreview .zenzaSceneNativeMini{display:block!important;position:absolute!important;left:0!important;top:0!important;bottom:auto!important;width:180px!important;height:90px!important;max-height:90px!important;transform:none!important;opacity:1!important;background:transparent!important;overflow:hidden!important;pointer-events:none!important;z-index:200}
 .zenzaSceneSharedPreview .zenzaSceneNativeMini[hidden]{display:none!important}
-.zenzaSceneSharedPreview .zenzaSceneListSlot{position:relative;flex-shrink:0;overflow:auto}
+.zenzaSceneSharedPreview .zenzaSceneListSlot{position:relative;flex-shrink:0;overflow:auto;pointer-events:auto}
 .zenzaSceneSharedPreview .zenzaSceneNativeList{display:block!important;position:relative!important;inset:auto!important;width:100%!important;max-height:none!important;transform:none!important;border:0!important;opacity:1!important;background:rgba(7,13,24,var(--scene-list-alpha,.9))!important;overflow:auto!important;pointer-events:auto!important}
 .zenzaSceneSharedPreview .zenzaSceneNativeList .listContainer{pointer-events:auto!important}
-.zenzaSceneSharedPreview .zenzaSceneFoot{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin-top:4px}
+.zenzaSceneSharedPreview .zenzaSceneFoot{position:static;display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin-top:4px;height:90px;overflow:visible;align-content:flex-start}
 .zenzaSceneSharedPreview .zenzaSceneActions{display:flex;flex-wrap:wrap;gap:2px;position:static;max-width:100%}
 .zenzaSceneSharedPreview .zenzaSceneBtn{position:static;box-sizing:border-box;min-width:32px;height:32px;padding:2px 5px;border:0;border-radius:4px;background:#243346;color:inherit;font:12px system-ui;cursor:pointer}
+.zenzaSceneSharedPreview .zenzaSceneCommentSearch,.zenzaSceneSharedPreview .zenzaSceneStepPopup{position:absolute!important;box-sizing:border-box;top:4px!important;bottom:auto!important;left:4px!important;right:auto!important;max-width:calc(100% - 8px)!important;max-height:calc(100% - 8px);overflow:auto;z-index:400;pointer-events:auto;background:#101824;color:#fff;padding:7px;border:1px solid #64748b;border-radius:4px}
+.zenzaSceneSharedPreview .zenzaSceneCommentSearch{width:calc(100% - 8px)}
+.zenzaSceneSharedPreview .zenzaSceneCommentSearch input{box-sizing:border-box;max-width:100%;min-height:32px}
+.zenzaSceneSharedPreview .zenzaSceneStepPopup button{min-width:32px;min-height:32px}
 .zenzaSceneSharedPreview .zenzaSceneBtn:disabled{opacity:.5;cursor:default}
 .zenzaSceneSharedPreview .zenzaSceneBtn:focus-visible{outline:2px solid #8ed8ff}
 .zenzaSceneSharedPreview .zenzaSceneBtn[aria-pressed=true]{background:#456b8d}
 .zenzaSceneSharedPreview:not(.is-expanded):not([data-scene-reveal=always]):not(:hover):not(:focus-within) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step){display:none}
 .zenzaSceneSharedPreview[data-scene-reveal=click]:not(.is-expanded) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step){display:none}
+.zenzaSceneSharedPreview[data-mini-style=flow] .zenzaSceneNativeMini .text{animation-play-state:running!important}
 .zenzaSceneSharedPreview[data-mini-style=static] .zenzaSceneNativeMini .listContainer{display:flex!important;flex-direction:column!important;height:90px!important}
 .zenzaSceneSharedPreview[data-mini-style=static] .zenzaSceneNativeMini .nicoChat{position:relative!important;top:auto!important;transform:none!important;flex:0 0 18px!important;height:18px!important}
 .zenzaSceneSharedPreview[data-mini-style=static] .zenzaSceneNativeMini .nicoChat:nth-child(n+6){display:none!important}

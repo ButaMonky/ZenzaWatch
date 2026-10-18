@@ -159,13 +159,16 @@ const historyTriggerKeyGuard = event => {
       this._commentPreview = new CommentPreview({
         $container: this._$seekBarContainer
       });
-      const updateEnableCommentPreview = v => {
+      const updateEnableCommentPreview = () => {
+        const v=config.resolveSceneSearch?.()?.listOpen??config.props.enableCommentPreview;
         this._$seekBarContainer.raf.toggleClass('enableCommentPreview', v);
         this._commentPreview.mode = v ? 'list' : 'hover';
       };
 
       updateEnableCommentPreview(config.props.enableCommentPreview);
       config.onkey('enableCommentPreview', updateEnableCommentPreview);
+      config.onkey('sceneSearch.commentPreviewVisible', updateEnableCommentPreview);
+      config.onkey('sceneSearch.commentListVisible', updateEnableCommentPreview);
 
       const watchElement = $container[0].closest('#zenzaVideoPlayerDialog');
       this._wheelSeeker = new WheelSeeker({
@@ -403,7 +406,7 @@ const historyTriggerKeyGuard = event => {
       const sec = e.target.value * 1;
       const left = sec / (e.target.max * 1) * global.innerWidth;
       util.dispatchCommand(e.target, 'seek', sec);
-      this._seekBarToolTip.update(sec, left);
+      this._seekBarToolTip.update(this._sceneSearchPinnedTime?.()??sec, left);
       this.storyboard.setCurrentTime(sec, true);
     }
     _onSeekBarMouseDown(e) {
@@ -436,8 +439,9 @@ const historyTriggerKeyGuard = event => {
       if (!this.state.isDragging) {
         e.stopPropagation();
       }
-      const left = e.offsetX;
-      const sec = this._posToTime(left);
+      const pinned=this._sceneSearchPinnedTime?.();
+      const left = Number.isFinite(pinned)?this._seekBarMouseX:e.offsetX;
+      const sec = Number.isFinite(pinned)?pinned:this._posToTime(left);
       this._seekBarMouseX = left;
 
       this._commentPreview.currentTime = sec;
@@ -454,10 +458,11 @@ const historyTriggerKeyGuard = event => {
       const left = sec / dur * window.innerWidth;
       this._seekBarMouseX = left;
 
-      this._commentPreview.currentTime = sec;
+      const previewTime=this._sceneSearchPinnedTime?.()??sec;
+      this._commentPreview.currentTime = previewTime;
       this._commentPreview.update(left);
 
-      this._seekBarToolTip.update(sec, left);
+      this._seekBarToolTip.update(previewTime, left);
       this.storyboard.setCurrentTime(sec, true);
     }
     _beginMouseDrag() {

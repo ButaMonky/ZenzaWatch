@@ -61,6 +61,8 @@ class SceneSearchInteraction {
     const right=anchor.x+30+t*(rect.right+18-(anchor.x+30));
     return x>=left&&x<=right;
   }
+  get holdingPreview(){return this._overPreview||this._dragging;}
+  clearCorridor(){this._clearTimer();this._stopTracking();}
   _clearTimer() {
     if(this._timer!==null){this._clock.clearTimeout(this._timer);this._timer=null;}
   }

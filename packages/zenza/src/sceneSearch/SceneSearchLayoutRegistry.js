@@ -6,7 +6,7 @@ class SceneSearchLayoutRegistry {
     this._items=new Map();
   }
   static validId(id) {
-    return typeof id==='string' && /^(00|0[1-9]|10)$/.test(id);
+    return typeof id==='string' && /^(00|0[1-9]|10|follow|fixed|legacy)$/.test(id);
   }
   register({id,label,description='',factory}={}) {
     if(!SceneSearchLayoutRegistry.validId(id) || typeof label!=='string' ||

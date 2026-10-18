@@ -53,6 +53,10 @@ describe('scene placement in viewport coordinates',()=>{
    seekbar:rect(0,680,1280,40)});
   assert(full.rect.top+full.rect.height<=672);
  });
+ it('places below the whole control bar when it extends below the video image',()=>{
+  const input=fixture({context:'normal',viewport:rect(0,0,768,900),player:rect(16,16,736,510),seekbar:rect(16,546,736,20)});
+  const r=compute(input);assert.strictEqual(overlap(r.rect,input.seekbar),0);assert(r.rect.top>=574);
+ });
  it('clamps a held panel when viewport shrinks, keeping horizontal mini/list',()=>{
   const previous=compute(fixture({player:rect(0,430,400,225)}));
   const input=fixture({viewport:rect(0,0,320,240),seekbar:rect(0,200,320,40),previous,hold:true});

@@ -45,6 +45,11 @@ class SceneSearchShortcutRouter {
   _layout(direction) {
     const full=this.controller.snapshot.mode==='fullscreen' &&
       this._get('sceneSearch.layout.linkFullscreen')!==true;
+    if(['follow','fixed','legacy'].includes(this.controller.snapshot.layoutId)){
+      const key=full?'sceneSearch.presentation.fullscreen':'sceneSearch.presentation.normal';
+      const choices=['follow','fixed','legacy'],index=choices.indexOf(this.controller.snapshot.layoutId);
+      return this._save(key,choices[(index+(direction>0?1:2))%3]);
+    }
     const key=full?'sceneSearch.layout.fullscreen':'sceneSearch.layout.normal';
     const value=this._get(key);
     const index=/^(00|0[1-9]|10)$/.test(value)?Number(value):1;

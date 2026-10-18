@@ -103,6 +103,9 @@ class SceneSearchLegacyAdapter {
     try{
       bridge.start(mode);
       bridge.setVideo(this.currentVideoId);
+      this._previousPinnedTime=this.bar._sceneSearchPinnedTime;
+      this._pinnedTimeHook=()=>bridge.state.pinned?bridge.state.time:null;
+      this.bar._sceneSearchPinnedTime=this._pinnedTimeHook;
       const player=this.bar.player;
       this._subscribe(player,'open',watchId=>{
         if(!this._disposed){bridge.setVideo(watchId);}
@@ -137,6 +140,10 @@ class SceneSearchLegacyAdapter {
       catch(error){this._onError(error,'unsubscribe:'+event);}
     }
     this._owners.length=0;
+    if(this.bar._sceneSearchPinnedTime===this._pinnedTimeHook){
+      if(this._previousPinnedTime===undefined)delete this.bar._sceneSearchPinnedTime;
+      else this.bar._sceneSearchPinnedTime=this._previousPinnedTime;
+    }
     this._bridge?.dispose();
     this._bridge=null;
   }

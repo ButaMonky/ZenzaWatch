@@ -43,6 +43,8 @@ class SceneSearchIntegrationBridge {
       getLegacyTooltip:()=>this._legacyTooltipElement,
       getLegacyComment:()=>this._commentPreviewElement,
       getMiniCommentMode:()=>this.config.getValue('sceneSearch.miniCommentMode'),
+      ...(config.resolveSceneSearch?{getAppearance:()=>config.resolveSceneSearch()}:{}),
+      getThumbnail:()=>this._getThumbnailElement?.(),
       getSeekBarContainer:()=>this.seekElement.closest?.('.seekBarContainer')||null};
     this._clock=clock||null;
     this._classes=classes;
@@ -60,6 +62,7 @@ class SceneSearchIntegrationBridge {
     this._running=false;
     this._disposed=false;
     this._style=null;
+    this._placementContext='normal';this._placementGeometry=null;this._placementHold=false;
     this._seekListeners={
       mouseenter:e=>{
         this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
@@ -79,6 +82,7 @@ class SceneSearchIntegrationBridge {
     };
     this.controller=new classes.Controller({
       getPreference:key=>config.getValue(key),
+      resolvePreferences:config.resolveSceneSearch?()=>config.resolveSceneSearch():null,
       createLayout:({id,mode})=>this._createLayout({id,mode}),
       loadPreview:loadPreview||null,
       onSeek:delta=>this._onSeekRelative(delta),
@@ -160,9 +164,12 @@ class SceneSearchIntegrationBridge {
     this._activePointers.clear();
     this.document.removeEventListener('pointerup',this._onPointerFinish,true);
     this.document.removeEventListener('pointercancel',this._onPointerFinish,true);
-    if(active || this._running){this.interaction.setDragging(false);}
+    if(active || this._running){this.interaction.setDragging(false);this._resumePlacement();}
   }
   _createLayout({id,mode}) {
+    this._placementGeometry=null;this._placementResult=null;
+    if(id==='follow'||id==='fixed')return this._createModernLayout({id,mode});
+    if(id==='legacy')id='00';
     const card=this.registry.create({id,mode,document:this.document,
       container:this.container,settings:this.layoutSettings,
       onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
@@ -273,6 +280,84 @@ class SceneSearchIntegrationBridge {
     };
     return wired;
   }
+  _createModernLayout({id,mode}){
+    const d=this.document,portal=d.createElement('div');
+    portal.className='zenzaScenePreviewPortal';
+    portal.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
+    (d.fullscreenElement||d.body).append(portal);
+    // Native row actions (seek / NG) still enter the original player dispatcher.
+    portal.addEventListener('command',event=>{
+      event.stopPropagation();
+      this.container.dispatchEvent(new d.defaultView.CustomEvent('command',{detail:event.detail,bubbles:true,composed:true}));
+    });
+    const card=this.registry.create({id,mode,document:d,container:portal,settings:this.layoutSettings,
+      onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
+    let list=null;
+    const render=state=>{
+      const prefs=this.config.resolveSceneSearch();
+      if(prefs.listOpen&&!list&&this._createCommentList){
+        list=this._createCommentList(portal);card.setListView(list);
+      }
+      card.render({...state,...prefs});
+      this._placeModern(card,state);
+      if(card.root){
+        card.root.dataset.sceneReveal=this.config.getValue('sceneSearch.controlsReveal')||'hover-focus';
+        card.root.dataset.sceneAnimation=this.config.getValue('sceneSearch.animation')||'subtle';
+      }
+      this._visibility?.refresh?.();
+      if(!state.shown&&!state.pinned)this.interaction?.clearCorridor?.();
+    };
+    return {get root(){return card.root;},
+      mount:()=>{try{
+        card.mount();this._active=card;this._modernPortal=portal;
+        this._hideLegacyTooltip();this._mountCardControls(card);
+      }catch(error){this._releaseCard(card);card.dispose();portal.remove();throw error;}},
+      render,renderTime:render,onPreview:()=>this.refreshSharedThumbnail(),
+      dispose:()=>{
+        this._releaseCard(card);card.dispose();portal.remove();
+        this._modernPortal=null;this._placementResult=null;this._placementGeometry=null;
+      }};
+  }
+  updatePlacementContext({context='normal',interactionActive=false}={}){
+    if(this._disposed)return;
+    this._placementContext=['normal','small','fullscreen'].includes(context)?context:'normal';
+    this._placementHold=interactionActive;
+    this._placementGeometry=null;
+    this.idleLimiter.pause('player-manipulation',interactionActive);
+    if(this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
+  }
+  _placeModern(card,state){
+    if(!card.root||!this._classes.Placement)return;
+    const d=this.document,win=d.defaultView,portal=this._modernPortal;
+    const parent=d.fullscreenElement||d.body;
+    if(portal&&portal.parentNode!==parent)parent.append(portal);
+    if(!this._placementGeometry){
+      const player=(this.container.querySelector('.videoPlayer')||this.container).getBoundingClientRect();
+      const seekbar=this.seekElement.getBoundingClientRect();
+      const obstacles=[];
+      for(const node of this.container.querySelectorAll(
+        '.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,.zenzaSmallModeAspectLockButton,.closeButton,.zenzaSmallModeCloseButton')){
+        const css=win.getComputedStyle(node),rect=node.getBoundingClientRect();
+        if(!node.hidden&&css.display!=='none'&&css.visibility!=='hidden'&&css.opacity!=='0'&&rect.width>0&&rect.height>0)obstacles.push(rect);
+      }
+      const origin=portal?.getBoundingClientRect()||{left:0,top:0,width:0,height:0};
+      this._placementGeometry={player,seekbar,obstacles,origin,
+        viewport:{left:0,top:0,width:win.innerWidth,height:win.innerHeight}};
+    }
+    const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
+    const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
+    const result=this._classes.Placement.compute({...g,layout:state.layoutId,context:this._placementContext,
+      imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,
+      anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold});
+    this._placementResult=result;card.fit(result);
+    const x=g.origin.width&&portal?.clientWidth?portal.clientWidth/g.origin.width:1;
+    const y=g.origin.height&&portal?.clientHeight?portal.clientHeight/g.origin.height:1;
+    card.root.style.left=(result.rect.left-g.origin.left)*x+'px';
+    card.root.style.top=(result.rect.top-g.origin.top)*y+'px';
+    card.root.style.width=result.rect.width+'px';card.root.style.height=result.rect.height+'px';
+    card.root.style.transformOrigin='0 0';card.root.style.transform='scale('+x+','+y+')';
+    card.root.dataset.sceneContext=this._placementContext;
+  }
   _updateTwinCommentPlacement(below,player){
     if(!below||!player){
       this.container.style.removeProperty('--scui-twin-comment-top');
@@ -294,6 +379,7 @@ class SceneSearchIntegrationBridge {
   }
   _onCardAction(action,context) {
     if(action==='comment-toggle'){
+      if(this.config.resolveSceneSearch?.()?.listAllowed===false)return;
       // Legacy tooltip button selects flowing/list mode, NOT global visibility.
       this.config.setValue('enableCommentPreview',
         this.config.getValue('enableCommentPreview')!==true);
@@ -442,7 +528,11 @@ class SceneSearchIntegrationBridge {
     this._active=null;
   }
   refreshSharedThumbnail() {
-    if(this.controller.snapshot.layoutId==='00'){
+    if(this._active?.setImage){
+      this._active.setImage(this._getThumbnailElement?.()||null);
+      return true;
+    }
+    if(['00','legacy'].includes(this.controller.snapshot.layoutId)){
       // The legacy StoryboardWorker can create its 160x90 canvas after mount.
       // Retry attachment of the original flowing-comment DOM at that moment.
       this._active?.render?.(this.controller.snapshot);
@@ -520,12 +610,15 @@ class SceneSearchIntegrationBridge {
     }
     this._legacyTooltipOriginal=null;
   }
+  _resumePlacement(){
+    if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
+  }
   _bindPreviewSurface(node) {
     const enter=()=>this.interaction.previewEnter(node);
-    const leave=e=>this.interaction.previewLeave(node,e);
+    const leave=e=>{this.interaction.previewLeave(node,e);this._resumePlacement();};
     const focus=()=>this.interaction.previewFocus(true,node);
     const blur=e=>{
-      if(!node.contains(e.relatedTarget))this.interaction.previewFocus(false,node);
+      if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
     };
     const pointer=e=>this._startPointer(e);
     const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
@@ -547,6 +640,7 @@ class SceneSearchIntegrationBridge {
     handle.dispose();
   }
   _previewRects() {
+    if(this._active?.getRects)return this._active.getRects();
     const root=this._active?.root;
     const nodes=[root,root?.querySelector('.zenzaSceneActions'),
       root?.querySelector('.zenzaSceneRemoteControls'),this._commentPreviewElement,
@@ -687,6 +781,7 @@ class SceneSearchIntegrationBridge {
     this._commentDock=null;
   }
   _syncCommentPreviewVisibility() {
+    if(this.config.resolveSceneSearch)return; // Effective state belongs to shared view / legacy adapter.
     const node=this._commentPreviewElement;
     if(!node?.style){return;}
     const visible=this.config.getValue('sceneSearch.commentPreviewVisible')!==false;
@@ -715,6 +810,11 @@ class SceneSearchIntegrationBridge {
     this._commentPreviewOriginal=null;
   }
   static validSavedPreference(key,value) {
+    if(key==='sceneSearch.presentation.normal'||key==='sceneSearch.presentation.fullscreen')
+      return ['follow','fixed','legacy'].includes(value);
+    if(key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
+    if(key==='sceneSearch.thumbnailScale')return Number.isInteger(value)&&value>=50&&value<=200;
+    if(key==='sceneSearch.commentListBackgroundOpacity')return Number.isInteger(value)&&value>=0&&value<=100;
     if(key==='sceneSearch.layout.normal'||key==='sceneSearch.layout.fullscreen'){
       return typeof value==='string'&&/^(00|0[1-9]|10)$/.test(value);
     }
@@ -738,7 +838,7 @@ class SceneSearchIntegrationBridge {
   }
   _refreshSavedPreferenceViews(keys) {
     if(this._disposed||!keys.length){return;}
-    const layoutKey=keys.find(key=>key.startsWith('sceneSearch.layout.'));
+    const layoutKey=keys.find(key=>key.startsWith('sceneSearch.layout.')||key.startsWith('sceneSearch.presentation.'));
     this.controller.onPreferencesChanged(layoutKey||keys[0]);
     if(keys.includes('sceneSearch.commentPreviewVisible'))this._syncCommentPreviewVisibility();
     if(keys.includes('sceneSearch.idleHideSeconds'))this.interaction.idlePreferencesChanged();
@@ -831,7 +931,10 @@ class SceneSearchIntegrationBridge {
         // comment/thumbnail handler. Do not intercept media click ownership.
         this.seekElement.addEventListener(event,handler,event==='mousemove');
       }
-      const keys=['sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
+      const keys=['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
+        'sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
+        'sceneSearch.thumbnailScale','sceneSearch.commentListBackgroundOpacity',
+        'sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
         'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
         'sceneSearch.commentPreviewVisible','sceneSearch.miniCommentMode','sceneSearch.idleHideSeconds',
         'sceneSearch.controlsReveal','sceneSearch.animation','enableCommentPreview'];
@@ -839,6 +942,7 @@ class SceneSearchIntegrationBridge {
         for(const key of keys){
           const callback=()=>{
             if(this._disposed||this._externalSettingsBatch)return;
+            if(key.startsWith('sceneSearch.presentation.')||key.startsWith('sceneSearch.layout.'))this.interaction.reset();
             this.controller.onPreferencesChanged(key);
             if(key==='sceneSearch.commentPreviewVisible'){
               this._syncCommentPreviewVisibility();
@@ -905,6 +1009,7 @@ class SceneSearchIntegrationBridge {
     this._subscriptions.length=0;
     this._style?.remove();
     this._style=null;
+    this._placementContext='normal';this._placementGeometry=null;this._placementHold=false;
     this._running=false;
   }
   static get CSS(){

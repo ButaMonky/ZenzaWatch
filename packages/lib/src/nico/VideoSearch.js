@@ -939,7 +939,9 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         // Task 073: search.limit を増やせるようにしたが、スナップショット検索は
         // 1回ごとに待ち時間が伸びる（300ms × 回数）ため、従来通り1600件で打ち切る。
         maxLimit = Math.min(Math.max(1, parseInt(maxLimit, 10) || 300), PER_PAGE * MAX_PAGE);
-        params = params || {};
+        // Issue #28: keep caller-owned search parameters unchanged during page fetching.
+        // Matches the already-committed private Task644 behavior.
+        params = Object.assign({}, params || {});
 
         const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params);
 
@@ -996,10 +998,12 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const midThumbnailThreshold = 23608629; // .Mのついた最小ID?
         data.data.forEach(item => {
           let description = item.description ? item.description.replace(/<.*?>/g, '') : '';
-          if (item.thumbnailUrl.indexOf('.M') >= 0) {
-            item.thumbnail_url = item.thumbnail_url.replace(/\.M$/, '');
+          const thumbnailUrl = typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '';
+          if (thumbnailUrl.indexOf('.M') >= 0) {
+            // Issue #27: snapshot uses thumbnailUrl, not thumbnail_url (Task644 parity).
+            item.thumbnailUrl = thumbnailUrl.replace(/\.M$/, '');
             item.is_middle_thumbnail = true;
-          } else if (item.thumbnailUrl.indexOf('.M') < 0 &&
+          } else if (typeof item.contentId === 'string' &&
             item.contentId.indexOf('sm') === 0) {
             let _id = parseInt(item.contentId.substring(2), 10);
             if (_id >= midThumbnailThreshold) {

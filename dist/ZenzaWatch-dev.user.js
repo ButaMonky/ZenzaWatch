@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-18 12:58Z
+// build: 2026-10-18 18:50Z c2934a9
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function() {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.311-task801';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-18 12:58Z';
+    var BUILD = '2026-10-18 18:50Z c2934a9';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -12947,7 +12947,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 				const PER_PAGE = 25; // 検索ページで1ページあたりに表示される件数
 				const MAX_PAGE = 64; // 25 * 64 = 1600
 				maxLimit = Math.min(Math.max(1, parseInt(maxLimit, 10) || 300), PER_PAGE * MAX_PAGE);
-				params = params || {};
+				params = Object.assign({}, params || {});
 				const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params);
 				const currentPage = params.page ? parseInt(params.page, 10) : 1;
 				const currentOffset = (currentPage - 1) * PER_PAGE;
@@ -12996,10 +12996,11 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
 				const midThumbnailThreshold = 23608629; // .Mのついた最小ID?
 				data.data.forEach(item => {
 					let description = item.description ? item.description.replace(/<.*?>/g, '') : '';
-					if (item.thumbnailUrl.indexOf('.M') >= 0) {
-						item.thumbnail_url = item.thumbnail_url.replace(/\.M$/, '');
+					const thumbnailUrl = typeof item.thumbnailUrl === 'string' ? item.thumbnailUrl : '';
+					if (thumbnailUrl.indexOf('.M') >= 0) {
+						item.thumbnailUrl = thumbnailUrl.replace(/\.M$/, '');
 						item.is_middle_thumbnail = true;
-					} else if (item.thumbnailUrl.indexOf('.M') < 0 &&
+					} else if (typeof item.contentId === 'string' &&
 						item.contentId.indexOf('sm') === 0) {
 						let _id = parseInt(item.contentId.substring(2), 10);
 						if (_id >= midThumbnailThreshold) {
@@ -26664,9 +26665,10 @@ class NicoComment extends Emitter {
 			maxTime = Math.max(maxTime, c.date);
 		}
 		const timeDepth = maxTime - minTime;
+		const hasTimeDepth = Number.isFinite(timeDepth) && timeDepth > 0;
 		for (const c of nicoChats) {
 			c.time3d = c.date - minTime;
-			c.time3dp = c.time3d / timeDepth;
+			c.time3dp = hasTimeDepth ? c.time3d / timeDepth : 0;
 		}
 		if (!nicoScripter.isEmpty) {
 			window.console.time('ニコスクリプト適用');

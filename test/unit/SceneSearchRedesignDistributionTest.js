@@ -5,8 +5,12 @@ describe('Task801 review package',()=>{
   const path='review/task801/ZenzaWatch-dev.user.js';
   assert(fs.existsSync(path),'review userscript must be packaged');
   const review=fs.readFileSync(path,'utf8'),dist=fs.readFileSync('dist/ZenzaWatch-dev.user.js','utf8');
+  // Task801 is an immutable accepted review snapshot, not the moving dev output.
+  // Issue #27-29 fixes legitimately change the later dev build without changing review.
+  const accepted=execFileSync('C:/Program Files/Git/cmd/git.exe',
+    ['show','c2934a9:dist/ZenzaWatch-dev.user.js'],{maxBuffer:30*1024*1024}).toString('utf8');
   const marker='// ==/UserScript==',body=s=>s.slice(s.indexOf(marker));
-  assert.strictEqual(body(review),body(dist));
+  assert.strictEqual(body(review),body(accepted),'Task801 accepted review body must remain unchanged');
   assert(review.includes('// @version        2.7.311-task801'));
   assert(/var VER\s*=\s*'2\.7\.311-task801'/.test(review));
   for(const key of ['downloadURL','updateURL'])assert(new RegExp('// @'+key+'\\s+https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/review/task801/ZenzaWatch-dev.user.js').test(review));

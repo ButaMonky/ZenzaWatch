@@ -126,10 +126,10 @@ async function client(url){
     const anchor=await evaluate("(()=>{const r=seek.getBoundingClientRect();return {x:r.left+r.width*.2,y:r.top+r.height/2};})()");
     await move(anchor.x,anchor.y);await frame();
     const beforeLeave=await state();
-    record(width+'/'+mode+'/'+layout+'/collapsed-height',beforeLeave.footer.height<=40&&beforeLeave.rect.height<=145,beforeLeave);
+    record(width+'/'+mode+'/'+layout+'/collapsed-height',beforeLeave.footer.height<=54&&beforeLeave.rect.height<=158,beforeLeave);
     for(const screen of ['normal','wide','big','3D','small']){
      await evaluate("document.body.className='zenzaScreenMode_"+screen+"';true");await frame();
-     const guard=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=more]'),r=b.getBoundingClientRect(),probe=document.createElement('div'),child=document.createElement('button');probe.append(child);document.body.append(probe);const background=getComputedStyle(child).pointerEvents;probe.remove();return {button:getComputedStyle(b).pointerEvents,hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),background,portal:getComputedStyle(root.parentElement).pointerEvents};})()");
+     const guard=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect(),probe=document.createElement('div'),child=document.createElement('button');probe.append(child);document.body.append(probe);const background=getComputedStyle(child).pointerEvents;probe.remove();return {button:getComputedStyle(b).pointerEvents,hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),background,portal:getComputedStyle(root.parentElement).pointerEvents};})()");
      record(width+'/'+mode+'/'+layout+'/native-input-guard/'+screen,guard.button==='auto'&&guard.hit&&guard.portal==='none'&&(screen==='small'||guard.background==='none'),guard);
     }
     await evaluate("document.body.className='zenzaScreenMode_big';true");await frame();
@@ -138,27 +138,18 @@ async function client(url){
     const afterLeave=await state();
     record(width+'/'+mode+'/'+layout+'/leave-anchor',Math.abs(beforeLeave.rect.left-afterLeave.rect.left)<1,{beforeLeave,afterLeave});
     for(const reveal of ['hover-focus','click','always']){
-     await evaluate("document.activeElement.blur();qaBinding.adapter.bridge._active.root.classList.remove('is-expanded');config.setValue('sceneSearch.controlsReveal',"+JSON.stringify(reveal)+");true");
+     await evaluate("document.activeElement.blur();config.setValue('sceneSearch.controlsReveal',"+JSON.stringify(reveal)+");config.setValue('enableCommentPreview',false);true");
      await move(width-2,2);await frame();
-     // Deliberately use the pre-hover coordinates. Re-querying after hover
-     // would conceal the bug where opening controls moves the clicked button.
-     await click('[data-scui-action="more"]');
-     const more=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect();return {expanded:root.classList.contains('is-expanded'),hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),style:getComputedStyle(b).visibility};})()");
-     record(width+'/'+mode+'/'+layout+'/more-click/'+reveal,more.expanded&&more.hit,more);
-     await evaluate("qaBinding.adapter.bridge._active.root.classList.remove('is-expanded');document.querySelector('[data-scui-action=more]').focus();true");
+     await click('[data-scui-action="comment-toggle"]');
+     record(width+'/'+mode+'/'+layout+'/comment-click/'+reveal,!(await state()).listHidden,await state());
+     await evaluate("document.querySelector('[data-scui-action=comment-toggle]').focus();true");
      await c.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r',unmodifiedText:'\r'});
-     await c.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});await frame();
-     record(width+'/'+mode+'/'+layout+'/more-keyboard/'+reveal,await evaluate("qaBinding.adapter.bridge._active.root.classList.contains('is-expanded')"),{});
+     await c.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter'});await frame();
+     record(width+'/'+mode+'/'+layout+'/comment-keyboard/'+reveal,(await state()).listHidden,await state());
      await evaluate('qaNativeCommands.length=0;true');
-     await click('[data-scui-action=seek-forward]');
-     record(width+'/'+mode+'/'+layout+'/seek-command/'+reveal,await evaluate("qaNativeCommands.length===1&&qaNativeCommands[0][0]==='seekBy'&&qaNativeCommands[0][1]===5"),await evaluate('qaNativeCommands'));
-     await click('[data-scui-action=seek-step]');
-     const stepAccess=await evaluate("(()=>{const p=document.querySelector('.zenzaSceneStepPopup'),r=p.getBoundingClientRect(),root=qaBinding.adapter.bridge._active.root.getBoundingClientRect();return {height:r.height,inside:r.top>=root.top&&r.bottom<=root.bottom,visible:!p.hidden};})()");
-     record(width+'/'+mode+'/'+layout+'/more-step/'+reveal,stepAccess.visible&&stepAccess.inside&&stepAccess.height>=64,stepAccess);
-     await click('.zenzaSceneStepPopup [data-scui=cancel]');
+     await click('[data-scui-action=seek-back]');await click('[data-scui-action=seek-forward]');
+     record(width+'/'+mode+'/'+layout+'/seek-command/'+reveal,await evaluate("JSON.stringify(qaNativeCommands)===JSON.stringify([['seekBy',-5],['seekBy',5]])"),await evaluate('qaNativeCommands'));
     }
-    await click('[data-scui-action=comment-toggle]');
-    record(width+'/'+mode+'/'+layout+'/expanded-comment-click',!(await state()).listHidden,await state());
     await evaluate("config.setValue('sceneSearch.controlsReveal','always');config.setValue('enableCommentPreview',true);true");await click('#seek');
     for(const scale of [50,100,150,200]){
      await evaluate("config.setValue('sceneSearch.thumbnailScale',"+scale+");true");await frame();
@@ -168,6 +159,8 @@ async function client(url){
      record(label+'/adjacent',s.list&&s.list.left>=s.image.right&&s.list.right<=s.rect.right+1&&!s.listHidden,s);
      record(label+'/native-flow',s.flow==='running',s);
      record(label+'/controls-visible',s.footer.content<=s.footer.height,s);
+     const controls=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,foot=root.querySelector('.zenzaSceneFoot'),image=root.querySelector('.zenzaSceneImageBox').getBoundingClientRect(),buttons=[...foot.querySelectorAll('button')],rects=buttons.map(b=>b.getBoundingClientRect());return {actions:buttons.map(b=>b.dataset.scuiAction),below:rects.every(r=>r.top>=image.bottom),sameRow:rects.every(r=>Math.abs(r.top-rects[0].top)<1),center:Math.abs((rects[1].left+rects[1].right)/2-(image.left+image.right)/2)<1,hit:buttons.every((b,i)=>b.contains(document.elementFromPoint(rects[i].left+rects[i].width/2,rects[i].top+rects[i].height/2))),noTray:!root.querySelector('.zenzaSceneMoreActions,.zenzaSceneStepPopup')};})()");
+     record(label+'/compact-controls',JSON.stringify(controls.actions)===JSON.stringify(['seek-back','comment-toggle','seek-forward'])&&controls.below&&controls.sameRow&&controls.center&&controls.hit&&controls.noTray,controls);
     }
     for(const opacity of [0,40,90,100]){
      await evaluate("config.setValue('sceneSearch.commentListBackgroundOpacity',"+opacity+");true");await frame();
@@ -194,13 +187,9 @@ async function client(url){
     const hidden=await state();record(width+'/'+mode+'/'+layout+'/idle',!hidden.shown&&hidden.hidden&&hidden.hitRects===0,hidden);
     await click('#seek');await evaluate("config.setValue('sceneSearch.idleHideSeconds',0);true");await pause(700);
     record(width+'/'+mode+'/'+layout+'/idle-zero',(await state()).shown,await state());
-    await click('[data-scui-action="seek-step"]');
-    const menu=await evaluate("(()=>{const p=document.querySelector('.zenzaSceneStepPopup'),r=p.getBoundingClientRect();return {visible:!p.hidden,rect:r.toJSON(),hit:p.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};})()");
-    record(width+'/'+mode+'/'+layout+'/step-menu',menu.visible&&menu.hit&&menu.rect.top>=0&&menu.rect.bottom<=900,menu);
-    await click('.zenzaSceneStepPopup [data-scui="cancel"]');
     await click('[data-scui-action="comment-search"]');
     const search=await evaluate("(()=>{const p=document.querySelector('.zenzaSceneCommentSearch'),r=p.getBoundingClientRect();return {visible:!p.hidden,rect:r.toJSON(),hit:p.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};})()");
-    record(width+'/'+mode+'/'+layout+'/search-panel',search.visible&&search.hit&&search.rect.top>=0&&search.rect.bottom<=900,search);
+    record(width+'/'+mode+'/'+layout+'/search-panel',search.visible&&search.hit&&search.rect.top>=0&&search.rect.bottom<=900&&search.rect.left>=(await state()).image.right,search);
     await evaluate("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));document.activeElement.blur();true");await frame();
     if(width===768){const shot=await c.send('Page.captureScreenshot',{format:'png'});fs.writeFileSync(path.join(out,'task801-'+mode+'-'+layout+'.png'),Buffer.from(shot.data,'base64'));}
    }
@@ -274,7 +263,7 @@ async function client(url){
   }
   await evaluate("config.setValue('sceneSearch.presentation.normal','fixed');true");await frame();
   if(width===1536){
-   await click('#seek');await click('[data-scui-action="pin"]');
+   await click('#seek');await evaluate('qaBinding.adapter.bridge.interaction.togglePin();true');
    await c.send('Emulation.setDeviceMetricsOverride',{width:320,height:900,deviceScaleFactor:1,mobile:false});await frame();
    const s=await state();record('small/pinned-viewport-shrink',s.rect.left>=7&&s.rect.right<=313,s);
    await c.send('Emulation.setDeviceMetricsOverride',{width,height:900,deviceScaleFactor:1,mobile:false});await frame();
@@ -288,7 +277,7 @@ async function client(url){
     await frame();await click('#seek');await frame();
     const short=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,r=root.getBoundingClientRect(),b=seek.getBoundingClientRect(),hit=document.elementFromPoint(160,220);return {rect:r.toJSON(),bar:b.toJSON(),hit:seek===hit||seek.contains(hit)};})()");
     record('short/'+mode+'/'+layout+'/seekbar',short.rect.bottom<=192.1&&short.rect.top>=7&&short.hit,short);
-    const scroll=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root;root.scrollTop=root.scrollHeight;const el=root.querySelector('[data-scui-action=seek-step]'),r=el.getBoundingClientRect(),outer=root.getBoundingClientRect();return {inside:r.top>=outer.top&&r.bottom<=outer.bottom,hit:el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};})()");
+    const scroll=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root;root.scrollTop=root.scrollHeight;const el=root.querySelector('[data-scui-action=comment-toggle]'),r=el.getBoundingClientRect(),outer=root.getBoundingClientRect();return {inside:r.top>=outer.top&&r.bottom<=outer.bottom,hit:el.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2))};})()");
     record('short/'+mode+'/'+layout+'/scroll-controls',scroll.inside&&scroll.hit,scroll);
     if(mode==='fullscreen'){await evaluate('document.exitFullscreen()');await frame();}
    }

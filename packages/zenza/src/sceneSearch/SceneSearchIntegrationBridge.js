@@ -301,7 +301,10 @@ class SceneSearchIntegrationBridge {
       if(prefs.listOpen&&!list&&this._createCommentList){
         list=this._createCommentList(portal);card.setListView(list);
       }
+      const returnListFocus=!prefs.listOpen&&card.root?.querySelector('.zenzaSceneListSlot')?.contains(d.activeElement);
+      if(!prefs.listOpen)this._commentPanel?.close();
       card.render({...state,...prefs});
+      if(returnListFocus)card.root.querySelector('[data-scui-action="comment-toggle"]')?.focus();
       if(card.root){
         card.root.dataset.sceneReveal=this.config.getValue('sceneSearch.controlsReveal')||'hover-focus';
         card.root.dataset.sceneAnimation=this.config.getValue('sceneSearch.animation')||'subtle';
@@ -467,15 +470,27 @@ class SceneSearchIntegrationBridge {
       },
       onError:error=>this._onError(error,'sceneSearch.seekStepSeconds')
     });
-    step.mount(actionList);
+    const modern=root.classList.contains('zenzaSceneSharedPreview');
+    // Modern controls use the shared seek commands; seconds stay in settings.
+    // Retain the step model for existing keyboard shortcuts, without its popup.
+    if(modern)step.updateFromConfig();else step.mount(actionList);
     this._stepWidget=step;
     const searchPanel=new C.CommentSearchPanel({
-      document:this.document,search:this.commentSearch
+      document:this.document,search:this.commentSearch,
+      onOpenChange:open=>{
+        const button=root.querySelector('[data-scui-action="comment-search"]');
+        button?.setAttribute('aria-expanded',String(open));
+        if(!open&&searchPanel.root?.contains(this.document.activeElement))button?.focus();
+      }
     });
-    searchPanel.mount(root);
+    searchPanel.mount(modern?root.querySelector('.zenzaSceneListSlot'):root);
     this._commentPanel=searchPanel;
     this.router.seekStepControl=step;
-    this.router.commentSearchPanel=searchPanel;
+    this.router.commentSearchPanel=modern?{toggle:()=>{
+      if(this.config.resolveSceneSearch().listAllowed===false)return;
+      if(this.config.getValue('enableCommentPreview')!==true)this.config.setValue('enableCommentPreview',true);
+      searchPanel.toggle();
+    }}:searchPanel;
     this._cardCleanup=this._bindPreviewSurface(root);
     this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
     this.refreshSharedThumbnail();
@@ -1102,7 +1117,7 @@ class SceneSearchIntegrationBridge {
 .zenzaSceneSearchHost[data-scene-reveal="always"] .zenzaSceneBtn{
  transform:none!important
 }
-.zenzaSceneSearchHost[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step),
+.zenzaSceneSearchHost:not(.zenzaSceneSharedPreview)[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) :is(.scene-pin,.scene-comment-toggle,.scene-comment-search,.scene-seek-step),
 .zenzaSceneEdgeDrawer[data-scene-reveal="click"]:not(.is-expanded):not(.is-pinned) .zenzaSceneActions{
  opacity:0!important;visibility:hidden!important;pointer-events:none!important
 }

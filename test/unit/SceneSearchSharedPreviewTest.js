@@ -24,6 +24,22 @@ function setup(){
 const state={shown:true,miniEnabled:true,listOpen:true,listAllowed:true,opacity:90,scale:100,miniStyle:'flow'};
 describe('shared scene native preview',function(){
  this.timeout(20000);
+ it('keeps only back, comment and forward icons in the footer and search with the list',()=>{
+  const h=setup();try{
+   h.view.render(state);
+   const buttons=[...h.view.root.querySelectorAll('.zenzaSceneFoot button')];
+   assert.deepStrictEqual(buttons.map(b=>b.dataset.scuiAction),['seek-back','comment-toggle','seek-forward']);
+   buttons.forEach(b=>b.click());
+   assert.deepStrictEqual(h.actions,['seek-back','comment-toggle','seek-forward']);
+   const search=h.view.root.querySelector('[data-scui-action="comment-search"]');
+   assert(search.closest('.zenzaSceneListSlot'));
+   assert(!h.view.root.querySelector('[data-scui-action="pin"],[data-scui-action="more"],[data-scui-action="seek-step"]'));
+   assert.strictEqual(h.mini.hidden,false);
+   h.view.render({...state,listOpen:false});
+   assert(search.closest('[hidden]'));
+   assert.strictEqual(h.mini.hidden,false);
+  }finally{h.done();}
+ });
  it('scales original image and mini together without scaling list, controls or canvas backing store',()=>{
   const h=setup();try{
    h.view.render(state);

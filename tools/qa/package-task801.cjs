@@ -1,10 +1,10 @@
 'use strict';
 const fs=require('fs'),path=require('path'),crypto=require('crypto');
 const root=path.resolve(__dirname,'../..'),marker='// ==/UserScript==';
-for(const [file,version] of [['ZenzaWatch-dev.user.js','2.7.309-task801'],['ZenzaAdvancedSettings.user.js','0.3.63-task801']]){
+for(const [file,version] of [['ZenzaWatch-dev.user.js','2.7.310-task801'],['ZenzaAdvancedSettings.user.js','0.3.63-task801']]){
  const source=fs.readFileSync(path.join(root,'dist',file),'utf8'),end=source.indexOf(marker);
  if(end<0||!new RegExp('^// @version\\s+'+version.replace(/\./g,'\\.')+'$','m').test(source))throw Error('Unexpected build '+file);
- if(file==='ZenzaWatch-dev.user.js'&&!source.includes("var VER = '2.7.309-task801'"))throw Error('Startup version mismatch');
+ if(file==='ZenzaWatch-dev.user.js'&&!source.includes("var VER = '2.7.310-task801'"))throw Error('Startup version mismatch');
  const output='review/task801/'+file,url='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/refs/heads/publication/task801-scui-preview-settings/'+output;
  let header=source.slice(0,end);
  for(const key of ['downloadURL','updateURL']){

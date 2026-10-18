@@ -26,6 +26,30 @@ function harness(layout='follow'){
  };
 }
 describe('semantic scene preview production binding',()=>{
+ it('keeps search inside the list and uses settings for the three icon controls',()=>{
+  const h=harness();try{
+   h.move(400);const root=h.bridge._active.root;
+   assert.strictEqual(root.querySelector('.zenzaSceneStepPopup'),null);
+   h.config.setValue('sceneSearch.seekStepSeconds',10);
+   root.querySelector('[data-scui-action="seek-back"]').click();
+   root.querySelector('[data-scui-action="seek-forward"]').click();
+   assert.deepStrictEqual(h.commands.slice(-2),[['seekBy',-10],['seekBy',10]]);
+   h.config.setValue('sceneSearch.seekStepSeconds',0);
+   assert(root.querySelector('[data-scui-action="seek-back"]').hidden);
+   assert(!root.querySelector('[data-scui-action="comment-toggle"]').hidden);
+   root.querySelector('[data-scui-action="comment-toggle"]').click();
+   const search=root.querySelector('[data-scui-action="comment-search"]');search.click();
+   const panel=root.querySelector('.zenzaSceneCommentSearch');
+   assert(panel.closest('.zenzaSceneListSlot'));assert(!panel.hidden);
+   assert.strictEqual(search.getAttribute('aria-expanded'),'true');
+   h.tick(5000);assert(!root.hidden,'typing focus must keep the preview visible');
+   root.querySelector('[data-scui-action="comment-toggle"]').click();
+   assert(panel.hidden);assert(panel.closest('[hidden]'));
+   assert.strictEqual(h.d.activeElement.dataset.scuiAction,'comment-toggle');
+   root.querySelector('[data-scui-action="comment-toggle"]').click();
+   assert(panel.hidden,'reopening the list must not resurrect a hidden search');
+  }finally{h.close();}
+ });
  for(const layout of ['follow','fixed'])it(layout+' mounts native mini and adjacent list with effective child settings',()=>{
   const h=harness(layout);try{
    assert.deepStrictEqual(h.errors,[]);assert.strictEqual(h.bridge.state.layoutId,layout);

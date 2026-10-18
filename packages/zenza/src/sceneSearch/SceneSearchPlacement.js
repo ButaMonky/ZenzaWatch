@@ -17,10 +17,9 @@ class SceneSearchPlacement {
         const iw = Math.max(1, input.imageSize.width), ih = Math.max(1, input.imageSize.height);
         const requested = clamp(Number.isFinite(input.requestedScale) ? input.requestedScale : 100, 50, 200) / 100;
         let listWidth = listOpen ? clamp(availableW - padding - gap - Math.max(minLeft, iw * requested), 160, 280) : 0;
-        let imageScale = Math.min(requested, Math.max(.05, (availableW - padding - (listOpen ? gap + listWidth : 0)) / iw), Math.max(.05, (availableH - padding - 158) / ih));
+        const footer = Number.isFinite(input.footerHeight) ? Math.max(36, input.footerHeight) : 54;
+        let imageScale = Math.min(requested, Math.max(.05, (availableW - padding - (listOpen ? gap + listWidth : 0)) / iw), Math.max(.05, (availableH - padding - footer) / ih));
         const leftWidth = Math.max(minLeft, iw * imageScale);
-        const footer = Number.isFinite(input.footerHeight) ? Math.max(36, input.footerHeight) :
-            Math.ceil(7 / Math.max(1, Math.floor((leftWidth + 2) / 38))) * 34 + 26;
         const width = Math.min(availableW, padding + leftWidth + (listOpen ? gap + listWidth : 0));
         const height = Math.min(availableH, padding + Math.max(ih * imageScale + footer, listOpen ? 240 : 0));
         const listMaxHeight = Math.max(32, height - padding);

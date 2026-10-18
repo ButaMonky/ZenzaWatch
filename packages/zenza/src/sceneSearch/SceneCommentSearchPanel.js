@@ -1,12 +1,13 @@
 // SCUI-06: Accessible local comment search UI; parent layout owns placement.
 //===BEGIN===
 class SceneCommentSearchPanel {
-  constructor({document,search}={}) {
+  constructor({document,search,onOpenChange}={}) {
     if(!document||!search||typeof search.search!=='function'){
       throw new TypeError('Search panel needs document and comment search model');
     }
     this.document=document;
     this.search=search;
+    this._onOpenChange=onOpenChange;
     this.root=null;
     this._open=false;
     this._onInput=this._handleInput.bind(this);
@@ -47,15 +48,17 @@ class SceneCommentSearchPanel {
     if(!this.root){return false;}
     this._open=true;
     this.root.hidden=false;
+    this._onOpenChange?.(true);
     const input=this.root.querySelector('[data-scui="query"]');
     input.focus();
     this.refresh();
     return true;
   }
   close() {
-    if(!this.root){return;}
+    if(!this.root||!this._open){return;}
     this._open=false;
     this.root.hidden=true;
+    this._onOpenChange?.(false);
   }
   toggle(){if(this._open){this.close();}else{this.open();}}
   reset() {

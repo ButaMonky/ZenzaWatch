@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.34-task391
+// @version        0.0.38-task800
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
@@ -2583,7 +2583,7 @@ AntiPrototypeJs().then(() => {
     };
 
     const init = () => {
-      console.log('%cinit ZenzaWatch HLS 0.0.33-task301', 'background: cyan');
+      console.log('%cinit ZenzaWatch HLS 0.0.38-task800', 'background: cyan');
 
       const hlsConfig = Object.assign({}, Config.raw);
       // Task 079: Config は emit('update', {key, value}) の形で知らせるので、

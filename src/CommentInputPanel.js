@@ -5,8 +5,10 @@ import {css} from '../packages/lib/src/css/css';
 import {uq} from '../packages/lib/src/uQuery';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+import {CommentSubmitLifetime} from '../packages/lib/src/nico/CommentSubmitLifetime';
 //===BEGIN===
 //@require UiVisibilityRegistry
+//@require CommentSubmitLifetime
 /*
  * Task 073: コメントコマンドピッカー（案C＋案Aパネル）
  * - 入力欄にフォーカスすると、下の帯（旧「入力時に一時停止」の帯）が広がり、サイズ・位置・基本色を選べる
@@ -354,43 +356,8 @@ class CommentInputPanel extends Emitter {
     this._$autoPause.prop('checked', !!val);
   }
   submit() {
-    // Hold the lock for the entire POST promise, not just the duplicate
-    // form-submit/button-click event turn.
-    if (this._submitPending) {
-      return this._submitPromise;
-    }
-    const originalChat = this._$commentInput.val();
-    const originalCommand = this._$commandInput.val();
-    const chat = originalChat.trim();
-    const cmd = originalCommand.trim();
-    if (!chat.length) {
-      return;
-    }
-    this._submitPending = true;
-    this._$view.addClass('updating');
-
-    const post = new Promise((resolve, reject) =>
-      this.emit('post', {resolve, reject}, chat, cmd));
-    const settled = post.then(
-      () => {
-        // The POST is now confirmed. Do not erase edits made while it was
-        // pending; a new draft (including command changes) owns the inputs.
-        if (this._$commentInput.val() === originalChat &&
-            this._$commandInput.val() === originalCommand) {
-          this._$commentInput.val('').blur();
-          this._$commandInput.blur();
-          this._togglePopover(false);
-        }
-        return true;
-      },
-      () => false // Keep the draft for retry. The dialog owns failure feedback.
-    );
-    this._submitPromise = settled.finally(() => {
-      this._submitPending = false;
-      this._submitPromise = null;
-      this._$view.removeClass('updating');
-    });
-    return this._submitPromise;
+    // Task505: TS-owned lock and draft lifecycle. Preserve legacy return values.
+    return CommentSubmitLifetime.submit(this);
   }
   get isAutoPause() {
     return this.config.props.autoPauseCommentInput;

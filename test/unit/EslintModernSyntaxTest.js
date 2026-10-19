@@ -14,16 +14,25 @@ const probes = [
     'class Counter { static count; static { this.count = 1; } }\n']
 ];
 
-describe('Task247 / Task298 ESLint modern syntax parsing', () => {
+describe('Task247 / Task298 ESLint modern syntax parsing', function() {
+  // First lint may resolve ESLint plugins/config under full-suite CPU load.
+  this.timeout(10000);
+  const byConfig = new Map();
+  const getESLint = configFile => {
+    if (!byConfig.has(configFile)) {
+      byConfig.set(configFile, new ESLint({
+        cwd: project,
+        useEslintrc: !configFile,
+        ...(configFile ? {overrideConfigFile: path.join(project, configFile)} : {})
+      }));
+    }
+    return byConfig.get(configFile);
+  };
   for (const configFile of [null, '.eslintrc', '.eslintrc.js']) {
     const configName = configFile || 'project config';
     for (const [name, code] of probes) {
       it(`${configName}: parses ${name}`, async () => {
-        const eslint = new ESLint({
-          cwd: project,
-          useEslintrc: !configFile,
-          ...(configFile ? {overrideConfigFile: path.join(project, configFile)} : {})
-        });
+        const eslint = getESLint(configFile);
         const [result] = await eslint.lintText(code, {
           filePath: 'src/task298-modern-syntax-probe.js'
         });
@@ -33,7 +42,7 @@ describe('Task247 / Task298 ESLint modern syntax parsing', () => {
   }
 
   it('still rejects invalid syntax with the project config', async () => {
-    const eslint = new ESLint({cwd: project});
+    const eslint = getESLint(null);
     const [result] = await eslint.lintText('const value = ;\n', {
       filePath: 'src/task298-invalid-syntax-probe.js'
     });

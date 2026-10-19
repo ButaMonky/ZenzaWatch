@@ -1,9 +1,9 @@
 import { CONSTANT } from '../../../../src/constant';
 import {css} from '../css/css';
+// GENERATED FROM tools/typescript-stage1/nico-src/PopupMessage.ts (Task785). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
 const PopupMessage = (() => {
-  const __css__ = `
+    const __css__ = `
     .zenzaPopupMessage {
       --notify-color: #0c0;
       --alert-color: #c00;
@@ -55,48 +55,39 @@ const PopupMessage = (() => {
       90% { opacity: 0; }
     }
   `;
-
-  let initialized = false;
-  const initialize = () => {
-    if (initialized) { return; }
-    initialized = true;
-    css.addStyle(__css__);
-  };
-
-  const create = (msg, className, allowHtml = false) => {
-    const d = document.createElement('div');
-    d.className = `zenzaPopupMessage ${className}`;
-    allowHtml ? (d.innerHTML = msg) : (d.textContent = msg);
-    d.addEventListener('animationend', () => d.remove(), {once: true});
-    return d;
-  };
-
-  const show = msg => {
-    initialize();
-    const target = document.querySelector('.popupMessageContainer');
-    (target || document.body).prepend(msg);
-  };
-
-  const nt = (msg, allowHtml, type, consoleStyle) => {
-    if (msg === undefined) {
-      msg = '不明なエラー';
-      window.console.error('undefined message sent');
-      window.console.trace();
-    }
-    console.log('%c%s', consoleStyle, msg);
-    show(create(msg, type, allowHtml));
-  };
-
-  const notify = (msg, allowHtml = false) =>
-    nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;');
-
-  const alert = (msg, allowHtml = false) =>
-    nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
-
-  const debug = (msg, allowHtml = false) =>
-    nt(msg, allowHtml, 'debug', 'background: #333; color: #fff; padding: 8px;');
-
-  return {notify, alert, debug};
+    let initialized = false;
+    const initialize = () => {
+        if (initialized) {
+            return;
+        }
+        initialized = true;
+        css.addStyle(__css__);
+    };
+    const create = (msg, className, allowHtml = false) => {
+        const d = document.createElement('div');
+        d.className = `zenzaPopupMessage ${className}`;
+        allowHtml ? (d.innerHTML = msg) : (d.textContent = msg);
+        d.addEventListener('animationend', () => d.remove(), { once: true });
+        return d;
+    };
+    const show = (msg) => {
+        initialize();
+        const target = document.querySelector('.popupMessageContainer');
+        (target || document.body).prepend(msg);
+    };
+    const nt = (msg, allowHtml, type, consoleStyle) => {
+        if (msg === undefined) {
+            msg = '不明なエラー';
+            window.console.error('undefined message sent');
+            window.console.trace();
+        }
+        console.log('%c%s', consoleStyle, msg);
+        show(create(msg, type, allowHtml));
+    };
+    const notify = (msg, allowHtml = false) => nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;');
+    const alert = (msg, allowHtml = false) => nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
+    const debug = (msg, allowHtml = false) => nt(msg, allowHtml, 'debug', 'background: #333; color: #fff; padding: 8px;');
+    return { notify, alert, debug };
 })();
 //===END===
-export { PopupMessage };
+export {PopupMessage};

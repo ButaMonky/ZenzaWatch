@@ -44,7 +44,7 @@ function threadLoaderSubject() {
     const u = String(url);
     requests.push({url: u, opts});
     const json = body => ({json: async () => body});
-    if (u.includes('/v1/comment/keys/post')) { return json({meta: {status: 200}, data: {postKey: SECRETS.postKey, challenge: {isRequired: true, siteKey: 'synthetic-site-key', challengeToken: SECRETS.token}}}); }
+    if (u.includes('/v1/comment/keys/post')) { return json({meta: {status: 200}, data: {postKey: SECRETS.postKey, challenge: {isRequired: false, siteKey: 'synthetic-site-key', challengeToken: SECRETS.token}}}); }
     if (u.includes('/v1/comment/keys/nicoru')) { return json({meta: {status: 200}, data: {nicoruKey: SECRETS.nicoruKey}}); }
     if (u.includes('/v1/comment/keys/delete')) { return json({meta: {status: 200}, data: {deleteKey: SECRETS.deleteKey}}); }
     if (u.includes('/v1/comment/keys/thread')) { return json({meta: {status: 200}, data: {threadKey: SECRETS.retryThreadKey}}); }

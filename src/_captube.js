@@ -5,7 +5,7 @@
 // @include     https://www.youtube.com/*
 // @include     https://www.youtube.com/embed/*
 // @include     https://youtube.com/*
-// @version     0.0.17-task374
+// @version     0.0.22-task800
 // @grant       none
 // @license     public domain
 // ==/UserScript==

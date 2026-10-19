@@ -1,5 +1,5 @@
 import {netUtil} from '../infra/netUtil';
-
+// GENERATED FROM tools/typescript-stage1/nico-src/TagSuggestLoader.ts (Task463). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 /**
  * タグ検索の入力補完（Task 069）。
@@ -20,32 +20,28 @@ import {netUtil} from '../infra/netUtil';
  *  - 本家では候補を選んで検索すると URL に rd=suggested_tag が付く（流入元の記録用）。
  */
 const TagSuggestLoader = (() => {
-  const API_BASE = 'https://sug.search.nicovideo.jp/suggestion/expand/';
-  const CACHE_LIMIT = 300;
-  const cache = new Map();
-
-  const load = async (word) => {
-    const w = (word || '').trim();
-    if (!w) {
-      return [];
-    }
-    if (cache.has(w)) {
-      return cache.get(w);
-    }
-    const net = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o)};
-    const res = await net.fetch(API_BASE + encodeURIComponent(w), {credentials: 'omit', timeout: 5000});
-    const json = await res.json();
-    const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter(c => typeof c === 'string') : [];
-    cache.set(w, candidates);
-    if (cache.size > CACHE_LIMIT) {
-      cache.delete(cache.keys().next().value);
-    }
-    return candidates;
-  };
-
-  return {load};
+    const API_BASE = 'https://sug.search.nicovideo.jp/suggestion/expand/';
+    const CACHE_LIMIT = 300;
+    const cache = new Map();
+    const load = async (word) => {
+        const w = (word || '').trim();
+        if (!w) {
+            return [];
+        }
+        if (cache.has(w)) {
+            return cache.get(w);
+        }
+        const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+        const res = await net.fetch(API_BASE + encodeURIComponent(w), { credentials: 'omit', timeout: 5000 });
+        const json = await res.json();
+        const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter((c) => typeof c === 'string') : [];
+        cache.set(w, candidates);
+        if (cache.size > CACHE_LIMIT) {
+            cache.delete(cache.keys().next().value);
+        }
+        return candidates;
+    };
+    return { load };
 })();
-
 //===END===
-
 export {TagSuggestLoader};

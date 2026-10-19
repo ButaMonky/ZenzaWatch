@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.5-task301
+// @version     0.3.7-task786
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -19,7 +19,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // ==/UserScript==
-// build: 2026-10-08 00:05Z 5266732
+// build: 2026-10-19 16:58Z
 /* eslint-disable */
 
 // chrome://flags/#enable-experimental-web-platform-features
@@ -40,7 +40,7 @@
 
   const monkey = (PRODUCT) => {
     'use strict';
-    var VER = '0.3.5-task301';
+    var VER = '0.3.7-task786';
     const ENV = 'STABLE';
 
     let ZenzaWatch = null;
@@ -110,194 +110,214 @@ interval: ${config.interval}        // マスクの更新間隔
       }
     };
 const bounce = {
-	origin: Symbol('origin'),
-	idle(func, time) {
-		let reqId = null;
-		let lastArgs = null;
-		let promise = new PromiseHandler();
-		const [caller, canceller] =
-			(time === undefined && self.requestIdleCallback) ?
-				[self.requestIdleCallback, self.cancelIdleCallback] : [self.setTimeout, self.clearTimeout];
-		const callback = () => {
-			const lastResult = func(...lastArgs);
-			promise.resolve({lastResult, lastArgs});
-			reqId = lastArgs = null;
-			promise = new PromiseHandler();
-		};
-		const result = (...args) => {
-			if (reqId) {
-				reqId = canceller(reqId);
-			}
-			lastArgs = args;
-			reqId = caller(callback, time);
-			return promise;
-		};
-		result[this.origin] = func;
-		return result;
-	},
-	time(func, time = 0) {
-		return this.idle(func, time);
-	}
+		origin: Symbol('origin'),
+		idle(func, time) {
+				let reqId = null;
+				let lastArgs = null;
+				let promise = new PromiseHandler();
+				const [caller, canceller] = ((time === undefined && self.requestIdleCallback) ?
+						[self.requestIdleCallback, self.cancelIdleCallback] : [self.setTimeout, self.clearTimeout]);
+				const callback = () => {
+						const lastResult = func(...lastArgs);
+						promise.resolve({ lastResult, lastArgs });
+						reqId = lastArgs = null;
+						promise = new PromiseHandler();
+				};
+				const result = (...args) => {
+						if (reqId) {
+								reqId = canceller(reqId);
+						}
+						lastArgs = args;
+						reqId = caller(callback, time);
+						return promise;
+				};
+				result[this.origin] = func;
+				return result;
+		},
+		time(func, time = 0) {
+				return this.idle(func, time);
+		}
 };
 const throttle = (func, interval) => {
-	let lastTime = 0;
-	let timer;
-	let promise = new PromiseHandler();
-	const result = (...args) => {
-		if (timer) {
-			return promise;
-		}
-		const now = performance.now();
-		const timeDiff = now - lastTime;
-		timer = setTimeout(() => {
-			lastTime = performance.now();
-			timer = null;
-			const lastResult = func(...args);
-			promise.resolve({lastResult, lastArgs: args});
-			promise = new PromiseHandler();
-		}, Math.max(interval - timeDiff, 0));
-		return promise;
-	};
-	result.cancel = () => {
-		if (timer) {
-			timer = clearTimeout(timer);
-		}
-		promise.resolve({lastResult: null, lastArgs: null});
-		promise = new PromiseHandler();
-	};
-	return result;
+		let lastTime = 0;
+		let timer;
+		let promise = new PromiseHandler();
+		const result = (...args) => {
+				if (timer) {
+						return promise;
+				}
+				const now = performance.now();
+				const timeDiff = now - lastTime;
+				timer = setTimeout(() => {
+						lastTime = performance.now();
+						timer = null;
+						const lastResult = func(...args);
+						promise.resolve({ lastResult, lastArgs: args });
+						promise = new PromiseHandler();
+				}, Math.max(interval - timeDiff, 0));
+				return promise;
+		};
+		result.cancel = () => {
+				if (timer) {
+						timer = clearTimeout(timer);
+				}
+				promise.resolve({ lastResult: null, lastArgs: null });
+				promise = new PromiseHandler();
+		};
+		return result;
 };
 throttle.time = (func, interval = 0) => throttle(func, interval);
-throttle.raf = function(func) {
-	let promise;
-	let cancelled = false;
-	let lastArgs = [];
-	const callRaf = res => requestAnimationFrame(res);
-	const onRaf = () => this.req = null;
-	const onCall = () => {
-		if (cancelled) {
-			cancelled = false;
-			return;
-		}
-		try { func(...lastArgs); } catch (e) { console.warn(e); }
-		promise = null;
-	};
-	const result = (...args) => {
-		lastArgs = args;
-		if (promise) {
-			return promise;
-		}
-		if (!this.req) {
-			this.req = new Promise(callRaf).then(onRaf);
-		}
-		promise = this.req.then(onCall);
-		return promise;
-	};
-	result.cancel = () => {
-		cancelled = true;
-		promise = null;
-	};
-	return result;
-}.bind({req: null, count: 0, id: 0});
-throttle.idle = func => {
-	let id;
-	const request = (self.requestIdleCallback || self.setTimeout);
-	const cancel = (self.cancelIdleCallback || self.clearTimeout);
-	const result = (...args) => {
-		if (id) {
-			return;
-		}
-		id = request(() => {
-			id = null;
-			func(...args);
-		}, 0);
-	};
-	result.cancel = () => {
-		if (id) {
-			id = cancel(id);
-		}
-	};
-	return result;
+throttle.raf = function (func) {
+		let promise;
+		let cancelled = false;
+		let lastArgs = [];
+		const callRaf = (res) => requestAnimationFrame(res);
+		const onRaf = () => this.req = null;
+		const onCall = () => {
+				if (cancelled) {
+						cancelled = false;
+						return;
+				}
+				try {
+						func(...lastArgs);
+				}
+				catch (e) {
+						console.warn(e);
+				}
+				promise = null;
+		};
+		const result = (...args) => {
+				lastArgs = args;
+				if (promise) {
+						return promise;
+				}
+				if (!this.req) {
+						this.req = new Promise(callRaf).then(onRaf);
+				}
+				promise = this.req.then(onCall);
+				return promise;
+		};
+		result.cancel = () => {
+				cancelled = true;
+				promise = null;
+		};
+		return result;
+}.bind({ req: null, count: 0, id: 0 });
+throttle.idle = (func) => {
+		let id;
+		const request = (self.requestIdleCallback || self.setTimeout);
+		const cancel = (self.cancelIdleCallback || self.clearTimeout);
+		const result = (...args) => {
+				if (id) {
+						return;
+				}
+				id = request(() => {
+						id = null;
+						func(...args);
+				}, 0);
+		};
+		result.cancel = () => {
+				if (id) {
+						id = cancel(id);
+				}
+		};
+		return result;
 };
 const css = (() => {
-	const setPropsTask = [];
-	const applySetProps = throttle.raf(
-		() => {
-		const tasks = setPropsTask.concat();
-		setPropsTask.length = 0;
-		for (const [element, prop, value] of tasks) {
-			try {
-				element.style.setProperty(prop, value);
-			} catch (error) {
-				console.warn('element.style.setProperty fail', {element, prop, value, error});
-			}
-		}
-	});
-	const css = {
-		addStyle: (styles, option, document = window.document) => {
-			const elm = Object.assign(document.createElement('style'), {
-				type: 'text/css'
-			}, typeof option === 'string' ? {id: option} : (option || {}));
-			if (typeof option === 'string') {
-				elm.id = option;
-			} else if (option) {
-				Object.assign(elm, option);
-			}
-			elm.classList.add(global.PRODUCT);
-			elm.append(styles.toString());
-			(document.head || document.body || document.documentElement).append(elm);
-			elm.disabled = option && option.disabled;
-			elm.dataset.switch = elm.disabled ? 'off' : 'on';
-			return elm;
-		},
-		registerProps(...args) {
-			if (!CSS || !('registerProperty' in CSS)) {
-				return;
-			}
-			for (const definition of args) {
-				try {
-					(definition.window || window).CSS.registerProperty(definition);
-				} catch (err) { console.warn('CSS.registerProperty fail', definition, err); }
-			}
-		},
-		setProps(...tasks) {
-			setPropsTask.push(...tasks);
-			return setPropsTask.length ? applySetProps() : Promise.resolve();
-		},
-		addModule: async function(func, options = {}) {
-			if (!CSS || !('paintWorklet' in CSS)) { return; }
-			if (this.modules.has(func)) { return this.modules.get(func); }
-			const pending = (async () => {
-				let url;
-				try {
-					const src = `(${func.toString()})(this, registerPaint,
-						${JSON.stringify(options.config || {}, null, 2)});`;
-					const blob = new Blob([src], {type: 'text/javascript'});
-					url = URL.createObjectURL(blob);
-					await CSS.paintWorklet.addModule(url);
-					return true;
-				} finally {
-					if (url !== undefined) { URL.revokeObjectURL(url); }
+		const setPropsTask = [];
+		const applySetProps = throttle.raf(() => {
+				const tasks = setPropsTask.concat();
+				setPropsTask.length = 0;
+				for (const [element, prop, value] of tasks) {
+						try {
+								element.style.setProperty(prop, value);
+						}
+						catch (error) {
+								console.warn('element.style.setProperty fail', { element, prop, value, error });
+						}
 				}
-			})();
-			this.modules.set(func, pending);
-			try { return await pending; }
-			catch (error) { this.modules.delete(func); throw error; }
-		}.bind({modules: new WeakMap}),
-		escape:  value => CSS.escape  ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
-		number:  value => CSS.number  ? CSS.number(value) : value,
-		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
-		ms:      value => CSS.ms      ? CSS.ms(value) : `${value}ms`,
-		pt:      value => CSS.pt      ? CSS.pt(value) : `${value}pt`,
-		px:      value => CSS.px      ? CSS.px(value) : `${value}px`,
-		percent: value => CSS.percent ? CSS.percent(value) : `${value}%`,
-		vh:      value => CSS.vh      ? CSS.vh(value) : `${value}vh`,
-		vw:      value => CSS.vw      ? CSS.vw(value) : `${value}vw`,
-		trans:   value => self.CSSStyleValue ? CSSStyleValue.parse('transform', value) : value,
-		word:    value => self.CSSKeywordValue ? new CSSKeywordValue(value) : value,
-		image:   value => self.CSSStyleValue ? CSSStyleValue.parse('background-image', value) : value,
-	};
-	return css;
+		});
+		const css = {
+				addStyle: (styles, option, document = window.document) => {
+						const elm = Object.assign(document.createElement('style'), {
+								type: 'text/css'
+						}, typeof option === 'string' ? { id: option } : (option || {}));
+						if (typeof option === 'string') {
+								elm.id = option;
+						}
+						else if (option) {
+								Object.assign(elm, option);
+						}
+						elm.classList.add(global.PRODUCT);
+						elm.append(styles.toString());
+						(document.head || document.body || document.documentElement).append(elm);
+						elm.disabled = (option && option.disabled);
+						elm.dataset.switch = elm.disabled ? 'off' : 'on';
+						return elm;
+				},
+				registerProps(...args) {
+						if (!CSS || !('registerProperty' in CSS)) {
+								return;
+						}
+						for (const definition of args) {
+								try {
+										(definition.window || window).CSS.registerProperty(definition);
+								}
+								catch (err) {
+										console.warn('CSS.registerProperty fail', definition, err);
+								}
+						}
+				},
+				setProps(...tasks) {
+						setPropsTask.push(...tasks);
+						return setPropsTask.length ? applySetProps() : Promise.resolve();
+				},
+				addModule: async function (func, options = {}) {
+						if (!CSS || !('paintWorklet' in CSS)) {
+								return;
+						}
+						if (this.modules.has(func)) {
+								return this.modules.get(func);
+						}
+						const pending = (async () => {
+								let url;
+								try {
+										const src = `(${func.toString()})(this, registerPaint,
+						${JSON.stringify(options.config || {}, null, 2)});`;
+										const blob = new Blob([src], { type: 'text/javascript' });
+										url = URL.createObjectURL(blob);
+										await CSS.paintWorklet.addModule(url);
+										return true;
+								}
+								finally {
+										if (url !== undefined) {
+												URL.revokeObjectURL(url);
+										}
+								}
+						})();
+						this.modules.set(func, pending);
+						try {
+								return await pending;
+						}
+						catch (error) {
+								this.modules.delete(func);
+								throw error;
+						}
+				}.bind({ modules: new WeakMap }),
+				escape: (value) => CSS.escape ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
+				number: (value) => CSS.number ? CSS.number(value) : value,
+				s: (value) => CSS.s ? CSS.s(value) : `${value}s`,
+				ms: (value) => CSS.ms ? CSS.ms(value) : `${value}ms`,
+				pt: (value) => CSS.pt ? CSS.pt(value) : `${value}pt`,
+				px: (value) => CSS.px ? CSS.px(value) : `${value}px`,
+				percent: (value) => CSS.percent ? CSS.percent(value) : `${value}%`,
+				vh: (value) => CSS.vh ? CSS.vh(value) : `${value}vh`,
+				vw: (value) => CSS.vw ? CSS.vw(value) : `${value}vw`,
+				trans: (value) => self.CSSStyleValue ? CSSStyleValue.parse('transform', value) : value,
+				word: (value) => self.CSSKeywordValue ? new CSSKeywordValue(value) : value,
+				image: (value) => self.CSSStyleValue ? CSSStyleValue.parse('background-image', value) : value,
+		};
+		return css;
 })();
 const cssUtil = css;
 

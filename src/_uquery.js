@@ -5,7 +5,7 @@
 // @match          *://*/*
 // @grant          none
 // @author         guest
-// @version        0.0.3-task152
+// @version        0.0.6-task850
 // @run-at         document-start
 // @license        public domain
 // @noframes

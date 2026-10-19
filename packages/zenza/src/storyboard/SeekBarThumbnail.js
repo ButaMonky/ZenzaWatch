@@ -3,94 +3,95 @@ import {uQuery} from '../../../lib/src/uQuery';
 import {global} from '../../../../src/ZenzaWatchIndex';
 import {StoryboardWorker} from './StoryboardWorker';
 import {ClassList} from '../../../lib/src/dom/ClassListWrapper';
+// GENERATED FROM tools/typescript-stage1/nico-src/SeekBarThumbnail.ts (Task901). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 class SeekBarThumbnail {
-  constructor(params) {
-    this._container = params.container;
-    this._scale = _.isNumber(params.scale) ? params.scale : 1.0;
-    this._currentTime = 0;
-
-    params.storyboard.on('reset', this._onStoryboardReset.bind(this));
-    params.storyboard.on('update', this._onStoryboardUpdate.bind(this));
-
-    global.debug.seekBarThumbnail = this;
-  }
-  _onStoryboardUpdate(model) {
-    this._model = model;
-    if (!model.isAvailable) {
-      this._onStoryboardReset();
-      return;
+    constructor(params) {
+        this._container = params.container;
+        this._scale = _.isNumber(params.scale) ? params.scale : 1.0;
+        this._currentTime = 0;
+        params.storyboard.on('reset', this._onStoryboardReset.bind(this));
+        params.storyboard.on('update', this._onStoryboardUpdate.bind(this));
+        global.debug.seekBarThumbnail = this;
     }
-
-    this.thumbnail ? this.thumbnail.setInfo(model.rawData) : this.initializeView(model);
-    // this.thumbnail.resize({width: model.cellWidth, height: model.cellHeight});
-
-    this.isAvailable = true;
-    this.show();
-  }
-  _onStoryboardReset() {
-    this.isAvailable = false;
-    this._model = null;
-    this.hide();
-    // Also clear the worker model, so an old thumbnail cannot be reused.
-    if (this.thumbnail) {
-      Promise.resolve(this.thumbnail.setInfo(null)).catch(() => {});
+    _onStoryboardUpdate(model) {
+        this._model = model;
+        if (!model.isAvailable) {
+            this._onStoryboardReset();
+            return;
+        }
+        if (this.thumbnail) {
+            // Task901 (SEEKBARTHUMB-SETINFO-UNHANDLED-001): after a failed worker setup every setInfo
+            // rejects; catch it like the reset path instead of leaking an unhandled rejection.
+            Promise.resolve(this.thumbnail.setInfo(model.rawData))
+                .catch((err) => console.warn('SeekBarThumbnail setInfo failed', err));
+        }
+        else {
+            this.initializeView(model);
+        }
+        // this.thumbnail.resize({width: model.cellWidth, height: model.cellHeight});
+        this.isAvailable = true;
+        this.show();
     }
-  }
-  get isVisible() {
-    return this._view ? this.classList.contains('is-visible') : false;
-  }
-  show() {
-    if (!this._view) {
-      return;
+    _onStoryboardReset() {
+        this.isAvailable = false;
+        this._model = null;
+        this.hide();
+        // Also clear the worker model, so an old thumbnail cannot be reused.
+        if (this.thumbnail) {
+            Promise.resolve(this.thumbnail.setInfo(null)).catch(() => { });
+        }
     }
-    this.classList.add('is-visible');
-  }
-  hide() {
-    if (!this._view) {
-      return;
+    get isVisible() {
+        return this._view ? this.classList.contains('is-visible') : false;
     }
-    this.classList.remove('is-visible');
-  }
-  initializeView(model) {
-    if (this.thumbnail) { return; }
-
-    if (!SeekBarThumbnail.styleAdded) {
-      cssUtil.addStyle(SeekBarThumbnail.__css__);
-      SeekBarThumbnail.styleAdded = true;
+    show() {
+        if (!this._view) {
+            return;
+        }
+        this.classList.add('is-visible');
     }
-    const view = this._view = uQuery.html(SeekBarThumbnail.__tpl__)[0];
-    this.classList = ClassList(view);
-
-    this.thumbnail = StoryboardWorker.createThumbnail({
-      container: view.querySelector('.zenzaSeekThumbnail-image'),
-      canvas: view.querySelector('.zenzaSeekThumbnail-thumbnail'),
-      info: model.rawData,
-      name: 'StoryboardThumbnail'
-    });
-
-    if (this._container) {
-      this._container.append(view);
+    hide() {
+        if (!this._view) {
+            return;
+        }
+        this.classList.remove('is-visible');
     }
-  }
-  set currentTime(sec) {
-    this._currentTime = sec;
-    if (!this.isAvailable || !this.thumbnail) {
-      return;
+    initializeView(model) {
+        if (this.thumbnail) {
+            return;
+        }
+        if (!SeekBarThumbnail.styleAdded) {
+            cssUtil.addStyle(SeekBarThumbnail.__css__);
+            SeekBarThumbnail.styleAdded = true;
+        }
+        const view = this._view = uQuery.html(SeekBarThumbnail.__tpl__)[0];
+        this.classList = ClassList(view);
+        this.thumbnail = StoryboardWorker.createThumbnail({
+            container: view.querySelector('.zenzaSeekThumbnail-image'),
+            canvas: view.querySelector('.zenzaSeekThumbnail-thumbnail'),
+            info: model.rawData,
+            name: 'StoryboardThumbnail'
+        });
+        if (this._container) {
+            this._container.append(view);
+        }
     }
-    this.thumbnail.currentTime = sec;
-  }
-
+    set currentTime(sec) {
+        this._currentTime = sec;
+        if (!this.isAvailable || !this.thumbnail) {
+            return;
+        }
+        this.thumbnail.currentTime = sec;
+    }
 }
 SeekBarThumbnail.BASE_WIDTH = 160;
 SeekBarThumbnail.BASE_HEIGHT = 90;
-
 SeekBarThumbnail.__tpl__ = (`
   <div class="zenzaSeekThumbnail">
     <div class="zenzaSeekThumbnail-image"><canvas width="160" height="90" class="zenzaSeekThumbnail-thumbnail"></canvas></div>
   </div>
 `).trim();
-
 SeekBarThumbnail.__css__ = (`
   .is-error .zenzaSeekThumbnail,
   .is-loading .zenzaSeekThumbnail {
@@ -125,7 +126,7 @@ SeekBarThumbnail.__css__ = (`
     z-index: 100;
   }
 `).trim();
-
 //===END===
-
-export {SeekBarThumbnail};
+export {
+  SeekBarThumbnail
+};

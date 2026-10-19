@@ -17,7 +17,17 @@ function beginSection(rel) {
   const text = read(rel);
   const parts = text.split('//===BEGIN===');
   if (parts.length < 2) { throw new Error(`${rel} に //===BEGIN=== が無い`); }
-  return parts[1].split('//===END===')[0];
+  const body = parts[1].split('//===END===')[0];
+  // Task478: ThreadLoader's isolated VM tests must execute the same production
+  // posting transport code that the userscript imports (no test-only mock).
+  if (rel === 'packages/lib/src/nico/ThreadLoader.js') {
+    return beginSection('packages/lib/src/nico/CommentPostWire.js') + '\n' +
+      beginSection('packages/lib/src/nico/CommentReadAdapter.js') + '\n' + body;
+  }
+  if (rel === 'packages/lib/src/nico/VideoInfoLoader.js') {
+    return beginSection('packages/lib/src/nico/CommentPostTarget.js') + '\n' + body;
+  }
+  return body;
 }
 
 // Index source offsets once per file content. Do not retain Babel nodes or scopes.

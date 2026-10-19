@@ -20,8 +20,6 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
     GateAPI.search();
   } else if (host === 'ext.nicovideo.jp' && name.startsWith(`thumbInfo${PRODUCT}Loader`)) {
     GateAPI.thumbInfo();
-  } else if (host === 'ext.nicovideo.jp' && name.startsWith(`videoInfo${PRODUCT}Loader`)) {
-    GateAPI.exApi();
   } else if (host === 'dic.nicovideo.jp' && name.startsWith(`nicodic${PRODUCT}Loader`)) {
     // タグの大百科記事の有無を調べるための隠しiframe（Task 044）。
     // NicodicArticleLoaderが開く。通常の大百科の閲覧時は

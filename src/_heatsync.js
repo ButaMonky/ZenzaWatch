@@ -15,7 +15,7 @@
 // @exclude     *://ch.nicovideo.jp/tool/*
 // @exclude     *://flapi.nicovideo.jp/*
 // @exclude     *://dic.nicovideo.jp/p/*
-// @version     0.0.21-task414
+// @version     0.0.22-task800
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain

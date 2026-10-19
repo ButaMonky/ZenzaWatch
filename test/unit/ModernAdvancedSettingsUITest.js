@@ -1199,7 +1199,10 @@ describe('Task391 native checkbox presentation',()=>{
   });
 });
 
-describe('Task396 C-style compact related-menu editor',()=>{
+describe('Task396 C-style compact related-menu editor',function(){
+  // Task850 (TEST-FLAKY-396): building this editor in JSDOM takes 2.0-2.7 s even alone
+  // (measured on develop too), right at mocha's 2 s default; give it headroom.
+  this.timeout(10000);
   const open=h=>{
     h.click('[data-zw-major="プレイリスト・検索"]');
     h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');

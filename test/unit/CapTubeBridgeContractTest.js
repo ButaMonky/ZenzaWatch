@@ -3,7 +3,9 @@ const assert = require('assert');
 const {read, extract, createContext, run} = require('../helpers/extractSource');
 function extractBridge(path) {
   const code=read(path);
-  const start=code.indexOf('VideoCaptureUtil.initCapTube = function()');
+  // Task788: the TypeScript emit writes `function ()`; accept both spellings.
+  const head=code.match(/VideoCaptureUtil\.initCapTube = function ?\(\)/);
+  const start=head ? head.index : -1;
   const thumb=code.indexOf('VideoCaptureUtil.capTubeThumbnail =',start);
   assert(start>=0 && thumb>start,'capture bridge implementation missing');
   const after=code.slice(thumb);

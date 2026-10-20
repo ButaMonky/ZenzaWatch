@@ -341,12 +341,10 @@ const VideoInfoLoader = (function () {
             // Task650: never reject without a reason (callers read err.reason).
             return Promise.reject({ reason: 'not supported', message: 'この動画はZenzaWatchで再生できません' });
         }
-        const url = `https://www.nicovideo.jp/watch/${videoId}?responseType=json`;
-        window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan', linkedChannelVideo);
+        window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan');
         return new Promise(r => {
             setTimeout(r, 1000);
-        }).then(() => netUtil.fetch(url, { credentials: 'include' }))
-            .then(res => res.json())
+        }).then(() => fetchWatchResponse(videoId, {}))
             .then(async (json) => {
             const data = await parseWatchApiData(json, videoId);
             //window.console.info('linkedChannelData', data);
@@ -514,19 +512,62 @@ const VideoInfoLoader = (function () {
     const createSleep = function (sleepTime) {
         return new Promise(resolve => setTimeout(resolve, sleepTime));
     };
+    // Task904: The official watch page embeds the current watch-v4 response in
+    // <meta name="server-response">. The old responseType=json URL now returns
+    // HTTP 400 for otherwise playable videos (observed 2026-10-20).
+    const parseWatchPageResponse = (html) => {
+        const page = new DOMParser().parseFromString(html, 'text/html');
+        const raw = page.querySelector('meta[name="server-response"]')?.getAttribute('content');
+        if (!raw)
+            return null;
+        try {
+            const json = JSON.parse(raw);
+            if (json && typeof json === 'object' && json.data?.response &&
+                typeof json.data.response === 'object') {
+                return json;
+            }
+        }
+        catch (_) { /* Invalid embedded JSON: report only a safe error code. */ }
+        throw {
+            reason: 'watch api', errorCode: 'WATCH_PAGE_SCHEMA',
+            message: '公式動画ページの情報形式を読み取れませんでした'
+        };
+    };
+    const fetchWatchResponse = async (watchId, options) => {
+        const pageUrl = `https://www.nicovideo.jp/watch/${encodeURIComponent(watchId)}` +
+            (options.economy === true ? '?eco=1' : '');
+        const pageResponse = await netUtil.fetch(pageUrl, { credentials: 'include' });
+        // Older test/extension adapters may offer json() only.
+        if (typeof pageResponse.text !== 'function') {
+            return pageResponse.json();
+        }
+        if (pageResponse.status >= 500) {
+            throw { reason: 'network', message: '通信エラー(network)' };
+        }
+        const html = await pageResponse.text();
+        const embedded = parseWatchPageResponse(html);
+        if (embedded)
+            return embedded;
+        // Keep supporting layouts without the embedded metadata (e.g. older
+        // channel/error pages), without making the legacy endpoint the normal path.
+        const legacyUrl = pageUrl + (options.economy === true ? '&' : '?') + 'responseType=json';
+        const legacyResponse = await netUtil.fetch(legacyUrl, { credentials: 'include' });
+        try {
+            const json = await legacyResponse.json();
+            if (json?.data?.response)
+                return json;
+        }
+        catch (_) { /* Legacy endpoint may return HTML or 400 without JSON. */ }
+        throw {
+            reason: 'watch api', errorCode: 'WATCH_PAGE_META_MISSING',
+            message: '動画情報が見つかりません（公式ページの構造を要確認）'
+        };
+    };
     const loadPromise = function (watchId, options, isRetry = false) {
-        let url = `https://www.nicovideo.jp/watch/${watchId}`;
-        console.log('%cloadFromWatchApiData...', 'background: lightgreen;', watchId, url);
-        const query = ['responseType=json'];
-        if (options.economy === true) {
-            query.push('eco=1');
-        }
-        if (query.length > 0) {
-            url += '?' + query.join('&');
-        }
-        return netUtil.fetch(url, { credentials: 'include' })
-            .then(res => res.json())
-            .catch(() => Promise.reject({ reason: 'network', message: '通信エラー(network)' }))
+        console.log('%cloadFromWatchApiData...', 'background: lightgreen;', watchId);
+        return fetchWatchResponse(watchId, options)
+            .catch(err => Promise.reject(err && typeof err === 'object' && err.reason ? err :
+            { reason: 'network', message: '通信エラー(network)' }))
             .then(onLoadPromise.bind(this, watchId, options, isRetry))
             .catch((err) => {
             window.console.error('err', { err: safeLoadError(err), isRetry, watchId });
@@ -540,9 +581,10 @@ const VideoInfoLoader = (function () {
             if (err.reason === 'forbidden' || err.reason === 'not found') {
                 return Promise.reject({ ...err, watchId });
             }
-            else if (err.reason === 'watch api' && err.errorCode === 'WATCH_SCHEMA') {
+            else if (err.reason === 'watch api' &&
+                ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING'].includes(err.errorCode)) {
                 return Promise.reject({
-                    watchId, reason: 'watch api', errorCode: 'WATCH_SCHEMA',
+                    watchId, reason: 'watch api', errorCode: err.errorCode,
                     message: err.message || '動画情報の形式が変更されました'
                 });
             }

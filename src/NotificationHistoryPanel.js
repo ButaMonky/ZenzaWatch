@@ -39,7 +39,7 @@ const NotificationHistoryPanel = (() => {
     if (content !== undefined) { node.textContent = String(content); }
     return node;
   };
-  const mount = root => {
+  const mount = (root, events) => {
     if (!root || root.querySelector('.zenzaNotificationHistory')) { return; }
     if (!document.getElementById(STYLE_ID)) {
       const sheet = element('style');
@@ -130,7 +130,7 @@ const NotificationHistoryPanel = (() => {
       more.hidden = entries.length <= shown;
     };
     const schedule = () => {
-      if (scheduled || disposed) { return; }
+      if (scheduled || disposed || !root.classList.contains('activeTab')) { return; }
       scheduled = true;
       Promise.resolve().then(() => {
         scheduled = false;
@@ -165,10 +165,12 @@ const NotificationHistoryPanel = (() => {
       schedule();
     });
     const unsubscribe = NotificationJournal.subscribe(schedule);
+    if (events && typeof events.on === 'function') { events.on('tabChange', schedule); }
     schedule();
     return () => {
       disposed = true;
       unsubscribe();
+      if (events && typeof events.off === 'function') { events.off('tabChange', schedule); }
       view.remove();
     };
   };

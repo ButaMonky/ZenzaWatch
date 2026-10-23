@@ -4091,7 +4091,13 @@ class NicoVideoPlayerDialog extends Emitter {
     if (requestId !== this._requestId) {
       return;
     }
-    this.execCommand('alert', e.message);
+    this._recordDiagnostic({
+      category: 'comment', level: 'error',
+      message: e && e.message || 'コメントの読み込みに失敗しました',
+      videoId: this._watchId, source: 'comment',
+      details: {errorCode: e && e.errorCode, reason: e && e.reason}
+    });
+    this.execCommand('alert', e && e.message);
   }
   _onLoadedMetaData() {
     // Task 077c: 動画が変わったら自動レベル補正を測り直す
@@ -4237,6 +4243,13 @@ class NicoVideoPlayerDialog extends Emitter {
     const videoWatchOptions = this._videoWatchOptions;
     const code = (e && e.target && e.target.error && e.target.error.code) || 0;
     window.console.error('VideoError!', code, e, (e.target && e.target.error), {isDeleted, isAbnormallyClosed});
+    this._recordDiagnostic({
+      category: 'player', level: 'error',
+      message: '動画の再生に失敗しました',
+      videoId: this._watchId, source: 'videoError',
+      details: {errorCode: 'MEDIA_ERR_' + code,
+        kind: isDmc ? 'dmc' : isDomand ? 'domand' : 'other'}
+    });
 
     if (Date.now() - this._lastOpenAt > 3 * 60 * 1000 && isDeleted && !isAbnormallyClosed) {
 
@@ -4259,6 +4272,12 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onYouTubeVideoError(e) {
     window.console.error('onYouTubeVideoError!', e);
+    this._recordDiagnostic({
+      category: 'player', level: 'error',
+      message: e && e.description || 'YouTube動画の再生に失敗しました',
+      videoId: this._watchId, source: 'youtube',
+      details: {reason: e && e.reason}
+    });
     this._setErrorMessage(e.description);
     this.emit('error', e);
     if (e.fallback) {
@@ -4632,6 +4651,11 @@ class NicoVideoPlayerDialog extends Emitter {
     return this.threadLoader.deleteChat(msgInfo, chat)
       .then(result => {
         window.console.timeEnd('コメント削除');
+        this._recordDiagnostic({
+          category: 'comment', level: 'success', message: 'コメント削除成功',
+          videoId: videoInfo && videoInfo.videoId,
+          source: 'comment', details: {operation: 'delete'}
+        });
         if (this._videoInfo === videoInfo && this._nicoVideoPlayer === player) {
           this.execCommand('notify', 'コメント削除成功');
           player.removeChat(chat);
@@ -4639,6 +4663,13 @@ class NicoVideoPlayerDialog extends Emitter {
       })
       .catch(err => {
         err = err || {};
+        this._recordDiagnostic({
+          category: 'comment', level: 'error',
+          message: err.message || 'コメント削除に失敗しました',
+          videoId: videoInfo && videoInfo.videoId, source: 'comment',
+          details: {operation: 'delete', statusCode: err.statusCode,
+            errorCode: err.errorCode, reason: err.reason}
+        });
         window.console.log('_onFail: ', err);
         window.console.timeEnd('コメント削除');
         if (this._videoInfo === videoInfo && this._nicoVideoPlayer === player) {

@@ -26,7 +26,7 @@
 - test/unit/NotificationJournalTest.js、NotificationJournalIndexedDbTest.js、NotificationHistoryPanelTest.js: ネット不要のテストを追加（合成IndexedDBで永続保存・別タブ削除も検証）
 
 ## 明確な非対応・後続修正が必要な点
-1. generated由来のThreadLoader内部にある全段階（投稿キー・POST再試行・ACK不明）の細かな診断は未接続。プレイヤー側の高レベル結果のみ記録できる
+1. generated由来のThreadLoader内部にある全段階（投稿キー・POST再試行・ACK不明）の細かな診断は未接続。プレイヤー側の高レベル結果のみ記録できる。ThreadLoader.jsの562行・587行にはPopupMessage.alert直呼びがあり、RootDispatcherを迂回するため履歴に未収録
 2. RootDispatcherを通らないPopupMessage直呼びは取りこぼす可能性がある。正式な共通通知発行口への統合はTypeScript正本の照合後
 3. ブラウザ全体のconsole.error/warnや第三者サイトのエラーを無差別に横取りしていない（秘密情報・ノイズ・性能問題があるため）
 4. 別オリジン・別ブラウザ端末間の履歴同期はなし。現状は同じブラウザ・オリジンのローカル履歴
@@ -42,7 +42,7 @@
 - 保存制限: IndexedDB利用不可・容量不足・複数タブ・大量通知・同時削除・プライバシー・JSON保存
 - 既存配布物 dist/ZenzaWatch-dev.user.js 等はこのブランチでは未更新。実機に使える状態ではない
 - verified時だけdevelopへ統合/配布。未確認をPASSと記さない
-- 初回GitHub Actions (PR #37): secret gate PASS。quality gates: 3467 passing / 78 pending / 1 failing（BuildIntegrityTest: dist未再生成）。新規のsource-onlyテストはこの時点で個別失敗なし。後続コミットのCIは別途再確認が必要
+- 初回GitHub Actions (PR #37): secret gate PASS。quality gates: 3467 passing / 78 pending / 1 failing（BuildIntegrityTest: dist未再生成）。後続CIでは3469 passing / 78 pending / 同じ1件失敗。追加されたsource-onlyテストの個別失敗なし。最新コミットのCIは別途再確認が必要
 
 ## 再開位置
 1. CI結果を確認して修正

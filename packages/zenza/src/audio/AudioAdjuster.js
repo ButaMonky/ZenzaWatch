@@ -1,3 +1,4 @@
+// GENERATED FROM tools/typescript-stage1/nico-src/AudioAdjuster.ts (Task901). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 /*
  * Task 074: 音量まわりの自動調整をまとめる仕組み。
@@ -25,110 +26,108 @@
  * 差し替える（使う側は AudioAdjuster.gain を読むだけなので影響しない）。
  */
 const AudioAdjuster = (() => {
-  const modules = new Map();
-  const listeners = new Set();
-  let config = null;
-  let context = {};
-  let gain = 1;
-
-  const isEnabled = module =>
-    !module.configKey || !config || !!config.props[module.configKey];
-
-  const calc = () => {
-    let result = 1;
-    for (const module of modules.values()) {
-      if (!isEnabled(module)) { continue; }
-      let g = 1;
-      try {
-        g = module.getGain(context);
-      } catch (e) {
-        window.console.warn('音量調整モジュールでエラー', module.id, e);
-        g = 1;
-      }
-      if (typeof g === 'number' && isFinite(g) && g > 0) {
-        result *= g;
-      }
-    }
-    return result;
-  };
-
-  const update = () => {
-    const next = calc();
-    if (Math.abs(next - gain) < 0.0001) {
-      return gain;
-    }
-    gain = next;
-    listeners.forEach(fn => {
-      try {
-        fn(gain, context);
-      } catch (e) {
-        window.console.warn('音量調整の通知でエラー', e);
-      }
-    });
-    return gain;
-  };
-
-  return {
-    /** Config を渡すと、各モジュールの configKey の変化を見て自動で再計算する */
-    initialize(playerConfig) {
-      config = playerConfig;
-      modules.forEach(module => {
-        if (module.configKey && config.onkey) {
-          config.onkey(module.configKey, () => update());
+    const modules = new Map();
+    const listeners = new Set();
+    let config = null;
+    let context = {};
+    let gain = 1;
+    const isEnabled = (module) => !module.configKey || !config || !!config.props[module.configKey];
+    const calc = () => {
+        let result = 1;
+        for (const module of modules.values()) {
+            if (!isEnabled(module)) {
+                continue;
+            }
+            let g = 1;
+            try {
+                g = module.getGain(context);
+            }
+            catch (e) {
+                window.console.warn('音量調整モジュールでエラー', module.id, e);
+                g = 1;
+            }
+            if (typeof g === 'number' && isFinite(g) && g > 0) {
+                result *= g;
+            }
         }
-      });
-      update();
-    },
-    register(module) {
-      if (!module || !module.id || typeof module.getGain !== 'function') {
-        return;
-      }
-      modules.set(module.id, module);
-      if (config && module.configKey && config.onkey) {
-        config.onkey(module.configKey, () => update());
-      }
-      update();
-    },
-    /** 動画が変わった時に呼ぶ。渡した情報がそのまま各モジュールへ渡る */
-    setContext(next = {}) {
-      context = next || {};
-      return update();
-    },
-    get context() { return context; },
-    get gain() { return gain; },
-    get modules() { return [...modules.values()]; },
-    onChange(fn) {
-      typeof fn === 'function' && listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    /** テスト用。登録済みモジュールと状態を初期化する */
-    _reset() {
-      modules.clear();
-      listeners.clear();
-      config = null;
-      context = {};
-      gain = 1;
-    }
-  };
+        return result;
+    };
+    const update = () => {
+        const next = calc();
+        if (Math.abs(next - gain) < 0.0001) {
+            return gain;
+        }
+        gain = next;
+        listeners.forEach(fn => {
+            try {
+                fn(gain, context);
+            }
+            catch (e) {
+                window.console.warn('音量調整の通知でエラー', e);
+            }
+        });
+        return gain;
+    };
+    return {
+        /** Config を渡すと、各モジュールの configKey の変化を見て自動で再計算する */
+        initialize(playerConfig) {
+            config = playerConfig;
+            modules.forEach(module => {
+                if (module.configKey && config.onkey) {
+                    config.onkey(module.configKey, () => update());
+                }
+            });
+            update();
+        },
+        register(module) {
+            if (!module || !module.id || typeof module.getGain !== 'function') {
+                return;
+            }
+            modules.set(module.id, module);
+            if (config && module.configKey && config.onkey) {
+                config.onkey(module.configKey, () => update());
+            }
+            update();
+        },
+        /** 動画が変わった時に呼ぶ。渡した情報がそのまま各モジュールへ渡る */
+        setContext(next = {}) {
+            context = next || {};
+            return update();
+        },
+        get context() { return context; },
+        get gain() { return gain; },
+        get modules() { return [...modules.values()]; },
+        onChange(fn) {
+            typeof fn === 'function' && listeners.add(fn);
+            return () => listeners.delete(fn);
+        },
+        /** テスト用。登録済みモジュールと状態を初期化する */
+        _reset() {
+            modules.clear();
+            listeners.clear();
+            config = null;
+            context = {};
+            gain = 1;
+        }
+    };
 })();
-
 /*
  * 本家と同じ「音声の自動調整」。
  * loudness は視聴JSONの倍率（例: 0.93）。音が大きい動画ほど小さい値になる。
  */
 AudioAdjuster.register({
-  id: 'loudnessNormalize',
-  label: '音声の自動調整（動画ごとの音量差を小さくする）',
-  configKey: 'audio.autoAdjust',
-  getGain(context) {
-    const loudness = context && context.loudness;
-    if (typeof loudness !== 'number' || !isFinite(loudness) || loudness <= 0) {
-      return 1;
+    id: 'loudnessNormalize',
+    label: '音声の自動調整（動画ごとの音量差を小さくする）',
+    configKey: 'audio.autoAdjust',
+    getGain(context) {
+        const loudness = context && context.loudness;
+        if (typeof loudness !== 'number' || !isFinite(loudness) || loudness <= 0) {
+            return 1;
+        }
+        return Math.min(loudness, 1);
     }
-    return Math.min(loudness, 1);
-  }
 });
-
 //===END===
-
-export {AudioAdjuster};
+export {
+  AudioAdjuster
+};

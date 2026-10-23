@@ -6,7 +6,8 @@
   "scripts": {
     "nico:emit": "tsc --project tsconfig.scui.json",
     "nico:sync": "npm run nico:emit && node scripts/sync-scui.mjs --write",
-    "nico:verify": "npm run nico:emit && node scripts/sync-scui.mjs --check"
+    "nico:verify": "npm run nico:emit && npm run nico:types && node scripts/sync-scui.mjs --check",
+    "nico:types": "tsc --project tsconfig.scene-contracts.json"
   },
   "devDependencies": {
     "typescript": "7.0.2"

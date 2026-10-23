@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../..');
 const lf=text=>text.replace(/\r\n/g,'\n');
 const hash=text=>createHash('sha256').update(lf(text)).digest('hex');
-const names=['SceneSearchLayout00','SceneSearchPreferences','SceneSearchPreviewView','SceneSearchPlacement'];
+const names=['SceneSearchLayout00','SceneSearchPreferences','SceneSearchPreviewView','SceneSearchPlacement','SceneSearchController','SceneSearchInteraction','ScenePreviewIdleLimiter','SceneSearchShortcutRouter','SceneCommentSearch','SceneCommentSearchPanel'];
 const read=p=>fs.existsSync(p)?fs.readFileSync(p,'utf8'):null;
 export function applyFiles(entries,io=fs){
  for(const e of entries)if(read(e.path)!==e.before)throw Error('SCUI_FOREIGN_EDIT');

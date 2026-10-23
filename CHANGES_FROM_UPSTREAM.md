@@ -1,3 +1,23 @@
+## 2026-10-20 / ZenzaWatch 2.7.314-public1020 — TypeScript-generated core and private development sync
+
+Bring the integrated development line (through Task903) onto the public develop branch while keeping the public-only Issue #27-#29 fixes and published Scene Search work (3-way merged). Library modules, the playlist stack, storyboard models, audio adjustment and the hover menu are now generated from reviewed TypeScript sources, with legacy-vs-generated regression tests. User-visible fixes include: dropping a .playlist.json onto the playlist list imports it again; one malformed recommendation no longer hides all related videos; new-format mylist items without counts or thumbnails no longer throw; a failed seek-bar thumbnail worker no longer leaks an unhandled rejection per video; repeated link hovers no longer accumulate click listeners; series pages without the expected container no longer abort link enhancement.
+
+## Task422 / ZenzaWatch 2.7.245-task422 — retry failed storyboard images without stale view leases
+
+Keep the Task420 shared-image ownership and GC contract, but discard a view-local page promise after its cache entry fails or disappears. A repeated same-time seek or one-page return may retry a failed decode, including failed prefetch; normal successful same-page requests stay coalesced. Release exact cache-generation identities for ThumbnailView and BoardView so old failed image completions cannot decrement a new same-URL entry. Add exact source/generated-dev regression tests for multiple failures, recovery, stale-generation release, and no closing of shared BLANK fallback. No live site actions or publication.
+
+## Task421 / MylistPocket 0.5.53-task421 — isolate per-card NG responses
+
+Preserve latest-request ownership on repeated NG card lookups so stale success/failure cannot clear newer loading state or overwrite newer verdicts. Handle rejected/error-valued or malformed video responses as failures without invoking NG/Fav matchers, and clear mutually conflicting result CSS. Keep queue concurrency, success/cache behavior, ordinary favorite/hover paths and NG toggle contracts. Add source/generated MylistPocket cases for A/B inversion, stale failure, Error results and malformed success. No live account action or publication.
+
+## Task420 / 2.7.244-task420 — protect shared storyboard image ownership
+
+Track only bitmap pages actually acquired by each ThumbnailView; reuse view-local promises, release each lease exactly once on info reset/dispose, and retain only the visible/neighbor pages while seeking. Cache GC may reclaim unpinned images only, never close an in-use shared ImageBitmap. Add source/Dev regressions for shared views, repeat disposal, repeat page, bounded retained pages and GC pressure; correct old regression expecting release of an unacquired sibling page. No live playback or publication.
+
+## Task419 / 2.7.243-task419 — isolate asynchronous YouTube player source transitions
+
+Recover the Task381 regression coverage on the current baseline and invalidate obsolete YouTube source initializations/completions when the video source changes, including A-to-normal, A-to-B and same-URL replacement. Preserve the requested start time and ordinary successful playback transition. Generate only the current ZenzaWatch-dev artifact, without importing historical distribution files. No live account actions or publication.
+
 ## Task418 ? guard missing rows after list commands
 
 Skip row-marking when the looked-up row no longer exists after playlist/deflist command emission. Keep the command, existing lookup rules and valid-row 1000ms timer unchanged. Do not introduce new fallback or timer ownership semantics. Add source/generated 16-case coverage. ZenzaWatch2.7.242-task418.

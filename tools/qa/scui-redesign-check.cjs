@@ -145,7 +145,10 @@ async function client(url){
     record(width+'/'+mode+'/'+layout+'/collapsed-height',beforeLeave.footer.height<=54&&beforeLeave.rect.height<=158,beforeLeave);
     for(const screen of ['normal','wide','big','3D','small']){
      await evaluate("document.body.className='zenzaScreenMode_"+screen+"';true");await frame();
-     const guard=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect(),probe=document.createElement('div'),child=document.createElement('button');probe.append(child);document.body.append(probe);const background=getComputedStyle(child).pointerEvents;probe.remove();return {button:getComputedStyle(b).pointerEvents,hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),background,portal:getComputedStyle(root.parentElement).pointerEvents};})()");
+     // A mode change can end the current hover/corridor. Re-enter through
+     // real pointer input before measuring a visible button's hit target.
+     await move(0,0);await move(anchor.x,anchor.y);await frame();
+     const guard=await evaluate("(()=>{const root=qaBinding.adapter.bridge._active.root,b=root.querySelector('[data-scui-action=comment-toggle]'),r=b.getBoundingClientRect(),probe=document.createElement('div'),child=document.createElement('button');probe.append(child);document.body.append(probe);const background=getComputedStyle(child).pointerEvents;probe.remove();return {rect:r.toJSON(),shown:qaBinding.adapter.bridge.state.shown,topElement:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.outerHTML.slice(0,400),button:getComputedStyle(b).pointerEvents,hit:b.contains(document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)),background,portal:getComputedStyle(root.parentElement).pointerEvents};})()");
      record(width+'/'+mode+'/'+layout+'/native-input-guard/'+screen,guard.button==='auto'&&guard.hit&&guard.portal==='none'&&(screen==='small'||guard.background==='none'),guard);
     }
     await evaluate("document.body.className='zenzaScreenMode_big';true");await frame();

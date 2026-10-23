@@ -43,6 +43,8 @@ const boot = (items=[sample()], editorPath='src/RelatedMenuSettings.js') => {
 };
 
 describe('Task314 related-menu custom links settings UI', function(){
+  // jsdom startup and the first source parse can exceed Mocha's default 2s.
+  this.timeout(15000);
   it('provides a dedicated, testable UI module and integrates after legacy handlers',()=>{
     assert.ok(fs.existsSync(path.join(__dirname,'../../src/RelatedMenuSettings.js')),
       'Task314 editor module must exist');

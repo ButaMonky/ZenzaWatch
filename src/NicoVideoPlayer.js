@@ -1443,6 +1443,8 @@ class VideoPlayer extends Emitter {
 
     this._reset();
 
+    // Invalidate any previous asynchronous YouTube transition on every source assignment.
+    const sourceGeneration = this._sourceGeneration = (this._sourceGeneration || 0) + 1;
     this._src = url;
     this._isPlaying = false;
     this._canPlay = false;
@@ -1451,11 +1453,13 @@ class VideoPlayer extends Emitter {
 
     if (/(youtube\.com|youtu\.be)/.test(url)) {
       const currentTime = this._currentVideo.currentTime;
+      const isCurrent = () => this._sourceGeneration === sourceGeneration && this._src === url;
       this._initYouTube().then(() => {
-        // 通常使用では(video|YouTube) -> YouTubeへの遷移しか存在しないので
-        // 逆方向の想定は色々端折っている
+        if (!isCurrent()) { return; }
         return this._videoYouTube.setSrc(url, currentTime);
       }).then(() => {
+        // A superseded asynchronous completion must not switch the current player.
+        if (!isCurrent()) { return; }
         this._changePlayer('YouTube');
       });
       return;

@@ -37,7 +37,8 @@ const WORKER_INJECTED = ['PID', 'bcast', 'portMap', 'EmitterInitFunc'];
 const KNOWN_UNDEFINED = {
   'MaskedWatch.user.js': ['PromiseHandler', 'global'], // 要調査（Task 085 で新たに検出）
   'HeatSync.user.js': ['_'], // lodash の @require が無い。要調査（Task 085 で新たに検出）
-  'MylistPocket.user.js': ['$', 'NicoVideoApi', 'BroadcastEmitter'], // 要調査（Task 085 で新たに検出）
+  // '$' は netUtil.ajax 由来だった。Task641 で未使用の ajax を削除したため消えた。
+  'MylistPocket.user.js': ['NicoVideoApi', 'BroadcastEmitter'], // 要調査（Task 085 で新たに検出）
   'ZenzaAdvancedSettings.user.js': ['workerUtil'], // 要調査（Task 085 で新たに検出）
   'ZenzaHLS.user.js': ['ZenzaWatch'] // ZenzaWatch は本体が作る window.ZenzaWatch の可能性。要調査
 };

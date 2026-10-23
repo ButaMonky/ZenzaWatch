@@ -96,17 +96,39 @@ class NicoCommentViewModel extends Emitter {
     }
 
     window.console.time('SlotLayoutWorker call');
-    const result = await this._slotLayoutWorker.post({
-      command: 'layout',
-      params: {
-        lastUpdate: this._lastUpdate,
-        top: this._topGroup.bulkSlotData,
-        naka: this._nakaGroup.bulkSlotData,
-        bottom: this._bottomGroup.bulkSlotData
-      }
-    });
-    if (result.lastUpdate !== this._lastUpdate) {
-      return console.warn('slotLayoutWorker changed', this._lastUpdate, result.lastUpdate);
+    const params = {
+      lastUpdate: this._lastUpdate,
+      top: this._topGroup.bulkSlotData,
+      naka: this._nakaGroup.bulkSlotData,
+      bottom: this._bottomGroup.bulkSlotData
+    };
+    let result;
+    try {
+      result = await this._slotLayoutWorker.post({command: 'layout', params});
+    } catch (_) {
+      window.console.timeEnd('SlotLayoutWorker call');
+      return console.warn('slotLayoutWorker request failed');
+    }
+    if (!result || result.lastUpdate !== this._lastUpdate) {
+      window.console.timeEnd('SlotLayoutWorker call');
+      return console.warn('slotLayoutWorker changed', this._lastUpdate,
+        result && result.lastUpdate);
+    }
+    // Validate all three groups before changing any slot. The worker may fail,
+    // return an old generation or send an incomplete/mismatched response.
+    const isValidGroup = (actual, original) => Array.isArray(actual) &&
+      actual.length === original.length && original.every((input, i) => {
+        const row = actual[i];
+        return row && row.id === input.id && row.no === input.no &&
+          row.fork === input.fork && row.invisible === input.invisible &&
+          (input.invisible ? row.slot === input.slot :
+            Number.isInteger(row.slot) && row.slot >= 0 && row.slot < 40);
+      });
+    if (!isValidGroup(result.top, params.top) ||
+        !isValidGroup(result.naka, params.naka) ||
+        !isValidGroup(result.bottom, params.bottom)) {
+      window.console.timeEnd('SlotLayoutWorker call');
+      return console.warn('slotLayoutWorker invalid response');
     }
     this._topGroup.bulkSlotData = result.top;
     this._nakaGroup.bulkSlotData = result.naka;

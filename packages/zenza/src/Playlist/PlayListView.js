@@ -6,174 +6,158 @@ import {ClassList} from '../../../lib/src/dom/ClassListWrapper';
 import {uq} from '../../../lib/src/uQuery';
 import {global} from '../../../../src/ZenzaWatchIndex';
 
+// GENERATED FROM tools/typescript-stage1/nico-src/PlayListView.ts (Task900). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
-
 class PlayListView extends Emitter {
-  constructor(...args) {
-    super(...args);
-    this.initialize(...args);
-  }
-  initialize(params) {
-    this._container = params.container;
-    this._model = params.model;
-    this._playlist = params.playlist;
-
-    cssUtil.addStyle(PlayListView.__css__);
-    const $view = this._$view = uq.html(PlayListView.__tpl__);
-    this.classList = ClassList($view[0]);
-    this._container.append($view[0]);
-    const mq = $view.mapQuery({
-      _index: '.playlist-index', _length: '.playlist-length',
-      _menu: '.playlist-menu', _fileDrop: '.playlist-file-drop',
-      _fileSelect: '.import-playlist-file-select',
-      _playlistFrame: '.playlist-frame'
-    });
-    Object.assign(this, mq.e);
-    Object.assign(this, mq.$);
-
-    global.debug.playlistView = this._$view;
-
-    const listView = this._listView = new VideoListView({
-      container: this._playlistFrame,
-      model: this._model,
-      className: 'playlist',
-      dragdrop: true,
-      dropfile: true,
-      enablePocketWatch: false
-    });
-    listView.on('command', this._onCommand.bind(this));
-    listView.on('deflistAdd', this._onDeflistAdd.bind(this));
-    listView.on('moveItem', (src, dest) => this.emit('moveItem', src, dest));
-    listView.on('filedrop', data => this.emit('command', 'importFile', data));
-
-    this._playlist.on('update',
-      _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
-
-    this._$view.on('click', this._onPlaylistCommandClick.bind(this));
-    global.emitter.on('hideHover', () => {
-      this._$menu.raf.removeClass('show');
-      this._$fileDrop.raf.removeClass('show');
-    });
-    uq('.zenzaVideoPlayerDialog')
-      .on('dragover', this._onDragOverFile.bind(this))
-      .on('dragenter', this._onDragEnterFile.bind(this))
-      .on('dragleave', this._onDragLeaveFile.bind(this))
-      .on('drop', this._onDropFile.bind(this));
-
-    this._$fileSelect.on('change', this._onImportFileSelect.bind(this));
-
-    ['addClass',
-      'removeClass',
-      'scrollTop',
-      'scrollToItem',
-    ].forEach(func => this[func] = listView[func].bind(listView));
-  }
-  toggleClass(className, v) {
-    this.classList.toggle(className, v);
-  }
-  _onCommand(command, param, itemId) {
-    switch (command) {
-      default:
-        this.emit('command', command, param, itemId);
-        break;
+    constructor(...args) {
+        super(...args);
+        this.initialize(...args);
     }
-  }
-  _onDeflistAdd(watchId, itemId) {
-    this.emit('deflistAdd', watchId, itemId);
-  }
-  _onPlaylistCommandClick(e) {
-    const target = e.target.closest('.playlist-command');
-    if (!target) {
-      return;
+    initialize(params) {
+        this._container = params.container;
+        this._model = params.model;
+        this._playlist = params.playlist;
+        cssUtil.addStyle(PlayListView.__css__);
+        const $view = this._$view = uq.html(PlayListView.__tpl__);
+        this.classList = ClassList($view[0]);
+        this._container.append($view[0]);
+        const mq = $view.mapQuery({
+            _index: '.playlist-index', _length: '.playlist-length',
+            _menu: '.playlist-menu', _fileDrop: '.playlist-file-drop',
+            _fileSelect: '.import-playlist-file-select',
+            _playlistFrame: '.playlist-frame'
+        });
+        Object.assign(this, mq.e);
+        Object.assign(this, mq.$);
+        global.debug.playlistView = this._$view;
+        const listView = this._listView = new VideoListView({
+            container: this._playlistFrame,
+            model: this._model,
+            className: 'playlist',
+            dragdrop: true,
+            dropfile: true,
+            enablePocketWatch: false
+        });
+        listView.on('command', this._onCommand.bind(this));
+        listView.on('deflistAdd', this._onDeflistAdd.bind(this));
+        listView.on('moveItem', (src, dest) => this.emit('moveItem', src, dest));
+        listView.on('filedrop', (data) => this.emit('command', 'importFile', data));
+        this._playlist.on('update', _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
+        this._$view.on('click', this._onPlaylistCommandClick.bind(this));
+        global.emitter.on('hideHover', () => {
+            this._$menu.raf.removeClass('show');
+            this._$fileDrop.raf.removeClass('show');
+        });
+        uq('.zenzaVideoPlayerDialog')
+            .on('dragover', this._onDragOverFile.bind(this))
+            .on('dragenter', this._onDragEnterFile.bind(this))
+            .on('dragleave', this._onDragLeaveFile.bind(this))
+            .on('drop', this._onDropFile.bind(this));
+        this._$fileSelect.on('change', this._onImportFileSelect.bind(this));
+        ['addClass',
+            'removeClass',
+            'scrollTop',
+            'scrollToItem',
+        ].forEach(func => this[func] = listView[func].bind(listView));
     }
-    const {command, param} = target.dataset;
-    e.stopPropagation();
-    if (!command) {
-      return;
+    toggleClass(className, v) {
+        this.classList.toggle(className, v);
     }
-    switch (command) {
-      case 'importFileMenu':
-        this._$menu.raf.removeClass('show');
-        this._$fileDrop.addClass('show');
-        return;
-      case 'toggleMenu':
+    _onCommand(command, param, itemId) {
+        switch (command) {
+            default:
+                this.emit('command', command, param, itemId);
+                break;
+        }
+    }
+    _onDeflistAdd(watchId, itemId) {
+        this.emit('deflistAdd', watchId, itemId);
+    }
+    _onPlaylistCommandClick(e) {
+        const target = e.target.closest('.playlist-command');
+        if (!target) {
+            return;
+        }
+        const { command, param } = target.dataset;
         e.stopPropagation();
+        if (!command) {
+            return;
+        }
+        switch (command) {
+            case 'importFileMenu':
+                this._$menu.raf.removeClass('show');
+                this._$fileDrop.addClass('show');
+                return;
+            case 'toggleMenu':
+                e.stopPropagation();
+                e.preventDefault();
+                this._$menu.raf.addClass('show');
+                return;
+            case 'shuffle':
+            case 'sortBy':
+            case 'reverse':
+                this.classList.add('shuffle');
+                window.setTimeout(() => this.classList.remove('shuffle'), 1000);
+                this.emit('command', command, param);
+                break;
+            default:
+                this.emit('command', command, param);
+        }
+        global.emitter.emitAsync('hideHover');
+    }
+    _onPlaylistStatusUpdate() {
+        const playlist = this._playlist;
+        this.classList.toggle('enable', playlist.isEnable);
+        this.classList.toggle('loop', playlist.isLoop);
+        this._index.textContent = playlist.getIndex() + 1;
+        this._length.textContent = playlist.length;
+    }
+    _onDragOverFile(e) {
         e.preventDefault();
-        this._$menu.raf.addClass('show');
-        return;
-      case 'shuffle':
-      case 'sortBy':
-      case 'reverse':
-        this.classList.add('shuffle');
-        window.setTimeout(() => this.classList.remove('shuffle'), 1000);
-        this.emit('command', command, param);
-        break;
-      default:
-        this.emit('command', command, param);
+        e.stopPropagation();
+        this._$fileDrop.addClass('is-dragover');
     }
-    global.emitter.emitAsync('hideHover');
-  }
-  _onPlaylistStatusUpdate() {
-    const playlist = this._playlist;
-    this.classList.toggle('enable', playlist.isEnable);
-    this.classList.toggle('loop', playlist.isLoop);
-    this._index.textContent = playlist.getIndex() + 1;
-    this._length.textContent = playlist.length;
-  }
-  _onDragOverFile(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this._$fileDrop.addClass('is-dragover');
-  }
-  _onDragEnterFile(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this._$fileDrop.addClass('is-dragover');
-  }
-  _onDragLeaveFile(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this._$fileDrop.removeClass('is-dragover');
-  }
-  _onDropFile(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    this._$fileDrop.removeClass('show is-dragover');
-
-    const file = (e.originalEvent || e).dataTransfer.files[0];
-    if (!/\.playlist\.json$/.test(file.name)) {
-      return;
+    _onDragEnterFile(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._$fileDrop.addClass('is-dragover');
     }
-
-    const fileReader = new FileReader();
-    fileReader.onload = ev => {
-      window.console.log('file data: ', ev.target.result);
-      this.emit('command', 'importFile', ev.target.result);
-    };
-
-    fileReader.readAsText(file);
-  }
-  _onImportFileSelect(e) {
-    e.preventDefault();
-
-    const file = (e.originalEvent || e).target.files[0];
-    if (!/\.playlist\.json$/.test(file.name)) {
-      return;
+    _onDragLeaveFile(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._$fileDrop.removeClass('is-dragover');
     }
-
-    const fileReader = new FileReader();
-    fileReader.onload = ev => {
-      window.console.log('file data: ', ev.target.result);
-      this.emit('command', 'importFile', ev.target.result);
-    };
-
-    fileReader.readAsText(file);
-  }
-
-  get hasFocus() {
-    return this._listView.hasFocus;
-  }
+    _onDropFile(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._$fileDrop.removeClass('show is-dragover');
+        const file = (e.originalEvent || e).dataTransfer.files[0];
+        if (!file || !/\.playlist\.json$/.test(file.name)) {
+            return;
+        }
+        const fileReader = new FileReader();
+        fileReader.onload = (ev) => {
+            window.console.log('file data: ', ev.target.result);
+            this.emit('command', 'importFile', ev.target.result);
+        };
+        fileReader.readAsText(file);
+    }
+    _onImportFileSelect(e) {
+        e.preventDefault();
+        const file = (e.originalEvent || e).target.files[0];
+        if (!file || !/\.playlist\.json$/.test(file.name)) {
+            return;
+        }
+        const fileReader = new FileReader();
+        fileReader.onload = (ev) => {
+            window.console.log('file data: ', ev.target.result);
+            this.emit('command', 'importFile', ev.target.result);
+        };
+        fileReader.readAsText(file);
+    }
+    get hasFocus() {
+        return this._listView.hasFocus;
+    }
 }
 PlayListView.__css__ = (`
 
@@ -393,7 +377,7 @@ PlayListView.__tpl__ = (`
       </div>
     </div>
   `).trim();
-
 //===END===
-
-export {PlayListView};
+export {
+  PlayListView
+};

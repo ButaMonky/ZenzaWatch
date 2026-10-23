@@ -137,6 +137,16 @@ class PlayerState extends BaseState {
   }
 
   set videoInfo(videoInfo) {
+    // Task904: failed video loads clear the current info. A null payload must
+    // not be passed to update() or dereferenced while reporting the failure.
+    if (videoInfo == null) {
+      this._videoInfo = null;
+      global.debug.videoInfo = null;
+      this.videoCount = {};
+      this.thumbnail = '';
+      this.emit('update-videoInfo', null);
+      return;
+    }
     if (this._videoInfo) {
       this._videoInfo.update(videoInfo);
     } else {

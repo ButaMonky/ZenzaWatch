@@ -102,7 +102,9 @@ describe('Task258 ad decoration item ownership', () => {
     assert.strictEqual(list._adDecorationRequested.has('sm3'), false);
   });
 
-  it('keeps generated dev dist current-item ownership in parity with source', async () => {
+  it('keeps generated dev dist current-item ownership in parity with source', async function() {
+    // Parsing a full bundled userscript is substantially slower than isolated source.
+    this.timeout(10000);
     const VideoList = loadVideoList('dist/ZenzaWatch-dev.user.js');
     const oldItem = {watchId: 'sm4', adDecoration: null};
     const newItem = {watchId: 'sm4', adDecoration: null};

@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.34-task391
+// @version        0.0.38-task800
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
@@ -31,7 +31,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaHLS.user.js
 // ==/UserScript==
-// build: 2026-10-11 04:07Z
+// build: 2026-10-19 16:58Z
 /* eslint-disable */
 
 
@@ -47,37 +47,37 @@ const ZenzaHLSmodules = {ErrorEvent, MediaError, HTMLDialogElement: window.HTMLD
 `;
 // hls.js@latest だと再生が始まらない動画がたまにある。 0.8.9ならok
 
-const AntiPrototypeJs = function() {
-	if (this.promise !== null || !window.Prototype || window.PureArray) {
-		return this.promise || Promise.resolve(window.PureArray || window.Array);
-	}
-	if (document.getElementsByClassName.toString().indexOf('B,A') >= 0) {
-		delete document.getElementsByClassName;
-	}
-	const waitForDom = new Promise(resolve => {
-		if (['interactive', 'complete'].includes(document.readyState)) {
-			return resolve();
+const AntiPrototypeJs = function () {
+		if (this.promise !== null || !window.Prototype || window.PureArray) {
+				return this.promise || Promise.resolve(window.PureArray || window.Array);
 		}
-		document.addEventListener('DOMContentLoaded', resolve, {once: true});
-	});
-	const f = Object.assign(document.createElement('iframe'), {
-		srcdoc: '<html><title>ここだけ時間が10年遅れてるスレ</title></html>',
-		id: 'prototype',
-		loading: 'eager'
-	});
-	Object.assign(f.style, {position: 'absolute', left: '-100vw', top: '-100vh'});
-	return this.promise = waitForDom
-		.then(() => new Promise(res => {
-			f.onload = res;
-			document.body.append(f);
+		if (document.getElementsByClassName.toString().indexOf('B,A') >= 0) {
+				delete document.getElementsByClassName;
+		}
+		const waitForDom = new Promise(resolve => {
+				if (['interactive', 'complete'].includes(document.readyState)) {
+						return resolve(undefined);
+				}
+				document.addEventListener('DOMContentLoaded', resolve, { once: true });
+		});
+		const f = Object.assign(document.createElement('iframe'), {
+				srcdoc: '<html><title>ここだけ時間が10年遅れてるスレ</title></html>',
+				id: 'prototype',
+				loading: 'eager'
+		});
+		Object.assign(f.style, { position: 'absolute', left: '-100vw', top: '-100vh' });
+		return this.promise = waitForDom
+				.then(() => new Promise(res => {
+				f.onload = res;
+				document.body.append(f);
 		})).then(() => {
-	window.PureArray = f.contentWindow.Array;
-	delete window.Array.prototype.toJSON;
-			delete window.String.prototype.toJSON;
-			f.remove();
-			return Promise.resolve(window.PureArray);
+				window.PureArray = f.contentWindow.Array;
+				delete window.Array.prototype.toJSON;
+				delete window.String.prototype.toJSON;
+				f.remove();
+				return Promise.resolve(window.PureArray);
 		}).catch(err => console.error(err));
-}.bind({promise: null});
+}.bind({ promise: null });
 AntiPrototypeJs();
 
 AntiPrototypeJs().then(() => {
@@ -94,430 +94,453 @@ AntiPrototypeJs().then(() => {
 
     console.time('ZenzaWatch HLS');
 function EmitterInitFunc() {
-class Handler { //extends Array {
-	constructor(...args) {
-		this._list = args;
-	}
-	get length() {
-		return this._list.length;
-	}
-	exec(...args) {
-		const pending = this._list.slice();
-		for (let i = pending.length - 1; i >= 0; i--) {
-			const member = pending[i];
-			if (this._list.includes(member)) { member.apply(this._list, args); }
+		class Handler {
+				constructor(...args) {
+						this._list = args;
+				}
+				get length() {
+						return this._list.length;
+				}
+				exec(...args) {
+						const pending = this._list.slice();
+						for (let i = pending.length - 1; i >= 0; i--) {
+								const member = pending[i];
+								if (this._list.includes(member)) {
+										member.apply(this._list, args);
+								}
+						}
+				}
+				execMethod(name, ...args) {
+						const pending = this._list.slice();
+						for (let i = pending.length - 1; i >= 0; i--) {
+								const member = pending[i];
+								if (this._list.includes(member)) {
+										member[name](...args);
+								}
+						}
+				}
+				add(member) {
+						if (this._list.includes(member)) {
+								return this;
+						}
+						this._list.unshift(member);
+						return this;
+				}
+				remove(member) {
+						this._list = this._list.filter(m => m !== member);
+						return this;
+				}
+				clear() {
+						this._list.length = 0;
+						return this;
+				}
+				get isEmpty() {
+						return this._list.length < 1;
+				}
+				*[Symbol.iterator]() {
+						const list = this._list || [];
+						for (const member of list) {
+								yield member;
+						}
+				}
+				next() {
+						return this[Symbol.iterator]();
+				}
 		}
-	}
-	execMethod(name, ...args) {
-		const pending = this._list.slice();
-		for (let i = pending.length - 1; i >= 0; i--) {
-			const member = pending[i];
-			if (this._list.includes(member)) { member[name](...args); }
-		}
-	}
-	add(member) {
-		if (this._list.includes(member)) {
-			return this;
-		}
-		this._list.unshift(member);
-		return this;
-	}
-	remove(member) {
-		this._list = this._list.filter(m => m !== member);
-		return this;
-	}
-	clear() {
-		this._list.length = 0;
-		return this;
-	}
-	get isEmpty() {
-		return this._list.length < 1;
-	}
-	*[Symbol.iterator]() {
-		const list = this._list || [];
-		for (const member of list) {
-			yield member;
-		}
-	}
-	next() {
-		return this[Symbol.iterator]();
-	}
+		Handler.nop = () => { };
+		const PromiseHandler = (() => {
+				const id = function () { return `Promise${this.id++}`; }.bind({ id: 0 });
+				class PromiseHandler extends Promise {
+						constructor(callback = () => { }) {
+								const key = new Object({ id: id(), callback, status: 'pending' });
+								const cb = function (res, rej) {
+										const resolve = (...args) => { this.status = 'resolved'; this.value = args; res(...args); };
+										const reject = (...args) => { this.status = 'rejected'; this.value = args; rej(...args); };
+										if (this.result) {
+												return this.result.then(resolve, reject);
+										}
+										Object.assign(this, { resolve, reject });
+										return callback(resolve, reject);
+								}.bind(key);
+								super(cb);
+								this.resolve = this.resolve.bind(this);
+								this.reject = this.reject.bind(this);
+								this.key = key;
+						}
+						resolve(...args) {
+								if (this.key.resolve) {
+										this.key.resolve(...args);
+								}
+								else {
+										this.key.result = Promise.resolve(...args);
+								}
+								return this;
+						}
+						reject(...args) {
+								if (this.key.reject) {
+										this.key.reject(...args);
+								}
+								else {
+										this.key.result = Promise.reject(...args);
+								}
+								return this;
+						}
+						addCallback(callback) {
+								Promise.resolve().then(() => callback(this.resolve, this.reject));
+								return this;
+						}
+				}
+				return PromiseHandler;
+		})();
+		const { Emitter } = (() => {
+				let totalCount = 0;
+				let warnings = [];
+				class Emitter {
+						on(name, callback) {
+								if (!this._events) {
+										Emitter.totalCount++;
+										this._events = new Map();
+								}
+								name = name.toLowerCase();
+								let e = this._events.get(name);
+								if (!e) {
+										const handler = new Handler(callback);
+										handler.name = name;
+										this._events.set(name, handler);
+										e = handler;
+								}
+								else {
+										e.add(callback);
+								}
+								if (e.length > 10) {
+										console.warn('listener count > 10', name, e, callback);
+										!Emitter.warnings.includes(this) && Emitter.warnings.push(this);
+								}
+								return this;
+						}
+						off(name, callback) {
+								if (!this._events) {
+										return;
+								}
+								name = name.toLowerCase();
+								const e = this._events.get(name);
+								if (!this._events.has(name)) {
+										return;
+								}
+								else if (!callback) {
+										this._events.delete(name);
+								}
+								else {
+										for (const listener of e) {
+												if (listener === callback || listener._original === callback) {
+														e.remove(listener);
+												}
+										}
+										if (e.isEmpty) {
+												this._events.delete(name);
+										}
+								}
+								if (this._events.size < 1) {
+										delete this._events;
+										Emitter.totalCount--;
+								}
+								return this;
+						}
+						once(name, func) {
+								const wrapper = (...args) => {
+										this.off(name, wrapper);
+										wrapper._original = null;
+										func(...args);
+								};
+								wrapper._original = func;
+								return this.on(name, wrapper);
+						}
+						clear(name) {
+								if (!this._events) {
+										return;
+								}
+								if (name) {
+										this._events.delete(name.toLowerCase());
+								}
+								else {
+										delete this._events;
+										Emitter.totalCount--;
+								}
+								return this;
+						}
+						emit(name, ...args) {
+								if (!this._events) {
+										return;
+								}
+								name = name.toLowerCase();
+								const e = this._events.get(name);
+								if (!e) {
+										return;
+								}
+								e.exec(...args);
+								return this;
+						}
+						emitAsync(...args) {
+								if (!this._events) {
+										return;
+								}
+								setTimeout(() => this.emit(...args), 0);
+								return this;
+						}
+						promise(name, callback) {
+								if (!this._promise) {
+										this._promise = new Map;
+								}
+								const p = this._promise.get(name);
+								if (p) {
+										return callback ? p.addCallback(callback) : p;
+								}
+								this._promise.set(name, new PromiseHandler(callback));
+								return this._promise.get(name);
+						}
+						emitResolve(name, ...args) {
+								if (!this._promise) {
+										this._promise = new Map;
+								}
+								if (!this._promise.has(name)) {
+										this._promise.set(name, new PromiseHandler());
+								}
+								return this._promise.get(name).resolve(...args);
+						}
+						emitReject(name, ...args) {
+								if (!this._promise) {
+										this._promise = new Map;
+								}
+								if (!this._promise.has(name)) {
+										this._promise.set(name, new PromiseHandler);
+								}
+								return this._promise.get(name).reject(...args);
+						}
+						resetPromise(name) {
+								if (!this._promise) {
+										return;
+								}
+								this._promise.delete(name);
+						}
+						hasPromise(name) {
+								return this._promise && this._promise.has(name);
+						}
+						addEventListener(...args) { return this.on(...args); }
+						removeEventListener(...args) { return this.off(...args); }
+				}
+				Emitter.totalCount = totalCount;
+				Emitter.warnings = warnings;
+				return { Emitter };
+		})();
+		return { Handler, PromiseHandler, Emitter };
 }
-Handler.nop = () => {/*     ( ˘ω˘ ) スヤァ    */};
-const PromiseHandler = (() => {
-	const id = function() { return `Promise${this.id++}`; }.bind({id: 0});
-	class PromiseHandler extends Promise {
-		constructor(callback = () => {}) {
-			const key = new Object({id: id(), callback, status: 'pending'});
-			const cb = function(res, rej) {
-				const resolve = (...args) => { this.status = 'resolved'; this.value = args; res(...args); };
-				const reject  = (...args) => { this.status = 'rejected'; this.value = args; rej(...args); };
-				if (this.result) {
-					return this.result.then(resolve, reject);
-				}
-				Object.assign(this, {resolve, reject});
-				return callback(resolve, reject);
-			}.bind(key);
-			super(cb);
-			this.resolve = this.resolve.bind(this);
-			this.reject = this.reject.bind(this);
-			this.key = key;
-		}
-		resolve(...args) {
-			if (this.key.resolve) {
-				this.key.resolve(...args);
-			} else {
-				this.key.result = Promise.resolve(...args);
-			}
-			return this;
-		}
-		reject(...args) {
-			if (this.key.reject) {
-				this.key.reject(...args);
-			} else {
-				this.key.result = Promise.reject(...args);
-			}
-			return this;
-		}
-		addCallback(callback) {
-			Promise.resolve().then(() => callback(this.resolve, this.reject));
-			return this;
-		}
-	}
-	return PromiseHandler;
-})();
-const {Emitter} = (() => {
-	let totalCount = 0;
-	let warnings = [];
-	class Emitter {
-		on(name, callback) {
-			if (!this._events) {
-				Emitter.totalCount++;
-				this._events = new Map();
-			}
-			name = name.toLowerCase();
-			let e = this._events.get(name);
-			if (!e) {
-				const handler = new Handler(callback);
-				handler.name = name;
-				e = this._events.set(name, handler);
-			} else {
-				e.add(callback);
-			}
-			if (e.length > 10) {
-				console.warn('listener count > 10', name, e, callback);
-				!Emitter.warnings.includes(this) && Emitter.warnings.push(this);
-			}
-			return this;
-		}
-		off(name, callback) {
-			if (!this._events) {
-				return;
-			}
-			name = name.toLowerCase();
-			const e = this._events.get(name);
-			if (!this._events.has(name)) {
-				return;
-			} else if (!callback) {
-				this._events.delete(name);
-			} else {
-				for (const listener of e) {
-					if (listener === callback || listener._original === callback) {
-						e.remove(listener);
-					}
-				}
-				if (e.isEmpty) {
-					this._events.delete(name);
-				}
-			}
-			if (this._events.size < 1) {
-				delete this._events;
-			}
-			return this;
-		}
-		once(name, func) {
-			const wrapper = (...args) => {
-				this.off(name, wrapper);
-				wrapper._original = null;
-				func(...args);
-			};
-			wrapper._original = func;
-			return this.on(name, wrapper);
-		}
-		clear(name) {
-			if (!this._events) {
-				return;
-			}
-			if (name) {
-				this._events.delete(name);
-			} else {
-				delete this._events;
-				Emitter.totalCount--;
-			}
-			return this;
-		}
-		emit(name, ...args) {
-			if (!this._events) {
-				return;
-			}
-			name = name.toLowerCase();
-			const e = this._events.get(name);
-			if (!e) {
-				return;
-			}
-			e.exec(...args);
-			return this;
-		}
-		emitAsync(...args) {
-			if (!this._events) {
-				return;
-			}
-			setTimeout(() => this.emit(...args), 0);
-			return this;
-		}
-		promise(name, callback) {
-			if (!this._promise) {
-				this._promise = new Map;
-			}
-			const p = this._promise.get(name);
-			if (p) {
-				return callback ? p.addCallback(callback) : p;
-			}
-			this._promise.set(name, new PromiseHandler(callback));
-			return this._promise.get(name);
-		}
-		emitResolve(name, ...args) {
-			if (!this._promise) {
-				this._promise = new Map;
-			}
-			if (!this._promise.has(name)) {
-				this._promise.set(name, new PromiseHandler());
-			}
-			return this._promise.get(name).resolve(...args);
-		}
-		emitReject(name, ...args) {
-			if (!this._promise) {
-				this._promise = new Map;
-			}
-			if (!this._promise.has(name)) {
-				this._promise.set(name, new PromiseHandler);
-			}
-			return this._promise.get(name).reject(...args);
-		}
-		resetPromise(name) {
-			if (!this._promise) { return; }
-			this._promise.delete(name);
-		}
-		hasPromise(name) {
-			return this._promise && this._promise.has(name);
-		}
-		addEventListener(...args) { return this.on(...args); }
-		removeEventListener(...args) { return this.off(...args);}
-	}
-	Emitter.totalCount = totalCount;
-	Emitter.warnings = warnings;
-	return {Emitter};
-})();
-	return {Handler, PromiseHandler, Emitter};
-}
-const {Handler, PromiseHandler, Emitter} = EmitterInitFunc();
+const { Handler, PromiseHandler, Emitter } = EmitterInitFunc();
 const workerUtil = (() => {
-	let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
-	let global = null, external = null;
-	const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
-	const isAvailable = !!(window.Blob && window.Worker && window.URL);
-	const messageWrapper = function(self) {
-		const _onmessage = self.onmessage || (() => {});
-		const promises = {};
-		let requestSeq = 0;
-		const onMessage = async function(self, type, e) {
-			const {body, sessionId, status} = e.data;
-			const {command, params} = body;
-			try {
-				let result;
-				switch (command) {
-					case 'commandResult':
-						if (promises[sessionId]) {
-							if (status === 'ok') {
-								promises[sessionId].resolve(params.result);
-							} else {
-								promises[sessionId].reject(new Error(params.result));
-							}
-							delete promises[sessionId];
+		let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
+		let global = null, external = null;
+		const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
+		const isAvailable = !!(window.Blob && window.Worker && window.URL);
+		const messageWrapper = function (self) {
+				const _onmessage = self.onmessage || (() => { });
+				const promises = {};
+				let requestSeq = 0;
+				const onMessage = async function (self, type, e) {
+						const { body, sessionId, status } = e.data;
+						const { command, params } = body;
+						try {
+								let result;
+								switch (command) {
+										case 'commandResult':
+												if (promises[sessionId]) {
+														if (status === 'ok') {
+																promises[sessionId].resolve(params.result);
+														}
+														else {
+																promises[sessionId].reject(new Error(params.result));
+														}
+														delete promises[sessionId];
+												}
+												return;
+										case 'ping':
+												result = { now: Date.now(), NAME, PID, url: location.href };
+												break;
+										case 'port':
+												{
+														const port = e.ports[0];
+														portMap[params.name] = port;
+														port.addEventListener('message', onMessage.bind({}, port, params.name));
+														port.start && port.start();
+														bindFunc(port, 'MessageChannel');
+														result = { name: params.name };
+														if (params.ping) {
+																console.time('ping:' + sessionId);
+																port.ping().then((result) => {
+																		console.timeEnd('ping:' + sessionId);
+																		console.log('ok %smec', Date.now() - params.now, params);
+																}).catch((err) => {
+																		console.timeEnd('ping:' + sessionId);
+																		console.warn('ping fail', { err, data: e.data });
+																});
+														}
+												}
+												break;
+										case 'broadcast':
+												{
+														if (!BroadcastChannel) {
+																return;
+														}
+														const channel = new BroadcastChannel(`${params.name}`);
+														channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
+														bindFunc(channel, 'BroadcastChannel');
+														bcast[params.basename] = channel;
+												}
+												return;
+										case 'env':
+												({ config, TOKEN, PRODUCT, CONSTANT } = params);
+												return;
+										default:
+												result = await _onmessage({ command, params }, type, PID);
+												break;
+								}
+								if (sessionId === undefined || sessionId === null) {
+										return;
+								}
+								self.postMessage({ body: { command: 'commandResult', params: { command, result } }, sessionId, TYPE: type, PID, status: 'ok'
+								});
 						}
-					return;
-					case 'ping':
-						result = {now: Date.now(), NAME, PID, url: location.href};
-						break;
-					case 'port': {
+						catch (err) {
+								console.error('failed', { err, command, params, sessionId, TYPE: type, PID, data: e.data });
+								if (sessionId === undefined || sessionId === null) {
+										return;
+								}
+								self.postMessage({ body: { command: 'commandResult', params: { command, result: err.message || null } },
+										sessionId, TYPE: type, PID, status: err.status || 'fail'
+								});
+						}
+				};
+				self.onmessage = onMessage.bind({}, self, self.name);
+				self.onconnect = (e) => {
 						const port = e.ports[0];
-						portMap[params.name] = port;
-						port.addEventListener('message', onMessage.bind({}, port, params.name));
-						port.start && port.start();
-						bindFunc(port, 'MessageChannel');
-						result = {name: params.name};
-						if (params.ping) {
-							console.time('ping:' + sessionId);
-							port.ping().then(result => {
-								console.timeEnd('ping:' + sessionId);
-								console.log('ok %smec', Date.now() - params.now, params);
-							}).catch(err => {
-								console.timeEnd('ping:' + sessionId);
-								console.warn('ping fail', {err, data: e.data});
-							});
+						port.onmessage = self.onmessage;
+						port.start();
+				};
+				const bindFunc = (self, type = 'Worker') => {
+						const post = function (self, body, options = {}) {
+								const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
+								return new Promise((resolve, reject) => {
+										promises[sessionId] = { resolve, reject };
+										self.postMessage({ body, sessionId, PID }, options.transfer);
+										if (typeof options.timeout === 'number') {
+												setTimeout(() => {
+														reject({ status: 'fail', message: 'timeout' });
+														delete promises[sessionId];
+												}, options.timeout);
+										}
+								}).finally(() => { delete promises[sessionId]; });
+						};
+						const emit = function (self, eventName, data = null) {
+								self.post({ command: 'emit', params: { eventName, data } });
+						};
+						const notify = function (self, message) {
+								self.post({ command: 'notify', params: { message } });
+						};
+						const alert = function (self, message) {
+								self.post({ command: 'alert', params: { message } });
+						};
+						const ping = async function (self, options = {}) {
+								const timekey = `PING "${self.name}"`;
+								console.log(timekey);
+								let result;
+								options.timeout = options.timeout || 10000;
+								try {
+										console.time(timekey);
+										result = await self.post({ command: 'ping', params: { now: Date.now(), NAME, PID, url: location.href } }, options);
+										console.timeEnd(timekey);
+								}
+								catch (e) {
+										console.timeEnd(timekey);
+										console.warn('ping fail', e);
+								}
+								return result;
+						};
+						self.post = post.bind({ sessionId: 0 }, this.port || self);
+						self.emit = emit.bind({}, self);
+						self.notify = notify.bind({}, self);
+						self.alert = alert.bind({}, self);
+						self.ping = ping.bind({}, self);
+						return self;
+				};
+				bindFunc(self);
+				self.xFetch = async (url, options = {}) => {
+						options = { ...options, ...{ signal: null } }; // remove AbortController
+						if (url.startsWith(location.origin)) {
+								return fetch(url, options);
 						}
-					}
-						break;
-					case 'broadcast': {
-						if (!BroadcastChannel) { return; }
-						const channel = new BroadcastChannel(`${params.name}`);
-						channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
-						bindFunc(channel, 'BroadcastChannel');
-						bcast[params.basename] = channel;
-					}
-						return;
-					case 'env':
-						({config, TOKEN, PRODUCT, CONSTANT} = params);
-						return;
-					default:
-						result = await _onmessage({command, params}, type, PID);
-						break;
-					}
-				if (sessionId === undefined || sessionId === null) { return; }
-				self.postMessage({body:
-					{command: 'commandResult', params:
-						{command, result}}, sessionId, TYPE: type, PID, status: 'ok'
-					});
-			} catch(err) {
-				console.error('failed', {err, command, params, sessionId, TYPE: type, PID, data: e.data});
-				if (sessionId === undefined || sessionId === null) { return; }
-				self.postMessage({body:
-						{command: 'commandResult', params: {command, result: err.message || null}},
-						sessionId, TYPE: type, PID, status: err.status || 'fail'
-					});
-			}
+						const result = await self.post({ command: 'fetch', params: { url, options } });
+						const { buffer, init, headers } = result;
+						const _headers = new Headers();
+						(headers || []).forEach((a) => _headers.append(...a));
+						const _init = {
+								status: init.status,
+								statusText: init.statusText || '',
+								headers: _headers
+						};
+						return new Response(buffer, _init);
+				};
 		};
-		self.onmessage = onMessage.bind({}, self, self.name);
-		self.onconnect = e => {
-			const port = e.ports[0];
-			port.onmessage = self.onmessage;
-			port.start();
-		};
-		const bindFunc = (self, type = 'Worker') => {
-			const post = function(self, body, options = {}) {
-				const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
-				return new Promise((resolve, reject) => {
-					promises[sessionId] = {resolve, reject};
-					self.postMessage({body, sessionId, PID}, options.transfer);
-					if (typeof options.timeout === 'number') {
-						setTimeout(() => {
-							reject({status: 'fail', message: 'timeout'});
-							delete promises[sessionId];
-						}, options.timeout);
-					}
-				}).finally(() => { delete promises[sessionId]; });
-			};
-			const emit = function(self, eventName, data = null) {
-				self.post({command: 'emit', params: {eventName, data}});
-			};
-			const notify = function(self, message) {
-				self.post({command: 'notify', params: {message}});
-			};
-			const alert = function(self, message) {
-				self.post({command: 'alert', params: {message}});
-			};
-			const ping = async function(self, options = {}) {
-				const timekey = `PING "${self.name}"`;
-				console.log(timekey);
-				let result;
-				options.timeout = options.timeout || 10000;
-				try {
-					console.time(timekey);
-					result = await self.post({command: 'ping', params: {now: Date.now(), NAME, PID, url: location.href}}, options);
-					console.timeEnd(timekey);
-				} catch (e) {
-					console.timeEnd(timekey);
-					console.warn('ping fail', e);
-				}
-				return result;
-			};
-			self.post = post.bind({sessionId: 0}, this.port || self);
-			self.emit = emit.bind({}, self);
-			self.notify = notify.bind({}, self);
-			self.alert = alert.bind({}, self);
-			self.ping = ping.bind({}, self);
-			return self;
-		};
-		bindFunc(self);
-		self.xFetch = async (url, options = {}) => {
-			options = {...options, ...{signal: null}}; // remove AbortController
-			if (url.startsWith(location.origin)) {
-				return fetch(url, options);
-			}
-			const result = await self.post({command: 'fetch', params: {url, options}});
-			const {buffer, init, headers} = result;
-			const _headers = new Headers();
-			(headers || []).forEach(a => _headers.append(...a));
-			const _init = {
-				status: init.status,
-				statusText: init.statusText || '',
-				headers: _headers
-			};
-			return new Response(buffer, _init);
-		};
-	};
-	const workerUtil = {
-		isAvailable,
-		js: (q, ...args) => {
-			const strargs = args.map(a => typeof a === 'string' ? a : a.toString);
-			return String.raw(q, ...strargs);
-		},
-		env: params => {
-			({config, TOKEN, PRODUCT, netUtil, CONSTANT, global} =
-				Object.assign({config, TOKEN, PRODUCT, netUtil, CONSTANT, global}, params));
-			if (global) { ({config, TOKEN, PRODUCT, CONSTANT} = global); }
-		},
-		create: function(func, options = {}) {
-			let cache = this.urlMap.get(func);
-			const name = options.name || 'Worker';
-			if (!cache) {
-				const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
-				const src = `
+		const workerUtil = {
+				isAvailable,
+				js: (q, ...args) => {
+						const strargs = args.map(a => typeof a === 'string' ? a : String(a));
+						return String.raw(q, ...strargs);
+				},
+				env: (params) => {
+						({ config, TOKEN, PRODUCT, netUtil, CONSTANT, global } =
+								Object.assign({ config, TOKEN, PRODUCT, netUtil, CONSTANT, global }, params));
+						if (global) {
+								({ config, TOKEN, PRODUCT, CONSTANT } = global);
+						}
+				},
+				create: function (func, options = {}) {
+						let cache = this.urlMap.get(func);
+						const name = options.name || 'Worker';
+						if (!cache) {
+								const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
+								const src = `
 				const PID = ${JSON.stringify(pid)};
 				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
-				const blob = new Blob([src], {type: 'text/javascript'});
-				const url = URL.createObjectURL(blob);
-				this.urlMap.set(func, url);
-				cache = url;
-			}
-			if (options.type === 'SharedWorker') {
-				const w = this.workerMap.get(func) || new SharedWorker(cache);
-				this.workerMap.set(func, w);
-				return w;
-			}
-			return new Worker(cache, options);
-		}.bind({urlMap: new Map(), workerMap: new Map()}),
-		createCrossMessageWorker: function(func, options = {}) {
-			const promises = {};
-			const instanceId = this.instanceSeq++;
-			let requestSeq = 0;
-			const name = options.name || 'Worker';
-			let state = 'starting';
-			const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
-			const rpcError = (reason, message) =>
-				Object.assign(new Error(message || reason), {name: 'WorkerRpcError', status: 'fail', reason, workerName: name});
-			const rejectAll = (reason, message) => {
-				for (const id of Object.keys(promises)) {
-					const p = promises[id];
-					delete promises[id];
-					p.reject(rpcError(reason, message));
-				}
-			};
-			const closables = [];
-			const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
-			const _func = `
+								const blob = new Blob([src], { type: 'text/javascript' });
+								const url = URL.createObjectURL(blob);
+								this.urlMap.set(func, url);
+								cache = url;
+						}
+						if (options.type === 'SharedWorker') {
+								const w = this.workerMap.get(func) || new SharedWorker(cache);
+								this.workerMap.set(func, w);
+								return w;
+						}
+						return new Worker(cache, options);
+				}.bind({ urlMap: new Map(), workerMap: new Map() }),
+				createCrossMessageWorker: function (func, options = {}) {
+						const promises = {};
+						const instanceId = this.instanceSeq++;
+						let requestSeq = 0;
+						const name = options.name || 'Worker';
+						let state = 'starting';
+						const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
+						const rpcError = (reason, message) => Object.assign(new Error(message || reason), { name: 'WorkerRpcError', status: 'fail', reason, workerName: name });
+						const rejectAll = (reason, message) => {
+								for (const id of Object.keys(promises)) {
+										const p = promises[id];
+										delete promises[id];
+										p.reject(rpcError(reason, message));
+								}
+						};
+						const closables = [];
+						const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
+						const _func = `
 			function (self) {
 			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = ${JSON.stringify(String(name))}, bcast = {}, portMap = {};
 			const {Handler, PromiseHandler, Emitter} = (${EmitterInitFunc.toString()})();
@@ -527,158 +550,179 @@ const workerUtil = (() => {
 			(${messageWrapper.toString()})(self);
 			}
 			`;
-			const worker = workerUtil.create(_func, options);
-			const self = options.type === 'SharedWorker' ? worker.port : worker;
-			self.name = name;
-			const onMessage = async function(self, e) {
-				if (state === 'disposed') { return; }
-				if (state === 'starting' || state === 'failed') { state = 'ready'; }
-				const {body, sessionId, status} = e.data;
-				const {command, params} = body;
-				try {
-					let result = 'ok';
-					let transfer = null;
-					switch (command) {
-						case 'commandResult':
-							if (promises[sessionId]) {
-								if (status === 'ok') {
-									promises[sessionId].resolve(params.result);
-								} else {
-									promises[sessionId].reject(new Error(params.result));
+						const worker = workerUtil.create(_func, options);
+						const self = options.type === 'SharedWorker' ? worker.port : worker;
+						self.name = name;
+						const onMessage = async function (self, e) {
+								if (state === 'disposed') {
+										return;
 								}
-								delete promises[sessionId];
-							}
-							return;
-						case 'ping':
-								result = {now: Date.now(), NAME, PID, url: location.href};
-								console.timeLog && console.timeLog(params.NAME, 'PONG');
-								break;
-						case 'emit':
-							global && global.emitter.emitAsync(params.eventName, params.data);
-							break;
-						case 'fetch':
-							result = await (netUtil || window).fetch(params.url,
-								Object.assign({}, params.options || {}, {_format: 'arraybuffer'}));
-							transfer = [result.buffer];
-							break;
-						case 'notify':
-							global && global.notify(params.message);
-							break;
-						case 'alert':
-							global && global.alert(params.message);
-							break;
-						default:
-							self.oncommand && (result = await self.oncommand({command, params}));
-							break;
-					}
-					if (sessionId === undefined || sessionId === null) { return; }
-					self.postMessage({body: {command: 'commandResult', params: {command, result}}, sessionId, status: 'ok'}, transfer);
-				} catch (err) {
-					console.error('failed', {err, command, params, sessionId});
-					if (sessionId === undefined || sessionId === null) { return; }
-					self.postMessage({body: {command: 'commandResult', params: {command, result: err.message || null}}, sessionId, status: err.status || 'fail'});
-				}
-			};
-			const bindFunc = (self, type = 'Worker') => {
-				const post = function(self, body, options = {}) {
-					if (state === 'failed' || state === 'disposed') {
-						return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
-					}
-					const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
-					const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
-					let timer = null;
-					return new Promise((resolve, reject) => {
-							promises[sessionId] = {resolve, reject};
-							self.postMessage({body, sessionId, TYPE: type, PID}, options.transfer);
-							if (timeout > 0 && timeout < Infinity) {
-								timer = setTimeout(() => {
-									if (!promises[sessionId]) { return; }
-									delete promises[sessionId];
-									reject(rpcError('timeout', 'timeout'));
-								}, timeout);
-							}
-						}).finally(() => {
-							timer && clearTimeout(timer);
-							delete promises[sessionId];
+								if (state === 'starting' || state === 'failed') {
+										state = 'ready';
+								}
+								const { body, sessionId, status } = e.data;
+								const { command, params } = body;
+								try {
+										let result = 'ok';
+										let transfer = null;
+										switch (command) {
+												case 'commandResult':
+														if (promises[sessionId]) {
+																if (status === 'ok') {
+																		promises[sessionId].resolve(params.result);
+																}
+																else {
+																		promises[sessionId].reject(new Error(params.result));
+																}
+																delete promises[sessionId];
+														}
+														return;
+												case 'ping':
+														result = { now: Date.now(), NAME, PID, url: location.href };
+														console.timeLog && console.timeLog(params.NAME, 'PONG');
+														break;
+												case 'emit':
+														global && global.emitter.emitAsync(params.eventName, params.data);
+														break;
+												case 'fetch':
+														result = await (netUtil || window).fetch(params.url, Object.assign({}, params.options || {}, { _format: 'arraybuffer' }));
+														transfer = [result.buffer];
+														break;
+												case 'notify':
+														global && global.notify(params.message);
+														break;
+												case 'alert':
+														global && global.alert(params.message);
+														break;
+												default:
+														self.oncommand && (result = await self.oncommand({ command, params }));
+														break;
+										}
+										if (sessionId === undefined || sessionId === null) {
+												return;
+										}
+										self.postMessage({ body: { command: 'commandResult', params: { command, result } }, sessionId, status: 'ok' }, transfer);
+								}
+								catch (err) {
+										console.error('failed', { err, command, params, sessionId });
+										if (sessionId === undefined || sessionId === null) {
+												return;
+										}
+										self.postMessage({ body: { command: 'commandResult', params: { command, result: err.message || null } }, sessionId, status: err.status || 'fail' });
+								}
+						};
+						const bindFunc = (self, type = 'Worker') => {
+								const post = function (self, body, options = {}) {
+										if (state === 'failed' || state === 'disposed') {
+												return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
+										}
+										const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
+										const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
+										let timer = null;
+										return new Promise((resolve, reject) => {
+												promises[sessionId] = { resolve, reject };
+												self.postMessage({ body, sessionId, TYPE: type, PID }, options.transfer);
+												if (timeout > 0 && timeout < Infinity) {
+														timer = setTimeout(() => {
+																if (!promises[sessionId]) {
+																		return;
+																}
+																delete promises[sessionId];
+																reject(rpcError('timeout', 'timeout'));
+														}, timeout);
+												}
+										}).finally(() => {
+												timer && clearTimeout(timer);
+												delete promises[sessionId];
+										});
+								};
+								const ping = async function (self, options = {}) {
+										const timekey = `PING "${self.name}" total time`;
+										window.console.log(`PING "${self.name}"...`);
+										let result;
+										options.timeout = options.timeout || 10000;
+										try {
+												window.console.time(timekey);
+												result = await self.post({ command: 'ping', params: { now: Date.now(), NAME: self.name, PID, url: location.href } }, options);
+												window.console.timeEnd(timekey);
+										}
+										catch (e) {
+												console.timeEnd(timekey);
+												console.warn('ping fail', e);
+										}
+										return result;
+								};
+								self.post = post.bind({ sessionId: 0 }, self);
+								self.send = (body, transfer) => self.postMessage({ body, TYPE: type, PID }, transfer);
+								self.ping = ping.bind({}, self);
+								self.addEventListener('message', onMessage.bind({ sessionId: 0 }, self));
+								self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
+								self.start && self.start();
+						};
+						bindFunc(self);
+						worker.addEventListener('error', (e) => {
+								if (state === 'disposed') {
+										return;
+								}
+								if (state === 'starting') {
+										state = 'failed';
+								}
+								rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
 						});
-				};
-				const ping = async function(self, options = {}) {
-					const timekey = `PING "${self.name}" total time`;
-					window.console.log(`PING "${self.name}"...`);
-					let result;
-					options.timeout = options.timeout || 10000;
-					try {
-					window.console.time(timekey);
-					result = await self.post({command: 'ping', params: {now: Date.now(), NAME: self.name, PID, url: location.href}}, options);
-					window.console.timeEnd(timekey);
-					} catch (e) {
-						console.timeEnd(timekey);
-						console.warn('ping fail', e);
-					}
-					return result;
-				};
-				self.post = post.bind({sessionId: 0}, self);
-				self.send = (body, transfer) => self.postMessage({body, TYPE: type, PID}, transfer);
-				self.ping = ping.bind({}, self);
-				self.addEventListener('message', onMessage.bind({sessionId: 0}, self));
-				self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
-				self.start && self.start();
-			};
-			bindFunc(self);
-			worker.addEventListener('error', e => {
-				if (state === 'disposed') { return; }
-				if (state === 'starting') { state = 'failed'; }
-				rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
-			});
-			if (self === worker && typeof worker.terminate === 'function') {
-				const terminate = worker.terminate.bind(worker);
-				self.terminate = () => {
-					if (state === 'disposed') { return; }
-					state = 'disposed';
-					rejectAll('terminated', `worker terminated: ${name}`);
-					for (const c of closables.splice(0)) {
-						try { c.close(); } catch (e) { /* 閉じられなくても続ける */ }
-					}
-					terminate();
-				};
-			}
-			self.getRpcState = () => ({id: instanceId, name, state, pending: Object.keys(promises).length});
-			if (config) {
-				self.send({
-					command: 'env',
-					params: {config: config.export(true), TOKEN, PRODUCT, CONSTANT}
-				});
-			}
-			self.addPort = (port, options = {}) => {
-				const name = options.name || 'MessageChannel';
-				return self.post({command: 'port', params: {port, name}}, {transfer: [port]});
-			};
-			const channel = new MessageChannel();
-			self.addPort(channel.port2).catch(() => {});
-			bindFunc(channel.port1, 'MessageChannel');
-			closables.push(channel.port1);
-			self.bridge = async (worker, options = {}) => {
-				const name = options.name || 'MessageChannelBridge';
-				const channel = new MessageChannel();
-				await self.addPort(channel.port1, {name: worker.name || name});
-				await worker.addPort(channel.port2, {name: self.name || name});
-			};
-			self.BroadcastChannel = basename => {
-				const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
-				self.send({command: 'broadcast', params: {basename, name}});
-				const channel = new BroadcastChannel(name);
-				bindFunc(channel, 'BroadcastChannel');
-				closables.push(channel);
-				return name;
-			};
-			self.ping()
-				.catch(result => console.warn('FAIL', result));
-			return self;
-		}.bind({
-			instanceSeq: 0
-		})
-	};
-	return workerUtil;
+						if (self === worker && typeof worker.terminate === 'function') {
+								const terminate = worker.terminate.bind(worker);
+								self.terminate = () => {
+										if (state === 'disposed') {
+												return;
+										}
+										state = 'disposed';
+										rejectAll('terminated', `worker terminated: ${name}`);
+										for (const c of closables.splice(0)) {
+												try {
+														c.close();
+												}
+												catch (e) { /* 閉じられなくても続ける */ }
+										}
+										terminate();
+								};
+						}
+						self.getRpcState = () => ({ id: instanceId, name, state, pending: Object.keys(promises).length });
+						if (config) {
+								self.send({
+										command: 'env',
+										params: { config: config.export(true), TOKEN, PRODUCT, CONSTANT }
+								});
+						}
+						self.addPort = (port, options = {}) => {
+								const name = options.name || 'MessageChannel';
+								return self.post({ command: 'port', params: { port, name } }, { transfer: [port] });
+						};
+						const channel = new MessageChannel();
+						self.addPort(channel.port2).catch(() => { });
+						bindFunc(channel.port1, 'MessageChannel');
+						closables.push(channel.port1);
+						self.bridge = async (worker, options = {}) => {
+								const name = options.name || 'MessageChannelBridge';
+								const channel = new MessageChannel();
+								await self.addPort(channel.port1, { name: worker.name || name });
+								await worker.addPort(channel.port2, { name: self.name || name });
+						};
+						self.BroadcastChannel = (basename) => {
+								const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
+								self.send({ command: 'broadcast', params: { basename, name } });
+								const channel = new BroadcastChannel(name);
+								bindFunc(channel, 'BroadcastChannel');
+								closables.push(channel);
+								return name;
+						};
+						self.ping()
+								.catch((result) => console.warn('FAIL', result));
+						return self;
+				}.bind({
+						instanceSeq: 0
+				})
+		};
+		return workerUtil;
 })();
 
     // Task173: 'force' = always native HLS; true = native only where hls.js cannot play.
@@ -3200,7 +3244,7 @@ const workerUtil = (() => {
     };
 
     const init = () => {
-      console.log('%cinit ZenzaWatch HLS 0.0.33-task301', 'background: cyan');
+      console.log('%cinit ZenzaWatch HLS 0.0.38-task800', 'background: cyan');
 
       const hlsConfig = Object.assign({}, Config.raw);
       // Task 079: Config は emit('update', {key, value}) の形で知らせるので、

@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.5-task301
+// @version     0.3.7-task786
 // @grant       none
 // @author      名無しさん
 // @license     public domain

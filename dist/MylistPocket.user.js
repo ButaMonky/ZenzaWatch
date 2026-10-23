@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.59-task714
+// @version     0.5.75-task800
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,40 +36,40 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-17 09:32Z b9e21e3
+// build: 2026-10-19 16:58Z
 /* eslint-disable */
 
-const AntiPrototypeJs = function() {
-	if (this.promise !== null || !window.Prototype || window.PureArray) {
-		return this.promise || Promise.resolve(window.PureArray || window.Array);
-	}
-	if (document.getElementsByClassName.toString().indexOf('B,A') >= 0) {
-		delete document.getElementsByClassName;
-	}
-	const waitForDom = new Promise(resolve => {
-		if (['interactive', 'complete'].includes(document.readyState)) {
-			return resolve();
+const AntiPrototypeJs = function () {
+		if (this.promise !== null || !window.Prototype || window.PureArray) {
+				return this.promise || Promise.resolve(window.PureArray || window.Array);
 		}
-		document.addEventListener('DOMContentLoaded', resolve, {once: true});
-	});
-	const f = Object.assign(document.createElement('iframe'), {
-		srcdoc: '<html><title>ここだけ時間が10年遅れてるスレ</title></html>',
-		id: 'prototype',
-		loading: 'eager'
-	});
-	Object.assign(f.style, {position: 'absolute', left: '-100vw', top: '-100vh'});
-	return this.promise = waitForDom
-		.then(() => new Promise(res => {
-			f.onload = res;
-			document.body.append(f);
+		if (document.getElementsByClassName.toString().indexOf('B,A') >= 0) {
+				delete document.getElementsByClassName;
+		}
+		const waitForDom = new Promise(resolve => {
+				if (['interactive', 'complete'].includes(document.readyState)) {
+						return resolve(undefined);
+				}
+				document.addEventListener('DOMContentLoaded', resolve, { once: true });
+		});
+		const f = Object.assign(document.createElement('iframe'), {
+				srcdoc: '<html><title>ここだけ時間が10年遅れてるスレ</title></html>',
+				id: 'prototype',
+				loading: 'eager'
+		});
+		Object.assign(f.style, { position: 'absolute', left: '-100vw', top: '-100vh' });
+		return this.promise = waitForDom
+				.then(() => new Promise(res => {
+				f.onload = res;
+				document.body.append(f);
 		})).then(() => {
-	window.PureArray = f.contentWindow.Array;
-	delete window.Array.prototype.toJSON;
-			delete window.String.prototype.toJSON;
-			f.remove();
-			return Promise.resolve(window.PureArray);
+				window.PureArray = f.contentWindow.Array;
+				delete window.Array.prototype.toJSON;
+				delete window.String.prototype.toJSON;
+				f.remove();
+				return Promise.resolve(window.PureArray);
 		}).catch(err => console.error(err));
-}.bind({promise: null});
+}.bind({ promise: null });
 AntiPrototypeJs().then(() => {
   const PRODUCT = 'MylistPocket';
 
@@ -2166,611 +2166,659 @@ const PocketThumbnail = (() => {
       return util;
     })();
 const bounce = {
-	origin: Symbol('origin'),
-	idle(func, time) {
-		let reqId = null;
-		let lastArgs = null;
-		let promise = new PromiseHandler();
-		const [caller, canceller] =
-			(time === undefined && self.requestIdleCallback) ?
-				[self.requestIdleCallback, self.cancelIdleCallback] : [self.setTimeout, self.clearTimeout];
-		const callback = () => {
-			const lastResult = func(...lastArgs);
-			promise.resolve({lastResult, lastArgs});
-			reqId = lastArgs = null;
-			promise = new PromiseHandler();
-		};
-		const result = (...args) => {
-			if (reqId) {
-				reqId = canceller(reqId);
-			}
-			lastArgs = args;
-			reqId = caller(callback, time);
-			return promise;
-		};
-		result[this.origin] = func;
-		return result;
-	},
-	time(func, time = 0) {
-		return this.idle(func, time);
-	}
+		origin: Symbol('origin'),
+		idle(func, time) {
+				let reqId = null;
+				let lastArgs = null;
+				let promise = new PromiseHandler();
+				const [caller, canceller] = ((time === undefined && self.requestIdleCallback) ?
+						[self.requestIdleCallback, self.cancelIdleCallback] : [self.setTimeout, self.clearTimeout]);
+				const callback = () => {
+						const lastResult = func(...lastArgs);
+						promise.resolve({ lastResult, lastArgs });
+						reqId = lastArgs = null;
+						promise = new PromiseHandler();
+				};
+				const result = (...args) => {
+						if (reqId) {
+								reqId = canceller(reqId);
+						}
+						lastArgs = args;
+						reqId = caller(callback, time);
+						return promise;
+				};
+				result[this.origin] = func;
+				return result;
+		},
+		time(func, time = 0) {
+				return this.idle(func, time);
+		}
 };
 const throttle = (func, interval) => {
-	let lastTime = 0;
-	let timer;
-	let promise = new PromiseHandler();
-	const result = (...args) => {
-		if (timer) {
-			return promise;
-		}
-		const now = performance.now();
-		const timeDiff = now - lastTime;
-		timer = setTimeout(() => {
-			lastTime = performance.now();
-			timer = null;
-			const lastResult = func(...args);
-			promise.resolve({lastResult, lastArgs: args});
-			promise = new PromiseHandler();
-		}, Math.max(interval - timeDiff, 0));
-		return promise;
-	};
-	result.cancel = () => {
-		if (timer) {
-			timer = clearTimeout(timer);
-		}
-		promise.resolve({lastResult: null, lastArgs: null});
-		promise = new PromiseHandler();
-	};
-	return result;
+		let lastTime = 0;
+		let timer;
+		let promise = new PromiseHandler();
+		const result = (...args) => {
+				if (timer) {
+						return promise;
+				}
+				const now = performance.now();
+				const timeDiff = now - lastTime;
+				timer = setTimeout(() => {
+						lastTime = performance.now();
+						timer = null;
+						const lastResult = func(...args);
+						promise.resolve({ lastResult, lastArgs: args });
+						promise = new PromiseHandler();
+				}, Math.max(interval - timeDiff, 0));
+				return promise;
+		};
+		result.cancel = () => {
+				if (timer) {
+						timer = clearTimeout(timer);
+				}
+				promise.resolve({ lastResult: null, lastArgs: null });
+				promise = new PromiseHandler();
+		};
+		return result;
 };
 throttle.time = (func, interval = 0) => throttle(func, interval);
-throttle.raf = function(func) {
-	let promise;
-	let cancelled = false;
-	let lastArgs = [];
-	const callRaf = res => requestAnimationFrame(res);
-	const onRaf = () => this.req = null;
-	const onCall = () => {
-		if (cancelled) {
-			cancelled = false;
-			return;
-		}
-		try { func(...lastArgs); } catch (e) { console.warn(e); }
-		promise = null;
-	};
-	const result = (...args) => {
-		lastArgs = args;
-		if (promise) {
-			return promise;
-		}
-		if (!this.req) {
-			this.req = new Promise(callRaf).then(onRaf);
-		}
-		promise = this.req.then(onCall);
-		return promise;
-	};
-	result.cancel = () => {
-		cancelled = true;
-		promise = null;
-	};
-	return result;
-}.bind({req: null, count: 0, id: 0});
-throttle.idle = func => {
-	let id;
-	const request = (self.requestIdleCallback || self.setTimeout);
-	const cancel = (self.cancelIdleCallback || self.clearTimeout);
-	const result = (...args) => {
-		if (id) {
-			return;
-		}
-		id = request(() => {
-			id = null;
-			func(...args);
-		}, 0);
-	};
-	result.cancel = () => {
-		if (id) {
-			id = cancel(id);
-		}
-	};
-	return result;
+throttle.raf = function (func) {
+		let promise;
+		let cancelled = false;
+		let lastArgs = [];
+		const callRaf = (res) => requestAnimationFrame(res);
+		const onRaf = () => this.req = null;
+		const onCall = () => {
+				if (cancelled) {
+						cancelled = false;
+						return;
+				}
+				try {
+						func(...lastArgs);
+				}
+				catch (e) {
+						console.warn(e);
+				}
+				promise = null;
+		};
+		const result = (...args) => {
+				lastArgs = args;
+				if (promise) {
+						return promise;
+				}
+				if (!this.req) {
+						this.req = new Promise(callRaf).then(onRaf);
+				}
+				promise = this.req.then(onCall);
+				return promise;
+		};
+		result.cancel = () => {
+				cancelled = true;
+				promise = null;
+		};
+		return result;
+}.bind({ req: null, count: 0, id: 0 });
+throttle.idle = (func) => {
+		let id;
+		const request = (self.requestIdleCallback || self.setTimeout);
+		const cancel = (self.cancelIdleCallback || self.clearTimeout);
+		const result = (...args) => {
+				if (id) {
+						return;
+				}
+				id = request(() => {
+						id = null;
+						func(...args);
+				}, 0);
+		};
+		result.cancel = () => {
+				if (id) {
+						id = cancel(id);
+				}
+		};
+		return result;
 };
 const css = (() => {
-	const setPropsTask = [];
-	const applySetProps = throttle.raf(
-		() => {
-		const tasks = setPropsTask.concat();
-		setPropsTask.length = 0;
-		for (const [element, prop, value] of tasks) {
-			try {
-				element.style.setProperty(prop, value);
-			} catch (error) {
-				console.warn('element.style.setProperty fail', {element, prop, value, error});
-			}
-		}
-	});
-	const css = {
-		addStyle: (styles, option, document = window.document) => {
-			const elm = Object.assign(document.createElement('style'), {
-				type: 'text/css'
-			}, typeof option === 'string' ? {id: option} : (option || {}));
-			if (typeof option === 'string') {
-				elm.id = option;
-			} else if (option) {
-				Object.assign(elm, option);
-			}
-			elm.classList.add(global.PRODUCT);
-			elm.append(styles.toString());
-			(document.head || document.body || document.documentElement).append(elm);
-			elm.disabled = option && option.disabled;
-			elm.dataset.switch = elm.disabled ? 'off' : 'on';
-			return elm;
-		},
-		registerProps(...args) {
-			if (!CSS || !('registerProperty' in CSS)) {
-				return;
-			}
-			for (const definition of args) {
-				try {
-					(definition.window || window).CSS.registerProperty(definition);
-				} catch (err) { console.warn('CSS.registerProperty fail', definition, err); }
-			}
-		},
-		setProps(...tasks) {
-			setPropsTask.push(...tasks);
-			return setPropsTask.length ? applySetProps() : Promise.resolve();
-		},
-		addModule: async function(func, options = {}) {
-			if (!CSS || !('paintWorklet' in CSS)) { return; }
-			if (this.modules.has(func)) { return this.modules.get(func); }
-			const pending = (async () => {
-				let url;
-				try {
-					const src = `(${func.toString()})(this, registerPaint,
-						${JSON.stringify(options.config || {}, null, 2)});`;
-					const blob = new Blob([src], {type: 'text/javascript'});
-					url = URL.createObjectURL(blob);
-					await CSS.paintWorklet.addModule(url);
-					return true;
-				} finally {
-					if (url !== undefined) { URL.revokeObjectURL(url); }
+		const setPropsTask = [];
+		const applySetProps = throttle.raf(() => {
+				const tasks = setPropsTask.concat();
+				setPropsTask.length = 0;
+				for (const [element, prop, value] of tasks) {
+						try {
+								element.style.setProperty(prop, value);
+						}
+						catch (error) {
+								console.warn('element.style.setProperty fail', { element, prop, value, error });
+						}
 				}
-			})();
-			this.modules.set(func, pending);
-			try { return await pending; }
-			catch (error) { this.modules.delete(func); throw error; }
-		}.bind({modules: new WeakMap}),
-		escape:  value => CSS.escape  ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
-		number:  value => CSS.number  ? CSS.number(value) : value,
-		s:       value => CSS.s       ? CSS.s(value) :  `${value}s`,
-		ms:      value => CSS.ms      ? CSS.ms(value) : `${value}ms`,
-		pt:      value => CSS.pt      ? CSS.pt(value) : `${value}pt`,
-		px:      value => CSS.px      ? CSS.px(value) : `${value}px`,
-		percent: value => CSS.percent ? CSS.percent(value) : `${value}%`,
-		vh:      value => CSS.vh      ? CSS.vh(value) : `${value}vh`,
-		vw:      value => CSS.vw      ? CSS.vw(value) : `${value}vw`,
-		trans:   value => self.CSSStyleValue ? CSSStyleValue.parse('transform', value) : value,
-		word:    value => self.CSSKeywordValue ? new CSSKeywordValue(value) : value,
-		image:   value => self.CSSStyleValue ? CSSStyleValue.parse('background-image', value) : value,
-	};
-	return css;
+		});
+		const css = {
+				addStyle: (styles, option, document = window.document) => {
+						const elm = Object.assign(document.createElement('style'), {
+								type: 'text/css'
+						}, typeof option === 'string' ? { id: option } : (option || {}));
+						if (typeof option === 'string') {
+								elm.id = option;
+						}
+						else if (option) {
+								Object.assign(elm, option);
+						}
+						elm.classList.add(global.PRODUCT);
+						elm.append(styles.toString());
+						(document.head || document.body || document.documentElement).append(elm);
+						elm.disabled = (option && option.disabled);
+						elm.dataset.switch = elm.disabled ? 'off' : 'on';
+						return elm;
+				},
+				registerProps(...args) {
+						if (!CSS || !('registerProperty' in CSS)) {
+								return;
+						}
+						for (const definition of args) {
+								try {
+										(definition.window || window).CSS.registerProperty(definition);
+								}
+								catch (err) {
+										console.warn('CSS.registerProperty fail', definition, err);
+								}
+						}
+				},
+				setProps(...tasks) {
+						setPropsTask.push(...tasks);
+						return setPropsTask.length ? applySetProps() : Promise.resolve();
+				},
+				addModule: async function (func, options = {}) {
+						if (!CSS || !('paintWorklet' in CSS)) {
+								return;
+						}
+						if (this.modules.has(func)) {
+								return this.modules.get(func);
+						}
+						const pending = (async () => {
+								let url;
+								try {
+										const src = `(${func.toString()})(this, registerPaint,
+						${JSON.stringify(options.config || {}, null, 2)});`;
+										const blob = new Blob([src], { type: 'text/javascript' });
+										url = URL.createObjectURL(blob);
+										await CSS.paintWorklet.addModule(url);
+										return true;
+								}
+								finally {
+										if (url !== undefined) {
+												URL.revokeObjectURL(url);
+										}
+								}
+						})();
+						this.modules.set(func, pending);
+						try {
+								return await pending;
+						}
+						catch (error) {
+								this.modules.delete(func);
+								throw error;
+						}
+				}.bind({ modules: new WeakMap }),
+				escape: (value) => CSS.escape ? CSS.escape(value) : value.replace(/([\.#()[\]])/g, '\\$1'),
+				number: (value) => CSS.number ? CSS.number(value) : value,
+				s: (value) => CSS.s ? CSS.s(value) : `${value}s`,
+				ms: (value) => CSS.ms ? CSS.ms(value) : `${value}ms`,
+				pt: (value) => CSS.pt ? CSS.pt(value) : `${value}pt`,
+				px: (value) => CSS.px ? CSS.px(value) : `${value}px`,
+				percent: (value) => CSS.percent ? CSS.percent(value) : `${value}%`,
+				vh: (value) => CSS.vh ? CSS.vh(value) : `${value}vh`,
+				vw: (value) => CSS.vw ? CSS.vw(value) : `${value}vw`,
+				trans: (value) => self.CSSStyleValue ? CSSStyleValue.parse('transform', value) : value,
+				word: (value) => self.CSSKeywordValue ? new CSSKeywordValue(value) : value,
+				image: (value) => self.CSSStyleValue ? CSSStyleValue.parse('background-image', value) : value,
+		};
+		return css;
 })();
 const cssUtil = css;
 Object.assign(util, css);
 Object.assign(util, workerUtil);
 const nicoUtil = {
-	parseWatchQuery: query => {
-		try {
-			const result = textUtil.parseQuery(query);
-			const playlist = JSON.parse(result.playlist && textUtil.decodeBase64(result.playlist) || '{}');
-			const context = playlist.context;
-			result.playlist = { type: playlist.type };
-			switch (playlist.type) {
-				case 'series':
-					Object.assign(result.playlist, { id: context.seriesId });
-					break;
-				case 'user-uploaded': {
-					const { userId, ...options } = context;
-					Object.assign(result.playlist, { id: userId, options });
-					break;
+		parseWatchQuery: (query) => {
+				try {
+						const result = textUtil.parseQuery(query);
+						const encoded = result.playlist;
+						const decoded = JSON.parse(encoded && textUtil.decodeBase64(encoded) || '{}');
+						if (decoded === null) {
+								throw new TypeError('playlist');
+						}
+						const playlist = decoded;
+						const context = playlist.context;
+						result.playlist = { type: playlist.type };
+						switch (playlist.type) {
+								case 'series':
+										Object.assign(result.playlist, { id: context.seriesId });
+										break;
+								case 'user-uploaded': {
+										const { userId, ...options } = context;
+										Object.assign(result.playlist, { id: userId, options });
+										break;
+								}
+								case 'mylist': {
+										const { mylistId, ...options } = context;
+										Object.assign(result.playlist, { id: mylistId, options });
+										break;
+								}
+								case 'watchlater':
+								case 'search':
+										Object.assign(result.playlist, { options: context });
+										break;
+						}
+						return result;
 				}
-				case 'mylist': {
-					const { mylistId, ...options } = context;
-					Object.assign(result.playlist, { id: mylistId, options });
-					break;
+				catch (e) {
+						return {};
 				}
-				case 'watchlater':
-				case 'search':
-					Object.assign(result.playlist, { options: context });
-					break;
-			}
-			return result;
-		} catch(e) {
-			return {};
-		}
-	},
-	hasLargeThumbnail: videoId => {
-		const threthold = 16371888;
-		const cid = videoId.substr(0, 2);
-		const fid = videoId.substr(2) * 1;
-		if (cid === 'nm') { return false; }
-		if (cid !== 'sm' && fid < 35000000) { return false; }
-		if (fid < threthold) {
-			return false;
-		}
-		return true;
-	},
-	getThumbnailUrlByVideoId: videoId => {
-		const videoIdReg = /^[a-z]{2}\d+$/;
-		if (!videoIdReg.test(videoId)) {
-			return null;
-		}
-		const fileId = parseInt(videoId.substr(2), 10);
-		const large = nicoUtil.hasLargeThumbnail(videoId) ? '.L' : '';
-		return fileId >= 35374758 ? // このIDから先は新サーバー(おそらく)
-			`https://nicovideo.cdn.nimg.jp/thumbnails/${fileId}/${fileId}.L` :
-			`https://tn.smilevideo.jp/smile?i=${fileId}.${large}`;
-	},
-	getWatchId: url => {
-		try {
-			const parsed = new URL(url || location.href, location.href);
-			if (!/^https?:$/.test(parsed.protocol)) { return null; }
-			const match = parsed.hostname === 'nico.ms' ?
-				/^\/([a-z0-9]+)\/?$/.exec(parsed.pathname) :
-				/^\/(?:watch|shorts)\/([a-z0-9]+)\/?$/.exec(parsed.pathname);
-			return match ? match[1] : null;
-		} catch (_) { return null; }
-	},
-	getCommonHeader: () => {
-		try { // hoge?.fuga... はGreasyforkの文法チェックで弾かれるのでまだ使えない
-			return JSON.parse(document.querySelector('#CommonHeader[data-common-header]').dataset.commonHeader || '{}');
-		} catch (e) {
-			return {initConfig: {}};
-		}
-	},
-	isLegacyHeader: () => !document.querySelector('#CommonHeader[data-common-header]'),
-	isPremiumLegacy: () => {
-		const a = 'a[href^="https://account.nicovideo.jp/premium/register"]';
-		return !document.querySelector(`#topline ${a}, #CommonHeader ${a}`);
-},
-isLoginLegacy: () => {
-		const a = 'a[href^="https://account.nicovideo.jp/login"]';
-		return !document.querySelector(`#topline ${a}, #CommonHeader ${a}`);
-	},
-	isPremium: () =>
-		nicoUtil.isLegacyHeader() ? nicoUtil.isPremiumLegacy() :
-			!!nicoUtil.getCommonHeader().initConfig.user.isPremium,
-	isLogin: () =>
-		nicoUtil.isLegacyHeader() ? nicoUtil.isLoginLegacy() :
-			!!nicoUtil.getCommonHeader().initConfig.user.isLogin,
-	getPageLanguage: () => {
-		try {
-			let h = document.getElementsByClassName('html')[0];
-			return h.lang || 'ja-JP';
-		} catch (e) {
-			return 'ja-JP';
-		}
-	},
-	openMylistWindow: watchId => {
-		window.open(
-			`//www.nicovideo.jp/mylist_add/video/${watchId}`,
-			'nicomylistadd',
-			'width=500, height=400, menubar=no, scrollbars=no');
-	},
-	openTweetWindow: ({watchId, duration, isChannel, title, videoId}) => {
-		const nicomsUrl = `https://nico.ms/${watchId}`;
-		const watchUrl = `https://www.nicovideo.jp/watch/${watchId}`;
-		title = `${title}(${textUtil.secToTime(duration)})`.replace(/@/g, '@ ');
-		const nicoch = isChannel ? ',+nicoch' : '';
-		const url =
-			'https://twitter.com/intent/tweet?' +
-			'url=' + encodeURIComponent(nicomsUrl) +
-			'&text=' + encodeURIComponent(title) +
-			'&hashtags=' + encodeURIComponent(videoId + nicoch) +
-			'&original_referer=' + encodeURIComponent(watchUrl) +
-			'';
-		window.open(url, '_blank', 'width=550, height=480, left=100, top50, personalbar=0, toolbar=0, scrollbars=1, sizable=1', 0);
-	},
-	isGinzaWatchUrl: url => /^https?:\/\/www\.nicovideo\.jp\/(watch|shorts)\//.test(url || location.href),
-	get getNicoHistory() {
-		const entry = document.cookie.split(';').map(value => value.trim())
-			.find(value => value.startsWith('nicohistory='));
-		if (!entry) { return ''; }
-		try {
-			return window.decodeURIComponent(entry.slice('nicohistory='.length));
-		} catch (error) {
-			if (!(error instanceof URIError)) { throw error; }
-			return '';
-		}
-	},
-	getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
+		},
+		hasLargeThumbnail: (videoId) => {
+				const threthold = 16371888;
+				const cid = videoId.substr(0, 2);
+				const fid = Number(videoId.substr(2));
+				if (cid === 'nm') {
+						return false;
+				}
+				if (cid !== 'sm' && fid < 35000000) {
+						return false;
+				}
+				if (fid < threthold) {
+						return false;
+				}
+				return true;
+		},
+		getThumbnailUrlByVideoId: (videoId) => {
+				const videoIdReg = /^[a-z]{2}\d+$/;
+				if (!videoIdReg.test(videoId)) {
+						return null;
+				}
+				const fileId = parseInt(videoId.substr(2), 10);
+				const large = nicoUtil.hasLargeThumbnail(videoId) ? '.L' : '';
+				return fileId >= 35374758 ?
+						`https://nicovideo.cdn.nimg.jp/thumbnails/${fileId}/${fileId}.L` :
+						`https://tn.smilevideo.jp/smile?i=${fileId}.${large}`;
+		},
+		getWatchId: (url) => {
+				try {
+						const parsed = new URL(url || location.href, location.href);
+						if (!/^https?:$/.test(parsed.protocol)) {
+								return null;
+						}
+						const match = parsed.hostname === 'nico.ms' ?
+								/^\/([a-z0-9]+)\/?$/.exec(parsed.pathname) :
+								/^\/(?:watch|shorts)\/([a-z0-9]+)\/?$/.exec(parsed.pathname);
+						return match ? match[1] : null;
+				}
+				catch (_) {
+						return null;
+				}
+		},
+		getCommonHeader: () => {
+				try {
+						return JSON.parse(document.querySelector('#CommonHeader[data-common-header]').dataset.commonHeader || '{}');
+				}
+				catch (e) {
+						return { initConfig: {} };
+				}
+		},
+		isLegacyHeader: () => !document.querySelector('#CommonHeader[data-common-header]'),
+		isPremiumLegacy: () => {
+				const a = 'a[href^="https://account.nicovideo.jp/premium/register"]';
+				return !document.querySelector(`#topline ${a}, #CommonHeader ${a}`);
+		},
+		isLoginLegacy: () => {
+				const a = 'a[href^="https://account.nicovideo.jp/login"]';
+				return !document.querySelector(`#topline ${a}, #CommonHeader ${a}`);
+		},
+		isPremium: () => nicoUtil.isLegacyHeader() ? nicoUtil.isPremiumLegacy() :
+				!!nicoUtil.getCommonHeader().initConfig.user.isPremium,
+		isLogin: () => nicoUtil.isLegacyHeader() ? nicoUtil.isLoginLegacy() :
+				!!nicoUtil.getCommonHeader().initConfig.user.isLogin,
+		getPageLanguage: () => {
+				try {
+						const h = document.getElementsByClassName('html')[0];
+						return h.lang || 'ja-JP';
+				}
+				catch (e) {
+						return 'ja-JP';
+				}
+		},
+		openMylistWindow: (watchId) => {
+				window.open(`//www.nicovideo.jp/mylist_add/video/${watchId}`, 'nicomylistadd', 'width=500, height=400, menubar=no, scrollbars=no');
+		},
+		openTweetWindow: ({ watchId, duration, isChannel, title, videoId }) => {
+				const nicomsUrl = `https://nico.ms/${watchId}`;
+				const watchUrl = `https://www.nicovideo.jp/watch/${watchId}`;
+				title = `${title}(${textUtil.secToTime(duration)})`.replace(/@/g, '@ ');
+				const nicoch = isChannel ? ',+nicoch' : '';
+				const url = 'https://twitter.com/intent/tweet?' +
+						'url=' + encodeURIComponent(nicomsUrl) +
+						'&text=' + encodeURIComponent(title) +
+						'&hashtags=' + encodeURIComponent(videoId + nicoch) +
+						'&original_referer=' + encodeURIComponent(watchUrl) + '';
+				window.open(url, '_blank', 'width=550, height=480, left=100, top50, personalbar=0, toolbar=0, scrollbars=1, sizable=1', 0);
+		},
+		isGinzaWatchUrl: (url) => /^https?:\/\/www\.nicovideo\.jp\/(watch|shorts)\//.test(url || location.href),
+		get getNicoHistory() {
+				const entry = document.cookie.split(';').map(value => value.trim())
+						.find(value => value.startsWith('nicohistory='));
+				if (!entry) {
+						return '';
+				}
+				try {
+						return window.decodeURIComponent(entry.slice('nicohistory='.length));
+				}
+				catch (error) {
+						if (!(error instanceof URIError)) {
+								throw error;
+						}
+						return '';
+				}
+		},
+		getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
 };
 Object.assign(util, nicoUtil);
 const netUtil = {
-	ajax: params => {
-		if (location.host !== 'www.nicovideo.jp') {
-			return NicoVideoApi.ajax(params);
-		}
-		return $.ajax(params);
-	},
-	abortableFetch: async (url, params = {}) => {
-		params = params || {};
-		const options = {...params};
-		const callerSignal = options.signal;
-		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-		const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
-			Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
-		const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-		const racers = [];
-		let timer;
-		let onAbort;
-		try {
-			if (callerSignal && callerSignal.aborted) { throw abortReason(); }
-			if (controller) { options.signal = controller.signal; }
-			if (callerSignal) {
-				racers.push(new Promise((resolve, reject) => {
-					onAbort = () => {
-						const reason = abortReason();
-						reject(reason);
-						if (controller) { controller.abort(reason); }
-					};
-					callerSignal.addEventListener('abort', onAbort, {once: true});
-				}));
-			}
-			if (timeout > 0) {
-				racers.push(new Promise((resolve, reject) => {
-					timer = setTimeout(() => {
-						const error = Object.assign(new Error('timeout'), {name: 'timeout'});
-						reject(error);
-						if (controller) { controller.abort(error); }
-					}, timeout);
-				}));
-			}
-			racers.push(fetch(url, options));
-			return await Promise.race(racers);
-		} finally {
-			if (timer !== undefined) { clearTimeout(timer); }
-			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
-		}
-	},
-	fetch(url, params) {
-		if (location.host !== 'www.nicovideo.jp') {
-			return NicoVideoApi.fetch(url, params);
-		}
-		return this.abortableFetch(url, params);
-	},
-	jsonp: (() => {
-		let callbackId = 0;
-		const getFuncName = () => `JsonpCallback${callbackId++}`;
-		let cw = null;
-		const getFrame = () => {
-			if (cw) { return cw; }
-			return new Promise(resolve => {
-				const iframe = document.createElement('iframe');
-				iframe.srcdoc = `
+		abortableFetch: async (url, params = {}) => {
+				params = params || {};
+				const options = { ...params };
+				const callerSignal = options.signal;
+				const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+				const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+						Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+				const timeout = (typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
+				const racers = [];
+				let timer;
+				let onAbort;
+				try {
+						if (callerSignal && callerSignal.aborted) {
+								throw abortReason();
+						}
+						if (controller) {
+								options.signal = controller.signal;
+						}
+						if (callerSignal) {
+								racers.push(new Promise((resolve, reject) => {
+										onAbort = () => {
+												const reason = abortReason();
+												reject(reason);
+												if (controller) {
+														controller.abort(reason);
+												}
+										};
+										callerSignal.addEventListener('abort', onAbort, { once: true });
+								}));
+						}
+						if (timeout > 0) {
+								racers.push(new Promise((resolve, reject) => {
+										timer = setTimeout(() => {
+												const error = Object.assign(new Error('timeout'), { name: 'timeout' });
+												reject(error);
+												if (controller) {
+														controller.abort(error);
+												}
+										}, timeout);
+								}));
+						}
+						racers.push(fetch(url, options));
+						return await Promise.race(racers);
+				}
+				finally {
+						if (timer !== undefined) {
+								clearTimeout(timer);
+						}
+						if (callerSignal && onAbort) {
+								callerSignal.removeEventListener('abort', onAbort);
+						}
+				}
+		},
+		fetch(url, params) {
+				if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {
+						return NicoVideoApi.fetch(url, params);
+				}
+				return this.abortableFetch(url, params);
+		},
+		jsonp: (() => {
+				let callbackId = 0;
+				const getFuncName = () => `JsonpCallback${callbackId++}`;
+				let cw = null;
+				const getFrame = () => {
+						if (cw) {
+								return cw;
+						}
+						return new Promise(resolve => {
+								const iframe = document.createElement('iframe');
+								iframe.srcdoc = `
 					<html><head></head></html>
 				`.trim();
-				iframe.sandbox = 'allow-same-origin allow-scripts';
-				Object.assign(iframe.style, {
-					width: '32px', height: '32px', position: 'fixed', left: '-100vw', top: '-100vh',
-					pointerEvents: 'none', overflow: 'hidden'
-				});
-				iframe.onload = () => {
-					cw = iframe.contentWindow;
-					resolve(cw);
+								iframe.sandbox = 'allow-same-origin allow-scripts';
+								Object.assign(iframe.style, {
+										width: '32px', height: '32px', position: 'fixed', left: '-100vw', top: '-100vh',
+										pointerEvents: 'none', overflow: 'hidden'
+								});
+								iframe.onload = () => {
+										cw = iframe.contentWindow;
+										resolve(cw);
+								};
+								(document.body || document.documentElement).append(iframe);
+						});
 				};
-				(document.body || document.documentElement).append(iframe);
-			});
-		};
-		const createFunc = async (url, funcName) => {
-			let timeoutTimer = null;
-			const win = await getFrame();
-			const doc = win.document;
-			const script = doc.createElement('script');
-			return new Promise((resolve, reject) => {
-				win[funcName] = result => {
-					win.clearTimeout(timeoutTimer);
-					timeoutTimer = null;
-					script.remove();
-					delete win[funcName];
-					resolve(result);
+				const createFunc = async (url, funcName) => {
+						let timeoutTimer = null;
+						const win = await getFrame();
+						const doc = win.document;
+						const script = doc.createElement('script');
+						return new Promise((resolve, reject) => {
+								win[funcName] = (result) => {
+										win.clearTimeout(timeoutTimer);
+										timeoutTimer = null;
+										script.remove();
+										delete win[funcName];
+										resolve(result);
+								};
+								timeoutTimer = win.setTimeout(() => {
+										script.remove();
+										delete win[funcName];
+										if (timeoutTimer) {
+												reject(new Error(`jsonp timeout ${url}`));
+										}
+								}, 30000);
+								script.src = url;
+								doc.head.append(script);
+						});
 				};
-				timeoutTimer = win.setTimeout(() => {
-					script.remove();
-					delete win[funcName];
-					if (timeoutTimer) {
-						reject(new Error(`jsonp timeout ${url}`));
-					}
-				}, 30000);
-				script.src = url;
-				doc.head.append(script);
-			});
-		};
-		return (url, funcName) => {
-			if (!funcName) {
-				funcName = getFuncName();
-			}
-			url = `${url}${url.includes('?') ? '&' : '?'}callback=${funcName}`;
-			return createFunc(url, funcName);
-		};
-	})()
+				return (url, funcName) => {
+						if (!funcName) {
+								funcName = getFuncName();
+						}
+						url = `${url}${url.includes('?') ? '&' : '?'}callback=${funcName}`;
+						return createFunc(url, funcName);
+				};
+		})()
 };
 Object.assign(util, netUtil);
 const textUtil = {
-	secToTime: sec => {
-		return [
-			Math.floor(sec / 60).toString().padStart(2, '0'),
-			(Math.floor(sec) % 60).toString().padStart(2, '0')
-		].join(':');
-	},
-	parseQuery: (query = '') => {
-		query = query.startsWith('?') ? query.substr(1) : query;
-		const result = {};
-		query.split('&').forEach(item => {
-			const sp = item.split('=');
-			try {
-				const key = decodeURIComponent(sp[0]);
-				const val = decodeURIComponent(sp.slice(1).join('='));
-				result[key] = val;
-			} catch (error) {
-				if (!(error instanceof URIError)) { throw error; }
-			}
-		});
-		return result;
-	},
-	parseUrl: url => {
-		url = url || 'https://unknown.example.com/';
-		return Object.assign(document.createElement('a'), {href: url});
-	},
-	decodeBase64: str => {
-		try {
-			return decodeURIComponent(
-				escape(atob(
-					str.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(str.length / 4) * 4, '=')
-				)));
-		} catch(e) {
-			return '';
-		}
-	},
-	encodeBase64: str => {
-		try {
-			return btoa(unescape(encodeURIComponent(str)));
-		} catch(e) {
-			return '';
-		}
-	},
-	escapeHtml: text => {
-		const map = {
-			'&': '&amp;',
-			'\x27': '&#39;',
-			'"': '&quot;',
-			'<': '&lt;',
-			'>': '&gt;'
-		};
-		return text.replace(/[&"'<>]/g, char => map[char]);
-	},
-	unescapeHtml: text => {
-		const map = {
-			'&amp;': '&',
-			'&#39;': '\x27',
-			'&quot;': '"',
-			'&lt;': '<',
-			'&gt;': '>'
-		};
-		return text.replace(/(&amp;|&#39;|&quot;|&lt;|&gt;)/g, char => map[char]);
-	},
-	escapeToZenkaku: text => {
-		const map = {
-			'&': '＆',
-			'\'': '’',
-			'"': '”',
-			'<': '＜',
-			'>': '＞'
-		};
-		return text.replace(/["'<>]/g, char => map[char]);
-	},
-	escapeRegs: text => {
-		const match = /[\\^$.*+?()[\]{}|]/g;
-		return text.replace(match, '\\$&');
-	},
-	convertKansuEi: text => {
-		let match = /[〇一二三四五六七八九零壱弐惨伍]/g;
-		let map = {
-			'〇': '0', '零': '0',
-			'一': '1', '壱': '1',
-			'二': '2', '弐': '2',
-			'三': '3', '惨': '3',
-			'四': '4',
-			'五': '5', '伍': '5',
-			'六': '6',
-			'七': '7',
-			'八': '8',
-			'九': '9',
-		};
-		text = text.replace(match, char => map[char]);
-		text = text.replace(/([1-9]?)[十拾]([0-9]?)/g, (n, a, b) => (a && b) ? `${a}${b}` : (a ? a * 10 : 10 + b * 1));
-		return text;
-	},
-	dateToString: date => {
-		if (typeof date === 'string') {
-			const origDate = date;
-			date = date.replace(/\//g, '-');
-			const m = /^(\d+-\d+-\d+) (\d+):(\d+):(\d+)/.exec(date);
-			if (m) {
-				date = new Date(m[1]);
-				date.setHours(m[2]);
-				date.setMinutes(m[3]);
-				date.setSeconds(m[4]);
-			} else {
-				const t = Date.parse(date);
-				if (isNaN(t)) {
-					return origDate;
+		secToTime: (sec) => {
+				return [
+						Math.floor(sec / 60).toString().padStart(2, '0'),
+						(Math.floor(sec) % 60).toString().padStart(2, '0')
+				].join(':');
+		},
+		parseQuery: (query = '') => {
+				query = query.startsWith('?') ? query.substr(1) : query;
+				const result = {};
+				query.split('&').forEach(item => {
+						const sp = item.split('=');
+						try {
+								const key = decodeURIComponent(sp[0]);
+								const val = decodeURIComponent(sp.slice(1).join('='));
+								result[key] = val;
+						}
+						catch (error) {
+								if (!(error instanceof URIError)) {
+										throw error;
+								}
+						}
+				});
+				return result;
+		},
+		parseUrl: (url) => {
+				url = url || 'https://unknown.example.com/';
+				return Object.assign(document.createElement('a'), { href: url });
+		},
+		decodeBase64: (str) => {
+				try {
+						return decodeURIComponent(escape(atob(str.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(str.length / 4) * 4, '='))));
 				}
-				date = new Date(t);
-			}
-		} else if (typeof date === 'number') {
-			date = new Date(date);
-		}
-		if (!date || isNaN(date.getTime())) {
-			return '1970/01/01 00:00:00';
-		}
-		const [yy, mm, dd, h, m, s] = [
-				date.getFullYear(),
-				date.getMonth() + 1,
-				date.getDate(),
-				date.getHours(),
-				date.getMinutes(),
-				date.getSeconds()
-			].map(n => n.toString().padStart(2, '0'));
-		return `${yy}/${mm}/${dd} ${h}:${m}:${s}`;
-	},
-	isValidJson: data => {
-		try {
-			JSON.parse(data);
-			return true;
-		} catch (e) {
-			return false;
-		}
-	},
-	toRgba: (c, alpha = 1) =>
-		`rgba(${parseInt(c.substr(1, 2), 16)}, ${parseInt(c.substr(3, 2), 16)}, ${parseInt(c.substr(5, 2), 16)}, ${alpha})`,
-	snakeToCamel: snake => snake.replace(/-./g, s => s.charAt(1).toUpperCase()),
-	camelToSnake: (camel, separator = '_') => camel.replace(/([A-Z])/g, s =>  separator + s.toLowerCase())
+				catch (e) {
+						return '';
+				}
+		},
+		encodeBase64: (str) => {
+				try {
+						return btoa(unescape(encodeURIComponent(str)));
+				}
+				catch (e) {
+						return '';
+				}
+		},
+		escapeHtml: (text) => {
+				const map = {
+						'&': '&amp;',
+						'\x27': '&#39;',
+						'"': '&quot;',
+						'<': '&lt;',
+						'>': '&gt;'
+				};
+				return text.replace(/[&"'<>]/g, char => map[char]);
+		},
+		unescapeHtml: (text) => {
+				const map = {
+						'&amp;': '&',
+						'&#39;': '\x27',
+						'&quot;': '"',
+						'&lt;': '<',
+						'&gt;': '>'
+				};
+				return text.replace(/(&amp;|&#39;|&quot;|&lt;|&gt;)/g, char => map[char]);
+		},
+		escapeToZenkaku: (text) => {
+				const map = {
+						'&': '＆',
+						'\'': '’',
+						'"': '”',
+						'<': '＜',
+						'>': '＞'
+				};
+				return text.replace(/["'<>]/g, char => map[char]);
+		},
+		escapeRegs: (text) => {
+				const match = /[\\^$.*+?()[\]{}|]/g;
+				return text.replace(match, '\\$&');
+		},
+		convertKansuEi: (text) => {
+				let match = /[〇一二三四五六七八九零壱弐惨伍]/g;
+				let map = {
+						'〇': '0', '零': '0',
+						'一': '1', '壱': '1',
+						'二': '2', '弐': '2',
+						'三': '3', '惨': '3',
+						'四': '4',
+						'五': '5', '伍': '5',
+						'六': '6',
+						'七': '7',
+						'八': '8',
+						'九': '9',
+				};
+				text = text.replace(match, char => map[char]);
+				text = text.replace(/([1-9]?)[十拾]([0-9]?)/g, (n, a, b) => ((a && b) ? `${a}${b}` : (a ? a * 10 : 10 + b * 1)));
+				return text;
+		},
+		dateToString: (date) => {
+				if (typeof date === 'string') {
+						const origDate = date;
+						date = date.replace(/\//g, '-');
+						const m = /^(\d+-\d+-\d+) (\d+):(\d+):(\d+)/.exec(date);
+						if (m) {
+								date = new Date(m[1]);
+								date.setHours(m[2]);
+								date.setMinutes(m[3]);
+								date.setSeconds(m[4]);
+						}
+						else {
+								const t = Date.parse(date);
+								if (isNaN(t)) {
+										return origDate;
+								}
+								date = new Date(t);
+						}
+				}
+				else if (typeof date === 'number') {
+						date = new Date(date);
+				}
+				if (!date || isNaN(date.getTime())) {
+						return '1970/01/01 00:00:00';
+				}
+				const [yy, mm, dd, h, m, s] = [
+						date.getFullYear(),
+						date.getMonth() + 1,
+						date.getDate(),
+						date.getHours(),
+						date.getMinutes(),
+						date.getSeconds()
+				].map(n => n.toString().padStart(2, '0'));
+				return `${yy}/${mm}/${dd} ${h}:${m}:${s}`;
+		},
+		isValidJson: (data) => {
+				try {
+						JSON.parse(data);
+						return true;
+				}
+				catch (e) {
+						return false;
+				}
+		},
+		toRgba: (c, alpha = 1) => `rgba(${parseInt(c.substr(1, 2), 16)}, ${parseInt(c.substr(3, 2), 16)}, ${parseInt(c.substr(5, 2), 16)}, ${alpha})`,
+		snakeToCamel: (snake) => snake.replace(/-./g, s => s.charAt(1).toUpperCase()),
+		camelToSnake: (camel, separator = '_') => camel.replace(/([A-Z])/g, s => separator + s.toLowerCase())
 };
 Object.assign(util, textUtil);
 const reg = (() => {
-	const $ = Symbol('$');
-	const undef = Symbol.for('undefined');
-	const MAX_RESULT = 30;
-	const smap = new WeakMap();
-	const self = {};
-	const reg = function(regex = undef, str = undef) {
-		const {results, last} = smap.has(this) ?
-			smap.get(this) : {results: [], last: {result: null}};
-		smap.set(this, {results, last});
-		if (regex === undef) {
-			return last ? last.result : null;
-		}
-		const regstr = regex.toString();
-		if (str !== undef) {
-			const found = results.find(r => regstr === r.regstr && str === r.str);
-			return found ? found.result : reg(regex).exec(str);
-		}
-		return {
-			exec(str) {
-				const result = regex.exec(str);
-				Array.isArray(result) && result.forEach((r, i) => result['$' + i] = r);
-				Object.assign(last, {str, regstr, result});
-				results.push(last);
-				results.length > MAX_RESULT && results.shift();
-				this[$] = str[$] = regex[$] = result;
-				return result;
-			},
-			test(str) { return !!this.exec(str); }
+		const $ = Symbol('$');
+		const undef = Symbol.for('undefined');
+		const MAX_RESULT = 30;
+		const smap = new WeakMap();
+		const self = {};
+		const reg = function (regex = undef, str = undef) {
+				const { results, last } = smap.has(this) ?
+						smap.get(this) : { results: [], last: { result: null } };
+				smap.set(this, { results, last });
+				if (regex === undef) {
+						return last ? last.result : null;
+				}
+				const regstr = regex.toString();
+				if (str !== undef) {
+						const found = results.find(r => regstr === r.regstr && str === r.str);
+						return found ? found.result : reg.call(this, regex).exec(str);
+				}
+				return {
+						exec(str) {
+								const result = regex.exec(str);
+								Array.isArray(result) && result.forEach((r, i) => result['$' + i] = r);
+								Object.assign(last, { str, regstr, result });
+								results.push(last);
+								results.length > MAX_RESULT && results.shift();
+								this[$] = regex[$] = result;
+								return result;
+						},
+						test(str) { return !!this.exec(str); }
+				};
 		};
-	};
-	const scope = (scopeObj = {}) => reg.bind(scopeObj);
-	return Object.assign(reg.bind(self), {$, scope});
+		const scope = (scopeObj = {}) => reg.bind(scopeObj);
+		return Object.assign(reg.bind(self), { $, scope });
 })();
 
     MylistPocket.emitter = util.emitter = new Emitter();
@@ -2839,319 +2887,383 @@ const reg = (() => {
 
     })();
 const objUtil = (() => {
-	const isObject = e => e !== null && e instanceof Object;
-	const PROPS = Symbol('PROPS');
-	const REVISION = Symbol('REVISION');
-	const CHANGED = Symbol('CHANGED');
-	const HAS = Symbol('HAS');
-	const SET = Symbol('SET');
-	const GET = Symbol('GET');
-	return {
-		bridge: (self, target, keys = null) => {
-			(keys || Object.getOwnPropertyNames(target.constructor.prototype))
-				.filter(key => typeof target[key] === 'function')
-				.forEach(key => self[key] = target[key].bind(target));
-		},
-		isObject,
-		toMap: (obj, mapper = Map) => {
-			if (obj instanceof mapper) {
-				return obj;
-			}
-			return new mapper(Object.entries(obj));
-		},
-		mapToObj: map => {
-			if (!(map instanceof Map)) {
-				return map;
-			}
-			const obj = {};
-			for (const [key, val] of map) {
-				obj[key] = val;
-			}
-			return obj;
-		},
-	};
+		const isObject = (e) => e !== null && e instanceof Object;
+		const PROPS = Symbol('PROPS');
+		const REVISION = Symbol('REVISION');
+		const CHANGED = Symbol('CHANGED');
+		const HAS = Symbol('HAS');
+		const SET = Symbol('SET');
+		const GET = Symbol('GET');
+		return {
+				bridge: (self, target, keys = null) => {
+						(keys || Object.getOwnPropertyNames(target.constructor.prototype))
+								.filter(key => typeof target[key] === 'function')
+								.forEach(key => self[key] = target[key].bind(target));
+				},
+				isObject,
+				toMap: (obj, mapper = Map) => {
+						if (obj instanceof mapper) {
+								return obj;
+						}
+						return new mapper(Object.entries(obj));
+				},
+				mapToObj: (map) => {
+						if (!(map instanceof Map)) {
+								return map;
+						}
+						const obj = {};
+						for (const [key, val] of map) {
+								obj[key] = val;
+						}
+						return obj;
+				}
+		};
 })();
 const StorageWriter = (() => {
-	const func = function(self) {
-		self.onmessage = ({command, params}) => {
-			const {obj, replacer, space} = params;
-			return JSON.stringify(obj, replacer || null, space || 0);
+		const func = function (self) {
+				self.onmessage = ({ command, params }) => {
+						const { obj, replacer, space } = params;
+						return JSON.stringify(obj, replacer || null, space || 0);
+				};
 		};
-	};
-	let worker;
-	const prototypePollution = window.Prototype && Array.prototype.hasOwnProperty('toJSON');
-	const toJson = async (obj, replacer = null, space = 0) => {
-		if (!prototypePollution || obj === null || ['string', 'number', 'boolean'].includes(typeof obj)) {
-			return JSON.stringify(obj, replacer, space);
-		}
-		worker = worker || workerUtil.createCrossMessageWorker(func, {name: 'ToJsonWorker'});
-		return worker.post({command: 'toJson', params: {obj, replacer, space}});
-	};
-	const writer = Symbol('StorageWriter');
-	const setItem = (storage, key, value) => {
-		if (!prototypePollution || value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
-			storage.setItem(key, JSON.stringify(value));
-		} else {
-			toJson(value).then(json => storage.setItem(key, json));
-		}
-	};
-	localStorage[writer] = (key, value) => setItem(localStorage, key, value);
-	sessionStorage[writer] = (key, value) => setItem(sessionStorage, key, value);
-	return { writer, toJson };
+		let worker;
+		const prototypePollution = window.Prototype && Array.prototype.hasOwnProperty('toJSON');
+		const toJson = async (obj, replacer = null, space = 0) => {
+				if (!prototypePollution || obj === null || ['string', 'number', 'boolean'].includes(typeof obj)) {
+						return JSON.stringify(obj, replacer, space);
+				}
+				worker = worker || workerUtil.createCrossMessageWorker(func, { name: 'ToJsonWorker' });
+				return worker.post({ command: 'toJson', params: { obj, replacer, space } });
+		};
+		const writer = Symbol('StorageWriter');
+		const setItem = (storage, key, value) => {
+				if (!prototypePollution || value === null || ['string', 'number', 'boolean'].includes(typeof value)) {
+						storage.setItem(key, JSON.stringify(value));
+				}
+				else {
+						toJson(value).then(json => storage.setItem(key, json));
+				}
+		};
+		localStorage[writer] = (key, value) => setItem(localStorage, key, value);
+		sessionStorage[writer] = (key, value) => setItem(sessionStorage, key, value);
+		return { writer, toJson };
 })();
 const Observable = (() => {
-	const observableSymbol = Symbol.observable || Symbol('observable');
-	const nop = Handler.nop;
-	class Subscription {
-		constructor({observable, subscriber, unsubscribe, closed}) {
-			this.callbacks = {unsubscribe, closed};
-			this.observable = observable;
-			const next = subscriber.next.bind(subscriber);
-			subscriber.next = args => {
-				if (this.closed || (this._filterFunc && !this._filterFunc(args))) {
-					return;
+		const observableSymbol = Symbol.observable || Symbol('observable');
+		const nop = Handler.nop;
+		class Subscription {
+				constructor({ observable, subscriber, unsubscribe, closed }) {
+						this.callbacks = { unsubscribe, closed };
+						this.observable = observable;
+						const next = subscriber.next.bind(subscriber);
+						subscriber.next = args => {
+								if (this.closed || (this._filterFunc && !this._filterFunc(args))) {
+										return;
+								}
+								return this._mapFunc ? next(this._mapFunc(args)) : next(args);
+						};
+						this._closed = false;
 				}
-				return this._mapFunc ? next(this._mapFunc(args)) : next(args);
-			};
-			this._closed = false;
-		}
-		subscribe(onNext, onError, onCompleted) {
-			return this.observable._subscribe({
-				subscriber: Subscriber.create(onNext, onError, onCompleted),
-				isNop: [onNext, onError, onCompleted].every(f => f == null),
-				filterFunc: this._filterFunc, mapFunc: this._mapFunc
-			});
-		}
-		unsubscribe() {
-			if (this._closed) { return this; }
-			this._closed = true;
-			if (this.callbacks.unsubscribe) { this.callbacks.unsubscribe(); }
-			return this;
-		}
-		dispose() {
-			return this.unsubscribe();
-		}
-		filter(func) {
-			const _func = this._filterFunc;
-			this._filterFunc = _func ? (arg => _func(arg) && func(arg)) : func;
-			return this;
-		}
-		map(func) {
-			const _func = this._mapFunc;
-			this._mapFunc = _func ? arg => func(_func(arg)) : func;
-			return this;
-		}
-		get closed() {
-			if (this.callbacks.closed) {
-				return this._closed || this.callbacks.closed();
-			} else {
-				return this._closed;
-			}
-		}
-	}
-	class Subscriber {
-		static create(onNext = null, onError = null, onCompleted = null) {
-			if (typeof onNext === 'function') {
-				return new this({
-					next: onNext,
-					error: onError,
-					complete: onCompleted
-				});
-			}
-			return new this(onNext || {});
-		}
-		constructor({start, next, error, complete, closed} = {}) {
-			this.callbacks = {
-				start: typeof start === 'function' ? start : nop,
-				next: typeof next === 'function' ? next : nop,
-				error: typeof error === 'function' ? error : nop,
-				complete: typeof complete === 'function' ? complete : nop,
-				closed: typeof closed === 'function' ? closed : () => false
-			};
-		}
-		start(arg) {this.callbacks.start(arg);}
-		next(arg) {this.callbacks.next(arg);}
-		error(arg) {this.callbacks.error(arg);}
-		complete(arg) {this.callbacks.complete(arg);}
-		get closed() {
-			return this.callbacks.closed();
-		}
-	}
-	Subscriber.nop = {start: nop, next: nop, error: nop, complete: nop, closed: nop};
-	const eleMap = new WeakMap();
-	class Observable {
-		static of(...args) {
-			return new this(o => {
-				for (const arg of args) {
-					o.next(arg);
+				subscribe(onNext, onError, onCompleted) {
+						return this.observable._subscribe({
+								subscriber: Subscriber.create(onNext, onError, onCompleted),
+								isNop: [onNext, onError, onCompleted].every(f => f == null),
+								filterFunc: this._filterFunc, mapFunc: this._mapFunc
+						});
 				}
-				o.complete();
-				return () => {};
-			});
+				unsubscribe() {
+						if (this._closed) {
+								return this;
+						}
+						this._closed = true;
+						if (this.callbacks.unsubscribe) {
+								this.callbacks.unsubscribe();
+						}
+						return this;
+				}
+				dispose() {
+						return this.unsubscribe();
+				}
+				filter(func) {
+						const _func = this._filterFunc;
+						this._filterFunc = _func ? (arg => _func(arg) && func(arg)) : func;
+						return this;
+				}
+				map(func) {
+						const _func = this._mapFunc;
+						this._mapFunc = _func ? arg => func(_func(arg)) : func;
+						return this;
+				}
+				get closed() {
+						if (this.callbacks.closed) {
+								return this._closed || this.callbacks.closed();
+						}
+						else {
+								return this._closed;
+						}
+				}
 		}
-		static from(arg) {
-			if (arg[Symbol.iterator]) {
-				return this.of(...arg);
-			} else if (arg[Observable.observavle]) {
-				return arg[Observable.observavle]();
-			}
+		class Subscriber {
+				static create(onNext = null, onError = null, onCompleted = null) {
+						if (typeof onNext === 'function') {
+								return new this({
+										next: onNext,
+										error: onError,
+										complete: onCompleted
+								});
+						}
+						return new this((onNext || {}));
+				}
+				constructor({ start, next, error, complete, closed } = {}) {
+						this.callbacks = {
+								start: typeof start === 'function' ? start : nop,
+								next: typeof next === 'function' ? next : nop,
+								error: typeof error === 'function' ? error : nop,
+								complete: typeof complete === 'function' ? complete : nop,
+								closed: typeof closed === 'function' ? closed : () => false
+						};
+				}
+				start(arg) { this.callbacks.start(arg); }
+				next(arg) { this.callbacks.next(arg); }
+				error(arg) { this.callbacks.error(arg); }
+				complete(arg) { this.callbacks.complete(arg); }
+				get closed() {
+						return this.callbacks.closed();
+				}
 		}
-		static fromEvent(element, eventName) {
-			const em = eleMap.get(element) || {};
-			if (em && em[eventName]) {
-				return em[eventName];
-			}
-			eleMap.set(element, em);
-			return em[eventName] = new this(o => {
-				const onUpdate = e => o.next(e);
-				element.addEventListener(eventName, onUpdate, {passive: true});
-				return () => element.removeEventListener(eventName, onUpdate);
-			});
+		Subscriber.nop = { start: nop, next: nop, error: nop, complete: nop, closed: nop };
+		const eleMap = new WeakMap();
+		class Observable {
+				static of(...args) {
+						return new this(o => {
+								for (const arg of args) {
+										o.next(arg);
+								}
+								o.complete();
+								return () => { };
+						});
+				}
+				static from(arg) {
+						if (arg[Symbol.iterator]) {
+								return this.of(...arg);
+						}
+						else if (arg[Observable.observavle]) {
+								return arg[Observable.observavle]();
+						}
+				}
+				static fromEvent(element, eventName) {
+						const em = eleMap.get(element) || {};
+						if (em && em[eventName]) {
+								return em[eventName];
+						}
+						eleMap.set(element, em);
+						return em[eventName] = new this(o => {
+								const onUpdate = (e) => o.next(e);
+								element.addEventListener(eventName, onUpdate, { passive: true });
+								return () => element.removeEventListener(eventName, onUpdate);
+						});
+				}
+				static interval(ms) {
+						return new this(function (o) {
+								const timer = setInterval(() => o.next(this.i++), ms);
+								return () => clearInterval(timer);
+						}.bind({ i: 0 }));
+				}
+				constructor(subscriberFunction) {
+						this._subscriberFunction = subscriberFunction;
+						this._sources = [];
+						this._connection = null;
+				}
+				get closed() { return !!(this._connection && this._connection.closed); }
+				_disposeToken(token) {
+						token.done = true;
+						if (!token.cleanup) {
+								return;
+						}
+						const cleanup = token.cleanup;
+						token.cleanup = null;
+						try {
+								cleanup();
+						}
+						catch (error) {
+								console.warn('Observable cleanup failed', error);
+						}
+				}
+				_finish(connection, method, value) {
+						if (connection.closed) {
+								return;
+						}
+						connection.closed = true;
+						try {
+								if (method) {
+										connection.handlers.execMethod(method, value);
+								}
+						}
+						finally {
+								connection.handlers.clear();
+								for (const token of connection.tokens) {
+										this._disposeToken(token);
+								}
+								connection.tokens.clear();
+						}
+				}
+				_connect(connection) {
+						connection.started = true;
+						const sources = [observer => this._subscriberFunction(observer),
+								...this._sources.map(source => (observer) => source.subscribe({
+										next: (value) => observer.next(value), error: (error) => observer.error(error),
+										complete: (value) => observer.complete(value)
+								}))];
+						let index = 0;
+						const advance = (completion) => {
+								if (connection.closed) {
+										return;
+								}
+								if (index === sources.length) {
+										this._finish(connection, 'complete', completion);
+										return;
+								}
+								const producer = sources[index++];
+								const token = { done: false, cleanup: null };
+								connection.tokens.add(token);
+								const active = () => !connection.closed && !token.done;
+								const observer = new Subscriber({
+										start: (value) => { if (active()) {
+												connection.handlers.execMethod('start', value);
+										} },
+										next: (value) => { if (active()) {
+												connection.handlers.execMethod('next', value);
+										} },
+										error: (error) => { if (active()) {
+												this._finish(connection, 'error', error);
+										} },
+										complete: (value) => {
+												if (!active()) {
+														return;
+												}
+												this._disposeToken(token);
+												advance(value);
+										},
+										closed: () => !active()
+								});
+								this._subscriber = observer;
+								try {
+										const cleanup = producer(observer);
+										token.cleanup = typeof cleanup === 'function' ? cleanup :
+												cleanup && typeof cleanup.unsubscribe === 'function' ? () => cleanup.unsubscribe() : null;
+										if (token.done || connection.closed) {
+												this._disposeToken(token);
+										}
+								}
+								catch (error) {
+										observer.error(error);
+								}
+						};
+						advance();
+				}
+				filter(func) {
+						return this.subscribe().filter(func);
+				}
+				map(func) {
+						return this.subscribe().map(func);
+				}
+				concat(arg) {
+						const observable = Observable.from(arg);
+						if (!observable || observable === this) {
+								throw new TypeError('Invalid concatenated Observable');
+						}
+						const pending = [observable], seen = new Set();
+						while (pending.length) {
+								const source = pending.pop();
+								if (source === this) {
+										throw new TypeError('Cyclic concatenated Observable');
+								}
+								if (seen.has(source)) {
+										continue;
+								}
+								seen.add(source);
+								pending.push(...(source._sources || []));
+						}
+						this._sources.push(observable);
+						return this;
+				}
+				forEach(callback) {
+						let p = new PromiseHandler();
+						callback(p);
+						return this.subscribe({
+								next: (arg) => {
+										const lp = p;
+										p = new PromiseHandler();
+										lp.resolve(arg);
+										callback(p);
+								},
+								error: (arg) => {
+										const lp = p;
+										p = new PromiseHandler();
+										lp.reject(arg);
+										callback(p);
+								}
+						});
+				}
+				onStart(arg) { this._subscriber.start(arg); }
+				onNext(arg) { this._subscriber.next(arg); }
+				onError(arg) { this._subscriber.error(arg); }
+				onComplete(arg) { this._subscriber.complete(arg); }
+				disconnect() {
+						if (this._connection) {
+								this._finish(this._connection);
+						}
+				}
+				[observableSymbol]() { return this; }
+				subscribe(onNext = null, onError = null, onCompleted = null) {
+						return this._subscribe({
+								subscriber: Subscriber.create(onNext, onError, onCompleted),
+								isNop: [onNext, onError, onCompleted].every(f => f === null)
+						});
+				}
+				_subscribe({ subscriber, isNop, filterFunc, mapFunc }) {
+						let connection = this._connection;
+						if (!connection || connection.closed) {
+								connection = { closed: false, started: false, handlers: new Handler(), tokens: new Set() };
+								if (!isNop) {
+										this._connection = connection;
+								}
+						}
+						const subscription = new Subscription({
+								observable: this, subscriber,
+								unsubscribe: () => {
+										if (isNop) {
+												return;
+										}
+										connection.handlers.remove(subscriber);
+										if (connection.handlers.isEmpty) {
+												this._finish(connection);
+										}
+								},
+								closed: () => connection.closed
+						}).filter(filterFunc).map(mapFunc);
+						if (isNop) {
+								return subscription;
+						}
+						connection.handlers.add(subscriber);
+						try {
+								subscriber.start(subscription);
+						}
+						catch (error) {
+								subscription.unsubscribe();
+								throw error;
+						}
+						if (!connection.closed && !connection.started) {
+								this._connect(connection);
+						}
+						return subscription;
+				}
 		}
-		static interval(ms) {
-			return new this(function(o) {
-				const timer = setInterval(() => o.next(this.i++), ms);
-				return () => clearInterval(timer);
-			}.bind({i: 0}));
-		}
-		constructor(subscriberFunction) {
-			this._subscriberFunction = subscriberFunction;
-			this._sources = [];
-			this._connection = null;
-		}
-		get closed() { return !!(this._connection && this._connection.closed); }
-		_disposeToken(token) {
-			token.done = true;
-			if (!token.cleanup) { return; }
-			const cleanup = token.cleanup;
-			token.cleanup = null;
-			try { cleanup(); } catch (error) { console.warn('Observable cleanup failed', error); }
-		}
-		_finish(connection, method, value) {
-			if (connection.closed) { return; }
-			connection.closed = true;
-			try { if (method) { connection.handlers.execMethod(method, value); } }
-			finally {
-				connection.handlers.clear();
-				for (const token of connection.tokens) { this._disposeToken(token); }
-				connection.tokens.clear();
-			}
-		}
-		_connect(connection) {
-			connection.started = true;
-			const sources = [observer => this._subscriberFunction(observer),
-				...this._sources.map(source => observer => source.subscribe({
-					next: value => observer.next(value), error: error => observer.error(error),
-					complete: value => observer.complete(value)
-				}))];
-			let index = 0;
-			const advance = completion => {
-				if (connection.closed) { return; }
-				if (index === sources.length) { this._finish(connection, 'complete', completion); return; }
-				const producer = sources[index++];
-				const token = {done: false, cleanup: null};
-				connection.tokens.add(token);
-				const active = () => !connection.closed && !token.done;
-				const observer = new Subscriber({
-					start: value => { if (active()) { connection.handlers.execMethod('start', value); } },
-					next: value => { if (active()) { connection.handlers.execMethod('next', value); } },
-					error: error => { if (active()) { this._finish(connection, 'error', error); } },
-					complete: value => {
-						if (!active()) { return; }
-						this._disposeToken(token);
-						advance(value);
-					},
-					closed: () => !active()
-				});
-				this._subscriber = observer;
-				try {
-					const cleanup = producer(observer);
-					token.cleanup = typeof cleanup === 'function' ? cleanup :
-						cleanup && typeof cleanup.unsubscribe === 'function' ? () => cleanup.unsubscribe() : null;
-					if (token.done || connection.closed) { this._disposeToken(token); }
-				} catch (error) { observer.error(error); }
-			};
-			advance();
-		}
-		filter(func) {
-			return this.subscribe().filter(func);
-		}
-		map(func) {
-			return this.subscribe().map(func);
-		}
-		concat(arg) {
-			const observable = Observable.from(arg);
-			if (!observable || observable === this) { throw new TypeError('Invalid concatenated Observable'); }
-			const pending = [observable], seen = new Set();
-			while (pending.length) {
-				const source = pending.pop();
-				if (source === this) { throw new TypeError('Cyclic concatenated Observable'); }
-				if (seen.has(source)) { continue; }
-				seen.add(source);
-				pending.push(...(source._sources || []));
-			}
-			this._sources.push(observable);
-			return this;
-		}
-		forEach(callback) {
-			let p = new PromiseHandler();
-			callback(p);
-			return this.subscribe({
-				next: arg => {
-					const lp = p;
-					p = new PromiseHandler();
-					lp.resolve(arg);
-					callback(p);
-				},
-				error: arg => {
-					const lp = p;
-					p = new PromiseHandler();
-					lp.reject(arg);
-					callback(p);
-			}});
-		}
-		onStart(arg) { this._subscriber.start(arg); }
-		onNext(arg) { this._subscriber.next(arg); }
-		onError(arg) { this._subscriber.error(arg); }
-		onComplete(arg) { this._subscriber.complete(arg);}
-		disconnect() {
-			if (this._connection) { this._finish(this._connection); }
-		}
-		[observableSymbol]() { return this; }
-		subscribe(onNext = null, onError = null, onCompleted = null) {
-			return this._subscribe({
-				subscriber: Subscriber.create(onNext, onError, onCompleted),
-				isNop: [onNext, onError, onCompleted].every(f => f === null)
-			});
-		}
-		_subscribe({subscriber, isNop, filterFunc, mapFunc}) {
-			let connection = this._connection;
-			if (!connection || connection.closed) {
-				connection = {closed: false, started: false, handlers: new Handler(), tokens: new Set()};
-				if (!isNop) { this._connection = connection; }
-			}
-			const subscription = new Subscription({
-				observable: this, subscriber,
-				unsubscribe: () => {
-					if (isNop) { return; }
-					connection.handlers.remove(subscriber);
-					if (connection.handlers.isEmpty) { this._finish(connection); }
-				},
-				closed: () => connection.closed
-			}).filter(filterFunc).map(mapFunc);
-			if (isNop) { return subscription; }
-			connection.handlers.add(subscriber);
-			try { subscriber.start(subscription); }
-			catch (error) { subscription.unsubscribe(); throw error; }
-			if (!connection.closed && !connection.started) { this._connect(connection); }
-			return subscription;
-		}
-	}
-	Observable.observavle = observableSymbol;
-	return Observable;
+		Observable.observavle = observableSymbol;
+		return Observable;
 })();
 const WindowResizeObserver = Observable.fromEvent(window, 'resize')
-	.map(o => { return {width: window.innerWidth, height: window.innerHeight}; });
+		.map(o => { return { width: window.innerWidth, height: window.innerHeight }; });
 // already required
 class DataStorage {
 	static create(defaultData, options = {}) {
@@ -3683,356 +3795,429 @@ class DataStorage {
     })();
 
 class CrossDomainGate extends Emitter {
-	static get hostReg() {
-		return /^[a-z0-9]*\.nicovideo\.jp$/;
-	}
-	constructor(...args) {
-		super();
-		this.initialize(...args);
-	}
-	initialize(params) {
-		this._baseUrl = params.baseUrl;
-		this._origin = params.origin || location.href;
-		this._type = params.type;
-		this._suffix = params.suffix || '';
-		this.name = params.name || params.type;
-		this._sessions = {};
-		this._initializeStatus = 'none';
-		this._generation = 0;
-		this._disposed = false;
-	}
-	_initializeFrame() {
-		if (this._disposed) { return Promise.reject(new Error('Gate disposed')); }
-		if (this.loaderFrame && !this.loaderFrame.parentNode) {
-			this._disconnect(new Error('Gate frame removed'));
+		static get hostReg() {
+				return /^[a-z0-9]*\.nicovideo\.jp$/;
 		}
-		if (this._initializeStatus !== 'none') { return this.promise('initialize'); }
-		this.resetPromise('initialize');
-		const pending = this.promise('initialize');
-		this._initializeStatus = 'initializing';
-		const generation = ++this._generation;
-		this._initializeTimer = setTimeout(() => {
-			if (generation === this._generation) {
-				this._disconnect(Object.assign(new Error('Gate initialization timeout'), {status: 'timeout'}));
-			}
-		}, 60000);
-		if (!this._pageHide) {
-			this._pageHide = () => this._disconnect(new Error('Gate page hidden'));
-			window.addEventListener('pagehide', this._pageHide);
+		constructor(...args) {
+				super();
+				this.initialize(...args);
 		}
-		try { this._initializeCrossDomainGate(); }
-		catch (error) { this._disconnect(error); }
-		return pending;
-	}
-	_clearInitializeTimer() {
-		if (this._initializeTimer !== undefined) { clearTimeout(this._initializeTimer); }
-		this._initializeTimer = undefined;
-	}
-	_disconnect(error = new Error('Gate disconnected')) {
-			this._generation;
-		this._clearInitializeTimer();
-		if (this._initialListener) {
-			window.removeEventListener('message', this._initialListener, {capture: true});
-			this._initialListener = null;
+		initialize(params) {
+				this._baseUrl = params.baseUrl;
+				this._origin = params.origin || location.href;
+				this._type = params.type;
+				this._suffix = params.suffix || '';
+				this.name = params.name || params.type;
+				this._sessions = {};
+				this._initializeStatus = 'none';
+				this._generation = 0;
+				this._disposed = false;
 		}
-		if (this._frameObserver) { this._frameObserver.disconnect(); this._frameObserver = null; }
-		if (this._initializeStatus === 'initializing') { this.emitReject('initialize', error); }
-		this._initializeStatus = 'none';
-		this.resetPromise('initialize');
-		for (const id of Object.keys(this._sessions)) { this._settleSession(id, error); }
-		if (this.port) {
-			this.port.removeEventListener && this.port.removeEventListener('message', this._portListener);
-			this.port.removeEventListener && this.port.removeEventListener('messageerror', this._portError);
-			this.port.close && this.port.close();
-		}
-		this.port = null;
-		this._loaderWindow = null;
-		if (this.loaderFrame) { this.loaderFrame.remove(); this.loaderFrame = null; }
-	}
-	dispose() {
-		this._disposed = true;
-		this._disconnect(new Error('Gate disposed'));
-		if (this._pageHide) { window.removeEventListener('pagehide', this._pageHide); this._pageHide = null; }
-		if (this._configListener) { this._config.off('update', this._configListener); this._configListener = null; }
-	}
-	reconnect() {
-		this._disconnect(new Error('Gate reconnecting'));
-		this._disposed = false;
-		return this._initializeFrame();
-	}
-	_settleSession(id, error, result) {
-		const session = this._sessions[id];
-		if (!session) { return; }
-		delete this._sessions[id];
-		session.cleanup();
-		if (arguments.length < 3) {
-			if (session.command === 'fetch' && this.port) {
+		_initializeFrame() {
+				if (this._disposed) {
+						return Promise.reject(new Error('Gate disposed'));
+				}
+				if (this.loaderFrame && !this.loaderFrame.parentNode) {
+						this._disconnect(new Error('Gate frame removed'));
+				}
+				if (this._initializeStatus !== 'none') {
+						return this.promise('initialize');
+				}
+				this.resetPromise('initialize');
+				const pending = this.promise('initialize');
+				this._initializeStatus = 'initializing';
+				const generation = ++this._generation;
+				this._initializeTimer = setTimeout(() => {
+						if (generation === this._generation) {
+								this._disconnect(Object.assign(new Error('Gate initialization timeout'), { status: 'timeout' }));
+						}
+				}, 60000);
+				if (!this._pageHide) {
+						this._pageHide = () => this._disconnect(new Error('Gate page hidden'));
+						window.addEventListener('pagehide', this._pageHide);
+				}
 				try {
-					this.port.postMessage({body: {command: 'cancelFetch', params: {sessionId: id}}, token: TOKEN});
-				} catch (_) { /* The peer may already be gone. */ }
-			}
-			session.reject(error);
-		} else { session.resolve(result); }
-	}
-	async _waitForInitialize(pending, signal) {
-		if (!signal) { return pending; }
-		if (signal.aborted) { throw signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), {name: 'AbortError'}); }
-		let onAbort;
-		try {
-			return await Promise.race([pending, new Promise((resolve, reject) => {
-				onAbort = () => reject(signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), {name: 'AbortError'}));
-				signal.addEventListener('abort', onAbort, {once: true});
-			})]);
-		} finally { signal.removeEventListener('abort', onAbort); }
-	}
-	_initializeCrossDomainGate() {
-		window.console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
-		const loaderFrame = this.loaderFrame = document.createElement('iframe');
-		loaderFrame.referrerPolicy = 'origin';
-		loaderFrame.sandbox = 'allow-scripts allow-same-origin';
-		loaderFrame.loading = 'eager';
-		loaderFrame.name = `${this._type}${PRODUCT}Loader${this._suffix ? `#${this._suffix}` : ''}`;
-		loaderFrame.className = `xDomainLoaderFrame ${this._type}`;
-		loaderFrame.style.cssText = `
-			position: fixed; left: -100vw; pointer-events: none;user-select: none; contain: strict;`;
-		(document.body || document.documentElement).append(loaderFrame);
-		this._loaderWindow = loaderFrame.contentWindow;
-		const generation = this._generation;
-		if (typeof MutationObserver !== 'undefined') {
-			this._frameObserver = new MutationObserver(() => {
-				if (generation === this._generation && !loaderFrame.parentNode) {
-					this._disconnect(new Error('Gate frame removed'));
+						this._initializeCrossDomainGate();
 				}
-			});
-			this._frameObserver.observe(loaderFrame.parentNode, {childList: true});
-		}
-		const onInitialMessage = this._initialListener = event => {
-			if (generation !== this._generation || event.source !== loaderFrame.contentWindow) {
-				return;
-			}
-			this._onMessage(event);
-			if (this._initializeStatus === 'done') {
-				window.removeEventListener('message', onInitialMessage, {capture: true});
-				this._initialListener = null;
-			}
-		};
-		window.addEventListener('message', onInitialMessage, {capture: true});
-		this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
-	}
-	_onMessage(event) {
-		if (this._disposed) { return; }
-		let data;
-		try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
-		catch (_) { return; }
-		if (!data || !data.body || typeof data.body !== 'object') { return; }
-		const {id, type, token, sessionId, body} = data;
-		if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
-			console.warn('invalid token:',
-				{id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN});
-			return;
-		}
-		if (!this.port && body.command !== 'initialized') { return; }
-		if (!this.port && body.command === 'initialized') {
-			if (!event.ports || !event.ports[0]) { return; }
-			const port = this.port = event.ports[0];
-			const generation = this._generation;
-			this._portListener = event => {
-				if (generation === this._generation && this.port === port) { this._onMessage(event); }
-			};
-			this._portError = () => {
-				if (generation === this._generation) { this._disconnect(new Error('Gate message error')); }
-			};
-			port.addEventListener('message', this._portListener);
-			port.addEventListener('messageerror', this._portError);
-			port.start();
-			port.postMessage({body: {command: 'ok'}, token: TOKEN});
-		}
-		return this._onCommand(body, sessionId);
-	}
-	_onCommand({command, status, params}, sessionId = null) {
-		switch (command) {
-			case 'initialized':
-				if (this._initializeStatus !== 'done') {
-					this._initializeStatus = 'done';
-					this._clearInitializeTimer();
-					const originalBody = params;
-					window.console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
-					const result = originalBody && this._onCommand(originalBody, sessionId);
-					this.emitResolve('initialize', {status: 'ok'});
-					return result;
+				catch (error) {
+						this._disconnect(error);
 				}
-				break;
-			case 'message':
-				BroadcastEmitter.emitAsync('message', params, 'broadcast', sessionId);
-				break;
-			default: {
-				const session = this._sessions[sessionId];
+				return pending;
+		}
+		_clearInitializeTimer() {
+				if (this._initializeTimer !== undefined) {
+						clearTimeout(this._initializeTimer);
+				}
+				this._initializeTimer = undefined;
+		}
+		_disconnect(error = new Error('Gate disconnected')) {
+					this._generation;
+				this._clearInitializeTimer();
+				if (this._initialListener) {
+						window.removeEventListener('message', this._initialListener, { capture: true });
+						this._initialListener = null;
+				}
+				if (this._frameObserver) {
+						this._frameObserver.disconnect();
+						this._frameObserver = null;
+				}
+				if (this._initializeStatus === 'initializing') {
+						this.emitReject('initialize', error);
+				}
+				this._initializeStatus = 'none';
+				this.resetPromise('initialize');
+				for (const id of Object.keys(this._sessions)) {
+						this._settleSession(id, error);
+				}
+				if (this.port) {
+						this.port.removeEventListener && this.port.removeEventListener('message', this._portListener);
+						this.port.removeEventListener && this.port.removeEventListener('messageerror', this._portError);
+						this.port.close && this.port.close();
+				}
+				this.port = null;
+				this._loaderWindow = null;
+				if (this.loaderFrame) {
+						this.loaderFrame.remove();
+						this.loaderFrame = null;
+				}
+		}
+		dispose() {
+				this._disposed = true;
+				this._disconnect(new Error('Gate disposed'));
+				if (this._pageHide) {
+						window.removeEventListener('pagehide', this._pageHide);
+						this._pageHide = null;
+				}
+				if (this._configListener) {
+						this._config.off('update', this._configListener);
+						this._configListener = null;
+				}
+		}
+		reconnect() {
+				this._disconnect(new Error('Gate reconnecting'));
+				this._disposed = false;
+				return this._initializeFrame();
+		}
+		_settleSession(id, error, result) {
+				const session = this._sessions[id];
 				if (!session) {
-					return;
+						return;
 				}
-				if (status === 'ok') {
-					this._settleSession(sessionId, null, params);
-				} else {
-					this._settleSession(sessionId, {message: status || 'fail'});
+				delete this._sessions[id];
+				session.cleanup();
+				if (arguments.length < 3) {
+						if (session.command === 'fetch' && this.port) {
+								try {
+										this.port.postMessage({ body: { command: 'cancelFetch', params: { sessionId: id } }, token: TOKEN });
+								}
+								catch (_) { /* The peer may already be gone. */ }
+						}
+						session.reject(error);
 				}
-			}
-				break;
-		}
-	}
-	load(url, options) {
-		return this._postMessage({command: 'loadUrl', params: {url, options}});
-	}
-	videoCapture(src, sec) {
-		return this._postMessage({command: 'videoCapture', params: {src, sec}})
-			.then(result => Promise.resolve(result.dataUrl));
-	}
-	_fetch(url, options = {}) {
-		const {signal, ...transferOptions} = options;
-		return this._postMessage({command: 'fetch', params: {url, options: transferOptions}}, true, '',
-			{signal, timeout: options.timeout});
-	}
-	async fetch(resource, options = {}) {
-		options = {...options};
-		let url = resource;
-		if (resource instanceof URL) {
-			url = resource.toString();
-		} else if (resource instanceof Request) {
-			url = resource.url;
-			options.method ??= resource.method;
-			options.headers ??= resource.headers;
-			options.body ??= resource.body;
-			options.credentials ??= resource.credentials;
-			options.signal ??= resource.signal;
-		}
-		const result = await this._fetch(url, options);
-		if (typeof result === 'string' || !result.buffer || !result.init || !result.headers) {
-			return result;
-		}
-		const {buffer, init, headers} = result;
-		const _headers = new Headers();
-		(headers || []).forEach(a => _headers.append(...a));
-		const _init = {
-			status: init.status,
-			statusText: init.statusText || '',
-			headers: _headers
-		};
-		if (options._format === 'arraybuffer') {
-			return {buffer, init, headers};
-		}
-		return new Response(buffer, _init);
-	}
-	async configBridge(config) {
-		const keys = config.getKeys();
-		if (this._configListener) { this._config.off('update', this._configListener); this._configListener = null; }
-		this._config = config;
-		const configData = await this._postMessage({
-			command: 'dumpConfig',
-			params: { keys, url: '', prefix: PRODUCT }
-		});
-		for (const key of Object.keys(configData)) {
-			config.props[key] = configData[key];
-		}
-		if (!this.constructor.hostReg.test(location.host) &&
-			!config.props.allowOtherDomain) {
-			return;
-		}
-		if (this._disposed) { return; }
-		this._configListener = (key, value) => {
-			if (key === 'autoCloseFullScreen') {
-				return;
-			}
-			this._postMessage({command: 'saveConfig', params: {key, value, prefix: PRODUCT}}, false).catch(() => {});
-		};
-		config.on('update', this._configListener);
-	}
-	async _postMessage(body, usePromise = true, sessionId = '', control = {}) {
-		const {signal} = control;
-		const abortReason = () => signal.reason !== undefined ? signal.reason :
-			Object.assign(new Error('Aborted'), {name: 'AbortError'});
-		if (signal && signal.aborted) { throw abortReason(); }
-		const pending = this._initializeFrame();
-		const generation = this._generation;
-		await this._waitForInitialize(pending, signal);
-		if (signal && signal.aborted) { throw abortReason(); }
-		if (this._disposed || generation !== this._generation ||
-				(control.generation !== undefined && control.generation !== generation)) {
-			throw new Error('Gate disconnected before send');
-		}
-		sessionId = sessionId || (`gate:${Math.random()}`);
-		const params = body.params || {};
-		if (!usePromise) {
-			this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer);
-			return;
-		}
-		if (this._sessions[sessionId]) { throw new Error('Duplicate gate session'); }
-		const session = new PromiseHandler();
-		const timeout = Number.isFinite(control.timeout) && control.timeout > 0 ?
-			Math.min(control.timeout + 1000, 2147483647) : 60000;
-		const timer = setTimeout(() => this._settleSession(sessionId,
-			Object.assign(new Error('Gate request timeout'), {status: 'timeout'})), timeout);
-		const onAbort = () => this._settleSession(sessionId, abortReason());
-		session.command = body.command;
-		session.cleanup = () => {
-			clearTimeout(timer);
-			if (signal) { signal.removeEventListener('abort', onAbort); }
-		};
-		this._sessions[sessionId] = session;
-		if (signal) { signal.addEventListener('abort', onAbort, {once: true}); }
-		try { this.port.postMessage({body, sessionId, token: TOKEN}, params.transfer); }
-		catch (error) { this._settleSession(sessionId, error); }
-		const result = await session;
-		if (this._disposed || generation !== this._generation) { throw new Error('Gate disconnected after reply'); }
-		return result;
-	}
-	postMessage(body, promise = true) {
-		return this._postMessage(body, promise);
-	}
-	sendMessage(body, usePromise = false, sessionId = '') {
-		return this._postMessage({command: 'message', params: body}, usePromise, sessionId);
-	}
-	pushHistory(path, title) {
-		return this._postMessage({command: 'pushHistory', params: {path, title}}, false);
-	}
-	async bridgeDb({name, ver, stores}) {
-		const worker = await this._postMessage(
-			{command: 'bridge-db', params: {command: 'open', params: {name, ver, stores}}}
-		);
-		let dbGeneration = this._generation;
-		let reopening;
-		const post = async (command, data, storeName, transfer) => {
-			await this._initializeFrame();
-			const generation = this._generation;
-			if (dbGeneration !== generation) {
-				if (!reopening || reopening.generation !== generation) {
-					const promise = this._postMessage(
-						{command: 'bridge-db', params: {command: 'open', params: {name, ver, stores}}},
-						true, '', {generation}
-					).then(() => { dbGeneration = generation; });
-					reopening = {generation, promise};
-					promise.catch(() => { if (reopening && reopening.promise === promise) { reopening = null; } });
+				else {
+						session.resolve(result);
 				}
-				await reopening.promise;
-			}
-			const params = {data, storeName, transfer, name};
-			return this._postMessage({command: 'bridge-db', params: {command, params, transfer}}, true, '', {generation});
-		};
-		const result = {worker};
-		for (const meta of stores) {
-			const storeName = meta.name;
-			result[storeName] = (storeName => {
-				return {
-					close: params => post('close', params, storeName),
-					put: (record, transfer) => post('put', record, storeName, transfer),
-					update: data => post('update', data, storeName),
-					get: ({key, index, timeout}) => post('get', {key, index, timeout}, storeName),
-					updateTime: ({key, index, timeout}) => post('updateTime', {key, index, timeout}, storeName),
-					delete: ({key, index, timeout}) => post('delete', {key, index, timeout}, storeName),
-					gc: (expireTime = 30 * 24 * 60 * 60 * 1000, index = 'updatedAt') => post('gc', {expireTime, index}, storeName)
+		}
+		async _waitForInitialize(pending, signal) {
+				if (!signal) {
+						return pending;
+				}
+				if (signal.aborted) {
+						throw signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), { name: 'AbortError' });
+				}
+				let onAbort;
+				try {
+						return await Promise.race([pending, new Promise((resolve, reject) => {
+										onAbort = () => reject(signal.reason !== undefined ? signal.reason : Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+										signal.addEventListener('abort', onAbort, { once: true });
+								})]);
+				}
+				finally {
+						signal.removeEventListener('abort', onAbort);
+				}
+		}
+		_initializeCrossDomainGate() {
+				window.console.time(`GATE OPEN: ${this.name} ${PRODUCT}`);
+				const loaderFrame = this.loaderFrame = document.createElement('iframe');
+				loaderFrame.referrerPolicy = 'origin';
+				loaderFrame.sandbox = 'allow-scripts allow-same-origin';
+				loaderFrame.loading = 'eager';
+				loaderFrame.name = `${this._type}${PRODUCT}Loader${this._suffix ? `#${this._suffix}` : ''}`;
+				loaderFrame.className = `xDomainLoaderFrame ${this._type}`;
+				loaderFrame.style.cssText = `
+			position: fixed; left: -100vw; pointer-events: none;user-select: none; contain: strict;`;
+				(document.body || document.documentElement).append(loaderFrame);
+				this._loaderWindow = loaderFrame.contentWindow;
+				const generation = this._generation;
+				if (typeof MutationObserver !== 'undefined') {
+						this._frameObserver = new MutationObserver(() => {
+								if (generation === this._generation && !loaderFrame.parentNode) {
+										this._disconnect(new Error('Gate frame removed'));
+								}
+						});
+						this._frameObserver.observe(loaderFrame.parentNode, { childList: true });
+				}
+				const onInitialMessage = this._initialListener = (event) => {
+						if (generation !== this._generation || event.source !== loaderFrame.contentWindow) {
+								return;
+						}
+						this._onMessage(event);
+						if (this._initializeStatus === 'done') {
+								window.removeEventListener('message', onInitialMessage, { capture: true });
+								this._initialListener = null;
+						}
 				};
-			})(storeName);
+				window.addEventListener('message', onInitialMessage, { capture: true });
+				this._loaderWindow.location.replace(this._baseUrl + '#' + TOKEN);
 		}
-		return result;
-	}
+		_onMessage(event) {
+				if (this._disposed) {
+						return;
+				}
+				let data;
+				try {
+						data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+				}
+				catch (_) {
+						return;
+				}
+				if (!data || !data.body || typeof data.body !== 'object') {
+						return;
+				}
+				const { id, type, token, sessionId, body } = data;
+				if (id !== PRODUCT || type !== this._type || token !== TOKEN) {
+						console.warn('invalid token:', { id, PRODUCT, type, _type: this._type, tokenMatches: token === TOKEN });
+						return;
+				}
+				if (!this.port && body.command !== 'initialized') {
+						return;
+				}
+				if (!this.port && body.command === 'initialized') {
+						if (!event.ports || !event.ports[0]) {
+								return;
+						}
+						const port = this.port = event.ports[0];
+						const generation = this._generation;
+						this._portListener = event => {
+								if (generation === this._generation && this.port === port) {
+										this._onMessage(event);
+								}
+						};
+						this._portError = () => {
+								if (generation === this._generation) {
+										this._disconnect(new Error('Gate message error'));
+								}
+						};
+						port.addEventListener('message', this._portListener);
+						port.addEventListener('messageerror', this._portError);
+						port.start();
+						port.postMessage({ body: { command: 'ok' }, token: TOKEN });
+				}
+				return this._onCommand(body, sessionId);
+		}
+		_onCommand({ command, status, params }, sessionId = null) {
+				switch (command) {
+						case 'initialized':
+								if (this._initializeStatus !== 'done') {
+										this._initializeStatus = 'done';
+										this._clearInitializeTimer();
+										const originalBody = params;
+										window.console.timeEnd(`GATE OPEN: ${this.name} ${PRODUCT}`);
+										const result = originalBody && this._onCommand(originalBody, sessionId);
+										this.emitResolve('initialize', { status: 'ok' });
+										return result;
+								}
+								break;
+						case 'message':
+								BroadcastEmitter.emitAsync('message', params, 'broadcast', sessionId);
+								break;
+						default:
+								{
+										const session = this._sessions[sessionId];
+										if (!session) {
+												return;
+										}
+										if (status === 'ok') {
+												this._settleSession(sessionId, null, params);
+										}
+										else {
+												this._settleSession(sessionId, { message: status || 'fail' });
+										}
+								}
+								break;
+				}
+		}
+		load(url, options) {
+				return this._postMessage({ command: 'loadUrl', params: { url, options } });
+		}
+		videoCapture(src, sec) {
+				return this._postMessage({ command: 'videoCapture', params: { src, sec } })
+						.then(result => Promise.resolve(result.dataUrl));
+		}
+		_fetch(url, options = {}) {
+				const { signal, ...transferOptions } = options;
+				return this._postMessage({ command: 'fetch', params: { url, options: transferOptions } }, true, '', { signal, timeout: options.timeout });
+		}
+		async fetch(resource, options = {}) {
+				options = { ...options };
+				let url = resource;
+				if (resource instanceof URL) {
+						url = resource.toString();
+				}
+				else if (resource instanceof Request) {
+						url = resource.url;
+						options.method ??= resource.method;
+						options.headers ??= resource.headers;
+						options.body ??= resource.body;
+						options.credentials ??= resource.credentials;
+						options.signal ??= resource.signal;
+				}
+				const result = await this._fetch(url, options);
+				if (typeof result === 'string' || !result.buffer || !result.init || !result.headers) {
+						return result;
+				}
+				const { buffer, init, headers } = result;
+				const _headers = new Headers();
+				(headers || []).forEach((a) => _headers.append(...a));
+				const _init = {
+						status: init.status,
+						statusText: init.statusText || '',
+						headers: _headers
+				};
+				if (options._format === 'arraybuffer') {
+						return { buffer, init, headers };
+				}
+				return new Response(buffer, _init);
+		}
+		async configBridge(config) {
+				const keys = config.getKeys();
+				if (this._configListener) {
+						this._config.off('update', this._configListener);
+						this._configListener = null;
+				}
+				this._config = config;
+				const configData = await this._postMessage({
+						command: 'dumpConfig',
+						params: { keys, url: '', prefix: PRODUCT }
+				});
+				for (const key of Object.keys(configData)) {
+						config.props[key] = configData[key];
+				}
+				if (!this.constructor.hostReg.test(location.host) &&
+						!config.props.allowOtherDomain) {
+						return;
+				}
+				if (this._disposed) {
+						return;
+				}
+				this._configListener = (key, value) => {
+						if (key === 'autoCloseFullScreen') {
+								return;
+						}
+						this._postMessage({ command: 'saveConfig', params: { key, value, prefix: PRODUCT } }, false).catch(() => { });
+				};
+				config.on('update', this._configListener);
+		}
+		async _postMessage(body, usePromise = true, sessionId = '', control = {}) {
+				const { signal } = control;
+				const abortReason = () => signal.reason !== undefined ? signal.reason :
+						Object.assign(new Error('Aborted'), { name: 'AbortError' });
+				if (signal && signal.aborted) {
+						throw abortReason();
+				}
+				const pending = this._initializeFrame();
+				const generation = this._generation;
+				await this._waitForInitialize(pending, signal);
+				if (signal && signal.aborted) {
+						throw abortReason();
+				}
+				if (this._disposed || generation !== this._generation ||
+						(control.generation !== undefined && control.generation !== generation)) {
+						throw new Error('Gate disconnected before send');
+				}
+				sessionId = sessionId || (`gate:${Math.random()}`);
+				const params = body.params || {};
+				if (!usePromise) {
+						this.port.postMessage({ body, sessionId, token: TOKEN }, params.transfer);
+						return;
+				}
+				if (this._sessions[sessionId]) {
+						throw new Error('Duplicate gate session');
+				}
+				const session = new PromiseHandler();
+				const timeout = Number.isFinite(control.timeout) && control.timeout > 0 ?
+						Math.min(control.timeout + 1000, 2147483647) : 60000;
+				const timer = setTimeout(() => this._settleSession(sessionId, Object.assign(new Error('Gate request timeout'), { status: 'timeout' })), timeout);
+				const onAbort = () => this._settleSession(sessionId, abortReason());
+				session.command = body.command;
+				session.cleanup = () => {
+						clearTimeout(timer);
+						if (signal) {
+								signal.removeEventListener('abort', onAbort);
+						}
+				};
+				this._sessions[sessionId] = session;
+				if (signal) {
+						signal.addEventListener('abort', onAbort, { once: true });
+				}
+				try {
+						this.port.postMessage({ body, sessionId, token: TOKEN }, params.transfer);
+				}
+				catch (error) {
+						this._settleSession(sessionId, error);
+				}
+				const result = await session;
+				if (this._disposed || generation !== this._generation) {
+						throw new Error('Gate disconnected after reply');
+				}
+				return result;
+		}
+		postMessage(body, promise = true) {
+				return this._postMessage(body, promise);
+		}
+		sendMessage(body, usePromise = false, sessionId = '') {
+				return this._postMessage({ command: 'message', params: body }, usePromise, sessionId);
+		}
+		pushHistory(path, title) {
+				return this._postMessage({ command: 'pushHistory', params: { path, title } }, false);
+		}
+		async bridgeDb({ name, ver, stores }) {
+				const worker = await this._postMessage({ command: 'bridge-db', params: { command: 'open', params: { name, ver, stores } } });
+				let dbGeneration = this._generation;
+				let reopening;
+				const post = async (command, data, storeName, transfer) => {
+						await this._initializeFrame();
+						const generation = this._generation;
+						if (dbGeneration !== generation) {
+								if (!reopening || reopening.generation !== generation) {
+										const promise = this._postMessage({ command: 'bridge-db', params: { command: 'open', params: { name, ver, stores } } }, true, '', { generation }).then(() => { dbGeneration = generation; });
+										reopening = { generation, promise };
+										promise.catch(() => { if (reopening && reopening.promise === promise) {
+												reopening = null;
+										} });
+								}
+								await reopening.promise;
+						}
+						const params = { data, storeName, transfer, name };
+						return this._postMessage({ command: 'bridge-db', params: { command, params, transfer } }, true, '', { generation });
+				};
+				const result = { worker };
+				for (const meta of stores) {
+						const storeName = meta.name;
+						result[storeName] = (storeName => {
+								return {
+										close: (params) => post('close', params, storeName),
+										put: (record, transfer) => post('put', record, storeName, transfer),
+										update: (data) => post('update', data, storeName),
+										get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
+										updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
+										delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),
+										gc: (expireTime = 30 * 24 * 60 * 60 * 1000, index = 'updatedAt') => post('gc', { expireTime, index }, storeName)
+								};
+						})(storeName);
+				}
+				return result;
+		}
 }
 
     const CsrfTokenLoader = (() => {
@@ -4095,58 +4280,61 @@ class CrossDomainGate extends Emitter {
     MylistPocket.debug.CsrfTokenLoader = CsrfTokenLoader;
 
 const OwnerSupplement = (() => {
-	const BLANK_ICON = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
-	const loadFromNicoad = async (videoId) => {
-		const net = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u, o) => fetch(u, o)};
-		const res = await net.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`,
-			{credentials: 'omit', timeout: 5000});
-		if (!res || !res.ok) {
-			return null;
-		}
-		const json = await res.json();
-		const d = json && json.data;
-		if (!d || String(d.id) !== String(videoId) || !d.ownerId) {
-			return null;
-		}
-		return {id: String(d.ownerId), name: d.ownerName || '', icon: d.ownerIcon || ''};
-	};
-	const supplementThumbInfo = async (thumbInfo) => {
-		if (!thumbInfo || thumbInfo.status !== 'ok' || thumbInfo.owner) {
-			return thumbInfo;
-		}
-		const videoId = thumbInfo.videoId || thumbInfo.id;
-		let found = null;
-		if (videoId && !thumbInfo.isChannel && /^(sm|nm)\d+$/.test(videoId)) {
-			try {
-				found = await loadFromNicoad(videoId);
-			} catch (e) {
-				window.console.warn('投稿者情報の補完に失敗', videoId, e);
-			}
-		}
-		if (found) {
-			thumbInfo.owner = {
-				type: 'user',
-				id: found.id,
-				linkId: `user/${found.id}`,
-				name: found.name || '(非公開ユーザー)',
-				url: `https://www.nicovideo.jp/user/${found.id}`,
-				icon: (found.icon || BLANK_ICON).replace(/^http:/, 'https:'),
-				isSupplemented: true
-			};
-		} else {
-			thumbInfo.owner = {
-				type: thumbInfo.isChannel ? 'channel' : 'user',
-				id: '',
-				linkId: '',
-				name: '(投稿者情報なし)',
-				url: '#',
-				icon: BLANK_ICON,
-				isSupplemented: true
-			};
-		}
-		return thumbInfo;
-	};
-	return {supplementThumbInfo, loadFromNicoad};
+		const BLANK_ICON = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
+		const loadFromNicoad = async (videoId) => {
+				const net = (typeof netUtil !== 'undefined') ? netUtil :
+						{ fetch: (u, o) => fetch(u, o) };
+				const res = await net.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`, { credentials: 'omit', timeout: 5000 });
+				if (!res || !res.ok) {
+						return null;
+				}
+				const json = await res.json();
+				const d = json && json.data;
+				const data = d;
+				if (!data || String(data.id) !== String(videoId) || !data.ownerId) {
+						return null;
+				}
+				return { id: String(data.ownerId), name: data.ownerName || '', icon: data.ownerIcon || '' };
+		};
+		const supplementThumbInfo = async (thumbInfo) => {
+				if (!thumbInfo || thumbInfo.status !== 'ok' || thumbInfo.owner) {
+						return thumbInfo;
+				}
+				const videoId = thumbInfo.videoId || thumbInfo.id;
+				let found = null;
+				if (videoId && !thumbInfo.isChannel && /^(sm|nm)\d+$/.test(videoId)) {
+						try {
+								found = await loadFromNicoad(videoId);
+						}
+						catch (e) {
+								window.console.warn('投稿者情報の補完に失敗', videoId, e);
+						}
+				}
+				if (found) {
+						thumbInfo.owner = {
+								type: 'user',
+								id: found.id,
+								linkId: `user/${found.id}`,
+								name: found.name || '(非公開ユーザー)',
+								url: `https://www.nicovideo.jp/user/${found.id}`,
+								icon: (found.icon || BLANK_ICON).replace(/^http:/, 'https:'),
+								isSupplemented: true
+						};
+				}
+				else {
+						thumbInfo.owner = {
+								type: thumbInfo.isChannel ? 'channel' : 'user',
+								id: '',
+								linkId: '',
+								name: '(投稿者情報なし)',
+								url: '#',
+								icon: BLANK_ICON,
+								isSupplemented: true
+						};
+				}
+				return thumbInfo;
+		};
+		return { supplementThumbInfo, loadFromNicoad };
 })();
     const ThumbInfoLoader = (() => {
       const BASE_URL = 'https://ext.nicovideo.jp/';
@@ -4239,314 +4427,319 @@ const OwnerSupplement = (() => {
 
 const emitter = util.emitter;
 const MylistApiLoader = (() => {
-	const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
-	const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
-	const createMylistError = (message, {
-		status = 'fail',
-		result,
-		code,
-		cause
-	} = {}) => {
-		const error = new Error(message);
-		error.status = status;
-		if (result !== undefined) { error.result = result; }
-		if (code !== undefined) { error.code = code; }
-		if (cause !== undefined) { error.cause = cause; }
-		return error;
-	};
-	let cacheStorage = null;
-	let token = '';
-	if (window.ZenzaWatch) {
-		emitter.on('csrfTokenUpdate', t => {
-			token = t;
-			if (cacheStorage) {
-				cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-			}
-		});
-	}
-	class MylistApiLoader {
-		constructor() {
-			if (!cacheStorage) {
-				cacheStorage = new CacheStorage(sessionStorage);
-			}
-			if (!token) {
-				token = cacheStorage.getItem('csrfToken');
-				if (token) {
-					console.log('cached token exists'); // Task 088: トークンの値はログに出さない
+		const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
+		const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
+		const createMylistError = (message, { status = 'fail', result, code, cause } = {}) => {
+				const error = new Error(message);
+				error.status = status;
+				if (result !== undefined) {
+						error.result = result;
 				}
-			}
-		}
-		setCsrfToken(t) {
-			token = t;
-			if (cacheStorage) {
-				cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-			}else{
-				cacheStorage = new CacheStorage(sessionStorage);
-				cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-			}
-		}
-		async _getCsrfToken(){
-				if (!cacheStorage) {
-						cacheStorage = new CacheStorage(sessionStorage);
+				if (code !== undefined) {
+						error.code = code;
 				}
-				token = cacheStorage.getItem('csrfToken');
-				if (token) {
-						console.log('cached token exists'); // Task 088: トークンの値はログに出さない
-				}else{
-						const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
-						const result = await netUtil.fetch( tokenUrl, {
-						credentials: 'include'
-						}).then(r => r.text()).catch(result => {
-								throw new Error('マイリストトークン取得失敗', {result, status: 'fail'});
+				if (cause !== undefined) {
+						error.cause = cause;
+				}
+				return error;
+		};
+		let cacheStorage = null;
+		let token = '';
+		if (window.ZenzaWatch) {
+				emitter.on('csrfTokenUpdate', (t) => {
+						token = t;
+						if (cacheStorage) {
+								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
+						}
+				});
+		}
+		class MylistApiLoader {
+				constructor() {
+						if (!cacheStorage) {
+								cacheStorage = new CacheStorage(sessionStorage);
+						}
+						if (!token) {
+								token = cacheStorage.getItem('csrfToken');
+								if (token) {
+										console.log('cached token exists'); // Task 088: トークンの値はログに出さない
+								}
+						}
+				}
+				setCsrfToken(t) {
+						token = t;
+						if (cacheStorage) {
+								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
+						}
+						else {
+								cacheStorage = new CacheStorage(sessionStorage);
+								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
+						}
+				}
+				async _getCsrfToken() {
+						if (!cacheStorage) {
+								cacheStorage = new CacheStorage(sessionStorage);
+						}
+						token = cacheStorage.getItem('csrfToken');
+						if (token) {
+								console.log('cached token exists'); // Task 088: トークンの値はログに出さない
+						}
+						else {
+								const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
+								const result = await netUtil.fetch(tokenUrl, {
+										credentials: 'include'
+								}).then((r) => r.text()).catch((result) => {
+										throw new Error('マイリストトークン取得失敗', { result, status: 'fail' });
+								});
+								const dom = new DOMParser().parseFromString(result, 'text/html');
+								const initUserpageDataContena = dom.querySelector('#js-initial-userpage-data');
+								const env = JSON.parse(initUserpageDataContena.getAttribute('data-environment'));
+								this.setCsrfToken(env.csrfToken);
+						}
+						return token;
+				}
+				async _getDeflistItems(frontendId = 6, frontendVersion = 0) {
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc';
+						const page = new URLSearchParams({ pageSize: 100, page: 1 });
+						let data;
+						do {
+								const res = await netUtil.fetch(`${url}&${page.toString()}`, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+										credentials: 'include'
+								}).then((r) => r.json())
+										.catch((e) => { throw createMylistError('あとで見るの取得失敗(2)', { result: e, cause: e }); });
+								if (res.meta.status !== 200 || !res.data.watchLater) {
+										throw createMylistError('あとで見るの取得失敗(1)', { result: res, code: res?.error?.code });
+								}
+								if (data == null) {
+										data = res.data.watchLater;
+								}
+								else {
+										data.hasInvisibleItems = data.hasInvisibleItems || res.data.watchLater.hasInvisibleItems;
+										data.hasNext = res.data.watchLater.hasNext;
+										data.items = data.items.concat(res.data.watchLater.items);
+								}
+								page.set('page', String(parseInt(page.get('page')) + 1));
+						} while (data && data.hasNext);
+						return data.items;
+				}
+				async _getMylistItems(id, frontendId = 6, frontendVersion = 0) {
+						const url = `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
+						const page = new URLSearchParams({ pageSize: 100, page: 1 });
+						let data;
+						do {
+								const res = await netUtil.fetch(`${url}?${page.toString()}`, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+										credentials: 'include'
+								}).then((r) => r.json())
+										.catch((e) => { throw createMylistError('マイリスト取得失敗(2)', { result: e, cause: e }); });
+								if (res.meta.status !== 200 || !res.data.mylist) {
+										throw createMylistError('マイリスト取得失敗(1)', { result: res, code: res?.error?.code });
+								}
+								if (data == null) {
+										data = res.data.mylist;
+								}
+								else {
+										data.hasInvisibleItems = data.hasInvisibleItems || res.data.mylist.hasInvisibleItems;
+										data.hasNext = res.data.mylist.hasNext;
+										data.items = data.items.concat(res.data.mylist.items);
+								}
+								page.set('page', String(parseInt(page.get('page')) + 1));
+						} while (data && data.hasNext);
+						return data.items;
+				}
+				async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
+						const cacheKey = 'mylistList';
+						const cacheData = cacheStorage.getItem(cacheKey);
+						if (cacheData) {
+								return cacheData;
+						}
+						const result = await netUtil.fetch(url, {
+								headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+								credentials: 'include'
+						}).then((r) => r.json())
+								.catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
+						if (result.meta.status !== 200 || !result.data.mylists) {
+								throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
+						}
+						const data = result.data.mylists;
+						cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+						return data;
+				}
+				async findDeflistItemByWatchId(watchId) {
+						const items = await this._getDeflistItems();
+						for (let item of items) {
+								if (item.watchId === watchId) {
+										return item;
+								}
+						}
+						throw createMylistError('動画が見つかりません', {
+								status: 'not_found',
+								code: 'NOT_FOUND',
+								result: { watchId, list: 'watchLater' }
 						});
-						const dom = new DOMParser().parseFromString(result, 'text/html');
-						const initUserpageDataContena = dom.querySelector('#js-initial-userpage-data');
-						const env = JSON.parse(initUserpageDataContena.getAttribute('data-environment'));
-						this.setCsrfToken(env.csrfToken); 
 				}
-				return token;
-		}
-		async _getDeflistItems(frontendId = 6, frontendVersion = 0) {
-			const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc';
-			const page = new URLSearchParams({ pageSize: 100, page: 1 });
-			let data;
-			do {
-				const res = await netUtil.fetch(`${url}&${page.toString()}`, {
-					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
-					credentials: 'include'
-				}).then(r => r.json())
-					.catch(e => { throw createMylistError('あとで見るの取得失敗(2)', {result: e, cause: e}); });
-				if (res.meta.status !== 200 || !res.data.watchLater) {
-					throw createMylistError('あとで見るの取得失敗(1)', {result: res, code: res?.error?.code});
-				}
-				if (data == null) {
-					data = res.data.watchLater;
-				} else {
-					data.hasInvisibleItems = data.hasInvisibleItems || res.data.watchLater.hasInvisibleItems;
-					data.hasNext = res.data.watchLater.hasNext;
-					data.items = data.items.concat(res.data.watchLater.items);
-				}
-				page.set('page', parseInt(page.get('page')) + 1);
-			} while (data && data.hasNext);
-			return data.items;
-		}
-		async _getMylistItems(id, frontendId = 6, frontendVersion = 0) {
-			const url = `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-			const page = new URLSearchParams({ pageSize: 100, page: 1 });
-			let data;
-			do {
-				const res = await netUtil.fetch(`${url}?${page.toString()}`, {
-					headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
-					credentials: 'include'
-				}).then(r => r.json())
-					.catch(e => { throw createMylistError('マイリスト取得失敗(2)', {result: e, cause: e}); });
-				if (res.meta.status !== 200 || !res.data.mylist) {
-					throw createMylistError('マイリスト取得失敗(1)', {result: res, code: res?.error?.code});
-				}
-				if (data == null) {
-					data = res.data.mylist;
-				} else {
-					data.hasInvisibleItems = data.hasInvisibleItems || res.data.mylist.hasInvisibleItems;
-					data.hasNext = res.data.mylist.hasNext;
-					data.items = data.items.concat(res.data.mylist.items);
-				}
-				page.set('page', parseInt(page.get('page')) + 1);
-			} while (data && data.hasNext);
-			return data.items;
-		}
-		async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
-			const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-			const cacheKey = 'mylistList';
-			const cacheData = cacheStorage.getItem(cacheKey);
-			if (cacheData) {
-				return cacheData;
-			}
-			const result = await netUtil.fetch(url, {
-				headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
-				credentials: 'include'
-			}).then(r => r.json())
-				.catch(e => { throw createMylistError('マイリスト一覧の取得失敗(2)', {result: e, cause: e}); });
-			if (result.meta.status !== 200 || !result.data.mylists) {
-				throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, {result, code: result?.error?.code});
-			}
-			const data = result.data.mylists;
-			cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
-			return data;
-		}
-		async findDeflistItemByWatchId(watchId) {
-			const items = await this._getDeflistItems();
-			for (let item of items) {
-				if (item.watchId === watchId) {
-					return item;
-				}
-			}
-			throw createMylistError('動画が見つかりません', {
-				status: 'not_found',
-				code: 'NOT_FOUND',
-				result: {watchId, list: 'watchLater'}
-			});
-		}
-		async findMylistItemByWatchId(watchId, groupId) {
-			const items = await this._getMylistItems(groupId);
-			for (let item of items) {
-				if (item.watchId === watchId) {
-					return item;
-				}
-			}
-			throw createMylistError('動画が見つかりません', {
-				status: 'not_found',
-				code: 'NOT_FOUND',
-				result: {watchId, groupId, list: 'mylist'}
-			});
-		}
-		async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0 } = {}) {
-			const item = await this.findDeflistItemByWatchId(watchId);
-			const body = `itemIds=${item.itemId}`;
-			const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
-			const cacheKey = 'deflistItems';
-			const result = await netUtil.fetch(url, {
-				method: 'DELETE',
-				headers: {
-					'X-Frontend-Id': frontendId,
-					'X-Frontend-Version': frontendVersion,
-					'X-Request-With': 'https://www.nicovideo.jp'
-				},
-				credentials: 'include'
-			}).then(r => r.json())
-				.catch(result => {
-					throw createMylistError('あとで見るから削除失敗(2)', {result, cause: result});
-				});
-			if (result.meta.status && result.meta.status === 200) {
-				cacheStorage.removeItem(cacheKey);
-				emitter.emitAsync('deflistRemove', watchId);
-				return {
-					status: 'ok',
-					result,
-					message: 'あとで見るから削除'
-				};
-			}
-			throw createMylistError(result.error.description, {
-					result, code: result.error.code
-			});
-		}
-		async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0 } = {}) {
-			const item = await this.findMylistItemByWatchId(watchId, groupId);
-			let body = 'itemIds=' + item.itemId;
-			const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
-			const cacheKey = `mylistItems: ${groupId}`;
-			const result = await netUtil.fetch(url, {
-				method: 'DELETE',
-				headers: {
-					'X-Frontend-Id': frontendId,
-					'X-Frontend-Version': frontendVersion,
-					'X-Request-With': 'https://www.nicovideo.jp'
-				},
-				credentials: 'include'
-			}).then(r => r.json())
-				.catch(result => {
-					throw createMylistError('マイリストから削除失敗(2)', {result, cause: result});
-				});
-			if (result.meta.status && result.meta.status === 200) {
-				cacheStorage.removeItem(cacheKey);
-				emitter.emitAsync('mylistRemove', watchId, groupId);
-				return {
-					status: 'ok',
-					result,
-					message: 'マイリストから削除'
-				};
-			}
-			throw createMylistError(result.error.description, {
-				result,
-				code: result.error.code
-			});
-		}
-		async addDeflistItem(watchId, description, isRetry = false, { frontendId = 6, frontendVersion = 0 } = {}) {
-			let url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later';
-			let body = `watchId=${watchId}&memo=`;
-			if (description) {
-				body += `${encodeURIComponent(description)}`;
-			}
-			let cacheKey = 'deflistItems';
-			const result = await netUtil.fetch(url, {
-				method: 'POST',
-				body,
-				headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
-				credentials: 'include'
-			}).then(r => r.json())
-				.catch(err => {
-						throw createMylistError('あとで見る登録失敗(200)', {
-							result: err,
-							cause: err
+				async findMylistItemByWatchId(watchId, groupId) {
+						const items = await this._getMylistItems(groupId);
+						for (let item of items) {
+								if (item.watchId === watchId) {
+										return item;
+								}
+						}
+						throw createMylistError('動画が見つかりません', {
+								status: 'not_found',
+								code: 'NOT_FOUND',
+								result: { watchId, groupId, list: 'mylist' }
 						});
-					});
-			if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
-				cacheStorage.removeItem(cacheKey);
-				emitter.emitAsync('deflistAdd', watchId, description);
-				return {
-					status: 'ok',
-					result,
-					message: 'あとで見る登録'
-				};
-			}
-			if (result.meta.status && result.meta.status === 409 && !isRetry) {
-					await this.removeDeflistItem(watchId).catch(err => {
-							throw createMylistError('あとで見る登録失敗(101)', {
-								result: err.result,
-								code: err.code,
-								cause: err
-							});
+				}
+				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0 } = {}) {
+						const item = await this.findDeflistItemByWatchId(watchId);
+						const body = `itemIds=${item.itemId}`;
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
+						const cacheKey = 'deflistItems';
+						const result = await netUtil.fetch(url, {
+								method: 'DELETE',
+								headers: {
+										'X-Frontend-Id': frontendId,
+										'X-Frontend-Version': frontendVersion,
+										'X-Request-With': 'https://www.nicovideo.jp'
+								},
+								credentials: 'include'
+						}).then((r) => r.json())
+								.catch((result) => {
+								throw createMylistError('あとで見るから削除失敗(2)', { result, cause: result });
 						});
-					const added = await this.addDeflistItem(watchId, description, true, {frontendId, frontendVersion});
-					return {
-						status: 'ok',
-						result: added,
-						message: 'あとで見るの先頭に移動'
-					};
-			}
-			if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
-				throw createMylistError('あとで見る登録失敗(100)', {
-					result
-				});
-			}
-				throw createMylistError(result.error.description, {
-					result,
-					code: result.error.code
-				});
+						if (result.meta.status && result.meta.status === 200) {
+								cacheStorage.removeItem(cacheKey);
+								emitter.emitAsync('deflistRemove', watchId);
+								return {
+										status: 'ok',
+										result,
+										message: 'あとで見るから削除'
+								};
+						}
+						throw createMylistError(result.error.description, {
+								result, code: result.error.code
+						});
+				}
+				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0 } = {}) {
+						const item = await this.findMylistItemByWatchId(watchId, groupId);
+						let body = 'itemIds=' + item.itemId;
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
+						const cacheKey = `mylistItems: ${groupId}`;
+						const result = await netUtil.fetch(url, {
+								method: 'DELETE',
+								headers: {
+										'X-Frontend-Id': frontendId,
+										'X-Frontend-Version': frontendVersion,
+										'X-Request-With': 'https://www.nicovideo.jp'
+								},
+								credentials: 'include'
+						}).then((r) => r.json())
+								.catch((result) => {
+								throw createMylistError('マイリストから削除失敗(2)', { result, cause: result });
+						});
+						if (result.meta.status && result.meta.status === 200) {
+								cacheStorage.removeItem(cacheKey);
+								emitter.emitAsync('mylistRemove', watchId, groupId);
+								return {
+										status: 'ok',
+										result,
+										message: 'マイリストから削除'
+								};
+						}
+						throw createMylistError(result.error.description, {
+								result,
+								code: result.error.code
+						});
+				}
+				async addDeflistItem(watchId, description, isRetry = false, { frontendId = 6, frontendVersion = 0 } = {}) {
+						let url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later';
+						let body = `watchId=${watchId}&memo=`;
+						if (description) {
+								body += `${encodeURIComponent(description)}`;
+						}
+						let cacheKey = 'deflistItems';
+						const result = await netUtil.fetch(url, {
+								method: 'POST',
+								body,
+								headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
+								credentials: 'include'
+						}).then((r) => r.json())
+								.catch((err) => {
+								throw createMylistError('あとで見る登録失敗(200)', {
+										result: err,
+										cause: err
+								});
+						});
+						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
+								cacheStorage.removeItem(cacheKey);
+								emitter.emitAsync('deflistAdd', watchId, description);
+								return {
+										status: 'ok',
+										result,
+										message: 'あとで見る登録'
+								};
+						}
+						if (result.meta.status && result.meta.status === 409 && !isRetry) {
+								await this.removeDeflistItem(watchId).catch((err) => {
+										throw createMylistError('あとで見る登録失敗(101)', {
+												result: err.result,
+												code: err.code,
+												cause: err
+										});
+								});
+								const added = await this.addDeflistItem(watchId, description, true, { frontendId, frontendVersion });
+								return {
+										status: 'ok',
+										result: added,
+										message: 'あとで見るの先頭に移動'
+								};
+						}
+						if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
+								throw createMylistError('あとで見る登録失敗(100)', {
+										result
+								});
+						}
+						throw createMylistError(result.error.description, {
+								result,
+								code: result.error.code
+						});
+				}
+				async addMylistItem(watchId, groupId, description, { frontendId = 6, frontendVersion = 0 } = {}) {
+						let body = 'itemId=' + watchId + '&description='; //+ '&token=' + token + '&group_id=' + groupId;
+						if (description) {
+								body += encodeURIComponent(description);
+						}
+						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
+						const cacheKey = `mylistItems: ${groupId}`;
+						const result = await netUtil.fetch(url, {
+								method: 'POST',
+								body,
+								headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp' },
+								credentials: 'include'
+						}).then((r) => r.json())
+								.catch((err) => {
+								throw createMylistError('マイリスト登録失敗(200)', {
+										result: err,
+										cause: err
+								});
+						});
+						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
+								cacheStorage.removeItem(cacheKey);
+								this.removeDeflistItem(watchId).catch(() => { });
+								return { status: 'ok', result, message: 'マイリスト登録' };
+						}
+						if (!result.meta.status /*|| !result.error*/) {
+								throw createMylistError('マイリスト登録失敗(100)', { result });
+						}
+						emitter.emitAsync('mylistAdd', watchId, groupId, description);
+						throw createMylistError(result.error.description, {
+								result, code: result.error.code
+						});
+				}
 		}
-		async addMylistItem(watchId, groupId, description, { frontendId = 6, frontendVersion = 0 } = {}) {
-			let body = 'itemId=' + watchId + '&description=';//+ '&token=' + token + '&group_id=' + groupId;
-			if (description) {
-				body += encodeURIComponent(description);
-			}
-			const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body ;
-			const cacheKey = `mylistItems: ${groupId}`;
-			const result = await netUtil.fetch(url, {
-				method: 'POST',
-				body,
-				headers: {  'Content-Type': 'application/x-www-form-urlencoded', 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion, 'X-Request-With': 'https://www.nicovideo.jp'},
-				credentials: 'include'
-			}).then(r => r.json())
-				.catch(err => {
-					throw createMylistError('マイリスト登録失敗(200)', {
-						result: err,
-						cause: err
-					});
-				});
-			if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
-				cacheStorage.removeItem(cacheKey);
-				this.removeDeflistItem(watchId).catch(() => {});
-				return {status: 'ok', result, message: 'マイリスト登録'};
-			}
-			if (!result.meta.status /*|| !result.error*/) {
-				throw createMylistError('マイリスト登録失敗(100)', {result});
-			}
-			emitter.emitAsync('mylistAdd', watchId, groupId, description);
-			throw createMylistError(result.error.description, {
-					result, code: result.error.code
-			});
-		}
-	}
-	return new MylistApiLoader();
+		return new MylistApiLoader();
 })();
 
 
@@ -6020,8 +6213,21 @@ const MylistApiLoader = (() => {
       const {ngChecker, favChecker} = ngContext?.checkers ||
         initNgChecker({ngConfig, favConfig});
 
+      // Each card owns only its newest NG request within this observer session.
+      const cardRequests = new WeakMap();
+      const failedCodeClasses = new WeakMap();
       const onItemInview = (item, watchId) => {
         if (!isCurrent() || !ngConfig.props.enable) { return; }
+        const requestId = (cardRequests.get(item) || 0) + 1;
+        cardRequests.set(item, requestId);
+        const owned = () => cardRequests.get(item) === requestId;
+        const cancelled = () => !owned() || !isCurrent() || !ngConfig.props.enable;
+        const clearFailure = () => {
+          item.classList.remove('is-ng-failed');
+          const code = failedCodeClasses.get(item);
+          if (code) { item.classList.remove(code); }
+          failedCodeClasses.delete(item);
+        };
 
         const loadLazy = () => {
           const lazyImage = item.querySelector('.jsLazyImage');
@@ -6034,21 +6240,32 @@ const MylistApiLoader = (() => {
           }
         };
 
-        QueueLoader.load(watchId, item,
-          () => !isCurrent() || !ngConfig.props.enable).then(
+        QueueLoader.load(watchId, item, cancelled).then(
           info => {
+            // An older result must not clear the newer request's loading state.
+            if (!owned()) { return; }
             item.classList.remove('is-ng-current');
             if (!isCurrent() || !ngConfig.props.enable ||
                 info?.status === 'cancelled') {
               loadLazy();
               return;
             }
-            if (!info || info.status === 'fail' || info.code === 'DELETED') {
-              if (info && info.code !== 'COMMUNITY') {
-                console.error('empty data', watchId, info, info ? info.code : 'unknown');
+            const malformed = !info || typeof info !== 'object' ||
+              Object.prototype.toString.call(info) === '[object Error]' ||
+              !info.owner || typeof info.owner !== 'object';
+            if (malformed || info.status === 'fail' || info.code === 'DELETED') {
+              const code = typeof info?.code === 'string' &&
+                /^[a-z0-9_-]{1,48}$/i.test(info.code) ? info.code : 'is-no-data';
+              clearFailure();
+              // Do not show both a previous NG verdict and a new failure.
+              item.classList.remove('is-ng-rejected', 'is-ng-resolved', 'is-fav-favorited');
+              if (!malformed && info.code !== 'COMMUNITY') {
+                console.warn('NG thumbnail unavailable', watchId, code);
               }
-              item.classList.add('is-ng-failed', info ? info.code : 'is-no-data');
+              item.classList.add('is-ng-failed', code);
+              failedCodeClasses.set(item, code);
             } else {
+              clearFailure();
               if (callback) {
                 return callback(item,
                   {watchId, info, isNg: ngChecker.isNg(info), isFav: favChecker.isMatch(info)});
@@ -6091,15 +6308,17 @@ const MylistApiLoader = (() => {
             }
 
             loadLazy();
-          },
-          () => {
-            item.classList.remove('is-ng-current');
-            if (isCurrent() && ngConfig.props.enable) {
-              item.classList.add('is-ng-failed');
-            }
-            loadLazy();
           }
-        );
+        ).catch(() => {
+          if (!owned()) { return; }
+          item.classList.remove('is-ng-current');
+          if (isCurrent() && ngConfig.props.enable) {
+            clearFailure();
+            item.classList.remove('is-ng-rejected', 'is-ng-resolved', 'is-fav-favorited');
+            item.classList.add('is-ng-failed');
+          }
+          loadLazy();
+        });
       };
 
       const intersectionObserver = initIntersectionObserver(onItemInview);
@@ -6168,7 +6387,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.59-task714', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.75-task800', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -6234,521 +6453,552 @@ const MylistApiLoader = (() => {
     init();
   };
 function EmitterInitFunc() {
-class Handler { //extends Array {
-	constructor(...args) {
-		this._list = args;
-	}
-	get length() {
-		return this._list.length;
-	}
-	exec(...args) {
-		const pending = this._list.slice();
-		for (let i = pending.length - 1; i >= 0; i--) {
-			const member = pending[i];
-			if (this._list.includes(member)) { member.apply(this._list, args); }
+		class Handler {
+				constructor(...args) {
+						this._list = args;
+				}
+				get length() {
+						return this._list.length;
+				}
+				exec(...args) {
+						const pending = this._list.slice();
+						for (let i = pending.length - 1; i >= 0; i--) {
+								const member = pending[i];
+								if (this._list.includes(member)) {
+										member.apply(this._list, args);
+								}
+						}
+				}
+				execMethod(name, ...args) {
+						const pending = this._list.slice();
+						for (let i = pending.length - 1; i >= 0; i--) {
+								const member = pending[i];
+								if (this._list.includes(member)) {
+										member[name](...args);
+								}
+						}
+				}
+				add(member) {
+						if (this._list.includes(member)) {
+								return this;
+						}
+						this._list.unshift(member);
+						return this;
+				}
+				remove(member) {
+						this._list = this._list.filter(m => m !== member);
+						return this;
+				}
+				clear() {
+						this._list.length = 0;
+						return this;
+				}
+				get isEmpty() {
+						return this._list.length < 1;
+				}
+				*[Symbol.iterator]() {
+						const list = this._list || [];
+						for (const member of list) {
+								yield member;
+						}
+				}
+				next() {
+						return this[Symbol.iterator]();
+				}
 		}
-	}
-	execMethod(name, ...args) {
-		const pending = this._list.slice();
-		for (let i = pending.length - 1; i >= 0; i--) {
-			const member = pending[i];
-			if (this._list.includes(member)) { member[name](...args); }
-		}
-	}
-	add(member) {
-		if (this._list.includes(member)) {
-			return this;
-		}
-		this._list.unshift(member);
-		return this;
-	}
-	remove(member) {
-		this._list = this._list.filter(m => m !== member);
-		return this;
-	}
-	clear() {
-		this._list.length = 0;
-		return this;
-	}
-	get isEmpty() {
-		return this._list.length < 1;
-	}
-	*[Symbol.iterator]() {
-		const list = this._list || [];
-		for (const member of list) {
-			yield member;
-		}
-	}
-	next() {
-		return this[Symbol.iterator]();
-	}
+		Handler.nop = () => { };
+		const PromiseHandler = (() => {
+				const id = function () { return `Promise${this.id++}`; }.bind({ id: 0 });
+				class PromiseHandler extends Promise {
+						constructor(callback = () => { }) {
+								const key = new Object({ id: id(), callback, status: 'pending' });
+								const cb = function (res, rej) {
+										const resolve = (...args) => { this.status = 'resolved'; this.value = args; res(...args); };
+										const reject = (...args) => { this.status = 'rejected'; this.value = args; rej(...args); };
+										if (this.result) {
+												return this.result.then(resolve, reject);
+										}
+										Object.assign(this, { resolve, reject });
+										return callback(resolve, reject);
+								}.bind(key);
+								super(cb);
+								this.resolve = this.resolve.bind(this);
+								this.reject = this.reject.bind(this);
+								this.key = key;
+						}
+						resolve(...args) {
+								if (this.key.resolve) {
+										this.key.resolve(...args);
+								}
+								else {
+										this.key.result = Promise.resolve(...args);
+								}
+								return this;
+						}
+						reject(...args) {
+								if (this.key.reject) {
+										this.key.reject(...args);
+								}
+								else {
+										this.key.result = Promise.reject(...args);
+								}
+								return this;
+						}
+						addCallback(callback) {
+								Promise.resolve().then(() => callback(this.resolve, this.reject));
+								return this;
+						}
+				}
+				return PromiseHandler;
+		})();
+		const { Emitter } = (() => {
+				let totalCount = 0;
+				let warnings = [];
+				class Emitter {
+						on(name, callback) {
+								if (!this._events) {
+										Emitter.totalCount++;
+										this._events = new Map();
+								}
+								name = name.toLowerCase();
+								let e = this._events.get(name);
+								if (!e) {
+										const handler = new Handler(callback);
+										handler.name = name;
+										this._events.set(name, handler);
+										e = handler;
+								}
+								else {
+										e.add(callback);
+								}
+								if (e.length > 10) {
+										console.warn('listener count > 10', name, e, callback);
+										!Emitter.warnings.includes(this) && Emitter.warnings.push(this);
+								}
+								return this;
+						}
+						off(name, callback) {
+								if (!this._events) {
+										return;
+								}
+								name = name.toLowerCase();
+								const e = this._events.get(name);
+								if (!this._events.has(name)) {
+										return;
+								}
+								else if (!callback) {
+										this._events.delete(name);
+								}
+								else {
+										for (const listener of e) {
+												if (listener === callback || listener._original === callback) {
+														e.remove(listener);
+												}
+										}
+										if (e.isEmpty) {
+												this._events.delete(name);
+										}
+								}
+								if (this._events.size < 1) {
+										delete this._events;
+										Emitter.totalCount--;
+								}
+								return this;
+						}
+						once(name, func) {
+								const wrapper = (...args) => {
+										this.off(name, wrapper);
+										wrapper._original = null;
+										func(...args);
+								};
+								wrapper._original = func;
+								return this.on(name, wrapper);
+						}
+						clear(name) {
+								if (!this._events) {
+										return;
+								}
+								if (name) {
+										this._events.delete(name.toLowerCase());
+								}
+								else {
+										delete this._events;
+										Emitter.totalCount--;
+								}
+								return this;
+						}
+						emit(name, ...args) {
+								if (!this._events) {
+										return;
+								}
+								name = name.toLowerCase();
+								const e = this._events.get(name);
+								if (!e) {
+										return;
+								}
+								e.exec(...args);
+								return this;
+						}
+						emitAsync(...args) {
+								if (!this._events) {
+										return;
+								}
+								setTimeout(() => this.emit(...args), 0);
+								return this;
+						}
+						promise(name, callback) {
+								if (!this._promise) {
+										this._promise = new Map;
+								}
+								const p = this._promise.get(name);
+								if (p) {
+										return callback ? p.addCallback(callback) : p;
+								}
+								this._promise.set(name, new PromiseHandler(callback));
+								return this._promise.get(name);
+						}
+						emitResolve(name, ...args) {
+								if (!this._promise) {
+										this._promise = new Map;
+								}
+								if (!this._promise.has(name)) {
+										this._promise.set(name, new PromiseHandler());
+								}
+								return this._promise.get(name).resolve(...args);
+						}
+						emitReject(name, ...args) {
+								if (!this._promise) {
+										this._promise = new Map;
+								}
+								if (!this._promise.has(name)) {
+										this._promise.set(name, new PromiseHandler);
+								}
+								return this._promise.get(name).reject(...args);
+						}
+						resetPromise(name) {
+								if (!this._promise) {
+										return;
+								}
+								this._promise.delete(name);
+						}
+						hasPromise(name) {
+								return this._promise && this._promise.has(name);
+						}
+						addEventListener(...args) { return this.on(...args); }
+						removeEventListener(...args) { return this.off(...args); }
+				}
+				Emitter.totalCount = totalCount;
+				Emitter.warnings = warnings;
+				return { Emitter };
+		})();
+		return { Handler, PromiseHandler, Emitter };
 }
-Handler.nop = () => {/*     ( ˘ω˘ ) スヤァ    */};
-const PromiseHandler = (() => {
-	const id = function() { return `Promise${this.id++}`; }.bind({id: 0});
-	class PromiseHandler extends Promise {
-		constructor(callback = () => {}) {
-			const key = new Object({id: id(), callback, status: 'pending'});
-			const cb = function(res, rej) {
-				const resolve = (...args) => { this.status = 'resolved'; this.value = args; res(...args); };
-				const reject  = (...args) => { this.status = 'rejected'; this.value = args; rej(...args); };
-				if (this.result) {
-					return this.result.then(resolve, reject);
-				}
-				Object.assign(this, {resolve, reject});
-				return callback(resolve, reject);
-			}.bind(key);
-			super(cb);
-			this.resolve = this.resolve.bind(this);
-			this.reject = this.reject.bind(this);
-			this.key = key;
-		}
-		resolve(...args) {
-			if (this.key.resolve) {
-				this.key.resolve(...args);
-			} else {
-				this.key.result = Promise.resolve(...args);
-			}
-			return this;
-		}
-		reject(...args) {
-			if (this.key.reject) {
-				this.key.reject(...args);
-			} else {
-				this.key.result = Promise.reject(...args);
-			}
-			return this;
-		}
-		addCallback(callback) {
-			Promise.resolve().then(() => callback(this.resolve, this.reject));
-			return this;
-		}
-	}
-	return PromiseHandler;
-})();
-const {Emitter} = (() => {
-	let totalCount = 0;
-	let warnings = [];
-	class Emitter {
-		on(name, callback) {
-			if (!this._events) {
-				Emitter.totalCount++;
-				this._events = new Map();
-			}
-			name = name.toLowerCase();
-			let e = this._events.get(name);
-			if (!e) {
-				const handler = new Handler(callback);
-				handler.name = name;
-				e = this._events.set(name, handler);
-			} else {
-				e.add(callback);
-			}
-			if (e.length > 10) {
-				console.warn('listener count > 10', name, e, callback);
-				!Emitter.warnings.includes(this) && Emitter.warnings.push(this);
-			}
-			return this;
-		}
-		off(name, callback) {
-			if (!this._events) {
-				return;
-			}
-			name = name.toLowerCase();
-			const e = this._events.get(name);
-			if (!this._events.has(name)) {
-				return;
-			} else if (!callback) {
-				this._events.delete(name);
-			} else {
-				for (const listener of e) {
-					if (listener === callback || listener._original === callback) {
-						e.remove(listener);
-					}
-				}
-				if (e.isEmpty) {
-					this._events.delete(name);
-				}
-			}
-			if (this._events.size < 1) {
-				delete this._events;
-			}
-			return this;
-		}
-		once(name, func) {
-			const wrapper = (...args) => {
-				this.off(name, wrapper);
-				wrapper._original = null;
-				func(...args);
-			};
-			wrapper._original = func;
-			return this.on(name, wrapper);
-		}
-		clear(name) {
-			if (!this._events) {
-				return;
-			}
-			if (name) {
-				this._events.delete(name);
-			} else {
-				delete this._events;
-				Emitter.totalCount--;
-			}
-			return this;
-		}
-		emit(name, ...args) {
-			if (!this._events) {
-				return;
-			}
-			name = name.toLowerCase();
-			const e = this._events.get(name);
-			if (!e) {
-				return;
-			}
-			e.exec(...args);
-			return this;
-		}
-		emitAsync(...args) {
-			if (!this._events) {
-				return;
-			}
-			setTimeout(() => this.emit(...args), 0);
-			return this;
-		}
-		promise(name, callback) {
-			if (!this._promise) {
-				this._promise = new Map;
-			}
-			const p = this._promise.get(name);
-			if (p) {
-				return callback ? p.addCallback(callback) : p;
-			}
-			this._promise.set(name, new PromiseHandler(callback));
-			return this._promise.get(name);
-		}
-		emitResolve(name, ...args) {
-			if (!this._promise) {
-				this._promise = new Map;
-			}
-			if (!this._promise.has(name)) {
-				this._promise.set(name, new PromiseHandler());
-			}
-			return this._promise.get(name).resolve(...args);
-		}
-		emitReject(name, ...args) {
-			if (!this._promise) {
-				this._promise = new Map;
-			}
-			if (!this._promise.has(name)) {
-				this._promise.set(name, new PromiseHandler);
-			}
-			return this._promise.get(name).reject(...args);
-		}
-		resetPromise(name) {
-			if (!this._promise) { return; }
-			this._promise.delete(name);
-		}
-		hasPromise(name) {
-			return this._promise && this._promise.has(name);
-		}
-		addEventListener(...args) { return this.on(...args); }
-		removeEventListener(...args) { return this.off(...args);}
-	}
-	Emitter.totalCount = totalCount;
-	Emitter.warnings = warnings;
-	return {Emitter};
-})();
-	return {Handler, PromiseHandler, Emitter};
-}
-const {Handler, PromiseHandler, Emitter} = EmitterInitFunc();
+const { Handler, PromiseHandler, Emitter } = EmitterInitFunc();
 function parseThumbInfo(xmlText) {
-	if (typeof xmlText !== 'string' || xmlText.status === 'ok') {
-		return xmlText;
-	}
-	const parser = new DOMParser();
-	const xml = parser.parseFromString(xmlText, 'text/xml');
-	const val = name => {
-		const elms = xml.getElementsByTagName(name);
-		if (elms.length < 1) {
-			return null;
+		if (typeof xmlText !== 'string' || xmlText.status === 'ok') {
+				return xmlText;
 		}
-		return elms[0].textContent;
-	};
-	const dateToString = dateString => {
-		const date = new Date(dateString);
-		const [yy, mm, dd, h, m, s] = [
-				date.getFullYear(),
-				date.getMonth() + 1,
-				date.getDate(),
-				date.getHours(),
-				date.getMinutes(),
-				date.getSeconds()
-			].map(n => n.toString().padStart(2, '0'));
-		return `${yy}/${mm}/${dd} ${h}:${m}:${s}`;
-	};
-	const resp = xml.getElementsByTagName('nicovideo_thumb_response');
-	if (resp.length < 1 || resp[0].getAttribute('status') !== 'ok') {
-		return {
-			status: 'fail',
-			code: val('code'),
-			message: val('description')
+		const parser = new DOMParser();
+		const xml = parser.parseFromString(xmlText, 'text/xml');
+		const val = (name) => {
+				const elms = xml.getElementsByTagName(name);
+				if (elms.length < 1) {
+						return null;
+				}
+				return elms[0].textContent;
 		};
-	}
-	const [min, sec] = val('length').split(':');
-	const duration = min * 60 + sec * 1;
-	const watchId = val('watch_url').split('/').reverse()[0];
-	const postedAt = dateToString(new Date(val('first_retrieve')));
-	const tags = [...xml.getElementsByTagName('tag')].map(tag => {
-			return {
-				text: tag.textContent,
-				category: tag.hasAttribute('category'),
-				lock: tag.hasAttribute('lock')
-			};
+		const dateToString = (dateString) => {
+				const date = new Date(dateString);
+				const [yy, mm, dd, h, m, s] = [
+						date.getFullYear(),
+						date.getMonth() + 1,
+						date.getDate(),
+						date.getHours(),
+						date.getMinutes(),
+						date.getSeconds()
+				].map(n => n.toString().padStart(2, '0'));
+				return `${yy}/${mm}/${dd} ${h}:${m}:${s}`;
+		};
+		const resp = xml.getElementsByTagName('nicovideo_thumb_response');
+		if (resp.length < 1 || resp[0].getAttribute('status') !== 'ok') {
+				return {
+						status: 'fail',
+						code: val('code'),
+						message: val('description')
+				};
+		}
+		const lengthText = val('length'), watchUrl = val('watch_url'), videoIdText = val('video_id'), thumbnailUrl = val('thumbnail_url');
+		if (lengthText === null || watchUrl === null || !videoIdText || thumbnailUrl === null) {
+				return {
+						status: 'fail',
+						code: 'INVALID_RESPONSE',
+						message: 'thumbinfo response is missing required fields'
+				};
+		}
+		const [min, sec] = lengthText.split(':');
+		const duration = min * 60 + sec * 1;
+		const watchId = watchUrl.split('/').reverse()[0];
+		const postedAt = dateToString(new Date(val('first_retrieve')));
+		const tags = [...xml.getElementsByTagName('tag')].map(tag => {
+				return {
+						text: tag.textContent,
+						category: tag.hasAttribute('category'),
+						lock: tag.hasAttribute('lock')
+				};
 		});
-	const videoId = val('video_id');
-	const isChannel = videoId.substring(0, 2) === 'so';
-	const result = {
-		status: 'ok',
-		_format: 'thumbInfo',
-		v: isChannel ? videoId : watchId,
-		id: videoId,
-		videoId,
-		watchId: isChannel ? videoId : watchId,
-		originalVideoId: (!isChannel && watchId !== videoId) ? videoId : '',
-		isChannel,
-		title: val('title'),
-		description: val('description'),
-		thumbnail: val('thumbnail_url').replace(/^http:/, 'https:'),
-		movieType: val('movie_type'),
-		lastResBody: val('last_res_body'),
-		duration,
-		postedAt,
-		mylistCount: parseInt(val('mylist_counter'), 10),
-		viewCount: parseInt(val('view_counter'), 10),
-		commentCount: parseInt(val('comment_num'), 10),
-		tagList: tags
-	};
-	const userId = val('user_id');
-	if (userId !== null && userId !== '') {
-		result.owner = {
-			type: 'user',
-			id: userId,
-			linkId: userId ? `user/${userId}` : '',
-			name: val('user_nickname') || '(非公開ユーザー)',
-			url: userId ? ('https://www.nicovideo.jp/user/' + userId) : '#',
-			icon: val('user_icon_url') || 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg'
+		const videoId = videoIdText;
+		const isChannel = videoId.substring(0, 2) === 'so';
+		const result = {
+				status: 'ok',
+				_format: 'thumbInfo',
+				v: isChannel ? videoId : watchId,
+				id: videoId,
+				videoId,
+				watchId: isChannel ? videoId : watchId,
+				originalVideoId: (!isChannel && watchId !== videoId) ? videoId : '',
+				isChannel,
+				title: val('title'),
+				description: val('description'),
+				thumbnail: thumbnailUrl.replace(/^http:/, 'https:'),
+				movieType: val('movie_type'),
+				lastResBody: val('last_res_body'),
+				duration,
+				postedAt,
+				mylistCount: parseInt(val('mylist_counter'), 10),
+				viewCount: parseInt(val('view_counter'), 10),
+				commentCount: parseInt(val('comment_num'), 10),
+				tagList: tags
 		};
-	}
-	const channelId = val('ch_id');
-	if (channelId !== null && channelId !== '') {
-		result.owner = {
-			type: 'channel',
-			id: channelId,
-			linkId: channelId ? `ch${channelId}` : '',
-			name: val('ch_name') || '(非公開チャンネル)',
-			url: 'https://ch.nicovideo.jp/ch' + channelId,
-			icon: val('ch_icon_url') || 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg'
-		};
-	}
-	return result;
+		const userId = val('user_id');
+		if (userId !== null && userId !== '') {
+				result.owner = {
+						type: 'user',
+						id: userId,
+						linkId: userId ? `user/${userId}` : '',
+						name: val('user_nickname') || '(非公開ユーザー)',
+						url: userId ? ('https://www.nicovideo.jp/user/' + userId) : '#',
+						icon: val('user_icon_url') || 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg'
+				};
+		}
+		const channelId = val('ch_id');
+		if (channelId !== null && channelId !== '') {
+				result.owner = {
+						type: 'channel',
+						id: channelId,
+						linkId: channelId ? `ch${channelId}` : '',
+						name: val('ch_name') || '(非公開チャンネル)',
+						url: 'https://ch.nicovideo.jp/ch' + channelId,
+						icon: val('ch_icon_url') || 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg'
+				};
+		}
+		return result;
 }
 const workerUtil = (() => {
-	let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
-	let global = null, external = null;
-	const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
-	const isAvailable = !!(window.Blob && window.Worker && window.URL);
-	const messageWrapper = function(self) {
-		const _onmessage = self.onmessage || (() => {});
-		const promises = {};
-		let requestSeq = 0;
-		const onMessage = async function(self, type, e) {
-			const {body, sessionId, status} = e.data;
-			const {command, params} = body;
-			try {
-				let result;
-				switch (command) {
-					case 'commandResult':
-						if (promises[sessionId]) {
-							if (status === 'ok') {
-								promises[sessionId].resolve(params.result);
-							} else {
-								promises[sessionId].reject(new Error(params.result));
-							}
-							delete promises[sessionId];
+		let config, TOKEN, PRODUCT = 'ZenzaWatch?', netUtil, CONSTANT, NAME = '';
+		let global = null, external = null;
+		const DEFAULT_REQUEST_TIMEOUT = 5 * 60 * 1000;
+		const isAvailable = !!(window.Blob && window.Worker && window.URL);
+		const messageWrapper = function (self) {
+				const _onmessage = self.onmessage || (() => { });
+				const promises = {};
+				let requestSeq = 0;
+				const onMessage = async function (self, type, e) {
+						const { body, sessionId, status } = e.data;
+						const { command, params } = body;
+						try {
+								let result;
+								switch (command) {
+										case 'commandResult':
+												if (promises[sessionId]) {
+														if (status === 'ok') {
+																promises[sessionId].resolve(params.result);
+														}
+														else {
+																promises[sessionId].reject(new Error(params.result));
+														}
+														delete promises[sessionId];
+												}
+												return;
+										case 'ping':
+												result = { now: Date.now(), NAME, PID, url: location.href };
+												break;
+										case 'port':
+												{
+														const port = e.ports[0];
+														portMap[params.name] = port;
+														port.addEventListener('message', onMessage.bind({}, port, params.name));
+														port.start && port.start();
+														bindFunc(port, 'MessageChannel');
+														result = { name: params.name };
+														if (params.ping) {
+																console.time('ping:' + sessionId);
+																port.ping().then((result) => {
+																		console.timeEnd('ping:' + sessionId);
+																		console.log('ok %smec', Date.now() - params.now, params);
+																}).catch((err) => {
+																		console.timeEnd('ping:' + sessionId);
+																		console.warn('ping fail', { err, data: e.data });
+																});
+														}
+												}
+												break;
+										case 'broadcast':
+												{
+														if (!BroadcastChannel) {
+																return;
+														}
+														const channel = new BroadcastChannel(`${params.name}`);
+														channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
+														bindFunc(channel, 'BroadcastChannel');
+														bcast[params.basename] = channel;
+												}
+												return;
+										case 'env':
+												({ config, TOKEN, PRODUCT, CONSTANT } = params);
+												return;
+										default:
+												result = await _onmessage({ command, params }, type, PID);
+												break;
+								}
+								if (sessionId === undefined || sessionId === null) {
+										return;
+								}
+								self.postMessage({ body: { command: 'commandResult', params: { command, result } }, sessionId, TYPE: type, PID, status: 'ok'
+								});
 						}
-					return;
-					case 'ping':
-						result = {now: Date.now(), NAME, PID, url: location.href};
-						break;
-					case 'port': {
+						catch (err) {
+								console.error('failed', { err, command, params, sessionId, TYPE: type, PID, data: e.data });
+								if (sessionId === undefined || sessionId === null) {
+										return;
+								}
+								self.postMessage({ body: { command: 'commandResult', params: { command, result: err.message || null } },
+										sessionId, TYPE: type, PID, status: err.status || 'fail'
+								});
+						}
+				};
+				self.onmessage = onMessage.bind({}, self, self.name);
+				self.onconnect = (e) => {
 						const port = e.ports[0];
-						portMap[params.name] = port;
-						port.addEventListener('message', onMessage.bind({}, port, params.name));
-						port.start && port.start();
-						bindFunc(port, 'MessageChannel');
-						result = {name: params.name};
-						if (params.ping) {
-							console.time('ping:' + sessionId);
-							port.ping().then(result => {
-								console.timeEnd('ping:' + sessionId);
-								console.log('ok %smec', Date.now() - params.now, params);
-							}).catch(err => {
-								console.timeEnd('ping:' + sessionId);
-								console.warn('ping fail', {err, data: e.data});
-							});
+						port.onmessage = self.onmessage;
+						port.start();
+				};
+				const bindFunc = (self, type = 'Worker') => {
+						const post = function (self, body, options = {}) {
+								const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
+								return new Promise((resolve, reject) => {
+										promises[sessionId] = { resolve, reject };
+										self.postMessage({ body, sessionId, PID }, options.transfer);
+										if (typeof options.timeout === 'number') {
+												setTimeout(() => {
+														reject({ status: 'fail', message: 'timeout' });
+														delete promises[sessionId];
+												}, options.timeout);
+										}
+								}).finally(() => { delete promises[sessionId]; });
+						};
+						const emit = function (self, eventName, data = null) {
+								self.post({ command: 'emit', params: { eventName, data } });
+						};
+						const notify = function (self, message) {
+								self.post({ command: 'notify', params: { message } });
+						};
+						const alert = function (self, message) {
+								self.post({ command: 'alert', params: { message } });
+						};
+						const ping = async function (self, options = {}) {
+								const timekey = `PING "${self.name}"`;
+								console.log(timekey);
+								let result;
+								options.timeout = options.timeout || 10000;
+								try {
+										console.time(timekey);
+										result = await self.post({ command: 'ping', params: { now: Date.now(), NAME, PID, url: location.href } }, options);
+										console.timeEnd(timekey);
+								}
+								catch (e) {
+										console.timeEnd(timekey);
+										console.warn('ping fail', e);
+								}
+								return result;
+						};
+						self.post = post.bind({ sessionId: 0 }, this.port || self);
+						self.emit = emit.bind({}, self);
+						self.notify = notify.bind({}, self);
+						self.alert = alert.bind({}, self);
+						self.ping = ping.bind({}, self);
+						return self;
+				};
+				bindFunc(self);
+				self.xFetch = async (url, options = {}) => {
+						options = { ...options, ...{ signal: null } }; // remove AbortController
+						if (url.startsWith(location.origin)) {
+								return fetch(url, options);
 						}
-					}
-						break;
-					case 'broadcast': {
-						if (!BroadcastChannel) { return; }
-						const channel = new BroadcastChannel(`${params.name}`);
-						channel.addEventListener('message', onMessage.bind({}, channel, 'BroadcastChannel'));
-						bindFunc(channel, 'BroadcastChannel');
-						bcast[params.basename] = channel;
-					}
-						return;
-					case 'env':
-						({config, TOKEN, PRODUCT, CONSTANT} = params);
-						return;
-					default:
-						result = await _onmessage({command, params}, type, PID);
-						break;
-					}
-				if (sessionId === undefined || sessionId === null) { return; }
-				self.postMessage({body:
-					{command: 'commandResult', params:
-						{command, result}}, sessionId, TYPE: type, PID, status: 'ok'
-					});
-			} catch(err) {
-				console.error('failed', {err, command, params, sessionId, TYPE: type, PID, data: e.data});
-				if (sessionId === undefined || sessionId === null) { return; }
-				self.postMessage({body:
-						{command: 'commandResult', params: {command, result: err.message || null}},
-						sessionId, TYPE: type, PID, status: err.status || 'fail'
-					});
-			}
+						const result = await self.post({ command: 'fetch', params: { url, options } });
+						const { buffer, init, headers } = result;
+						const _headers = new Headers();
+						(headers || []).forEach((a) => _headers.append(...a));
+						const _init = {
+								status: init.status,
+								statusText: init.statusText || '',
+								headers: _headers
+						};
+						return new Response(buffer, _init);
+				};
 		};
-		self.onmessage = onMessage.bind({}, self, self.name);
-		self.onconnect = e => {
-			const port = e.ports[0];
-			port.onmessage = self.onmessage;
-			port.start();
-		};
-		const bindFunc = (self, type = 'Worker') => {
-			const post = function(self, body, options = {}) {
-				const sessionId = `recv:${NAME}:${type}:${requestSeq++}`;
-				return new Promise((resolve, reject) => {
-					promises[sessionId] = {resolve, reject};
-					self.postMessage({body, sessionId, PID}, options.transfer);
-					if (typeof options.timeout === 'number') {
-						setTimeout(() => {
-							reject({status: 'fail', message: 'timeout'});
-							delete promises[sessionId];
-						}, options.timeout);
-					}
-				}).finally(() => { delete promises[sessionId]; });
-			};
-			const emit = function(self, eventName, data = null) {
-				self.post({command: 'emit', params: {eventName, data}});
-			};
-			const notify = function(self, message) {
-				self.post({command: 'notify', params: {message}});
-			};
-			const alert = function(self, message) {
-				self.post({command: 'alert', params: {message}});
-			};
-			const ping = async function(self, options = {}) {
-				const timekey = `PING "${self.name}"`;
-				console.log(timekey);
-				let result;
-				options.timeout = options.timeout || 10000;
-				try {
-					console.time(timekey);
-					result = await self.post({command: 'ping', params: {now: Date.now(), NAME, PID, url: location.href}}, options);
-					console.timeEnd(timekey);
-				} catch (e) {
-					console.timeEnd(timekey);
-					console.warn('ping fail', e);
-				}
-				return result;
-			};
-			self.post = post.bind({sessionId: 0}, this.port || self);
-			self.emit = emit.bind({}, self);
-			self.notify = notify.bind({}, self);
-			self.alert = alert.bind({}, self);
-			self.ping = ping.bind({}, self);
-			return self;
-		};
-		bindFunc(self);
-		self.xFetch = async (url, options = {}) => {
-			options = {...options, ...{signal: null}}; // remove AbortController
-			if (url.startsWith(location.origin)) {
-				return fetch(url, options);
-			}
-			const result = await self.post({command: 'fetch', params: {url, options}});
-			const {buffer, init, headers} = result;
-			const _headers = new Headers();
-			(headers || []).forEach(a => _headers.append(...a));
-			const _init = {
-				status: init.status,
-				statusText: init.statusText || '',
-				headers: _headers
-			};
-			return new Response(buffer, _init);
-		};
-	};
-	const workerUtil = {
-		isAvailable,
-		js: (q, ...args) => {
-			const strargs = args.map(a => typeof a === 'string' ? a : a.toString);
-			return String.raw(q, ...strargs);
-		},
-		env: params => {
-			({config, TOKEN, PRODUCT, netUtil, CONSTANT, global} =
-				Object.assign({config, TOKEN, PRODUCT, netUtil, CONSTANT, global}, params));
-			if (global) { ({config, TOKEN, PRODUCT, CONSTANT} = global); }
-		},
-		create: function(func, options = {}) {
-			let cache = this.urlMap.get(func);
-			const name = options.name || 'Worker';
-			if (!cache) {
-				const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
-				const src = `
+		const workerUtil = {
+				isAvailable,
+				js: (q, ...args) => {
+						const strargs = args.map(a => typeof a === 'string' ? a : String(a));
+						return String.raw(q, ...strargs);
+				},
+				env: (params) => {
+						({ config, TOKEN, PRODUCT, netUtil, CONSTANT, global } =
+								Object.assign({ config, TOKEN, PRODUCT, netUtil, CONSTANT, global }, params));
+						if (global) {
+								({ config, TOKEN, PRODUCT, CONSTANT } = global);
+						}
+				},
+				create: function (func, options = {}) {
+						let cache = this.urlMap.get(func);
+						const name = options.name || 'Worker';
+						if (!cache) {
+								const pid = `${window && window.name || 'self'}:${location.href}:${name}:${Date.now().toString(16).toUpperCase()}`;
+								const src = `
 				const PID = ${JSON.stringify(pid)};
 				console.log('%cinit %s %s', 'font-weight: bold;', self.name || '', ${JSON.stringify(String(PRODUCT))}, location.origin);
 				(${func.toString()})(self);
 				`;
-				const blob = new Blob([src], {type: 'text/javascript'});
-				const url = URL.createObjectURL(blob);
-				this.urlMap.set(func, url);
-				cache = url;
-			}
-			if (options.type === 'SharedWorker') {
-				const w = this.workerMap.get(func) || new SharedWorker(cache);
-				this.workerMap.set(func, w);
-				return w;
-			}
-			return new Worker(cache, options);
-		}.bind({urlMap: new Map(), workerMap: new Map()}),
-		createCrossMessageWorker: function(func, options = {}) {
-			const promises = {};
-			const instanceId = this.instanceSeq++;
-			let requestSeq = 0;
-			const name = options.name || 'Worker';
-			let state = 'starting';
-			const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
-			const rpcError = (reason, message) =>
-				Object.assign(new Error(message || reason), {name: 'WorkerRpcError', status: 'fail', reason, workerName: name});
-			const rejectAll = (reason, message) => {
-				for (const id of Object.keys(promises)) {
-					const p = promises[id];
-					delete promises[id];
-					p.reject(rpcError(reason, message));
-				}
-			};
-			const closables = [];
-			const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
-			const _func = `
+								const blob = new Blob([src], { type: 'text/javascript' });
+								const url = URL.createObjectURL(blob);
+								this.urlMap.set(func, url);
+								cache = url;
+						}
+						if (options.type === 'SharedWorker') {
+								const w = this.workerMap.get(func) || new SharedWorker(cache);
+								this.workerMap.set(func, w);
+								return w;
+						}
+						return new Worker(cache, options);
+				}.bind({ urlMap: new Map(), workerMap: new Map() }),
+				createCrossMessageWorker: function (func, options = {}) {
+						const promises = {};
+						const instanceId = this.instanceSeq++;
+						let requestSeq = 0;
+						const name = options.name || 'Worker';
+						let state = 'starting';
+						const requestTimeout = typeof options.requestTimeout === 'number' ? options.requestTimeout : DEFAULT_REQUEST_TIMEOUT;
+						const rpcError = (reason, message) => Object.assign(new Error(message || reason), { name: 'WorkerRpcError', status: 'fail', reason, workerName: name });
+						const rejectAll = (reason, message) => {
+								for (const id of Object.keys(promises)) {
+										const p = promises[id];
+										delete promises[id];
+										p.reject(rpcError(reason, message));
+								}
+						};
+						const closables = [];
+						const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
+						const _func = `
 			function (self) {
 			let config = {}, PRODUCT, TOKEN, CONSTANT, NAME = ${JSON.stringify(String(name))}, bcast = {}, portMap = {};
 			const {Handler, PromiseHandler, Emitter} = (${EmitterInitFunc.toString()})();
@@ -6758,659 +7008,806 @@ const workerUtil = (() => {
 			(${messageWrapper.toString()})(self);
 			}
 			`;
-			const worker = workerUtil.create(_func, options);
-			const self = options.type === 'SharedWorker' ? worker.port : worker;
-			self.name = name;
-			const onMessage = async function(self, e) {
-				if (state === 'disposed') { return; }
-				if (state === 'starting' || state === 'failed') { state = 'ready'; }
-				const {body, sessionId, status} = e.data;
-				const {command, params} = body;
-				try {
-					let result = 'ok';
-					let transfer = null;
-					switch (command) {
-						case 'commandResult':
-							if (promises[sessionId]) {
-								if (status === 'ok') {
-									promises[sessionId].resolve(params.result);
-								} else {
-									promises[sessionId].reject(new Error(params.result));
+						const worker = workerUtil.create(_func, options);
+						const self = options.type === 'SharedWorker' ? worker.port : worker;
+						self.name = name;
+						const onMessage = async function (self, e) {
+								if (state === 'disposed') {
+										return;
 								}
-								delete promises[sessionId];
-							}
-							return;
-						case 'ping':
-								result = {now: Date.now(), NAME, PID, url: location.href};
-								console.timeLog && console.timeLog(params.NAME, 'PONG');
-								break;
-						case 'emit':
-							global && global.emitter.emitAsync(params.eventName, params.data);
-							break;
-						case 'fetch':
-							result = await (netUtil || window).fetch(params.url,
-								Object.assign({}, params.options || {}, {_format: 'arraybuffer'}));
-							transfer = [result.buffer];
-							break;
-						case 'notify':
-							global && global.notify(params.message);
-							break;
-						case 'alert':
-							global && global.alert(params.message);
-							break;
-						default:
-							self.oncommand && (result = await self.oncommand({command, params}));
-							break;
-					}
-					if (sessionId === undefined || sessionId === null) { return; }
-					self.postMessage({body: {command: 'commandResult', params: {command, result}}, sessionId, status: 'ok'}, transfer);
-				} catch (err) {
-					console.error('failed', {err, command, params, sessionId});
-					if (sessionId === undefined || sessionId === null) { return; }
-					self.postMessage({body: {command: 'commandResult', params: {command, result: err.message || null}}, sessionId, status: err.status || 'fail'});
-				}
-			};
-			const bindFunc = (self, type = 'Worker') => {
-				const post = function(self, body, options = {}) {
-					if (state === 'failed' || state === 'disposed') {
-						return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
-					}
-					const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
-					const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
-					let timer = null;
-					return new Promise((resolve, reject) => {
-							promises[sessionId] = {resolve, reject};
-							self.postMessage({body, sessionId, TYPE: type, PID}, options.transfer);
-							if (timeout > 0 && timeout < Infinity) {
-								timer = setTimeout(() => {
-									if (!promises[sessionId]) { return; }
-									delete promises[sessionId];
-									reject(rpcError('timeout', 'timeout'));
-								}, timeout);
-							}
-						}).finally(() => {
-							timer && clearTimeout(timer);
-							delete promises[sessionId];
+								if (state === 'starting' || state === 'failed') {
+										state = 'ready';
+								}
+								const { body, sessionId, status } = e.data;
+								const { command, params } = body;
+								try {
+										let result = 'ok';
+										let transfer = null;
+										switch (command) {
+												case 'commandResult':
+														if (promises[sessionId]) {
+																if (status === 'ok') {
+																		promises[sessionId].resolve(params.result);
+																}
+																else {
+																		promises[sessionId].reject(new Error(params.result));
+																}
+																delete promises[sessionId];
+														}
+														return;
+												case 'ping':
+														result = { now: Date.now(), NAME, PID, url: location.href };
+														console.timeLog && console.timeLog(params.NAME, 'PONG');
+														break;
+												case 'emit':
+														global && global.emitter.emitAsync(params.eventName, params.data);
+														break;
+												case 'fetch':
+														result = await (netUtil || window).fetch(params.url, Object.assign({}, params.options || {}, { _format: 'arraybuffer' }));
+														transfer = [result.buffer];
+														break;
+												case 'notify':
+														global && global.notify(params.message);
+														break;
+												case 'alert':
+														global && global.alert(params.message);
+														break;
+												default:
+														self.oncommand && (result = await self.oncommand({ command, params }));
+														break;
+										}
+										if (sessionId === undefined || sessionId === null) {
+												return;
+										}
+										self.postMessage({ body: { command: 'commandResult', params: { command, result } }, sessionId, status: 'ok' }, transfer);
+								}
+								catch (err) {
+										console.error('failed', { err, command, params, sessionId });
+										if (sessionId === undefined || sessionId === null) {
+												return;
+										}
+										self.postMessage({ body: { command: 'commandResult', params: { command, result: err.message || null } }, sessionId, status: err.status || 'fail' });
+								}
+						};
+						const bindFunc = (self, type = 'Worker') => {
+								const post = function (self, body, options = {}) {
+										if (state === 'failed' || state === 'disposed') {
+												return Promise.reject(rpcError(state === 'failed' ? 'failed' : 'terminated', `worker ${state}: ${name}`));
+										}
+										const sessionId = `send:${instanceId}:${name}:${type}:${requestSeq++}`;
+										const timeout = typeof options.timeout === 'number' ? options.timeout : requestTimeout;
+										let timer = null;
+										return new Promise((resolve, reject) => {
+												promises[sessionId] = { resolve, reject };
+												self.postMessage({ body, sessionId, TYPE: type, PID }, options.transfer);
+												if (timeout > 0 && timeout < Infinity) {
+														timer = setTimeout(() => {
+																if (!promises[sessionId]) {
+																		return;
+																}
+																delete promises[sessionId];
+																reject(rpcError('timeout', 'timeout'));
+														}, timeout);
+												}
+										}).finally(() => {
+												timer && clearTimeout(timer);
+												delete promises[sessionId];
+										});
+								};
+								const ping = async function (self, options = {}) {
+										const timekey = `PING "${self.name}" total time`;
+										window.console.log(`PING "${self.name}"...`);
+										let result;
+										options.timeout = options.timeout || 10000;
+										try {
+												window.console.time(timekey);
+												result = await self.post({ command: 'ping', params: { now: Date.now(), NAME: self.name, PID, url: location.href } }, options);
+												window.console.timeEnd(timekey);
+										}
+										catch (e) {
+												console.timeEnd(timekey);
+												console.warn('ping fail', e);
+										}
+										return result;
+								};
+								self.post = post.bind({ sessionId: 0 }, self);
+								self.send = (body, transfer) => self.postMessage({ body, TYPE: type, PID }, transfer);
+								self.ping = ping.bind({}, self);
+								self.addEventListener('message', onMessage.bind({ sessionId: 0 }, self));
+								self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
+								self.start && self.start();
+						};
+						bindFunc(self);
+						worker.addEventListener('error', (e) => {
+								if (state === 'disposed') {
+										return;
+								}
+								if (state === 'starting') {
+										state = 'failed';
+								}
+								rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
 						});
-				};
-				const ping = async function(self, options = {}) {
-					const timekey = `PING "${self.name}" total time`;
-					window.console.log(`PING "${self.name}"...`);
-					let result;
-					options.timeout = options.timeout || 10000;
-					try {
-					window.console.time(timekey);
-					result = await self.post({command: 'ping', params: {now: Date.now(), NAME: self.name, PID, url: location.href}}, options);
-					window.console.timeEnd(timekey);
-					} catch (e) {
-						console.timeEnd(timekey);
-						console.warn('ping fail', e);
-					}
-					return result;
-				};
-				self.post = post.bind({sessionId: 0}, self);
-				self.send = (body, transfer) => self.postMessage({body, TYPE: type, PID}, transfer);
-				self.ping = ping.bind({}, self);
-				self.addEventListener('message', onMessage.bind({sessionId: 0}, self));
-				self.addEventListener('messageerror', () => state !== 'disposed' && rejectAll('messageerror', `messageerror: ${name}`));
-				self.start && self.start();
-			};
-			bindFunc(self);
-			worker.addEventListener('error', e => {
-				if (state === 'disposed') { return; }
-				if (state === 'starting') { state = 'failed'; }
-				rejectAll(state === 'failed' ? 'failed' : 'error', (e && e.message) || `worker error: ${name}`);
-			});
-			if (self === worker && typeof worker.terminate === 'function') {
-				const terminate = worker.terminate.bind(worker);
-				self.terminate = () => {
-					if (state === 'disposed') { return; }
-					state = 'disposed';
-					rejectAll('terminated', `worker terminated: ${name}`);
-					for (const c of closables.splice(0)) {
-						try { c.close(); } catch (e) { /* 閉じられなくても続ける */ }
-					}
-					terminate();
-				};
-			}
-			self.getRpcState = () => ({id: instanceId, name, state, pending: Object.keys(promises).length});
-			if (config) {
-				self.send({
-					command: 'env',
-					params: {config: config.export(true), TOKEN, PRODUCT, CONSTANT}
-				});
-			}
-			self.addPort = (port, options = {}) => {
-				const name = options.name || 'MessageChannel';
-				return self.post({command: 'port', params: {port, name}}, {transfer: [port]});
-			};
-			const channel = new MessageChannel();
-			self.addPort(channel.port2).catch(() => {});
-			bindFunc(channel.port1, 'MessageChannel');
-			closables.push(channel.port1);
-			self.bridge = async (worker, options = {}) => {
-				const name = options.name || 'MessageChannelBridge';
-				const channel = new MessageChannel();
-				await self.addPort(channel.port1, {name: worker.name || name});
-				await worker.addPort(channel.port2, {name: self.name || name});
-			};
-			self.BroadcastChannel = basename => {
-				const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
-				self.send({command: 'broadcast', params: {basename, name}});
-				const channel = new BroadcastChannel(name);
-				bindFunc(channel, 'BroadcastChannel');
-				closables.push(channel);
-				return name;
-			};
-			self.ping()
-				.catch(result => console.warn('FAIL', result));
-			return self;
-		}.bind({
-			instanceSeq: 0
-		})
-	};
-	return workerUtil;
+						if (self === worker && typeof worker.terminate === 'function') {
+								const terminate = worker.terminate.bind(worker);
+								self.terminate = () => {
+										if (state === 'disposed') {
+												return;
+										}
+										state = 'disposed';
+										rejectAll('terminated', `worker terminated: ${name}`);
+										for (const c of closables.splice(0)) {
+												try {
+														c.close();
+												}
+												catch (e) { /* 閉じられなくても続ける */ }
+										}
+										terminate();
+								};
+						}
+						self.getRpcState = () => ({ id: instanceId, name, state, pending: Object.keys(promises).length });
+						if (config) {
+								self.send({
+										command: 'env',
+										params: { config: config.export(true), TOKEN, PRODUCT, CONSTANT }
+								});
+						}
+						self.addPort = (port, options = {}) => {
+								const name = options.name || 'MessageChannel';
+								return self.post({ command: 'port', params: { port, name } }, { transfer: [port] });
+						};
+						const channel = new MessageChannel();
+						self.addPort(channel.port2).catch(() => { });
+						bindFunc(channel.port1, 'MessageChannel');
+						closables.push(channel.port1);
+						self.bridge = async (worker, options = {}) => {
+								const name = options.name || 'MessageChannelBridge';
+								const channel = new MessageChannel();
+								await self.addPort(channel.port1, { name: worker.name || name });
+								await worker.addPort(channel.port2, { name: self.name || name });
+						};
+						self.BroadcastChannel = (basename) => {
+								const name = `${basename || 'Broadcast'}${TOKEN || Date.now().toString(16)}`;
+								self.send({ command: 'broadcast', params: { basename, name } });
+								const channel = new BroadcastChannel(name);
+								bindFunc(channel, 'BroadcastChannel');
+								closables.push(channel);
+								return name;
+						};
+						self.ping()
+								.catch((result) => console.warn('FAIL', result));
+						return self;
+				}.bind({
+						instanceSeq: 0
+				})
+		};
+		return workerUtil;
 })();
 const IndexedDbStorage = (() => {
-	const workerFunc = function(self) {
-		const db = Object.create(null);
-		const initializing = new Map();
-		const schemas = new Map();
-		const controller = {
-			async init({name, ver, stores}) {
-				if (db[name] && (ver === undefined || db[name].version === ver)) { return db[name]; }
-				const active = initializing.get(name);
-				if (active) {
-					await active.promise;
-					return this.init({name, ver, stores});
-				}
-				if (db[name]) { this.close({name}); }
-				const schema = stores || schemas.get(name) || [];
-				const entry = {};
-				const pending = new Promise((resolve, reject) => {
-					let settled = false, req;
-					const fail = error => {
-						if (settled) { return; }
-						settled = true;
-						clearTimeout(timer);
-						try { req && req.transaction && req.transaction.abort(); } catch (abortError) {}
-						reject(error);
-					};
-					const timer = setTimeout(() => fail(new Error('IndexedDB open timed out')), 30000);
-					entry.cancel = () => fail(new Error('IndexedDB open cancelled'));
-					try { req = indexedDB.open(name, ver); } catch (error) { fail(error); return; }
-					req.onblocked = () => fail(new Error('IndexedDB upgrade blocked by another connection'));
-					req.onupgradeneeded = e => {
-						if (settled) { try { req.transaction.abort(); } catch (error) {} return; }
-						try {
-							const connection = e.target.result;
-							for (const meta of schema) {
-								const definition = meta.definition || {};
-								const exists = connection.objectStoreNames.contains(meta.name);
-								const store = exists ? req.transaction.objectStore(meta.name) :
-									connection.createObjectStore(meta.name, definition);
-								if (exists && (JSON.stringify(store.keyPath) !== JSON.stringify(definition.keyPath ?? null) ||
-										store.autoIncrement !== !!definition.autoIncrement)) {
-									throw new Error('IndexedDB store migration requires an explicit data migration');
+		const workerFunc = function (self) {
+				const db = Object.create(null);
+				const initializing = new Map();
+				const schemas = new Map();
+				const controller = {
+						async init({ name, ver, stores }) {
+								if (db[name] && (ver === undefined || db[name].version === ver)) {
+										return db[name];
 								}
-								for (const idx of meta.indexes || []) {
-									if (store.indexNames.contains(idx.name)) {
-										const current = store.index(idx.name), params = idx.params || {};
-										if (JSON.stringify(current.keyPath) !== JSON.stringify(idx.keyPath) ||
-												current.unique !== !!params.unique || current.multiEntry !== !!params.multiEntry) {
-											throw new Error('IndexedDB index migration requires an explicit data migration');
+								const active = initializing.get(name);
+								if (active) {
+										await active.promise;
+										return this.init({ name, ver, stores });
+								}
+								if (db[name]) {
+										this.close({ name });
+								}
+								const schema = stores || schemas.get(name) || [];
+								const entry = {};
+								const pending = new Promise((resolve, reject) => {
+										let settled = false, req;
+										const fail = (error) => {
+												if (settled) {
+														return;
+												}
+												settled = true;
+												clearTimeout(timer);
+												try {
+														req && req.transaction && req.transaction.abort();
+												}
+												catch (abortError) { }
+												reject(error);
+										};
+										const timer = setTimeout(() => fail(new Error('IndexedDB open timed out')), 30000);
+										entry.cancel = () => fail(new Error('IndexedDB open cancelled'));
+										try {
+												req = indexedDB.open(name, ver);
 										}
-									} else { store.createIndex(idx.name, idx.keyPath, idx.params); }
+										catch (error) {
+												fail(error);
+												return;
+										}
+										req.onblocked = () => fail(new Error('IndexedDB upgrade blocked by another connection'));
+										req.onupgradeneeded = (e) => {
+												if (settled) {
+														try {
+																req.transaction.abort();
+														}
+														catch (error) { }
+														return;
+												}
+												try {
+														const connection = e.target.result;
+														for (const meta of schema) {
+																const definition = meta.definition || {};
+																const exists = connection.objectStoreNames.contains(meta.name);
+																const store = exists ? req.transaction.objectStore(meta.name) :
+																		connection.createObjectStore(meta.name, definition);
+																if (exists && (JSON.stringify(store.keyPath) !== JSON.stringify(definition.keyPath ?? null) ||
+																		store.autoIncrement !== !!definition.autoIncrement)) {
+																		throw new Error('IndexedDB store migration requires an explicit data migration');
+																}
+																for (const idx of meta.indexes || []) {
+																		if (store.indexNames.contains(idx.name)) {
+																				const current = store.index(idx.name), params = idx.params || {};
+																				if (JSON.stringify(current.keyPath) !== JSON.stringify(idx.keyPath) ||
+																						current.unique !== !!params.unique || current.multiEntry !== !!params.multiEntry) {
+																						throw new Error('IndexedDB index migration requires an explicit data migration');
+																				}
+																		}
+																		else {
+																				store.createIndex(idx.name, idx.keyPath, idx.params);
+																		}
+																}
+														}
+												}
+												catch (error) {
+														fail(error);
+												}
+										};
+										req.onsuccess = (e) => {
+												const connection = e.target.result;
+												if (settled) {
+														connection.close();
+														return;
+												}
+												settled = true;
+												clearTimeout(timer);
+												const forget = () => { if (db[name] === connection) {
+														delete db[name];
+												} };
+												connection.onversionchange = () => { connection.close(); forget(); };
+												connection.onclose = forget;
+												db[name] = connection;
+												schemas.set(name, schema);
+												resolve(connection);
+										};
+										req.onerror = (e) => fail(req.error || e);
+								});
+								entry.promise = pending;
+								initializing.set(name, entry);
+								try {
+										return await pending;
 								}
-							}
-						} catch (error) { fail(error); }
-					};
-					req.onsuccess = e => {
-						const connection = e.target.result;
-						if (settled) { connection.close(); return; }
-						settled = true;
-						clearTimeout(timer);
-						const forget = () => { if (db[name] === connection) { delete db[name]; } };
-						connection.onversionchange = () => { connection.close(); forget(); };
-						connection.onclose = forget;
-						db[name] = connection;
-						schemas.set(name, schema);
-						resolve(connection);
-					};
-					req.onerror = e => fail(req.error || e);
-				});
-				entry.promise = pending;
-				initializing.set(name, entry);
-				try { return await pending; }
-				finally { if (initializing.get(name) === entry) { initializing.delete(name); } }
-			},
-			close({name}) {
-				const active = initializing.get(name);
-				if (active) { active.cancel(); initializing.delete(name); }
-				if (db[name]) { db[name].close(); delete db[name]; }
-			},
-			async getStore({name, storeName, mode = 'readonly'}) {
-				let connection;
-				do { connection = await this.init({name}); } while (db[name] !== connection);
-				const transaction = connection.transaction(storeName, mode);
-				return {store: transaction.objectStore(storeName), transaction};
-			},
-			async _write({name, storeName}, operation) {
-				const {store, transaction} = await this.getStore({name, storeName, mode: 'readwrite'});
-				return new Promise((resolve, reject) => {
-					let result, settled = false;
-					const cleanup = () => {
-						transaction.oncomplete = transaction.onabort = transaction.onerror = null;
-					};
-					const fail = error => {
-						if (settled) { return; }
-						settled = true;
-						const reason = (error && error.target) ?
-							(error.target.error || transaction.error || new Error('IndexedDB transaction failed')) : error;
-						cleanup();
-						try { transaction.abort(); } catch (abortError) {}
-						reject(reason || new Error('IndexedDB transaction failed'));
-					};
-					transaction.oncomplete = () => {
-						if (settled) { return; }
-						settled = true;
-						cleanup();
-						resolve(result);
-					};
-					transaction.onabort = transaction.onerror = fail;
-					try {
-						operation(store, value => { result = value; }, fail);
-					} catch (error) { fail(error); }
-				});
-			},
-			async put({name, storeName, data}) {
-				return this._write({name, storeName}, (store, result, fail) => {
-					const req = store.put(data);
-					req.onsuccess = e => result(e.target.result);
-					req.onerror = fail;
-				});
-			},
-			async get({name, storeName, data: {key, index, timeout}}) {
-				const {store} = await this.getStore({name, storeName});
-				return new Promise((resolve, reject) => {
-					const req =
-						index ?
-							store.index(index).get(key) : store.get(key);
-					req.onsuccess = e => resolve(e.target.result);
-					req.onerror = reject;
-					if (timeout) {
-						setTimeout(() => {
-							reject(`timeout: key${key}`);
-						}, timeout);
-					}
-				});
-			},
-			async update({name, storeName, data}) {
-				return this._write({name, storeName}, (store, result, fail) => {
-					const req = data.index ? store.index(data.index).get(data.key) : store.get(data.key);
-					req.onerror = fail;
-					req.onsuccess = () => {
-						try {
-							if (data.onlyExisting && !req.result) { result(null); return; }
-							const record = {...(req.result || {})};
-							const safe = key => !['__proto__', 'constructor', 'prototype'].includes(key);
-							for (const [key, value] of Object.entries(data.defaults || {})) {
-								if (safe(key) && !record[key]) { record[key] = value; }
-							}
-							for (const [key, value] of Object.entries(data.patch || {})) {
-								if (safe(key)) { record[key] = value; }
-							}
-							for (const [key, value] of Object.entries(data.increment || {})) {
-								if (!safe(key) || !Number.isFinite(value)) { throw new TypeError('Invalid increment'); }
-								record[key] = (Number.isFinite(record[key]) ? record[key] : 0) + value;
-							}
-							for (const [kind, first] of [['prepend', true], ['append', false]]) {
-								for (const [key, values] of Object.entries(data[kind] || {})) {
-									if (!safe(key) || !Array.isArray(values)) { throw new TypeError('Invalid list update'); }
-									const old = Array.isArray(record[key]) ? record[key] : [];
-									record[key] = first ? values.concat(old) : old.concat(values);
+								finally {
+										if (initializing.get(name) === entry) {
+												initializing.delete(name);
+										}
 								}
-							}
-							for (const [key, length] of Object.entries(data.limits || {})) {
-								if (!safe(key) || !Number.isSafeInteger(length) || length < 0) { throw new TypeError('Invalid list limit'); }
-								if (Array.isArray(record[key])) { record[key] = record[key].slice(0, length); }
-							}
-							const write = store.put(record);
-							write.onerror = fail;
-							write.onsuccess = () => result(record);
-						} catch (error) { fail(error); }
-					};
-				});
-			},
-			async updateTime({name, storeName, data: {key, index}}) {
-				return this.update({name, storeName, data: {key, index, onlyExisting: true, patch: {updatedAt: Date.now()}}});
-			},
-			async delete({name, storeName, data: {key, index}}) {
-				return this._write({name, storeName}, (store, result, fail) => {
-					let remove = 0;
-					const range = IDBKeyRange.only(key);
-					const req = index ? store.index(index).openCursor(range) : store.openCursor(range);
-					req.onsuccess = e => {
+						},
+						close({ name }) {
+								const active = initializing.get(name);
+								if (active) {
+										active.cancel();
+										initializing.delete(name);
+								}
+								if (db[name]) {
+										db[name].close();
+										delete db[name];
+								}
+						},
+						async getStore({ name, storeName, mode = 'readonly' }) {
+								let connection;
+								do {
+										connection = await this.init({ name });
+								} while (db[name] !== connection);
+								const transaction = connection.transaction(storeName, mode);
+								return { store: transaction.objectStore(storeName), transaction };
+						},
+						async _write({ name, storeName }, operation) {
+								const { store, transaction } = await this.getStore({ name, storeName, mode: 'readwrite' });
+								return new Promise((resolve, reject) => {
+										let result, settled = false;
+										const cleanup = () => {
+												transaction.oncomplete = transaction.onabort = transaction.onerror = null;
+										};
+										const fail = (error) => {
+												if (settled) {
+														return;
+												}
+												settled = true;
+												const reason = (error && error.target) ?
+														(error.target.error || transaction.error || new Error('IndexedDB transaction failed')) : error;
+												cleanup();
+												try {
+														transaction.abort();
+												}
+												catch (abortError) { }
+												reject(reason || new Error('IndexedDB transaction failed'));
+										};
+										transaction.oncomplete = () => {
+												if (settled) {
+														return;
+												}
+												settled = true;
+												cleanup();
+												resolve(result);
+										};
+										transaction.onabort = transaction.onerror = fail;
+										try {
+												operation(store, value => { result = value; }, fail);
+										}
+										catch (error) {
+												fail(error);
+										}
+								});
+						},
+						async put({ name, storeName, data }) {
+								return this._write({ name, storeName }, (store, result, fail) => {
+										const req = store.put(data);
+										req.onsuccess = (e) => result(e.target.result);
+										req.onerror = fail;
+								});
+						},
+						async get({ name, storeName, data: { key, index, timeout } }) {
+								const { store } = await this.getStore({ name, storeName });
+								return new Promise((resolve, reject) => {
+										const req = index ? store.index(index).get(key) : store.get(key);
+										let timer;
+										let settled = false;
+										const finish = (callback, result) => {
+												if (settled) {
+														return;
+												}
+												settled = true;
+												if (timer !== undefined) {
+														clearTimeout(timer);
+														timer = undefined;
+												}
+												req.onsuccess = req.onerror = null;
+												callback(result);
+										};
+										req.onsuccess = (event) => finish(resolve, event.target.result);
+										req.onerror = (event) => finish(reject, event);
+										if (timeout) {
+												timer = setTimeout(() => finish(reject, 'IndexedDB get timed out'), timeout);
+										}
+								});
+						},
+						async update({ name, storeName, data }) {
+								return this._write({ name, storeName }, (store, result, fail) => {
+										const req = data.index ? store.index(data.index).get(data.key) : store.get(data.key);
+										req.onerror = fail;
+										req.onsuccess = () => {
+												try {
+														if (data.onlyExisting && !req.result) {
+																result(null);
+																return;
+														}
+														const record = { ...(req.result || {}) };
+														const safe = (key) => !['__proto__', 'constructor', 'prototype'].includes(key);
+														for (const [key, value] of Object.entries(data.defaults || {})) {
+																if (safe(key) && !record[key]) {
+																		record[key] = value;
+																}
+														}
+														for (const [key, value] of Object.entries(data.patch || {})) {
+																if (safe(key)) {
+																		record[key] = value;
+																}
+														}
+														for (const [key, value] of Object.entries(data.increment || {})) {
+																if (!safe(key) || !Number.isFinite(value)) {
+																		throw new TypeError('Invalid increment');
+																}
+																record[key] = (Number.isFinite(record[key]) ? record[key] : 0) + value;
+														}
+														for (const [kind, first] of [['prepend', true], ['append', false]]) {
+																for (const [key, values] of Object.entries(data[kind] || {})) {
+																		if (!safe(key) || !Array.isArray(values)) {
+																				throw new TypeError('Invalid list update');
+																		}
+																		const old = Array.isArray(record[key]) ? record[key] : [];
+																		record[key] = first ? values.concat(old) : old.concat(values);
+																}
+														}
+														for (const [key, length] of Object.entries(data.limits || {})) {
+																if (!safe(key) || !Number.isSafeInteger(length) || length < 0) {
+																		throw new TypeError('Invalid list limit');
+																}
+																if (Array.isArray(record[key])) {
+																		record[key] = record[key].slice(0, length);
+																}
+														}
+														const write = store.put(record);
+														write.onerror = fail;
+														write.onsuccess = () => result(record);
+												}
+												catch (error) {
+														fail(error);
+												}
+										};
+								});
+						},
+						async updateTime({ name, storeName, data: { key, index } }) {
+								return this.update({ name, storeName, data: { key, index, onlyExisting: true, patch: { updatedAt: Date.now() } } });
+						},
+						async delete({ name, storeName, data: { key, index } }) {
+								return this._write({ name, storeName }, (store, result, fail) => {
+										let remove = 0;
+										const range = IDBKeyRange.only(key);
+										const req = index ? store.index(index).openCursor(range) : store.openCursor(range);
+										req.onsuccess = (e) => {
+												try {
+														const cursor = e.target.result;
+														if (!cursor) {
+																result(remove > 0);
+																return;
+														}
+														cursor.delete();
+														remove++;
+														cursor.continue();
+												}
+												catch (error) {
+														fail(error);
+												}
+										};
+										req.onerror = fail;
+								});
+						},
+						async clear({ name, storeName }) {
+								return this._write({ name, storeName }, (store, result, fail) => {
+										const req = store.clear();
+										req.onsuccess = () => result(undefined);
+										req.onerror = fail;
+								});
+						},
+						async gc({ name, storeName, data: { expireTime, index } }) {
+								index = index || 'updatedAt';
+								const now = Date.now(), ptime = performance.now();
+								const expiresAt = (index !== 'expiresAt') ? (now - expireTime) : now;
+								let count = 0;
+								return this._write({ name, storeName }, (store, result, fail) => {
+										const range = IDBKeyRange.upperBound(expiresAt);
+										const req = store.index(index).openCursor(range);
+										req.onsuccess = (e) => {
+												try {
+														const cursor = e.target.result;
+														if (cursor) {
+																count++;
+																cursor.delete();
+																cursor.continue();
+														}
+														else {
+																result({ status: 'ok', count, time: performance.now() - ptime });
+														}
+												}
+												catch (error) {
+														fail(error);
+												}
+										};
+										req.onerror = fail;
+								}).catch((e) => {
+										console.warn('IndexedDB cache cleanup failed');
+										throw e;
+								});
+						}
+				};
+				self.onmessage = async ({ command, params }) => {
 						try {
-							const cursor = e.target.result;
-							if (!cursor) { result(remove > 0); return; }
-							cursor.delete();
-							remove++;
-							cursor.continue();
-						} catch (error) { fail(error); }
-					};
-					req.onerror = fail;
-				});
-			},
-			async clear({name, storeName}) {
-				return this._write({name, storeName}, (store, result, fail) => {
-					const req = store.clear();
-					req.onsuccess = () => result(undefined);
-					req.onerror = fail;
-				});
-			},
-			async gc({name, storeName, data: {expireTime, index}}) {
-				index = index || 'updatedAt';
-				const now = Date.now(), ptime = performance.now();
-				const expiresAt = (index !== 'expiresAt') ? (now - expireTime) : now;
-				let count = 0;
-				return this._write({name, storeName}, (store, result, fail) => {
-					const range = IDBKeyRange.upperBound(expiresAt);
-					const req = store.index(index).openCursor(range);
-					req.onsuccess = e => {
-						try {
-							const cursor = e.target.result;
-							if (cursor) {
-								count++;
-								cursor.delete();
-								cursor.continue();
-							} else {
-								result({status: 'ok', count, time: performance.now() - ptime});
-							}
-						} catch (error) { fail(error); }
-					};
-					req.onerror = fail;
-				}).catch(e => {
-					console.warn('IndexedDB cache cleanup failed');
-					throw e;
-				});
-			}
+								switch (command) {
+										case 'init':
+												await controller[command](params);
+												return 'ok';
+										case 'put':
+												return controller.put(params);
+										case 'updateTime':
+										case 'get':
+												return controller[command](params);
+										default:
+												return controller[command](params) || 'ok';
+								}
+						}
+						catch (err) {
+								console.warn('command failed: ', { command, params });
+								throw err;
+						}
+				};
+				return controller;
 		};
-		self.onmessage = async ({command, params}) => {
-			try {
-			switch (command) {
-				case 'init':
-					await controller[command](params);
-					return 'ok';
-				case 'put':
-					return controller.put(params);
-				case 'updateTime':
-				case 'get':
-					return controller[command](params);
-				default:
-					return controller[command](params) || 'ok';
-				}
-			} catch (err) {
-				console.warn('command failed: ', {command, params});
-				throw err;
-			}
-		};
-		return controller;
-	};
-	const workers = new Map;
-	const open = async ({name, ver, stores}, func) => {
-		let worker;
-		if (func) {
-			let _func = workerFunc;
-			if (func) {
-				_func = `
+		const workers = new Map();
+		const open = async ({ name, ver, stores }, func) => {
+				let worker;
+				if (func) {
+						let _func = workerFunc;
+						if (func) {
+								_func = `
 				(() => {
 				const controller = (${workerFunc.toString()})(self);
 				(${func.toString()})(self)
 				})
 				`;
-			}
-			worker = workers.get(func) || workerUtil.createCrossMessageWorker(_func, {name: `IndexedDb[${name}]`});
-			workers.set(func, worker);
-		} else {
-			worker = workers.get(workerFunc) || workerUtil.createCrossMessageWorker(workerFunc, {name: 'IndexedDb'});
-			workers.set(workerFunc, worker);
-		}
-		await worker.post({command: 'init', params: {name, ver, stores}});
-		const post = (command, data, storeName, transfer) => {
-			const params = {data, name, storeName, transfer};
-			return worker.post({command, params}, transfer);
-		};
-		const result = {worker};
-		for (const meta of stores) {
-			const storeName = meta.name;
-			result[storeName] = (storeName => {
-				return {
-					close: params => post('close', params, storeName),
-					put: (record, transfer) => post('put', record, storeName, transfer),
-					update: data => post('update', data, storeName),
-					get: ({key, index, timeout}) => post('get', {key, index, timeout}, storeName),
-					updateTime: ({key, index, timeout}) => post('updateTime', {key, index, timeout}, storeName),
-					delete: ({key, index, timeout}) => post('delete', {key, index, timeout}, storeName),
-					gc: (expireTime = 30 * 24 * 60 * 60 * 1000, index = 'updatedAt') => post('gc', {expireTime, index}, storeName)
+						}
+						worker = workers.get(func) || workerUtil.createCrossMessageWorker(_func, { name: `IndexedDb[${name}]` });
+						workers.set(func, worker);
+				}
+				else {
+						worker = workers.get(workerFunc) || workerUtil.createCrossMessageWorker(workerFunc, { name: 'IndexedDb' });
+						workers.set(workerFunc, worker);
+				}
+				await worker.post({ command: 'init', params: { name, ver, stores } });
+				const post = (command, data, storeName, transfer) => {
+						const params = { data, name, storeName, transfer };
+						return worker.post({ command, params }, { transfer });
 				};
-			})(storeName);
-		}
-		return result;
-	};
-	return {open};
+				const result = { worker };
+				for (const meta of stores) {
+						const storeName = meta.name;
+						result[storeName] = (storeName => {
+								return {
+										close: (params) => post('close', params, storeName),
+										put: (record, transfer) => post('put', record, storeName, transfer),
+										update: (data) => post('update', data, storeName),
+										get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
+										updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
+										delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),
+										gc: (expireTime = 30 * 24 * 60 * 60 * 1000, index = 'updatedAt') => post('gc', { expireTime, index }, storeName)
+								};
+						})(storeName);
+				}
+				return result;
+		};
+		return { open };
 })();
 const ThumbInfoCacheDb = (() => {
-	const THUMB_INFO = {
-		name: 'thumb-info',
-		ver: 1,
-		stores: [
-			{
-				name: 'cache',
-				indexes: [
-					{name: 'postedAt', keyPath: 'postedAt', params: {unique: false}},
-					{name: 'updatedAt', keyPath: 'updatedAt', params: {unique: false}}
-				],
-				definition: {keyPath: 'watchId', autoIncrement: false}
-			}
-		]
-	};
-	let db;
-	const open = async () => {
-		db = db || await IndexedDbStorage.open(THUMB_INFO);
-		const cacheDb = db['cache'];
-		cacheDb.gc(90 * 24 * 60 * 60 * 1000).catch(() => console.warn('Thumbnail cache cleanup failed'));
-		return {
-			put: async (xml, thumbInfo = null) => {
-				thumbInfo = thumbInfo || parseThumbInfo(xml);
-				if (thumbInfo.status !== 'ok') {
-					return;
-				}
-				const watchId = thumbInfo.v;
-				const videoId = thumbInfo.id;
-				const postedAt = new Date(thumbInfo.postedAt).getTime();
-				const updatedAt = Date.now();
-				const record = {
-					watchId,
-					videoId,
-					postedAt,
-					updatedAt,
-					xml,
-					thumbInfo
-				};
-				await cacheDb.put(record);
-				return {watchId, updatedAt};
-			},
-			get: watchId => cacheDb.updateTime({key: watchId}),
-			delete: watchId => cacheDb.delete({key: watchId}),
-			close: () => cacheDb.close()
+		const THUMB_INFO = {
+				name: 'thumb-info',
+				ver: 1,
+				stores: [
+						{
+								name: 'cache',
+								indexes: [
+										{ name: 'postedAt', keyPath: 'postedAt', params: { unique: false } },
+										{ name: 'updatedAt', keyPath: 'updatedAt', params: { unique: false } }
+								],
+								definition: { keyPath: 'watchId', autoIncrement: false }
+						}
+				]
 		};
-	};
-	return {open};
+		let db;
+		const open = async () => {
+				db = db || await IndexedDbStorage.open(THUMB_INFO);
+				const cacheDb = db['cache'];
+				cacheDb.gc(90 * 24 * 60 * 60 * 1000).catch(() => console.warn('Thumbnail cache cleanup failed'));
+				return {
+						put: async (xml, thumbInfo = null) => {
+								thumbInfo = thumbInfo || parseThumbInfo(xml);
+								if (thumbInfo.status !== 'ok') {
+										return;
+								}
+								const watchId = thumbInfo.v;
+								const videoId = thumbInfo.id;
+								const postedAt = new Date(thumbInfo.postedAt).getTime();
+								const updatedAt = Date.now();
+								const record = {
+										watchId,
+										videoId,
+										postedAt,
+										updatedAt,
+										xml,
+										thumbInfo
+								};
+								await cacheDb.put(record);
+								return { watchId, updatedAt };
+						},
+						get: (watchId) => cacheDb.updateTime({ key: watchId }),
+						delete: (watchId) => cacheDb.delete({ key: watchId }),
+						close: () => cacheDb.close()
+				};
+		};
+		return { open };
 })();
 window.MylistPocketLib = {
   workerUtil
 };
 const thumbInfoApi = async function() {
 const gate = () => {
-	const post = function(body, {type, token, sessionId, origin} = {}) {
-		sessionId = sessionId || '';
-		origin = origin || '';
-		this.origin = origin = origin || this.origin || document.referrer;
-		this.token = token = token || this.token;
-		this.type = type = type || this.type;
-		if (!this.channel) {
-			this.channel = new MessageChannel;
-		}
-		const url = location.href;
-		const id = PRODUCT;
-		try {
-			const msg = {id, type, token, url, sessionId, body};
-			if (!this.port) {
-				msg.body = {command: 'initialized', params: msg.body};
-				parent.postMessage(msg, origin, [this.channel.port2]);
-				this.port = this.channel.port1;
-				this.port.start();
-			} else {
-				this.port.postMessage(msg);
-			}
-		} catch (e) {
-			console.error('%cError: parent.postMessage - ', 'color: red; background: yellow', e);
-		}
-		return this.port;
-	}.bind({channel: null, port: null, origin: null, token: null, type: null});
-	const parseUrl = url => {
-		url = url || 'https://unknown.example.com/';
-		const a = document.createElement('a');
-		a.href = url;
-		return a;
-	};
-	const isNicoServiceHost = url => {
-		const host = parseUrl(url).hostname;
-		return /(^[a-z0-9.-]*\.nicovideo\.jp$|^[a-z0-9.-]*\.nico(|:[0-9]+)$)/.test(host);
-	};
-	const isWhiteHost = url => {
-		const u = parseUrl(url);
-		const host = u.hostname;
-		if (['account.nicovideo.jp', 'point.nicovideo.jp'].includes(host)) {
-			return false;
-		}
-		if (isNicoServiceHost(url)) {
-			return true;
-		}
-		if (['localhost', '127.0.0.1'].includes(host)) { return true; }
-		if (localStorage.ZenzaWatch_whiteHost) {
-			if (localStorage.ZenzaWatch_whiteHost.split(',').includes(host)) {
-				return true;
-			}
-		}
-		if (u.protocol !== 'https:') { return false; }
-		return [
-			'google.com',
-			'www.google.com',
-			'www.google.co.jp',
-			'www.bing.com',
-			'twitter.com',
-			'friends.nico',
-			'feedly.com',
-			'www.youtube.com',
-		].includes(host) || host.endsWith('.slack.com');
-	};
-	const uFetch = async (params, consume = response => response) => {
-		const {url, options: requestOptions = {}} = params;
-		if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
-			return Promise.reject({status: 'fail', message: 'network error'});
-		}
-		const options = {...requestOptions};
-		const callerSignal = options.signal;
-		const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-		const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
-			Object.assign(new Error('The operation was aborted'), {name: 'AbortError'});
-		const timeout = (typeof options.timeout === 'number' && !isNaN(options.timeout)) ? options.timeout :
-			(typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
-		const racers = [];
-		let timer;
-		let onAbort;
-		try {
-			if (callerSignal && callerSignal.aborted) { throw abortReason(); }
-			if (controller) { options.signal = controller.signal; }
-			if (callerSignal) {
-				racers.push(new Promise((resolve, reject) => {
-					onAbort = () => {
-						const reason = abortReason();
-						reject(reason);
-						if (controller) { controller.abort(reason); }
-					};
-					callerSignal.addEventListener('abort', onAbort, {once: true});
-				}));
-			}
-			if (timeout > 0) {
-				racers.push(new Promise((resolve, reject) => {
-					timer = setTimeout(() => {
-						const error = Object.assign(new Error('timeout'), {name: 'timeout'});
-						reject(error);
-						if (controller) { controller.abort(error); }
-					}, timeout);
-				}));
-			}
-			racers.push(fetch(url, options).then(consume));
-			return await Promise.race(racers);
-		} catch (err) {
-			throw {status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail'};
-		} finally {
-			if (timer !== undefined) { clearTimeout(timer); }
-			if (callerSignal && onAbort) { callerSignal.removeEventListener('abort', onAbort); }
-		}
-	};
-	const fetchSessions = new Map();
-	const xFetch = (params, sessionId = null) => {
-		const command = 'fetch';
-		const controller = new AbortController();
-		fetchSessions.set(sessionId, controller);
-		const request = {...params, options: {...params.options, signal: controller.signal}};
-		return uFetch(request, async resp => {
-			const buffer = await resp.arrayBuffer();
-			const init = ['type', 'url', 'redirected', 'status', 'ok', 'statusText']
-					.reduce((map, key) => {map[key] = resp[key]; return map;}, {});
-			const headers = [...resp.headers.entries()];
-			return {buffer, init, headers};
-		}).then(({buffer, init, headers}) => {
-			const result = {status: 'ok', command, params: {buffer, init, headers}};
-			post(result, {sessionId});
-			return result;
-		}).catch(({status, message}) => {
-			post({status, message, command}, {sessionId});
-		}).finally(() => {
-			if (fetchSessions.get(sessionId) === controller) { fetchSessions.delete(sessionId); }
-		});
-	};
-	const init = ({prefix, type}) => {
-		if (!window.name.startsWith(prefix)) {
-			throw new Error(`unknown name "${window.name}"`);
-		}
-		const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
-		type = type || window.name.replace(new RegExp(`/(${PRODUCT}|)Loader$/`), '');
-		const origin = document.referrer || window.name.split('#')[1];
-		console.log('%cCrossDomainPort: host:%s window:%s', 'background: lightgreen;', location.host, window.name.split('#')[0]);
-		if (!isWhiteHost(origin)) {
-			throw new Error(`disable bridge "${origin}"`);
-		}
-		const TOKEN = location.hash ? location.hash.substring(1) : null;
-		window.history.replaceState(null, null, location.pathname);
-		const port = post({status: 'ok', command: 'initialized'}, {type, token: TOKEN, origin});
-		port.addEventListener('message', event => {
-			let data;
-			try { data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
-			catch (_) { return; }
-			if (!data || data.token !== TOKEN || !data.body || data.body.command !== 'cancelFetch') { return; }
-			event.stopImmediatePropagation();
-			const controller = fetchSessions.get(data.body.params && data.body.params.sessionId);
-			if (controller) { controller.abort(); }
-		});
-		workerUtil && workerUtil.env({TOKEN, PRODUCT});
-		return {port, TOKEN, origin, type, PID};
-	};
-	return {post, parseUrl, isNicoServiceHost, isWhiteHost, uFetch, xFetch, init};
+		const post = function (body, { type, token, sessionId, origin } = {}) {
+				sessionId = sessionId || '';
+				origin = origin || '';
+				this.origin = origin = origin || this.origin || document.referrer;
+				this.token = token = token || this.token;
+				this.type = type = type || this.type;
+				if (!this.channel) {
+						this.channel = new MessageChannel;
+				}
+				const url = location.href;
+				const id = PRODUCT;
+				try {
+						const msg = { id, type, token, url, sessionId, body };
+						if (!this.port) {
+								msg.body = { command: 'initialized', params: msg.body };
+								parent.postMessage(msg, origin, [this.channel.port2]);
+								this.port = this.channel.port1;
+								this.port.start();
+						}
+						else {
+								this.port.postMessage(msg);
+						}
+				}
+				catch (e) {
+						console.error('%cError: parent.postMessage - ', 'color: red; background: yellow', e);
+				}
+				return this.port;
+		}.bind({ channel: null, port: null, origin: null, token: null, type: null });
+		const parseUrl = (url) => {
+				url = url || 'https://unknown.example.com/';
+				const a = document.createElement('a');
+				a.href = url;
+				return a;
+		};
+		const isNicoServiceHost = (url) => {
+				const host = parseUrl(url).hostname;
+				return /(^[a-z0-9.-]*\.nicovideo\.jp$|^[a-z0-9.-]*\.nico(|:[0-9]+)$)/.test(host);
+		};
+		const isWhiteHost = (url) => {
+				const u = parseUrl(url);
+				const host = u.hostname;
+				if (['account.nicovideo.jp', 'point.nicovideo.jp'].includes(host)) {
+						return false;
+				}
+				if (isNicoServiceHost(url)) {
+						return true;
+				}
+				if (['localhost', '127.0.0.1'].includes(host)) {
+						return true;
+				}
+				if (localStorage.ZenzaWatch_whiteHost) {
+						if (localStorage.ZenzaWatch_whiteHost.split(',').includes(host)) {
+								return true;
+						}
+				}
+				if (u.protocol !== 'https:') {
+						return false;
+				}
+				return [
+						'google.com',
+						'www.google.com',
+						'www.google.co.jp',
+						'www.bing.com',
+						'twitter.com',
+						'friends.nico',
+						'feedly.com',
+						'www.youtube.com',
+				].includes(host) || host.endsWith('.slack.com');
+		};
+		const uFetch = async (params, consume = (response => response)) => {
+				const { url, options: requestOptions = {} } = params;
+				if (!isWhiteHost(url) || !isNicoServiceHost(url)) {
+						return Promise.reject({ status: 'fail', message: 'network error' });
+				}
+				const options = { ...requestOptions };
+				const callerSignal = options.signal;
+				const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+				const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
+						Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+				const timeout = (typeof options.timeout === 'number' && !isNaN(options.timeout)) ? options.timeout :
+						(typeof params.timeout === 'number' && !isNaN(params.timeout)) ? params.timeout : 30 * 1000;
+				const racers = [];
+				let timer;
+				let onAbort;
+				try {
+						if (callerSignal && callerSignal.aborted) {
+								throw abortReason();
+						}
+						if (controller) {
+								options.signal = controller.signal;
+						}
+						if (callerSignal) {
+								racers.push(new Promise((resolve, reject) => {
+										onAbort = () => {
+												const reason = abortReason();
+												reject(reason);
+												if (controller) {
+														controller.abort(reason);
+												}
+										};
+										callerSignal.addEventListener('abort', onAbort, { once: true });
+								}));
+						}
+						if (timeout > 0) {
+								racers.push(new Promise((resolve, reject) => {
+										timer = setTimeout(() => {
+												const error = Object.assign(new Error('timeout'), { name: 'timeout' });
+												reject(error);
+												if (controller) {
+														controller.abort(error);
+												}
+										}, timeout);
+								}));
+						}
+						racers.push(fetch(url, options).then(consume));
+						return await Promise.race(racers);
+				}
+				catch (err) {
+						throw { status: 'fail', message: err && err.name === 'timeout' ? 'timeout' : 'uFetch fail' };
+				}
+				finally {
+						if (timer !== undefined) {
+								clearTimeout(timer);
+						}
+						if (callerSignal && onAbort) {
+								callerSignal.removeEventListener('abort', onAbort);
+						}
+				}
+		};
+		const fetchSessions = new Map();
+		const xFetch = (params, sessionId = null) => {
+				const command = 'fetch';
+				const controller = new AbortController();
+				fetchSessions.set(sessionId, controller);
+				const request = { ...params, options: { ...params.options, signal: controller.signal } };
+				return uFetch(request, async (resp) => {
+						const buffer = await resp.arrayBuffer();
+						const init = ['type', 'url', 'redirected', 'status', 'ok', 'statusText']
+								.reduce((map, key) => { map[key] = resp[key]; return map; }, {});
+						const headers = [...resp.headers.entries()];
+						return { buffer, init, headers };
+				}).then(({ buffer, init, headers }) => {
+						const result = { status: 'ok', command, params: { buffer, init, headers } };
+						post(result, { sessionId });
+						return result;
+				}).catch(({ status, message }) => {
+						post({ status, message, command }, { sessionId });
+				}).finally(() => {
+						if (fetchSessions.get(sessionId) === controller) {
+								fetchSessions.delete(sessionId);
+						}
+				});
+		};
+		const init = ({ prefix, type }) => {
+				if (!window.name.startsWith(prefix)) {
+						throw new Error(`unknown name "${window.name}"`);
+				}
+				const PID = `${window && window.name || 'self'}:${location.host}:${name}:${Date.now().toString(16).toUpperCase()}`;
+				type = type || window.name.replace(new RegExp(`/(${PRODUCT}|)Loader$/`), '');
+				const origin = document.referrer || window.name.split('#')[1];
+				console.log('%cCrossDomainPort: host:%s window:%s', 'background: lightgreen;', location.host, window.name.split('#')[0]);
+				if (!isWhiteHost(origin)) {
+						throw new Error(`disable bridge "${origin}"`);
+				}
+				const TOKEN = location.hash ? location.hash.substring(1) : null;
+				window.history.replaceState(null, null, location.pathname);
+				const port = post({ status: 'ok', command: 'initialized' }, { type, token: TOKEN, origin });
+				port.addEventListener('message', event => {
+						let data;
+						try {
+								data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+						}
+						catch (_) {
+								return;
+						}
+						if (!data || data.token !== TOKEN || !data.body || data.body.command !== 'cancelFetch') {
+								return;
+						}
+						event.stopImmediatePropagation();
+						const controller = fetchSessions.get(data.body.params && data.body.params.sessionId);
+						if (controller) {
+								controller.abort();
+						}
+				});
+				workerUtil && workerUtil.env({ TOKEN, PRODUCT });
+				return { port, TOKEN, origin, type, PID };
+		};
+		return { post, parseUrl, isNicoServiceHost, isWhiteHost, uFetch, xFetch, init };
 };
   const {post, parseUrl, uFetch, init} = gate();
   // Finish asynchronous setup before advertising readiness: the parent sends its

@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const {loadClass, createContext} = require('../helpers/extractSource');
+const {loadClass, createContext, extract, run} = require('../helpers/extractSource');
 
 function field(initial) {
   let value = initial, blurs = 0;
@@ -19,6 +19,11 @@ function fixture(path) {
     Emitter: class {},
     setTimeout: fn => { tasks.push(fn); return tasks.length; }
   });
+  // Evaluate exactly the bundled helper alongside the real class in both paths.
+  const helperPath = path === 'src/CommentInputPanel.js' ?
+    'packages/lib/src/nico/CommentSubmitLifetime.js' : path;
+  run('const CommentSubmitLifetime = ' +
+    extract(helperPath, 'CommentSubmitLifetime', 'var') + ';', ctx);
   const Subject = loadClass(path, 'CommentInputPanel', ctx);
   const subject = Object.create(Subject.prototype);
   const message = field('  hello world  ');

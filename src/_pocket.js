@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.59-task714
+// @version     0.5.75-task800
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -3950,8 +3950,21 @@ const emitter = util.emitter;
       const {ngChecker, favChecker} = ngContext?.checkers ||
         initNgChecker({ngConfig, favConfig});
 
+      // Each card owns only its newest NG request within this observer session.
+      const cardRequests = new WeakMap();
+      const failedCodeClasses = new WeakMap();
       const onItemInview = (item, watchId) => {
         if (!isCurrent() || !ngConfig.props.enable) { return; }
+        const requestId = (cardRequests.get(item) || 0) + 1;
+        cardRequests.set(item, requestId);
+        const owned = () => cardRequests.get(item) === requestId;
+        const cancelled = () => !owned() || !isCurrent() || !ngConfig.props.enable;
+        const clearFailure = () => {
+          item.classList.remove('is-ng-failed');
+          const code = failedCodeClasses.get(item);
+          if (code) { item.classList.remove(code); }
+          failedCodeClasses.delete(item);
+        };
 
         const loadLazy = () => {
           const lazyImage = item.querySelector('.jsLazyImage');
@@ -3964,21 +3977,32 @@ const emitter = util.emitter;
           }
         };
 
-        QueueLoader.load(watchId, item,
-          () => !isCurrent() || !ngConfig.props.enable).then(
+        QueueLoader.load(watchId, item, cancelled).then(
           info => {
+            // An older result must not clear the newer request's loading state.
+            if (!owned()) { return; }
             item.classList.remove('is-ng-current');
             if (!isCurrent() || !ngConfig.props.enable ||
                 info?.status === 'cancelled') {
               loadLazy();
               return;
             }
-            if (!info || info.status === 'fail' || info.code === 'DELETED') {
-              if (info && info.code !== 'COMMUNITY') {
-                console.error('empty data', watchId, info, info ? info.code : 'unknown');
+            const malformed = !info || typeof info !== 'object' ||
+              Object.prototype.toString.call(info) === '[object Error]' ||
+              !info.owner || typeof info.owner !== 'object';
+            if (malformed || info.status === 'fail' || info.code === 'DELETED') {
+              const code = typeof info?.code === 'string' &&
+                /^[a-z0-9_-]{1,48}$/i.test(info.code) ? info.code : 'is-no-data';
+              clearFailure();
+              // Do not show both a previous NG verdict and a new failure.
+              item.classList.remove('is-ng-rejected', 'is-ng-resolved', 'is-fav-favorited');
+              if (!malformed && info.code !== 'COMMUNITY') {
+                console.warn('NG thumbnail unavailable', watchId, code);
               }
-              item.classList.add('is-ng-failed', info ? info.code : 'is-no-data');
+              item.classList.add('is-ng-failed', code);
+              failedCodeClasses.set(item, code);
             } else {
+              clearFailure();
               if (callback) {
                 return callback(item,
                   {watchId, info, isNg: ngChecker.isNg(info), isFav: favChecker.isMatch(info)});
@@ -4021,15 +4045,17 @@ const emitter = util.emitter;
             }
 
             loadLazy();
-          },
-          () => {
-            item.classList.remove('is-ng-current');
-            if (isCurrent() && ngConfig.props.enable) {
-              item.classList.add('is-ng-failed');
-            }
-            loadLazy();
           }
-        );
+        ).catch(() => {
+          if (!owned()) { return; }
+          item.classList.remove('is-ng-current');
+          if (isCurrent() && ngConfig.props.enable) {
+            clearFailure();
+            item.classList.remove('is-ng-rejected', 'is-ng-resolved', 'is-fav-favorited');
+            item.classList.add('is-ng-failed');
+          }
+          loadLazy();
+        });
       };
 
       const intersectionObserver = initIntersectionObserver(onItemInview);
@@ -4098,7 +4124,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.59-task714', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.75-task800', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

@@ -41,7 +41,10 @@ function fixture(configured={}) {
     dispose(){ui.dispose();dom.window.close();}};
 }
 
-describe('Task318 additive custom seek configuration',()=>{
+describe('Task318 additive custom seek configuration',function(){
+  // Task790 (TEST-FLAKY-318): each case builds the settings view in JSDOM and runs close
+  // to mocha's 2 s default even alone; give it headroom instead of failing at random.
+  this.timeout(10000);
   it('merges legacy PARAM fields into only the explicitly configured composite cards',()=>{
     const h=fixture({PARAM_CUSTOM_SEEK_1:3,PARAM_CUSTOM_SEEK_2:-3});
     try{

@@ -4545,7 +4545,9 @@ class NicoVideoPlayerDialog extends Emitter {
     };
 
     const msgInfo = this._videoInfo.msgInfo;
-    return this.threadLoader.postChat(msgInfo, text, cmd, vpos)
+    // Task780: Turnstile verification can take minutes. Never send that delayed
+    // authenticated comment to a video whose player generation was replaced.
+    return this.threadLoader.postChat(msgInfo, text, cmd, vpos, isCurrent)
       .then(onSuccess).catch(onFail);
   }
   removeChat(chat) {

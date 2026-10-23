@@ -1,13 +1,15 @@
 import {textUtil} from '../../../lib/src/text/textUtil';
 import {dll} from '../../../components/src/dll';
+// GENERATED FROM tools/typescript-stage1/nico-src/VideoListItemView.ts (Task900). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 // なんか汎用性を持たせようとして失敗してる奴
-class VideoListItemView  {
-  static get ITEM_HEIGHT() { return 100; }
-  static get THUMBNAIL_WIDTH() { return 96; }
-  static get THUMBNAIL_HEIGHT() { return 72; }
-  // ここはDOM的に隔離されてるので外部要因との干渉を考えなくてよい
-  static get CSS() { return `
+class VideoListItemView {
+    static get ITEM_HEIGHT() { return 100; }
+    static get THUMBNAIL_WIDTH() { return 96; }
+    static get THUMBNAIL_HEIGHT() { return 72; }
+    // ここはDOM的に隔離されてるので外部要因との干渉を考えなくてよい
+    static get CSS() {
+        return `
   * {
     box-sizing: border-box;
   }
@@ -141,7 +143,7 @@ class VideoListItemView  {
     display: inline-block;
     width:  100%;
     height: 100%;
-    transition: box-shaow 0.4s ease, transform 0.4s ease;
+    transition: box-shadow 0.4s ease, transform 0.4s ease;
   }
 
   .thumbnailContainer a:active {
@@ -328,51 +330,57 @@ class VideoListItemView  {
     }
   }
   `;
-  }
-  static compactCount(value) {
-    if (!Number.isFinite(value)) { return '不明'; }
-    if (value >= 1e8) { return `${Math.floor(value / 1e7) / 10}億`; }
-    if (value >= 1e6) { return `${Math.floor(value / 1e4)}万`; }
-    if (value >= 1e4) { return `${Math.floor(value / 1e3) / 10}万`; }
-    return value.toLocaleString();
-  }
-  static build(item, index = 0) {
-    const {html} = dll.lit;
-    const {classMap} = dll.directives;
-
-    const fullCount = m => Number.isFinite(m) ? m.toLocaleString() : '不明';
-    const countField = (key, label, value) => html`<span class="count" title=${`${label}: ${fullCount(value)}`}>${label}: <span class=${`value ${key}Count`}>${this.compactCount(value)}</span></span>`;
-    const {cache, timestamp, index: _index, isLazy} = this.map.get(item) || {};
-    if (cache && timestamp === item.timestamp && index === _index && isLazy === item.isLazy) {
-      return cache;
     }
-    const title = item.title;
-    const count = item.count;
-    const itemId = item.itemId;
-    const watchId = item.watchId;
-    const watchUrl = `https://www.nicovideo.jp/watch/${watchId}`;
-    const cmap = ({
-      'videoItem': true,
-      [`watch${watchId}`]: true,
-      [`item${itemId}`]: true,
-      [item.isLazy     ? 'is-lazy-load' : 'is-inview'] : true,
-      'is-active':        item.isActive,
-      'is-updating':      item.isUpdating,
-      'is-played':        item.isPlayed,
-      'is-dragging':      item.isDragging,
-      'is-dragover':      item.isDragover,
-      'is-drropped':      item.isDropped,
-      'is-favorited':      item.isFavorited,
-      'is-not-resolved': !item.isPocketResolved,
-      'is-adDecoration-gold':   item.adDecoration === 'gold',
-      'is-adDecoration-silver': item.adDecoration === 'silver'
-    });
-    // const className = `videoItem watch${watchId} item${itemId}`;
-    const thumbnailStyle = `background-image: url(${item.thumbnail})`;
-
-    const result = html`
+    static compactCount(value) {
+        if (!Number.isFinite(value)) {
+            return '不明';
+        }
+        if (value >= 1e8) {
+            return `${Math.floor(value / 1e7) / 10}億`;
+        }
+        if (value >= 1e6) {
+            return `${Math.floor(value / 1e4)}万`;
+        }
+        if (value >= 1e4) {
+            return `${Math.floor(value / 1e3) / 10}万`;
+        }
+        return value.toLocaleString();
+    }
+    static build(item, index = 0) {
+        const { html } = dll.lit;
+        const { classMap } = dll.directives;
+        const fullCount = (m) => Number.isFinite(m) ? m.toLocaleString() : '不明';
+        const countField = (key, label, value) => html `<span class="count" title=${`${label}: ${fullCount(value)}`}>${label}: <span class=${`value ${key}Count`}>${this.compactCount(value)}</span></span>`;
+        const { cache, timestamp, index: _index, isLazy } = this.map.get(item) || {};
+        if (cache && timestamp === item.timestamp && index === _index && isLazy === item.isLazy) {
+            return cache;
+        }
+        const title = item.title;
+        const count = item.count;
+        const itemId = item.itemId;
+        const watchId = item.watchId;
+        const watchUrl = `https://www.nicovideo.jp/watch/${watchId}`;
+        const cmap = ({
+            'videoItem': true,
+            [`watch${watchId}`]: true,
+            [`item${itemId}`]: true,
+            [item.isLazy ? 'is-lazy-load' : 'is-inview']: true,
+            'is-active': item.isActive,
+            'is-updating': item.isUpdating,
+            'is-played': item.isPlayed,
+            'is-dragging': item.isDragging,
+            'is-dragover': item.isDragover,
+            'is-dropped': item.isDropped,
+            'is-favorited': item.isFavorited,
+            'is-not-resolved': !item.isPocketResolved,
+            'is-adDecoration-gold': item.adDecoration === 'gold',
+            'is-adDecoration-silver': item.adDecoration === 'silver'
+        });
+        // const className = `videoItem watch${watchId} item${itemId}`;
+        const thumbnailStyle = `background-image: url(${item.thumbnail})`;
+        const result = html `
       <div class=${classMap(cmap)} data-index=${index + 1} data-item-id=${itemId} data-watch-id=${watchId}>
-        ${item.isLazy ? '' : html`
+        ${item.isLazy ? '' : html `
           <span class="command playlistRemove" data-command="playlistRemove" data-param=${watchId} title="プレイリストから削除">×</span>
           <div class="thumbnailContainer" style=${thumbnailStyle} data-watch-id=${watchId} data-src=${item.thumbnail}>
             <a class="command" href=${watchUrl} data-command="select" data-param=${itemId}>
@@ -397,14 +405,12 @@ class VideoListItemView  {
           </div>
         `}
       </div>`;
-      this.map.set(item, {cache: result, timestamp: item.timestamp, index, isLazy: item.isLazy});
-      return result;
-  }
+        this.map.set(item, { cache: result, timestamp: item.timestamp, index, isLazy: item.isLazy });
+        return result;
+    }
 }
 VideoListItemView.map = new WeakMap;
-
-
-
 //===END===
-
-export {VideoListItemView};
+export {
+  VideoListItemView
+};

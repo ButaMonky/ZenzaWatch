@@ -15,8 +15,13 @@ const deferred = () => {
   return {promise, resolve, reject};
 };
 
+// Avoid parsing the ~54k-line Dev userscript for every scenario. Recheck the
+// entire source string so tests still notice a regenerated bundle mid-run.
+const sourceCache = new Map();
 function loadOuterCreateView(file) {
   const raw = read(file);
+  const cached = sourceCache.get(file);
+  if (cached && cached.raw === raw) { return cached.code; }
   const ast = parser.parse(raw, {sourceType:'unambiguous', plugins:['classProperties']});
   let code;
   traverse(ast, {noScope:true, VariableDeclarator(path) {
@@ -25,6 +30,7 @@ function loadOuterCreateView(file) {
     if (candidate.includes("canvas.classList.add('is-loading')")) { code = candidate; }
   }});
   if (!code) { throw new Error('outer createView not found: ' + file); }
+  sourceCache.set(file, {raw, code});
   return code;
 }
 
@@ -63,7 +69,9 @@ function harness(file, {deferredSetup=false}={}) {
 }
 
 for (const [variant, file] of variants) {
-  describe('Task423 AUD-66 outer storyboard loading ownership: '+variant, () => {
+  describe('Task423 AUD-66 outer storyboard loading ownership: '+variant, function() {
+    // First parse of the generated bundle depends on machine load, not Worker behavior.
+    if (variant === 'generated Dev') { this.timeout(10000); }
     it('clears initial loading after a successful setup', async () => {
       const h = harness(file), v = h.create();
       assert.strictEqual(v.loading(), true);

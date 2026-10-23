@@ -8,10 +8,19 @@
     "build": "node tools/build.mjs",
     "build:zenza": "node tools/build-zenza.mjs",
     "check:zenza": "node tools/build-zenza.mjs --check",
+    "check:typescript": "tsc -p tsconfig.typescript.json && tsc -p tsconfig.typescript.contract.json && node tools/check-typescript-settings.mjs --check && npm run check:probe",
+    "check:probe": "tsc -p tsconfig.probe.json && tsc -p tsconfig.probe.contract.json && node tools/check-probe-typescript.mjs --check",
+    "stamp:probe": "tsc -p tsconfig.probe.json && node tools/check-probe-typescript.mjs --write",
+    "stamp:typescript": "tsc -p tsconfig.typescript.json && node tools/check-typescript-settings.mjs --write",
     "pretest": "node tools/build-zenza.mjs && node tools/build.mjs"
   },
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
-  "integrationRevision": "Task200"
+  "integrationRevision": "Task200",
+  "devDependencies": {
+    "@babel/generator": "7.29.8",
+    "@babel/parser": "7.29.8",
+    "typescript": "7.0.2"
+  }
 }

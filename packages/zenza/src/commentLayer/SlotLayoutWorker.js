@@ -23,15 +23,15 @@ const SlotLayoutWorker = (() => {
         this.p = 1;
       }
       findIdle(sec) {
-        const {count, slot, table} = this;
-        for (let i = 0; i < count; i++) {
+        const {slotCount, slot, itemTable} = this;
+        for (let i = 0; i < slotCount; i++) {
           if (!slot[i]) {
             //console.log('empty found! idx=%s, sec=%s slot=%s', i, sec, JSON.stringify(slot));
             slot[i] = this.p++;
             return i;
           }
 
-          let item = table[i];
+          let item = itemTable[i];
           if (sec < item.begin || sec > item.end) {
             //console.log('idle found! idx=%s, sec=%s ', i, sec, JSON.stringify(slot), JSON.stringify(item));
             slot[i] = this.p++;
@@ -56,6 +56,8 @@ const SlotLayoutWorker = (() => {
         // なかったら、一番古いやつから奪い取る
         if (slot < 0) {
           slot = this.mostOld;
+          // Replaced entries must become newest, not remain oldest forever.
+          this.slot[slot] = this.p++;
         }
         this.itemTable[slot] = item;
         return slot;
@@ -88,7 +90,8 @@ const SlotLayoutWorker = (() => {
         const fork = o.fork % 3;
         o.slot = slotEntries[fork].find(o, sec);
       }
-      return data;
+      // Preserve each original vpos-sorted group for bulkSlotData setters.
+      return {top, naka, bottom};
     };
 
     self.onmessage = ({command, params}) => {

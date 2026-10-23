@@ -140,6 +140,7 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
   it('公開してよいパスの決まり: 今の公開用ファイル構成は通り、禁止の種類は通らない', function() {
     const allowed = ['README.md', 'LICENSE', 'package.json', 'package-lock.json', '.gitignore', 'build.js', 'dist-manifest.json',
       'src/_template.js', 'src/_jshintrc', 'src/yomi/YomiPage.js', 'packages/lib/src/nico/ThreadLoader.js',
+      'packages/zenza/src/pocket/PocketThumbnail.ts',
       'packages/components/src/template.txt', 'packages/components/mock/config.js', 'packages/components/dist/main.js',
       'dist/ZenzaWatch-dev.user.js', 'test/unit/utilTest.js', 'test/fixtures/VideoInfoRawData.json',
       'test/mocha.opts', 'sample/CA_TEST.playlist.json',
@@ -151,6 +152,7 @@ describe('公開前スキャン：未送信コミット・公開される全フ�
     const denied = ['.env', 'src/.env.local', 'capture.har', 'tools/publish_scan.py', 'docs/design-pack/x.md',
       'dist/_versions/ZenzaWatch-dev.task081.user.js', '.npmrc', 'test/fixtures/cookies.json', 'id_rsa',
       'notes.txt', 'src/data.bin', 'server.key', 'debug.log',
+      'packages/zenza/src/pocket/OtherUnreviewed.ts', 'packages/lib/src/pocket/PocketThumbnail.ts',
       'packages/comment-history/capture.har', 'packages/comment-history/src/cookies.mjs',
       'packages/comment-history/evidence/results.json', 'packages/comment-history/tools/unknown.mjs',
       'packages/other/src/unreviewed.mjs', 'packages/comment-history/src/generated/credentials.json'];

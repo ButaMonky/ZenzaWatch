@@ -109,4 +109,10 @@ describe('SCUI-06 isolated accessible search panel',()=>{
   assert.strictEqual(h.dom.window.document.querySelector('.zenzaSceneCommentSearch'),null);
   h.dom.window.close();
  });
+ it('ignores a non-element click target without throwing or seeking',()=>{
+  const h=panelHarness();h.panel.open();
+  assert.doesNotThrow(()=>h.panel._handleClick({target:h.dom.window.document.createTextNode('comment')}));
+  assert.strictEqual(h.state.seeks.length,0);
+  h.panel.dispose();h.dom.window.close();
+ });
 });

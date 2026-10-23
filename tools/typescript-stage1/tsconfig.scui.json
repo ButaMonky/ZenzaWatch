@@ -18,6 +18,6 @@
     "outDir": ".generated/scui"
   },
   "include": [
-    "nico-src/SceneSearch*.ts"
+    "nico-src/Scene*.ts"
   ]
 }

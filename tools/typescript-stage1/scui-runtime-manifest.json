@@ -22,5 +22,41 @@
     "runtime": "packages/zenza/src/sceneSearch/SceneSearchPlacement.js",
     "sourceSha256": "8839c4a873062bbdfcd623617ab4a63b58e200c680008de7456a7c2ad21513a9",
     "runtimeSha256": "ac8b0eeef61b2dcf1929439219359cad9378bc18ee339190436aa683a034a8d2"
+  },
+  "SceneSearchController": {
+    "source": "tools/typescript-stage1/nico-src/SceneSearchController.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneSearchController.js",
+    "sourceSha256": "b5df39ce50cfdea937e1957a45f0e9e04d443228f79b45af7cce7ccf5b17d910",
+    "runtimeSha256": "d20ebc408d007c255d163e0293629370beed0aa730ec1231ee6a9823824d9663"
+  },
+  "SceneSearchInteraction": {
+    "source": "tools/typescript-stage1/nico-src/SceneSearchInteraction.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneSearchInteraction.js",
+    "sourceSha256": "38f6efa25aa94375035668eeb6ac3d7df2ecbe2afef3877b0642bbdfde35e45c",
+    "runtimeSha256": "36198558e5877544fc3d36a614fd575bda6fae474ec9900057451e8fb6a4715a"
+  },
+  "ScenePreviewIdleLimiter": {
+    "source": "tools/typescript-stage1/nico-src/ScenePreviewIdleLimiter.ts",
+    "runtime": "packages/zenza/src/sceneSearch/ScenePreviewIdleLimiter.js",
+    "sourceSha256": "2f3db83f589b990765dc15920bee6112354b19268e57d44f5dc92e0a0a5eaa43",
+    "runtimeSha256": "72c5dd886dac0f83236ae21d618d49aa4cd46286db1c73184b87bf68bad423f8"
+  },
+  "SceneSearchShortcutRouter": {
+    "source": "tools/typescript-stage1/nico-src/SceneSearchShortcutRouter.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneSearchShortcutRouter.js",
+    "sourceSha256": "21e926aace00ffe4096bfc08e7cd59b7f1ea0856bf49c6f3c503ec9cf035ac10",
+    "runtimeSha256": "422156b969f87ba5246796757c64fb692f02aeececfb0c9f5ec258826508bb52"
+  },
+  "SceneCommentSearch": {
+    "source": "tools/typescript-stage1/nico-src/SceneCommentSearch.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneCommentSearch.js",
+    "sourceSha256": "2aad3a0002522a0d37364b9384aea8711d4528ca094e45d54afb4c5078866f43",
+    "runtimeSha256": "5f142ee4baae5a2e8d35686cbca06b347a08a4d812fffbad5c0e0fb60793097f"
+  },
+  "SceneCommentSearchPanel": {
+    "source": "tools/typescript-stage1/nico-src/SceneCommentSearchPanel.ts",
+    "runtime": "packages/zenza/src/sceneSearch/SceneCommentSearchPanel.js",
+    "sourceSha256": "444f178bf4ef1560edc57987d7a02b617467e69ec6a84cba787e10cddb47ada6",
+    "runtimeSha256": "9a6acad7a54faeab9e4d30d2f3d0a8561be2ce5eb8d66e8913a4dd116b511722"
   }
 }

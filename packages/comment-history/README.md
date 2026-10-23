@@ -17,3 +17,42 @@ Current official totals and posting metadata are not replaced by historical page
 ## Integration boundaries
 Generated entry points are connected by CommentPlayer, NicoVideoPlayer and NicoVideoPlayerDialog. Display preparation keeps normal comment identities and NicoScript runtime state. CommentPanel retains a reading anchor only within the same video generation.
 Keep independent fixture tests and integration tests together when changing these boundaries. Browser tests with mocked transport are not evidence of successful live NicoNico retrieval.
+
+## Task460 — TypeScript settings migration (Stage 1)
+
+The optional TypeScript implementation is in `typescript-src/settings.ts`,
+with a strict typed boundary in `typescript-src/core.d.mts`. This is a
+**non-deployed compatibility stage**: the runtime and custom Zenza bundler
+still consume `src/settings.mjs` unchanged. No fetch, retry, quota or
+rendering behavior changes are introduced.
+
+From this package, `npm ci --ignore-scripts --no-audit --no-fund` installs
+pinned TypeScript 7.0.2 and Babel AST comparison tools. Then run
+`npm run check:typescript` for a strict TS compile and semantic JS parity
+check. `npm run stamp:typescript` updates the source/runtime manifest only
+when the emitted JS and deployed JS have the same AST and the Git baseline
+has not been edited by another owner. Runtime changes require a separate
+reviewed task and full regression. The normal `npm test` also guards
+the checked-in TS/JS SHA-256 manifest without needing a TypeScript compiler.
+
+Other comment-history modules remain JavaScript until separately migrated.
+
+## Task520 — TypeScript互換性調査モジュール
+
+従来の`src/probe.mjs`を変更せず、TypeScript候補を
+`probe-src/probe.ts`に配置しました。5段階の試験と通信回数上限、
+キャンセル処理、集計レポートについて公開型を定義しています。
+`probe-src/core.d.mts`と`transport.d.mts`はこの
+probe専用の型境界であり、実行時のcore/transport自体の移行ではありません。
+
+`npm run check:probe`でTypeScript7のstrict型検査・不正設定の
+コンパイル拒否・Babel ASTによる既存JSとの完全一致・manifestを検証します。
+`npm run stamp:probe`はGit HEAD側の旧実行JSが未変更の場合だけ
+マニフェストを更新します。
+`npm run check:typescript`は設定スキーマ検査に加えて
+probe検査も行います。`npm test`では型ソースのSHA、
+実行JSのSHA、5段階保持と上限の変更を監視します。
+
+ビルド結果は`.generated-probe/`へ出力（Gitから除外）。
+正規のZenza/bundlerは引き続き`src/probe.mjs`を使用し、
+自動的にTypeScript出力を製品へ置換しません。

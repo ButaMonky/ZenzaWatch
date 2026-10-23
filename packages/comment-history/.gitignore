@@ -1,2 +1,4 @@
-node_modules/
+# Generated strict TypeScript JS and declarations are reproducible build outputs.
+.generated-ts/
 dist/
+.generated-probe/

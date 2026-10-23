@@ -1,0 +1,5 @@
+{
+ "extends":"./tsconfig.scui.json",
+ "compilerOptions":{"noEmit":true,"rootDir":"."},
+ "include":["nico-src/Scene*.ts","type-tests/scene-runtime.ts"]
+}

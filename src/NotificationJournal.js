@@ -25,6 +25,8 @@ const NotificationJournal = (() => {
   const text = value => {
     if (typeof value !== 'string') { return ''; }
     return value
+      .replace(/(["'](?:token|secret|authorization|cookie|password|csrf|session)["']\s*:\s*)(["'][^"']*["']|[^,}\s]+)/gi,
+        '$1"[REDACTED]"')
       .replace(/https?:\/\/[^\s<>"']+/gi, match => {
         try {
           const url = new URL(match);
@@ -73,6 +75,7 @@ const NotificationJournal = (() => {
     }
   };
   const open = () => {
+    if (connection) { return Promise.resolve(connection); }
     if (opening) { return opening; }
     if (typeof indexedDB === 'undefined') { return Promise.resolve(null); }
     opening = new Promise(resolve => {

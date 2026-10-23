@@ -91,13 +91,13 @@ const NotificationJournal = (() => {
         }
       };
       req.onsuccess = () => {
-        connection = req.result;
-        connection.onversionchange = () => {
-          connection.close();
-          connection = null;
-          opening = null;
+        const db = req.result;
+        connection = db;
+        db.onversionchange = () => {
+          db.close();
+          if (connection === db) { connection = null; opening = null; }
         };
-        resolve(connection);
+        resolve(db);
       };
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);

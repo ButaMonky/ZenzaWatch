@@ -23,7 +23,7 @@
 - src/NotificationHistoryPanel.js（新設）: 履歴タブ、検索、種類フィルター、詳細展開、JSON保存、全件削除。textContent表示でHTMLを実行しない。選択中以外は読み取りを開始しない
 - src/RootDispatcher.js: dispatcher経由の通知・警告を画面表示を変えずに記録。ECHOの自由入力パラメータは履歴へ残さない
 - src/NicoVideoPlayerDialog.js: タブ統合。いいね（画面が切り替わっていても元の動画ID）、コメント投稿結果と診断、動画情報・再生失敗を必要な項目だけで記録
-- test/unit/NotificationJournalTest.js、NotificationHistoryPanelTest.js: ネット不要のテストを追加
+- test/unit/NotificationJournalTest.js、NotificationJournalIndexedDbTest.js、NotificationHistoryPanelTest.js: ネット不要のテストを追加（合成IndexedDBで永続保存・別タブ削除も検証）
 
 ## 明確な非対応・後続修正が必要な点
 1. generated由来のThreadLoader内部にある全段階（投稿キー・POST再試行・ACK不明）の細かな診断は未接続。プレイヤー側の高レベル結果のみ記録できる
@@ -42,6 +42,7 @@
 - 保存制限: IndexedDB利用不可・容量不足・複数タブ・大量通知・同時削除・プライバシー・JSON保存
 - 既存配布物 dist/ZenzaWatch-dev.user.js 等はこのブランチでは未更新。実機に使える状態ではない
 - verified時だけdevelopへ統合/配布。未確認をPASSと記さない
+- 初回GitHub Actions (PR #37): secret gate PASS。quality gates: 3467 passing / 78 pending / 1 failing（BuildIntegrityTest: dist未再生成）。新規のsource-onlyテストはこの時点で個別失敗なし。後続コミットのCIは別途再確認が必要
 
 ## 再開位置
 1. CI結果を確認して修正

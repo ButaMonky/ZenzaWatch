@@ -29,8 +29,9 @@ const RootDispatcher = (() => {
           NotificationJournal.record({
             category: 'general',
             level,
-            message: allowHtml && typeof message === 'string' ?
-              message.replace(/<[^>]*>/g, ' ') : message,
+            message: typeof message === 'string' ?
+              (allowHtml ? message.replace(/<[^>]*>/g, ' ') : message) :
+              '[形式不明の通知（内容非保存）]',
             videoId: info && (info.videoId || info.watchId) || '',
             source: 'popup'
           });

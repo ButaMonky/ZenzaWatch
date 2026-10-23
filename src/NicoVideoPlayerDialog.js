@@ -2456,7 +2456,7 @@ class NicoVideoPlayerDialog extends Emitter {
     // Independent history tab; never pause playback while retrieving journal records.
     if (typeof NotificationHistoryPanel !== 'undefined') {
       const tab = this._view.appendTab('notificationHistory', '通知履歴');
-      NotificationHistoryPanel.mount(tab[0]);
+      NotificationHistoryPanel.mount(tab[0], global.emitter);
     }
 
     this._$playerContainer = this._view.get$Container();

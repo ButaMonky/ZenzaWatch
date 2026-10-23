@@ -293,7 +293,15 @@ const RootDispatcher = (() => {
           break;
         case 'echo':
           window.console.log('%cECHO', 'font-weight: bold;', {params});
-          RootDispatcher._showLoggedPopup('info', `ECHO: 「${typeof params === 'string' ? params : JSON.stringify(params)}」`);
+          // Echo may contain arbitrary user values. Do not persist its raw payload.
+          if (typeof NotificationJournal !== 'undefined') {
+            NotificationJournal.record({
+              category: 'system', level: 'info',
+              message: 'ECHO コマンドを実行しました（内容非保存）',
+              source: 'echo'
+            });
+          }
+          PopupMessage.notify(`ECHO: 「${typeof params === 'string' ? params : JSON.stringify(params)}」`);
           break;
         default:
           // Task 077: 画面フィルター（toggle-screenFilter.* / screenFilter-*）

@@ -1,5 +1,6 @@
 import {ZenzaWatch, PRODUCT} from './ZenzaWatchIndex';
 import {PopupMessage} from './util';
+import {NotificationJournal} from './NotificationJournal';
 import {PlayerConfig} from './NicoVideoPlayerDialog';
 import {Clipboard} from '../packages/lib/src/dom/Clipboard';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
@@ -13,11 +14,34 @@ import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions'
 //@require PipPageThumbnail
 //@require RelatedMenuOrder
 //@require RelatedMenuActions
+//@require NotificationJournal
 const RootDispatcher = (() => {
   let config;
   let player;
   let playerState;
   class RootDispatcher {
+    static _showLoggedPopup(level, message, allowHtml = false) {
+      // Save the user-facing message, never the raw Error/response/payload.
+      // The journal does not block the existing popup when storage is disabled.
+      try {
+        if (typeof NotificationJournal !== 'undefined') {
+          const info = playerState && playerState.videoInfo;
+          NotificationJournal.record({
+            category: 'general',
+            level,
+            message: allowHtml && typeof message === 'string' ?
+              message.replace(/<[^>]*>/g, ' ') : message,
+            videoId: info && (info.videoId || info.watchId) || '',
+            source: 'popup'
+          });
+        }
+      } catch (_) { /* do not alter the established notification flow */ }
+      if (level === 'error') {
+        PopupMessage.alert(message, allowHtml);
+      } else {
+        PopupMessage.notify(message, allowHtml);
+      }
+    }
     static initialize(dialog) {
       player = dialog;
       playerState = ZenzaWatch.state.player;
@@ -60,7 +84,7 @@ const RootDispatcher = (() => {
         return;
       }
       if (!CommentPictureInPicture.isSupported()) {
-        PopupMessage.alert('このブラウザはコメント付きピクチャーインピクチャーに対応していません');
+        RootDispatcher._showLoggedPopup('error', 'このブラウザはコメント付きピクチャーインピクチャーに対応していません');
         return;
       }
       CommentPictureInPicture.toggle({
@@ -73,7 +97,7 @@ const RootDispatcher = (() => {
         onEnd: () => PipPageThumbnail.stop()
       }).catch(err => {
         console.warn('comment picture-in-picture fail', err);
-        PopupMessage.alert(`コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
+        RootDispatcher._showLoggedPopup('error', `コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
       });
     }
 
@@ -89,23 +113,23 @@ const RootDispatcher = (() => {
       let result = {status: 'ok'};
       switch(command) {
         case 'notifyHtml':
-          PopupMessage.notify(params, true);
+          RootDispatcher._showLoggedPopup('info', params, true);
           break;
         case 'notify':
-          PopupMessage.notify(params);
+          RootDispatcher._showLoggedPopup('info', params);
           break;
         case 'alert':
-          PopupMessage.alert(params);
+          RootDispatcher._showLoggedPopup('error', params);
           break;
         case 'alertHtml':
-          PopupMessage.alert(params, true);
+          RootDispatcher._showLoggedPopup('error', params, true);
           break;
         case 'copy-related-text': {
           if(typeof params!=='string' || !params || params.length>655360){break;}
-          const failed=()=>PopupMessage.notify('コピーできませんでした。ブラウザの権限を確認してください');
+          const failed=()=>RootDispatcher._showLoggedPopup('info', 'コピーできませんでした。ブラウザの権限を確認してください');
           try{
             Promise.resolve(Clipboard.copyText(params)).then(result=>{
-              if(result===false){failed();}else{PopupMessage.notify('コピーしました');}
+              if(result===false){failed();}else{RootDispatcher._showLoggedPopup('info', 'コピーしました');}
             },failed);
           }catch(_){failed();}
           break;
@@ -186,7 +210,7 @@ const RootDispatcher = (() => {
           const video = player?._nicoVideoPlayer?._videoPlayer?.videoElement ||
             document.querySelector('.zenzaWatchVideoElement');
           if (!video || typeof video.requestPictureInPicture !== 'function') {
-            PopupMessage.alert('この動画ではピクチャーインピクチャーを開始できません');
+            RootDispatcher._showLoggedPopup('error', 'この動画ではピクチャーインピクチャーを開始できません');
             break;
           }
           // Keep this call synchronous with the user's click (user activation).
@@ -246,7 +270,7 @@ const RootDispatcher = (() => {
           command = command.replace(/^toggle-/, '');
           config.props[command] = !config.props[command];
           if (command === 'supporterCredit.enable') {
-            PopupMessage.notify(`提供画面の表示: ${config.props[command] ? 'ON' : 'OFF'}`);
+            RootDispatcher._showLoggedPopup('info', `提供画面の表示: ${config.props[command] ? 'ON' : 'OFF'}`);
           }
           break;
         case 'baseFontFamily':
@@ -269,13 +293,13 @@ const RootDispatcher = (() => {
           break;
         case 'echo':
           window.console.log('%cECHO', 'font-weight: bold;', {params});
-          PopupMessage.notify(`ECHO: 「${typeof params === 'string' ? params : JSON.stringify(params)}」`);
+          RootDispatcher._showLoggedPopup('info', `ECHO: 「${typeof params === 'string' ? params : JSON.stringify(params)}」`);
           break;
         default:
           // Task 077: 画面フィルター（toggle-screenFilter.* / screenFilter-*）
           if (typeof command === 'string' && /^(toggle-)?screenFilter[.-]/.test(command)) {
             const message = ScreenFilter.execCommand(command, params);
-            message && PopupMessage.notify(message);
+            message && RootDispatcher._showLoggedPopup('info', message);
             break;
           }
           ZenzaWatch.emitter.emit(`command-${command}`, command, params);
@@ -303,7 +327,7 @@ const RootDispatcher = (() => {
           break;
         case 'debug':
           playerState.isDebug = !!value;
-          PopupMessage.notify('debug: ' + (value ? 'ON' : 'OFF'));
+          RootDispatcher._showLoggedPopup('info', 'debug: ' + (value ? 'ON' : 'OFF'));
           break;
         case 'sharedNgLevel':
         case 'screenMode':

@@ -100,6 +100,6 @@ describe('NotificationJournal source-only, no network', () => {
     const journal = harness();
     journal.record({message: 'notice'});
     assert.strictEqual(await journal.clear(), false);
-    assert.deepStrictEqual(await journal.list(), []);
+    assert.strictEqual((await journal.list()).length, 0);
   });
 });

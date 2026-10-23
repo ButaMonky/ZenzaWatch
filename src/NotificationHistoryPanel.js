@@ -142,19 +142,22 @@ const NotificationHistoryPanel = (() => {
     refresh.addEventListener('click', schedule);
     more.addEventListener('click', () => { shown += 100; schedule(); });
     save.addEventListener('click', async () => {
-      const entries = await snapshot();
-      const blob = new Blob([JSON.stringify(entries, null, 2)], {type: 'application/json'});
-      const url = URL.createObjectURL(blob);
+      let url = null;
       try {
+        const entries = await snapshot();
+        const blob = new Blob([JSON.stringify(entries, null, 2)], {type: 'application/json'});
+        url = URL.createObjectURL(blob);
         const link = element('a');
         link.href = url;
         link.download = 'zenzawatch-notifications-' +
           new Date().toISOString().slice(0, 10) + '.json';
         document.body.append(link);
-        link.click();
-        link.remove();
+        try { link.click(); } finally { link.remove(); }
+        status.textContent = 'JSON保存を開始しました（' + entries.length + '件）';
+      } catch (_) {
+        status.textContent = 'JSON保存に失敗しました';
       } finally {
-        URL.revokeObjectURL(url);
+        if (url) { window.setTimeout(() => URL.revokeObjectURL(url), 1000); }
       }
     });
     clear.addEventListener('click', async () => {

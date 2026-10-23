@@ -9,6 +9,7 @@ const NotificationJournal = (() => {
   const MAX_SESSION = 2000;
   const listeners = new Set();
   const session = [];
+  const recent = [];
   const levels = new Set(['info', 'success', 'warning', 'error']);
   const categories = new Set(['general', 'comment', 'like', 'network', 'player', 'system']);
   const safeKeys = new Set([
@@ -125,9 +126,13 @@ const NotificationJournal = (() => {
         const tx = db.transaction(STORE, 'readwrite');
         tx.objectStore(STORE).put(entry);
         tx.onerror = () => {};
-        if (++writes % 50 === 0) {
-          tx.oncomplete = () => prune(db);
-        }
+        tx.oncomplete = () => {
+          // Retain in memory only until the transaction commits. This avoids
+          // resurfacing stale events after a different tab clears IndexedDB.
+          const index = session.findIndex(item => item.id === entry.id);
+          if (index !== -1) { session.splice(index, 1); }
+          if (++writes % 50 === 0) { prune(db); }
+        };
       } catch (_) { /* still available in session memory */ }
     }).catch(() => {});
   };
@@ -137,7 +142,7 @@ const NotificationJournal = (() => {
     // An explicitly classified event is emitted just before its generic popup.
     // Save only the richer event; do not lose two legitimate repeated notifications.
     if (entry.category === 'general') {
-      const duplicate = session.slice(0, 8).some(previous =>
+      const duplicate = recent.some(previous =>
         previous.category !== 'general' &&
         previous.message === entry.message &&
         previous.videoId === entry.videoId &&
@@ -146,6 +151,8 @@ const NotificationJournal = (() => {
     }
     session.unshift(entry);
     if (session.length > MAX_SESSION) { session.length = MAX_SESSION; }
+    recent.unshift(entry);
+    if (recent.length > 8) { recent.length = 8; }
     persist(entry, generation);
     announce();
     return entry;
@@ -177,6 +184,7 @@ const NotificationJournal = (() => {
   const clear = async () => {
     generation++;
     session.length = 0;
+    recent.length = 0;
     announce();
     const db = await open();
     if (!db) { return false; }

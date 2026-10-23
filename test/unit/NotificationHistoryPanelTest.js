@@ -25,6 +25,7 @@ function setup(records) {
     extract('src/NotificationHistoryPanel.js', 'NotificationHistoryPanel', 'var') +
     ';globalThis.__panel=NotificationHistoryPanel;', context);
   const root = dom.window.document.getElementById('root');
+  root.classList.add('activeTab');
   context.__panel.mount(root);
   return {dom, root, journal};
 }

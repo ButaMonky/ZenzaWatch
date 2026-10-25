@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.316-task801
+// @version        2.7.317-task935
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-23 14:47Z
+// build: 2026-10-25 16:24Z 00bd568
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.316-task801';
+    var VER = '2.7.317-task935';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-23 14:47Z';
+    var BUILD = '2026-10-25 16:24Z 00bd568';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -23629,6 +23629,17 @@ util.addStyle(`
 	}
 	.videoControlBar.is-menuOpen .controlItemContainer.right {
 		z-index: 320;
+	}
+	/* Issue #3 / Task935: The transparent right-control wrapper covers the end
+		of the fullscreen seek range. Keep Task101's z-index and real buttons,
+		but let empty wrapper pixels pass mouse input through to the seekbar.
+		Low-specificity button opt-in preserves focus/menu/disabled overrides. */
+	.videoControlBar .controlItemContainer.right,
+	.videoControlBar .controlItemContainer.right > .scalingUI {
+		pointer-events: none;
+	}
+	:where(.videoControlBar .controlItemContainer.right > .scalingUI) > .controlButton {
+		pointer-events: auto;
 	}
 `, {className: 'screenMode for-screen-full videoControlBar', disabled: true});
 	VideoControlBar.__tpl__ = (`

@@ -54,5 +54,11 @@ jobs:
           cache: npm
       - name: Install exactly the dependency lockfile
         run: npm ci --no-audit --no-fund
+      # Task935: SCUI source parity tests need compiler output in a clean runner.
+      # No product source is rewritten; the synchronizer checks tracked JS.
+      - name: Install canonical scene TypeScript toolchain
+        run: npm --prefix tools/typescript-stage1 ci --no-audit --no-fund
+      - name: Emit and verify canonical scene sources
+        run: npm --prefix tools/typescript-stage1 run nico:verify
       - name: Full offline regression suite
         run: npm test -- --timeout 15000 --reporter dot

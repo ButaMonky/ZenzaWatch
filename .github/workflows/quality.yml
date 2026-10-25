@@ -33,6 +33,10 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Structural and negative-path protocol contract fixtures
         run: node --test test/compat/nico-contract.test.mjs test/compat/nico-failure-modes.test.mjs
+      # Public Issue #3: real Chrome hit testing at 240 screen/scale/seek points.
+      # Uses only a reduced local page; no login, NicoNico traffic or credentials.
+      - name: Verify native fullscreen seek and toolbar controls in Chromium
+        run: node test/browser/issue3-public-hit-area.cjs
       - name: Generate local comment-history bundles and run all protocol tests
         run: npm --prefix packages/comment-history test
 
@@ -50,5 +54,11 @@ jobs:
           cache: npm
       - name: Install exactly the dependency lockfile
         run: npm ci --no-audit --no-fund
+      # Task935: SCUI source parity tests need compiler output in a clean runner.
+      # No product source is rewritten; the synchronizer checks tracked JS.
+      - name: Install canonical scene TypeScript toolchain
+        run: npm --prefix tools/typescript-stage1 ci --no-audit --no-fund
+      - name: Emit and verify canonical scene sources
+        run: npm --prefix tools/typescript-stage1 run nico:verify
       - name: Full offline regression suite
         run: npm test -- --timeout 15000 --reporter dot

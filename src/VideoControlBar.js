@@ -1659,6 +1659,18 @@ util.addStyle(`
     z-index: 320;
   }
 
+  /* Issue #3 / Task935: The transparent right-control wrapper covers the end
+     of the fullscreen seek range. Keep Task101's z-index and real buttons,
+     but let empty wrapper pixels pass mouse input through to the seekbar.
+     Low-specificity button opt-in preserves focus/menu/disabled overrides. */
+  .videoControlBar .controlItemContainer.right,
+  .videoControlBar .controlItemContainer.right > .scalingUI {
+    pointer-events: none;
+  }
+  :where(.videoControlBar .controlItemContainer.right > .scalingUI) > .controlButton {
+    pointer-events: auto;
+  }
+
 `, {className: 'screenMode for-screen-full videoControlBar', disabled: true});
 
   VideoControlBar.__tpl__ = (`

@@ -47,6 +47,19 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 各スクリプトの詳しい役割については
 [SCRIPTS.md](/SCRIPTS.md) を参照してください。
 
+### 過去のバージョンをダウンロードする
+
+過去の公開版は [GitHub Releases（旧版・復元用ファイル一覧）](https://github.com/ButaMonky/ZenzaWatch/releases) から選べます。
+
+- [2.7.315：動画情報の読み込み修復版](https://github.com/ButaMonky/ZenzaWatch/releases/tag/v2.7.315)
+- [2.7.316：シーンサーチを統合した版](https://github.com/ButaMonky/ZenzaWatch/releases/tag/v2.7.316)
+- [2.7.317：Issue #3のシーク修正版（先行リリース・実機確認待ち）](https://github.com/ButaMonky/ZenzaWatch/releases/tag/v2.7.317)
+
+各Releaseには、当時のZenzaWatch本体・HLS・Pocket・上級者設定・ブログパーツ補助と、
+SHA-256一覧、手動復元用の `pinned-rollback.zip` を収録しています。
+**通常の旧版ファイルには最新版への自動更新URLが残っています。** 昔の状態を維持したい場合は復元用ZIPを利用してください。
+詳しくは [バージョンとリリースの管理方針](./RELEASES.md) を参照してください。
+
 ## 本家からの変更点
 
 現在のニコニコ動画環境への対応を含め、

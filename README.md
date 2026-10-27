@@ -135,3 +135,6 @@ Task376で一度実装された部分はTask378で撤去しました。**明示�
 不具合報告や、再現手順・原因・修正案が分かっている場合は
 [Issues](https://github.com/ButaMonky/ZenzaWatch/issues)
 を利用してください。
+
+
+## NicoNico API research (Task969)\n\nThe public [offline API lookup and source index](docs/research/README.md) documents 44 research entries. It is not part of the player runtime.

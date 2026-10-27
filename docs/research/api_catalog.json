@@ -1,0 +1,1419 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-27",
+  "description": "AI/search-friendly index of existing NicoNico endpoints. Read-only reference; no requests are executed by this catalog.",
+  "verification_levels": {
+    "code": "Implementation inspected; does NOT mean a live request was repeated.",
+    "historical": "Earlier dated research records a real browser/API observation.",
+    "live_get": "Read-only GET checked on 2026-10-27; not a guarantee of permanence."
+  },
+  "auth_levels": {
+    "public": "Public/read-only use, normally without cookies; endpoint policy may change.",
+    "frontend_cookie": "Existing client uses frontend headers and credentials include. Not all operations require login.",
+    "authorized": "Requires permitted user action, credentials and/or keys; documentation is not execution permission.",
+    "dynamic": "Server host and authorization are supplied by watch metadata, not hardcoded."
+  },
+  "entries": [
+    {
+      "id": "search.video",
+      "category": "search",
+      "title": "公式動画検索",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v2/search/video",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "historical",
+      "verified_on": "2026-09-17",
+      "keywords": [
+        "動画",
+        "検索",
+        "キーワード",
+        "タグ検索",
+        "search",
+        "official",
+        "nvapi",
+        "ソート"
+      ],
+      "summary": "公式ページ系検索の動画一覧。sortKey/pageSize/各種フィルターを使いcount.likeも保持。",
+      "caveats": [
+        "data.itemsとtotalCountの形式検証が必要。",
+        "未対応条件や失敗時のsnapshotへのフォールバックに注意。"
+      ],
+      "response": [
+        "data.items",
+        "data.totalCount",
+        "count.like"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoSearch.js",
+          "anchor": "const API_URL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "search.snapshot",
+      "category": "search",
+      "title": "スナップショット検索",
+      "method": "GET",
+      "url": "https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-09-14",
+      "keywords": [
+        "検索",
+        "snapshot",
+        "スナップショット",
+        "詳細条件",
+        "contentId",
+        "複合検索",
+        "除外",
+        "OR"
+      ],
+      "summary": "q/targets/fields/_sort/_limit/_offset/filtersを指定して検索。",
+      "caveats": [
+        "更新は概ね日次。直近の動画欠落を「存在しない」と判断しない。"
+      ],
+      "response": [
+        "data",
+        "meta.totalCount"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoSearch.js",
+          "anchor": "const BASE_URL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "search.by-owner",
+      "category": "search",
+      "title": "投稿者の公開動画検索",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v3/users/{userId}/videos",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "投稿者",
+        "ユーザー",
+        "動画一覧",
+        "公開検索",
+        "by-owner",
+        "uploaded"
+      ],
+      "summary": "投稿者の公開動画をページング取得し、snapshotでタグ/キーワードを絞る。",
+      "caveats": [
+        "100件/ページ、最大5000件という実装上限。チャンネルは別扱い。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoSearch.js",
+          "anchor": "const fetchUserPage"
+        }
+      ],
+      "depends_on": [
+        "search.snapshot"
+      ]
+    },
+    {
+      "id": "search.suggest",
+      "category": "search",
+      "title": "タグ検索候補",
+      "method": "GET",
+      "url": "https://sug.search.nicovideo.jp/suggestion/expand/{encodedWord}",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-09-17",
+      "keywords": [
+        "サジェスト",
+        "タグ候補",
+        "autocomplete",
+        "入力補完",
+        "検索候補"
+      ],
+      "summary": "タグの候補配列candidatesを返す。",
+      "caveats": [
+        "観測上10件まで、credentials omit。include時CORS失敗の過去例あり。"
+      ],
+      "response": [
+        "candidates[]"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/TagSuggestLoader.js",
+          "anchor": "const API_BASE"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "search.playlist",
+      "category": "search",
+      "title": "プレイリスト検索",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/playlist/search",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "プレイリスト",
+        "検索",
+        "シリーズ",
+        "keyword",
+        "page",
+        "sort"
+      ],
+      "summary": "keyword/tag/pageSize/page/orderで動画を検索するプレイリスト専用API。",
+      "caveats": [
+        "/v2/search/videoとは応答形状が異なる。URL単位でキャッシュ分離。"
+      ],
+      "response": [
+        "data.items"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/PlaylistApiLoader.js",
+          "anchor": "_buildSearchURL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "tags.list",
+      "category": "tags",
+      "title": "タグ一覧取得",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v2/videos/{videoId}/tags",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "タグ",
+        "一覧",
+        "取得",
+        "GET",
+        "リスト",
+        "tag"
+      ],
+      "summary": "動画のタグと編集可能情報を取得する。",
+      "caveats": [
+        "現在のTagEditApiはX-Tag-Edit-Keyをヘッダーに設定。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/TagEditApi.js",
+          "anchor": "load(videoId, editKey"
+        }
+      ],
+      "depends_on": [
+        "tags.edit-key"
+      ]
+    },
+    {
+      "id": "tags.add",
+      "category": "tags",
+      "title": "タグ登録・追加",
+      "method": "POST",
+      "url": "https://nvapi.nicovideo.jp/v2/videos/{videoId}/tags?tag={encodedTag}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "historical",
+      "verified_on": "2026-09-16",
+      "keywords": [
+        "タグ",
+        "登録",
+        "追加",
+        "書込",
+        "編集",
+        "add",
+        "POST"
+      ],
+      "summary": "動画タグを追加する。X-Tag-Edit-Keyと編集権限が必要。",
+      "caveats": [
+        "403やKEY_EXPIRED時はwatch v3からキーを更新して最大1回再試行。",
+        "台帳の検索は一切送信しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/TagEditApi.js",
+          "anchor": "async add("
+        }
+      ],
+      "depends_on": [
+        "tags.edit-key"
+      ]
+    },
+    {
+      "id": "tags.delete",
+      "category": "tags",
+      "title": "タグ削除",
+      "method": "DELETE",
+      "url": "https://nvapi.nicovideo.jp/v2/videos/{videoId}/tags?tag={encodedTag}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "historical",
+      "verified_on": "2026-09-16",
+      "keywords": [
+        "タグ",
+        "削除",
+        "消す",
+        "解除",
+        "編集",
+        "remove",
+        "DELETE"
+      ],
+      "summary": "動画タグを削除する。正しい権限と編集キーが必要。",
+      "caveats": [
+        "403 FORBIDDENとキー期限切れの原因が確定しているとは限らない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/TagEditApi.js",
+          "anchor": "async remove("
+        }
+      ],
+      "depends_on": [
+        "tags.edit-key"
+      ]
+    },
+    {
+      "id": "tags.edit-key",
+      "category": "tags",
+      "title": "タグ編集キー更新",
+      "method": "GET",
+      "url": "https://www.nicovideo.jp/api/watch/v3/{videoId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "historical",
+      "verified_on": "2026-09-16",
+      "keywords": [
+        "タグ",
+        "編集キー",
+        "再取得",
+        "X-Tag-Edit-Key",
+        "期限切れ",
+        "CSRF"
+      ],
+      "summary": "noSideEffect=true等で視聴情報を取り直しtag.edit.editKeyを得る。",
+      "caveats": [
+        "キー/認証情報を台帳や診断ログへ保存しない。"
+      ],
+      "response": [
+        "data.tag.edit.editKey"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/TagEditApi.js",
+          "anchor": "_refreshEditKey("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.watch",
+      "category": "video",
+      "title": "視聴ページ・watch v4",
+      "method": "GET",
+      "url": "https://www.nicovideo.jp/watch/{watchId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "historical",
+      "verified_on": "2026-10-01",
+      "keywords": [
+        "watch",
+        "視聴",
+        "動画情報",
+        "v4",
+        "server-response",
+        "プレイヤー",
+        "thumbnail"
+      ],
+      "summary": "埋込server-responseの$watchV4.dataを読む。動画、コメント、サムネイル情報の起点。",
+      "caveats": [
+        "v3とv4のデータ形状は異なる。有料/非公開と不存在は区別。"
+      ],
+      "response": [
+        "$watchV4.data.video",
+        "player",
+        "thumbnail"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoInfoLoader.js",
+          "anchor": "const fetchWatchResponse"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.watch-lazy",
+      "category": "video",
+      "title": "watch v4追加情報lazy",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v4/watch/lazy/{watchId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "動画追加情報",
+        "投稿者",
+        "シリーズ",
+        "lazy",
+        "ロード"
+      ],
+      "summary": "投稿者やシリーズ等の遅延ロードを視聴ページに関連付ける。",
+      "caveats": [
+        "要求watchIdと応答IDの一致検証。全フィールドの現在の保証は不明。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoInfoLoader.js",
+          "anchor": "/v4/watch/lazy/"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.thumbinfo",
+      "category": "video",
+      "title": "getthumbinfo XML",
+      "method": "GET",
+      "url": "https://ext.nicovideo.jp/api/getthumbinfo/{watchId}",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-09-17",
+      "keywords": [
+        "サムネイル",
+        "動画情報",
+        "タイトル",
+        "説明文",
+        "再生数",
+        "xml",
+        "thumbinfo"
+      ],
+      "summary": "公開動画の説明文/サムネイル/再生・コメント・マイリスト数をXMLで取得。",
+      "caveats": [
+        "いいね数はこのXMLにない。",
+        "投稿者ID/アイコンが欠ける動画がある。"
+      ],
+      "response": [
+        "title",
+        "description",
+        "view_counter",
+        "comment_num"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThumbInfoLoader.js",
+          "anchor": "api/getthumbinfo/"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.likes-and-owner",
+      "category": "video",
+      "title": "いいね数と可視投稿者",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/videos?watchIds={watchId}",
+      "action": "read",
+      "auth": "public",
+      "verification": "live_get",
+      "verified_on": "2026-10-27",
+      "keywords": [
+        "いいね数",
+        "count.like",
+        "投稿者",
+        "ユーザー名",
+        "owner",
+        "icon",
+        "動画概要"
+      ],
+      "summary": "data.items[].video.count.likeと可視ownerから追加カード情報を取得。",
+      "caveats": [
+        "X-Frontend-Id:6/-Version:0。0と欠損を区別し、hidden ownerを上書きしない。"
+      ],
+      "response": [
+        "data.items[].video.count.like",
+        "data.items[].video.owner"
+      ],
+      "sources": [
+        {
+          "path": "docs/research/API_OBSERVATIONS.md",
+          "anchor": "## video.likes-and-owner"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.owner.nicoad",
+      "category": "video",
+      "title": "欠落投稿者のNicoAd補完",
+      "method": "GET",
+      "url": "https://api.nicoad.nicovideo.jp/v1/contents/video/{watchId}",
+      "action": "read",
+      "auth": "public",
+      "verification": "live_get",
+      "verified_on": "2026-10-27",
+      "keywords": [
+        "投稿者",
+        "補完",
+        "消えた",
+        "削除済み",
+        "退会",
+        "ownerId",
+        "ownerName",
+        "ownerIcon",
+        "広告"
+      ],
+      "summary": "getthumbinfoで不足した投稿者ID・名前・アイコンを得られる場合がある。",
+      "caveats": [
+        "data.id一致検証。広告対象外404あり。取得成功で退会状態は断定できない。"
+      ],
+      "response": [
+        "data.ownerId",
+        "data.ownerName",
+        "data.ownerIcon"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/OwnerSupplement.js",
+          "anchor": "/v1/contents/video/"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.owner.snapshot",
+      "category": "video",
+      "title": "Snapshotの投稿者ID逆引き",
+      "method": "GET",
+      "url": "https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-09-14",
+      "keywords": [
+        "投稿者ID",
+        "欠落",
+        "ID逆引き",
+        "snapshot",
+        "userId",
+        "channelId",
+        "contentId"
+      ],
+      "summary": "contentIdフィルターで動画IDに対応するuserIdやchannelIdを照会。",
+      "caveats": [
+        "名前/アイコンは解決しない。更新遅延と同一IDの確認に注意。"
+      ],
+      "response": [
+        "contentId",
+        "userId",
+        "channelId"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoSearch.js",
+          "anchor": "lookupOwnerIds("
+        }
+      ],
+      "depends_on": [
+        "search.snapshot"
+      ]
+    },
+    {
+      "id": "video.owner.icon-cdn",
+      "category": "video",
+      "title": "既知IDのアイコンCDN候補",
+      "method": "GET",
+      "url": "https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/s/{bucket}/{userId}.jpg",
+      "action": "read",
+      "auth": "public",
+      "verification": "live_get",
+      "verified_on": "2026-10-27",
+      "keywords": [
+        "アイコン",
+        "CDN",
+        "投稿者",
+        "画像",
+        "バケット",
+        "固有画像",
+        "icon"
+      ],
+      "summary": "確認済みのユーザーIDから画像URLを算出。",
+      "caveats": [
+        "正しい数字のユーザーIDのみ。404でも投稿者IDを消さない。画像は固有/削除前の証明ではない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "docs/research/API_OBSERVATIONS.md",
+          "anchor": "## video.owner.icon-cdn"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "video.nicoad-decoration",
+      "category": "video",
+      "title": "金冠・銀冠を一括取得",
+      "method": "GET",
+      "url": "https://api.nicoad.nicovideo.jp/v1/contents/video/decoration?ids={watchIds}",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-09-14",
+      "keywords": [
+        "ニコニ広告",
+        "金冠",
+        "銀冠",
+        "decoration",
+        "gold",
+        "silver"
+      ],
+      "summary": "複数動画IDの広告装飾を一括取得。",
+      "caveats": [
+        "100ID/URL2000字で分割、同時3チャンク。失敗はnormal確定ではない。"
+      ],
+      "response": [
+        "data.contents[].id",
+        "data.contents[].decoration"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/AdDecorationLoader.js",
+          "anchor": "const API_BASE"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "comment.read-key",
+      "category": "comments",
+      "title": "スレッドキー取得",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId={videoId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "コメント",
+        "スレッドキー",
+        "読込",
+        "key",
+        "threadKey"
+      ],
+      "summary": "コメント読込に必要なthreadKeyを取得。",
+      "caveats": [
+        "キーをログや資料に保存しない。失敗した値で正常なキャッシュを上書きしない。"
+      ],
+      "response": [
+        "data.threadKey"
+      ],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "getThreadKey("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "comment.read",
+      "category": "comments",
+      "title": "nvCommentコメント取得",
+      "method": "POST",
+      "url": "{nvComment.server}/v1/threads",
+      "action": "read",
+      "auth": "dynamic",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "コメント",
+        "取得",
+        "閲覧",
+        "read",
+        "threads",
+        "過去ログ",
+        "言語"
+      ],
+      "summary": "watch由来サーバーへparams/threadKeyでスレッドを読み込む。",
+      "caveats": [
+        "POSTメソッドでも読込操作でありコメント新規投稿ではない。",
+        "不正な応答は空コメント扱いしない。言語指定エラー時の既定言語へフォールバック。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "new URL('/v1/threads'"
+        }
+      ],
+      "depends_on": [
+        "comment.read-key"
+      ]
+    },
+    {
+      "id": "comment.post-key",
+      "category": "comments",
+      "title": "コメント投稿キー取得",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId={threadId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "コメント",
+        "投稿キー",
+        "postKey",
+        "認証",
+        "challenge",
+        "threadId"
+      ],
+      "summary": "対象スレッドの投稿キーと追加認証状態を取得。",
+      "caveats": [
+        "postKey・チャレンジトークンは一切記録しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/CommentPostWire.js",
+          "anchor": "const getPostKey"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "comment.post",
+      "category": "comments",
+      "title": "コメント新規投稿",
+      "method": "POST",
+      "url": "{nvComment.server}/v1/threads/{threadId}/comments",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "コメント",
+        "書込",
+        "投稿",
+        "postChat",
+        "sendChat",
+        "vpos",
+        "投稿番号"
+      ],
+      "summary": "正しい投稿先threadId・postKey・テキスト・コマンドを用いて投稿。",
+      "caveats": [
+        "追加認証は本人による正規操作が必要。",
+        "成功応答にnoが欠けたら成否不明として再送しない。",
+        "このカタログは投稿を実行しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "async _postChat("
+        }
+      ],
+      "depends_on": [
+        "comment.post-key"
+      ]
+    },
+    {
+      "id": "comment.delete-key",
+      "category": "comments",
+      "title": "コメント削除キー取得",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/comment/keys/delete?threadId={threadId}&fork={fork}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "コメント",
+        "削除キー",
+        "deleteKey",
+        "threadId"
+      ],
+      "summary": "対象コメント/スレッドの削除キーを取得。",
+      "caveats": [
+        "キーとforkの整合性が必要。認証情報を保存しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "async getDeleteKey("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "comment.delete",
+      "category": "comments",
+      "title": "投稿者コメント削除",
+      "method": "PUT",
+      "url": "{nvComment.server}/v1/threads/{threadId}/comment-comment-owner-deletions",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "コメント削除",
+        "delete",
+        "comment",
+        "REMOVE",
+        "PUT"
+      ],
+      "summary": "削除対象no/forkを指定し投稿者のコメントを削除する。",
+      "caveats": [
+        "削除権限とdeleteKeyが必要。ユーザー操作なく送信しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "async deleteChat("
+        }
+      ],
+      "depends_on": [
+        "comment.delete-key"
+      ]
+    },
+    {
+      "id": "comment.nicoru-key",
+      "category": "comments",
+      "title": "ニコるキー取得",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/comment/keys/nicoru?threadId={threadId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "ニコる",
+        "キー",
+        "nicoruKey",
+        "コメント"
+      ],
+      "summary": "ニコる操作に必要な鍵を取得。",
+      "caveats": [
+        "ユーザーID・認証状況に依存。キー値は保管禁止。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "async getNicoruKey("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "comment.nicoru",
+      "category": "comments",
+      "title": "コメントにニコる",
+      "method": "POST",
+      "url": "{nvComment.server}/v1/threads/{threadId}/nicorus",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "ニコる",
+        "コメント評価",
+        "nicoru"
+      ],
+      "summary": "指定コメントにニコる操作。",
+      "caveats": [
+        "権限/キーと対象コメント番号を確認。読込ではなく状態変更。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/ThreadLoader.js",
+          "anchor": "async nicoru("
+        }
+      ],
+      "depends_on": [
+        "comment.nicoru-key"
+      ]
+    },
+    {
+      "id": "like.add",
+      "category": "likes",
+      "title": "いいね登録",
+      "method": "POST",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/likes/items?videoId={videoId}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "historical",
+      "verified_on": "2026-09-13",
+      "keywords": [
+        "いいね",
+        "押す",
+        "登録",
+        "like",
+        "POST"
+      ],
+      "summary": "自身の動画いいねを登録。過去実通信で201。",
+      "caveats": [
+        "認証ユーザーの状態を変更する。失敗時に画面状態だけ反転させない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/LikeApi.js",
+          "anchor": "like: (videoId"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "like.delete",
+      "category": "likes",
+      "title": "いいね解除",
+      "method": "DELETE",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/likes/items?videoId={videoId}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "historical",
+      "verified_on": "2026-09-13",
+      "keywords": [
+        "いいね解除",
+        "消す",
+        "unlike",
+        "DELETE"
+      ],
+      "summary": "自身の動画いいねを解除。過去実通信で200。",
+      "caveats": [
+        "失敗した解除を成功表示しない。明示操作なしに送信しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/LikeApi.js",
+          "anchor": "unlike: (videoId"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "playlist.series",
+      "category": "playlist",
+      "title": "シリーズ動画プレイリスト",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/playlist/series/{seriesId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "シリーズ",
+        "プレイリスト",
+        "動画一覧"
+      ],
+      "summary": "動画シリーズをプレイリストとして取得。",
+      "caveats": [
+        "sortKey等が別種のプレイリストと共通と仮定しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/PlaylistApiLoader.js",
+          "anchor": "_buildSeriesURL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "playlist.uploaded",
+      "category": "playlist",
+      "title": "投稿者動画プレイリスト",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/playlist/user-uploaded/{userId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "投稿動画",
+        "アップロード",
+        "ユーザー",
+        "プレイリスト"
+      ],
+      "summary": "投稿者公開動画のプレイリスト。",
+      "caveats": [
+        "/v3/users/{id}/videosとは別経路。URL別キャッシュ。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/PlaylistApiLoader.js",
+          "anchor": "_buildUserUploadedURL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "playlist.mylist",
+      "category": "playlist",
+      "title": "公開マイリスト再生",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/playlist/mylist/{mylistId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "マイリスト",
+        "プレイリスト",
+        "公開"
+      ],
+      "summary": "公開マイリストを再生順に取得。",
+      "caveats": [
+        "編集可能な本人マイリスト取得とは区別。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/PlaylistApiLoader.js",
+          "anchor": "_buildMylistURL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "playlist.watchlater",
+      "category": "playlist",
+      "title": "あとで見るプレイリスト",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/playlist/watch-later",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "あとで見る",
+        "プレイリスト",
+        "とりマイ"
+      ],
+      "summary": "本人のあとで見る一覧をプレイリスト形式で取得。",
+      "caveats": [
+        "あとで見るの追加/削除は別のAPI。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/PlaylistApiLoader.js",
+          "anchor": "_buildWatchlaterURL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "mylist.groups",
+      "category": "mylist",
+      "title": "本人マイリストグループ一覧",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/mylists",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "マイリスト",
+        "グループ",
+        "一覧",
+        "ユーザー",
+        "me"
+      ],
+      "summary": "自分のマイリストグループ一覧を読む。",
+      "caveats": [
+        "ログインが必要。取得失敗を空グループと誤認しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async getMylistList("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "mylist.items",
+      "category": "mylist",
+      "title": "本人マイリスト動画一覧",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/mylists/{groupId}",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "マイリスト",
+        "動画一覧",
+        "アイテム",
+        "itemId"
+      ],
+      "summary": "本人マイリストを100件/ページでページング。",
+      "caveats": [
+        "削除・移動ではwatchIdとitemIdの違いに注意。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async _getMylistItems("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "mylist.add",
+      "category": "mylist",
+      "title": "マイリスト追加",
+      "method": "POST",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/mylists/{groupId}/items?itemId={watchId}&description={encodedDescription}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "マイリスト",
+        "追加",
+        "登録",
+        "投稿"
+      ],
+      "summary": "本人マイリストに動画を追加。",
+      "caveats": [
+        "現行実装はitemIdとdescriptionをクエリとform bodyの両方に指定し、成功後にあとで見るから外す。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async addMylistItem("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "mylist.delete",
+      "category": "mylist",
+      "title": "マイリスト削除",
+      "method": "DELETE",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/mylists/{groupId}/items?itemIds={itemId}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "マイリスト",
+        "削除",
+        "解除",
+        "REMOVE"
+      ],
+      "summary": "指定groupId/itemIdの登録を削除。",
+      "caveats": [
+        "誤ったgroupId/itemIdは他の登録に影響。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async removeMylistItem("
+        }
+      ],
+      "depends_on": [
+        "mylist.items"
+      ]
+    },
+    {
+      "id": "watchlater.items",
+      "category": "mylist",
+      "title": "あとで見る登録一覧",
+      "method": "GET",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/watch-later",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "あとで見る",
+        "登録一覧",
+        "とりマイ"
+      ],
+      "summary": "本人のあとで見る登録動画を読む。",
+      "caveats": [
+        "プレイリスト表示APIと応答形状が違う。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async _getDeflistItems("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "watchlater.add",
+      "category": "mylist",
+      "title": "あとで見る追加",
+      "method": "POST",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/watch-later",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "あとで見る",
+        "追加",
+        "登録",
+        "とりマイ"
+      ],
+      "summary": "watchIdとmemoであとで見るに追加。",
+      "caveats": [
+        "重複409時は現行実装が削除→再追加するため副作用に注意。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async addDeflistItem("
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "watchlater.delete",
+      "category": "mylist",
+      "title": "あとで見る削除",
+      "method": "DELETE",
+      "url": "https://nvapi.nicovideo.jp/v1/users/me/watch-later?itemIds={itemId}",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "あとで見る",
+        "削除",
+        "解除",
+        "とりマイ"
+      ],
+      "summary": "itemIdに対応する本人の登録を削除。",
+      "caveats": [
+        "watchIdをitemIdと取り違えない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/MylistApiLoader.js",
+          "anchor": "async removeDeflistItem("
+        }
+      ],
+      "depends_on": [
+        "watchlater.items"
+      ]
+    },
+    {
+      "id": "nicodic.batch",
+      "category": "dictionary",
+      "title": "大百科記事一括照会",
+      "method": "GET",
+      "url": "https://api.dic.nicovideo.jp/v1/articles/article?titles[]={title}",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-10-01",
+      "keywords": [
+        "大百科",
+        "ニコニコ",
+        "記事存在",
+        "タグ",
+        "存在確認",
+        "batch"
+      ],
+      "summary": "titles[]を繰り返し記事有無をまとめて調べる。",
+      "caveats": [
+        "10件は現在の実装上の安全分割数。取得失敗は「なし」とは区別。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/NicodicArticleLoader.js",
+          "anchor": "const API_URL"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "commons.parents",
+      "category": "commons",
+      "title": "コンテンツツリー親作品",
+      "method": "GET",
+      "url": "https://public-api.commons.nicovideo.jp/v1/tree/{globalId}/relatives/parents",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-10-01",
+      "keywords": [
+        "コンテンツツリー",
+        "親作品",
+        "引用",
+        "親"
+      ],
+      "summary": "コンテンツツリーの親をoffset/limitでページング。",
+      "caveats": [
+        "先頭404は未登録可能。途中404はエラー。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/CommonsTreeLoader.js",
+          "anchor": "const API_BASE"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "commons.children",
+      "category": "commons",
+      "title": "コンテンツツリー子作品",
+      "method": "GET",
+      "url": "https://public-api.commons.nicovideo.jp/v1/tree/{globalId}/relatives/children",
+      "action": "read",
+      "auth": "public",
+      "verification": "historical",
+      "verified_on": "2026-10-01",
+      "keywords": [
+        "コンテンツツリー",
+        "子作品",
+        "引用",
+        "子"
+      ],
+      "summary": "子作品の関係をoffset/limitでページング。",
+      "caveats": [
+        "with_meta=1の全通信条件は未確認。デフォルト上限300は実装側制限。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/CommonsTreeLoader.js",
+          "anchor": "relatives/${kind}"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "watch.playback-position",
+      "category": "history",
+      "title": "再生位置保存",
+      "method": "PUT",
+      "url": "https://nvapi.nicovideo.jp/v2/users/me/watch/history/playback-position",
+      "action": "write",
+      "auth": "authorized",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "再生位置",
+        "履歴",
+        "続きから",
+        "シーク",
+        "履歴保存"
+      ],
+      "summary": "本人の再生位置をvideoId/secondsで保存。",
+      "caveats": [
+        "HTTP204など空本文もあり得る。失敗時に成功と断定しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/PlaybackPosition.js",
+          "anchor": "const URL_V2"
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "ranking.rss",
+      "category": "ranking",
+      "title": "ランキングRSS",
+      "method": "GET",
+      "url": "https://www.nicovideo.jp/ranking/genre/{genre}?term={term}&rss=2.0",
+      "action": "read",
+      "auth": "public",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "ランキング",
+        "RSS",
+        "人気",
+        "ジャンル",
+        "集計"
+      ],
+      "summary": "ジャンルと期間でランキングをRSS2.0として取得。",
+      "caveats": [
+        "XML内のHTML解析でメタデータを整形。公式検索APIと混同しない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/NicoRssLoader.js",
+          "anchor": "const loadRanking ="
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "watch.linked-channel",
+      "category": "video",
+      "title": "チャンネル連動動画",
+      "method": "GET",
+      "url": "https://public-api.ch.nicovideo.jp/v1/user/channelVideoDAnimeLinks",
+      "action": "read",
+      "auth": "frontend_cookie",
+      "verification": "code",
+      "verified_on": null,
+      "keywords": [
+        "チャンネル",
+        "有料",
+        "dアニメ",
+        "連動",
+        "動画",
+        "会員"
+      ],
+      "summary": "チャンネル視聴権限に応じた連動動画の情報取得。",
+      "caveats": [
+        "有料動画の権限を迂回するものではない。"
+      ],
+      "response": [],
+      "sources": [
+        {
+          "path": "packages/lib/src/nico/VideoInfoLoader.js",
+          "anchor": "channelVideoDAnimeLinks"
+        }
+      ],
+      "depends_on": []
+    }
+  ]
+}

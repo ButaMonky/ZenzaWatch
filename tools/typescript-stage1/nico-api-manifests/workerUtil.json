@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/workerUtil.ts",
+  "runtime": "packages/lib/src/infra/workerUtil.js",
+  "sourceSha256": "a901b94dd5215a22fca4f2fadea2312d6ecd6fd5a1d43da420dc24c3762419de",
+  "runtimeSha256": "fb9c44e76eaba51dc635914acc26f1f5822caec36b2d59398226bc3d81ab41bf"
+}

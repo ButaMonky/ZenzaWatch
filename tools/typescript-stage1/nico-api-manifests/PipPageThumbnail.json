@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PipPageThumbnail.ts",
+  "runtime": "packages/zenza/src/videoPlayer/PipPageThumbnail.js",
+  "sourceSha256": "e7ad274af24da67472200c3c2d066d68ca6d2a32e3fe389b6e0e668187c924d9",
+  "runtimeSha256": "925bd69b928176e24d6b3ac7afdc654e588cccb5e2a8ef78151e69bcd560c0a2"
+}

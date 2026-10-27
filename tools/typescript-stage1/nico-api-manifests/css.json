@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/css.ts",
+  "runtime": "packages/lib/src/css/css.js",
+  "sourceSha256": "90b1d63a372205a685d2564b83b2a59c9fa2339ce8e99fd2df13f59241c226b4",
+  "runtimeSha256": "6c4cd8ee2d5d7947dfda95cf7dbc4f62716d5078fb38a1d05553336772732b87"
+}

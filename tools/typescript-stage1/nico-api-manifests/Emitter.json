@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/Emitter.ts",
+  "runtime": "packages/lib/src/Emitter.js",
+  "sourceSha256": "83e386c7fb62b6b77cb9b8b7fad665d517b5e534e402eb2af0a2018735caa634",
+  "runtimeSha256": "6c7f7418a2fa965e2c342c95dd927f965896601d521b53c1718c957ace5bbf70"
+}

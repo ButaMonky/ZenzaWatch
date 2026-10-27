@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/ThumbInfoCacheDb.ts",
+  "runtime": "packages/lib/src/nico/ThumbInfoCacheDb.js",
+  "sourceSha256": "48bc2c12ad0896a0c31bfb9623dccb58af37dd63b73de5eb663898c48ec33dfd",
+  "runtimeSha256": "5291896e112b2389d2c52f6fb8fefa7c3446931edadbdff286c23eccc46ff83d"
+}

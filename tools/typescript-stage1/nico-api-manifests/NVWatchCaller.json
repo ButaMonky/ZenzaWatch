@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NVWatchCaller.ts",
+  "runtime": "packages/lib/src/nico/NVWatchCaller.js",
+  "sourceSha256": "5375f266d288983f44351de82a57a064417dbbf83230d995c00691f4ffb19e71",
+  "runtimeSha256": "c9235c8230172385c1bfb0895af437a48c27b808d20feefb5195dfcb9ac02975"
+}

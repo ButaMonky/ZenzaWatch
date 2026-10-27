@@ -4,8 +4,9 @@ const fs=require('fs'),path=require('path'),os=require('os'),assert=require('ass
 const {spawn,spawnSync}=require('child_process'),{pathToFileURL}=require('url');
 const ROOT=path.resolve(__dirname,'../..');
 const source=fs.readFileSync(path.join(ROOT,'src/VideoControlBar.js'),'utf8');
-const marker="{className: 'screenMode for-screen-full videoControlBar'";
-const end=source.indexOf(marker),start=source.lastIndexOf('util.addStyle('+String.fromCharCode(96),end);
+const marker=/\{\s*className:\s*'screenMode for-screen-full videoControlBar'/;
+const match=marker.exec(source);
+const end=match?match.index:-1,start=source.lastIndexOf('util.addStyle('+String.fromCharCode(96),end);
 assert(start>=0&&end>start,'fullscreen CSS marker missing');
 const snippet=source.slice(start+'util.addStyle('.length+1,end);
 const css=snippet.slice(0,snippet.lastIndexOf(String.fromCharCode(96)));

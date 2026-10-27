@@ -50,7 +50,7 @@ describe('Task401 player and advanced full-viewport setting synchronization',()=
     const dispatch=read('src/RootDispatcher.js');
     assert(config.includes('backComment: false'));
     assert(player.includes('data-setting-name="backComment"'));
-    assert(advanced.includes("['backComment','コメントを画面全体に流す'"));
+    assert(/\[\s*['"]backComment['"]\s*,\s*['"]コメントを画面全体に流す['"]/.test(advanced));
     assert(shortcuts.includes("command: 'toggle-backComment'"));
     assert(dispatch.includes("case 'toggle-backComment':"));
     assert(dispatch.includes("case 'backComment':"));

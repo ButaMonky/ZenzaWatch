@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/gate.ts",
+  "runtime": "packages/lib/src/message/gate.js",
+  "sourceSha256": "4a8c5aa851e6292b70787db355de9cee5520062c994732f1d4da1b6e0b8d0bf0",
+  "runtimeSha256": "415c83cd56c2465965ad618b477800d1a7a040b311fe57ad389ff8c629054131"
+}

@@ -29,6 +29,8 @@ function setup(initial={}) {
     'touch.tap3command':'toggle-mute',
     speakLark:false,speakLarkVolume:1,
     debug:false,
+    pipPageThumbnail:true,
+    pipPageThumbnailSource:'smart',
     wordRegFilter:'',
     KEY_TOGGLE_PLAY:32,
     KEY_CUSTOM_SEEK_1:0,
@@ -80,6 +82,26 @@ describe('Task318 advanced settings descriptor and draft model',()=>{
       x.category==='プレイリスト・検索' && x.subcategory.includes('カスタムリンク')));
     assert(model.descriptors.some(x=>x.id==='KEY_CUSTOM_SEEK_1'&&x.subcategory==='シーク'));
     assert(model.descriptors.some(x=>x.id==='PARAM_CUSTOM_SEEK_1'&&x.subcategory==='シーク'));
+    dom.window.close();
+  });
+  it('places PiP settings in their own screen category and saves the source choice only on Apply',()=>{
+    const {model,config,dom}=setup();
+    const visible=model.descriptor('pipPageThumbnail');
+    const source=model.descriptor('pipPageThumbnailSource');
+    assert(visible && source);
+    assert.strictEqual(visible.category,'画面・映像');
+    assert.strictEqual(source.category,'画面・映像');
+    assert.strictEqual(visible.subcategory,'PiP（小窓再生）');
+    assert.strictEqual(source.subcategory,visible.subcategory);
+    assert.strictEqual(source.dependsOn,'pipPageThumbnail');
+    assert.strictEqual(source.type,'select');
+    assert.deepStrictEqual(Array.from(source.options.map(x=>x.value)),['smart','legacy']);
+    assert.strictEqual(model.isEnabled(source.id),true);
+    model.set('pipPageThumbnailSource','legacy');
+    assert.strictEqual(config.values.pipPageThumbnailSource,'smart');
+    model.save();
+    assert.strictEqual(config.values.pipPageThumbnailSource,'legacy');
+    assert.deepStrictEqual(config.calls,[['pipPageThumbnailSource','legacy']]);
     dom.window.close();
   });
   it('includes generated history and screen-filter keys even when legacy controls are mounted elsewhere',()=>{
@@ -434,5 +456,57 @@ describe('Task318 deterministic navigation and parent-first ordering',()=>{
     assert.deepStrictEqual([...new Set(nav)],
       Array.from(Model.CATEGORIES).filter(c=>nav.includes(c)));
     dom.window.close();
+  });
+});
+
+describe('Task938 stable fullscreen and small-mode classification with legacy inputs',()=>{
+  it('places old and new preferences exactly once in the correct video categories',()=>{
+    const dom=new JSDOM('<!doctype html><div id="legacy"><label><input type="checkbox" data-setting-name="smallModeAspectLock">縦横比を固定</label></div>');
+    try{
+      const Model=loadClass('src/ModernAdvancedSettingsModel.js','ModernAdvancedSettingsModel',
+        createContext({document:dom.window.document,URL}));
+      const defaults={
+        screenMode:'normal','screenMode:ginza':'normal','screenMode:others':'normal',
+        autoFullScreen:false,smallModeAspectLock:false,
+        fullscreenControlBarMode:'auto',
+        'controlBar.showOnPause.small':false,'controlBar.showOnPause.fullscreen':false,
+        'controlBar.hideAfterSeconds.small':3,'controlBar.hideAfterSeconds.fullscreen':0.4,
+        enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,menuScale:1
+      };
+      const config={default:defaults,values:{...defaults,
+        'controlBar.showOnPause.small':true,
+        'controlBar.showOnPause.fullscreen':true},
+        getValue(k){return this.values[k]},
+        setValue(k,v){this.values[k]=v}};
+      const model=new Model({config,legacyRoot:dom.window.document.getElementById('legacy')});
+      const wanted={
+        screenMode:'表示モード',
+        'screenMode:ginza':'表示モード','screenMode:others':'表示モード',
+        autoFullScreen:'全画面モード',
+        smallModeAspectLock:'小画面モード',
+        fullscreenControlBarMode:'全画面モード',
+        'controlBar.showOnPause.small':'小画面モード',
+        'controlBar.hideAfterSeconds.small':'小画面モード',
+        'controlBar.showOnPause.fullscreen':'全画面モード',
+        'controlBar.hideAfterSeconds.fullscreen':'全画面モード',
+        enableHeatMap:'プレイヤーの操作表示',
+        enableStoryboard:'プレイヤーの操作表示',
+        enableStoryboardBar:'プレイヤーの操作表示',
+        menuScale:'プレイヤーの操作表示'
+      };
+      for(const [id,group] of Object.entries(wanted)){
+        assert.strictEqual(model.descriptor(id).category,'画面・映像',id);
+        assert.strictEqual(model.descriptor(id).subcategory,group,id);
+        assert.strictEqual(model.descriptors.filter(d=>d.id===id).length,1,id);
+      }
+      assert.deepStrictEqual(
+        [...new Set(model.descriptors.filter(d=>d.category==='画面・映像').map(d=>d.subcategory))],
+        ['表示モード','小画面モード','全画面モード','プレイヤーの操作表示']);
+      model.resetSubcategory('画面・映像','小画面モード');
+      assert.strictEqual(model.get('controlBar.showOnPause.small'),false);
+      assert.strictEqual(model.get('controlBar.showOnPause.fullscreen'),true);
+      assert.strictEqual(config.values['controlBar.showOnPause.small'],true,
+        'reset is draft-only until saved');
+    }finally{dom.window.close()}
   });
 });

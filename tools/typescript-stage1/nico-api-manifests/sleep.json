@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/sleep.ts",
+  "runtime": "packages/lib/src/infra/sleep.js",
+  "sourceSha256": "3ad30503465ebd9b4847c00f837a0c22f71e394adb090cbe97f148048141910b",
+  "runtimeSha256": "0433ee002274463429427a342675b41f83d7aa314b02c454825ef648076b1e74"
+}

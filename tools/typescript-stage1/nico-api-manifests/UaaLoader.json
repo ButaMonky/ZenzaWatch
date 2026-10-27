@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/UaaLoader.ts",
+  "runtime": "packages/lib/src/nico/UaaLoader.js",
+  "sourceSha256": "abcadea8823a3ffaa399e951df80e7af93fa046a3e2545781b56a90d5cb0f306",
+  "runtimeSha256": "2e14735cdda5153cfdbef1eef75fe2bfaa245ceb84bec590ea61349acb2052b5"
+}

@@ -6,13 +6,13 @@
 // @grant          none
 // @author         segabito macmoto
 // @license        public domain
-// @version        0.0.4
+// @version        0.0.5-task928
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
 // @supportURL     https://github.com/ButaMonky/ZenzaWatch/issues
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaBlogPartsButton.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaBlogPartsButton.user.js
 // ==/UserScript==
-// build: 2026-09-18 16:13Z 807b380
+// build: 2026-10-27 12:27Z 5e716422
 /* eslint-disable */
 
 

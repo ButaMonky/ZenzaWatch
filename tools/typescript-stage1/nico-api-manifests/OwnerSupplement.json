@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/OwnerSupplement.ts",
+  "runtime": "packages/lib/src/nico/OwnerSupplement.js",
+  "sourceSha256": "a25a5512898013c748cbc2f0d4929be43f6c8aa550200ceeef57360651506486",
+  "runtimeSha256": "7e3ed15e8a520713524bd7d9ed497ed8eaa40aa218fc30748fb97930e1249113"
+}

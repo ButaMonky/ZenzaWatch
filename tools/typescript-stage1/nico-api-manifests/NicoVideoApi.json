@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NicoVideoApi.ts",
+  "runtime": "packages/lib/src/nico/NicoVideoApi.js",
+  "sourceSha256": "db40485edd5b009a33f98cfe00a3bf08225f71ef32159dc42bdaf346e797557a",
+  "runtimeSha256": "3b56f7305eedb975cd273237779f2967223cd722d007ef7698c19984e8504c1c"
+}

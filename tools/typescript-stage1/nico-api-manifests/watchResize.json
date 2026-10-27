@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/watchResize.ts",
+  "runtime": "packages/lib/src/dom/watchResize.js",
+  "sourceSha256": "c455a48ec5c5ece1f9088c5d3287e2e777ebef375649ccff3d8524e904f47492",
+  "runtimeSha256": "4f7beb4db62b16510403b35eaa11f196d03f5f1228dc93dc672f6afc15c82db9"
+}

@@ -1,5 +1,5 @@
 // GENERATED FROM packages/zenza/src/pocket/PocketThumbnail.ts (Task713). Do not edit this JS.
-// SOURCE_SHA256 5ece03a54c0ead9852e510a25c26bf6bcb07b659f73540d96fbd9964360ea7ef
+// SOURCE_SHA256 ac8b89534abbbd400a7778caeb15c4069af7bc19437cc2a711a2853f198b658f
 //===BEGIN===
 const PocketThumbnail = (() => {
     const CACHE_MS = 5 * 60 * 1000;
@@ -38,10 +38,13 @@ const PocketThumbnail = (() => {
         if (!thumb) {
             return [];
         }
-        return normalize([
-            thumb.ogp, thumb.player, thumb.large, thumb.largeUrl,
-            thumb.middle, thumb.middleUrl, thumb.normal, thumb.url
-        ]);
+        // Reuse the same official-CDN policy as PiP. Pocket retains an unknown
+        // non-goptim OGP as last fallback; PiP intentionally excludes it.
+        // Network/cache/image ownership remain local to this standalone helper.
+        return normalize(ThumbnailSourcePolicy.select(thumb, [
+            thumb.large, thumb.largeUrl, thumb.middle, thumb.middleUrl,
+            thumb.normal, thumb.url
+        ], { mode: 'smart', includeUnknownOgp: true }));
     };
     const legacyUrls = (thumbnail, hasLarge = false) => {
         const normal = normalize([thumbnail]);

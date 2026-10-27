@@ -32,6 +32,7 @@ function fixture(hostname='www.nicovideo.jp'){
       return new Promise(resolve=>fetchResolutions.set(url,resolve));
     }}
   });
+  run('const ThumbnailSourcePolicy='+extract('packages/lib/src/nico/ThumbnailSourcePolicy.js','ThumbnailSourcePolicy','var')+';',context);
   run('const PocketThumbnail='+extract(
     'packages/zenza/src/pocket/PocketThumbnail.js','PocketThumbnail','var')+
     ';this.PocketThumbnail=PocketThumbnail;',context);

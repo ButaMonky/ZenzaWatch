@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CommentReadAdapter.ts",
+  "runtime": "packages/lib/src/nico/CommentReadAdapter.js",
+  "sourceSha256": "e6798fd0692a670fc980151178a853174f48c612e4387506d09e18f77c643d6b",
+  "runtimeSha256": "1d232a72ce5509895f14724e87afa659ef9de9366e787abe1e423bc50e67b511"
+}

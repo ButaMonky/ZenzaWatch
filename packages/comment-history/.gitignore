@@ -2,3 +2,4 @@
 .generated-ts/
 dist/
 .generated-probe/
+.generated-layers/

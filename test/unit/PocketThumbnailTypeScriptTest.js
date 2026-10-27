@@ -9,6 +9,7 @@ const rel = 'packages/zenza/src/pocket/PocketThumbnail.js';
 
 function setup() {
   const c=createContext();
+  run('const ThumbnailSourcePolicy='+extract('packages/lib/src/nico/ThumbnailSourcePolicy.js','ThumbnailSourcePolicy','var')+';',c);
   run('const PocketThumbnail='+extract(rel,'PocketThumbnail','var')+
     ';this.pocket=PocketThumbnail;',c);
   return c.pocket;
@@ -17,7 +18,7 @@ const payload=thumb=>({data:{response:{video:{thumbnail:thumb}}}});
 const flush=async()=>{for(let i=0;i<6;i++) await Promise.resolve();};
 
 describe('Task713 TypeScript MylistPocket thumbnail helper',()=>{
-  it('prefers official OGP 1280 image and keeps signed query unchanged',()=>{
+  it('prefers clean original 1280px before player 960px and keeps signed query unchanged',()=>{
     const api=setup();
     const signed='https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46923344/46923344.original/r1280x720l?key=AbCdXYZ';
     assert.deepStrictEqual([...api.watchUrls(payload({url:'https://cdn.example/small',
@@ -29,9 +30,17 @@ describe('Task713 TypeScript MylistPocket thumbnail helper',()=>{
     const v4={data:{response:{$watchV4:{data:{video:{thumbnail:{
       ogp:'https://cdn.example/high',normal:'https://cdn.example/normal'}}}}}}};
     assert.deepStrictEqual([...api.watchUrls(v4)],
-      ['https://cdn.example/high','https://cdn.example/normal']);
+      ['https://cdn.example/normal','https://cdn.example/high']);
     assert.deepStrictEqual([...api.watchUrls({errorCode:'NOT_FOUND'})],[]);
     assert.deepStrictEqual([...api.watchUrls(null)],[]);
+  });
+  it('filters the proven goptim play-overlay variant while retaining signed player 960x540',()=>{
+    const api=setup();
+    const url='https://goptim.video.nimg.jp/thumbnail/1280x720?b=p&bs=54&i=46949237.64709125&s=blur&key=example';
+    const player='https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46949237/46949237.64709125.original/a960x540l?key=example';
+    assert.deepStrictEqual([...api.watchUrls(payload({
+      ogp:url,player,large:'https://nicovideo.cdn.nimg.jp/thumbnails/46949237/46949237.64709125.L'
+    }))],[player,'https://nicovideo.cdn.nimg.jp/thumbnails/46949237/46949237.64709125.L']);
   });
   it('rejects unsafe schemes, duplicates, and invalid metadata',()=>{
     const api=setup();

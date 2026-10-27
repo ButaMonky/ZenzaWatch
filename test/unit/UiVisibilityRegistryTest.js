@@ -54,8 +54,8 @@ describe('Task318 centralized visibility manifest',()=>{
       assert(entry.description.includes('上級者設定') || entry.description.includes('検索'),
         'The recovery path must be described: '+key);
     }
-    assert.strictEqual(settings().filter(item=>item.scope!=='scene').length,37,
-      'preserve the original thirty-seven visibility settings');
+    assert.strictEqual(settings().filter(item=>item.scope!=='scene').length,38,
+      'preserve original thirty-seven visibility settings plus the notification button');
     assert.strictEqual(settings().filter(item=>item.scope==='scene').length,7);
   });
   it('hides each newly optional control and restores original state without losing content',()=>{
@@ -119,6 +119,93 @@ describe('Task318 centralized visibility manifest',()=>{
     config.getValue=()=>true;
     Registry.apply(config,element,'ui.bar.time');
     assert(element.hidden);
+    dom.window.close();
+  });
+  it('renders live shortcut hints, with no parentheses when a key is unassigned',()=>{
+    const dom=new JSDOM('<!doctype html><html><head></head><body>'+
+      '<section class="hoverMenuContainer">'+
+      '<div class="menuButton" data-command="toggle-showComment"><div class="tooltip">コメント表示ON/OFF(V)</div></div>'+
+      '<div class="menuButton" data-command="deflistAdd"><div class="tooltip">あとで見る(T)</div></div>'+
+      '<div class="menuButton" data-command="toggle-like"><div class="tooltip">いいね！</div></div>'+
+      '<div class="menuButton" data-command="toggle-enableFilter"><div class="tooltip">NGフィルターON/OFF</div></div>'+
+      '</section></body></html>');
+    const actions=[
+      {id:'TOGGLE_COMMENT',command:'toggle-showComment',defaultKey:86},
+      {id:'DEFLIST_ADD',command:'deflistAdd',defaultKey:84},
+      {id:'TOGGLE_LIKE',command:'toggle-like',defaultKey:0},
+      {id:'TOGGLE_NG_FILTER',command:'toggle-enableFilter',defaultKey:0}
+    ];
+    const registry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',
+      createContext({SHORTCUT_ACTIONS:actions,formatKeyCombo:n=>{
+        const mods=n>=0x1000?'Shift + ':'';
+        return mods+String.fromCharCode(n%0x1000);
+      }}));
+    const configValues={
+      KEY_TOGGLE_COMMENT:86,KEY_DEFLIST_ADD:84,KEY_TOGGLE_LIKE:0,KEY_TOGGLE_NG_FILTER:0
+    };
+    const subscribers=new Map();
+    const config={
+      getValue:key=>configValues[key],
+      onkey(key,listener){subscribers.set(key,listener);},
+      offkey(key,listener){if(subscribers.get(key)===listener)subscribers.delete(key);}
+    };
+    const root=dom.window.document.querySelector('.hoverMenuContainer');
+    const connection=registry.connect(config,root,'hover');
+    const label=cmd=>root.querySelector('[data-command="'+cmd+'"] .tooltip').textContent;
+    assert.strictEqual(label('toggle-showComment'),'コメント表示ON/OFF（V）');
+    assert.strictEqual(label('deflistAdd'),'あとで見る（T）');
+    assert.strictEqual(label('toggle-like'),'いいね！');
+    assert.strictEqual(label('toggle-enableFilter'),'NGフィルターON/OFF');
+    configValues.KEY_TOGGLE_COMMENT=0;
+    subscribers.get('KEY_TOGGLE_COMMENT')();
+    assert.strictEqual(label('toggle-showComment'),'コメント表示ON/OFF');
+    configValues.KEY_TOGGLE_COMMENT=0x1000+75;
+    subscribers.get('KEY_TOGGLE_COMMENT')();
+    assert.strictEqual(label('toggle-showComment'),'コメント表示ON/OFF（Shift + K）');
+    configValues.KEY_TOGGLE_LIKE=76;
+    subscribers.get('KEY_TOGGLE_LIKE')();
+    assert.strictEqual(label('toggle-like'),'いいね！（L）');
+    const css=dom.window.document.getElementById('zenzaHoverTooltipOpaque').textContent;
+    assert(css.includes('.menuButton:hover{opacity:1!important;}'));
+    assert(!css.includes('background:#888!important'),
+      'hover opacity must never override the existing color of tweet/like buttons');
+    assert(read('src/NicoVideoPlayerDialog.js').includes('.zenzaTweetButton:hover'),
+      'the original tweet-specific blue hover rule must remain available');
+    assert(css.includes('.menuButton:hover .tooltip{opacity:1!important'));
+    connection.dispose();
+    configValues.KEY_TOGGLE_LIKE=0;
+    assert.strictEqual(subscribers.has('KEY_TOGGLE_LIKE'),false);
+    assert.strictEqual(label('toggle-like'),'いいね！（L）','disposed observer must not mutate the view');
+    dom.window.close();
+  });
+  it('uses configured keys for bottom control-bar hints without inventing unassigned ones',()=>{
+    const dom=new JSDOM('<!doctype html><body><div class="videoControlBar">'+
+      '<div class="controlButton" data-command="toggle-mute"><span class="tooltip">ミュート</span></div>'+
+      '<div class="controlButton" data-command="togglePlay"><span class="tooltip">再生/一時停止</span></div>'+
+      '<div class="controlButton" data-command="unsupported"><span class="tooltip">独立の説明</span></div>'+
+      '</div></body></html>');
+    const registry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',
+      createContext({
+        SHORTCUT_ACTIONS:[
+          {id:'MUTE',command:'toggle-mute',defaultKey:77},
+          {id:'TOGGLE_PLAY',command:'togglePlay',defaultKey:32}
+        ],formatKeyCombo:n=>n===32?'Space':String.fromCharCode(n)
+      }));
+    const keys={KEY_MUTE:77,KEY_TOGGLE_PLAY:0};
+    const observers=new Map();
+    const config={
+      getValue:key=>keys[key],
+      onkey(key,listener){observers.set(key,listener);},
+      offkey(key){observers.delete(key);}
+    };
+    const root=dom.window.document.querySelector('.videoControlBar');
+    const owner=registry.connect(config,root,'bar');
+    assert.strictEqual(root.querySelector('[data-command="toggle-mute"] .tooltip').textContent,'ミュート（M）');
+    assert.strictEqual(root.querySelector('[data-command="togglePlay"] .tooltip').textContent,'再生/一時停止');
+    keys.KEY_TOGGLE_PLAY=32;observers.get('KEY_TOGGLE_PLAY')();
+    assert.strictEqual(root.querySelector('[data-command="togglePlay"] .tooltip').textContent,'再生/一時停止（Space）');
+    assert.strictEqual(root.querySelector('[data-command="unsupported"] .tooltip').textContent,'独立の説明');
+    owner.dispose();
     dom.window.close();
   });
   it('connects Config events per owner/scope and supports future refresh',()=>{

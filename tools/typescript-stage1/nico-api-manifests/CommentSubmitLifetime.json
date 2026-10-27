@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CommentSubmitLifetime.ts",
+  "runtime": "packages/lib/src/nico/CommentSubmitLifetime.js",
+  "sourceSha256": "754c05837d010ff117733e6f93b0316706c8b78b5ac44cc747b1bf915350c1c6",
+  "runtimeSha256": "cb1aa1b93e72fc9e8dbf131612ccd435ae9dfa145943e4b6f08c9e2e4a87c470"
+}

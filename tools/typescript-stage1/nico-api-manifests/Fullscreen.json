@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/Fullscreen.ts",
+  "runtime": "packages/lib/src/dom/Fullscreen.js",
+  "sourceSha256": "4672bd29e3aabfdf49dd72c4a1748cfed09cb96e13641b8938fbdff09f89d526",
+  "runtimeSha256": "4e427bbabea09fd5678cbafc633b1118868c06a060990403b766bc7be0301cc5"
+}

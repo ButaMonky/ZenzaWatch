@@ -1,715 +1,582 @@
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {PromiseHandler} from '../packages/lib/src/Emitter';
 
+// GENERATED FROM tools/typescript-stage1/nico-src/VideoInfo.ts (Task962). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //
 class JSONable {
-  toJSON() {
-    const data = Object.create(null);
-    const proto = Object.getPrototypeOf(this);
-
-    for (const prop of Object.getOwnPropertyNames(proto)) {
-      const desc = Object.getOwnPropertyDescriptor(proto, prop);
-      if (typeof desc?.get !== 'function') continue;
-
-      const value = data[prop] = this[prop];
-      if (value == null || typeof value.toJSON !== 'function') continue;
-
-      data[prop] = value.toJSON();
+    toJSON() {
+        const data = Object.create(null);
+        const proto = Object.getPrototypeOf(this);
+        for (const prop of Object.getOwnPropertyNames(proto)) {
+            const desc = Object.getOwnPropertyDescriptor(proto, prop);
+            if (typeof desc?.get !== 'function')
+                continue;
+            const value = data[prop] = this[prop];
+            if (value == null || typeof value.toJSON !== 'function')
+                continue;
+            data[prop] = value.toJSON();
+        }
+        return data;
     }
-
-    return data;
-  }
 }
-
 class DomandInfo extends JSONable {
-  // Task184 (F08): a comparator must return a signed number. The former boolean
-  // comparators (b > a) left e.g. [1,3,2] unsorted. Higher level first; ties keep the
-  // server order (toSorted is stable); missing / non-numeric levels go last.
-  static _qualityDesc(level) {
-    return (a, b) => {
-      const x = Number(level(a)), y = Number(level(b));
-      const fx = Number.isFinite(x), fy = Number.isFinite(y);
-      if (fx && fy) { return y - x; }
-      return fx === fy ? 0 : (fx ? -1 : 1);
-    };
-  }
-
-  constructor(rawData, videoDetail, linkedChannelVideo) {
-    super();
-    this._rawData = rawData;
-    this._videoDetail = videoDetail;
-    this._linkedChannelVideo = linkedChannelVideo;
-  }
-
-  get videoId() {
-    return this._linkedChannelVideo != null ? this._linkedChannelVideo.linkedVideoId : this._videoDetail.id;
-  }
-
-  get accessRightKey() {
-    return this._rawData.accessRightKey || '';
-  }
-
-  get audios() {
-    return this._rawData.audios.toSorted(DomandInfo._qualityDesc(a => a.qualityLevel));
-  }
-
-  get availableAudios() {
-    return this.audios.filter(a => a.isAvailable);
-  }
-
-  get availableAudioIds() {
-    return this.availableAudios.map(a => a.id);
-  }
-
-  get videos() {
-    return this._rawData.videos.toSorted(DomandInfo._qualityDesc(v => v.qualityLevel));
-  }
-
-  get availableVideos() {
-    return this.videos.filter(v => v.isAvailable);
-  }
-
-  get availableVideoIds() {
-    return this.availableVideos.map(v => v.id);
-  }
-
-  get isStoryboardAvailable() {
-    return this._rawData.isStoryboardAvailable;
-  }
-
-  /*
-   * Task 074: 本家の「音声の自動調整」で使う倍率。
-   * audios[].loudnessCollection の type:"video" の値（例: 0.93）。
-   * 音が大きい動画ほど小さい値になる。取れない場合はnull。
-   */
-  get loudness() {
-    const audio = this.availableAudios[0] || this.audios[0];
-    const collection = (audio && audio.loudnessCollection) || [];
-    const video = collection.find(l => l && l.type === 'video');
-    return video && typeof video.value === 'number' ? video.value : null;
-  }
+    // Task184 (F08): a comparator must return a signed number. The former boolean
+    // comparators (b > a) left e.g. [1,3,2] unsorted. Higher level first; ties keep the
+    // server order (toSorted is stable); missing / non-numeric levels go last.
+    static _qualityDesc(level) {
+        return (a, b) => {
+            const x = Number(level(a)), y = Number(level(b));
+            const fx = Number.isFinite(x), fy = Number.isFinite(y);
+            if (fx && fy) {
+                return y - x;
+            }
+            return fx === fy ? 0 : (fx ? -1 : 1);
+        };
+    }
+    constructor(rawData, videoDetail, linkedChannelVideo) {
+        super();
+        this._rawData = rawData;
+        this._videoDetail = videoDetail;
+        this._linkedChannelVideo = linkedChannelVideo;
+    }
+    get videoId() {
+        return this._linkedChannelVideo != null ? this._linkedChannelVideo.linkedVideoId : this._videoDetail.id;
+    }
+    get accessRightKey() {
+        return this._rawData.accessRightKey || '';
+    }
+    get audios() {
+        return this._rawData.audios.toSorted(DomandInfo._qualityDesc((a) => a.qualityLevel));
+    }
+    get availableAudios() {
+        return this.audios.filter((a) => a.isAvailable);
+    }
+    get availableAudioIds() {
+        return this.availableAudios.map((a) => a.id);
+    }
+    get videos() {
+        return this._rawData.videos.toSorted(DomandInfo._qualityDesc((v) => v.qualityLevel));
+    }
+    get availableVideos() {
+        return this.videos.filter((v) => v.isAvailable);
+    }
+    get availableVideoIds() {
+        return this.availableVideos.map((v) => v.id);
+    }
+    get isStoryboardAvailable() {
+        return this._rawData.isStoryboardAvailable;
+    }
+    /*
+     * Task 074: 本家の「音声の自動調整」で使う倍率。
+     * audios[].loudnessCollection の type:"video" の値（例: 0.93）。
+     * 音が大きい動画ほど小さい値になる。取れない場合はnull。
+     */
+    get loudness() {
+        const audio = this.availableAudios[0] || this.audios[0];
+        const collection = (audio && audio.loudnessCollection) || [];
+        const video = collection.find((l) => l && l.type === 'video');
+        return video && typeof video.value === 'number' ? video.value : null;
+    }
 }
-
 class DmcInfo extends JSONable {
-  // Task184 (F08): same signed descending comparator as DomandInfo.
-  static _qualityDesc(level) {
-    return (a, b) => {
-      const x = Number(level(a)), y = Number(level(b));
-      const fx = Number.isFinite(x), fy = Number.isFinite(y);
-      if (fx && fy) { return y - x; }
-      return fx === fy ? 0 : (fx ? -1 : 1);
-    };
-  }
-
-  constructor(rawData) {
-    super();
-    this._rawData = rawData;
-    this._session = rawData.movie.session;
-  }
-
-  get apiUrl() {
-    return this._session.urls[0].url;
-  }
-
-  get urls() {
-    return this._session.urls;
-  }
-
-  get audios() {
-    return this._rawData.movie.audios.toSorted(DmcInfo._qualityDesc(a => a.metadata && a.metadata.levelIndex));
-  }
-
-  get availableAudios() {
-    return this.audios.filter(a => a.isAvailable);
-  }
-
-  get availableAudioIds() {
-    return this.availableAudios.map(a => a.id);
-  }
-
-  get videos() {
-    return this._rawData.movie.videos.toSorted(DmcInfo._qualityDesc(v => v.metadata && v.metadata.levelIndex));
-  }
-
-  get availableVideos() {
-    return this.videos.filter(v => v.isAvailable);
-  }
-
-  get availableVideoIds() {
-    return this.availableVideos.map(v => v.id);
-  }
-
-  // Task 074: 旧システム(dmc)側の音量倍率。metadata.loudnessCollection に入っている
-  get loudness() {
-    const audio = this.availableAudios[0] || this.audios[0];
-    const collection = (audio && audio.metadata && audio.metadata.loudnessCollection) || [];
-    const video = collection.find(l => l && l.type === 'video');
-    return video && typeof video.value === 'number' ? video.value : null;
-  }
-
-  get signature() {
-    return this._session.signature;
-  }
-
-  get token() {
-    return this._session.token;
-  }
-
-  get serviceUserId() {
-    return this._session.serviceUserId;
-  }
-
-  get contentId() {
-    return this._session.contentId;
-  }
-
-  get playerId() {
-    return this._session.playerId;
-  }
-
-  get recipeId() {
-    return this._session.recipeId;
-  }
-
-  get protocols() {
-    return this._session.protocols || [];
-  }
-
-  get isHLSRequired() {
-    return !this.protocols.includes('http');
-  }
-
-  get contentKeyTimeout() {
-    return this._session.contentKeyTimeout;
-  }
-
-  get priority() {
-    return this._session.priority;
-  }
-
-  get authTypes() {
-    return this._session.authTypes;
-  }
-
-  get videoFormatList() {
-    return (this.videos || []).concat();
-  }
-
-  get hasStoryboard() {
-    return !!this._rawData.storyboard;
-  }
-
-  get storyboardInfo() {
-    return this.hasStoryboard ? this._rawData.storyboard.session : null;
-  }
-
-  get transferPreset() {
-    return (this._session.transferPresets || [''])[0] || '';
-  }
-
-  get heartbeatLifetime() {
-    return this._session.heartbeatLifetime || 120 * 1000;
-  }
-
-  get contentKeyTimeout() {
-    return this._session.contentKeyTimeout || 600 * 1000;
-  }
-
-  get importVersion() {
-    return this._rawData.import_version || 0;
-  }
-
-  get trackingId() {
-    return this._rawData.trackingId || '';
-  }
-
-  get encryption() {
-    return this._rawData.encryption || null;
-  }
+    // Task184 (F08): same signed descending comparator as DomandInfo.
+    static _qualityDesc(level) {
+        return (a, b) => {
+            const x = Number(level(a)), y = Number(level(b));
+            const fx = Number.isFinite(x), fy = Number.isFinite(y);
+            if (fx && fy) {
+                return y - x;
+            }
+            return fx === fy ? 0 : (fx ? -1 : 1);
+        };
+    }
+    constructor(rawData) {
+        super();
+        this._rawData = rawData;
+        this._session = rawData.movie.session;
+    }
+    get apiUrl() {
+        return this._session.urls[0].url;
+    }
+    get urls() {
+        return this._session.urls;
+    }
+    get audios() {
+        return this._rawData.movie.audios.toSorted(DmcInfo._qualityDesc((a) => a.metadata && a.metadata.levelIndex));
+    }
+    get availableAudios() {
+        return this.audios.filter((a) => a.isAvailable);
+    }
+    get availableAudioIds() {
+        return this.availableAudios.map((a) => a.id);
+    }
+    get videos() {
+        return this._rawData.movie.videos.toSorted(DmcInfo._qualityDesc((v) => v.metadata && v.metadata.levelIndex));
+    }
+    get availableVideos() {
+        return this.videos.filter((v) => v.isAvailable);
+    }
+    get availableVideoIds() {
+        return this.availableVideos.map((v) => v.id);
+    }
+    // Task 074: 旧システム(dmc)側の音量倍率。metadata.loudnessCollection に入っている
+    get loudness() {
+        const audio = this.availableAudios[0] || this.audios[0];
+        const collection = (audio && audio.metadata && audio.metadata.loudnessCollection) || [];
+        const video = collection.find((l) => l && l.type === 'video');
+        return video && typeof video.value === 'number' ? video.value : null;
+    }
+    get signature() {
+        return this._session.signature;
+    }
+    get token() {
+        return this._session.token;
+    }
+    get serviceUserId() {
+        return this._session.serviceUserId;
+    }
+    get contentId() {
+        return this._session.contentId;
+    }
+    get playerId() {
+        return this._session.playerId;
+    }
+    get recipeId() {
+        return this._session.recipeId;
+    }
+    get protocols() {
+        return this._session.protocols || [];
+    }
+    get isHLSRequired() {
+        return !this.protocols.includes('http');
+    }
+    get priority() {
+        return this._session.priority;
+    }
+    get authTypes() {
+        return this._session.authTypes;
+    }
+    get videoFormatList() {
+        return (this.videos || []).concat();
+    }
+    get hasStoryboard() {
+        return !!this._rawData.storyboard;
+    }
+    get storyboardInfo() {
+        return this.hasStoryboard ? this._rawData.storyboard.session : null;
+    }
+    get transferPreset() {
+        return (this._session.transferPresets || [''])[0] || '';
+    }
+    get heartbeatLifetime() {
+        return this._session.heartbeatLifetime || 120 * 1000;
+    }
+    get contentKeyTimeout() {
+        return this._session.contentKeyTimeout || 600 * 1000;
+    }
+    get importVersion() {
+        return this._rawData.import_version || 0;
+    }
+    get trackingId() {
+        return this._rawData.trackingId || '';
+    }
+    get encryption() {
+        return this._rawData.encryption || null;
+    }
 }
-
 class VideoFilter {
-  constructor(ngOwner, ngTag) {
-    this.ngOwner = ngOwner;
-    this.ngTag = ngTag;
-  }
-
-  get ngOwner() {
-    return this._ngOwner || [];
-  }
-
-  set ngOwner(owner) {
-    owner = _.isArray(owner) ? owner : owner.toString().split(/[\r\n]/);
-    let list = [];
-    owner.forEach(o => {
-      list.push(o.replace(/#.*$/, '').trim());
-    });
-    this._ngOwner = list;
-  }
-
-  get ngTag() {
-    return this._ngTag || [];
-  }
-
-  set ngTag(tag) {
-    tag = Array.isArray(tag) ? tag : tag.toString().split(/[\r\n]/);
-    const list = [];
-    tag.forEach(t => {
-      list.push(t.toLowerCase().trim());
-    });
-    this._ngTag = list;
-  }
-
-  isNgVideo(videoInfo) {
-    let isNg = false;
-    let isChannel = videoInfo.isChannel;
-    let ngTag = this.ngTag;
-
-    videoInfo.tagList.forEach(tag => {
-      let text = (tag.name || '').toLowerCase();
-      if (ngTag.includes(text)) {
-        isNg = true;
-      }
-    });
-    if (isNg) {
-      return true;
+    constructor(ngOwner, ngTag) {
+        this.ngOwner = ngOwner;
+        this.ngTag = ngTag;
     }
-
-    let owner = videoInfo.owner;
-    let ownerId = owner.id;
-    if (ownerId && this.ngOwner.includes(ownerId)) {
-      isNg = true;
+    get ngOwner() {
+        return this._ngOwner || [];
     }
-
-    return isNg;
-  }
+    set ngOwner(owner) {
+        owner = _.isArray(owner) ? owner : owner.toString().split(/[\r\n]/);
+        let list = [];
+        owner.forEach((o) => {
+            list.push(o.replace(/#.*$/, '').trim());
+        });
+        this._ngOwner = list;
+    }
+    get ngTag() {
+        return this._ngTag || [];
+    }
+    set ngTag(tag) {
+        tag = Array.isArray(tag) ? tag : tag.toString().split(/[\r\n]/);
+        const list = [];
+        tag.forEach((t) => {
+            list.push(t.toLowerCase().trim());
+        });
+        this._ngTag = list;
+    }
+    isNgVideo(videoInfo) {
+        let isNg = false;
+        let isChannel = videoInfo.isChannel;
+        let ngTag = this.ngTag;
+        videoInfo.tagList.forEach((tag) => {
+            let text = (tag.name || '').toLowerCase();
+            if (ngTag.includes(text)) {
+                isNg = true;
+            }
+        });
+        if (isNg) {
+            return true;
+        }
+        let owner = videoInfo.owner;
+        let ownerId = owner.id;
+        if (ownerId && this.ngOwner.includes(ownerId)) {
+            isNg = true;
+        }
+        return isNg;
+    }
 }
-
 class VideoInfoModel extends JSONable {
-  constructor(videoInfoData, localCacheData = {}) {
-    super();
-    this._update(videoInfoData, localCacheData);
-    this._currentVideoPromise = null;
-  }
-
-  update(videoInfoModel) {
-    this._update(videoInfoModel._rawData);
-    return true;
-  }
-
-  _update(info, localCacheData = {}) {
-    this._rawData = info;
-    this._cacheData = localCacheData;
-    this._watchApiData = info.watchApiData;
-    this._videoDetail = info.watchApiData.videoDetail;
-    this._viewerInfo = info.viewerInfo;               // 閲覧者(＝おまいら)の情報
-    this._ngFilters = info.ngFilters;
-    this._msgInfo = info.msgInfo;
-    this._dmcInfo = (info.dmcInfo && info.dmcInfo.movie.session) ? new DmcInfo(info.dmcInfo) : null;
-    this._domandInfo = info.domandInfo ? new DomandInfo(info.domandInfo, info.watchApiData.videoDetail, info.linkedChannelVideo) : null;
-    this._relatedVideo = info.playlist; // playlistという名前だが実質は関連動画
-    this._playlistToken = info.playlistToken;
-    this._watchAuthKey = info.watchAuthKey;
-    this._seekToken = info.seekToken;
-    this._resumeInfo = info.resumeInfo || {};
-    this._currentVideo = null;
-    this._currentVideoPromise = null;
-    return true;
-  }
-
-  get title() {
-    return this._videoDetail.title_original || this._videoDetail.title;
-  }
-
-  get description() {
-    return this._videoDetail.description || '';
-  }
-
-  /**
-   * マイリスト等がリンクになっていない物
-   */
-  get descriptionOriginal() {
-    return this._videoDetail.description_original;
-  }
-
-  get postedAt() {
-    return this._videoDetail.postedAt;
-  }
-
-  get thumbnail() {
-    return this._videoDetail.thumbnail;
-  }
-
-  /**
-   * 大きいサムネがあればそっちを返す
-   */
-  get betterThumbnail() {
-    return this._rawData.thumbnail;
-  }
-
-  get largeThumbnnail() {
-    return this._videoDetail.largeThumbnnail;
-  }
-
-  /**
-   * @return Promise
-   */
-  getCurrentVideo() {
-    if (this._currentVideoPromise) {
-      return this._currentVideoPromise;
+    constructor(videoInfoData, localCacheData = {}) {
+        super();
+        this._update(videoInfoData, localCacheData);
+        this._currentVideoPromise = null;
     }
-    return this._currentVideoPromise = new PromiseHandler();
-  }
-
-  setCurrentVideo(v) {
-    this._currentVideo = v;
-    this._currentVideoPromise && this._currentVideoPromise.resolve(v);
-  }
-
-  get tagList() {
-    return this._videoDetail.tagList;
-  }
-
-  get tagEdit() {
-    return this._videoDetail.tagEdit;
-  }
-
-  getVideoId() { // sm12345
-    return this.videoId;
-  }
-
-  get videoId() {
-    return this._videoDetail.id;
-  }
-
-  get originalVideoId() {
-    return (this.isMymemory || this.isCommunityVideo) ? this.videoId : '';
-  }
-
-  getWatchId() { // sm12345だったりスレッドIDだったり
-    return this.watchId;
-  }
-
-  get watchId() {
-    if (this.videoId.substring(0, 2) === 'so') {
-      return this.videoId;
+    update(videoInfoModel) {
+        this._update(videoInfoModel._rawData);
+        return true;
     }
-    return this._videoDetail.v;
-  }
-
-  get contextWatchId() {
-    return this._videoDetail.v;
-  }
-
-  get watchUrl() {
-    return `https://www.nicovideo.jp/watch/${this.watchId}`;
-  }
-
-  get threadId() { // watchIdと同一とは限らない
-    return this._msgInfo.threadId;
-  }
-
-  get videoSize() {
-    return {
-      width: this._videoDetail.width,
-      height: this._videoDetail.height
-    };
-  }
-
-  get duration() {
-    return this._videoDetail.length;
-  }
-
-  get count() {
-    const vd = this._videoDetail;
-    return {
-      comment: vd.commentCount,
-      mylist: vd.mylistCount,
-      view: vd.viewCount,
-      ...(vd.likeCount !== undefined ? {like: vd.likeCount} : {})
-    };
-  }
-
-  get cardAccess() {
-    return {paid: this._rawData.isNeedPayment, member: this._rawData.isMemberFree,
-      premium: this._rawData.isPremiumFree};
-  }
-
-  get isChannel() {
-    return !!this._videoDetail.channelId;
-  }
-
-  get isMymemory() {
-    return !!this._videoDetail.isMymemory;
-  }
-
-  get isCommunityVideo() {
-    return !!(!this.isChannel && this._videoDetail.communityId);
-  }
-
-  get isLiked() {
-    return !!this._videoDetail.isLiked;
-  }
-  set isLiked(v) {
-    this._videoDetail.isLiked = v;
-  }
-
-  // Task172 (F01): existence of a content tree is true / false / unknown.
-  // Watch V4 does not report it, so unknown must not be treated as "no tree".
-  get contentTreeState() {
-    const exists = this._videoDetail.commons_tree_exists;
-    if (exists === null || exists === undefined) { return 'unknown'; }
-    return exists ? 'exists' : 'none';
-  }
-
-  get hasParentVideo() {
-    return this.contentTreeState === 'exists';
-  }
-
-  // Opening /works/{videoId} is offered unless the tree is explicitly absent.
-  get canOpenContentTree() {
-    return this.contentTreeState !== 'none' && /^[a-z]{2}\d+$/.test(String(this.videoId || ''));
-  }
-
-  get isHLSRequired() {
-    if (this.isDmcAvailable) {
-      return this.dmcInfo.isHLSRequired
-    } else {
-      return this.isDomandAvailable;
+    _update(info, localCacheData = {}) {
+        this._rawData = info;
+        this._cacheData = localCacheData;
+        this._watchApiData = info.watchApiData;
+        this._videoDetail = info.watchApiData.videoDetail;
+        this._viewerInfo = info.viewerInfo; // 閲覧者(＝おまいら)の情報
+        this._ngFilters = info.ngFilters;
+        this._msgInfo = info.msgInfo;
+        this._dmcInfo = (info.dmcInfo && info.dmcInfo.movie.session) ? new DmcInfo(info.dmcInfo) : null;
+        this._domandInfo = info.domandInfo ? new DomandInfo(info.domandInfo, info.watchApiData.videoDetail, info.linkedChannelVideo) : null;
+        this._relatedVideo = info.playlist; // playlistという名前だが実質は関連動画
+        this._playlistToken = info.playlistToken;
+        this._watchAuthKey = info.watchAuthKey;
+        this._seekToken = info.seekToken;
+        this._resumeInfo = info.resumeInfo || {};
+        this._currentVideo = null;
+        this._currentVideoPromise = null;
+        return true;
     }
-  }
-
-  get actionTrackId() {
-    return this._watchApiData.clientTrackId;
-  }
-
-  get isDomandAvailable() {
-    return this._rawData.isDomand;
-  }
-
-  get isDmcAvailable() {
-    return this._rawData.isDmc;
-  }
-
-  get domandInfo() {
-    return this._domandInfo;
-  }
-
-  get dmcInfo() {
-    return this._dmcInfo;
-  }
-
-  get msgInfo() {
-    return this._msgInfo;
-  }
-
-  get isDomandOnly() {
-    return this.isDomandAvailable && !this.isDmcAvailable;
-  }
-
-  get isDmcOnly() {
-    return this.isDmcAvailable && !this.isDomandAvailable;
-  }
-
-  get hasDomandStoryboard() {
-    return this._domandInfo?.isStoryboardAvailable ?? false;
-  }
-
-  get hasDmcStoryboard() {
-    return this._dmcInfo?.hasStoryboard ?? false;
-  }
-
-  get dmcStoryboardInfo() {
-    return this.hasDmcStoryboard ? this._dmcInfo.storyboardInfo : null;
-  }
-
-  get hasStoryboard() {
-    return this.hasDomandStoryboard || this.hasDmcStoryboard;
-  }
-
-  // Task 074: 再生中の動画のジャンル（{key, label}）。未設定・取得できない場合はnull
-  get genre() {
-    const key = this._rawData.genreKey;
-    const label = this._rawData.genreLabel;
-    return key || label ? {key: key || '', label: label || key || ''} : null;
-  }
-
-  // Task 074: 「音声の自動調整」用の倍率（domand優先、無ければdmc、どちらも無ければnull）
-  get loudness() {
-    const value = this._domandInfo?.loudness ?? this._dmcInfo?.loudness ?? null;
-    return typeof value === 'number' && isFinite(value) && value > 0 ? value : null;
-  }
-
-  /**
-   * 投稿者の情報
-   * チャンネル動画かどうかで分岐
-   */
-  get owner() {
-    if (this.isChannel) {
-      let {
-        iconUrl: icon = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg',
-        id,
-        linkId = '',
-        name,
-      } = {...this._watchApiData.channelInfo};
-      return {
-        type: 'channel',
-        url: `https://ch.nicovideo.jp/${linkId}`,
-        icon,
-        id,
-        linkId,
-        name,
-      };
-    } else {
-      // 退会しているユーザーだと空になっている
-      let {
-        iconUrl: icon = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg',
-        id,
-        linkId = '',
-        name = '(非公開ユーザー)',
-      } = {...this._watchApiData.uploaderInfo};
-      return {
-        type: 'user',
-        url: id ? `https://www.nicovideo.jp/${linkId}` : '#',
-        icon,
-        id,
-        linkId,
-        name,
-      };
+    get title() {
+        return this._videoDetail.title_original || this._videoDetail.title;
     }
-  }
-
-  get series() {
-    if (!this._rawData.series || !this._rawData.series.id) {
-      return null;
+    get description() {
+        return this._videoDetail.description || '';
     }
-    const series = this._rawData.series;
-    const thumbnailUrl = series.thumbnailUrl || this.betterThumbnail;
-    return Object.assign({}, series, {thumbnailUrl});
-  }
-
-  // Task182 (F05): a series may come without video neighbours; missing ones are null.
-  get firstVideo() {
-    return this.series?.video?.first ?? null;
-  }
-
-  get prevVideo() {
-    return this.series?.video?.prev ?? null;
-  }
-
-  get nextVideo() {
-    return this.series?.video?.next ?? null;
-  }
-
-  get relatedVideoItems() {
-    return this._relatedVideo.playlist || [];
-  }
-
-  get replacementWords() {
-    return this._ngFilters.reduce((acc, ng) => {
-      if (ng.source != null && ng.destination != null) {
-        acc[ng.source] = ng.destination;
-      }
-      return acc;
-    }, Object.create({}))
-  }
-
-  get playlistToken() {
-    return this._playlistToken;
-  }
-
-  set playlistToken(v) {
-    this._playlistToken = v;
-  }
-
-  get watchAuthKey() {
-    return this._watchAuthKey;
-  }
-
-  set watchAuthKey(v) {
-    this._watchAuthKey = v;
-  }
-
-  get seekToken() {
-    return this._seekToken;
-  }
-
-  get width() {
-    return parseInt(this._videoDetail.width, 10);
-  }
-
-  get height() {
-    return parseInt(this._videoDetail.height, 10);
-  }
-
-  get initialPlaybackTime() {
-		return this.resumePoints[0]?.time ?? 0;
-  }
-
-  get resumePoints() {
-    const duration = this.duration;
-    const MARGIN = 10;
-    const resumePoints =
-      ((this._cacheData && this._cacheData.resume) ? this._cacheData.resume : [])
-        .filter(({now, time}) => time > MARGIN && time < duration - MARGIN)
-        .map(({now, time}) => { return {now: new Date(now).toLocaleString(), time}; });
-    const lastResumePoint = this._resumeInfo ? this._resumeInfo.initialPlaybackPosition : 0;
-
-    lastResumePoint && resumePoints.unshift({now: '前回', time: lastResumePoint});
-    return resumePoints;
-  }
-
-  get csrfToken() {
-    return this._rawData.csrfToken || '';
-  }
-
-  get extension() {
-    if (this.isDomandAvailable || this.isDmcAvailable) {
-      return 'mp4';
+    /**
+     * マイリスト等がリンクになっていない物
+     */
+    get descriptionOriginal() {
+        return this._videoDetail.description_original;
     }
-    return 'unknown';
-  }
-
-  get community() {
-    return this._rawData.community || null;
-  }
-
-  get maybeBetterQualityServerType() {
-    if (this.isDomandOnly) {
-      return 'domand';
+    get postedAt() {
+        return this._videoDetail.postedAt;
     }
-    if (this.isDmcOnly) {
-      return 'dmc';
+    get thumbnail() {
+        return this._videoDetail.thumbnail;
     }
-    if (!this.isDmcAvailable) {
-      return 'domand';
+    /**
+     * 大きいサムネがあればそっちを返す
+     */
+    get betterThumbnail() {
+        return this._rawData.thumbnail;
     }
-    if (!this.isDomandAvailable) {
-      return 'dmc';
+    get largeThumbnnail() {
+        return this._videoDetail.largeThumbnnail;
     }
-
-    const highestDomand = Math.max(...this.domandInfo.videos.map(v => {
-      return v.height;
-    }));
-
-    const highestDmc = Math.max(...this.dmcInfo.videos.map(v => {
-      return v.metadata.resolution.height;
-    }));
-
-    // Domandのほうが高解像度を持っているなら恐らくDomand側が高画質
-    if (highestDomand >= highestDmc) {
-      return 'domand';
+    /**
+     * @return Promise
+     */
+    getCurrentVideo() {
+        if (this._currentVideoPromise) {
+            return this._currentVideoPromise;
+        }
+        return this._currentVideoPromise = new PromiseHandler();
     }
-
-    // それ以外はdmc
-    return 'dmc';
-  }
+    setCurrentVideo(v) {
+        this._currentVideo = v;
+        this._currentVideoPromise && this._currentVideoPromise.resolve(v);
+    }
+    get tagList() {
+        return this._videoDetail.tagList;
+    }
+    get tagEdit() {
+        return this._videoDetail.tagEdit;
+    }
+    getVideoId() {
+        return this.videoId;
+    }
+    get videoId() {
+        return this._videoDetail.id;
+    }
+    get originalVideoId() {
+        return (this.isMymemory || this.isCommunityVideo) ? this.videoId : '';
+    }
+    getWatchId() {
+        return this.watchId;
+    }
+    get watchId() {
+        if (this.videoId.substring(0, 2) === 'so') {
+            return this.videoId;
+        }
+        return this._videoDetail.v;
+    }
+    get contextWatchId() {
+        return this._videoDetail.v;
+    }
+    get watchUrl() {
+        return `https://www.nicovideo.jp/watch/${this.watchId}`;
+    }
+    get threadId() {
+        return this._msgInfo.threadId;
+    }
+    get videoSize() {
+        return {
+            width: this._videoDetail.width,
+            height: this._videoDetail.height
+        };
+    }
+    get duration() {
+        return this._videoDetail.length;
+    }
+    get count() {
+        const vd = this._videoDetail;
+        return {
+            comment: vd.commentCount,
+            mylist: vd.mylistCount,
+            view: vd.viewCount,
+            ...(vd.likeCount !== undefined ? { like: vd.likeCount } : {})
+        };
+    }
+    get cardAccess() {
+        return { paid: this._rawData.isNeedPayment, member: this._rawData.isMemberFree,
+            premium: this._rawData.isPremiumFree };
+    }
+    get isChannel() {
+        return !!this._videoDetail.channelId;
+    }
+    get isMymemory() {
+        return !!this._videoDetail.isMymemory;
+    }
+    get isCommunityVideo() {
+        return !!(!this.isChannel && this._videoDetail.communityId);
+    }
+    get isLiked() {
+        return !!this._videoDetail.isLiked;
+    }
+    set isLiked(v) {
+        this._videoDetail.isLiked = v;
+    }
+    // Task172 (F01): existence of a content tree is true / false / unknown.
+    // Watch V4 does not report it, so unknown must not be treated as "no tree".
+    get contentTreeState() {
+        const exists = this._videoDetail.commons_tree_exists;
+        if (exists === null || exists === undefined) {
+            return 'unknown';
+        }
+        return exists ? 'exists' : 'none';
+    }
+    get hasParentVideo() {
+        return this.contentTreeState === 'exists';
+    }
+    // Opening /works/{videoId} is offered unless the tree is explicitly absent.
+    get canOpenContentTree() {
+        return this.contentTreeState !== 'none' && /^[a-z]{2}\d+$/.test(String(this.videoId || ''));
+    }
+    get isHLSRequired() {
+        if (this.isDmcAvailable) {
+            return this.dmcInfo.isHLSRequired;
+        }
+        else {
+            return this.isDomandAvailable;
+        }
+    }
+    get actionTrackId() {
+        return this._watchApiData.clientTrackId;
+    }
+    get isDomandAvailable() {
+        return this._rawData.isDomand;
+    }
+    get isDmcAvailable() {
+        return this._rawData.isDmc;
+    }
+    get domandInfo() {
+        return this._domandInfo;
+    }
+    get dmcInfo() {
+        return this._dmcInfo;
+    }
+    get msgInfo() {
+        return this._msgInfo;
+    }
+    get isDomandOnly() {
+        return this.isDomandAvailable && !this.isDmcAvailable;
+    }
+    get isDmcOnly() {
+        return this.isDmcAvailable && !this.isDomandAvailable;
+    }
+    get hasDomandStoryboard() {
+        return this._domandInfo?.isStoryboardAvailable ?? false;
+    }
+    get hasDmcStoryboard() {
+        return this._dmcInfo?.hasStoryboard ?? false;
+    }
+    get dmcStoryboardInfo() {
+        return this.hasDmcStoryboard ? this._dmcInfo.storyboardInfo : null;
+    }
+    get hasStoryboard() {
+        return this.hasDomandStoryboard || this.hasDmcStoryboard;
+    }
+    // Task 074: 再生中の動画のジャンル（{key, label}）。未設定・取得できない場合はnull
+    get genre() {
+        const key = this._rawData.genreKey;
+        const label = this._rawData.genreLabel;
+        return key || label ? { key: key || '', label: label || key || '' } : null;
+    }
+    // Task 074: 「音声の自動調整」用の倍率（domand優先、無ければdmc、どちらも無ければnull）
+    get loudness() {
+        const value = this._domandInfo?.loudness ?? this._dmcInfo?.loudness ?? null;
+        return typeof value === 'number' && isFinite(value) && value > 0 ? value : null;
+    }
+    /**
+     * 投稿者の情報
+     * チャンネル動画かどうかで分岐
+     */
+    get owner() {
+        if (this.isChannel) {
+            let { iconUrl: icon = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg', id, linkId = '', name, } = { ...this._watchApiData.channelInfo };
+            return {
+                type: 'channel',
+                url: `https://ch.nicovideo.jp/${linkId}`,
+                icon,
+                id,
+                linkId,
+                name,
+            };
+        }
+        else {
+            // 退会しているユーザーだと空になっている
+            let { iconUrl: icon = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg', id, linkId = '', name = '(非公開ユーザー)', } = { ...this._watchApiData.uploaderInfo };
+            return {
+                type: 'user',
+                url: id ? `https://www.nicovideo.jp/${linkId}` : '#',
+                icon,
+                id,
+                linkId,
+                name,
+            };
+        }
+    }
+    get series() {
+        if (!this._rawData.series || !this._rawData.series.id) {
+            return null;
+        }
+        const series = this._rawData.series;
+        const thumbnailUrl = series.thumbnailUrl || this.betterThumbnail;
+        return Object.assign({}, series, { thumbnailUrl });
+    }
+    // Task182 (F05): a series may come without video neighbours; missing ones are null.
+    get firstVideo() {
+        return this.series?.video?.first ?? null;
+    }
+    get prevVideo() {
+        return this.series?.video?.prev ?? null;
+    }
+    get nextVideo() {
+        return this.series?.video?.next ?? null;
+    }
+    get relatedVideoItems() {
+        return this._relatedVideo.playlist || [];
+    }
+    get replacementWords() {
+        return this._ngFilters.reduce((acc, ng) => {
+            if (ng.source != null && ng.destination != null) {
+                acc[ng.source] = ng.destination;
+            }
+            return acc;
+        }, Object.create({}));
+    }
+    get playlistToken() {
+        return this._playlistToken;
+    }
+    set playlistToken(v) {
+        this._playlistToken = v;
+    }
+    get watchAuthKey() {
+        return this._watchAuthKey;
+    }
+    set watchAuthKey(v) {
+        this._watchAuthKey = v;
+    }
+    get seekToken() {
+        return this._seekToken;
+    }
+    get width() {
+        return parseInt(this._videoDetail.width, 10);
+    }
+    get height() {
+        return parseInt(this._videoDetail.height, 10);
+    }
+    get initialPlaybackTime() {
+        return this.resumePoints[0]?.time ?? 0;
+    }
+    get resumePoints() {
+        const duration = this.duration;
+        const MARGIN = 10;
+        const resumePoints = ((this._cacheData && this._cacheData.resume) ? this._cacheData.resume : [])
+            .filter(({ now, time }) => time > MARGIN && time < duration - MARGIN)
+            .map(({ now, time }) => { return { now: new Date(now).toLocaleString(), time }; });
+        const lastResumePoint = this._resumeInfo ? this._resumeInfo.initialPlaybackPosition : 0;
+        lastResumePoint && resumePoints.unshift({ now: '前回', time: lastResumePoint });
+        return resumePoints;
+    }
+    get csrfToken() {
+        return this._rawData.csrfToken || '';
+    }
+    get extension() {
+        if (this.isDomandAvailable || this.isDmcAvailable) {
+            return 'mp4';
+        }
+        return 'unknown';
+    }
+    get community() {
+        return this._rawData.community || null;
+    }
+    get maybeBetterQualityServerType() {
+        if (this.isDomandOnly) {
+            return 'domand';
+        }
+        if (this.isDmcOnly) {
+            return 'dmc';
+        }
+        if (!this.isDmcAvailable) {
+            return 'domand';
+        }
+        if (!this.isDomandAvailable) {
+            return 'dmc';
+        }
+        const highestDomand = Math.max(...this.domandInfo.videos.map((v) => {
+            return v.height;
+        }));
+        const highestDmc = Math.max(...this.dmcInfo.videos.map((v) => {
+            return v.metadata.resolution.height;
+        }));
+        // Domandのほうが高解像度を持っているなら恐らくDomand側が高画質
+        if (highestDomand >= highestDmc) {
+            return 'domand';
+        }
+        // それ以外はdmc
+        return 'dmc';
+    }
 }
-
-
 //===END===
-
 export {
-  DmcInfo, VideoInfoModel, VideoFilter
+  DmcInfo,
+  VideoInfoModel,
+  VideoFilter
 };

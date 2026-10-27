@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NicoRssLoader.ts",
+  "runtime": "packages/lib/src/nico/NicoRssLoader.js",
+  "sourceSha256": "9f25decf0c1f88738fd89158dec41e7c499ee75a8136d850c0ecebb2043e3bfe",
+  "runtimeSha256": "70f903c176a5f67e60d6a0a99ba430a6043f80e6f27cc057ad608c5e7727dc11"
+}

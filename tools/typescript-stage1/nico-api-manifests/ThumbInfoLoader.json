@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/ThumbInfoLoader.ts",
+  "runtime": "packages/lib/src/nico/ThumbInfoLoader.js",
+  "sourceSha256": "e7fd116eac37a47e423edd672662872b9c43a85fa5d23ca851e7dda9a0a402e5",
+  "runtimeSha256": "3410299e9995a1a24dcbe15eda6d06f97aa682f5448826e563f91d2c45a4aaa0"
+}

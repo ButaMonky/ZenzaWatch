@@ -7,8 +7,8 @@ const {createContext,loadClass}=require('../helpers/extractSource');
 describe('Task318 browser bootstrap integration',()=>{
   it('loads both modern UI and draft model from the advanced userscript',()=>{
     const source=read('src/_setting.js');
-    assert.match(source,/import \{ModernAdvancedSettingsModel\}/);
-    assert.match(source,/import \{ModernAdvancedSettingsUI\}/);
+    assert.match(source,/import\s*\{\s*ModernAdvancedSettingsModel\s*\}/);
+    assert.match(source,/import\s*\{\s*ModernAdvancedSettingsUI\s*\}/);
     assert.match(source,/\/\/@require ModernAdvancedSettingsModel/);
     assert.match(source,/\/\/@require ModernAdvancedSettingsUI/);
     assert.match(source,/new ModernAdvancedSettingsModel\(/);
@@ -18,8 +18,8 @@ describe('Task318 browser bootstrap integration',()=>{
     const source=read('src/_setting.js');
     const history=source.indexOf('this._historySettings =');
     const links=source.indexOf('this._relatedMenuLinks =');
-    const model=source.indexOf('this._modernModel=');
-    const ui=source.indexOf('this._modernUI=');
+    const model=source.search(/this\._modernModel\s*=/);
+    const ui=source.search(/this\._modernUI\s*=/);
     assert(history>0&&history<model);
     assert(links>0&&links<model);
     assert(model<ui);

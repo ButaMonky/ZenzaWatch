@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/domEvent.ts",
+  "runtime": "packages/lib/src/dom/domEvent.js",
+  "sourceSha256": "05c9fa3e90d9a02733815bda4456885858bdda90b6d2d5ce23dbc57adf6c6c8f",
+  "runtimeSha256": "69557f659b47eb8779431f0519be66eee627eafb5b8d0b66747bdb594d63dd4f"
+}

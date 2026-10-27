@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/speech.ts",
+  "runtime": "packages/lib/src/infra/speech.js",
+  "sourceSha256": "87231482a2bdc4b13ca8d056330727534b478cc0ae193a0466b48c4c7b3d31f0",
+  "runtimeSha256": "2bb5e9654897007fc45f91c4a3f923183eed8f87ccc88ad12080e53dc1ef3c4a"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/VideoList.ts",
+  "runtime": "packages/zenza/src/Playlist/VideoList.js",
+  "sourceSha256": "5393c0961208c810a54d797c3bf3431eccb1e59852a92f2036aeadbd3ce79a33",
+  "runtimeSha256": "aea4f89c9b4845780147e47e748117260edae731ac00ce28e93c112620d66198"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/BaseViewComponent.ts",
+  "runtime": "packages/zenza/src/parts/BaseViewComponent.js",
+  "sourceSha256": "b908ed805907012bff84bee0f22f029ab8dfc05ade9e5f01faee921a01ea97f5",
+  "runtimeSha256": "5f63d1642b68f98cbe0667ecb704e591b08eb311851edfe398fa45496554fb01"
+}

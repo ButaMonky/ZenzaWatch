@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CommentPostWire.ts",
+  "runtime": "packages/lib/src/nico/CommentPostWire.js",
+  "sourceSha256": "88dfe878547fc92c14ab39887e5553fe7af5f11872d264651127eb5f02fcfabd",
+  "runtimeSha256": "19eb054eb3f5ff940c667fd6b52f96f0f6242c9ee450abce1fb0ae62352712d1"
+}

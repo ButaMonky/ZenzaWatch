@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "source": "probe-src/probe.ts",
+  "runtime": "src/probe.mjs",
+  "sourceSha256": "b44f0697213d332e0e42f39c5ecb392b5f0ceeaf3abbbaecae57ab5cace3c414",
+  "runtimeSha256": "9c2f727c5688c25a26be8d221ae24b1884791c620991785f1cc3a4a2878e6059",
+  "semanticSha256": "f741cc7d01282be27355d0a75123afc924ba9c9de0557caa50c3f119c375f959"
+}

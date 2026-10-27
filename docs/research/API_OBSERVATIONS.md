@@ -1,22 +1,24 @@
-# Additional public research observations (Task969)
+# Public API observations for Task969
 
-This file documents two observation-only API records absent from the current published source code. They are **not** evidence that this repository implements these endpoints. These entries were transferred from private offline research findings on 2026-10-27 without publishing any authenticated traces, request headers, or personal data. The original observation material is not part of this public repository, so independently verify the current API before relying on it.
+This document preserves observations recorded on 2026-10-27. Both endpoints below
+are now present in this repository as part of the full development release.
+Their observed status in the catalog is historical and is not a guarantee of current availability.
 
 ## video.likes-and-owner
 
-- Read-only endpoint observed on 2026-10-27: `GET https://nvapi.nicovideo.jp/v1/videos?watchIds={watchId}`
-- Observed fields: `data.items[].video.count.like` and public `data.items[].video.owner`.
-- Publicly shipped ZenzaWatch already consumes `count.like` from other result objects (see `packages/lib/src/nico/VideoSearch.js` and `packages/zenza/src/Playlist/VideoListItemView.js`), but **the specific /v1/videos endpoint is not implemented in this public tree**.
-- Treat absent `count.like` as unknown, not zero; hidden uploader data must not overwrite already verified visible metadata.
-- The documented date is an historical observation; it is not a claim of current uptime or public API support.
+- Endpoint: `GET https://nvapi.nicovideo.jp/v1/videos?watchIds={watchId}`.
+- Source: `packages/zenza/src/pocket/PocketCardMetadataLoader.js`.
+- Relevant response fields: `data.items[].video.count.like` and visible uploader metadata.
+- When counts are missing, avoid incorrectly replacing them with zero; hidden uploader
+  metadata must not replace an already confirmed uploader identity.
 
 ## video.owner.icon-cdn
 
-- Read-only URL pattern observed on 2026-10-27: `https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/s/{bucket}/{userId}.jpg`.
-- Public fixtures in `packages/components/mock/nicorepoVideoData.js` include small user-icon URL patterns, but the finite fallback logic and ID-bucket derivation associated with this record are **not implemented in this public tree**.
-- The URL is a *candidate* only for already known, well-formed user IDs. An HTTP 404 does not establish account deletion, user identity or retirement.
-- No user-specific URLs, icons or request logs are shipped in this research document.
+- URL pattern: `https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/s/{bucket}/{userId}.jpg`.
+- Source: `packages/zenza/src/pocket/PocketDescriptionCard.js`.
+- A valid existing user ID is required before generating the URL; an HTTP 404 is
+  not proof of account deletion or departure.
+- The current code implements a bounded fallback for image loading.
 
-## HLS and unindexed endpoints
-
-- The 44 records are an initial search index, not a complete census of NicoNico interfaces. Other topics, including HLS, may be in application source or separate compatibility documents and should not be assumed complete.
+The source paths above contain the actual released implementation. No raw
+authentication data, browsing logs or private research archives are included.

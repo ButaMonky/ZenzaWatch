@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CacheStorage.ts",
+  "runtime": "packages/lib/src/infra/CacheStorage.js",
+  "sourceSha256": "11d467098cb6b69cad8138b5addfb9512971aff746d3690592580fa3925b20d6",
+  "runtimeSha256": "f9c1dccaf104113c69f062d36f8a3e755e77cb5cdfe7062bd77ea3eb2e30d6a3"
+}

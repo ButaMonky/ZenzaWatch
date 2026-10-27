@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/StorageWriter.ts",
+  "runtime": "packages/lib/src/infra/StorageWriter.js",
+  "sourceSha256": "279ec248452205dd991fc501d8ad181fb8fc3147752d32365e70866ef41ac7ed",
+  "runtimeSha256": "0e4e1d834108ede9a3e5e1bab88683fdb531a580e31926b0b302a8a1250bae8f"
+}

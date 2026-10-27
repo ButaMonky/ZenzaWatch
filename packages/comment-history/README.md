@@ -56,3 +56,28 @@ probe検査も行います。`npm test`では型ソースのSHA、
 ビルド結果は`.generated-probe/`へ出力（Gitから除外）。
 正規のZenza/bundlerは引き続き`src/probe.mjs`を使用し、
 自動的にTypeScript出力を製品へ置換しません。
+
+## Task521 — LayeredCommentStore TypeScript（非配布候補）
+
+`layers-src/layers.ts` は旧 `src/layers.mjs` と同じ
+通常/履歴コメント統合ロジックをTypeScriptで型付けしたソース候補です。
+ストアの normal優先、重複処理、履歴の順序、履歴上限、削除を
+strict型チェックします。
+
+`npm run check:layers` が型・不正型契約・Babel AST一致・
+保存されたSHA256 manifestを検査します。
+`npm run stamp:layers` は元の実行JSを他ownerが
+変更していないことをGit HEADで確認してからmanifestを更新します。
+`npm run check:typescript` にもこの検査が含まれます。
+
+JSと型宣言は`.generated-layers/`へ生成しGitでは追跡しません。
+既存`src/layers.mjs`の配布・実行コードは変更せず、
+他モジュールのTypeScript移行とは独立させています。
+
+## Task514 — Browser preferences TypeScript (non-deployed)
+
+`typescript-src/browser-preferences.ts` is a strict-typed candidate for the existing
+`src/browser-preferences.mjs` storage adapter. The shipped JavaScript and userscript remain unchanged.
+`npm run check:browser-typescript` runs strict and negative type contracts plus exact
+Babel AST parity with the runtime; `stamp:browser-typescript` is an explicitly guarded
+manifest refresh. This independent verification is included in `check:typescript`.

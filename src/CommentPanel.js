@@ -16,629 +16,627 @@ import {cssUtil} from '../packages/lib/src/css/css';
 import {env} from '../packages/lib/src/infra/env';
 import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 
+// GENERATED FROM tools/typescript-stage1/nico-src/CommentPanel.ts (Task963). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
 class CommentListModel extends Emitter {
-  constructor(params) {
-    super();
-    this._isUniq = params.uniq;
-    this._items = [];
-    this._positions = [];
-    this._maxItems = params.maxItems || 100;
-    this._currentSortKey = 'vpos';
-    this._readingEpoch = 0;
-    this._isDesc = false;
-    this._currentTime = 0;
-    this._currentIndex = -1;
-  }
-  setItem(itemList) {
-    this._items = Array.isArray(itemList) ? itemList : [itemList];
-  }
-  clear() {
-    this._readingEpoch++;
-    this._items = [];
-    this._positions = [];
-    this._currentTime = 0;
-    this._currentIndex = -1;
-    this.emit('update', [], true);
-  }
-  setChatList(chatList) {
-    chatList = chatList.top.concat(chatList.naka, chatList.bottom);
-    const items = [];
-    const positions = [];
-    for (let i = 0, len = chatList.length; i < len; i++) {
-      items.push(new CommentListItem(chatList[i]));
-      positions.push(parseFloat(chatList[i].vpos, 10) / 100);
+    constructor(params) {
+        super();
+        this._isUniq = params.uniq;
+        this._items = [];
+        this._positions = [];
+        this._maxItems = params.maxItems || 100;
+        this._currentSortKey = 'vpos';
+        this._readingEpoch = 0;
+        this._isDesc = false;
+        this._currentTime = 0;
+        this._currentIndex = -1;
     }
-    this._items = items;
-    this._positions = positions.sort((a, b) => a - b);
-    // Same-video replacements keep the clock; clear() resets it on video changes.
-    this._currentIndex = -1;
-
-    this.sort();
-    this.emit('update', this._items, true);
-  }
-  removeItemByIndex(index) {
-    const target = this._getItemByIndex(index);
-    if (!target) {
-      return;
+    setItem(itemList) {
+        this._items = Array.isArray(itemList) ? itemList : [itemList];
     }
-    this.removeItem(target);
-  }
-  get length() {
-    return this._items.length;
-  }
-  _getItemByIndex(index) {
-    return this._items[index];
-  }
-  indexOf(item) {
-    return (this._items || []).indexOf(item);
-  }
-  getItemByIndex(index) {
-    const item = this._getItemByIndex(index);
-    if (!item) {
-      return null;
+    clear() {
+        this._readingEpoch++;
+        this._items = [];
+        this._positions = [];
+        this._currentTime = 0;
+        this._currentIndex = -1;
+        this.emit('update', [], true);
     }
-    return item;
-  }
-  findByItemId(itemId) {
-    itemId = parseInt(itemId, 10);
-    return this._items.find(item => item.itemId === itemId);
-  }
-  removeItem(item) {
-    const beforeLen = this._items.length;
-    this._items = this._items.filter(i => i !== item); //_.pull(this._items, item);
-    const afterLen = this._items.length;
-    if (beforeLen !== afterLen) {
-      this._positions = this._items.map(item => item.vpos / 100).sort((a, b) => a - b);
-      this._currentIndex = -1;
-      this.emit('update', this._items);
+    setChatList(chatList) {
+        chatList = chatList.top.concat(chatList.naka, chatList.bottom);
+        const items = [];
+        const positions = [];
+        for (let i = 0, len = chatList.length; i < len; i++) {
+            items.push(new CommentListItem(chatList[i]));
+            positions.push(parseFloat(chatList[i].vpos, 10) / 100);
+        }
+        this._items = items;
+        this._positions = positions.sort((a, b) => a - b);
+        // Same-video replacements keep the clock; clear() resets it on video changes.
+        this._currentIndex = -1;
+        this.sort();
+        this.emit('update', this._items, true);
     }
-  }
-  _onItemUpdate(item, key, value) {
-    this.emit('itemUpdate', item, key, value);
-  }
-  sortBy(key, isDesc) {
-    const table = {
-      vpos: 'vpos',
-      date: 'date',
-      text: 'text',
-      user: 'userId',
-      nicoru: 'nicoru'
-    };
-    const func = table[key];
-    if (!func) {
-      return;
+    removeItemByIndex(index) {
+        const target = this._getItemByIndex(index);
+        if (!target) {
+            return;
+        }
+        this.removeItem(target);
     }
-    this._items = _.sortBy(this._items, item => item[func]);
-    if (isDesc) {
-      this._items.reverse();
+    get length() {
+        return this._items.length;
     }
-    this._currentSortKey = key;
-    this._isDesc = isDesc;
-    this._currentIndex = -1;
-    this.onUpdate(true);
-  }
-  sort() {
-    this.sortBy(this._currentSortKey, this._isDesc);
-  }
-  get currentSortKey() {
-    return this._currentSortKey;
-  }
-  onUpdate(replaceAll = false) {
-    this.emitAsync('update', this._items, replaceAll);
-  }
-  getInViewIndex(sec) {
-    const index = Math.max(0, _.sortedLastIndex(this._positions, sec + 1) - 1);
-    return this._isDesc ? Math.max(0, this._positions.length - 1 - index) : index;
-  }
-  set currentTime(sec) {
-    if (this._currentTime !== sec && typeof sec === 'number') {
-      this._currentTime = sec;
-      const inviewIndex = this.getInViewIndex(sec);
-      if (this._currentSortKey === 'vpos' && this._currentIndex !== inviewIndex) {
-        this.emit('currentTimeUpdate', sec, inviewIndex);
-      }
-      this._currentIndex = inviewIndex;
+    _getItemByIndex(index) {
+        return this._items[index];
     }
-  }
-  get currentTime() {return this._currentTime;}
+    indexOf(item) {
+        return (this._items || []).indexOf(item);
+    }
+    getItemByIndex(index) {
+        const item = this._getItemByIndex(index);
+        if (!item) {
+            return null;
+        }
+        return item;
+    }
+    findByItemId(itemId) {
+        itemId = parseInt(itemId, 10);
+        return this._items.find((item) => item.itemId === itemId);
+    }
+    removeItem(item) {
+        const beforeLen = this._items.length;
+        this._items = this._items.filter((i) => i !== item); //_.pull(this._items, item);
+        const afterLen = this._items.length;
+        if (beforeLen !== afterLen) {
+            this._positions = this._items.map((item) => item.vpos / 100).sort((a, b) => a - b);
+            this._currentIndex = -1;
+            this.emit('update', this._items);
+        }
+    }
+    _onItemUpdate(item, key, value) {
+        this.emit('itemUpdate', item, key, value);
+    }
+    sortBy(key, isDesc) {
+        const table = {
+            vpos: 'vpos',
+            date: 'date',
+            text: 'text',
+            user: 'userId',
+            nicoru: 'nicoru'
+        };
+        const func = table[key];
+        if (!func) {
+            return;
+        }
+        this._items = _.sortBy(this._items, (item) => item[func]);
+        if (isDesc) {
+            this._items.reverse();
+        }
+        this._currentSortKey = key;
+        this._isDesc = isDesc;
+        this._currentIndex = -1;
+        this.onUpdate(true);
+    }
+    sort() {
+        this.sortBy(this._currentSortKey, this._isDesc);
+    }
+    get currentSortKey() {
+        return this._currentSortKey;
+    }
+    onUpdate(replaceAll = false) {
+        this.emitAsync('update', this._items, replaceAll);
+    }
+    getInViewIndex(sec) {
+        const index = Math.max(0, _.sortedLastIndex(this._positions, sec + 1) - 1);
+        return this._isDesc ? Math.max(0, this._positions.length - 1 - index) : index;
+    }
+    set currentTime(sec) {
+        if (this._currentTime !== sec && typeof sec === 'number') {
+            this._currentTime = sec;
+            const inviewIndex = this.getInViewIndex(sec);
+            if (this._currentSortKey === 'vpos' && this._currentIndex !== inviewIndex) {
+                this.emit('currentTimeUpdate', sec, inviewIndex);
+            }
+            this._currentIndex = inviewIndex;
+        }
+    }
+    get currentTime() { return this._currentTime; }
 }
-
 /**
  * DOM的に隔離したiframeの中に生成する。
  * かなり実験要素が多いのでまだまだ変わる。
  */
 class CommentListView extends Emitter {
-  constructor(params) {
-    super();
-    this._ItemView = CommentListItemView;
-    this._itemCss = CommentListItemView.CSS;
-    this._className = params.className || 'commentList';
-
-    this._retryGetIframeCount = 0;
-
-    this._maxItems = 100000;
-    this._inviewItemList = new Map;
-    this._scrollTop = 0;
-    this.timeScrollTop = 0;
-    this.newItems = [];
-    this.removedItems = [];
-    this._innerHeight = 100;
-
-    this._model = params.model;
-    this._modelUpdateVersion = 0;
-    this._isModelUpdatePending = false;
-    if (this._model) {
-      const update = _.debounce(this._onModelUpdate.bind(this), 500);
-      this._model.on('update', (items, replaceAll) => {
-        this._isModelUpdatePending = true;
-        update(items, replaceAll, ++this._modelUpdateVersion);
-      });
-    }
-
-    // this.syncScrollTop = throttle.raf(this.syncScrollTop.bind(this));
-    this.setScrollTop = throttle.raf(this.setScrollTop.bind(this));
-    this._initializeView(params, 0);
-  }
-  async _initializeView(params) {
-    const html = CommentListView.__tpl__.replace('%CSS%', this._itemCss);
-    const frame = this.frameLayer = new FrameLayer({
-      container: params.container,
-      html,
-      className: 'commentListFrame'
-    });
-    const contentWindow = await frame.wait();
-    this._initFrame(contentWindow);
-  }
-  _initFrame(w) {
-    this.contentWindow = w;
-    const doc = this.document = w.document;
-    const body = this.body = doc.body;
-    const classList = this.classList = ClassList(body);
-    const $body = this._$body = uq(body);
-    if (this._className) {
-      classList.add(this._className);
-    }
-    this._container = doc.querySelector('#listContainer');
-    this._$container = uq(this._container);
-    this._list = doc.getElementById('listContainerInner');
-    if (this._html) {
-      this._list.innerHTML = this._html;
-    }
-    this._$menu = $body.find('.listMenu');
-
-    this._$itemDetail = $body.find('.itemDetailContainer');
-
-    $body
-      .on('click', this._onClick.bind(this))
-      .on('dblclick', this._onDblClick.bind(this))
-      .on('keydown', e => global.emitter.emit('keydown', e))
-      .on('keyup', e => global.emitter.emit('keyup', e))
-      .toggleClass('is-guest', !nicoUtil.isLogin())
-      .toggleClass('is-premium', nicoUtil.isPremium())
-      .toggleClass('is-firefox', env.isFirefox());
-    // this.frameLayer.addEventBridge('keydown').addEventBridge('keyup');
-    this.frameLayer.frame.addEventListener('visibilitychange', e => {
-      const {isVisible} = e.detail;
-      if (!isVisible) { return; }
-      this._refreshCurrentPoint();
-      this._refreshInviewElements();
-    });
-
-
-    this._$menu.on('click', this._onMenuClick.bind(this));
-    this._$itemDetail.on('click', this._onItemDetailClick.bind(this));
-
-    this._onScroll = this._onScroll.bind(this);
-    this._onScrolling = _.throttle(this._onScrolling.bind(this), 100);
-    this._onScrollEnd = _.debounce(this._onScrollEnd.bind(this), 500);
-    this._container.addEventListener('scroll', this._onScroll, {passive: true});
-
-    this._$container.on('mouseover', this._onMouseOver.bind(this))
-      .on('mouseleave', this._onMouseOut.bind(this))
-      .on('wheel', _.throttle(this._onWheel.bind(this), 100), {passive: true});
-
-    w.addEventListener('resize', this._onResize.bind(this));
-    this._innerHeight = w.innerHeight;
-
-    this._refreshInviewElements = _.throttle(this._refreshInviewElements.bind(this), 100);
-    this._appendNewItems = throttle.raf(this._appendNewItems.bind(this));
-    // cssUtil.registerProps(
-      // {name: '--current-time', syntax: '<time>', initialValue: cssUtil.s(0), inherits: true, window: w},
-      // {name: '--duration', syntax: '<time>', initialValue: cssUtil.s(4), inherits: true, window: w},
-      // {name: '--scroll-top',   syntax: '<number>', initialValue: 0, inherits: true, window: w},
-      // {name: '--time-scroll-top',   syntax: '<number>', initialValue: 0, inherits: true, window: w},
-      // {name: '--inner-height', syntax: '<number>', initialValue: 0, inherits: true, window: w},
-      // {name: '--list-height', syntax: '<number>', initialValue: 0, inherits: true, window: w},
-      // {name: '--height-pp', syntax: '<length>', initialValue: cssUtil.px(0), inherits: true, window: w},
-      // {name: '--trans-y-pp', syntax: '<length>', initialValue: cssUtil.px(0), inherits: true, window: w},
-      // {name: '--vpos-time', syntax: '<time>', initialValue: cssUtil.s(0), inherits: true, window: w}
-    // );
-    cssUtil.setProps([body,'--inner-height', this._innerHeight]);
-    this._debouncedOnItemClick = _.debounce(this._onItemClick.bind(this), 300);
-
-    // 互換用
-    global.debug.$commentList = uq(this._list);
-    global.debug.getCommentPanelItems = () =>
-      Array.from(doc.querySelectorAll('.commentListItem'));
-    this.emitResolve('frame-ready');
-  }
-  // Task200: row IDs are disposable; reading state follows the original comment.
-  _readingKey(item) {
-    const chat = item && item.nicoChat;
-    if (!chat) { return null; }
-    const thread = chat.threadId ?? chat.thread, no = Number(chat.no), fork = Number(chat.fork);
-    if (thread != null && String(thread) && Number.isSafeInteger(no) && no > 0 && Number.isInteger(fork)) {
-      return JSON.stringify([String(thread), fork, no]);
-    }
-    return chat.id == null ? null : 'pending:' + String(chat.id);
-  }
-  _captureReadingState() {
-    const views = this._itemViews || [], height = CommentListView.ITEM_HEIGHT;
-    const changedVideo = this._readingEpoch !== this._model?._readingEpoch;
-    const top = changedVideo ? 0 : Math.max(0, this._container?.scrollTop || 0);
-    const index = Math.min(views.length - 1, Math.floor(top / height));
-    const anchors = [];
-    if (!changedVideo) {
-      for (let distance = 0; distance < 12; distance++) {
-        for (const i of [index + distance, index - distance]) {
-          const key = this._readingKey(views[i]?._item);
-          if (key && !anchors.includes(key)) { anchors.push(key); }
+    constructor(params) {
+        super();
+        this._ItemView = CommentListItemView;
+        this._itemCss = CommentListItemView.CSS;
+        this._className = params.className || 'commentList';
+        this._retryGetIframeCount = 0;
+        this._maxItems = 100000;
+        this._inviewItemList = new Map;
+        this._scrollTop = 0;
+        this.timeScrollTop = 0;
+        this.newItems = [];
+        this.removedItems = [];
+        this._innerHeight = 100;
+        this._model = params.model;
+        this._modelUpdateVersion = 0;
+        this._isModelUpdatePending = false;
+        if (this._model) {
+            const update = _.debounce(this._onModelUpdate.bind(this), 500);
+            this._model.on('update', (items, replaceAll) => {
+                this._isModelUpdatePending = true;
+                update(items, replaceAll, ++this._modelUpdateVersion);
+            });
         }
-      }
+        // this.syncScrollTop = throttle.raf(this.syncScrollTop.bind(this));
+        this.setScrollTop = throttle.raf(this.setScrollTop.bind(this));
+        this._initializeView(params, 0);
     }
-    const previous = id => id == null ? null : views.find(v => String(v._item?.itemId) === String(id))?._item;
-    const detail = this._$itemDetail?.[0];
-    return {anchors, offset: top % height, scrollTop: top,
-      manual: this.isActive || this.isAutoScroll === false || this._model?.currentSortKey !== 'vpos',
-      selected: changedVideo ? null : this._readingKey(previous(this._selectedItem?.dataset.itemId)),
-      detail: changedVideo || !detail?.classList.contains('show') ? null : this._readingKey(previous(detail.dataset.itemId))};
-  }
-  _restoreReadingState(state) {
-    if (!state) { return; }
-    const views = this._itemViews || [], byKey = new Map();
-    views.forEach((view, index) => { const key = this._readingKey(view._item); if (key && !byKey.has(key)) { byKey.set(key, {view, index}); } });
-    this._clearSelectedItem(); this._selectedItem = null;
-    if (state.manual && this._container) {
-      const anchor = state.anchors.map(key => byKey.get(key)).find(Boolean);
-      const top = anchor ? anchor.index * CommentListView.ITEM_HEIGHT + state.offset : state.scrollTop;
-      const maximum = views.length ? Math.max(0, views.length * CommentListView.ITEM_HEIGHT + 100 - this._innerHeight) : 0;
-      this._scrollTop = Math.max(0, Math.min(top, maximum));
-      this._container.scrollTop = this._scrollTop;
+    async _initializeView(params) {
+        const html = CommentListView.__tpl__.replace('%CSS%', this._itemCss);
+        const frame = this.frameLayer = new FrameLayer({
+            container: params.container,
+            html,
+            className: 'commentListFrame'
+        });
+        const contentWindow = await frame.wait();
+        this._initFrame(contentWindow);
     }
-    const selected = byKey.get(state.selected);
-    if (selected) { this._selectItem(selected.view.viewElement); }
-    const detail = byKey.get(state.detail);
-    if (detail) { this.showItemDetail(detail.view._item); } else { this.hideItemDetail(); }
-  }
-  async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
-    if (!this._isFrameReady) {
-      await this.promise('frame-ready');
+    _initFrame(w) {
+        this.contentWindow = w;
+        const doc = this.document = w.document;
+        const body = this.body = doc.body;
+        const classList = this.classList = ClassList(body);
+        const $body = this._$body = uq(body);
+        if (this._className) {
+            classList.add(this._className);
+        }
+        this._container = doc.querySelector('#listContainer');
+        this._$container = uq(this._container);
+        this._list = doc.getElementById('listContainerInner');
+        if (this._html) {
+            this._list.innerHTML = this._html;
+        }
+        this._$menu = $body.find('.listMenu');
+        this._$itemDetail = $body.find('.itemDetailContainer');
+        $body
+            .on('click', this._onClick.bind(this))
+            .on('dblclick', this._onDblClick.bind(this))
+            .on('keydown', (e) => global.emitter.emit('keydown', e))
+            .on('keyup', (e) => global.emitter.emit('keyup', e))
+            .toggleClass('is-guest', !nicoUtil.isLogin())
+            .toggleClass('is-premium', nicoUtil.isPremium())
+            .toggleClass('is-firefox', env.isFirefox());
+        // this.frameLayer.addEventBridge('keydown').addEventBridge('keyup');
+        this.frameLayer.frame.addEventListener('visibilitychange', (e) => {
+            const { isVisible } = e.detail;
+            if (!isVisible) {
+                return;
+            }
+            this._refreshCurrentPoint();
+            this._refreshInviewElements();
+        });
+        this._$menu.on('click', this._onMenuClick.bind(this));
+        this._$itemDetail.on('click', this._onItemDetailClick.bind(this));
+        this._onScroll = this._onScroll.bind(this);
+        this._onScrolling = _.throttle(this._onScrolling.bind(this), 100);
+        this._onScrollEnd = _.debounce(this._onScrollEnd.bind(this), 500);
+        this._container.addEventListener('scroll', this._onScroll, { passive: true });
+        this._$container.on('mouseover', this._onMouseOver.bind(this))
+            .on('mouseleave', this._onMouseOut.bind(this))
+            .on('wheel', _.throttle(this._onWheel.bind(this), 100), { passive: true });
+        w.addEventListener('resize', this._onResize.bind(this));
+        this._innerHeight = w.innerHeight;
+        this._refreshInviewElements = _.throttle(this._refreshInviewElements.bind(this), 100);
+        this._appendNewItems = throttle.raf(this._appendNewItems.bind(this));
+        // cssUtil.registerProps(
+        // {name: '--current-time', syntax: '<time>', initialValue: cssUtil.s(0), inherits: true, window: w},
+        // {name: '--duration', syntax: '<time>', initialValue: cssUtil.s(4), inherits: true, window: w},
+        // {name: '--scroll-top',   syntax: '<number>', initialValue: 0, inherits: true, window: w},
+        // {name: '--time-scroll-top',   syntax: '<number>', initialValue: 0, inherits: true, window: w},
+        // {name: '--inner-height', syntax: '<number>', initialValue: 0, inherits: true, window: w},
+        // {name: '--list-height', syntax: '<number>', initialValue: 0, inherits: true, window: w},
+        // {name: '--height-pp', syntax: '<length>', initialValue: cssUtil.px(0), inherits: true, window: w},
+        // {name: '--trans-y-pp', syntax: '<length>', initialValue: cssUtil.px(0), inherits: true, window: w},
+        // {name: '--vpos-time', syntax: '<time>', initialValue: cssUtil.s(0), inherits: true, window: w}
+        // );
+        cssUtil.setProps([body, '--inner-height', this._innerHeight]);
+        this._debouncedOnItemClick = _.debounce(this._onItemClick.bind(this), 300);
+        // 互換用
+        global.debug.$commentList = uq(this._list);
+        global.debug.getCommentPanelItems = () => Array.from(doc.querySelectorAll('.commentListItem'));
+        this.emitResolve('frame-ready');
     }
-    if (revision !== this._modelUpdateVersion) { return; }
-    this._isFrameReady = true;
-
-    window.console.time('update commentlistView');
-    this.addClass('updating');
-    itemList = Array.isArray(itemList) ? itemList : [itemList];
-    // Preserve manual browsing while the list is rebuilt.
-
-    if (replaceAll) {
-      this._scrollTop = this._container ? this._container.scrollTop : 0;
+    // Task200: row IDs are disposable; reading state follows the original comment.
+    _readingKey(item) {
+        const chat = item && item.nicoChat;
+        if (!chat) {
+            return null;
+        }
+        const thread = chat.threadId ?? chat.thread, no = Number(chat.no), fork = Number(chat.fork);
+        if (thread != null && String(thread) && Number.isSafeInteger(no) && no > 0 && Number.isInteger(fork)) {
+            return JSON.stringify([String(thread), fork, no]);
+        }
+        return chat.id == null ? null : 'pending:' + String(chat.id);
     }
-
-    const itemViews = itemList.map((item, i) =>
-      new this._ItemView({item: item, index: i, height: CommentListView.ITEM_HEIGHT})
-    );
-
-    await cssUtil.setProps([this.body, '--list-height',
-      Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
-
-    if (revision !== this._modelUpdateVersion || !this._list) { return; }
-    const readingState = this._captureReadingState();
-    this._readingEpoch = this._model?._readingEpoch;
-    this._itemViews = itemViews;
-    this._isModelUpdatePending = false;
-    this.newItems.length = 0;
-    this.removedItems.length = 0;
-    this._list.textContent = '';
-    this._inviewItemList.clear();
-    this._$menu.removeClass('show');
-    this._refreshCurrentPoint();
-    this._restoreReadingState(readingState);
-    this._refreshInviewElements();
-
-    window.setTimeout(() => {
-      if (revision !== this._modelUpdateVersion) { return; }
-      this.removeClass('updating');
-      this.emit('update');
-    }, 100);
-
-    window.console.timeEnd('update commentlistView');
-  }
-  _onClick(e) {
-    e.stopPropagation();
-    global.emitter.emitAsync('hideHover');
-    const item = e.target.closest('.commentListItem');
-    if (item) {
-      return this._debouncedOnItemClick(e, item);
+    _captureReadingState() {
+        const views = this._itemViews || [], height = CommentListView.ITEM_HEIGHT;
+        const changedVideo = this._readingEpoch !== this._model?._readingEpoch;
+        const top = changedVideo ? 0 : Math.max(0, this._container?.scrollTop || 0);
+        const index = Math.min(views.length - 1, Math.floor(top / height));
+        const anchors = [];
+        if (!changedVideo) {
+            for (let distance = 0; distance < 12; distance++) {
+                for (const i of [index + distance, index - distance]) {
+                    const key = this._readingKey(views[i]?._item);
+                    if (key && !anchors.includes(key)) {
+                        anchors.push(key);
+                    }
+                }
+            }
+        }
+        const previous = (id) => id == null ? null : views.find((v) => String(v._item?.itemId) === String(id))?._item;
+        const detail = this._$itemDetail?.[0];
+        return { anchors, offset: top % height, scrollTop: top,
+            manual: this.isActive || this.isAutoScroll === false || this._model?.currentSortKey !== 'vpos',
+            selected: changedVideo ? null : this._readingKey(previous(this._selectedItem?.dataset.itemId)),
+            detail: changedVideo || !detail?.classList.contains('show') ? null : this._readingKey(previous(detail.dataset.itemId)) };
     }
-  }
-  _onItemClick(e, item) {
-    if (e.target.closest('.nicoru-icon')) {
-      // Display state is committed only after the server accepts the Nicoru.
-      this.emit('command', 'nicoru', item, item.dataset.itemId);
-      return;
+    _restoreReadingState(state) {
+        if (!state) {
+            return;
+        }
+        const views = this._itemViews || [], byKey = new Map();
+        views.forEach((view, index) => { const key = this._readingKey(view._item); if (key && !byKey.has(key)) {
+            byKey.set(key, { view, index });
+        } });
+        this._clearSelectedItem();
+        this._selectedItem = null;
+        if (state.manual && this._container) {
+            const anchor = state.anchors.map((key) => byKey.get(key)).find(Boolean);
+            const top = anchor ? anchor.index * CommentListView.ITEM_HEIGHT + state.offset : state.scrollTop;
+            const maximum = views.length ? Math.max(0, views.length * CommentListView.ITEM_HEIGHT + 100 - this._innerHeight) : 0;
+            this._scrollTop = Math.max(0, Math.min(top, maximum));
+            this._container.scrollTop = this._scrollTop;
+        }
+        const selected = byKey.get(state.selected);
+        if (selected) {
+            this._selectItem(selected.view.viewElement);
+        }
+        const detail = byKey.get(state.detail);
+        if (detail) {
+            this.showItemDetail(detail.view._item);
+        }
+        else {
+            this.hideItemDetail();
+        }
     }
-    this._$menu
-      .css('transform', `translate(0, ${item.dataset.top}px)`)
-      .attr('data-item-id', item.dataset.itemId)
-      .attr('data-is-mine', item.dataset.isMine)
-      .addClass('show');
-  }
-  _onMenuClick(e) {
-    const target = e.target.closest('.menuButton');
-    this._$menu.removeClass('show');
-    if (!target) {
-      return;
+    async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
+        if (!this._isFrameReady) {
+            await this.promise('frame-ready');
+        }
+        if (revision !== this._modelUpdateVersion) {
+            return;
+        }
+        this._isFrameReady = true;
+        window.console.time('update commentlistView');
+        this.addClass('updating');
+        itemList = Array.isArray(itemList) ? itemList : [itemList];
+        // Preserve manual browsing while the list is rebuilt.
+        if (replaceAll) {
+            this._scrollTop = this._container ? this._container.scrollTop : 0;
+        }
+        const itemViews = itemList.map((item, i) => new this._ItemView({ item: item, index: i, height: CommentListView.ITEM_HEIGHT }));
+        await cssUtil.setProps([this.body, '--list-height',
+            Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
+        if (revision !== this._modelUpdateVersion || !this._list) {
+            return;
+        }
+        const readingState = this._captureReadingState();
+        this._readingEpoch = this._model?._readingEpoch;
+        this._itemViews = itemViews;
+        this._isModelUpdatePending = false;
+        this.newItems.length = 0;
+        this.removedItems.length = 0;
+        this._list.textContent = '';
+        this._inviewItemList.clear();
+        this._$menu.removeClass('show');
+        this._refreshCurrentPoint();
+        this._restoreReadingState(readingState);
+        this._refreshInviewElements();
+        window.setTimeout(() => {
+            if (revision !== this._modelUpdateVersion) {
+                return;
+            }
+            this.removeClass('updating');
+            this.emit('update');
+        }, 100);
+        window.console.timeEnd('update commentlistView');
     }
-    const {itemId} = e.target.closest('.listMenu').dataset;
-    if (!itemId) {
-      return;
+    _onClick(e) {
+        e.stopPropagation();
+        global.emitter.emitAsync('hideHover');
+        const item = e.target.closest('.commentListItem');
+        if (item) {
+            return this._debouncedOnItemClick(e, item);
+        }
     }
-
-    const {command} = target.dataset;
-
-    if (command === 'addUserIdFilter' || command === 'addWordFilter') {
-      Array.from(this._list.querySelectorAll(`.item${itemId}`))
-        .forEach(e => e.remove());
+    _onItemClick(e, item) {
+        if (e.target.closest('.nicoru-icon')) {
+            // Display state is committed only after the server accepts the Nicoru.
+            this.emit('command', 'nicoru', item, item.dataset.itemId);
+            return;
+        }
+        this._$menu
+            .css('transform', `translate(0, ${item.dataset.top}px)`)
+            .attr('data-item-id', item.dataset.itemId)
+            .attr('data-is-mine', item.dataset.isMine)
+            .addClass('show');
     }
-
-    this.emit('command', command, null, itemId);
-  }
-  _onItemDetailClick(e) {
-    const target = e.target.closest('.command');
-    if (!target) {
-      return;
+    _onMenuClick(e) {
+        const target = e.target.closest('.menuButton');
+        this._$menu.removeClass('show');
+        if (!target) {
+            return;
+        }
+        const { itemId } = e.target.closest('.listMenu').dataset;
+        if (!itemId) {
+            return;
+        }
+        const { command } = target.dataset;
+        if (command === 'addUserIdFilter' || command === 'addWordFilter') {
+            Array.from(this._list.querySelectorAll(`.item${itemId}`))
+                .forEach(e => e.remove());
+        }
+        this.emit('command', command, null, itemId);
     }
-    const itemId = this._$itemDetail.attr('data-item-id');
-    if (!itemId) {
-      return;
+    _onItemDetailClick(e) {
+        const target = e.target.closest('.command');
+        if (!target) {
+            return;
+        }
+        const itemId = this._$itemDetail.attr('data-item-id');
+        if (!itemId) {
+            return;
+        }
+        const { command, param } = target.dataset;
+        if (command === 'hideItemDetail') {
+            return this.hideItemDetail();
+        }
+        if (command === 'reloadComment') {
+            this.hideItemDetail();
+        }
+        this.emit('command', command, param, itemId);
     }
-    const {command, param} = target.dataset;
-    if (command === 'hideItemDetail') {
-      return this.hideItemDetail();
+    _clearSelectedItem() {
+        if (this._selectedItem) {
+            this._selectedItem.classList.remove('is-active');
+            this._selectedItem = null;
+        }
     }
-    if (command === 'reloadComment') {
-      this.hideItemDetail();
+    _selectItem(item) {
+        if (!item || this._selectedItem === item) {
+            return;
+        }
+        this._clearSelectedItem();
+        this._selectedItem = item;
+        item.classList.add('is-active');
     }
-    this.emit('command', command, param, itemId);
-  }
-  _clearSelectedItem() {
-    if (this._selectedItem) {
-      this._selectedItem.classList.remove('is-active');
-      this._selectedItem = null;
+    _onDblClick(e) {
+        e.stopPropagation();
+        const item = e.target.closest('.commentListItem');
+        if (!item) {
+            return;
+        }
+        e.preventDefault();
+        this._selectItem(item);
+        const itemId = item.dataset.itemId;
+        this.emit('command', 'select', null, itemId);
     }
-  }
-  _selectItem(item) {
-    if (!item || this._selectedItem === item) {
-      return;
+    _onMouseMove() {
+        this.isActive = true;
+        this.addClass('is-active');
     }
-    this._clearSelectedItem();
-    this._selectedItem = item;
-    item.classList.add('is-active');
-  }
-  _onDblClick(e) {
-    e.stopPropagation();
-    const item = e.target.closest('.commentListItem');
-    if (!item) {
-      return;
+    _onMouseOver() {
+        this.isActive = true;
+        this.addClass('is-active');
     }
-    e.preventDefault();
-
-    this._selectItem(item);
-    const itemId = item.dataset.itemId;
-    this.emit('command', 'select', null, itemId);
-  }
-  _onMouseMove() {
-    this.isActive = true;
-    this.addClass('is-active');
-  }
-  _onMouseOver() {
-    this.isActive = true;
-    this.addClass('is-active');
-  }
-  _onWheel() {
-    this.isActive = true;
-    // this.syncScrollTop();
-    this.addClass('is-active');
-  }
-  _onMouseOut() {
-    this.isActive = false;
-    // this.syncScrollTop();
-    this.removeClass('is-active');
-  }
-  _onResize() {
-    this._innerHeight = this.contentWindow.innerHeight;
-    cssUtil.setProps([this.body, '--inner-height', this._innerHeight]);
-    // this.syncScrollTop();
-    this._refreshInviewElements();
-  }
-  _onScroll(e) {
-    if (!this.hasClass('is-scrolling')) {
-      this.addClass('is-scrolling');
+    _onWheel() {
+        this.isActive = true;
+        // this.syncScrollTop();
+        this.addClass('is-active');
     }
-    // self.console.log('scroll', this._container.scrollTop, e);
-    this._onScrolling();
-    this._onScrollEnd();
-  }
-  _onScrolling() {
-    this.syncScrollTop();
-    this._refreshInviewElements();
-  }
-  _onScrollEnd() {
-    this.removeClass('is-scrolling');
-    // this.syncScrollTop();
-  }
-  _refreshInviewElements() {
-    if (!this._list || !this.frameLayer.isVisible) {
-      return;
+    _onMouseOut() {
+        this.isActive = false;
+        // this.syncScrollTop();
+        this.removeClass('is-active');
     }
-    const itemHeight = CommentListView.ITEM_HEIGHT;
-    const scrollTop = this._scrollTop;
-    const innerHeight = this._innerHeight;
-    const windowBottom = scrollTop + innerHeight;
-    const itemViews = this._itemViews || [];
-    const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 10);
-    const endIndex = Math.min(itemViews.length, Math.floor(windowBottom / itemHeight) + 10);
-    let changed = 0;
-    const newItems = this.newItems, inviewItemList = this._inviewItemList;
-    for (let i = startIndex; i < endIndex; i++) {
-      if (inviewItemList.has(i) || !itemViews[i]) {
-        continue;
-      }
-      changed++;
-      newItems.push(itemViews[i].viewElement);
-      inviewItemList.set(i, itemViews[i]);
+    _onResize() {
+        this._innerHeight = this.contentWindow.innerHeight;
+        cssUtil.setProps([this.body, '--inner-height', this._innerHeight]);
+        // this.syncScrollTop();
+        this._refreshInviewElements();
     }
-
-    const removedItems = this.removedItems;
-    for (const i of inviewItemList.keys()) {
-      if (i >= startIndex && i <= endIndex) {
-        continue;
-      }
-      changed++;
-      removedItems.push(inviewItemList.get(i).viewElement);
-      inviewItemList.delete(i);
+    _onScroll(e) {
+        if (!this.hasClass('is-scrolling')) {
+            this.addClass('is-scrolling');
+        }
+        // self.console.log('scroll', this._container.scrollTop, e);
+        this._onScrolling();
+        this._onScrollEnd();
     }
-
-    if (changed < 1) {
-      return;
+    _onScrolling() {
+        this.syncScrollTop();
+        this._refreshInviewElements();
     }
-
-    this._appendNewItems();
-  }
-  _appendNewItems() {
-    if (this.removedItems.length) {
-      for (const e of this.removedItems) { e.remove(); }
-      this.removedItems.length = 0;
+    _onScrollEnd() {
+        this.removeClass('is-scrolling');
+        // this.syncScrollTop();
     }
-    if (!this.newItems.length) {
-      return;
+    _refreshInviewElements() {
+        if (!this._list || !this.frameLayer.isVisible) {
+            return;
+        }
+        const itemHeight = CommentListView.ITEM_HEIGHT;
+        const scrollTop = this._scrollTop;
+        const innerHeight = this._innerHeight;
+        const windowBottom = scrollTop + innerHeight;
+        const itemViews = this._itemViews || [];
+        const startIndex = Math.max(0, Math.floor(scrollTop / itemHeight) - 10);
+        const endIndex = Math.min(itemViews.length, Math.floor(windowBottom / itemHeight) + 10);
+        let changed = 0;
+        const newItems = this.newItems, inviewItemList = this._inviewItemList;
+        for (let i = startIndex; i < endIndex; i++) {
+            if (inviewItemList.has(i) || !itemViews[i]) {
+                continue;
+            }
+            changed++;
+            newItems.push(itemViews[i].viewElement);
+            inviewItemList.set(i, itemViews[i]);
+        }
+        const removedItems = this.removedItems;
+        for (const i of inviewItemList.keys()) {
+            if (i >= startIndex && i <= endIndex) {
+                continue;
+            }
+            changed++;
+            removedItems.push(inviewItemList.get(i).viewElement);
+            inviewItemList.delete(i);
+        }
+        if (changed < 1) {
+            return;
+        }
+        this._appendNewItems();
     }
-    const f = this._appendFragment = this._appendFragment || document.createDocumentFragment();
-    f.append(...this.newItems);
-    this._list.append(f);
-    for (const e of this.newItems) { e.style.contentVisibility = 'visible'; }
-    this.newItems.length = 0;
-  }
-  _updatePerspective() {
-    const keys = Object.keys(this._inviewItemList);
-    let avr = 0;
-    if (!this._inviewItemList.size) {
-      avr = 50;
-    } else {
-      let min = 0xffff;
-      let max = -0xffff;
-      keys.forEach(key => {
-        let item = this._inviewItemList.get(key);
-        min = Math.min(min, item.time3dp);
-        max = Math.max(max, item.time3dp);
-        avr += item.time3dp;
-      });
-      avr = avr / keys.length * 100 + 50; //max * 100; //(min + max) / 2 + 10; //50 + avr / keys.length;
+    _appendNewItems() {
+        if (this.removedItems.length) {
+            for (const e of this.removedItems) {
+                e.remove();
+            }
+            this.removedItems.length = 0;
+        }
+        if (!this.newItems.length) {
+            return;
+        }
+        const f = this._appendFragment = this._appendFragment || document.createDocumentFragment();
+        f.append(...this.newItems);
+        this._list.append(f);
+        for (const e of this.newItems) {
+            e.style.contentVisibility = 'visible';
+        }
+        this.newItems.length = 0;
     }
-    this._list.style.transform = `translateZ(-${avr}px)`;
-  }
-  addClass(className) {
-    this.classList && this.classList.add(className);
-  }
-  removeClass(className) {
-    this.classList && this.classList.remove(className);
-  }
-  toggleClass(className, v) {
-    this.classList && this.classList.toggle(className, v);
-  }
-  hasClass(className) {
-    return this.classList.contains(className);
-  }
-  find(query) {
-    return this.document.querySelectorAll(query);
-  }
-  syncScrollTop() {
-    if (!this.contentWindow || !this.frameLayer.isVisible) {
-      return;
+    _updatePerspective() {
+        const keys = Object.keys(this._inviewItemList);
+        let avr = 0;
+        if (!this._inviewItemList.size) {
+            avr = 50;
+        }
+        else {
+            let min = 0xffff;
+            let max = -0xffff;
+            keys.forEach(key => {
+                let item = this._inviewItemList.get(key);
+                min = Math.min(min, item.time3dp);
+                max = Math.max(max, item.time3dp);
+                avr += item.time3dp;
+            });
+            avr = avr / keys.length * 100 + 50; //max * 100; //(min + max) / 2 + 10; //50 + avr / keys.length;
+        }
+        this._list.style.transform = `translateZ(-${avr}px)`;
     }
-    if (this.isActive) {
-      this._scrollTop = this._container.scrollTop;
+    addClass(className) {
+        this.classList && this.classList.add(className);
     }
-  }
-  setScrollTop(v) {
-    if (!this.contentWindow || this._isModelUpdatePending || this.isActive ||
-        this.isAutoScroll === false || (this._model && this._model.currentSortKey !== 'vpos')) {
-      return;
+    removeClass(className) {
+        this.classList && this.classList.remove(className);
     }
-    this._scrollTop = v;
-    if (!this.frameLayer.isVisible) {
-      return;
+    toggleClass(className, v) {
+        this.classList && this.classList.toggle(className, v);
     }
-    // this._container.removeEventListener('scroll', this._onScroll);
-    this._container.scrollTop = v;
-    // this._container.addEventListener('scroll', this._onScroll, {passive: true});
-  }
-  _refreshCurrentPoint() {
-    const model = this._model;
-    if (!model || model.currentSortKey !== 'vpos') { return; }
-    this.setCurrentPoint(model.currentTime, model.getInViewIndex(model.currentTime), this.isAutoScroll);
-  }
-  setCurrentPoint(sec, idx, isAutoScroll) {
-    this.isAutoScroll = isAutoScroll;
-    if (!this.contentWindow || !this._itemViews || this._isModelUpdatePending) {
-      return;
+    hasClass(className) {
+        return this.classList.contains(className);
     }
-    const innerHeight = this._innerHeight;
-    const itemViews = this._itemViews;
-    const len = itemViews.length;
-    const view = itemViews[idx];
-    if (len < 1 || !view) {
-      this.timeScrollTop = 0;
-      if (!this.isActive && isAutoScroll) { this.setScrollTop(0); }
-      return;
+    find(query) {
+        return this.document.querySelectorAll(query);
     }
-
-    const itemHeight = CommentListView.ITEM_HEIGHT;
-    const top = Math.max(0, view.top - innerHeight + itemHeight);
-    this.timeScrollTop = top;
-    this.isAutoScroll = isAutoScroll;
-    // cssUtil.setProps(
-    //   [this.body, '--time-scroll-top', top],
-    //   [this.body, '--current-time', css.s(sec)]
-    // );
-    if (!this.isActive && isAutoScroll) {
-        this.setScrollTop(top);
+    syncScrollTop() {
+        if (!this.contentWindow || !this.frameLayer.isVisible) {
+            return;
+        }
+        if (this.isActive) {
+            this._scrollTop = this._container.scrollTop;
+        }
     }
-  }
-  showItemDetail(item) {
-    const $d = this._$itemDetail;
-    $d.attr('data-item-id', item.itemId);
-    $d.find('.resNo').text(item.no).end()
-      .find('.vpos').text(item.timePos).end()
-      .find('.time').text(item.formattedDate).end()
-      .find('.userId').text(item.userId).end()
-      .find('.cmd').text(item.cmd).end()
-      .find('.text').text(item.text).end()
-      .addClass('show');
-    global.debug.$itemDetail = $d;
-  }
-  hideItemDetail() {
-    this._$itemDetail.removeClass('show');
-  }
+    setScrollTop(v) {
+        if (!this.contentWindow || this._isModelUpdatePending || this.isActive ||
+            this.isAutoScroll === false || (this._model && this._model.currentSortKey !== 'vpos')) {
+            return;
+        }
+        this._scrollTop = v;
+        if (!this.frameLayer.isVisible) {
+            return;
+        }
+        // this._container.removeEventListener('scroll', this._onScroll);
+        this._container.scrollTop = v;
+        // this._container.addEventListener('scroll', this._onScroll, {passive: true});
+    }
+    _refreshCurrentPoint() {
+        const model = this._model;
+        if (!model || model.currentSortKey !== 'vpos') {
+            return;
+        }
+        this.setCurrentPoint(model.currentTime, model.getInViewIndex(model.currentTime), this.isAutoScroll);
+    }
+    setCurrentPoint(sec, idx, isAutoScroll) {
+        this.isAutoScroll = isAutoScroll;
+        if (!this.contentWindow || !this._itemViews || this._isModelUpdatePending) {
+            return;
+        }
+        const innerHeight = this._innerHeight;
+        const itemViews = this._itemViews;
+        const len = itemViews.length;
+        const view = itemViews[idx];
+        if (len < 1 || !view) {
+            this.timeScrollTop = 0;
+            if (!this.isActive && isAutoScroll) {
+                this.setScrollTop(0);
+            }
+            return;
+        }
+        const itemHeight = CommentListView.ITEM_HEIGHT;
+        const top = Math.max(0, view.top - innerHeight + itemHeight);
+        this.timeScrollTop = top;
+        this.isAutoScroll = isAutoScroll;
+        // cssUtil.setProps(
+        //   [this.body, '--time-scroll-top', top],
+        //   [this.body, '--current-time', css.s(sec)]
+        // );
+        if (!this.isActive && isAutoScroll) {
+            this.setScrollTop(top);
+        }
+    }
+    showItemDetail(item) {
+        const $d = this._$itemDetail;
+        $d.attr('data-item-id', item.itemId);
+        $d.find('.resNo').text(item.no).end()
+            .find('.vpos').text(item.timePos).end()
+            .find('.time').text(item.formattedDate).end()
+            .find('.userId').text(item.userId).end()
+            .find('.cmd').text(item.cmd).end()
+            .find('.text').text(item.text).end()
+            .addClass('show');
+        global.debug.$itemDetail = $d;
+    }
+    hideItemDetail() {
+        this._$itemDetail.removeClass('show');
+    }
 }
 CommentListView.ITEM_HEIGHT = 40;
-
 CommentListView.__css__ = '';
-
 CommentListView.__tpl__ = (`
 <!DOCTYPE html>
 <html lang="ja">
@@ -909,13 +907,10 @@ CommentListView.__tpl__ = (`
 </html>
 
   `).trim();
-
-
 const CommentListItemView = (() => {
-  // なんか汎用性を持たせようとして失敗してる奴
-
-  // ここはDOM的に隔離されてるので外部要因との干渉を考えなくてよい
-  const CSS = (`
+    // なんか汎用性を持たせようとして失敗してる奴
+    // ここはDOM的に隔離されてるので外部要因との干渉を考えなくてよい
+    const CSS = (`
       * {
         box-sizing: border-box;
       }
@@ -1162,9 +1157,7 @@ const CommentListItemView = (() => {
       }
 */
     `).trim();
-
-
-  const TPL = (`
+    const TPL = (`
       <div class="commentListItem" style="position: absolute;">
         <img src="${NICORU}" class="nicoru-icon" data-command="nicoru" title="Nicorü">
         <p class="info">
@@ -1174,323 +1167,283 @@ const CommentListItemView = (() => {
         <span class="progress-negi" style="position: absolute; will-change: transform; contain: strict;"></span>
       </div>
     `).trim();
-
-  let counter = 0;
-  let template;
-
-  class CommentListItemView {
-    static get template() {
-      if (!template) {
-        const t = document.createElement('template');
-        t.id = 'CommentListItemView-template' + Date.now();
-        t.innerHTML = TPL;
-        // document.body.append(t);
-        template = {
-          t,
-          clone: () => {
-            return document.importNode(t.content, true).firstChild;
-          },
-          commentListItem: t.content.querySelector('.commentListItem'),
-          timepos: t.content.querySelector('.timepos'),
-          date: t.content.querySelector('.date'),
-          text: t.content.querySelector('.text')
-        };
-      }
-      return template;
+    let counter = 0;
+    let template;
+    class CommentListItemView {
+        static get template() {
+            if (!template) {
+                const t = document.createElement('template');
+                t.id = 'CommentListItemView-template' + Date.now();
+                t.innerHTML = TPL;
+                // document.body.append(t);
+                template = {
+                    t,
+                    clone: () => {
+                        return document.importNode(t.content, true).firstChild;
+                    },
+                    commentListItem: t.content.querySelector('.commentListItem'),
+                    timepos: t.content.querySelector('.timepos'),
+                    date: t.content.querySelector('.date'),
+                    text: t.content.querySelector('.text')
+                };
+            }
+            return template;
+        }
+        constructor(params) {
+            this.initialize(params);
+        }
+        initialize(params) {
+            this._item = params.item;
+            this._index = params.index;
+            this._height = params.height;
+            this._id = counter++;
+        }
+        build() {
+            const template = this.constructor.template;
+            const { commentListItem, timepos, date, text } = template;
+            const item = this._item;
+            const oden = (this._index % 2 === 0) ? 'even' : 'odd';
+            const time3dp = Math.round(this._item.time3dp * 100);
+            const formattedDate = item.formattedDate;
+            commentListItem.id = this.domId;
+            const font = item.fontCommand || 'default';
+            commentListItem.className =
+                `commentListItem no${item.no} item${this._id} ${oden} fork${item.fork} font-${font} ${item.isSubThread ? 'subThread' : ''}`;
+            commentListItem.classList.toggle('nicotta', item.nicotta);
+            commentListItem.style.cssText = `top: ${this.top}px; content-visibility: hidden;`;
+            /*--duration: ${item.duration}s;
+            --vpos-time: ${item.vpos / 100}s;*/
+            // commentListItem.style.transform = `translateZ(${time3dp}px)`;
+            //commentListItem.setAttribute('data-time-3dp', time3dp);
+            Object.assign(commentListItem.dataset, {
+                itemId: item.itemId,
+                no: item.no,
+                uniqNo: item.uniqNo,
+                vpos: item.vpos,
+                top: this.top,
+                thread: item.threadId,
+                isMine: item.isMine,
+                title: `${item.no}: ${formattedDate} ID:${item.userId}\n${item.text}`,
+                time3dp,
+                valhalla: item.valhalla,
+            });
+            item.nicoru > 0 ?
+                (commentListItem.dataset.nicoru = item.nicoru) :
+                (delete commentListItem.dataset.nicoru);
+            timepos.textContent = item.timePos;
+            date.textContent = formattedDate;
+            text.textContent = item.text.trim();
+            const color = item.color;
+            text.style.textShadow = color ? `0px 0px 2px ${color}` : '';
+            this._view = template.clone();
+        }
+        get viewElement() {
+            if (!this._view) {
+                this.build();
+            }
+            return this._view;
+        }
+        get itemId() {
+            return this._item.itemId;
+        }
+        get domId() {
+            return `item${this._item.itemId}`;
+        }
+        get top() {
+            return this._index * this._height;
+        }
+        remove() {
+            if (!this._view) {
+                return;
+            }
+            this._view.remove();
+        }
+        toString() {
+            return this.viewElement.outerHTML;
+        }
+        get time3dp() {
+            return this._item.time3dp;
+        }
+        get time3d() {
+            return this._item.time3d;
+        }
+        get nicotta() {
+            return this._item.nicotta;
+        }
+        set nicotta(v) {
+            this._item.nicotta = v;
+            this._view.classList.toggle('nicotta', v);
+        }
+        get nicoru() {
+            return this._item.nicoru;
+        }
+        set nicoru(v) {
+            this._item.nicoru = v;
+            v > 0 ?
+                (this._view.dataset.nicoru = v) : (delete this._view.dataset.nicoru);
+        }
     }
-
-    constructor(params) {
-      this.initialize(params);
-    }
-
-    initialize(params) {
-      this._item = params.item;
-      this._index = params.index;
-      this._height = params.height;
-
-      this._id = counter++;
-    }
-
-    build() {
-      const template = this.constructor.template;
-      const {commentListItem, timepos, date, text} = template;
-      const item = this._item;
-      const oden = (this._index % 2 === 0) ? 'even' : 'odd';
-      const time3dp = Math.round(this._item.time3dp * 100);
-
-      const formattedDate = item.formattedDate;
-      commentListItem.id = this.domId;
-      const font = item.fontCommand || 'default';
-      commentListItem.className =
-        `commentListItem no${item.no} item${this._id} ${oden} fork${item.fork} font-${font} ${item.isSubThread ? 'subThread' : ''}`;
-      commentListItem.classList.toggle('nicotta', item.nicotta);
-      commentListItem.style.cssText = `top: ${this.top}px; content-visibility: hidden;`;
-          /*--duration: ${item.duration}s;
-          --vpos-time: ${item.vpos / 100}s;*/
-      // commentListItem.style.transform = `translateZ(${time3dp}px)`;
-      //commentListItem.setAttribute('data-time-3dp', time3dp);
-
-      Object.assign(commentListItem.dataset, {
-        itemId: item.itemId,
-        no: item.no,
-        uniqNo: item.uniqNo,
-        vpos: item.vpos,
-        top: this.top,
-        thread: item.threadId,
-        isMine: item.isMine,
-        title: `${item.no}: ${formattedDate} ID:${item.userId}\n${item.text}`,
-        time3dp,
-        valhalla: item.valhalla,
-      });
-      item.nicoru > 0 ?
-        (commentListItem.dataset.nicoru = item.nicoru) :
-        (delete commentListItem.dataset.nicoru);
-
-      timepos.textContent = item.timePos;
-      date.textContent = formattedDate;
-      text.textContent = item.text.trim();
-
-      const color = item.color;
-      text.style.textShadow = color ? `0px 0px 2px ${color}` : '';
-      this._view = template.clone();
-    }
-
-    get viewElement() {
-      if (!this._view) {
-        this.build();
-      }
-      return this._view;
-    }
-
-    get itemId() {
-      return this._item.itemId;
-    }
-
-    get domId() {
-      return `item${this._item.itemId}`;
-    }
-
-    get top() {
-      return this._index * this._height;
-    }
-
-    remove() {
-      if (!this._view) {
-        return;
-      }
-      this._view.remove();
-    }
-
-    toString() {
-      return this.viewElement.outerHTML;
-    }
-
-    get time3dp() {
-      return this._item.time3dp;
-    }
-
-    get time3d() {
-      return this._item.time3d;
-    }
-
-    get nicotta() {
-      return this._item.nicotta;
-    }
-    set nicotta(v) {
-      this._item.nicotta = v;
-      this._view.classList.toggle('nicotta', v);
-    }
-    get nicoru() {
-      return this._item.nicoru;
-    }
-    set nicoru(v) {
-      this._item.nicoru = v;
-      v > 0 ?
-        (this._view.dataset.nicoru = v) : (delete this._view.dataset.nicoru);
-    }
-  }
-
-  CommentListItemView.TPL = TPL;
-  CommentListItemView.CSS = CSS;
-  return CommentListItemView;
+    CommentListItemView.TPL = TPL;
+    CommentListItemView.CSS = CSS;
+    return CommentListItemView;
 })();
-
 class CommentListItem {
-  constructor(nicoChat) {
-    this.nicoChat = nicoChat;
-    this._itemId = CommentListItem._itemId++;
-    this._vpos = nicoChat.vpos;
-    this._text = nicoChat.text;
-    this._escapedText = textUtil.escapeHtml(this._text);
-    this._userId = nicoChat.userId;
-    this._date = nicoChat.date;
-    this._fork = nicoChat.fork;
-    this._no = nicoChat.no;
-    this._color = nicoChat.color;
-    this._fontCommand = nicoChat.fontCommand;
-    this._isSubThread = nicoChat.isSubThread;
-
-    this._formattedDate = textUtil.dateToString(this._date * 1000);
-    this._timePos = textUtil.secToTime(this._vpos / 100);
-  }
-  get itemId() {return this._itemId;}
-  get vpos() {return this._vpos;}
-  get timePos() {return this._timePos;}
-  get cmd() {return this.nicoChat.cmd;}
-  get text() {return this._text;}
-  get escapedText() {return this._escapedText;}
-  get userId() {return this._userId;}
-  get color() {return this._color;}
-  get date() {return this._date;}
-  get time() {return this._date * 1000;}
-  get formattedDate() {return this._formattedDate;}
-  get fork() {return this._fork;}
-  get no() {return this._no;}
-  get uniqNo() {return this.nicoChat.uniqNo;}
-  get fontCommand() {return this._fontCommand;}
-  get isSubThread() {return this._isSubThread;}
-  get threadId() {return this.nicoChat.threadId;}
-  get time3d() {return this.nicoChat.time3d;}
-  get time3dp() {return this.nicoChat.time3dp;}
-  get nicoru() {return this.nicoChat.nicoru;}
-  set nicoru(v) { this.nicoChat.nicoru = v;}
-  get duration() {return this.nicoChat.duration;}
-  get valhalla() {return this.nicoChat.valhalla;}
-  get nicotta() { return this.nicoChat.nicotta;}
-  set nicotta(v) { this.nicoChat.nicotta = v; }
-  get isMine() {return this.nicoChat.isMine;}
+    constructor(nicoChat) {
+        this.nicoChat = nicoChat;
+        this._itemId = CommentListItem._itemId++;
+        this._vpos = nicoChat.vpos;
+        this._text = nicoChat.text;
+        this._escapedText = textUtil.escapeHtml(this._text);
+        this._userId = nicoChat.userId;
+        this._date = nicoChat.date;
+        this._fork = nicoChat.fork;
+        this._no = nicoChat.no;
+        this._color = nicoChat.color;
+        this._fontCommand = nicoChat.fontCommand;
+        this._isSubThread = nicoChat.isSubThread;
+        this._formattedDate = textUtil.dateToString(this._date * 1000);
+        this._timePos = textUtil.secToTime(this._vpos / 100);
+    }
+    get itemId() { return this._itemId; }
+    get vpos() { return this._vpos; }
+    get timePos() { return this._timePos; }
+    get cmd() { return this.nicoChat.cmd; }
+    get text() { return this._text; }
+    get escapedText() { return this._escapedText; }
+    get userId() { return this._userId; }
+    get color() { return this._color; }
+    get date() { return this._date; }
+    get time() { return this._date * 1000; }
+    get formattedDate() { return this._formattedDate; }
+    get fork() { return this._fork; }
+    get no() { return this._no; }
+    get uniqNo() { return this.nicoChat.uniqNo; }
+    get fontCommand() { return this._fontCommand; }
+    get isSubThread() { return this._isSubThread; }
+    get threadId() { return this.nicoChat.threadId; }
+    get time3d() { return this.nicoChat.time3d; }
+    get time3dp() { return this.nicoChat.time3dp; }
+    get nicoru() { return this.nicoChat.nicoru; }
+    set nicoru(v) { this.nicoChat.nicoru = v; }
+    get duration() { return this.nicoChat.duration; }
+    get valhalla() { return this.nicoChat.valhalla; }
+    get nicotta() { return this.nicoChat.nicotta; }
+    set nicotta(v) { this.nicoChat.nicotta = v; }
+    get isMine() { return this.nicoChat.isMine; }
 }
 CommentListItem._itemId = 0;
-
-
 class CommentPanelView extends Emitter {
-  languages = [
-    ['ja-jp', "日本語"],
-    ['en-us', "English (US)"],
-    ['zh-tw', "中文 (繁體)"]
-  ];
-
-  constructor(params) {
-    super();
-    this.$container = params.$container;
-    this.model = params.model;
-    this.commentPanel = params.commentPanel;
-
-    css.addStyle(CommentPanelView.__css__);
-    const $view = this.$view = uq.html(CommentPanelView.__tpl__);
-    this.$container.append($view);
-
-    const langs = document.querySelector('.commentLanguageSelector');
-    for (const [language, label] of this.languages) {
-      const list = document.createElement('li');
-      list.className = 'commentPanel-command';
-      Object.assign(list.dataset, {
-        command: 'update-commentLanguage',
-        param: language,
-      });
-      list.textContent = label;
-      langs.append(list);
+    languages = [
+        ['ja-jp', "日本語"],
+        ['en-us', "English (US)"],
+        ['zh-tw', "中文 (繁體)"]
+    ];
+    constructor(params) {
+        super();
+        this.$container = params.$container;
+        this.model = params.model;
+        this.commentPanel = params.commentPanel;
+        css.addStyle(CommentPanelView.__css__);
+        const $view = this.$view = uq.html(CommentPanelView.__tpl__);
+        this.$container.append($view);
+        const langs = document.querySelector('.commentLanguageSelector');
+        for (const [language, label] of this.languages) {
+            const list = document.createElement('li');
+            list.className = 'commentPanel-command';
+            Object.assign(list.dataset, {
+                command: 'update-commentLanguage',
+                param: language,
+            });
+            list.textContent = label;
+            langs.append(list);
+        }
+        const $menu = this._$menu = this.$view.find('.commentPanel-menu');
+        global.debug.commentPanelView = this;
+        const listView = this._listView = new CommentListView({
+            container: this.$view.find('.commentPanel-frame')[0],
+            model: this.model,
+            className: 'commentList',
+            builder: CommentListItemView,
+            itemCss: CommentListItemView.__css__
+        });
+        listView.on('command', this._onCommand.bind(this));
+        this._timeMachineView = new TimeMachineView({
+            parentNode: document.querySelector('.timeMachineContainer')
+        });
+        this._timeMachineView.on('command', this._onCommand.bind(this));
+        this.commentPanel.on('threadInfo', _.debounce(this._onThreadInfo.bind(this), 100));
+        this.commentPanel.on('update', _.debounce(this._onCommentPanelStatusUpdate.bind(this), 100));
+        this.commentPanel.on('itemDetailResp', _.debounce((item) => listView.showItemDetail(item), 100));
+        this._onCommentPanelStatusUpdate();
+        this.model.on('currentTimeUpdate', this._onModelCurrentTimeUpdate.bind(this));
+        this.$view.on('click', this._onCommentListCommandClick.bind(this));
+        global.emitter.on('hideHover', () => $menu.removeClass('show'));
     }
-
-    const $menu = this._$menu = this.$view.find('.commentPanel-menu');
-
-    global.debug.commentPanelView = this;
-
-    const listView = this._listView = new CommentListView({
-      container: this.$view.find('.commentPanel-frame')[0],
-      model: this.model,
-      className: 'commentList',
-      builder: CommentListItemView,
-      itemCss: CommentListItemView.__css__
-    });
-    listView.on('command', this._onCommand.bind(this));
-
-    this._timeMachineView = new TimeMachineView({
-      parentNode: document.querySelector('.timeMachineContainer')
-    });
-    this._timeMachineView.on('command', this._onCommand.bind(this));
-
-    this.commentPanel.on('threadInfo',
-      _.debounce(this._onThreadInfo.bind(this), 100));
-    this.commentPanel.on('update',
-      _.debounce(this._onCommentPanelStatusUpdate.bind(this), 100));
-    this.commentPanel.on('itemDetailResp',
-      _.debounce(item => listView.showItemDetail(item), 100));
-    this._onCommentPanelStatusUpdate();
-
-    this.model.on('currentTimeUpdate', this._onModelCurrentTimeUpdate.bind(this));
-
-    this.$view.on('click', this._onCommentListCommandClick.bind(this));
-
-    global.emitter.on('hideHover', () => $menu.removeClass('show'));
-  }
-  toggleClass(className, v) {
-    return this.$view.raf.toggleClass(className, v);
-  }
-  _onModelCurrentTimeUpdate(sec, viewIndex) {
-    if (!this.$view){
-      return;
+    toggleClass(className, v) {
+        return this.$view.raf.toggleClass(className, v);
     }
-
-    this._lastCurrentTime = sec;
-    this._listView.setCurrentPoint(sec, viewIndex, this.commentPanel.isAutoScroll);
-  }
-  _onCommand(command, param, itemId) {
-    switch (command) {
-      case 'nicoru':
-        // The row remains retryable until the request is confirmed.
-        this.emit('command', command, param, itemId);
-        break;
-      default:
-        this.emit('command', command, param, itemId);
-        break;
+    _onModelCurrentTimeUpdate(sec, viewIndex) {
+        if (!this.$view) {
+            return;
+        }
+        this._lastCurrentTime = sec;
+        this._listView.setCurrentPoint(sec, viewIndex, this.commentPanel.isAutoScroll);
     }
-  }
-  _onCommentListCommandClick(e) {
-    const target = e.target.closest('[data-command]');
-    if (!target) { return; }
-    const {command, param} = target.dataset;
-    e.stopPropagation();
-    if (!command) {
-      return;
+    _onCommand(command, param, itemId) {
+        switch (command) {
+            case 'nicoru':
+                // The row remains retryable until the request is confirmed.
+                this.emit('command', command, param, itemId);
+                break;
+            default:
+                this.emit('command', command, param, itemId);
+                break;
+        }
     }
-
-    const $view = this.$view;
-    const setUpdating = () => {
-      document.activeElement.blur();
-      $view.raf.addClass('updating');
-      window.setTimeout(() => $view.removeClass('updating'), 1000);
-    };
-
-    switch (command) {
-      case 'sortBy':
-        setUpdating();
-        this.emit('command', command, param);
-        break;
-      case 'reloadComment':
-        setUpdating();
-        this.emit('command', command, param);
-        break;
-      default:
-        this.emit('command', command, param);
+    _onCommentListCommandClick(e) {
+        const target = e.target.closest('[data-command]');
+        if (!target) {
+            return;
+        }
+        const { command, param } = target.dataset;
+        e.stopPropagation();
+        if (!command) {
+            return;
+        }
+        const $view = this.$view;
+        const setUpdating = () => {
+            document.activeElement.blur();
+            $view.raf.addClass('updating');
+            window.setTimeout(() => $view.removeClass('updating'), 1000);
+        };
+        switch (command) {
+            case 'sortBy':
+                setUpdating();
+                this.emit('command', command, param);
+                break;
+            case 'reloadComment':
+                setUpdating();
+                this.emit('command', command, param);
+                break;
+            default:
+                this.emit('command', command, param);
+        }
+        global.emitter.emitAsync('hideHover');
     }
-    global.emitter.emitAsync('hideHover');
-  }
-  _onThreadInfo(threadInfo) {
-    this._timeMachineView.update(threadInfo, {videoPostedAt: this.commentPanel?._player?._videoInfo?.postedAt});
-  }
-  _onCommentPanelStatusUpdate() {
-    const commentPanel = this.commentPanel;
-    this._listView.isAutoScroll = commentPanel.isAutoScroll;
-    this._listView._refreshCurrentPoint();
-    const $view = this.toggleClass('autoScroll', commentPanel.isAutoScroll);
-
-    const langClass = `lang-${commentPanel.getLanguage()}`;
-    if (!$view.hasClass(langClass)) {
-      $view.raf.removeClass(this.languages.map(([x]) => `lang-${x}`).join(' '));
-      $view.raf.addClass(langClass);
+    _onThreadInfo(threadInfo) {
+        this._timeMachineView.update(threadInfo, { videoPostedAt: this.commentPanel?._player?._videoInfo?.postedAt });
     }
-  }
+    _onCommentPanelStatusUpdate() {
+        const commentPanel = this.commentPanel;
+        this._listView.isAutoScroll = commentPanel.isAutoScroll;
+        this._listView._refreshCurrentPoint();
+        const $view = this.toggleClass('autoScroll', commentPanel.isAutoScroll);
+        const langClass = `lang-${commentPanel.getLanguage()}`;
+        if (!$view.hasClass(langClass)) {
+            $view.raf.removeClass(this.languages.map(([x]) => `lang-${x}`).join(' '));
+            $view.raf.addClass(langClass);
+        }
+    }
 }
 CommentPanelView.__css__ = `
     :root {
@@ -1587,7 +1540,6 @@ CommentPanelView.__css__ = `
 
 
   `.trim();
-
 CommentPanelView.__tpl__ = (`
     <div class="commentPanel-container">
       <div class="commentPanel-header">
@@ -1620,386 +1572,371 @@ CommentPanelView.__tpl__ = (`
       <div class="commentPanel-frame"></div>
     </div>
   `).trim();
-
-
-
 class CommentPanel extends Emitter {
-  constructor(params) {
-    super();
-    this._thumbInfoLoader = params.loader || global.api.ThumbInfoLoader;
-    this._$container = params.$container;
-    const player = this._player = params.player;
-
-    this._autoScroll = _.isBoolean(params.autoScroll) ? params.autoScroll : true;
-
-    this._model = new CommentListModel({});
-    this._language = params.language || 'ja-jp';
-
-    player.on('commentParsed', _.debounce(this._onCommentParsed.bind(this), 500));
-    player.on('commentChange', _.debounce(this._onCommentChange.bind(this), 500));
-    player.on('commentReady', _.debounce(this._onCommentReady.bind(this), 500));
-    player.on('open', this._onPlayerOpen.bind(this));
-    player.on('close', this._onPlayerClose.bind(this));
-
-    global.debug.commentPanel = this;
-  }
-  _initializeView() {
-    if (this._view) {
-      return;
+    constructor(params) {
+        super();
+        this._thumbInfoLoader = params.loader || global.api.ThumbInfoLoader;
+        this._$container = params.$container;
+        const player = this._player = params.player;
+        this._autoScroll = _.isBoolean(params.autoScroll) ? params.autoScroll : true;
+        this._model = new CommentListModel({});
+        this._language = params.language || 'ja-jp';
+        player.on('commentParsed', _.debounce(this._onCommentParsed.bind(this), 500));
+        player.on('commentChange', _.debounce(this._onCommentChange.bind(this), 500));
+        player.on('commentReady', _.debounce(this._onCommentReady.bind(this), 500));
+        player.on('open', this._onPlayerOpen.bind(this));
+        player.on('close', this._onPlayerClose.bind(this));
+        global.debug.commentPanel = this;
     }
-    this._view = new CommentPanelView({
-      $container: this._$container,
-      model: this._model,
-      commentPanel: this,
-      builder: CommentListItemView,
-      itemCss: CommentListItemView.__css__
-    });
-    this._view.on('command', this._onCommand.bind(this));
-  }
-  startTimer() {
-    this.stopTimer();
-    this._timer = window.setInterval(this._onTimer.bind(this), 200);
-  }
-  stopTimer() {
-    if (this._timer) {
-      window.clearInterval(this._timer);
-      this._timer = null;
-    }
-  }
-  _onTimer() {
-    if (this._autoScroll) {
-      this.currentTime=this._player.currentTime;
-    }
-  }
-  _onCommand(command, param, itemId) {
-    let item;
-    const hasItemId = itemId !== undefined && itemId !== null;
-    if (hasItemId) {
-      item = this._model.findByItemId(itemId);
-    }
-    const needsItem = ['select', 'clipBoard', 'removeComment',
-      'addUserIdFilter', 'addWordFilter', 'nicoru', 'itemDetailRequest'].includes(command);
-    // A menu event can outlive its row after a reload, filter, or video change.
-    if (!item && (hasItemId || needsItem)) {
-      return;
-    }
-    switch (command) {
-      case 'toggleScroll':
-        this.toggleScroll();
-        break;
-      case 'sortBy': {
-        const tmp = param.split(':');
-        this.sortBy(tmp[0], tmp[1] === 'desc');
-        break;}
-      case 'select':{
-        const vpos = item.vpos;
-        this.emit('command', 'seek', vpos / 100);
-        // TODO: コメント強調
-        break;}
-      case 'clipBoard':
-        Clipboard.copyText(item.text);
-        this.emit('command', 'notify', 'クリップボードにコピーしました');
-        break;
-      case 'removeComment':
-        (new Promise((resolve, reject) => this.emit('deleteChat', {resolve, reject}, item.nicoChat)))
-          .then(() => this._model.removeItem(item))
-          // The dialog has already displayed the server error; keep this row
-          // and consume the expected rejection without an unhandled Promise.
-          .catch(() => {});
-        break;
-      case 'addUserIdFilter':
-        this._model.removeItem(item);
-        this.emit('command', command, item.userId);
-        break;
-      case 'addWordFilter':
-        this._model.removeItem(item);
-        this.emit('command', command, item.text);
-        break;
-      case 'reloadComment':
-        if (item) {
-          param = {};
-          const dt = new Date(item.time);
-          this.emit('command', 'notify', item.formattedDate + '頃のログ');
-          param.when = Math.floor(dt.getTime() / 1000);
+    _initializeView() {
+        if (this._view) {
+            return;
         }
-        this.emit('command', command, param);
-
-        break;
-      case 'itemDetailRequest':
-        if (item) {
-          this.emit('itemDetailResp', item);
+        this._view = new CommentPanelView({
+            $container: this._$container,
+            model: this._model,
+            commentPanel: this,
+            builder: CommentListItemView,
+            itemCss: CommentListItemView.__css__
+        });
+        this._view.on('command', this._onCommand.bind(this));
+    }
+    startTimer() {
+        this.stopTimer();
+        this._timer = window.setInterval(this._onTimer.bind(this), 200);
+    }
+    stopTimer() {
+        if (this._timer) {
+            window.clearInterval(this._timer);
+            this._timer = null;
         }
-        break;
-      case 'nicoru': {
-        // One in-flight request per actual row. Do not present success before
-        // the server confirms it, and never revive a row after a list switch.
-        if (!this._nicoruPending) { this._nicoruPending = new WeakSet(); }
-        if (this._nicoruPending.has(item) || item.nicotta) { break; }
-        this._nicoruPending.add(item);
-        const row = param;
-        if (row?.classList) { row.classList.add('is-nicoruPending'); }
-        const chat = item.nicoChat;
-        const oldCount = Number(item.nicoru) || 0;
-        (new Promise((resolve, reject) =>
-          this.emit('command', command, chat, {resolve, reject})))
-          .then(result => {
-            if (this._model.findByItemId(itemId) !== item) { return; }
-            const authoritative = Number(result?.count);
-            const count = Number.isFinite(authoritative) && authoritative >= 0 &&
-              result?.count !== undefined ? authoritative : oldCount + 1;
-            item.nicoru = count;
-            item.nicotta = true;
-            // A test or third-party model need not use the normal property proxies.
-            chat.nicoru = count;
-            chat.nicotta = true;
-            if (row?.isConnected !== false && row?.dataset &&
-                String(row.dataset.itemId) === String(itemId)) {
-              row.dataset.nicoru = count;
-              row.classList.add('nicotta');
+    }
+    _onTimer() {
+        if (this._autoScroll) {
+            this.currentTime = this._player.currentTime;
+        }
+    }
+    _onCommand(command, param, itemId) {
+        let item;
+        const hasItemId = itemId !== undefined && itemId !== null;
+        if (hasItemId) {
+            item = this._model.findByItemId(itemId);
+        }
+        const needsItem = ['select', 'clipBoard', 'removeComment',
+            'addUserIdFilter', 'addWordFilter', 'nicoru', 'itemDetailRequest'].includes(command);
+        // A menu event can outlive its row after a reload, filter, or video change.
+        if (!item && (hasItemId || needsItem)) {
+            return;
+        }
+        switch (command) {
+            case 'toggleScroll':
+                this.toggleScroll();
+                break;
+            case 'sortBy': {
+                const tmp = param.split(':');
+                this.sortBy(tmp[0], tmp[1] === 'desc');
+                break;
             }
-          })
-          // The dialog already displays the server failure. Leave the row
-          // and its model unchanged so the user can retry.
-          .catch(() => {})
-          .finally(() => {
-            this._nicoruPending.delete(item);
-            if (row?.classList) { row.classList.remove('is-nicoruPending'); }
-          });
-        break;
-      }
-      default:
-        this.emit('command', command, param);
+            case 'select': {
+                const vpos = item.vpos;
+                this.emit('command', 'seek', vpos / 100);
+                // TODO: コメント強調
+                break;
+            }
+            case 'clipBoard':
+                Clipboard.copyText(item.text);
+                this.emit('command', 'notify', 'クリップボードにコピーしました');
+                break;
+            case 'removeComment':
+                (new Promise((resolve, reject) => this.emit('deleteChat', { resolve, reject }, item.nicoChat)))
+                    .then(() => this._model.removeItem(item))
+                    // The dialog has already displayed the server error; keep this row
+                    // and consume the expected rejection without an unhandled Promise.
+                    .catch(() => { });
+                break;
+            case 'addUserIdFilter':
+                this._model.removeItem(item);
+                this.emit('command', command, item.userId);
+                break;
+            case 'addWordFilter':
+                this._model.removeItem(item);
+                this.emit('command', command, item.text);
+                break;
+            case 'reloadComment':
+                if (item) {
+                    param = {};
+                    const dt = new Date(item.time);
+                    this.emit('command', 'notify', item.formattedDate + '頃のログ');
+                    param.when = Math.floor(dt.getTime() / 1000);
+                }
+                this.emit('command', command, param);
+                break;
+            case 'itemDetailRequest':
+                if (item) {
+                    this.emit('itemDetailResp', item);
+                }
+                break;
+            case 'nicoru': {
+                // One in-flight request per actual row. Do not present success before
+                // the server confirms it, and never revive a row after a list switch.
+                if (!this._nicoruPending) {
+                    this._nicoruPending = new WeakSet();
+                }
+                if (this._nicoruPending.has(item) || item.nicotta) {
+                    break;
+                }
+                this._nicoruPending.add(item);
+                const row = param;
+                if (row?.classList) {
+                    row.classList.add('is-nicoruPending');
+                }
+                const chat = item.nicoChat;
+                const oldCount = Number(item.nicoru) || 0;
+                (new Promise((resolve, reject) => this.emit('command', command, chat, { resolve, reject })))
+                    .then(result => {
+                    if (this._model.findByItemId(itemId) !== item) {
+                        return;
+                    }
+                    const authoritative = Number(result?.count);
+                    const count = Number.isFinite(authoritative) && authoritative >= 0 &&
+                        result?.count !== undefined ? authoritative : oldCount + 1;
+                    item.nicoru = count;
+                    item.nicotta = true;
+                    // A test or third-party model need not use the normal property proxies.
+                    chat.nicoru = count;
+                    chat.nicotta = true;
+                    if (row?.isConnected !== false && row?.dataset &&
+                        String(row.dataset.itemId) === String(itemId)) {
+                        row.dataset.nicoru = count;
+                        row.classList.add('nicotta');
+                    }
+                })
+                    // The dialog already displays the server failure. Leave the row
+                    // and its model unchanged so the user can retry.
+                    .catch(() => { })
+                    .finally(() => {
+                    this._nicoruPending.delete(item);
+                    if (row?.classList) {
+                        row.classList.remove('is-nicoruPending');
+                    }
+                });
+                break;
+            }
+            default:
+                this.emit('command', command, param);
+        }
     }
-  }
-  _onCommentParsed(language) {
-    this.setLanguage(language);
-    this._initializeView();
-    this.setChatList(this._player.chatList);
-    this.startTimer();
-  }
-  _onCommentChange(language) {
-    this.setLanguage(language);
-    this._initializeView();
-    this.setChatList(this._player.chatList);
-  }
-  _onCommentReady(result, threadInfo) {
-    this._threadInfo = threadInfo;
-    this.emit('threadInfo', threadInfo);
-  }
-  _onPlayerOpen() {
-    this._model.clear();
-  }
-  _onPlayerClose() {
-    this._model.clear();
-    this.stopTimer();
-  }
-  setChatList(chatList) {
-    if (!this._model) {
-      return;
+    _onCommentParsed(language) {
+        this.setLanguage(language);
+        this._initializeView();
+        this.setChatList(this._player.chatList);
+        this.startTimer();
     }
-    this._model.setChatList(chatList);
-  }
-  get isAutoScroll() {
-    return this._autoScroll;
-  }
-  getLanguage() {
-    return this._language || 'ja-jp';
-  }
-  getThreadInfo() {
-    return this._threadInfo;
-  }
-  setLanguage(lang) {
-    if (lang !== this._language) {
-      this._language = lang;
-      this.emit('update');
+    _onCommentChange(language) {
+        this.setLanguage(language);
+        this._initializeView();
+        this.setChatList(this._player.chatList);
     }
-  }
-  toggleScroll(v) {
-    if (!_.isBoolean(v)) {
-      this._autoScroll = !this._autoScroll;
-      if (this._autoScroll) {
-        this._model.sortBy('vpos');
-      }
-      this.emit('update');
-      return;
+    _onCommentReady(result, threadInfo) {
+        this._threadInfo = threadInfo;
+        this.emit('threadInfo', threadInfo);
     }
-
-    if (this._autoScroll !== v) {
-      this._autoScroll = v;
-      if (this._autoScroll) {
-        this._model.sortBy('vpos');
-      }
-      this.emit('update');
+    _onPlayerOpen() {
+        this._model.clear();
     }
-  }
-  sortBy(key, isDesc) {
-    this._model.sortBy(key, isDesc);
-    if (key !== 'vpos') {
-      this.toggleScroll(false);
+    _onPlayerClose() {
+        this._model.clear();
+        this.stopTimer();
     }
-  }
-  set currentTime(sec) {
-    if (!this._view || this._player.currentTab !== 'comment') {
-      return;
+    setChatList(chatList) {
+        if (!this._model) {
+            return;
+        }
+        this._model.setChatList(chatList);
     }
-    this._model.currentTime = sec;
-  }
-  get currentTime() {
-    return this._model.currentTime;
-  }
+    get isAutoScroll() {
+        return this._autoScroll;
+    }
+    getLanguage() {
+        return this._language || 'ja-jp';
+    }
+    getThreadInfo() {
+        return this._threadInfo;
+    }
+    setLanguage(lang) {
+        if (lang !== this._language) {
+            this._language = lang;
+            this.emit('update');
+        }
+    }
+    toggleScroll(v) {
+        if (!_.isBoolean(v)) {
+            this._autoScroll = !this._autoScroll;
+            if (this._autoScroll) {
+                this._model.sortBy('vpos');
+            }
+            this.emit('update');
+            return;
+        }
+        if (this._autoScroll !== v) {
+            this._autoScroll = v;
+            if (this._autoScroll) {
+                this._model.sortBy('vpos');
+            }
+            this.emit('update');
+        }
+    }
+    sortBy(key, isDesc) {
+        this._model.sortBy(key, isDesc);
+        if (key !== 'vpos') {
+            this.toggleScroll(false);
+        }
+    }
+    set currentTime(sec) {
+        if (!this._view || this._player.currentTab !== 'comment') {
+            return;
+        }
+        this._model.currentTime = sec;
+    }
+    get currentTime() {
+        return this._model.currentTime;
+    }
 }
-
 class TimeMachineView extends BaseViewComponent {
-  constructor({parentNode}) {
-    super({
-      parentNode,
-      name: 'TimeMachineView',
-      template: '<div class="TimeMachineView"></div>',
-      shadow: TimeMachineView._shadow_,
-      css: ''
-    });
-
-
-    this._bound._onTimer = this._onTimer.bind(this);
-
-    this._state = {
-      isWaybackMode: false,
-      isSelecting: false,
-    };
-
-    this._currentTimestamp = Date.now();
-
-    global.debug.timeMachineView = this;
-
-    window.setInterval(this._bound._onTimer, 3 * 1000);
-  }
-
-  _initDom(...args) {
-    super._initDom(...args);
-
-    const v = this._shadow || this._view;
-    Object.assign(this._elm, {
-      time: v.querySelector('.dateTime'),
-      back: v.querySelector('.backToTheFuture'),
-      input: v.querySelector('.dateTimeInput'),
-      submit: v.querySelector('.dateTimeSubmit'),
-      cancel: v.querySelector('.dateTimeCancel')
-    });
-
-    this._updateTimestamp();
-    this._elm.time.addEventListener('click', this._toggle.bind(this));
-    this._elm.back.addEventListener('mousedown', _.debounce(this._onBack.bind(this), 300));
-    this._elm.submit.addEventListener('click', this._onSubmit.bind(this));
-    this._elm.cancel.addEventListener('click', this._onCancel.bind(this));
-  }
-
-  update(threadInfo, {videoPostedAt} = {}) {
-    // Thread IDs are opaque: neither a newer 10-digit ID nor a long ID is the video date.
-    const published = typeof videoPostedAt === 'string' ? Date.parse(videoPostedAt) : NaN;
-    this._videoPostTime = Number.isFinite(published) && published > 0 && published <= Date.now() ? published : null;
-    const isWaybackMode = threadInfo.isWaybackMode;
-    this.setState({isWaybackMode, isSelecting: false});
-
-    if (isWaybackMode) {
-      this._currentTimestamp = threadInfo.when * 1000;
-    } else {
-      this._currentTimestamp = Date.now();
+    constructor({ parentNode }) {
+        super({
+            parentNode,
+            name: 'TimeMachineView',
+            template: '<div class="TimeMachineView"></div>',
+            shadow: TimeMachineView._shadow_,
+            css: ''
+        });
+        this._bound._onTimer = this._onTimer.bind(this);
+        this._state = {
+            isWaybackMode: false,
+            isSelecting: false,
+        };
+        this._currentTimestamp = Date.now();
+        global.debug.timeMachineView = this;
+        window.setInterval(this._bound._onTimer, 3 * 1000);
     }
-    this._updateTimestamp();
-  }
-
-  _updateTimestamp() {
-    if (isNaN(this._currentTimestamp)) {
-      return;
+    _initDom(...args) {
+        super._initDom(...args);
+        const v = this._shadow || this._view;
+        Object.assign(this._elm, {
+            time: v.querySelector('.dateTime'),
+            back: v.querySelector('.backToTheFuture'),
+            input: v.querySelector('.dateTimeInput'),
+            submit: v.querySelector('.dateTimeSubmit'),
+            cancel: v.querySelector('.dateTimeCancel')
+        });
+        this._updateTimestamp();
+        this._elm.time.addEventListener('click', this._toggle.bind(this));
+        this._elm.back.addEventListener('mousedown', _.debounce(this._onBack.bind(this), 300));
+        this._elm.submit.addEventListener('click', this._onSubmit.bind(this));
+        this._elm.cancel.addEventListener('click', this._onCancel.bind(this));
     }
-    this._elm.time.textContent = this._currentTime = this._toDate(this._currentTimestamp);
-  }
-
-  openSelect() {
-    const input = this._elm.input;
-    const now = this._toTDate(Date.now());
-    input.setAttribute('max', now);
-    input.setAttribute('value', this._toTDate(this._currentTimestamp));
-    if (Number.isFinite(this._videoPostTime)) { input.setAttribute('min', this._toTDate(this._videoPostTime)); }
-    else { input.removeAttribute('min'); }
-    this.setState({isSelecting: true});
-    window.setTimeout(() => {
-      input.focus();
-    }, 0);
-  }
-
-  closeSelect() {
-    this.setState({isSelecting: false});
-  }
-
-  _toggle() {
-    if (this._state.isSelecting) {
-      this.closeSelect();
-    } else {
-      this.openSelect();
+    update(threadInfo, { videoPostedAt } = {}) {
+        // Thread IDs are opaque: neither a newer 10-digit ID nor a long ID is the video date.
+        const published = typeof videoPostedAt === 'string' ? Date.parse(videoPostedAt) : NaN;
+        this._videoPostTime = Number.isFinite(published) && published > 0 && published <= Date.now() ? published : null;
+        const isWaybackMode = threadInfo.isWaybackMode;
+        this.setState({ isWaybackMode, isSelecting: false });
+        if (isWaybackMode) {
+            this._currentTimestamp = threadInfo.when * 1000;
+        }
+        else {
+            this._currentTimestamp = Date.now();
+        }
+        this._updateTimestamp();
     }
-  }
-
-  _onTimer() {
-    if (this._state.isWaybackMode) {
-      return;
+    _updateTimestamp() {
+        if (isNaN(this._currentTimestamp)) {
+            return;
+        }
+        this._elm.time.textContent = this._currentTime = this._toDate(this._currentTimestamp);
     }
-    let now = Date.now();
-    let str = this._toDate(now);
-
-    if (this._currentTime === str) {
-      return;
+    openSelect() {
+        const input = this._elm.input;
+        const now = this._toTDate(Date.now());
+        input.setAttribute('max', now);
+        input.setAttribute('value', this._toTDate(this._currentTimestamp));
+        if (Number.isFinite(this._videoPostTime)) {
+            input.setAttribute('min', this._toTDate(this._videoPostTime));
+        }
+        else {
+            input.removeAttribute('min');
+        }
+        this.setState({ isSelecting: true });
+        window.setTimeout(() => {
+            input.focus();
+        }, 0);
     }
-    this._currentTimestamp = now;
-    this._updateTimestamp();
-  }
-
-  _padTime(time) {
-    const pad = v => v.toString().padStart(2, '0');
-    const dt = new Date(time);
-    return {
-      yyyy: dt.getFullYear(),
-      mm: pad(dt.getMonth() + 1),
-      dd: pad(dt.getDate()),
-      h: pad(dt.getHours()),
-      m: pad(dt.getMinutes()),
-      s: pad(dt.getSeconds())
-    };
-  }
-
-  _toDate(time) {
-    const {yyyy, mm, dd, h, m} = this._padTime(time);
-    return `${yyyy}/${mm}/${dd} ${h}:${m}`;
-  }
-
-  _toTDate(time) {
-    const {yyyy, mm, dd, h, m, s} = this._padTime(time);
-    return `${yyyy}-${mm}-${dd}T${h}:${m}:${s}`;
-  }
-
-  _onSubmit() {
-    const val = this._elm.input.value;
-    if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
-      return;
+    closeSelect() {
+        this.setState({ isSelecting: false });
     }
-    const time = new Date(val).getTime();
-    if (!Number.isFinite(time) || time <= 0 || time > Date.now()) { return; }
-    const when = Math.floor(Math.max(time, this._videoPostTime || 0) / 1000);
-    this.emit('command', 'reloadComment', {when});
-    this.closeSelect();
-  }
-
-  _onCancel() {
-    this.closeSelect();
-  }
-
-  _onBack() {
-    // Leave the successful historical label intact until the latest load succeeds.
-    this.closeSelect();
-    this.emit('command', 'reloadComment', {when: 0});
-  }
+    _toggle() {
+        if (this._state.isSelecting) {
+            this.closeSelect();
+        }
+        else {
+            this.openSelect();
+        }
+    }
+    _onTimer() {
+        if (this._state.isWaybackMode) {
+            return;
+        }
+        let now = Date.now();
+        let str = this._toDate(now);
+        if (this._currentTime === str) {
+            return;
+        }
+        this._currentTimestamp = now;
+        this._updateTimestamp();
+    }
+    _padTime(time) {
+        const pad = (v) => v.toString().padStart(2, '0');
+        const dt = new Date(time);
+        return {
+            yyyy: dt.getFullYear(),
+            mm: pad(dt.getMonth() + 1),
+            dd: pad(dt.getDate()),
+            h: pad(dt.getHours()),
+            m: pad(dt.getMinutes()),
+            s: pad(dt.getSeconds())
+        };
+    }
+    _toDate(time) {
+        const { yyyy, mm, dd, h, m } = this._padTime(time);
+        return `${yyyy}/${mm}/${dd} ${h}:${m}`;
+    }
+    _toTDate(time) {
+        const { yyyy, mm, dd, h, m, s } = this._padTime(time);
+        return `${yyyy}-${mm}-${dd}T${h}:${m}:${s}`;
+    }
+    _onSubmit() {
+        const val = this._elm.input.value;
+        if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
+            return;
+        }
+        const time = new Date(val).getTime();
+        if (!Number.isFinite(time) || time <= 0 || time > Date.now()) {
+            return;
+        }
+        const when = Math.floor(Math.max(time, this._videoPostTime || 0) / 1000);
+        this.emit('command', 'reloadComment', { when });
+        this.closeSelect();
+    }
+    _onCancel() {
+        this.closeSelect();
+    }
+    _onBack() {
+        // Leave the successful historical label intact until the latest load succeeds.
+        this.closeSelect();
+        this.emit('command', 'reloadComment', { when: 0 });
+    }
 }
-
 TimeMachineView._shadow_ = (`
     <style>
       .dateTime {
@@ -2138,13 +2075,8 @@ TimeMachineView._shadow_ = (`
       </div>
     </div>
   `).trim();
-
 TimeMachineView.__tpl__ = ('<div class="TimeMachineView"></div>').trim();
-
-
 //===END===
-
-// tb = ZenzaWatch.debug.getFrameBodies().find(b => b.classList.contains('commentList')).querySelector('.timeBar');[...tb.computedStyleMap().entries()].filter(([key, vars]) => key.startsWith('--')).forEach(([key, vars]) => console.log(key, ...vars))
 export {
   CommentPanel
 };

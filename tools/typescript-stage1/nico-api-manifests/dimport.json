@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/dimport.ts",
+  "runtime": "packages/lib/src/infra/dimport.js",
+  "sourceSha256": "a9164af4870f8d4caa36ee8b8b1f92fccacd511c6dc686625b1be3697f7cbaf2",
+  "runtimeSha256": "1e67e852cbca6487bb27a2036ab44b256365d003c2ff6f74fef1e73642e16cb6"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PlayerSession.ts",
+  "runtime": "packages/zenza/src/init/PlayerSession.js",
+  "sourceSha256": "ba91db3c1da8e7349797a4d22e2b9389fdd285f9c64ed4587056b546f2937d0b",
+  "runtimeSha256": "cf359d97307ba5e405611ff44358366d8e6dcb2fa5d294f82cec0c3e878d3839"
+}

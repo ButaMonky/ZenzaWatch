@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/VideoItemObserver.ts",
+  "runtime": "packages/lib/src/nico/VideoItemObserver.js",
+  "sourceSha256": "da68dc934879105cafcb736924f17df89bfe67fa1ba7277484736b28e5ce3b24",
+  "runtimeSha256": "053bb3359755561f5c6d7271893781aadf238ccb8915552c3559bdc0c42dc7b9"
+}

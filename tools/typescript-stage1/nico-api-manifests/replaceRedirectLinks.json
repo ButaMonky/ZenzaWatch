@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/replaceRedirectLinks.ts",
+  "runtime": "packages/zenza/src/init/replaceRedirectLinks.js",
+  "sourceSha256": "cda3c06bb58bf7e91f58fdd25ba53a79fe33ce7eb4b643670aa4c304e592b229",
+  "runtimeSha256": "89663db28fac5b5e0c7548254e71c4c682ce57b6b23c3e4597094b8c4c36f79b"
+}

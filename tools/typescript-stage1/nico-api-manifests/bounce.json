@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/bounce.ts",
+  "runtime": "packages/lib/src/infra/bounce.js",
+  "sourceSha256": "498bfd9dfbc9dcdcb608600d308bafaac581be73214a18fa940767bce9046e3c",
+  "runtimeSha256": "eafe28309767931cc7a5305d4c038fb7bd87c169d1813845e615a3adb49e8a0d"
+}

@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmitOnError": true,
+    "rootDir": "typescript-src",
+    "outDir": ".generated-ts",
+    "declaration": true,
+    "sourceMap": false,
+    "skipLibCheck": false
+  },
+  "include": [
+    "typescript-src/browser-preferences.ts",
+    "typescript-src/core.d.mts",
+    "typescript-src/settings.d.mts",
+    "typescript-src/zenza-settings.d.mts"
+  ]
+}

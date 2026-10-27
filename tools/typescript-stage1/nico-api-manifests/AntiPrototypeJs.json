@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/AntiPrototypeJs.ts",
+  "runtime": "packages/lib/src/infra/AntiPrototype-js.js",
+  "sourceSha256": "d353e6fe4ae96eb2a6ed6878ab6557441b1c4f268799b95eee30825ed3970995",
+  "runtimeSha256": "d2c8daef2d54c4dbb7a345a1833bee92842e3816f6447a86929be791ac8ef995"
+}

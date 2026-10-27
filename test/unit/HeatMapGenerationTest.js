@@ -102,8 +102,9 @@ describe('Task187 heatmap generation and watchId ownership (Watch V4 audit F13)'
 
   it('the control bar saves through the ownership check, not the current id alone', () => {
     const src = require('fs').readFileSync(require('path').join(__dirname, '../../src/VideoControlBar.js'), 'utf-8');
-    assert(!src.includes('WatchInfoCacheDb.putBestEffort(this.player.watchId, {heatMap})'));
+    const squash = s => String(s).replace(/\s+/g, ''); // Task964: formatting tolerant
+    assert(!squash(src).includes(squash('WatchInfoCacheDb.putBestEffort(this.player.watchId, {heatMap})')));
     assert(src.includes('heatMapCacheEntry(payload, this.player.watchId)'));
-    assert(src.includes('this.heatMap.reset({watchId: this._heatMapWatchId})'));
+    assert(squash(src).includes(squash('this.heatMap.reset({watchId: this._heatMapWatchId})')));
   });
 });

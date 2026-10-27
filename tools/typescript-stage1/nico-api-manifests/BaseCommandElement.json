@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/BaseCommandElement.ts",
+  "runtime": "packages/components/src/element/BaseCommandElement.js",
+  "sourceSha256": "b3d41211aca968a1792310d82ec5161cd7b608af060b67213192c31a14d7c0c2",
+  "runtimeSha256": "733b9050d4f883ec03fac3e378184d828249b73a5bfb0d167987de9fa7c2fcaa"
+}

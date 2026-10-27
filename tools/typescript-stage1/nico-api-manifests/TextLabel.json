@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/TextLabel.ts",
+  "runtime": "packages/lib/src/ui/TextLabel.js",
+  "sourceSha256": "cd09a3fa2f06b2bc219d728b46609d5e7fca6dcbc032b5bbae3dacf86cb242ab",
+  "runtimeSha256": "81dd3b0f8cd7140f5a6b0520e454bc4bd9b915d3c7ab2af256041a7c076eaa5a"
+}

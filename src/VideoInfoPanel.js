@@ -25,198 +25,174 @@ import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRout
 const VideoItemObserver = {
   observe: () => {}
 };
+// GENERATED FROM tools/typescript-stage1/nico-src/VideoInfoPanel.ts (Task964). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require RelatedMenuActions
 //@require RelatedMenuOrder
 //@require UiVisibilityRegistry
 //@require OfficialPlayerRoute
-
 class VideoInfoPanel extends Emitter {
-  constructor(params) {
-    super();
-    this._videoHeaderPanel = new VideoHeaderPanel(params);
-    this._dialog = params.dialog;
-    this._config = Config;
-
-    this._dialog.on('canplay', this._onVideoCanPlay.bind(this));
-    this._dialog.on('videoCount', this._onVideoCountUpdate.bind(this));
-    // Task 074: いいね！のお礼メッセージ（URLが書かれていることがあるので、
-    // 消えるポップアップだけでなくパネルにも残して選択・コピーできるようにする）
-    this._dialog.on('likeThanksMessage', this._onLikeThanksMessage.bind(this));
-
-    if (params.node) {
-      this.appendTo(params.node);
-    }
-  }
-  _initializeDom() {
-    if (this._isInitialized) {
-      return;
-    }
-    this._isInitialized = true;
-
-    const $view = this._$view = uq.html(VideoInfoPanel.__tpl__);
-    const view = this._view = $view[0];
-    const classList = this.classList = ClassList(view);
-
-    const $icon = this._$ownerIcon = $view.find('.ownerIcon');
-    this._$ownerName = $view.find('.ownerName');
-    this._$ownerPageLink = $view.find('.ownerPageLink');
-
-    this._description = view.querySelector('.videoDescription');
-    this._seriesList = view.querySelector('.seriesList');
-
-    this._tagListView = new TagListView({
-      parentNode: view.querySelector('.videoTagsContainer')
-    });
-
-    this._relatedInfoMenu = new RelatedInfoMenu({
-      parentNode: view.querySelector('.relatedInfoMenuContainer')
-    });
-
-    this._videoMetaInfo = new VideoMetaInfo({
-      parentNode: view.querySelector('.videoMetaInfoContainer')
-    });
-
-    this._likeMessageContainer = view.querySelector('.likeMessageContainer');
-    this._uaaContainer = view.querySelector('.uaaContainer');
-    this._uaaView = new UaaView(
-      {parentNode: this._uaaContainer});
-
-    this._visibility = UiVisibilityRegistry.connect(Config,view,'info',{
-      beforeHide:entry=>{
-        if(entry.key!=='ui.info.relatedTab' || this._activeTabName!=='relatedVideoTab'){
-          return;
+    constructor(params) {
+        super();
+        this._videoHeaderPanel = new VideoHeaderPanel(params);
+        this._dialog = params.dialog;
+        this._config = Config;
+        this._dialog.on('canplay', this._onVideoCanPlay.bind(this));
+        this._dialog.on('videoCount', this._onVideoCountUpdate.bind(this));
+        // Task 074: いいね！のお礼メッセージ（URLが書かれていることがあるので、
+        // 消えるポップアップだけでなくパネルにも残して選択・コピーできるようにする）
+        this._dialog.on('likeThanksMessage', this._onLikeThanksMessage.bind(this));
+        if (params.node) {
+            this.appendTo(params.node);
         }
-        const containerView=this._dialog?._view;
-        if(typeof containerView?.selectTab==='function'){
-          containerView.selectTab('videoInfoTab');
-        }else{
-          this.selectTab('videoInfoTab');
+    }
+    _initializeDom() {
+        if (this._isInitialized) {
+            return;
         }
-      }
-    });
-
-    view.addEventListener('mousemove', e => e.stopPropagation());
-    view.addEventListener('command', this._onCommandEvent.bind(this));
-    view.addEventListener('click', this._onClick.bind(this));
-    view.addEventListener('wheel', e => e.stopPropagation(), {passive: true});
-    $icon.on('load', () => $icon.raf.removeClass('is-loading'));
-
-    classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
-    global.emitter.on('fullscreenStatusChange', isFull => {
-      classList.toggle('is-fullscreen', isFull);
-      classList.toggle('is-notFullscreen', !isFull);
-    });
-
-    view.addEventListener('touchenter', () => classList.add('is-slideOpen'), {passive: true});
-    global.emitter.on('hideHover', () => classList.remove('is-slideOpen'));
-    cssUtil.registerProps(
-      {name: '--base-description-color', syntax: '<color>', initialValue: '#888', inherits: true}
-    );
-    MylistPocketDetector.detect().then(pocket => {
-      this._pocket = pocket;
-      classList.add('is-pocketReady');
-    });
-    if (window.customElements) {
-      VideoItemObserver.observe({container: this._description});
+        this._isInitialized = true;
+        const $view = this._$view = uq.html(VideoInfoPanel.__tpl__);
+        const view = this._view = $view[0];
+        const classList = this.classList = ClassList(view);
+        const $icon = this._$ownerIcon = $view.find('.ownerIcon');
+        this._$ownerName = $view.find('.ownerName');
+        this._$ownerPageLink = $view.find('.ownerPageLink');
+        this._description = view.querySelector('.videoDescription');
+        this._seriesList = view.querySelector('.seriesList');
+        this._tagListView = new TagListView({
+            parentNode: view.querySelector('.videoTagsContainer')
+        });
+        this._relatedInfoMenu = new RelatedInfoMenu({
+            parentNode: view.querySelector('.relatedInfoMenuContainer')
+        });
+        this._videoMetaInfo = new VideoMetaInfo({
+            parentNode: view.querySelector('.videoMetaInfoContainer')
+        });
+        this._likeMessageContainer = view.querySelector('.likeMessageContainer');
+        this._uaaContainer = view.querySelector('.uaaContainer');
+        this._uaaView = new UaaView({ parentNode: this._uaaContainer });
+        this._visibility = UiVisibilityRegistry.connect(Config, view, 'info', {
+            beforeHide: (entry) => {
+                if (entry.key !== 'ui.info.relatedTab' || this._activeTabName !== 'relatedVideoTab') {
+                    return;
+                }
+                const containerView = this._dialog?._view;
+                if (typeof containerView?.selectTab === 'function') {
+                    containerView.selectTab('videoInfoTab');
+                }
+                else {
+                    this.selectTab('videoInfoTab');
+                }
+            }
+        });
+        view.addEventListener('mousemove', (e) => e.stopPropagation());
+        view.addEventListener('command', this._onCommandEvent.bind(this));
+        view.addEventListener('click', this._onClick.bind(this));
+        view.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
+        $icon.on('load', () => $icon.raf.removeClass('is-loading'));
+        classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
+        global.emitter.on('fullscreenStatusChange', (isFull) => {
+            classList.toggle('is-fullscreen', isFull);
+            classList.toggle('is-notFullscreen', !isFull);
+        });
+        view.addEventListener('touchenter', () => classList.add('is-slideOpen'), { passive: true });
+        global.emitter.on('hideHover', () => classList.remove('is-slideOpen'));
+        cssUtil.registerProps({ name: '--base-description-color', syntax: '<color>', initialValue: '#888', inherits: true });
+        MylistPocketDetector.detect().then((pocket) => {
+            this._pocket = pocket;
+            classList.add('is-pocketReady');
+        });
+        if (window.customElements) {
+            VideoItemObserver.observe({ container: this._description });
+        }
     }
-  }
-  update(videoInfo) {
-    this._videoInfo = videoInfo;
-    this._videoHeaderPanel.update(videoInfo);
-
-    const owner = videoInfo.owner;
-    this._$ownerIcon.attr('src', owner.icon);
-    this._$ownerPageLink.attr('href', owner.url);
-    this._$ownerName.text(owner.name);
-
-    this._videoMetaInfo.update(videoInfo);
-    this._tagListView.update({
-      tagList: videoInfo.tagList,
-      watchId: videoInfo.watchId,
-      videoId: videoInfo.videoId,
-      token: videoInfo.csrfToken,
-      tagEdit: videoInfo.tagEdit,
-    });
-
-    this._seriesList.textContent = '';
-    if (videoInfo.series) {
-      const label = document.createElement('zenza-video-series-label');
-      Object.assign(label.dataset, videoInfo.series);
-      this._seriesList.append(label);
+    update(videoInfo) {
+        this._videoInfo = videoInfo;
+        this._videoHeaderPanel.update(videoInfo);
+        const owner = videoInfo.owner;
+        this._$ownerIcon.attr('src', owner.icon);
+        this._$ownerPageLink.attr('href', owner.url);
+        this._$ownerName.text(owner.name);
+        this._videoMetaInfo.update(videoInfo);
+        this._tagListView.update({
+            tagList: videoInfo.tagList,
+            watchId: videoInfo.watchId,
+            videoId: videoInfo.videoId,
+            token: videoInfo.csrfToken,
+            tagEdit: videoInfo.tagEdit,
+        });
+        this._seriesList.textContent = '';
+        if (videoInfo.series) {
+            const label = document.createElement('zenza-video-series-label');
+            Object.assign(label.dataset, videoInfo.series);
+            this._seriesList.append(label);
+        }
+        this._updateVideoDescription(videoInfo.description, videoInfo.series);
+        const classList = this.classList;
+        classList.remove('userVideo', 'channelVideo', 'initializing', 'is-loadFailed');
+        classList.toggle('is-community', this._videoInfo.isCommunityVideo);
+        classList.toggle('is-mymemory', this._videoInfo.isMymemory);
+        classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
+        this._clearLikeThanksMessage();
+        this._uaaView.clear();
+        this._uaaView.update(videoInfo);
+        this._relatedInfoMenu.update(videoInfo);
     }
-    this._updateVideoDescription(videoInfo.description, videoInfo.series);
-
-    const classList = this.classList;
-    classList.remove('userVideo', 'channelVideo', 'initializing', 'is-loadFailed');
-    classList.toggle('is-community', this._videoInfo.isCommunityVideo);
-    classList.toggle('is-mymemory', this._videoInfo.isMymemory);
-    classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
-
-    this._clearLikeThanksMessage();
-
-    this._uaaView.clear();
-    this._uaaView.update(videoInfo);
-
-    this._relatedInfoMenu.update(videoInfo);
-
-  }
-  /**
-   * 説明文中のurlの自動リンク等の処理
-   */
-  async _updateVideoDescription(html, series = null) {
-    // Task 090（監査v2 ZW-053）: 更新の世代。await の後で、もっと新しい更新や clear() があったら、この結果は捨てる
-    const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
-    this._description.textContent = '';
-    this._zenTubeUrl = null;
-    if (series) {
-      if (series.video.prev || series.video.next) {
-        html += `<br><br>「${textUtil.escapeHtml(series.title)}」 シリーズ前後の動画`;
-      }
-      if (series.video.prev) {
-        html += `<br>前の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.prev.id)}">${textUtil.escapeHtml(series.video.prev.id)}</a>`;
-      }
-      if (series.video.next) {
-        html += `<br>次の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.next.id)}">${textUtil.escapeHtml(series.video.next.id)}</a>`;
-      }
-    }
-    /*
-     * Task 074: 以前はリンクの「文字」から動画IDを取っていたため、
-     * 説明文に https://www.nicovideo.jp/watch/sm39257413 のようなフルURLが
-     * 書かれている場合（本家がclass="watch"を付けないただのリンクにする）に
-     * 動画情報のカードが出ず、クリックしてもZenzaで開けなかった。
-     * リンク先(href)のホストとパスから動画IDを取るようにして、
-     * フルURL・スマホ版URL・nico.ms・ショート動画(ss〜)にも対応する。
+    /**
+     * 説明文中のurlの自動リンク等の処理
      */
-    const watchIdFromLink = link => {
-      const host = (link.hostname || '').replace(/^(www|sp|embed)\./, '');
-      const path = link.pathname || '';
-      if (host === 'nico.ms') {
-        const m = /^\/((?:sm|nm|so|ss)[0-9]+)/.exec(path);
-        return m ? m[1] : null;
-      }
-      if (host !== 'nicovideo.jp') {
-        return null;
-      }
-      const m = /^\/(?:watch|shorts)\/((?:sm|nm|so|ss)[0-9]+)/.exec(path);
-      return m ? m[1] : null;
-    };
-    const decorateWatchLink = watchLink => {
-      const videoId = watchIdFromLink(watchLink);
-      if (!videoId) {
-        return;
-      }
-      watchLink.classList.add('noHoverMenu');
-      Object.assign(watchLink.dataset, {command: 'open', param: videoId});
-
-      if (!window.customElements) {
-        const $watchLink = uq(watchLink);
-        const thumbnail = nicoUtil.getThumbnailUrlByVideoId(videoId);
-        if (thumbnail) {
-          const $img = uq('<img class="videoThumbnail">').attr('src', thumbnail);
-          $watchLink.append($img);
+    async _updateVideoDescription(html, series = null) {
+        // Task 090（監査v2 ZW-053）: 更新の世代。await の後で、もっと新しい更新や clear() があったら、この結果は捨てる
+        const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+        this._description.textContent = '';
+        this._zenTubeUrl = null;
+        if (series) {
+            if (series.video.prev || series.video.next) {
+                html += `<br><br>「${textUtil.escapeHtml(series.title)}」 シリーズ前後の動画`;
+            }
+            if (series.video.prev) {
+                html += `<br>前の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.prev.id)}">${textUtil.escapeHtml(series.video.prev.id)}</a>`;
+            }
+            if (series.video.next) {
+                html += `<br>次の動画 <a class="watch" href="https://www.nicovideo.jp/watch/${textUtil.escapeHtml(series.video.next.id)}">${textUtil.escapeHtml(series.video.next.id)}</a>`;
+            }
         }
-        const buttons = uq(`<zenza-playlist-append
+        /*
+         * Task 074: 以前はリンクの「文字」から動画IDを取っていたため、
+         * 説明文に https://www.nicovideo.jp/watch/sm39257413 のようなフルURLが
+         * 書かれている場合（本家がclass="watch"を付けないただのリンクにする）に
+         * 動画情報のカードが出ず、クリックしてもZenzaで開けなかった。
+         * リンク先(href)のホストとパスから動画IDを取るようにして、
+         * フルURL・スマホ版URL・nico.ms・ショート動画(ss〜)にも対応する。
+         */
+        const watchIdFromLink = (link) => {
+            const host = (link.hostname || '').replace(/^(www|sp|embed)\./, '');
+            const path = link.pathname || '';
+            if (host === 'nico.ms') {
+                const m = /^\/((?:sm|nm|so|ss)[0-9]+)/.exec(path);
+                return m ? m[1] : null;
+            }
+            if (host !== 'nicovideo.jp') {
+                return null;
+            }
+            const m = /^\/(?:watch|shorts)\/((?:sm|nm|so|ss)[0-9]+)/.exec(path);
+            return m ? m[1] : null;
+        };
+        const decorateWatchLink = (watchLink) => {
+            const videoId = watchIdFromLink(watchLink);
+            if (!videoId) {
+                return;
+            }
+            watchLink.classList.add('noHoverMenu');
+            Object.assign(watchLink.dataset, { command: 'open', param: videoId });
+            if (!window.customElements) {
+                const $watchLink = uq(watchLink);
+                const thumbnail = nicoUtil.getThumbnailUrlByVideoId(videoId);
+                if (thumbnail) {
+                    const $img = uq('<img class="videoThumbnail">').attr('src', thumbnail);
+                    $watchLink.append($img);
+                }
+                const buttons = uq(`<zenza-playlist-append
           class="playlistAppend clickable-item" title="プレイリストで開く"
           data-command="playlistAppend" data-param="${videoId}"
         >▶</zenza-playlist-append><div
@@ -226,359 +202,352 @@ class VideoInfoPanel extends Emitter {
         ><div class="pocket-info" title="動画情報"
           data-command="pocket-info" data-param="${videoId}"
         >？</div>`);
-        $watchLink.append(buttons);
-      } else {
-        const vitem = document.createElement('zenza-video-item');
-        vitem.dataset.videoId = videoId;
-        watchLink.after(vitem);
-        watchLink.classList.remove('watch');
-      }
-    };
-    const seekTime = seek => {
-      const [min, sec] = (seek.dataset.seektime || '0:0').split(':');
-      Object.assign(seek.dataset, {command: 'seek', type: 'number', param: min * 60 + sec * 1});
-    };
-    /*
-     * Task 088（監査v2 ZW-052）: 以前はリンクの文字（link.textContent）から取った ID を、
-     * そのまま HTML の文字列へ埋め込んで要素を作り直していたため、引用符や < > を含むリンクの文字が
-     * 新しい属性・要素として解釈されてしまった。ID はリンク先(href)から取り（取れない時だけ文字から）、
-     * 数字だけであることを確かめてから、createElement と dataset で組み立てる。元のリンクはそのまま中へ移す。
-     */
-    const playlistLinkId = (link, kind) => {
-      const host = (link.hostname || '').replace(/^(www|sp)\./, '');
-      if (host === 'nicovideo.jp') {
-        const m = new RegExp(`^(?:/user/[0-9]+)?/${kind}/([0-9]+)/?$`).exec(link.pathname || '');
-        if (m) {
-          return m[1];
-        }
-      }
-      const t = new RegExp(`^${kind}/([0-9]+)$`).exec((link.textContent || '').trim());
-      return t ? t[1] : null;
-    };
-    const playlistLink = (link, {kind, tag, idKey, command}) => {
-      const id = playlistLinkId(link, kind);
-      if (!id) {
-        return;
-      }
-      link.classList.add(`${kind}Link`);
-      const wrapper = document.createElement(tag);
-      wrapper.dataset[idKey] = id;
-      const button = document.createElement('zenza-playlist-append');
-      button.className = `${command} clickable-item`;
-      button.title = 'プレイリストで開く';
-      Object.assign(button.dataset, {command, param: id});
-      button.textContent = '▶';
-      link.replaceWith(wrapper);
-      wrapper.append(link, button);
-    };
-    const mylistLink = link =>
-      playlistLink(link, {kind: 'mylist', tag: 'zenza-mylist-link', idKey: 'mylistId', command: 'playlistSetMylist'});
-    const seriesLink = link =>
-      playlistLink(link, {kind: 'series', tag: 'zenza-series-link', idKey: 'seriesId', command: 'playlistSetSeries'});
-    /*
-     * Task 088（監査v2 ZW-052）: 説明文の本文はニコニコが返す HTML をそのまま表示している。
-     * 念のため、表示する前にスクリプトとして動き得るもの（script 等の要素、on〜 の属性、
-     * javascript: / data: / vbscript: の URL）だけを取り除く。文字の装飾や普通のリンクはそのまま。
-     */
-    const UNSAFE_ELEMENTS = 'script,iframe,frame,object,embed,base,meta,link,form';
-    const UNSAFE_URL = /^[\s\u0000-\u001f]*(javascript|data|vbscript):/i;
-    const sanitizeDescription = root => {
-      for (const e of root.querySelectorAll(UNSAFE_ELEMENTS)) {
-        e.remove();
-      }
-      for (const e of root.querySelectorAll('*')) {
-        for (const {name, value} of [...e.attributes]) {
-          const n = name.toLowerCase();
-          if (n.startsWith('on') ||
-            (['href', 'src', 'action', 'formaction', 'xlink:href'].includes(n) && UNSAFE_URL.test(value))) {
-            e.removeAttribute(name);
-          }
-        }
-      }
-    };
-    const youtube = link => {
-      const btn = uq(`<zentube-button
+                $watchLink.append(buttons);
+            }
+            else {
+                const vitem = document.createElement('zenza-video-item');
+                vitem.dataset.videoId = videoId;
+                watchLink.after(vitem);
+                watchLink.classList.remove('watch');
+            }
+        };
+        const seekTime = (seek) => {
+            const [min, sec] = (seek.dataset.seektime || '0:0').split(':');
+            Object.assign(seek.dataset, { command: 'seek', type: 'number', param: min * 60 + sec * 1 });
+        };
+        /*
+         * Task 088（監査v2 ZW-052）: 以前はリンクの文字（link.textContent）から取った ID を、
+         * そのまま HTML の文字列へ埋め込んで要素を作り直していたため、引用符や < > を含むリンクの文字が
+         * 新しい属性・要素として解釈されてしまった。ID はリンク先(href)から取り（取れない時だけ文字から）、
+         * 数字だけであることを確かめてから、createElement と dataset で組み立てる。元のリンクはそのまま中へ移す。
+         */
+        const playlistLinkId = (link, kind) => {
+            const host = (link.hostname || '').replace(/^(www|sp)\./, '');
+            if (host === 'nicovideo.jp') {
+                const m = new RegExp(`^(?:/user/[0-9]+)?/${kind}/([0-9]+)/?$`).exec(link.pathname || '');
+                if (m) {
+                    return m[1];
+                }
+            }
+            const t = new RegExp(`^${kind}/([0-9]+)$`).exec((link.textContent || '').trim());
+            return t ? t[1] : null;
+        };
+        const playlistLink = (link, { kind, tag, idKey, command }) => {
+            const id = playlistLinkId(link, kind);
+            if (!id) {
+                return;
+            }
+            link.classList.add(`${kind}Link`);
+            const wrapper = document.createElement(tag);
+            wrapper.dataset[idKey] = id;
+            const button = document.createElement('zenza-playlist-append');
+            button.className = `${command} clickable-item`;
+            button.title = 'プレイリストで開く';
+            Object.assign(button.dataset, { command, param: id });
+            button.textContent = '▶';
+            link.replaceWith(wrapper);
+            wrapper.append(link, button);
+        };
+        const mylistLink = (link) => playlistLink(link, { kind: 'mylist', tag: 'zenza-mylist-link', idKey: 'mylistId', command: 'playlistSetMylist' });
+        const seriesLink = (link) => playlistLink(link, { kind: 'series', tag: 'zenza-series-link', idKey: 'seriesId', command: 'playlistSetSeries' });
+        /*
+         * Task 088（監査v2 ZW-052）: 説明文の本文はニコニコが返す HTML をそのまま表示している。
+         * 念のため、表示する前にスクリプトとして動き得るもの（script 等の要素、on〜 の属性、
+         * javascript: / data: / vbscript: の URL）だけを取り除く。文字の装飾や普通のリンクはそのまま。
+         */
+        const UNSAFE_ELEMENTS = 'script,iframe,frame,object,embed,base,meta,link,form';
+        const UNSAFE_URL = /^[\s\u0000-\u001f]*(javascript|data|vbscript):/i;
+        const sanitizeDescription = (root) => {
+            for (const e of root.querySelectorAll(UNSAFE_ELEMENTS)) {
+                e.remove();
+            }
+            for (const e of root.querySelectorAll('*')) {
+                for (const { name, value } of [...e.attributes]) {
+                    const n = name.toLowerCase();
+                    if (n.startsWith('on') ||
+                        (['href', 'src', 'action', 'formaction', 'xlink:href'].includes(n) && UNSAFE_URL.test(value))) {
+                        e.removeAttribute(name);
+                    }
+                }
+            }
+        };
+        const youtube = (link) => {
+            const btn = uq(`<zentube-button
         class="zenzaTubeButton"
         title="ZenzaWatchで開く(実験中)"
         accesskey="z"
         data-command="setVideo;"
         >▷Zen<span>Tube</span></zentube-button>`)[0];
-      Object.assign(btn.dataset, {
-        command: 'setVideo',
-        param: link.href
-      });
-      link.parentNode.insertBefore(btn, link);
-    };
-
-    await sleep.promise();
-    if (generation !== this._descriptionGeneration) {
-      return;
+            Object.assign(btn.dataset, {
+                command: 'setVideo',
+                param: link.href
+            });
+            link.parentNode.insertBefore(btn, link);
+        };
+        await sleep.promise();
+        if (generation !== this._descriptionGeneration) {
+            return;
+        }
+        const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);
+        sanitizeDescription($description[0]);
+        for (const a of $description.query('a')) {
+            a.classList.add('noHoverMenu');
+            const href = a.href;
+            if (a.classList.contains('watch') || watchIdFromLink(a)) {
+                decorateWatchLink(a);
+            }
+            else if (a.classList.contains('seekTime')) {
+                seekTime(a);
+            }
+            else if (/^mylist\//.test(a.textContent)) {
+                mylistLink(a);
+            }
+            else if (/^series\//.test(a.textContent)) {
+                seriesLink(a);
+            }
+            else if (/^https?:\/\/((www\.|)youtube\.com\/watch|youtu\.be)/.test(href)) {
+                youtube(a);
+                this._zenTubeUrl = href;
+            }
+        }
+        for (const e of $description.query('[style*="color: #000000;"],[style*="color: black;"]')) {
+            e.dataset.originalCss = e.cssText;
+            e.style.color = '#FFF';
+        }
+        for (const e of $description.query('span')) {
+            e.classList.add('videoDescription-font');
+        }
+        // 装飾は切り離した要素の上で済ませてあるので、最新の結果だけで置き換える
+        this._description.replaceChildren($description[0]);
     }
-
-    const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);
-    sanitizeDescription($description[0]);
-    for (const a of $description.query('a')) {
-      a.classList.add('noHoverMenu');
-      const href = a.href;
-      if (a.classList.contains('watch') || watchIdFromLink(a)) {
-        decorateWatchLink(a);
-      } else if (a.classList.contains('seekTime')) {
-        seekTime(a);
-      } else if (/^mylist\//.test(a.textContent)) {
-        mylistLink(a);
-      } else if (/^series\//.test(a.textContent)) {
-        seriesLink(a);
-      } else if (/^https?:\/\/((www\.|)youtube\.com\/watch|youtu\.be)/.test(href)) {
-        youtube(a);
-        this._zenTubeUrl = href;
-      }
+    /*
+     * Task 074: いいね！のお礼メッセージをパネルに残す。
+     * 本文はテキストとして選択でき、中のURLは自動でリンクになる。
+     * 「コピー」ボタンで本文全体をクリップボードへコピーできる。
+     */
+    _onLikeThanksMessage({ message = '', videoId = '' } = {}) {
+        const container = this._likeMessageContainer;
+        if (!container) {
+            return;
+        }
+        container.textContent = '';
+        if (!message) {
+            return;
+        }
+        const box = document.createElement('div');
+        box.className = 'likeThanksMessage';
+        const head = document.createElement('div');
+        head.className = 'likeThanksMessage-head';
+        const title = document.createElement('span');
+        title.className = 'likeThanksMessage-title';
+        title.textContent = `\u2665 いいね！のお礼メッセージ${videoId ? `（${videoId}）` : ''}`;
+        const copy = document.createElement('button');
+        copy.type = 'button';
+        copy.className = 'likeThanksMessage-copy';
+        copy.textContent = 'コピー';
+        const flash = (text) => {
+            copy.textContent = text;
+            window.setTimeout(() => { copy.textContent = 'コピー'; }, 2000);
+        };
+        copy.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(message)
+                    .then(() => flash('コピーしました'))
+                    .catch(() => flash('コピーできませんでした'));
+            }
+            else {
+                flash('コピーできませんでした');
+            }
+        });
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'likeThanksMessage-close';
+        close.textContent = '\u2715';
+        close.title = '閉じる';
+        close.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            this._clearLikeThanksMessage();
+        });
+        head.append(title, copy, close);
+        const body = document.createElement('div');
+        body.className = 'likeThanksMessage-body';
+        // URLだけリンクにする（他の部分はテキストのまま＝HTMLとして解釈しない）
+        const reg = /(https?:\/\/[^\s<>"']+)/g;
+        let last = 0;
+        let m;
+        while ((m = reg.exec(message)) !== null) {
+            if (m.index > last) {
+                body.append(document.createTextNode(message.slice(last, m.index)));
+            }
+            const a = document.createElement('a');
+            a.href = m[1];
+            a.textContent = m[1];
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.className = 'noHoverMenu';
+            body.append(a);
+            last = m.index + m[1].length;
+        }
+        if (last < message.length) {
+            body.append(document.createTextNode(message.slice(last)));
+        }
+        box.append(head, body);
+        container.append(box);
     }
-    for (const e of
-      $description.query('[style*="color: #000000;"],[style*="color: black;"]')
-    ) {
-      e.dataset.originalCss = e.cssText;
-      e.style.color = '#FFF';
+    _clearLikeThanksMessage() {
+        if (this._likeMessageContainer) {
+            this._likeMessageContainer.textContent = '';
+        }
     }
-    for (const e of $description.query('span')) {
-      e.classList.add('videoDescription-font');
+    async _onVideoCanPlay(watchId, videoInfo, options) {
+        // 動画の再生を優先するため、比較的どうでもいい要素はこのタイミングで初期化するのがよい
+        if (!this._relatedVideoList) {
+            this._relatedVideoList = new RelatedVideoList({
+                container: this._$view.find('.relatedVideoContainer')[0],
+                enableAdDecoration: this._config.props.enableAdDecoration,
+                debugCheckAdDecoration: this._config.props.debugCheckAdDecoration
+            });
+            this._relatedVideoList.on('command', this._onCommand.bind(this));
+        }
+        // A newer canplay/video/description invalidates earlier queued switches.
+        const timerGeneration = this._autoZenTubeTimerGeneration =
+            (this._autoZenTubeTimerGeneration || 0) + 1;
+        if (this._config.props.autoZenTube && this._zenTubeUrl && !options.isAutoZenTubeDisabled) {
+            const zenTubeUrl = this._zenTubeUrl;
+            const descriptionGeneration = this._descriptionGeneration;
+            sleep(100).then(() => {
+                if (timerGeneration !== this._autoZenTubeTimerGeneration ||
+                    this._videoInfo !== videoInfo ||
+                    this._descriptionGeneration !== descriptionGeneration ||
+                    this._zenTubeUrl !== zenTubeUrl) {
+                    return;
+                }
+                window.console.info('%cAuto ZenTube', zenTubeUrl);
+                this.emit('command', 'setVideo', zenTubeUrl);
+            });
+        }
+        await sleep.idle();
+        // The previously scheduled canplay can resume after a different video
+        // has become active. Never start an obsolete recommendation request.
+        if (this._videoInfo !== videoInfo) {
+            return;
+        }
+        this._relatedVideoList.fetchRecommend(videoInfo.videoId, watchId, videoInfo);
     }
-
-    // 装飾は切り離した要素の上で済ませてあるので、最新の結果だけで置き換える
-    this._description.replaceChildren($description[0]);
-
-  }
-  /*
-   * Task 074: いいね！のお礼メッセージをパネルに残す。
-   * 本文はテキストとして選択でき、中のURLは自動でリンクになる。
-   * 「コピー」ボタンで本文全体をクリップボードへコピーできる。
-   */
-  _onLikeThanksMessage({message = '', videoId = ''} = {}) {
-    const container = this._likeMessageContainer;
-    if (!container) {
-      return;
+    _onVideoCountUpdate(...args) {
+        if (!this._videoHeaderPanel) {
+            return;
+        }
+        this._videoMetaInfo.updateVideoCount(...args);
+        this._videoHeaderPanel.updateVideoCount(...args);
     }
-    container.textContent = '';
-    if (!message) {
-      return;
+    _onClick(e) {
+        e.stopPropagation();
+        if ((e.button !== 0 || e.metaKey || e.shiftKey || e.altKey || e.ctrlKey)) {
+            return true;
+        }
+        const target = e.target.closest('[data-command]');
+        if (!target) {
+            global.emitter.emitAsync('hideHover'); // 手抜き
+            return;
+        }
+        let { command, param, type } = target.dataset;
+        if (param && (type === 'bool' || type === 'json')) {
+            param = JSON.parse(param);
+        }
+        e.preventDefault();
+        domEvent.dispatchCommand(e.target, command, param);
     }
-    const box = document.createElement('div');
-    box.className = 'likeThanksMessage';
-    const head = document.createElement('div');
-    head.className = 'likeThanksMessage-head';
-    const title = document.createElement('span');
-    title.className = 'likeThanksMessage-title';
-    title.textContent = `\u2665 いいね！のお礼メッセージ${videoId ? `（${videoId}）` : ''}`;
-    const copy = document.createElement('button');
-    copy.type = 'button';
-    copy.className = 'likeThanksMessage-copy';
-    copy.textContent = 'コピー';
-    const flash = text => {
-      copy.textContent = text;
-      window.setTimeout(() => { copy.textContent = 'コピー'; }, 2000);
-    };
-    copy.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(message)
-          .then(() => flash('コピーしました'))
-          .catch(() => flash('コピーできませんでした'));
-      } else {
-        flash('コピーできませんでした');
-      }
-    });
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'likeThanksMessage-close';
-    close.textContent = '\u2715';
-    close.title = '閉じる';
-    close.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      this._clearLikeThanksMessage();
-    });
-    head.append(title, copy, close);
-    const body = document.createElement('div');
-    body.className = 'likeThanksMessage-body';
-    // URLだけリンクにする（他の部分はテキストのまま＝HTMLとして解釈しない）
-    const reg = /(https?:\/\/[^\s<>"']+)/g;
-    let last = 0;
-    let m;
-    while ((m = reg.exec(message)) !== null) {
-      if (m.index > last) {
-        body.append(document.createTextNode(message.slice(last, m.index)));
-      }
-      const a = document.createElement('a');
-      a.href = m[1];
-      a.textContent = m[1];
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.className = 'noHoverMenu';
-      body.append(a);
-      last = m.index + m[1].length;
+    _onCommand(command, param) {
+        switch (command) {
+            default:
+                domEvent.dispatchCommand(this._view, command, param);
+                break;
+        }
     }
-    if (last < message.length) {
-      body.append(document.createTextNode(message.slice(last)));
+    _onCommandEvent(e) {
+        const { command, param } = e.detail;
+        switch (command) {
+            case 'pocket-info':
+                this._pocket.external.info(param);
+                break;
+            case 'ownerVideo':
+                domEvent.dispatchCommand(this._view, 'playlistSetUploadedVideo', this._videoInfo.owner.id);
+                break;
+            default:
+                return;
+        }
+        e.stopPropagation();
     }
-    box.append(head, body);
-    container.append(box);
-  }
-  _clearLikeThanksMessage() {
-    if (this._likeMessageContainer) {
-      this._likeMessageContainer.textContent = '';
+    appendTo(node) {
+        this._initializeDom();
+        this._$view.appendTo(node);
+        this._videoHeaderPanel.appendTo(node);
     }
-  }
-  async _onVideoCanPlay(watchId, videoInfo, options) {
-    // 動画の再生を優先するため、比較的どうでもいい要素はこのタイミングで初期化するのがよい
-    if (!this._relatedVideoList) {
-      this._relatedVideoList = new RelatedVideoList({
-        container: this._$view.find('.relatedVideoContainer')[0],
-        enableAdDecoration: this._config.props.enableAdDecoration,
-        debugCheckAdDecoration: this._config.props.debugCheckAdDecoration
-      });
-      this._relatedVideoList.on('command', this._onCommand.bind(this));
+    hide() {
+        this._videoHeaderPanel.hide();
     }
-
-    // A newer canplay/video/description invalidates earlier queued switches.
-    const timerGeneration = this._autoZenTubeTimerGeneration =
-      (this._autoZenTubeTimerGeneration || 0) + 1;
-    if (this._config.props.autoZenTube && this._zenTubeUrl && !options.isAutoZenTubeDisabled) {
-      const zenTubeUrl = this._zenTubeUrl;
-      const descriptionGeneration = this._descriptionGeneration;
-      sleep(100).then(() => {
-        if (timerGeneration !== this._autoZenTubeTimerGeneration ||
-            this._videoInfo !== videoInfo ||
-            this._descriptionGeneration !== descriptionGeneration ||
-            this._zenTubeUrl !== zenTubeUrl) { return; }
-        window.console.info('%cAuto ZenTube', zenTubeUrl);
-        this.emit('command', 'setVideo', zenTubeUrl);
-      });
+    close() {
+        this._videoHeaderPanel.close();
     }
-    await sleep.idle();
-    // The previously scheduled canplay can resume after a different video
-    // has become active. Never start an obsolete recommendation request.
-    if (this._videoInfo !== videoInfo) {
-      return;
+    clear() {
+        this._videoHeaderPanel.clear();
+        this.classList.remove('is-loadFailed');
+        this.classList.add('initializing');
+        this._$ownerIcon.raf.addClass('is-loading');
+        this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+        this._description.textContent = '';
     }
-    this._relatedVideoList.fetchRecommend(videoInfo.videoId, watchId, videoInfo);
-  }
-  _onVideoCountUpdate(...args) {
-    if (!this._videoHeaderPanel) {
-      return;
+    onLoadFail() {
+        // A failed metadata request is finished, not still initializing.
+        // Hide stale data from the previous video instead of revealing it.
+        this._videoInfo = null;
+        this._videoHeaderPanel.clear();
+        this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+        this._description.textContent = '';
+        this.classList.remove('initializing');
+        this.classList.add('is-loadFailed');
+        this._$ownerIcon.raf.removeClass('is-loading');
     }
-    this._videoMetaInfo.updateVideoCount(...args);
-    this._videoHeaderPanel.updateVideoCount(...args);
-  }
-  _onClick(e) {
-    e.stopPropagation();
-    if (
-      (e.button !== 0 || e.metaKey || e.shiftKey || e.altKey || e.ctrlKey)) {
-      return true;
+    selectTab(tabName) {
+        const $view = this._$view;
+        const $target = $view.find(`.tabs.${tabName}, .tabSelect.${tabName}`);
+        this._activeTabName = tabName;
+        $view.find('.activeTab').removeClass('activeTab');
+        $target.addClass('activeTab');
     }
-    const target = e.target.closest('[data-command]');
-    if (!target) {
-      global.emitter.emitAsync('hideHover'); // 手抜き
-      return;
+    blinkTab(tabName) {
+        const $view = this._$view;
+        const $target = $view.find(`.tabs.${tabName}, .tabSelect.${tabName}`);
+        if (!$target.length) {
+            return;
+        }
+        $target.addClass('blink');
+        window.setTimeout(() => $target.removeClass('blink'), 50);
     }
-    let {command, param, type} = target.dataset;
-    if (param && (type === 'bool' || type === 'json')) {
-      param = JSON.parse(param);
+    appendTab(tabName, title, content) {
+        const $view = this._$view;
+        const $select = uq('<div class="tabSelect"/>')
+            .addClass(tabName)
+            .attr('data-command', 'selectTab')
+            .attr('data-param', tabName)
+            .text(title);
+        const $body = uq('<div class="tabs"/>').addClass(tabName);
+        if (content) {
+            $body.append(content);
+        }
+        $view.find('.tabSelectContainer').append($select);
+        $view.append($body);
+        if (this._activeTabName === tabName) {
+            $select.addClass('activeTab');
+            $body.addClass('activeTab');
+        }
+        return $body;
     }
-    e.preventDefault();
-
-    domEvent.dispatchCommand(e.target, command, param);
-  }
-  _onCommand(command, param) {
-    switch (command) {
-      default:
-        domEvent.dispatchCommand(this._view, command, param);
-        break;
-    }
-  }
-  _onCommandEvent(e) {
-    const {command, param} = e.detail;
-    switch (command) {
-      case 'pocket-info':
-        this._pocket.external.info(param);
-        break;
-      case 'ownerVideo':
-        domEvent.dispatchCommand(this._view, 'playlistSetUploadedVideo', this._videoInfo.owner.id);
-        break;
-      default:
-        return;
-    }
-    e.stopPropagation();
-  }
-  appendTo(node) {
-    this._initializeDom();
-    this._$view.appendTo(node);
-    this._videoHeaderPanel.appendTo(node);
-  }
-  hide() {
-    this._videoHeaderPanel.hide();
-  }
-  close() {
-    this._videoHeaderPanel.close();
-  }
-  clear() {
-    this._videoHeaderPanel.clear();
-    this.classList.remove('is-loadFailed');
-    this.classList.add('initializing');
-    this._$ownerIcon.raf.addClass('is-loading');
-    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
-    this._description.textContent = '';
-  }
-  onLoadFail() {
-    // A failed metadata request is finished, not still initializing.
-    // Hide stale data from the previous video instead of revealing it.
-    this._videoInfo = null;
-    this._videoHeaderPanel.clear();
-    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
-    this._description.textContent = '';
-    this.classList.remove('initializing');
-    this.classList.add('is-loadFailed');
-    this._$ownerIcon.raf.removeClass('is-loading');
-  }
-  selectTab(tabName) {
-    const $view = this._$view;
-    const $target = $view.find(`.tabs.${tabName}, .tabSelect.${tabName}`);
-    this._activeTabName = tabName;
-    $view.find('.activeTab').removeClass('activeTab');
-    $target.addClass('activeTab');
-  }
-  blinkTab(tabName) {
-    const $view = this._$view;
-    const $target = $view.find(`.tabs.${tabName}, .tabSelect.${tabName}`);
-    if (!$target.length) {
-      return;
-    }
-    $target.addClass('blink');
-    window.setTimeout(() => $target.removeClass('blink'), 50);
-  }
-  appendTab(tabName, title, content) {
-    const $view = this._$view;
-    const $select =
-      uq('<div class="tabSelect"/>')
-        .addClass(tabName)
-        .attr('data-command', 'selectTab')
-        .attr('data-param', tabName)
-        .text(title);
-    const $body = uq('<div class="tabs"/>').addClass(tabName);
-    if (content) {
-      $body.append(content);
-    }
-
-    $view.find('.tabSelectContainer').append($select);
-    $view.append($body);
-
-    if (this._activeTabName === tabName) {
-      $select.addClass('activeTab');
-      $body.addClass('activeTab');
-    }
-    return $body;
-  }
 }
-
 css.addStyle(`
   .zenzaWatchVideoInfoPanel .tabs:not(.activeTab) {
     display: none;
@@ -1053,8 +1022,7 @@ css.addStyle(`
     content-visibility: auto;
   }
 
-  `, {className: 'videoInfoPanel'});
-
+  `, { className: 'videoInfoPanel' });
 css.addStyle(`
   .is-open .zenzaWatchVideoInfoPanel>* {
     display: none;
@@ -1097,8 +1065,7 @@ css.addStyle(`
     transition: opacity 0.4s ease, transform 0.4s ease 1s;
   }
 
-`, {className: 'screenMode for-full videoInfoPanel'});
-
+`, { className: 'screenMode for-full videoInfoPanel' });
 css.addStyle(`
   .zenzaScreenMode_small .zenzaWatchVideoInfoPanel {
     display: none;
@@ -1166,11 +1133,10 @@ css.addStyle(`
     border-radius: 0;
     background: #ccc;
   }
-`, {className: 'screenMode for-popup videoInfoPanel'});
-
+`, { className: 'screenMode for-popup videoInfoPanel' });
 uq.ready().then(() => {
-  if (document.body.classList.contains('MatrixRanking-body')) {
-    css.addStyle(`
+    if (document.body.classList.contains('MatrixRanking-body')) {
+        css.addStyle(`
       body.zenzaScreenMode_sideView.MatrixRanking-body .RankingRowRank {
         line-height: 48px;
         height: 48px;
@@ -1252,10 +1218,9 @@ uq.ready().then(() => {
         transform: translateX(calc(100vw / 2 - 100% - 36px));
         user-select: none;
       }
-    `, {className: 'screenMode for-sideView MatrixRanking', disabled: true});
+    `, { className: 'screenMode for-sideView MatrixRanking', disabled: true });
     }
 });
-
 css.addStyle(`
   .is-open .zenzaWatchVideoInfoPanel {
     display: none;
@@ -1334,14 +1299,12 @@ css.addStyle(`
     }
   }
 
-`, {className: 'screenMode for-dialog videoInfoPanel'});
-
+`, { className: 'screenMode for-dialog videoInfoPanel' });
 css.addStyle(`
   .zenzaWatchVideoInfoPanel .comment {
     padding-left: 0;
   }
-`, {className: 'domain slack-com', disabled: true});
-
+`, { className: 'domain slack-com', disabled: true });
 VideoInfoPanel.__tpl__ = (`
     <div class="zenzaWatchVideoInfoPanel show initializing">
       <div class="nowLoading">
@@ -1390,428 +1353,409 @@ VideoInfoPanel.__tpl__ = (`
 
     </div>
   `).trim();
-
-
 class VideoHeaderPanel extends Emitter {
-  constructor(params) {
-    super();
-  }
-  _initializeDom() {
-    if (this._isInitialized) {
-      return;
+    constructor(params) {
+        super();
     }
-    this._isInitialized = true;
-    cssUtil.addStyle(VideoHeaderPanel.__css__);
-    const $view = this._$view = uq.html(VideoHeaderPanel.__tpl__);
-    const view = $view[0];
-    const classList = this.classList = ClassList(view);
-
-    this._videoTitle = $view.find('.videoTitle')[0];
-    this._searchForm = new VideoSearchForm({
-      parentNode: view
-    });
-
-    $view.on('wheel', e => e.stopPropagation(), {passive: true});
-    this._seriesCover = view.querySelector('.series-thumbnail');
-
-    this._tagListView = new TagListView({
-      parentNode: view.querySelector('.videoTagsContainer')
-    });
-
-    this._relatedInfoMenu = new RelatedInfoMenu({
-      parentNode: view.querySelector('.relatedInfoMenuContainer'),
-      isHeader: true
-    });
-    this._relatedInfoMenu.on('open', () => {
-      classList.add('is-relatedMenuOpen');
-      this._updateHold();
-    });
-    this._relatedInfoMenu.on('close', () => {
-      classList.remove('is-relatedMenuOpen');
-      this._updateHold();
-    });
-    this._initHold(view);
-
-    this._videoMetaInfo = new VideoMetaInfo({
-      parentNode: view.querySelector('.videoMetaInfoContainer'),
-    });
-
-    this._visibility = UiVisibilityRegistry.connect(Config,view,'header',{
-      beforeHide:(entry,node)=>{
-        // Avoid keeping keyboard focus inside a hidden search field.
-        if(entry.key==='ui.header.search' && node.contains(document.activeElement)){
-          document.activeElement.blur?.();
+    _initializeDom() {
+        if (this._isInitialized) {
+            return;
         }
-      },
-      afterApply:()=>{
-        if(!view.isConnected){return;}
-        this._resetHeight();
-        this._onResize();
-      }
-    });
-
-    classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
-    global.emitter.on('fullScreenStatusChange', isFull => {
-      classList.toggle('is-fullscreen', isFull);
-      classList.toggle('is-notFullscreen', !isFull);
-      // Task 076: 全画面に入った/出た時は、外に出すための調整をすぐ戻す／やり直す
-      this._onResize();
-      window.setTimeout(() => this._onResize(), 600);
-    });
-
-    new MutationObserver((mutationList) => {
-      for (const mutation of mutationList) {
-        if (mutation.type !== 'attributes') return;
-        if (mutation.attributeName !== 'data-screen-mode') return;
-
+        this._isInitialized = true;
+        cssUtil.addStyle(VideoHeaderPanel.__css__);
+        const $view = this._$view = uq.html(VideoHeaderPanel.__tpl__);
+        const view = $view[0];
+        const classList = this.classList = ClassList(view);
+        this._videoTitle = $view.find('.videoTitle')[0];
+        this._searchForm = new VideoSearchForm({
+            parentNode: view
+        });
+        $view.on('wheel', (e) => e.stopPropagation(), { passive: true });
+        this._seriesCover = view.querySelector('.series-thumbnail');
+        this._tagListView = new TagListView({
+            parentNode: view.querySelector('.videoTagsContainer')
+        });
+        this._relatedInfoMenu = new RelatedInfoMenu({
+            parentNode: view.querySelector('.relatedInfoMenuContainer'),
+            isHeader: true
+        });
+        this._relatedInfoMenu.on('open', () => {
+            classList.add('is-relatedMenuOpen');
+            this._updateHold();
+        });
+        this._relatedInfoMenu.on('close', () => {
+            classList.remove('is-relatedMenuOpen');
+            this._updateHold();
+        });
+        this._initHold(view);
+        this._videoMetaInfo = new VideoMetaInfo({
+            parentNode: view.querySelector('.videoMetaInfoContainer'),
+        });
+        this._visibility = UiVisibilityRegistry.connect(Config, view, 'header', {
+            beforeHide: (entry, node) => {
+                // Avoid keeping keyboard focus inside a hidden search field.
+                if (entry.key === 'ui.header.search' && node.contains(document.activeElement)) {
+                    document.activeElement.blur?.();
+                }
+            },
+            afterApply: () => {
+                if (!view.isConnected) {
+                    return;
+                }
+                this._resetHeight();
+                this._onResize();
+            }
+        });
+        classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
+        global.emitter.on('fullScreenStatusChange', (isFull) => {
+            classList.toggle('is-fullscreen', isFull);
+            classList.toggle('is-notFullscreen', !isFull);
+            // Task 076: 全画面に入った/出た時は、外に出すための調整をすぐ戻す／やり直す
+            this._onResize();
+            window.setTimeout(() => this._onResize(), 600);
+        });
+        new MutationObserver((mutationList) => {
+            for (const mutation of mutationList) {
+                if (mutation.type !== 'attributes')
+                    return;
+                if (mutation.attributeName !== 'data-screen-mode')
+                    return;
+                this._resetHeight();
+                window.setTimeout(() => this._onResize(), 1000);
+                break;
+            }
+        }).observe(window.document.body, { attributes: true });
+        window.addEventListener('resize', _.debounce(this._onResize.bind(this), 500));
+        // Task 072: 表示位置の設定を変えたらすぐ反映する
+        Config.onkey('videoHeader.position', () => {
+            this._resetHeight();
+            this._onResize();
+            window.setTimeout(() => this._onResize(), 300);
+        });
+    }
+    update(videoInfo) {
+        this._videoInfo = videoInfo;
+        this._videoTitle.title = this._videoTitle.textContent = videoInfo.title;
+        const watchId = videoInfo.watchId;
+        this._videoMetaInfo.update(videoInfo);
+        this._tagListView.update({
+            tagList: videoInfo.tagList,
+            watchId,
+            videoId: videoInfo.videoId,
+            token: videoInfo.csrfToken,
+            tagEdit: videoInfo.tagEdit,
+            genre: videoInfo.genre, // Task 074: タグ欄の先頭にジャンルを表示する
+        });
+        this._relatedInfoMenu.update(videoInfo);
+        const classList = this.classList;
+        classList.remove('userVideo', 'channelVideo', 'initializing');
+        classList.toggle('is-community', this._videoInfo.isCommunityVideo);
+        classList.toggle('is-mymemory', this._videoInfo.isMymemory);
+        classList.toggle('has-Parent', this._videoInfo.hasParentVideo);
+        classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
+        this._$view.raf.css('display', '');
+        if (videoInfo.series && videoInfo.series.thumbnailUrl) {
+            this._seriesCover.style.backgroundImage = `url("${videoInfo.series.thumbnailUrl}")`;
+        }
+        else {
+            this._seriesCover.removeAttribute('style');
+        }
         this._resetHeight();
         window.setTimeout(() => this._onResize(), 1000);
-        break;
-      }
-    }).observe(window.document.body, {attributes: true});
-    window.addEventListener('resize', _.debounce(this._onResize.bind(this), 500));
-    // Task 072: 表示位置の設定を変えたらすぐ反映する
-    Config.onkey('videoHeader.position', () => {
-      this._resetHeight();
-      this._onResize();
-      window.setTimeout(() => this._onResize(), 300);
-    });
-  }
-  update(videoInfo) {
-    this._videoInfo = videoInfo;
-
-    this._videoTitle.title =  this._videoTitle.textContent = videoInfo.title;
-
-    const watchId = videoInfo.watchId;
-    this._videoMetaInfo.update(videoInfo);
-
-    this._tagListView.update({
-      tagList: videoInfo.tagList,
-      watchId,
-      videoId: videoInfo.videoId,
-      token: videoInfo.csrfToken,
-      tagEdit: videoInfo.tagEdit,
-      genre: videoInfo.genre, // Task 074: タグ欄の先頭にジャンルを表示する
-    });
-
-    this._relatedInfoMenu.update(videoInfo);
-
-    const classList = this.classList;
-    classList.remove('userVideo', 'channelVideo', 'initializing');
-    classList.toggle('is-community', this._videoInfo.isCommunityVideo);
-    classList.toggle('is-mymemory', this._videoInfo.isMymemory);
-    classList.toggle('has-Parent', this._videoInfo.hasParentVideo);
-    classList.add(videoInfo.isChannel ? 'channelVideo' : 'userVideo');
-    this._$view.raf.css('display', '');
-
-    if (videoInfo.series && videoInfo.series.thumbnailUrl) {
-      this._seriesCover.style.backgroundImage = `url("${videoInfo.series.thumbnailUrl}")`;
-    } else {
-      this._seriesCover.removeAttribute('style');
     }
-
-    this._resetHeight();
-    window.setTimeout(() => this._onResize(), 1000);
-  }
-  updateVideoCount(...args) {
-    this._videoMetaInfo.updateVideoCount(...args);
-  }
-  _resetHeight() {
-    this._height = undefined;
-  }
-  /*
-   * Task 076 (D-18): 入力中・メニュー表示中にヘッダーが透明になって消えないようにする。
-   * 原因: ヘッダーは :hover か is-mouseMoving の時だけ表示されるため、検索欄に入力中（マウス静止）や、
-   *       関連メニュー・タグの「？」メニューからマウスが外れた瞬間に透明になり、タグ欄も消えていた。
-   * 対応（2026-09-17の提案 2-A＋2-B）:
-   *  2-A 操作中は固定表示: ヘッダーの中にフォーカスがある間（検索欄・「？」メニュー・関連メニュー）と、
-   *      関連メニューを開いている間は is-hold を付けて表示し続ける
-   *  2-B 消えるまでの猶予: マウスがヘッダーから出ても HOLD_LINGER_MS の間は表示したままにする
-   */
-  _initHold(view) {
-    const update = () => this._updateHold();
-    // シャドウDOMの中のフォーカスも focusin/focusout は外側まで届く
-    view.addEventListener('focusin', update);
-    view.addEventListener('focusout', () => window.setTimeout(update, 0));
-    view.addEventListener('mouseenter', () => {
-      window.clearTimeout(this._lingerTimer);
-      this._lingering = false;
-      update();
-    });
-    view.addEventListener('mouseleave', () => {
-      window.clearTimeout(this._lingerTimer);
-      this._lingering = true;
-      update();
-      this._lingerTimer = window.setTimeout(() => {
-        this._lingering = false;
-        update();
-      }, VideoHeaderPanel.HOLD_LINGER_MS);
-    });
-  }
-  _updateHold() {
-    const view = this._$view && this._$view[0];
-    if (!view) {
-      return;
+    updateVideoCount(...args) {
+        this._videoMetaInfo.updateVideoCount(...args);
     }
-    let focused = false;
-    try {
-      focused = view.matches(':focus-within');
-    } catch (e) {
-      focused = view.contains(document.activeElement);
+    _resetHeight() {
+        this._height = undefined;
     }
-    const hold = focused || this._lingering || view.classList.contains('is-relatedMenuOpen');
-    view.classList.toggle('is-hold', !!hold);
-    view.classList.toggle('is-holdFocus', !!focused);
-  }
-  /*
-   * Task 072: 動画ヘッダーの表示位置を設定（videoHeader.position）で選べるようにした。
-   * 従来（auto）は「動画の上に置いた時に画面上端から20px以上はみ出すか」で、
-   * 動画の外に置く／動画に重ねて自動で隠す（is-onscreen）を切り替えていた。
-   * そのため同じ画面モードでも、タグの行数（ヘッダーの高さ）やウィンドウの大きさ次第で表示が変わっていた。
-   *
-   * Task 076: 「常に動画の外」の収め方を作り直した（Task 074の「動画だけ下げる」方式は、
-   * ヘッダーが動画ではなく .zenzaPlayerContainer の上端基準で置かれているため効いていなかった）。
-   * 実際に測りながら layoutOutsideHeader() で収める（詳細はその関数のコメント参照）。
-   */
-  _onResize() {
-    const view = this._$view && this._$view[0];
-    if (!view) {
-      return;
+    /*
+     * Task 076 (D-18): 入力中・メニュー表示中にヘッダーが透明になって消えないようにする。
+     * 原因: ヘッダーは :hover か is-mouseMoving の時だけ表示されるため、検索欄に入力中（マウス静止）や、
+     *       関連メニュー・タグの「？」メニューからマウスが外れた瞬間に透明になり、タグ欄も消えていた。
+     * 対応（2026-09-17の提案 2-A＋2-B）:
+     *  2-A 操作中は固定表示: ヘッダーの中にフォーカスがある間（検索欄・「？」メニュー・関連メニュー）と、
+     *      関連メニューを開いている間は is-hold を付けて表示し続ける
+     *  2-B 消えるまでの猶予: マウスがヘッダーから出ても HOLD_LINGER_MS の間は表示したままにする
+     */
+    _initHold(view) {
+        const update = () => this._updateHold();
+        // シャドウDOMの中のフォーカスも focusin/focusout は外側まで届く
+        view.addEventListener('focusin', update);
+        view.addEventListener('focusout', () => window.setTimeout(update, 0));
+        view.addEventListener('mouseenter', () => {
+            window.clearTimeout(this._lingerTimer);
+            this._lingering = false;
+            update();
+        });
+        view.addEventListener('mouseleave', () => {
+            window.clearTimeout(this._lingerTimer);
+            this._lingering = true;
+            update();
+            this._lingerTimer = window.setTimeout(() => {
+                this._lingering = false;
+                update();
+            }, VideoHeaderPanel.HOLD_LINGER_MS);
+        });
     }
-    const configMode = Config.props['videoHeader.position'] || 'auto';
-    const classList = this.classList;
-    // Task 076: 設定が効くのは通常・大モード（全画面を除く）だけ。
-    // それ以外（小・サイドビュー・ワイド・3D・全画面）は従来通り(auto)の判定にする。
-    // 以前は画面モードに関係なく is-onscreen を付けていたため、サイドビューで「常に重ねる」にすると
-    // .is-onscreen { width: 100% !important } がサイドビュー用の幅を上書きしてしまっていた。
-    const target = VideoHeaderPanel.isOutsideLayoutTarget(view);
-    const mode = target ? configMode : 'auto';
-    const layoutActive = mode === 'outside';
-    if (!layoutActive) {
-      // 自分が加えたズレ・縮みを戻してから判定する
-      VideoHeaderPanel.resetOutsideLayout(view);
+    _updateHold() {
+        const view = this._$view && this._$view[0];
+        if (!view) {
+            return;
+        }
+        let focused = false;
+        try {
+            focused = view.matches(':focus-within');
+        }
+        catch (e) {
+            focused = view.contains(document.activeElement);
+        }
+        const hold = focused || this._lingering || view.classList.contains('is-relatedMenuOpen');
+        view.classList.toggle('is-hold', !!hold);
+        view.classList.toggle('is-holdFocus', !!focused);
     }
-    const rect = view.getBoundingClientRect();
-    const isOnscreen = classList.contains('is-onscreen');
-    const height = this._height ?? (rect.bottom - rect.top);
-    if (!this._height && !isOnscreen) {
-      this._height = height;
+    /*
+     * Task 072: 動画ヘッダーの表示位置を設定（videoHeader.position）で選べるようにした。
+     * 従来（auto）は「動画の上に置いた時に画面上端から20px以上はみ出すか」で、
+     * 動画の外に置く／動画に重ねて自動で隠す（is-onscreen）を切り替えていた。
+     * そのため同じ画面モードでも、タグの行数（ヘッダーの高さ）やウィンドウの大きさ次第で表示が変わっていた。
+     *
+     * Task 076: 「常に動画の外」の収め方を作り直した（Task 074の「動画だけ下げる」方式は、
+     * ヘッダーが動画ではなく .zenzaPlayerContainer の上端基準で置かれているため効いていなかった）。
+     * 実際に測りながら layoutOutsideHeader() で収める（詳細はその関数のコメント参照）。
+     */
+    _onResize() {
+        const view = this._$view && this._$view[0];
+        if (!view) {
+            return;
+        }
+        const configMode = Config.props['videoHeader.position'] || 'auto';
+        const classList = this.classList;
+        // Task 076: 設定が効くのは通常・大モード（全画面を除く）だけ。
+        // それ以外（小・サイドビュー・ワイド・3D・全画面）は従来通り(auto)の判定にする。
+        // 以前は画面モードに関係なく is-onscreen を付けていたため、サイドビューで「常に重ねる」にすると
+        // .is-onscreen { width: 100% !important } がサイドビュー用の幅を上書きしてしまっていた。
+        const target = VideoHeaderPanel.isOutsideLayoutTarget(view);
+        const mode = target ? configMode : 'auto';
+        const layoutActive = mode === 'outside';
+        if (!layoutActive) {
+            // 自分が加えたズレ・縮みを戻してから判定する
+            VideoHeaderPanel.resetOutsideLayout(view);
+        }
+        const rect = view.getBoundingClientRect();
+        const isOnscreen = classList.contains('is-onscreen');
+        const height = this._height ?? (rect.bottom - rect.top);
+        if (!this._height && !isOnscreen) {
+            this._height = height;
+        }
+        const top = isOnscreen ? (rect.top - height) : rect.top;
+        let onscreen;
+        switch (mode) {
+            case 'outside':
+                onscreen = false;
+                break;
+            case 'overlay':
+            case 'overlay-visible':
+                onscreen = true;
+                break;
+            default:
+                onscreen = top < -20;
+        }
+        classList.toggle('is-onscreen', onscreen);
+        classList.toggle('is-overlayVisible', mode === 'overlay-visible');
+        classList.toggle('is-outsideFixed', mode === 'outside');
+        if (layoutActive) {
+            const result = VideoHeaderPanel.layoutOutsideHeader(view);
+            this._lastOutsideLayout = result;
+            if (result && result.changed) {
+                window.console.log('%c[Task076] ヘッダー配置', 'color: #0a0', result);
+            }
+        }
     }
-    const top = isOnscreen ? (rect.top - height) : rect.top;
-    let onscreen;
-    switch (mode) {
-      case 'outside':
-        onscreen = false;
-        break;
-      case 'overlay':
-      case 'overlay-visible':
-        onscreen = true;
-        break;
-      default:
-        onscreen = top < -20;
+    /* 「常に動画の外」の配置を行う画面モードか（通常・大、かつ全画面でない） */
+    static isOutsideLayoutTarget(view) {
+        const body = document.body;
+        if (!body.classList.contains('zenzaScreenMode_normal') &&
+            !body.classList.contains('zenzaScreenMode_big')) {
+            return false;
+        }
+        if (view && view.classList.contains('is-fullscreen')) {
+            return false;
+        }
+        return !(Fullscreen && typeof Fullscreen.now === 'function' && Fullscreen.now());
     }
-    classList.toggle('is-onscreen', onscreen);
-    classList.toggle('is-overlayVisible', mode === 'overlay-visible');
-    classList.toggle('is-outsideFixed', mode === 'outside');
-
-    if (layoutActive) {
-      const result = VideoHeaderPanel.layoutOutsideHeader(view);
-      this._lastOutsideLayout = result;
-      if (result && result.changed) {
-        window.console.log('%c[Task076] ヘッダー配置', 'color: #0a0', result);
-      }
+    // @@TASK076_LAYOUT_BEGIN
+    /*
+     * Task 076: 自分が加えたズレ・縮みを全部戻す
+     */
+    static resetOutsideLayout(view) {
+        const body = document.body;
+        body.classList.remove('zenzaHeaderOutsideActive');
+        body.style.removeProperty('--zenza-dialog-shift-y');
+        if (view) {
+            view.classList.remove('is-compact', 'is-tagsClamped');
+            view.style.removeProperty('--zenza-header-outside-shift');
+            view.style.removeProperty('--zenza-header-tags-max');
+        }
     }
-  }
-  /* 「常に動画の外」の配置を行う画面モードか（通常・大、かつ全画面でない） */
-  static isOutsideLayoutTarget(view) {
-    const body = document.body;
-    if (!body.classList.contains('zenzaScreenMode_normal') &&
-        !body.classList.contains('zenzaScreenMode_big')) {
-      return false;
+    /*
+     * Task 076: 「常に動画の外」のヘッダーを画面内に収める。推測せず、1段ずつ実際に測りながら進める。
+     *
+     * 前提（実測で確認済み）
+     *  - ヘッダーは .zenzaPlayerContainer の上端を基準に置かれている（bottom: calc(100% + 8px)）。
+     *    動画(.videoPlayer)だけ動かしてもヘッダーは動かない。
+     *  - .zenzaVideoPlayerDialogInner（プレイヤー＋情報パネルの箱）はダイアログの中央に置かれている
+     *    （display:flex; align-items:center）。箱を下げればプレイヤーもヘッダーも一緒に下がる。
+     *  - 再生バーは position: fixed で画面の一番下にある。動画の下端はバーの上端より上に保つ。
+     *  - 画面の幅が狭い時は、情報パネル（プレイリスト等）がプレイヤーの「下」に来る（padding-bottom: 240px）。
+     *
+     * 順番
+     *  0. 自分が加えたズレ・縮みを全部戻して素の位置を測る
+     *  1. 箱ごと下げる（margin-top。transformやpositionは中のfixed/absoluteの基準を変えるので使わない）。
+     *     下げてよい量 = 箱の下の空き。情報パネルが下にある時は、パネルが最低 MIN_INFO_VISIBLE(120)px 見える所まで。
+     *     ただし動画の下端が再生バーに潜らない範囲
+     *  2. コンパクト表示（is-compact: タイトル・メタ情報の文字と余白を詰める）
+     *  3. タグ欄に高さの上限（is-tagsClamped: あふれた分はタグ欄の中でスクロール。最低1行は見せる）
+     *  4. 残りだけヘッダー自体を下げる（動画の上端に重なる。動画の高さの1/4まで）
+     * どの段階でも、最終的なヘッダーの上端が SAFE_TOP px 以上になれば終了する。
+     */
+    static layoutOutsideHeader(view) {
+        const SAFE_TOP = 4;
+        const MIN_INFO_VISIBLE = 120;
+        const body = document.body;
+        const container = view.closest('.zenzaPlayerContainer') ||
+            document.querySelector('.zenzaPlayerContainer');
+        const inner = view.closest('.zenzaVideoPlayerDialogInner') ||
+            document.querySelector('.zenzaVideoPlayerDialogInner');
+        const prev = {
+            dialogShift: parseFloat(body.style.getPropertyValue('--zenza-dialog-shift-y')) || 0,
+            compact: view.classList.contains('is-compact'),
+            clamped: view.classList.contains('is-tagsClamped'),
+            headerShift: parseFloat(view.style.getPropertyValue('--zenza-header-outside-shift')) || 0
+        };
+        // 0. 全部戻して素の位置を測る
+        VideoHeaderPanel.resetOutsideLayout(view);
+        const result = {
+            dialogShift: 0, compact: false, tagsMax: null, headerShift: 0,
+            headerTop: null, changed: false
+        };
+        const finish = () => {
+            result.headerTop = Math.round(view.getBoundingClientRect().top);
+            result.changed = prev.dialogShift !== result.dialogShift ||
+                prev.compact !== result.compact ||
+                prev.clamped !== (result.tagsMax !== null) ||
+                prev.headerShift !== result.headerShift;
+            return result;
+        };
+        if (!container || !inner) {
+            return finish();
+        }
+        let hRect = view.getBoundingClientRect();
+        if (hRect.height <= 0) {
+            return finish();
+        }
+        const over = () => SAFE_TOP - view.getBoundingClientRect().top;
+        if (over() <= 0) {
+            return finish();
+        }
+        body.classList.add('zenzaHeaderOutsideActive');
+        // 1. 箱ごと下げる
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        const cRect = container.getBoundingClientRect();
+        const iRect = inner.getBoundingClientRect();
+        const bar = container.querySelector('.videoControlBar');
+        let floor = viewportH; // 動画の下端がこれより下に行かないようにする
+        if (bar) {
+            const bRect = bar.getBoundingClientRect();
+            const barFixed = window.getComputedStyle(bar).position === 'fixed';
+            if (barFixed && bRect.height > 0 && bRect.top > cRect.top) {
+                floor = Math.min(floor, bRect.top);
+            }
+        }
+        const containerRoom = Math.max(0, Math.floor(floor - cRect.bottom));
+        let boxRoom = Math.max(0, Math.floor(viewportH - iRect.bottom));
+        const info = inner.querySelector('.zenzaWatchVideoInfoPanel');
+        if (info) {
+            const infoRect = info.getBoundingClientRect();
+            const infoBelow = infoRect.height > 0 && infoRect.top >= cRect.bottom - 2;
+            if (infoBelow) {
+                const visible = Math.min(viewportH, floor) - infoRect.top;
+                boxRoom = Math.max(boxRoom, Math.floor(visible - MIN_INFO_VISIBLE));
+            }
+        }
+        const dialogShift = Math.max(0, Math.min(Math.ceil(over()), containerRoom, boxRoom));
+        if (dialogShift > 0) {
+            body.style.setProperty('--zenza-dialog-shift-y', `${dialogShift}px`);
+            result.dialogShift = dialogShift;
+        }
+        if (over() <= 0) {
+            return finish();
+        }
+        // 2. コンパクト表示
+        view.classList.add('is-compact');
+        result.compact = true;
+        if (over() <= 0) {
+            // 小さくして余った分だけ、箱を下げる量を戻す（情報パネルをなるべく多く見せる）
+            const spare = Math.floor(-over());
+            if (spare > 0 && result.dialogShift > 0) {
+                result.dialogShift = Math.max(0, result.dialogShift - spare);
+                body.style.setProperty('--zenza-dialog-shift-y', `${result.dialogShift}px`);
+            }
+            return finish();
+        }
+        // 3. タグ欄に高さの上限（最低1行）
+        const tags = view.querySelector('.videoTagsContainer');
+        if (tags) {
+            const tRect = tags.getBoundingClientRect();
+            // タグの一覧はシャドウDOMの中にあることがあるので、両方探す
+            const host = tags.firstElementChild;
+            const firstItem = tags.querySelector('li') ||
+                (host && host.shadowRoot && host.shadowRoot.querySelector('li'));
+            const rowH = firstItem ? Math.ceil(firstItem.getBoundingClientRect().height + 4) : 28;
+            const minH = Math.max(28, rowH);
+            if (tRect.height > minH) {
+                const max = Math.max(minH, Math.floor(tRect.height - Math.ceil(over())));
+                view.style.setProperty('--zenza-header-tags-max', `${max}px`);
+                view.classList.add('is-tagsClamped');
+                result.tagsMax = max;
+            }
+        }
+        if (over() <= 0) {
+            return finish();
+        }
+        // 4. 残りだけヘッダー自体を下げる（動画の上端に重なる。動画の高さの1/4まで）
+        const limit = Math.floor(container.getBoundingClientRect().height / 4);
+        const headerShift = Math.max(0, Math.min(Math.ceil(over()), limit));
+        if (headerShift > 0) {
+            view.style.setProperty('--zenza-header-outside-shift', `${headerShift}px`);
+            result.headerShift = headerShift;
+        }
+        return finish();
     }
-    if (view && view.classList.contains('is-fullscreen')) {
-      return false;
+    // @@TASK076_LAYOUT_END
+    appendTo(node) {
+        this._initializeDom();
+        this._$view.appendTo(node);
     }
-    return !(Fullscreen && typeof Fullscreen.now === 'function' && Fullscreen.now());
-  }
-  // @@TASK076_LAYOUT_BEGIN
-  /*
-   * Task 076: 自分が加えたズレ・縮みを全部戻す
-   */
-  static resetOutsideLayout(view) {
-    const body = document.body;
-    body.classList.remove('zenzaHeaderOutsideActive');
-    body.style.removeProperty('--zenza-dialog-shift-y');
-    if (view) {
-      view.classList.remove('is-compact', 'is-tagsClamped');
-      view.style.removeProperty('--zenza-header-outside-shift');
-      view.style.removeProperty('--zenza-header-tags-max');
+    hide() {
+        if (!this._$view) {
+            return;
+        }
+        this.classList.remove('show');
     }
-  }
-  /*
-   * Task 076: 「常に動画の外」のヘッダーを画面内に収める。推測せず、1段ずつ実際に測りながら進める。
-   *
-   * 前提（実測で確認済み）
-   *  - ヘッダーは .zenzaPlayerContainer の上端を基準に置かれている（bottom: calc(100% + 8px)）。
-   *    動画(.videoPlayer)だけ動かしてもヘッダーは動かない。
-   *  - .zenzaVideoPlayerDialogInner（プレイヤー＋情報パネルの箱）はダイアログの中央に置かれている
-   *    （display:flex; align-items:center）。箱を下げればプレイヤーもヘッダーも一緒に下がる。
-   *  - 再生バーは position: fixed で画面の一番下にある。動画の下端はバーの上端より上に保つ。
-   *  - 画面の幅が狭い時は、情報パネル（プレイリスト等）がプレイヤーの「下」に来る（padding-bottom: 240px）。
-   *
-   * 順番
-   *  0. 自分が加えたズレ・縮みを全部戻して素の位置を測る
-   *  1. 箱ごと下げる（margin-top。transformやpositionは中のfixed/absoluteの基準を変えるので使わない）。
-   *     下げてよい量 = 箱の下の空き。情報パネルが下にある時は、パネルが最低 MIN_INFO_VISIBLE(120)px 見える所まで。
-   *     ただし動画の下端が再生バーに潜らない範囲
-   *  2. コンパクト表示（is-compact: タイトル・メタ情報の文字と余白を詰める）
-   *  3. タグ欄に高さの上限（is-tagsClamped: あふれた分はタグ欄の中でスクロール。最低1行は見せる）
-   *  4. 残りだけヘッダー自体を下げる（動画の上端に重なる。動画の高さの1/4まで）
-   * どの段階でも、最終的なヘッダーの上端が SAFE_TOP px 以上になれば終了する。
-   */
-  static layoutOutsideHeader(view) {
-    const SAFE_TOP = 4;
-    const MIN_INFO_VISIBLE = 120;
-    const body = document.body;
-    const container = view.closest('.zenzaPlayerContainer') ||
-      document.querySelector('.zenzaPlayerContainer');
-    const inner = view.closest('.zenzaVideoPlayerDialogInner') ||
-      document.querySelector('.zenzaVideoPlayerDialogInner');
-    const prev = {
-      dialogShift: parseFloat(body.style.getPropertyValue('--zenza-dialog-shift-y')) || 0,
-      compact: view.classList.contains('is-compact'),
-      clamped: view.classList.contains('is-tagsClamped'),
-      headerShift: parseFloat(view.style.getPropertyValue('--zenza-header-outside-shift')) || 0
-    };
-    // 0. 全部戻して素の位置を測る
-    VideoHeaderPanel.resetOutsideLayout(view);
-    const result = {
-      dialogShift: 0, compact: false, tagsMax: null, headerShift: 0,
-      headerTop: null, changed: false
-    };
-    const finish = () => {
-      result.headerTop = Math.round(view.getBoundingClientRect().top);
-      result.changed = prev.dialogShift !== result.dialogShift ||
-        prev.compact !== result.compact ||
-        prev.clamped !== (result.tagsMax !== null) ||
-        prev.headerShift !== result.headerShift;
-      return result;
-    };
-    if (!container || !inner) {
-      return finish();
+    close() {
     }
-    let hRect = view.getBoundingClientRect();
-    if (hRect.height <= 0) {
-      return finish();
+    clear() {
+        if (!this._$view) {
+            return;
+        }
+        this.classList.add('initializing');
+        this._videoTitle.textContent = '';
     }
-    const over = () => SAFE_TOP - view.getBoundingClientRect().top;
-    if (over() <= 0) {
-      return finish();
+    getPublicStatusDom() {
+        return this._$view.find('.publicStatus').html();
     }
-    body.classList.add('zenzaHeaderOutsideActive');
-
-    // 1. 箱ごと下げる
-    const viewportH = window.innerHeight || document.documentElement.clientHeight;
-    const cRect = container.getBoundingClientRect();
-    const iRect = inner.getBoundingClientRect();
-    const bar = container.querySelector('.videoControlBar');
-    let floor = viewportH; // 動画の下端がこれより下に行かないようにする
-    if (bar) {
-      const bRect = bar.getBoundingClientRect();
-      const barFixed = window.getComputedStyle(bar).position === 'fixed';
-      if (barFixed && bRect.height > 0 && bRect.top > cRect.top) {
-        floor = Math.min(floor, bRect.top);
-      }
-    }
-    const containerRoom = Math.max(0, Math.floor(floor - cRect.bottom));
-    let boxRoom = Math.max(0, Math.floor(viewportH - iRect.bottom));
-    const info = inner.querySelector('.zenzaWatchVideoInfoPanel');
-    if (info) {
-      const infoRect = info.getBoundingClientRect();
-      const infoBelow = infoRect.height > 0 && infoRect.top >= cRect.bottom - 2;
-      if (infoBelow) {
-        const visible = Math.min(viewportH, floor) - infoRect.top;
-        boxRoom = Math.max(boxRoom, Math.floor(visible - MIN_INFO_VISIBLE));
-      }
-    }
-    const dialogShift = Math.max(0, Math.min(Math.ceil(over()), containerRoom, boxRoom));
-    if (dialogShift > 0) {
-      body.style.setProperty('--zenza-dialog-shift-y', `${dialogShift}px`);
-      result.dialogShift = dialogShift;
-    }
-    if (over() <= 0) {
-      return finish();
-    }
-
-    // 2. コンパクト表示
-    view.classList.add('is-compact');
-    result.compact = true;
-    if (over() <= 0) {
-      // 小さくして余った分だけ、箱を下げる量を戻す（情報パネルをなるべく多く見せる）
-      const spare = Math.floor(-over());
-      if (spare > 0 && result.dialogShift > 0) {
-        result.dialogShift = Math.max(0, result.dialogShift - spare);
-        body.style.setProperty('--zenza-dialog-shift-y', `${result.dialogShift}px`);
-      }
-      return finish();
-    }
-
-    // 3. タグ欄に高さの上限（最低1行）
-    const tags = view.querySelector('.videoTagsContainer');
-    if (tags) {
-      const tRect = tags.getBoundingClientRect();
-      // タグの一覧はシャドウDOMの中にあることがあるので、両方探す
-      const host = tags.firstElementChild;
-      const firstItem = tags.querySelector('li') ||
-        (host && host.shadowRoot && host.shadowRoot.querySelector('li'));
-      const rowH = firstItem ? Math.ceil(firstItem.getBoundingClientRect().height + 4) : 28;
-      const minH = Math.max(28, rowH);
-      if (tRect.height > minH) {
-        const max = Math.max(minH, Math.floor(tRect.height - Math.ceil(over())));
-        view.style.setProperty('--zenza-header-tags-max', `${max}px`);
-        view.classList.add('is-tagsClamped');
-        result.tagsMax = max;
-      }
-    }
-    if (over() <= 0) {
-      return finish();
-    }
-
-    // 4. 残りだけヘッダー自体を下げる（動画の上端に重なる。動画の高さの1/4まで）
-    const limit = Math.floor(container.getBoundingClientRect().height / 4);
-    const headerShift = Math.max(0, Math.min(Math.ceil(over()), limit));
-    if (headerShift > 0) {
-      view.style.setProperty('--zenza-header-outside-shift', `${headerShift}px`);
-      result.headerShift = headerShift;
-    }
-    return finish();
-  }
-  // @@TASK076_LAYOUT_END
-  appendTo(node) {
-    this._initializeDom();
-    this._$view.appendTo(node);
-  }
-  hide() {
-    if (!this._$view) {
-      return;
-    }
-    this.classList.remove('show');
-  }
-  close() {
-  }
-  clear() {
-    if (!this._$view) {
-      return;
-    }
-    this.classList.add('initializing');
-
-    this._videoTitle.textContent = '';
-  }
-  getPublicStatusDom() {
-    return this._$view.find('.publicStatus').html();
-  }
 }
-
 css.addStyle(`
   .zenzaScreenMode_small .zenzaWatchVideoHeaderPanel {
     display: none;
@@ -1859,8 +1803,7 @@ css.addStyle(`
     }
   }
 
-`, {className: 'screenMode for-popup videoHeaderPanel', disabled: true});
-
+`, { className: 'screenMode for-popup videoHeaderPanel', disabled: true });
 css.addStyle(`
   body .is-open .zenzaWatchVideoHeaderPanel {
     width: calc(100% + ${CONSTANT.RIGHT_PANEL_WIDTH}px);
@@ -1894,8 +1837,7 @@ css.addStyle(`
       background: #222;
     }
 
-`, {className: 'screenMode for-dialog videoHeaderPanel', disabled: true});
-
+`, { className: 'screenMode for-dialog videoHeaderPanel', disabled: true });
 css.addStyle(`
   .is-open .zenzaWatchVideoHeaderPanel {
     position: absolute; /* fixedだとFirefoxのバグでおかしくなる */
@@ -1926,8 +1868,7 @@ css.addStyle(`
     width: calc(100% - 220px);
   }
 
-`, {className: 'screenMode for-full videoHeaderPanel', disabled: true});
-
+`, { className: 'screenMode for-full videoHeaderPanel', disabled: true });
 VideoHeaderPanel.__css__ = (`
     .zenzaWatchVideoHeaderPanel {
       position: absolute;
@@ -2113,10 +2054,8 @@ VideoHeaderPanel.__css__ = (`
         linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 100%);
     }
   `);
-
 // Task 076 (D-18): マウスがヘッダーから出てから消えるまでの猶予
 VideoHeaderPanel.HOLD_LINGER_MS = 1500;
-
 VideoHeaderPanel.__tpl__ = (`
     <div class="zenzaWatchVideoHeaderPanel show initializing" style="display: none;">
       <h2 class="videoTitleContainer">
@@ -2131,434 +2070,429 @@ VideoHeaderPanel.__tpl__ = (`
       <div class="series-thumbnail-cover"><div class="series-thumbnail"></div></div>
     </div>
   `).trim();
-
-
 class VideoSearchForm extends Emitter {
-  constructor(...args) {
-    super();
-    this._config = Config.namespace('videoSearch');
-    this._initDom(...args);
-  }
-
-  _initDom({parentNode}) {
-    let tpl = document.getElementById('zenzaVideoSearchPanelTemplate');
-    if (!tpl) {
-      cssUtil.addStyle(VideoSearchForm.__css__);
-      tpl = document.createElement('template');
-      tpl.innerHTML = VideoSearchForm.__tpl__;
-      tpl.id = 'zenzaVideoSearchPanelTemplate';
+    constructor(...args) {
+        super();
+        this._config = Config.namespace('videoSearch');
+        this._initDom(...args);
     }
-    const view = document.importNode(tpl.content, true);
-
-    this._view = view.querySelector('*');
-    this._form = view.querySelector('form');
-    this._word = view.querySelector('.searchWordInput');
-    this._videoIdBox = view.querySelector('.searchVideoIdResult');
-    this._videoIdList = view.querySelector('.searchVideoIdResult-list');
-    // Task 068: 並び順は「キー」と「昇順/降順」の2つのselectに分けた（本家と同じ9種類）。
-    // 保存形式は従来通り videoSearch.sort に "キー" または "キー,a|d"（"playlist"は自動）。
-    this._sortKey = view.querySelector('.searchSortKeySelect');
-    this._sortOrder = view.querySelector('.searchOrderSelect');
-    this._mode = view.querySelector('.searchMode') || 'tag';
-
-    this._form.addEventListener('submit', this._onSubmit.bind(this));
-
-    const config = this._config;
-    const form = this._form;
-
-    // Task 073: 「再生中の動画の投稿者の動画のみ」。以前はdisabledのまま（取り消し線付きで
-    // チェックできない状態）だった。誤って絞り込んだまま検索し続けないよう、開くたびにOFFへ戻す。
-    // 将来この項目をテンプレートから削除しても動くよう、要素が無い場合は何もしない。
-    config.props.ownerOnly = false;
-    const ownerOnlyInput = this._ownerOnlyInput;
-    if (ownerOnlyInput) {
-      ownerOnlyInput.checked = false;
-    }
-    const confMode = config.props.mode;
-    if (typeof confMode === 'string' && ['tag', 'keyword'].includes(confMode)) {
-      form['mode'].value = confMode;
-    } else if (typeof confMode === 'boolean') {
-      form['mode'].value = confMode ? 'tag' : 'keyword';
-    } else {
-      form['mode'].value = 'tag';
-    }
-    form['word'].value = config.props.word;
-    this._applySortValue(config.props.sort);
-    form['f_range'].value = `${config.props.f_range || 0}`;
-    form['l_range'].value = `${config.props.l_range || 0}`;
-    form['genre'].value = config.props.genre || 'all';
-    if (!form['genre'].value) { form['genre'].value = 'all'; }
-
-    // Task 073: 以前の「入力欄の下に出る小さなタグ候補リスト」(_initSuggest)は廃止し、
-    // 普通の単語でも動画ID入力時と同じ「検索（件数）＋タグ予測」の枠で表示する。
-    this._initVideoIdPreview();
-    this._view.addEventListener('click', this._onClick.bind(this));
-    // Task 071: 以前は DocumentFragment（view）に付けていたため一度も発火せず、
-    // 検索欄への貼り付けがプレイヤー全体の貼り付け処理（動画IDならすぐ開く）へ伝わっていた。
-    // 検索欄の中の貼り付けは、ここで止めて検索欄の下に動画を表示する。
-    this._view.addEventListener('paste', e => e.stopPropagation());
-    const submit = _.debounce(this.submit.bind(this), 500);
-    Array.from(view.querySelectorAll('input, select')).forEach(item => {
-      if (item.type === 'checkbox') {
-        item.addEventListener('change', () => {
-          this._word.focus();
-          config.props[item.name] = item.checked;
-          submit();
-        });
-      } else if (item.type === 'radio') {
-        item.addEventListener('change', () => {
-          this._word.focus();
-          config.props[item.name] = this._form[item.name].value;
-          submit();
-        });
-      } else if (item.name === 'sortKey' || item.name === 'sortOrder') {
-        item.addEventListener('change', () => {
-          config.props.sort = this._composeSortValue();
-          this._updateOrderState();
-          submit();
-        });
-      } else {
-        item.addEventListener('change', () => {
-          config.props[item.name] = item.value;
-          if (item.tagName === 'SELECT') {
-            submit();
-          }
-        });
-      }
-    });
-
-    // Task 074: ヘッダーのジャンルバッジから、検索欄のジャンル絞り込みを設定する
-    global.emitter.on('setSearchGenre', key => {
-      const genreSelect = this._form.elements.namedItem('genre');
-      if (!genreSelect) { return; }
-      const value = key && Array.from(genreSelect.options).some(o => o.value === key) ? key : 'all';
-      genreSelect.value = value;
-      config.props.genre = value;
-      const label = genreSelect.options[genreSelect.selectedIndex];
-      domEvent.dispatchCommand(this._view, 'notify',
-        value === 'all' ?
-          'ジャンルの絞り込みを解除しました' :
-          `検索のジャンルを「${label ? label.textContent : value}」に設定しました`);
-      this._word.focus();
-      this._refreshWordCountsAfterFilterChange();
-    });
-
-    global.emitter.on('searchVideo', ({word}) => {
-      form['word'].value = word;
-      // Task 073: 検索が実行された語は、次に入力を変えるまで予測枠を出さない
-      // （タグのクリック等で検索した時に、裏で予測や件数の問い合わせが走らないように）
-      this._videoIdDismissedKey = this._videoIdKeyOf(word);
-      this._updateVideoIdPreview();
-    });
-
-    if (parentNode) {
-      parentNode.appendChild(view);
-    }
-
-    global.debug.searchForm = this;
-  }
-
-  /*
-   * Task 071: 検索欄に動画ID（sm/nm/so + 数字、視聴URL、nico.ms 短縮URL）を入力・貼り付けすると、
-   * すぐに開くのではなく、検索欄の下にその動画のカードをアニメーション付きで表示する。
-   * - 手入力でも貼り付けでも動く（input イベントで判定）
-   * - 空白・読点・改行区切りで最大5件まで同時に表示（全部が動画IDの時だけ。1つでも普通の語があれば通常の検索扱い）
-   * - カードのクリック/▶再生/Enter で開く。次に再生・末尾に追加・あとで見るも可能
-   * - ↑↓でカードを選択、Esc で閉じる（入力を変えると再表示）
-   */
-  static parseVideoIds(text) {
-    return VideoSearchForm.parseVideoIdInput(text).ids;
-  }
-
-  /*
-   * Task 071 追加: sm114514 のように「動画IDでありながらタグ（検索語）としても使われる単語」がある。
-   * そのため、URLを含まない素の動画IDだけの入力（bare）は、動画カードを出しつつ検索語としても扱う
-   * （Enter/▶ は通常の検索、カードのクリックや ↓ で選んで Enter / Shift+Enter で再生）。
-   * 視聴URL・nico.ms など検索語になり得ない形が含まれる時だけ、Enter で動画を開く。
-   */
-  static parseVideoIdInput(text) {
-    const src = String(text || '').trim();
-    const empty = {ids: [], bare: false};
-    if (!src) {
-      return empty;
-    }
-    const tokens = src.split(/[\s,、，　]+/).filter(Boolean);
-    const ids = [];
-    let bare = true;
-    for (const token of tokens) {
-      const m = VideoSearchForm.VIDEO_ID_REG.exec(token);
-      if (!m) {
-        return empty;
-      }
-      if (token.length !== m[1].length) {
-        bare = false;
-      }
-      const id = m[1].toLowerCase();
-      ids.includes(id) || ids.push(id);
-    }
-    return {ids: ids.slice(0, VideoSearchForm.MAX_VIDEO_ID_CARDS), bare};
-  }
-
-  _initVideoIdPreview() {
-    this._videoIdKey = '';
-    this._videoIdDismissedKey = '';
-    this._videoIdCards = new Map();
-    this._videoIdBare = false;
-    this._videoIdNavKey = '';
-    this._videoIdTagWord = '';
-    this._videoIdTagSeq = 0;
-    this._videoIdTagsElm = this._videoIdBox ? this._videoIdBox.querySelector('.searchVideoIdResult-tags') : null;
-    this._wordCountCache = new Map();
-    this._wordCountSeq = 0;
-    this._autoTagCountGeneration = 0;
-    const input = this._word, box = this._videoIdBox;
-    if (!input || !box) {
-      return;
-    }
-    const update = _.debounce(() => this._updateVideoIdPreview(), 120);
-    input.addEventListener('input', () => update());
-    input.addEventListener('compositionend', () => update());
-    input.addEventListener('paste', () => window.setTimeout(() => this._updateVideoIdPreview(), 0));
-    input.addEventListener('keydown', e => this._onVideoIdKeyDown(e), true);
-    /*
-     * Task 074: 「入力欄を触っているのに予測が出ない」ことがある件の対処。
-     * 検索を実行した語・Escで閉じた語は、入力を変えるまで再表示しない作りにしていた
-     * （裏で予測や件数を何度も取りに行かないようにするため）。そのため
-     * 「検索した後にもう一度入力欄をクリックした」「起動直後で前回の語が入っている」
-     * 場合に何も出ず、分かりづらかった。
-     * 入力欄にフォーカスし直した時と、↓キーを押した時は、もう一度出すようにする。
-     */
-    input.addEventListener('focus', () => {
-      if (this._videoIdDismissedKey && this.word) {
-        this._videoIdDismissedKey = '';
-        this._videoIdKey = '';
-        this._updateVideoIdPreview();
-      }
-    });
-    // ボタンを押しても入力欄からフォーカスが外れない（外れるとパネルごと閉じる）ようにする
-    box.addEventListener('mousedown', e => {
-      if (e.button === 0) {
-        e.preventDefault();
-      }
-    });
-    // Hover is an explicit request in low-traffic mode; the default search-row
-    // selection during ordinary typing does not trigger a count request.
-    box.addEventListener('mouseover', e => {
-      const tag = e.target.closest?.('.searchVideoIdResult-tag:not(.is-leaving)');
-      if (tag) {
-        const key = `tag:${tag.dataset.word}`;
-        if (key !== this._videoIdNavKey) {
-          this._videoIdNavKey = key;
-          this._updateVideoIdSelection();
+    _initDom({ parentNode }) {
+        let tpl = document.getElementById('zenzaVideoSearchPanelTemplate');
+        if (!tpl) {
+            cssUtil.addStyle(VideoSearchForm.__css__);
+            tpl = document.createElement('template');
+            tpl.innerHTML = VideoSearchForm.__tpl__;
+            tpl.id = 'zenzaVideoSearchPanelTemplate';
         }
-        return;
-      }
-      const row = e.target.closest?.('.searchVideoIdResult-search');
-      if (row && !row.contains(e.relatedTarget)) {
-        this._videoIdNavKey = 'search';
-        this._updateVideoIdSelection();
-        this._updateVideoIdSearchRow(false,true);
-      }
-    });
-    box.addEventListener('mouseout', e => {
-      const row = e.target.closest?.('.searchVideoIdResult-search');
-      if (row && !row.contains(e.relatedTarget) && this.wordCountMode==='on-demand') {
-        this._cancelSearchRowCount();
-      }
-    });
-    box.addEventListener('click', e => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.target.closest('.searchVideoIdResult-search')) {
-        this._submitVideoIdAsWord();
-        return;
-      }
-      const tag = e.target.closest('.searchVideoIdResult-tag');
-      if (tag) {
-        this._selectVideoIdTag(tag.dataset.word);
-        return;
-      }
-      const card = e.target.closest('.searchVideoCard');
-      if (!card) {
-        return;
-      }
-      const button = e.target.closest('[data-action]');
-      const action = button ? button.dataset.action : 'open';
-      this._execVideoIdAction(action, card.dataset.watchId, button || card);
-    });
-    Array.from(this._form.querySelectorAll('.searchMode')).forEach(radio =>
-      radio.addEventListener('change', () => this._refreshWordCountsAfterFilterChange()));
-    // Task 073: 件数は期間・長さ・ジャンルの絞り込みも反映するので、変えたら数え直す
-    ['f_range', 'l_range', 'genre', 'ownerOnly'].forEach(name => {
-      const elm = this._form.elements.namedItem(name);
-      elm && elm.addEventListener && elm.addEventListener('change', () => {
-        this._refreshWordCountsAfterFilterChange();
-      });
-    });
-    // 起動直後（前回の検索語が入った状態）は、入力を変えるまで予測枠を出さない
-    this._videoIdDismissedKey = this._videoIdKeyOf(input.value);
-    // Task 072: タグ予測の表示方式（A/B/C）
-    this._applyVideoIdSuggestMode();
-    this._config.onkey('videoIdSuggestMode', () => {
-      this._applyVideoIdSuggestMode();
-      this._videoIdKey = '';
-      this._updateVideoIdPreview();
-    });
-    this._config.onkey('wordCountMode', () => {
-      this._cancelPendingWordCounts();
-      this._clearVisibleWordCounts();
-      if (!this._videoIdBox.classList.contains('is-open')) { return; }
-      this._updateVideoIdSearchRow(true);
-      this._scheduleAutomaticTagCounts();
-    });
-    this._updateVideoIdPreview();
-  }
-
-  get videoIdSuggestMode() {
-    const mode = this._config.props.videoIdSuggestMode;
-    return VideoSearchForm.VIDEO_ID_SUGGEST_MODES.includes(mode) ? mode : 'merged';
-  }
-
-  get wordCountMode() {
-    const mode = this._config?.props?.wordCountMode;
-    return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'on-demand';
-  }
-
-  _applyVideoIdSuggestMode() {
-    const box = this._videoIdBox;
-    if (!box) { return; }
-    const mode = this.videoIdSuggestMode;
-    VideoSearchForm.VIDEO_ID_SUGGEST_MODES.forEach(m => box.classList.toggle(`is-mode-${m}`, m === mode));
-  }
-
-  _videoIdKeyOf(text) {
-    const {ids, bare} = VideoSearchForm.parseVideoIdInput(text);
-    if (!ids.length) {
-      // Task 073: 普通の単語（語ごとに別のキー。空なら空）
-      const word = String(text || '').trim();
-      return word ? `k:${word}` : '';
+        const view = document.importNode(tpl.content, true);
+        this._view = view.querySelector('*');
+        this._form = view.querySelector('form');
+        this._word = view.querySelector('.searchWordInput');
+        this._videoIdBox = view.querySelector('.searchVideoIdResult');
+        this._videoIdList = view.querySelector('.searchVideoIdResult-list');
+        // Task 068: 並び順は「キー」と「昇順/降順」の2つのselectに分けた（本家と同じ9種類）。
+        // 保存形式は従来通り videoSearch.sort に "キー" または "キー,a|d"（"playlist"は自動）。
+        this._sortKey = view.querySelector('.searchSortKeySelect');
+        this._sortOrder = view.querySelector('.searchOrderSelect');
+        this._mode = view.querySelector('.searchMode') || 'tag';
+        this._form.addEventListener('submit', this._onSubmit.bind(this));
+        const config = this._config;
+        const form = this._form;
+        // Task 073: 「再生中の動画の投稿者の動画のみ」。以前はdisabledのまま（取り消し線付きで
+        // チェックできない状態）だった。誤って絞り込んだまま検索し続けないよう、開くたびにOFFへ戻す。
+        // 将来この項目をテンプレートから削除しても動くよう、要素が無い場合は何もしない。
+        config.props.ownerOnly = false;
+        const ownerOnlyInput = this._ownerOnlyInput;
+        if (ownerOnlyInput) {
+            ownerOnlyInput.checked = false;
+        }
+        const confMode = config.props.mode;
+        if (typeof confMode === 'string' && ['tag', 'keyword'].includes(confMode)) {
+            form['mode'].value = confMode;
+        }
+        else if (typeof confMode === 'boolean') {
+            form['mode'].value = confMode ? 'tag' : 'keyword';
+        }
+        else {
+            form['mode'].value = 'tag';
+        }
+        form['word'].value = config.props.word;
+        this._applySortValue(config.props.sort);
+        form['f_range'].value = `${config.props.f_range || 0}`;
+        form['l_range'].value = `${config.props.l_range || 0}`;
+        form['genre'].value = config.props.genre || 'all';
+        if (!form['genre'].value) {
+            form['genre'].value = 'all';
+        }
+        // Task 073: 以前の「入力欄の下に出る小さなタグ候補リスト」(_initSuggest)は廃止し、
+        // 普通の単語でも動画ID入力時と同じ「検索（件数）＋タグ予測」の枠で表示する。
+        this._initVideoIdPreview();
+        this._view.addEventListener('click', this._onClick.bind(this));
+        // Task 071: 以前は DocumentFragment（view）に付けていたため一度も発火せず、
+        // 検索欄への貼り付けがプレイヤー全体の貼り付け処理（動画IDならすぐ開く）へ伝わっていた。
+        // 検索欄の中の貼り付けは、ここで止めて検索欄の下に動画を表示する。
+        this._view.addEventListener('paste', (e) => e.stopPropagation());
+        const submit = _.debounce(this.submit.bind(this), 500);
+        Array.from(view.querySelectorAll('input, select')).forEach(item => {
+            if (item.type === 'checkbox') {
+                item.addEventListener('change', () => {
+                    this._word.focus();
+                    config.props[item.name] = item.checked;
+                    submit();
+                });
+            }
+            else if (item.type === 'radio') {
+                item.addEventListener('change', () => {
+                    this._word.focus();
+                    config.props[item.name] = this._form[item.name].value;
+                    submit();
+                });
+            }
+            else if (item.name === 'sortKey' || item.name === 'sortOrder') {
+                item.addEventListener('change', () => {
+                    config.props.sort = this._composeSortValue();
+                    this._updateOrderState();
+                    submit();
+                });
+            }
+            else {
+                item.addEventListener('change', () => {
+                    config.props[item.name] = item.value;
+                    if (item.tagName === 'SELECT') {
+                        submit();
+                    }
+                });
+            }
+        });
+        // Task 074: ヘッダーのジャンルバッジから、検索欄のジャンル絞り込みを設定する
+        global.emitter.on('setSearchGenre', (key) => {
+            const genreSelect = this._form.elements.namedItem('genre');
+            if (!genreSelect) {
+                return;
+            }
+            const value = key && Array.from(genreSelect.options).some(o => o.value === key) ? key : 'all';
+            genreSelect.value = value;
+            config.props.genre = value;
+            const label = genreSelect.options[genreSelect.selectedIndex];
+            domEvent.dispatchCommand(this._view, 'notify', value === 'all' ?
+                'ジャンルの絞り込みを解除しました' :
+                `検索のジャンルを「${label ? label.textContent : value}」に設定しました`);
+            this._word.focus();
+            this._refreshWordCountsAfterFilterChange();
+        });
+        global.emitter.on('searchVideo', ({ word }) => {
+            form['word'].value = word;
+            // Task 073: 検索が実行された語は、次に入力を変えるまで予測枠を出さない
+            // （タグのクリック等で検索した時に、裏で予測や件数の問い合わせが走らないように）
+            this._videoIdDismissedKey = this._videoIdKeyOf(word);
+            this._updateVideoIdPreview();
+        });
+        if (parentNode) {
+            parentNode.appendChild(view);
+        }
+        global.debug.searchForm = this;
     }
-    return `${bare ? 'w' : 'u'}:${ids.join(',')}`;
-  }
-
-  _updateVideoIdPreview() {
-    const {ids, bare: idBare} = VideoSearchForm.parseVideoIdInput(this._word.value);
-    // Task 073: 動画IDではない普通の単語でも、同じ枠で「検索（件数）＋タグ予測」を出す
-    const wordOnly = !ids.length && !!this.word;
-    const bare = idBare || wordOnly;
-    const key = this._videoIdKeyOf(this._word.value);
-    if (key !== this._videoIdDismissedKey) {
-      this._videoIdDismissedKey = '';
+    /*
+     * Task 071: 検索欄に動画ID（sm/nm/so + 数字、視聴URL、nico.ms 短縮URL）を入力・貼り付けすると、
+     * すぐに開くのではなく、検索欄の下にその動画のカードをアニメーション付きで表示する。
+     * - 手入力でも貼り付けでも動く（input イベントで判定）
+     * - 空白・読点・改行区切りで最大5件まで同時に表示（全部が動画IDの時だけ。1つでも普通の語があれば通常の検索扱い）
+     * - カードのクリック/▶再生/Enter で開く。次に再生・末尾に追加・あとで見るも可能
+     * - ↑↓でカードを選択、Esc で閉じる（入力を変えると再表示）
+     */
+    static parseVideoIds(text) {
+        return VideoSearchForm.parseVideoIdInput(text).ids;
     }
-    const visible = (ids.length > 0 || wordOnly) && !this._videoIdDismissedKey;
-    if (key === this._videoIdKey && visible === this._videoIdBox.classList.contains('is-open')) {
-      return;
+    /*
+     * Task 071 追加: sm114514 のように「動画IDでありながらタグ（検索語）としても使われる単語」がある。
+     * そのため、URLを含まない素の動画IDだけの入力（bare）は、動画カードを出しつつ検索語としても扱う
+     * （Enter/▶ は通常の検索、カードのクリックや ↓ で選んで Enter / Shift+Enter で再生）。
+     * 視聴URL・nico.ms など検索語になり得ない形が含まれる時だけ、Enter で動画を開く。
+     */
+    static parseVideoIdInput(text) {
+        const src = String(text || '').trim();
+        const empty = { ids: [], bare: false };
+        if (!src) {
+            return empty;
+        }
+        const tokens = src.split(/[\s,、，　]+/).filter(Boolean);
+        const ids = [];
+        let bare = true;
+        for (const token of tokens) {
+            const m = VideoSearchForm.VIDEO_ID_REG.exec(token);
+            if (!m) {
+                return empty;
+            }
+            if (token.length !== m[1].length) {
+                bare = false;
+            }
+            const id = m[1].toLowerCase();
+            ids.includes(id) || ids.push(id);
+        }
+        return { ids: ids.slice(0, VideoSearchForm.MAX_VIDEO_ID_CARDS), bare };
     }
-    const keyChanged = this._videoIdKey !== key;
-    this._videoIdKey = key;
-    this._videoIdBare = bare;
-    this._view.classList.toggle('is-videoIdMode', ids.length > 0);
-    window.clearTimeout(this._videoIdCleanupTimer);
-    if (!visible) {
-      this._videoIdBox.classList.remove('is-open');
-      this._cancelPendingWordCounts();
-      this._videoIdNavKey = '';
-      window.clearTimeout(this._videoIdWaitTimer);
-      this._videoIdTagSeq++;
-      // 閉じるアニメーションの後にカードを片付ける（次に表示した時も登場アニメーションから始まるように）
-      this._videoIdCleanupTimer = window.setTimeout(() => {
-        if (this._videoIdBox.classList.contains('is-open')) { return; }
-        this._videoIdCards.clear();
-        this._videoIdList.textContent = '';
-        this._videoIdTagsElm && (this._videoIdTagsElm.textContent = '');
-        this._videoIdTagWord = '';
+    _initVideoIdPreview() {
         this._videoIdKey = '';
-      }, 400);
-      return;
+        this._videoIdDismissedKey = '';
+        this._videoIdCards = new Map();
+        this._videoIdBare = false;
+        this._videoIdNavKey = '';
+        this._videoIdTagWord = '';
+        this._videoIdTagSeq = 0;
+        this._videoIdTagsElm = this._videoIdBox ? this._videoIdBox.querySelector('.searchVideoIdResult-tags') : null;
+        this._wordCountCache = new Map();
+        this._wordCountSeq = 0;
+        this._autoTagCountGeneration = 0;
+        const input = this._word, box = this._videoIdBox;
+        if (!input || !box) {
+            return;
+        }
+        const update = _.debounce(() => this._updateVideoIdPreview(), 120);
+        input.addEventListener('input', () => update());
+        input.addEventListener('compositionend', () => update());
+        input.addEventListener('paste', () => window.setTimeout(() => this._updateVideoIdPreview(), 0));
+        input.addEventListener('keydown', (e) => this._onVideoIdKeyDown(e), true);
+        /*
+         * Task 074: 「入力欄を触っているのに予測が出ない」ことがある件の対処。
+         * 検索を実行した語・Escで閉じた語は、入力を変えるまで再表示しない作りにしていた
+         * （裏で予測や件数を何度も取りに行かないようにするため）。そのため
+         * 「検索した後にもう一度入力欄をクリックした」「起動直後で前回の語が入っている」
+         * 場合に何も出ず、分かりづらかった。
+         * 入力欄にフォーカスし直した時と、↓キーを押した時は、もう一度出すようにする。
+         */
+        input.addEventListener('focus', () => {
+            if (this._videoIdDismissedKey && this.word) {
+                this._videoIdDismissedKey = '';
+                this._videoIdKey = '';
+                this._updateVideoIdPreview();
+            }
+        });
+        // ボタンを押しても入力欄からフォーカスが外れない（外れるとパネルごと閉じる）ようにする
+        box.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                e.preventDefault();
+            }
+        });
+        // Hover is an explicit request in low-traffic mode; the default search-row
+        // selection during ordinary typing does not trigger a count request.
+        box.addEventListener('mouseover', (e) => {
+            const tag = e.target.closest?.('.searchVideoIdResult-tag:not(.is-leaving)');
+            if (tag) {
+                const key = `tag:${tag.dataset.word}`;
+                if (key !== this._videoIdNavKey) {
+                    this._videoIdNavKey = key;
+                    this._updateVideoIdSelection();
+                }
+                return;
+            }
+            const row = e.target.closest?.('.searchVideoIdResult-search');
+            if (row && !row.contains(e.relatedTarget)) {
+                this._videoIdNavKey = 'search';
+                this._updateVideoIdSelection();
+                this._updateVideoIdSearchRow(false, true);
+            }
+        });
+        box.addEventListener('mouseout', (e) => {
+            const row = e.target.closest?.('.searchVideoIdResult-search');
+            if (row && !row.contains(e.relatedTarget) && this.wordCountMode === 'on-demand') {
+                this._cancelSearchRowCount();
+            }
+        });
+        box.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.target.closest('.searchVideoIdResult-search')) {
+                this._submitVideoIdAsWord();
+                return;
+            }
+            const tag = e.target.closest('.searchVideoIdResult-tag');
+            if (tag) {
+                this._selectVideoIdTag(tag.dataset.word);
+                return;
+            }
+            const card = e.target.closest('.searchVideoCard');
+            if (!card) {
+                return;
+            }
+            const button = e.target.closest('[data-action]');
+            const action = button ? button.dataset.action : 'open';
+            this._execVideoIdAction(action, card.dataset.watchId, button || card);
+        });
+        Array.from(this._form.querySelectorAll('.searchMode')).forEach(radio => radio.addEventListener('change', () => this._refreshWordCountsAfterFilterChange()));
+        // Task 073: 件数は期間・長さ・ジャンルの絞り込みも反映するので、変えたら数え直す
+        ['f_range', 'l_range', 'genre', 'ownerOnly'].forEach(name => {
+            const elm = this._form.elements.namedItem(name);
+            elm && elm.addEventListener && elm.addEventListener('change', () => {
+                this._refreshWordCountsAfterFilterChange();
+            });
+        });
+        // 起動直後（前回の検索語が入った状態）は、入力を変えるまで予測枠を出さない
+        this._videoIdDismissedKey = this._videoIdKeyOf(input.value);
+        // Task 072: タグ予測の表示方式（A/B/C）
+        this._applyVideoIdSuggestMode();
+        this._config.onkey('videoIdSuggestMode', () => {
+            this._applyVideoIdSuggestMode();
+            this._videoIdKey = '';
+            this._updateVideoIdPreview();
+        });
+        this._config.onkey('wordCountMode', () => {
+            this._cancelPendingWordCounts();
+            this._clearVisibleWordCounts();
+            if (!this._videoIdBox.classList.contains('is-open')) {
+                return;
+            }
+            this._updateVideoIdSearchRow(true);
+            this._scheduleAutomaticTagCounts();
+        });
+        this._updateVideoIdPreview();
     }
-    const list = this._videoIdList;
-    const cards = this._videoIdCards;
-    for (const [id, card] of cards) {
-      if (!ids.includes(id)) {
-        cards.delete(id);
-        this._removeVideoCard(card);
-      }
+    get videoIdSuggestMode() {
+        const mode = this._config.props.videoIdSuggestMode;
+        return VideoSearchForm.VIDEO_ID_SUGGEST_MODES.includes(mode) ? mode : 'merged';
     }
-    let delay = 0;
-    ids.forEach((id, i) => {
-      let card = cards.get(id);
-      if (!card) {
-        card = this._createVideoCard(id);
-        card.style.setProperty('--card-delay', `${delay++ * 70}ms`);
-        cards.set(id, card);
-      }
-      // 並び順を入力順に合わせる（退場中のカードより前に置く）
-      const current = list.querySelectorAll('.searchVideoCard:not(.is-leaving)')[i];
-      if (current !== card) {
-        list.insertBefore(card, current || null);
-      }
-    });
-    const box = this._videoIdBox;
-    // Task 072: C（delayed）は入力が止まってから動画カードを出す。カードの情報取得は先に始めておく
-    if (this.videoIdSuggestMode === 'delayed' && !wordOnly) {
-      if (keyChanged) {
-        box.classList.add('is-cardsWaiting');
-        window.clearTimeout(this._videoIdWaitTimer);
-        this._videoIdWaitTimer = window.setTimeout(() => {
-          box.classList.remove('is-cardsWaiting');
-          this._updateVideoIdSelection();
-        }, VideoSearchForm.VIDEO_ID_CARD_DELAY_MS);
-      }
-    } else {
-      window.clearTimeout(this._videoIdWaitTimer);
-      box.classList.remove('is-cardsWaiting');
+    get wordCountMode() {
+        const mode = this._config?.props?.wordCountMode;
+        return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'on-demand';
     }
-    // Task 072: 素の動画ID（検索語にもなる入力）の時は、本家と同じタグ予測も出す
-    if (bare) {
-      this._requestVideoIdTags(this.word);
-    } else {
-      this._videoIdTagSeq++;
-      this._renderVideoIdTags([], '');
+    _applyVideoIdSuggestMode() {
+        const box = this._videoIdBox;
+        if (!box) {
+            return;
+        }
+        const mode = this.videoIdSuggestMode;
+        VideoSearchForm.VIDEO_ID_SUGGEST_MODES.forEach((m) => box.classList.toggle(`is-mode-${m}`, m === mode));
     }
-    // 検索語としても使える入力（bare）は、最初は「検索」行を選ぶ（Enterは通常の検索）。URLは先頭の動画
-    if (keyChanged || !this._findVideoIdNavItem(this._videoIdNavKey)) {
-      this._videoIdNavKey = this._defaultVideoIdNavKey();
+    _videoIdKeyOf(text) {
+        const { ids, bare } = VideoSearchForm.parseVideoIdInput(text);
+        if (!ids.length) {
+            // Task 073: 普通の単語（語ごとに別のキー。空なら空）
+            const word = String(text || '').trim();
+            return word ? `k:${word}` : '';
+        }
+        return `${bare ? 'w' : 'u'}:${ids.join(',')}`;
     }
-    this._updateVideoIdSelection();
-    box.classList.toggle('is-multi', ids.length > 1);
-    box.classList.toggle('is-bare', bare);
-    box.classList.toggle('is-word', wordOnly);
-    box.querySelector('.searchVideoIdResult-label').textContent =
-      wordOnly ? '検索予測' : (ids.length > 1 ? `動画ID ${ids.length}件` : '動画ID');
-    const hint = box.querySelector('.searchVideoIdResult-hint');
-    if (wordOnly) {
-      hint.textContent = 'Enter 検索・↑↓ 選択・Esc 閉じる';
-      hint.title = 'Enter: 選んでいる行を実行（検索／タグで検索）　↑↓: 選択　Esc: 閉じる';
-    } else if (bare) {
-      hint.textContent = 'Enter 検索・↑↓ 選択・Shift+Enter 再生';
-      hint.title = 'Enter: 選んでいる行を実行（検索／タグで検索／動画を再生）　↑↓: 選択　Shift+Enter: 動画を再生　Esc: 閉じる';
-    } else {
-      hint.textContent = ids.length > 1 ? '↑↓ 選択・Enter 再生・Esc 閉じる' : 'Enter 再生・Esc 閉じる';
-      hint.title = 'クリック/Enter: 再生　Shift+Enter: 次に再生　↑↓: 選択(複数の時)　Esc: 閉じる';
+    _updateVideoIdPreview() {
+        const { ids, bare: idBare } = VideoSearchForm.parseVideoIdInput(this._word.value);
+        // Task 073: 動画IDではない普通の単語でも、同じ枠で「検索（件数）＋タグ予測」を出す
+        const wordOnly = !ids.length && !!this.word;
+        const bare = idBare || wordOnly;
+        const key = this._videoIdKeyOf(this._word.value);
+        if (key !== this._videoIdDismissedKey) {
+            this._videoIdDismissedKey = '';
+        }
+        const visible = (ids.length > 0 || wordOnly) && !this._videoIdDismissedKey;
+        if (key === this._videoIdKey && visible === this._videoIdBox.classList.contains('is-open')) {
+            return;
+        }
+        const keyChanged = this._videoIdKey !== key;
+        this._videoIdKey = key;
+        this._videoIdBare = bare;
+        this._view.classList.toggle('is-videoIdMode', ids.length > 0);
+        window.clearTimeout(this._videoIdCleanupTimer);
+        if (!visible) {
+            this._videoIdBox.classList.remove('is-open');
+            this._cancelPendingWordCounts();
+            this._videoIdNavKey = '';
+            window.clearTimeout(this._videoIdWaitTimer);
+            this._videoIdTagSeq++;
+            // 閉じるアニメーションの後にカードを片付ける（次に表示した時も登場アニメーションから始まるように）
+            this._videoIdCleanupTimer = window.setTimeout(() => {
+                if (this._videoIdBox.classList.contains('is-open')) {
+                    return;
+                }
+                this._videoIdCards.clear();
+                this._videoIdList.textContent = '';
+                this._videoIdTagsElm && (this._videoIdTagsElm.textContent = '');
+                this._videoIdTagWord = '';
+                this._videoIdKey = '';
+            }, 400);
+            return;
+        }
+        const list = this._videoIdList;
+        const cards = this._videoIdCards;
+        for (const [id, card] of cards) {
+            if (!ids.includes(id)) {
+                cards.delete(id);
+                this._removeVideoCard(card);
+            }
+        }
+        let delay = 0;
+        ids.forEach((id, i) => {
+            let card = cards.get(id);
+            if (!card) {
+                card = this._createVideoCard(id);
+                card.style.setProperty('--card-delay', `${delay++ * 70}ms`);
+                cards.set(id, card);
+            }
+            // 並び順を入力順に合わせる（退場中のカードより前に置く）
+            const current = list.querySelectorAll('.searchVideoCard:not(.is-leaving)')[i];
+            if (current !== card) {
+                list.insertBefore(card, current || null);
+            }
+        });
+        const box = this._videoIdBox;
+        // Task 072: C（delayed）は入力が止まってから動画カードを出す。カードの情報取得は先に始めておく
+        if (this.videoIdSuggestMode === 'delayed' && !wordOnly) {
+            if (keyChanged) {
+                box.classList.add('is-cardsWaiting');
+                window.clearTimeout(this._videoIdWaitTimer);
+                this._videoIdWaitTimer = window.setTimeout(() => {
+                    box.classList.remove('is-cardsWaiting');
+                    this._updateVideoIdSelection();
+                }, VideoSearchForm.VIDEO_ID_CARD_DELAY_MS);
+            }
+        }
+        else {
+            window.clearTimeout(this._videoIdWaitTimer);
+            box.classList.remove('is-cardsWaiting');
+        }
+        // Task 072: 素の動画ID（検索語にもなる入力）の時は、本家と同じタグ予測も出す
+        if (bare) {
+            this._requestVideoIdTags(this.word);
+        }
+        else {
+            this._videoIdTagSeq++;
+            this._renderVideoIdTags([], '');
+        }
+        // 検索語としても使える入力（bare）は、最初は「検索」行を選ぶ（Enterは通常の検索）。URLは先頭の動画
+        if (keyChanged || !this._findVideoIdNavItem(this._videoIdNavKey)) {
+            this._videoIdNavKey = this._defaultVideoIdNavKey();
+        }
+        this._updateVideoIdSelection();
+        box.classList.toggle('is-multi', ids.length > 1);
+        box.classList.toggle('is-bare', bare);
+        box.classList.toggle('is-word', wordOnly);
+        box.querySelector('.searchVideoIdResult-label').textContent =
+            wordOnly ? '検索予測' : (ids.length > 1 ? `動画ID ${ids.length}件` : '動画ID');
+        const hint = box.querySelector('.searchVideoIdResult-hint');
+        if (wordOnly) {
+            hint.textContent = 'Enter 検索・↑↓ 選択・Esc 閉じる';
+            hint.title = 'Enter: 選んでいる行を実行（検索／タグで検索）　↑↓: 選択　Esc: 閉じる';
+        }
+        else if (bare) {
+            hint.textContent = 'Enter 検索・↑↓ 選択・Shift+Enter 再生';
+            hint.title = 'Enter: 選んでいる行を実行（検索／タグで検索／動画を再生）　↑↓: 選択　Shift+Enter: 動画を再生　Esc: 閉じる';
+        }
+        else {
+            hint.textContent = ids.length > 1 ? '↑↓ 選択・Enter 再生・Esc 閉じる' : 'Enter 再生・Esc 閉じる';
+            hint.title = 'クリック/Enter: 再生　Shift+Enter: 次に再生　↑↓: 選択(複数の時)　Esc: 閉じる';
+        }
+        this._updateVideoIdSearchRow();
+        this._videoIdBox.classList.add('is-open');
     }
-    this._updateVideoIdSearchRow();
-    this._videoIdBox.classList.add('is-open');
-  }
-
-  _removeVideoCard(card) {
-    card.classList.add('is-leaving');
-    const remove = () => card.remove();
-    card.addEventListener('animationend', e => e.target === card && remove());
-    window.setTimeout(remove, 400);
-  }
-
-  _createVideoCard(watchId) {
-    const card = document.createElement('div');
-    card.className = 'searchVideoCard is-loading';
-    card.dataset.watchId = watchId;
-    card.setAttribute('role', 'button');
-    card.title = `${watchId} を再生`;
-    card.innerHTML = `
+    _removeVideoCard(card) {
+        card.classList.add('is-leaving');
+        const remove = () => card.remove();
+        card.addEventListener('animationend', (e) => e.target === card && remove());
+        window.setTimeout(remove, 400);
+    }
+    _createVideoCard(watchId) {
+        const card = document.createElement('div');
+        card.className = 'searchVideoCard is-loading';
+        card.dataset.watchId = watchId;
+        card.setAttribute('role', 'button');
+        card.title = `${watchId} を再生`;
+        card.innerHTML = `
       <div class="searchVideoCard-main">
         <div class="searchVideoCard-thumb">
           <img class="searchVideoCard-image" alt="" decoding="async">
@@ -2578,731 +2512,725 @@ class VideoSearchForm extends Emitter {
         <button type="button" class="searchVideoCard-button" data-action="deflistAdd" title="あとで見るに登録">あとで見る</button>
       </div>
     `.trim();
-    card.querySelector('.searchVideoCard-id').textContent = watchId;
-    const image = card.querySelector('.searchVideoCard-image');
-    image.addEventListener('load', () => card.classList.add('is-imageLoaded'), {once: true});
-    image.addEventListener('error', () => card.classList.add('is-imageError'), {once: true});
-
-    ThumbInfoLoader.load(watchId)
-      .then(info => this._fillVideoCard(card, watchId, info))
-      .catch(err => this._failVideoCard(card, watchId, err));
-    return card;
-  }
-
-  _fillVideoCard(card, watchId, info) {
-    if (!info || info.status === 'fail') {
-      return this._failVideoCard(card, watchId, info);
+        card.querySelector('.searchVideoCard-id').textContent = watchId;
+        const image = card.querySelector('.searchVideoCard-image');
+        image.addEventListener('load', () => card.classList.add('is-imageLoaded'), { once: true });
+        image.addEventListener('error', () => card.classList.add('is-imageError'), { once: true });
+        ThumbInfoLoader.load(watchId)
+            .then((info) => this._fillVideoCard(card, watchId, info))
+            .catch((err) => this._failVideoCard(card, watchId, err));
+        return card;
     }
-    const title = info.title || watchId;
-    card.title = `${title}\n(${watchId})`;
-    const image = card.querySelector('.searchVideoCard-image');
-    const thumbnail = String(info.thumbnail_url || info.thumbnail || '').replace(/^http:/, 'https:');
-    if (thumbnail) {
-      image.src = thumbnail;
-    } else {
-      card.classList.add('is-imageError');
+    _fillVideoCard(card, watchId, info) {
+        if (!info || info.status === 'fail') {
+            return this._failVideoCard(card, watchId, info);
+        }
+        const title = info.title || watchId;
+        card.title = `${title}\n(${watchId})`;
+        const image = card.querySelector('.searchVideoCard-image');
+        const thumbnail = String(info.thumbnail_url || info.thumbnail || '').replace(/^http:/, 'https:');
+        if (thumbnail) {
+            image.src = thumbnail;
+        }
+        else {
+            card.classList.add('is-imageError');
+        }
+        const duration = info.duration * 1;
+        card.querySelector('.searchVideoCard-duration').textContent =
+            isNaN(duration) ? '' : textUtil.secToTime(duration);
+        const titleElm = card.querySelector('.searchVideoCard-title');
+        titleElm.textContent = title;
+        const meta = card.querySelector('.searchVideoCard-meta');
+        meta.textContent = '';
+        const addComma = (n) => (typeof n === 'number' && n.toLocaleString) ? n.toLocaleString() : (n || 0);
+        const posted = info.postedAt ? new Date(info.postedAt) : null;
+        const pad = (n) => `${n}`.padStart(2, '0');
+        const items = [
+            posted && !isNaN(posted.getTime()) ?
+                `${posted.getFullYear()}/${pad(posted.getMonth() + 1)}/${pad(posted.getDate())} ${pad(posted.getHours())}:${pad(posted.getMinutes())}` : '',
+            `再生 ${addComma(info.viewCount * 1)}`,
+            `コメ ${addComma(info.commentCount * 1)}`,
+            `マイ ${addComma(info.mylistCount * 1)}`
+        ].filter(Boolean);
+        items.forEach(text => {
+            const span = document.createElement('span');
+            span.textContent = text;
+            meta.append(span);
+        });
+        const ownerName = info.owner && info.owner.name;
+        if (ownerName) {
+            const owner = document.createElement('span');
+            owner.className = 'searchVideoCard-owner';
+            owner.textContent = info.isChannel || (info.owner.type === 'channel') ? `ch: ${ownerName}` : ownerName;
+            meta.append(owner);
+        }
+        card.classList.remove('is-loading');
+        card.classList.add('is-loaded');
     }
-    const duration = info.duration * 1;
-    card.querySelector('.searchVideoCard-duration').textContent =
-      isNaN(duration) ? '' : textUtil.secToTime(duration);
-    const titleElm = card.querySelector('.searchVideoCard-title');
-    titleElm.textContent = title;
-    const meta = card.querySelector('.searchVideoCard-meta');
-    meta.textContent = '';
-    const addComma = n => (typeof n === 'number' && n.toLocaleString) ? n.toLocaleString() : (n || 0);
-    const posted = info.postedAt ? new Date(info.postedAt) : null;
-    const pad = n => `${n}`.padStart(2, '0');
-    const items = [
-      posted && !isNaN(posted.getTime()) ?
-        `${posted.getFullYear()}/${pad(posted.getMonth() + 1)}/${pad(posted.getDate())} ${pad(posted.getHours())}:${pad(posted.getMinutes())}` : '',
-      `再生 ${addComma(info.viewCount * 1)}`,
-      `コメ ${addComma(info.commentCount * 1)}`,
-      `マイ ${addComma(info.mylistCount * 1)}`
-    ].filter(Boolean);
-    items.forEach(text => {
-      const span = document.createElement('span');
-      span.textContent = text;
-      meta.append(span);
-    });
-    const ownerName = info.owner && info.owner.name;
-    if (ownerName) {
-      const owner = document.createElement('span');
-      owner.className = 'searchVideoCard-owner';
-      owner.textContent = info.isChannel || (info.owner.type === 'channel') ? `ch: ${ownerName}` : ownerName;
-      meta.append(owner);
+    _failVideoCard(card, watchId, err) {
+        const code = err && err.code;
+        const message = code === 'DELETED' ? '削除された動画です' :
+            code === 'NOT_FOUND' ? '動画が見つかりません' :
+                code === 'COMMUNITY' ? 'コミュニティ限定などで情報を取得できません' :
+                    '動画情報を取得できませんでした';
+        card.querySelector('.searchVideoCard-title').textContent = message;
+        const meta = card.querySelector('.searchVideoCard-meta');
+        meta.textContent = code === 'DELETED' || code === 'NOT_FOUND' ? '' : '再生は試せます';
+        card.classList.remove('is-loading');
+        card.classList.add('is-failed', 'is-imageError');
+        if (code === 'DELETED' || code === 'NOT_FOUND') {
+            card.classList.add('is-unavailable');
+            card.setAttribute('aria-disabled', 'true');
+            Array.from(card.querySelectorAll('.searchVideoCard-button')).forEach(button => {
+                button.disabled = true;
+                button.setAttribute('aria-disabled', 'true');
+            });
+        }
     }
-    card.classList.remove('is-loading');
-    card.classList.add('is-loaded');
-  }
-
-  _failVideoCard(card, watchId, err) {
-    const code = err && err.code;
-    const message =
-      code === 'DELETED' ? '削除された動画です' :
-      code === 'NOT_FOUND' ? '動画が見つかりません' :
-      code === 'COMMUNITY' ? 'コミュニティ限定などで情報を取得できません' :
-      '動画情報を取得できませんでした';
-    card.querySelector('.searchVideoCard-title').textContent = message;
-    const meta = card.querySelector('.searchVideoCard-meta');
-    meta.textContent = code === 'DELETED' || code === 'NOT_FOUND' ? '' : '再生は試せます';
-    card.classList.remove('is-loading');
-    card.classList.add('is-failed', 'is-imageError');
-    if (code === 'DELETED' || code === 'NOT_FOUND') {
-      card.classList.add('is-unavailable');
-      card.setAttribute('aria-disabled', 'true');
-      Array.from(card.querySelectorAll('.searchVideoCard-button')).forEach(button => {
-        button.disabled = true;
-        button.setAttribute('aria-disabled', 'true');
-      });
+    // Task 072: ↑↓で移動する対象を「検索行 → タグ予測 → 動画カード」の1列にまとめて扱う（A/B/C共通）
+    _videoIdNavItems() {
+        const box = this._videoIdBox;
+        const items = [];
+        if (!box) {
+            return items;
+        }
+        if (this._videoIdBare) {
+            items.push({ key: 'search', type: 'search', el: box.querySelector('.searchVideoIdResult-search') });
+            Array.from(box.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)')).forEach(el => items.push({ key: `tag:${el.dataset.word}`, type: 'tag', el, word: el.dataset.word }));
+        }
+        if (!box.classList.contains('is-cardsWaiting')) {
+            Array.from(this._videoIdList.querySelectorAll('.searchVideoCard:not(.is-leaving)')).forEach(el => items.push({ key: `card:${el.dataset.watchId}`, type: 'card', el, watchId: el.dataset.watchId }));
+        }
+        return items;
     }
-  }
-
-  // Task 072: ↑↓で移動する対象を「検索行 → タグ予測 → 動画カード」の1列にまとめて扱う（A/B/C共通）
-  _videoIdNavItems() {
-    const box = this._videoIdBox;
-    const items = [];
-    if (!box) { return items; }
-    if (this._videoIdBare) {
-      items.push({key: 'search', type: 'search', el: box.querySelector('.searchVideoIdResult-search')});
-      Array.from(box.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)')).forEach(el =>
-        items.push({key: `tag:${el.dataset.word}`, type: 'tag', el, word: el.dataset.word}));
+    _findVideoIdNavItem(key) {
+        return key ? this._videoIdNavItems().find((item) => item.key === key) : null;
     }
-    if (!box.classList.contains('is-cardsWaiting')) {
-      Array.from(this._videoIdList.querySelectorAll('.searchVideoCard:not(.is-leaving)')).forEach(el =>
-        items.push({key: `card:${el.dataset.watchId}`, type: 'card', el, watchId: el.dataset.watchId}));
+    _defaultVideoIdNavKey() {
+        if (this._videoIdBare) {
+            return 'search';
+        }
+        const first = VideoSearchForm.parseVideoIds(this._word.value)[0];
+        return first ? `card:${first}` : '';
     }
-    return items;
-  }
-
-  _findVideoIdNavItem(key) {
-    return key ? this._videoIdNavItems().find(item => item.key === key) : null;
-  }
-
-  _defaultVideoIdNavKey() {
-    if (this._videoIdBare) {
-      return 'search';
+    _updateVideoIdSelection(requestCount = true) {
+        const items = this._videoIdNavItems();
+        if (!this._findVideoIdNavItem(this._videoIdNavKey)) {
+            this._videoIdNavKey = this._defaultVideoIdNavKey();
+        }
+        const highlight = this._videoIdBare || items.length > 1;
+        const box = this._videoIdBox;
+        box && Array.from(box.querySelectorAll('.is-selected')).forEach(el => el.classList.remove('is-selected'));
+        const selected = items.find((item) => item.key === this._videoIdNavKey);
+        if (!selected || !highlight || !selected.el) {
+            return;
+        }
+        selected.el.classList.add('is-selected');
+        if (selected.type !== 'search' && selected.el.scrollIntoView) {
+            selected.el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+        if (selected.type === 'tag' && requestCount && this.wordCountMode === 'on-demand') {
+            this._requestTagCount(selected.el, selected.word);
+        }
+        else if (this.wordCountMode === 'on-demand') {
+            window.clearTimeout(this._tagCountTimer);
+            this._tagCountGeneration = (this._tagCountGeneration || 0) + 1;
+            this._tagCountPendingElm?.classList.remove('is-counting');
+            this._tagCountPendingElm = null;
+        }
     }
-    const first = VideoSearchForm.parseVideoIds(this._word.value)[0];
-    return first ? `card:${first}` : '';
-  }
-
-  _updateVideoIdSelection(requestCount = true) {
-    const items = this._videoIdNavItems();
-    if (!this._findVideoIdNavItem(this._videoIdNavKey)) {
-      this._videoIdNavKey = this._defaultVideoIdNavKey();
-    }
-    const highlight = this._videoIdBare || items.length > 1;
-    const box = this._videoIdBox;
-    box && Array.from(box.querySelectorAll('.is-selected')).forEach(el => el.classList.remove('is-selected'));
-    const selected = items.find(item => item.key === this._videoIdNavKey);
-    if (!selected || !highlight || !selected.el) {
-      return;
-    }
-    selected.el.classList.add('is-selected');
-    if (selected.type !== 'search' && selected.el.scrollIntoView) {
-      selected.el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
-    }
-    if (selected.type === 'tag' && requestCount && this.wordCountMode === 'on-demand') {
-      this._requestTagCount(selected.el, selected.word);
-    } else if (this.wordCountMode === 'on-demand') {
-      window.clearTimeout(this._tagCountTimer);
-      this._tagCountGeneration = (this._tagCountGeneration || 0) + 1;
-      this._tagCountPendingElm?.classList.remove('is-counting');
-      this._tagCountPendingElm = null;
-    }
-  }
-
-  // Task 073: ↑↓やマウスで選んでいるタグ候補の件数（入力語と同じく、絞り込み条件を反映）
-  _requestTagCount(li, word) {
-    if (this.wordCountMode === 'off' || this.wordCountMode === 'auto') { return; }
-    window.clearTimeout(this._tagCountTimer);
-    const generation = (this._tagCountGeneration = (this._tagCountGeneration || 0) + 1);
-    // 問い合わせ前に別の候補へ移った場合、前の候補の「数えています」表示を消す
-    const pending = this._tagCountPendingElm;
-    if (pending && pending.classList.contains('is-counting')) {
-      pending.classList.remove('is-counting');
-    }
-    this._tagCountPendingElm = null;
-    const countElm = li && li.querySelector('.searchVideoIdResult-tagCount');
-    if (!countElm || !word) {
-      return;
-    }
-    const mode = this.searchType === 'tag' ? 'tag' : 'keyword';
-    const cacheKey = this._wordCountCacheKey(word, mode);
-    const render = count => {
-      if (generation !== this._tagCountGeneration) { return; }
-      countElm.classList.remove('is-counting');
-      countElm.textContent = typeof count === 'number' ? `${count.toLocaleString()}件` : '';
-      countElm.classList.toggle('is-empty', count === 0);
-    };
-    if (!cacheKey) {
-      render(null);
-      return;
-    }
-    if (this._wordCountCache.has(cacheKey)) {
-      render(this._wordCountCache.get(cacheKey));
-      return;
-    }
-    countElm.textContent = '';
-    countElm.classList.add('is-counting');
-    this._tagCountPendingElm = countElm;
-    // 候補を↑↓で素早く移動している間は問い合わせない（止まった候補だけ数える）
-    this._tagCountTimer = window.setTimeout(() => {
-      this._tagCountPendingElm = null;
-      VideoSearchForm.fetchWordCount(word, mode, this.filterOptions)
-        .then(count => {
-          this._setWordCountCache(cacheKey, count);
-          render(count);
-        })
-        .catch(() => render(null));
-    }, VideoSearchForm.WORD_COUNT_DELAY_MS);
-  }
-
-  // 件数キャッシュのキー。「投稿者の動画のみ」は本家の検索APIで数えられないので件数を出さない(null)
-  _wordCountCacheKey(word, mode) {
-    if (this.isOwnerOnly) {
-      return null;
-    }
-    return `${mode}:${JSON.stringify(this.filterOptions)}:${word}`;
-  }
-
-  _setWordCountCache(key, count) {
-    const cache = this._wordCountCache;
-    cache.set(key, count);
-    // 長時間使っても増え続けないよう、古いものから捨てる
-    while (cache.size > VideoSearchForm.WORD_COUNT_CACHE_SIZE) {
-      cache.delete(cache.keys().next().value);
-    }
-  }
-
-  _cancelSearchRowCount() {
-    window.clearTimeout(this._wordCountTimer);
-    this._wordCountSeq = (this._wordCountSeq || 0) + 1;
-    this._videoIdBox?.querySelector('.searchVideoIdResult-search')
-      ?.classList.remove('is-counting');
-  }
-
-  _cancelPendingWordCounts() {
-    this._cancelSearchRowCount();
-    window.clearTimeout(this._tagCountTimer);
-    window.clearTimeout(this._autoTagCountTimer);
-    this._tagCountGeneration = (this._tagCountGeneration || 0) + 1;
-    this._autoTagCountGeneration = (this._autoTagCountGeneration || 0) + 1;
-    this._tagCountPendingElm?.classList.remove('is-counting');
-    this._tagCountPendingElm = null;
-  }
-
-  _clearVisibleWordCounts() {
-    const box = this._videoIdBox;
-    if (!box) { return; }
-    const row = box.querySelector('.searchVideoIdResult-search');
-    const count = row?.querySelector('.searchVideoIdResult-searchCount');
-    if (count) { count.textContent = ''; }
-    row?.classList.remove('is-counting');
-    row?.classList.remove('is-empty');
-    box.querySelectorAll('.searchVideoIdResult-tagCount').forEach(el => {
-      el.textContent = '';
-      el.classList.remove('is-counting');
-      el.classList.remove('is-empty');
-    });
-  }
-
-  _refreshWordCountsAfterFilterChange() {
-    this._cancelPendingWordCounts();
-    this._clearVisibleWordCounts();
-    this._updateVideoIdSearchRow(true);
-    this._updateVideoIdSelection(false);
-    this._scheduleAutomaticTagCounts();
-  }
-
-  _scheduleAutomaticTagCounts() {
-    window.clearTimeout(this._autoTagCountTimer);
-    const generation = (this._autoTagCountGeneration =
-      (this._autoTagCountGeneration || 0) + 1);
-    if (this.wordCountMode !== 'auto' || !this._videoIdBox || this.isOwnerOnly) { return; }
-    const items = Array.from(this._videoIdBox.querySelectorAll(
-      '.searchVideoIdResult-tag:not(.is-leaving)')).slice(0, VideoSearchForm.MAX_VIDEO_ID_TAGS);
-    if (!items.length) { return; }
-    const inputWord = this.word, mode = this.searchType, filters = this.filterOptions;
-    const valid = () => generation === this._autoTagCountGeneration &&
-      this.wordCountMode === 'auto' && !this.isOwnerOnly &&
-      this.word === inputWord && this.searchType === mode &&
-      this._videoIdBox.classList.contains('is-open');
-    const render = (li,count) => {
-      if (!valid()) { return; }
-      const elm = li.querySelector('.searchVideoIdResult-tagCount');
-      if (!elm || li.classList.contains('is-leaving')) { return; }
-      elm.classList.remove('is-counting');
-      elm.textContent = typeof count === 'number' ? count.toLocaleString() + '件' : '';
-      elm.classList.toggle('is-empty',count === 0);
-    };
-    const runNext = async index => {
-      if (!valid()) { return; }
-      for (let i=index; i<items.length; i++) {
-        const li=items[i], word=li.dataset.word;
-        const cacheKey=word && this._wordCountCacheKey(word,mode);
-        if (!cacheKey || li.classList.contains('is-leaving')) { continue; }
+    // Task 073: ↑↓やマウスで選んでいるタグ候補の件数（入力語と同じく、絞り込み条件を反映）
+    _requestTagCount(li, word) {
+        if (this.wordCountMode === 'off' || this.wordCountMode === 'auto') {
+            return;
+        }
+        window.clearTimeout(this._tagCountTimer);
+        const generation = (this._tagCountGeneration = (this._tagCountGeneration || 0) + 1);
+        // 問い合わせ前に別の候補へ移った場合、前の候補の「数えています」表示を消す
+        const pending = this._tagCountPendingElm;
+        if (pending && pending.classList.contains('is-counting')) {
+            pending.classList.remove('is-counting');
+        }
+        this._tagCountPendingElm = null;
+        const countElm = li && li.querySelector('.searchVideoIdResult-tagCount');
+        if (!countElm || !word) {
+            return;
+        }
+        const mode = this.searchType === 'tag' ? 'tag' : 'keyword';
+        const cacheKey = this._wordCountCacheKey(word, mode);
+        const render = (count) => {
+            if (generation !== this._tagCountGeneration) {
+                return;
+            }
+            countElm.classList.remove('is-counting');
+            countElm.textContent = typeof count === 'number' ? `${count.toLocaleString()}件` : '';
+            countElm.classList.toggle('is-empty', count === 0);
+        };
+        if (!cacheKey) {
+            render(null);
+            return;
+        }
         if (this._wordCountCache.has(cacheKey)) {
-          render(li,this._wordCountCache.get(cacheKey));
-          continue;
+            render(this._wordCountCache.get(cacheKey));
+            return;
         }
-        const elm=li.querySelector('.searchVideoIdResult-tagCount');
-        elm?.classList.add('is-counting');
+        countElm.textContent = '';
+        countElm.classList.add('is-counting');
+        this._tagCountPendingElm = countElm;
+        // 候補を↑↓で素早く移動している間は問い合わせない（止まった候補だけ数える）
+        this._tagCountTimer = window.setTimeout(() => {
+            this._tagCountPendingElm = null;
+            VideoSearchForm.fetchWordCount(word, mode, this.filterOptions)
+                .then(count => {
+                this._setWordCountCache(cacheKey, count);
+                render(count);
+            })
+                .catch(() => render(null));
+        }, VideoSearchForm.WORD_COUNT_DELAY_MS);
+    }
+    // 件数キャッシュのキー。「投稿者の動画のみ」は本家の検索APIで数えられないので件数を出さない(null)
+    _wordCountCacheKey(word, mode) {
+        if (this.isOwnerOnly) {
+            return null;
+        }
+        return `${mode}:${JSON.stringify(this.filterOptions)}:${word}`;
+    }
+    _setWordCountCache(key, count) {
+        const cache = this._wordCountCache;
+        cache.set(key, count);
+        // 長時間使っても増え続けないよう、古いものから捨てる
+        while (cache.size > VideoSearchForm.WORD_COUNT_CACHE_SIZE) {
+            cache.delete(cache.keys().next().value);
+        }
+    }
+    _cancelSearchRowCount() {
+        window.clearTimeout(this._wordCountTimer);
+        this._wordCountSeq = (this._wordCountSeq || 0) + 1;
+        this._videoIdBox?.querySelector('.searchVideoIdResult-search')
+            ?.classList.remove('is-counting');
+    }
+    _cancelPendingWordCounts() {
+        this._cancelSearchRowCount();
+        window.clearTimeout(this._tagCountTimer);
+        window.clearTimeout(this._autoTagCountTimer);
+        this._tagCountGeneration = (this._tagCountGeneration || 0) + 1;
+        this._autoTagCountGeneration = (this._autoTagCountGeneration || 0) + 1;
+        this._tagCountPendingElm?.classList.remove('is-counting');
+        this._tagCountPendingElm = null;
+    }
+    _clearVisibleWordCounts() {
+        const box = this._videoIdBox;
+        if (!box) {
+            return;
+        }
+        const row = box.querySelector('.searchVideoIdResult-search');
+        const count = row?.querySelector('.searchVideoIdResult-searchCount');
+        if (count) {
+            count.textContent = '';
+        }
+        row?.classList.remove('is-counting');
+        row?.classList.remove('is-empty');
+        box.querySelectorAll('.searchVideoIdResult-tagCount').forEach((el) => {
+            el.textContent = '';
+            el.classList.remove('is-counting');
+            el.classList.remove('is-empty');
+        });
+    }
+    _refreshWordCountsAfterFilterChange() {
+        this._cancelPendingWordCounts();
+        this._clearVisibleWordCounts();
+        this._updateVideoIdSearchRow(true);
+        this._updateVideoIdSelection(false);
+        this._scheduleAutomaticTagCounts();
+    }
+    _scheduleAutomaticTagCounts() {
+        window.clearTimeout(this._autoTagCountTimer);
+        const generation = (this._autoTagCountGeneration =
+            (this._autoTagCountGeneration || 0) + 1);
+        if (this.wordCountMode !== 'auto' || !this._videoIdBox || this.isOwnerOnly) {
+            return;
+        }
+        const items = Array.from(this._videoIdBox.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)')).slice(0, VideoSearchForm.MAX_VIDEO_ID_TAGS);
+        if (!items.length) {
+            return;
+        }
+        const inputWord = this.word, mode = this.searchType, filters = this.filterOptions;
+        const valid = () => generation === this._autoTagCountGeneration &&
+            this.wordCountMode === 'auto' && !this.isOwnerOnly &&
+            this.word === inputWord && this.searchType === mode &&
+            this._videoIdBox.classList.contains('is-open');
+        const render = (li, count) => {
+            if (!valid()) {
+                return;
+            }
+            const elm = li.querySelector('.searchVideoIdResult-tagCount');
+            if (!elm || li.classList.contains('is-leaving')) {
+                return;
+            }
+            elm.classList.remove('is-counting');
+            elm.textContent = typeof count === 'number' ? count.toLocaleString() + '件' : '';
+            elm.classList.toggle('is-empty', count === 0);
+        };
+        const runNext = async (index) => {
+            if (!valid()) {
+                return;
+            }
+            for (let i = index; i < items.length; i++) {
+                const li = items[i], word = li.dataset.word;
+                const cacheKey = word && this._wordCountCacheKey(word, mode);
+                if (!cacheKey || li.classList.contains('is-leaving')) {
+                    continue;
+                }
+                if (this._wordCountCache.has(cacheKey)) {
+                    render(li, this._wordCountCache.get(cacheKey));
+                    continue;
+                }
+                const elm = li.querySelector('.searchVideoIdResult-tagCount');
+                elm?.classList.add('is-counting');
+                try {
+                    const count = await VideoSearchForm.fetchWordCount(word, mode, filters);
+                    this._setWordCountCache(cacheKey, count);
+                    render(li, count);
+                }
+                catch (_) {
+                    render(li, null);
+                }
+                if (valid() && i + 1 < items.length) {
+                    this._autoTagCountTimer = window.setTimeout(() => runNext(i + 1), VideoSearchForm.WORD_COUNT_DELAY_MS);
+                }
+                return;
+            }
+        };
+        this._autoTagCountTimer = window.setTimeout(() => runNext(0), VideoSearchForm.WORD_COUNT_DELAY_MS);
+    }
+    _onVideoIdKeyDown(e) {
+        if (e.isComposing || e.keyCode === 229) {
+            return;
+        }
+        if (!this._videoIdBox.classList.contains('is-open')) {
+            // Task 074: 閉じている時に↓キーを押したら、もう一度予測を出す
+            if (e.key === 'ArrowDown' && this.word) {
+                e.preventDefault();
+                e.stopPropagation();
+                this._videoIdDismissedKey = '';
+                this._videoIdKey = '';
+                this._updateVideoIdPreview();
+            }
+            return;
+        }
+        const { ids, bare: idBare } = VideoSearchForm.parseVideoIdInput(this._word.value);
+        const wordOnly = !ids.length && !!this.word;
+        if (!ids.length && !wordOnly) {
+            return;
+        }
+        const bare = idBare || wordOnly;
+        const items = this._videoIdNavItems();
+        const current = items.find((item) => item.key === this._videoIdNavKey);
+        const selectedCardId = current && current.type === 'card' ? current.watchId : ids[0];
+        switch (e.key) {
+            case 'Enter':
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.shiftKey && selectedCardId) {
+                    this._execVideoIdAction(idBare ? 'open' : 'playlistInsert', selectedCardId);
+                    break;
+                }
+                if (!current || current.type === 'search') {
+                    bare ? this._submitVideoIdAsWord() : this._execVideoIdAction('open', ids[0]);
+                }
+                else if (current.type === 'tag') {
+                    this._selectVideoIdTag(current.word);
+                }
+                else {
+                    this._execVideoIdAction('open', current.watchId);
+                }
+                break;
+            case 'ArrowDown':
+            case 'ArrowUp': {
+                if (items.length < 2) {
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                const delta = e.key === 'ArrowDown' ? 1 : -1;
+                const index = Math.max(0, items.indexOf(current));
+                this._videoIdNavKey = items[(index + delta + items.length) % items.length].key;
+                this._updateVideoIdSelection();
+                if (this._videoIdNavKey === 'search') {
+                    this._updateVideoIdSearchRow(false, true);
+                }
+                else if (this.wordCountMode === 'on-demand') {
+                    this._cancelSearchRowCount();
+                }
+                break;
+            }
+            case 'Escape':
+                e.preventDefault();
+                e.stopPropagation();
+                this._videoIdDismissedKey = this._videoIdKey;
+                this._updateVideoIdPreview();
+                break;
+        }
+    }
+    // Task 072: 本家と同じタグ予測（sug.search）を、動画IDの入力でも取得する
+    async _requestVideoIdTags(word) {
+        if (word === this._videoIdTagWord) {
+            return;
+        }
+        this._videoIdTagWord = word;
+        const seq = ++this._videoIdTagSeq;
+        let items = [];
         try {
-          const count=await VideoSearchForm.fetchWordCount(word,mode,filters);
-          this._setWordCountCache(cacheKey,count);
-          render(li,count);
-        } catch (_) { render(li,null); }
-        if (valid() && i+1<items.length) {
-          this._autoTagCountTimer=window.setTimeout(() => runNext(i+1),
-            VideoSearchForm.WORD_COUNT_DELAY_MS);
+            items = await TagSuggestLoader.load(word);
         }
-        return;
-      }
-    };
-    this._autoTagCountTimer=window.setTimeout(() => runNext(0),
-      VideoSearchForm.WORD_COUNT_DELAY_MS);
-  }
-
-  _onVideoIdKeyDown(e) {
-    if (e.isComposing || e.keyCode === 229) {
-      return;
-    }
-    if (!this._videoIdBox.classList.contains('is-open')) {
-      // Task 074: 閉じている時に↓キーを押したら、もう一度予測を出す
-      if (e.key === 'ArrowDown' && this.word) {
-        e.preventDefault();
-        e.stopPropagation();
-        this._videoIdDismissedKey = '';
-        this._videoIdKey = '';
-        this._updateVideoIdPreview();
-      }
-      return;
-    }
-    const {ids, bare: idBare} = VideoSearchForm.parseVideoIdInput(this._word.value);
-    const wordOnly = !ids.length && !!this.word;
-    if (!ids.length && !wordOnly) {
-      return;
-    }
-    const bare = idBare || wordOnly;
-    const items = this._videoIdNavItems();
-    const current = items.find(item => item.key === this._videoIdNavKey);
-    const selectedCardId = current && current.type === 'card' ? current.watchId : ids[0];
-    switch (e.key) {
-      case 'Enter':
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.shiftKey && selectedCardId) {
-          this._execVideoIdAction(idBare ? 'open' : 'playlistInsert', selectedCardId);
-          break;
+        catch (err) {
+            window.console.warn('タグ予測の取得に失敗', word, err);
         }
-        if (!current || current.type === 'search') {
-          bare ? this._submitVideoIdAsWord() : this._execVideoIdAction('open', ids[0]);
-        } else if (current.type === 'tag') {
-          this._selectVideoIdTag(current.word);
-        } else {
-          this._execVideoIdAction('open', current.watchId);
+        if (seq !== this._videoIdTagSeq || this.word !== word) {
+            return;
         }
-        break;
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        if (items.length < 2) { return; }
-        e.preventDefault();
-        e.stopPropagation();
-        const delta = e.key === 'ArrowDown' ? 1 : -1;
-        const index = Math.max(0, items.indexOf(current));
-        this._videoIdNavKey = items[(index + delta + items.length) % items.length].key;
+        this._renderVideoIdTags(items || [], word);
+    }
+    _renderVideoIdTags(items, word) {
+        const ul = this._videoIdTagsElm;
+        if (!ul) {
+            return;
+        }
+        const lower = String(word || '').toLowerCase();
+        // 入力と同じ語は「検索」行と重複するので出さない
+        const words = items.filter((w) => String(w).toLowerCase() !== lower).slice(0, VideoSearchForm.MAX_VIDEO_ID_TAGS);
+        const current = new Map(Array.from(ul.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)'))
+            .map(li => [li.dataset.word, li]));
+        current.forEach((li, w) => {
+            if (!words.includes(w)) {
+                li.classList.add('is-leaving');
+                window.setTimeout(() => li.remove(), 200);
+            }
+        });
+        let delay = 0;
+        words.forEach((w, i) => {
+            let li = current.get(w);
+            if (!li) {
+                li = document.createElement('li');
+                li.className = 'searchVideoIdResult-tag';
+                li.setAttribute('role', 'option');
+                li.dataset.word = w;
+                li.title = `「${w}」で検索`;
+                const icon = document.createElement('span');
+                icon.className = 'searchVideoIdResult-tagIcon';
+                icon.textContent = '#';
+                const text = document.createElement('span');
+                text.className = 'searchVideoIdResult-tagText';
+                text.textContent = w;
+                // Task 073: 選択中の候補だけ件数を問い合わせて表示する（取得済みの件数はそのまま残す）
+                const count = document.createElement('span');
+                count.className = 'searchVideoIdResult-tagCount';
+                li.append(icon, text, count);
+                li.style.setProperty('--tag-delay', `${delay++ * 35}ms`);
+            }
+            const at = ul.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)')[i];
+            if (at !== li) {
+                ul.insertBefore(li, at || null);
+            }
+        });
+        this._videoIdBox.classList.toggle('has-tags', words.length > 0);
         this._updateVideoIdSelection();
-        if (this._videoIdNavKey === 'search') {
-          this._updateVideoIdSearchRow(false,true);
-        } else if (this.wordCountMode === 'on-demand') {
-          this._cancelSearchRowCount();
+        this._scheduleAutomaticTagCounts();
+    }
+    _selectVideoIdTag(word) {
+        if (!word) {
+            return;
         }
-        break;
-      }
-      case 'Escape':
-        e.preventDefault();
-        e.stopPropagation();
+        this._word.value = word;
+        this._config.props.word = word;
+        // 選んだタグ自体が動画IDの形（例: sm9708985）でも、カードを出し直さずにそのまま検索する
+        this._videoIdDismissedKey = this._videoIdKeyOf(word);
+        this._updateVideoIdPreview();
+        this.submit();
+    }
+    // 素の動画IDを検索語として検索する行（タグ/キーワードのヒット件数も表示）
+    _updateVideoIdSearchRow(force = false, requestOnDemand = false) {
+        const row = this._videoIdBox.querySelector('.searchVideoIdResult-search');
+        if (!row) {
+            return;
+        }
+        const word = this.word;
+        // Task 073: 普通の単語（動画IDではない入力）でも表示する
+        if (!word || !this._videoIdBare) {
+            return;
+        }
+        const mode = this.searchType === 'tag' ? 'tag' : 'keyword';
+        const label = mode === 'tag' ? `タグ「${word}」で検索` : `キーワード「${word}」で検索`;
+        const labelElm = row.querySelector('.searchVideoIdResult-searchLabel');
+        const countElm = row.querySelector('.searchVideoIdResult-searchCount');
+        if (!force && !requestOnDemand && labelElm.textContent === label) {
+            return;
+        }
+        labelElm.textContent = label;
+        const countMode = this.wordCountMode;
+        const cacheKey = this._wordCountCacheKey(word, mode);
+        row.title = countMode === 'off' ? `${label}（件数表示はOFF）` :
+            cacheKey ? label : `${label}（「投稿者の動画のみ」の時は件数を表示しません）`;
+        const seq = ++this._wordCountSeq;
+        window.clearTimeout(this._wordCountTimer);
+        const render = (count) => {
+            if (seq !== this._wordCountSeq) {
+                return;
+            }
+            row.classList.remove('is-counting');
+            row.classList.toggle('is-empty', count === 0);
+            countElm.textContent = typeof count === 'number' ? `${count.toLocaleString()}件` : '';
+            if (typeof count === 'number') {
+                countElm.classList.remove('is-pop');
+                void countElm.offsetWidth;
+                countElm.classList.add('is-pop');
+            }
+        };
+        if (!cacheKey || countMode === 'off') {
+            render(null);
+            return;
+        }
+        if (this._wordCountCache.has(cacheKey)) {
+            render(this._wordCountCache.get(cacheKey));
+            return;
+        }
+        // On-demand does not start a count request just because a word was typed
+        // or filters changed; the explicit hover/keyboard selection starts it.
+        if (countMode !== 'auto' && !requestOnDemand) {
+            render(null);
+            return;
+        }
+        row.classList.add('is-counting');
+        row.classList.remove('is-empty');
+        countElm.textContent = '';
+        const filters = this.filterOptions;
+        this._wordCountTimer = window.setTimeout(() => {
+            if (seq !== this._wordCountSeq ||
+                !this._videoIdBox.classList.contains('is-open') ||
+                this.wordCountMode === 'off') {
+                return;
+            }
+            VideoSearchForm.fetchWordCount(word, mode, filters)
+                .then(count => {
+                this._setWordCountCache(cacheKey, count);
+                render(count);
+            })
+                .catch(() => render(null));
+        }, VideoSearchForm.WORD_COUNT_DELAY_MS);
+    }
+    // nvapi /v2/search/video で件数だけ取る（本家の検索と同じ条件: 人気順・sensitiveContents=mask）
+    // Task 073: 期間・長さ・ジャンルの絞り込み(filters)も、実際の検索と同じ組み立て方(buildQuery)で反映する
+    static async fetchWordCount(word, mode, filters = {}) {
+        const nvapi = NicoSearchApiV2Loader && NicoSearchApiV2Loader.nvapi;
+        const params = Object.assign({}, filters, { searchType: mode === 'tag' ? 'tag' : 'keyword' });
+        const base = nvapi ? nvapi.buildQuery(word, params) : {
+            [mode === 'tag' ? 'tag' : 'keyword']: word,
+            sortKey: 'hot', sortOrder: 'none', sensitiveContents: 'mask'
+        };
+        const q = new URLSearchParams(Object.assign(base, { pageSize: 1, page: 1 }));
+        const res = await fetch(`https://nvapi.nicovideo.jp/v2/search/video?${q}`, {
+            credentials: 'include',
+            headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }
+        });
+        const json = await res.json();
+        if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+            throw new Error('count failed');
+        }
+        return json.data.totalCount * 1 || 0;
+    }
+    _submitVideoIdAsWord() {
         this._videoIdDismissedKey = this._videoIdKey;
         this._updateVideoIdPreview();
-        break;
+        this.submit();
     }
-  }
-
-  // Task 072: 本家と同じタグ予測（sug.search）を、動画IDの入力でも取得する
-  async _requestVideoIdTags(word) {
-    if (word === this._videoIdTagWord) {
-      return;
-    }
-    this._videoIdTagWord = word;
-    const seq = ++this._videoIdTagSeq;
-    let items = [];
-    try {
-      items = await TagSuggestLoader.load(word);
-    } catch (err) {
-      window.console.warn('タグ予測の取得に失敗', word, err);
-    }
-    if (seq !== this._videoIdTagSeq || this.word !== word) {
-      return;
-    }
-    this._renderVideoIdTags(items || [], word);
-  }
-
-  _renderVideoIdTags(items, word) {
-    const ul = this._videoIdTagsElm;
-    if (!ul) { return; }
-    const lower = String(word || '').toLowerCase();
-    // 入力と同じ語は「検索」行と重複するので出さない
-    const words = items.filter(w => String(w).toLowerCase() !== lower).slice(0, VideoSearchForm.MAX_VIDEO_ID_TAGS);
-    const current = new Map(Array.from(ul.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)'))
-      .map(li => [li.dataset.word, li]));
-    current.forEach((li, w) => {
-      if (!words.includes(w)) {
-        li.classList.add('is-leaving');
-        window.setTimeout(() => li.remove(), 200);
-      }
-    });
-    let delay = 0;
-    words.forEach((w, i) => {
-      let li = current.get(w);
-      if (!li) {
-        li = document.createElement('li');
-        li.className = 'searchVideoIdResult-tag';
-        li.setAttribute('role', 'option');
-        li.dataset.word = w;
-        li.title = `「${w}」で検索`;
-        const icon = document.createElement('span');
-        icon.className = 'searchVideoIdResult-tagIcon';
-        icon.textContent = '#';
-        const text = document.createElement('span');
-        text.className = 'searchVideoIdResult-tagText';
-        text.textContent = w;
-        // Task 073: 選択中の候補だけ件数を問い合わせて表示する（取得済みの件数はそのまま残す）
-        const count = document.createElement('span');
-        count.className = 'searchVideoIdResult-tagCount';
-        li.append(icon, text, count);
-        li.style.setProperty('--tag-delay', `${delay++ * 35}ms`);
-      }
-      const at = ul.querySelectorAll('.searchVideoIdResult-tag:not(.is-leaving)')[i];
-      if (at !== li) {
-        ul.insertBefore(li, at || null);
-      }
-    });
-    this._videoIdBox.classList.toggle('has-tags', words.length > 0);
-    this._updateVideoIdSelection();
-    this._scheduleAutomaticTagCounts();
-  }
-
-  _selectVideoIdTag(word) {
-    if (!word) {
-      return;
-    }
-    this._word.value = word;
-    this._config.props.word = word;
-    // 選んだタグ自体が動画IDの形（例: sm9708985）でも、カードを出し直さずにそのまま検索する
-    this._videoIdDismissedKey = this._videoIdKeyOf(word);
-    this._updateVideoIdPreview();
-    this.submit();
-  }
-
-  // 素の動画IDを検索語として検索する行（タグ/キーワードのヒット件数も表示）
-  _updateVideoIdSearchRow(force = false, requestOnDemand = false) {
-    const row = this._videoIdBox.querySelector('.searchVideoIdResult-search');
-    if (!row) {
-      return;
-    }
-    const word = this.word;
-    // Task 073: 普通の単語（動画IDではない入力）でも表示する
-    if (!word || !this._videoIdBare) {
-      return;
-    }
-    const mode = this.searchType === 'tag' ? 'tag' : 'keyword';
-    const label = mode === 'tag' ? `タグ「${word}」で検索` : `キーワード「${word}」で検索`;
-    const labelElm = row.querySelector('.searchVideoIdResult-searchLabel');
-    const countElm = row.querySelector('.searchVideoIdResult-searchCount');
-    if (!force && !requestOnDemand && labelElm.textContent === label) {
-      return;
-    }
-    labelElm.textContent = label;
-    const countMode = this.wordCountMode;
-    const cacheKey = this._wordCountCacheKey(word, mode);
-    row.title = countMode === 'off' ? `${label}（件数表示はOFF）` :
-      cacheKey ? label : `${label}（「投稿者の動画のみ」の時は件数を表示しません）`;
-    const seq = ++this._wordCountSeq;
-    window.clearTimeout(this._wordCountTimer);
-    const render = count => {
-      if (seq !== this._wordCountSeq) { return; }
-      row.classList.remove('is-counting');
-      row.classList.toggle('is-empty', count === 0);
-      countElm.textContent = typeof count === 'number' ? `${count.toLocaleString()}件` : '';
-      if (typeof count === 'number') {
-        countElm.classList.remove('is-pop');
-        void countElm.offsetWidth;
-        countElm.classList.add('is-pop');
-      }
-    };
-    if (!cacheKey || countMode === 'off') {
-      render(null);
-      return;
-    }
-    if (this._wordCountCache.has(cacheKey)) {
-      render(this._wordCountCache.get(cacheKey));
-      return;
-    }
-    // On-demand does not start a count request just because a word was typed
-    // or filters changed; the explicit hover/keyboard selection starts it.
-    if (countMode !== 'auto' && !requestOnDemand) {
-      render(null);
-      return;
-    }
-    row.classList.add('is-counting');
-    row.classList.remove('is-empty');
-    countElm.textContent = '';
-    const filters = this.filterOptions;
-    this._wordCountTimer = window.setTimeout(() => {
-      if (seq !== this._wordCountSeq ||
-        !this._videoIdBox.classList.contains('is-open') ||
-        this.wordCountMode === 'off') { return; }
-      VideoSearchForm.fetchWordCount(word, mode, filters)
-        .then(count => {
-          this._setWordCountCache(cacheKey, count);
-          render(count);
-        })
-        .catch(() => render(null));
-    }, VideoSearchForm.WORD_COUNT_DELAY_MS);
-  }
-
-  // nvapi /v2/search/video で件数だけ取る（本家の検索と同じ条件: 人気順・sensitiveContents=mask）
-  // Task 073: 期間・長さ・ジャンルの絞り込み(filters)も、実際の検索と同じ組み立て方(buildQuery)で反映する
-  static async fetchWordCount(word, mode, filters = {}) {
-    const nvapi = NicoSearchApiV2Loader && NicoSearchApiV2Loader.nvapi;
-    const params = Object.assign({}, filters, {searchType: mode === 'tag' ? 'tag' : 'keyword'});
-    const base = nvapi ? nvapi.buildQuery(word, params) : {
-      [mode === 'tag' ? 'tag' : 'keyword']: word,
-      sortKey: 'hot', sortOrder: 'none', sensitiveContents: 'mask'
-    };
-    const q = new URLSearchParams(Object.assign(base, {pageSize: 1, page: 1}));
-    const res = await fetch(`https://nvapi.nicovideo.jp/v2/search/video?${q}`, {
-      credentials: 'include',
-      headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
-    });
-    const json = await res.json();
-    if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-      throw new Error('count failed');
-    }
-    return json.data.totalCount * 1 || 0;
-  }
-
-  _submitVideoIdAsWord() {
-    this._videoIdDismissedKey = this._videoIdKey;
-    this._updateVideoIdPreview();
-    this.submit();
-  }
-
-  _execVideoIdAction(action, watchId, feedbackTarget) {
-    if (!watchId) {
-      return;
-    }
-    const card = this._videoIdCards.get(watchId);
-    if (card && card.classList.contains('is-unavailable')) {
-      return;
-    }
-    switch (action) {
-      case 'open':
-        card && card.classList.add('is-opening');
-        domEvent.dispatchCommand(this._view, 'open', watchId);
-        // 開いたらカードは閉じる（入力はそのまま。入力を変えるとまた出る）
-        window.setTimeout(() => {
-          this._videoIdDismissedKey = this._videoIdKey;
-          this._updateVideoIdPreview();
-          card && card.classList.remove('is-opening');
-        }, 260);
-        break;
-      case 'playlistInsert':
-      case 'playlistAdd':
-      case 'deflistAdd': {
-        domEvent.dispatchCommand(this._view, action, watchId);
-        const target = feedbackTarget && feedbackTarget.classList.contains('searchVideoCard-button') ?
-          feedbackTarget : (card && card.querySelector(`[data-action="${action}"]`));
-        if (target) {
-          target.classList.remove('is-done');
-          void target.offsetWidth;
-          target.classList.add('is-done');
-          window.setTimeout(() => target.classList.remove('is-done'), 900);
+    _execVideoIdAction(action, watchId, feedbackTarget) {
+        if (!watchId) {
+            return;
         }
-        break;
-      }
+        const card = this._videoIdCards.get(watchId);
+        if (card && card.classList.contains('is-unavailable')) {
+            return;
+        }
+        switch (action) {
+            case 'open':
+                card && card.classList.add('is-opening');
+                domEvent.dispatchCommand(this._view, 'open', watchId);
+                // 開いたらカードは閉じる（入力はそのまま。入力を変えるとまた出る）
+                window.setTimeout(() => {
+                    this._videoIdDismissedKey = this._videoIdKey;
+                    this._updateVideoIdPreview();
+                    card && card.classList.remove('is-opening');
+                }, 260);
+                break;
+            case 'playlistInsert':
+            case 'playlistAdd':
+            case 'deflistAdd': {
+                domEvent.dispatchCommand(this._view, action, watchId);
+                const target = feedbackTarget && feedbackTarget.classList.contains('searchVideoCard-button') ?
+                    feedbackTarget : (card && card.querySelector(`[data-action="${action}"]`));
+                if (target) {
+                    target.classList.remove('is-done');
+                    void target.offsetWidth;
+                    target.classList.add('is-done');
+                    window.setTimeout(() => target.classList.remove('is-done'), 900);
+                }
+                break;
+            }
+        }
     }
-  }
-
-  _onClick(e) {
-    e.stopPropagation();
-    const tagName = (e.target.tagName || '').toLowerCase();
-    const target = e.target.closest('.command');
-
-    if (!['input', 'select'].includes(tagName)) {
-      this._word.focus();
+    _onClick(e) {
+        e.stopPropagation();
+        const tagName = (e.target.tagName || '').toLowerCase();
+        const target = e.target.closest('.command');
+        if (!['input', 'select'].includes(tagName)) {
+            this._word.focus();
+        }
+        if (!target) {
+            return;
+        }
+        const command = target.dataset.command;
+        if (!command) {
+            return;
+        }
+        e.preventDefault();
+        const type = target.getAttribute('data-type') || 'string';
+        let param = target.getAttribute('data-param');
+        if (type !== 'string') {
+            param = JSON.parse(param);
+        }
+        switch (command) {
+            case 'clear':
+                this._word.value = '';
+                break;
+            default:
+                domEvent.dispatchCommand(e.target, command, param);
+        }
     }
-
-    if (!target) {
-      return;
+    _onSubmit(e) {
+        e.stopPropagation();
+        // Task 071: 動画IDが入っている時の▶/Enterは、検索ではなくその動画を再生する
+        // 検索語になり得ないURL形式の時だけ動画を開く（sm114514 のような素のIDは検索語として検索）
+        const { ids, bare } = VideoSearchForm.parseVideoIdInput(this.word);
+        if (ids.length && !bare) {
+            const current = this._findVideoIdNavItem(this._videoIdNavKey);
+            this._execVideoIdAction('open', current && current.type === 'card' ? current.watchId : ids[0]);
+            return;
+        }
+        // Task 073: ▶ボタンで検索した時も予測枠を閉じる（入力を変えるとまた出る）
+        if (this._videoIdBox && this._videoIdBox.classList.contains('is-open')) {
+            this._videoIdDismissedKey = this._videoIdKey;
+            this._updateVideoIdPreview();
+        }
+        this.submit();
     }
-
-    const command = target.dataset.command;
-    if (!command) {
-      return;
+    submit() {
+        const word = this.word;
+        if (!word) {
+            return;
+        }
+        // Task 071: URL形式の動画IDは検索しない（並び順などを変えた時の自動検索も含む）。
+        // sm114514 のような素のIDはタグ・キーワードとしても存在し得るので通常通り検索する
+        const parsed = VideoSearchForm.parseVideoIdInput(word);
+        if (parsed.ids.length && !parsed.bare) {
+            return;
+        }
+        domEvent.dispatchCommand(this._view, 'playlistSetSearchVideo', {
+            word,
+            option: Object.assign({
+                searchType: this.searchType,
+                sort: this.sort,
+                order: this.order,
+                owner: this.isOwnerOnly,
+                playlistSort: this.isPlaylistSort
+            }, this.filterOptions)
+        });
     }
-    e.preventDefault();
-    const type = target.getAttribute('data-type') || 'string';
-    let param = target.getAttribute('data-param');
-    if (type !== 'string') { param = JSON.parse(param); }
-
-    switch (command) {
-      case 'clear':
-        this._word.value = '';
-        break;
-      default:
-        domEvent.dispatchCommand(e.target, command, param);
+    _hasFocus() {
+        return !!document.activeElement.closest('#zenzaVideoSearchPanel');
     }
-  }
-
-  _onSubmit(e) {
-    e.stopPropagation();
-    // Task 071: 動画IDが入っている時の▶/Enterは、検索ではなくその動画を再生する
-    // 検索語になり得ないURL形式の時だけ動画を開く（sm114514 のような素のIDは検索語として検索）
-    const {ids, bare} = VideoSearchForm.parseVideoIdInput(this.word);
-    if (ids.length && !bare) {
-      const current = this._findVideoIdNavItem(this._videoIdNavKey);
-      this._execVideoIdAction('open', current && current.type === 'card' ? current.watchId : ids[0]);
-      return;
+    _updateFocus() {
     }
-    // Task 073: ▶ボタンで検索した時も予測枠を閉じる（入力を変えるとまた出る）
-    if (this._videoIdBox && this._videoIdBox.classList.contains('is-open')) {
-      this._videoIdDismissedKey = this._videoIdKey;
-      this._updateVideoIdPreview();
+    get word() {
+        return (this._word.value || '').trim();
     }
-    this.submit();
-  }
-
-  submit() {
-    const word = this.word;
-    if (!word) {
-      return;
+    get searchType() {
+        return this._form.mode.value;
     }
-    // Task 071: URL形式の動画IDは検索しない（並び順などを変えた時の自動検索も含む）。
-    // sm114514 のような素のIDはタグ・キーワードとしても存在し得るので通常通り検索する
-    const parsed = VideoSearchForm.parseVideoIdInput(word);
-    if (parsed.ids.length && !parsed.bare) {
-      return;
+    // Task0xx: 解釈ロジックをVideoSearch.jsのparseVideoSearchSortValue()へ集約。
+    // タグ検索(TagListView)側もこれと全く同じ関数でvideoSearch.sortを解釈する。
+    get sort() {
+        return parseVideoSearchSortValue(this._composeSortValue()).sort;
     }
-
-    domEvent.dispatchCommand(this._view, 'playlistSetSearchVideo', {
-      word,
-      option: Object.assign({
-        searchType: this.searchType,
-        sort: this.sort,
-        order: this.order,
-        owner: this.isOwnerOnly,
-        playlistSort: this.isPlaylistSort
-      }, this.filterOptions)
-    });
-  }
-
-  _hasFocus() {
-    return !!document.activeElement.closest('#zenzaVideoSearchPanel');
-  }
-
-  _updateFocus() {
-  }
-
-  get word() {
-    return (this._word.value || '').trim();
-  }
-
-  get searchType() {
-    return this._form.mode.value;
-  }
-
-  // Task0xx: 解釈ロジックをVideoSearch.jsのparseVideoSearchSortValue()へ集約。
-  // タグ検索(TagListView)側もこれと全く同じ関数でvideoSearch.sortを解釈する。
-  get sort() {
-    return parseVideoSearchSortValue(this._composeSortValue()).sort;
-  }
-
-  get order() {
-    return parseVideoSearchSortValue(this._composeSortValue()).order;
-  }
-
-  get isPlaylistSort() {
-    return parseVideoSearchSortValue(this._composeSortValue()).playlistSort;
-  }
-
-  // Task 068: 並び順キーと昇降順のselectから、保存用の値("playlist" / "f" / "l,a" 等)を作る
-  _composeSortValue() {
-    const key = this._sortKey.value || 'playlist';
-    if (key === 'playlist') {
-      return 'playlist';
+    get order() {
+        return parseVideoSearchSortValue(this._composeSortValue()).order;
     }
-    if (VideoSearchForm.UNORDERABLE.includes(key)) {
-      return key;
+    get isPlaylistSort() {
+        return parseVideoSearchSortValue(this._composeSortValue()).playlistSort;
     }
-    return `${key},${this._sortOrder.value === 'a' ? 'a' : 'd'}`;
-  }
-
-  _applySortValue(raw) {
-    const value = raw || 'playlist';
-    const [key, order] = value.split(',');
-    this._sortKey.value = key;
-    if (this._sortKey.value !== key) {
-      this._sortKey.value = 'playlist'; // 知らない値(古い設定等)は自動に戻す
+    // Task 068: 並び順キーと昇降順のselectから、保存用の値("playlist" / "f" / "l,a" 等)を作る
+    _composeSortValue() {
+        const key = this._sortKey.value || 'playlist';
+        if (key === 'playlist') {
+            return 'playlist';
+        }
+        if (VideoSearchForm.UNORDERABLE.includes(key)) {
+            return key;
+        }
+        return `${key},${this._sortOrder.value === 'a' ? 'a' : 'd'}`;
     }
-    this._sortOrder.value = order === 'a' ? 'a' : 'd';
-    this._updateOrderState();
-  }
-
-  _updateOrderState() {
-    const key = this._sortKey.value;
-    this._sortOrder.disabled = key === 'playlist' || VideoSearchForm.UNORDERABLE.includes(key);
-  }
-
-  get filterOptions() {
-    const form = this._form;
-    const result = {};
-    const fRange = form['f_range'].value * 1;
-    const lRange = form['l_range'].value * 1;
-    const genre = form['genre'].value;
-    if (fRange) { result.f_range = fRange; }
-    if (lRange) { result.l_range = lRange; }
-    if (genre && genre !== 'all') { result.genre = genre; }
-    return result;
-  }
-
-  // Task 073: 項目を削除しても例外にならないよう、要素が無ければ常にfalse
-  get _ownerOnlyInput() {
-    const form = this._form;
-    const input = form && form.elements && form.elements.namedItem('ownerOnly');
-    return (input && input.type === 'checkbox') ? input : null;
-  }
-
-  get isOwnerOnly() {
-    const input = this._ownerOnlyInput;
-    return !!(input && input.checked && !input.disabled);
-  }
+    _applySortValue(raw) {
+        const value = raw || 'playlist';
+        const [key, order] = value.split(',');
+        this._sortKey.value = key;
+        if (this._sortKey.value !== key) {
+            this._sortKey.value = 'playlist'; // 知らない値(古い設定等)は自動に戻す
+        }
+        this._sortOrder.value = order === 'a' ? 'a' : 'd';
+        this._updateOrderState();
+    }
+    _updateOrderState() {
+        const key = this._sortKey.value;
+        this._sortOrder.disabled = key === 'playlist' || VideoSearchForm.UNORDERABLE.includes(key);
+    }
+    get filterOptions() {
+        const form = this._form;
+        const result = {};
+        const fRange = form['f_range'].value * 1;
+        const lRange = form['l_range'].value * 1;
+        const genre = form['genre'].value;
+        if (fRange) {
+            result.f_range = fRange;
+        }
+        if (lRange) {
+            result.l_range = lRange;
+        }
+        if (genre && genre !== 'all') {
+            result.genre = genre;
+        }
+        return result;
+    }
+    // Task 073: 項目を削除しても例外にならないよう、要素が無ければ常にfalse
+    get _ownerOnlyInput() {
+        const form = this._form;
+        const input = form && form.elements && form.elements.namedItem('ownerOnly');
+        return (input && input.type === 'checkbox') ? input : null;
+    }
+    get isOwnerOnly() {
+        const input = this._ownerOnlyInput;
+        return !!(input && input.checked && !input.disabled);
+    }
 }
-
 // 本家で昇順/降順を選べない並び順（ニコニコで人気・あなたへのおすすめ）
 VideoSearchForm.UNORDERABLE = ['h', 'p'];
-
 css.addStyle(`
   .is-open .zenzaWatchVideoHeaderPanel .zenzaVideoSearchPanel {
     top: 120px;
     right: 32px;
   }
-`, {className: 'screenMode for-popup videoSearchPanel', disabled: true});
-
+`, { className: 'screenMode for-popup videoSearchPanel', disabled: true });
 // Task 074: ショート動画(ss〜)と /shorts/ 形式のURLにも対応
 VideoSearchForm.VIDEO_ID_REG =
-  /^(?:https?:\/\/)?(?:(?:www\.|sp\.|embed\.)?nicovideo\.jp\/(?:watch|shorts)\/|nico\.ms\/)?((?:sm|nm|so|ss)\d+)(?:[\/?#&].*)?$/i;
+    /^(?:https?:\/\/)?(?:(?:www\.|sp\.|embed\.)?nicovideo\.jp\/(?:watch|shorts)\/|nico\.ms\/)?((?:sm|nm|so|ss)\d+)(?:[\/?#&].*)?$/i;
 VideoSearchForm.MAX_VIDEO_ID_CARDS = 5;
 // Task 072
 VideoSearchForm.VIDEO_ID_SUGGEST_MODES = ['merged', 'side', 'delayed'];
@@ -3311,7 +3239,6 @@ VideoSearchForm.VIDEO_ID_CARD_DELAY_MS = 500;
 // Task 073: 件数の問い合わせは、入力・選択が止まってからこの時間後に行う
 VideoSearchForm.WORD_COUNT_DELAY_MS = 300;
 VideoSearchForm.WORD_COUNT_CACHE_SIZE = 200;
-
 VideoSearchForm.__css__ = (`
     .zenzaVideoSearchPanel {
       pointer-events: auto;
@@ -4096,7 +4023,6 @@ VideoSearchForm.__css__ = (`
       }
 
   `).trim();
-
 VideoSearchForm.__tpl__ = (`
     <div class="zenzaVideoSearchPanel" id="zenzaVideoSearchPanel">
       <form action="javascript: void(0);">
@@ -4224,229 +4150,200 @@ VideoSearchForm.__tpl__ = (`
       </form>
     </div>
   `).toString();
-
-
 // typoじゃなくてブロック回避のため名前を変えてる
 class UaaView extends BaseViewComponent {
-  constructor({parentNode}) {
-    super({
-      parentNode,
-      name: 'UaaView',
-      template: UaaView.__tpl__,
-      shadow: UaaView._shadow_,
-      css: UaaView.__css__
-    });
-
-    this._state = {
-      isUpdating: false,
-      isExist: false,
-      isSpeaking: false
-    };
-
-    this._config = Config.namespace('uaa');
-    this._generation = 0;
-    this._loadTimer = null;
-    this._abortController = null;
-
-    this._bound.load = this.load.bind(this);
-    this._bound.update = this.update.bind(this);
-  }
-
-  _initDom(...args) {
-    super._initDom(...args);
-    ZenzaWatch.debug.uaa = this;
-
-    if (!this._shadow) {
-      return;
-    } // ShadowDOM使えなかったらバイバイ
-    const shadow = this._shadow || this._view;
-    this._elm.body = shadow.querySelector('.UaaDetailBody');
-  }
-
-  _cancelPending() {
-    this._generation = (this._generation || 0) + 1;
-    if (this._loadTimer) {
-      window.clearTimeout(this._loadTimer);
-      this._loadTimer = null;
+    constructor({ parentNode }) {
+        super({
+            parentNode,
+            name: 'UaaView',
+            template: UaaView.__tpl__,
+            shadow: UaaView._shadow_,
+            css: UaaView.__css__
+        });
+        this._state = {
+            isUpdating: false,
+            isExist: false,
+            isSpeaking: false
+        };
+        this._config = Config.namespace('uaa');
+        this._generation = 0;
+        this._loadTimer = null;
+        this._abortController = null;
+        this._bound.load = this.load.bind(this);
+        this._bound.update = this.update.bind(this);
     }
-    if (this._abortController) {
-      this._abortController.abort();
-      this._abortController = null;
-    }
-  }
-
-  update(videoInfo) {
-    if (!this._shadow || !this._config.props.enable) {
-      return;
-    }
-    if (!this._elm.body) {
-      return;
-    }
-
-    if (this._state.isUpdating && this._props.videoId === videoInfo.videoId) {
-      return;
-    }
-    this._cancelPending();
-    this.setState({isUpdating: true});
-    this._props.videoInfo = videoInfo;
-    this._props.videoId = videoInfo.videoId;
-
-    const generation = this._generation;
-    const controller =
-      typeof AbortController === 'undefined' ? null : new AbortController();
-    this._abortController = controller;
-    const signal = controller ? controller.signal : undefined;
-    this._loadTimer = window.setTimeout(() => {
-      this._loadTimer = null;
-      if (generation !== this._generation || (signal && signal.aborted)) {
-        return;
-      }
-      this.load(videoInfo, {generation, signal});
-    }, 5000);
-  }
-
-  load(videoInfo, {generation = this._generation, signal} = {}) {
-    const videoId = videoInfo.videoId;
-
-    return UaaLoader.load(videoId, {limit: 50, signal})
-      .then(result => this._onLoad(videoId, result, generation, signal))
-      .catch(e => this._onFail(videoId, e, generation, signal));
-  }
-
-  clear() {
-    this._cancelPending();
-    this.setState({isUpdating: false, isExist: false, isSpeaking: false});
-    if (!this._elm.body) {
-      return;
-    }
-    this._elm.body.textContent = '';
-  }
-
-  _onLoad(videoId, result, generation = this._generation, signal) {
-    if (this._props.videoId !== videoId || generation !== this._generation ||
-        (signal && signal.aborted)) {
-      return;
-    }
-    this.setState({isUpdating: false});
-    const data = result ? result.data : null;
-    if (!data || data.sponsors.length < 1) {
-      return;
-    }
-
-    const df = this.df = this.df || document.createDocumentFragment();
-    const div = document.createElement('div');
-    div.className = 'screenshots';
-    let idx = 0, screenshots = 0;
-    data.sponsors.forEach(u => {
-      if (!u.auxiliary.bgVideoPosition || idx >= 4) {
-        return;
-      }
-      u.added = true;
-      div.append(this._createItem(u, idx++, generation, signal));
-      screenshots++;
-    });
-    div.setAttribute('data-screenshot-count', screenshots);
-    df.append(div);
-
-    data.sponsors.forEach(u => {
-      if (!u.auxiliary.bgVideoPosition || u.added) {
-        return;
-      }
-      u.added = true;
-      df.append(this._createItem(u, idx++, generation, signal));
-    });
-    data.sponsors.forEach(u => {
-      if (u.added) {
-        return;
-      }
-      u.added = true;
-      df.append(this._createItem(u, idx++, generation, signal));
-    });
-
-    this._elm.body.innerHTML = '';
-    this._elm.body.append(df);
-
-    this.setState({isExist: true});
-  }
-
-  _createItem(data, idx, generation = this._generation,
-      signal = this._abortController ? this._abortController.signal : undefined) {
-    const df = document.createElement('div');
-    const contact = document.createElement('span');
-    contact.textContent = data.advertiserName;
-    contact.className = 'contact';
-    df.className = 'item';
-    const aux = data.auxiliary;
-    const bgkeyframe = aux.bgVideoPosition || 0;
-    if (data.message) {
-      data.title = data.message;
-    }
-
-    df.setAttribute('data-index', idx);
-    if (bgkeyframe && idx < 4) {
-      const sec = parseFloat(bgkeyframe);
-      df.setAttribute('data-time', textUtil.secToTime(sec));
-      df.classList.add('clickable', 'command', 'other');
-      Object.assign(df.dataset, { command: 'seek', type: 'number', param: sec });
-      contact.setAttribute('title', `${data.message}(${textUtil.secToTime(sec)})`);
-
-      const isCurrent = () =>
-        generation === this._generation && (!signal || !signal.aborted);
-      this._props.videoInfo.getCurrentVideo()
-        .then(url => {
-          if (!isCurrent()) {
-            return null;
-          }
-          return ZenzaWatch.util.VideoCaptureUtil.capture(url, sec, {signal});
-        })
-        .then(screenshot => {
-          if (!screenshot || !isCurrent()) {
+    _initDom(...args) {
+        super._initDom(...args);
+        ZenzaWatch.debug.uaa = this;
+        if (!this._shadow) {
             return;
-          }
-          const cv = document.createElement('canvas');
-          const ct = cv.getContext('2d');
-          cv.width = screenshot.width;
-          cv.height = screenshot.height;
-
-          cv.className = 'screenshot command clickable';
-          Object.assign(cv.dataset, { command: 'seek', type: 'number', param: sec });
-          ct.fillStyle = 'rgb(32, 32, 32)';
-          ct.fillRect(0, 0, cv.width, cv.height);
-          ct.drawImage(screenshot, 0, 0);
-          df.classList.add('has-screenshot');
-          df.classList.remove('clickable', 'other');
-
-          df.append(cv);
-        }).catch(() => {});
-    } else if (bgkeyframe) {
-      const sec = parseFloat(bgkeyframe);
-      df.classList.add('clickable', 'command', 'other');
-      Object.assign(df.dataset, { command: 'seek', type: 'number', param: sec });
-      contact.setAttribute('title', `${data.message}(${textUtil.secToTime(sec)})`);
-    } else {
-      df.classList.add('other');
+        } // ShadowDOM使えなかったらバイバイ
+        const shadow = this._shadow || this._view;
+        this._elm.body = shadow.querySelector('.UaaDetailBody');
     }
-    df.append(contact);
-    return df;
-  }
-
-  _onFail(videoId, e, generation = this._generation, signal) {
-    if (this._props.videoId !== videoId || generation !== this._generation ||
-        (signal && signal.aborted)) {
-      return;
+    _cancelPending() {
+        this._generation = (this._generation || 0) + 1;
+        if (this._loadTimer) {
+            window.clearTimeout(this._loadTimer);
+            this._loadTimer = null;
+        }
+        if (this._abortController) {
+            this._abortController.abort();
+            this._abortController = null;
+        }
     }
-    this.setState({isUpdating: false});
-  }
-
-  _onCommand(command, param) {
-    switch (command) {
-      default:
-        super._onCommand(command, param);
+    update(videoInfo) {
+        if (!this._shadow || !this._config.props.enable) {
+            return;
+        }
+        if (!this._elm.body) {
+            return;
+        }
+        if (this._state.isUpdating && this._props.videoId === videoInfo.videoId) {
+            return;
+        }
+        this._cancelPending();
+        this.setState({ isUpdating: true });
+        this._props.videoInfo = videoInfo;
+        this._props.videoId = videoInfo.videoId;
+        const generation = this._generation;
+        const controller = typeof AbortController === 'undefined' ? null : new AbortController();
+        this._abortController = controller;
+        const signal = controller ? controller.signal : undefined;
+        this._loadTimer = window.setTimeout(() => {
+            this._loadTimer = null;
+            if (generation !== this._generation || (signal && signal.aborted)) {
+                return;
+            }
+            this.load(videoInfo, { generation, signal });
+        }, 5000);
     }
-  }
-
+    load(videoInfo, { generation = this._generation, signal } = {}) {
+        const videoId = videoInfo.videoId;
+        return UaaLoader.load(videoId, { limit: 50, signal })
+            .then((result) => this._onLoad(videoId, result, generation, signal))
+            .catch((e) => this._onFail(videoId, e, generation, signal));
+    }
+    clear() {
+        this._cancelPending();
+        this.setState({ isUpdating: false, isExist: false, isSpeaking: false });
+        if (!this._elm.body) {
+            return;
+        }
+        this._elm.body.textContent = '';
+    }
+    _onLoad(videoId, result, generation = this._generation, signal) {
+        if (this._props.videoId !== videoId || generation !== this._generation ||
+            (signal && signal.aborted)) {
+            return;
+        }
+        this.setState({ isUpdating: false });
+        const data = result ? result.data : null;
+        if (!data || data.sponsors.length < 1) {
+            return;
+        }
+        const df = this.df = this.df || document.createDocumentFragment();
+        const div = document.createElement('div');
+        div.className = 'screenshots';
+        let idx = 0, screenshots = 0;
+        data.sponsors.forEach((u) => {
+            if (!u.auxiliary.bgVideoPosition || idx >= 4) {
+                return;
+            }
+            u.added = true;
+            div.append(this._createItem(u, idx++, generation, signal));
+            screenshots++;
+        });
+        div.setAttribute('data-screenshot-count', screenshots);
+        df.append(div);
+        data.sponsors.forEach((u) => {
+            if (!u.auxiliary.bgVideoPosition || u.added) {
+                return;
+            }
+            u.added = true;
+            df.append(this._createItem(u, idx++, generation, signal));
+        });
+        data.sponsors.forEach((u) => {
+            if (u.added) {
+                return;
+            }
+            u.added = true;
+            df.append(this._createItem(u, idx++, generation, signal));
+        });
+        this._elm.body.innerHTML = '';
+        this._elm.body.append(df);
+        this.setState({ isExist: true });
+    }
+    _createItem(data, idx, generation = this._generation, signal = this._abortController ? this._abortController.signal : undefined) {
+        const df = document.createElement('div');
+        const contact = document.createElement('span');
+        contact.textContent = data.advertiserName;
+        contact.className = 'contact';
+        df.className = 'item';
+        const aux = data.auxiliary;
+        const bgkeyframe = aux.bgVideoPosition || 0;
+        if (data.message) {
+            data.title = data.message;
+        }
+        df.setAttribute('data-index', idx);
+        if (bgkeyframe && idx < 4) {
+            const sec = parseFloat(bgkeyframe);
+            df.setAttribute('data-time', textUtil.secToTime(sec));
+            df.classList.add('clickable', 'command', 'other');
+            Object.assign(df.dataset, { command: 'seek', type: 'number', param: sec });
+            contact.setAttribute('title', `${data.message}(${textUtil.secToTime(sec)})`);
+            const isCurrent = () => generation === this._generation && (!signal || !signal.aborted);
+            this._props.videoInfo.getCurrentVideo()
+                .then((url) => {
+                if (!isCurrent()) {
+                    return null;
+                }
+                return ZenzaWatch.util.VideoCaptureUtil.capture(url, sec, { signal });
+            })
+                .then((screenshot) => {
+                if (!screenshot || !isCurrent()) {
+                    return;
+                }
+                const cv = document.createElement('canvas');
+                const ct = cv.getContext('2d');
+                cv.width = screenshot.width;
+                cv.height = screenshot.height;
+                cv.className = 'screenshot command clickable';
+                Object.assign(cv.dataset, { command: 'seek', type: 'number', param: sec });
+                ct.fillStyle = 'rgb(32, 32, 32)';
+                ct.fillRect(0, 0, cv.width, cv.height);
+                ct.drawImage(screenshot, 0, 0);
+                df.classList.add('has-screenshot');
+                df.classList.remove('clickable', 'other');
+                df.append(cv);
+            }).catch(() => { });
+        }
+        else if (bgkeyframe) {
+            const sec = parseFloat(bgkeyframe);
+            df.classList.add('clickable', 'command', 'other');
+            Object.assign(df.dataset, { command: 'seek', type: 'number', param: sec });
+            contact.setAttribute('title', `${data.message}(${textUtil.secToTime(sec)})`);
+        }
+        else {
+            df.classList.add('other');
+        }
+        df.append(contact);
+        return df;
+    }
+    _onFail(videoId, e, generation = this._generation, signal) {
+        if (this._props.videoId !== videoId || generation !== this._generation ||
+            (signal && signal.aborted)) {
+            return;
+        }
+        this.setState({ isUpdating: false });
+    }
+    _onCommand(command, param) {
+        switch (command) {
+            default:
+                super._onCommand(command, param);
+        }
+    }
 }
-
 UaaView._shadow_ = (`
     <style>
       .UaaDetails,
@@ -4632,9 +4529,7 @@ UaaView._shadow_ = (`
       <div class="UaaDetailBody"></div>
     </details>
   `).trim();
-
 UaaView.__tpl__ = ('<div class="uaaView"></div>').trim();
-
 UaaView.__css__ = (`
     uaaView {
       display: none;
@@ -4643,390 +4538,405 @@ UaaView.__css__ = (`
      display: block;
     }
   `).trim();
-
-
 class RelatedInfoMenu extends BaseViewComponent {
-  constructor({parentNode, isHeader}) {
-    super({
-      parentNode,
-      name: 'RelatedInfoMenu',
-      template: '<div class="RelatedInfoMenu" tabindex="-1"></div>',
-      shadow: RelatedInfoMenu._shadow_,
-      css: RelatedInfoMenu.__css__
-    });
-
-    this._state = {};
-
-    this._bound.update = this.update.bind(this);
-    this._bound._onBodyClick = _.debounce(this._onBodyClick.bind(this), 0);
-    this._unwatchCustomActions = RelatedMenuActions.onChange(() => this._renderCustomMenu());
-    Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
-    Config.onkey(RelatedMenuOrder.CONFIG_KEY, () => this._renderCustomMenu());
-    Config.onkey(RelatedMenuOrder.HIDDEN_KEY, () => this._renderCustomMenu());
-    Config.onkey(RelatedMenuOrder.OPTIONS_KEY, () => this._renderCustomMenu());
-    // Config and the advanced-settings userscript each hold their own
-    // DataStorage instance. Local updates use onkey above; another browser
-    // tab uses storage events, which DataStorage itself does not subscribe to.
-    this._relatedStorageKeys=[
-      RelatedMenuActions.CONFIG_KEY,RelatedMenuOrder.CONFIG_KEY,
-      RelatedMenuOrder.HIDDEN_KEY,RelatedMenuOrder.OPTIONS_KEY,'ui.relatedMenu'
-    ];
-    if(typeof Config.getStorageKey==='function' && typeof Config.refresh==='function'){
-      this._onRelatedStorage=event=>{
-        if(event.storageArea && event.storageArea!==Config.storage){return;}
-        const key=this._relatedStorageKeys.find(k=>Config.getStorageKey(k)===event.key);
-        if(key){this._refreshRelatedStorageKey(key,event.newValue===null);}
-      };
-      this._onAdvancedSettingsSaved=event=>{
-        const keys=Array.isArray(event.detail?.keys)?event.detail.keys:[];
-        for(const key of keys){
-          if(this._relatedStorageKeys.includes(key)){this._refreshRelatedStorageKey(key);}
+    constructor({ parentNode, isHeader }) {
+        super({
+            parentNode,
+            name: 'RelatedInfoMenu',
+            template: '<div class="RelatedInfoMenu" tabindex="-1"></div>',
+            shadow: RelatedInfoMenu._shadow_,
+            css: RelatedInfoMenu.__css__
+        });
+        this._state = {};
+        this._bound.update = this.update.bind(this);
+        this._bound._onBodyClick = _.debounce(this._onBodyClick.bind(this), 0);
+        this._unwatchCustomActions = RelatedMenuActions.onChange(() => this._renderCustomMenu());
+        Config.onkey(RelatedMenuActions.CONFIG_KEY, () => this._renderCustomMenu());
+        Config.onkey(RelatedMenuOrder.CONFIG_KEY, () => this._renderCustomMenu());
+        Config.onkey(RelatedMenuOrder.HIDDEN_KEY, () => this._renderCustomMenu());
+        Config.onkey(RelatedMenuOrder.OPTIONS_KEY, () => this._renderCustomMenu());
+        // Config and the advanced-settings userscript each hold their own
+        // DataStorage instance. Local updates use onkey above; another browser
+        // tab uses storage events, which DataStorage itself does not subscribe to.
+        this._relatedStorageKeys = [
+            RelatedMenuActions.CONFIG_KEY, RelatedMenuOrder.CONFIG_KEY,
+            RelatedMenuOrder.HIDDEN_KEY, RelatedMenuOrder.OPTIONS_KEY, 'ui.relatedMenu'
+        ];
+        if (typeof Config.getStorageKey === 'function' && typeof Config.refresh === 'function') {
+            this._onRelatedStorage = (event) => {
+                if (event.storageArea && event.storageArea !== Config.storage) {
+                    return;
+                }
+                const key = this._relatedStorageKeys.find((k) => Config.getStorageKey(k) === event.key);
+                if (key) {
+                    this._refreshRelatedStorageKey(key, event.newValue === null);
+                }
+            };
+            this._onAdvancedSettingsSaved = (event) => {
+                const keys = Array.isArray(event.detail?.keys) ? event.detail.keys : [];
+                for (const key of keys) {
+                    if (this._relatedStorageKeys.includes(key)) {
+                        this._refreshRelatedStorageKey(key);
+                    }
+                }
+            };
+            window.addEventListener('storage', this._onRelatedStorage);
+            window.addEventListener('ZenzaWatch-advanced-settings-saved', this._onAdvancedSettingsSaved);
         }
-      };
-      window.addEventListener('storage',this._onRelatedStorage);
-      window.addEventListener('ZenzaWatch-advanced-settings-saved',
-        this._onAdvancedSettingsSaved);
+        this.setState({ isHeader });
     }
-    this.setState({isHeader});
-
-  }
-
-  _refreshRelatedStorageKey(key,removed=false) {
-    const storageKey=Config.getStorageKey(key);
-    // A deleted key should return to the saved default without writing a new
-    // localStorage value (which would cause cross-tab feedback).
-    const missing=removed && Config.storage?.[storageKey]==null;
-    if(missing && Object.prototype.hasOwnProperty.call(Config.default||{},key)){
-      Config.refresh(key,{[storageKey]:JSON.stringify(Config.default[key])});
-    } else {
-      Config.refresh(key);
-    }
-    if(key==='ui.relatedMenu'){this._visibility?.apply('ui.relatedMenu');}
-    else {this._renderCustomMenu();}
-  }
-
-  _initDom(...args) {
-    super._initDom(...args);
-
-    ClassList(this._view).toggle('is-Edge', /edge/i.test(navigator.userAgent));
-    const shadow = this._shadow || this._view;
-    this._elm.body = shadow.querySelector('.RelatedInfoMenuBody');
-    this._elm.summary = shadow.querySelector('summary');
-    shadow.addEventListener('click', e => {
-      e.stopPropagation();
-    });
-    this._elm.summary.addEventListener('click', _.debounce(() => {
-      if (shadow.open) {
-        document.body.addEventListener('mouseup', this._bound._onBodyClick, {once: true});
-        this.emit('open');
-      }
-    }, 100));
-
-    this._ginzaLink = shadow.querySelector('.ginzaLink');
-    // Use native anchor navigation rather than reopening a named watch tab.
-    // In particular, the official route must not trigger another Zenza reload.
-    this._ginzaLink.addEventListener('click', e => {
-      if(!this._currentWatchId){e.preventDefault();return;}
-      this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
-        this._currentWatchId,this._builtinOptions('official').includePosition===false?
-          0:this._relatedContext().currentTime);
-      const options=this._builtinOptions('official');
-      if(options.openMode&&options.openMode!=='default' && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
-        (!Number.isInteger(e.button)||e.button===0)){
-        e.preventDefault();
-        this._openBuiltinUrl('official',this._ginzaLink.href);
-      }
-      this._onBodyClick();
-      super._onCommand('pause');
-    });
-    this._originalLink = shadow.querySelector('.originalLink');
-    this._twitterLink = shadow.querySelector('.twitterHashLink');
-    this._parentVideoLink = shadow.querySelector('.parentVideoLink');
-    this._uadLink = shadow.querySelector('.uadLink');
-    // Real anchors keep Ctrl/middle-click and the browser context menu usable.
-    for(const [id,link] of [['twitter',this._twitterLink],['tree',this._parentVideoLink],['ad',this._uadLink]]){
-      if(!link){continue;}
-      link.removeAttribute('data-command');
-      link.rel='noopener noreferrer';
-      const refresh=()=>this._refreshBuiltinLink(id,link);
-      link.addEventListener('auxclick',refresh);
-      link.addEventListener('contextmenu',refresh);
-      link.addEventListener('click',e=>{
-        refresh();
-        if(!link.hasAttribute('href')){e.preventDefault();return;}
-        const modified=e.ctrlKey||e.metaKey||e.shiftKey||e.altKey||e.button>0;
-        const mode=this._builtinOptions(id).openMode||'default';
-        if(!modified && (mode==='new-window'||(id==='ad'&&mode==='default'))){
-          e.preventDefault();this._openBuiltinUrl(id,link.href);
+    _refreshRelatedStorageKey(key, removed = false) {
+        const storageKey = Config.getStorageKey(key);
+        // A deleted key should return to the saved default without writing a new
+        // localStorage value (which would cause cross-tab feedback).
+        const missing = removed && Config.storage?.[storageKey] == null;
+        if (missing && Object.prototype.hasOwnProperty.call(Config.default || {}, key)) {
+            Config.refresh(key, { [storageKey]: JSON.stringify(Config.default[key]) });
         }
-        this._onBodyClick();
-      });
-    }
-    this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
-    this._customRelatedItems = shadow.querySelector('.customRelatedItems');
-    this._builtinRelatedItems = new Map([...shadow.querySelectorAll(
-      '.relatedMenuItems > li[data-related-order-key]')].map(li=>[
-      li.dataset.relatedOrderKey, li]));
-    this._builtinOriginalLabels=new Map([...this._builtinRelatedItems].map(([key,li])=>
-      [key,li.querySelector('.command')?.textContent||'']));
-    this._customLinkById = new Map();
-    this._elm.summary.addEventListener('click', () => {
-      this._renderCustomMenu();
-      if (this._currentWatchId) {
-        this._ginzaLink.href=OfficialPlayerRoute.makeUrl(
-          this._currentWatchId, this._builtinOptions('official').includePosition===false?
-            0:this._relatedContext().currentTime);
-      }
-    });
-    this._visibility=UiVisibilityRegistry.connect(Config,this._view,'related',{
-      beforeHide:()=>{
-        const details=this._shadow||this._view;
-        if(details.open){this._onBodyClick();}
-      }
-    });
-    shadow.addEventListener('click', e => {
-      const link = e.target.closest('a[data-related-link-id]');
-      if (!link) { return; }
-      const item = this._customLinkById.get(link.dataset.relatedLinkId);
-      const result = item && RelatedMenuActions.resolveUrl(item.url, this._relatedContext());
-      if (!result || !result.url) {
-        e.preventDefault();
-        return;
-      }
-      link.href = result.url;
-      if(item.openMode==='new-window' && !e.ctrlKey && !e.metaKey && !e.shiftKey){
-        e.preventDefault();
-        const features='noopener,noreferrer,width='+(item.popupWidth||760)+',height='+(item.popupHeight||650);
-        window.open(result.url,'_blank',features);
-      }
-      shadow.open = false;
-      this.emit('close');
-    });
-  }
-
-  _applyMenuVisibility() {
-    return this._visibility?.apply('ui.relatedMenu');
-  }
-
-  _onBodyClick() {
-    const shadow = this._shadow || this._view;
-    shadow.open = false;
-    document.body.removeEventListener('mouseup', this._bound._onBodyClick);
-    this.emit('close');
-  }
-
-  update(videoInfo) {
-    const shadow = this._shadow || this._view;
-    shadow.open = false;
-
-    this._currentWatchId = videoInfo.watchId;
-    this._currentVideoId = videoInfo.videoId;
-    this._currentVideoInfo = videoInfo;
-    this.setState({
-      // Task172 (F01): show the entries when the tree may exist (V4 unknown) too.
-      isParentVideoExist: videoInfo.canOpenContentTree === true,
-      isCommunity: videoInfo.isCommunityVideo,
-      isMymemory: videoInfo.isMymemory
-    });
-
-    const vid = this._currentVideoId;
-    const wid = this._currentWatchId;
-    this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid));
-    this._originalLink.setAttribute('href', `//www.nicovideo.jp/watch/${vid}`);
-    this._twitterLink.setAttribute('href',
-      this._resolveBuiltinUrl('twitter',`https://twitter.com/hashtag/${vid}`));
-    // Task 043: commons.nicovideo.jp/tree/{id} は廃止された。
-    // 現在の親作品・子作品の表示先は /works/{id} 。クエリはニコニコ動画の
-    // 視聴ページからコンテンツツリーを開いた時と同じもの（流入元の記録用）。
-    this._parentVideoLink.setAttribute('href',
-      this._resolveBuiltinUrl('tree',
-        `https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`));
-    this._renderCustomMenu();
-    this.emit('close');
-  }
-
-  _relatedContext() {
-    // Only explicitly approved metadata reaches registered actions.
-    const currentTime = ZenzaWatch.debug?.videoControlBar?.player?.currentTime;
-    return RelatedMenuActions.makeContext(this._currentVideoInfo, currentTime);
-  }
-
-  _builtinOptions(id){
-    return RelatedMenuOrder.getOption(Config.getValue(RelatedMenuOrder.OPTIONS_KEY),id);
-  }
-  _resolveBuiltinUrl(id,original){
-    const template=this._builtinOptions(id).urlTemplate;
-    if(!template){return original;}
-    const resolved=RelatedMenuActions.resolveUrl(template,this._relatedContext());
-    return resolved.url||null;
-  }
-  _refreshBuiltinLink(id,link){
-    if(!link || !this._currentVideoInfo){return;}
-    const vid=this._currentVideoId,wid=this._currentWatchId;
-    const defaults={
-      twitter:`https://twitter.com/hashtag/${vid}`,
-      tree:`https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`,
-      ad:`https://nicoad.nicovideo.jp/video/publish/${wid}?frontend_id=6&frontend_version=0&zenza_watch`
-    };
-    const url=this._resolveBuiltinUrl(id,defaults[id]);
-    if(url){
-      link.href=url;
-      link.target=this._builtinOptions(id).openMode==='same-tab'?'_self':'_blank';
-      link.removeAttribute('aria-disabled');link.removeAttribute('title');
-    }else{
-      link.removeAttribute('href');
-      link.setAttribute('aria-disabled','true');
-      link.title='リンクに必要な動画・投稿者情報を取得できませんでした';
-    }
-  }
-  _openBuiltinUrl(id,url){
-    return RelatedMenuOrder.openUrl(id,url,this._builtinOptions(id),
-      (...args)=>window.open(...args));
-  }
-  _renderCustomMenu() {
-    if (!this._customRelatedGroup || !this._customRelatedItems) { return; }
-    const links = RelatedMenuActions.getLinks(Config.getValue(RelatedMenuActions.CONFIG_KEY))
-      .filter(item => item.enabled);
-    const context = this._relatedContext();
-    const actions = RelatedMenuActions.getActions(context);
-    const nodes = new Map(this._builtinRelatedItems || []);
-    let customCount = 0;
-    this._customLinkById.clear();
-    for(const [key,li] of this._builtinRelatedItems||[]){
-      const id=key.slice(8);
-      const element=li.querySelector('.command');
-      const label=this._builtinOptions(id).label;
-      if(element){element.textContent=label||this._builtinOriginalLabels?.get(key)||'';}
-    }
-    const officialMode=this._builtinOptions('official').openMode;
-    if(this._ginzaLink){
-      this._ginzaLink.target=officialMode==='same-tab'?'_self':'_blank';
-    }
-    for(const [id,link] of [['twitter',this._twitterLink],['tree',this._parentVideoLink],['ad',this._uadLink]]){
-      this._refreshBuiltinLink(id,link);
-    }
-
-    if (this._currentVideoInfo) {
-      for (const item of links) {
-        const li = document.createElement('li');
-        if(RelatedMenuActions.isCopy(item)){
-          const resolved=RelatedMenuActions.resolveCopy(item.copyTemplate,context);
-          const button=document.createElement('button');
-          button.type='button';button.className='command customRelatedAction';
-          button.textContent=item.label;button.dataset.command='copy-custom-related-item';
-          button.dataset.param=item.id;button.disabled=resolved.text===null;
-          if(button.disabled){button.title='未取得: '+(resolved.missing||[]).join(', ');}
-          li.dataset.relatedOrderKey='link:'+item.id;li.append(button);
-          this._customLinkById.set(item.id,item);nodes.set('link:'+item.id,li);customCount++;
-          continue;
+        else {
+            Config.refresh(key);
         }
-        const resolved = RelatedMenuActions.resolveUrl(item.url, context);
-        const link = document.createElement(resolved.url ? 'a' : 'span');
-        link.className = resolved.url ? 'command customRelatedLink' : 'command customRelatedDisabled';
-        link.textContent = item.label;
-        if (resolved.url) {
-          link.href = resolved.url;
-          link.target = item.openMode==='same-tab'?'_self':
-            item.openMode==='new-tab'||item.openMode==='new-window'?'_blank':
-            item.openInNewTab?'_blank':'_self';
-          link.rel = 'noopener noreferrer';
-          link.dataset.relatedLinkId = item.id;
-          this._customLinkById.set(item.id, item);
-        } else {
-          link.setAttribute('aria-disabled', 'true');
-          link.title = resolved.missing?.length ?
-            '未取得: ' + resolved.missing.join(', ') : 'URLを開けません';
+        if (key === 'ui.relatedMenu') {
+            this._visibility?.apply('ui.relatedMenu');
         }
-        li.appendChild(link);
-        const key = 'link:' + item.id;
-        li.dataset.relatedOrderKey = key;
-        nodes.set(key, li);
-        customCount++;
-      }
-      for (const action of actions) {
-        const li = document.createElement('li');
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'command customRelatedAction';
-        button.textContent = action.label;
-        button.dataset.command = 'run-custom-related-action';
-        button.dataset.param = action.id;
-        button.disabled = !action.enabled;
-        li.appendChild(button);
-        const key = 'action:' + action.id;
-        li.dataset.relatedOrderKey = key;
-        nodes.set(key, li);
-        customCount++;
-      }
+        else {
+            this._renderCustomMenu();
+        }
     }
-
-    // Move the original nodes, do not clone their command handlers or replace
-    // eligibility classes (community/mymemory/tree availability).
-    const order = RelatedMenuOrder.orderedKeys(
-      Config.getValue(RelatedMenuOrder.CONFIG_KEY), [...nodes.keys()]);
-    const hiddenItems = Config.getValue(RelatedMenuOrder.HIDDEN_KEY);
-    for (const [key, node] of nodes) {
-      node.hidden = RelatedMenuOrder.isHidden(key, hiddenItems);
+    _initDom(...args) {
+        super._initDom(...args);
+        ClassList(this._view).toggle('is-Edge', /edge/i.test(navigator.userAgent));
+        const shadow = this._shadow || this._view;
+        this._elm.body = shadow.querySelector('.RelatedInfoMenuBody');
+        this._elm.summary = shadow.querySelector('summary');
+        shadow.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+        this._elm.summary.addEventListener('click', _.debounce(() => {
+            if (shadow.open) {
+                document.body.addEventListener('mouseup', this._bound._onBodyClick, { once: true });
+                this.emit('open');
+            }
+        }, 100));
+        this._ginzaLink = shadow.querySelector('.ginzaLink');
+        // Use native anchor navigation rather than reopening a named watch tab.
+        // In particular, the official route must not trigger another Zenza reload.
+        this._ginzaLink.addEventListener('click', (e) => {
+            if (!this._currentWatchId) {
+                e.preventDefault();
+                return;
+            }
+            this._ginzaLink.href = OfficialPlayerRoute.makeUrl(this._currentWatchId, this._builtinOptions('official').includePosition === false ?
+                0 : this._relatedContext().currentTime);
+            const options = this._builtinOptions('official');
+            if (options.openMode && options.openMode !== 'default' && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+                (!Number.isInteger(e.button) || e.button === 0)) {
+                e.preventDefault();
+                this._openBuiltinUrl('official', this._ginzaLink.href);
+            }
+            this._onBodyClick();
+            super._onCommand('pause');
+        });
+        this._originalLink = shadow.querySelector('.originalLink');
+        this._twitterLink = shadow.querySelector('.twitterHashLink');
+        this._parentVideoLink = shadow.querySelector('.parentVideoLink');
+        this._uadLink = shadow.querySelector('.uadLink');
+        // Real anchors keep Ctrl/middle-click and the browser context menu usable.
+        for (const [id, link] of [['twitter', this._twitterLink], ['tree', this._parentVideoLink], ['ad', this._uadLink]]) {
+            if (!link) {
+                continue;
+            }
+            link.removeAttribute('data-command');
+            link.rel = 'noopener noreferrer';
+            const refresh = () => this._refreshBuiltinLink(id, link);
+            link.addEventListener('auxclick', refresh);
+            link.addEventListener('contextmenu', refresh);
+            link.addEventListener('click', (e) => {
+                refresh();
+                if (!link.hasAttribute('href')) {
+                    e.preventDefault();
+                    return;
+                }
+                const modified = e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button > 0;
+                const mode = this._builtinOptions(id).openMode || 'default';
+                if (!modified && (mode === 'new-window' || (id === 'ad' && mode === 'default'))) {
+                    e.preventDefault();
+                    this._openBuiltinUrl(id, link.href);
+                }
+                this._onBodyClick();
+            });
+        }
+        this._customRelatedGroup = shadow.querySelector('.customRelatedGroup');
+        this._customRelatedItems = shadow.querySelector('.customRelatedItems');
+        this._builtinRelatedItems = new Map([...shadow.querySelectorAll('.relatedMenuItems > li[data-related-order-key]')].map(li => [
+            li.dataset.relatedOrderKey, li
+        ]));
+        this._builtinOriginalLabels = new Map([...this._builtinRelatedItems].map(([key, li]) => [key, li.querySelector('.command')?.textContent || '']));
+        this._customLinkById = new Map();
+        this._elm.summary.addEventListener('click', () => {
+            this._renderCustomMenu();
+            if (this._currentWatchId) {
+                this._ginzaLink.href = OfficialPlayerRoute.makeUrl(this._currentWatchId, this._builtinOptions('official').includePosition === false ?
+                    0 : this._relatedContext().currentTime);
+            }
+        });
+        this._visibility = UiVisibilityRegistry.connect(Config, this._view, 'related', {
+            beforeHide: () => {
+                const details = this._shadow || this._view;
+                if (details.open) {
+                    this._onBodyClick();
+                }
+            }
+        });
+        shadow.addEventListener('click', (e) => {
+            const link = e.target.closest('a[data-related-link-id]');
+            if (!link) {
+                return;
+            }
+            const item = this._customLinkById.get(link.dataset.relatedLinkId);
+            const result = item && RelatedMenuActions.resolveUrl(item.url, this._relatedContext());
+            if (!result || !result.url) {
+                e.preventDefault();
+                return;
+            }
+            link.href = result.url;
+            if (item.openMode === 'new-window' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                e.preventDefault();
+                const features = 'noopener,noreferrer,width=' + (item.popupWidth || 760) + ',height=' + (item.popupHeight || 650);
+                window.open(result.url, '_blank', features);
+            }
+            shadow.open = false;
+            this.emit('close');
+        });
     }
-    this._customRelatedItems.replaceChildren(...order.map(key=>nodes.get(key)),
-      ...(this._customRelatedGroup ? [this._customRelatedGroup] : []));
-    // Legacy marker remains for existing consumers, but contributes no row.
-    if (this._customRelatedGroup) { this._customRelatedGroup.hidden = customCount === 0; }
-  }
-
-  _onCommand(command, param) {
-    let url;
-    const shadow = this._shadow || this._view;
-    shadow.open = false;
-
-    switch (command) {
-      case 'watch-ginza': {
-        const currentTime=this._builtinOptions('official').includePosition===false?
-          0:this._relatedContext().currentTime;
-        const officialUrl=OfficialPlayerRoute.makeUrl(this._currentWatchId,currentTime);
-        this._ginzaLink.href=officialUrl;
-        this._openBuiltinUrl('official',officialUrl);
-        super._onCommand('pause');
-        break;
-      }
-      case 'open-uad':
-        url = `//nicoad.nicovideo.jp/video/publish/${this._currentWatchId}?frontend_id=6&frontend_version=0&zenza_watch`;
-        this._openBuiltinUrl('ad',url);
-        break;
-      case 'open-twitter-hash':
-        this._openBuiltinUrl('twitter',this._resolveBuiltinUrl('twitter',this._twitterLink.href));
-        break;
-      case 'open-parent-video':
-        this._openBuiltinUrl('tree',this._resolveBuiltinUrl('tree',this._parentVideoLink.href));
-        break;
-      case 'copy-video-watch-url':
-        super._onCommand(command, param);
-        super._onCommand('notify', 'コピーしました');
-        break;
-      case 'open-original-video':
-        super._onCommand('openNow', this._currentVideoId);
-        break;
-      case 'copy-custom-related-item': {
-        const item=this._customLinkById.get(param);
-        if(!item || !item.enabled || !RelatedMenuActions.isCopy(item)){break;}
-        const result=RelatedMenuActions.resolveCopy(item.copyTemplate,this._relatedContext());
-        if(result.text!==null){super._onCommand('copy-related-text',result.text);}
-        break;
-      }
-      case 'run-custom-related-action':
-        RelatedMenuActions.invoke(param, this._relatedContext());
-        break;
-      default:
-        super._onCommand(command, param);
+    _applyMenuVisibility() {
+        return this._visibility?.apply('ui.relatedMenu');
     }
-    this.emit('close');
-  }
-
-
+    _onBodyClick() {
+        const shadow = this._shadow || this._view;
+        shadow.open = false;
+        document.body.removeEventListener('mouseup', this._bound._onBodyClick);
+        this.emit('close');
+    }
+    update(videoInfo) {
+        const shadow = this._shadow || this._view;
+        shadow.open = false;
+        this._currentWatchId = videoInfo.watchId;
+        this._currentVideoId = videoInfo.videoId;
+        this._currentVideoInfo = videoInfo;
+        this.setState({
+            // Task172 (F01): show the entries when the tree may exist (V4 unknown) too.
+            isParentVideoExist: videoInfo.canOpenContentTree === true,
+            isCommunity: videoInfo.isCommunityVideo,
+            isMymemory: videoInfo.isMymemory
+        });
+        const vid = this._currentVideoId;
+        const wid = this._currentWatchId;
+        this._ginzaLink.setAttribute('href', OfficialPlayerRoute.makeUrl(wid));
+        this._originalLink.setAttribute('href', `//www.nicovideo.jp/watch/${vid}`);
+        this._twitterLink.setAttribute('href', this._resolveBuiltinUrl('twitter', `https://twitter.com/hashtag/${vid}`));
+        // Task 043: commons.nicovideo.jp/tree/{id} は廃止された。
+        // 現在の親作品・子作品の表示先は /works/{id} 。クエリはニコニコ動画の
+        // 視聴ページからコンテンツツリーを開いた時と同じもの（流入元の記録用）。
+        this._parentVideoLink.setAttribute('href', this._resolveBuiltinUrl('tree', `https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`));
+        this._renderCustomMenu();
+        this.emit('close');
+    }
+    _relatedContext() {
+        // Only explicitly approved metadata reaches registered actions.
+        const currentTime = ZenzaWatch.debug?.videoControlBar?.player?.currentTime;
+        return RelatedMenuActions.makeContext(this._currentVideoInfo, currentTime);
+    }
+    _builtinOptions(id) {
+        return RelatedMenuOrder.getOption(Config.getValue(RelatedMenuOrder.OPTIONS_KEY), id);
+    }
+    _resolveBuiltinUrl(id, original) {
+        const template = this._builtinOptions(id).urlTemplate;
+        if (!template) {
+            return original;
+        }
+        const resolved = RelatedMenuActions.resolveUrl(template, this._relatedContext());
+        return resolved.url || null;
+    }
+    _refreshBuiltinLink(id, link) {
+        if (!link || !this._currentVideoInfo) {
+            return;
+        }
+        const vid = this._currentVideoId, wid = this._currentWatchId;
+        const defaults = {
+            twitter: `https://twitter.com/hashtag/${vid}`,
+            tree: `https://commons.nicovideo.jp/works/${vid}?transit_from=pcvideo_watch_contentstree&rf=nvpc&rp=watch&ra=content_tree`,
+            ad: `https://nicoad.nicovideo.jp/video/publish/${wid}?frontend_id=6&frontend_version=0&zenza_watch`
+        };
+        const url = this._resolveBuiltinUrl(id, defaults[id]);
+        if (url) {
+            link.href = url;
+            link.target = this._builtinOptions(id).openMode === 'same-tab' ? '_self' : '_blank';
+            link.removeAttribute('aria-disabled');
+            link.removeAttribute('title');
+        }
+        else {
+            link.removeAttribute('href');
+            link.setAttribute('aria-disabled', 'true');
+            link.title = 'リンクに必要な動画・投稿者情報を取得できませんでした';
+        }
+    }
+    _openBuiltinUrl(id, url) {
+        return RelatedMenuOrder.openUrl(id, url, this._builtinOptions(id), (...args) => window.open(...args));
+    }
+    _renderCustomMenu() {
+        if (!this._customRelatedGroup || !this._customRelatedItems) {
+            return;
+        }
+        const links = RelatedMenuActions.getLinks(Config.getValue(RelatedMenuActions.CONFIG_KEY))
+            .filter((item) => item.enabled);
+        const context = this._relatedContext();
+        const actions = RelatedMenuActions.getActions(context);
+        const nodes = new Map(this._builtinRelatedItems || []);
+        let customCount = 0;
+        this._customLinkById.clear();
+        for (const [key, li] of this._builtinRelatedItems || []) {
+            const id = key.slice(8);
+            const element = li.querySelector('.command');
+            const label = this._builtinOptions(id).label;
+            if (element) {
+                element.textContent = label || this._builtinOriginalLabels?.get(key) || '';
+            }
+        }
+        const officialMode = this._builtinOptions('official').openMode;
+        if (this._ginzaLink) {
+            this._ginzaLink.target = officialMode === 'same-tab' ? '_self' : '_blank';
+        }
+        for (const [id, link] of [['twitter', this._twitterLink], ['tree', this._parentVideoLink], ['ad', this._uadLink]]) {
+            this._refreshBuiltinLink(id, link);
+        }
+        if (this._currentVideoInfo) {
+            for (const item of links) {
+                const li = document.createElement('li');
+                if (RelatedMenuActions.isCopy(item)) {
+                    const resolved = RelatedMenuActions.resolveCopy(item.copyTemplate, context);
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'command customRelatedAction';
+                    button.textContent = item.label;
+                    button.dataset.command = 'copy-custom-related-item';
+                    button.dataset.param = item.id;
+                    button.disabled = resolved.text === null;
+                    if (button.disabled) {
+                        button.title = '未取得: ' + (resolved.missing || []).join(', ');
+                    }
+                    li.dataset.relatedOrderKey = 'link:' + item.id;
+                    li.append(button);
+                    this._customLinkById.set(item.id, item);
+                    nodes.set('link:' + item.id, li);
+                    customCount++;
+                    continue;
+                }
+                const resolved = RelatedMenuActions.resolveUrl(item.url, context);
+                const link = document.createElement(resolved.url ? 'a' : 'span');
+                link.className = resolved.url ? 'command customRelatedLink' : 'command customRelatedDisabled';
+                link.textContent = item.label;
+                if (resolved.url) {
+                    link.href = resolved.url;
+                    link.target = item.openMode === 'same-tab' ? '_self' :
+                        item.openMode === 'new-tab' || item.openMode === 'new-window' ? '_blank' :
+                            item.openInNewTab ? '_blank' : '_self';
+                    link.rel = 'noopener noreferrer';
+                    link.dataset.relatedLinkId = item.id;
+                    this._customLinkById.set(item.id, item);
+                }
+                else {
+                    link.setAttribute('aria-disabled', 'true');
+                    link.title = resolved.missing?.length ?
+                        '未取得: ' + resolved.missing.join(', ') : 'URLを開けません';
+                }
+                li.appendChild(link);
+                const key = 'link:' + item.id;
+                li.dataset.relatedOrderKey = key;
+                nodes.set(key, li);
+                customCount++;
+            }
+            for (const action of actions) {
+                const li = document.createElement('li');
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'command customRelatedAction';
+                button.textContent = action.label;
+                button.dataset.command = 'run-custom-related-action';
+                button.dataset.param = action.id;
+                button.disabled = !action.enabled;
+                li.appendChild(button);
+                const key = 'action:' + action.id;
+                li.dataset.relatedOrderKey = key;
+                nodes.set(key, li);
+                customCount++;
+            }
+        }
+        // Move the original nodes, do not clone their command handlers or replace
+        // eligibility classes (community/mymemory/tree availability).
+        const order = RelatedMenuOrder.orderedKeys(Config.getValue(RelatedMenuOrder.CONFIG_KEY), [...nodes.keys()]);
+        const hiddenItems = Config.getValue(RelatedMenuOrder.HIDDEN_KEY);
+        for (const [key, node] of nodes) {
+            node.hidden = RelatedMenuOrder.isHidden(key, hiddenItems);
+        }
+        this._customRelatedItems.replaceChildren(...order.map((key) => nodes.get(key)), ...(this._customRelatedGroup ? [this._customRelatedGroup] : []));
+        // Legacy marker remains for existing consumers, but contributes no row.
+        if (this._customRelatedGroup) {
+            this._customRelatedGroup.hidden = customCount === 0;
+        }
+    }
+    _onCommand(command, param) {
+        let url;
+        const shadow = this._shadow || this._view;
+        shadow.open = false;
+        switch (command) {
+            case 'watch-ginza': {
+                const currentTime = this._builtinOptions('official').includePosition === false ?
+                    0 : this._relatedContext().currentTime;
+                const officialUrl = OfficialPlayerRoute.makeUrl(this._currentWatchId, currentTime);
+                this._ginzaLink.href = officialUrl;
+                this._openBuiltinUrl('official', officialUrl);
+                super._onCommand('pause');
+                break;
+            }
+            case 'open-uad':
+                url = `//nicoad.nicovideo.jp/video/publish/${this._currentWatchId}?frontend_id=6&frontend_version=0&zenza_watch`;
+                this._openBuiltinUrl('ad', url);
+                break;
+            case 'open-twitter-hash':
+                this._openBuiltinUrl('twitter', this._resolveBuiltinUrl('twitter', this._twitterLink.href));
+                break;
+            case 'open-parent-video':
+                this._openBuiltinUrl('tree', this._resolveBuiltinUrl('tree', this._parentVideoLink.href));
+                break;
+            case 'copy-video-watch-url':
+                super._onCommand(command, param);
+                super._onCommand('notify', 'コピーしました');
+                break;
+            case 'open-original-video':
+                super._onCommand('openNow', this._currentVideoId);
+                break;
+            case 'copy-custom-related-item': {
+                const item = this._customLinkById.get(param);
+                if (!item || !item.enabled || !RelatedMenuActions.isCopy(item)) {
+                    break;
+                }
+                const result = RelatedMenuActions.resolveCopy(item.copyTemplate, this._relatedContext());
+                if (result.text !== null) {
+                    super._onCommand('copy-related-text', result.text);
+                }
+                break;
+            }
+            case 'run-custom-related-action':
+                RelatedMenuActions.invoke(param, this._relatedContext());
+                break;
+            default:
+                super._onCommand(command, param);
+        }
+        this.emit('close');
+    }
 }
-
 RelatedInfoMenu._css_ = ('').trim();
-
 RelatedInfoMenu._shadow_ = (`
     <style>
       .RelatedInfoMenu,
@@ -5198,65 +5108,62 @@ RelatedInfoMenu._shadow_ = (`
       </div>
     </details>
   `).trim();
-
 class VideoMetaInfo extends BaseViewComponent {
-  constructor({parentNode}) {
-    super({
-      parentNode,
-      name: 'VideoMetaInfo',
-      template: '<div class="VideoMetaInfo"></div>',
-      shadow: VideoMetaInfo._shadow_,
-      css: VideoMetaInfo.__css__
-    });
-
-    this._state = {};
-
-    this._bound.update = this.update.bind(this);
-  }
-
-  _initDom(...args) {
-    super._initDom(...args);
-
-    const shadow = this._shadow || this._view;
-    this._elm = Object.assign({}, this._elm, {
-      postedAt: shadow.querySelector('.postedAt'),
-      body: shadow.querySelector('.videoMetaInfo'),
-      viewCount: shadow.querySelector('.viewCount'),
-      commentCount: shadow.querySelector('.commentCount'),
-      mylistCount: shadow.querySelector('.mylistCount'),
-      likeCount: shadow.querySelector('.likeCount'),
-      likeColumn: shadow.querySelector('.likeColumn')
-    });
-  }
-
-  update(videoInfo) {
-    this._elm.postedAt.textContent = new Date(videoInfo.postedAt).toLocaleString();
-    this._elm.likeColumn.hidden = true;
-    this._elm.likeCount.textContent = '';
-    this._elm.likeCount.title = '';
-    const count = videoInfo.count;
-    this.updateVideoCount(count);
-  }
-
-  updateVideoCount(count) {
-    for (const key of ['comment', 'view', 'mylist', 'like']) {
-      // Comment-only refreshes must preserve likes; full video changes reset them.
-      if (!Object.prototype.hasOwnProperty.call(count, key)) { continue; }
-      const value = count[key];
-      // Dialog expands a comment-only event with view/mylist: undefined.
-      // Undefined means no update, not a request to erase existing counts.
-      if (value === undefined) { continue; }
-      const valid = Number.isSafeInteger(value) && value >= 0;
-      const element = this._elm[`${key}Count`];
-      if (key === 'like') { this._elm.likeColumn.hidden = !valid; }
-      element.textContent = valid ? value.toLocaleString() : '';
-      element.title = valid ? value.toLocaleString() : '';
+    constructor({ parentNode }) {
+        super({
+            parentNode,
+            name: 'VideoMetaInfo',
+            template: '<div class="VideoMetaInfo"></div>',
+            shadow: VideoMetaInfo._shadow_,
+            css: VideoMetaInfo.__css__
+        });
+        this._state = {};
+        this._bound.update = this.update.bind(this);
     }
-  }
+    _initDom(...args) {
+        super._initDom(...args);
+        const shadow = this._shadow || this._view;
+        this._elm = Object.assign({}, this._elm, {
+            postedAt: shadow.querySelector('.postedAt'),
+            body: shadow.querySelector('.videoMetaInfo'),
+            viewCount: shadow.querySelector('.viewCount'),
+            commentCount: shadow.querySelector('.commentCount'),
+            mylistCount: shadow.querySelector('.mylistCount'),
+            likeCount: shadow.querySelector('.likeCount'),
+            likeColumn: shadow.querySelector('.likeColumn')
+        });
+    }
+    update(videoInfo) {
+        this._elm.postedAt.textContent = new Date(videoInfo.postedAt).toLocaleString();
+        this._elm.likeColumn.hidden = true;
+        this._elm.likeCount.textContent = '';
+        this._elm.likeCount.title = '';
+        const count = videoInfo.count;
+        this.updateVideoCount(count);
+    }
+    updateVideoCount(count) {
+        for (const key of ['comment', 'view', 'mylist', 'like']) {
+            // Comment-only refreshes must preserve likes; full video changes reset them.
+            if (!Object.prototype.hasOwnProperty.call(count, key)) {
+                continue;
+            }
+            const value = count[key];
+            // Dialog expands a comment-only event with view/mylist: undefined.
+            // Undefined means no update, not a request to erase existing counts.
+            if (value === undefined) {
+                continue;
+            }
+            const valid = Number.isSafeInteger(value) && value >= 0;
+            const element = this._elm[`${key}Count`];
+            if (key === 'like') {
+                this._elm.likeColumn.hidden = !valid;
+            }
+            element.textContent = valid ? value.toLocaleString() : '';
+            element.title = valid ? value.toLocaleString() : '';
+        }
+    }
 }
-
 VideoMetaInfo._css_ = ('').trim();
-
 VideoMetaInfo._shadow_ = (`
     <style>
       .VideoMetaInfo .postedAtOuter {
@@ -5313,9 +5220,7 @@ VideoMetaInfo._shadow_ = (`
       </span>
     </div>
   `);
-
 //===END===
-
 export {
   VideoInfoPanel,
   VideoHeaderPanel,

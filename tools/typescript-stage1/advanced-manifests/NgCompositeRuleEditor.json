@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/advanced-src/NgCompositeRuleEditor.ts",
+  "emitted": "tools/typescript-stage1/.generated/advanced/NgCompositeRuleEditor.js",
+  "runtime": "src/NgCompositeRuleEditor.js",
+  "sourceSha256": "e987969db2de136c91a5c2a16da8e9c0a71cce13645267947747319e4e2f6fd0",
+  "runtimeSha256": "c39941a9384b7ba754cb71cb616452affca9cf9f858e585037ea27ab41219c30",
+  "semanticSha256": "1f85a61d8d68ae3f24f15ced5e3a8f5636ee530401c9746d44feb0b77787c442"
+}

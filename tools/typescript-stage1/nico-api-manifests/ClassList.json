@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/ClassList.ts",
+  "runtime": "packages/lib/src/dom/ClassListWrapper.js",
+  "sourceSha256": "2141168aa2baacaf8fbec6ba2888545cebbcca19b843c4e1c318927888720363",
+  "runtimeSha256": "145c6a7e9c926bb8e5ac63b493f83e00b07844387b3d37c368fd9dac46b94164"
+}

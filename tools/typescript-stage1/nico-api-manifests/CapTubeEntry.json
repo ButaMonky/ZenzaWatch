@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CapTubeEntry.ts",
+  "runtime": "src/_captube.js",
+  "sourceSha256": "2bca6cc6a7a9c5c170c661384b98a9a07c9974c7072710a67f17defd6c74795c",
+  "runtimeSha256": "00a381b785c2d32942580381af95773a835bf31719770d95de1dfae0eef7af3e"
+}

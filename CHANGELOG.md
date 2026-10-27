@@ -1,3 +1,15 @@
+## 2026-10-27 - Public promotion of tested development changes (Dev 2.7.344)
+
+- Brought the tested product changes from the private development tree into the public fork, retaining the existing public Issue #3 seek-bar fix (PR #38).
+- Playback rate shortcuts and wheel controls now move through the same stable preset sequence in both directions (Task945, Discussion #40), so four down/up commands from 1.0 return to 1.0.
+- Included notification history, configurable popup colors and background transparency, shortcut hints, preview placement stabilization, and other tested UI improvements. Further UI refinement remains planned.
+- Updated video card like counts and uploader recovery, bounded user-icon fallback, playlist and storyboard behaviour, and asynchronous ownership checks.
+- Included CapTube YouTube uploader/Worker/repeated-capture repairs and HeatSync playback speed recovery.
+- Regenerated ten active userscripts from synchronized sources using the public GitHub download/update channel; the three legacy-frozen userscripts remain unchanged.
+- Published the matching TypeScript source of truth and test suite. The Task969 API catalog now links all 44 records to code in this public tree.
+- Internal private audit material, authentication data, local evidence and sensitive historical fixtures are excluded.
+- This promotion did not send comments, delete tags, or make any other authenticated NicoNico modifications.
+
 ## 2026-10-26 - Task935: Issue #3 フルスクリーン右端のシーク操作を修復（2.7.317）
 
 - 全画面の右側操作列の透明な領域がシークバーの終端側を覆い、直接クリックやサムネイル表示を妨げていた問題を修正。

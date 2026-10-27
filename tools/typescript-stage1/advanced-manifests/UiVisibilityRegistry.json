@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/advanced-src/UiVisibilityRegistry.ts",
+  "emitted": "tools/typescript-stage1/.generated/advanced/UiVisibilityRegistry.js",
+  "runtime": "src/UiVisibilityRegistry.js",
+  "sourceSha256": "9c72e3046d126876a4b39d11a4899870d5fb898d4f5bc3eb0b12d85b477e0ac6",
+  "runtimeSha256": "b32b462f6a23898740e214ffa691c0619330ce884ce97cb0a241fbcfc2ae17e8",
+  "semanticSha256": "e4f4e14731b09615d55081ca8144aed9f5d42d26bcd38e2c3796fb6d9d805f77"
+}

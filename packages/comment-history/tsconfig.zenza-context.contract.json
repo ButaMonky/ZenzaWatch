@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.zenza-context.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "context-src/zenza-context.ts",
+    "context-src/core.d.mts",
+    "context-src/zenza-context-types.d.ts",
+    "context-src/zenza-context-contract.test.ts"
+  ]
+}

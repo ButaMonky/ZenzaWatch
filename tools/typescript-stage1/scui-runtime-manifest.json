@@ -20,8 +20,8 @@
   "SceneSearchPlacement": {
     "source": "tools/typescript-stage1/nico-src/SceneSearchPlacement.ts",
     "runtime": "packages/zenza/src/sceneSearch/SceneSearchPlacement.js",
-    "sourceSha256": "8839c4a873062bbdfcd623617ab4a63b58e200c680008de7456a7c2ad21513a9",
-    "runtimeSha256": "ac8b0eeef61b2dcf1929439219359cad9378bc18ee339190436aa683a034a8d2"
+    "sourceSha256": "c192117c11667e8d8a140a421ccddc305419a0b58f9633b08d82e1d41561d570",
+    "runtimeSha256": "6c17bc25ed466eb1dcca00344bfc7107b4cfcaf2cd465101ef6461b82e4ec572"
   },
   "SceneSearchController": {
     "source": "tools/typescript-stage1/nico-src/SceneSearchController.ts",

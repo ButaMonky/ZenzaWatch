@@ -7,8 +7,9 @@ const {REPO_ROOT} = require('../helpers/buildSandbox');
 
 function fullscreenCss() {
   const src = fs.readFileSync(path.join(REPO_ROOT, 'src', 'VideoControlBar.js'), 'utf-8');
-  const marker = "{className: 'screenMode for-screen-full videoControlBar'";
-  const end = src.indexOf(marker);
+  // Task964: the file is generated from TypeScript, which prints `{ className: ... }`.
+  const found = /\{\s*className: 'screenMode for-screen-full videoControlBar'/.exec(src);
+  const end = found ? found.index : -1;
   assert.ok(end > 0, 'for-screen-full style marker が見つからない');
   const start = src.lastIndexOf('util.addStyle(\`', end);
   assert.ok(start >= 0, 'for-screen-full util.addStyle が見つからない');

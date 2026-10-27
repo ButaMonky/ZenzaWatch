@@ -4,17 +4,17 @@
 
 | ファイル | 役割 | 備考 |
 |---|---|---|
-| `ZenzaWatch-dev.user.js` | **ZenzaWatch本体**。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供 | 現在の推奨版。`2.7.229-task391` |
+| `ZenzaWatch-dev.user.js` | **ZenzaWatch本体**。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供 | 現在の推奨版。`2.7.344-task966`（公開版） |
 | `ZenzaWatch.user.js` | ZenzaWatch本体の旧通常版（2.6.2） | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない。DEV版と同時に有効にしないこと |
-| `ZenzaAdvancedSettings.user.js` | 上級者向け設定パネル | ショートカット、表示44項目、画面フィルター、NG等の設定。`0.3.47-task391` |
-| `ZenzaHLS.user.js` | HLS / domand動画再生を担当 | 自動画質切り替えも担当。`0.0.34-task391` |
-| `MylistPocket.user.js` | サムネイル上の「とりマイ」「動画情報」「Zenzaプレイリスト追加」など | `0.5.50-task389` |
-| `ZenzaGamePad.user.js` | ゲームパッドでZenzaWatchを操作 | 任意 |
-| `HeatSync.user.js` | コメントの少ない部分を自動で早送りする拡張 | 任意 |
-| `MaskedWatch.user.js` | 画面上の文字・顔などを検出してコメント表示を調整 | 任意 |
-| `ZenzaBlogPartsButton.user.js` | 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加 | 任意 |
-| `CapTube.user.js` | YouTubeでSキーによるスクリーンショット撮影 | YouTubeの撮影とZenzaWatchの動画キャプチャ連携。`0.0.17-task374` |
-| `uQuery.user.js` | 開発者向けのコンソール補助 | 通常利用では不要 |
+| `ZenzaAdvancedSettings.user.js` | 上級者向け設定パネル | ショートカット、表示・非表示、画面フィルター、NG、通知の色・透明度。`0.3.79-task965` |
+| `ZenzaHLS.user.js` | HLS / domand動画再生を担当 | 自動画質切り替えも担当。`0.0.41-task966` |
+| `MylistPocket.user.js` | サムネイル上の「とりマイ」「動画情報」「Zenzaプレイリスト追加」など | `0.5.80-task968` |
+| `ZenzaGamePad.user.js` | ゲームパッドでZenzaWatchを操作 | 任意。`1.5.6-task966` |
+| `HeatSync.user.js` | コメントの少ない部分を自動で早送りする拡張 | 任意。`0.0.24-task966qa` |
+| `MaskedWatch.user.js` | 画面上の文字・顔などを検出してコメント表示を調整 | 任意。`0.3.8-task966` |
+| `ZenzaBlogPartsButton.user.js` | 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加 | 任意。`0.0.5-task928` |
+| `CapTube.user.js` | YouTubeでSキーによるスクリーンショット撮影 | YouTubeの撮影とZenzaWatchの動画キャプチャ連携。`0.0.24-task966qa` |
+| `uQuery.user.js` | 開発者向けのコンソール補助 | 通常利用では不要。`0.0.7-task966` |
 | `MylistFilter.user.js` | マイリストの視聴不可動画を一括削除 | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない |
 | `WatchDump.user.js` | 動画データをコンソールへ出力するデバッグ用 | **旧版（凍結）**。`http://` のページにしか反応せず、現在は動かない |
 

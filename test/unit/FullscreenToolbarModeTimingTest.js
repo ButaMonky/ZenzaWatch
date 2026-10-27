@@ -38,16 +38,28 @@ describe('Task310 toolbar display modes and idle timing', () => {
     h.view._scheduleControlBarIdle();
     assert.deepStrictEqual(h.calls, ['small:cancel', 'normal:400']);
   });
-  it('pause shares the current mode timer and clears the opposite timer', () => {
+  it('pause does not reveal toolbar in small/fullscreen by default, but user can opt in', () => {
     const h = viewHarness();
     h.view.addClass = () => {};
+    h.view._playerConfig = {props: {}};
     h.view._onVideoPause();
     assert.strictEqual(h.view._isControlBarActive, true);
     assert.deepStrictEqual(h.calls, ['small:cancel', 'normal:400']);
     h.calls.length = 0;
     h.view._state.screenMode = 'small';
     h.view._onVideoPause();
+    assert.deepStrictEqual(h.calls, [], 'small pause should not reveal controls by default');
+    h.view._playerConfig.props['controlBar.showOnPause.small'] = true;
+    h.view._onVideoPause();
     assert.deepStrictEqual(h.calls, ['normal:cancel', 'small:3000']);
+    h.calls.length = 0;
+    h.view._state.screenMode = 'normal';
+    h.mode.full = true;
+    h.view._onVideoPause();
+    assert.deepStrictEqual(h.calls, [], 'fullscreen pause should not reveal controls by default');
+    h.view._playerConfig.props['controlBar.showOnPause.fullscreen'] = true;
+    h.view._onVideoPause();
+    assert.deepStrictEqual(h.calls, ['small:cancel', 'normal:400']);
   });
   it('recomputes auto / always-show / always-hide without the vMargin override', () => {
     const h = viewHarness();

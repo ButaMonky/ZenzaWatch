@@ -139,9 +139,13 @@ describe('IndexedDB initialization and exception propagation (ZW-083)', function
     const anchor = dist.indexOf("void ThumbInfoLoader.load('sm9').catch(");
     assert.ok(anchor >= 0, 'initializer warm-up anchor missing from generated dev dist');
     const start = dist.lastIndexOf('const initWorker =', anchor);
-    const end = dist.indexOf('\n\t};', anchor);
+    // Task965: initializer.js is generated from TS now, so its dist indentation changed;
+    // close the block at the indentation of its own `const initWorker =` line.
+    const indent = dist.slice(dist.lastIndexOf('\n', start) + 1, start);
+    const closing = `\n${indent}};`;
+    const end = dist.indexOf(closing, anchor);
     assert.ok(start >= 0 && end > start, 'initializer initWorker block missing from generated dev dist');
-    run(`${dist.slice(start, end + 4)}\nglobalThis.initialize = initWorker;`, context);
+    run(`${dist.slice(start, end + closing.length)}\nglobalThis.initialize = initWorker;`, context);
     const state = observe(context.initialize());
     await ticks();
     assert.strictEqual(state.status, 'resolved');

@@ -121,7 +121,9 @@ class SceneSearchPlayerBinding {
   }
   _watchGeometry(){
     const win=this.document.defaultView;
-    const selectors='.videoPlayer,.commentInputPanel,.commandDrawer,.commandPopover,.closeButton,.zenzaSmallModeResizeHandle';
+    // Task934: toolbar icon columns and menu/resize changes can change the
+    // available fullscreen preview area without changing the video size.
+    const selectors='.videoPlayer,.commentInputPanel,.commandDrawer,.commandPopover,.closeButton,.zenzaSmallModeResizeHandle,.controlItemContainer.right,.controlItemContainer.left,.controlItemContainer.center';
     if(win.ResizeObserver){
       this._geometryObserver=new win.ResizeObserver(this._geometryChanged);
       this._geometryObserver.observe(this.container);

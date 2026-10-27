@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/MaskedWatchEntry.ts",
+  "runtime": "src/_shape.js",
+  "sourceSha256": "b7006b9737d84c871fc068cc7c65f2d9e5b90a08a02011b994a854c59a4deab3",
+  "runtimeSha256": "a6aede5711838a59e6a08fa6d3bebc2e51d9a95ad6f85108dc9a12bdd6eee6f8"
+}

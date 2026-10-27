@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/DialogElement.ts",
+  "runtime": "packages/components/src/element/DialogElement.js",
+  "sourceSha256": "97fd2df1d14c7a47275b5c03a8edbd9fd44f1393f2071e85488255a40392eb6e",
+  "runtimeSha256": "714d835c023b5e6a500c545e37aa32bb53d0cd83c7806e461f8a18e2bc893d11"
+}

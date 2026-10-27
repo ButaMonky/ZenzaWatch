@@ -7,534 +7,488 @@ import {Config} from './Config';
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
 
+// GENERATED FROM tools/typescript-stage1/nico-src/TagListView.ts (Task963). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
 class TagListView extends BaseViewComponent {
-  constructor({parentNode}) {
-    super({
-      parentNode,
-      name: 'TagListView',
-      template: '<div class="TagListView"></div>',
-      shadow: TagListView.__shadow__,
-      css: TagListView.__css__
-    });
-
-    this._state = {
-      isInputing: false,
-      isUpdating: false,
-      isEditing: false
-    };
-
-    this._tagEditApi = new TagEditApi();
-    this._boundOnBodyClick = this._onBodyClick.bind(this);
-    this._inputFocusTimer = null;
-  }
-
-  _initDom(...args) {
-    super._initDom(...args);
-
-    const v = this._shadow || this._view;
-    Object.assign(this._elm, {
-      videoTags: v.querySelector('.videoTags'),
-      videoTagsInner: v.querySelector('.videoTagsInner'),
-      tagInput: v.querySelector('.tagInputText'),
-      form: v.querySelector('form')
-    });
-
-    this._elm.tagInput.addEventListener('keydown', this._onTagInputKeyDown.bind(this));
-    this._elm.form.addEventListener('submit', this._onTagInputSubmit.bind(this));
-    v.addEventListener('keydown', e => {
-      if (this._state.isInputing) {
-        e.stopPropagation();
-      }
-    });
-    v.addEventListener('click', e => e.stopPropagation());
-
-    ZenzaWatch.emitter.on('hideHover', () => {
-      if (this._state.isEditing) {
-        this._endEdit();
-      }
-    });
-  }
-
-  _onCommand(command, param) {
-    switch (command) {
-
-      case 'refresh':
-        this._refreshTag();
-        break;
-      case 'toggleEdit':
-        if (this._state.isEditing) {
-          this._endEdit();
-        } else {
-          this._beginEdit();
+    constructor({ parentNode }) {
+        super({
+            parentNode,
+            name: 'TagListView',
+            template: '<div class="TagListView"></div>',
+            shadow: TagListView.__shadow__,
+            css: TagListView.__css__
+        });
+        this._state = {
+            isInputing: false,
+            isUpdating: false,
+            isEditing: false
+        };
+        this._tagEditApi = new TagEditApi();
+        this._boundOnBodyClick = this._onBodyClick.bind(this);
+        this._inputFocusTimer = null;
+    }
+    _initDom(...args) {
+        super._initDom(...args);
+        const v = this._shadow || this._view;
+        Object.assign(this._elm, {
+            videoTags: v.querySelector('.videoTags'),
+            videoTagsInner: v.querySelector('.videoTagsInner'),
+            tagInput: v.querySelector('.tagInputText'),
+            form: v.querySelector('form')
+        });
+        this._elm.tagInput.addEventListener('keydown', this._onTagInputKeyDown.bind(this));
+        this._elm.form.addEventListener('submit', this._onTagInputSubmit.bind(this));
+        v.addEventListener('keydown', (e) => {
+            if (this._state.isInputing) {
+                e.stopPropagation();
+            }
+        });
+        v.addEventListener('click', (e) => e.stopPropagation());
+        ZenzaWatch.emitter.on('hideHover', () => {
+            if (this._state.isEditing) {
+                this._endEdit();
+            }
+        });
+    }
+    _onCommand(command, param) {
+        switch (command) {
+            case 'refresh':
+                this._refreshTag();
+                break;
+            case 'toggleEdit':
+                if (this._state.isEditing) {
+                    this._endEdit();
+                }
+                else {
+                    this._beginEdit();
+                }
+                break;
+            case 'toggleInput':
+                if (this._state.isInputing) {
+                    this._endInput();
+                }
+                else {
+                    this._beginInput();
+                }
+                break;
+            case 'beginInput':
+                this._beginInput();
+                break;
+            case 'endInput':
+                this._endInput();
+                break;
+            case 'addTag':
+                this._addTag(param);
+                break;
+            case 'removeTag': {
+                let elm = this._elm.videoTags.querySelector(`.tagItem[data-tag-id="${param}"]`);
+                if (!elm) {
+                    return;
+                }
+                elm.classList.add('is-Removing');
+                let data = JSON.parse(elm.getAttribute('data-tag'));
+                this._removeTag(param, data.name);
+                break;
+            }
+            case 'tag-search':
+                this._onTagSearch(param);
+                break;
+            // Task 074: ジャンルのバッジ
+            case 'set-search-genre':
+                ZenzaWatch.emitter.emit('setSearchGenre', param);
+                break;
+            case 'none':
+                break;
+            default:
+                super._onCommand(command, param);
+                break;
         }
-        break;
-      case 'toggleInput':
+    }
+    /**
+     * タグの▶ボタンから検索する（Task0xx: タグ検索の不具合修正）。
+     *
+     * 以前は2つの不具合があった。
+     * (1) searchTypeに検索パネルの共有設定videoSearch.modeをそのまま使っていた
+     *     ため、直前に検索パネルで「キーワード」モードにしていると、タグを
+     *     クリックしてもタグ完全一致(tagsExact)ではなくタイトル・説明文まで
+     *     含めた曖昧検索になってしまっていた。タグをクリックした時点で検索語は
+     *     常に「そのタグそのもの」なので、searchTypeは常に'tag'に固定する。
+     * (2) 並び順の解釈が検索パネル側(VideoInfoPanel.jsのVideoSearchForm)と
+     *     食い違っており(videoSearch.sortの値が検索パネル変更後の物だと
+     *     照合に失敗してlastCommentTimeへフォールバックし、videoSearch.orderは
+     *     どこからも更新されない上に'desc'/'asc'という単語自体がクエリ側の
+     *     期待する'd'/'a'と一致せず常に昇順になっていた)ため、検索パネルと
+     *     同じparseVideoSearchSortValue()を使うよう統一した。
+     */
+    _onTagSearch(word) {
+        const config = Config.namespace('videoSearch');
+        const { sort, order, playlistSort } = parseVideoSearchSortValue(config.getValue('sort') || 'playlist');
+        let option = {
+            searchType: 'tag',
+            order,
+            sort,
+            playlistSort
+            // Task 073: 以前は検索欄の「投稿者の動画のみ」の設定値も引き継いでいたが、
+            // タグをクリックした時は常にタグ全体から検索する（検索欄の項目を将来削除しても影響しないよう切り離した）。
+        };
+        super._onCommand('playlistSetSearchVideo', { word, option });
+    }
+    update({ tagList = [], watchId = null, videoId = null, token = null, tagEdit = null, genre = undefined }) {
         if (this._state.isInputing) {
-          this._endInput();
-        } else {
-          this._beginInput();
+            this._endInput();
         }
-        break;
-      case 'beginInput':
-        this._beginInput();
-        break;
-      case 'endInput':
-        this._endInput();
-        break;
-      case 'addTag':
-        this._addTag(param);
-        break;
-      case 'removeTag': {
-        let elm = this._elm.videoTags.querySelector(`.tagItem[data-tag-id="${param}"]`);
-        if (!elm) {
-          return;
+        if (this._state.isEditing) {
+            this._endEdit();
         }
-        elm.classList.add('is-Removing');
-        let data = JSON.parse(elm.getAttribute('data-tag'));
-        this._removeTag(param, data.name);
-        break;
-      }
-      case 'tag-search':
-        this._onTagSearch(param);
-        break;
-      // Task 074: ジャンルのバッジ
-      case 'set-search-genre':
-        ZenzaWatch.emitter.emit('setSearchGenre', param);
-        break;
-      case 'none':
-        break;
-      default:
-        super._onCommand(command, param);
-        break;
+        // Task 074: 再生中の動画のジャンル（タグ欄の先頭にバッジで出す）
+        if (genre !== undefined) {
+            this._genre = genre;
+        }
+        if (watchId) {
+            this._watchId = watchId;
+        }
+        if (videoId) {
+            this._videoId = videoId;
+        }
+        if (token) {
+            this._token = token;
+        }
+        this._tagEdit = tagEdit || null;
+        this.setState({
+            isInputing: false,
+            isUpdating: false,
+            isEditing: false,
+            isEmpty: false
+        });
+        this._update(tagList);
     }
-  }
-
-  /**
-   * タグの▶ボタンから検索する（Task0xx: タグ検索の不具合修正）。
-   *
-   * 以前は2つの不具合があった。
-   * (1) searchTypeに検索パネルの共有設定videoSearch.modeをそのまま使っていた
-   *     ため、直前に検索パネルで「キーワード」モードにしていると、タグを
-   *     クリックしてもタグ完全一致(tagsExact)ではなくタイトル・説明文まで
-   *     含めた曖昧検索になってしまっていた。タグをクリックした時点で検索語は
-   *     常に「そのタグそのもの」なので、searchTypeは常に'tag'に固定する。
-   * (2) 並び順の解釈が検索パネル側(VideoInfoPanel.jsのVideoSearchForm)と
-   *     食い違っており(videoSearch.sortの値が検索パネル変更後の物だと
-   *     照合に失敗してlastCommentTimeへフォールバックし、videoSearch.orderは
-   *     どこからも更新されない上に'desc'/'asc'という単語自体がクエリ側の
-   *     期待する'd'/'a'と一致せず常に昇順になっていた)ため、検索パネルと
-   *     同じparseVideoSearchSortValue()を使うよう統一した。
-   */
-  _onTagSearch(word) {
-    const config = Config.namespace('videoSearch');
-    const {sort, order, playlistSort} =
-      parseVideoSearchSortValue(config.getValue('sort') || 'playlist');
-
-    let option = {
-      searchType: 'tag',
-      order,
-      sort,
-      playlistSort
-      // Task 073: 以前は検索欄の「投稿者の動画のみ」の設定値も引き継いでいたが、
-      // タグをクリックした時は常にタグ全体から検索する（検索欄の項目を将来削除しても影響しないよう切り離した）。
-    };
-
-    super._onCommand('playlistSetSearchVideo', {word, option});
-  }
-
-  update({tagList = [], watchId = null, videoId = null, token = null, tagEdit = null, genre = undefined}) {
-    if (this._state.isInputing) {
-      this._endInput();
+    _onClick(e) {
+        if (this._state.isInputing || this._state.isEditing) {
+            e.stopPropagation();
+        }
+        super._onClick(e);
     }
-    if (this._state.isEditing) {
-      this._endEdit();
+    _canEditTags() {
+        return !!(nicoUtil.isLogin() && this._tagEdit && this._tagEdit.isEditable === true);
     }
-
-    // Task 074: 再生中の動画のジャンル（タグ欄の先頭にバッジで出す）
-    if (genre !== undefined) {
-      this._genre = genre;
+    _tagEditUnavailableMessage() {
+        if (!nicoUtil.isLogin()) {
+            return 'ログインしていません';
+        }
+        if (this._tagEdit && this._tagEdit.uneditableReason === 'PREMIUM_ONLY') {
+            return 'プレミアム会員のみタグ編集できます';
+        }
+        return 'この動画ではタグ編集できません';
     }
-    if (watchId) {
-      this._watchId = watchId;
-    }
-    if (videoId) {
-      this._videoId = videoId;
-    }
-    if (token) {
-      this._token = token;
-    }
-    this._tagEdit = tagEdit || null;
-
-    this.setState({
-      isInputing: false,
-      isUpdating: false,
-      isEditing: false,
-      isEmpty: false
-    });
-    this._update(tagList);
-  }
-
-  _onClick(e) {
-    if (this._state.isInputing || this._state.isEditing) {
-      e.stopPropagation();
-    }
-    super._onClick(e);
-  }
-
-  _canEditTags() {
-    return !!(nicoUtil.isLogin() && this._tagEdit && this._tagEdit.isEditable === true);
-  }
-
-  _tagEditUnavailableMessage() {
-    if (!nicoUtil.isLogin()) {
-      return 'ログインしていません';
-    }
-    if (this._tagEdit && this._tagEdit.uneditableReason === 'PREMIUM_ONLY') {
-      return 'プレミアム会員のみタグ編集できます';
-    }
-    return 'この動画ではタグ編集できません';
-  }
-
-  _update(tagList = []) {
-    let tags = [];
-    const genre = this._genre;
-    if (genre && genre.label) {
-      // Task 074: クリックすると検索欄のジャンル絞り込みをこのジャンルに合わせる
-      tags.push(`<li class="genreItem" title="ジャンル: ${textUtil.escapeHtml(genre.label)}（クリックで検索欄のジャンル絞り込みに設定）"
+    _update(tagList = []) {
+        let tags = [];
+        const genre = this._genre;
+        if (genre && genre.label) {
+            // Task 074: クリックすると検索欄のジャンル絞り込みをこのジャンルに合わせる
+            tags.push(`<li class="genreItem" title="ジャンル: ${textUtil.escapeHtml(genre.label)}（クリックで検索欄のジャンル絞り込みに設定）"
         ><span class="genreBadge command" data-command="set-search-genre" data-param="${textUtil.escapeHtml(genre.key)}"
         >${textUtil.escapeHtml(genre.label)}</span></li>`);
-    }
-    tagList.forEach(tag => {
-      tags.push(this._createTag(tag));
-    });
-    if (this._canEditTags()) {
-      tags.push(this._createToggleInput());
-    } else {
-      const message = textUtil.escapeHtml(this._tagEditUnavailableMessage());
-      tags.push(`<span class="text tagEditUnavailable" title="${message}">${message}</span>`);
-    }
-    this.setState({isEmpty: tagList.length < 1});
-    this._elm.videoTagsInner.innerHTML = tags.join('');
-    this._updateNicodicIcons(tagList);
-  }
-
-  /**
-   * 大百科の記事があるタグのアイコンを、取得できしだい差し替える（Task 044）。
-   *
-   * 以前は視聴ページAPIのタグ情報にあるisNicodicArticleExistsを見ていたが、
-   * ニコニコ側がこの値を返さなくなり（2026-09時点で、明らかに記事がある
-   * タグまで含めて常にfalse）、アイコンが一切出なくなっていた。
-   * Task157では大百科APIへタグを一括送信し、request_titleで結果を対応付ける。
-   * 詳しくはNicodicArticleLoaderと互換性追補を参照。
-   *
-   * 判定には通信が要るため、まず今まで通りの見た目で描画しておき、
-   * 結果が返ったものから順にアイコンと状態を書き換える
-   * （結果が返らなくても、記事なしの見た目のまま実害は無い）。
-   */
-  _updateNicodicIcons(tagList = []) {
-    const container = this._elm.videoTagsInner;
-    if (!container || !tagList.length) { return; }
-    // 描画し直された後に古い結果が書き込まれないよう、世代で見分ける
-    const generation = (this._nicodicGeneration = (this._nicodicGeneration || 0) + 1);
-    const names = tagList.map(tag => tag.name).filter(name => name);
-
-    NicodicArticleLoader.checkAll(names, (name, hasDic, article) => {
-      if (generation !== this._nicodicGeneration || !hasDic) { return; }
-      const li = container.querySelector(`li[data-tag-id="${window.CSS && CSS.escape ? CSS.escape(name) : name}"]`);
-      if (!li) { return; }
-      const menu = li.querySelector('.tagItemMenu');
-      if (menu) {
-        // この要素はシャドウDOMを持つカスタム要素。属性を書き換えると
-        // attributeChangedCallbackが拾って見た目に反映される（Task 047）
-        menu.dataset.hasNicodic = '1';
-        if (article && article.summary) {
-          menu.dataset.nicodicSummary =
-            article.summary.replace(/\s+/g, ' ').slice(0, 200);
         }
-      }
-      // 以下はカスタム要素が使えない環境での予備表示（通常は描画されない）
-      const img = li.querySelector('img.dicIcon');
-      if (img) { img.src = TagListView.DIC_ICON_EXISTS; }
-    });
-  }
-
-  _createToggleInput() {
-    return (`
+        tagList.forEach((tag) => {
+            tags.push(this._createTag(tag));
+        });
+        if (this._canEditTags()) {
+            tags.push(this._createToggleInput());
+        }
+        else {
+            const message = textUtil.escapeHtml(this._tagEditUnavailableMessage());
+            tags.push(`<span class="text tagEditUnavailable" title="${message}">${message}</span>`);
+        }
+        this.setState({ isEmpty: tagList.length < 1 });
+        this._elm.videoTagsInner.innerHTML = tags.join('');
+        this._updateNicodicIcons(tagList);
+    }
+    /**
+     * 大百科の記事があるタグのアイコンを、取得できしだい差し替える（Task 044）。
+     *
+     * 以前は視聴ページAPIのタグ情報にあるisNicodicArticleExistsを見ていたが、
+     * ニコニコ側がこの値を返さなくなり（2026-09時点で、明らかに記事がある
+     * タグまで含めて常にfalse）、アイコンが一切出なくなっていた。
+     * Task157では大百科APIへタグを一括送信し、request_titleで結果を対応付ける。
+     * 詳しくはNicodicArticleLoaderと互換性追補を参照。
+     *
+     * 判定には通信が要るため、まず今まで通りの見た目で描画しておき、
+     * 結果が返ったものから順にアイコンと状態を書き換える
+     * （結果が返らなくても、記事なしの見た目のまま実害は無い）。
+     */
+    _updateNicodicIcons(tagList = []) {
+        const container = this._elm.videoTagsInner;
+        if (!container || !tagList.length) {
+            return;
+        }
+        // 描画し直された後に古い結果が書き込まれないよう、世代で見分ける
+        const generation = (this._nicodicGeneration = (this._nicodicGeneration || 0) + 1);
+        const names = tagList.map((tag) => tag.name).filter((name) => name);
+        NicodicArticleLoader.checkAll(names, (name, hasDic, article) => {
+            if (generation !== this._nicodicGeneration || !hasDic) {
+                return;
+            }
+            const li = container.querySelector(`li[data-tag-id="${window.CSS && CSS.escape ? CSS.escape(name) : name}"]`);
+            if (!li) {
+                return;
+            }
+            const menu = li.querySelector('.tagItemMenu');
+            if (menu) {
+                // この要素はシャドウDOMを持つカスタム要素。属性を書き換えると
+                // attributeChangedCallbackが拾って見た目に反映される（Task 047）
+                menu.dataset.hasNicodic = '1';
+                if (article && article.summary) {
+                    menu.dataset.nicodicSummary =
+                        article.summary.replace(/\s+/g, ' ').slice(0, 200);
+                }
+            }
+            // 以下はカスタム要素が使えない環境での予備表示（通常は描画されない）
+            const img = li.querySelector('img.dicIcon');
+            if (img) {
+                img.src = TagListView.DIC_ICON_EXISTS;
+            }
+        });
+    }
+    _createToggleInput() {
+        return (`
         <div
           class="button command toggleInput"
           data-command="toggleInput"
           data-tooltip="タグ追加">
           <span class="icon">&#8853;</span>
         </div>`).trim();
-  }
-
-  _onApiResult(watchId, result) {
-    if (watchId !== this._watchId) {
-      return; // 通信してる間に動画変わったぽい
     }
-    const err = result.error_msg;
-    if (err) {
-      this.emit('command', 'alert', err);
+    _onApiResult(watchId, result) {
+        if (watchId !== this._watchId) {
+            return; // 通信してる間に動画変わったぽい
+        }
+        const err = result.error_msg;
+        if (err) {
+            this.emit('command', 'alert', err);
+        }
+        this.update(result.tags);
     }
-
-    this.update(result.tags);
-  }
-
-  // Task 066: タグ編集キーが期限切れで取り直された場合、以後の操作でも
-  // 新しいキーを使うよう手元の tagEdit を更新する。
-  _onEditKeyUpdate(watchId, newKey) {
-    if (watchId !== this._watchId || !newKey) {
-      return;
+    // Task 066: タグ編集キーが期限切れで取り直された場合、以後の操作でも
+    // 新しいキーを使うよう手元の tagEdit を更新する。
+    _onEditKeyUpdate(watchId, newKey) {
+        if (watchId !== this._watchId || !newKey) {
+            return;
+        }
+        this._tagEdit = Object.assign({}, this._tagEdit || {}, { editKey: newKey });
     }
-    this._tagEdit = Object.assign({}, this._tagEdit || {}, {editKey: newKey});
-  }
-
-  // Task 066: 以前は失敗時にresultがundefinedになり、result.tags等の参照で
-  // 例外になって「更新中」のまま固まっていた。失敗時は状態を戻して通知する。
-  _onTagEditError(watchId, err, label) {
-    window.console.warn(`[TagListView] ${label}`, err);
-    if (watchId !== this._watchId) {
-      return;
+    // Task 066: 以前は失敗時にresultがundefinedになり、result.tags等の参照で
+    // 例外になって「更新中」のまま固まっていた。失敗時は状態を戻して通知する。
+    _onTagEditError(watchId, err, label) {
+        window.console.warn(`[TagListView] ${label}`, err);
+        if (watchId !== this._watchId) {
+            return;
+        }
+        this.setState({ isUpdating: false });
+        this.emit('command', 'alert', (err && err.message) || `${label}に失敗しました`);
     }
-    this.setState({isUpdating: false});
-    this.emit('command', 'alert', (err && err.message) || `${label}に失敗しました`);
-  }
-
-  _addTag(tag) {
-    if (!this._canEditTags()) {
-      return;
+    _addTag(tag) {
+        if (!this._canEditTags()) {
+            return;
+        }
+        this.setState({ isUpdating: true });
+        const wait3s = this._makeWait(3000);
+        const watchId = this._watchId;
+        const videoId = this._videoId;
+        const csrfToken = this._token;
+        const editKey = this._tagEdit?.editKey;
+        const addTag = () => {
+            return this._tagEditApi.add({
+                videoId,
+                tag,
+                csrfToken,
+                editKey,
+                onEditKeyUpdate: (key) => this._onEditKeyUpdate(watchId, key)
+            });
+        };
+        return Promise.all([addTag(), wait3s]).then(results => {
+            let result = results[0] || {};
+            if (watchId !== this._watchId) {
+                return;
+            } // 待ってる間に動画が変わったぽい
+            if (result.tags) {
+                this._update(result.tags);
+            }
+            this.setState({ isInputing: false, isUpdating: false, isEditing: false });
+            if (result.error_msg) {
+                this.emit('command', 'alert', result.error_msg);
+            }
+        }).catch(err => this._onTagEditError(watchId, err, 'タグの追加'));
     }
-    this.setState({isUpdating: true});
-
-    const wait3s = this._makeWait(3000);
-    const watchId = this._watchId;
-    const videoId = this._videoId;
-    const csrfToken = this._token;
-    const editKey = this._tagEdit?.editKey;
-    const addTag = () => {
-      return this._tagEditApi.add({
-        videoId,
-        tag,
-        csrfToken,
-        editKey,
-        onEditKeyUpdate: key => this._onEditKeyUpdate(watchId, key)
-      });
-    };
-
-    return Promise.all([addTag(), wait3s]).then(results => {
-      let result = results[0] || {};
-      if (watchId !== this._watchId) {
-        return;
-      } // 待ってる間に動画が変わったぽい
-      if (result.tags) {
-        this._update(result.tags);
-      }
-      this.setState({isInputing: false, isUpdating: false, isEditing: false});
-
-      if (result.error_msg) {
-        this.emit('command', 'alert', result.error_msg);
-      }
-    }).catch(err => this._onTagEditError(watchId, err, 'タグの追加'));
-  }
-
-  _removeTag(tagId, tag = '') {
-    if (!this._canEditTags()) {
-      return;
+    _removeTag(tagId, tag = '') {
+        if (!this._canEditTags()) {
+            return;
+        }
+        this.setState({ isUpdating: true });
+        const wait3s = this._makeWait(3000);
+        const watchId = this._watchId;
+        const videoId = this._videoId;
+        const csrfToken = this._token;
+        const editKey = this._tagEdit?.editKey;
+        const removeTag = () => {
+            return this._tagEditApi.remove({
+                videoId,
+                tag,
+                id: tagId,
+                csrfToken,
+                editKey,
+                onEditKeyUpdate: (key) => this._onEditKeyUpdate(watchId, key)
+            });
+        };
+        return Promise.all([removeTag(), wait3s]).then((results) => {
+            let result = results[0] || {};
+            if (watchId !== this._watchId) {
+                return;
+            } // 待ってる間に動画が変わったぽい
+            if (result.tags) {
+                this._update(result.tags);
+            }
+            this.setState({ isUpdating: false });
+            if (result.error_msg) {
+                this.emit('command', 'alert', result.error_msg);
+            }
+        }).catch(err => this._onTagEditError(watchId, err, 'タグの削除'));
     }
-    this.setState({isUpdating: true});
-
-    const wait3s = this._makeWait(3000);
-    const watchId = this._watchId;
-    const videoId = this._videoId;
-    const csrfToken = this._token;
-    const editKey = this._tagEdit?.editKey;
-    const removeTag = () => {
-      return this._tagEditApi.remove({
-        videoId,
-        tag,
-        id: tagId,
-        csrfToken,
-        editKey,
-        onEditKeyUpdate: key => this._onEditKeyUpdate(watchId, key)
-      });
-    };
-
-    return Promise.all([removeTag(), wait3s]).then((results) => {
-      let result = results[0] || {};
-      if (watchId !== this._watchId) {
-        return;
-      } // 待ってる間に動画が変わったぽい
-      if (result.tags) {
-        this._update(result.tags);
-      }
-      this.setState({isUpdating: false});
-
-      if (result.error_msg) {
-        this.emit('command', 'alert', result.error_msg);
-      }
-    }).catch(err => this._onTagEditError(watchId, err, 'タグの削除'));
-  }
-
-  _refreshTag() {
-    this.setState({isUpdating: true});
-    const watchId = this._watchId;
-    const wait1s = this._makeWait(1000);
-    const load = () => {
-      return this._tagEditApi.load(this._videoId, this._tagEdit?.editKey, {
-        onEditKeyUpdate: key => this._onEditKeyUpdate(watchId, key)
-      });
-    };
-
-    return Promise.all([load(), wait1s]).then((results) => {
-      let result = results[0] || {};
-      if (watchId !== this._watchId) {
-        return;
-      } // 待ってる間に動画が変わったぽい
-      this._update(result.tags || []);
-      this.setState({isUpdating: false, isInputing: false, isEditing: false});
-    }).catch(err => this._onTagEditError(watchId, err, 'タグ一覧の取得'));
-  }
-
-  _makeWait(ms) {
-    return new Promise(resolve => {
-      setTimeout(() => {
-        resolve(ms);
-      }, ms);
-    });
-  }
-
-  _createDicIcon(text, hasDic) {
-    let href = `https://dic.nicovideo.jp/a/${encodeURIComponent(text)}`;
-    // TODO: 本家がHTML5に完全移行したらこのアイコンも消えるかもしれないので代替を探す
-    let src = hasDic ?
-      TagListView.DIC_ICON_EXISTS : TagListView.DIC_ICON_NONE;
-    let icon = `<img class="dicIcon" src="${src}">`;
-    
-    let hasNicodic = hasDic ? 1 : 0;
-    return (
-      `<zenza-tag-item-menu
+    _refreshTag() {
+        this.setState({ isUpdating: true });
+        const watchId = this._watchId;
+        const wait1s = this._makeWait(1000);
+        const load = () => {
+            return this._tagEditApi.load(this._videoId, this._tagEdit?.editKey, {
+                onEditKeyUpdate: (key) => this._onEditKeyUpdate(watchId, key)
+            });
+        };
+        return Promise.all([load(), wait1s]).then((results) => {
+            let result = results[0] || {};
+            if (watchId !== this._watchId) {
+                return;
+            } // 待ってる間に動画が変わったぽい
+            this._update(result.tags || []);
+            this.setState({ isUpdating: false, isInputing: false, isEditing: false });
+        }).catch(err => this._onTagEditError(watchId, err, 'タグ一覧の取得'));
+    }
+    _makeWait(ms) {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                resolve(ms);
+            }, ms);
+        });
+    }
+    _createDicIcon(text, hasDic) {
+        let href = `https://dic.nicovideo.jp/a/${encodeURIComponent(text)}`;
+        // TODO: 本家がHTML5に完全移行したらこのアイコンも消えるかもしれないので代替を探す
+        let src = hasDic ?
+            TagListView.DIC_ICON_EXISTS : TagListView.DIC_ICON_NONE;
+        let icon = `<img class="dicIcon" src="${src}">`;
+        let hasNicodic = hasDic ? 1 : 0;
+        return (`<zenza-tag-item-menu
         class="tagItemMenu"
         data-text="${encodeURIComponent(text)}"
         data-has-nicodic="${hasNicodic}"
-      ><a target="_blank" class="nicodic" href="${href}">${icon}</a></zenza-tag-item-menu>`
-    );
-  }
-
-  _createDeleteButton(id) {
-    if (!this._canEditTags()) {
-      return '';
+      ><a target="_blank" class="nicodic" href="${href}">${icon}</a></zenza-tag-item-menu>`);
     }
-    return `<span target="_blank" class="deleteButton command" title="削除" data-command="removeTag" data-param="${textUtil.escapeHtml(String(id))}">－</span>`;
-  }
-
-  _createLink(text) {
-    let href = `//www.nicovideo.jp/tag/${encodeURIComponent(text)}`;
-    // タグはエスケープされた物が来るのでそのままでつっこんでいいはずだが、
-    // 古いのはけっこういい加減なデータもあったりして信頼できない        
-    text = textUtil.escapeToZenkaku(textUtil.unescapeHtml(text));
-    return `<a class="tagLink" href="${href}">${text}</a>`;
-  }
-
-  _createSearch(text) {
-    let title = 'プレイリストに追加';
-    let command = 'tag-search';
-    let param = textUtil.escapeHtml(text);
-    return (`<zenza-playlist-append class="playlistAppend" title="${title}" data-command="${command}" data-param="${param}">▶</zenza-playlist-append>`);
-  }
-
-  _createTag(tag) {
-    let tagName = tag.name;
-    let dic = this._createDicIcon(tagName, !!tag.isNicodicArticleExists);
-    let del = this._createDeleteButton(tagName);
-    let link = this._createLink(tagName);
-    let search = this._createSearch(tagName);
-    let data = textUtil.escapeHtml(JSON.stringify(tag));
-    let className = tag.isLocked ? 'tagItem is-Locked' : 'tagItem';
-    
-    return `<li class="${className}" data-tag="${data}" data-tag-id="${textUtil.escapeHtml(String(tagName))}">${dic}${del}${link}${search}</li>`;
-  }
-
-  _onTagInputKeyDown(e) {
-    if (this._state.isUpdating) {
-      e.preventDefault();
-      e.stopPropagation();
+    _createDeleteButton(id) {
+        if (!this._canEditTags()) {
+            return '';
+        }
+        return `<span target="_blank" class="deleteButton command" title="削除" data-command="removeTag" data-param="${textUtil.escapeHtml(String(id))}">－</span>`;
     }
-    switch (e.keyCode) {
-      case 27: // ESC
+    _createLink(text) {
+        let href = `//www.nicovideo.jp/tag/${encodeURIComponent(text)}`;
+        // タグはエスケープされた物が来るのでそのままでつっこんでいいはずだが、
+        // 古いのはけっこういい加減なデータもあったりして信頼できない
+        text = textUtil.escapeToZenkaku(textUtil.unescapeHtml(text));
+        return `<a class="tagLink" href="${href}">${text}</a>`;
+    }
+    _createSearch(text) {
+        let title = 'プレイリストに追加';
+        let command = 'tag-search';
+        let param = textUtil.escapeHtml(text);
+        return (`<zenza-playlist-append class="playlistAppend" title="${title}" data-command="${command}" data-param="${param}">▶</zenza-playlist-append>`);
+    }
+    _createTag(tag) {
+        let tagName = tag.name;
+        let dic = this._createDicIcon(tagName, !!tag.isNicodicArticleExists);
+        let del = this._createDeleteButton(tagName);
+        let link = this._createLink(tagName);
+        let search = this._createSearch(tagName);
+        let data = textUtil.escapeHtml(JSON.stringify(tag));
+        let className = tag.isLocked ? 'tagItem is-Locked' : 'tagItem';
+        return `<li class="${className}" data-tag="${data}" data-tag-id="${textUtil.escapeHtml(String(tagName))}">${dic}${del}${link}${search}</li>`;
+    }
+    _onTagInputKeyDown(e) {
+        if (this._state.isUpdating) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        switch (e.keyCode) {
+            case 27: // ESC
+                e.preventDefault();
+                e.stopPropagation();
+                this._endInput();
+                break;
+        }
+    }
+    _onTagInputSubmit(e) {
+        if (this._state.isUpdating) {
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
+        let val = (this._elm.tagInput.value || '').trim();
+        if (!val) {
+            this._endInput();
+            return;
+        }
+        this._onCommand('addTag', val);
+        this._elm.tagInput.value = '';
+    }
+    _onBodyClick() {
         this._endInput();
-        break;
+        this._endEdit();
     }
-  }
-
-  _onTagInputSubmit(e) {
-    if (this._state.isUpdating) {
-      return;
+    _beginEdit() {
+        if (!this._canEditTags()) {
+            return;
+        }
+        this.setState({ isEditing: true });
+        document.body.addEventListener('click', this._boundOnBodyClick);
     }
-    e.preventDefault();
-    e.stopPropagation();
-    let val = (this._elm.tagInput.value || '').trim();
-    if (!val) {
-      this._endInput();
-      return;
+    _endEdit() {
+        document.body.removeEventListener('click', this._boundOnBodyClick);
+        this.setState({ isEditing: false });
     }
-    this._onCommand('addTag', val);
-    this._elm.tagInput.value = '';
-  }
-
-  _onBodyClick() {
-    this._endInput();
-    this._endEdit();
-  }
-
-  _beginEdit() {
-    if (!this._canEditTags()) {
-      return;
+    _beginInput() {
+        if (!this._canEditTags()) {
+            return;
+        }
+        this.setState({ isInputing: true });
+        document.body.addEventListener('click', this._boundOnBodyClick);
+        this._elm.tagInput.value = '';
+        if (this._inputFocusTimer !== null) {
+            window.clearTimeout(this._inputFocusTimer);
+        }
+        this._inputFocusTimer = window.setTimeout(() => {
+            this._inputFocusTimer = null;
+            if (this._state.isInputing) {
+                this._elm.tagInput.focus();
+            }
+        }, 100);
     }
-    this.setState({isEditing: true});
-    document.body.addEventListener('click', this._boundOnBodyClick);
-  }
-
-  _endEdit() {
-    document.body.removeEventListener('click', this._boundOnBodyClick);
-    this.setState({isEditing: false});
-  }
-
-  _beginInput() {
-    if (!this._canEditTags()) {
-      return;
+    _endInput() {
+        if (this._inputFocusTimer !== null) {
+            window.clearTimeout(this._inputFocusTimer);
+            this._inputFocusTimer = null;
+        }
+        this._elm.tagInput.blur();
+        document.body.removeEventListener('click', this._boundOnBodyClick);
+        this.setState({ isInputing: false });
     }
-    this.setState({isInputing: true});
-    document.body.addEventListener('click', this._boundOnBodyClick);
-    this._elm.tagInput.value = '';
-    if (this._inputFocusTimer !== null) {
-      window.clearTimeout(this._inputFocusTimer);
-    }
-    this._inputFocusTimer = window.setTimeout(() => {
-      this._inputFocusTimer = null;
-      if (this._state.isInputing) {
-        this._elm.tagInput.focus();
-      }
-    }, 100);
-  }
-
-  _endInput() {
-    if (this._inputFocusTimer !== null) {
-      window.clearTimeout(this._inputFocusTimer);
-      this._inputFocusTimer = null;
-    }
-    this._elm.tagInput.blur();
-    document.body.removeEventListener('click', this._boundOnBodyClick);
-    this.setState({isInputing: false});
-  }
-
-
 }
-
-
 // 大百科の記事の有無を示すアイコン（Task 045）。
 //
 // 注意（Task 047で判明）: これは <zenza-tag-item-menu> のlight DOM側にある
@@ -552,17 +506,13 @@ class TagListView extends BaseViewComponent {
 //
 // 二度と外部の都合で消えないよう、画像を外部から取るのをやめて、
 // その場で描いたSVGを埋め込む（本を開いた形）。
-const dicIconSvg = (left, right, opacity) =>
-  'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" opacity="' + opacity + '">' +
-      '<path d="M1.4 2.6h5.3c.7 0 1.3.6 1.3 1.3v10c-.3-.5-.8-.8-1.3-.8H1.4z" fill="' + left + '"/>' +
-      '<path d="M14.6 2.6H9.3c-.7 0-1.3.6-1.3 1.3v10c.3-.5.8-.8 1.3-.8h5.3z" fill="' + right + '"/>' +
+const dicIconSvg = (left, right, opacity) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" opacity="' + opacity + '">' +
+    '<path d="M1.4 2.6h5.3c.7 0 1.3.6 1.3 1.3v10c-.3-.5-.8-.8-1.3-.8H1.4z" fill="' + left + '"/>' +
+    '<path d="M14.6 2.6H9.3c-.7 0-1.3.6-1.3 1.3v10c.3-.5.8-.8 1.3-.8h5.3z" fill="' + right + '"/>' +
     '</svg>');
-
 // 記事あり: はっきり見える色。記事なし: 灰色で薄く。
 TagListView.DIC_ICON_EXISTS = dicIconSvg('#d2483f', '#f0938c', '1');
-TagListView.DIC_ICON_NONE   = dicIconSvg('#999999', '#cccccc', '0.5');
-
+TagListView.DIC_ICON_NONE = dicIconSvg('#999999', '#cccccc', '0.5');
 TagListView.__shadow__ = (`
     <style>
       :host-context(.videoTagsContainer.sideTab) .tagLink {
@@ -782,7 +732,7 @@ TagListView.__shadow__ = (`
       .TagListView.is-Editing .is-Locked .deleteButton {
         visibility: hidden;
       }
-      
+
       .TagListView .is-Removing .deleteButton {
         background: #666;
       }
@@ -1021,7 +971,6 @@ TagListView.__shadow__ = (`
       </div>
     </div>
   `).trim();
-
 TagListView.__css__ = (`
 
     /* Firefox用 ShaowDOMサポートしたら不要 */
@@ -1041,12 +990,10 @@ TagListView.__css__ = (`
     }
 
   `).trim();
-
-
 class TagItemMenu extends HTMLElement {
-  static template({text}) {
-    let host = location.host;
-    return `
+    static template({ text }) {
+        let host = location.host;
+        return `
       <style>
         .root {
           display: inline-block;
@@ -1171,64 +1118,65 @@ class TagItemMenu extends HTMLElement {
         </ul>
       </div>
     `;
-  }
-  constructor() {
-    super();
-    this.hasNicodic = parseInt(this.dataset.hasNicodic) !== 0;
-    this.text = textUtil.escapeToZenkaku(this.dataset.text);
-    const shadow = this._shadow = this.attachShadow({mode: 'open'});
-    shadow.innerHTML = this.constructor.template({text: this.text});
-    this._applyHasNicodic();
-  }
-
-  /*
-    Task 047: 大百科アイコンが変わらなかった、本当の本当の原因。
-
-    Task 044・045では、この要素の**light DOM側**にある
-    <img class="dicIcon"> を書き換えていた。ところがこの要素は
-    シャドウDOMを持ち、その中に <slot> が無い。つまり
-    **light DOMの中身は最初から一切描画されていない**（存在はするが見えない）。
-    実際に画面に出ているアイコンは、シャドウDOM内の
-    <div class="icon toggle"></div>（CSSで描いた四角＋「？」）の方で、
-    記事の有無は .root に has-nicodic が付くかどうかで
-    背景色（#888 → #900）が変わる仕組みだった。画像は使っていない。
-
-    そして、その has-nicodic はコンストラクタで一度きり設定されており、
-    後から data-has-nicodic を書き換えても何も起きなかった。
-    大百科の記事有無は通信して分かるものなので、後から反映できなければ
-    意味がない。属性の変化を監視して反映するようにする。
-  */
-  static get observedAttributes() {
-    return ['data-has-nicodic', 'data-nicodic-summary'];
-  }
-
-  attributeChangedCallback(name, oldValue, newValue) {
-    if (!this._shadow || oldValue === newValue) { return; }
-    if (name === 'data-has-nicodic') {
-      this.hasNicodic = parseInt(newValue, 10) !== 0;
-      this._applyHasNicodic();
-      return;
     }
-    if (name === 'data-nicodic-summary') {
-      // 大百科APIが返す要約。マウスを乗せると読めるようにする
-      this.title = newValue || '';
+    constructor() {
+        super();
+        this.hasNicodic = parseInt(this.dataset.hasNicodic) !== 0;
+        this.text = textUtil.escapeToZenkaku(this.dataset.text);
+        const shadow = this._shadow = this.attachShadow({ mode: 'open' });
+        shadow.innerHTML = this.constructor.template({ text: this.text });
+        this._applyHasNicodic();
     }
-  }
-
-  _applyHasNicodic() {
-    const root = this._shadow && this._shadow.querySelector('.root');
-    if (!root) { return; }
-    root.classList.toggle('has-nicodic', this.hasNicodic);
-    if (!this.title) {
-      this.title = this.hasNicodic ?
-        '大百科に記事があります' : '大百科の記事はまだありません';
+    /*
+      Task 047: 大百科アイコンが変わらなかった、本当の本当の原因。
+      .
+      Task 044・045では、この要素の**light DOM側**にある
+      <img class="dicIcon"> を書き換えていた。ところがこの要素は
+      シャドウDOMを持ち、その中に <slot> が無い。つまり
+      **light DOMの中身は最初から一切描画されていない**（存在はするが見えない）。
+      実際に画面に出ているアイコンは、シャドウDOM内の
+      <div class="icon toggle"></div>（CSSで描いた四角＋「？」）の方で、
+      記事の有無は .root に has-nicodic が付くかどうかで
+      背景色（#888 → #900）が変わる仕組みだった。画像は使っていない。
+      .
+      そして、その has-nicodic はコンストラクタで一度きり設定されており、
+      後から data-has-nicodic を書き換えても何も起きなかった。
+      大百科の記事有無は通信して分かるものなので、後から反映できなければ
+      意味がない。属性の変化を監視して反映するようにする。
+    */
+    static get observedAttributes() {
+        return ['data-has-nicodic', 'data-nicodic-summary'];
     }
-  }
+    attributeChangedCallback(name, oldValue, newValue) {
+        if (!this._shadow || oldValue === newValue) {
+            return;
+        }
+        if (name === 'data-has-nicodic') {
+            this.hasNicodic = parseInt(newValue, 10) !== 0;
+            this._applyHasNicodic();
+            return;
+        }
+        if (name === 'data-nicodic-summary') {
+            // 大百科APIが返す要約。マウスを乗せると読めるようにする
+            this.title = newValue || '';
+        }
+    }
+    _applyHasNicodic() {
+        const root = this._shadow && this._shadow.querySelector('.root');
+        if (!root) {
+            return;
+        }
+        root.classList.toggle('has-nicodic', this.hasNicodic);
+        if (!this.title) {
+            this.title = this.hasNicodic ?
+                '大百科に記事があります' : '大百科の記事はまだありません';
+        }
+    }
 }
 if (window.customElements) {
-  window.customElements.define('zenza-tag-item-menu', TagItemMenu);
+    window.customElements.define('zenza-tag-item-menu', TagItemMenu);
 }
-
 //===END===
-
-export {TagListView};
+export {
+  TagListView
+};

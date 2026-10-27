@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "source": "context-src/zenza-context.ts",
+  "runtime": "src/zenza-context.mjs",
+  "sourceSha256": "306a8e99309ff06a4246477cd713732a8ca8d11e21e35e803ebe9d264f44e2db",
+  "runtimeSha256": "13d4850b1c26a46ddf7fd2fa3cc62ad0db4cb212891434f5519b0b66bc2e7432",
+  "semanticSha256": "74568b59740564dc34a5dfbed23903d5a8d96808226184c548ba73b521e8a9e5"
+}

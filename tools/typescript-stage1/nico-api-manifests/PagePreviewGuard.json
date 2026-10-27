@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PagePreviewGuard.ts",
+  "runtime": "packages/zenza/src/init/PagePreviewGuard.js",
+  "sourceSha256": "557f291d1e2400b0290eaf9a827fd5e20d328848dbfb5d475d0c32439d96c86e",
+  "runtimeSha256": "68814833a106225b20e2139e688b482fc44e5303f4fc1cdeb66e65dd7889bea1"
+}

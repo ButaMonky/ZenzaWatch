@@ -46,6 +46,42 @@ describe('Config import validation',()=>{
    assert.strictEqual(options.validateImport(key,bad),false,key);assert.strictEqual(options.validateImport(key,good),true,key);
   }
  });
+ it('validates the Task936 toolbar pause toggles and bounded seconds',()=>{
+  const {options,default:d}=configSchema();
+  for(const key of ['controlBar.showOnPause.small','controlBar.showOnPause.fullscreen']){
+    assert.strictEqual(d[key],false,key);
+    assert.strictEqual(options.validateImport(key,true),true,key);
+    assert.strictEqual(options.validateImport(key,false),true,key);
+    for(const bad of ['false','true',0,1,null]){
+      assert.strictEqual(options.validateImport(key,bad),false,key+'='+bad);
+    }
+  }
+  for(const [key,initial] of [
+    ['controlBar.hideAfterSeconds.small',3],
+    ['controlBar.hideAfterSeconds.fullscreen',0.4]
+  ]){
+    assert.strictEqual(d[key],initial,key);
+    for(const good of [0.2,0.4,1,1.3,3,10]){
+      assert.strictEqual(options.validateImport(key,good),true,key+'='+good);
+    }
+    for(const bad of [0,0.1,10.1,-1,1.25,'1.0',NaN,Infinity,null]){
+      assert.strictEqual(options.validateImport(key,bad),false,key+'='+bad);
+    }
+  }
+ });
+ it('validates PiP original-page thumbnail mode without touching existing settings',()=>{
+  const {options,default:d}=configSchema();
+  assert.strictEqual(d.pipPageThumbnail,true);
+  assert.strictEqual(d.pipPageThumbnailSource,'smart');
+  for(const mode of ['smart','legacy']){
+    assert.strictEqual(options.validateImport('pipPageThumbnailSource',mode),true,mode);
+  }
+  for(const invalid of ['auto','ogp','player',false,null,1,'']){
+    assert.strictEqual(options.validateImport('pipPageThumbnailSource',invalid),false,String(invalid));
+  }
+  assert.strictEqual(options.validateImport('pipPageThumbnail',true),true);
+  assert.strictEqual(options.validateImport('pipPageThumbnail',false),true);
+ });
  it('allows only the three supported search count traffic modes',()=>{
   const {options,default:d}=configSchema();
   const key='videoSearch.wordCountMode';

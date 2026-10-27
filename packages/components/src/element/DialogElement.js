@@ -2,42 +2,32 @@ import { BaseCommandElement } from './BaseCommandElement.js';
 import {textUtil} from '../../../lib/src/text/textUtil';
 import {cssUtil} from '../../../lib/src/css/css';
 const dll = {};
+// GENERATED FROM tools/typescript-stage1/nico-src/DialogElement.ts (Task966). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
-
-
-const {DialogElement, DialogProps} = (() => {
-
-  const DialogProps = {};
-  const DialogAttributes = Object.keys(DialogProps).map(prop => BaseCommandElement.toAttributeName(prop));
-
-  class DialogElement extends BaseCommandElement {
-
-    static get propTypes() {
-      return DialogProps;
-    }
-
-    static get defaultProps() {
-      return DialogProps;
-    }
-
-    static get observedAttributes() {
-      return DialogAttributes;
-    }
-
-    static get defaultState() {
-      return {
-        isOpen: false
-      };
-    }
-
-    static async getContentsTemplate(state = {}, props = {}, events = {}) {
-      return null;
-    }
-
-    static async getTemplate(state = {}, props = {}, events = {}) {
-      const {html} = dll.list || await this.importLit();
-      const body = html`
+const { DialogElement, DialogProps } = (() => {
+    const DialogProps = {};
+    const DialogAttributes = Object.keys(DialogProps).map(prop => BaseCommandElement.toAttributeName(prop));
+    class DialogElement extends BaseCommandElement {
+        static get propTypes() {
+            return DialogProps;
+        }
+        static get defaultProps() {
+            return DialogProps;
+        }
+        static get observedAttributes() {
+            return DialogAttributes;
+        }
+        static get defaultState() {
+            return {
+                isOpen: false
+            };
+        }
+        static async getContentsTemplate(state = {}, props = {}, events = {}) {
+            return null;
+        }
+        static async getTemplate(state = {}, props = {}, events = {}) {
+            const { html } = dll.list || await this.importLit();
+            const body = html `
         <style>
 
         * {
@@ -282,9 +272,8 @@ const {DialogElement, DialogProps} = (() => {
         <div class="dialog-background" data-command="nop">
           <div class="dialog-inner">${this.getContentsTemplate(html, state, props, events)}</div>
         </div>
-      ` ;
-
-      return html`
+      `;
+            return html `
         <div id="root" @click=${events.onClick}>
           <div class="dialog ${state.isOpen ? 'is-open' : ''}"
             data-command="close">
@@ -294,101 +283,92 @@ const {DialogElement, DialogProps} = (() => {
           </div>
         </div>
       `;
-    }
-
-    constructor() {
-      super();
-      const onKey = this.onKey.bind(this);
-      Object.assign(this.events, {
-        onChange: this.onChange.bind(this),
-        onKeyDown: onKey,
-        onKeyUp: onKey
-      });
-      Object.assign(this.state, this.props);
-
-      cssUtil.registerProps({
-        name: '--current-hue',
-        syntax: '<number>',
-        initialValue: 0,
-        inherits: true
-      });
-    }
-
-    async connectedCallback() {
-      await super.connectedCallback();
-      if (!this._root) { return; }
-      this._dialog = this._root.querySelector('.dialog');
-      this._dialog.addEventListener('animationend', e => {
-        if (e.animationName !== 'opening') { return; }
-        if (this.state.isOpen) {
-          this.onOpen();
         }
-      });
+        constructor() {
+            super();
+            const onKey = this.onKey.bind(this);
+            Object.assign(this.events, {
+                onChange: this.onChange.bind(this),
+                onKeyDown: onKey,
+                onKeyUp: onKey
+            });
+            Object.assign(this.state, this.props);
+            cssUtil.registerProps({
+                name: '--current-hue',
+                syntax: '<number>',
+                initialValue: 0,
+                inherits: true
+            });
+        }
+        async connectedCallback() {
+            await super.connectedCallback();
+            if (!this._root) {
+                return;
+            }
+            this._dialog = this._root.querySelector('.dialog');
+            this._dialog.addEventListener('animationend', (e) => {
+                if (e.animationName !== 'opening') {
+                    return;
+                }
+                if (this.state.isOpen) {
+                    this.onOpen();
+                }
+            });
+        }
+        get isOpen() {
+            return this.state.isOpen;
+        }
+        set isOpen(v) {
+            if (this.isOpen === v) {
+                return;
+            }
+            !!v ? this.open() : this.close();
+        }
+        get dialog() {
+            return this._dialog;
+        }
+        open() {
+            this.setState({ isOpen: true });
+            this._dialog && this._dialog.classList.add('is-open');
+        }
+        close() {
+            this._dialog && this._dialog.classList.remove('is-open');
+            setTimeout(() => this.setState({ isOpen: false }), 1000);
+        }
+        toggle() {
+            this.isOpen ? this.close() : this.open();
+        }
+        onCommand(e) {
+            const { command, param } = e.detail;
+            switch (command) {
+                case 'close':
+                    this.close();
+                    break;
+                default:
+                    return;
+            }
+            e.stopPropagation();
+            e.preventDefault();
+        }
+        onChange(e) {
+        }
+        onOpen() {
+        }
+        onKey(e) {
+            const target = (e.path && e.path[0]) ? e.path[0] : e.target;
+            if (target.tagName === 'SELECT' ||
+                target.tagName === 'INPUT' ||
+                target.tagName === 'TEXTAREA') {
+                e.stopPropagation();
+            }
+        }
+        attributeChangedCallback(attr, oldValue, newValue) {
+        }
     }
-
-    get isOpen() {
-      return this.state.isOpen;
-    }
-
-    set isOpen(v) {
-      if (this.isOpen === v) { return; }
-      !!v ? this.open() : this.close();
-    }
-
-    get dialog() {
-      return this._dialog;
-    }
-
-    open() {
-      this.setState({isOpen: true});
-      this._dialog && this._dialog.classList.add('is-open');
-    }
-
-    close() {
-      this._dialog && this._dialog.classList.remove('is-open');
-      setTimeout(() => this.setState({isOpen: false}), 1000);
-    }
-
-    toggle() {
-      this.isOpen ? this.close() : this.open();
-    }
-
-    onCommand(e) {
-      const {command, param} = e.detail;
-      switch (command) {
-        case 'close':
-          this.close();
-          break;
-        default:
-          return;
-      }
-      e.stopPropagation();
-      e.preventDefault();
-    }
-
-    onChange(e) {
-
-    }
-
-    onOpen() {
-    }
-
-    onKey(e) {
-      const target = (e.path && e.path[0]) ? e.path[0] : e.target;
-      if (target.tagName === 'SELECT' ||
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA') {
-        e.stopPropagation();
-      }
-    }
-
-    attributeChangedCallback(attr, oldValue, newValue) {
-    }
-  }
-  return {DialogElement, DialogProps};
+    return { DialogElement, DialogProps };
 })();
-
-
 //===END===
-
-export { DialogElement, DialogProps };
+export {
+  DialogElement,
+  DialogProps
+};

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/MylistPocketDetector.ts",
+  "runtime": "packages/zenza/src/init/MylistPocketDetector.js",
+  "sourceSha256": "3596b7aa3662aa6a1b44db6ab255939864dd35e264c43c328f9041d652c921e6",
+  "runtimeSha256": "7083fb83774feb4e14de54739f25fa9d9c6b14c518b84e04fe9531b1f4a5af7e"
+}

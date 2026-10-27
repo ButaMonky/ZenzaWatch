@@ -3,6 +3,12 @@
  * TypeScript source of truth for the generated userscript helper.
  */
 type UnknownRecord = Record<string, unknown>;
+// Injected by MylistPocket's page-world //@require immediately before
+// PocketThumbnail; this pure policy module is also used by ZenzaWatch PiP.
+declare const ThumbnailSourcePolicy: {
+  select(thumbnail: UnknownRecord, fallback: readonly unknown[],
+    options?: {mode?: 'smart' | 'legacy'; includeUnknownOgp?: boolean}): unknown[];
+};
 type FetchResponse = {ok: boolean; json(): Promise<unknown>};
 type FetchFunction = (url: string, options: {
   credentials: 'include';
@@ -45,10 +51,13 @@ const PocketThumbnail = (() => {
     const v4 = record(record(response?.$watchV4)?.data);
     const thumb = record(record((v4 || response)?.video)?.thumbnail);
     if (!thumb) { return []; }
-    return normalize([
-      thumb.ogp, thumb.player, thumb.large, thumb.largeUrl,
-      thumb.middle, thumb.middleUrl, thumb.normal, thumb.url
-    ]);
+    // Reuse the same official-CDN policy as PiP. Pocket retains an unknown
+    // non-goptim OGP as last fallback; PiP intentionally excludes it.
+    // Network/cache/image ownership remain local to this standalone helper.
+    return normalize(ThumbnailSourcePolicy.select(thumb, [
+      thumb.large, thumb.largeUrl, thumb.middle, thumb.middleUrl,
+      thumb.normal, thumb.url
+    ], {mode: 'smart', includeUnknownOgp: true}));
   };
 
   const legacyUrls = (thumbnail: unknown, hasLarge = false): string[] => {

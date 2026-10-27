@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "source": "typescript-src/browser-preferences.ts",
+  "runtime": "src/browser-preferences.mjs",
+  "sourceSha256": "bcdf6a15a68b75dcd12d422599078b6ff52e35e2b570f0dc427f04af7143c570",
+  "runtimeSha256": "1b7249122958af10770fd059ab37b5a196606a17cfe538f5c276534bc418478f",
+  "semanticSha256": "1672870385dc866cc3c77d80ed416b62810fc217a882f066dce072ff10a7493b"
+}

@@ -14,11 +14,18 @@ describe('Task204 NG filter control button', () => {
     assert(/class="ngFilterSwitch menuButton" data-command="toggle-enableFilter"/.test(block[0]));
   });
 
-  it('exposes a readable tooltip and a dedicated icon without changing the existing comment button', () => {
+  it('preserves readable comment and NG tooltips using their configured shortcut keys', () => {
     const text = source();
-    assert(text.includes('コメント表示ON/OFF(V)'));
+    // Task939 replaced hard-coded '(V)' with the live KEY_TOGGLE_COMMENT
+    // tooltip binding. The original button command and NG icon stay intact.
+    assert(text.includes('<div class="tooltip">コメント表示ON/OFF</div>'));
+    assert(!text.includes('コメント表示ON/OFF(V)'),
+      'hard-coded V would disagree with a customized shortcut');
+    const registry = read('src/UiVisibilityRegistry.js');
+    assert(/'toggle-showComment':\s*'TOGGLE_COMMENT'/.test(registry));
     assert(/ngFilterSwitch[\s\S]*?<div class="tooltip">NGフィルターON\/OFF<\/div>/.test(text));
     assert(/ngFilterSwitch[\s\S]*?ngFilterIcon/.test(text));
+    assert(text.includes('data-command="toggle-showComment"'));
   });
 
   it('maps filter state to a dialog class so the button always reflects config changes', () => {

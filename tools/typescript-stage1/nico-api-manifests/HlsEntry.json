@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/HlsEntry.ts",
+  "runtime": "src/_hls.js",
+  "sourceSha256": "bc928db138099d2329dbc42e8023720e67e915a6d5e31e68f03c4ea866a6dfe3",
+  "runtimeSha256": "06e935ff8add4d2f852cadccaffe74f12e621b2383349d26e97aa336ac2b4292"
+}

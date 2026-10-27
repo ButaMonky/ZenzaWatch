@@ -3,82 +3,69 @@ import {textUtil} from '../../../lib/src/text/textUtil';
 // import {util} from '../util/util.js';
 // console.info('BaseCommandElement', BaseCommandElement);
 const dll = {};
+// GENERATED FROM tools/typescript-stage1/nico-src/VideoItemElement.ts (Task965). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
-
-
-const {VideoItemElement, VideoItemProps} = (() => {
-  const ITEM_HEIGHT = 100;
-  const THUMBNAIL_WIDTH = 96;
-  const THUMBNAIL_HEIGHT = 72;
-  const BLANK_THUMBNAIL = 'https://nicovideo.cdn.nimg.jp/web/img/series/no_thumbnail.png';
-
-  const VideoItemProps = {
-    watchId: '',
-    videoId: '',
-    threadId: '',
-    title: '',
-    duration: 0,
-    commentCount: 0,
-    mylistCount: 0,
-    viewCount: 0,
-    thumbnail: BLANK_THUMBNAIL,
-    postedAt: '',
-
-    description: '',
-    mylistComment: '',
-    isChannel: false,
-    isMymemory: false,
-    ownerId: 0,
-    ownerName: '',
-
-    thumbInfo: {},
-    hasInview: false,
-    lazyload: false
-  };
-  const VideoItemAttributes = Object.keys(VideoItemProps).map(prop => BaseCommandElement.toAttributeName(prop));
-
-  class VideoItemElement extends BaseCommandElement {
-
-    static get propTypes() {
-      return VideoItemProps;
-    }
-
-    static get defaultProps() {
-      return VideoItemProps;
-    }
-
-    static get observedAttributes() {
-      return VideoItemAttributes;
-    }
-
-    static get defaultState() {
-      return {
-        isActive: false,
-        isPlayed: false
-      };
-    }
-
-    static async getTemplate(state = {}, props = {}, events = {}) {
-      const {html} = dll.list || await this.importLit();
-
-      const watchId = props.watchId;
-      const watchUrl = `https://www.nicovideo.jp/watch/${props.watchId}`;
-      const title = props.title ? html`<span title="${props.title}">${props.title}<span>` : props.watchId;
-      const duration = props.duration ? html`<span class="duration">${textUtil.secToTime(props.duration)}</span>` : '';
-      const postedAt = props.postedAt ? `${textUtil.dateToString(new Date(props.postedAt))}` : '';
-      const thumbnail = props.lazyload ? BLANK_THUMBNAIL : props.thumbnail;
-      const counter =  (props.viewCount || props.commentCount || props.mylistCount) ? html`
+const { VideoItemElement, VideoItemProps } = (() => {
+    const ITEM_HEIGHT = 100;
+    const THUMBNAIL_WIDTH = 96;
+    const THUMBNAIL_HEIGHT = 72;
+    const BLANK_THUMBNAIL = 'https://nicovideo.cdn.nimg.jp/web/img/series/no_thumbnail.png';
+    const VideoItemProps = {
+        watchId: '',
+        videoId: '',
+        threadId: '',
+        title: '',
+        duration: 0,
+        commentCount: 0,
+        mylistCount: 0,
+        viewCount: 0,
+        thumbnail: BLANK_THUMBNAIL,
+        postedAt: '',
+        description: '',
+        mylistComment: '',
+        isChannel: false,
+        isMymemory: false,
+        ownerId: 0,
+        ownerName: '',
+        thumbInfo: {},
+        hasInview: false,
+        lazyload: false
+    };
+    const VideoItemAttributes = Object.keys(VideoItemProps).map(prop => BaseCommandElement.toAttributeName(prop));
+    class VideoItemElement extends BaseCommandElement {
+        static get propTypes() {
+            return VideoItemProps;
+        }
+        static get defaultProps() {
+            return VideoItemProps;
+        }
+        static get observedAttributes() {
+            return VideoItemAttributes;
+        }
+        static get defaultState() {
+            return {
+                isActive: false,
+                isPlayed: false
+            };
+        }
+        static async getTemplate(state = {}, props = {}, events = {}) {
+            const { html } = dll.list || await this.importLit();
+            const watchId = props.watchId;
+            const watchUrl = `https://www.nicovideo.jp/watch/${props.watchId}`;
+            const title = props.title ? html `<span title="${props.title}">${props.title}<span>` : props.watchId;
+            const duration = props.duration ? html `<span class="duration">${textUtil.secToTime(props.duration)}</span>` : '';
+            const postedAt = props.postedAt ? `${textUtil.dateToString(new Date(props.postedAt))}` : '';
+            const thumbnail = props.lazyload ? BLANK_THUMBNAIL : props.thumbnail;
+            const counter = (props.viewCount || props.commentCount || props.mylistCount) ? html `
         <div class="counter">
           <span class="count">再生: <span class="value viewCount">${props.viewCount}</span></span>
           <span class="count">コメ: <span class="value commentCount">${props.commentCount}</span></span>
           <span class="count">マイ: <span class="value mylistCount">${props.mylistCount}</span></span>
         </div>
         ` : '';
-        const classes = [];
-        props.isChannel && classes.push('is-channel');
-
-      return html`
+            const classes = [];
+            props.isChannel && classes.push('is-channel');
+            return html `
     <div id="root" @click=${events.onClick} class="${classes.join(' ')}">
     <style>
       * {
@@ -304,54 +291,51 @@ const {VideoItemElement, VideoItemProps} = (() => {
         ${counter}
      </div>
    </div>`;
+        }
+        _applyThumbInfo(thumbInfo) {
+            const data = thumbInfo.data || thumbInfo; // legacy 互換のため
+            const thumbnail = this.props.thumbnail.match(/smile\?i=/) ?
+                this.props.thumbnail : data.thumbnail;
+            const owner = data.owner || {};
+            const isChannel = data.v.startsWith('so') || owner.type === 'channel';
+            const watchId = isChannel ? data.id : data.v;
+            Object.assign(this.dataset, {
+                watchId,
+                videoId: data.id,
+                title: data.title,
+                duration: data.duration,
+                commentCount: data.commentCount,
+                mylistCount: data.mylistCount,
+                viewCount: data.viewCount,
+                thumbnail,
+                postedAt: data.postedAt,
+                ownerId: owner.id || 0,
+                ownerName: owner.name || '',
+                ownerIcon: owner.icon || '',
+                owerUrl: owner.url || '',
+                isChannel
+            });
+            this.dispatchEvent(new CustomEvent('thumb-info', { detail: { props: this.props }, bubbles: true, composed: true }));
+        }
+        attributeChangedCallback(attr, oldValue, newValue) {
+            if (attr === 'data-lazyload') {
+                this.props.lazyload = newValue !== 'false';
+                return this.requestRender(true);
+            }
+            if (attr !== 'data-thumb-info') {
+                return super.attributeChangedCallback(attr, oldValue, newValue);
+            }
+            const info = JSON.parse(newValue);
+            if (!info || info.status !== 'ok') {
+                return;
+            }
+            this._applyThumbInfo(info);
+        }
     }
-
-    _applyThumbInfo(thumbInfo) {
-      const data = thumbInfo.data || thumbInfo; // legacy 互換のため
-      const thumbnail = this.props.thumbnail.match(/smile\?i=/) ?
-        this.props.thumbnail : data.thumbnail;
-      const owner = data.owner || {};
-      const isChannel = data.v.startsWith('so') || owner.type === 'channel';
-      const watchId = isChannel ? data.id : data.v;
-      Object.assign(this.dataset, {
-        watchId,
-        videoId: data.id,
-        title: data.title,
-        duration: data.duration,
-        commentCount: data.commentCount,
-        mylistCount: data.mylistCount,
-        viewCount: data.viewCount,
-        thumbnail,
-        postedAt: data.postedAt,
-        ownerId: owner.id || 0,
-        ownerName: owner.name || '',
-        ownerIcon: owner.icon || '',
-        owerUrl: owner.url || '',
-        isChannel
-      });
-      this.dispatchEvent(new CustomEvent('thumb-info', {detail: {props: this.props}, bubbles: true, composed: true}));
-    }
-
-    attributeChangedCallback(attr, oldValue, newValue) {
-      if (attr === 'data-lazyload') {
-        this.props.lazyload = newValue !== 'false';
-        return this.requestRender(true);
-      }
-      if (attr !== 'data-thumb-info') {
-        return super.attributeChangedCallback(attr, oldValue, newValue);
-      }
-      const info = JSON.parse(newValue);
-      if (!info || info.status !== 'ok') {
-        return;
-      }
-      this._applyThumbInfo(info);
-    }
-  }
-
-  return {VideoItemElement, VideoItemProps};
+    return { VideoItemElement, VideoItemProps };
 })();
-
-
 //===END===
-
-export { VideoItemElement, VideoItemProps };
+export {
+  VideoItemElement,
+  VideoItemProps
+};

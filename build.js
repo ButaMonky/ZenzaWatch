@@ -1,13 +1,32 @@
 var srcDir = './src';
 var outFile = 'dist/ZenzaWatch.user.js';
 
-// 配布元（Task 078）。以前は kphrx 版（playlist-deploy ブランチ）を指していたため、
-// このフォークからインストールしても Tampermonkey の自動更新で kphrx 版に
-// 上書きされてしまっていた。GitHub で公開しているこのフォーク
-// （ButaMonky/ZenzaWatch の develop ブランチ）を指すように変更した。
-// @name / @namespace は本家・kphrx 版と同じままにしている（同じスクリプトとして
-// 上書きインストールされ、二重に動かないようにするため）。
-const PUBLISH_REPO = 'https://github.com/ButaMonky/ZenzaWatch';
+// Task928: Route distribution to the repository being built.
+// Do not silently install the public version from a private development build.
+// The two allowlisted channels share this build logic, avoiding code drift.
+const RELEASE_REPOS = Object.freeze({
+  public: 'https://github.com/ButaMonky/ZenzaWatch',
+  private: 'https://github.com/ButaMonky/ZenzaWatch-Back-up'
+});
+function resolveReleaseChannel() {
+  const explicit = process.env.ZENZA_PUBLISH_CHANNEL;
+  if (explicit === 'public' || explicit === 'private') { return explicit; }
+  const gh = process.env.GITHUB_REPOSITORY || '';
+  if (/^ButaMonky\/ZenzaWatch-Back-up$/i.test(gh)) { return 'private'; }
+  if (/^ButaMonky\/ZenzaWatch$/i.test(gh)) { return 'public'; }
+  try {
+    const origin = require('child_process')
+      .execFileSync('git', ['remote', 'get-url', 'origin'], {
+        encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+    if (/github\.com[:/]ButaMonky\/ZenzaWatch-Back-up(?:\.git)?$/i.test(origin) ||
+        /github\.com[:/]seiginomikatakaibamann-lang\/wanzawatch(?:\.git)?$/i.test(origin)) {
+      return 'private';
+    }
+  } catch (_) { /* tarball builds retain the public fallback */ }
+  return 'public';
+}
+const PUBLISH_REPO = RELEASE_REPOS[resolveReleaseChannel()];
 const PUBLISH_RAW_BASE = `${PUBLISH_REPO}/raw/develop/`;
 
 // ビルド識別子（Task 039）。

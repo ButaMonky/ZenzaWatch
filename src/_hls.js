@@ -1569,9 +1569,7 @@ AntiPrototypeJs().then(() => {
                     if (data.fatal) {
                         return this._onHLSJSFatalError(e, data);
                     }
-                    console.info('%cHls.Events.ERROR: WARN', 'background: cyan;', this._id, data.type, 
-                    // data,
-                    `isForbidden403: ${this._isForbidden403}, isStalledBy403: ${this._isStalledBy403}, isSeeking: ${this._isSeeking}`);
+                    console.info('%cHls.Events.ERROR: WARN', 'background: cyan;', this._id, data.type, `isForbidden403: ${this._isForbidden403}, isStalledBy403: ${this._isStalledBy403}, isSeeking: ${this._isSeeking}`);
                     switch (data.type) {
                         case Hls.ErrorTypes.NETWORK_ERROR:
                             {

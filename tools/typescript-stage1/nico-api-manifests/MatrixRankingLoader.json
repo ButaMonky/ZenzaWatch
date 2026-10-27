@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/MatrixRankingLoader.ts",
+  "runtime": "packages/lib/src/nico/MatrixRankingLoader.js",
+  "sourceSha256": "6ee11349d11806f8985fd531a1766bf54170c0000fdcced396c8906b7210c4f4",
+  "runtimeSha256": "700a6a6af9c4d22ebab8c51a57e21ffc6d5e098ba42fa8b81791b3b27a378a25"
+}

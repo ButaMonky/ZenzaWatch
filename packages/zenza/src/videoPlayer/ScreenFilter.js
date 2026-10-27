@@ -1,4 +1,6 @@
+// GENERATED FROM tools/typescript-stage1/nico-src/ScreenFilter.ts (Task963). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+// legacy-to-ts: names provided by other bundled modules
 /*
  * Task 077 / 077b / 077c: 画面フィルター（バックログ D-34）
  *
@@ -33,417 +35,430 @@
  * 「押している間だけ元の映像」は廃止し、画面の左半分だけ元の映像を重ねる比較モードにした。
  */
 const ScreenFilter = (() => {
-  const PREFIX = 'screenFilter.';
-  const SVG_ID = 'zenzaScreenFilterSvg';
-  const STYLE_ID = 'zenzaScreenFilterStyle';
-  const CSS_VAR = '--zenza-screen-filter';
-  const VIGNETTE_CLASS = 'zenzaScreenFilterVignette';
-
-  /*
-   * 調整項目の一覧。設定パネル（プレイヤー内のフィルターパネル・上級者用設定）の
-   * 表示もこの配列から作るので、項目を足す時はここに1つ足せばよい。
-   *   group: 'basic' 色と明るさ / 'tone' 明暗の細かい調整 / 'style' 雰囲気
-   *   heavy: true … 周りの画素を見る処理で重い（説明に書く）
-   */
-  const PARAMS = [
-    {
-      key: 'brightness', label: '明るさ', group: 'basic',
-      min: 0, max: 200, step: 1, def: 100, unit: '%',
-      desc: '画面全体を明るく／暗くします。上げすぎると明るい所が真っ白に飛びます。' +
-        '暗い動画を見やすくしたい時は、下の「ガンマ」の方が自然に明るくなります。'
-    },
-    {
-      key: 'contrast', label: 'コントラスト', group: 'basic',
-      min: 0, max: 200, step: 1, def: 100, unit: '%',
-      desc: '明るい所と暗い所の差の強さです。上げるとメリハリが出てくっきり、' +
-        '下げると柔らかい（眠たい）感じになります。'
-    },
-    {
-      key: 'saturate', label: '彩度（色の濃さ）', group: 'basic',
-      min: 0, max: 300, step: 1, def: 100, unit: '%',
-      desc: '色の濃さです。0 で白黒、100 が元のまま、上げると色が鮮やかになります。'
-    },
-    {
-      key: 'temperature', label: '色温度', group: 'basic',
-      min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
-      desc: 'マイナスで青っぽく（涼しい感じ）、プラスでオレンジっぽく（暖かい感じ）なります。' +
-        '夜は少しプラスにすると目に優しくなります。'
-    },
-    {
-      key: 'tint', label: '色かぶり補正', group: 'basic',
-      min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
-      desc: '映像が緑っぽい時はプラス（赤紫の方向へ）、赤紫っぽい時はマイナス（緑の方向へ）に動かすと自然な色に戻ります。'
-    },
-    {
-      key: 'hue', label: '色相（色のずらし）', group: 'basic',
-      min: -180, max: 180, step: 1, def: 0, unit: '°',
-      desc: 'すべての色を虹の順番にずらします（例: 赤→黄→緑…）。普段は 0 のままで大丈夫です。' +
-        '遊びや、見分けにくい色がある時の補助に。'
-    },
-    {
-      key: 'sepia', label: 'セピア', group: 'basic',
-      min: 0, max: 100, step: 1, def: 0, unit: '%',
-      desc: '古い写真のような茶色っぽい色味に寄せます。色温度より色が抜けた感じになります。'
-    },
-    {
-      key: 'invert', label: '階調反転（ネガ）', group: 'basic', type: 'boolean', def: false,
-      desc: '明るい所と暗い所を入れ替えます（写真のネガのような見た目）。' +
-        '白い背景の資料動画を暗くしたい時は、プリセットの「反転（暗転）」を選ぶと色味が保たれます。'
-    },
-    {
-      key: 'gamma', label: 'ガンマ（中間の明るさ）', group: 'tone',
-      min: 0.3, max: 3.0, step: 0.01, def: 1.0, unit: '', digits: 2,
-      desc: '真っ黒・真っ白はそのままに、中くらいの明るさだけを持ち上げ／下げます。' +
-        '1 より大きくすると、白飛びさせずに暗い部分が見えやすくなります。暗い動画にいちばん効く項目です。'
-    },
-    {
-      key: 'blackLevel', label: '黒レベル', group: 'tone',
-      min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
-      desc: 'いちばん暗い部分の調整です。プラスにすると真っ黒な所が少し持ち上がって暗部が見えやすく' +
-        '（そのぶん黒が灰色っぽく）なり、マイナスにすると黒が引き締まります。'
-    },
-    {
-      key: 'whiteLevel', label: '白レベル', group: 'tone',
-      min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
-      desc: 'いちばん明るい部分の調整です。マイナスにすると白が少し抑えられて、まぶしさ・白飛びが和らぎます。' +
-        'プラスにすると明るい部分がより明るくなります。'
-    },
-    {
-      key: 'autoLevels', label: '自動レベル補正', group: 'tone', type: 'boolean', def: false,
-      desc: '動画ごとに、いちばん暗い所が黒・いちばん明るい所が白になるよう自動で合わせます（0.5秒ごとに少しずつ）。' +
-        '白っぽくかすんだ動画や、全体が暗い動画に効きます。処理はとても軽いです。'
-    },
-    {
-      key: 'sharpen', label: 'シャープ（輪郭の強調）', group: 'tone', heavy: true,
-      min: 0, max: 100, step: 1, def: 0, unit: '',
-      desc: '輪郭をくっきりさせます。ぼやけた低画質の動画に。20〜40 くらいがおすすめです。' +
-        '周りの画素を調べる処理なので、この項目だけは少し重めです（グラフィックボードの無いパソコンで動画がカクつく時は 0 に）。'
-    },
-    {
-      key: 'blur', label: 'ぼかし', group: 'style',
-      min: 0, max: 20, step: 0.1, def: 0, unit: 'px',
-      desc: '映像をぼかします。ブロックノイズやチラつきが気になる時は 1 前後、はっきりぼかしたい時は 5 以上に。' +
-        '画面上の大きさ（ピクセル）で効くので、大きな画面ほど強めにすると同じ見え方になります。'
-    },
-    {
-      key: 'vignette', label: '周辺減光', group: 'style',
-      min: 0, max: 100, step: 1, def: 0, unit: '%',
-      desc: '画面の周りをだんだん暗くして、映画やカメラのような雰囲気にします。映像の上に影を重ねるだけなので、処理はほぼゼロです。'
-    },
-    {
-      key: 'colorize', label: '着色（モノトーン）', group: 'style', type: 'select', def: 'none',
-      options: [
-        ['none', 'なし'],
-        ['gold', 'ゴールド'],
-        ['sepia', 'セピア（古写真）'],
-        ['blue', 'ブルー'],
-        ['green', 'グリーン（暗視カメラ風）']
-      ],
-      desc: '映像をいったん白黒にして、選んだ色のグラデーションで塗り直します。' +
-        'ゴールドは金属っぽい高級感、セピアは古い写真、グリーンは暗視カメラのような見た目になります。'
-    }
-  ];
-  const PARAM_MAP = PARAMS.reduce((map, p) => { map[p.key] = p; return map; }, {});
-  const DEFAULTS = PARAMS.reduce((map, p) => { map[p.key] = p.def; return map; }, {});
-
-  /*
-   * プリセット。values に書いていない項目は既定値に戻る（前のプリセットの値が残らない）。
-   * 反転（左右・上下）とフィルターの ON/OFF はプリセットでは変えない。
-   */
-  const PRESETS = [
-    {id: 'standard', label: '標準', values: {},
-      desc: 'すべて元のまま（フィルターなし）。'},
-    {id: 'dark', label: '暗い動画を見やすく', values: {gamma: 1.35, blackLevel: 4, contrast: 105},
-      desc: '夜のシーンや古い実況動画など、暗くて見えにくい動画向け。白飛びさせずに暗い所を持ち上げます。'},
-    {id: 'sharp', label: 'くっきり', values: {contrast: 112, saturate: 110, sharpen: 30},
-      desc: 'ぼやけた低画質の動画向け。輪郭とメリハリを強めます。輪郭の強調を使うので少しだけ重めです。'},
-    {id: 'vivid', label: 'ビビッド', values: {saturate: 135, contrast: 108},
-      desc: 'アニメやゲーム実況の色を鮮やかに。'},
-    {id: 'faded', label: '色あせ補正', values: {saturate: 130, contrast: 110, autoLevels: true},
-      desc: '古い動画や色の薄い動画向け。色を濃くし、明るさの範囲も自動で合わせます。'},
-    {id: 'cinema', label: 'シネマ（銀残し風）', values: {saturate: 55, contrast: 120, gamma: 0.92, vignette: 35},
-      desc: '映画でよく使われる「銀残し」風。色を抜いて硬めの階調にし、周りを少し暗くします。'},
-    {id: 'film', label: 'フィルム（レトロ）', values: {saturate: 80, blackLevel: 7, whiteLevel: -6, temperature: 12},
-      desc: '黒を少し浮かせて白を抑え、色を少し抜いた、昔のフィルムのような柔らかい見た目。'},
-    {id: 'pastel', label: 'パステル', values: {saturate: 70, blackLevel: 14, contrast: 90, gamma: 1.1},
-      desc: '明るく淡い色合いに。'},
-    {id: 'cool', label: '寒色', values: {temperature: -35},
-      desc: '青っぽく涼しい色合いに。'},
-    {id: 'warm', label: '暖色', values: {temperature: 35},
-      desc: 'オレンジっぽく暖かい色合いに。'},
-    {id: 'eyeCare', label: '目に優しい（夜）', values: {brightness: 85, saturate: 90, temperature: 30},
-      desc: '暗い部屋で見る時向け。少し暗く、暖かい色にして青い光を減らします。'},
-    {id: 'gold', label: 'ゴールド', values: {colorize: 'gold', contrast: 105},
-      desc: '明るさを金色のグラデーションに置き換えます（黄金質・金属質のような見た目）。'},
-    {id: 'mono', label: '白黒', values: {saturate: 0},
-      desc: '色を抜いて白黒にします。雰囲気づくりや、色のチカチカが気になる時に。'},
-    {id: 'monoHigh', label: '白黒（硬調）', values: {saturate: 0, contrast: 135},
-      desc: 'コントラストの強い白黒。'},
-    {id: 'invert', label: '反転（暗転）', values: {invert: true, hue: 180},
-      desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。'}
-  ];
-  const PRESET_MAP = PRESETS.reduce((map, p) => { map[p.id] = p; return map; }, {});
-
-  /* 着色（colorize）のグラデーション。暗い所→明るい所の順の色（0〜1） */
-  const COLORIZE_MAPS = {
-    gold: [[0.08, 0.04, 0.01], [0.45, 0.28, 0.08], [0.85, 0.62, 0.25], [1, 0.9, 0.6]],
-    sepia: [[0.1, 0.06, 0.03], [0.45, 0.33, 0.2], [0.8, 0.68, 0.5], [1, 0.95, 0.85]],
-    blue: [[0.02, 0.05, 0.12], [0.15, 0.3, 0.55], [0.5, 0.7, 0.9], [0.9, 0.97, 1]],
-    green: [[0, 0.05, 0], [0.1, 0.45, 0.1], [0.4, 0.85, 0.35], [0.85, 1, 0.8]]
-  };
-
-  let config = null;
-  let bypass = false;
-  let applyScheduled = false;
-  let lastCss = null;
-  let lastSvgKey = null;
-  let lastVignette = null;
-  const listeners = new Set();
-  // 自動レベル補正の現在値（入力の黒点・白点。0〜1）。設定には保存しない
-  const auto = {black: 0, white: 1, available: true, timer: null, canvas: null};
-
-  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-  const digitsOf = p => p.digits !== undefined ? p.digits : (String(p.step).split('.')[1] || '').length;
-
-  const normalize = (key, value) => {
-    const p = PARAM_MAP[key];
-    if (!p) { return value; }
-    if (p.type === 'boolean') {
-      return value === true || value === 'true';
-    }
-    if (p.type === 'select') {
-      return p.options.some(([v]) => v === value) ? value : p.def;
-    }
-    let v = parseFloat(value);
-    if (!isFinite(v)) { v = p.def; }
-    v = clamp(v, p.min, p.max);
-    return parseFloat(v.toFixed(digitsOf(p)));
-  };
-
-  const prop = key => config && config.props ? config.props[PREFIX + key] : undefined;
-  const setProp = (key, value) => {
-    if (!config || !config.props) { return; }
-    if (config.props[PREFIX + key] !== value) {
-      config.props[PREFIX + key] = value;
-    }
-  };
-
-  /** 今の設定値（調整項目だけ）を正規化して返す */
-  const read = () => {
-    const values = {};
-    PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
-    return values;
-  };
-
-  // Task 080: 「使う」を廃止。標準（全部既定値）なら何も掛からないので、常に有効として扱う
-  const isEnabled = () => true;
-
-  const isDefaultValue = (key, value) => {
-    const p = PARAM_MAP[key];
-    if (p.type === 'boolean') { return !!value === !!p.def; }
-    if (p.type === 'select') { return value === p.def; }
-    return Math.abs(value - p.def) < 1e-6;
-  };
-
-  const sameValue = (p, a, b) => {
-    if (p.type === 'boolean') { return !!a === !!b; }
-    if (p.type === 'select') { return a === b; }
-    return Math.abs(a - b) < 1e-6;
-  };
-
-  /** 今の値が一致するプリセットのid。どれとも違えば 'custom'（手動調整中） */
-  const detectPreset = (values = read()) => {
-    const found = PRESETS.find(preset => PARAMS.every(p => {
-      const target = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
-      return sameValue(p, values[p.key], target);
-    }));
-    return found ? found.id : 'custom';
-  };
-
-  /** 何か1つでも効いているか（ボタンを光らせる判定） */
-  const isActive = (values = read()) => isEnabled() && PARAMS.some(p => !isDefaultValue(p.key, values[p.key]));
-
-  // ---- 色変換行列（3行×4列: RGBの係数＋足し算）。CSSの filter 関数と同じ式 ----
-  const IDENTITY = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]];
-  /** a を先に掛けてから b を掛けた合成行列（b ∘ a） */
-  const compose = (a, b) => {
-    const r = [];
-    for (let i = 0; i < 3; i++) {
-      r.push([0, 1, 2].map(j => b[i][0] * a[0][j] + b[i][1] * a[1][j] + b[i][2] * a[2][j])
-        .concat(b[i][0] * a[0][3] + b[i][1] * a[1][3] + b[i][2] * a[2][3] + b[i][3]));
-    }
-    return r;
-  };
-  const diag = (r, g, b, o = 0) => [[r, 0, 0, o], [0, g, 0, o], [0, 0, b, o]];
-  const saturateMatrix = s => [
-    [0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0],
-    [0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0],
-    [0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0]
-  ];
-  const sepiaMatrix = a => {
-    const k = 1 - a;
-    return [
-      [0.393 + 0.607 * k, 0.769 - 0.769 * k, 0.189 - 0.189 * k, 0],
-      [0.349 - 0.349 * k, 0.686 + 0.314 * k, 0.168 - 0.168 * k, 0],
-      [0.272 - 0.272 * k, 0.534 - 0.534 * k, 0.131 + 0.869 * k, 0]
+    const PREFIX = 'screenFilter.';
+    const SVG_ID = 'zenzaScreenFilterSvg';
+    const STYLE_ID = 'zenzaScreenFilterStyle';
+    const CSS_VAR = '--zenza-screen-filter';
+    const VIGNETTE_CLASS = 'zenzaScreenFilterVignette';
+    /*
+     * 調整項目の一覧。設定パネル（プレイヤー内のフィルターパネル・上級者用設定）の
+     * 表示もこの配列から作るので、項目を足す時はここに1つ足せばよい。
+     *   group: 'basic' 色と明るさ / 'tone' 明暗の細かい調整 / 'style' 雰囲気
+     *   heavy: true … 周りの画素を見る処理で重い（説明に書く）
+     */
+    const PARAMS = [
+        {
+            key: 'brightness', label: '明るさ', group: 'basic',
+            min: 0, max: 200, step: 1, def: 100, unit: '%',
+            desc: '画面全体を明るく／暗くします。上げすぎると明るい所が真っ白に飛びます。' +
+                '暗い動画を見やすくしたい時は、下の「ガンマ」の方が自然に明るくなります。'
+        },
+        {
+            key: 'contrast', label: 'コントラスト', group: 'basic',
+            min: 0, max: 200, step: 1, def: 100, unit: '%',
+            desc: '明るい所と暗い所の差の強さです。上げるとメリハリが出てくっきり、' +
+                '下げると柔らかい（眠たい）感じになります。'
+        },
+        {
+            key: 'saturate', label: '彩度（色の濃さ）', group: 'basic',
+            min: 0, max: 300, step: 1, def: 100, unit: '%',
+            desc: '色の濃さです。0 で白黒、100 が元のまま、上げると色が鮮やかになります。'
+        },
+        {
+            key: 'temperature', label: '色温度', group: 'basic',
+            min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
+            desc: 'マイナスで青っぽく（涼しい感じ）、プラスでオレンジっぽく（暖かい感じ）なります。' +
+                '夜は少しプラスにすると目に優しくなります。'
+        },
+        {
+            key: 'tint', label: '色かぶり補正', group: 'basic',
+            min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
+            desc: '映像が緑っぽい時はプラス（赤紫の方向へ）、赤紫っぽい時はマイナス（緑の方向へ）に動かすと自然な色に戻ります。'
+        },
+        {
+            key: 'hue', label: '色相（色のずらし）', group: 'basic',
+            min: -180, max: 180, step: 1, def: 0, unit: '°',
+            desc: 'すべての色を虹の順番にずらします（例: 赤→黄→緑…）。普段は 0 のままで大丈夫です。' +
+                '遊びや、見分けにくい色がある時の補助に。'
+        },
+        {
+            key: 'sepia', label: 'セピア', group: 'basic',
+            min: 0, max: 100, step: 1, def: 0, unit: '%',
+            desc: '古い写真のような茶色っぽい色味に寄せます。色温度より色が抜けた感じになります。'
+        },
+        {
+            key: 'invert', label: '階調反転（ネガ）', group: 'basic', type: 'boolean', def: false,
+            desc: '明るい所と暗い所を入れ替えます（写真のネガのような見た目）。' +
+                '白い背景の資料動画を暗くしたい時は、プリセットの「反転（暗転）」を選ぶと色味が保たれます。'
+        },
+        {
+            key: 'gamma', label: 'ガンマ（中間の明るさ）', group: 'tone',
+            min: 0.3, max: 3.0, step: 0.01, def: 1.0, unit: '', digits: 2,
+            desc: '真っ黒・真っ白はそのままに、中くらいの明るさだけを持ち上げ／下げます。' +
+                '1 より大きくすると、白飛びさせずに暗い部分が見えやすくなります。暗い動画にいちばん効く項目です。'
+        },
+        {
+            key: 'blackLevel', label: '黒レベル', group: 'tone',
+            min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
+            desc: 'いちばん暗い部分の調整です。プラスにすると真っ黒な所が少し持ち上がって暗部が見えやすく' +
+                '（そのぶん黒が灰色っぽく）なり、マイナスにすると黒が引き締まります。'
+        },
+        {
+            key: 'whiteLevel', label: '白レベル', group: 'tone',
+            min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
+            desc: 'いちばん明るい部分の調整です。マイナスにすると白が少し抑えられて、まぶしさ・白飛びが和らぎます。' +
+                'プラスにすると明るい部分がより明るくなります。'
+        },
+        {
+            key: 'autoLevels', label: '自動レベル補正', group: 'tone', type: 'boolean', def: false,
+            desc: '動画ごとに、いちばん暗い所が黒・いちばん明るい所が白になるよう自動で合わせます（0.5秒ごとに少しずつ）。' +
+                '白っぽくかすんだ動画や、全体が暗い動画に効きます。処理はとても軽いです。'
+        },
+        {
+            key: 'sharpen', label: 'シャープ（輪郭の強調）', group: 'tone', heavy: true,
+            min: 0, max: 100, step: 1, def: 0, unit: '',
+            desc: '輪郭をくっきりさせます。ぼやけた低画質の動画に。20〜40 くらいがおすすめです。' +
+                '周りの画素を調べる処理なので、この項目だけは少し重めです（グラフィックボードの無いパソコンで動画がカクつく時は 0 に）。'
+        },
+        {
+            key: 'blur', label: 'ぼかし', group: 'style',
+            min: 0, max: 20, step: 0.1, def: 0, unit: 'px',
+            desc: '映像をぼかします。ブロックノイズやチラつきが気になる時は 1 前後、はっきりぼかしたい時は 5 以上に。' +
+                '画面上の大きさ（ピクセル）で効くので、大きな画面ほど強めにすると同じ見え方になります。'
+        },
+        {
+            key: 'vignette', label: '周辺減光', group: 'style',
+            min: 0, max: 100, step: 1, def: 0, unit: '%',
+            desc: '画面の周りをだんだん暗くして、映画やカメラのような雰囲気にします。映像の上に影を重ねるだけなので、処理はほぼゼロです。'
+        },
+        {
+            key: 'colorize', label: '着色（モノトーン）', group: 'style', type: 'select', def: 'none',
+            options: [
+                ['none', 'なし'],
+                ['gold', 'ゴールド'],
+                ['sepia', 'セピア（古写真）'],
+                ['blue', 'ブルー'],
+                ['green', 'グリーン（暗視カメラ風）']
+            ],
+            desc: '映像をいったん白黒にして、選んだ色のグラデーションで塗り直します。' +
+                'ゴールドは金属っぽい高級感、セピアは古い写真、グリーンは暗視カメラのような見た目になります。'
+        }
     ];
-  };
-  const hueMatrix = deg => {
-    const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
-    return [
-      [0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0],
-      [0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0],
-      [0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0]
+    const PARAM_MAP = PARAMS.reduce((map, p) => { map[p.key] = p; return map; }, {});
+    const DEFAULTS = PARAMS.reduce((map, p) => { map[p.key] = p.def; return map; }, {});
+    /*
+     * プリセット。values に書いていない項目は既定値に戻る（前のプリセットの値が残らない）。
+     * 反転（左右・上下）とフィルターの ON/OFF はプリセットでは変えない。
+     */
+    const PRESETS = [
+        { id: 'standard', label: '標準', values: {},
+            desc: 'すべて元のまま（フィルターなし）。' },
+        { id: 'dark', label: '暗い動画を見やすく', values: { gamma: 1.35, blackLevel: 4, contrast: 105 },
+            desc: '夜のシーンや古い実況動画など、暗くて見えにくい動画向け。白飛びさせずに暗い所を持ち上げます。' },
+        { id: 'sharp', label: 'くっきり', values: { contrast: 112, saturate: 110, sharpen: 30 },
+            desc: 'ぼやけた低画質の動画向け。輪郭とメリハリを強めます。輪郭の強調を使うので少しだけ重めです。' },
+        { id: 'vivid', label: 'ビビッド', values: { saturate: 135, contrast: 108 },
+            desc: 'アニメやゲーム実況の色を鮮やかに。' },
+        { id: 'faded', label: '色あせ補正', values: { saturate: 130, contrast: 110, autoLevels: true },
+            desc: '古い動画や色の薄い動画向け。色を濃くし、明るさの範囲も自動で合わせます。' },
+        { id: 'cinema', label: 'シネマ（銀残し風）', values: { saturate: 55, contrast: 120, gamma: 0.92, vignette: 35 },
+            desc: '映画でよく使われる「銀残し」風。色を抜いて硬めの階調にし、周りを少し暗くします。' },
+        { id: 'film', label: 'フィルム（レトロ）', values: { saturate: 80, blackLevel: 7, whiteLevel: -6, temperature: 12 },
+            desc: '黒を少し浮かせて白を抑え、色を少し抜いた、昔のフィルムのような柔らかい見た目。' },
+        { id: 'pastel', label: 'パステル', values: { saturate: 70, blackLevel: 14, contrast: 90, gamma: 1.1 },
+            desc: '明るく淡い色合いに。' },
+        { id: 'cool', label: '寒色', values: { temperature: -35 },
+            desc: '青っぽく涼しい色合いに。' },
+        { id: 'warm', label: '暖色', values: { temperature: 35 },
+            desc: 'オレンジっぽく暖かい色合いに。' },
+        { id: 'eyeCare', label: '目に優しい（夜）', values: { brightness: 85, saturate: 90, temperature: 30 },
+            desc: '暗い部屋で見る時向け。少し暗く、暖かい色にして青い光を減らします。' },
+        { id: 'gold', label: 'ゴールド', values: { colorize: 'gold', contrast: 105 },
+            desc: '明るさを金色のグラデーションに置き換えます（黄金質・金属質のような見た目）。' },
+        { id: 'mono', label: '白黒', values: { saturate: 0 },
+            desc: '色を抜いて白黒にします。雰囲気づくりや、色のチカチカが気になる時に。' },
+        { id: 'monoHigh', label: '白黒（硬調）', values: { saturate: 0, contrast: 135 },
+            desc: 'コントラストの強い白黒。' },
+        { id: 'invert', label: '反転（暗転）', values: { invert: true, hue: 180 },
+            desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。' }
     ];
-  };
-  const LUMA = [0.2126, 0.7152, 0.0722];
-
-  /** 色の処理を全部まとめた行列。何もしない時は null */
-  const buildColorMatrix = values => {
-    let m = IDENTITY, changed = false;
-    const add = x => { m = compose(m, x); changed = true; };
-    if (!isDefaultValue('brightness', values.brightness)) { const b = values.brightness / 100; add(diag(b, b, b)); }
-    if (!isDefaultValue('contrast', values.contrast)) { const c = values.contrast / 100; add(diag(c, c, c, 0.5 - 0.5 * c)); }
-    if (!isDefaultValue('saturate', values.saturate)) { add(saturateMatrix(values.saturate / 100)); }
-    if (!isDefaultValue('sepia', values.sepia)) { add(sepiaMatrix(values.sepia / 100)); }
-    if (!isDefaultValue('hue', values.hue)) { add(hueMatrix(values.hue)); }
-    if (values.invert) { add(diag(-1, -1, -1, 1)); }
-    if (!isDefaultValue('temperature', values.temperature) || !isDefaultValue('tint', values.tint)) {
-      const t = values.temperature / 100, n = values.tint / 100;
-      add(diag(1 + 0.10 * t + 0.04 * n, 1 - 0.12 * n, 1 - 0.15 * t + 0.04 * n));
-    }
-    if (values.colorize !== 'none') {
-      add([LUMA.concat(0), LUMA.concat(0), LUMA.concat(0)]);
-    }
-    return changed ? m : null;
-  };
-
-  /**
-   * 黒レベル/白レベルを「出力 = slope × 入力 + intercept」に変換する。
-   *   黒レベル +n … 出力の黒を n% 持ち上げる / -n … 入力の n% 以下を真っ黒にする（締める）
-   *   白レベル -n … 出力の白を n% 下げる     / +n … 入力の (100-n)% 以上を真っ白にする（伸ばす）
-   */
-  const levelsToLinear = (blackLevel, whiteLevel) => {
-    const b = blackLevel / 100, w = whiteLevel / 100;
-    const inBlack = b < 0 ? -b : 0, outBlack = b > 0 ? b : 0;
-    const inWhite = w > 0 ? 1 - w : 1, outWhite = w < 0 ? 1 + w : 1;
-    const slope = (outWhite - outBlack) / Math.max(0.01, inWhite - inBlack);
-    const intercept = outBlack - slope * inBlack;
-    return {slope: +slope.toFixed(4), intercept: +intercept.toFixed(4)};
-  };
-
-  const TONE_TABLE_SIZE = 65;
-  const lerpColor = (stops, x, ch) => {
-    const pos = clamp(x, 0, 1) * (stops.length - 1);
-    const i = Math.min(stops.length - 2, Math.floor(pos));
-    const f = pos - i;
-    return stops[i][ch] * (1 - f) + stops[i + 1][ch] * f;
-  };
-
-  const useAutoLevels = values => values.autoLevels && auto.available &&
-    (auto.black > 0.004 || auto.white < 0.996);
-
-  /** 明るさの曲線（自動レベル→黒/白レベル→ガンマ→着色）を1枚の対応表にする。何もしない時は null */
-  const buildToneTables = values => {
-    const levels = !isDefaultValue('blackLevel', values.blackLevel) || !isDefaultValue('whiteLevel', values.whiteLevel);
-    const gamma = !isDefaultValue('gamma', values.gamma);
-    const colorize = values.colorize !== 'none' && COLORIZE_MAPS[values.colorize];
-    const autoOn = useAutoLevels(values);
-    if (!levels && !gamma && !colorize && !autoOn) { return null; }
-    const {slope, intercept} = levelsToLinear(values.blackLevel, values.whiteLevel);
-    const exponent = 1 / values.gamma;
-    const tables = [[], [], []];
-    for (let i = 0; i < TONE_TABLE_SIZE; i++) {
-      let x = i / (TONE_TABLE_SIZE - 1);
-      if (autoOn) { x = clamp((x - auto.black) / Math.max(0.05, auto.white - auto.black), 0, 1); }
-      x = clamp(slope * x + intercept, 0, 1);
-      x = Math.pow(x, exponent);
-      for (let ch = 0; ch < 3; ch++) {
-        tables[ch].push(+(colorize ? lerpColor(colorize, x, ch) : x).toFixed(4));
-      }
-    }
-    return tables.map(t => t.join(' '));
-  };
-
-  /*
-   * シャープ: アンシャープマスク。出力 = (1 + a) × 元の絵 − a × ぼかした絵。
-   * a = シャープ/100 × 6（シャープ25で a=1.5。077 の3×3畳み込みと同じくらいの効き）。
-   * 077b は a = シャープ/100 × 2 で、効きが弱すぎた（077c で修正）。
-   */
-  const SHARPEN_GAIN = 6;
-
-  /** SVGフィルターの中身（<filter> の子要素）を作る。何もしない時は '' */
-  const buildSvgFilterMarkup = values => {
-    const parts = [];
-    let input = 'SourceGraphic';
-    const m = buildColorMatrix(values);
-    if (m) {
-      const v = m.map(row => [row[0], row[1], row[2], 0, row[3]].map(n => +n.toFixed(5)).join(' ')).join('  ');
-      parts.push(`<feColorMatrix type="matrix" values="${v}  0 0 0 1 0" result="sfColor"/>`);
-      input = 'sfColor';
-    }
-    const tables = buildToneTables(values);
-    if (tables) {
-      const f = (ch, i) => `<feFunc${ch} type="table" tableValues="${tables[i]}"/>`;
-      parts.push(`<feComponentTransfer in="${input}" result="sfTone">${f('R', 0)}${f('G', 1)}${f('B', 2)}</feComponentTransfer>`);
-      input = 'sfTone';
-    }
-    if (!isDefaultValue('sharpen', values.sharpen)) {
-      const amount = +(values.sharpen / 100 * SHARPEN_GAIN).toFixed(3);
-      parts.push(`<feGaussianBlur in="${input}" stdDeviation="0.6" result="sfBlur"/>`);
-      parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0"/>`);
-    }
-    return parts.join('');
-  };
-
-  /** SVG フィルターを画面外に1つだけ置き、値に合わせて中身を差し替える */
-  const ensureSvg = markup => {
-    if (typeof document === 'undefined') { return; }
-    if (markup === lastSvgKey && document.getElementById(SVG_ID)) { return; }
-    lastSvgKey = markup;
-    let svg = document.getElementById(`${SVG_ID}-root`);
-    if (!svg) {
-      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.id = `${SVG_ID}-root`;
-      svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('width', '0');
-      svg.setAttribute('height', '0');
-      svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
-      (document.body || document.documentElement).append(svg);
-    }
-    svg.innerHTML =
-      `<filter id="${SVG_ID}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">${markup}</filter>`;
-  };
-
-  /**
-   * CSS の filter 文字列を作る（canvas の ctx.filter にもそのまま使える）。
-   * 何も掛けない時は 'none'。周辺減光はここに含まない（映像の上に重ねる影で表現する）。
-   */
-  const buildFilter = (values = read(), {enabled = isEnabled()} = {}) => {
-    if (!enabled) { return 'none'; }
-    const list = [];
-    const markup = buildSvgFilterMarkup(values);
-    if (markup) {
-      ensureSvg(markup);
-      list.push(`url(#${SVG_ID})`);
-    }
-    if (!isDefaultValue('blur', values.blur)) { list.push(`blur(${values.blur}px)`); }
-    return list.length ? list.join(' ') : 'none';
-  };
-
-  /** 周辺減光の影の濃さ（0〜1）。効かない時は 0 */
-  const vignetteAlpha = (values = read()) =>
-    (!isEnabled() || bypass) ? 0 : +(values.vignette / 100 * 0.85).toFixed(3);
-
-  const vignetteBackground = alpha =>
-    `radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,${alpha}) 100%)`;
-
-  const ensureStyle = () => {
-    if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) { return; }
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = `
+    const PRESET_MAP = PRESETS.reduce((map, p) => { map[p.id] = p; return map; }, {});
+    /* 着色（colorize）のグラデーション。暗い所→明るい所の順の色（0〜1） */
+    const COLORIZE_MAPS = {
+        gold: [[0.08, 0.04, 0.01], [0.45, 0.28, 0.08], [0.85, 0.62, 0.25], [1, 0.9, 0.6]],
+        sepia: [[0.1, 0.06, 0.03], [0.45, 0.33, 0.2], [0.8, 0.68, 0.5], [1, 0.95, 0.85]],
+        blue: [[0.02, 0.05, 0.12], [0.15, 0.3, 0.55], [0.5, 0.7, 0.9], [0.9, 0.97, 1]],
+        green: [[0, 0.05, 0], [0.1, 0.45, 0.1], [0.4, 0.85, 0.35], [0.85, 1, 0.8]]
+    };
+    let config = null;
+    let bypass = false;
+    let applyScheduled = false;
+    let lastCss = null;
+    let lastSvgKey = null;
+    let lastVignette = null;
+    const listeners = new Set();
+    // 自動レベル補正の現在値（入力の黒点・白点。0〜1）。設定には保存しない
+    const auto = { black: 0, white: 1, available: true, timer: null, canvas: null };
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const digitsOf = (p) => p.digits !== undefined ? p.digits : (String(p.step).split('.')[1] || '').length;
+    const normalize = (key, value) => {
+        const p = PARAM_MAP[key];
+        if (!p) {
+            return value;
+        }
+        if (p.type === 'boolean') {
+            return value === true || value === 'true';
+        }
+        if (p.type === 'select') {
+            return p.options.some(([v]) => v === value) ? value : p.def;
+        }
+        let v = parseFloat(value);
+        if (!isFinite(v)) {
+            v = p.def;
+        }
+        v = clamp(v, p.min, p.max);
+        return parseFloat(v.toFixed(digitsOf(p)));
+    };
+    const prop = (key) => config && config.props ? config.props[PREFIX + key] : undefined;
+    const setProp = (key, value) => {
+        if (!config || !config.props) {
+            return;
+        }
+        if (config.props[PREFIX + key] !== value) {
+            config.props[PREFIX + key] = value;
+        }
+    };
+    /** 今の設定値（調整項目だけ）を正規化して返す */
+    const read = () => {
+        const values = {};
+        PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
+        return values;
+    };
+    // Task 080: 「使う」を廃止。標準（全部既定値）なら何も掛からないので、常に有効として扱う
+    const isEnabled = () => true;
+    const isDefaultValue = (key, value) => {
+        const p = PARAM_MAP[key];
+        if (p.type === 'boolean') {
+            return !!value === !!p.def;
+        }
+        if (p.type === 'select') {
+            return value === p.def;
+        }
+        return Math.abs(value - p.def) < 1e-6;
+    };
+    const sameValue = (p, a, b) => {
+        if (p.type === 'boolean') {
+            return !!a === !!b;
+        }
+        if (p.type === 'select') {
+            return a === b;
+        }
+        return Math.abs(a - b) < 1e-6;
+    };
+    /** 今の値が一致するプリセットのid。どれとも違えば 'custom'（手動調整中） */
+    const detectPreset = (values = read()) => {
+        const found = PRESETS.find(preset => PARAMS.every(p => {
+            const target = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
+            return sameValue(p, values[p.key], target);
+        }));
+        return found ? found.id : 'custom';
+    };
+    /** 何か1つでも効いているか（ボタンを光らせる判定） */
+    const isActive = (values = read()) => isEnabled() && PARAMS.some(p => !isDefaultValue(p.key, values[p.key]));
+    // ---- 色変換行列（3行×4列: RGBの係数＋足し算）。CSSの filter 関数と同じ式 ----
+    const IDENTITY = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]];
+    /** a を先に掛けてから b を掛けた合成行列（b ∘ a） */
+    const compose = (a, b) => {
+        const r = [];
+        for (let i = 0; i < 3; i++) {
+            r.push([0, 1, 2].map(j => b[i][0] * a[0][j] + b[i][1] * a[1][j] + b[i][2] * a[2][j])
+                .concat(b[i][0] * a[0][3] + b[i][1] * a[1][3] + b[i][2] * a[2][3] + b[i][3]));
+        }
+        return r;
+    };
+    const diag = (r, g, b, o = 0) => [[r, 0, 0, o], [0, g, 0, o], [0, 0, b, o]];
+    const saturateMatrix = (s) => [
+        [0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0],
+        [0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0],
+        [0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0]
+    ];
+    const sepiaMatrix = (a) => {
+        const k = 1 - a;
+        return [
+            [0.393 + 0.607 * k, 0.769 - 0.769 * k, 0.189 - 0.189 * k, 0],
+            [0.349 - 0.349 * k, 0.686 + 0.314 * k, 0.168 - 0.168 * k, 0],
+            [0.272 - 0.272 * k, 0.534 - 0.534 * k, 0.131 + 0.869 * k, 0]
+        ];
+    };
+    const hueMatrix = (deg) => {
+        const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+        return [
+            [0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0],
+            [0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0],
+            [0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0]
+        ];
+    };
+    const LUMA = [0.2126, 0.7152, 0.0722];
+    /** 色の処理を全部まとめた行列。何もしない時は null */
+    const buildColorMatrix = (values) => {
+        let m = IDENTITY, changed = false;
+        const add = (x) => { m = compose(m, x); changed = true; };
+        if (!isDefaultValue('brightness', values.brightness)) {
+            const b = values.brightness / 100;
+            add(diag(b, b, b));
+        }
+        if (!isDefaultValue('contrast', values.contrast)) {
+            const c = values.contrast / 100;
+            add(diag(c, c, c, 0.5 - 0.5 * c));
+        }
+        if (!isDefaultValue('saturate', values.saturate)) {
+            add(saturateMatrix(values.saturate / 100));
+        }
+        if (!isDefaultValue('sepia', values.sepia)) {
+            add(sepiaMatrix(values.sepia / 100));
+        }
+        if (!isDefaultValue('hue', values.hue)) {
+            add(hueMatrix(values.hue));
+        }
+        if (values.invert) {
+            add(diag(-1, -1, -1, 1));
+        }
+        if (!isDefaultValue('temperature', values.temperature) || !isDefaultValue('tint', values.tint)) {
+            const t = values.temperature / 100, n = values.tint / 100;
+            add(diag(1 + 0.10 * t + 0.04 * n, 1 - 0.12 * n, 1 - 0.15 * t + 0.04 * n));
+        }
+        if (values.colorize !== 'none') {
+            add([LUMA.concat(0), LUMA.concat(0), LUMA.concat(0)]);
+        }
+        return changed ? m : null;
+    };
+    /**
+     * 黒レベル/白レベルを「出力 = slope × 入力 + intercept」に変換する。
+     *   黒レベル +n … 出力の黒を n% 持ち上げる / -n … 入力の n% 以下を真っ黒にする（締める）
+     *   白レベル -n … 出力の白を n% 下げる     / +n … 入力の (100-n)% 以上を真っ白にする（伸ばす）
+     */
+    const levelsToLinear = (blackLevel, whiteLevel) => {
+        const b = blackLevel / 100, w = whiteLevel / 100;
+        const inBlack = b < 0 ? -b : 0, outBlack = b > 0 ? b : 0;
+        const inWhite = w > 0 ? 1 - w : 1, outWhite = w < 0 ? 1 + w : 1;
+        const slope = (outWhite - outBlack) / Math.max(0.01, inWhite - inBlack);
+        const intercept = outBlack - slope * inBlack;
+        return { slope: +slope.toFixed(4), intercept: +intercept.toFixed(4) };
+    };
+    const TONE_TABLE_SIZE = 65;
+    const lerpColor = (stops, x, ch) => {
+        const pos = clamp(x, 0, 1) * (stops.length - 1);
+        const i = Math.min(stops.length - 2, Math.floor(pos));
+        const f = pos - i;
+        return stops[i][ch] * (1 - f) + stops[i + 1][ch] * f;
+    };
+    const useAutoLevels = (values) => values.autoLevels && auto.available &&
+        (auto.black > 0.004 || auto.white < 0.996);
+    /** 明るさの曲線（自動レベル→黒/白レベル→ガンマ→着色）を1枚の対応表にする。何もしない時は null */
+    const buildToneTables = (values) => {
+        const levels = !isDefaultValue('blackLevel', values.blackLevel) || !isDefaultValue('whiteLevel', values.whiteLevel);
+        const gamma = !isDefaultValue('gamma', values.gamma);
+        const colorize = values.colorize !== 'none' && COLORIZE_MAPS[values.colorize];
+        const autoOn = useAutoLevels(values);
+        if (!levels && !gamma && !colorize && !autoOn) {
+            return null;
+        }
+        const { slope, intercept } = levelsToLinear(values.blackLevel, values.whiteLevel);
+        const exponent = 1 / values.gamma;
+        const tables = [[], [], []];
+        for (let i = 0; i < TONE_TABLE_SIZE; i++) {
+            let x = i / (TONE_TABLE_SIZE - 1);
+            if (autoOn) {
+                x = clamp((x - auto.black) / Math.max(0.05, auto.white - auto.black), 0, 1);
+            }
+            x = clamp(slope * x + intercept, 0, 1);
+            x = Math.pow(x, exponent);
+            for (let ch = 0; ch < 3; ch++) {
+                tables[ch].push(+(colorize ? lerpColor(colorize, x, ch) : x).toFixed(4));
+            }
+        }
+        return tables.map((t) => t.join(' '));
+    };
+    /*
+     * シャープ: アンシャープマスク。出力 = (1 + a) × 元の絵 − a × ぼかした絵。
+     * a = シャープ/100 × 6（シャープ25で a=1.5。077 の3×3畳み込みと同じくらいの効き）。
+     * 077b は a = シャープ/100 × 2 で、効きが弱すぎた（077c で修正）。
+     */
+    const SHARPEN_GAIN = 6;
+    /** SVGフィルターの中身（<filter> の子要素）を作る。何もしない時は '' */
+    const buildSvgFilterMarkup = (values) => {
+        const parts = [];
+        let input = 'SourceGraphic';
+        const m = buildColorMatrix(values);
+        if (m) {
+            const v = m.map(row => [row[0], row[1], row[2], 0, row[3]].map(n => +n.toFixed(5)).join(' ')).join('  ');
+            parts.push(`<feColorMatrix type="matrix" values="${v}  0 0 0 1 0" result="sfColor"/>`);
+            input = 'sfColor';
+        }
+        const tables = buildToneTables(values);
+        if (tables) {
+            const f = (ch, i) => `<feFunc${ch} type="table" tableValues="${tables[i]}"/>`;
+            parts.push(`<feComponentTransfer in="${input}" result="sfTone">${f('R', 0)}${f('G', 1)}${f('B', 2)}</feComponentTransfer>`);
+            input = 'sfTone';
+        }
+        if (!isDefaultValue('sharpen', values.sharpen)) {
+            const amount = +(values.sharpen / 100 * SHARPEN_GAIN).toFixed(3);
+            parts.push(`<feGaussianBlur in="${input}" stdDeviation="0.6" result="sfBlur"/>`);
+            parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0"/>`);
+        }
+        return parts.join('');
+    };
+    /** SVG フィルターを画面外に1つだけ置き、値に合わせて中身を差し替える */
+    const ensureSvg = (markup) => {
+        if (typeof document === 'undefined') {
+            return;
+        }
+        if (markup === lastSvgKey && document.getElementById(SVG_ID)) {
+            return;
+        }
+        lastSvgKey = markup;
+        let svg = document.getElementById(`${SVG_ID}-root`);
+        if (!svg) {
+            svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.id = `${SVG_ID}-root`;
+            svg.setAttribute('aria-hidden', 'true');
+            svg.setAttribute('width', '0');
+            svg.setAttribute('height', '0');
+            svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+            (document.body || document.documentElement).append(svg);
+        }
+        svg.innerHTML =
+            `<filter id="${SVG_ID}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">${markup}</filter>`;
+    };
+    /**
+     * CSS の filter 文字列を作る（canvas の ctx.filter にもそのまま使える）。
+     * 何も掛けない時は 'none'。周辺減光はここに含まない（映像の上に重ねる影で表現する）。
+     */
+    const buildFilter = (values = read(), { enabled = isEnabled() } = {}) => {
+        if (!enabled) {
+            return 'none';
+        }
+        const list = [];
+        const markup = buildSvgFilterMarkup(values);
+        if (markup) {
+            ensureSvg(markup);
+            list.push(`url(#${SVG_ID})`);
+        }
+        if (!isDefaultValue('blur', values.blur)) {
+            list.push(`blur(${values.blur}px)`);
+        }
+        return list.length ? list.join(' ') : 'none';
+    };
+    /** 周辺減光の影の濃さ（0〜1）。効かない時は 0 */
+    const vignetteAlpha = (values = read()) => (!isEnabled() || bypass) ? 0 : +(values.vignette / 100 * 0.85).toFixed(3);
+    const vignetteBackground = (alpha) => `radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,${alpha}) 100%)`;
+    const ensureStyle = () => {
+        if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) {
+            return;
+        }
+        const style = document.createElement('style');
+        style.id = STYLE_ID;
+        style.textContent = `
       .zenzaWatchVideoElement {
         filter: var(${CSS_VAR}, none);
       }
@@ -458,503 +473,561 @@ const ScreenFilter = (() => {
         display: block;
       }
     `;
-    (document.head || document.documentElement).append(style);
-  };
-
-  /* 周辺減光: 動画要素のすぐ後ろ（同じ親の中）に影の要素を置く。コメントより下になる */
-  const applyVignette = alpha => {
-    if (typeof document === 'undefined') { return; }
-    const key = String(alpha);
-    const videos = document.querySelectorAll('.zenzaWatchVideoElement');
-    videos.forEach(video => {
-      const parent = video.parentNode;
-      if (!parent) { return; }
-      let el = parent.querySelector(`:scope > .${VIGNETTE_CLASS}`);
-      if (!el) {
-        if (!alpha) { return; }
-        el = document.createElement('div');
-        el.className = VIGNETTE_CLASS;
-        video.after(el);
-      }
-      el.classList.toggle('is-active', alpha > 0);
-      if (alpha > 0) { el.style.background = vignetteBackground(alpha); }
-    });
-    lastVignette = key;
-  };
-
-  const emitChange = () => {
-    listeners.forEach(fn => {
-      try { fn(); } catch (e) { window.console.warn('ScreenFilter listener error', e); }
-    });
-  };
-
-  /** 動画要素へ反映する（CSS変数を書き換えるだけなので軽い） */
-  const apply = (values = read(), {notify = true} = {}) => {
-    applyScheduled = false;
-    if (typeof document === 'undefined') { return 'none'; }
-    ensureStyle();
-    const css = bypass ? 'none' : buildFilter(values);
-    if (css !== lastCss) {
-      lastCss = css;
-      document.documentElement.style.setProperty(CSS_VAR, css);
-    }
-    applyVignette(vignetteAlpha(values));
-    updateAutoLevelsTimer(values);
-    notify && emitChange();
-    return css;
-  };
-
-  const scheduleApply = () => {
-    if (applyScheduled) { return; }
-    applyScheduled = true;
-    Promise.resolve().then(() => apply());
-  };
-
-  // ---- 自動レベル補正: 0.5秒ごとに映像を小さく縮めて、暗い所・明るい所を調べる ----
-  const AUTO_W = 64, AUTO_H = 36;
-  const sampleAutoLevels = () => {
-    if (!isEnabled() || bypass) { return; }
-    const video = document.querySelector('.zenzaWatchVideoElement');
-    if (!video || video.paused || video.readyState < 2 || !video.videoWidth) { return; }
-    try {
-      if (!auto.canvas) {
-        auto.canvas = document.createElement('canvas');
-        auto.canvas.width = AUTO_W;
-        auto.canvas.height = AUTO_H;
-        auto.ctx = auto.canvas.getContext('2d', {willReadFrequently: true});
-      }
-      const ctx = auto.ctx;
-      ctx.drawImage(video.drawableElement || video, 0, 0, AUTO_W, AUTO_H);
-      const data = ctx.getImageData(0, 0, AUTO_W, AUTO_H).data;
-      const hist = new Uint32Array(256);
-      for (let i = 0; i < data.length; i += 4) {
-        hist[(data[i] * 54 + data[i + 1] * 183 + data[i + 2] * 19) >> 8]++;
-      }
-      const total = AUTO_W * AUTO_H, cut = total * 0.005;
-      let low = 0, high = 255, acc = 0;
-      for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > cut) { low = i; break; } }
-      acc = 0;
-      for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > cut) { high = i; break; } }
-      // 伸ばしすぎない（黒点は最大25%、白点は最小75%、幅は最低40%）
-      let b = Math.min(low / 255, 0.25), w = Math.max(high / 255, 0.75);
-      if (w - b < 0.4) { return; }
-      b = auto.black * 0.7 + b * 0.3;
-      w = auto.white * 0.7 + w * 0.3;
-      if (Math.abs(b - auto.black) < 0.004 && Math.abs(w - auto.white) < 0.004) { return; }
-      auto.black = b;
-      auto.white = w;
-      apply(read(), {notify: false});
-    } catch (e) {
-      // 配信元の許可（CORS）が無い映像では調べられない。以後は止める
-      auto.available = false;
-      window.console.warn('ScreenFilter: 自動レベル補正はこの映像では使えません', e && e.name);
-      stopAutoLevels();
-      emitChange();
-    }
-  };
-  const stopAutoLevels = () => {
-    if (auto.timer) {
-      clearInterval(auto.timer);
-      auto.timer = null;
-    }
-  };
-  const updateAutoLevelsTimer = values => {
-    const want = values.autoLevels && isEnabled() && auto.available && typeof window !== 'undefined';
-    if (want && !auto.timer) {
-      auto.timer = setInterval(sampleAutoLevels, 500);
-    } else if (!want && auto.timer) {
-      stopAutoLevels();
-      auto.black = 0;
-      auto.white = 1;
-    }
-  };
-  /** 動画が変わった時に呼ぶ（自動レベル補正をやり直す） */
-  const resetAutoLevels = () => {
-    auto.black = 0;
-    auto.white = 1;
-    auto.available = true;
-    scheduleApply();
-  };
-
-  /** 値を1つ変える（パネル・ショートカット用）。範囲外は丸める */
-  const set = (key, value) => {
-    if (!PARAM_MAP[key]) { return; }
-    setProp(key, normalize(key, value));
-    scheduleApply();
-  };
-
-  /** スライダーを動かしている間のプレビュー（保存はしない） */
-  const preview = (key, value) => {
-    const values = read();
-    values[key] = normalize(key, value);
-    // パネルへは通知しない（通知するとパネルが保存済みの値でつまみを戻してしまう。077b）
-    apply(values, {notify: false});
-  };
-
-  const applyPreset = id => {
-    const preset = PRESET_MAP[id];
-    if (!preset) { return null; }
-    PARAMS.forEach(p => {
-      const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
-      setProp(p.key, normalize(p.key, v));
-    });
-    scheduleApply();
-    return preset;
-  };
-
-  const reset = () => applyPreset('standard');
-
-  const nextPreset = () => {
-    const current = detectPreset();
-    const index = PRESETS.findIndex(p => p.id === current);
-    const next = PRESETS[(index + 1) % PRESETS.length];
-    return applyPreset(next.id);
-  };
-
-  const formatValue = (key, value) => {
-    const p = PARAM_MAP[key];
-    if (!p) { return String(value); }
-    if (p.type === 'boolean') { return value ? 'ON' : 'OFF'; }
-    if (p.type === 'select') { const o = p.options.find(([v]) => v === value); return o ? o[1] : String(value); }
-    const text = Number(value).toFixed(digitsOf(p));
-    return `${p.signed && value > 0 ? '+' : ''}${text}${p.unit || ''}`;
-  };
-
-  /** 'brightness:+5' のような文字列で値を増減する（ショートカット用） */
-  const adjust = param => {
-    const [key, deltaText] = String(param || '').split(':');
-    const p = PARAM_MAP[key];
-    if (!p || p.type === 'boolean' || p.type === 'select') { return null; }
-    const delta = parseFloat(deltaText) || 0;
-    const next = normalize(key, normalize(key, prop(key)) + delta);
-    setProp(key, next);
-    scheduleApply();
-    return {param: p, value: next};
-  };
-
-  const onOff = v => v ? 'ON' : 'OFF';
-
-  /** 全部の調整項目が既定値（＝エフェクトOFF） */
-  const isStandard = (values = read()) => PARAMS.every(p => isDefaultValue(p.key, values[p.key]));
-  const saveValues = values => {
-    try { setProp('saved', JSON.stringify(values)); } catch (e) { /* 保存できなくても動作は続ける */ }
-  };
-  const loadSaved = () => {
-    const raw = prop('saved');
-    if (!raw) { return null; }
-    try {
-      const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
-      return v && typeof v === 'object' ? v : null;
-    } catch (e) {
-      return null;
-    }
-  };
-
-  /**
-   * RootDispatcher から呼ばれる。画面に出すメッセージ（無ければ null）を返す。
-   *   toggle-screenFilter.enable / .flipH / .flipV / .invert / .autoLevels、
-   *   screenFilter-preset(id) / screenFilter-nextPreset / screenFilter-reset / screenFilter-adjust('key:±n')
-   */
-  const execCommand = (command, param) => {
-    switch (command) {
-      case 'toggle-screenFilter.enable': {
-        // Task 080: 「使う」の代わりに、今の設定 ⇔ 標準 を行き来する
-        const values = read();
-        if (!isStandard(values)) {
-          saveValues(values);
-          applyPreset('standard');
-          return 'エフェクト: OFF（標準に戻しました。もう一度押すと元の設定に戻ります）';
+        (document.head || document.documentElement).append(style);
+    };
+    /* 周辺減光: 動画要素のすぐ後ろ（同じ親の中）に影の要素を置く。コメントより下になる */
+    const applyVignette = (alpha) => {
+        if (typeof document === 'undefined') {
+            return;
         }
-        const saved = loadSaved();
-        if (!saved) { return 'エフェクト: 標準のままです（戻す設定がありません）'; }
+        const key = String(alpha);
+        const videos = document.querySelectorAll('.zenzaWatchVideoElement');
+        videos.forEach(video => {
+            const parent = video.parentNode;
+            if (!parent) {
+                return;
+            }
+            let el = parent.querySelector(`:scope > .${VIGNETTE_CLASS}`);
+            if (!el) {
+                if (!alpha) {
+                    return;
+                }
+                el = document.createElement('div');
+                el.className = VIGNETTE_CLASS;
+                video.after(el);
+            }
+            el.classList.toggle('is-active', alpha > 0);
+            if (alpha > 0) {
+                el.style.background = vignetteBackground(alpha);
+            }
+        });
+        lastVignette = key;
+    };
+    const emitChange = () => {
+        listeners.forEach(fn => {
+            try {
+                fn();
+            }
+            catch (e) {
+                window.console.warn('ScreenFilter listener error', e);
+            }
+        });
+    };
+    /** 動画要素へ反映する（CSS変数を書き換えるだけなので軽い） */
+    const apply = (values = read(), { notify = true } = {}) => {
+        applyScheduled = false;
+        if (typeof document === 'undefined') {
+            return 'none';
+        }
+        ensureStyle();
+        const css = bypass ? 'none' : buildFilter(values);
+        if (css !== lastCss) {
+            lastCss = css;
+            document.documentElement.style.setProperty(CSS_VAR, css);
+        }
+        applyVignette(vignetteAlpha(values));
+        updateAutoLevelsTimer(values);
+        notify && emitChange();
+        return css;
+    };
+    const scheduleApply = () => {
+        if (applyScheduled) {
+            return;
+        }
+        applyScheduled = true;
+        Promise.resolve().then(() => apply());
+    };
+    // ---- 自動レベル補正: 0.5秒ごとに映像を小さく縮めて、暗い所・明るい所を調べる ----
+    const AUTO_W = 64, AUTO_H = 36;
+    const sampleAutoLevels = () => {
+        if (!isEnabled() || bypass) {
+            return;
+        }
+        const video = document.querySelector('.zenzaWatchVideoElement');
+        if (!video || video.paused || video.readyState < 2 || !video.videoWidth) {
+            return;
+        }
+        try {
+            if (!auto.canvas) {
+                auto.canvas = document.createElement('canvas');
+                auto.canvas.width = AUTO_W;
+                auto.canvas.height = AUTO_H;
+                auto.ctx = auto.canvas.getContext('2d', { willReadFrequently: true });
+            }
+            const ctx = auto.ctx;
+            ctx.drawImage(video.drawableElement || video, 0, 0, AUTO_W, AUTO_H);
+            const data = ctx.getImageData(0, 0, AUTO_W, AUTO_H).data;
+            const hist = new Uint32Array(256);
+            for (let i = 0; i < data.length; i += 4) {
+                hist[(data[i] * 54 + data[i + 1] * 183 + data[i + 2] * 19) >> 8]++;
+            }
+            const total = AUTO_W * AUTO_H, cut = total * 0.005;
+            let low = 0, high = 255, acc = 0;
+            for (let i = 0; i < 256; i++) {
+                acc += hist[i];
+                if (acc > cut) {
+                    low = i;
+                    break;
+                }
+            }
+            acc = 0;
+            for (let i = 255; i >= 0; i--) {
+                acc += hist[i];
+                if (acc > cut) {
+                    high = i;
+                    break;
+                }
+            }
+            // 伸ばしすぎない（黒点は最大25%、白点は最小75%、幅は最低40%）
+            let b = Math.min(low / 255, 0.25), w = Math.max(high / 255, 0.75);
+            if (w - b < 0.4) {
+                return;
+            }
+            b = auto.black * 0.7 + b * 0.3;
+            w = auto.white * 0.7 + w * 0.3;
+            if (Math.abs(b - auto.black) < 0.004 && Math.abs(w - auto.white) < 0.004) {
+                return;
+            }
+            auto.black = b;
+            auto.white = w;
+            apply(read(), { notify: false });
+        }
+        catch (e) {
+            // 配信元の許可（CORS）が無い映像では調べられない。以後は止める
+            auto.available = false;
+            window.console.warn('ScreenFilter: 自動レベル補正はこの映像では使えません', e && e.name);
+            stopAutoLevels();
+            emitChange();
+        }
+    };
+    const stopAutoLevels = () => {
+        if (auto.timer) {
+            clearInterval(auto.timer);
+            auto.timer = null;
+        }
+    };
+    const updateAutoLevelsTimer = (values) => {
+        const want = values.autoLevels && isEnabled() && auto.available && typeof window !== 'undefined';
+        if (want && !auto.timer) {
+            auto.timer = setInterval(sampleAutoLevels, 500);
+        }
+        else if (!want && auto.timer) {
+            stopAutoLevels();
+            auto.black = 0;
+            auto.white = 1;
+        }
+    };
+    /** 動画が変わった時に呼ぶ（自動レベル補正をやり直す） */
+    const resetAutoLevels = () => {
+        auto.black = 0;
+        auto.white = 1;
+        auto.available = true;
+        scheduleApply();
+    };
+    /** 値を1つ変える（パネル・ショートカット用）。範囲外は丸める */
+    const set = (key, value) => {
+        if (!PARAM_MAP[key]) {
+            return;
+        }
+        setProp(key, normalize(key, value));
+        scheduleApply();
+    };
+    /** スライダーを動かしている間のプレビュー（保存はしない） */
+    const preview = (key, value) => {
+        const values = read();
+        values[key] = normalize(key, value);
+        // パネルへは通知しない（通知するとパネルが保存済みの値でつまみを戻してしまう。077b）
+        apply(values, { notify: false });
+    };
+    const applyPreset = (id) => {
+        const preset = PRESET_MAP[id];
+        if (!preset) {
+            return null;
+        }
         PARAMS.forEach(p => {
-          setProp(p.key, normalize(p.key, saved[p.key] !== undefined ? saved[p.key] : p.def));
+            const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
+            setProp(p.key, normalize(p.key, v));
         });
         scheduleApply();
-        const preset = PRESET_MAP[detectPreset()];
-        return `エフェクト: ON（${preset ? preset.label : '手動で調整した設定'}）`;
-      }
-      case 'toggle-screenFilter.split': {
-        const v = setSplit(!split.on);
-        return v ? '画面フィルター: 左半分に元の映像を表示' : '画面フィルター: 比較表示をやめました';
-      }
-      case 'toggle-screenFilter.flipH': {
-        const v = !prop('flipH');
-        setProp('flipH', v);
-        return `左右反転: ${onOff(v)}`;
-      }
-      case 'toggle-screenFilter.flipV': {
-        const v = !prop('flipV');
-        setProp('flipV', v);
-        return `上下反転: ${onOff(v)}`;
-      }
-      case 'toggle-screenFilter.invert':
-      case 'toggle-screenFilter.autoLevels': {
-        const key = command.replace('toggle-screenFilter.', '');
-        const v = !normalize(key, prop(key));
-        set(key, v);
-        return `${PARAM_MAP[key].label}: ${onOff(v)}`;
-      }
-      case 'screenFilter-preset': {
-        const preset = applyPreset(param);
-        if (!preset) { return null; }
-        return `画面フィルター: ${preset.label}`;
-      }
-      case 'screenFilter-nextPreset': {
-        const preset = nextPreset();
-        return preset ? `画面フィルター: ${preset.label}` : null;
-      }
-      case 'screenFilter-reset':
-        reset();
-        return '画面フィルター: 標準に戻しました';
-      case 'screenFilter-adjust': {
-        const result = adjust(param);
-        if (!result) { return null; }
-        return `${result.param.label}: ${formatValue(result.param.key, result.value)}`;
-      }
-    }
-    return null;
-  };
-
-  const isCanvasTarget = target => {
-    const key = target === 'screenshot' ? 'applyToScreenshot' : 'applyToCommentPip';
-    const v = prop(key);
-    return v === undefined ? true : !!v;
-  };
-
-  /**
-   * canvas へ動画（または動画を描いた canvas）を、フィルター・反転・周辺減光つきで描く。
-   * target: 'screenshot' | 'commentPip'（それぞれの「反映する」設定を見る）
-   */
-  const drawVideo = (ctx, source, dx, dy, w, h, {target = 'commentPip'} = {}) => {
-    const use = isCanvasTarget(target);
-    const filter = use && !bypass ? buildFilter() : 'none';
-    const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
-    ctx.save();
-    if (filter !== 'none') {
-      ctx.filter = filter;
-    }
-    if (flipH || flipV) {
-      ctx.translate(dx + (flipH ? w : 0), dy + (flipV ? h : 0));
-      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-      ctx.drawImage(source, 0, 0, w, h);
-    } else {
-      ctx.drawImage(source, dx, dy, w, h);
-    }
-    ctx.restore();
-    const alpha = use ? vignetteAlpha() : 0;
-    if (alpha > 0) {
-      const cx = dx + w / 2, cy = dy + h / 2;
-      const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, Math.hypot(w, h) / 2);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, `rgba(0,0,0,${alpha})`);
-      ctx.save();
-      ctx.fillStyle = g;
-      ctx.fillRect(dx, dy, w, h);
-      ctx.restore();
-    }
-  };
-
-  /** スクリーンショット用: 加工済みの新しい canvas を返す（加工が無ければそのまま返す） */
-  const processCanvas = (canvas, {target = 'screenshot'} = {}) => {
-    if (!isCanvasTarget(target)) { return canvas; }
-    const filter = bypass ? 'none' : buildFilter();
-    if (filter === 'none' && !prop('flipH') && !prop('flipV') && !vignetteAlpha()) { return canvas; }
-    const out = document.createElement('canvas');
-    out.width = canvas.width;
-    out.height = canvas.height;
-    const ctx = out.getContext('2d');
-    drawVideo(ctx, canvas, 0, 0, canvas.width, canvas.height, {target});
-    return out;
-  };
-
-  // ---- Task 080: 画面の左半分だけ元の映像を重ねて見比べる ----
-  // フィルターは <video> 全体に CSS で掛かるので、左半分の上に「加工前の映像」を
-  // canvas へ描いて重ねる（drawImage は加工前のフレームを描く）。反転中は反転して描く。
-  const SPLIT_CLASS = 'zenzaScreenFilterSplit';
-  const split = {on: false, raf: 0, canvas: null, ctx: null, lastKey: ''};
-  const hideSplitCanvas = () => {
-    if (split.canvas) { split.canvas.style.display = 'none'; }
-    split.lastKey = '';
-  };
-  const drawSplit = () => {
-    split.raf = 0;
-    if (!split.on || typeof document === 'undefined') { return; }
-    split.raf = requestAnimationFrame(drawSplit);
-    const video = document.querySelector('.zenzaWatchVideoElement');
-    const src = video && (video.drawableElement || video);
-    const parent = video && video.parentNode;
-    if (!src || !parent || !src.videoWidth || src.readyState < 2 || isStandard()) {
-      hideSplitCanvas();
-      return;
-    }
-    let canvas = split.canvas;
-    if (!canvas || canvas.parentNode !== parent) {
-      canvas = split.canvas || document.createElement('canvas');
-      canvas.className = SPLIT_CLASS;
-      canvas.style.cssText = 'position:absolute;z-index:7;pointer-events:none;';
-      video.after(canvas);
-      split.canvas = canvas;
-      split.ctx = canvas.getContext('2d');
-    }
-    const vw = src.videoWidth, vh = src.videoHeight;
-    const ew = video.offsetWidth, eh = video.offsetHeight;
-    if (!ew || !eh) { hideSplitCanvas(); return; }
-    const scale = Math.min(ew / vw, eh / vh);
-    const cw = vw * scale, ch = vh * scale;
-    const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
-    const flipH = !!prop('flipH'), flipV = !!prop('flipV');
-    const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
-    if (key === split.lastKey && canvas.style.display !== 'none') { return; }
-    split.lastKey = key;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
-    const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w;
-      canvas.height = h;
-    }
-    Object.assign(canvas.style, {
-      display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
-    });
-    const ctx = split.ctx;
-    const half = Math.round(w / 2);
-    ctx.clearRect(0, 0, w, h);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, half, h);
-    ctx.clip();
-    ctx.translate(flipH ? w : 0, flipV ? h : 0);
-    ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-    ctx.drawImage(src, 0, 0, w, h);
-    ctx.restore();
-    // 境目の線と、左右それぞれの説明
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    ctx.fillRect(half - 1, 0, 2, h);
-    const fs = Math.max(11, Math.round(h / 30));
-    ctx.font = `bold ${fs}px sans-serif`;
-    ctx.textBaseline = 'top';
-    const label = (text, x, align) => {
-      ctx.textAlign = align;
-      ctx.lineWidth = Math.max(2, fs / 5);
-      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-      ctx.strokeText(text, x, fs * 0.6);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(text, x, fs * 0.6);
+        return preset;
     };
-    label('元の映像', half - fs * 0.6, 'right');
-    label('エフェクト', half + fs * 0.6, 'left');
-  };
-  const setSplit = v => {
-    split.on = !!v;
-    if (split.on) {
-      !split.raf && (split.raf = requestAnimationFrame(drawSplit));
-    } else {
-      split.raf && cancelAnimationFrame(split.raf);
-      split.raf = 0;
-      hideSplitCanvas();
-    }
-    emitChange();
-    return split.on;
-  };
-
-  const initialize = playerConfig => {
-    if (config === playerConfig) { return; }
-    config = playerConfig;
-    // Task 080: 「使う」を OFF にしていた人の移行。値は ON/OFF 切り替え用に保存して、標準に戻す
-    if (prop('enable') === false) {
-      const values = read();
-      if (!isStandard(values)) { saveValues(values); }
-      PARAMS.forEach(p => setProp(p.key, p.def));
-      setProp('enable', true);
-    }
-    // 反転は従来通り「ページを開き直すと元に戻る」扱いにする（ずっと反転したままの事故防止）
-    setProp('flipH', false);
-    setProp('flipV', false);
-    if (config && typeof config.on === 'function') {
-      config.on('update', key => {
-        if (typeof key === 'string' && key.startsWith(PREFIX)) {
-          scheduleApply();
+    const reset = () => applyPreset('standard');
+    const nextPreset = () => {
+        const current = detectPreset();
+        const index = PRESETS.findIndex(p => p.id === current);
+        const next = PRESETS[(index + 1) % PRESETS.length];
+        return applyPreset(next.id);
+    };
+    const formatValue = (key, value) => {
+        const p = PARAM_MAP[key];
+        if (!p) {
+            return String(value);
         }
-      });
-    }
-    apply();
-  };
-
-  return {
-    PREFIX,
-    PARAMS,
-    PARAM_MAP,
-    PRESETS,
-    DEFAULTS,
-    COLORIZE_MAPS,
-    initialize,
-    read,
-    set,
-    preview,
-    apply,
-    applyPreset,
-    reset,
-    nextPreset,
-    adjust,
-    detectPreset,
-    isActive,
-    buildFilter,
-    buildSvgFilterMarkup,
-    buildColorMatrix,
-    buildToneTables,
-    levelsToLinear,
-    formatValue,
-    normalize,
-    execCommand,
-    drawVideo,
-    processCanvas,
-    isEnabled,
-    isStandard,
-    setSplit,
-    get isSplit() { return split.on; },
-    resetAutoLevels,
-    get autoLevelsAvailable() { return auto.available; },
-    get flipH() { return !!prop('flipH'); },
-    get flipV() { return !!prop('flipV'); },
-    /** （旧）押している間だけ元の映像。Task 080 からパネルでは使っていない */
-    setBypass(v) {
-      bypass = !!v;
-      apply();
-    },
-    get bypass() { return bypass; },
-    onChange(fn) {
-      typeof fn === 'function' && listeners.add(fn);
-      return () => listeners.delete(fn);
-    },
-    /** テスト用 */
-    _reset() {
-      config = null;
-      bypass = false;
-      lastCss = null;
-      lastSvgKey = null;
-      lastVignette = null;
-      stopAutoLevels();
-      auto.black = 0;
-      auto.white = 1;
-      auto.available = true;
-      listeners.clear();
-      split.on = false;
-    }
-  };
+        if (p.type === 'boolean') {
+            return value ? 'ON' : 'OFF';
+        }
+        if (p.type === 'select') {
+            const o = p.options.find(([v]) => v === value);
+            return o ? o[1] : String(value);
+        }
+        const text = Number(value).toFixed(digitsOf(p));
+        return `${p.signed && value > 0 ? '+' : ''}${text}${p.unit || ''}`;
+    };
+    /** 'brightness:+5' のような文字列で値を増減する（ショートカット用） */
+    const adjust = (param) => {
+        const [key, deltaText] = String(param || '').split(':');
+        const p = PARAM_MAP[key];
+        if (!p || p.type === 'boolean' || p.type === 'select') {
+            return null;
+        }
+        const delta = parseFloat(deltaText) || 0;
+        const next = normalize(key, normalize(key, prop(key)) + delta);
+        setProp(key, next);
+        scheduleApply();
+        return { param: p, value: next };
+    };
+    const onOff = (v) => v ? 'ON' : 'OFF';
+    /** 全部の調整項目が既定値（＝エフェクトOFF） */
+    const isStandard = (values = read()) => PARAMS.every(p => isDefaultValue(p.key, values[p.key]));
+    const saveValues = (values) => {
+        try {
+            setProp('saved', JSON.stringify(values));
+        }
+        catch (e) { /* 保存できなくても動作は続ける */ }
+    };
+    const loadSaved = () => {
+        const raw = prop('saved');
+        if (!raw) {
+            return null;
+        }
+        try {
+            const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            return v && typeof v === 'object' ? v : null;
+        }
+        catch (e) {
+            return null;
+        }
+    };
+    /**
+     * RootDispatcher から呼ばれる。画面に出すメッセージ（無ければ null）を返す。
+     *   toggle-screenFilter.enable / .flipH / .flipV / .invert / .autoLevels、
+     *   screenFilter-preset(id) / screenFilter-nextPreset / screenFilter-reset / screenFilter-adjust('key:±n')
+     */
+    const execCommand = (command, param) => {
+        switch (command) {
+            case 'toggle-screenFilter.enable': {
+                // Task 080: 「使う」の代わりに、今の設定 ⇔ 標準 を行き来する
+                const values = read();
+                if (!isStandard(values)) {
+                    saveValues(values);
+                    applyPreset('standard');
+                    return 'エフェクト: OFF（標準に戻しました。もう一度押すと元の設定に戻ります）';
+                }
+                const saved = loadSaved();
+                if (!saved) {
+                    return 'エフェクト: 標準のままです（戻す設定がありません）';
+                }
+                PARAMS.forEach(p => {
+                    setProp(p.key, normalize(p.key, saved[p.key] !== undefined ? saved[p.key] : p.def));
+                });
+                scheduleApply();
+                const preset = PRESET_MAP[detectPreset()];
+                return `エフェクト: ON（${preset ? preset.label : '手動で調整した設定'}）`;
+            }
+            case 'toggle-screenFilter.split': {
+                const v = setSplit(!split.on);
+                return v ? '画面フィルター: 左半分に元の映像を表示' : '画面フィルター: 比較表示をやめました';
+            }
+            case 'toggle-screenFilter.flipH': {
+                const v = !prop('flipH');
+                setProp('flipH', v);
+                return `左右反転: ${onOff(v)}`;
+            }
+            case 'toggle-screenFilter.flipV': {
+                const v = !prop('flipV');
+                setProp('flipV', v);
+                return `上下反転: ${onOff(v)}`;
+            }
+            case 'toggle-screenFilter.invert':
+            case 'toggle-screenFilter.autoLevels': {
+                const key = command.replace('toggle-screenFilter.', '');
+                const v = !normalize(key, prop(key));
+                set(key, v);
+                return `${PARAM_MAP[key].label}: ${onOff(v)}`;
+            }
+            case 'screenFilter-preset': {
+                const preset = applyPreset(param);
+                if (!preset) {
+                    return null;
+                }
+                return `画面フィルター: ${preset.label}`;
+            }
+            case 'screenFilter-nextPreset': {
+                const preset = nextPreset();
+                return preset ? `画面フィルター: ${preset.label}` : null;
+            }
+            case 'screenFilter-reset':
+                reset();
+                return '画面フィルター: 標準に戻しました';
+            case 'screenFilter-adjust': {
+                const result = adjust(param);
+                if (!result) {
+                    return null;
+                }
+                return `${result.param.label}: ${formatValue(result.param.key, result.value)}`;
+            }
+        }
+        return null;
+    };
+    const isCanvasTarget = (target) => {
+        const key = target === 'screenshot' ? 'applyToScreenshot' : 'applyToCommentPip';
+        const v = prop(key);
+        return v === undefined ? true : !!v;
+    };
+    /**
+     * canvas へ動画（または動画を描いた canvas）を、フィルター・反転・周辺減光つきで描く。
+     * target: 'screenshot' | 'commentPip'（それぞれの「反映する」設定を見る）
+     */
+    const drawVideo = (ctx, source, dx, dy, w, h, { target = 'commentPip' } = {}) => {
+        const use = isCanvasTarget(target);
+        const filter = use && !bypass ? buildFilter() : 'none';
+        const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
+        ctx.save();
+        if (filter !== 'none') {
+            ctx.filter = filter;
+        }
+        if (flipH || flipV) {
+            ctx.translate(dx + (flipH ? w : 0), dy + (flipV ? h : 0));
+            ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+            ctx.drawImage(source, 0, 0, w, h);
+        }
+        else {
+            ctx.drawImage(source, dx, dy, w, h);
+        }
+        ctx.restore();
+        const alpha = use ? vignetteAlpha() : 0;
+        if (alpha > 0) {
+            const cx = dx + w / 2, cy = dy + h / 2;
+            const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, Math.hypot(w, h) / 2);
+            g.addColorStop(0, 'rgba(0,0,0,0)');
+            g.addColorStop(1, `rgba(0,0,0,${alpha})`);
+            ctx.save();
+            ctx.fillStyle = g;
+            ctx.fillRect(dx, dy, w, h);
+            ctx.restore();
+        }
+    };
+    /** スクリーンショット用: 加工済みの新しい canvas を返す（加工が無ければそのまま返す） */
+    const processCanvas = (canvas, { target = 'screenshot' } = {}) => {
+        if (!isCanvasTarget(target)) {
+            return canvas;
+        }
+        const filter = bypass ? 'none' : buildFilter();
+        if (filter === 'none' && !prop('flipH') && !prop('flipV') && !vignetteAlpha()) {
+            return canvas;
+        }
+        const out = document.createElement('canvas');
+        out.width = canvas.width;
+        out.height = canvas.height;
+        const ctx = out.getContext('2d');
+        drawVideo(ctx, canvas, 0, 0, canvas.width, canvas.height, { target });
+        return out;
+    };
+    // ---- Task 080: 画面の左半分だけ元の映像を重ねて見比べる ----
+    // フィルターは <video> 全体に CSS で掛かるので、左半分の上に「加工前の映像」を
+    // canvas へ描いて重ねる（drawImage は加工前のフレームを描く）。反転中は反転して描く。
+    const SPLIT_CLASS = 'zenzaScreenFilterSplit';
+    const split = { on: false, raf: 0, canvas: null, ctx: null, lastKey: '' };
+    const hideSplitCanvas = () => {
+        if (split.canvas) {
+            split.canvas.style.display = 'none';
+        }
+        split.lastKey = '';
+    };
+    const drawSplit = () => {
+        split.raf = 0;
+        if (!split.on || typeof document === 'undefined') {
+            return;
+        }
+        split.raf = requestAnimationFrame(drawSplit);
+        const video = document.querySelector('.zenzaWatchVideoElement');
+        const src = video && (video.drawableElement || video);
+        const parent = video && video.parentNode;
+        if (!src || !parent || !src.videoWidth || src.readyState < 2 || isStandard()) {
+            hideSplitCanvas();
+            return;
+        }
+        let canvas = split.canvas;
+        if (!canvas || canvas.parentNode !== parent) {
+            canvas = split.canvas || document.createElement('canvas');
+            canvas.className = SPLIT_CLASS;
+            canvas.style.cssText = 'position:absolute;z-index:7;pointer-events:none;';
+            video.after(canvas);
+            split.canvas = canvas;
+            split.ctx = canvas.getContext('2d');
+        }
+        const vw = src.videoWidth, vh = src.videoHeight;
+        const ew = video.offsetWidth, eh = video.offsetHeight;
+        if (!ew || !eh) {
+            hideSplitCanvas();
+            return;
+        }
+        const scale = Math.min(ew / vw, eh / vh);
+        const cw = vw * scale, ch = vh * scale;
+        const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
+        const flipH = !!prop('flipH'), flipV = !!prop('flipV');
+        const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
+        if (key === split.lastKey && canvas.style.display !== 'none') {
+            return;
+        }
+        split.lastKey = key;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
+        const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
+        if (canvas.width !== w || canvas.height !== h) {
+            canvas.width = w;
+            canvas.height = h;
+        }
+        Object.assign(canvas.style, {
+            display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
+        });
+        const ctx = split.ctx;
+        const half = Math.round(w / 2);
+        ctx.clearRect(0, 0, w, h);
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, half, h);
+        ctx.clip();
+        ctx.translate(flipH ? w : 0, flipV ? h : 0);
+        ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+        ctx.drawImage(src, 0, 0, w, h);
+        ctx.restore();
+        // 境目の線と、左右それぞれの説明
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillRect(half - 1, 0, 2, h);
+        const fs = Math.max(11, Math.round(h / 30));
+        ctx.font = `bold ${fs}px sans-serif`;
+        ctx.textBaseline = 'top';
+        const label = (text, x, align) => {
+            ctx.textAlign = align;
+            ctx.lineWidth = Math.max(2, fs / 5);
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+            ctx.strokeText(text, x, fs * 0.6);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(text, x, fs * 0.6);
+        };
+        label('元の映像', half - fs * 0.6, 'right');
+        label('エフェクト', half + fs * 0.6, 'left');
+    };
+    const setSplit = (v) => {
+        split.on = !!v;
+        if (split.on) {
+            !split.raf && (split.raf = requestAnimationFrame(drawSplit));
+        }
+        else {
+            split.raf && cancelAnimationFrame(split.raf);
+            split.raf = 0;
+            hideSplitCanvas();
+        }
+        emitChange();
+        return split.on;
+    };
+    const initialize = (playerConfig) => {
+        if (config === playerConfig) {
+            return;
+        }
+        config = playerConfig;
+        // Task 080: 「使う」を OFF にしていた人の移行。値は ON/OFF 切り替え用に保存して、標準に戻す
+        if (prop('enable') === false) {
+            const values = read();
+            if (!isStandard(values)) {
+                saveValues(values);
+            }
+            PARAMS.forEach(p => setProp(p.key, p.def));
+            setProp('enable', true);
+        }
+        // 反転は従来通り「ページを開き直すと元に戻る」扱いにする（ずっと反転したままの事故防止）
+        setProp('flipH', false);
+        setProp('flipV', false);
+        if (config && typeof config.on === 'function') {
+            config.on('update', (key) => {
+                if (typeof key === 'string' && key.startsWith(PREFIX)) {
+                    scheduleApply();
+                }
+            });
+        }
+        apply();
+    };
+    return {
+        PREFIX,
+        PARAMS,
+        PARAM_MAP,
+        PRESETS,
+        DEFAULTS,
+        COLORIZE_MAPS,
+        initialize,
+        read,
+        set,
+        preview,
+        apply,
+        applyPreset,
+        reset,
+        nextPreset,
+        adjust,
+        detectPreset,
+        isActive,
+        buildFilter,
+        buildSvgFilterMarkup,
+        buildColorMatrix,
+        buildToneTables,
+        levelsToLinear,
+        formatValue,
+        normalize,
+        execCommand,
+        drawVideo,
+        processCanvas,
+        isEnabled,
+        isStandard,
+        setSplit,
+        get isSplit() { return split.on; },
+        resetAutoLevels,
+        get autoLevelsAvailable() { return auto.available; },
+        get flipH() { return !!prop('flipH'); },
+        get flipV() { return !!prop('flipV'); },
+        /** （旧）押している間だけ元の映像。Task 080 からパネルでは使っていない */
+        setBypass(v) {
+            bypass = !!v;
+            apply();
+        },
+        get bypass() { return bypass; },
+        onChange(fn) {
+            typeof fn === 'function' && listeners.add(fn);
+            return () => listeners.delete(fn);
+        },
+        /** テスト用 */
+        _reset() {
+            config = null;
+            bypass = false;
+            lastCss = null;
+            lastSvgKey = null;
+            lastVignette = null;
+            stopAutoLevels();
+            auto.black = 0;
+            auto.white = 1;
+            auto.available = true;
+            listeners.clear();
+            split.on = false;
+        }
+    };
 })();
-
 /*
  * プレイヤー内の「画面フィルター」パネル。
  * 動画を見ながら調整できるよう、画面の右上に小さく出す（動画は隠さない）。
  * 全画面の時は全画面の要素の中へ、それ以外は body へ置く（全画面中も見えるように）。
  */
 const ScreenFilterPanel = (() => {
-  const esc = s => String(s).replace(/[&<>"']/g, c => (
-    {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'}[c]
-  ));
-
-  const CSS = `
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]));
+    const CSS = `
     .zenzaScreenFilterPanel {
       position: fixed;
       top: 16px;
@@ -1138,17 +1211,16 @@ const ScreenFilterPanel = (() => {
       color: #ff9f8f;
     }
   `;
-
-  const rowHtml = p => {
-    if (p.type === 'boolean') {
-      return `
+    const rowHtml = (p) => {
+        if (p.type === 'boolean') {
+            return `
         <div class="sfRow" data-key="${p.key}">
           <label class="sfCheck"><input type="checkbox" data-param="${p.key}"> ${esc(p.label)}</label>
           <div class="sfDesc">${esc(p.desc)}</div>
         </div>`;
-    }
-    if (p.type === 'select') {
-      return `
+        }
+        if (p.type === 'select') {
+            return `
         <div class="sfRow" data-key="${p.key}">
           <div class="sfRowHead">
             <span class="sfLabel">${esc(p.label)}</span>
@@ -1158,9 +1230,9 @@ const ScreenFilterPanel = (() => {
           </div>
           <div class="sfDesc">${esc(p.desc)}</div>
         </div>`;
-    }
-    // Task 077c: つまみ（細かく1刻み）と、数字を直接入れられる欄の両方を置く
-    return `
+        }
+        // Task 077c: つまみ（細かく1刻み）と、数字を直接入れられる欄の両方を置く
+        return `
       <div class="sfRow" data-key="${p.key}">
         <div class="sfRowHead">
           <span class="sfLabel">${esc(p.label)}</span>
@@ -1173,9 +1245,8 @@ const ScreenFilterPanel = (() => {
         <input type="range" data-param="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}">
         <div class="sfDesc">${esc(p.desc)}</div>
       </div>`;
-  };
-
-  const TEMPLATE = () => `
+    };
+    const TEMPLATE = () => `
     <div class="sfHead">
       <span class="sfTitle">画面フィルター</span>
       <button type="button" class="sfClose" data-action="close" title="閉じる">×</button>
@@ -1189,8 +1260,7 @@ const ScreenFilterPanel = (() => {
       <div class="sfSectionTitle">かんたん設定（プリセット）</div>
       <div class="sfDesc">迷ったらここから選んでください。選んだあとに下のつまみで微調整もできます。</div>
       <div class="sfPresets">
-        ${ScreenFilter.PRESETS.map(p =>
-          `<button type="button" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`).join('')}
+        ${ScreenFilter.PRESETS.map(p => `<button type="button" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`).join('')}
       </div>
       <div class="sfPresetState"></div>
       <div class="sfNote">
@@ -1231,224 +1301,242 @@ const ScreenFilterPanel = (() => {
       <button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる（左: 元の映像）</button>
     </div>
   `;
-
-  class Panel {
-    constructor({config}) {
-      this.config = config;
-      this.view = null;
-      this._onFullscreenChange = this._onFullscreenChange.bind(this);
-      this._refresh = this._refresh.bind(this);
-    }
-
-    _initializeDom() {
-      if (this.view) { return; }
-      if (!document.getElementById('zenzaScreenFilterPanelStyle')) {
-        const style = document.createElement('style');
-        style.id = 'zenzaScreenFilterPanelStyle';
-        style.textContent = CSS;
-        (document.head || document.documentElement).append(style);
-      }
-      const view = this.view = document.createElement('div');
-      // zen-family: Zenza は再生中、body直下の zen-family 以外の要素の中身を
-      // pointer-events: none にしている（裏のページの無効化）。付けないとパネルが操作できない。
-      view.className = 'zenzaScreenFilterPanel zen-family';
-      view.innerHTML = TEMPLATE();
-
-      // 全画面中はプレイヤーの中に置かれるため、クリック等がプレイヤー側
-      // （再生/一時停止の切り替え・preventDefault）へ伝わらないようにする。
-      ['click', 'dblclick', 'mousedown', 'mouseup', 'wheel', 'contextmenu', 'keydown', 'keyup']
-        .forEach(name => view.addEventListener(name, e => e.stopPropagation()));
-      // Esc でパネルだけ閉じる（プレイヤー自体は閉じない）
-      view.addEventListener('keydown', e => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          this.close();
+    class Panel {
+        constructor({ config }) {
+            this.config = config;
+            this.view = null;
+            this._onFullscreenChange = this._onFullscreenChange.bind(this);
+            this._refresh = this._refresh.bind(this);
         }
-      });
-
-      view.addEventListener('input', e => {
-        const key = e.target.dataset.param;
-        if (key && e.target.type === 'range') {
-          ScreenFilter.preview(key, e.target.value);
-          this._updateValueLabel(key, ScreenFilter.normalize(key, e.target.value), {force: true});
+        _initializeDom() {
+            if (this.view) {
+                return;
+            }
+            if (!document.getElementById('zenzaScreenFilterPanelStyle')) {
+                const style = document.createElement('style');
+                style.id = 'zenzaScreenFilterPanelStyle';
+                style.textContent = CSS;
+                (document.head || document.documentElement).append(style);
+            }
+            const view = this.view = document.createElement('div');
+            // zen-family: Zenza は再生中、body直下の zen-family 以外の要素の中身を
+            // pointer-events: none にしている（裏のページの無効化）。付けないとパネルが操作できない。
+            view.className = 'zenzaScreenFilterPanel zen-family';
+            view.innerHTML = TEMPLATE();
+            // 全画面中はプレイヤーの中に置かれるため、クリック等がプレイヤー側
+            // （再生/一時停止の切り替え・preventDefault）へ伝わらないようにする。
+            ['click', 'dblclick', 'mousedown', 'mouseup', 'wheel', 'contextmenu', 'keydown', 'keyup']
+                .forEach(name => view.addEventListener(name, e => e.stopPropagation()));
+            // Esc でパネルだけ閉じる（プレイヤー自体は閉じない）
+            view.addEventListener('keydown', e => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.close();
+                }
+            });
+            view.addEventListener('input', e => {
+                const key = e.target.dataset.param;
+                if (key && e.target.type === 'range') {
+                    ScreenFilter.preview(key, e.target.value);
+                    this._updateValueLabel(key, ScreenFilter.normalize(key, e.target.value), { force: true });
+                }
+            });
+            view.addEventListener('change', e => {
+                const { param, setting, num } = e.target.dataset;
+                if (num) {
+                    const v = ScreenFilter.normalize(num, e.target.value);
+                    e.target.value = v;
+                    ScreenFilter.set(num, v);
+                    const range = this.view.querySelector(`input[type=range][data-param="${num}"]`);
+                    range && (range.value = v);
+                    if (!ScreenFilter.isEnabled()) {
+                        this.config.props['screenFilter.enable'] = true;
+                    }
+                }
+                else if (param) {
+                    ScreenFilter.set(param, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
+                    if (!ScreenFilter.isEnabled()) {
+                        this.config.props['screenFilter.enable'] = true;
+                    }
+                }
+                else if (setting) {
+                    this.config.props[`screenFilter.${setting}`] = !!e.target.checked;
+                }
+            });
+            view.addEventListener('click', e => {
+                const target = e.target.closest('button');
+                if (!target) {
+                    return;
+                }
+                const { preset, reset, action } = target.dataset;
+                if (preset) {
+                    ScreenFilter.execCommand('screenFilter-preset', preset);
+                }
+                else if (reset) {
+                    ScreenFilter.set(reset, ScreenFilter.PARAM_MAP[reset].def);
+                }
+                else if (action === 'reset') {
+                    ScreenFilter.reset();
+                }
+                else if (action === 'close') {
+                    this.close();
+                }
+                else if (action === 'split') {
+                    ScreenFilter.setSplit(!ScreenFilter.isSplit);
+                }
+            });
+            // Task 080: パネルの外を押したら閉じる（エフェクトボタン自身は除く。ボタンは開閉の切り替え）。
+            // 動画の上を押して閉じた時は、その1回のクリックで再生/一時停止が切り替わらないようにする。
+            this._onOutsidePointerDown = (e) => {
+                if (!this.isOpen || this.view.classList.contains('is-closing')) {
+                    return;
+                }
+                const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+                if (path.includes(this.view)) {
+                    return;
+                }
+                if (path.some((el) => el && el.classList && el.classList.contains('screenFilterSwitch'))) {
+                    return;
+                }
+                const onVideo = path.some((el) => el && el.classList &&
+                    (el.classList.contains('videoPlayer') || el.classList.contains('commentLayerFrame')));
+                this.close();
+                if (onVideo) {
+                    const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+                    window.addEventListener('click', swallow, { capture: true, once: true });
+                    setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 600);
+                }
+            };
+            ScreenFilter.onChange(this._refresh);
+            document.addEventListener('fullscreenchange', this._onFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
         }
-      });
-      view.addEventListener('change', e => {
-        const {param, setting, num} = e.target.dataset;
-        if (num) {
-          const v = ScreenFilter.normalize(num, e.target.value);
-          e.target.value = v;
-          ScreenFilter.set(num, v);
-          const range = this.view.querySelector(`input[type=range][data-param="${num}"]`);
-          range && (range.value = v);
-          if (!ScreenFilter.isEnabled()) { this.config.props['screenFilter.enable'] = true; }
-        } else if (param) {
-          ScreenFilter.set(param, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
-          if (!ScreenFilter.isEnabled()) { this.config.props['screenFilter.enable'] = true; }
-        } else if (setting) {
-          this.config.props[`screenFilter.${setting}`] = !!e.target.checked;
+        _updateValueLabel(key, value, { force = false } = {}) {
+            const row = this.view.querySelector(`.sfRow[data-key="${key}"]`);
+            const label = row && row.querySelector('.sfValue');
+            const num = label && label.querySelector('.sfNum');
+            if (!num) {
+                return;
+            }
+            if (force || document.activeElement !== num) {
+                num.value = value;
+            }
+            label.classList.toggle('is-changed', Math.abs(value - ScreenFilter.PARAM_MAP[key].def) > 1e-6);
         }
-      });
-      view.addEventListener('click', e => {
-        const target = e.target.closest('button');
-        if (!target) { return; }
-        const {preset, reset, action} = target.dataset;
-        if (preset) {
-          ScreenFilter.execCommand('screenFilter-preset', preset);
-        } else if (reset) {
-          ScreenFilter.set(reset, ScreenFilter.PARAM_MAP[reset].def);
-        } else if (action === 'reset') {
-          ScreenFilter.reset();
-        } else if (action === 'close') {
-          this.close();
-        } else if (action === 'split') {
-          ScreenFilter.setSplit(!ScreenFilter.isSplit);
+        _refresh() {
+            if (!this.view || !this.isOpen) {
+                return;
+            }
+            const values = ScreenFilter.read();
+            const props = this.config.props;
+            ScreenFilter.PARAMS.forEach(p => {
+                const input = this.view.querySelector(`[data-param="${p.key}"]`);
+                if (!input) {
+                    return;
+                }
+                if (p.type === 'boolean') {
+                    input.checked = !!values[p.key];
+                }
+                else if (p.type === 'select') {
+                    input.value = values[p.key];
+                }
+                else {
+                    // 操作中（フォーカス中）のつまみは書き換えない。ドラッグ中はプレビューだけで
+                    // まだ保存していないため、ここで保存値に戻すとつまみが跳ね返ってしまう。
+                    if (document.activeElement !== input) {
+                        input.value = values[p.key];
+                        this._updateValueLabel(p.key, values[p.key]);
+                    }
+                }
+            });
+            this.view.querySelectorAll('[data-setting]').forEach((input) => {
+                const name = input.dataset.setting;
+                const v = props[`screenFilter.${name}`];
+                input.checked = v === undefined ? name !== 'flipH' && name !== 'flipV' : !!v;
+            });
+            const current = ScreenFilter.detectPreset(values);
+            this.view.querySelectorAll('[data-preset]').forEach((button) => {
+                button.classList.toggle('is-current', button.dataset.preset === current);
+            });
+            const preset = ScreenFilter.PRESETS.find(p => p.id === current);
+            this.view.querySelector('.sfPresetState').textContent = preset ?
+                `いまの設定: ${preset.label}` : 'いまの設定: 手動で調整中（どのプリセットとも違う値）';
+            const autoRow = this.view.querySelector('.sfRow[data-key="autoLevels"] .sfDesc');
+            if (autoRow) {
+                autoRow.classList.toggle('is-unavailable', !ScreenFilter.autoLevelsAvailable);
+                autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
+            }
+            const splitButton = this.view.querySelector('[data-action="split"]');
+            splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
         }
-      });
-      // Task 080: パネルの外を押したら閉じる（エフェクトボタン自身は除く。ボタンは開閉の切り替え）。
-      // 動画の上を押して閉じた時は、その1回のクリックで再生/一時停止が切り替わらないようにする。
-      this._onOutsidePointerDown = e => {
-        if (!this.isOpen || this.view.classList.contains('is-closing')) { return; }
-        const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
-        if (path.includes(this.view)) { return; }
-        if (path.some(el => el && el.classList && el.classList.contains('screenFilterSwitch'))) { return; }
-        const onVideo = path.some(el => el && el.classList &&
-          (el.classList.contains('videoPlayer') || el.classList.contains('commentLayerFrame')));
-        this.close();
-        if (onVideo) {
-          const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
-          window.addEventListener('click', swallow, {capture: true, once: true});
-          setTimeout(() => window.removeEventListener('click', swallow, {capture: true}), 600);
+        _getParentNode() {
+            const fs = document.fullscreenElement || document.webkitFullscreenElement;
+            return fs || document.body;
         }
-      };
-
-      ScreenFilter.onChange(this._refresh);
-      document.addEventListener('fullscreenchange', this._onFullscreenChange);
-      document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
-    }
-
-    _updateValueLabel(key, value, {force = false} = {}) {
-      const row = this.view.querySelector(`.sfRow[data-key="${key}"]`);
-      const label = row && row.querySelector('.sfValue');
-      const num = label && label.querySelector('.sfNum');
-      if (!num) { return; }
-      if (force || document.activeElement !== num) {
-        num.value = value;
-      }
-      label.classList.toggle('is-changed', Math.abs(value - ScreenFilter.PARAM_MAP[key].def) > 1e-6);
-    }
-
-    _refresh() {
-      if (!this.view || !this.isOpen) { return; }
-      const values = ScreenFilter.read();
-      const props = this.config.props;
-      ScreenFilter.PARAMS.forEach(p => {
-        const input = this.view.querySelector(`[data-param="${p.key}"]`);
-        if (!input) { return; }
-        if (p.type === 'boolean') {
-          input.checked = !!values[p.key];
-        } else if (p.type === 'select') {
-          input.value = values[p.key];
-        } else {
-          // 操作中（フォーカス中）のつまみは書き換えない。ドラッグ中はプレビューだけで
-          // まだ保存していないため、ここで保存値に戻すとつまみが跳ね返ってしまう。
-          if (document.activeElement !== input) {
-            input.value = values[p.key];
-            this._updateValueLabel(p.key, values[p.key]);
-          }
+        _onFullscreenChange() {
+            if (!this.view || !this.isOpen) {
+                return;
+            }
+            const parent = this._getParentNode();
+            if (this.view.parentNode !== parent) {
+                parent.append(this.view);
+            }
         }
-      });
-      this.view.querySelectorAll('[data-setting]').forEach(input => {
-        const name = input.dataset.setting;
-        const v = props[`screenFilter.${name}`];
-        input.checked = v === undefined ? name !== 'flipH' && name !== 'flipV' : !!v;
-      });
-      const current = ScreenFilter.detectPreset(values);
-      this.view.querySelectorAll('[data-preset]').forEach(button => {
-        button.classList.toggle('is-current', button.dataset.preset === current);
-      });
-      const preset = ScreenFilter.PRESETS.find(p => p.id === current);
-      this.view.querySelector('.sfPresetState').textContent = preset ?
-        `いまの設定: ${preset.label}` : 'いまの設定: 手動で調整中（どのプリセットとも違う値）';
-      const autoRow = this.view.querySelector('.sfRow[data-key="autoLevels"] .sfDesc');
-      if (autoRow) {
-        autoRow.classList.toggle('is-unavailable', !ScreenFilter.autoLevelsAvailable);
-        autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
-      }
-      const splitButton = this.view.querySelector('[data-action="split"]');
-      splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
+        get isOpen() {
+            return !!(this.view && this.view.classList.contains('is-open') &&
+                !this.view.classList.contains('is-closing'));
+        }
+        open() {
+            this._initializeDom();
+            const parent = this._getParentNode();
+            if (this.view.parentNode !== parent) {
+                parent.append(this.view);
+            }
+            clearTimeout(this._closeTimer);
+            this.view.classList.remove('is-closing');
+            this._updateOrigin();
+            // アニメーションを毎回最初から再生するため、一度外してから付け直す
+            this.view.classList.remove('is-open');
+            void this.view.offsetWidth;
+            this.view.classList.add('is-open');
+            this._refresh();
+            window.addEventListener('pointerdown', this._onOutsidePointerDown, { capture: true });
+        }
+        /** エフェクトボタンがある方向からパネルが出てくるように、変形の起点を合わせる */
+        _updateOrigin() {
+            const button = document.querySelector('.screenFilterSwitch');
+            const rect = button && button.getBoundingClientRect();
+            if (!rect || !rect.width) {
+                this.view.style.removeProperty('--sf-origin');
+                return;
+            }
+            const vw = window.innerWidth, vh = window.innerHeight;
+            const panelW = Math.min(380, vw - 32);
+            const panelLeft = vw - 16 - panelW;
+            const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
+            const y = rect.top > vh / 2 ? 100 : 0;
+            this.view.style.setProperty('--sf-origin', `${x.toFixed(1)}% ${y}%`);
+        }
+        close() {
+            if (!this.view || !this.isOpen) {
+                return;
+            }
+            window.removeEventListener('pointerdown', this._onOutsidePointerDown, { capture: true });
+            this.view.classList.add('is-closing');
+            clearTimeout(this._closeTimer);
+            this._closeTimer = setTimeout(() => {
+                this.view.classList.remove('is-open', 'is-closing');
+            }, 170);
+            ScreenFilter.bypass && ScreenFilter.setBypass(false);
+        }
+        toggle() {
+            this.isOpen ? this.close() : this.open();
+        }
     }
-
-    _getParentNode() {
-      const fs = document.fullscreenElement || document.webkitFullscreenElement;
-      return fs || document.body;
-    }
-
-    _onFullscreenChange() {
-      if (!this.view || !this.isOpen) { return; }
-      const parent = this._getParentNode();
-      if (this.view.parentNode !== parent) {
-        parent.append(this.view);
-      }
-    }
-
-    get isOpen() {
-      return !!(this.view && this.view.classList.contains('is-open') &&
-        !this.view.classList.contains('is-closing'));
-    }
-
-    open() {
-      this._initializeDom();
-      const parent = this._getParentNode();
-      if (this.view.parentNode !== parent) {
-        parent.append(this.view);
-      }
-      clearTimeout(this._closeTimer);
-      this.view.classList.remove('is-closing');
-      this._updateOrigin();
-      // アニメーションを毎回最初から再生するため、一度外してから付け直す
-      this.view.classList.remove('is-open');
-      void this.view.offsetWidth;
-      this.view.classList.add('is-open');
-      this._refresh();
-      window.addEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
-    }
-
-    /** エフェクトボタンがある方向からパネルが出てくるように、変形の起点を合わせる */
-    _updateOrigin() {
-      const button = document.querySelector('.screenFilterSwitch');
-      const rect = button && button.getBoundingClientRect();
-      if (!rect || !rect.width) {
-        this.view.style.removeProperty('--sf-origin');
-        return;
-      }
-      const vw = window.innerWidth, vh = window.innerHeight;
-      const panelW = Math.min(380, vw - 32);
-      const panelLeft = vw - 16 - panelW;
-      const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
-      const y = rect.top > vh / 2 ? 100 : 0;
-      this.view.style.setProperty('--sf-origin', `${x.toFixed(1)}% ${y}%`);
-    }
-
-    close() {
-      if (!this.view || !this.isOpen) { return; }
-      window.removeEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
-      this.view.classList.add('is-closing');
-      clearTimeout(this._closeTimer);
-      this._closeTimer = setTimeout(() => {
-        this.view.classList.remove('is-open', 'is-closing');
-      }, 170);
-      ScreenFilter.bypass && ScreenFilter.setBypass(false);
-    }
-
-    toggle() {
-      this.isOpen ? this.close() : this.open();
-    }
-  }
-
-  return Panel;
+    return Panel;
 })();
-
 //===END===
-
-export {ScreenFilter, ScreenFilterPanel};
+export {
+  ScreenFilter,
+  ScreenFilterPanel
+};

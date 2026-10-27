@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/createVideoElement.ts",
+  "runtime": "packages/zenza/src/videoPlayer/createVideoElement.js",
+  "sourceSha256": "d73d70678b22df86e3c60fe3cfd601ccda0b84bc96d696cdfd0b8eddc742f5fc",
+  "runtimeSha256": "60a2e9b8e406675cd77b6df4c4b51ef5b4587d1f35a94ef36b01ecd38233fdb8"
+}

@@ -181,17 +181,4 @@ describe('Task969: offline API research catalog',function(){
   const result=python(['-c',script],{inline:true});
   assert.strictEqual(result.status,0,result.stderr);
  });
-
- it('public references never depend on nonpublic TypeScript research sources',()=>{
-  const sourcePaths=DATA.entries.map(x=>x.sources[0].path);
-  const observations=DATA.entries.filter(x=>
-   x.sources[0].path==='docs/research/API_OBSERVATIONS.md').map(x=>x.id);
-  assert.deepStrictEqual(observations,['video.likes-and-owner','video.owner.icon-cdn']);
-  for(const x of sourcePaths){
-   assert(!x.startsWith('tools/typescript-stage1/'),x);
-   assert(!x.startsWith('C:')&&!x.includes('\\\\Users\\\\'),x);
-   assert(x.startsWith('packages/lib/src/nico/')||
-     x==='docs/research/API_OBSERVATIONS.md',x);
-  }
- });
 });

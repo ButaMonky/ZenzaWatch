@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/nicoUtil.ts",
+  "runtime": "packages/lib/src/nico/nicoUtil.js",
+  "sourceSha256": "1c569deb719483b0e2c1be2d075ab99d4c1166955ce890b4136ff64032bd4084",
+  "runtimeSha256": "981e7e75055fb3ab3b84d083d41c34a5f84d3998e3fcf18f770331a8ba85e649"
+}

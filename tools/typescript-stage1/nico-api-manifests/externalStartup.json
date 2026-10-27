@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/externalStartup.ts",
+  "runtime": "packages/zenza/src/init/externalStartup.js",
+  "sourceSha256": "4417bcef63128f72996775ebe4e0987a4ae42a0c136f7ab3b6446046e8898f58",
+  "runtimeSha256": "d154993c5168d92d79b96448a3d742beeb3c2efc9af9a4cf3edc7bbb5a5c95df"
+}

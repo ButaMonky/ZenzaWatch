@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PopupMessage.ts",
+  "runtime": "packages/lib/src/ui/PopupMessage.js",
+  "sourceSha256": "13c74fda0cda0ee4ca73d9ba09e7189adaed5798564a92c50afdca56ead2c337",
+  "runtimeSha256": "7abf915c5adc94d5b98ae57e44a4c61e942a4cfe6a76307fa76d1c45ff7eb46c"
+}

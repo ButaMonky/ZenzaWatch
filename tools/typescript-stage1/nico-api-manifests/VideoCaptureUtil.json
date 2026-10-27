@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/VideoCaptureUtil.ts",
+  "runtime": "packages/lib/src/dom/VideoCaptureUtil.js",
+  "sourceSha256": "68ed9bbe2c1d108b2bd731e993f4c52dbf40c4a54451c633ace6101652530c47",
+  "runtimeSha256": "85ced690c778a8fa6078f312e9662b1cdc77082319e7464c90fb610327711478"
+}

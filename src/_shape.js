@@ -10,7 +10,7 @@
 // @exclude     *://ads*.nicovideo.jp/*
 // @exclude     *://www.nicovideo.jp/favicon.ico*
 // @exclude     *://www.nicovideo.jp/robots.txt*
-// @version     0.3.7-task786
+// @version     0.3.8-task966
 // @grant       none
 // @author      名無しさん
 // @license     public domain
@@ -18,9 +18,8 @@
 import {css} from '../packages/lib/src/css/css';
 import {throttle} from '../packages/lib/src/infra/bounce';
 
+// GENERATED FROM tools/typescript-stage1/nico-src/MaskedWatchEntry.ts (Task966). Edit the .ts and run npm run nico:sync.
 // chrome://flags/#enable-experimental-web-platform-features
-
-
 /**
  * @typedf BoundingBox
  * @property {number} x
@@ -29,30 +28,26 @@ import {throttle} from '../packages/lib/src/infra/bounce';
  * @property {number} height
  * @property {'face'|'text'} type
  */
-
-
 (() => {
-  const PRODUCT = 'MaskedWatch';
-
-  const monkey = (PRODUCT) => {
-    'use strict';
-    //@version
-    //@environment
-    let ZenzaWatch = null;
-
-    const DEFAULT_CONFIG = {
-      interval: 300,
-      enabled: true,
-      debug: false,
-      faceDetection: true,
-      textDetection: !navigator.userAgent.toLowerCase().includes('windows'),
-      fastMode: true,
-      tmpWidth: 854,
-      tmpHeight: 480,
-    };
-    const config = new class extends Function {
-      toString() {
-        return `
+    const PRODUCT = 'MaskedWatch';
+    const monkey = (PRODUCT) => {
+        'use strict';
+        //@version
+        //@environment
+        let ZenzaWatch = null;
+        const DEFAULT_CONFIG = {
+            interval: 300,
+            enabled: true,
+            debug: false,
+            faceDetection: true,
+            textDetection: !navigator.userAgent.toLowerCase().includes('windows'),
+            fastMode: true,
+            tmpWidth: 854,
+            tmpHeight: 480,
+        };
+        const config = new class extends Function {
+            toString() {
+                return `
 *** CONFIG MENU (設定はサービスごとに保存) ***
 enabled: ${config.enabled},       // 有効/無効
 debug: ${config.debug},        // デバッグON/OFF
@@ -63,321 +58,327 @@ tmpWidth: ${config.tmpWidth},      // 検出処理用キャンバスの横解像
 tmpHeight: ${config.tmpHeight}        // 検出処理用キャンバスの縦解像度
 interval: ${config.interval}        // マスクの更新間隔
 `;
-      }
-    }, def = {};
-    Object.keys(DEFAULT_CONFIG).sort().forEach(key => {
-      const storageKey = `${PRODUCT}_${key}`;
-      def[key] = {
-        enumerable: true,
-        get() {
-          return localStorage.hasOwnProperty(storageKey) ?
-            JSON.parse(localStorage[storageKey]) : DEFAULT_CONFIG[key];
-        },
-        set(value) {
-          const currentValue = this[key];
-          if (value === currentValue) {
-            return;
-          }
-          if (value === DEFAULT_CONFIG[key]) {
-            localStorage.removeItem(storageKey);
-          } else {
-            localStorage[storageKey] = JSON.stringify(value);
-          }
-          document.body.dispatchEvent(
-            new CustomEvent(`${PRODUCT}-config.update`,
-            {detail: {key, value, lastValue: currentValue}, bubbles: true, composed: true}
-          ));
-        }
-      };
-    });
-    Object.defineProperties(config, def);
-
-    const MaskedWatch = window.MaskedWatch = { config };
-
-    const createWorker = (func, options = {}) => {
-      const src = `(${func.toString()})(self);`;
-      const blob = new Blob([src], {type: 'text/javascript'});
-      const url = URL.createObjectURL(blob);
-      try {
-        return new Worker(url, options);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    };
-//@require throttle
-//@require css
-
-    const 業務 = function(self) {
-      let fastMode, faceDetection, textDetection, debug, enabled;
-      const init = params => {
-        updateConfig({config: params.config});
-      };
-
-      const updateConfig = ({config}) => {
-        ({fastMode, faceDetection, textDetection, debug, enabled} = config);
-        faceDetector = new (self || window).FaceDetector({fastMode});
-        textDetector = new (self || window).TextDetector();
-      };
-
-      let faceDetector;
-      let textDetector;
-      const detect = async ({bitmap}) => {
-        // debug && console.time('detect');
-        const tasks = [];
-        faceDetection && (tasks.push(faceDetector.detect(bitmap).catch(() => [])));
-        textDetection && (tasks.push(textDetector.detect(bitmap).catch(() => [])));
-        const detected = (await Promise.all(tasks)).flat();
-
-        const boxes = detected.map(d => {
-          const {x, y , width, height} = d.boundingBox;
-          return {x, y , width, height, type: d.landmarks ? 'face' : 'text'};
+            }
+        }, def = {};
+        Object.keys(DEFAULT_CONFIG).sort().forEach(key => {
+            const storageKey = `${PRODUCT}_${key}`;
+            def[key] = {
+                enumerable: true,
+                get() {
+                    return localStorage.hasOwnProperty(storageKey) ?
+                        JSON.parse(localStorage[storageKey]) : DEFAULT_CONFIG[key];
+                },
+                set(value) {
+                    const currentValue = this[key];
+                    if (value === currentValue) {
+                        return;
+                    }
+                    if (value === DEFAULT_CONFIG[key]) {
+                        localStorage.removeItem(storageKey);
+                    }
+                    else {
+                        localStorage[storageKey] = JSON.stringify(value);
+                    }
+                    document.body.dispatchEvent(new CustomEvent(`${PRODUCT}-config.update`, { detail: { key, value, lastValue: currentValue }, bubbles: true, composed: true }));
+                }
+            };
         });
-        // debug && console.timeEnd('detect');
-        return {boxes};
-      };
-
-      self.onmessage = async e => {
-        const {command, params} = e.data.body;
-        try {
-          switch (command) {
-            case 'init':
-              init(params);
-              self.postMessage({body: {command: 'init', params: {}, status: 'ok'}});
-              break;
-            case 'config':
-              updateConfig(params);
-              break;
-            case 'detect': {
-              const {dataURL, boxes} = await detect(params);
-              self.postMessage({body: {command: 'data', params: {dataURL, boxes}, status: 'ok'}});
+        Object.defineProperties(config, def);
+        const MaskedWatch = window.MaskedWatch = { config };
+        const createWorker = (func, options = {}) => {
+            const src = `(${func.toString()})(self);`;
+            const blob = new Blob([src], { type: 'text/javascript' });
+            const url = URL.createObjectURL(blob);
+            try {
+                return new Worker(url, options);
             }
-              break;
-          }
-        } catch(err) {
-          console.error('error', {command, params}, err);
-        }
-      };
-    };
-
-    const 下請 = function(self, registerPaint, config) {
-      registerPaint('塗装', class {
-        static get inputProperties() {
-          return ['--json-args', '--config'];
-        }
-        paint(ctx, {width, height}, props) {
-          const args   = JSON.parse(props.get('--json-args').toString() || '{}');
-          const config = JSON.parse(props.get('--config').toString() || '{}');
-
-          ctx.beginPath();
-          ctx.fillStyle = 'rgba(255, 255, 255, 1)';
-          ctx.fillRect(0, 0, width, height);
-          if (!args.history || !config.enabled) {
-            return;
-          }
-
-          const ratio = Math.min(width / config.tmpWidth, height / config.tmpHeight);
-          const transX = (width  - (config.tmpWidth  * ratio)) / 2;
-          const transY = (height - (config.tmpHeight * ratio)) / 2;
-          const tmpArea = (config.tmpWidth  * ratio) * (config.tmpHeight * ratio);
-
-
-          /** @type {(BoundingBox[])[]} */
-          const history = args.history;
-          for (const boxes of history) {
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.fillRect(0, 0, width, height);
-
-            for (const box of boxes) {
-              let {x, y , width, height, type} = box;
-              const area = width * height;
-              const opacity = area / tmpArea * 0.3;
-              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-
-              x = x * ratio + transX;
-              y = y * ratio + transY;
-              width  *= ratio;
-              height *= ratio;
-              if (type === 'face') {
-                const mx = 16 * ratio, my = 24 * ratio; // margin
-                ctx.clearRect(x - mx, y  - my, width + mx * 2, height + my * 2);
-                ctx.fillRect (x - mx, y  - my, width + mx * 2, height + my * 2);
-              } else {
-                const mx = 16 * ratio, my = 16 * ratio; // margin
-                ctx.clearRect(x - mx, y  - my, width + mx * 2, height + my * 2);
-                ctx.fillRect (x - mx, y  - my, width + mx * 2, height + my * 2);
-              }
+            finally {
+                URL.revokeObjectURL(url);
             }
-          }
-        }
-      });
-    };
-
-    const createDetector = async ({video, layer, interval, type, owner = video, onDispose = () => {}}) => {
-      const worker = createWorker(業務, {name: 'Facelook'});
-      let disposed = false, timer, observer, onConfig, debugLayer;
-      const dispose = () => {
-        if (disposed) { return; }
-        disposed = true;
-        if (timer !== undefined) { clearInterval(timer); }
-        timer = undefined;
-        if (onConfig) { window.removeEventListener(`${PRODUCT}-config.update`, onConfig); }
-        if (observer) { observer.disconnect(); }
-        worker.terminate();
-        if (debugLayer) { debugLayer.remove(); }
-        onDispose();
-      };
-      try {
-        await css.addModule(下請, {config: {...config}});
-      const transferCanvas = new OffscreenCanvas(config.tmpWidth, config.tmpHeight);
-      const ctx = transferCanvas.getContext('2d', {alpha: false, desynchronized: true});
-      debugLayer = document.createElement('div');
-      [layer, debugLayer].forEach(layer => {
-        layer.style.setProperty('--config', JSON.stringify({...config}));
-        layer.style.setProperty('--json-args', '{}');
-      });
-      'maskImage' in layer.style ?
-        (layer.style.maskImage = 'paint(塗装)') :
-        (layer.style.webkitMaskImage = 'paint(塗装)');
-
-      // for debug
-      Object.assign(debugLayer.style, {
-        border: '1px solid #888',
-        left: 0,
-        bottom: '48px',
-        position: 'fixed',
-        zIndex: '100000',
-        width: '160px',
-        height: '90px',
-        opacity: 0.5,
-        background: '#333',
-        pointerEvents: 'none',
-        userSelect: 'none'
-      });
-      debugLayer.classList.add('zen-family');
-      debugLayer.dataset.type = type;
-      debugLayer.style.backgroundImage = 'paint(塗装)';
-      config.debug && document.body.append(debugLayer);
-      worker.postMessage({body: {command: 'init', params: {config: {...config}}}});
-
-      let isBusy = true, currentTime = video.currentTime, boxHistory = [];
-      worker.addEventListener('message', e => {
-        if (disposed) { return; }
-        const {command, params} = e.data.body;
-        switch (command) {
-          case 'init':
-            console.log('initialized');
-            isBusy = false;
-            break;
-          case 'data': {
-            isBusy = false;
-            if (!config.enabled) { return; }
-            /** @type {BoundingBox[]} */
-            const boxes = params.boxes;
-            boxHistory.push(boxes);
-            while (boxHistory.length > 5) { boxHistory.shift(); }
-            const arg = JSON.stringify({
-              tmpWidth: config.tmpWidth, tmpHeight: config.tmpHeight,
-              history: boxHistory
+        };
+        //@require throttle
+        //@require css
+        const 業務 = function (self) {
+            let fastMode, faceDetection, textDetection, debug, enabled;
+            const init = (params) => {
+                updateConfig({ config: params.config });
+            };
+            const updateConfig = ({ config }) => {
+                ({ fastMode, faceDetection, textDetection, debug, enabled } = config);
+                faceDetector = new (self || window).FaceDetector({ fastMode });
+                textDetector = new (self || window).TextDetector();
+            };
+            let faceDetector;
+            let textDetector;
+            const detect = async ({ bitmap }) => {
+                // debug && console.time('detect');
+                const tasks = [];
+                faceDetection && (tasks.push(faceDetector.detect(bitmap).catch(() => [])));
+                textDetection && (tasks.push(textDetector.detect(bitmap).catch(() => [])));
+                const detected = (await Promise.all(tasks)).flat();
+                const boxes = detected.map(d => {
+                    const { x, y, width, height } = d.boundingBox;
+                    return { x, y, width, height, type: d.landmarks ? 'face' : 'text' };
+                });
+                // debug && console.timeEnd('detect');
+                return { boxes };
+            };
+            self.onmessage = async (e) => {
+                const { command, params } = e.data.body;
+                try {
+                    switch (command) {
+                        case 'init':
+                            init(params);
+                            self.postMessage({ body: { command: 'init', params: {}, status: 'ok' } });
+                            break;
+                        case 'config':
+                            updateConfig(params);
+                            break;
+                        case 'detect':
+                            {
+                                const { dataURL, boxes } = await detect(params);
+                                self.postMessage({ body: { command: 'data', params: { dataURL, boxes }, status: 'ok' } });
+                            }
+                            break;
+                    }
+                }
+                catch (err) {
+                    console.error('error', { command, params }, err);
+                }
+            };
+        };
+        const 下請 = function (self, registerPaint, config) {
+            registerPaint('塗装', class {
+                static get inputProperties() {
+                    return ['--json-args', '--config'];
+                }
+                paint(ctx, { width, height }, props) {
+                    const args = JSON.parse(props.get('--json-args').toString() || '{}');
+                    const config = JSON.parse(props.get('--config').toString() || '{}');
+                    ctx.beginPath();
+                    ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+                    ctx.fillRect(0, 0, width, height);
+                    if (!args.history || !config.enabled) {
+                        return;
+                    }
+                    const ratio = Math.min(width / config.tmpWidth, height / config.tmpHeight);
+                    const transX = (width - (config.tmpWidth * ratio)) / 2;
+                    const transY = (height - (config.tmpHeight * ratio)) / 2;
+                    const tmpArea = (config.tmpWidth * ratio) * (config.tmpHeight * ratio);
+                    /** @type {(BoundingBox[])[]} */
+                    const history = args.history;
+                    for (const boxes of history) {
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.fillRect(0, 0, width, height);
+                        for (const box of boxes) {
+                            let { x, y, width, height, type } = box;
+                            const area = width * height;
+                            const opacity = area / tmpArea * 0.3;
+                            ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                            x = x * ratio + transX;
+                            y = y * ratio + transY;
+                            width *= ratio;
+                            height *= ratio;
+                            if (type === 'face') {
+                                const mx = 16 * ratio, my = 24 * ratio; // margin
+                                ctx.clearRect(x - mx, y - my, width + mx * 2, height + my * 2);
+                                ctx.fillRect(x - mx, y - my, width + mx * 2, height + my * 2);
+                            }
+                            else {
+                                const mx = 16 * ratio, my = 16 * ratio; // margin
+                                ctx.clearRect(x - mx, y - my, width + mx * 2, height + my * 2);
+                                ctx.fillRect(x - mx, y - my, width + mx * 2, height + my * 2);
+                            }
+                        }
+                    }
+                }
             });
-            layer.style.setProperty('--json-args', arg);
-            config.debug && debugLayer.style.setProperty('--json-args', arg);
-          }
-          break;
-        }
-      });
-
-      const onTimer = () => {
-        if (disposed || isBusy ||
-            currentTime === video.currentTime ||
-            document.visibilityState !== 'visible') {
-          return;
-        }
-
-        currentTime = video.currentTime;
-        const vw = video.videoWidth, vh = video.videoHeight;
-        const tmpWidth = config.tmpWidth, tmpHeight = config.tmpHeight;
-        const ratio = Math.min(tmpWidth / vw, tmpHeight / vh);
-        const dw = vw * ratio, dh = vh * ratio;
-        ctx.beginPath();
-        ctx.drawImage(
-          video,
-          0, 0, vw, vh,
-          (tmpWidth - dw) / 2, (tmpHeight - dh) / 2, dw, dh
-        );
-        const bitmap = transferCanvas.transferToImageBitmap();
-        isBusy = true;
-        worker.postMessage({body: {command: 'detect', params: {bitmap}}}, [bitmap]);
-      };
-      const start = () => {
-        if (!disposed && timer === undefined) { timer = setInterval(onTimer, interval); }
-      };
-      const stop = () => { clearInterval(timer); timer = undefined; };
-      start();
-
-      onConfig = e => {
-        if (disposed) { return; }
-        worker.postMessage({body: {command: 'config', params: {config: {...config}}}});
-        const {key, value} = e.detail;
-        layer.style.setProperty('--config', JSON.stringify({...config}));
-        debugLayer.style.setProperty('--config', JSON.stringify({...config}));
-        switch (key) {
-          case 'enabled':
-            value ? start() : stop();
-            break;
-          case 'debug':
-            value ? document.body.append(debugLayer) : debugLayer.remove();
-            break;
-          case 'tmpWidth':
-            transferCanvas.width = value;
-            break;
-          case 'tmpHeight':
-            transferCanvas.height = value;
-            break;
-        }
-      };
-      window.addEventListener(`${PRODUCT}-config.update`, onConfig, {passive: true});
-      const checkConnection = () => {
-        if (owner.isConnected === false || video.isConnected === false || layer.isConnected === false ||
-            (owner.drawableElement && owner.drawableElement !== video)) { dispose(); }
-      };
-      observer = new MutationObserver(checkConnection);
-      observer.observe(document.documentElement, {childList: true, subtree: true});
-      checkConnection();
-      return {start, stop, dispose};
-      } catch (error) {
-        dispose();
-        throw error;
-      }
-    };
-
-    const dialog = ((config) => {
-      class MaskedWatchDialog extends HTMLElement {
-        init() {
-          if (this.shadow) { return; }
-          this.shadow = this.attachShadow({mode: 'open'});
-          this.shadow.innerHTML = this.getTemplate(config);
-          this.root = this.shadow.querySelector('#root');
-          this.shadow.querySelector('.close-button').addEventListener('click', e => {
-            this.close(); e.stopPropagation(); e.preventDefault();
-          });
-          this.root.addEventListener('click', e => {
-            if (e.target === this.root) { this.close(); }
-            e.stopPropagation();
-          });
-          this.classList.add('zen-family');
-          this.root.classList.add('zen-family');
-          this.update();
-
-          this.root.addEventListener('change', e => {
-            const input = e.target;
-            const name = input.name;
-            const value = JSON.parse(input.value);
-            config.debug && console.log('update config', {name, value});
-            config[name] = value;
-          });
-        }
-        getTemplate(config) {
-          return `
+        };
+        const createDetector = async ({ video, layer, interval, type, owner = video, onDispose = () => { } }) => {
+            const worker = createWorker(業務, { name: 'Facelook' });
+            let disposed = false, timer, observer, onConfig, debugLayer;
+            const dispose = () => {
+                if (disposed) {
+                    return;
+                }
+                disposed = true;
+                if (timer !== undefined) {
+                    clearInterval(timer);
+                }
+                timer = undefined;
+                if (onConfig) {
+                    window.removeEventListener(`${PRODUCT}-config.update`, onConfig);
+                }
+                if (observer) {
+                    observer.disconnect();
+                }
+                worker.terminate();
+                if (debugLayer) {
+                    debugLayer.remove();
+                }
+                onDispose();
+            };
+            try {
+                await css.addModule(下請, { config: { ...config } });
+                const transferCanvas = new OffscreenCanvas(config.tmpWidth, config.tmpHeight);
+                const ctx = transferCanvas.getContext('2d', { alpha: false, desynchronized: true });
+                debugLayer = document.createElement('div');
+                [layer, debugLayer].forEach(layer => {
+                    layer.style.setProperty('--config', JSON.stringify({ ...config }));
+                    layer.style.setProperty('--json-args', '{}');
+                });
+                'maskImage' in layer.style ?
+                    (layer.style.maskImage = 'paint(塗装)') :
+                    (layer.style.webkitMaskImage = 'paint(塗装)');
+                // for debug
+                Object.assign(debugLayer.style, {
+                    border: '1px solid #888',
+                    left: 0,
+                    bottom: '48px',
+                    position: 'fixed',
+                    zIndex: '100000',
+                    width: '160px',
+                    height: '90px',
+                    opacity: 0.5,
+                    background: '#333',
+                    pointerEvents: 'none',
+                    userSelect: 'none'
+                });
+                debugLayer.classList.add('zen-family');
+                debugLayer.dataset.type = type;
+                debugLayer.style.backgroundImage = 'paint(塗装)';
+                config.debug && document.body.append(debugLayer);
+                worker.postMessage({ body: { command: 'init', params: { config: { ...config } } } });
+                let isBusy = true, currentTime = video.currentTime, boxHistory = [];
+                worker.addEventListener('message', e => {
+                    if (disposed) {
+                        return;
+                    }
+                    const { command, params } = e.data.body;
+                    switch (command) {
+                        case 'init':
+                            console.log('initialized');
+                            isBusy = false;
+                            break;
+                        case 'data':
+                            {
+                                isBusy = false;
+                                if (!config.enabled) {
+                                    return;
+                                }
+                                /** @type {BoundingBox[]} */
+                                const boxes = params.boxes;
+                                boxHistory.push(boxes);
+                                while (boxHistory.length > 5) {
+                                    boxHistory.shift();
+                                }
+                                const arg = JSON.stringify({
+                                    tmpWidth: config.tmpWidth, tmpHeight: config.tmpHeight,
+                                    history: boxHistory
+                                });
+                                layer.style.setProperty('--json-args', arg);
+                                config.debug && debugLayer.style.setProperty('--json-args', arg);
+                            }
+                            break;
+                    }
+                });
+                const onTimer = () => {
+                    if (disposed || isBusy ||
+                        currentTime === video.currentTime ||
+                        document.visibilityState !== 'visible') {
+                        return;
+                    }
+                    currentTime = video.currentTime;
+                    const vw = video.videoWidth, vh = video.videoHeight;
+                    const tmpWidth = config.tmpWidth, tmpHeight = config.tmpHeight;
+                    const ratio = Math.min(tmpWidth / vw, tmpHeight / vh);
+                    const dw = vw * ratio, dh = vh * ratio;
+                    ctx.beginPath();
+                    ctx.drawImage(video, 0, 0, vw, vh, (tmpWidth - dw) / 2, (tmpHeight - dh) / 2, dw, dh);
+                    const bitmap = transferCanvas.transferToImageBitmap();
+                    isBusy = true;
+                    worker.postMessage({ body: { command: 'detect', params: { bitmap } } }, [bitmap]);
+                };
+                const start = () => {
+                    if (!disposed && timer === undefined) {
+                        timer = setInterval(onTimer, interval);
+                    }
+                };
+                const stop = () => { clearInterval(timer); timer = undefined; };
+                start();
+                onConfig = (e) => {
+                    if (disposed) {
+                        return;
+                    }
+                    worker.postMessage({ body: { command: 'config', params: { config: { ...config } } } });
+                    const { key, value } = e.detail;
+                    layer.style.setProperty('--config', JSON.stringify({ ...config }));
+                    debugLayer.style.setProperty('--config', JSON.stringify({ ...config }));
+                    switch (key) {
+                        case 'enabled':
+                            value ? start() : stop();
+                            break;
+                        case 'debug':
+                            value ? document.body.append(debugLayer) : debugLayer.remove();
+                            break;
+                        case 'tmpWidth':
+                            transferCanvas.width = value;
+                            break;
+                        case 'tmpHeight':
+                            transferCanvas.height = value;
+                            break;
+                    }
+                };
+                window.addEventListener(`${PRODUCT}-config.update`, onConfig, { passive: true });
+                const checkConnection = () => {
+                    if (owner.isConnected === false || video.isConnected === false || layer.isConnected === false ||
+                        (owner.drawableElement && owner.drawableElement !== video)) {
+                        dispose();
+                    }
+                };
+                observer = new MutationObserver(checkConnection);
+                observer.observe(document.documentElement, { childList: true, subtree: true });
+                checkConnection();
+                return { start, stop, dispose };
+            }
+            catch (error) {
+                dispose();
+                throw error;
+            }
+        };
+        const dialog = ((config) => {
+            class MaskedWatchDialog extends HTMLElement {
+                init() {
+                    if (this.shadow) {
+                        return;
+                    }
+                    this.shadow = this.attachShadow({ mode: 'open' });
+                    this.shadow.innerHTML = this.getTemplate(config);
+                    this.root = this.shadow.querySelector('#root');
+                    this.shadow.querySelector('.close-button').addEventListener('click', (e) => {
+                        this.close();
+                        e.stopPropagation();
+                        e.preventDefault();
+                    });
+                    this.root.addEventListener('click', (e) => {
+                        if (e.target === this.root) {
+                            this.close();
+                        }
+                        e.stopPropagation();
+                    });
+                    this.classList.add('zen-family');
+                    this.root.classList.add('zen-family');
+                    this.update();
+                    this.root.addEventListener('change', (e) => {
+                        const input = e.target;
+                        const name = input.name;
+                        const value = JSON.parse(input.value);
+                        config.debug && console.log('update config', { name, value });
+                        config[name] = value;
+                    });
+                }
+                getTemplate(config) {
+                    return `
           <dialog id="root" class="root">
             <div>
             <style>
@@ -481,60 +482,59 @@ interval: ${config.interval}        // マスクの更新間隔
             </div>
           </dialog>
           `;
-        }
-
-        update() {
-          this.init();
-          [...this.shadow.querySelectorAll('input')].forEach(input => {
-            const name = input.name, value = JSON.parse(input.value);
-            input.checked = config[name] === value;
-          });
-        }
-
-        get isOpen() {
-          return !!this.root && !!this.root.open;
-        }
-
-        open() {
-          this.update();
-          this.root.showModal();
-        }
-
-        close() {
-          this.root && this.root.close();
-        }
-
-        toggle() {
-          this.init();
-          if (this.isOpen) {
-            this.root.close();
-          } else {
-            this.open();
-          }
-        }
-      }
-      window.customElements.define(`${PRODUCT.toLowerCase()}-dialog`, MaskedWatchDialog);
-      return document.createElement(`${PRODUCT.toLowerCase()}-dialog`);
-    })(config);
-    MaskedWatch.dialog = dialog;
-
-    const createToggleButton = (config, dialog) => {
-      class ToggleButton extends HTMLElement {
-        constructor() {
-          super();
-          this.init();
-        }
-        init() {
-          if (this.shadow) { return; }
-          this.shadow = this.attachShadow({mode: 'open'});
-          this.shadow.innerHTML = this.getTemplate(config);
-          this.root = this.shadow.querySelector('#root');
-          this.root.addEventListener('click', e => {
-            dialog.toggle(); e.stopPropagation(); e.preventDefault();
-          });
-        }
-        getTemplate() {
-          return `
+                }
+                update() {
+                    this.init();
+                    [...this.shadow.querySelectorAll('input')].forEach(input => {
+                        const name = input.name, value = JSON.parse(input.value);
+                        input.checked = config[name] === value;
+                    });
+                }
+                get isOpen() {
+                    return !!this.root && !!this.root.open;
+                }
+                open() {
+                    this.update();
+                    this.root.showModal();
+                }
+                close() {
+                    this.root && this.root.close();
+                }
+                toggle() {
+                    this.init();
+                    if (this.isOpen) {
+                        this.root.close();
+                    }
+                    else {
+                        this.open();
+                    }
+                }
+            }
+            window.customElements.define(`${PRODUCT.toLowerCase()}-dialog`, MaskedWatchDialog);
+            return document.createElement(`${PRODUCT.toLowerCase()}-dialog`);
+        })(config);
+        MaskedWatch.dialog = dialog;
+        const createToggleButton = (config, dialog) => {
+            class ToggleButton extends HTMLElement {
+                constructor() {
+                    super();
+                    this.init();
+                }
+                init() {
+                    if (this.shadow) {
+                        return;
+                    }
+                    this.shadow = this.attachShadow({ mode: 'open' });
+                    this.shadow.innerHTML = this.getTemplate(config);
+                    this.root = this.shadow.querySelector('#root');
+                    this.root.addEventListener('click', (e) => {
+                        dialog.toggle();
+                        e.stopPropagation();
+                        e.preventDefault();
+                    });
+                }
+                getTemplate() {
+                    return `
           <style>
           .controlButton {
             position: relative;
@@ -600,155 +600,144 @@ interval: ${config.interval}        // マスクの更新間隔
           <div class="tooltip">Masked Watch</div>
         </div>
             `;
-        }
-      }
-      window.customElements.define(`${PRODUCT.toLowerCase()}-toggle-button`, ToggleButton);
-      return document.createElement(`${PRODUCT.toLowerCase()}-toggle-button`);
+                }
+            }
+            window.customElements.define(`${PRODUCT.toLowerCase()}-toggle-button`, ToggleButton);
+            return document.createElement(`${PRODUCT.toLowerCase()}-toggle-button`);
+        };
+        const ZenzaDetector = (() => {
+            const promise = (window.ZenzaWatch && window.ZenzaWatch.ready) ?
+                Promise.resolve(window.ZenzaWatch) :
+                new Promise(resolve => {
+                    [window, (document.body || document.documentElement)]
+                        .forEach(e => e.addEventListener('ZenzaWatchInitialize', () => {
+                        resolve(window.ZenzaWatch);
+                    }, { once: true }));
+                });
+            return { detect: () => promise };
+        })();
+        const vmap = new WeakMap();
+        let timer;
+        const resumeWatching = () => {
+            if (timer === undefined) {
+                timer = setInterval(watch, 1000);
+            }
+        };
+        const watch = () => {
+            if (!config.enabled || document.visibilityState !== 'visible') {
+                return;
+            }
+            [...document.querySelectorAll('video, zenza-video')]
+                .filter(video => !video.paused && !vmap.has(video))
+                .forEach(video => {
+                // 対応プレイヤー増やすならココ
+                let layer, type = 'UNKNOWN';
+                if (video.closest('#MainVideoPlayer')) {
+                    layer = document.querySelector('.CommentRenderer');
+                    type = 'NICO VIDEO';
+                }
+                else if (video.closest('#rootElementId')) {
+                    layer = document.querySelector('#comment canvas');
+                    type = 'NICO EMBED';
+                }
+                else if (video.closest('#watchVideoContainer')) {
+                    layer = document.querySelector('#jsPlayerCanvasComment canvas');
+                    type = 'NICO SP';
+                }
+                else if (video.closest('.zenzaPlayerContainer')) {
+                    layer = document.querySelector('.commentLayerFrame');
+                    type = 'ZenzaWatch';
+                }
+                else if (video.closest('[class*="__leo"]')) {
+                    layer = document.querySelector('#comment-layer-container canvas');
+                    type = 'NICO LIVE';
+                }
+                else if (video.closest('#bilibiliPlayer')) {
+                    layer = document.querySelector('.bilibili-player-video-danmaku').parentElement;
+                    type = 'BILI BILI [´ω`]';
+                }
+                else if (video.id === 'js-video') {
+                    layer = document.querySelector('#cmCanvas');
+                    type = 'HIMAWARI';
+                }
+                console.log('%ctype: "%s"', 'font-weight: bold', layer ? type : 'UNKNOWN???');
+                layer && Object.assign(layer.style, {
+                    backgroundSize: 'contain',
+                    maskSize: 'contain',
+                    webkitMaskSize: 'contain',
+                    maskRepeat: 'no-repeat',
+                    webkitMaskRepeat: 'no-repeat',
+                    maskPosition: 'center center',
+                    webkitMaskPosition: 'center center'
+                });
+                layer && video.dispatchEvent(new CustomEvent(`${PRODUCT}-start`, { detail: { type, video, layer }, bubbles: true, composed: true }));
+                vmap.set(video, layer ?
+                    createDetector({ video: video.drawableElement || video, owner: video,
+                        layer, interval: config.interval, type, onDispose: () => { vmap.delete(video); resumeWatching(); } })
+                        .catch(() => { vmap.delete(video); resumeWatching(); console.warn('MaskedWatch detector unavailable'); }) :
+                    type);
+                if (layer && !location.href.startsWith('https://www.nicovideo.jp/watch/')) {
+                    clearInterval(timer);
+                    timer = undefined;
+                }
+            });
+        };
+        const init = () => {
+            css.registerProps({ name: '--json-args', syntax: '*', initialValue: '{}', inherits: false }, { name: '--config', syntax: '*', initialValue: '{}', inherits: false });
+            timer = setInterval(watch, 1000);
+            document.body.append(dialog);
+            window.setTimeout(() => {
+                const li = document.createElement('li');
+                li.innerHTML = `<a href="javascript:;">${PRODUCT}設定</a>`;
+                li.style.whiteSpace = 'nowrap';
+                li.addEventListener('click', () => dialog.toggle());
+                document.querySelector('#siteHeaderRightMenuContainer') && document.querySelector('#siteHeaderRightMenuContainer').append(li);
+            }, document.querySelector('#siteHeaderRightMenuContainer') ? 1000 : 15000);
+            ZenzaDetector.detect().then(zen => {
+                console.log('ZenzaWatch found ver.%s', zen.version);
+                ZenzaWatch = zen;
+                ZenzaWatch.emitter.promise('videoControBar.addonMenuReady').then(({ container }) => {
+                    container.append(createToggleButton(config, dialog));
+                });
+                ZenzaWatch.emitter.promise('videoContextMenu.addonMenuReady.list').then(({ container }) => {
+                    const faceMenu = document.createElement('li');
+                    faceMenu.className = 'command';
+                    faceMenu.dataset.command = 'nop';
+                    faceMenu.textContent = '顔の検出';
+                    faceMenu.classList.toggle('selected', config.faceDetection);
+                    faceMenu.addEventListener('click', () => {
+                        config.faceDetection = !config.faceDetection;
+                    });
+                    const textMenu = document.createElement('li');
+                    textMenu.className = 'command';
+                    textMenu.dataset.command = 'nop';
+                    textMenu.textContent = 'テキストの検出';
+                    textMenu.classList.toggle('selected', config.textDetection);
+                    textMenu.addEventListener('click', () => {
+                        config.textDetection = !config.textDetection;
+                    });
+                    ZenzaWatch.emitter.on('showMenu', () => {
+                        faceMenu.classList.toggle('selected', config.faceDetection);
+                        textMenu.classList.toggle('selected', config.textDetection);
+                    });
+                    container.append(faceMenu, textMenu);
+                });
+            });
+        };
+        init();
+        // eslint-disable-next-line no-undef
+        console.log('%cMasked Watch', 'font-size: 200%;', `ver ${VER}`, '\nconfig: ', JSON.stringify({ ...config }));
     };
-
-    const ZenzaDetector = (() => {
-      const promise =
-        (window.ZenzaWatch && window.ZenzaWatch.ready) ?
-          Promise.resolve(window.ZenzaWatch) :
-          new Promise(resolve => {
-            [window, (document.body || document.documentElement)]
-              .forEach(e => e.addEventListener('ZenzaWatchInitialize', () => {
-                resolve(window.ZenzaWatch);
-              }, {once: true}));
-          });
-      return {detect: () => promise};
-    })();
-
-    const vmap = new WeakMap();
-    let timer;
-    const resumeWatching = () => {
-      if (timer === undefined) { timer = setInterval(watch, 1000); }
-    };
-    const watch = () => {
-      if (!config.enabled || document.visibilityState !== 'visible') { return; }
-      [...document.querySelectorAll('video, zenza-video')]
-        .filter(video => !video.paused && !vmap.has(video))
-        .forEach(video => {
-          // 対応プレイヤー増やすならココ
-          let layer, type = 'UNKNOWN';
-          if (video.closest('#MainVideoPlayer')) {
-            layer = document.querySelector('.CommentRenderer');
-            type = 'NICO VIDEO';
-          } else if (video.closest('#rootElementId')) {
-            layer = document.querySelector('#comment canvas');
-            type = 'NICO EMBED';
-          } else if (video.closest('#watchVideoContainer')) {
-            layer = document.querySelector('#jsPlayerCanvasComment canvas');
-            type = 'NICO SP';
-          } else if (video.closest('.zenzaPlayerContainer')) {
-            layer = document.querySelector('.commentLayerFrame');
-            type = 'ZenzaWatch';
-          } else if (video.closest('[class*="__leo"]')) {
-            layer = document.querySelector('#comment-layer-container canvas');
-            type = 'NICO LIVE';
-          } else if (video.closest('#bilibiliPlayer')) {
-            layer = document.querySelector('.bilibili-player-video-danmaku').parentElement;
-            type = 'BILI BILI [´ω`]';
-          } else if (video.id === 'js-video') {
-            layer = document.querySelector('#cmCanvas');
-            type = 'HIMAWARI';
-          }
-
-          console.log('%ctype: "%s"', 'font-weight: bold', layer ? type : 'UNKNOWN???');
-          layer && Object.assign(layer.style, {
-            backgroundSize:     'contain',
-            maskSize:           'contain',
-            webkitMaskSize:     'contain',
-            maskRepeat:         'no-repeat',
-            webkitMaskRepeat:   'no-repeat',
-            maskPosition:       'center center',
-            webkitMaskPosition: 'center center'
-          });
-          layer && video.dispatchEvent(
-            new CustomEvent(`${PRODUCT}-start`,
-            {detail: {type, video, layer}, bubbles: true, composed: true}
-          ));
-
-          vmap.set(video,
-            layer ?
-            createDetector({video: video.drawableElement || video, owner: video,
-              layer, interval: config.interval, type, onDispose: () => { vmap.delete(video); resumeWatching(); }})
-              .catch(() => { vmap.delete(video); resumeWatching(); console.warn('MaskedWatch detector unavailable'); }) :
-            type
-          );
-          if (layer && !location.href.startsWith('https://www.nicovideo.jp/watch/')) {
-            clearInterval(timer); timer = undefined;
-          }
-        });
-    };
-
-    const init = () => {
-      css.registerProps(
-        {name: '--json-args', syntax: '*', initialValue: '{}', inherits: false },
-        {name: '--config',    syntax: '*', initialValue: '{}', inherits: false }
-      );
-      timer = setInterval(watch, 1000);
-
-      document.body.append(dialog);
-
-      window.setTimeout(() => {
-        const li = document.createElement('li');
-        li.innerHTML = `<a href="javascript:;">${PRODUCT}設定</a>`;
-        li.style.whiteSpace = 'nowrap';
-        li.addEventListener('click', () => dialog.toggle());
-        document.querySelector('#siteHeaderRightMenuContainer') && document.querySelector('#siteHeaderRightMenuContainer').append(li);
-      }, document.querySelector('#siteHeaderRightMenuContainer') ? 1000 : 15000);
-
-      ZenzaDetector.detect().then(zen => {
-        console.log('ZenzaWatch found ver.%s', zen.version);
-        ZenzaWatch = zen;
-        ZenzaWatch.emitter.promise('videoControBar.addonMenuReady').then(({container}) => {
-          container.append(createToggleButton(config, dialog));
-        });
-        ZenzaWatch.emitter.promise('videoContextMenu.addonMenuReady.list').then(({container}) => {
-          const faceMenu = document.createElement('li');
-          faceMenu.className = 'command';
-          faceMenu.dataset.command = 'nop';
-          faceMenu.textContent = '顔の検出';
-          faceMenu.classList.toggle('selected', config.faceDetection);
-          faceMenu.addEventListener('click', () => {
-            config.faceDetection = !config.faceDetection;
-          });
-          const textMenu = document.createElement('li');
-          textMenu.className = 'command';
-          textMenu.dataset.command = 'nop';
-          textMenu.textContent = 'テキストの検出';
-          textMenu.classList.toggle('selected', config.textDetection);
-          textMenu.addEventListener('click', () => {
-            config.textDetection = !config.textDetection;
-          });
-          ZenzaWatch.emitter.on('showMenu', () => {
-            faceMenu.classList.toggle('selected', config.faceDetection);
-            textMenu.classList.toggle('selected', config.textDetection);
-          });
-
-          container.append(faceMenu, textMenu);
-        });
-
-      });
-    };
-    init();
-
-    // eslint-disable-next-line no-undef
-    console.log('%cMasked Watch', 'font-size: 200%;', `ver ${VER}`, '\nconfig: ', JSON.stringify({...config}));
-  };
-
-  const loadGm = () => {
-    const script = document.createElement('script');
-    script.id = `${PRODUCT}Loader`;
-    script.setAttribute('type', 'text/javascript');
-    script.setAttribute('charset', 'UTF-8');
-    script.append(`
+    const loadGm = () => {
+        const script = document.createElement('script');
+        script.id = `${PRODUCT}Loader`;
+        script.setAttribute('type', 'text/javascript');
+        script.setAttribute('charset', 'UTF-8');
+        script.append(`
     (() => {
       (${monkey.toString()})("${PRODUCT}");
     })();`);
-    (document.head || document.documentElement).append(script);
-  };
-
-  loadGm();
+        (document.head || document.documentElement).append(script);
+    };
+    loadGm();
 })();

@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.75-task800
+// @version     0.5.80-task968
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -49,7 +49,11 @@ import {reg} from '../packages/lib/src/text/reg';
 import {parseThumbInfo} from '../packages/lib/src/nico/parseThumbInfo';
 import {OwnerSupplement} from '../packages/lib/src/nico/OwnerSupplement';
 import {ThumbInfoCacheDb} from '../packages/lib/src/nico/ThumbInfoCacheDb';
+import {ThumbnailSourcePolicy} from '../packages/lib/src/nico/ThumbnailSourcePolicy';
 import {PocketThumbnail} from '../packages/zenza/src/pocket/PocketThumbnail';
+import {PocketDescriptionCard} from '../packages/zenza/src/pocket/PocketDescriptionCard';
+import {PocketCardMetadataLoader} from '../packages/zenza/src/pocket/PocketCardMetadataLoader';
+import {AdDecorationLoader} from '../packages/lib/src/nico/AdDecorationLoader';
 import {MylistApiLoader} from '../packages/lib/src/nico/MylistApiLoader';
 import {objUtil} from '../packages/lib/src/infra/objUtil';
 import {bounce} from '../packages/lib/src/infra/bounce';
@@ -60,7 +64,10 @@ AntiPrototypeJs().then(() => {
   const monkey = (PRODUCT) => {
     // The monkey function is stringified and injected into the page world.
     // Its dependencies must live inside this function, not the outer userscript.
+//@require ThumbnailSourcePolicy
 //@require PocketThumbnail
+//@require PocketDescriptionCard
+//@require PocketCardMetadataLoader
     const console = window.console;
     const {workerUtil} = window.MylistPocketLib;
     //const $ = window.jQuery;
@@ -83,6 +90,7 @@ AntiPrototypeJs().then(() => {
     };
 
     const __css__ = (`
+      ${PocketDescriptionCard.CSS}
       a[href*='watch/'] > g-img {
         position: inherit;
       }
@@ -252,7 +260,7 @@ AntiPrototypeJs().then(() => {
       #mylistPocket-popup .owner-icon:hover {
       }
 
-      #mylistPocket-popup .description a {
+      #mylistPocket-popup .description a:not(.mpp-card-title):not(.mpp-card-thumb):not(.mpp-card-owner) {
         color: #ffff00 !important;
         text-decoration: none !important;
         font-weight: normal !important;
@@ -280,10 +288,10 @@ AntiPrototypeJs().then(() => {
         pointer-events: none;
       }
 
-      #mylistPocket-popup .description a:visited {
+      #mylistPocket-popup .description a:not(.mpp-card-title):not(.mpp-card-thumb):not(.mpp-card-owner):visited {
         color: #ffff99 !important;
       }
-      #mylistPocket-popup .description button {
+      #mylistPocket-popup .description button:not(.mpp-card-info) {
         /*font-family: Menlo;*/
         font-size: 16px;
         font-weight: bolder;
@@ -296,7 +304,7 @@ AntiPrototypeJs().then(() => {
         border: solid 2px #ccc;
         outline: none;
       }
-      #mylistPocket-popup .description button:hover {
+      #mylistPocket-popup .description button:not(.mpp-card-info):hover {
         transform: translate(-2px,-2px);
         box-shadow: 2px 2px 2px #000;
         background: #666;
@@ -305,12 +313,12 @@ AntiPrototypeJs().then(() => {
           0.2s box-shadow ease
           ;
       }
-      #mylistPocket-popup .description button:active {
+      #mylistPocket-popup .description button:not(.mpp-card-info):active {
         transform: none;
         box-shadow: none;
         transition: none;
       }
-      #mylistPocket-popup .description button:active::hover {
+      #mylistPocket-popup .description button:not(.mpp-card-info):active::hover {
         opacity: 0;
       }
 
@@ -2034,6 +2042,7 @@ Object.assign(util, workerUtil);
 //@require nicoUtil
 Object.assign(util, nicoUtil);
 //@require netUtil
+//@require AdDecorationLoader
 Object.assign(util, netUtil);
 //@require textUtil
 Object.assign(util, textUtil);
@@ -2739,6 +2748,9 @@ const emitter = util.emitter;
         ZenzaDetector.detect().then(() => {
           this._isZenzaReady = true;
           this.addClass('is-zenzaReady');
+          // Card metadata can arrive before ZenzaWatch is ready; preserve
+          // existing DOM and upgrade its native links as soon as it is.
+          PocketDescriptionCard.enableZenzaLinks(this._hostDom);
           window.ZenzaWatch.emitter.on('DialogPlayerOpen', bounce.time(() => {
             this.hide();
           }, 1000));
@@ -2753,8 +2765,11 @@ const emitter = util.emitter;
 
         // Task 079: 念のため、連携部品がまだ無い時は飛ばす（初期化の失敗で
         // 情報パネル全体が開けなくなるのを防ぐ）。
+        // The old description used a.videoLink. Task950 now replaces each
+        // linked video with one .mpp-video-card, so keep the optional NG/fav
+        // observer attached to both representations (one match per video).
         MylistPocket.external && MylistPocket.external.observe({
-          query: 'a.videoLink',
+          query: 'a.videoLink, .mpp-video-card',
           container: this._hostDom.querySelector('.description'),
         });
 
@@ -2968,6 +2983,7 @@ const emitter = util.emitter;
       }
 
       reset() {
+        this._descriptionCardsGeneration = (this._descriptionCardsGeneration || 0) + 1;
         this._initialize();
         window.setTimeout(() => { this._videoInfoArea.scrollTop = 0; }, 0);
         this.removeClass('noclip');
@@ -2980,6 +2996,7 @@ const emitter = util.emitter;
       }
 
       hide() {
+        this._descriptionCardsGeneration = (this._descriptionCardsGeneration || 0) + 1;
         this._videoInfoArea.scrollTop = 0;
         this.removeClass('show is-ok is-fail noclip is-setting');
       }
@@ -3053,46 +3070,38 @@ const emitter = util.emitter;
       }
 
       _createDescription(elm, data) {
-        // Task 092: 文字列の innerHTML ではなく、リンクを付けた DOM をそのまま入れる
+        // The description uses DOM links (Task092). Reuse the playlist-style
+        // metadata layout, not the old hard-coded "video deleted" thumbnails.
+        const generation = (this._descriptionCardsGeneration || 0) + 1;
+        this._descriptionCardsGeneration = generation;
+        const ownerVideoInfo = this._videoInfo;
         elm.textContent = '';
         elm.append(util.httpLinkFragment(data));
-        const isZenzaReady = this._isZenzaReady;
-        //if (util.isFirefox()) { return; }
-        Array.from(elm.querySelectorAll('a.videoLink')).forEach((link) => {
+        const cards = [];
+        for (const link of Array.from(elm.querySelectorAll('a.videoLink'))) {
           const ref = util.resolveNicoVideoLink(link);
-          if (!ref) { return; }
-          const watchId = ref.watchId;
-          if (isZenzaReady) {
-            link.classList.add('noHoverMenu');
-            link.classList.add('command');
-            link.setAttribute('data-command', 'zenza-open');
-            link.setAttribute('data-param', watchId);
-          }
-          const label = document.createElement('span');
-          label.className = 'label';
-          label.textContent = link.textContent;
-          link.textContent = '';
-          link.append(label);
-
-          const btn = document.createElement('button');
-          btn.innerHTML = '？';
-          btn.className = 'command command-button noHoverMenu';
-          btn.setAttribute('slot', 'command-button');
-          btn.setAttribute('tooltip', '動画情報');
-          btn.setAttribute('data-command', 'info');
-          btn.setAttribute('data-param', watchId);
-          link.appendChild(btn);
-
-          const thumbnail = util.getThumbnailUrlByVideoId(watchId);
-          const img = document.createElement('img');
-          img.className = 'videoThumbnail preview';
-          img.src = 'https://nicovideo.cdn.nimg.jp/uni/img/common/video_deleted.jpg';//(thumbnail || '').replace(/^http:/, '');
-          link.classList.add('popupThumbnail');
-          link.appendChild(img);
-
-          link.dataset.videoId = watchId;
-          link.classList.add('watch');
-        });
+          if (!ref) { continue; }
+          const card = PocketDescriptionCard.make(
+            document, ref.watchId, ref.canonicalUrl, link.textContent, this._isZenzaReady);
+          if (!card) { continue; }
+          link.replaceWith(card.root);
+          cards.push(card);
+        }
+        // An old popup's response must never change a newer popup's cards.
+        // Fetch only after a user opened information, max 3 thumb requests
+        // concurrently; one existing NicoAd batch serves all successful cards.
+        const isCurrent = () => generation === this._descriptionCardsGeneration &&
+          this._videoInfo === ownerVideoInfo && elm.isConnected &&
+          this._hostDom.classList.contains('show');
+        PocketDescriptionCard.hydrate(cards, {
+          loadInfo: id => ThumbInfoLoader.load(id),
+          loadDecoration: ids => AdDecorationLoader.load(ids),
+          loadExtra: id => PocketCardMetadataLoader.load(id),
+          installImage: (image, thumbnail, owned, info) => PocketThumbnail.install(
+            image, PocketThumbnail.legacyUrls(thumbnail,
+              util.hasLargeThumbnail(info.videoId || info.id || '')), owned),
+          isCurrent
+        }).catch(error => window.console.warn('MylistPocket: 説明文カードの取得に失敗', error));
       }
 
       /**
@@ -4124,7 +4133,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.75-task800', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.80-task968', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

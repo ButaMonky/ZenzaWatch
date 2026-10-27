@@ -74,6 +74,26 @@ describe('Task321 AUD-42 Like result video ownership',()=>{
       assert.strictEqual(h.original.isLiked,false);
       assert.strictEqual(h.dialog._state.isLiked,false);
       assert.deepStrictEqual(h.notifications,[['notify','(･A･)ﾉｼ']]);
+      assert.deepStrictEqual(h.viewEvents,[],
+        'unlike must not send an empty event that erases the visible thank-you note');
+    });
+    it(file+' never replaces the Like note with an unlike response',async()=>{
+      const h=harness(file,true);
+      h.dialog._onToggleLike();
+      h.resolve({data:{thanksMessage:'unexpected unlike message'}});
+      await flush();
+      assert.strictEqual(h.original.isLiked,false);
+      assert.deepStrictEqual(h.viewEvents,[],
+        'an unlike response is not a new Like thank-you note');
+    });
+    it(file+' does not emit a blank thank-you note when Like returns no thanks',async()=>{
+      const h=harness(file);
+      h.dialog._onToggleLike();
+      h.resolve({data:{}});
+      await flush();
+      assert.strictEqual(h.original.isLiked,true);
+      assert.deepStrictEqual(h.viewEvents,[],
+        'an empty Like response must not erase an earlier message');
     });
     it(file+' preserves failure alerts and never changes model state on rejection',async()=>{
       const h=harness(file),failure=new Error('request failed');

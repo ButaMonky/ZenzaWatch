@@ -3,67 +3,65 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.66-task801
+// @version     0.3.79-task965
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
 // @noframes
 // @require     https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
-
-import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
-import {uq} from '../packages/lib/src/uQuery';
-import {cssUtil} from '../packages/lib/src/css/css';
-import {DataStorage} from '../packages/lib/src/infra/DataStorage';
-import {Config} from './Config';
-import {Emitter, Handler} from '../packages/lib/src/Emitter';
-import {SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsByCategory} from '../packages/zenza/src/ShortcutActions';
-import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
-import {ZenzaCommentHistorySettings} from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
-import {RelatedMenuSettings} from './RelatedMenuSettings';
-import {RelatedMenuOrder} from './RelatedMenuOrder';
-import {ScreenshotFileName} from './ScreenshotFileName';
-import {RelatedMenuActions} from '../packages/zenza/src/menu/RelatedMenuActions';
-import {ModernAdvancedSettingsModel} from './ModernAdvancedSettingsModel';
-import {ModernAdvancedSettingsUI} from './ModernAdvancedSettingsUI';
-import {NgCompositeRuleEditor} from './NgCompositeRuleEditor';
+import { ZenzaDetector } from '../packages/components/src/util/ZenzaDetector';
+import { uq } from '../packages/lib/src/uQuery';
+import { cssUtil } from '../packages/lib/src/css/css';
+import { DataStorage } from '../packages/lib/src/infra/DataStorage';
+import { Config } from './Config';
+import { Emitter, Handler } from '../packages/lib/src/Emitter';
+import { SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsByCategory } from '../packages/zenza/src/ShortcutActions';
+import { ScreenFilter } from '../packages/zenza/src/videoPlayer/ScreenFilter';
+import { ZenzaCommentHistorySettings } from '../packages/comment-history/src/generated/ZenzaCommentHistorySettings.generated.js';
+import { RelatedMenuSettings } from './RelatedMenuSettings';
+import { RelatedMenuOrder } from './RelatedMenuOrder';
+import { ScreenshotFileName } from './ScreenshotFileName';
+import { RelatedMenuActions } from '../packages/zenza/src/menu/RelatedMenuActions';
+import { ModernAdvancedSettingsModel } from './ModernAdvancedSettingsModel';
+import { ModernAdvancedSettingsUI } from './ModernAdvancedSettingsUI';
+import { NgCompositeRuleEditor } from './NgCompositeRuleEditor';
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
-import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
-((window) => { const self = window;
-  const PRODUCT = 'ZenzaWatch';
-  const monkey = async (PRODUCT) => {
-    const _ = window._ ;
-    const Array = window.PureArray || window.Array;
-//@require Emitter
-//@require Config
-await Config.promise('restore');
-//@require uq
-const $ = uq;
-//@require cssUtil
-//@require SHORTCUT_ACTIONS
-//@require ScreenFilter
-//@require ZenzaCommentHistorySettings
-//@require RelatedMenuSettings
-//@require RelatedMenuOrder
-//@require ScreenshotFileName
-//@require RelatedMenuActions
-//@require ModernAdvancedSettingsModel
-//@require ModernAdvancedSettingsUI
-//@require NgCompositeRuleEditor
-    window.ZenzaAdvancedSettings = {
-      config: Config
-    };
-    const global = {
-      PRODUCT
-    };
-
-    let panel;
-
-    const __tpl__ = (`
+import { CommentDisplayBudget } from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
+((window) => {
+    const self = window;
+    const PRODUCT = 'ZenzaWatch';
+    const monkey = async (PRODUCT) => {
+        const _ = window._;
+        const Array = window.PureArray || window.Array;
+        //@require Emitter
+        //@require Config
+        await Config.promise('restore');
+        //@require uq
+        const $ = uq;
+        //@require cssUtil
+        //@require SHORTCUT_ACTIONS
+        //@require ScreenFilter
+        //@require ZenzaCommentHistorySettings
+        //@require RelatedMenuSettings
+        //@require RelatedMenuOrder
+        //@require ScreenshotFileName
+        //@require RelatedMenuActions
+        //@require ModernAdvancedSettingsModel
+        //@require ModernAdvancedSettingsUI
+        //@require NgCompositeRuleEditor
+        window.ZenzaAdvancedSettings = {
+            config: Config,
+            version: '0.3.79-task965'
+        };
+        const global = {
+            PRODUCT
+        };
+        let panel;
+        const __tpl__ = (`
       <button class="openZenzaAdvancedSettingPanel">ZenzaWatch上級者設定</button>
     `).trim();
-
-    const __css__ = (`
+        const __css__ = (`
       .openZenzaAdvancedSettingPanel {
         font-size: 12px;
         border-radius: 4px;
@@ -93,42 +91,37 @@ const $ = uq;
         display: none !important;
       }
     `).trim();
-
-
-
-    // Task 059: ショートカットキー設定UI。
-    const escapeShortcutHtml = s => String(s).replace(/[&<>"']/g, c => (
-      {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'}[c]
-    ));
-
-    // Task 065: カスタムシークスロット(CUSTOM_SEEK_1〜10)のうち、
-    // キーも秒数も既定値(未設定)のままの行は初期状態では隠す
-    // (.slotHidden)。ユーザーが以前に使っていた分(キーか秒数のどちらかを
-    // 設定済み)は、パネルを開くたびに毎回隠れてしまうと不便なので
-    // 常に表示する。
-    const isCustomSeekSlotUnset = action => {
-      if (!action.customSeekSlot) { return false; }
-      const key = parseInt(Config.props['KEY_' + action.id], 10) || 0;
-      const seconds = parseFloat(Config.props['PARAM_' + action.id]) || 0;
-      return !key && !seconds;
-    };
-
-    const renderShortcutKeySettingsHtml = () => {
-      const groups = groupShortcutActionsByCategory();
-      return groups.map(group => `
+        // Task 059: ショートカットキー設定UI。
+        const escapeShortcutHtml = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]));
+        // Task 065: カスタムシークスロット(CUSTOM_SEEK_1〜10)のうち、
+        // キーも秒数も既定値(未設定)のままの行は初期状態では隠す
+        // (.slotHidden)。ユーザーが以前に使っていた分(キーか秒数のどちらかを
+        // 設定済み)は、パネルを開くたびに毎回隠れてしまうと不便なので
+        // 常に表示する。
+        const isCustomSeekSlotUnset = (action) => {
+            if (!action.customSeekSlot) {
+                return false;
+            }
+            const key = parseInt(Config.props['KEY_' + action.id], 10) || 0;
+            const seconds = parseFloat(Config.props['PARAM_' + action.id]) || 0;
+            return !key && !seconds;
+        };
+        const renderShortcutKeySettingsHtml = () => {
+            const groups = groupShortcutActionsByCategory();
+            return groups.map(group => `
         <div class="shortcutCategory">
           <p class="caption sub">${escapeShortcutHtml(group.category)}</p>
           ${group.actions.map(action => {
-            const isCustomSeek = !!action.customSeekSlot;
-            const rowClass = isCustomSeek ?
-              `shortcutRow customSeekSlotRow${isCustomSeekSlotUnset(action) ? ' slotHidden' : ''}` :
-              'shortcutRow';
-            const secondsInputHtml = isCustomSeek ? `
+                const isCustomSeek = !!action.customSeekSlot;
+                const rowClass = isCustomSeek ?
+                    `shortcutRow customSeekSlotRow${isCustomSeekSlotUnset(action) ? ' slotHidden' : ''}` :
+                    'shortcutRow';
+                const secondsInputHtml = isCustomSeek ? `
               <input type="text" class="shortcutSecondsInput" inputmode="numeric"
                 data-setting-name="PARAM_${action.id}"
                 title="秒数を入力(マイナスで戻る・プラスで進む)"
                 placeholder="秒数 例:-10">` : '';
-            return `
+                return `
             <div class="${rowClass}" data-action-id="${action.id}">
               <span class="shortcutLabel">${escapeShortcutHtml(action.label)}</span>
               <span class="shortcutKeyDisplay">${escapeShortcutHtml(formatKeyCombo(Config.props['KEY_' + action.id]))}</span>
@@ -139,7 +132,7 @@ const $ = uq;
               <span class="shortcutConflictWarning"></span>
             </div>
           `;
-          }).join('')}
+            }).join('')}
           ${group.category === 'シーク' ? `
           <div class="customSeekAddRow">
             <button type="button" class="customSeekAddBtn">＋ カスタムシークのスロットを追加(最大10個)</button>
@@ -147,16 +140,15 @@ const $ = uq;
           ` : ''}
         </div>
       `).join('');
-    };
-
-    // Task 077: 画面フィルターの設定欄。項目と説明文は ScreenFilter.PARAMS から作る
-    // （プレイヤー内の専用パネルと同じ文言。項目を足す時は ScreenFilter.js だけ直せばよい）。
-    const renderScreenFilterSettingsHtml = () => {
-      const esc = escapeShortcutHtml;
-      const rows = ScreenFilter.PARAMS.map(p => {
-        const name = ScreenFilter.PREFIX + p.key;
-        if (p.type === 'boolean') {
-          return `
+        };
+        // Task 077: 画面フィルターの設定欄。項目と説明文は ScreenFilter.PARAMS から作る
+        // （プレイヤー内の専用パネルと同じ文言。項目を足す時は ScreenFilter.js だけ直せばよい）。
+        const renderScreenFilterSettingsHtml = () => {
+            const esc = escapeShortcutHtml;
+            const rows = ScreenFilter.PARAMS.map(p => {
+                const name = ScreenFilter.PREFIX + p.key;
+                if (p.type === 'boolean') {
+                    return `
           <div class="screenFilterRow control toggle">
             <label>
               <input type="checkbox" class="checkbox" data-setting-name="${name}">
@@ -164,9 +156,9 @@ const $ = uq;
             </label>
             <div class="settingNote">${esc(p.desc)}</div>
           </div>`;
-        }
-        if (p.type === 'select') {
-          return `
+                }
+                if (p.type === 'select') {
+                    return `
           <div class="screenFilterRow control toggle">
             <label>
               ${esc(p.label)}
@@ -176,9 +168,9 @@ const $ = uq;
             </label>
             <div class="settingNote">${esc(p.desc)}</div>
           </div>`;
-        }
-        const range = `${p.min}〜${p.max}${p.unit || ''}、標準は ${ScreenFilter.formatValue(p.key, p.def)}`;
-        return `
+                }
+                const range = `${p.min}〜${p.max}${p.unit || ''}、標準は ${ScreenFilter.formatValue(p.key, p.def)}`;
+                return `
           <div class="screenFilterRow control toggle">
             <label>
               ${esc(p.label)}${p.heavy ? '（やや重い）' : ''}
@@ -187,11 +179,9 @@ const $ = uq;
             </label>
             <div class="settingNote">${esc(p.desc)}</div>
           </div>`;
-      }).join('');
-      const presets = ScreenFilter.PRESETS.map(p =>
-        `<button type="button" class="screenFilterPresetBtn" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`
-      ).join('');
-      return `
+            }).join('');
+            const presets = ScreenFilter.PRESETS.map(p => `<button type="button" class="screenFilterPresetBtn" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`).join('');
+            return `
         <p class="caption">画面フィルター（映像の明るさ・色・反転）</p>
         <div class="settingNote">
           動画の映像だけに明るさ・コントラスト・ガンマなどの補正を掛けます（コメントやボタンには掛かりません）。
@@ -221,440 +211,441 @@ const $ = uq;
           </div>
         </div>
       `;
-    };
-
-    class SettingPanel {
-      constructor(...args) {
-        this.initialize(...args);
-      }
-      initialize(params) {
-        this._playerConfig     = params.playerConfig;
-        this._$container       = params.$container;
-
-        this._update$rawData = _.debounce(this._update$rawData.bind(this), 500);
-        this._playerConfig.on('update', this._onPlayerConfigUpdate.bind(this));
-      }
-      _initializeDom() {
-        if (this._$panel) { return; }
-        const $container = this._$container;
-        const config = this._playerConfig;
-
-        cssUtil.addStyle(SettingPanel.__css__);
-        $container.append(uq.html(SettingPanel.__tpl__));
-
-        const $panel = this._$panel = $container.find('.zenzaAdvancedSettingPanel');
-        this._$view =
-          $container.find('.zenzaAdvancedSettingPanel');
-        this._$view.on('click', e => e.stopPropagation());
-
-        this._$rawData = $panel.find('.zenzaAdvancedSetting-rawData');
-        this._$rawData.val(config.exportJson());
-        this._$rawData.on('change', () => {
-          let val = this._$rawData.val();
-          let data;
-          if (val === '') { val = '{}'; }
-
-          try {
-            data = JSON.parse(val);
-          } catch (e) {
-            alert(e);
-            return;
-          }
-
-          if (confirm('設定データを直接書き換えしますか？')) {
-            try {
-              config.import(data);
-              location.reload();
-            } catch (error) {
-              alert(`設定を読み込めませんでした: ${error.message}`);
-            }
-          }
-
-        });
-
-        this._$playlistData = $panel.find('.zenzaAdvancedSetting-playlistData');
-        this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
-        this._$playlistData.on('change', () => {
-          let val = this._$playlistData.val();
-          let data;
-          if (val === '') { val = '{}'; }
-
-          try {
-            data = JSON.parse(val);
-          } catch (e) {
-            alert(e);
-            return;
-          }
-
-          if (confirm('プレイリストデータを直接書き換えしますか？')) {
-            window.ZenzaWatch.external.playlist.import(data);
-            location.reload();
-          }
-
-        });
-
-        const onInputItemChange = this._onInputItemChange.bind(this);
-        const $check = $panel.find('input[type=checkbox]');
-        $check.forEach(check => {
-          const {settingName} = check.dataset;
-          const val = !!config.props[settingName];
-          check.checked = val;
-          check.closest('.control').classList.toggle('checked', val);
-        });
-        $check.on('change', this._onToggleItemChange.bind(this));
-
-        const $input = $panel.find('input[type=text], select, .textAreaInput');
-        $input.forEach(input => {
-          const {settingName} = input.dataset;
-          const val = config.props[settingName];
-          input.value = val;
-        });
-        $input.on('change', onInputItemChange);
-
-        // Task 059: ショートカットキー設定の初期化。
-        this._$shortcutContainer = $panel.find('.shortcutKeySettingsContainer');
-        $panel.find('.shortcutRecordBtn').on('click', e => {
-          e.stopPropagation();
-          this._onShortcutRecordClick(e);
-        });
-        $panel.find('.shortcutClearBtn').on('click', e => {
-          e.stopPropagation();
-          this._onShortcutClearClick(e);
-        });
-        $panel.find('.shortcutResetBtn').on('click', e => {
-          e.stopPropagation();
-          this._onShortcutResetClick(e);
-        });
-        this._refreshAllShortcutRows();
-
-        // Task 065: カスタムシークの「追加」ボタン。押すたびに、隠れている
-        // (未設定の)スロットのうち一番若い番号のものを1つだけ表示する。
-        // 10個すべて表示し終えたらボタン自体を無効化する。
-        this._$customSeekAddBtn = $panel.find('.customSeekAddBtn');
-        this._$customSeekAddBtn.on('click', e => {
-          e.stopPropagation();
-          this._onCustomSeekAddClick();
-        });
-        this._refreshCustomSeekAddButton();
-
-        // Task 077: 画面フィルターのプリセットボタン。値をまとめて書き換えて、入力欄にも反映する
-        $panel.find('.screenFilterPresetBtn').on('click', e => {
-          e.stopPropagation();
-          const preset = ScreenFilter.PRESETS.find(p => p.id === e.target.dataset.preset);
-          if (!preset) { return; }
-          ScreenFilter.PARAMS.forEach(p => {
-            const name = ScreenFilter.PREFIX + p.key;
-            const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
-            config.props[name] = v;
-            const input = $panel.find(`[data-setting-name="${name}"]`)[0];
-            if (!input) { return; }
-            if (input.type === 'checkbox') {
-              input.checked = !!v;
-              input.closest('.control').classList.toggle('checked', !!v);
-            } else {
-              input.value = v;
-            }
-          });
-        });
-
-        $panel.find('.zenzaAdvancedSetting-close').on('mousedown', e => {
-          e.stopPropagation();
-          this.hide();
-        });
-
-        // Task200: attach after legacy input handlers, avoiding double saves.
-        this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({window, config});
-        this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings(
-          $panel.find('.commentHistorySettingsContainer')[0], {preferences: this._historyPreferences}
-        );
-        // Task314: mount only after legacy input/checkbox handlers have scanned their inputs.
-        // The custom link editor owns its draft; unrelated settings keep their old handlers.
-        this._relatedMenuLinks = RelatedMenuSettings.mount(
-          $panel.find('.relatedMenuCustomLinksContainer')[0],
-          {config, actions: RelatedMenuActions,
-            shortcuts: {encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS}}
-        );
-        $panel.toggleClass('debug', config.props.debug);
-        // Task318: mount the new full-viewport settings only after all legacy
-        // adapters have registered. Existing data sources remain authoritative.
-        const legacyRoot=$panel.find('.settingPanelInner')[0];
-        this._modernModel=new ModernAdvancedSettingsModel({
-          config,legacyRoot,actions:SHORTCUT_ACTIONS,
-          screenFilterParams:ScreenFilter.PARAMS,
-          historySchema:ZenzaCommentHistorySettings.SETTINGS_SCHEMA
-        });
-        this._modernUI=new ModernAdvancedSettingsUI({
-          panel:$panel[0],legacyRoot,model:this._modernModel,
-          relatedEditor:this._relatedMenuLinks,
-          relatedOrder:RelatedMenuOrder,
-          relatedActions:RelatedMenuActions,
-          screenshotFileName:ScreenshotFileName,
-          playlist:window.ZenzaWatch?.external?.playlist,
-          storage:window.localStorage,
-          formatKeyCombo,encodeKeyCombo,
-          onClose:()=>{
-            this._modernModel.cancel();
-            this._relatedMenuLinks._load();
-            this.hide();
-          },
-          confirm:message=>window.confirm(message)
-        });
-      }
-      _onPlayerConfigUpdate(key, value) {
-        switch (key) {
-          case 'debug':
-            this._$panel.toggleClass('debug', value);
-            break;
-          case 'wordRegFilter':
-          case 'wordRegFilterFlags':
-            this._$panel.find('.' + key + 'Input').val(value);
-            break;
-          case 'enableFullScreenOnDoubleClick':
-          case 'autoCloseFullScreen':
-          case 'continueNextPage':
-          case 'smallModeAspectLock':
-            this._$panel
-              .find('.' + key + 'Control').toggleClass('checked', value)
-              .find('input[type=checkbox]').prop('checked', value);
-            break;
-        }
-        this._update$rawData();
-      }
-      _update$rawData() {
-        this._$rawData.val(this._playerConfig.exportJson());
-      }
-      _onToggleItemChange(e) {
-        const {settingName} = e.target.dataset;
-        const val = !!e.target.checked;
-
-        this._playerConfig.props[settingName] = val;
-        e.target.closest('.control').classList.toggle('checked', val);
-      }
-      _onInputItemChange(e) {
-        const $target = $(e.target);
-        const {settingName} = e.target.dataset;
-        const val = e.target.value;
-
-        window.setTimeout(() => $target.removeClass('update error'), 300);
-
-        window.console.log('onInputItemChange', settingName, val);
-        switch (settingName) {
-          case 'wordRegFilter':
-            try {
-              const reg = new RegExp(val, this._playerConfig.props.wordRegFilterFlags);
-              $target.addClass('update');
-            } catch(err) {
-              $target.addClass('error');
-              //alert('正規表現にエラーがあります');
-              return;
-            }
-            break;
-          case 'wordRegFilterFlags': {
-            try {
-              const reg = new RegExp(this._playerConfig.props.wordRegFilter, val);
-              $target.addClass('update');
-            } catch(err) {
-              $target.addClass('error');
-              //alert('正規表現にエラーがあります');
-              return;
-            }
-          }
-            break;
-          default:
-            $target.addClass('update');
-            break;
-        }
-
-        // Task 077: 画面フィルターの数値は範囲内に丸めて数値として保存する
-        if (typeof settingName === 'string' && settingName.startsWith(ScreenFilter.PREFIX)) {
-          const key = settingName.slice(ScreenFilter.PREFIX.length);
-          if (ScreenFilter.PARAM_MAP[key]) {
-            const v = ScreenFilter.normalize(key, val);
-            this._playerConfig.props[settingName] = v;
-            e.target.value = v;
-            return;
-          }
-        }
-
-        // Task 206: 同時表示上限は選択肢の数値として保存する（文字列のまま保存しない）
-        if (settingName === CommentDisplayBudget.CONFIG_KEY) {
-          this._playerConfig.props[settingName] = CommentDisplayBudget.normalizeLimit(val);
-          return;
-        }
-
-        this._playerConfig.props[settingName] = val;
-
-        // Task 065: カスタムシーク秒数の入力欄。キーも秒数も未設定に
-        // 戻ったら、行を「追加」前の状態(非表示)に戻しておく
-        // (常に表示したままだと、使っていないスロットが増えて
-        // 一覧が長くなり続けてしまうため)。
-        if (typeof settingName === 'string' && settingName.startsWith('PARAM_CUSTOM_SEEK_')) {
-          this._hideCustomSeekSlotIfUnset(settingName.replace(/^PARAM_/, ''));
-        }
-      }
-      // Task 065: 指定したカスタムシークのアクションIDが、キー・秒数とも
-      // 未設定に戻っていたら行を隠し、「追加」ボタンの状態も更新する。
-      _hideCustomSeekSlotIfUnset(actionId) {
-        if (!this._$shortcutContainer) { return; }
-        const key = parseInt(this._playerConfig.props['KEY_' + actionId], 10) || 0;
-        const seconds = parseFloat(this._playerConfig.props['PARAM_' + actionId]) || 0;
-        if (key || seconds) { return; }
-        this._$shortcutContainer
-          .find(`.customSeekSlotRow[data-action-id="${actionId}"]`)
-          .addClass('slotHidden');
-        this._refreshCustomSeekAddButton();
-      }
-      // ---- Task 059: ショートカットキー設定 ----
-      _refreshShortcutRow(actionId) {
-        if (!this._$shortcutContainer) { return; }
-        const val = this._playerConfig.props['KEY_' + actionId];
-        this._$shortcutContainer
-          .find(`.shortcutRow[data-action-id="${actionId}"] .shortcutKeyDisplay`)
-          .text(formatKeyCombo(val));
-      }
-      _refreshAllShortcutRows() {
-        if (!this._$shortcutContainer) { return; }
-        SHORTCUT_ACTIONS.forEach(action => this._refreshShortcutRow(action.id));
-        this._refreshShortcutConflictWarnings();
-      }
-      _refreshShortcutConflictWarnings() {
-        if (!this._$shortcutContainer) { return; }
-        const config = this._playerConfig;
-        const byKeyValue = {};
-        SHORTCUT_ACTIONS.forEach(action => {
-          const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
-          if (!val || val >= 90000000) { return; }
-          (byKeyValue[val] = byKeyValue[val] || []).push(action);
-        });
-        SHORTCUT_ACTIONS.forEach(action => {
-          const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
-          const dupes = (byKeyValue[val] || []).filter(a => a.id !== action.id);
-          const $warn = this._$shortcutContainer
-            .find(`.shortcutRow[data-action-id="${action.id}"] .shortcutConflictWarning`);
-          if (val && dupes.length) {
-            $warn.text('⚠ 「' + dupes.map(a => a.label).join('」「') + '」と重複しています')
-              .addClass('show');
-          } else {
-            $warn.text('').removeClass('show');
-          }
-        });
-      }
-      _cancelShortcutRecording() {
-        if (this._shortcutRecordingCleanup) {
-          this._shortcutRecordingCleanup();
-        }
-      }
-      _onShortcutRecordClick(e) {
-        const actionId = e.target.dataset.actionId;
-        this._cancelShortcutRecording();
-        const $btn = $(e.target);
-        const $row = $btn.closest('.shortcutRow');
-        const originalLabel = $btn.text();
-        $btn.text('キーを押してください (Escでキャンセル)');
-        $row.addClass('recording');
-
-        // 修飾キー単体(Shift/Ctrl/Alt/Meta)の押下だけでは確定しない。
-        // 実際のキーが押されるまで待つ。単体のEscはキャンセル扱い。
-        const MODIFIER_ONLY_KEYCODES = [16, 17, 18, 91, 92, 93, 224];
-        const onKeyDown = evt => {
-          evt.preventDefault();
-          evt.stopPropagation();
-          if (MODIFIER_ONLY_KEYCODES.includes(evt.keyCode)) { return; }
-          if (evt.keyCode === 27 &&
-              !evt.shiftKey && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
-            cleanup();
-            return;
-          }
-          const combo = encodeKeyCombo(evt);
-          this._playerConfig.props['KEY_' + actionId] = combo;
-          cleanup();
-          this._refreshAllShortcutRows();
         };
-        const cleanup = () => {
-          document.removeEventListener('keydown', onKeyDown, true);
-          $btn.text(originalLabel);
-          $row.removeClass('recording');
-          this._shortcutRecordingCleanup = null;
-        };
-        this._shortcutRecordingCleanup = cleanup;
-        document.addEventListener('keydown', onKeyDown, true);
-      }
-      _onShortcutClearClick(e) {
-        const actionId = e.target.dataset.actionId;
-        this._cancelShortcutRecording();
-        this._playerConfig.props['KEY_' + actionId] = 0;
-        this._refreshAllShortcutRows();
-        this._hideCustomSeekSlotIfUnset(actionId);
-      }
-      _onShortcutResetClick(e) {
-        const actionId = e.target.dataset.actionId;
-        this._cancelShortcutRecording();
-        const key = 'KEY_' + actionId;
-        // Publish the effective default before removing the persisted override.
-        // deleteValue resets internal data but does not emit a live update.
-        this._playerConfig.props[key] = this._playerConfig.default[key];
-        this._playerConfig.deleteValue(key);
-        this._refreshAllShortcutRows();
-        this._hideCustomSeekSlotIfUnset(actionId);
-      }
-      // Task 065: カスタムシークスロットの「追加」ボタン。
-      // 隠れているスロット行(.customSeekSlotRow.slotHidden)のうち、
-      // 配列(= CUSTOM_SEEK_1〜10、DOM上も番号順)で一番先頭のものだけを
-      // 表示状態に切り替える。全部表示し終えたらボタンを無効化する。
-      _onCustomSeekAddClick() {
-        if (!this._$shortcutContainer) { return; }
-        const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
-        if (hiddenRows.length) {
-          $(hiddenRows[0]).removeClass('slotHidden');
+        class SettingPanel {
+            constructor(...args) {
+                this.initialize(...args);
+            }
+            initialize(params) {
+                this._playerConfig = params.playerConfig;
+                this._$container = params.$container;
+                this._update$rawData = _.debounce(this._update$rawData.bind(this), 500);
+                this._playerConfig.on('update', this._onPlayerConfigUpdate.bind(this));
+            }
+            _initializeDom() {
+                if (this._$panel) {
+                    return;
+                }
+                const $container = this._$container;
+                const config = this._playerConfig;
+                cssUtil.addStyle(SettingPanel.__css__);
+                $container.append(uq.html(SettingPanel.__tpl__));
+                const $panel = this._$panel = $container.find('.zenzaAdvancedSettingPanel');
+                this._$view =
+                    $container.find('.zenzaAdvancedSettingPanel');
+                this._$view.on('click', (e) => e.stopPropagation());
+                this._$rawData = $panel.find('.zenzaAdvancedSetting-rawData');
+                this._$rawData.val(config.exportJson());
+                this._$rawData.on('change', () => {
+                    let val = this._$rawData.val();
+                    let data;
+                    if (val === '') {
+                        val = '{}';
+                    }
+                    try {
+                        data = JSON.parse(val);
+                    }
+                    catch (e) {
+                        alert(e);
+                        return;
+                    }
+                    if (confirm('設定データを直接書き換えしますか？')) {
+                        try {
+                            config.import(data);
+                            location.reload();
+                        }
+                        catch (error) {
+                            alert(`設定を読み込めませんでした: ${error.message}`);
+                        }
+                    }
+                });
+                this._$playlistData = $panel.find('.zenzaAdvancedSetting-playlistData');
+                this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
+                this._$playlistData.on('change', () => {
+                    let val = this._$playlistData.val();
+                    let data;
+                    if (val === '') {
+                        val = '{}';
+                    }
+                    try {
+                        data = JSON.parse(val);
+                    }
+                    catch (e) {
+                        alert(e);
+                        return;
+                    }
+                    if (confirm('プレイリストデータを直接書き換えしますか？')) {
+                        window.ZenzaWatch.external.playlist.import(data);
+                        location.reload();
+                    }
+                });
+                const onInputItemChange = this._onInputItemChange.bind(this);
+                const $check = $panel.find('input[type=checkbox]');
+                $check.forEach((check) => {
+                    const { settingName } = check.dataset;
+                    const val = !!config.props[settingName];
+                    check.checked = val;
+                    check.closest('.control').classList.toggle('checked', val);
+                });
+                $check.on('change', this._onToggleItemChange.bind(this));
+                const $input = $panel.find('input[type=text], select, .textAreaInput');
+                $input.forEach((input) => {
+                    const { settingName } = input.dataset;
+                    const val = config.props[settingName];
+                    input.value = val;
+                });
+                $input.on('change', onInputItemChange);
+                // Task 059: ショートカットキー設定の初期化。
+                this._$shortcutContainer = $panel.find('.shortcutKeySettingsContainer');
+                $panel.find('.shortcutRecordBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    this._onShortcutRecordClick(e);
+                });
+                $panel.find('.shortcutClearBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    this._onShortcutClearClick(e);
+                });
+                $panel.find('.shortcutResetBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    this._onShortcutResetClick(e);
+                });
+                this._refreshAllShortcutRows();
+                // Task 065: カスタムシークの「追加」ボタン。押すたびに、隠れている
+                // (未設定の)スロットのうち一番若い番号のものを1つだけ表示する。
+                // 10個すべて表示し終えたらボタン自体を無効化する。
+                this._$customSeekAddBtn = $panel.find('.customSeekAddBtn');
+                this._$customSeekAddBtn.on('click', (e) => {
+                    e.stopPropagation();
+                    this._onCustomSeekAddClick();
+                });
+                this._refreshCustomSeekAddButton();
+                // Task 077: 画面フィルターのプリセットボタン。値をまとめて書き換えて、入力欄にも反映する
+                $panel.find('.screenFilterPresetBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    const preset = ScreenFilter.PRESETS.find(p => p.id === e.target.dataset.preset);
+                    if (!preset) {
+                        return;
+                    }
+                    ScreenFilter.PARAMS.forEach(p => {
+                        const name = ScreenFilter.PREFIX + p.key;
+                        const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
+                        config.props[name] = v;
+                        const input = $panel.find(`[data-setting-name="${name}"]`)[0];
+                        if (!input) {
+                            return;
+                        }
+                        if (input.type === 'checkbox') {
+                            input.checked = !!v;
+                            input.closest('.control').classList.toggle('checked', !!v);
+                        }
+                        else {
+                            input.value = v;
+                        }
+                    });
+                });
+                $panel.find('.zenzaAdvancedSetting-close').on('mousedown', (e) => {
+                    e.stopPropagation();
+                    this.hide();
+                });
+                // Task200: attach after legacy input handlers, avoiding double saves.
+                this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({ window, config });
+                this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings($panel.find('.commentHistorySettingsContainer')[0], { preferences: this._historyPreferences });
+                // Task314: mount only after legacy input/checkbox handlers have scanned their inputs.
+                // The custom link editor owns its draft; unrelated settings keep their old handlers.
+                this._relatedMenuLinks = RelatedMenuSettings.mount($panel.find('.relatedMenuCustomLinksContainer')[0], { config, actions: RelatedMenuActions,
+                    shortcuts: { encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS } });
+                $panel.toggleClass('debug', config.props.debug);
+                // Task318: mount the new full-viewport settings only after all legacy
+                // adapters have registered. Existing data sources remain authoritative.
+                const legacyRoot = $panel.find('.settingPanelInner')[0];
+                this._modernModel = new ModernAdvancedSettingsModel({
+                    config, legacyRoot, actions: SHORTCUT_ACTIONS,
+                    screenFilterParams: ScreenFilter.PARAMS,
+                    historySchema: ZenzaCommentHistorySettings.SETTINGS_SCHEMA
+                });
+                this._modernUI = new ModernAdvancedSettingsUI({
+                    panel: $panel[0], legacyRoot, model: this._modernModel,
+                    relatedEditor: this._relatedMenuLinks,
+                    relatedOrder: RelatedMenuOrder,
+                    relatedActions: RelatedMenuActions,
+                    screenshotFileName: ScreenshotFileName,
+                    playlist: window.ZenzaWatch?.external?.playlist,
+                    storage: window.localStorage,
+                    formatKeyCombo, encodeKeyCombo,
+                    onClose: () => {
+                        this._modernModel.cancel();
+                        this._relatedMenuLinks._load();
+                        this.hide();
+                    },
+                    confirm: (message) => window.confirm(message)
+                });
+            }
+            _onPlayerConfigUpdate(key, value) {
+                switch (key) {
+                    case 'debug':
+                        this._$panel.toggleClass('debug', value);
+                        break;
+                    case 'wordRegFilter':
+                    case 'wordRegFilterFlags':
+                        this._$panel.find('.' + key + 'Input').val(value);
+                        break;
+                    case 'enableFullScreenOnDoubleClick':
+                    case 'autoCloseFullScreen':
+                    case 'continueNextPage':
+                    case 'smallModeAspectLock':
+                        this._$panel
+                            .find('.' + key + 'Control').toggleClass('checked', value)
+                            .find('input[type=checkbox]').prop('checked', value);
+                        break;
+                }
+                this._update$rawData();
+            }
+            _update$rawData() {
+                this._$rawData.val(this._playerConfig.exportJson());
+            }
+            _onToggleItemChange(e) {
+                const { settingName } = e.target.dataset;
+                const val = !!e.target.checked;
+                this._playerConfig.props[settingName] = val;
+                e.target.closest('.control').classList.toggle('checked', val);
+            }
+            _onInputItemChange(e) {
+                const $target = $(e.target);
+                const { settingName } = e.target.dataset;
+                const val = e.target.value;
+                window.setTimeout(() => $target.removeClass('update error'), 300);
+                window.console.log('onInputItemChange', settingName, val);
+                switch (settingName) {
+                    case 'wordRegFilter':
+                        try {
+                            const reg = new RegExp(val, this._playerConfig.props.wordRegFilterFlags);
+                            $target.addClass('update');
+                        }
+                        catch (err) {
+                            $target.addClass('error');
+                            //alert('正規表現にエラーがあります');
+                            return;
+                        }
+                        break;
+                    case 'wordRegFilterFlags':
+                        {
+                            try {
+                                const reg = new RegExp(this._playerConfig.props.wordRegFilter, val);
+                                $target.addClass('update');
+                            }
+                            catch (err) {
+                                $target.addClass('error');
+                                //alert('正規表現にエラーがあります');
+                                return;
+                            }
+                        }
+                        break;
+                    default:
+                        $target.addClass('update');
+                        break;
+                }
+                // Task 077: 画面フィルターの数値は範囲内に丸めて数値として保存する
+                if (typeof settingName === 'string' && settingName.startsWith(ScreenFilter.PREFIX)) {
+                    const key = settingName.slice(ScreenFilter.PREFIX.length);
+                    if (ScreenFilter.PARAM_MAP[key]) {
+                        const v = ScreenFilter.normalize(key, val);
+                        this._playerConfig.props[settingName] = v;
+                        e.target.value = v;
+                        return;
+                    }
+                }
+                // Task 206: 同時表示上限は選択肢の数値として保存する（文字列のまま保存しない）
+                if (settingName === CommentDisplayBudget.CONFIG_KEY) {
+                    this._playerConfig.props[settingName] = CommentDisplayBudget.normalizeLimit(val);
+                    return;
+                }
+                this._playerConfig.props[settingName] = val;
+                // Task 065: カスタムシーク秒数の入力欄。キーも秒数も未設定に
+                // 戻ったら、行を「追加」前の状態(非表示)に戻しておく
+                // (常に表示したままだと、使っていないスロットが増えて
+                // 一覧が長くなり続けてしまうため)。
+                if (typeof settingName === 'string' && settingName.startsWith('PARAM_CUSTOM_SEEK_')) {
+                    this._hideCustomSeekSlotIfUnset(settingName.replace(/^PARAM_/, ''));
+                }
+            }
+            // Task 065: 指定したカスタムシークのアクションIDが、キー・秒数とも
+            // 未設定に戻っていたら行を隠し、「追加」ボタンの状態も更新する。
+            _hideCustomSeekSlotIfUnset(actionId) {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const key = parseInt(this._playerConfig.props['KEY_' + actionId], 10) || 0;
+                const seconds = parseFloat(this._playerConfig.props['PARAM_' + actionId]) || 0;
+                if (key || seconds) {
+                    return;
+                }
+                this._$shortcutContainer
+                    .find(`.customSeekSlotRow[data-action-id="${actionId}"]`)
+                    .addClass('slotHidden');
+                this._refreshCustomSeekAddButton();
+            }
+            // ---- Task 059: ショートカットキー設定 ----
+            _refreshShortcutRow(actionId) {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const val = this._playerConfig.props['KEY_' + actionId];
+                this._$shortcutContainer
+                    .find(`.shortcutRow[data-action-id="${actionId}"] .shortcutKeyDisplay`)
+                    .text(formatKeyCombo(val));
+            }
+            _refreshAllShortcutRows() {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                SHORTCUT_ACTIONS.forEach(action => this._refreshShortcutRow(action.id));
+                this._refreshShortcutConflictWarnings();
+            }
+            _refreshShortcutConflictWarnings() {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const config = this._playerConfig;
+                const byKeyValue = {};
+                SHORTCUT_ACTIONS.forEach(action => {
+                    const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
+                    if (!val || val >= 90000000) {
+                        return;
+                    }
+                    (byKeyValue[val] = byKeyValue[val] || []).push(action);
+                });
+                SHORTCUT_ACTIONS.forEach(action => {
+                    const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
+                    const dupes = (byKeyValue[val] || []).filter(a => a.id !== action.id);
+                    const $warn = this._$shortcutContainer
+                        .find(`.shortcutRow[data-action-id="${action.id}"] .shortcutConflictWarning`);
+                    if (val && dupes.length) {
+                        $warn.text('⚠ 「' + dupes.map(a => a.label).join('」「') + '」と重複しています')
+                            .addClass('show');
+                    }
+                    else {
+                        $warn.text('').removeClass('show');
+                    }
+                });
+            }
+            _cancelShortcutRecording() {
+                if (this._shortcutRecordingCleanup) {
+                    this._shortcutRecordingCleanup();
+                }
+            }
+            _onShortcutRecordClick(e) {
+                const actionId = e.target.dataset.actionId;
+                this._cancelShortcutRecording();
+                const $btn = $(e.target);
+                const $row = $btn.closest('.shortcutRow');
+                const originalLabel = $btn.text();
+                $btn.text('キーを押してください (Escでキャンセル)');
+                $row.addClass('recording');
+                // 修飾キー単体(Shift/Ctrl/Alt/Meta)の押下だけでは確定しない。
+                // 実際のキーが押されるまで待つ。単体のEscはキャンセル扱い。
+                const MODIFIER_ONLY_KEYCODES = [16, 17, 18, 91, 92, 93, 224];
+                const onKeyDown = (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    if (MODIFIER_ONLY_KEYCODES.includes(evt.keyCode)) {
+                        return;
+                    }
+                    if (evt.keyCode === 27 &&
+                        !evt.shiftKey && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
+                        cleanup();
+                        return;
+                    }
+                    const combo = encodeKeyCombo(evt);
+                    this._playerConfig.props['KEY_' + actionId] = combo;
+                    cleanup();
+                    this._refreshAllShortcutRows();
+                };
+                const cleanup = () => {
+                    document.removeEventListener('keydown', onKeyDown, true);
+                    $btn.text(originalLabel);
+                    $row.removeClass('recording');
+                    this._shortcutRecordingCleanup = null;
+                };
+                this._shortcutRecordingCleanup = cleanup;
+                document.addEventListener('keydown', onKeyDown, true);
+            }
+            _onShortcutClearClick(e) {
+                const actionId = e.target.dataset.actionId;
+                this._cancelShortcutRecording();
+                this._playerConfig.props['KEY_' + actionId] = 0;
+                this._refreshAllShortcutRows();
+                this._hideCustomSeekSlotIfUnset(actionId);
+            }
+            _onShortcutResetClick(e) {
+                const actionId = e.target.dataset.actionId;
+                this._cancelShortcutRecording();
+                const key = 'KEY_' + actionId;
+                // Publish the effective default before removing the persisted override.
+                // deleteValue resets internal data but does not emit a live update.
+                this._playerConfig.props[key] = this._playerConfig.default[key];
+                this._playerConfig.deleteValue(key);
+                this._refreshAllShortcutRows();
+                this._hideCustomSeekSlotIfUnset(actionId);
+            }
+            // Task 065: カスタムシークスロットの「追加」ボタン。
+            // 隠れているスロット行(.customSeekSlotRow.slotHidden)のうち、
+            // 配列(= CUSTOM_SEEK_1〜10、DOM上も番号順)で一番先頭のものだけを
+            // 表示状態に切り替える。全部表示し終えたらボタンを無効化する。
+            _onCustomSeekAddClick() {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
+                if (hiddenRows.length) {
+                    $(hiddenRows[0]).removeClass('slotHidden');
+                }
+                this._refreshCustomSeekAddButton();
+            }
+            _refreshCustomSeekAddButton() {
+                if (!this._$shortcutContainer || !this._$customSeekAddBtn) {
+                    return;
+                }
+                const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
+                const isFull = hiddenRows.length === 0;
+                this._$customSeekAddBtn.prop('disabled', isFull);
+                this._$customSeekAddBtn.text(isFull ? 'これ以上は追加できません(最大10個)' : '＋ カスタムシークのスロットを追加(最大10個)');
+            }
+            _beforeShow() {
+                if (this._$playlistData) {
+                    this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
+                }
+            }
+            toggle(v) {
+                this._initializeDom();
+                const willShow = typeof v === 'boolean' ? v : !this._$view.hasClass('show');
+                if (!willShow) {
+                    if (this._modernUI.hasPendingEdits() &&
+                        !window.confirm('未保存の変更を破棄して閉じますか？')) {
+                        return;
+                    }
+                    // A newly opened empty seek slot is UI-only but must also be discarded.
+                    this._cancelShortcutRecording();
+                    this._modernUI.discardChanges();
+                }
+                else if (!this._modernUI.hasPendingEdits()) {
+                    // Import, browser sync and external userscripts can update Config.
+                    // Start each opening from the latest committed values.
+                    this._modernUI.discardChanges();
+                }
+                this._$view.toggleClass('show', willShow);
+                this._modernUI.setModalVisible(willShow);
+                if (willShow) {
+                    this._beforeShow();
+                }
+            }
+            show() {
+                this.toggle(true);
+            }
+            hide() {
+                this.toggle(false);
+            }
         }
-        this._refreshCustomSeekAddButton();
-      }
-      _refreshCustomSeekAddButton() {
-        if (!this._$shortcutContainer || !this._$customSeekAddBtn) { return; }
-        const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
-        const isFull = hiddenRows.length === 0;
-        this._$customSeekAddBtn.prop('disabled', isFull);
-        this._$customSeekAddBtn.text(
-          isFull ? 'これ以上は追加できません(最大10個)' : '＋ カスタムシークのスロットを追加(最大10個)'
-        );
-      }
-      _beforeShow() {
-        if (this._$playlistData) {
-          this._$playlistData.val(
-            JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2)
-          );
-        }
-      }
-      toggle(v) {
-        this._initializeDom();
-        const willShow=typeof v==='boolean'?v:!this._$view.hasClass('show');
-        if (!willShow) {
-          if (this._modernUI.hasPendingEdits() &&
-            !window.confirm('未保存の変更を破棄して閉じますか？')) {
-            return;
-          }
-          // A newly opened empty seek slot is UI-only but must also be discarded.
-          this._cancelShortcutRecording();
-          this._modernUI.discardChanges();
-        } else if (!this._modernUI.hasPendingEdits()) {
-          // Import, browser sync and external userscripts can update Config.
-          // Start each opening from the latest committed values.
-          this._modernUI.discardChanges();
-        }
-        this._$view.toggleClass('show', willShow);
-        this._modernUI.setModalVisible(willShow);
-        if (willShow) { this._beforeShow(); }
-      }
-      show() {
-        this.toggle(true);
-      }
-      hide() {
-        this.toggle(false);
-      }
-    }
-
-
-    SettingPanel.__css__ = (`
+        SettingPanel.__css__ = (`
       .zenzaAdvancedSettingPanel {
         position: fixed;
         left: 50%;
@@ -955,8 +946,7 @@ const $ = uq;
       }
 
     `).trim();
-
-    const commands = (`
+        const commands = (`
       <option value="">なし</option>
       <option value="togglePlay">再生/停止</option>
       <option value="fullScreen">フルスクリーン ON/OFF</option>
@@ -974,8 +964,7 @@ const $ = uq;
       <option value="toggle-supporterCredit.enable">動画の最後の提供画面 ON/OFF</option>
       <option value="toggle-screenFilterPanel">画面フィルターのパネルを開く/閉じる</option>
     `).trim();
-
-    SettingPanel.__tpl__ = (`
+        SettingPanel.__tpl__ = (`
       <div class="zenzaAdvancedSettingPanel zen-family">
         <div class="settingPanelInner">
           <div class="enableFullScreenOnDoubleClickControl control toggle">
@@ -1143,9 +1132,7 @@ const $ = uq;
             <label>
               同時に表示するコメント数の上限
               <select data-setting-name="commentLayer.maxDisplayComment">
-                ${CommentDisplayBudget.CHOICES.map(n =>
-                  `<option value="${n}">${n}件${n === CommentDisplayBudget.DEFAULT ? '（初期値）' : n === 40 ? '（本家ZenzaWatchと同じ）' : n >= 800 ? '（重い）' : ''}</option>`
-                ).join('')}
+                ${CommentDisplayBudget.CHOICES.map((n) => `<option value="${n}">${n}件${n === CommentDisplayBudget.DEFAULT ? '（初期値）' : n === 40 ? '（本家ZenzaWatchと同じ）' : n >= 800 ? '（重い）' : ''}</option>`).join('')}
               </select>
             </label>
             <div class="settingNote">
@@ -1259,49 +1246,36 @@ const $ = uq;
         <div class="zenzaAdvancedSetting-close">閉じる</div>
       </div>
     `).trim();
-
-
-
-    const initializePanel = () => {
-      // Config.watch();
-      if (panel == null) {
-        panel = new SettingPanel({
-          playerConfig: Config,
-          $container: $('body')
-        });
-      }
+        const initializePanel = () => {
+            // Config.watch();
+            if (panel == null) {
+                panel = new SettingPanel({
+                    playerConfig: Config,
+                    $container: $('body')
+                });
+            }
+        };
+        const initialize = () => {
+            const $button = $(__tpl__);
+            cssUtil.addStyle(__css__);
+            document.querySelector('#js-initial-userpage-data') ?
+                $('.Dropdown-button').before($button) :
+                $('.accountEdit').after($button);
+            $button.on('click', (e) => {
+                initializePanel();
+                panel.toggle();
+            });
+        };
+        initialize();
     };
-
-    const initialize = () => {
-      const $button = $(__tpl__);
-      cssUtil.addStyle(__css__);
-
-      document.querySelector('#js-initial-userpage-data') ?
-        $('.Dropdown-button').before($button) :
-        $('.accountEdit').after($button);
-
-      $button.on('click', e => {
-        initializePanel();
-        panel.toggle();
-      });
-
+    const loadGM = () => {
+        const script = document.createElement('script');
+        script.id = 'ZenzaWatchAdvancedSettingsLoader';
+        script.setAttribute('type', 'text/javascript');
+        script.setAttribute('charset', 'UTF-8');
+        script.append(`(${monkey})('${PRODUCT}');`);
+        document.body.append(script);
     };
-
-    initialize();
-  };
-
-  const loadGM = () => {
-    const script = document.createElement('script');
-    script.id = 'ZenzaWatchAdvancedSettingsLoader';
-    script.setAttribute('type', 'text/javascript');
-    script.setAttribute('charset', 'UTF-8');
-    script.append(`(${monkey})('${PRODUCT}');`);
-    document.body.append(script);
-  };
-
-
-//@require ZenzaDetector
-ZenzaDetector.detect().then(() => loadGM());
-
-
+    //@require ZenzaDetector
+    ZenzaDetector.detect().then(() => loadGM());
 })(globalThis ? globalThis.window : window);

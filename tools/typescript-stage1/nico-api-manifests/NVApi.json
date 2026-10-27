@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NVApi.ts",
+  "runtime": "packages/lib/src/nico/NVApi.js",
+  "sourceSha256": "397b01ea8f406acf78ad60a272d7ae65bb31ce60ba9ffb54b019902be5033845",
+  "runtimeSha256": "55ee5b3466c3b51076dc1da6c899369deb8cde0904e7a5fba972bb732401ffa1"
+}

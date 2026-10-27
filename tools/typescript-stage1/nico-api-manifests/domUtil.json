@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/domUtil.ts",
+  "runtime": "packages/lib/src/dom/domUtil.js",
+  "sourceSha256": "6a30fa304c718dbbee9e350cd864305a60bffa7bc6bad9c764835b1e8d793ca4",
+  "runtimeSha256": "870cac145760472419d8464cad3f79aca2cc8503514b47b5f45a99e4ecb357d0"
+}

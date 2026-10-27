@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/FrameLayer.ts",
+  "runtime": "packages/zenza/src/parts/FrameLayer.js",
+  "sourceSha256": "c3510272b33f0b08fbca1562bbb57830fc75dd4bedbc49a5067dd98664570e45",
+  "runtimeSha256": "a29f6a1ec720656419f20d5fae696c99dac97aefc2855228c4316e287395aa10"
+}

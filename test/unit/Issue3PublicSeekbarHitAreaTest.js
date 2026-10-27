@@ -4,7 +4,7 @@ const {read}=require('../helpers/extractSource');
 const meta="screenMode for-screen-full videoControlBar";
 const fullscreenCss=()=>{
  const src=read('src/VideoControlBar.js');
- const end=src.indexOf("{className: '"+meta+"'");
+ const end=src.search(new RegExp("\\{\\s*className:\\s*'"+meta+"'"));
  assert(end>=0,'native fullscreen style must be present');
  const start=src.lastIndexOf('util.addStyle(\x60',end);
  assert(start>=0,'native fullscreen style is missing');
@@ -28,15 +28,15 @@ describe('Issue #3 public right seek hit-area regression',()=>{
    assert.doesNotMatch(css,/zenzaCommentPreview|seekBarToolTip/);
    assert.match(css,/\.seekBar\s*\{[^}]*height:\s*24px/);
  });
- it('bundles only the public seek fix in its installable userscript',()=>{
+ it('retains the published seek fix alongside the promoted features',()=>{
    const dist=read('dist/ZenzaWatch-dev.user.js');
    const source=read('src/_template.js');
    const version=source.match(/^\/\/ @version\s+(\S+)/m)?.[1];
-   assert(version&&version.startsWith('2.7.317-'),version);
+   assert(version&&version.startsWith('2.7.344-'),version);
    assert(dist.includes(version),'distributed version differs from source');
    assert(dist.includes('pointer-events: none;'));
    assert(dist.includes(':where(.videoControlBar .controlItemContainer.right > .scalingUI) > .controlButton'));
    assert(dist.includes('https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js'));
-   assert(!dist.includes('NotificationHistoryPanel'),'private-only new features must not leak');
+   assert(dist.includes('NotificationHistoryPanel'),'released notification UI should coexist with seek fix');
  });
 });

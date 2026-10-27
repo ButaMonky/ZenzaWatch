@@ -14,23 +14,38 @@ describe('Task714 MylistPocket serialized page-world binding',()=>{
     const serialized=ctx.actualInjectedFunction;
     assert(serialized.includes('const PocketThumbnail = (() => {'),
       'The injected monkey lacks its TypeScript-generated PocketThumbnail');
+    assert(serialized.includes('const ThumbnailSourcePolicy = (() => {'),
+      'The page-world MylistPocket script lacks the shared thumbnail policy');
+    assert(serialized.indexOf('const ThumbnailSourcePolicy = (() => {') <
+      serialized.indexOf('const PocketThumbnail = (() => {'),
+      'the thumbnail selection policy must initialize before PocketThumbnail');
     const wrapped='const monkey='+serialized+';';
     const ast=parser.parse(wrapped,{sourceType:'script'});
     let references=0;
+    let policyReferences=0;
     const freeReferences=[];
+    const freePolicyReferences=[];
     traverse(ast,{
       Identifier(p){
-        if(!p.isReferencedIdentifier() || p.node.name!=='PocketThumbnail') return;
-        references++;
-        const bound=p.scope.getBinding('PocketThumbnail');
-        if(!bound || !bound.path.isVariableDeclarator()){
-          freeReferences.push(p.node.start);
+        if(!p.isReferencedIdentifier())return;
+        if(p.node.name==='PocketThumbnail'){
+          references++;
+          const bound=p.scope.getBinding('PocketThumbnail');
+          if(!bound || !bound.path.isVariableDeclarator())freeReferences.push(p.node.start);
+        }
+        if(p.node.name==='ThumbnailSourcePolicy'){
+          policyReferences++;
+          const bound=p.scope.getBinding('ThumbnailSourcePolicy');
+          if(!bound || !bound.path.isVariableDeclarator())freePolicyReferences.push(p.node.start);
         }
       }
     });
     assert(references>=4,'No real usage sites of PocketThumbnail were checked');
     assert.deepStrictEqual(freeReferences,[],
       'PocketThumbnail must not be an outer lexical reference after monkey.toString()');
+    assert(policyReferences>=1,'the shared image policy has no tested runtime usage');
+    assert.deepStrictEqual(freePolicyReferences,[],
+      'ThumbnailSourcePolicy must be bound inside the serialized page-world function');
     const arrow=ast.program.body[0].declarations[0].init;
     const helper=arrow.body.body.find(node=>node.type==='VariableDeclaration' &&
       node.declarations.some(d=>d.id.name==='PocketThumbnail'));

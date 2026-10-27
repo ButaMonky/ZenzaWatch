@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PlayListSession.ts",
+  "runtime": "packages/zenza/src/Playlist/PlayListSession.js",
+  "sourceSha256": "0f817048634da567789a727997240b1ed970154a7782c6adb3c16da31f1b97fb",
+  "runtimeSha256": "caf53029508949a29dc3b9d3555775c43136fb5e2e2542821b8e9369ac94d489"
+}

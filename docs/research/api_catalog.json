@@ -454,8 +454,8 @@
       ],
       "sources": [
         {
-          "path": "docs/research/API_OBSERVATIONS.md",
-          "anchor": "## video.likes-and-owner"
+          "path": "packages/zenza/src/pocket/PocketCardMetadataLoader.js",
+          "anchor": "const API"
         }
       ],
       "depends_on": []
@@ -562,8 +562,8 @@
       "response": [],
       "sources": [
         {
-          "path": "docs/research/API_OBSERVATIONS.md",
-          "anchor": "## video.owner.icon-cdn"
+          "path": "packages/zenza/src/pocket/PocketDescriptionCard.js",
+          "anchor": "userCdnIcon"
         }
       ],
       "depends_on": []

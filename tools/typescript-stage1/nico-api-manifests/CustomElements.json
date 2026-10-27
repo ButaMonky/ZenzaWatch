@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CustomElements.ts",
+  "runtime": "packages/zenza/src/parts/CustomElements.js",
+  "sourceSha256": "4120dbe956f55dd06645d83e4be0406f9f3d41e11ab69cebc00239c145b456e6",
+  "runtimeSha256": "aa88b9017db61b78d32be652cdbda45fdad8be9f9f7bdb137d3ede9aa067f0f6"
+}

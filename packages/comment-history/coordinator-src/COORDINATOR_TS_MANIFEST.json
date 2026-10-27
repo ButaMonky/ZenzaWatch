@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "source": "coordinator-src/coordinator.ts",
+  "runtime": "src/coordinator.mjs",
+  "sourceSha256": "841711237bf6bcc1286d6324bd308ee660d4837d5748721f792dd5899a08f4b8",
+  "runtimeSha256": "b517aee0841c50d3900af42fd4258eb282928c9534db41b0d0a62732fb92b253",
+  "semanticSha256": "b4beeba3106e7124557a15bdf088aa05bb5c29fe95c490b95ac2b68af36344ed"
+}

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/Clipboard.ts",
+  "runtime": "packages/lib/src/dom/Clipboard.js",
+  "sourceSha256": "ab608f9ddcbdff7d6e26ef1c28d5db3e20d448ab1b613a944ab9edb12270f590",
+  "runtimeSha256": "af026dd43d9beff74377eb1f32598da1b53adc8ee36279e6396817ba14f750a6"
+}

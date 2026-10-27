@@ -16,24 +16,24 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.317-task935`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
-  - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復（実機確認待ち）。
+  - 最新版：`2.7.344-task966`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+  - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
 
 - **[ZenzaHLS をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)**
-  - HLS / domand動画の再生や自動画質切り替えを担当します。
+  - HLS / domand動画の再生や自動画質切り替えを担当します。 (version 0.0.41-task966)
 
 基本的には上の2つをインストールしてください。
 
 #### オプション
 
 - [MylistPocket をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js)
-  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。
+  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version 0.5.80-task968)
 
 - [ZenzaAdvancedSettings をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js)
-  - ショートカット、画面フィルター、NGなどの上級者向け設定。
+  - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version 0.3.79-task965)
 
 - [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
-  - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。
+  - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version 0.0.5-task928)
 
 > [!IMPORTANT]
 > 現在の改良内容は `ZenzaWatch-dev.user.js` に反映されています。
@@ -137,4 +137,6 @@ Task376で一度実装された部分はTask378で撤去しました。**明示�
 を利用してください。
 
 
-## NicoNico API research (Task969)\n\nThe public [offline API lookup and source index](docs/research/README.md) documents 44 research entries. It is not part of the player runtime.
+## NicoNico API research (Task969)
+
+The public [offline API lookup and source index](docs/research/README.md) documents 44 research entries. It is not part of the player runtime.

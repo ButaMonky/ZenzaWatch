@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PlaybackPosition.ts",
+  "runtime": "packages/lib/src/nico/PlaybackPosition.js",
+  "sourceSha256": "79187dde8e449fa2a76f155fe7c340e021f7c73c202dc7d7cfd239d3dd2328bc",
+  "runtimeSha256": "2646c8fc57c0e29023cc361a64041bbf32c1c86ef790fb0be399d885bb79b202"
+}

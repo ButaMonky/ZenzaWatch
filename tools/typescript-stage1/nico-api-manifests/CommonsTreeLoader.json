@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CommonsTreeLoader.ts",
+  "runtime": "packages/lib/src/nico/CommonsTreeLoader.js",
+  "sourceSha256": "ce4dcc631e62049945468979f830b09d0dc8e01bad27e88d12d6a781bd287e09",
+  "runtimeSha256": "f9796e8d67b5df6ad02e06a38c8f8e1161f03644ed1a9365f02682130c4adb5d"
+}

@@ -32,7 +32,7 @@ describe('backComment の透明度レイヤー（B-7 / Task 102）', function() 
 
   it('Task401では映像を縮小せず画面全面にコメントを重ねる', function() {
     const src = source();
-    const fullEnd = src.indexOf("`, {className: 'screenMode for-full', disabled: true});");
+    const fullEndMatch = /`,\s*\{\s*className: 'screenMode for-full',\s*disabled: true\s*\}\);/.exec(src); const fullEnd = fullEndMatch ? fullEndMatch.index : -1;
     const fullStart = src.lastIndexOf('util.addStyle(`', fullEnd);
     const css = src.slice(fullStart, fullEnd);
     assert.ok(fullStart >= 0 && fullEnd > fullStart);

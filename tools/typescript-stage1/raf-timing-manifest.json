@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/src/RequestAnimationFrame.ts",
+  "runtime": "packages/lib/src/infra/RequestAnimationFrame.js",
+  "sourceSha256": "7bb9b5d2ebb00319a3a9c34d152163efdfb5b1751cc9c84f49fca418f9826f3e",
+  "runtimeSha256": "4b275d82e9128d21ada06bc20e9a04144766f80401c6e80c09493ee196c9a3ef"
+}

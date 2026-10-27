@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/Storyboard.ts",
+  "runtime": "packages/zenza/src/storyboard/Storyboard.js",
+  "sourceSha256": "91e7f0826a0399d3d98d088c9c009b2f967455fb0dd1378e3765e5d6f2fb8a71",
+  "runtimeSha256": "f5dd57197705f8070901a2c197c7720b4e65f5520fc076c483c4100bf0a7df0f"
+}

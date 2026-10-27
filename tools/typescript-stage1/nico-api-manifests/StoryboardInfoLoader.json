@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/StoryboardInfoLoader.ts",
+  "runtime": "packages/lib/src/nico/StoryboardInfoLoader.js",
+  "sourceSha256": "ea83dffa85b6eb2ee347e2991dd7e4ecc0b5e663a3a7f447e7d037b264f6ab1d",
+  "runtimeSha256": "8a28003efe403c7b1e05453436a6bd308501a3fcbcbecc5b33d81ae9ecb26b8c"
+}

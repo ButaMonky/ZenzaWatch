@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/textUtil.ts",
+  "runtime": "packages/lib/src/text/textUtil.js",
+  "sourceSha256": "9d6121e3cca09ee55c727573d3d85bf3e59c182ed57169a88040f643b20142de",
+  "runtimeSha256": "bb6585ac50512ab93081b53460c97477714beab20c34f72adb3fc712823ea707"
+}

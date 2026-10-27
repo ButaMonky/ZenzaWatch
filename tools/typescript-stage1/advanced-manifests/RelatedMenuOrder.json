@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/advanced-src/RelatedMenuOrder.ts",
+  "emitted": "tools/typescript-stage1/.generated/advanced/RelatedMenuOrder.js",
+  "runtime": "src/RelatedMenuOrder.js",
+  "sourceSha256": "2602b95944775d5666ff3cfad352efb5b799a526bb6c2ef8ffc9278f3732c3b0",
+  "runtimeSha256": "5336351899f40e17f4d75f556616a719a3987afdc884ee8b0af793f95d4a9393",
+  "semanticSha256": "cef59a1d139b0cd5344719882256606d0c9b324b83d57cedb26c9eb70b1811f9"
+}

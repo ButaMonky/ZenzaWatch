@@ -5,6 +5,7 @@ import path from 'path';
 
 const REPO_ROOT = path.resolve(__dirname, '../..');
 const DIALOG_PATH = path.join(REPO_ROOT, 'src', 'NicoVideoPlayerDialog.js');
+const squash = s => String(s).replace(/\s+/g, ''); // Task964: generated-from-TS formatting tolerant
 
 function readDialog() {
   return fs.readFileSync(DIALOG_PATH, 'utf-8');
@@ -33,7 +34,7 @@ describe('Historical source recovery（Task 095）', function() {
     const source = readDialog();
     const responsive = between(source, '  _updateResponsive(', '  _isFullscreenControlBarScope() {');
     assert.ok(
-      responsive.includes('_updateResponsive({onlyControlBar = false} = {})'),
+      squash(responsive).includes(squash('_updateResponsive({onlyControlBar = false} = {})')),
       'onlyControlBar option が消えている'
     );
 
@@ -45,7 +46,7 @@ describe('Historical source recovery（Task 095）', function() {
 
     const applyMode = between(source, '  _applyScreenMode(force = false)', '  _updateScreenModeStyle()');
     assert.ok(
-      applyMode.includes('this._updateResponsive({onlyControlBar: true})'),
+      squash(applyMode).includes(squash('this._updateResponsive({onlyControlBar: true})')),
       'screen-mode切替が全responsive状態を再計算している'
     );
   });
@@ -55,7 +56,7 @@ describe('Historical source recovery（Task 095）', function() {
     const rule = '.zenzaPlayerContainer.is-backComment .commentLayerFrame';
     assert.equal(source.split(rule).length - 1, 1, 'backComment comment-layer ruleは1か所だけであるべき');
 
-    const forFullEnd = source.indexOf("`, {className: 'screenMode for-full', disabled: true});");
+    const forFullEndMatch = /`,\s*\{\s*className: 'screenMode for-full',\s*disabled: true\s*\}\);/.exec(source); const forFullEnd = forFullEndMatch ? forFullEndMatch.index : -1;
     assert.ok(forFullEnd > 0, 'for-full style block が見つからない');
     const forFullStart = source.lastIndexOf('util.addStyle(`', forFullEnd);
     assert.ok(forFullStart >= 0, 'for-full style block の開始が見つからない');

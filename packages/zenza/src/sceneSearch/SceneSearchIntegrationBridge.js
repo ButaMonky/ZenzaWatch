@@ -341,22 +341,71 @@ class SceneSearchIntegrationBridge {
       const player=(this.container.querySelector('.videoPlayer')||this.container).getBoundingClientRect();
       const seekbar=this.seekElement.getBoundingClientRect();
       const obstacles=[];
+      const fullscreen=this._placementContext==='fullscreen'||!!d.fullscreenElement;
+      // Task954: normal seekbar hover changes both height and margin-top;
+      // even its measured BOTTOM can shift by 2px. The wrapper remains at a
+      // fixed top, so derive the always-expanded 24px bar from that anchor.
+      // Native .seekBar:hover uses margin-top:-14px (scaled with the player).
+      const seekBottom=Number.isFinite(seekbar.bottom)?seekbar.bottom:seekbar.top+seekbar.height;
+      const seekWrap=this.seekElement.closest?.('.seekBarContainer');
+      const wrapRect=seekWrap?.getBoundingClientRect?.();
+      const wrapScale=wrapRect?.width>0&&seekWrap?.offsetWidth>0?
+        wrapRect.width/seekWrap.offsetWidth:1;
+      let previewAnchorTop=!fullscreen&&Number.isFinite(wrapRect?.top)?
+        wrapRect.top-14*wrapScale:seekBottom-24;
+      // Fullscreen anchors above actual controls, not the variable seekbar.
+      if(fullscreen){
+        // Task956: the visible icons may extend ABOVE their wrapper due to UI
+        // scaling/transform. Task954 sampled the wrapper only and could place
+        // the preview over the actual button glyphs in native fullscreen.
+        // Sample the rendered controls, never tooltip/popover descendants.
+        const controls=this.container.querySelectorAll(
+          '.videoControlBar .controlItemContainer');
+        const bounds=[];
+        for(const row of controls){
+          for(const node of [row,...row.querySelectorAll('.scalingUI,.controlButton')]){
+            if(node.hidden||node.closest('[hidden]'))continue;
+            const style=win.getComputedStyle(node);
+            if(style.display==='none'||style.visibility==='hidden')continue;
+            const rect=node.getBoundingClientRect();
+            if(rect.width>0&&rect.height>0&&Number.isFinite(rect.top)){
+              bounds.push(rect.top);
+            }
+          }
+        }
+        if(bounds.length)previewAnchorTop=Math.min(previewAnchorTop,...bounds);
+      }
+      // Task934: original Task101 intentionally raises fullscreen icon columns
+      // above the seekbar. They must be measured as obstacles, not covered or
+      // ignored by the SCUI preview. No icon z-index or click ownership changes.
+      const controls=fullscreen?',.videoControlBar .controlItemContainer,.controlItemContainer.right,.controlItemContainer.left,.controlItemContainer.center':'';
       for(const node of this.container.querySelectorAll(
-        '.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,.zenzaSmallModeAspectLockButton,.closeButton,.zenzaSmallModeCloseButton')){
+        '.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,.zenzaSmallModeAspectLockButton,.closeButton,.zenzaSmallModeCloseButton'+controls)){
         const css=win.getComputedStyle(node),rect=node.getBoundingClientRect();
-        if(!node.hidden&&css.display!=='none'&&css.visibility!=='hidden'&&css.opacity!=='0'&&rect.width>0&&rect.height>0)obstacles.push(rect);
+        // The 200x50px comment input sits in the middle of fullscreen even
+        // while idle/transparent. It was treated as an obstacle on every
+        // seek-mousemove, causing the preview to leap upward only at center.
+        // Protect it once focused, hovered or an input popup is open.
+        const idleComment=node.matches('.commentInputPanel')&&
+          !node.matches(':focus-within,:hover')&&
+          !node.classList.contains('is-popoverOpen');
+        if(!idleComment&&!node.hidden&&css.display!=='none'&&
+          css.visibility!=='hidden'&&css.opacity!=='0'&&
+          rect.width>0&&rect.height>0)obstacles.push(rect);
       }
       const origin=portal?.getBoundingClientRect()||{left:0,top:0,width:0,height:0};
-      this._placementGeometry={player,seekbar,obstacles,origin,
+      this._placementGeometry={player,seekbar,obstacles,origin,previewAnchorTop,
         viewport:{left:0,top:0,width:win.innerWidth,height:win.innerHeight}};
     }
     const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
     const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
     const input={...g,layout:state.layoutId,context:this._placementContext,
       imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,listScale:prefs.listScale,
-      anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold};
-    let result=this._classes.Placement.compute(input);
-    if(card.measureFooter)result=this._classes.Placement.compute({...input,footerHeight:card.measureFooter(result.imageScale)});
+      anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold,
+      // Constant footer reserve keeps the preview box's height and bottom
+      // edge stable while time labels and buttons change during seeking.
+      footerHeight:64};
+    const result=this._classes.Placement.compute(input);
     this._placementResult=result;card.fit(result);
     const x=g.origin.width&&portal?.clientWidth?portal.clientWidth/g.origin.width:1;
     const y=g.origin.height&&portal?.clientHeight?portal.clientHeight/g.origin.height:1;

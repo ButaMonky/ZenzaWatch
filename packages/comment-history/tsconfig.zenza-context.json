@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmitOnError": true,
+    "rootDir": "context-src",
+    "outDir": ".generated-ts/zenza-context",
+    "declaration": true,
+    "sourceMap": false,
+    "skipLibCheck": false,
+    "types": []
+  },
+  "include": ["context-src/zenza-context.ts", "context-src/core.d.mts"]
+}

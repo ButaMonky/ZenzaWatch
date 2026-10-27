@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/inintCssProps.ts",
+  "runtime": "packages/zenza/src/init/inintCssProps.js",
+  "sourceSha256": "eb7cc0948326b73e5ee8ad18dc359579c68bab25b0d19b90efdb117f89e2f32b",
+  "runtimeSha256": "188ad6298ab738faa0983ea33356574133e3bc1a420795a4f5ccb8debc981d2f"
+}

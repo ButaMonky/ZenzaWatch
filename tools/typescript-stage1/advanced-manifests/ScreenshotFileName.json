@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/advanced-src/ScreenshotFileName.ts",
+  "emitted": "tools/typescript-stage1/.generated/advanced/ScreenshotFileName.js",
+  "runtime": "src/ScreenshotFileName.js",
+  "sourceSha256": "d6a92369bfa0c53f43b6faea963c375965df48394d365434761f7e8019e573b0",
+  "runtimeSha256": "6dd2aa94180ee9f04b7887504bfb53c3e45225a712f29e694dab63214e54907b",
+  "semanticSha256": "91d4d9b737e5a4aa225cc8598a9342962713392a4c7be1b267b0a267aa23cda0"
+}

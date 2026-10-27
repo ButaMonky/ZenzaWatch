@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "verbatimModuleSyntax": true,
+    "removeComments": false,
+    "noCheck": true,
+    "noEmitOnError": false,
+    "rootDir": "advanced-src",
+    "outDir": ".generated/advanced",
+    "declaration": true,
+    "sourceMap": false
+  },
+  "include": ["advanced-src/*.ts"]
+}

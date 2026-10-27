@@ -42,10 +42,10 @@
 | video.watch — 視聴ページ・watch v4 | GET (read) | frontend_cookie | historical | https://www.nicovideo.jp/watch/{watchId} | [コード](../../packages/lib/src/nico/VideoInfoLoader.js) |
 | video.watch-lazy — watch v4追加情報lazy | GET (read) | frontend_cookie | code | https://nvapi.nicovideo.jp/v4/watch/lazy/{watchId} | [コード](../../packages/lib/src/nico/VideoInfoLoader.js) |
 | video.thumbinfo — getthumbinfo XML | GET (read) | public | historical | https://ext.nicovideo.jp/api/getthumbinfo/{watchId} | [コード](../../packages/lib/src/nico/ThumbInfoLoader.js) |
-| video.likes-and-owner — いいね数と可視投稿者 | GET (read) | public | live_get | https://nvapi.nicovideo.jp/v1/videos?watchIds={watchId} | [コード](../../docs/research/API_OBSERVATIONS.md) |
+| video.likes-and-owner — いいね数と可視投稿者 | GET (read) | public | live_get | https://nvapi.nicovideo.jp/v1/videos?watchIds={watchId} | [コード](../../packages/zenza/src/pocket/PocketCardMetadataLoader.js) |
 | video.owner.nicoad — 欠落投稿者のNicoAd補完 | GET (read) | public | live_get | https://api.nicoad.nicovideo.jp/v1/contents/video/{watchId} | [コード](../../packages/lib/src/nico/OwnerSupplement.js) |
 | video.owner.snapshot — Snapshotの投稿者ID逆引き | GET (read) | public | historical | https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search | [コード](../../packages/lib/src/nico/VideoSearch.js) |
-| video.owner.icon-cdn — 既知IDのアイコンCDN候補 | GET (read) | public | live_get | https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/s/{bucket}/{userId}.jpg | [コード](../../docs/research/API_OBSERVATIONS.md) |
+| video.owner.icon-cdn — 既知IDのアイコンCDN候補 | GET (read) | public | live_get | https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/s/{bucket}/{userId}.jpg | [コード](../../packages/zenza/src/pocket/PocketDescriptionCard.js) |
 | video.nicoad-decoration — 金冠・銀冠を一括取得 | GET (read) | public | historical | https://api.nicoad.nicovideo.jp/v1/contents/video/decoration?ids={watchIds} | [コード](../../packages/lib/src/nico/AdDecorationLoader.js) |
 | watch.linked-channel — チャンネル連動動画 | GET (read) | frontend_cookie | code | https://public-api.ch.nicovideo.jp/v1/user/channelVideoDAnimeLinks | [コード](../../packages/lib/src/nico/VideoInfoLoader.js) |
 

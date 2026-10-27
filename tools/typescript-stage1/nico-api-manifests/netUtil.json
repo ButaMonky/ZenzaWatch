@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/netUtil.ts",
+  "runtime": "packages/lib/src/infra/netUtil.js",
+  "sourceSha256": "247a97d8e43acde228ab167ca462ecdde1c2c9bf270a04d32c8b6f14ebd21801",
+  "runtimeSha256": "04c81b8a63a53f18c58c0237384b19296e34f7d5df362c8ba0a2b5e56c29d6f7"
+}

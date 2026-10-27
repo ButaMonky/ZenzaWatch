@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/MediaTimeline.ts",
+  "runtime": "packages/lib/src/dom/MediaTimeline.js",
+  "sourceSha256": "5ac2109106bf26319b957ed482fdd505e80c96e78bb19db13117b805f1544ffc",
+  "runtimeSha256": "f180fcaa7ea0c8546612b2989365e1278c11528325a80cfd8bdb7e1d39fe61a3"
+}

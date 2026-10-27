@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/src/OfficialPlayerRoute.ts",
+  "runtime": "packages/zenza/src/menu/OfficialPlayerRoute.js",
+  "sourceSha256": "e7c0adb128c7c3e11f1df3700e81d79f3d9a1e08acbf830141402112f124d040",
+  "runtimeSha256": "75f89ed57a61de52c3065e0cca756cba90fc994c0588a13a4acf0442c1e67744"
+}

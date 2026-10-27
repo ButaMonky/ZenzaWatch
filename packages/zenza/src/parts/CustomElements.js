@@ -1,21 +1,18 @@
 // import {browser} from '../browser';
 // const window = browser.window;
 
+// GENERATED FROM tools/typescript-stage1/nico-src/CustomElements.ts (Task960). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
 const CustomElements = {};
-
 CustomElements.initialize = (() => {
-  if (!window.customElements) {
-    return;
-  }
-
-  class PlaylistAppend extends HTMLElement {
-    static get observedAttributes() { return []; }
-
-    // 末尾に追加するという意味合では add より append らしい
-    static template() {
-      return `
+    if (!window.customElements) {
+        return;
+    }
+    class PlaylistAppend extends HTMLElement {
+        static get observedAttributes() { return []; }
+        // 末尾に追加するという意味合では add より append らしい
+        static template() {
+            return `
         <style>
         * {
           box-sizing: border-box;
@@ -65,29 +62,32 @@ CustomElements.initialize = (() => {
       <div class="playlistAppend">
         <div class="label">▶</div></div>
        `;
+        }
+        constructor() {
+            super();
+            const shadow = this._shadow = this.attachShadow({ mode: 'open' });
+            shadow.innerHTML = this.constructor.template();
+        }
+        // Task960 (CUSTOMELEMENTS-RECONNECT-001): disconnectedCallback empties the shadow root,
+        // so a button moved elsewhere in the DOM came back empty. Rebuild it on reconnect.
+        connectedCallback() {
+            if (!this._shadow.firstChild) {
+                this._shadow.innerHTML = this.constructor.template();
+            }
+        }
+        disconnectedCallback() {
+            this._shadow.textContent = '';
+        }
     }
-
-    constructor() {
-      super();
-      const shadow = this._shadow = this.attachShadow({mode: 'open'});
-      shadow.innerHTML = this.constructor.template();
-    }
-
-    disconnectedCallback() {
-      this._shadow.textContent = '';
-    }
-  }
-
-  window.customElements.define('zenza-playlist-append', PlaylistAppend);
-
-
-  class SeekbarLabel extends HTMLElement {
-    static get observedAttributes() { return [
-      'time', 'duration', 'text'
-    ]; }
-
-    static template() {
-      return `
+    window.customElements.define('zenza-playlist-append', PlaylistAppend);
+    class SeekbarLabel extends HTMLElement {
+        static get observedAttributes() {
+            return [
+                'time', 'duration', 'text'
+            ];
+        }
+        static template() {
+            return `
         <style>
 *, *::after, *::before {
   box-sizing: border-box;
@@ -143,74 +143,62 @@ CustomElements.initialize = (() => {
         <span class="label"></span>
       </div>
        `;
+        }
+        constructor() {
+            super();
+            const shadow = this._shadow = this.attachShadow({ mode: 'open' });
+            shadow.innerHTML = this.constructor.template();
+            this._root = shadow.querySelector('.root');
+            this._label = shadow.querySelector('.label');
+            this._updatePos = _.debounce(this._updatePos.bind(this), 100);
+            this.props = {
+                time: -1,
+                duration: 1,
+                text: this.getAttribute('text') || this.getAttribute('data-text')
+            };
+            this._label.textContent = this.props.text;
+        }
+        _updateTime(t) {
+            this.props.time = isNaN(t) ? -1 : t;
+            this._updatePos();
+        }
+        _updateDuration(d) {
+            this.props.duration = isNaN(d) ? 1 : d;
+            this._updatePos();
+        }
+        _updatePos() {
+            const per = this.props.time / Math.max(this.props.duration, 1) * 100;
+            this.hidden = per <= 0;
+            this.setAttribute('data-param', this.props.time);
+            this._root.style.transform = `translate(${per}vw, 0) translateX(-50%) scale(var(--scale-pp, 1.2))`;
+            this._label.style.transform = `translate(-${per}%, 0)`;
+        }
+        _clear() {
+            this._root.classList.toggle('has-screenshot', false);
+            this.props.time = -1;
+            this.props.duration = 1;
+            this.hidden = true;
+        }
+        hide() {
+            this.hidden = true;
+        }
+        attributeChangedCallback(attr, oldValue, newValue) {
+            switch (attr) {
+                case 'time':
+                    this._updateTime(parseFloat(newValue));
+                    break;
+                case 'duration':
+                    this._updateDuration(parseFloat(newValue));
+                    break;
+                case 'text':
+                    this._label.textContent = newValue;
+                    break;
+            }
+        }
     }
-
-    constructor() {
-      super();
-      const shadow = this._shadow = this.attachShadow({mode: 'open'});
-      shadow.innerHTML = this.constructor.template();
-      this._root = shadow.querySelector('.root');
-      this._label = shadow.querySelector('.label');
-
-      this._updatePos = _.debounce(this._updatePos.bind(this), 100);
-
-      this.props = {
-        time: -1,
-        duration: 1,
-        text: this.getAttribute('text') || this.getAttribute('data-text')
-      };
-      this._label.textContent = this.props.text;
-    }
-
-    _updateTime(t) {
-      this.props.time = isNaN(t) ? -1 : t;
-      this._updatePos();
-    }
-
-    _updateDuration(d) {
-      this.props.duration = isNaN(d) ? 1 : d;
-      this._updatePos();
-    }
-
-    _updatePos() {
-      const per = this.props.time / Math.max(this.props.duration, 1) * 100;
-      this.hidden = per <= 0;
-      this.setAttribute('data-param', this.props.time);
-      this._root.style.transform = `translate(${per}vw, 0) translateX(-50%) scale(var(--scale-pp, 1.2))`;
-      this._label.style.transform = `translate(-${per}%, 0)`;
-    }
-
-    _clear() {
-      this._root.classList.toggle('has-screenshot', false);
-      this.props.time = -1;
-      this.props.duration = 1;
-      this.hidden = true;
-    }
-
-    hide() {
-      this.hidden = true;
-    }
-
-    attributeChangedCallback(attr, oldValue, newValue) {
-      switch (attr) {
-        case 'time':
-          this._updateTime(parseFloat(newValue));
-          break;
-        case 'duration':
-          this._updateDuration(parseFloat(newValue));
-          break;
-        case 'text':
-          this._label.textContent = newValue;
-          break;
-      }
-    }
-  }
-  window.customElements.define('zenza-seekbar-label', SeekbarLabel);
-
+    window.customElements.define('zenza-seekbar-label', SeekbarLabel);
 });
-
 //===END===
-
 export {
   CustomElements
 };

@@ -28,6 +28,7 @@ function setup(thumb = 'https://nicovideo.cdn.nimg.jp/thumbnails/2049295/2049295
   const state = Object.assign(emitter(), {videoInfo: {thumbnail: thumb}, thumbnail: ''});
   const config = Object.assign(emitter(), {props: {pipPageThumbnail: true}});
   const context = createContext({document});
+  run('const ThumbnailSourcePolicy = '+extract('packages/lib/src/nico/ThumbnailSourcePolicy.js','ThumbnailSourcePolicy','var')+';',context);
   run('const PipPageThumbnail = ' + extract(SOURCE, 'PipPageThumbnail', 'var') +
     ';this.PipPageThumbnail = PipPageThumbnail;', context);
   const controller = context.PipPageThumbnail.initialize({

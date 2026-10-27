@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.66-task801
+// @version     0.3.79-task965
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,15 +14,15 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-23 14:47Z
+// build: 2026-10-27 12:27Z 5e716422
 /* eslint-disable */
-
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
-((window) => { const self = window;
-  const PRODUCT = 'ZenzaWatch';
-  const monkey = async (PRODUCT) => {
-    const _ = window._ ;
-    const Array = window.PureArray || window.Array;
+((window) => {
+    const self = window;
+    const PRODUCT = 'ZenzaWatch';
+    const monkey = async (PRODUCT) => {
+        const _ = window._;
+        const Array = window.PureArray || window.Array;
 function EmitterInitFunc() {
 		class Handler {
 				constructor(...args) {
@@ -1069,350 +1069,372 @@ class DataStorage {
 	}
 }
 const KEY_MOD = {
-	SHIFT: 0x1000,
-	CTRL: 0x10000,
-	ALT: 0x100000,
-	META: 0x1000000
+		SHIFT: 0x1000,
+		CTRL: 0x10000,
+		ALT: 0x100000,
+		META: 0x1000000
 };
-const encodeKeyCombo = e => {
-	return (e.keyCode || 0) +
-		(e.metaKey ? KEY_MOD.META : 0) +
-		(e.altKey ? KEY_MOD.ALT : 0) +
-		(e.ctrlKey ? KEY_MOD.CTRL : 0) +
-		(e.shiftKey ? KEY_MOD.SHIFT : 0);
+const encodeKeyCombo = (e) => {
+		return (e.keyCode || 0) +
+				(e.metaKey ? KEY_MOD.META : 0) +
+				(e.altKey ? KEY_MOD.ALT : 0) +
+				(e.ctrlKey ? KEY_MOD.CTRL : 0) +
+				(e.shiftKey ? KEY_MOD.SHIFT : 0);
 };
 const KEY_NAME_TABLE = {
-	8: 'Backspace', 9: 'Tab', 13: 'Enter', 19: 'Pause', 20: 'CapsLock',
-	27: 'Esc', 32: 'Space', 33: 'PageUp', 34: 'PageDown', 35: 'End', 36: 'Home',
-	37: '←', 38: '↑', 39: '→', 40: '↓',
-	45: 'Insert', 46: 'Delete',
-	48: '0', 49: '1', 50: '2', 51: '3', 52: '4', 53: '5', 54: '6', 55: '7', 56: '8', 57: '9',
-	65: 'A', 66: 'B', 67: 'C', 68: 'D', 69: 'E', 70: 'F', 71: 'G', 72: 'H', 73: 'I',
-	74: 'J', 75: 'K', 76: 'L', 77: 'M', 78: 'N', 79: 'O', 80: 'P', 81: 'Q', 82: 'R',
-	83: 'S', 84: 'T', 85: 'U', 86: 'V', 87: 'W', 88: 'X', 89: 'Y', 90: 'Z',
-	106: 'Num*', 107: 'Num+', 109: 'Num-', 110: 'Num.', 111: 'Num/',
-	112: 'F1', 113: 'F2', 114: 'F3', 115: 'F4', 116: 'F5', 117: 'F6',
-	118: 'F7', 119: 'F8', 120: 'F9', 121: 'F10', 122: 'F11', 123: 'F12',
-	173: 'Mute', 174: 'VolDown', 175: 'VolUp',
-	176: 'MediaNext', 177: 'MediaPrev', 178: 'MediaStop', 179: 'MediaPlay',
-	186: ';', 187: '=', 188: ',', 189: '-', 190: '.', 191: '/', 192: '`',
-	219: '[', 220: '\\', 221: ']', 222: '\''
+		8: 'Backspace', 9: 'Tab', 13: 'Enter', 19: 'Pause', 20: 'CapsLock',
+		27: 'Esc', 32: 'Space', 33: 'PageUp', 34: 'PageDown', 35: 'End', 36: 'Home',
+		37: '←', 38: '↑', 39: '→', 40: '↓',
+		45: 'Insert', 46: 'Delete',
+		48: '0', 49: '1', 50: '2', 51: '3', 52: '4', 53: '5', 54: '6', 55: '7', 56: '8', 57: '9',
+		65: 'A', 66: 'B', 67: 'C', 68: 'D', 69: 'E', 70: 'F', 71: 'G', 72: 'H', 73: 'I',
+		74: 'J', 75: 'K', 76: 'L', 77: 'M', 78: 'N', 79: 'O', 80: 'P', 81: 'Q', 82: 'R',
+		83: 'S', 84: 'T', 85: 'U', 86: 'V', 87: 'W', 88: 'X', 89: 'Y', 90: 'Z',
+		106: 'Num*', 107: 'Num+', 109: 'Num-', 110: 'Num.', 111: 'Num/',
+		112: 'F1', 113: 'F2', 114: 'F3', 115: 'F4', 116: 'F5', 117: 'F6',
+		118: 'F7', 119: 'F8', 120: 'F9', 121: 'F10', 122: 'F11', 123: 'F12',
+		173: 'Mute', 174: 'VolDown', 175: 'VolUp',
+		176: 'MediaNext', 177: 'MediaPrev', 178: 'MediaStop', 179: 'MediaPlay',
+		186: ';', 187: '=', 188: ',', 189: '-', 190: '.', 191: '/', 192: '`',
+		219: '[', 220: '\\', 221: ']', 222: '\''
 };
-for (let i = 96; i <= 105; i++) { KEY_NAME_TABLE[i] = 'Num' + (i - 96); }
-const formatKeyCombo = code => {
-	code = parseInt(code, 10) || 0;
-	if (!code) { return '(未設定)'; }
-	if (code >= 90000000) { return '(未割り当て/カスタム値)'; }
-	const mods = [];
-	let rest = code;
-	if (rest >= KEY_MOD.META) { mods.push('Meta'); rest -= KEY_MOD.META; }
-	if (rest >= KEY_MOD.ALT) { mods.push('Alt'); rest -= KEY_MOD.ALT; }
-	if (rest >= KEY_MOD.CTRL) { mods.push('Ctrl'); rest -= KEY_MOD.CTRL; }
-	if (rest >= KEY_MOD.SHIFT) { mods.push('Shift'); rest -= KEY_MOD.SHIFT; }
-	mods.push(KEY_NAME_TABLE[rest] || ('#' + rest));
-	return mods.join(' + ');
+for (let i = 96; i <= 105; i++) {
+		KEY_NAME_TABLE[i] = 'Num' + (i - 96);
+}
+const formatKeyCombo = (code) => {
+		code = parseInt(code, 10) || 0;
+		if (!code) {
+				return '(未設定)';
+		}
+		if (code >= 90000000) {
+				return '(未割り当て/カスタム値)';
+		}
+		const mods = [];
+		let rest = code;
+		if (rest >= KEY_MOD.META) {
+				mods.push('Meta');
+				rest -= KEY_MOD.META;
+		}
+		if (rest >= KEY_MOD.ALT) {
+				mods.push('Alt');
+				rest -= KEY_MOD.ALT;
+		}
+		if (rest >= KEY_MOD.CTRL) {
+				mods.push('Ctrl');
+				rest -= KEY_MOD.CTRL;
+		}
+		if (rest >= KEY_MOD.SHIFT) {
+				mods.push('Shift');
+				rest -= KEY_MOD.SHIFT;
+		}
+		mods.push(KEY_NAME_TABLE[rest] || ('#' + rest));
+		return mods.join(' + ');
 };
 // =====================================================================
 // =====================================================================
 const SHORTCUT_ACTIONS = [
-	{id: 'CLOSE', legacy: true, category: 'プレイヤー全般', label: '閉じる',
-		defaultKey: 27, command: 'close'},
-	{id: 'RE_OPEN', legacy: true, category: 'プレイヤー全般',
-		label: '今見ている動画を再読み込み(閉じている時は直前に見ていた動画を開く)',
-		defaultKey: 27 + KEY_MOD.SHIFT, command: 'reload'},
-	{id: 'HOME', legacy: true, category: 'シーク', label: '先頭へシーク',
-		defaultKey: 36 + KEY_MOD.SHIFT, command: 'seekTo', param: 0},
-	{id: 'SEEK_LEFT', legacy: true, category: 'シーク', label: '5秒戻る(Shift+←/←長押しでも可)',
-		defaultKey: 37 + KEY_MOD.SHIFT, command: 'seekBy', param: -5},
-	{id: 'SEEK_RIGHT', legacy: true, category: 'シーク', label: '5秒進む(Shift+→/→長押しでも可)',
-		defaultKey: 39 + KEY_MOD.SHIFT, command: 'seekBy', param: 5},
-	{id: 'SEEK_PREV_FRAME', legacy: true, category: 'シーク', label: '1コマ戻る',
-		defaultKey: 188, command: 'seekPrevFrame'},
-	{id: 'SEEK_NEXT_FRAME', legacy: true, category: 'シーク', label: '1コマ進む',
-		defaultKey: 190, command: 'seekNextFrame'},
-	{id: 'VOL_UP', legacy: true, category: '音量', label: '音量を上げる',
-		defaultKey: 38 + KEY_MOD.SHIFT, command: 'volumeUp'},
-	{id: 'VOL_DOWN', legacy: true, category: '音量', label: '音量を下げる',
-		defaultKey: 40 + KEY_MOD.SHIFT, command: 'volumeDown'},
-	{id: 'INPUT_COMMENT', legacy: true, category: 'コメント', label: 'コメント入力欄にフォーカス',
-		defaultKey: 67, command: '(専用処理)'},
-	{id: 'FULLSCREEN', legacy: true, category: '画面', label: 'フルスクリーン ON/OFF',
-		defaultKey: 70, command: 'toggle-fullscreen'},
-	{id: 'MUTE', legacy: true, category: '音量', label: 'ミュート ON/OFF',
-		defaultKey: 77, command: 'toggle-mute'},
-	{id: 'TOGGLE_COMMENT', legacy: true, category: 'コメント', label: 'コメント表示 ON/OFF',
-		defaultKey: 86, command: 'toggle-showComment'},
-	{id: 'TOGGLE_LOOP', legacy: true, category: '再生', label: 'ループ再生 ON/OFF',
-		defaultKey: 82, command: 'toggle-loop'},
-	{id: 'DEFLIST_ADD', legacy: true, category: 'マイリスト', label: 'あとで見るへ追加',
-		defaultKey: 84, command: 'deflistAdd'},
-	{id: 'DEFLIST_REMOVE', legacy: true, category: 'マイリスト', label: 'あとで見るから削除',
-		defaultKey: 84 + KEY_MOD.SHIFT, command: 'deflistRemove'},
-	{id: 'TOGGLE_PLAY', legacy: true, category: '再生', label: '再生 / 一時停止',
-		defaultKey: 32, command: 'togglePlay'},
-	{id: 'TOGGLE_PLAYLIST', legacy: true, category: 'プレイリスト', label: 'プレイリスト表示 ON/OFF',
-		defaultKey: 80, command: 'togglePlaylist'},
-	{id: 'SCREEN_MODE_1', legacy: true, category: '画面', label: '画面モード: 小',
-		defaultKey: 49 + KEY_MOD.SHIFT, command: 'screenMode', param: 'small'},
-	{id: 'SCREEN_MODE_2', legacy: true, category: '画面', label: '画面モード: サイドビュー',
-		defaultKey: 50 + KEY_MOD.SHIFT, command: 'screenMode', param: 'sideView'},
-	{id: 'SCREEN_MODE_3', legacy: true, category: '画面', label: '画面モード: 3D',
-		defaultKey: 51 + KEY_MOD.SHIFT, command: 'screenMode', param: '3D'},
-	{id: 'SCREEN_MODE_4', legacy: true, category: '画面', label: '画面モード: 通常',
-		defaultKey: 52 + KEY_MOD.SHIFT, command: 'screenMode', param: 'normal'},
-	{id: 'SCREEN_MODE_5', legacy: true, category: '画面', label: '画面モード: 大',
-		defaultKey: 53 + KEY_MOD.SHIFT, command: 'screenMode', param: 'big'},
-	{id: 'SCREEN_MODE_6', legacy: true, category: '画面', label: '画面モード: ワイド',
-		defaultKey: 54 + KEY_MOD.SHIFT, command: 'screenMode', param: 'wide'},
-	{id: 'SHIFT_RESET', legacy: true, category: '再生速度', label: '押している間だけ超低速再生',
-		defaultKey: 49, command: 'playbackRate'},
-	{id: 'SHIFT_DOWN', legacy: true, category: '再生速度', label: '再生速度を下げる',
-		defaultKey: 188 + KEY_MOD.SHIFT, command: 'shiftDown'},
-	{id: 'SHIFT_UP', legacy: true, category: '再生速度', label: '再生速度を上げる',
-		defaultKey: 190 + KEY_MOD.SHIFT, command: 'shiftUp'},
-	{id: 'NEXT_VIDEO', legacy: true, category: 'プレイリスト', label: '次の動画',
-		defaultKey: 74, command: 'playNextVideo'},
-	{id: 'PREV_VIDEO', legacy: true, category: 'プレイリスト', label: '前の動画',
-		defaultKey: 75, command: 'playPreviousVideo'},
-	{id: 'SCREEN_SHOT', legacy: true, category: 'その他', label: 'スクリーンショット',
-		defaultKey: 83, command: 'screenShot'},
-	{id: 'SCREEN_SHOT_WITH_COMMENT', legacy: true, category: 'その他', label: 'スクリーンショット(コメント付き)',
-		defaultKey: 83 + KEY_MOD.SHIFT, command: 'screenShotWithComment'},
-	{id: 'TOGGLE_LIKE', category: '再生', label: 'いいね！ ON/OFF',
-		defaultKey: 0, command: 'toggle-like'},
-	{id: 'PLAYLIST_SHUFFLE', category: 'プレイリスト', label: 'プレイリストをシャッフル',
-		defaultKey: 0, command: 'shufflePlaylist'},
-	{id: 'RELOAD_VIDEO', category: 'プレイヤー全般', label: '動画を再読み込み',
-		defaultKey: 0, command: 'reload'},
-	{id: 'SEEK_TO_RESUME_POINT', category: 'シーク', label: '前回の再生位置へシーク',
-		defaultKey: 0, command: 'seekToResumePoint'},
-	{id: 'OPEN_GINZA', category: 'プレイヤー全般', label: 'Ginza(公式プレイヤー)で開く',
-		defaultKey: 0, command: 'openGinza'},
-	{id: 'SAVE_MYMEMORY', category: 'その他', label: '再生位置を「おもいで」に保存',
-		defaultKey: 0, command: 'saveMymemory'},
-	{id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを画面全体に流す ON/OFF',
-		defaultKey: 0, command: 'toggle-backComment'},
-	{id: 'TOGGLE_NG_FILTER', category: 'フィルタ/NG', label: 'NGフィルタ全体 ON/OFF',
-		defaultKey: 0, command: 'toggle-enableFilter'},
-	{id: 'TOGGLE_DEBUG', category: 'その他', label: 'デバッグモード ON/OFF',
-		defaultKey: 0, command: 'toggle-debug'},
-	{id: 'TOGGLE_NICOS_JUMP', category: 'コメント', label: '@ジャンプ機能 ON/OFF',
-		defaultKey: 0, command: 'toggle-enableNicosJumpVideo'},
-	{id: 'TOGGLE_BEST_ZENTUBE', category: 'その他', label: 'ベストZenTube ON/OFF',
-		defaultKey: 0, command: 'toggle-bestZenTube'},
-	{id: 'TOGGLE_AUTO_COMMENT_SPEED', category: 'コメント', label: 'コメント速度自動調整 ON/OFF',
-		defaultKey: 0, command: 'toggle-autoCommentSpeedRate'},
-	{id: 'TOGGLE_STORYBOARD', category: '画面', label: 'シークバーのサムネイル(ストーリーボード) ON/OFF',
-		defaultKey: 0, command: 'toggle-enableStoryboard'},
-	{id: 'TOGGLE_STORYBOARD_BAR', category: '画面', label: 'シーンサーチバー ON/OFF',
-		defaultKey: 0, command: 'toggle-enableStoryboardBar'},
-	{id: 'TOGGLE_COMMENT_PANEL', category: 'コメント', label: 'コメントパネル表示 ON/OFF',
-		defaultKey: 0, command: 'toggle-enableCommentPanel'},
-	{id: 'TOGGLE_COMMENT_PANEL_AUTOSCROLL', category: 'コメント', label: 'コメントパネルの自動スクロール ON/OFF',
-		defaultKey: 0, command: 'toggle-enableCommentPanelAutoScroll'},
-	{id: 'TOGGLE_HEATMAP', category: '画面', label: '再生数ヒートマップ表示 ON/OFF',
-		defaultKey: 0, command: 'toggle-enableHeatMap'},
-	{id: 'TOGGLE_AD_DECORATION', category: 'プレイリスト', label: 'プレイリストの広告 金冠/銀冠枠 ON/OFF',
-		defaultKey: 0, command: 'toggle-enableAdDecoration'},
-	{id: 'TOGGLE_AUTOPLAY', category: '再生', label: '自動再生 ON/OFF',
-		defaultKey: 0, command: 'toggle-autoPlay'},
-	{id: 'TOGGLE_CONTINUE_NEXT_PAGE', category: '再生', label: 'ページ切り替え後の再生継続 ON/OFF',
-		defaultKey: 0, command: 'toggle-continueNextPage'},
-	{id: 'TOGGLE_AUTO_ZENTUBE', category: 'その他', label: '自動ZenTube ON/OFF',
-		defaultKey: 0, command: 'toggle-autoZenTube'},
-	{id: 'TOGGLE_DBLCLICK_CLOSE', category: 'プレイヤー全般', label: '背景ダブルクリックで閉じる ON/OFF',
-		defaultKey: 0, command: 'toggle-enableDblclickClose'},
-	{id: 'TOGGLE_SMALLMODE_ASPECT_LOCK', category: '画面', label: '「小」モードのアスペクト比ロック ON/OFF',
-		defaultKey: 0, command: 'toggle-smallModeAspectLock'},
-	{id: 'TOGGLE_FULLSCREEN_ON_DBLCLICK', category: '画面', label: '画面ダブルクリックでフルスクリーン ON/OFF',
-		defaultKey: 0, command: 'toggle-enableFullScreenOnDoubleClick'},
-	{id: 'TOGGLE_REMOVE_NG_MATCHED_USER', category: 'フィルタ/NG', label: 'NGマッチしたユーザーのコメントを全部消す ON/OFF',
-		defaultKey: 0, command: 'toggle-removeNgMatchedUser'},
-	{id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'シーンサーチ: 流れるコメント／一覧を切替',
-		defaultKey: 0, command: 'toggle-enableCommentPreview'},
-	{id: 'SCENE_PIN', category: '画面', label: 'シーンサーチ: プレビューの固定/解除',
-		defaultKey: 0, command: 'sceneSearch-togglePin'},
-	{id: 'SCENE_SHOW', category: '画面', label: 'シーンサーチ: 表示/非表示',
-		defaultKey: 0, command: 'sceneSearch-togglePanel'},
-	{id: 'SCENE_CONTROLS', category: '画面', label: 'シーンサーチ: 操作ボタンを展開/収納',
-		defaultKey: 0, command: 'sceneSearch-toggleControls'},
-	{id: 'SCENE_LAYOUT_NEXT', category: '画面', label: 'シーンサーチ: 次のレイアウト',
-		defaultKey: 0, command: 'sceneSearch-nextLayout'},
-	{id: 'SCENE_LAYOUT_PREV', category: '画面', label: 'シーンサーチ: 前のレイアウト',
-		defaultKey: 0, command: 'sceneSearch-prevLayout'},
-	{id: 'SCENE_SEEK_BACK', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ戻る',
-		defaultKey: 0, command: 'sceneSearch-seekBack'},
-	{id: 'SCENE_SEEK_FORWARD', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ進む',
-		defaultKey: 0, command: 'sceneSearch-seekForward'},
-	{id: 'SCENE_STEP_UP', category: 'シーク', label: 'シーンサーチ: 移動秒数を増やす',
-		defaultKey: 0, command: 'sceneSearch-stepUp'},
-	{id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
-		defaultKey: 0, command: 'sceneSearch-stepDown'},
-	{id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメント全体の表示/非表示（流れる表示・一覧共通）',
-		defaultKey: 0, command: 'sceneSearch-toggleCommentPreview'},
-	{id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
-		defaultKey: 0, command: 'sceneSearch-toggleCommentSearch'},
-	{id: 'SCENE_IDLE_HIDE', category: '画面', label: 'シーンサーチ: 静止中サムネ自動非表示のON/OFF',
-		defaultKey: 0, command: 'sceneSearch-toggleIdleHide'},
-	{id: 'OPEN_NICOAD', category: 'その他', label: 'ニコニ広告で宣伝',
-		defaultKey: 0, command: 'open-uad'},
-	{id: 'OPEN_TWITTER_HASH', category: 'その他', label: 'twitterの反応を見る',
-		defaultKey: 0, command: 'open-twitter-hash'},
-	{id: 'OPEN_PARENT_VIDEO', category: 'その他', label: '親作品・コンテンツツリーを開く',
-		defaultKey: 0, command: 'open-parent-video'},
-	{id: 'OPEN_ORIGINAL_VIDEO', category: 'その他', label: '元動画を開く',
-		defaultKey: 0, command: 'open-original-video'},
-	{id: 'PLAYLIST_SET_COMMONS_TREE', category: 'プレイリスト', label: '親作品・子作品をプレイリストに追加',
-		defaultKey: 0, command: 'playlistSetCommonsTree'},
-	{id: 'COPY_WATCH_URL', category: 'その他', label: '動画URLをコピー',
-		defaultKey: 0, command: 'copy-video-watch-url'},
-	{id: 'RESET_SMALLMODE_POSITION', category: '画面', label: '「小」モードの位置とサイズを初期状態に戻す',
-		defaultKey: 0, command: 'resetSmallModePosition'},
-	{id: 'CUSTOM_SEEK_1', category: 'シーク', label: 'カスタムシーク1(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 1},
-	{id: 'CUSTOM_SEEK_2', category: 'シーク', label: 'カスタムシーク2(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 2},
-	{id: 'CUSTOM_SEEK_3', category: 'シーク', label: 'カスタムシーク3(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 3},
-	{id: 'CUSTOM_SEEK_4', category: 'シーク', label: 'カスタムシーク4(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 4},
-	{id: 'CUSTOM_SEEK_5', category: 'シーク', label: 'カスタムシーク5(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 5},
-	{id: 'CUSTOM_SEEK_6', category: 'シーク', label: 'カスタムシーク6(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 6},
-	{id: 'CUSTOM_SEEK_7', category: 'シーク', label: 'カスタムシーク7(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 7},
-	{id: 'CUSTOM_SEEK_8', category: 'シーク', label: 'カスタムシーク8(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 8},
-	{id: 'CUSTOM_SEEK_9', category: 'シーク', label: 'カスタムシーク9(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 9},
-	{id: 'CUSTOM_SEEK_10', category: 'シーク', label: 'カスタムシーク10(秒数は自由入力・マイナスで戻る)',
-		defaultKey: 0, command: 'seekBy', customSeekSlot: 10},
-	{id: 'PICTURE_IN_PICTURE', category: 'その他', label: 'ピクチャーインピクチャー',
-		defaultKey: 0, command: 'picture-in-picture'},
-	{id: 'PICTURE_IN_PICTURE_COMMENT', category: 'その他', label: 'ピクチャーインピクチャー(コメント付き)',
-		defaultKey: 0, command: 'picture-in-picture-comment'},
-	{id: 'TOGGLE_AUDIO_AUTO_ADJUST', category: 'その他', label: '音声の自動調整のON/OFF',
-		defaultKey: 0, command: 'toggle-audio.autoAdjust'},
-	{id: 'TOGGLE_SUPPORTER_CREDIT', category: 'その他', label: '動画の最後の「提供」画面の表示 ON/OFF',
-		defaultKey: 0, command: 'toggle-supporterCredit.enable'},
-	{id: 'PLAYBACK_RATE_10', category: '再生速度', label: '再生速度: 10倍',
-		defaultKey: 0, command: 'playbackRate', param: 10},
-	{id: 'PLAYBACK_RATE_5', category: '再生速度', label: '再生速度: 5倍',
-		defaultKey: 0, command: 'playbackRate', param: 5},
-	{id: 'PLAYBACK_RATE_4', category: '再生速度', label: '再生速度: 4倍',
-		defaultKey: 0, command: 'playbackRate', param: 4},
-	{id: 'PLAYBACK_RATE_3', category: '再生速度', label: '再生速度: 3倍',
-		defaultKey: 0, command: 'playbackRate', param: 3},
-	{id: 'PLAYBACK_RATE_2', category: '再生速度', label: '再生速度: 2倍',
-		defaultKey: 0, command: 'playbackRate', param: 2},
-	{id: 'PLAYBACK_RATE_1_75', category: '再生速度', label: '再生速度: 1.75倍',
-		defaultKey: 0, command: 'playbackRate', param: 1.75},
-	{id: 'PLAYBACK_RATE_1_5', category: '再生速度', label: '再生速度: 1.5倍',
-		defaultKey: 0, command: 'playbackRate', param: 1.5},
-	{id: 'PLAYBACK_RATE_1_25', category: '再生速度', label: '再生速度: 1.25倍',
-		defaultKey: 0, command: 'playbackRate', param: 1.25},
-	{id: 'PLAYBACK_RATE_1', category: '再生速度', label: '再生速度: 標準速度(x1)',
-		defaultKey: 0, command: 'playbackRate', param: 1},
-	{id: 'PLAYBACK_RATE_0_75', category: '再生速度', label: '再生速度: 0.75倍',
-		defaultKey: 0, command: 'playbackRate', param: 0.75},
-	{id: 'PLAYBACK_RATE_0_5', category: '再生速度', label: '再生速度: 0.5倍',
-		defaultKey: 0, command: 'playbackRate', param: 0.5},
-	{id: 'PLAYBACK_RATE_0_25', category: '再生速度', label: '再生速度: 0.25倍',
-		defaultKey: 0, command: 'playbackRate', param: 0.25},
-	{id: 'PLAYBACK_RATE_0_1', category: '再生速度', label: '再生速度: 0.1倍',
-		defaultKey: 0, command: 'playbackRate', param: 0.1},
-	{id: 'OPEN_SCREEN_FILTER_PANEL', category: '画面フィルター', label: '画面フィルターのパネルを開く/閉じる',
-		defaultKey: 0, command: 'toggle-screenFilterPanel'},
-	{id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: 'エフェクト ON/OFF（今の設定 ⇔ 標準）',
-		defaultKey: 0, command: 'toggle-screenFilter.enable'},
-	{id: 'TOGGLE_SCREEN_FILTER_SPLIT', category: '画面フィルター', label: '左右で見比べる（左半分に元の映像）ON/OFF',
-		defaultKey: 0, command: 'toggle-screenFilter.split'},
-	{id: 'SCREEN_FILTER_NEXT_PRESET', category: '画面フィルター', label: 'プリセットを順番に切り替える',
-		defaultKey: 0, command: 'screenFilter-nextPreset'},
-	{id: 'SCREEN_FILTER_RESET', category: '画面フィルター', label: 'すべて標準に戻す',
-		defaultKey: 0, command: 'screenFilter-reset'},
-	{id: 'SCREEN_FILTER_PRESET_DARK', category: '画面フィルター', label: 'プリセット: 暗い動画を見やすく',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'dark'},
-	{id: 'SCREEN_FILTER_PRESET_SHARP', category: '画面フィルター', label: 'プリセット: くっきり',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'sharp'},
-	{id: 'SCREEN_FILTER_PRESET_FADED', category: '画面フィルター', label: 'プリセット: 色あせ補正',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'faded'},
-	{id: 'SCREEN_FILTER_PRESET_EYECARE', category: '画面フィルター', label: 'プリセット: 目に優しい（夜）',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'eyeCare'},
-	{id: 'SCREEN_FILTER_PRESET_MONO', category: '画面フィルター', label: 'プリセット: 白黒',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'mono'},
-	{id: 'SCREEN_FILTER_PRESET_INVERT', category: '画面フィルター', label: 'プリセット: 反転（暗転）',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'invert'},
-	{id: 'SCREEN_FILTER_PRESET_VIVID', category: '画面フィルター', label: 'プリセット: ビビッド',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'vivid'},
-	{id: 'SCREEN_FILTER_PRESET_CINEMA', category: '画面フィルター', label: 'プリセット: シネマ（銀残し風）',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'cinema'},
-	{id: 'SCREEN_FILTER_PRESET_FILM', category: '画面フィルター', label: 'プリセット: フィルム（レトロ）',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'film'},
-	{id: 'SCREEN_FILTER_PRESET_PASTEL', category: '画面フィルター', label: 'プリセット: パステル',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'pastel'},
-	{id: 'SCREEN_FILTER_PRESET_COOL', category: '画面フィルター', label: 'プリセット: 寒色',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'cool'},
-	{id: 'SCREEN_FILTER_PRESET_WARM', category: '画面フィルター', label: 'プリセット: 暖色',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'warm'},
-	{id: 'SCREEN_FILTER_PRESET_GOLD', category: '画面フィルター', label: 'プリセット: ゴールド',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'gold'},
-	{id: 'SCREEN_FILTER_PRESET_MONO_HIGH', category: '画面フィルター', label: 'プリセット: 白黒（硬調）',
-		defaultKey: 0, command: 'screenFilter-preset', param: 'monoHigh'},
-	{id: 'SCREEN_FILTER_TEMPERATURE_UP', category: '画面フィルター', label: '色温度を暖かく(+5)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'temperature:5'},
-	{id: 'SCREEN_FILTER_TEMPERATURE_DOWN', category: '画面フィルター', label: '色温度を涼しく(-5)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'temperature:-5'},
-	{id: 'SCREEN_FILTER_BLUR_UP', category: '画面フィルター', label: 'ぼかしを強く(+1px)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'blur:1'},
-	{id: 'SCREEN_FILTER_BLUR_DOWN', category: '画面フィルター', label: 'ぼかしを弱く(-1px)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'blur:-1'},
-	{id: 'TOGGLE_SCREEN_FILTER_AUTO_LEVELS', category: '画面フィルター', label: '自動レベル補正 ON/OFF',
-		defaultKey: 0, command: 'toggle-screenFilter.autoLevels'},
-	{id: 'SCREEN_FILTER_BRIGHTNESS_UP', category: '画面フィルター', label: '明るさを上げる(+5%)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'brightness:5'},
-	{id: 'SCREEN_FILTER_BRIGHTNESS_DOWN', category: '画面フィルター', label: '明るさを下げる(-5%)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'brightness:-5'},
-	{id: 'SCREEN_FILTER_CONTRAST_UP', category: '画面フィルター', label: 'コントラストを上げる(+5%)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'contrast:5'},
-	{id: 'SCREEN_FILTER_CONTRAST_DOWN', category: '画面フィルター', label: 'コントラストを下げる(-5%)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'contrast:-5'},
-	{id: 'SCREEN_FILTER_SATURATE_UP', category: '画面フィルター', label: '彩度(色の濃さ)を上げる(+5%)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'saturate:5'},
-	{id: 'SCREEN_FILTER_SATURATE_DOWN', category: '画面フィルター', label: '彩度(色の濃さ)を下げる(-5%)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'saturate:-5'},
-	{id: 'SCREEN_FILTER_GAMMA_UP', category: '画面フィルター', label: 'ガンマを上げる(暗い所を明るく +0.05)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'gamma:0.05'},
-	{id: 'SCREEN_FILTER_GAMMA_DOWN', category: '画面フィルター', label: 'ガンマを下げる(-0.05)',
-		defaultKey: 0, command: 'screenFilter-adjust', param: 'gamma:-0.05'},
-	{id: 'TOGGLE_SCREEN_FILTER_INVERT', category: '画面フィルター', label: '階調反転(ネガ) ON/OFF',
-		defaultKey: 0, command: 'toggle-screenFilter.invert'},
-	{id: 'TOGGLE_FLIP_H', category: '画面フィルター', label: '左右反転 ON/OFF',
-		defaultKey: 0, command: 'toggle-flipH'},
-	{id: 'TOGGLE_FLIP_V', category: '画面フィルター', label: '上下反転 ON/OFF',
-		defaultKey: 0, command: 'toggle-flipV'}
+		{ id: 'CLOSE', legacy: true, category: 'プレイヤー全般', label: '閉じる',
+				defaultKey: 27, command: 'close' },
+		{ id: 'RE_OPEN', legacy: true, category: 'プレイヤー全般',
+				label: '今見ている動画を再読み込み(閉じている時は直前に見ていた動画を開く)',
+				defaultKey: 27 + KEY_MOD.SHIFT, command: 'reload' },
+		{ id: 'HOME', legacy: true, category: 'シーク', label: '先頭へシーク',
+				defaultKey: 36 + KEY_MOD.SHIFT, command: 'seekTo', param: 0 },
+		{ id: 'SEEK_LEFT', legacy: true, category: 'シーク', label: '5秒戻る(Shift+←/←長押しでも可)',
+				defaultKey: 37 + KEY_MOD.SHIFT, command: 'seekBy', param: -5 },
+		{ id: 'SEEK_RIGHT', legacy: true, category: 'シーク', label: '5秒進む(Shift+→/→長押しでも可)',
+				defaultKey: 39 + KEY_MOD.SHIFT, command: 'seekBy', param: 5 },
+		{ id: 'SEEK_PREV_FRAME', legacy: true, category: 'シーク', label: '1コマ戻る',
+				defaultKey: 188, command: 'seekPrevFrame' },
+		{ id: 'SEEK_NEXT_FRAME', legacy: true, category: 'シーク', label: '1コマ進む',
+				defaultKey: 190, command: 'seekNextFrame' },
+		{ id: 'VOL_UP', legacy: true, category: '音量', label: '音量を上げる',
+				defaultKey: 38 + KEY_MOD.SHIFT, command: 'volumeUp' },
+		{ id: 'VOL_DOWN', legacy: true, category: '音量', label: '音量を下げる',
+				defaultKey: 40 + KEY_MOD.SHIFT, command: 'volumeDown' },
+		{ id: 'INPUT_COMMENT', legacy: true, category: 'コメント', label: 'コメント入力欄にフォーカス',
+				defaultKey: 67, command: '(専用処理)' },
+		{ id: 'FULLSCREEN', legacy: true, category: '画面', label: 'フルスクリーン ON/OFF',
+				defaultKey: 70, command: 'toggle-fullscreen' },
+		{ id: 'MUTE', legacy: true, category: '音量', label: 'ミュート ON/OFF',
+				defaultKey: 77, command: 'toggle-mute' },
+		{ id: 'TOGGLE_COMMENT', legacy: true, category: 'コメント', label: 'コメント表示 ON/OFF',
+				defaultKey: 86, command: 'toggle-showComment' },
+		{ id: 'TOGGLE_LOOP', legacy: true, category: '再生', label: 'ループ再生 ON/OFF',
+				defaultKey: 82, command: 'toggle-loop' },
+		{ id: 'DEFLIST_ADD', legacy: true, category: 'マイリスト', label: 'あとで見るへ追加',
+				defaultKey: 84, command: 'deflistAdd' },
+		{ id: 'DEFLIST_REMOVE', legacy: true, category: 'マイリスト', label: 'あとで見るから削除',
+				defaultKey: 84 + KEY_MOD.SHIFT, command: 'deflistRemove' },
+		{ id: 'TOGGLE_PLAY', legacy: true, category: '再生', label: '再生 / 一時停止',
+				defaultKey: 32, command: 'togglePlay' },
+		{ id: 'TOGGLE_PLAYLIST', legacy: true, category: 'プレイリスト', label: 'プレイリスト表示 ON/OFF',
+				defaultKey: 80, command: 'togglePlaylist' },
+		{ id: 'SCREEN_MODE_1', legacy: true, category: '画面', label: '画面モード: 小',
+				defaultKey: 49 + KEY_MOD.SHIFT, command: 'screenMode', param: 'small' },
+		{ id: 'SCREEN_MODE_2', legacy: true, category: '画面', label: '画面モード: サイドビュー',
+				defaultKey: 50 + KEY_MOD.SHIFT, command: 'screenMode', param: 'sideView' },
+		{ id: 'SCREEN_MODE_3', legacy: true, category: '画面', label: '画面モード: 3D',
+				defaultKey: 51 + KEY_MOD.SHIFT, command: 'screenMode', param: '3D' },
+		{ id: 'SCREEN_MODE_4', legacy: true, category: '画面', label: '画面モード: 通常',
+				defaultKey: 52 + KEY_MOD.SHIFT, command: 'screenMode', param: 'normal' },
+		{ id: 'SCREEN_MODE_5', legacy: true, category: '画面', label: '画面モード: 大',
+				defaultKey: 53 + KEY_MOD.SHIFT, command: 'screenMode', param: 'big' },
+		{ id: 'SCREEN_MODE_6', legacy: true, category: '画面', label: '画面モード: ワイド',
+				defaultKey: 54 + KEY_MOD.SHIFT, command: 'screenMode', param: 'wide' },
+		{ id: 'SHIFT_RESET', legacy: true, category: '再生速度', label: '押している間だけ超低速再生',
+				defaultKey: 49, command: 'playbackRate' },
+		{ id: 'SHIFT_DOWN', legacy: true, category: '再生速度', label: '再生速度を下げる',
+				defaultKey: 188 + KEY_MOD.SHIFT, command: 'shiftDown' },
+		{ id: 'SHIFT_UP', legacy: true, category: '再生速度', label: '再生速度を上げる',
+				defaultKey: 190 + KEY_MOD.SHIFT, command: 'shiftUp' },
+		{ id: 'NEXT_VIDEO', legacy: true, category: 'プレイリスト', label: '次の動画',
+				defaultKey: 74, command: 'playNextVideo' },
+		{ id: 'PREV_VIDEO', legacy: true, category: 'プレイリスト', label: '前の動画',
+				defaultKey: 75, command: 'playPreviousVideo' },
+		{ id: 'SCREEN_SHOT', legacy: true, category: 'その他', label: 'スクリーンショット',
+				defaultKey: 83, command: 'screenShot' },
+		{ id: 'SCREEN_SHOT_WITH_COMMENT', legacy: true, category: 'その他', label: 'スクリーンショット(コメント付き)',
+				defaultKey: 83 + KEY_MOD.SHIFT, command: 'screenShotWithComment' },
+		{ id: 'TOGGLE_NOTIFICATION_HISTORY', category: 'その他', label: '通知・エラー履歴を開く/閉じる',
+				defaultKey: 0, command: 'toggle-notificationHistory' },
+		{ id: 'TOGGLE_LIKE', category: '再生', label: 'いいね！ ON/OFF',
+				defaultKey: 0, command: 'toggle-like' },
+		{ id: 'PLAYLIST_SHUFFLE', category: 'プレイリスト', label: 'プレイリストをシャッフル',
+				defaultKey: 0, command: 'shufflePlaylist' },
+		{ id: 'RELOAD_VIDEO', category: 'プレイヤー全般', label: '動画を再読み込み',
+				defaultKey: 0, command: 'reload' },
+		{ id: 'SEEK_TO_RESUME_POINT', category: 'シーク', label: '前回の再生位置へシーク',
+				defaultKey: 0, command: 'seekToResumePoint' },
+		{ id: 'OPEN_GINZA', category: 'プレイヤー全般', label: 'Ginza(公式プレイヤー)で開く',
+				defaultKey: 0, command: 'openGinza' },
+		{ id: 'SAVE_MYMEMORY', category: 'その他', label: '再生位置を「おもいで」に保存',
+				defaultKey: 0, command: 'saveMymemory' },
+		{ id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを画面全体に流す ON/OFF',
+				defaultKey: 0, command: 'toggle-backComment' },
+		{ id: 'TOGGLE_NG_FILTER', category: 'フィルタ/NG', label: 'NGフィルタ全体 ON/OFF',
+				defaultKey: 0, command: 'toggle-enableFilter' },
+		{ id: 'TOGGLE_DEBUG', category: 'その他', label: 'デバッグモード ON/OFF',
+				defaultKey: 0, command: 'toggle-debug' },
+		{ id: 'TOGGLE_NICOS_JUMP', category: 'コメント', label: '@ジャンプ機能 ON/OFF',
+				defaultKey: 0, command: 'toggle-enableNicosJumpVideo' },
+		{ id: 'TOGGLE_BEST_ZENTUBE', category: 'その他', label: 'ベストZenTube ON/OFF',
+				defaultKey: 0, command: 'toggle-bestZenTube' },
+		{ id: 'TOGGLE_AUTO_COMMENT_SPEED', category: 'コメント', label: 'コメント速度自動調整 ON/OFF',
+				defaultKey: 0, command: 'toggle-autoCommentSpeedRate' },
+		{ id: 'TOGGLE_STORYBOARD', category: '画面', label: 'シークバーのサムネイル(ストーリーボード) ON/OFF',
+				defaultKey: 0, command: 'toggle-enableStoryboard' },
+		{ id: 'TOGGLE_STORYBOARD_BAR', category: '画面', label: 'シーンサーチバー ON/OFF',
+				defaultKey: 0, command: 'toggle-enableStoryboardBar' },
+		{ id: 'TOGGLE_COMMENT_PANEL', category: 'コメント', label: 'コメントパネル表示 ON/OFF',
+				defaultKey: 0, command: 'toggle-enableCommentPanel' },
+		{ id: 'TOGGLE_COMMENT_PANEL_AUTOSCROLL', category: 'コメント', label: 'コメントパネルの自動スクロール ON/OFF',
+				defaultKey: 0, command: 'toggle-enableCommentPanelAutoScroll' },
+		{ id: 'TOGGLE_HEATMAP', category: '画面', label: '再生数ヒートマップ表示 ON/OFF',
+				defaultKey: 0, command: 'toggle-enableHeatMap' },
+		{ id: 'TOGGLE_AD_DECORATION', category: 'プレイリスト', label: 'プレイリストの広告 金冠/銀冠枠 ON/OFF',
+				defaultKey: 0, command: 'toggle-enableAdDecoration' },
+		{ id: 'TOGGLE_AUTOPLAY', category: '再生', label: '自動再生 ON/OFF',
+				defaultKey: 0, command: 'toggle-autoPlay' },
+		{ id: 'TOGGLE_CONTINUE_NEXT_PAGE', category: '再生', label: 'ページ切り替え後の再生継続 ON/OFF',
+				defaultKey: 0, command: 'toggle-continueNextPage' },
+		{ id: 'TOGGLE_AUTO_ZENTUBE', category: 'その他', label: '自動ZenTube ON/OFF',
+				defaultKey: 0, command: 'toggle-autoZenTube' },
+		{ id: 'TOGGLE_DBLCLICK_CLOSE', category: 'プレイヤー全般', label: '背景ダブルクリックで閉じる ON/OFF',
+				defaultKey: 0, command: 'toggle-enableDblclickClose' },
+		{ id: 'TOGGLE_SMALLMODE_ASPECT_LOCK', category: '画面', label: '「小」モードのアスペクト比ロック ON/OFF',
+				defaultKey: 0, command: 'toggle-smallModeAspectLock' },
+		{ id: 'TOGGLE_FULLSCREEN_ON_DBLCLICK', category: '画面', label: '画面ダブルクリックでフルスクリーン ON/OFF',
+				defaultKey: 0, command: 'toggle-enableFullScreenOnDoubleClick' },
+		{ id: 'TOGGLE_REMOVE_NG_MATCHED_USER', category: 'フィルタ/NG', label: 'NGマッチしたユーザーのコメントを全部消す ON/OFF',
+				defaultKey: 0, command: 'toggle-removeNgMatchedUser' },
+		{ id: 'TOGGLE_COMMENT_PREVIEW', category: 'コメント', label: 'コメント欄プレビュー ON/OFF',
+				defaultKey: 0, command: 'toggle-enableCommentPreview' },
+		{ id: 'SCENE_PIN', category: '画面', label: 'シーンサーチ: プレビューの固定/解除',
+				defaultKey: 0, command: 'sceneSearch-togglePin' },
+		{ id: 'SCENE_SHOW', category: '画面', label: 'シーンサーチ: 表示/非表示',
+				defaultKey: 0, command: 'sceneSearch-togglePanel' },
+		{ id: 'SCENE_CONTROLS', category: '画面', label: 'シーンサーチ: 操作ボタンを展開/収納',
+				defaultKey: 0, command: 'sceneSearch-toggleControls' },
+		{ id: 'SCENE_LAYOUT_NEXT', category: '画面', label: 'シーンサーチ: 次のレイアウト',
+				defaultKey: 0, command: 'sceneSearch-nextLayout' },
+		{ id: 'SCENE_LAYOUT_PREV', category: '画面', label: 'シーンサーチ: 前のレイアウト',
+				defaultKey: 0, command: 'sceneSearch-prevLayout' },
+		{ id: 'SCENE_SEEK_BACK', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ戻る',
+				defaultKey: 0, command: 'sceneSearch-seekBack' },
+		{ id: 'SCENE_SEEK_FORWARD', category: 'シーク', label: 'シーンサーチ: 設定秒数だけ進む',
+				defaultKey: 0, command: 'sceneSearch-seekForward' },
+		{ id: 'SCENE_STEP_UP', category: 'シーク', label: 'シーンサーチ: 移動秒数を増やす',
+				defaultKey: 0, command: 'sceneSearch-stepUp' },
+		{ id: 'SCENE_STEP_DOWN', category: 'シーク', label: 'シーンサーチ: 移動秒数を減らす',
+				defaultKey: 0, command: 'sceneSearch-stepDown' },
+		{ id: 'SCENE_COMMENT_VISIBILITY', category: 'コメント', label: 'シーンサーチ: コメントプレビュー表示/非表示',
+				defaultKey: 0, command: 'sceneSearch-toggleCommentPreview' },
+		{ id: 'SCENE_COMMENT_SEARCH', category: 'コメント', label: 'シーンサーチ: コメント検索を開く/閉じる',
+				defaultKey: 0, command: 'sceneSearch-toggleCommentSearch' },
+		{ id: 'SCENE_IDLE_HIDE', category: '画面', label: 'シーンサーチ: 静止中サムネ自動非表示のON/OFF',
+				defaultKey: 0, command: 'sceneSearch-toggleIdleHide' },
+		{ id: 'OPEN_NICOAD', category: 'その他', label: 'ニコニ広告で宣伝',
+				defaultKey: 0, command: 'open-uad' },
+		{ id: 'OPEN_TWITTER_HASH', category: 'その他', label: 'twitterの反応を見る',
+				defaultKey: 0, command: 'open-twitter-hash' },
+		{ id: 'OPEN_PARENT_VIDEO', category: 'その他', label: '親作品・コンテンツツリーを開く',
+				defaultKey: 0, command: 'open-parent-video' },
+		{ id: 'OPEN_ORIGINAL_VIDEO', category: 'その他', label: '元動画を開く',
+				defaultKey: 0, command: 'open-original-video' },
+		{ id: 'PLAYLIST_SET_COMMONS_TREE', category: 'プレイリスト', label: '親作品・子作品をプレイリストに追加',
+				defaultKey: 0, command: 'playlistSetCommonsTree' },
+		{ id: 'COPY_WATCH_URL', category: 'その他', label: '動画URLをコピー',
+				defaultKey: 0, command: 'copy-video-watch-url' },
+		{ id: 'RESET_SMALLMODE_POSITION', category: '画面', label: '「小」モードの位置とサイズを初期状態に戻す',
+				defaultKey: 0, command: 'resetSmallModePosition' },
+		{ id: 'CUSTOM_SEEK_1', category: 'シーク', label: 'カスタムシーク1(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 1 },
+		{ id: 'CUSTOM_SEEK_2', category: 'シーク', label: 'カスタムシーク2(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 2 },
+		{ id: 'CUSTOM_SEEK_3', category: 'シーク', label: 'カスタムシーク3(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 3 },
+		{ id: 'CUSTOM_SEEK_4', category: 'シーク', label: 'カスタムシーク4(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 4 },
+		{ id: 'CUSTOM_SEEK_5', category: 'シーク', label: 'カスタムシーク5(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 5 },
+		{ id: 'CUSTOM_SEEK_6', category: 'シーク', label: 'カスタムシーク6(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 6 },
+		{ id: 'CUSTOM_SEEK_7', category: 'シーク', label: 'カスタムシーク7(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 7 },
+		{ id: 'CUSTOM_SEEK_8', category: 'シーク', label: 'カスタムシーク8(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 8 },
+		{ id: 'CUSTOM_SEEK_9', category: 'シーク', label: 'カスタムシーク9(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 9 },
+		{ id: 'CUSTOM_SEEK_10', category: 'シーク', label: 'カスタムシーク10(秒数は自由入力・マイナスで戻る)',
+				defaultKey: 0, command: 'seekBy', customSeekSlot: 10 },
+		{ id: 'PICTURE_IN_PICTURE', category: 'その他', label: 'ピクチャーインピクチャー',
+				defaultKey: 0, command: 'picture-in-picture' },
+		{ id: 'PICTURE_IN_PICTURE_COMMENT', category: 'その他', label: 'ピクチャーインピクチャー(コメント付き)',
+				defaultKey: 0, command: 'picture-in-picture-comment' },
+		{ id: 'TOGGLE_AUDIO_AUTO_ADJUST', category: 'その他', label: '音声の自動調整のON/OFF',
+				defaultKey: 0, command: 'toggle-audio.autoAdjust' },
+		{ id: 'TOGGLE_SUPPORTER_CREDIT', category: 'その他', label: '動画の最後の「提供」画面の表示 ON/OFF',
+				defaultKey: 0, command: 'toggle-supporterCredit.enable' },
+		{ id: 'PLAYBACK_RATE_10', category: '再生速度', label: '再生速度: 10倍',
+				defaultKey: 0, command: 'playbackRate', param: 10 },
+		{ id: 'PLAYBACK_RATE_5', category: '再生速度', label: '再生速度: 5倍',
+				defaultKey: 0, command: 'playbackRate', param: 5 },
+		{ id: 'PLAYBACK_RATE_4', category: '再生速度', label: '再生速度: 4倍',
+				defaultKey: 0, command: 'playbackRate', param: 4 },
+		{ id: 'PLAYBACK_RATE_3', category: '再生速度', label: '再生速度: 3倍',
+				defaultKey: 0, command: 'playbackRate', param: 3 },
+		{ id: 'PLAYBACK_RATE_2', category: '再生速度', label: '再生速度: 2倍',
+				defaultKey: 0, command: 'playbackRate', param: 2 },
+		{ id: 'PLAYBACK_RATE_1_75', category: '再生速度', label: '再生速度: 1.75倍',
+				defaultKey: 0, command: 'playbackRate', param: 1.75 },
+		{ id: 'PLAYBACK_RATE_1_5', category: '再生速度', label: '再生速度: 1.5倍',
+				defaultKey: 0, command: 'playbackRate', param: 1.5 },
+		{ id: 'PLAYBACK_RATE_1_25', category: '再生速度', label: '再生速度: 1.25倍',
+				defaultKey: 0, command: 'playbackRate', param: 1.25 },
+		{ id: 'PLAYBACK_RATE_1', category: '再生速度', label: '再生速度: 標準速度(x1)',
+				defaultKey: 0, command: 'playbackRate', param: 1 },
+		{ id: 'PLAYBACK_RATE_0_75', category: '再生速度', label: '再生速度: 0.75倍',
+				defaultKey: 0, command: 'playbackRate', param: 0.75 },
+		{ id: 'PLAYBACK_RATE_0_5', category: '再生速度', label: '再生速度: 0.5倍',
+				defaultKey: 0, command: 'playbackRate', param: 0.5 },
+		{ id: 'PLAYBACK_RATE_0_25', category: '再生速度', label: '再生速度: 0.25倍',
+				defaultKey: 0, command: 'playbackRate', param: 0.25 },
+		{ id: 'PLAYBACK_RATE_0_1', category: '再生速度', label: '再生速度: 0.1倍',
+				defaultKey: 0, command: 'playbackRate', param: 0.1 },
+		{ id: 'OPEN_SCREEN_FILTER_PANEL', category: '画面フィルター', label: '画面フィルターのパネルを開く/閉じる',
+				defaultKey: 0, command: 'toggle-screenFilterPanel' },
+		{ id: 'TOGGLE_SCREEN_FILTER', category: '画面フィルター', label: 'エフェクト ON/OFF（今の設定 ⇔ 標準）',
+				defaultKey: 0, command: 'toggle-screenFilter.enable' },
+		{ id: 'TOGGLE_SCREEN_FILTER_SPLIT', category: '画面フィルター', label: '左右で見比べる（左半分に元の映像）ON/OFF',
+				defaultKey: 0, command: 'toggle-screenFilter.split' },
+		{ id: 'SCREEN_FILTER_NEXT_PRESET', category: '画面フィルター', label: 'プリセットを順番に切り替える',
+				defaultKey: 0, command: 'screenFilter-nextPreset' },
+		{ id: 'SCREEN_FILTER_RESET', category: '画面フィルター', label: 'すべて標準に戻す',
+				defaultKey: 0, command: 'screenFilter-reset' },
+		{ id: 'SCREEN_FILTER_PRESET_DARK', category: '画面フィルター', label: 'プリセット: 暗い動画を見やすく',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'dark' },
+		{ id: 'SCREEN_FILTER_PRESET_SHARP', category: '画面フィルター', label: 'プリセット: くっきり',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'sharp' },
+		{ id: 'SCREEN_FILTER_PRESET_FADED', category: '画面フィルター', label: 'プリセット: 色あせ補正',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'faded' },
+		{ id: 'SCREEN_FILTER_PRESET_EYECARE', category: '画面フィルター', label: 'プリセット: 目に優しい（夜）',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'eyeCare' },
+		{ id: 'SCREEN_FILTER_PRESET_MONO', category: '画面フィルター', label: 'プリセット: 白黒',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'mono' },
+		{ id: 'SCREEN_FILTER_PRESET_INVERT', category: '画面フィルター', label: 'プリセット: 反転（暗転）',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'invert' },
+		{ id: 'SCREEN_FILTER_PRESET_VIVID', category: '画面フィルター', label: 'プリセット: ビビッド',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'vivid' },
+		{ id: 'SCREEN_FILTER_PRESET_CINEMA', category: '画面フィルター', label: 'プリセット: シネマ（銀残し風）',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'cinema' },
+		{ id: 'SCREEN_FILTER_PRESET_FILM', category: '画面フィルター', label: 'プリセット: フィルム（レトロ）',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'film' },
+		{ id: 'SCREEN_FILTER_PRESET_PASTEL', category: '画面フィルター', label: 'プリセット: パステル',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'pastel' },
+		{ id: 'SCREEN_FILTER_PRESET_COOL', category: '画面フィルター', label: 'プリセット: 寒色',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'cool' },
+		{ id: 'SCREEN_FILTER_PRESET_WARM', category: '画面フィルター', label: 'プリセット: 暖色',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'warm' },
+		{ id: 'SCREEN_FILTER_PRESET_GOLD', category: '画面フィルター', label: 'プリセット: ゴールド',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'gold' },
+		{ id: 'SCREEN_FILTER_PRESET_MONO_HIGH', category: '画面フィルター', label: 'プリセット: 白黒（硬調）',
+				defaultKey: 0, command: 'screenFilter-preset', param: 'monoHigh' },
+		{ id: 'SCREEN_FILTER_TEMPERATURE_UP', category: '画面フィルター', label: '色温度を暖かく(+5)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'temperature:5' },
+		{ id: 'SCREEN_FILTER_TEMPERATURE_DOWN', category: '画面フィルター', label: '色温度を涼しく(-5)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'temperature:-5' },
+		{ id: 'SCREEN_FILTER_BLUR_UP', category: '画面フィルター', label: 'ぼかしを強く(+1px)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'blur:1' },
+		{ id: 'SCREEN_FILTER_BLUR_DOWN', category: '画面フィルター', label: 'ぼかしを弱く(-1px)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'blur:-1' },
+		{ id: 'TOGGLE_SCREEN_FILTER_AUTO_LEVELS', category: '画面フィルター', label: '自動レベル補正 ON/OFF',
+				defaultKey: 0, command: 'toggle-screenFilter.autoLevels' },
+		{ id: 'SCREEN_FILTER_BRIGHTNESS_UP', category: '画面フィルター', label: '明るさを上げる(+5%)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'brightness:5' },
+		{ id: 'SCREEN_FILTER_BRIGHTNESS_DOWN', category: '画面フィルター', label: '明るさを下げる(-5%)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'brightness:-5' },
+		{ id: 'SCREEN_FILTER_CONTRAST_UP', category: '画面フィルター', label: 'コントラストを上げる(+5%)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'contrast:5' },
+		{ id: 'SCREEN_FILTER_CONTRAST_DOWN', category: '画面フィルター', label: 'コントラストを下げる(-5%)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'contrast:-5' },
+		{ id: 'SCREEN_FILTER_SATURATE_UP', category: '画面フィルター', label: '彩度(色の濃さ)を上げる(+5%)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'saturate:5' },
+		{ id: 'SCREEN_FILTER_SATURATE_DOWN', category: '画面フィルター', label: '彩度(色の濃さ)を下げる(-5%)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'saturate:-5' },
+		{ id: 'SCREEN_FILTER_GAMMA_UP', category: '画面フィルター', label: 'ガンマを上げる(暗い所を明るく +0.05)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'gamma:0.05' },
+		{ id: 'SCREEN_FILTER_GAMMA_DOWN', category: '画面フィルター', label: 'ガンマを下げる(-0.05)',
+				defaultKey: 0, command: 'screenFilter-adjust', param: 'gamma:-0.05' },
+		{ id: 'TOGGLE_SCREEN_FILTER_INVERT', category: '画面フィルター', label: '階調反転(ネガ) ON/OFF',
+				defaultKey: 0, command: 'toggle-screenFilter.invert' },
+		{ id: 'TOGGLE_FLIP_H', category: '画面フィルター', label: '左右反転 ON/OFF',
+				defaultKey: 0, command: 'toggle-flipH' },
+		{ id: 'TOGGLE_FLIP_V', category: '画面フィルター', label: '上下反転 ON/OFF',
+				defaultKey: 0, command: 'toggle-flipV' }
 ];
 const buildDefaultKeyConfig = (existingDefaults = {}) => {
-	const result = {};
-	SHORTCUT_ACTIONS.forEach(action => {
-		const propName = 'KEY_' + action.id;
-		if (Object.prototype.hasOwnProperty.call(existingDefaults, propName)) { return; }
-		result[propName] = action.defaultKey || 0;
-	});
-	return result;
+		const result = {};
+		SHORTCUT_ACTIONS.forEach(action => {
+				const propName = 'KEY_' + action.id;
+				if (Object.prototype.hasOwnProperty.call(existingDefaults, propName)) {
+						return;
+				}
+				result[propName] = action.defaultKey || 0;
+		});
+		return result;
 };
 const groupShortcutActionsByCategory = () => {
-	const groups = [];
-	const byCategory = {};
-	SHORTCUT_ACTIONS.forEach(action => {
-		if (!byCategory[action.category]) {
-			byCategory[action.category] = {category: action.category, actions: []};
-			groups.push(byCategory[action.category]);
-		}
-		byCategory[action.category].actions.push(action);
-	});
-	return groups;
+		const groups = [];
+		const byCategory = {};
+		SHORTCUT_ACTIONS.forEach(action => {
+				if (!byCategory[action.category]) {
+						byCategory[action.category] = { category: action.category, actions: [] };
+						groups.push(byCategory[action.category]);
+				}
+				byCategory[action.category].actions.push(action);
+		});
+		return groups;
 };
 const ZenzaCommentHistorySettings = (() => {
 'use strict';
@@ -3123,240 +3145,377 @@ class SceneSearchPreferences {
 		}
 }
 class UiVisibilityRegistry {
-	static get SHARED_SETTINGS() {
-		return [
-			['showComment','comments-video'],['enableCommentPanel','comments-list'],
-			['enableCommentPreview','comments-preview'],['enableHeatMap','comment-heatmap'],
-			['enableStoryboard','seek-thumbnail'],['enableStoryboardBar','scene-filmstrip'],
-			['enableAdDecoration','ad-crown'],
-			['sceneSearch.enabled','seek-thumbnail'],
-			['sceneSearch.commentPreviewVisible','comments-preview'],
-			['sceneSearch.miniCommentVisible','comments-video'],
-			['sceneSearch.commentListVisible','comments-list']
-		];
-	}
-	static get ITEMS() {
-		if(this.__items){return this.__items;}
-		return this.__items=Object.freeze([
-			{key:'ui.hover.like',scope:'hover',label:'いいねボタン',icon:'♡',selector:'.toggleLikeButton'},
-			{key:'ui.hover.tweet',scope:'hover',label:'ツイート（X共有）ボタン',icon:'t',selector:'.zenzaTweetButton'},
-			{key:'ui.hover.mylist',scope:'hover',label:'マイリスト登録',icon:'My',selector:'.mylistButton.mylistAddMenu'},
-			{key:'ui.hover.watchLater',scope:'hover',label:'あとで見る',icon:'✚',selector:'.mylistButton.deflistAdd'},
-			{key:'ui.hover.comments',scope:'hover',label:'コメント表示切替',icon:'💬',selector:'.showCommentSwitch'},
-			{key:'ui.hover.ngFilter',scope:'hover',label:'NGフィルター切替',icon:'shield-ng',selector:'.ngFilterSwitch'},
-			{key:'ui.relatedMenu',scope:'related',label:'関連メニュー',icon:'related-menu',selector:'.RelatedInfoMenu',
-				description:'動画上部と動画情報パネルの2か所を一括で切り替えます。登録したリンクは削除しません。'},
-			{key:'ui.commentInput',scope:'comment',label:'コメント入力欄',icon:'comment-input',selector:'.commentInputPanel',
-				description:'コメント入力・コマンド・送信ボタンをまとめて隠します。コメント表示とショートカットはそのままです。'},
-			{key:'ui.bar.previous',scope:'bar',label:'前の動画ボタン',icon:'⇤',selector:'.prevVideo'},
-			{key:'ui.bar.next',scope:'bar',label:'次の動画ボタン',icon:'⇥',selector:'.nextVideo'},
-			{key:'ui.bar.storyboard',scope:'bar',label:'シーンサーチの切替ボタン',icon:'▤',selector:'.toggleStoryboard'},
-			{key:'ui.bar.loop',scope:'bar',label:'ループボタン',icon:'↻',selector:'.loopSwitch'},
-			{key:'ui.bar.seekTop',scope:'bar',label:'動画の先頭へ戻るボタン',icon:'⇤',selector:'.seekTop'},
-			{key:'ui.bar.speed',scope:'bar',label:'再生速度メニュー',icon:'1.0×',selector:'.playbackRateMenu'},
-			{key:'ui.bar.time',scope:'bar',label:'再生時間の表示',icon:'1:23',selector:'.videoTime'},
-			{key:'ui.bar.mute',scope:'bar',label:'ミュートボタン',icon:'🔊',selector:'.muteSwitch'},
-			{key:'ui.bar.volume',scope:'bar',label:'音量スライダー',icon:'━●',selector:'.volumeControl'},
-			{key:'ui.bar.history',scope:'bar',label:'コメント増量ボタン',icon:'▤',selector:'.commentHistorySwitch'},
-			{key:'ui.bar.filter',scope:'bar',label:'画面フィルターボタン',icon:'filter-sparkle',selector:'.screenFilterSwitch'},
-			{key:'ui.bar.quality',scope:'bar',label:'画質・動画サーバー選択',icon:'画',selector:'.videoServerTypeMenu'},
-			{key:'ui.bar.screenMode',scope:'bar',label:'画面サイズ・モード選択',icon:'⛶',selector:'.screenModeMenu'},
-			{key:'ui.bar.pin',scope:'bar',label:'操作バーの表示モード選択',icon:'📌',selector:'.fullscreenControlBarModeMenu'},
-			{key:'ui.bar.fullscreen',scope:'bar',label:'フルスクリーン切替ボタン',icon:'⛶',selector:'.fullscreenSwitch',
-				description:'画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。'},
-			{key:'ui.bar.settings',scope:'bar',label:'プレイヤー設定（歯車）ボタン',icon:'⚙',selector:'.settingPanelSwitch',
-				description:'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。'},
-			{key:'ui.scene.panel',scope:'scene',hidden:true,label:'シーンサーチのプレビュー枠',
-				icon:'▣',selector:'.zenzaSceneSearchHost'},
-			{key:'ui.scene.pin',scope:'scene',hidden:true,label:'シーンサーチのピン固定ボタン',
-				icon:'📌',selector:'.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]'},
-			{key:'ui.scene.seekArrows',scope:'scene',label:'シーンサーチの前後矢印',
-				icon:'↔',selector:'.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]'},
-			{key:'ui.scene.seekSeconds',scope:'scene',hidden:true,label:'シーンサーチの移動秒数ボタン',
-				icon:'5s',selector:'.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]'},
-			{key:'ui.scene.commentToggle',scope:'scene',label:'シーンサーチのコメント表示切替ボタン',
-				icon:'💬',selector:'.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]'},
-			{key:'ui.scene.commentSearch',scope:'scene',label:'シーンサーチのコメント検索ボタン',
-				icon:'⌕',selector:'.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]'},
-			{key:'ui.scene.more',scope:'scene',hidden:true,label:'シーンサーチの操作メニュー展開ボタン',
-				icon:'⋯',selector:'.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]'},
-			{key:'ui.info.owner',scope:'info',label:'投稿者情報',icon:'👤',selector:'.videoOwnerInfoContainer'},
-			{key:'ui.info.description',scope:'info',label:'動画説明文',icon:'≡',selector:'.videoDescription'},
-			{key:'ui.info.series',scope:'info',label:'シリーズ情報',icon:'▤',selector:'.seriesList'},
-			{key:'ui.info.tags',scope:'info',label:'動画情報のタグ一覧',icon:'#',selector:'.videoTagsContainer.sideTab'},
-			{key:'ui.info.credits',scope:'info',label:'ニコニ広告関連情報',icon:'広告',selector:'.uaaContainer'},
-			{key:'ui.info.likeThanks',scope:'info',label:'いいねのお礼メッセージ',icon:'♥',selector:'.likeMessageContainer'},
-			{key:'ui.info.metadata',scope:'info',label:'動画の再生数などの情報',icon:'ℹ',selector:'.videoMetaInfoContainer'},
-			{key:'ui.info.relatedTab',scope:'info',label:'関連動画タブ',icon:'▶',selector:'.tabSelect.relatedVideoTab, .tabs.relatedVideoTab',
-				description:'関連動画タブを隠した場合、開いていた内容は動画情報タブへ戻ります。'},
-			{key:'ui.header.title',scope:'header',label:'動画タイトル（上部）',icon:'T',selector:'.videoTitleContainer'},
-			{key:'ui.header.tags',scope:'header',label:'上部のタグ一覧',icon:'#',selector:'.videoTagsContainer.videoHeader'},
-			{key:'ui.header.metadata',scope:'header',label:'上部の動画情報',icon:'ℹ',selector:'.videoMetaInfoContainer'},
-			{key:'ui.header.series',scope:'header',label:'上部のシリーズ画像',icon:'▧',selector:'.series-thumbnail-cover'},
-			{key:'ui.header.search',scope:'header',label:'動画検索ウィンドウ',icon:'⌕',selector:'.zenzaVideoSearchPanel',
-				description:'上部の動画検索欄・候補一覧を隠します。検索文字は削除されません。ニコニコのマイページ（/my）の上級者設定から再表示できます。'}
-		].map(item=>Object.freeze(item)));
-	}
-	static get _byKey() {
-		if(!this.__byKey){this.__byKey=new Map(this.ITEMS.map(item=>[item.key,item]));}
-		return this.__byKey;
-	}
-	static get(key) { return this._byKey.get(key)||null; }
-	static list(scope) { return this.ITEMS.filter(item=>item.scope===scope); }
-	static defaults() { return Object.fromEntries(this.ITEMS.map(item=>[item.key,true])); }
-	static isVisibilityKey(key) { return !!this.get(key); }
-	static descriptors() {
-		return this.ITEMS.map(item=>({
-			id:item.key,label:item.label+'を表示',category:'画面・映像',
-			subcategory:'表示・非表示',type:'boolean',
-			icon:item.icon,visibilityScope:item.scope,hidden:item.hidden===true,
-			description:item.description||'画面上の表示のみ切り替えます。機能・操作コマンド自体は削除しません。'
-		}));
-	}
-	static get _savedDisplay() {
-		if(!this.__savedDisplay){this.__savedDisplay=new WeakMap();}
-		return this.__savedDisplay;
-	}
-	static apply(config,root,key,{beforeHide,afterApply}={}) {
-		const entry=this.get(key);
-		if(!entry || !root || !config){return 0;}
-		if(key==='ui.scene.panel'&&root.matches?.('.zenzaSceneSharedPreview'))return 0;
-		const read=k=>typeof config.getValue==='function'?config.getValue(k):config.props?.[k];
-		const sceneEnabled=entry.scope!=='scene'||(config.resolveSceneSearch?.()?.enabled??read('sceneSearch.enabled')!==false);
-		const visible=(entry.scope!=='scene'||sceneEnabled)&&
-			(key==='ui.scene.panel'&&(typeof config.resolveSceneSearch==='function'||read('sceneSearch.enabled')!==undefined)?sceneEnabled:read(key)!==false);
-		const nodes=[];
-		if(root.matches?.(entry.selector)){nodes.push(root);}
-		root.querySelectorAll?.(entry.selector).forEach(node=>nodes.push(node));
-		let changed=0;
-		for(const node of nodes){
-			const saved=this._savedDisplay.get(node);
-			if(!visible && !saved){
-				beforeHide?.(entry,node);
-				this._savedDisplay.set(node,{
-					value:node.style.getPropertyValue('display'),
-					priority:node.style.getPropertyPriority('display'),
-					hidden:node.hidden
-				});
-				node.hidden=true;
-				node.style.setProperty('display','none','important');
-				changed++;
-			}else if(!visible && saved && (node.hidden!==true ||
-				node.style.getPropertyValue('display')!=='none' ||
-				node.style.getPropertyPriority('display')!=='important')){
-				node.hidden=true;
-				node.style.setProperty('display','none','important');
-				changed++;
-			}else if(visible && saved){
-				if(saved.value){node.style.setProperty('display',saved.value,saved.priority);}
-				else{node.style.removeProperty('display');}
-				node.hidden=saved.hidden;
-				this._savedDisplay.delete(node);
-				changed++;
-			}
+		static get SHARED_SETTINGS() {
+				return [
+						['showComment', 'comments-video'], ['enableCommentPanel', 'comments-list'],
+						['enableCommentPreview', 'comments-preview'], ['enableHeatMap', 'comment-heatmap'],
+						['enableStoryboard', 'seek-thumbnail'], ['enableStoryboardBar', 'scene-filmstrip'],
+						['enableAdDecoration', 'ad-crown'],
+						['sceneSearch.enabled', 'seek-thumbnail'], ['sceneSearch.commentPreviewVisible', 'comments-preview'],
+						['sceneSearch.miniCommentVisible', 'comments-video'], ['sceneSearch.commentListVisible', 'comments-list']
+				];
 		}
-		if(changed){afterApply?.(entry,visible);}
-		return changed;
-	}
-	static connect(config,root,scope,callbacks={}) {
-		const items=this.list(scope);
-		const api={
-			refresh:()=>items.forEach(item=>
-				this.apply(config,root,item.key,callbacks)),
-			apply:key=>{
-				if(items.some(item=>item.key===key)){
-					return this.apply(config,root,key,callbacks);
+		static get ITEMS() {
+				if (this.__items) {
+						return this.__items;
 				}
-				return 0;
-			}
-		};
-		const subscriptions=[];
-		if(items.some(item=>item.scope==='scene')){
-			const listener=()=>api.refresh();config.onkey?.('sceneSearch.enabled',listener);
-			subscriptions.push(['sceneSearch.enabled',listener]);
+				return this.__items = Object.freeze([
+						{ key: 'ui.hover.like', scope: 'hover', label: 'いいねボタン', icon: '♡', selector: '.toggleLikeButton' },
+						{ key: 'ui.hover.tweet', scope: 'hover', label: 'ツイート（X共有）ボタン', icon: 't', selector: '.zenzaTweetButton' },
+						{ key: 'ui.hover.mylist', scope: 'hover', label: 'マイリスト登録', icon: 'My', selector: '.mylistButton.mylistAddMenu' },
+						{ key: 'ui.hover.watchLater', scope: 'hover', label: 'あとで見る', icon: '✚', selector: '.mylistButton.deflistAdd' },
+						{ key: 'ui.hover.comments', scope: 'hover', label: 'コメント表示切替', icon: '💬', selector: '.showCommentSwitch' },
+						{ key: 'ui.hover.ngFilter', scope: 'hover', label: 'NGフィルター切替', icon: 'shield-ng', selector: '.ngFilterSwitch' },
+						{ key: 'ui.relatedMenu', scope: 'related', label: '関連メニュー', icon: 'related-menu', selector: '.RelatedInfoMenu',
+								description: '動画上部と動画情報パネルの2か所を一括で切り替えます。登録したリンクは削除しません。' },
+						{ key: 'ui.commentInput', scope: 'comment', label: 'コメント入力欄', icon: 'comment-input', selector: '.commentInputPanel',
+								description: 'コメント入力・コマンド・送信ボタンをまとめて隠します。コメント表示とショートカットはそのままです。' },
+						{ key: 'ui.bar.previous', scope: 'bar', label: '前の動画ボタン', icon: '⇤', selector: '.prevVideo' },
+						{ key: 'ui.bar.next', scope: 'bar', label: '次の動画ボタン', icon: '⇥', selector: '.nextVideo' },
+						{ key: 'ui.bar.storyboard', scope: 'bar', label: 'シーンサーチの切替ボタン', icon: '▤', selector: '.toggleStoryboard' },
+						{ key: 'ui.bar.loop', scope: 'bar', label: 'ループボタン', icon: '↻', selector: '.loopSwitch' },
+						{ key: 'ui.bar.seekTop', scope: 'bar', label: '動画の先頭へ戻るボタン', icon: '⇤', selector: '.seekTop' },
+						{ key: 'ui.bar.speed', scope: 'bar', label: '再生速度メニュー', icon: '1.0×', selector: '.playbackRateMenu' },
+						{ key: 'ui.bar.time', scope: 'bar', label: '再生時間の表示', icon: '1:23', selector: '.videoTime' },
+						{ key: 'ui.bar.mute', scope: 'bar', label: 'ミュートボタン', icon: '🔊', selector: '.muteSwitch' },
+						{ key: 'ui.bar.volume', scope: 'bar', label: '音量スライダー', icon: '━●', selector: '.volumeControl' },
+						{ key: 'ui.bar.history', scope: 'bar', label: 'コメント増量ボタン', icon: '▤', selector: '.commentHistorySwitch' },
+						{ key: 'ui.bar.notificationHistory', scope: 'bar', label: '通知・エラー履歴を開くボタン', icon: '🔔', selector: '.notificationHistorySwitch',
+								description: 'プレイヤー左下のhls横にある通知履歴ボタンを表示・非表示にします。履歴データは消去せず、設定したショートカットは引き続き使えます。' },
+						{ key: 'ui.bar.filter', scope: 'bar', label: '画面フィルターボタン', icon: 'filter-sparkle', selector: '.screenFilterSwitch' },
+						{ key: 'ui.bar.quality', scope: 'bar', label: '画質・動画サーバー選択', icon: '画', selector: '.videoServerTypeMenu' },
+						{ key: 'ui.bar.screenMode', scope: 'bar', label: '画面サイズ・モード選択', icon: '⛶', selector: '.screenModeMenu' },
+						{ key: 'ui.bar.pin', scope: 'bar', label: '操作バーの表示モード選択', icon: '📌', selector: '.fullscreenControlBarModeMenu' },
+						{ key: 'ui.bar.fullscreen', scope: 'bar', label: 'フルスクリーン切替ボタン', icon: '⛶', selector: '.fullscreenSwitch',
+								description: '画面の切替ボタンを隠します。通常のFキーで全画面を切り替えられます。上級者設定のこの画面から再表示できます。' },
+						{ key: 'ui.bar.settings', scope: 'bar', label: 'プレイヤー設定（歯車）ボタン', icon: '⚙', selector: '.settingPanelSwitch',
+								description: 'プレイヤー内の歯車を隠します。再表示するにはニコニコのマイページ（/my）のZenzaWatch上級者設定から戻してください。' },
+						{ key: 'ui.scene.panel', scope: 'scene', hidden: true, label: 'シーンサーチのプレビュー枠',
+								icon: '▣', selector: '.zenzaSceneSearchHost' },
+						{ key: 'ui.scene.pin', scope: 'scene', hidden: true, label: 'シーンサーチのピン固定ボタン',
+								icon: '📌', selector: '.zenzaSceneSearchPin, .zenzaSceneSearchHost [data-scui-action="pin"]' },
+						{ key: 'ui.scene.seekArrows', scope: 'scene', label: 'シーンサーチの前後矢印',
+								icon: '↔', selector: '.zenzaSceneSeekStepControl [data-scui="back"], .zenzaSceneSeekStepControl [data-scui="forward"], .zenzaSceneSearchHost [data-scui-action="seek-back"], .zenzaSceneSearchHost [data-scui-action="seek-forward"]' },
+						{ key: 'ui.scene.seekSeconds', scope: 'scene', hidden: true, label: 'シーンサーチの移動秒数ボタン',
+								icon: '5s', selector: '.zenzaSceneSeekStepControl [data-scui="open"], .zenzaSceneSearchHost [data-scui-action="seek-step"]' },
+						{ key: 'ui.scene.commentToggle', scope: 'scene', label: 'シーンサーチのコメント表示切替ボタン',
+								icon: '💬', selector: '.zenzaSceneCommentToggle, .zenzaSceneSearchHost [data-scui-action="comment-toggle"]' },
+						{ key: 'ui.scene.commentSearch', scope: 'scene', label: 'シーンサーチのコメント検索ボタン',
+								icon: '⌕', selector: '.zenzaSceneCommentSearchToggle, .zenzaSceneSearchHost [data-scui-action="comment-search"]' },
+						{ key: 'ui.scene.more', scope: 'scene', hidden: true, label: 'シーンサーチの操作メニュー展開ボタン',
+								icon: '⋯', selector: '.zenzaSceneSearchMore, .zenzaSceneSearchHost [data-scui-action="more"]' },
+						{ key: 'ui.info.owner', scope: 'info', label: '投稿者情報', icon: '👤', selector: '.videoOwnerInfoContainer' },
+						{ key: 'ui.info.description', scope: 'info', label: '動画説明文', icon: '≡', selector: '.videoDescription' },
+						{ key: 'ui.info.series', scope: 'info', label: 'シリーズ情報', icon: '▤', selector: '.seriesList' },
+						{ key: 'ui.info.tags', scope: 'info', label: '動画情報のタグ一覧', icon: '#', selector: '.videoTagsContainer.sideTab' },
+						{ key: 'ui.info.credits', scope: 'info', label: 'ニコニ広告関連情報', icon: '広告', selector: '.uaaContainer' },
+						{ key: 'ui.info.likeThanks', scope: 'info', label: 'いいねのお礼メッセージ', icon: '♥', selector: '.likeMessageContainer' },
+						{ key: 'ui.info.metadata', scope: 'info', label: '動画の再生数などの情報', icon: 'ℹ', selector: '.videoMetaInfoContainer' },
+						{ key: 'ui.info.relatedTab', scope: 'info', label: '関連動画タブ', icon: '▶', selector: '.tabSelect.relatedVideoTab, .tabs.relatedVideoTab',
+								description: '関連動画タブを隠した場合、開いていた内容は動画情報タブへ戻ります。' },
+						{ key: 'ui.header.title', scope: 'header', label: '動画タイトル（上部）', icon: 'T', selector: '.videoTitleContainer' },
+						{ key: 'ui.header.tags', scope: 'header', label: '上部のタグ一覧', icon: '#', selector: '.videoTagsContainer.videoHeader' },
+						{ key: 'ui.header.metadata', scope: 'header', label: '上部の動画情報', icon: 'ℹ', selector: '.videoMetaInfoContainer' },
+						{ key: 'ui.header.series', scope: 'header', label: '上部のシリーズ画像', icon: '▧', selector: '.series-thumbnail-cover' },
+						{ key: 'ui.header.search', scope: 'header', label: '動画検索ウィンドウ', icon: '⌕', selector: '.zenzaVideoSearchPanel',
+								description: '上部の動画検索欄・候補一覧を隠します。検索文字は削除されません。ニコニコのマイページ（/my）の上級者設定から再表示できます。' }
+				].map(item => Object.freeze(item)));
 		}
-		for(const item of items){
-			const listener=()=>api.apply(item.key);
-			config.onkey?.(item.key,listener);
-			subscriptions.push([item.key,listener]);
+		static get _byKey() {
+				if (!this.__byKey) {
+						this.__byKey = new Map(this.ITEMS.map(item => [item.key, item]));
+				}
+				return this.__byKey;
 		}
-		const win=root.ownerDocument?.defaultView;
-		let disposed=false;
-		let onStorage=null,onAdvancedSave=null;
-		if(scope!=='related' && win?.addEventListener &&
-			typeof config.getStorageKey==='function' &&
-			typeof config.refresh==='function') {
-			const shortcutKeys=Object.keys(config.default||{}).filter(key=>
-				/^KEY_|^PARAM_CUSTOM_SEEK_\d+$/.test(key));
-			const sharedKeys=new Set(scope==='bar'?
-				[...this.SHARED_SETTINGS.map(([key])=>key),...shortcutKeys]:[]);
-			const ownKeys=new Set([...items.map(item=>item.key),...sharedKeys]);
-			const byStorageKey=new Map([...ownKeys].map(key=>[config.getStorageKey(key),key]));
-			const sync=(key,removed=false)=>{
-				if(disposed || !ownKeys.has(key)){return;}
-				const storageKey=config.getStorageKey(key);
-				const fallback=removed && config.storage?.[storageKey]===undefined &&
-					Object.prototype.hasOwnProperty.call(config.default||{},key) ?
-					{[storageKey]:JSON.stringify(config.default[key])}:undefined;
-				try{
-					const previous=config.getValue(key);
-					Promise.resolve(config.refresh(key,fallback))
-						.then(()=>{
-							if(disposed){return;}
-							if(!sharedKeys.has(key)){api.apply(key);return;}
-							const value=config.getValue(key);
-							const numeric=shortcutKeys.includes(key);
-							const valid=numeric?(typeof value==='number' && Number.isFinite(value) &&
-								(!key.startsWith('KEY_') || (Number.isSafeInteger(value)&&value>=0))):
-								typeof value==='boolean';
-							if(!valid || value===previous){return;}
-							config.emit?.('change',new Map([[key,value]]));
-							const emit=config.emitAsync?.bind(config)||config.emit?.bind(config);
-							emit?.('update',key,value);
-							emit?.('update-'+key,value);
-						})
-						.catch(()=>{}); // A blocked storage read must not break playback.
-				}catch(_){ /* Navigation must continue on denied storage access. */ }
-			};
-			onStorage=e=>{
-				if(e.storageArea && config.storage && e.storageArea!==config.storage){return;}
-				const key=byStorageKey.get(e.key);
-				if(key){sync(key,e.newValue===null);}
-			};
-			onAdvancedSave=e=>{
-				const keys=Array.isArray(e.detail?.keys)?e.detail.keys:[];
-				keys.forEach(key=>sync(key));
-			};
-			win.addEventListener('storage',onStorage);
-			win.addEventListener('ZenzaWatch-advanced-settings-saved',onAdvancedSave);
+		static get(key) { return this._byKey.get(key) || null; }
+		static list(scope) { return this.ITEMS.filter(item => item.scope === scope); }
+		static defaults() { return Object.fromEntries(this.ITEMS.map(item => [item.key, true])); }
+		static isVisibilityKey(key) { return !!this.get(key); }
+		static descriptors() {
+				return this.ITEMS.map(item => ({
+						id: item.key, label: item.label + 'を表示', category: '画面・映像',
+						subcategory: '表示・非表示', type: 'boolean',
+						icon: item.icon, visibilityScope: item.scope, hidden: item.hidden === true,
+						description: item.description || '画面上の表示のみ切り替えます。機能・操作コマンド自体は削除しません。'
+				}));
 		}
-		api.dispose=()=>{
-			disposed=true;
-			if(typeof config.offkey==='function'){
-				for(const [key,listener] of subscriptions){config.offkey(key,listener);}
-			}
-			if(onStorage){win.removeEventListener('storage',onStorage);}
-			if(onAdvancedSave){
-				win.removeEventListener('ZenzaWatch-advanced-settings-saved',onAdvancedSave);
-			}
-			subscriptions.length=0;
-		};
-		api.refresh();
-		return api;
-	}
-	static assertValidManifest() {
-		const items=this.ITEMS;
-		const keys=new Set();
-		for(const item of items){
-			if(!/^ui\.[a-z][a-zA-Z.]*$/.test(item.key) ||
-				keys.has(item.key) || !item.scope || !item.label ||
-				!item.icon || !item.selector){
-				throw new Error('Invalid visibility entry: '+item.key);
-			}
-			keys.add(item.key);
+		static get _savedDisplay() {
+				if (!this.__savedDisplay) {
+						this.__savedDisplay = new WeakMap();
+				}
+				return this.__savedDisplay;
 		}
-		return true;
-	}
+		static apply(config, root, key, { beforeHide, afterApply } = {}) {
+				const entry = this.get(key);
+				if (!entry || !root || !config) {
+						return 0;
+				}
+				if (key === 'ui.scene.panel' && root.matches?.('.zenzaSceneSharedPreview'))
+						return 0;
+				const read = (k) => typeof config.getValue === 'function' ? config.getValue(k) : config.props?.[k];
+				const sceneEnabled = entry.scope !== 'scene' || (config.resolveSceneSearch?.()?.enabled ?? read('sceneSearch.enabled') !== false);
+				const visible = (entry.scope !== 'scene' || sceneEnabled) &&
+						(key === 'ui.scene.panel' && (typeof config.resolveSceneSearch === 'function' || read('sceneSearch.enabled') !== undefined) ? sceneEnabled : read(key) !== false);
+				const nodes = [];
+				if (root.matches?.(entry.selector)) {
+						nodes.push(root);
+				}
+				root.querySelectorAll?.(entry.selector).forEach(node => nodes.push(node));
+				let changed = 0;
+				for (const node of nodes) {
+						const saved = this._savedDisplay.get(node);
+						if (!visible && !saved) {
+								beforeHide?.(entry, node);
+								this._savedDisplay.set(node, {
+										value: node.style.getPropertyValue('display'),
+										priority: node.style.getPropertyPriority('display'),
+										hidden: node.hidden
+								});
+								node.hidden = true;
+								node.style.setProperty('display', 'none', 'important');
+								changed++;
+						}
+						else if (!visible && saved && (node.hidden !== true ||
+								node.style.getPropertyValue('display') !== 'none' ||
+								node.style.getPropertyPriority('display') !== 'important')) {
+								node.hidden = true;
+								node.style.setProperty('display', 'none', 'important');
+								changed++;
+						}
+						else if (visible && saved) {
+								if (saved.value) {
+										node.style.setProperty('display', saved.value, saved.priority);
+								}
+								else {
+										node.style.removeProperty('display');
+								}
+								node.hidden = saved.hidden;
+								this._savedDisplay.delete(node);
+								changed++;
+						}
+				}
+				if (changed) {
+						afterApply?.(entry, visible);
+				}
+				return changed;
+		}
+		static connectShortcutTooltips(config, root, scope) {
+				if (scope !== 'hover' && scope !== 'bar') {
+						return () => { };
+				}
+				const actions = typeof SHORTCUT_ACTIONS !== 'undefined' ? SHORTCUT_ACTIONS : [];
+				const format = typeof formatKeyCombo === 'function' ? formatKeyCombo : () => '';
+				const selector = scope === 'hover' ? '.menuButton[data-command]' : '.controlButton[data-command]';
+				const aliases = {
+						'toggle-showComment': 'TOGGLE_COMMENT',
+						'toggle-enableFilter': 'TOGGLE_NG_FILTER',
+						'toggle-like': 'TOGGLE_LIKE',
+						'deflistAdd': 'DEFLIST_ADD',
+						'toggle-fullscreen': 'FULLSCREEN',
+						'fullscreen': 'FULLSCREEN', // Actual toolbar command, not toggle-fullscreen.
+						'toggle-mute': 'MUTE',
+						'toggleStoryboard': 'TOGGLE_STORYBOARD_BAR',
+						'seek': 'HOME', // Toolbar seek-to-beginning only (data-param=0).
+						'togglePlay': 'TOGGLE_PLAY'
+				};
+				const bindings = [], multiHints = [], keys = new Set();
+				root.querySelectorAll(selector).forEach(button => {
+						const tooltip = button.querySelector('.tooltip');
+						if (!tooltip) {
+								return;
+						}
+						const command = button.dataset.command || '';
+						if (command === 'seek' && button.dataset.param !== '0') {
+								return;
+						}
+						const exact = actions.filter(a => a.command === command);
+						const assigned = aliases[command] ?
+								actions.filter(a => a.id === aliases[command]) : exact;
+						if (!assigned.length) {
+								return;
+						}
+						const base = (tooltip.textContent || '').replace(/\([MFVT]\)\s*$/, '').trim();
+						bindings.push({ tooltip, base, actions: assigned });
+						for (const a of assigned) {
+								keys.add('KEY_' + a.id);
+						}
+				});
+				if (scope === 'bar') {
+						const groups = {
+								volume: { label: '音量調整', entries: [{ id: 'VOL_UP', verb: '上げる' }, { id: 'VOL_DOWN', verb: '下げる' }] },
+								speed: { label: '再生速度', entries: [{ id: 'SHIFT_UP', verb: '上げる' }, { id: 'SHIFT_DOWN', verb: '下げる' }] }
+						};
+						root.querySelectorAll('[data-shortcut-hint]').forEach(control => {
+								const group = groups[control.dataset.shortcutHint || ''];
+								const tooltip = control.querySelector('.tooltip');
+								if (!group || !tooltip) {
+										return;
+								}
+								multiHints.push({ tooltip, ...group });
+								for (const entry of group.entries) {
+										keys.add('KEY_' + entry.id);
+								}
+						});
+				}
+				const hintFor = (id) => {
+						const value = Number(config.getValue?.('KEY_' + id) ?? config.props?.['KEY_' + id] ?? 0);
+						if (!Number.isSafeInteger(value) || value <= 0 || value >= 90000000) {
+								return '';
+						}
+						const hint = format(value);
+						return hint && !hint.startsWith('(') ? hint : '';
+				};
+				const update = () => {
+						for (const item of bindings) {
+								const hint = item.actions.map(a => hintFor(a.id)).find(Boolean) || '';
+								item.tooltip.textContent = item.base + (hint ? '（' + hint + '）' : '');
+						}
+						for (const group of multiHints) {
+								const parts = group.entries.map(({ id, verb }) => {
+										const shortcut = hintFor(id);
+										return shortcut ? verb + ': ' + shortcut : '';
+								}).filter(Boolean);
+								group.tooltip.textContent = group.label + (parts.length ? '（' + parts.join(' / ') + '）' : '');
+						}
+				};
+				for (const key of keys) {
+						config.onkey?.(key, update);
+				}
+				if (scope === 'hover' && bindings.length) {
+						const doc = root.ownerDocument;
+						if (!doc.getElementById('zenzaHoverTooltipOpaque')) {
+								const style = doc.createElement('style');
+								style.id = 'zenzaHoverTooltipOpaque';
+								style.textContent =
+										'.hoverMenuContainer .menuButton:hover{opacity:1!important;}' +
+												'.hoverMenuContainer .menuButton:hover .tooltip{' +
+												'opacity:1!important;background:#fffbd2;color:#111;}';
+								(doc.head || doc.documentElement).appendChild(style);
+						}
+				}
+				update();
+				return () => { for (const key of keys) {
+						config.offkey?.(key, update);
+				} };
+		}
+		static connect(config, root, scope, callbacks = {}) {
+				const items = this.list(scope);
+				const disposeTooltips = this.connectShortcutTooltips(config, root, scope);
+				const api = {
+						refresh: () => items.forEach(item => this.apply(config, root, item.key, callbacks)),
+						apply: (key) => {
+								if (items.some(item => item.key === key)) {
+										return this.apply(config, root, key, callbacks);
+								}
+								return 0;
+						}
+				};
+				const subscriptions = [];
+				if (items.some(item => item.scope === 'scene')) {
+						const listener = () => api.refresh();
+						config.onkey?.('sceneSearch.enabled', listener);
+						subscriptions.push(['sceneSearch.enabled', listener]);
+				}
+				for (const item of items) {
+						const listener = () => api.apply(item.key);
+						config.onkey?.(item.key, listener);
+						subscriptions.push([item.key, listener]);
+				}
+				const win = root.ownerDocument?.defaultView;
+				let disposed = false;
+				let onStorage = null, onAdvancedSave = null;
+				if (scope !== 'related' && win?.addEventListener &&
+						typeof config.getStorageKey === 'function' &&
+						typeof config.refresh === 'function') {
+						const shortcutKeys = Object.keys(config.default || {}).filter(key => /^KEY_|^PARAM_CUSTOM_SEEK_\d+$/.test(key));
+						const sharedKeys = new Set(scope === 'bar' ?
+								[...this.SHARED_SETTINGS.map(([key]) => key), ...shortcutKeys] : []);
+						const ownKeys = new Set([...items.map(item => item.key), ...sharedKeys]);
+						const byStorageKey = new Map([...ownKeys].map(key => [config.getStorageKey(key), key]));
+						const sync = (key, removed = false) => {
+								if (disposed || !ownKeys.has(key)) {
+										return;
+								}
+								const storageKey = config.getStorageKey(key);
+								const fallback = removed && config.storage?.[storageKey] === undefined &&
+										Object.prototype.hasOwnProperty.call(config.default || {}, key) ?
+										{ [storageKey]: JSON.stringify(config.default[key]) } : undefined;
+								try {
+										const previous = config.getValue(key);
+										Promise.resolve(config.refresh(key, fallback))
+												.then(() => {
+												if (disposed) {
+														return;
+												}
+												if (!sharedKeys.has(key)) {
+														api.apply(key);
+														return;
+												}
+												const value = config.getValue(key);
+												const numeric = shortcutKeys.includes(key);
+												const valid = numeric ? (typeof value === 'number' && Number.isFinite(value) &&
+														(!key.startsWith('KEY_') || (Number.isSafeInteger(value) && value >= 0))) :
+														typeof value === 'boolean';
+												if (!valid || value === previous) {
+														return;
+												}
+												config.emit?.('change', new Map([[key, value]]));
+												const emit = config.emitAsync?.bind(config) || config.emit?.bind(config);
+												emit?.('update', key, value);
+												emit?.('update-' + key, value);
+										})
+												.catch(() => { }); // A blocked storage read must not break playback.
+								}
+								catch (_) { /* Navigation must continue on denied storage access. */ }
+						};
+						onStorage = e => {
+								if (e.storageArea && config.storage && e.storageArea !== config.storage) {
+										return;
+								}
+								const key = byStorageKey.get(e.key);
+								if (key) {
+										sync(key, e.newValue === null);
+								}
+						};
+						onAdvancedSave = e => {
+								const keys = (Array.isArray(e.detail?.keys) ? e.detail.keys : []);
+								keys.forEach((key) => sync(key));
+						};
+						win.addEventListener('storage', onStorage);
+						win.addEventListener('ZenzaWatch-advanced-settings-saved', onAdvancedSave);
+				}
+				api.dispose = () => {
+						disposed = true;
+						disposeTooltips();
+						if (typeof config.offkey === 'function') {
+								for (const [key, listener] of subscriptions) {
+										config.offkey(key, listener);
+								}
+						}
+						if (onStorage) {
+								win.removeEventListener('storage', onStorage);
+						}
+						if (onAdvancedSave) {
+								win.removeEventListener('ZenzaWatch-advanced-settings-saved', onAdvancedSave);
+						}
+						subscriptions.length = 0;
+				};
+				api.refresh();
+				return api;
+		}
+		static assertValidManifest() {
+				const items = this.ITEMS;
+				const keys = new Set();
+				for (const item of items) {
+						if (!/^ui\.[a-z][a-zA-Z.]*$/.test(item.key) ||
+								keys.has(item.key) || !item.scope || !item.label ||
+								!item.icon || !item.selector) {
+								throw new Error('Invalid visibility entry: ' + item.key);
+						}
+						keys.add(item.key);
+				}
+				return true;
+		}
 }
 const NG_COLOR_HEX = Object.freeze({
 	white:'#FFFFFF',red:'#FF0000',pink:'#FF8080',orange:'#FFC000',
@@ -3794,424 +3953,498 @@ class NgCompositeRules {
 	}
 }
 const Config = (() => {
-	const DEFAULT_CONFIG = {
-		debug: false,
-		volume: 0.3,
-		showComment: true,
-		autoPlay: true,
-		'autoPlay:ginza': true,
-		'autoPlay:others': true,
-		enableResume: false,
-		loop: false,
-		mute: false,
-		screenMode: 'normal',
-		'screenMode:ginza': 'normal',
-		'screenMode:others': 'normal',
-		autoFullScreen: false,
-		autoCloseFullScreen: true, // 再生終了時に自動でフルスクリーン解除するかどうか
-		continueNextPage: false,   // 動画再生中にリロードやページ切り替えしたら続きから開き直す
-		backComment: false,        // 全画面・ワイド表示でコメントを映像の上に全域表示
-		autoPauseCommentInput: true, // コメント入力時に自動停止する
-		sharedNgLevel: 'MID',      // NG共有の強度 NONE, LOW, MID, HIGH, MAX
-		enablePushState: true,     // ブラウザの履歴に乗せる
-		enableHeatMap: true,
-		enableCommentPreview: false,
-		enableAutoMylistComment: false, // マイリストコメントに投稿者を入れる
-		menuScale: 1.0,
-		enableTogglePlayOnClick: false, // 画面クリック時に再生/一時停止するかどうか
-		enableDblclickClose: true, //
-		smallModeOffsetX: 0, // 画面モード「小」の位置オフセットX(px)。ドラッグで動かした位置を記憶する
-		smallModeOffsetY: 0, // 画面モード「小」の位置オフセットY(px)
-		smallModeWidth: 0,   // 画面モード「小」の幅(px)。0 = 既定値(SIDE_PLAYER_WIDTH)を使用
-		smallModeHeight: 0,  // 画面モード「小」の高さ(px)。0 = 既定値(SIDE_PLAYER_HEIGHT)を使用
-		smallModeAspectLock: false, // 画面モード「小」のリサイズ時にアスペクト比を固定するか
-		enableFullScreenOnDoubleClick: true,
-		enableStoryboard: true, // シークバーサムネイル関連
-		enableStoryboardBar: false, // シーンサーチ
-		videoInfoPanelTab: 'videoInfoTab',
-		fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
-		'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
-		'relatedMenu.order': [], // Empty = original seven items, then links and registered actions
-		'relatedMenu.hiddenItems': [], // Per-row display visibility, without deleting actions
-		'relatedMenu.builtinOptions': {}, // Optional labels/open modes/copy format for standard items
-		forceEconomy: false, // 動画を強制的にエコノミーモードで開く(HoverMenu.js/initializer.jsが参照)
-		enableFilter: true,
-		wordFilter: '',
-		wordRegFilter: '',
-		wordRegFilterFlags: 'i',
-		userIdFilter: '',
-		commandFilter: '',
-		removeNgMatchedUser: false, // NGにマッチしたユーザーのコメント全部消す
-		'ngComposite.rules': [], // 上級者向け複合NG・置換（初期状態は既存挙動のまま）
-		'filter.fork0': true, // 通常コメント
-		'filter.fork1': true, // 投稿者コメント
-		'filter.fork2': true, // かんたんコメント
-		'filter.fork3': true, // AIキャラクターコメント
-		'filter.defaultThread': true, // 通常コメント
-		'filter.ownerThread': true, // 投稿者コメント
-		'filter.communityThread': true, // チャンネルコメント / コミュニティコメント
-		'filter.nicosThread': true, // ニコスクリプトコメント
-		'filter.easyThread': true, // かんたんコメント
-		'filter.aiThread': true, // AIキャラクターコメント
-		'filter.extraDefaultThread': true, // ***extra-default
-		'filter.extraOwnerThread': true, // ***extra-owner
-		'filter.extraCommunityThread': true, // 引用コメント
-		'filter.extraNicosThread': true, // ***extra-nicos
-		'filter.extraEasyThread': true, // 引用かんたんコメント
-		videoTagFilter: '',
-		videoOwnerFilter: '',
-		enableCommentPanel: true,
-		enableCommentPanelAutoScroll: true,
-		commentSpeedRate: 1.0,
-		autoCommentSpeedRate: false,
-		playlistLoop: false,
-		enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
-		debugCheckAdDecoration: false,
-		commentLanguage: 'ja-jp',
-		baseFontFamily: '',
-		baseChatScale: 1.0,
-		baseFontBolder: true,
-		cssFontWeight: 'bold',
-		allowOtherDomain: true,
-		overrideWatchLink: false, // すべての動画リンクをZenzaWatchで開く
-		'overrideWatchLink:others': false, // すべての動画リンクをZenzaWatchで開く
-		speakLark: false, // 一発ネタのコメント読み上げ機能. 飽きたら消す
-		speakLarkVolume: 1.0, // 一発ネタのコメント読み上げ機能. 飽きたら消す
-		enableSingleton: false,
-		loadLinkedChannelVideo: false,
-		commentLayerOpacity: 1.0, //
-		'commentLayer.textShadowType': '', // フォントの修飾タイプ
-		'commentLayer.enableSlotLayoutEmulation': false,
-		'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
-		'commentLayer.protectCA': true,
-		'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
-		'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
-		'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
-		overrideGinza: false,     // 動画視聴ページでもGinzaの代わりに起動する
-		enableGinzaSlayer: false, // まだ実験中
-		lastPlayerId: '',
-		playbackRate: 1.0,
-		lastWatchId: 'sm9',
-		message: '',
-		enableVideoSession: true,
-		videoServerType: 'dmc',
-		autoDisableNew: true, // dmcのほうが高画質と思われる動画でdomandを無効にする
-		dmcVideoQuality: 'auto',   // 優先する画質 auto, veryhigh, high, mid, low
-		domandVideoQuality: 'auto', // 優先する画質 auto, 1080p, 720, 480p, 360p, 144p
-		'video.hls.enableOnlyRequired': true, // hlsが必須の動画だけ有効化する
-		enableNicosJumpVideo: true, // @ジャンプを有効にするかどうか
-		'videoSearch.ownerOnly': false, // Task 073: 検索欄を開くたびにOFFへ戻す（VideoSearchForm）
-		'videoSearch.mode': 'tag',
-		'videoSearch.order': 'desc',
-		'videoSearch.sort': 'playlist',
-		'videoSearch.word': '',
-		'videoSearch.f_range': 0,
-		'videoSearch.l_range': 0,
-		'videoSearch.genre': 'all',
-		'videoSearch.videoIdSuggestMode': 'merged',
-		'videoSearch.wordCountMode': 'on-demand',
-		'videoHeader.position': 'auto',
-		'uaa.enable': true,
-		'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
-		'supporterCredit.enable': true,       // 提供画面を表示する
-		'supporterCredit.voice': true,        // 提供音声（期間ごとに変わる読み上げ）を鳴らす
-		'supporterCredit.gift': true,         // ギフトが落ちてくる演出を表示する
-		'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
-		'screenFilter.enable': true,
-		'screenFilter.saved': '',
-		'screenFilter.brightness': 100,     // 明るさ(%)
-		'screenFilter.contrast': 100,       // コントラスト(%)
-		'screenFilter.saturate': 100,       // 彩度(%)
-		'screenFilter.sepia': 0,            // 暖色(%)
-		'screenFilter.hue': 0,              // 色相(度)
-		'screenFilter.blur': 0,             // ぼかし(px)
-		'screenFilter.invert': false,       // 階調反転
-		'screenFilter.gamma': 1.0,          // ガンマ
-		'screenFilter.blackLevel': 0,       // 黒レベル（SVGフィルター）
-		'screenFilter.whiteLevel': 0,       // 白レベル（SVGフィルター）
-		'screenFilter.sharpen': 0,          // シャープ（SVGフィルター）
-		'screenFilter.temperature': 0,      // 色温度（-100 青〜+100 橙）
-		'screenFilter.tint': 0,             // 色かぶり補正（-100 緑〜+100 赤紫）
-		'screenFilter.autoLevels': false,   // 自動レベル補正
-		'screenFilter.vignette': 0,         // 周辺減光(%)
-		'screenFilter.colorize': 'none',    // 着色（none/gold/sepia/blue/green）
-		'screenFilter.flipH': false,        // 左右反転（旧 toggle-flipH。ページを開き直すとOFFに戻る）
-		'screenFilter.flipV': false,        // 上下反転（旧 toggle-flipV。同上）
-		'screenFilter.applyToScreenshot': true, // スクリーンショットにも反映する
-		'screenFilter.applyToCommentPip': true, // P in P(コメント付き)にも反映する
-		'screenshot.prefix': '', // スクリーンショットのファイル名の先頭につける文字
-		'screenshot.filenameTemplate': '', // 空は従来書式。トークンでファイル名構成を指定可能
-		'search.limit': 1000,
-		'touch.enable': window.ontouchstart !== undefined,
-		'touch.tap2command': '',
-		'touch.tap3command': 'toggle-mute',
-		'touch.tap4command': 'toggle-showComment',
-		'touch.tap5command': 'screenShot',
-		autoZenTube: false,
-		bestZenTube: false,
-		KEY_CLOSE: 27,          // ESC
-		KEY_RE_OPEN: 27 + 0x1000, // SHIFT + ESC
-		KEY_HOME: 36 + 0x1000, // SHIFT + HOME
-		KEY_SEEK_LEFT: 37 + 0x1000, // SHIFT + LEFT
-		KEY_SEEK_RIGHT: 39 + 0x1000, // SHIFT + RIGHT
-		KEY_SEEK_PREV_FRAME: 188, // ,
-		KEY_SEEK_NEXT_FRAME: 190, // .
-		KEY_VOL_UP: 38 + 0x1000, // SHIFT + UP
-		KEY_VOL_DOWN: 40 + 0x1000, // SHIFT + DOWN
-		KEY_INPUT_COMMENT: 67, // C
-		KEY_FULLSCREEN: 70, // F
-		KEY_MUTE: 77, // M
-		KEY_TOGGLE_COMMENT: 86, // V
-		KEY_TOGGLE_LOOP: 82, // R 76, // L
-		KEY_DEFLIST_ADD: 84,          // T
-		KEY_DEFLIST_REMOVE: 84 + 0x1000, // SHIFT + T
-		KEY_TOGGLE_PLAY: 32, // SPACE
-		KEY_TOGGLE_PLAYLIST: 80, // P
-		KEY_SCREEN_MODE_1: 49 + 0x1000, // SHIFT + 1
-		KEY_SCREEN_MODE_2: 50 + 0x1000, // SHIFT + 2
-		KEY_SCREEN_MODE_3: 51 + 0x1000, // SHIFT + 3
-		KEY_SCREEN_MODE_4: 52 + 0x1000, // SHIFT + 4
-		KEY_SCREEN_MODE_5: 53 + 0x1000, // SHIFT + 5
-		KEY_SCREEN_MODE_6: 54 + 0x1000, // SHIFT + 6
-		KEY_SHIFT_RESET: 49, // 1
-		KEY_SHIFT_DOWN: 188 + 0x1000, // <
-		KEY_SHIFT_UP: 190 + 0x1000, // >
-		KEY_NEXT_VIDEO: 74, // J
-		KEY_PREV_VIDEO: 75, // K
-		KEY_SCREEN_SHOT: 83, // S
-		KEY_SCREEN_SHOT_WITH_COMMENT: 83 + 0x1000, // SHIFT + S
-	};
-	// =====================================================================
-	// =====================================================================
-	if (navigator &&
-		navigator.userAgent &&
-		navigator.userAgent.match(/(Android|iPad;|CriOS)/i)) {
-		DEFAULT_CONFIG.overrideWatchLink = true;
-		DEFAULT_CONFIG.enableTogglePlayOnClick = true;
-		DEFAULT_CONFIG.autoFullScreen = true;
-		DEFAULT_CONFIG.autoCloseFullScreen = false;
-		DEFAULT_CONFIG.volume = 1.0;
-		DEFAULT_CONFIG.enableVideoSession = true;
-		DEFAULT_CONFIG['uaa.enable'] = false;
-	}
-	Object.assign(DEFAULT_CONFIG, UiVisibilityRegistry.defaults());
-	Object.assign(DEFAULT_CONFIG, {
-		'sceneSearch.presentation.normal': 'follow',
-		'sceneSearch.presentation.fullscreen': 'follow',
-		'sceneSearch.presentation.migrationAcknowledged': false,
-		'sceneSearch.layout.normal': '01',
-		'sceneSearch.layout.fullscreen': '01',
-		'sceneSearch.layout.linkFullscreen': false,
-		'sceneSearch.seekStepSeconds': 5,
-		'sceneSearch.idleHideSeconds': 2,
-		'sceneSearch.controlsReveal': 'hover-focus',
-		'sceneSearch.animation': 'subtle',
-		'sceneSearch.enabled': true,
-		'sceneSearch.commentListScale': 100,
-		'sceneSearch.commentPreviewVisible': true,
-		'sceneSearch.miniCommentVisible': true,
-		'sceneSearch.commentListVisible': true,
-		'sceneSearch.commentListBackgroundOpacity': 90,
-		'sceneSearch.thumbnailScale': 100,
-		'sceneSearch.miniCommentMode': 'flow'
-	});
-	Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
-	for (let i = 1; i <= 10; i++) {
-		DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
-	}
-	Object.assign(DEFAULT_CONFIG, ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS);
-	const config = DataStorage.create(
-		DEFAULT_CONFIG,
-		{
-			normalizeImport: (key, value) => {
-				if (['videoSearch.f_range', 'videoSearch.l_range'].includes(key) &&
-						typeof value === 'string' && /^[0-9]+$/.test(value)) { return Number(value); }
-				return value;
-			},
-			validateImport: (key, value) => {
-				if (key === 'sceneSearch.presentation.normal' || key === 'sceneSearch.presentation.fullscreen') {
-					return ['follow','fixed','legacy'].includes(value);
-				}
-				if (key === 'sceneSearch.presentation.migrationAcknowledged') { return typeof value === 'boolean'; }
-				if (key === 'sceneSearch.layout.normal' ||
-						key === 'sceneSearch.layout.fullscreen') {
-					return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
-				}
-				if (key === 'sceneSearch.enabled' || key === 'sceneSearch.layout.linkFullscreen' ||
-						key === 'sceneSearch.commentPreviewVisible' ||
-						key === 'sceneSearch.miniCommentVisible' ||
-						key === 'sceneSearch.commentListVisible') {
-					return typeof value === 'boolean';
-				}
-				if (key === 'sceneSearch.miniCommentMode') {
-					return ['flow','static','hidden'].includes(value);
-				}
-				if (key === 'sceneSearch.seekStepSeconds') {
-					return Number.isSafeInteger(value) && value >= 0 && value <= 600;
-				}
-				if (key === 'sceneSearch.idleHideSeconds') {
-					return typeof value === 'number' && Number.isFinite(value) &&
-						value >= 0 && value <= 30 && Number.isInteger(value * 2);
-				}
-				if (key === 'sceneSearch.commentListBackgroundOpacity') {
-					return Number.isSafeInteger(value) && value >= 0 && value <= 100;
-				}
-				if (key === 'sceneSearch.commentListScale') {
-					return Number.isSafeInteger(value) && value >= 100 && value <= 200;
-				}
-				if (key === 'sceneSearch.thumbnailScale') {
-					return Number.isSafeInteger(value) && value >= 50 && value <= 200;
-				}
-				if (key === 'sceneSearch.controlsReveal') {
-					return ['hover-focus', 'click', 'always'].includes(value);
-				}
-				if (key === 'sceneSearch.animation') {
-					return ['off', 'subtle', 'full'].includes(value);
-				}
-				if (key.startsWith('sceneSearch.')) { return false; }
-				if (key === 'ngComposite.rules') {
-					return typeof NgCompositeRules!=='undefined' ? NgCompositeRules.validate(value) :
-						Array.isArray(value)&&value.length===0;
-				}
-				if (key === RelatedMenuActions.CONFIG_KEY) { return RelatedMenuActions.validateLinks(value).valid; }
-				if (key === RelatedMenuOrder.CONFIG_KEY) { return RelatedMenuOrder.validateOrder(value); }
-				if (key === RelatedMenuOrder.HIDDEN_KEY) { return RelatedMenuOrder.validateHiddenItems(value); }
-				if (key === RelatedMenuOrder.OPTIONS_KEY) { return RelatedMenuOrder.validateOptions(value); }
-				if (UiVisibilityRegistry.isVisibilityKey(key)) { return typeof value === 'boolean'; }
-				if (key === 'screenshot.filenameTemplate') { return ScreenshotFileName.validateTemplate(value); }
-				if (key === 'commentHistory.enabled') { return typeof value === 'boolean'; }
-				if (key.startsWith('commentHistory.')) {
-					const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
-					if (!descriptor) { return false; }
-					try {
-						ZenzaCommentHistorySettings.normalizeSettings({[descriptor.name]: value});
-						return true;
-					} catch (_) { return false; }
-				}
-				const choices = {
-					screenMode: ['normal', 'big', 'wide', 'small', 'sideView', '3D'],
-					sharedNgLevel: ['NONE', 'LOW', 'MID', 'HIGH', 'MAX'],
-					fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
-					'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
-					'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
-					'videoSearch.wordCountMode': ['on-demand', 'auto', 'off']
-				};
-				const name = key.startsWith('screenMode:') ? 'screenMode' : key;
-				if (Object.prototype.hasOwnProperty.call(choices, name)) {
-					return choices[name].includes(value);
-				}
-				if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && value >= 0; }
-				if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
-				if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
-				if (key === 'search.limit') { return Number.isInteger(value) && value >= 1 && value <= 5000; }
-				if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
-					'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
-					return Number.isFinite(value) && value >= 0 && value <= 1;
-				}
-				if (['playbackRate', 'commentSpeedRate', 'baseChatScale', 'menuScale'].includes(key)) {
-					return Number.isFinite(value) && value > 0;
-				}
-				if (['smallModeWidth', 'smallModeHeight'].includes(key)) {
-					return Number.isFinite(value) && value >= 0;
-				}
-				return true;
-			},
-			preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
-			prefix: PRODUCT,
-			ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
-			readonly: !location || location.host !== 'www.nicovideo.jp',
-			storage: localStorage
+		const DEFAULT_CONFIG = {
+				debug: false,
+				volume: 0.3,
+				showComment: true,
+				autoPlay: true,
+				'autoPlay:ginza': true,
+				'autoPlay:others': true,
+				enableResume: false,
+				loop: false,
+				mute: false,
+				screenMode: 'normal',
+				'screenMode:ginza': 'normal',
+				'screenMode:others': 'normal',
+				autoFullScreen: false,
+				autoCloseFullScreen: true, // 再生終了時に自動でフルスクリーン解除するかどうか
+				continueNextPage: false, // 動画再生中にリロードやページ切り替えしたら続きから開き直す
+				backComment: false, // 全画面・ワイド表示でコメントを映像の上に全域表示
+				autoPauseCommentInput: true, // コメント入力時に自動停止する
+				sharedNgLevel: 'MID', // NG共有の強度 NONE, LOW, MID, HIGH, MAX
+				enablePushState: true, // ブラウザの履歴に乗せる
+				enableHeatMap: true,
+				pipPageThumbnail: true,
+				pipPageThumbnailSource: 'smart',
+				enableCommentPreview: false,
+				enableAutoMylistComment: false, // マイリストコメントに投稿者を入れる
+				menuScale: 1.0,
+				enableTogglePlayOnClick: false, // 画面クリック時に再生/一時停止するかどうか
+				enableDblclickClose: true, //
+				smallModeOffsetX: 0, // 画面モード「小」の位置オフセットX(px)。ドラッグで動かした位置を記憶する
+				smallModeOffsetY: 0, // 画面モード「小」の位置オフセットY(px)
+				smallModeWidth: 0, // 画面モード「小」の幅(px)。0 = 既定値(SIDE_PLAYER_WIDTH)を使用
+				smallModeHeight: 0, // 画面モード「小」の高さ(px)。0 = 既定値(SIDE_PLAYER_HEIGHT)を使用
+				smallModeAspectLock: false, // 画面モード「小」のリサイズ時にアスペクト比を固定するか
+				enableFullScreenOnDoubleClick: true,
+				enableStoryboard: true, // シークバーサムネイル関連
+				enableStoryboardBar: false, // シーンサーチ
+				'popup.notifyColor': '#00cc00',
+				'popup.alertColor': '#cc0000',
+				'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
+				videoInfoPanelTab: 'videoInfoTab',
+				fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
+				'controlBar.showOnPause.small': false,
+				'controlBar.showOnPause.fullscreen': false,
+				'controlBar.hideAfterSeconds.small': 3,
+				'controlBar.hideAfterSeconds.fullscreen': 0.4,
+				'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
+				'relatedMenu.order': [], // Empty = original seven items, then links and registered actions
+				'relatedMenu.hiddenItems': [], // Per-row display visibility, without deleting actions
+				'relatedMenu.builtinOptions': {}, // Optional labels/open modes/copy format for standard items
+				forceEconomy: false, // 動画を強制的にエコノミーモードで開く(HoverMenu.js/initializer.jsが参照)
+				enableFilter: true,
+				wordFilter: '',
+				wordRegFilter: '',
+				wordRegFilterFlags: 'i',
+				userIdFilter: '',
+				commandFilter: '',
+				removeNgMatchedUser: false, // NGにマッチしたユーザーのコメント全部消す
+				'ngComposite.rules': [], // 上級者向け複合NG・置換（初期状態は既存挙動のまま）
+				'filter.fork0': true, // 通常コメント
+				'filter.fork1': true, // 投稿者コメント
+				'filter.fork2': true, // かんたんコメント
+				'filter.fork3': true, // AIキャラクターコメント
+				'filter.defaultThread': true, // 通常コメント
+				'filter.ownerThread': true, // 投稿者コメント
+				'filter.communityThread': true, // チャンネルコメント / コミュニティコメント
+				'filter.nicosThread': true, // ニコスクリプトコメント
+				'filter.easyThread': true, // かんたんコメント
+				'filter.aiThread': true, // AIキャラクターコメント
+				'filter.extraDefaultThread': true, // ***extra-default
+				'filter.extraOwnerThread': true, // ***extra-owner
+				'filter.extraCommunityThread': true, // 引用コメント
+				'filter.extraNicosThread': true, // ***extra-nicos
+				'filter.extraEasyThread': true, // 引用かんたんコメント
+				videoTagFilter: '',
+				videoOwnerFilter: '',
+				enableCommentPanel: true,
+				enableCommentPanelAutoScroll: true,
+				commentSpeedRate: 1.0,
+				autoCommentSpeedRate: false,
+				playlistLoop: false,
+				enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
+				debugCheckAdDecoration: false,
+				commentLanguage: 'ja-jp',
+				baseFontFamily: '',
+				baseChatScale: 1.0,
+				baseFontBolder: true,
+				cssFontWeight: 'bold',
+				allowOtherDomain: true,
+				overrideWatchLink: false, // すべての動画リンクをZenzaWatchで開く
+				'overrideWatchLink:others': false, // すべての動画リンクをZenzaWatchで開く
+				speakLark: false, // 一発ネタのコメント読み上げ機能. 飽きたら消す
+				speakLarkVolume: 1.0, // 一発ネタのコメント読み上げ機能. 飽きたら消す
+				enableSingleton: false,
+				loadLinkedChannelVideo: false,
+				commentLayerOpacity: 1.0, //
+				'commentLayer.textShadowType': '', // フォントの修飾タイプ
+				'commentLayer.enableSlotLayoutEmulation': false,
+				'commentLayer.maxDisplayComment': CommentDisplayBudget.DEFAULT,
+				'commentLayer.protectCA': true,
+				'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
+				'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
+				'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
+				overrideGinza: false, // 動画視聴ページでもGinzaの代わりに起動する
+				enableGinzaSlayer: false, // まだ実験中
+				lastPlayerId: '',
+				playbackRate: 1.0,
+				lastWatchId: 'sm9',
+				message: '',
+				enableVideoSession: true,
+				videoServerType: 'dmc',
+				autoDisableNew: true, // dmcのほうが高画質と思われる動画でdomandを無効にする
+				dmcVideoQuality: 'auto', // 優先する画質 auto, veryhigh, high, mid, low
+				domandVideoQuality: 'auto', // 優先する画質 auto, 1080p, 720, 480p, 360p, 144p
+				'video.hls.enableOnlyRequired': true, // hlsが必須の動画だけ有効化する
+				enableNicosJumpVideo: true, // @ジャンプを有効にするかどうか
+				'videoSearch.ownerOnly': false, // Task 073: 検索欄を開くたびにOFFへ戻す（VideoSearchForm）
+				'videoSearch.mode': 'tag',
+				'videoSearch.order': 'desc',
+				'videoSearch.sort': 'playlist',
+				'videoSearch.word': '',
+				'videoSearch.f_range': 0,
+				'videoSearch.l_range': 0,
+				'videoSearch.genre': 'all',
+				'videoSearch.videoIdSuggestMode': 'merged',
+				'videoSearch.wordCountMode': 'on-demand',
+				'videoHeader.position': 'auto',
+				'uaa.enable': true,
+				'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
+				'supporterCredit.enable': true, // 提供画面を表示する
+				'supporterCredit.voice': true, // 提供音声（期間ごとに変わる読み上げ）を鳴らす
+				'supporterCredit.gift': true, // ギフトが落ちてくる演出を表示する
+				'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
+				'screenFilter.enable': true,
+				'screenFilter.saved': '',
+				'screenFilter.brightness': 100, // 明るさ(%)
+				'screenFilter.contrast': 100, // コントラスト(%)
+				'screenFilter.saturate': 100, // 彩度(%)
+				'screenFilter.sepia': 0, // 暖色(%)
+				'screenFilter.hue': 0, // 色相(度)
+				'screenFilter.blur': 0, // ぼかし(px)
+				'screenFilter.invert': false, // 階調反転
+				'screenFilter.gamma': 1.0, // ガンマ
+				'screenFilter.blackLevel': 0, // 黒レベル（SVGフィルター）
+				'screenFilter.whiteLevel': 0, // 白レベル（SVGフィルター）
+				'screenFilter.sharpen': 0, // シャープ（SVGフィルター）
+				'screenFilter.temperature': 0, // 色温度（-100 青〜+100 橙）
+				'screenFilter.tint': 0, // 色かぶり補正（-100 緑〜+100 赤紫）
+				'screenFilter.autoLevels': false, // 自動レベル補正
+				'screenFilter.vignette': 0, // 周辺減光(%)
+				'screenFilter.colorize': 'none', // 着色（none/gold/sepia/blue/green）
+				'screenFilter.flipH': false, // 左右反転（旧 toggle-flipH。ページを開き直すとOFFに戻る）
+				'screenFilter.flipV': false, // 上下反転（旧 toggle-flipV。同上）
+				'screenFilter.applyToScreenshot': true, // スクリーンショットにも反映する
+				'screenFilter.applyToCommentPip': true, // P in P(コメント付き)にも反映する
+				'screenshot.prefix': '', // スクリーンショットのファイル名の先頭につける文字
+				'screenshot.filenameTemplate': '', // 空は従来書式。トークンでファイル名構成を指定可能
+				'search.limit': 1000,
+				'touch.enable': window.ontouchstart !== undefined,
+				'touch.tap2command': '',
+				'touch.tap3command': 'toggle-mute',
+				'touch.tap4command': 'toggle-showComment',
+				'touch.tap5command': 'screenShot',
+				autoZenTube: false,
+				bestZenTube: false,
+				KEY_CLOSE: 27, // ESC
+				KEY_RE_OPEN: 27 + 0x1000, // SHIFT + ESC
+				KEY_HOME: 36 + 0x1000, // SHIFT + HOME
+				KEY_SEEK_LEFT: 37 + 0x1000, // SHIFT + LEFT
+				KEY_SEEK_RIGHT: 39 + 0x1000, // SHIFT + RIGHT
+				KEY_SEEK_PREV_FRAME: 188, // ,
+				KEY_SEEK_NEXT_FRAME: 190, // .
+				KEY_VOL_UP: 38 + 0x1000, // SHIFT + UP
+				KEY_VOL_DOWN: 40 + 0x1000, // SHIFT + DOWN
+				KEY_INPUT_COMMENT: 67, // C
+				KEY_FULLSCREEN: 70, // F
+				KEY_MUTE: 77, // M
+				KEY_TOGGLE_COMMENT: 86, // V
+				KEY_TOGGLE_LOOP: 82, // R 76, // L
+				KEY_DEFLIST_ADD: 84, // T
+				KEY_DEFLIST_REMOVE: 84 + 0x1000, // SHIFT + T
+				KEY_TOGGLE_PLAY: 32, // SPACE
+				KEY_TOGGLE_PLAYLIST: 80, // P
+				KEY_SCREEN_MODE_1: 49 + 0x1000, // SHIFT + 1
+				KEY_SCREEN_MODE_2: 50 + 0x1000, // SHIFT + 2
+				KEY_SCREEN_MODE_3: 51 + 0x1000, // SHIFT + 3
+				KEY_SCREEN_MODE_4: 52 + 0x1000, // SHIFT + 4
+				KEY_SCREEN_MODE_5: 53 + 0x1000, // SHIFT + 5
+				KEY_SCREEN_MODE_6: 54 + 0x1000, // SHIFT + 6
+				KEY_SHIFT_RESET: 49, // 1
+				KEY_SHIFT_DOWN: 188 + 0x1000, // <
+				KEY_SHIFT_UP: 190 + 0x1000, // >
+				KEY_NEXT_VIDEO: 74, // J
+				KEY_PREV_VIDEO: 75, // K
+				KEY_SCREEN_SHOT: 83, // S
+				KEY_SCREEN_SHOT_WITH_COMMENT: 83 + 0x1000, // SHIFT + S
+		};
+		// =====================================================================
+		// =====================================================================
+		if (navigator &&
+				navigator.userAgent &&
+				navigator.userAgent.match(/(Android|iPad;|CriOS)/i)) {
+				DEFAULT_CONFIG.overrideWatchLink = true;
+				DEFAULT_CONFIG.enableTogglePlayOnClick = true;
+				DEFAULT_CONFIG.autoFullScreen = true;
+				DEFAULT_CONFIG.autoCloseFullScreen = false;
+				DEFAULT_CONFIG.volume = 1.0;
+				DEFAULT_CONFIG.enableVideoSession = true;
+				DEFAULT_CONFIG['uaa.enable'] = false;
 		}
-	);
-	config.hasStoredValue = function(key) {
-		try {
-			const text = this.storage[this.getStorageKey(key)];
-			if (typeof text !== 'string') { return false; }
-			const value = JSON.parse(text);
-			return Object.prototype.hasOwnProperty.call(this.default,key) &&
-				typeof value === typeof this.default[key] && this.options.validateImport(key,value);
-		} catch (_) { return false; }
-	};
-	config.resolveSceneSearch = function() {
-		return typeof SceneSearchPreferences === 'undefined' ? null :
-			SceneSearchPreferences.resolve(key=>this.getValue(key),key=>this.hasStoredValue(key));
-	};
-	config.persistSceneSearchSelection = function(values) {
-		if(this.readonly) { throw new Error('設定は読み取り専用です'); }
-		const entries=Object.entries(values).map(([key,value])=>{
-			if(!key.startsWith('sceneSearch.') || !Object.prototype.hasOwnProperty.call(this.default,key) ||
-				typeof value!==typeof this.default[key] || !this.options.validateImport(key,value)){
-				throw new TypeError('無効なシーンサーチ設定: '+key);
-			}
-			const storageKey=this.getStorageKey(key);
-			return {key,value,storageKey,before:this.storage[storageKey],json:JSON.stringify(value)};
+		Object.assign(DEFAULT_CONFIG, UiVisibilityRegistry.defaults());
+		Object.assign(DEFAULT_CONFIG, {
+				'sceneSearch.presentation.normal': 'follow',
+				'sceneSearch.presentation.fullscreen': 'follow',
+				'sceneSearch.presentation.migrationAcknowledged': false,
+				'sceneSearch.layout.normal': '01',
+				'sceneSearch.layout.fullscreen': '01',
+				'sceneSearch.layout.linkFullscreen': false,
+				'sceneSearch.seekStepSeconds': 5,
+				'sceneSearch.idleHideSeconds': 2,
+				'sceneSearch.controlsReveal': 'hover-focus',
+				'sceneSearch.animation': 'subtle',
+				'sceneSearch.enabled': true,
+				'sceneSearch.commentListScale': 100,
+				'sceneSearch.commentPreviewVisible': true,
+				'sceneSearch.miniCommentVisible': true,
+				'sceneSearch.commentListVisible': true,
+				'sceneSearch.commentListBackgroundOpacity': 90,
+				'sceneSearch.thumbnailScale': 100,
+				'sceneSearch.miniCommentMode': 'flow'
 		});
-		const written=[];
-		try {
-			for(const entry of entries){
-				written.push(entry);
-				this.storage[entry.storageKey]=entry.json;
-				if(this.storage[entry.storageKey]!==entry.json) { throw new Error('設定を保存できません: '+entry.key); }
-			}
-		} catch(error) {
-			for(const entry of written.reverse()){
+		Object.assign(DEFAULT_CONFIG, buildDefaultKeyConfig(DEFAULT_CONFIG));
+		for (let i = 1; i <= 10; i++) {
+				DEFAULT_CONFIG['PARAM_CUSTOM_SEEK_' + i] = 0;
+		}
+		Object.assign(DEFAULT_CONFIG, ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS);
+		const config = DataStorage.create(DEFAULT_CONFIG, {
+				normalizeImport: (key, value) => {
+						if (['videoSearch.f_range', 'videoSearch.l_range'].includes(key) &&
+								typeof value === 'string' && /^[0-9]+$/.test(value)) {
+								return Number(value);
+						}
+						return value;
+				},
+				validateImport: (key, value) => {
+						if (key === 'sceneSearch.presentation.normal' || key === 'sceneSearch.presentation.fullscreen') {
+								return ['follow', 'fixed', 'legacy'].includes(value);
+						}
+						if (key === 'sceneSearch.presentation.migrationAcknowledged') {
+								return typeof value === 'boolean';
+						}
+						if (key === 'sceneSearch.layout.normal' ||
+								key === 'sceneSearch.layout.fullscreen') {
+								return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
+						}
+						if (key === 'sceneSearch.enabled' || key === 'sceneSearch.layout.linkFullscreen' ||
+								key === 'sceneSearch.commentPreviewVisible' ||
+								key === 'sceneSearch.miniCommentVisible' ||
+								key === 'sceneSearch.commentListVisible') {
+								return typeof value === 'boolean';
+						}
+						if (key === 'sceneSearch.miniCommentMode') {
+								return ['flow', 'static', 'hidden'].includes(value);
+						}
+						if (key === 'sceneSearch.seekStepSeconds') {
+								return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 600;
+						}
+						if (key === 'sceneSearch.idleHideSeconds') {
+								return typeof value === 'number' && Number.isFinite(value) &&
+										value >= 0 && value <= 30 && Number.isInteger(value * 2);
+						}
+						if (key === 'sceneSearch.commentListBackgroundOpacity') {
+								return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100;
+						}
+						if (key === 'sceneSearch.commentListScale') {
+								return typeof value === 'number' && Number.isSafeInteger(value) && value >= 100 && value <= 200;
+						}
+						if (key === 'sceneSearch.thumbnailScale') {
+								return typeof value === 'number' && Number.isSafeInteger(value) && value >= 50 && value <= 200;
+						}
+						if (key === 'sceneSearch.controlsReveal') {
+								return ['hover-focus', 'click', 'always'].includes(value);
+						}
+						if (key === 'sceneSearch.animation') {
+								return ['off', 'subtle', 'full'].includes(value);
+						}
+						if (key.startsWith('sceneSearch.')) {
+								return false;
+						}
+						if (key === 'ngComposite.rules') {
+								return typeof NgCompositeRules !== 'undefined' ? NgCompositeRules.validate(value) :
+										Array.isArray(value) && value.length === 0;
+						}
+						if (key === RelatedMenuActions.CONFIG_KEY) {
+								return RelatedMenuActions.validateLinks(value).valid;
+						}
+						if (key === RelatedMenuOrder.CONFIG_KEY) {
+								return RelatedMenuOrder.validateOrder(value);
+						}
+						if (key === RelatedMenuOrder.HIDDEN_KEY) {
+								return RelatedMenuOrder.validateHiddenItems(value);
+						}
+						if (key === RelatedMenuOrder.OPTIONS_KEY) {
+								return RelatedMenuOrder.validateOptions(value);
+						}
+						if (UiVisibilityRegistry.isVisibilityKey(key)) {
+								return typeof value === 'boolean';
+						}
+						if (key === 'screenshot.filenameTemplate') {
+								return ScreenshotFileName.validateTemplate(value);
+						}
+						if (key === 'controlBar.showOnPause.small' || key === 'controlBar.showOnPause.fullscreen') {
+								return typeof value === 'boolean';
+						}
+						if (key === 'controlBar.hideAfterSeconds.small' || key === 'controlBar.hideAfterSeconds.fullscreen') {
+								return typeof value === 'number' && Number.isFinite(value) && value >= 0.2 &&
+										value <= 10 && Math.abs(value * 10 - Math.round(value * 10)) < 0.000001;
+						}
+						if (key === 'commentHistory.enabled') {
+								return typeof value === 'boolean';
+						}
+						if (key.startsWith('commentHistory.')) {
+								const descriptor = ZenzaCommentHistorySettings.SETTINGS_SCHEMA.find(item => item.key === key);
+								if (!descriptor) {
+										return false;
+								}
+								try {
+										ZenzaCommentHistorySettings.normalizeSettings({ [descriptor.name]: value });
+										return true;
+								}
+								catch (_) {
+										return false;
+								}
+						}
+						const choices = {
+								screenMode: ['normal', 'big', 'wide', 'small', 'sideView', '3D'],
+								sharedNgLevel: ['NONE', 'LOW', 'MID', 'HIGH', 'MAX'],
+								fullscreenControlBarMode: ['auto', 'always-show', 'always-hide'],
+								pipPageThumbnailSource: ['smart', 'legacy'],
+								'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
+								'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
+								'videoSearch.wordCountMode': ['on-demand', 'auto', 'off']
+						};
+						const name = key.startsWith('screenMode:') ? 'screenMode' : key;
+						if (Object.prototype.hasOwnProperty.call(choices, name)) {
+								return choices[name].includes(value);
+						}
+						if (key.startsWith('KEY_')) {
+								return Number.isSafeInteger(value) && value >= 0;
+						}
+						if (key === CommentDisplayBudget.CONFIG_KEY) {
+								return CommentDisplayBudget.isValidLimit(value);
+						}
+						if (key === 'commentLayer.protectCA') {
+								return typeof value === 'boolean';
+						}
+						if (key === 'search.limit') {
+								return Number.isInteger(value) && value >= 1 && value <= 5000;
+						}
+						if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
+								'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {
+								return Number.isFinite(value) && value >= 0 && value <= 1;
+						}
+						if (['playbackRate', 'commentSpeedRate', 'baseChatScale', 'menuScale'].includes(key)) {
+								return Number.isFinite(value) && value > 0;
+						}
+						if (['smallModeWidth', 'smallModeHeight'].includes(key)) {
+								return Number.isFinite(value) && value >= 0;
+						}
+						return true;
+				},
+				preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
+				prefix: PRODUCT,
+				ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
+				readonly: !location || location.host !== 'www.nicovideo.jp',
+				storage: localStorage
+		});
+		config.hasStoredValue = function (key) {
 				try {
-					if(entry.before===undefined){delete this.storage[entry.storageKey];}
-					else {this.storage[entry.storageKey]=entry.before;}
-				} catch (_) { /* Preserve the write error; never report success. */ }
-			}
-			throw error;
-		}
-		for(const {key,value} of entries){
-			this._data[key]=value;
-			if(!this.silently){this._changed.set(key,value);}
-		}
-		if(!this.silently && entries.length){this._onChange();}
-	};
-	config.import = function(data) {
-		let input=data;
-		if(data && typeof data==='object' && !Array.isArray(data) && typeof SceneSearchPreferences!=='undefined'){
-			const owns=key=>Object.prototype.hasOwnProperty.call(data,key);
-			const resolved=SceneSearchPreferences.resolve(key=>data[key],owns);
-			input={...data};
-			for(const [key,value] of [
-				['sceneSearch.enabled',resolved.enabled],
-				['sceneSearch.presentation.normal',resolved.normal],
-				['sceneSearch.presentation.fullscreen',resolved.fullscreen],
-				['sceneSearch.miniCommentVisible',resolved.miniVisible]
-			]) { if(!owns(key)) input[key]=value; }
-		}
-		return Object.getPrototypeOf(this).import.call(this,input);
-	};
-	config.export = function(isAll=false) {
-		const data=Object.getPrototypeOf(this).export.call(this,isAll);
-		for(const key of ['sceneSearch.enabled','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
-			'sceneSearch.miniCommentVisible']) {
-			if(this.hasStoredValue(key)){data[key]=this.getValue(key);}
-		}
-		return data;
-	};
-	return config;
+						const text = this.storage[this.getStorageKey(key)];
+						if (typeof text !== 'string') {
+								return false;
+						}
+						const value = JSON.parse(text);
+						return Object.prototype.hasOwnProperty.call(this.default, key) &&
+								typeof value === typeof this.default[key] && this.options.validateImport(key, value);
+				}
+				catch (_) {
+						return false;
+				}
+		};
+		config.resolveSceneSearch = function () {
+				return typeof SceneSearchPreferences === 'undefined' ? null :
+						SceneSearchPreferences.resolve(key => this.getValue(key), key => this.hasStoredValue(key));
+		};
+		config.persistSceneSearchSelection = function (values) {
+				if (this.readonly) {
+						throw new Error('設定は読み取り専用です');
+				}
+				const entries = Object.entries(values).map(([key, value]) => {
+						if (!key.startsWith('sceneSearch.') || !Object.prototype.hasOwnProperty.call(this.default, key) ||
+								typeof value !== typeof this.default[key] || !this.options.validateImport(key, value)) {
+								throw new TypeError('無効なシーンサーチ設定: ' + key);
+						}
+						const storageKey = this.getStorageKey(key);
+						return { key, value, storageKey, before: this.storage[storageKey], json: JSON.stringify(value) };
+				});
+				const written = [];
+				try {
+						for (const entry of entries) {
+								written.push(entry);
+								this.storage[entry.storageKey] = entry.json;
+								if (this.storage[entry.storageKey] !== entry.json) {
+										throw new Error('設定を保存できません: ' + entry.key);
+								}
+						}
+				}
+				catch (error) {
+						for (const entry of written.reverse()) {
+								try {
+										if (entry.before === undefined) {
+												delete this.storage[entry.storageKey];
+										}
+										else {
+												this.storage[entry.storageKey] = entry.before;
+										}
+								}
+								catch (_) { /* Preserve the write error; never report success. */ }
+						}
+						throw error;
+				}
+				for (const { key, value } of entries) {
+						this._data[key] = value;
+						if (!this.silently) {
+								this._changed.set(key, value);
+						}
+				}
+				if (!this.silently && entries.length) {
+						this._onChange();
+				}
+		};
+		config.import = function (data) {
+				let input = data;
+				if (data && typeof data === 'object' && !Array.isArray(data) && typeof SceneSearchPreferences !== 'undefined') {
+						const record = data;
+						const owns = (key) => Object.prototype.hasOwnProperty.call(record, key);
+						const resolved = SceneSearchPreferences.resolve(key => record[key], owns);
+						const imported = { ...record };
+						for (const [key, value] of [
+								['sceneSearch.enabled', resolved.enabled],
+								['sceneSearch.presentation.normal', resolved.normal],
+								['sceneSearch.presentation.fullscreen', resolved.fullscreen],
+								['sceneSearch.miniCommentVisible', resolved.miniVisible]
+						]) {
+								if (!owns(key))
+										imported[key] = value;
+						}
+						input = imported;
+				}
+				return Object.getPrototypeOf(this).import.call(this, input);
+		};
+		config.export = function (isAll = false) {
+				const data = Object.getPrototypeOf(this).export.call(this, isAll);
+				for (const key of ['sceneSearch.enabled', 'sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen',
+						'sceneSearch.miniCommentVisible']) {
+						if (this.hasStoredValue(key)) {
+								data[key] = this.getValue(key);
+						}
+				}
+				return data;
+		};
+		return config;
 })();
 Config.exportConfig = () => Config.export();
 Config.importConfig = v => Config.import(v);
 Config.exportToFile = () => {
-	const json = Config.exportJson();
-	const blob = new Blob([json], {type: 'application/json'});
-	const url = URL.createObjectURL(blob);
-	try {
-		const a = Object.assign(document.createElement('a'), {
-			download: `${new Date().toLocaleString().replace(/[:/]/g, '_')}_ZenzaWatch.config.json`,
-			rel: 'noopener',
-			href: url
-		});
-		a.click();
-	} finally {
-		setTimeout(() => URL.revokeObjectURL(url), 2000);
-	}
+		const json = Config.exportJson();
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		try {
+				const a = Object.assign(document.createElement('a'), {
+						download: `${new Date().toLocaleString().replace(/[:/]/g, '_')}_ZenzaWatch.config.json`,
+						rel: 'noopener',
+						href: url
+				});
+				a.click();
+		}
+		finally {
+				setTimeout(() => URL.revokeObjectURL(url), 2000);
+		}
 };
 const NaviConfig = Config;
-await Config.promise('restore');
+        await Config.promise('restore');
 const uQuery = (() => {
 		const endMap = new WeakMap();
 		const emptyMap = new Map();
@@ -4913,7 +5146,7 @@ const uQuery = (() => {
 		return uQuery;
 })();
 const uq = uQuery;
-const $ = uq;
+        const $ = uq;
 const css = (() => {
 		const setPropsTask = [];
 		const applySetProps = throttle.raf(() => {
@@ -5046,369 +5279,409 @@ const cssUtil = css;
 * 「押している間だけ元の映像」は廃止し、画面の左半分だけ元の映像を重ねる比較モードにした。
 */
 const ScreenFilter = (() => {
-	const PREFIX = 'screenFilter.';
-	const SVG_ID = 'zenzaScreenFilterSvg';
-	const STYLE_ID = 'zenzaScreenFilterStyle';
-	const CSS_VAR = '--zenza-screen-filter';
-	const VIGNETTE_CLASS = 'zenzaScreenFilterVignette';
-	/*
-	* 調整項目の一覧。設定パネル（プレイヤー内のフィルターパネル・上級者用設定）の
-	* 表示もこの配列から作るので、項目を足す時はここに1つ足せばよい。
-	*   group: 'basic' 色と明るさ / 'tone' 明暗の細かい調整 / 'style' 雰囲気
-	*   heavy: true … 周りの画素を見る処理で重い（説明に書く）
-	*/
-	const PARAMS = [
-		{
-			key: 'brightness', label: '明るさ', group: 'basic',
-			min: 0, max: 200, step: 1, def: 100, unit: '%',
-			desc: '画面全体を明るく／暗くします。上げすぎると明るい所が真っ白に飛びます。' +
-				'暗い動画を見やすくしたい時は、下の「ガンマ」の方が自然に明るくなります。'
-		},
-		{
-			key: 'contrast', label: 'コントラスト', group: 'basic',
-			min: 0, max: 200, step: 1, def: 100, unit: '%',
-			desc: '明るい所と暗い所の差の強さです。上げるとメリハリが出てくっきり、' +
-				'下げると柔らかい（眠たい）感じになります。'
-		},
-		{
-			key: 'saturate', label: '彩度（色の濃さ）', group: 'basic',
-			min: 0, max: 300, step: 1, def: 100, unit: '%',
-			desc: '色の濃さです。0 で白黒、100 が元のまま、上げると色が鮮やかになります。'
-		},
-		{
-			key: 'temperature', label: '色温度', group: 'basic',
-			min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
-			desc: 'マイナスで青っぽく（涼しい感じ）、プラスでオレンジっぽく（暖かい感じ）なります。' +
-				'夜は少しプラスにすると目に優しくなります。'
-		},
-		{
-			key: 'tint', label: '色かぶり補正', group: 'basic',
-			min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
-			desc: '映像が緑っぽい時はプラス（赤紫の方向へ）、赤紫っぽい時はマイナス（緑の方向へ）に動かすと自然な色に戻ります。'
-		},
-		{
-			key: 'hue', label: '色相（色のずらし）', group: 'basic',
-			min: -180, max: 180, step: 1, def: 0, unit: '°',
-			desc: 'すべての色を虹の順番にずらします（例: 赤→黄→緑…）。普段は 0 のままで大丈夫です。' +
-				'遊びや、見分けにくい色がある時の補助に。'
-		},
-		{
-			key: 'sepia', label: 'セピア', group: 'basic',
-			min: 0, max: 100, step: 1, def: 0, unit: '%',
-			desc: '古い写真のような茶色っぽい色味に寄せます。色温度より色が抜けた感じになります。'
-		},
-		{
-			key: 'invert', label: '階調反転（ネガ）', group: 'basic', type: 'boolean', def: false,
-			desc: '明るい所と暗い所を入れ替えます（写真のネガのような見た目）。' +
-				'白い背景の資料動画を暗くしたい時は、プリセットの「反転（暗転）」を選ぶと色味が保たれます。'
-		},
-		{
-			key: 'gamma', label: 'ガンマ（中間の明るさ）', group: 'tone',
-			min: 0.3, max: 3.0, step: 0.01, def: 1.0, unit: '', digits: 2,
-			desc: '真っ黒・真っ白はそのままに、中くらいの明るさだけを持ち上げ／下げます。' +
-				'1 より大きくすると、白飛びさせずに暗い部分が見えやすくなります。暗い動画にいちばん効く項目です。'
-		},
-		{
-			key: 'blackLevel', label: '黒レベル', group: 'tone',
-			min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
-			desc: 'いちばん暗い部分の調整です。プラスにすると真っ黒な所が少し持ち上がって暗部が見えやすく' +
-				'（そのぶん黒が灰色っぽく）なり、マイナスにすると黒が引き締まります。'
-		},
-		{
-			key: 'whiteLevel', label: '白レベル', group: 'tone',
-			min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
-			desc: 'いちばん明るい部分の調整です。マイナスにすると白が少し抑えられて、まぶしさ・白飛びが和らぎます。' +
-				'プラスにすると明るい部分がより明るくなります。'
-		},
-		{
-			key: 'autoLevels', label: '自動レベル補正', group: 'tone', type: 'boolean', def: false,
-			desc: '動画ごとに、いちばん暗い所が黒・いちばん明るい所が白になるよう自動で合わせます（0.5秒ごとに少しずつ）。' +
-				'白っぽくかすんだ動画や、全体が暗い動画に効きます。処理はとても軽いです。'
-		},
-		{
-			key: 'sharpen', label: 'シャープ（輪郭の強調）', group: 'tone', heavy: true,
-			min: 0, max: 100, step: 1, def: 0, unit: '',
-			desc: '輪郭をくっきりさせます。ぼやけた低画質の動画に。20〜40 くらいがおすすめです。' +
-				'周りの画素を調べる処理なので、この項目だけは少し重めです（グラフィックボードの無いパソコンで動画がカクつく時は 0 に）。'
-		},
-		{
-			key: 'blur', label: 'ぼかし', group: 'style',
-			min: 0, max: 20, step: 0.1, def: 0, unit: 'px',
-			desc: '映像をぼかします。ブロックノイズやチラつきが気になる時は 1 前後、はっきりぼかしたい時は 5 以上に。' +
-				'画面上の大きさ（ピクセル）で効くので、大きな画面ほど強めにすると同じ見え方になります。'
-		},
-		{
-			key: 'vignette', label: '周辺減光', group: 'style',
-			min: 0, max: 100, step: 1, def: 0, unit: '%',
-			desc: '画面の周りをだんだん暗くして、映画やカメラのような雰囲気にします。映像の上に影を重ねるだけなので、処理はほぼゼロです。'
-		},
-		{
-			key: 'colorize', label: '着色（モノトーン）', group: 'style', type: 'select', def: 'none',
-			options: [
-				['none', 'なし'],
-				['gold', 'ゴールド'],
-				['sepia', 'セピア（古写真）'],
-				['blue', 'ブルー'],
-				['green', 'グリーン（暗視カメラ風）']
-			],
-			desc: '映像をいったん白黒にして、選んだ色のグラデーションで塗り直します。' +
-				'ゴールドは金属っぽい高級感、セピアは古い写真、グリーンは暗視カメラのような見た目になります。'
-		}
-	];
-	const PARAM_MAP = PARAMS.reduce((map, p) => { map[p.key] = p; return map; }, {});
-	const DEFAULTS = PARAMS.reduce((map, p) => { map[p.key] = p.def; return map; }, {});
-	/*
-	* プリセット。values に書いていない項目は既定値に戻る（前のプリセットの値が残らない）。
-	* 反転（左右・上下）とフィルターの ON/OFF はプリセットでは変えない。
-	*/
-	const PRESETS = [
-		{id: 'standard', label: '標準', values: {},
-			desc: 'すべて元のまま（フィルターなし）。'},
-		{id: 'dark', label: '暗い動画を見やすく', values: {gamma: 1.35, blackLevel: 4, contrast: 105},
-			desc: '夜のシーンや古い実況動画など、暗くて見えにくい動画向け。白飛びさせずに暗い所を持ち上げます。'},
-		{id: 'sharp', label: 'くっきり', values: {contrast: 112, saturate: 110, sharpen: 30},
-			desc: 'ぼやけた低画質の動画向け。輪郭とメリハリを強めます。輪郭の強調を使うので少しだけ重めです。'},
-		{id: 'vivid', label: 'ビビッド', values: {saturate: 135, contrast: 108},
-			desc: 'アニメやゲーム実況の色を鮮やかに。'},
-		{id: 'faded', label: '色あせ補正', values: {saturate: 130, contrast: 110, autoLevels: true},
-			desc: '古い動画や色の薄い動画向け。色を濃くし、明るさの範囲も自動で合わせます。'},
-		{id: 'cinema', label: 'シネマ（銀残し風）', values: {saturate: 55, contrast: 120, gamma: 0.92, vignette: 35},
-			desc: '映画でよく使われる「銀残し」風。色を抜いて硬めの階調にし、周りを少し暗くします。'},
-		{id: 'film', label: 'フィルム（レトロ）', values: {saturate: 80, blackLevel: 7, whiteLevel: -6, temperature: 12},
-			desc: '黒を少し浮かせて白を抑え、色を少し抜いた、昔のフィルムのような柔らかい見た目。'},
-		{id: 'pastel', label: 'パステル', values: {saturate: 70, blackLevel: 14, contrast: 90, gamma: 1.1},
-			desc: '明るく淡い色合いに。'},
-		{id: 'cool', label: '寒色', values: {temperature: -35},
-			desc: '青っぽく涼しい色合いに。'},
-		{id: 'warm', label: '暖色', values: {temperature: 35},
-			desc: 'オレンジっぽく暖かい色合いに。'},
-		{id: 'eyeCare', label: '目に優しい（夜）', values: {brightness: 85, saturate: 90, temperature: 30},
-			desc: '暗い部屋で見る時向け。少し暗く、暖かい色にして青い光を減らします。'},
-		{id: 'gold', label: 'ゴールド', values: {colorize: 'gold', contrast: 105},
-			desc: '明るさを金色のグラデーションに置き換えます（黄金質・金属質のような見た目）。'},
-		{id: 'mono', label: '白黒', values: {saturate: 0},
-			desc: '色を抜いて白黒にします。雰囲気づくりや、色のチカチカが気になる時に。'},
-		{id: 'monoHigh', label: '白黒（硬調）', values: {saturate: 0, contrast: 135},
-			desc: 'コントラストの強い白黒。'},
-		{id: 'invert', label: '反転（暗転）', values: {invert: true, hue: 180},
-			desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。'}
-	];
-	const PRESET_MAP = PRESETS.reduce((map, p) => { map[p.id] = p; return map; }, {});
-	/* 着色（colorize）のグラデーション。暗い所→明るい所の順の色（0〜1） */
-	const COLORIZE_MAPS = {
-		gold: [[0.08, 0.04, 0.01], [0.45, 0.28, 0.08], [0.85, 0.62, 0.25], [1, 0.9, 0.6]],
-		sepia: [[0.1, 0.06, 0.03], [0.45, 0.33, 0.2], [0.8, 0.68, 0.5], [1, 0.95, 0.85]],
-		blue: [[0.02, 0.05, 0.12], [0.15, 0.3, 0.55], [0.5, 0.7, 0.9], [0.9, 0.97, 1]],
-		green: [[0, 0.05, 0], [0.1, 0.45, 0.1], [0.4, 0.85, 0.35], [0.85, 1, 0.8]]
-	};
-	let config = null;
-	let bypass = false;
-	let applyScheduled = false;
-	let lastCss = null;
-	let lastSvgKey = null;
-	let lastVignette = null;
-	const listeners = new Set();
-	const auto = {black: 0, white: 1, available: true, timer: null, canvas: null};
-	const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-	const digitsOf = p => p.digits !== undefined ? p.digits : (String(p.step).split('.')[1] || '').length;
-	const normalize = (key, value) => {
-		const p = PARAM_MAP[key];
-		if (!p) { return value; }
-		if (p.type === 'boolean') {
-			return value === true || value === 'true';
-		}
-		if (p.type === 'select') {
-			return p.options.some(([v]) => v === value) ? value : p.def;
-		}
-		let v = parseFloat(value);
-		if (!isFinite(v)) { v = p.def; }
-		v = clamp(v, p.min, p.max);
-		return parseFloat(v.toFixed(digitsOf(p)));
-	};
-	const prop = key => config && config.props ? config.props[PREFIX + key] : undefined;
-	const setProp = (key, value) => {
-		if (!config || !config.props) { return; }
-		if (config.props[PREFIX + key] !== value) {
-			config.props[PREFIX + key] = value;
-		}
-	};
-	const read = () => {
-		const values = {};
-		PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
-		return values;
-	};
-	const isEnabled = () => true;
-	const isDefaultValue = (key, value) => {
-		const p = PARAM_MAP[key];
-		if (p.type === 'boolean') { return !!value === !!p.def; }
-		if (p.type === 'select') { return value === p.def; }
-		return Math.abs(value - p.def) < 1e-6;
-	};
-	const sameValue = (p, a, b) => {
-		if (p.type === 'boolean') { return !!a === !!b; }
-		if (p.type === 'select') { return a === b; }
-		return Math.abs(a - b) < 1e-6;
-	};
-	const detectPreset = (values = read()) => {
-		const found = PRESETS.find(preset => PARAMS.every(p => {
-			const target = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
-			return sameValue(p, values[p.key], target);
-		}));
-		return found ? found.id : 'custom';
-	};
-	const isActive = (values = read()) => isEnabled() && PARAMS.some(p => !isDefaultValue(p.key, values[p.key]));
-	const IDENTITY = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]];
-	const compose = (a, b) => {
-		const r = [];
-		for (let i = 0; i < 3; i++) {
-			r.push([0, 1, 2].map(j => b[i][0] * a[0][j] + b[i][1] * a[1][j] + b[i][2] * a[2][j])
-				.concat(b[i][0] * a[0][3] + b[i][1] * a[1][3] + b[i][2] * a[2][3] + b[i][3]));
-		}
-		return r;
-	};
-	const diag = (r, g, b, o = 0) => [[r, 0, 0, o], [0, g, 0, o], [0, 0, b, o]];
-	const saturateMatrix = s => [
-		[0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0],
-		[0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0],
-		[0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0]
-	];
-	const sepiaMatrix = a => {
-		const k = 1 - a;
-		return [
-			[0.393 + 0.607 * k, 0.769 - 0.769 * k, 0.189 - 0.189 * k, 0],
-			[0.349 - 0.349 * k, 0.686 + 0.314 * k, 0.168 - 0.168 * k, 0],
-			[0.272 - 0.272 * k, 0.534 - 0.534 * k, 0.131 + 0.869 * k, 0]
+		const PREFIX = 'screenFilter.';
+		const SVG_ID = 'zenzaScreenFilterSvg';
+		const STYLE_ID = 'zenzaScreenFilterStyle';
+		const CSS_VAR = '--zenza-screen-filter';
+		const VIGNETTE_CLASS = 'zenzaScreenFilterVignette';
+		/*
+		* 調整項目の一覧。設定パネル（プレイヤー内のフィルターパネル・上級者用設定）の
+		* 表示もこの配列から作るので、項目を足す時はここに1つ足せばよい。
+		*   group: 'basic' 色と明るさ / 'tone' 明暗の細かい調整 / 'style' 雰囲気
+		*   heavy: true … 周りの画素を見る処理で重い（説明に書く）
+		*/
+		const PARAMS = [
+				{
+						key: 'brightness', label: '明るさ', group: 'basic',
+						min: 0, max: 200, step: 1, def: 100, unit: '%',
+						desc: '画面全体を明るく／暗くします。上げすぎると明るい所が真っ白に飛びます。' +
+								'暗い動画を見やすくしたい時は、下の「ガンマ」の方が自然に明るくなります。'
+				},
+				{
+						key: 'contrast', label: 'コントラスト', group: 'basic',
+						min: 0, max: 200, step: 1, def: 100, unit: '%',
+						desc: '明るい所と暗い所の差の強さです。上げるとメリハリが出てくっきり、' +
+								'下げると柔らかい（眠たい）感じになります。'
+				},
+				{
+						key: 'saturate', label: '彩度（色の濃さ）', group: 'basic',
+						min: 0, max: 300, step: 1, def: 100, unit: '%',
+						desc: '色の濃さです。0 で白黒、100 が元のまま、上げると色が鮮やかになります。'
+				},
+				{
+						key: 'temperature', label: '色温度', group: 'basic',
+						min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
+						desc: 'マイナスで青っぽく（涼しい感じ）、プラスでオレンジっぽく（暖かい感じ）なります。' +
+								'夜は少しプラスにすると目に優しくなります。'
+				},
+				{
+						key: 'tint', label: '色かぶり補正', group: 'basic',
+						min: -100, max: 100, step: 1, def: 0, unit: '', signed: true,
+						desc: '映像が緑っぽい時はプラス（赤紫の方向へ）、赤紫っぽい時はマイナス（緑の方向へ）に動かすと自然な色に戻ります。'
+				},
+				{
+						key: 'hue', label: '色相（色のずらし）', group: 'basic',
+						min: -180, max: 180, step: 1, def: 0, unit: '°',
+						desc: 'すべての色を虹の順番にずらします（例: 赤→黄→緑…）。普段は 0 のままで大丈夫です。' +
+								'遊びや、見分けにくい色がある時の補助に。'
+				},
+				{
+						key: 'sepia', label: 'セピア', group: 'basic',
+						min: 0, max: 100, step: 1, def: 0, unit: '%',
+						desc: '古い写真のような茶色っぽい色味に寄せます。色温度より色が抜けた感じになります。'
+				},
+				{
+						key: 'invert', label: '階調反転（ネガ）', group: 'basic', type: 'boolean', def: false,
+						desc: '明るい所と暗い所を入れ替えます（写真のネガのような見た目）。' +
+								'白い背景の資料動画を暗くしたい時は、プリセットの「反転（暗転）」を選ぶと色味が保たれます。'
+				},
+				{
+						key: 'gamma', label: 'ガンマ（中間の明るさ）', group: 'tone',
+						min: 0.3, max: 3.0, step: 0.01, def: 1.0, unit: '', digits: 2,
+						desc: '真っ黒・真っ白はそのままに、中くらいの明るさだけを持ち上げ／下げます。' +
+								'1 より大きくすると、白飛びさせずに暗い部分が見えやすくなります。暗い動画にいちばん効く項目です。'
+				},
+				{
+						key: 'blackLevel', label: '黒レベル', group: 'tone',
+						min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
+						desc: 'いちばん暗い部分の調整です。プラスにすると真っ黒な所が少し持ち上がって暗部が見えやすく' +
+								'（そのぶん黒が灰色っぽく）なり、マイナスにすると黒が引き締まります。'
+				},
+				{
+						key: 'whiteLevel', label: '白レベル', group: 'tone',
+						min: -50, max: 50, step: 1, def: 0, unit: '', signed: true,
+						desc: 'いちばん明るい部分の調整です。マイナスにすると白が少し抑えられて、まぶしさ・白飛びが和らぎます。' +
+								'プラスにすると明るい部分がより明るくなります。'
+				},
+				{
+						key: 'autoLevels', label: '自動レベル補正', group: 'tone', type: 'boolean', def: false,
+						desc: '動画ごとに、いちばん暗い所が黒・いちばん明るい所が白になるよう自動で合わせます（0.5秒ごとに少しずつ）。' +
+								'白っぽくかすんだ動画や、全体が暗い動画に効きます。処理はとても軽いです。'
+				},
+				{
+						key: 'sharpen', label: 'シャープ（輪郭の強調）', group: 'tone', heavy: true,
+						min: 0, max: 100, step: 1, def: 0, unit: '',
+						desc: '輪郭をくっきりさせます。ぼやけた低画質の動画に。20〜40 くらいがおすすめです。' +
+								'周りの画素を調べる処理なので、この項目だけは少し重めです（グラフィックボードの無いパソコンで動画がカクつく時は 0 に）。'
+				},
+				{
+						key: 'blur', label: 'ぼかし', group: 'style',
+						min: 0, max: 20, step: 0.1, def: 0, unit: 'px',
+						desc: '映像をぼかします。ブロックノイズやチラつきが気になる時は 1 前後、はっきりぼかしたい時は 5 以上に。' +
+								'画面上の大きさ（ピクセル）で効くので、大きな画面ほど強めにすると同じ見え方になります。'
+				},
+				{
+						key: 'vignette', label: '周辺減光', group: 'style',
+						min: 0, max: 100, step: 1, def: 0, unit: '%',
+						desc: '画面の周りをだんだん暗くして、映画やカメラのような雰囲気にします。映像の上に影を重ねるだけなので、処理はほぼゼロです。'
+				},
+				{
+						key: 'colorize', label: '着色（モノトーン）', group: 'style', type: 'select', def: 'none',
+						options: [
+								['none', 'なし'],
+								['gold', 'ゴールド'],
+								['sepia', 'セピア（古写真）'],
+								['blue', 'ブルー'],
+								['green', 'グリーン（暗視カメラ風）']
+						],
+						desc: '映像をいったん白黒にして、選んだ色のグラデーションで塗り直します。' +
+								'ゴールドは金属っぽい高級感、セピアは古い写真、グリーンは暗視カメラのような見た目になります。'
+				}
 		];
-	};
-	const hueMatrix = deg => {
-		const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
-		return [
-			[0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0],
-			[0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0],
-			[0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0]
+		const PARAM_MAP = PARAMS.reduce((map, p) => { map[p.key] = p; return map; }, {});
+		const DEFAULTS = PARAMS.reduce((map, p) => { map[p.key] = p.def; return map; }, {});
+		/*
+		* プリセット。values に書いていない項目は既定値に戻る（前のプリセットの値が残らない）。
+		* 反転（左右・上下）とフィルターの ON/OFF はプリセットでは変えない。
+		*/
+		const PRESETS = [
+				{ id: 'standard', label: '標準', values: {},
+						desc: 'すべて元のまま（フィルターなし）。' },
+				{ id: 'dark', label: '暗い動画を見やすく', values: { gamma: 1.35, blackLevel: 4, contrast: 105 },
+						desc: '夜のシーンや古い実況動画など、暗くて見えにくい動画向け。白飛びさせずに暗い所を持ち上げます。' },
+				{ id: 'sharp', label: 'くっきり', values: { contrast: 112, saturate: 110, sharpen: 30 },
+						desc: 'ぼやけた低画質の動画向け。輪郭とメリハリを強めます。輪郭の強調を使うので少しだけ重めです。' },
+				{ id: 'vivid', label: 'ビビッド', values: { saturate: 135, contrast: 108 },
+						desc: 'アニメやゲーム実況の色を鮮やかに。' },
+				{ id: 'faded', label: '色あせ補正', values: { saturate: 130, contrast: 110, autoLevels: true },
+						desc: '古い動画や色の薄い動画向け。色を濃くし、明るさの範囲も自動で合わせます。' },
+				{ id: 'cinema', label: 'シネマ（銀残し風）', values: { saturate: 55, contrast: 120, gamma: 0.92, vignette: 35 },
+						desc: '映画でよく使われる「銀残し」風。色を抜いて硬めの階調にし、周りを少し暗くします。' },
+				{ id: 'film', label: 'フィルム（レトロ）', values: { saturate: 80, blackLevel: 7, whiteLevel: -6, temperature: 12 },
+						desc: '黒を少し浮かせて白を抑え、色を少し抜いた、昔のフィルムのような柔らかい見た目。' },
+				{ id: 'pastel', label: 'パステル', values: { saturate: 70, blackLevel: 14, contrast: 90, gamma: 1.1 },
+						desc: '明るく淡い色合いに。' },
+				{ id: 'cool', label: '寒色', values: { temperature: -35 },
+						desc: '青っぽく涼しい色合いに。' },
+				{ id: 'warm', label: '暖色', values: { temperature: 35 },
+						desc: 'オレンジっぽく暖かい色合いに。' },
+				{ id: 'eyeCare', label: '目に優しい（夜）', values: { brightness: 85, saturate: 90, temperature: 30 },
+						desc: '暗い部屋で見る時向け。少し暗く、暖かい色にして青い光を減らします。' },
+				{ id: 'gold', label: 'ゴールド', values: { colorize: 'gold', contrast: 105 },
+						desc: '明るさを金色のグラデーションに置き換えます（黄金質・金属質のような見た目）。' },
+				{ id: 'mono', label: '白黒', values: { saturate: 0 },
+						desc: '色を抜いて白黒にします。雰囲気づくりや、色のチカチカが気になる時に。' },
+				{ id: 'monoHigh', label: '白黒（硬調）', values: { saturate: 0, contrast: 135 },
+						desc: 'コントラストの強い白黒。' },
+				{ id: 'invert', label: '反転（暗転）', values: { invert: true, hue: 180 },
+						desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。' }
 		];
-	};
-	const LUMA = [0.2126, 0.7152, 0.0722];
-	const buildColorMatrix = values => {
-		let m = IDENTITY, changed = false;
-		const add = x => { m = compose(m, x); changed = true; };
-		if (!isDefaultValue('brightness', values.brightness)) { const b = values.brightness / 100; add(diag(b, b, b)); }
-		if (!isDefaultValue('contrast', values.contrast)) { const c = values.contrast / 100; add(diag(c, c, c, 0.5 - 0.5 * c)); }
-		if (!isDefaultValue('saturate', values.saturate)) { add(saturateMatrix(values.saturate / 100)); }
-		if (!isDefaultValue('sepia', values.sepia)) { add(sepiaMatrix(values.sepia / 100)); }
-		if (!isDefaultValue('hue', values.hue)) { add(hueMatrix(values.hue)); }
-		if (values.invert) { add(diag(-1, -1, -1, 1)); }
-		if (!isDefaultValue('temperature', values.temperature) || !isDefaultValue('tint', values.tint)) {
-			const t = values.temperature / 100, n = values.tint / 100;
-			add(diag(1 + 0.10 * t + 0.04 * n, 1 - 0.12 * n, 1 - 0.15 * t + 0.04 * n));
-		}
-		if (values.colorize !== 'none') {
-			add([LUMA.concat(0), LUMA.concat(0), LUMA.concat(0)]);
-		}
-		return changed ? m : null;
-	};
-	const levelsToLinear = (blackLevel, whiteLevel) => {
-		const b = blackLevel / 100, w = whiteLevel / 100;
-		const inBlack = b < 0 ? -b : 0, outBlack = b > 0 ? b : 0;
-		const inWhite = w > 0 ? 1 - w : 1, outWhite = w < 0 ? 1 + w : 1;
-		const slope = (outWhite - outBlack) / Math.max(0.01, inWhite - inBlack);
-		const intercept = outBlack - slope * inBlack;
-		return {slope: +slope.toFixed(4), intercept: +intercept.toFixed(4)};
-	};
-	const TONE_TABLE_SIZE = 65;
-	const lerpColor = (stops, x, ch) => {
-		const pos = clamp(x, 0, 1) * (stops.length - 1);
-		const i = Math.min(stops.length - 2, Math.floor(pos));
-		const f = pos - i;
-		return stops[i][ch] * (1 - f) + stops[i + 1][ch] * f;
-	};
-	const useAutoLevels = values => values.autoLevels && auto.available &&
-		(auto.black > 0.004 || auto.white < 0.996);
-	const buildToneTables = values => {
-		const levels = !isDefaultValue('blackLevel', values.blackLevel) || !isDefaultValue('whiteLevel', values.whiteLevel);
-		const gamma = !isDefaultValue('gamma', values.gamma);
-		const colorize = values.colorize !== 'none' && COLORIZE_MAPS[values.colorize];
-		const autoOn = useAutoLevels(values);
-		if (!levels && !gamma && !colorize && !autoOn) { return null; }
-		const {slope, intercept} = levelsToLinear(values.blackLevel, values.whiteLevel);
-		const exponent = 1 / values.gamma;
-		const tables = [[], [], []];
-		for (let i = 0; i < TONE_TABLE_SIZE; i++) {
-			let x = i / (TONE_TABLE_SIZE - 1);
-			if (autoOn) { x = clamp((x - auto.black) / Math.max(0.05, auto.white - auto.black), 0, 1); }
-			x = clamp(slope * x + intercept, 0, 1);
-			x = Math.pow(x, exponent);
-			for (let ch = 0; ch < 3; ch++) {
-				tables[ch].push(+(colorize ? lerpColor(colorize, x, ch) : x).toFixed(4));
-			}
-		}
-		return tables.map(t => t.join(' '));
-	};
-	/*
-	* シャープ: アンシャープマスク。出力 = (1 + a) × 元の絵 − a × ぼかした絵。
-	* a = シャープ/100 × 6（シャープ25で a=1.5。077 の3×3畳み込みと同じくらいの効き）。
-	* 077b は a = シャープ/100 × 2 で、効きが弱すぎた（077c で修正）。
-	*/
-	const SHARPEN_GAIN = 6;
-	const buildSvgFilterMarkup = values => {
-		const parts = [];
-		let input = 'SourceGraphic';
-		const m = buildColorMatrix(values);
-		if (m) {
-			const v = m.map(row => [row[0], row[1], row[2], 0, row[3]].map(n => +n.toFixed(5)).join(' ')).join('  ');
-			parts.push(`<feColorMatrix type="matrix" values="${v}  0 0 0 1 0" result="sfColor"/>`);
-			input = 'sfColor';
-		}
-		const tables = buildToneTables(values);
-		if (tables) {
-			const f = (ch, i) => `<feFunc${ch} type="table" tableValues="${tables[i]}"/>`;
-			parts.push(`<feComponentTransfer in="${input}" result="sfTone">${f('R', 0)}${f('G', 1)}${f('B', 2)}</feComponentTransfer>`);
-			input = 'sfTone';
-		}
-		if (!isDefaultValue('sharpen', values.sharpen)) {
-			const amount = +(values.sharpen / 100 * SHARPEN_GAIN).toFixed(3);
-			parts.push(`<feGaussianBlur in="${input}" stdDeviation="0.6" result="sfBlur"/>`);
-			parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0"/>`);
-		}
-		return parts.join('');
-	};
-	const ensureSvg = markup => {
-		if (typeof document === 'undefined') { return; }
-		if (markup === lastSvgKey && document.getElementById(SVG_ID)) { return; }
-		lastSvgKey = markup;
-		let svg = document.getElementById(`${SVG_ID}-root`);
-		if (!svg) {
-			svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-			svg.id = `${SVG_ID}-root`;
-			svg.setAttribute('aria-hidden', 'true');
-			svg.setAttribute('width', '0');
-			svg.setAttribute('height', '0');
-			svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
-			(document.body || document.documentElement).append(svg);
-		}
-		svg.innerHTML =
-			`<filter id="${SVG_ID}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">${markup}</filter>`;
-	};
-	const buildFilter = (values = read(), {enabled = isEnabled()} = {}) => {
-		if (!enabled) { return 'none'; }
-		const list = [];
-		const markup = buildSvgFilterMarkup(values);
-		if (markup) {
-			ensureSvg(markup);
-			list.push(`url(#${SVG_ID})`);
-		}
-		if (!isDefaultValue('blur', values.blur)) { list.push(`blur(${values.blur}px)`); }
-		return list.length ? list.join(' ') : 'none';
-	};
-	const vignetteAlpha = (values = read()) =>
-		(!isEnabled() || bypass) ? 0 : +(values.vignette / 100 * 0.85).toFixed(3);
-	const vignetteBackground = alpha =>
-		`radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,${alpha}) 100%)`;
-	const ensureStyle = () => {
-		if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) { return; }
-		const style = document.createElement('style');
-		style.id = STYLE_ID;
-		style.textContent = `
+		const PRESET_MAP = PRESETS.reduce((map, p) => { map[p.id] = p; return map; }, {});
+		/* 着色（colorize）のグラデーション。暗い所→明るい所の順の色（0〜1） */
+		const COLORIZE_MAPS = {
+				gold: [[0.08, 0.04, 0.01], [0.45, 0.28, 0.08], [0.85, 0.62, 0.25], [1, 0.9, 0.6]],
+				sepia: [[0.1, 0.06, 0.03], [0.45, 0.33, 0.2], [0.8, 0.68, 0.5], [1, 0.95, 0.85]],
+				blue: [[0.02, 0.05, 0.12], [0.15, 0.3, 0.55], [0.5, 0.7, 0.9], [0.9, 0.97, 1]],
+				green: [[0, 0.05, 0], [0.1, 0.45, 0.1], [0.4, 0.85, 0.35], [0.85, 1, 0.8]]
+		};
+		let config = null;
+		let bypass = false;
+		let applyScheduled = false;
+		let lastCss = null;
+		let lastSvgKey = null;
+		let lastVignette = null;
+		const listeners = new Set();
+		const auto = { black: 0, white: 1, available: true, timer: null, canvas: null };
+		const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+		const digitsOf = (p) => p.digits !== undefined ? p.digits : (String(p.step).split('.')[1] || '').length;
+		const normalize = (key, value) => {
+				const p = PARAM_MAP[key];
+				if (!p) {
+						return value;
+				}
+				if (p.type === 'boolean') {
+						return value === true || value === 'true';
+				}
+				if (p.type === 'select') {
+						return p.options.some(([v]) => v === value) ? value : p.def;
+				}
+				let v = parseFloat(value);
+				if (!isFinite(v)) {
+						v = p.def;
+				}
+				v = clamp(v, p.min, p.max);
+				return parseFloat(v.toFixed(digitsOf(p)));
+		};
+		const prop = (key) => config && config.props ? config.props[PREFIX + key] : undefined;
+		const setProp = (key, value) => {
+				if (!config || !config.props) {
+						return;
+				}
+				if (config.props[PREFIX + key] !== value) {
+						config.props[PREFIX + key] = value;
+				}
+		};
+		const read = () => {
+				const values = {};
+				PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
+				return values;
+		};
+		const isEnabled = () => true;
+		const isDefaultValue = (key, value) => {
+				const p = PARAM_MAP[key];
+				if (p.type === 'boolean') {
+						return !!value === !!p.def;
+				}
+				if (p.type === 'select') {
+						return value === p.def;
+				}
+				return Math.abs(value - p.def) < 1e-6;
+		};
+		const sameValue = (p, a, b) => {
+				if (p.type === 'boolean') {
+						return !!a === !!b;
+				}
+				if (p.type === 'select') {
+						return a === b;
+				}
+				return Math.abs(a - b) < 1e-6;
+		};
+		const detectPreset = (values = read()) => {
+				const found = PRESETS.find(preset => PARAMS.every(p => {
+						const target = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
+						return sameValue(p, values[p.key], target);
+				}));
+				return found ? found.id : 'custom';
+		};
+		const isActive = (values = read()) => isEnabled() && PARAMS.some(p => !isDefaultValue(p.key, values[p.key]));
+		const IDENTITY = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]];
+		const compose = (a, b) => {
+				const r = [];
+				for (let i = 0; i < 3; i++) {
+						r.push([0, 1, 2].map(j => b[i][0] * a[0][j] + b[i][1] * a[1][j] + b[i][2] * a[2][j])
+								.concat(b[i][0] * a[0][3] + b[i][1] * a[1][3] + b[i][2] * a[2][3] + b[i][3]));
+				}
+				return r;
+		};
+		const diag = (r, g, b, o = 0) => [[r, 0, 0, o], [0, g, 0, o], [0, 0, b, o]];
+		const saturateMatrix = (s) => [
+				[0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0],
+				[0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0],
+				[0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0]
+		];
+		const sepiaMatrix = (a) => {
+				const k = 1 - a;
+				return [
+						[0.393 + 0.607 * k, 0.769 - 0.769 * k, 0.189 - 0.189 * k, 0],
+						[0.349 - 0.349 * k, 0.686 + 0.314 * k, 0.168 - 0.168 * k, 0],
+						[0.272 - 0.272 * k, 0.534 - 0.534 * k, 0.131 + 0.869 * k, 0]
+				];
+		};
+		const hueMatrix = (deg) => {
+				const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+				return [
+						[0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928, 0],
+						[0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283, 0],
+						[0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072, 0]
+				];
+		};
+		const LUMA = [0.2126, 0.7152, 0.0722];
+		const buildColorMatrix = (values) => {
+				let m = IDENTITY, changed = false;
+				const add = (x) => { m = compose(m, x); changed = true; };
+				if (!isDefaultValue('brightness', values.brightness)) {
+						const b = values.brightness / 100;
+						add(diag(b, b, b));
+				}
+				if (!isDefaultValue('contrast', values.contrast)) {
+						const c = values.contrast / 100;
+						add(diag(c, c, c, 0.5 - 0.5 * c));
+				}
+				if (!isDefaultValue('saturate', values.saturate)) {
+						add(saturateMatrix(values.saturate / 100));
+				}
+				if (!isDefaultValue('sepia', values.sepia)) {
+						add(sepiaMatrix(values.sepia / 100));
+				}
+				if (!isDefaultValue('hue', values.hue)) {
+						add(hueMatrix(values.hue));
+				}
+				if (values.invert) {
+						add(diag(-1, -1, -1, 1));
+				}
+				if (!isDefaultValue('temperature', values.temperature) || !isDefaultValue('tint', values.tint)) {
+						const t = values.temperature / 100, n = values.tint / 100;
+						add(diag(1 + 0.10 * t + 0.04 * n, 1 - 0.12 * n, 1 - 0.15 * t + 0.04 * n));
+				}
+				if (values.colorize !== 'none') {
+						add([LUMA.concat(0), LUMA.concat(0), LUMA.concat(0)]);
+				}
+				return changed ? m : null;
+		};
+		const levelsToLinear = (blackLevel, whiteLevel) => {
+				const b = blackLevel / 100, w = whiteLevel / 100;
+				const inBlack = b < 0 ? -b : 0, outBlack = b > 0 ? b : 0;
+				const inWhite = w > 0 ? 1 - w : 1, outWhite = w < 0 ? 1 + w : 1;
+				const slope = (outWhite - outBlack) / Math.max(0.01, inWhite - inBlack);
+				const intercept = outBlack - slope * inBlack;
+				return { slope: +slope.toFixed(4), intercept: +intercept.toFixed(4) };
+		};
+		const TONE_TABLE_SIZE = 65;
+		const lerpColor = (stops, x, ch) => {
+				const pos = clamp(x, 0, 1) * (stops.length - 1);
+				const i = Math.min(stops.length - 2, Math.floor(pos));
+				const f = pos - i;
+				return stops[i][ch] * (1 - f) + stops[i + 1][ch] * f;
+		};
+		const useAutoLevels = (values) => values.autoLevels && auto.available &&
+				(auto.black > 0.004 || auto.white < 0.996);
+		const buildToneTables = (values) => {
+				const levels = !isDefaultValue('blackLevel', values.blackLevel) || !isDefaultValue('whiteLevel', values.whiteLevel);
+				const gamma = !isDefaultValue('gamma', values.gamma);
+				const colorize = values.colorize !== 'none' && COLORIZE_MAPS[values.colorize];
+				const autoOn = useAutoLevels(values);
+				if (!levels && !gamma && !colorize && !autoOn) {
+						return null;
+				}
+				const { slope, intercept } = levelsToLinear(values.blackLevel, values.whiteLevel);
+				const exponent = 1 / values.gamma;
+				const tables = [[], [], []];
+				for (let i = 0; i < TONE_TABLE_SIZE; i++) {
+						let x = i / (TONE_TABLE_SIZE - 1);
+						if (autoOn) {
+								x = clamp((x - auto.black) / Math.max(0.05, auto.white - auto.black), 0, 1);
+						}
+						x = clamp(slope * x + intercept, 0, 1);
+						x = Math.pow(x, exponent);
+						for (let ch = 0; ch < 3; ch++) {
+								tables[ch].push(+(colorize ? lerpColor(colorize, x, ch) : x).toFixed(4));
+						}
+				}
+				return tables.map((t) => t.join(' '));
+		};
+		/*
+		* シャープ: アンシャープマスク。出力 = (1 + a) × 元の絵 − a × ぼかした絵。
+		* a = シャープ/100 × 6（シャープ25で a=1.5。077 の3×3畳み込みと同じくらいの効き）。
+		* 077b は a = シャープ/100 × 2 で、効きが弱すぎた（077c で修正）。
+		*/
+		const SHARPEN_GAIN = 6;
+		const buildSvgFilterMarkup = (values) => {
+				const parts = [];
+				let input = 'SourceGraphic';
+				const m = buildColorMatrix(values);
+				if (m) {
+						const v = m.map(row => [row[0], row[1], row[2], 0, row[3]].map(n => +n.toFixed(5)).join(' ')).join('  ');
+						parts.push(`<feColorMatrix type="matrix" values="${v}  0 0 0 1 0" result="sfColor"/>`);
+						input = 'sfColor';
+				}
+				const tables = buildToneTables(values);
+				if (tables) {
+						const f = (ch, i) => `<feFunc${ch} type="table" tableValues="${tables[i]}"/>`;
+						parts.push(`<feComponentTransfer in="${input}" result="sfTone">${f('R', 0)}${f('G', 1)}${f('B', 2)}</feComponentTransfer>`);
+						input = 'sfTone';
+				}
+				if (!isDefaultValue('sharpen', values.sharpen)) {
+						const amount = +(values.sharpen / 100 * SHARPEN_GAIN).toFixed(3);
+						parts.push(`<feGaussianBlur in="${input}" stdDeviation="0.6" result="sfBlur"/>`);
+						parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0"/>`);
+				}
+				return parts.join('');
+		};
+		const ensureSvg = (markup) => {
+				if (typeof document === 'undefined') {
+						return;
+				}
+				if (markup === lastSvgKey && document.getElementById(SVG_ID)) {
+						return;
+				}
+				lastSvgKey = markup;
+				let svg = document.getElementById(`${SVG_ID}-root`);
+				if (!svg) {
+						svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+						svg.id = `${SVG_ID}-root`;
+						svg.setAttribute('aria-hidden', 'true');
+						svg.setAttribute('width', '0');
+						svg.setAttribute('height', '0');
+						svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+						(document.body || document.documentElement).append(svg);
+				}
+				svg.innerHTML =
+						`<filter id="${SVG_ID}" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">${markup}</filter>`;
+		};
+		const buildFilter = (values = read(), { enabled = isEnabled() } = {}) => {
+				if (!enabled) {
+						return 'none';
+				}
+				const list = [];
+				const markup = buildSvgFilterMarkup(values);
+				if (markup) {
+						ensureSvg(markup);
+						list.push(`url(#${SVG_ID})`);
+				}
+				if (!isDefaultValue('blur', values.blur)) {
+						list.push(`blur(${values.blur}px)`);
+				}
+				return list.length ? list.join(' ') : 'none';
+		};
+		const vignetteAlpha = (values = read()) => (!isEnabled() || bypass) ? 0 : +(values.vignette / 100 * 0.85).toFixed(3);
+		const vignetteBackground = (alpha) => `radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,${alpha}) 100%)`;
+		const ensureStyle = () => {
+				if (typeof document === 'undefined' || document.getElementById(STYLE_ID)) {
+						return;
+				}
+				const style = document.createElement('style');
+				style.id = STYLE_ID;
+				style.textContent = `
 			.zenzaWatchVideoElement {
 				filter: var(${CSS_VAR}, none);
 			}
@@ -5423,440 +5696,523 @@ const ScreenFilter = (() => {
 				display: block;
 			}
 		`;
-		(document.head || document.documentElement).append(style);
-	};
-	/* 周辺減光: 動画要素のすぐ後ろ（同じ親の中）に影の要素を置く。コメントより下になる */
-	const applyVignette = alpha => {
-		if (typeof document === 'undefined') { return; }
-		const key = String(alpha);
-		const videos = document.querySelectorAll('.zenzaWatchVideoElement');
-		videos.forEach(video => {
-			const parent = video.parentNode;
-			if (!parent) { return; }
-			let el = parent.querySelector(`:scope > .${VIGNETTE_CLASS}`);
-			if (!el) {
-				if (!alpha) { return; }
-				el = document.createElement('div');
-				el.className = VIGNETTE_CLASS;
-				video.after(el);
-			}
-			el.classList.toggle('is-active', alpha > 0);
-			if (alpha > 0) { el.style.background = vignetteBackground(alpha); }
-		});
-		lastVignette = key;
-	};
-	const emitChange = () => {
-		listeners.forEach(fn => {
-			try { fn(); } catch (e) { window.console.warn('ScreenFilter listener error', e); }
-		});
-	};
-	const apply = (values = read(), {notify = true} = {}) => {
-		applyScheduled = false;
-		if (typeof document === 'undefined') { return 'none'; }
-		ensureStyle();
-		const css = bypass ? 'none' : buildFilter(values);
-		if (css !== lastCss) {
-			lastCss = css;
-			document.documentElement.style.setProperty(CSS_VAR, css);
-		}
-		applyVignette(vignetteAlpha(values));
-		updateAutoLevelsTimer(values);
-		notify && emitChange();
-		return css;
-	};
-	const scheduleApply = () => {
-		if (applyScheduled) { return; }
-		applyScheduled = true;
-		Promise.resolve().then(() => apply());
-	};
-	const AUTO_W = 64, AUTO_H = 36;
-	const sampleAutoLevels = () => {
-		if (!isEnabled() || bypass) { return; }
-		const video = document.querySelector('.zenzaWatchVideoElement');
-		if (!video || video.paused || video.readyState < 2 || !video.videoWidth) { return; }
-		try {
-			if (!auto.canvas) {
-				auto.canvas = document.createElement('canvas');
-				auto.canvas.width = AUTO_W;
-				auto.canvas.height = AUTO_H;
-				auto.ctx = auto.canvas.getContext('2d', {willReadFrequently: true});
-			}
-			const ctx = auto.ctx;
-			ctx.drawImage(video.drawableElement || video, 0, 0, AUTO_W, AUTO_H);
-			const data = ctx.getImageData(0, 0, AUTO_W, AUTO_H).data;
-			const hist = new Uint32Array(256);
-			for (let i = 0; i < data.length; i += 4) {
-				hist[(data[i] * 54 + data[i + 1] * 183 + data[i + 2] * 19) >> 8]++;
-			}
-			const total = AUTO_W * AUTO_H, cut = total * 0.005;
-			let low = 0, high = 255, acc = 0;
-			for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > cut) { low = i; break; } }
-			acc = 0;
-			for (let i = 255; i >= 0; i--) { acc += hist[i]; if (acc > cut) { high = i; break; } }
-			let b = Math.min(low / 255, 0.25), w = Math.max(high / 255, 0.75);
-			if (w - b < 0.4) { return; }
-			b = auto.black * 0.7 + b * 0.3;
-			w = auto.white * 0.7 + w * 0.3;
-			if (Math.abs(b - auto.black) < 0.004 && Math.abs(w - auto.white) < 0.004) { return; }
-			auto.black = b;
-			auto.white = w;
-			apply(read(), {notify: false});
-		} catch (e) {
-			auto.available = false;
-			window.console.warn('ScreenFilter: 自動レベル補正はこの映像では使えません', e && e.name);
-			stopAutoLevels();
-			emitChange();
-		}
-	};
-	const stopAutoLevels = () => {
-		if (auto.timer) {
-			clearInterval(auto.timer);
-			auto.timer = null;
-		}
-	};
-	const updateAutoLevelsTimer = values => {
-		const want = values.autoLevels && isEnabled() && auto.available && typeof window !== 'undefined';
-		if (want && !auto.timer) {
-			auto.timer = setInterval(sampleAutoLevels, 500);
-		} else if (!want && auto.timer) {
-			stopAutoLevels();
-			auto.black = 0;
-			auto.white = 1;
-		}
-	};
-	const resetAutoLevels = () => {
-		auto.black = 0;
-		auto.white = 1;
-		auto.available = true;
-		scheduleApply();
-	};
-	const set = (key, value) => {
-		if (!PARAM_MAP[key]) { return; }
-		setProp(key, normalize(key, value));
-		scheduleApply();
-	};
-	const preview = (key, value) => {
-		const values = read();
-		values[key] = normalize(key, value);
-		apply(values, {notify: false});
-	};
-	const applyPreset = id => {
-		const preset = PRESET_MAP[id];
-		if (!preset) { return null; }
-		PARAMS.forEach(p => {
-			const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
-			setProp(p.key, normalize(p.key, v));
-		});
-		scheduleApply();
-		return preset;
-	};
-	const reset = () => applyPreset('standard');
-	const nextPreset = () => {
-		const current = detectPreset();
-		const index = PRESETS.findIndex(p => p.id === current);
-		const next = PRESETS[(index + 1) % PRESETS.length];
-		return applyPreset(next.id);
-	};
-	const formatValue = (key, value) => {
-		const p = PARAM_MAP[key];
-		if (!p) { return String(value); }
-		if (p.type === 'boolean') { return value ? 'ON' : 'OFF'; }
-		if (p.type === 'select') { const o = p.options.find(([v]) => v === value); return o ? o[1] : String(value); }
-		const text = Number(value).toFixed(digitsOf(p));
-		return `${p.signed && value > 0 ? '+' : ''}${text}${p.unit || ''}`;
-	};
-	const adjust = param => {
-		const [key, deltaText] = String(param || '').split(':');
-		const p = PARAM_MAP[key];
-		if (!p || p.type === 'boolean' || p.type === 'select') { return null; }
-		const delta = parseFloat(deltaText) || 0;
-		const next = normalize(key, normalize(key, prop(key)) + delta);
-		setProp(key, next);
-		scheduleApply();
-		return {param: p, value: next};
-	};
-	const onOff = v => v ? 'ON' : 'OFF';
-	const isStandard = (values = read()) => PARAMS.every(p => isDefaultValue(p.key, values[p.key]));
-	const saveValues = values => {
-		try { setProp('saved', JSON.stringify(values)); } catch (e) { /* 保存できなくても動作は続ける */ }
-	};
-	const loadSaved = () => {
-		const raw = prop('saved');
-		if (!raw) { return null; }
-		try {
-			const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
-			return v && typeof v === 'object' ? v : null;
-		} catch (e) {
-			return null;
-		}
-	};
-	const execCommand = (command, param) => {
-		switch (command) {
-			case 'toggle-screenFilter.enable': {
-				const values = read();
-				if (!isStandard(values)) {
-					saveValues(values);
-					applyPreset('standard');
-					return 'エフェクト: OFF（標準に戻しました。もう一度押すと元の設定に戻ります）';
+				(document.head || document.documentElement).append(style);
+		};
+		/* 周辺減光: 動画要素のすぐ後ろ（同じ親の中）に影の要素を置く。コメントより下になる */
+		const applyVignette = (alpha) => {
+				if (typeof document === 'undefined') {
+						return;
 				}
-				const saved = loadSaved();
-				if (!saved) { return 'エフェクト: 標準のままです（戻す設定がありません）'; }
+				const key = String(alpha);
+				const videos = document.querySelectorAll('.zenzaWatchVideoElement');
+				videos.forEach(video => {
+						const parent = video.parentNode;
+						if (!parent) {
+								return;
+						}
+						let el = parent.querySelector(`:scope > .${VIGNETTE_CLASS}`);
+						if (!el) {
+								if (!alpha) {
+										return;
+								}
+								el = document.createElement('div');
+								el.className = VIGNETTE_CLASS;
+								video.after(el);
+						}
+						el.classList.toggle('is-active', alpha > 0);
+						if (alpha > 0) {
+								el.style.background = vignetteBackground(alpha);
+						}
+				});
+				lastVignette = key;
+		};
+		const emitChange = () => {
+				listeners.forEach(fn => {
+						try {
+								fn();
+						}
+						catch (e) {
+								window.console.warn('ScreenFilter listener error', e);
+						}
+				});
+		};
+		const apply = (values = read(), { notify = true } = {}) => {
+				applyScheduled = false;
+				if (typeof document === 'undefined') {
+						return 'none';
+				}
+				ensureStyle();
+				const css = bypass ? 'none' : buildFilter(values);
+				if (css !== lastCss) {
+						lastCss = css;
+						document.documentElement.style.setProperty(CSS_VAR, css);
+				}
+				applyVignette(vignetteAlpha(values));
+				updateAutoLevelsTimer(values);
+				notify && emitChange();
+				return css;
+		};
+		const scheduleApply = () => {
+				if (applyScheduled) {
+						return;
+				}
+				applyScheduled = true;
+				Promise.resolve().then(() => apply());
+		};
+		const AUTO_W = 64, AUTO_H = 36;
+		const sampleAutoLevels = () => {
+				if (!isEnabled() || bypass) {
+						return;
+				}
+				const video = document.querySelector('.zenzaWatchVideoElement');
+				if (!video || video.paused || video.readyState < 2 || !video.videoWidth) {
+						return;
+				}
+				try {
+						if (!auto.canvas) {
+								auto.canvas = document.createElement('canvas');
+								auto.canvas.width = AUTO_W;
+								auto.canvas.height = AUTO_H;
+								auto.ctx = auto.canvas.getContext('2d', { willReadFrequently: true });
+						}
+						const ctx = auto.ctx;
+						ctx.drawImage(video.drawableElement || video, 0, 0, AUTO_W, AUTO_H);
+						const data = ctx.getImageData(0, 0, AUTO_W, AUTO_H).data;
+						const hist = new Uint32Array(256);
+						for (let i = 0; i < data.length; i += 4) {
+								hist[(data[i] * 54 + data[i + 1] * 183 + data[i + 2] * 19) >> 8]++;
+						}
+						const total = AUTO_W * AUTO_H, cut = total * 0.005;
+						let low = 0, high = 255, acc = 0;
+						for (let i = 0; i < 256; i++) {
+								acc += hist[i];
+								if (acc > cut) {
+										low = i;
+										break;
+								}
+						}
+						acc = 0;
+						for (let i = 255; i >= 0; i--) {
+								acc += hist[i];
+								if (acc > cut) {
+										high = i;
+										break;
+								}
+						}
+						let b = Math.min(low / 255, 0.25), w = Math.max(high / 255, 0.75);
+						if (w - b < 0.4) {
+								return;
+						}
+						b = auto.black * 0.7 + b * 0.3;
+						w = auto.white * 0.7 + w * 0.3;
+						if (Math.abs(b - auto.black) < 0.004 && Math.abs(w - auto.white) < 0.004) {
+								return;
+						}
+						auto.black = b;
+						auto.white = w;
+						apply(read(), { notify: false });
+				}
+				catch (e) {
+						auto.available = false;
+						window.console.warn('ScreenFilter: 自動レベル補正はこの映像では使えません', e && e.name);
+						stopAutoLevels();
+						emitChange();
+				}
+		};
+		const stopAutoLevels = () => {
+				if (auto.timer) {
+						clearInterval(auto.timer);
+						auto.timer = null;
+				}
+		};
+		const updateAutoLevelsTimer = (values) => {
+				const want = values.autoLevels && isEnabled() && auto.available && typeof window !== 'undefined';
+				if (want && !auto.timer) {
+						auto.timer = setInterval(sampleAutoLevels, 500);
+				}
+				else if (!want && auto.timer) {
+						stopAutoLevels();
+						auto.black = 0;
+						auto.white = 1;
+				}
+		};
+		const resetAutoLevels = () => {
+				auto.black = 0;
+				auto.white = 1;
+				auto.available = true;
+				scheduleApply();
+		};
+		const set = (key, value) => {
+				if (!PARAM_MAP[key]) {
+						return;
+				}
+				setProp(key, normalize(key, value));
+				scheduleApply();
+		};
+		const preview = (key, value) => {
+				const values = read();
+				values[key] = normalize(key, value);
+				apply(values, { notify: false });
+		};
+		const applyPreset = (id) => {
+				const preset = PRESET_MAP[id];
+				if (!preset) {
+						return null;
+				}
 				PARAMS.forEach(p => {
-					setProp(p.key, normalize(p.key, saved[p.key] !== undefined ? saved[p.key] : p.def));
+						const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
+						setProp(p.key, normalize(p.key, v));
 				});
 				scheduleApply();
-				const preset = PRESET_MAP[detectPreset()];
-				return `エフェクト: ON（${preset ? preset.label : '手動で調整した設定'}）`;
-			}
-			case 'toggle-screenFilter.split': {
-				const v = setSplit(!split.on);
-				return v ? '画面フィルター: 左半分に元の映像を表示' : '画面フィルター: 比較表示をやめました';
-			}
-			case 'toggle-screenFilter.flipH': {
-				const v = !prop('flipH');
-				setProp('flipH', v);
-				return `左右反転: ${onOff(v)}`;
-			}
-			case 'toggle-screenFilter.flipV': {
-				const v = !prop('flipV');
-				setProp('flipV', v);
-				return `上下反転: ${onOff(v)}`;
-			}
-			case 'toggle-screenFilter.invert':
-			case 'toggle-screenFilter.autoLevels': {
-				const key = command.replace('toggle-screenFilter.', '');
-				const v = !normalize(key, prop(key));
-				set(key, v);
-				return `${PARAM_MAP[key].label}: ${onOff(v)}`;
-			}
-			case 'screenFilter-preset': {
-				const preset = applyPreset(param);
-				if (!preset) { return null; }
-				return `画面フィルター: ${preset.label}`;
-			}
-			case 'screenFilter-nextPreset': {
-				const preset = nextPreset();
-				return preset ? `画面フィルター: ${preset.label}` : null;
-			}
-			case 'screenFilter-reset':
-				reset();
-				return '画面フィルター: 標準に戻しました';
-			case 'screenFilter-adjust': {
-				const result = adjust(param);
-				if (!result) { return null; }
-				return `${result.param.label}: ${formatValue(result.param.key, result.value)}`;
-			}
-		}
-		return null;
-	};
-	const isCanvasTarget = target => {
-		const key = target === 'screenshot' ? 'applyToScreenshot' : 'applyToCommentPip';
-		const v = prop(key);
-		return v === undefined ? true : !!v;
-	};
-	const drawVideo = (ctx, source, dx, dy, w, h, {target = 'commentPip'} = {}) => {
-		const use = isCanvasTarget(target);
-		const filter = use && !bypass ? buildFilter() : 'none';
-		const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
-		ctx.save();
-		if (filter !== 'none') {
-			ctx.filter = filter;
-		}
-		if (flipH || flipV) {
-			ctx.translate(dx + (flipH ? w : 0), dy + (flipV ? h : 0));
-			ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-			ctx.drawImage(source, 0, 0, w, h);
-		} else {
-			ctx.drawImage(source, dx, dy, w, h);
-		}
-		ctx.restore();
-		const alpha = use ? vignetteAlpha() : 0;
-		if (alpha > 0) {
-			const cx = dx + w / 2, cy = dy + h / 2;
-			const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, Math.hypot(w, h) / 2);
-			g.addColorStop(0, 'rgba(0,0,0,0)');
-			g.addColorStop(1, `rgba(0,0,0,${alpha})`);
-			ctx.save();
-			ctx.fillStyle = g;
-			ctx.fillRect(dx, dy, w, h);
-			ctx.restore();
-		}
-	};
-	const processCanvas = (canvas, {target = 'screenshot'} = {}) => {
-		if (!isCanvasTarget(target)) { return canvas; }
-		const filter = bypass ? 'none' : buildFilter();
-		if (filter === 'none' && !prop('flipH') && !prop('flipV') && !vignetteAlpha()) { return canvas; }
-		const out = document.createElement('canvas');
-		out.width = canvas.width;
-		out.height = canvas.height;
-		const ctx = out.getContext('2d');
-		drawVideo(ctx, canvas, 0, 0, canvas.width, canvas.height, {target});
-		return out;
-	};
-	const SPLIT_CLASS = 'zenzaScreenFilterSplit';
-	const split = {on: false, raf: 0, canvas: null, ctx: null, lastKey: ''};
-	const hideSplitCanvas = () => {
-		if (split.canvas) { split.canvas.style.display = 'none'; }
-		split.lastKey = '';
-	};
-	const drawSplit = () => {
-		split.raf = 0;
-		if (!split.on || typeof document === 'undefined') { return; }
-		split.raf = requestAnimationFrame(drawSplit);
-		const video = document.querySelector('.zenzaWatchVideoElement');
-		const src = video && (video.drawableElement || video);
-		const parent = video && video.parentNode;
-		if (!src || !parent || !src.videoWidth || src.readyState < 2 || isStandard()) {
-			hideSplitCanvas();
-			return;
-		}
-		let canvas = split.canvas;
-		if (!canvas || canvas.parentNode !== parent) {
-			canvas = split.canvas || document.createElement('canvas');
-			canvas.className = SPLIT_CLASS;
-			canvas.style.cssText = 'position:absolute;z-index:7;pointer-events:none;';
-			video.after(canvas);
-			split.canvas = canvas;
-			split.ctx = canvas.getContext('2d');
-		}
-		const vw = src.videoWidth, vh = src.videoHeight;
-		const ew = video.offsetWidth, eh = video.offsetHeight;
-		if (!ew || !eh) { hideSplitCanvas(); return; }
-		const scale = Math.min(ew / vw, eh / vh);
-		const cw = vw * scale, ch = vh * scale;
-		const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
-		const flipH = !!prop('flipH'), flipV = !!prop('flipV');
-		const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
-		if (key === split.lastKey && canvas.style.display !== 'none') { return; }
-		split.lastKey = key;
-		const dpr = Math.min(window.devicePixelRatio || 1, 2);
-		const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
-		const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
-		if (canvas.width !== w || canvas.height !== h) {
-			canvas.width = w;
-			canvas.height = h;
-		}
-		Object.assign(canvas.style, {
-			display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
-		});
-		const ctx = split.ctx;
-		const half = Math.round(w / 2);
-		ctx.clearRect(0, 0, w, h);
-		ctx.save();
-		ctx.beginPath();
-		ctx.rect(0, 0, half, h);
-		ctx.clip();
-		ctx.translate(flipH ? w : 0, flipV ? h : 0);
-		ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-		ctx.drawImage(src, 0, 0, w, h);
-		ctx.restore();
-		ctx.fillStyle = 'rgba(255,255,255,0.85)';
-		ctx.fillRect(half - 1, 0, 2, h);
-		const fs = Math.max(11, Math.round(h / 30));
-		ctx.font = `bold ${fs}px sans-serif`;
-		ctx.textBaseline = 'top';
-		const label = (text, x, align) => {
-			ctx.textAlign = align;
-			ctx.lineWidth = Math.max(2, fs / 5);
-			ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-			ctx.strokeText(text, x, fs * 0.6);
-			ctx.fillStyle = '#fff';
-			ctx.fillText(text, x, fs * 0.6);
+				return preset;
 		};
-		label('元の映像', half - fs * 0.6, 'right');
-		label('エフェクト', half + fs * 0.6, 'left');
-	};
-	const setSplit = v => {
-		split.on = !!v;
-		if (split.on) {
-			!split.raf && (split.raf = requestAnimationFrame(drawSplit));
-		} else {
-			split.raf && cancelAnimationFrame(split.raf);
-			split.raf = 0;
-			hideSplitCanvas();
-		}
-		emitChange();
-		return split.on;
-	};
-	const initialize = playerConfig => {
-		if (config === playerConfig) { return; }
-		config = playerConfig;
-		if (prop('enable') === false) {
-			const values = read();
-			if (!isStandard(values)) { saveValues(values); }
-			PARAMS.forEach(p => setProp(p.key, p.def));
-			setProp('enable', true);
-		}
-		setProp('flipH', false);
-		setProp('flipV', false);
-		if (config && typeof config.on === 'function') {
-			config.on('update', key => {
-				if (typeof key === 'string' && key.startsWith(PREFIX)) {
-					scheduleApply();
+		const reset = () => applyPreset('standard');
+		const nextPreset = () => {
+				const current = detectPreset();
+				const index = PRESETS.findIndex(p => p.id === current);
+				const next = PRESETS[(index + 1) % PRESETS.length];
+				return applyPreset(next.id);
+		};
+		const formatValue = (key, value) => {
+				const p = PARAM_MAP[key];
+				if (!p) {
+						return String(value);
 				}
-			});
-		}
-		apply();
-	};
-	return {
-		PREFIX,
-		PARAMS,
-		PARAM_MAP,
-		PRESETS,
-		DEFAULTS,
-		COLORIZE_MAPS,
-		initialize,
-		read,
-		set,
-		preview,
-		apply,
-		applyPreset,
-		reset,
-		nextPreset,
-		adjust,
-		detectPreset,
-		isActive,
-		buildFilter,
-		buildSvgFilterMarkup,
-		buildColorMatrix,
-		buildToneTables,
-		levelsToLinear,
-		formatValue,
-		normalize,
-		execCommand,
-		drawVideo,
-		processCanvas,
-		isEnabled,
-		isStandard,
-		setSplit,
-		get isSplit() { return split.on; },
-		resetAutoLevels,
-		get autoLevelsAvailable() { return auto.available; },
-		get flipH() { return !!prop('flipH'); },
-		get flipV() { return !!prop('flipV'); },
-		setBypass(v) {
-			bypass = !!v;
-			apply();
-		},
-		get bypass() { return bypass; },
-		onChange(fn) {
-			typeof fn === 'function' && listeners.add(fn);
-			return () => listeners.delete(fn);
-		},
-		_reset() {
-			config = null;
-			bypass = false;
-			lastCss = null;
-			lastSvgKey = null;
-			lastVignette = null;
-			stopAutoLevels();
-			auto.black = 0;
-			auto.white = 1;
-			auto.available = true;
-			listeners.clear();
-			split.on = false;
-		}
-	};
+				if (p.type === 'boolean') {
+						return value ? 'ON' : 'OFF';
+				}
+				if (p.type === 'select') {
+						const o = p.options.find(([v]) => v === value);
+						return o ? o[1] : String(value);
+				}
+				const text = Number(value).toFixed(digitsOf(p));
+				return `${p.signed && value > 0 ? '+' : ''}${text}${p.unit || ''}`;
+		};
+		const adjust = (param) => {
+				const [key, deltaText] = String(param || '').split(':');
+				const p = PARAM_MAP[key];
+				if (!p || p.type === 'boolean' || p.type === 'select') {
+						return null;
+				}
+				const delta = parseFloat(deltaText) || 0;
+				const next = normalize(key, normalize(key, prop(key)) + delta);
+				setProp(key, next);
+				scheduleApply();
+				return { param: p, value: next };
+		};
+		const onOff = (v) => v ? 'ON' : 'OFF';
+		const isStandard = (values = read()) => PARAMS.every(p => isDefaultValue(p.key, values[p.key]));
+		const saveValues = (values) => {
+				try {
+						setProp('saved', JSON.stringify(values));
+				}
+				catch (e) { /* 保存できなくても動作は続ける */ }
+		};
+		const loadSaved = () => {
+				const raw = prop('saved');
+				if (!raw) {
+						return null;
+				}
+				try {
+						const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+						return v && typeof v === 'object' ? v : null;
+				}
+				catch (e) {
+						return null;
+				}
+		};
+		const execCommand = (command, param) => {
+				switch (command) {
+						case 'toggle-screenFilter.enable': {
+								const values = read();
+								if (!isStandard(values)) {
+										saveValues(values);
+										applyPreset('standard');
+										return 'エフェクト: OFF（標準に戻しました。もう一度押すと元の設定に戻ります）';
+								}
+								const saved = loadSaved();
+								if (!saved) {
+										return 'エフェクト: 標準のままです（戻す設定がありません）';
+								}
+								PARAMS.forEach(p => {
+										setProp(p.key, normalize(p.key, saved[p.key] !== undefined ? saved[p.key] : p.def));
+								});
+								scheduleApply();
+								const preset = PRESET_MAP[detectPreset()];
+								return `エフェクト: ON（${preset ? preset.label : '手動で調整した設定'}）`;
+						}
+						case 'toggle-screenFilter.split': {
+								const v = setSplit(!split.on);
+								return v ? '画面フィルター: 左半分に元の映像を表示' : '画面フィルター: 比較表示をやめました';
+						}
+						case 'toggle-screenFilter.flipH': {
+								const v = !prop('flipH');
+								setProp('flipH', v);
+								return `左右反転: ${onOff(v)}`;
+						}
+						case 'toggle-screenFilter.flipV': {
+								const v = !prop('flipV');
+								setProp('flipV', v);
+								return `上下反転: ${onOff(v)}`;
+						}
+						case 'toggle-screenFilter.invert':
+						case 'toggle-screenFilter.autoLevels': {
+								const key = command.replace('toggle-screenFilter.', '');
+								const v = !normalize(key, prop(key));
+								set(key, v);
+								return `${PARAM_MAP[key].label}: ${onOff(v)}`;
+						}
+						case 'screenFilter-preset': {
+								const preset = applyPreset(param);
+								if (!preset) {
+										return null;
+								}
+								return `画面フィルター: ${preset.label}`;
+						}
+						case 'screenFilter-nextPreset': {
+								const preset = nextPreset();
+								return preset ? `画面フィルター: ${preset.label}` : null;
+						}
+						case 'screenFilter-reset':
+								reset();
+								return '画面フィルター: 標準に戻しました';
+						case 'screenFilter-adjust': {
+								const result = adjust(param);
+								if (!result) {
+										return null;
+								}
+								return `${result.param.label}: ${formatValue(result.param.key, result.value)}`;
+						}
+				}
+				return null;
+		};
+		const isCanvasTarget = (target) => {
+				const key = target === 'screenshot' ? 'applyToScreenshot' : 'applyToCommentPip';
+				const v = prop(key);
+				return v === undefined ? true : !!v;
+		};
+		const drawVideo = (ctx, source, dx, dy, w, h, { target = 'commentPip' } = {}) => {
+				const use = isCanvasTarget(target);
+				const filter = use && !bypass ? buildFilter() : 'none';
+				const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
+				ctx.save();
+				if (filter !== 'none') {
+						ctx.filter = filter;
+				}
+				if (flipH || flipV) {
+						ctx.translate(dx + (flipH ? w : 0), dy + (flipV ? h : 0));
+						ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+						ctx.drawImage(source, 0, 0, w, h);
+				}
+				else {
+						ctx.drawImage(source, dx, dy, w, h);
+				}
+				ctx.restore();
+				const alpha = use ? vignetteAlpha() : 0;
+				if (alpha > 0) {
+						const cx = dx + w / 2, cy = dy + h / 2;
+						const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, Math.hypot(w, h) / 2);
+						g.addColorStop(0, 'rgba(0,0,0,0)');
+						g.addColorStop(1, `rgba(0,0,0,${alpha})`);
+						ctx.save();
+						ctx.fillStyle = g;
+						ctx.fillRect(dx, dy, w, h);
+						ctx.restore();
+				}
+		};
+		const processCanvas = (canvas, { target = 'screenshot' } = {}) => {
+				if (!isCanvasTarget(target)) {
+						return canvas;
+				}
+				const filter = bypass ? 'none' : buildFilter();
+				if (filter === 'none' && !prop('flipH') && !prop('flipV') && !vignetteAlpha()) {
+						return canvas;
+				}
+				const out = document.createElement('canvas');
+				out.width = canvas.width;
+				out.height = canvas.height;
+				const ctx = out.getContext('2d');
+				drawVideo(ctx, canvas, 0, 0, canvas.width, canvas.height, { target });
+				return out;
+		};
+		const SPLIT_CLASS = 'zenzaScreenFilterSplit';
+		const split = { on: false, raf: 0, canvas: null, ctx: null, lastKey: '' };
+		const hideSplitCanvas = () => {
+				if (split.canvas) {
+						split.canvas.style.display = 'none';
+				}
+				split.lastKey = '';
+		};
+		const drawSplit = () => {
+				split.raf = 0;
+				if (!split.on || typeof document === 'undefined') {
+						return;
+				}
+				split.raf = requestAnimationFrame(drawSplit);
+				const video = document.querySelector('.zenzaWatchVideoElement');
+				const src = video && (video.drawableElement || video);
+				const parent = video && video.parentNode;
+				if (!src || !parent || !src.videoWidth || src.readyState < 2 || isStandard()) {
+						hideSplitCanvas();
+						return;
+				}
+				let canvas = split.canvas;
+				if (!canvas || canvas.parentNode !== parent) {
+						canvas = split.canvas || document.createElement('canvas');
+						canvas.className = SPLIT_CLASS;
+						canvas.style.cssText = 'position:absolute;z-index:7;pointer-events:none;';
+						video.after(canvas);
+						split.canvas = canvas;
+						split.ctx = canvas.getContext('2d');
+				}
+				const vw = src.videoWidth, vh = src.videoHeight;
+				const ew = video.offsetWidth, eh = video.offsetHeight;
+				if (!ew || !eh) {
+						hideSplitCanvas();
+						return;
+				}
+				const scale = Math.min(ew / vw, eh / vh);
+				const cw = vw * scale, ch = vh * scale;
+				const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
+				const flipH = !!prop('flipH'), flipV = !!prop('flipV');
+				const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
+				if (key === split.lastKey && canvas.style.display !== 'none') {
+						return;
+				}
+				split.lastKey = key;
+				const dpr = Math.min(window.devicePixelRatio || 1, 2);
+				const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
+				const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
+				if (canvas.width !== w || canvas.height !== h) {
+						canvas.width = w;
+						canvas.height = h;
+				}
+				Object.assign(canvas.style, {
+						display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
+				});
+				const ctx = split.ctx;
+				const half = Math.round(w / 2);
+				ctx.clearRect(0, 0, w, h);
+				ctx.save();
+				ctx.beginPath();
+				ctx.rect(0, 0, half, h);
+				ctx.clip();
+				ctx.translate(flipH ? w : 0, flipV ? h : 0);
+				ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+				ctx.drawImage(src, 0, 0, w, h);
+				ctx.restore();
+				ctx.fillStyle = 'rgba(255,255,255,0.85)';
+				ctx.fillRect(half - 1, 0, 2, h);
+				const fs = Math.max(11, Math.round(h / 30));
+				ctx.font = `bold ${fs}px sans-serif`;
+				ctx.textBaseline = 'top';
+				const label = (text, x, align) => {
+						ctx.textAlign = align;
+						ctx.lineWidth = Math.max(2, fs / 5);
+						ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+						ctx.strokeText(text, x, fs * 0.6);
+						ctx.fillStyle = '#fff';
+						ctx.fillText(text, x, fs * 0.6);
+				};
+				label('元の映像', half - fs * 0.6, 'right');
+				label('エフェクト', half + fs * 0.6, 'left');
+		};
+		const setSplit = (v) => {
+				split.on = !!v;
+				if (split.on) {
+						!split.raf && (split.raf = requestAnimationFrame(drawSplit));
+				}
+				else {
+						split.raf && cancelAnimationFrame(split.raf);
+						split.raf = 0;
+						hideSplitCanvas();
+				}
+				emitChange();
+				return split.on;
+		};
+		const initialize = (playerConfig) => {
+				if (config === playerConfig) {
+						return;
+				}
+				config = playerConfig;
+				if (prop('enable') === false) {
+						const values = read();
+						if (!isStandard(values)) {
+								saveValues(values);
+						}
+						PARAMS.forEach(p => setProp(p.key, p.def));
+						setProp('enable', true);
+				}
+				setProp('flipH', false);
+				setProp('flipV', false);
+				if (config && typeof config.on === 'function') {
+						config.on('update', (key) => {
+								if (typeof key === 'string' && key.startsWith(PREFIX)) {
+										scheduleApply();
+								}
+						});
+				}
+				apply();
+		};
+		return {
+				PREFIX,
+				PARAMS,
+				PARAM_MAP,
+				PRESETS,
+				DEFAULTS,
+				COLORIZE_MAPS,
+				initialize,
+				read,
+				set,
+				preview,
+				apply,
+				applyPreset,
+				reset,
+				nextPreset,
+				adjust,
+				detectPreset,
+				isActive,
+				buildFilter,
+				buildSvgFilterMarkup,
+				buildColorMatrix,
+				buildToneTables,
+				levelsToLinear,
+				formatValue,
+				normalize,
+				execCommand,
+				drawVideo,
+				processCanvas,
+				isEnabled,
+				isStandard,
+				setSplit,
+				get isSplit() { return split.on; },
+				resetAutoLevels,
+				get autoLevelsAvailable() { return auto.available; },
+				get flipH() { return !!prop('flipH'); },
+				get flipV() { return !!prop('flipV'); },
+				setBypass(v) {
+						bypass = !!v;
+						apply();
+				},
+				get bypass() { return bypass; },
+				onChange(fn) {
+						typeof fn === 'function' && listeners.add(fn);
+						return () => listeners.delete(fn);
+				},
+				_reset() {
+						config = null;
+						bypass = false;
+						lastCss = null;
+						lastSvgKey = null;
+						lastVignette = null;
+						stopAutoLevels();
+						auto.black = 0;
+						auto.white = 1;
+						auto.available = true;
+						listeners.clear();
+						split.on = false;
+				}
+		};
 })();
 /*
 * プレイヤー内の「画面フィルター」パネル。
@@ -5864,10 +6220,8 @@ const ScreenFilter = (() => {
 * 全画面の時は全画面の要素の中へ、それ以外は body へ置く（全画面中も見えるように）。
 */
 const ScreenFilterPanel = (() => {
-	const esc = s => String(s).replace(/[&<>"']/g, c => (
-		{'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'}[c]
-	));
-	const CSS = `
+		const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]));
+		const CSS = `
 		.zenzaScreenFilterPanel {
 			position: fixed;
 			top: 16px;
@@ -6051,16 +6405,16 @@ const ScreenFilterPanel = (() => {
 			color: #ff9f8f;
 		}
 	`;
-	const rowHtml = p => {
-		if (p.type === 'boolean') {
-			return `
+		const rowHtml = (p) => {
+				if (p.type === 'boolean') {
+						return `
 				<div class="sfRow" data-key="${p.key}">
 					<label class="sfCheck"><input type="checkbox" data-param="${p.key}"> ${esc(p.label)}</label>
 					<div class="sfDesc">${esc(p.desc)}</div>
 				</div>`;
-		}
-		if (p.type === 'select') {
-			return `
+				}
+				if (p.type === 'select') {
+						return `
 				<div class="sfRow" data-key="${p.key}">
 					<div class="sfRowHead">
 						<span class="sfLabel">${esc(p.label)}</span>
@@ -6070,8 +6424,8 @@ const ScreenFilterPanel = (() => {
 					</div>
 					<div class="sfDesc">${esc(p.desc)}</div>
 				</div>`;
-		}
-		return `
+				}
+				return `
 			<div class="sfRow" data-key="${p.key}">
 				<div class="sfRowHead">
 					<span class="sfLabel">${esc(p.label)}</span>
@@ -6084,8 +6438,8 @@ const ScreenFilterPanel = (() => {
 				<input type="range" data-param="${p.key}" min="${p.min}" max="${p.max}" step="${p.step}">
 				<div class="sfDesc">${esc(p.desc)}</div>
 			</div>`;
-	};
-	const TEMPLATE = () => `
+		};
+		const TEMPLATE = () => `
 		<div class="sfHead">
 			<span class="sfTitle">画面フィルター</span>
 			<button type="button" class="sfClose" data-action="close" title="閉じる">×</button>
@@ -6099,8 +6453,7 @@ const ScreenFilterPanel = (() => {
 			<div class="sfSectionTitle">かんたん設定（プリセット）</div>
 			<div class="sfDesc">迷ったらここから選んでください。選んだあとに下のつまみで微調整もできます。</div>
 			<div class="sfPresets">
-				${ScreenFilter.PRESETS.map(p =>
-					`<button type="button" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`).join('')}
+				${ScreenFilter.PRESETS.map(p => `<button type="button" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`).join('')}
 			</div>
 			<div class="sfPresetState"></div>
 			<div class="sfNote">
@@ -6141,196 +6494,228 @@ const ScreenFilterPanel = (() => {
 			<button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる（左: 元の映像）</button>
 		</div>
 	`;
-	class Panel {
-		constructor({config}) {
-			this.config = config;
-			this.view = null;
-			this._onFullscreenChange = this._onFullscreenChange.bind(this);
-			this._refresh = this._refresh.bind(this);
-		}
-		_initializeDom() {
-			if (this.view) { return; }
-			if (!document.getElementById('zenzaScreenFilterPanelStyle')) {
-				const style = document.createElement('style');
-				style.id = 'zenzaScreenFilterPanelStyle';
-				style.textContent = CSS;
-				(document.head || document.documentElement).append(style);
-			}
-			const view = this.view = document.createElement('div');
-			view.className = 'zenzaScreenFilterPanel zen-family';
-			view.innerHTML = TEMPLATE();
-			['click', 'dblclick', 'mousedown', 'mouseup', 'wheel', 'contextmenu', 'keydown', 'keyup']
-				.forEach(name => view.addEventListener(name, e => e.stopPropagation()));
-			view.addEventListener('keydown', e => {
-				if (e.key === 'Escape') {
-					e.preventDefault();
-					this.close();
+		class Panel {
+				constructor({ config }) {
+						this.config = config;
+						this.view = null;
+						this._onFullscreenChange = this._onFullscreenChange.bind(this);
+						this._refresh = this._refresh.bind(this);
 				}
-			});
-			view.addEventListener('input', e => {
-				const key = e.target.dataset.param;
-				if (key && e.target.type === 'range') {
-					ScreenFilter.preview(key, e.target.value);
-					this._updateValueLabel(key, ScreenFilter.normalize(key, e.target.value), {force: true});
+				_initializeDom() {
+						if (this.view) {
+								return;
+						}
+						if (!document.getElementById('zenzaScreenFilterPanelStyle')) {
+								const style = document.createElement('style');
+								style.id = 'zenzaScreenFilterPanelStyle';
+								style.textContent = CSS;
+								(document.head || document.documentElement).append(style);
+						}
+						const view = this.view = document.createElement('div');
+						view.className = 'zenzaScreenFilterPanel zen-family';
+						view.innerHTML = TEMPLATE();
+						['click', 'dblclick', 'mousedown', 'mouseup', 'wheel', 'contextmenu', 'keydown', 'keyup']
+								.forEach(name => view.addEventListener(name, e => e.stopPropagation()));
+						view.addEventListener('keydown', e => {
+								if (e.key === 'Escape') {
+										e.preventDefault();
+										this.close();
+								}
+						});
+						view.addEventListener('input', e => {
+								const key = e.target.dataset.param;
+								if (key && e.target.type === 'range') {
+										ScreenFilter.preview(key, e.target.value);
+										this._updateValueLabel(key, ScreenFilter.normalize(key, e.target.value), { force: true });
+								}
+						});
+						view.addEventListener('change', e => {
+								const { param, setting, num } = e.target.dataset;
+								if (num) {
+										const v = ScreenFilter.normalize(num, e.target.value);
+										e.target.value = v;
+										ScreenFilter.set(num, v);
+										const range = this.view.querySelector(`input[type=range][data-param="${num}"]`);
+										range && (range.value = v);
+										if (!ScreenFilter.isEnabled()) {
+												this.config.props['screenFilter.enable'] = true;
+										}
+								}
+								else if (param) {
+										ScreenFilter.set(param, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
+										if (!ScreenFilter.isEnabled()) {
+												this.config.props['screenFilter.enable'] = true;
+										}
+								}
+								else if (setting) {
+										this.config.props[`screenFilter.${setting}`] = !!e.target.checked;
+								}
+						});
+						view.addEventListener('click', e => {
+								const target = e.target.closest('button');
+								if (!target) {
+										return;
+								}
+								const { preset, reset, action } = target.dataset;
+								if (preset) {
+										ScreenFilter.execCommand('screenFilter-preset', preset);
+								}
+								else if (reset) {
+										ScreenFilter.set(reset, ScreenFilter.PARAM_MAP[reset].def);
+								}
+								else if (action === 'reset') {
+										ScreenFilter.reset();
+								}
+								else if (action === 'close') {
+										this.close();
+								}
+								else if (action === 'split') {
+										ScreenFilter.setSplit(!ScreenFilter.isSplit);
+								}
+						});
+						this._onOutsidePointerDown = (e) => {
+								if (!this.isOpen || this.view.classList.contains('is-closing')) {
+										return;
+								}
+								const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+								if (path.includes(this.view)) {
+										return;
+								}
+								if (path.some((el) => el && el.classList && el.classList.contains('screenFilterSwitch'))) {
+										return;
+								}
+								const onVideo = path.some((el) => el && el.classList &&
+										(el.classList.contains('videoPlayer') || el.classList.contains('commentLayerFrame')));
+								this.close();
+								if (onVideo) {
+										const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
+										window.addEventListener('click', swallow, { capture: true, once: true });
+										setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 600);
+								}
+						};
+						ScreenFilter.onChange(this._refresh);
+						document.addEventListener('fullscreenchange', this._onFullscreenChange);
+						document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
 				}
-			});
-			view.addEventListener('change', e => {
-				const {param, setting, num} = e.target.dataset;
-				if (num) {
-					const v = ScreenFilter.normalize(num, e.target.value);
-					e.target.value = v;
-					ScreenFilter.set(num, v);
-					const range = this.view.querySelector(`input[type=range][data-param="${num}"]`);
-					range && (range.value = v);
-					if (!ScreenFilter.isEnabled()) { this.config.props['screenFilter.enable'] = true; }
-				} else if (param) {
-					ScreenFilter.set(param, e.target.type === 'checkbox' ? e.target.checked : e.target.value);
-					if (!ScreenFilter.isEnabled()) { this.config.props['screenFilter.enable'] = true; }
-				} else if (setting) {
-					this.config.props[`screenFilter.${setting}`] = !!e.target.checked;
+				_updateValueLabel(key, value, { force = false } = {}) {
+						const row = this.view.querySelector(`.sfRow[data-key="${key}"]`);
+						const label = row && row.querySelector('.sfValue');
+						const num = label && label.querySelector('.sfNum');
+						if (!num) {
+								return;
+						}
+						if (force || document.activeElement !== num) {
+								num.value = value;
+						}
+						label.classList.toggle('is-changed', Math.abs(value - ScreenFilter.PARAM_MAP[key].def) > 1e-6);
 				}
-			});
-			view.addEventListener('click', e => {
-				const target = e.target.closest('button');
-				if (!target) { return; }
-				const {preset, reset, action} = target.dataset;
-				if (preset) {
-					ScreenFilter.execCommand('screenFilter-preset', preset);
-				} else if (reset) {
-					ScreenFilter.set(reset, ScreenFilter.PARAM_MAP[reset].def);
-				} else if (action === 'reset') {
-					ScreenFilter.reset();
-				} else if (action === 'close') {
-					this.close();
-				} else if (action === 'split') {
-					ScreenFilter.setSplit(!ScreenFilter.isSplit);
+				_refresh() {
+						if (!this.view || !this.isOpen) {
+								return;
+						}
+						const values = ScreenFilter.read();
+						const props = this.config.props;
+						ScreenFilter.PARAMS.forEach(p => {
+								const input = this.view.querySelector(`[data-param="${p.key}"]`);
+								if (!input) {
+										return;
+								}
+								if (p.type === 'boolean') {
+										input.checked = !!values[p.key];
+								}
+								else if (p.type === 'select') {
+										input.value = values[p.key];
+								}
+								else {
+										if (document.activeElement !== input) {
+												input.value = values[p.key];
+												this._updateValueLabel(p.key, values[p.key]);
+										}
+								}
+						});
+						this.view.querySelectorAll('[data-setting]').forEach((input) => {
+								const name = input.dataset.setting;
+								const v = props[`screenFilter.${name}`];
+								input.checked = v === undefined ? name !== 'flipH' && name !== 'flipV' : !!v;
+						});
+						const current = ScreenFilter.detectPreset(values);
+						this.view.querySelectorAll('[data-preset]').forEach((button) => {
+								button.classList.toggle('is-current', button.dataset.preset === current);
+						});
+						const preset = ScreenFilter.PRESETS.find(p => p.id === current);
+						this.view.querySelector('.sfPresetState').textContent = preset ?
+								`いまの設定: ${preset.label}` : 'いまの設定: 手動で調整中（どのプリセットとも違う値）';
+						const autoRow = this.view.querySelector('.sfRow[data-key="autoLevels"] .sfDesc');
+						if (autoRow) {
+								autoRow.classList.toggle('is-unavailable', !ScreenFilter.autoLevelsAvailable);
+								autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
+						}
+						const splitButton = this.view.querySelector('[data-action="split"]');
+						splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
 				}
-			});
-			this._onOutsidePointerDown = e => {
-				if (!this.isOpen || this.view.classList.contains('is-closing')) { return; }
-				const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
-				if (path.includes(this.view)) { return; }
-				if (path.some(el => el && el.classList && el.classList.contains('screenFilterSwitch'))) { return; }
-				const onVideo = path.some(el => el && el.classList &&
-					(el.classList.contains('videoPlayer') || el.classList.contains('commentLayerFrame')));
-				this.close();
-				if (onVideo) {
-					const swallow = ev => { ev.stopPropagation(); ev.preventDefault(); };
-					window.addEventListener('click', swallow, {capture: true, once: true});
-					setTimeout(() => window.removeEventListener('click', swallow, {capture: true}), 600);
+				_getParentNode() {
+						const fs = document.fullscreenElement || document.webkitFullscreenElement;
+						return fs || document.body;
 				}
-			};
-			ScreenFilter.onChange(this._refresh);
-			document.addEventListener('fullscreenchange', this._onFullscreenChange);
-			document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
-		}
-		_updateValueLabel(key, value, {force = false} = {}) {
-			const row = this.view.querySelector(`.sfRow[data-key="${key}"]`);
-			const label = row && row.querySelector('.sfValue');
-			const num = label && label.querySelector('.sfNum');
-			if (!num) { return; }
-			if (force || document.activeElement !== num) {
-				num.value = value;
-			}
-			label.classList.toggle('is-changed', Math.abs(value - ScreenFilter.PARAM_MAP[key].def) > 1e-6);
-		}
-		_refresh() {
-			if (!this.view || !this.isOpen) { return; }
-			const values = ScreenFilter.read();
-			const props = this.config.props;
-			ScreenFilter.PARAMS.forEach(p => {
-				const input = this.view.querySelector(`[data-param="${p.key}"]`);
-				if (!input) { return; }
-				if (p.type === 'boolean') {
-					input.checked = !!values[p.key];
-				} else if (p.type === 'select') {
-					input.value = values[p.key];
-				} else {
-					if (document.activeElement !== input) {
-						input.value = values[p.key];
-						this._updateValueLabel(p.key, values[p.key]);
-					}
+				_onFullscreenChange() {
+						if (!this.view || !this.isOpen) {
+								return;
+						}
+						const parent = this._getParentNode();
+						if (this.view.parentNode !== parent) {
+								parent.append(this.view);
+						}
 				}
-			});
-			this.view.querySelectorAll('[data-setting]').forEach(input => {
-				const name = input.dataset.setting;
-				const v = props[`screenFilter.${name}`];
-				input.checked = v === undefined ? name !== 'flipH' && name !== 'flipV' : !!v;
-			});
-			const current = ScreenFilter.detectPreset(values);
-			this.view.querySelectorAll('[data-preset]').forEach(button => {
-				button.classList.toggle('is-current', button.dataset.preset === current);
-			});
-			const preset = ScreenFilter.PRESETS.find(p => p.id === current);
-			this.view.querySelector('.sfPresetState').textContent = preset ?
-				`いまの設定: ${preset.label}` : 'いまの設定: 手動で調整中（どのプリセットとも違う値）';
-			const autoRow = this.view.querySelector('.sfRow[data-key="autoLevels"] .sfDesc');
-			if (autoRow) {
-				autoRow.classList.toggle('is-unavailable', !ScreenFilter.autoLevelsAvailable);
-				autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
-			}
-			const splitButton = this.view.querySelector('[data-action="split"]');
-			splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
+				get isOpen() {
+						return !!(this.view && this.view.classList.contains('is-open') &&
+								!this.view.classList.contains('is-closing'));
+				}
+				open() {
+						this._initializeDom();
+						const parent = this._getParentNode();
+						if (this.view.parentNode !== parent) {
+								parent.append(this.view);
+						}
+						clearTimeout(this._closeTimer);
+						this.view.classList.remove('is-closing');
+						this._updateOrigin();
+						this.view.classList.remove('is-open');
+						void this.view.offsetWidth;
+						this.view.classList.add('is-open');
+						this._refresh();
+						window.addEventListener('pointerdown', this._onOutsidePointerDown, { capture: true });
+				}
+				_updateOrigin() {
+						const button = document.querySelector('.screenFilterSwitch');
+						const rect = button && button.getBoundingClientRect();
+						if (!rect || !rect.width) {
+								this.view.style.removeProperty('--sf-origin');
+								return;
+						}
+						const vw = window.innerWidth, vh = window.innerHeight;
+						const panelW = Math.min(380, vw - 32);
+						const panelLeft = vw - 16 - panelW;
+						const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
+						const y = rect.top > vh / 2 ? 100 : 0;
+						this.view.style.setProperty('--sf-origin', `${x.toFixed(1)}% ${y}%`);
+				}
+				close() {
+						if (!this.view || !this.isOpen) {
+								return;
+						}
+						window.removeEventListener('pointerdown', this._onOutsidePointerDown, { capture: true });
+						this.view.classList.add('is-closing');
+						clearTimeout(this._closeTimer);
+						this._closeTimer = setTimeout(() => {
+								this.view.classList.remove('is-open', 'is-closing');
+						}, 170);
+						ScreenFilter.bypass && ScreenFilter.setBypass(false);
+				}
+				toggle() {
+						this.isOpen ? this.close() : this.open();
+				}
 		}
-		_getParentNode() {
-			const fs = document.fullscreenElement || document.webkitFullscreenElement;
-			return fs || document.body;
-		}
-		_onFullscreenChange() {
-			if (!this.view || !this.isOpen) { return; }
-			const parent = this._getParentNode();
-			if (this.view.parentNode !== parent) {
-				parent.append(this.view);
-			}
-		}
-		get isOpen() {
-			return !!(this.view && this.view.classList.contains('is-open') &&
-				!this.view.classList.contains('is-closing'));
-		}
-		open() {
-			this._initializeDom();
-			const parent = this._getParentNode();
-			if (this.view.parentNode !== parent) {
-				parent.append(this.view);
-			}
-			clearTimeout(this._closeTimer);
-			this.view.classList.remove('is-closing');
-			this._updateOrigin();
-			this.view.classList.remove('is-open');
-			void this.view.offsetWidth;
-			this.view.classList.add('is-open');
-			this._refresh();
-			window.addEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
-		}
-		_updateOrigin() {
-			const button = document.querySelector('.screenFilterSwitch');
-			const rect = button && button.getBoundingClientRect();
-			if (!rect || !rect.width) {
-				this.view.style.removeProperty('--sf-origin');
-				return;
-			}
-			const vw = window.innerWidth, vh = window.innerHeight;
-			const panelW = Math.min(380, vw - 32);
-			const panelLeft = vw - 16 - panelW;
-			const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
-			const y = rect.top > vh / 2 ? 100 : 0;
-			this.view.style.setProperty('--sf-origin', `${x.toFixed(1)}% ${y}%`);
-		}
-		close() {
-			if (!this.view || !this.isOpen) { return; }
-			window.removeEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
-			this.view.classList.add('is-closing');
-			clearTimeout(this._closeTimer);
-			this._closeTimer = setTimeout(() => {
-				this.view.classList.remove('is-open', 'is-closing');
-			}, 170);
-			ScreenFilter.bypass && ScreenFilter.setBypass(false);
-		}
-		toggle() {
-			this.isOpen ? this.close() : this.open();
-		}
-	}
-	return Panel;
+		return Panel;
 })();
 // already required
 class RelatedMenuSettings {
@@ -6959,2164 +7344,912 @@ class RelatedMenuSettings {
 // already required
 // already required
 class ModernAdvancedSettingsModel {
-	static get CATEGORIES() {
-		return [
-			'再生・音声','画面・映像','コメント表示',
-			'NG・表示対象','プレイリスト・検索','ショートカット','マウス・タッチ'
-		];
-	}
-	static _clone(value) {
-		if (value === undefined || value === null || typeof value !== 'object') {
-			return value;
+		static get CATEGORIES() {
+				return [
+						'再生・音声', '画面・映像', 'コメント表示',
+						'NG・表示対象', 'プレイリスト・検索', 'ショートカット', 'マウス・タッチ'
+				];
 		}
-		return JSON.parse(JSON.stringify(value));
-	}
-	static _same(a,b) { return JSON.stringify(a) === JSON.stringify(b); }
-	static visibleExtraSettings() {
-		const group=(category,subcategory,rows)=>rows.map(([id,label,details={}] )=>
-			({id,label,category,subcategory,...details}));
-		const slider=(min,max,step=0.01)=>({type:'slider',min,max,step});
-		const select=items=>({type:'select',options:items.map(([value,label])=>({value,label}))});
-		const screenModes=select([
-			['normal','通常'],['big','大'],['wide','ワイド'],
-			['small','小'],['sideView','サイドビュー'],['3D','3D']
-		]);
-		const sharedNg=select([['NONE','無効'],['LOW','弱'],['MID','中'],
-			['HIGH','強'],['MAX','最大']]);
-		return [
-			...group('再生・音声','再生動作',[
-				['autoPlay','動画を自動再生'],
-				['autoPlay:ginza','公式の動画ページで自動再生'],
-				['autoPlay:others','外部サイトで自動再生'],
-				['enableResume','前回の再生位置を利用'],
-				['loop','動画をループ再生'],
-				['autoPauseCommentInput','コメント入力中に動画を一時停止'],
-				['playbackRate','再生速度',{type:'number'}],
-				['enableSingleton','複数のプレイヤーを同時起動しない']
-			]),
-			...group('再生・音声','音量',[
-				['volume','動画の音量',slider(0,1)],
-				['mute','動画をミュート']
-			]),
-			...group('再生・音声','読み上げ',[
-				['speakLark','コメント読み上げ（現在は未対応）',{
-					description:'旧設定ですが、現在のZenzaWatchには再生コメントを音声化する処理が接続されていません。ONにしても読み上げません。保存値は互換性のため保持します。'
-				}],
-				['speakLarkVolume','読み上げ音量（現在は未対応）',{
-					...slider(0,1),
-					description:'コメント読み上げ機能が未実装のため、この音量値も現在の再生には作用しません。'
-				}]
-			]),
-			...group('再生・音声','動画の取得',[
-				['forceEconomy','エコノミー画質で取得'],
-				['autoDisableNew','旧配信方式の画質を優先'],
-				['dmcVideoQuality','旧配信方式の優先画質',select([
-					['auto','自動'],['veryhigh','最高'],['high','高'],
-					['mid','中'],['low','低']])],
-				['domandVideoQuality','新配信方式の優先画質',select([
-					['auto','自動'],['1080p','1080p'],['720p','720p'],
-					['480p','480p'],['360p','360p'],['144p','144p']])]
-			]),
-			...group('再生・音声','公式プレイヤー連携',[
-				['overrideGinza','公式の視聴ページでZenzaWatchを優先']
-			]),
-			...group('画面・映像','画面フィルター',[
-				['screenFilter.flipH','左右反転'],
-				['screenFilter.flipV','上下反転'],
-				['screenFilter.applyToScreenshot','スクリーンショットにも映像フィルターを適用'],
-				['screenFilter.applyToCommentPip','コメント付きPiPにも映像フィルターを適用']
-			]),
-			...group('画面・映像','表示モード',[
-				['screenMode','通常の画面モード',screenModes],
-				['screenMode:ginza','公式動画ページの画面モード',screenModes],
-				['screenMode:others','外部サイトの画面モード',screenModes],
-				['autoFullScreen','自動でフルスクリーン'],
-				['smallModeAspectLock','小モードで縦横比を固定']
-			]),
-			...group('画面・映像','プレイヤーの操作表示',[
-				['fullscreenControlBarMode','全画面での操作バー',select([
-					['auto','自動'],['always-show','常に表示'],
-					['always-hide','常に隠す']])],
-				['enableHeatMap','ヒートマップを表示'],
-				['enableStoryboard','シークバーのサムネイルを表示'],
-				['enableStoryboardBar','シーンサーチバーを表示'],
-				['menuScale','操作メニューの拡大率',{type:'number'}]
-			]),
-			...group('画面・映像','シーンサーチ',[
-				['sceneSearch.presentation.normal','通常表示のシーンサーチ',{
-					...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示']])}],
-				['sceneSearch.presentation.fullscreen','全画面のシーンサーチ',{
-					...select([['follow','シーク位置に追従'],['fixed','位置を固定'],['legacy','従来表示']])}],
-				['sceneSearch.layout.normal','旧形式の通常表示',{hidden:true,
-					...select([
-						['00','00 旧式表示（検証中）'],
-						['01','01 クラシック追従'],['02','02 左右ツインパネル'],
-						['03','03 サイドシェルフ'],['04','04 トップエッジ'],
-						['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
-						['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
-						['09','09 分離リモコン'],['10','10 スマート自動回避']
-					]),description:'通常時のレイアウトです。動画の再生位置や設定値は変更しません。'}],
-				['sceneSearch.layout.linkFullscreen','全画面も同じ表示方式を使う',{
-					description:'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'}],
-				['sceneSearch.layout.fullscreen','旧形式の全画面表示',{hidden:true,
-					...select([
-						['00','00 旧式表示（検証中）'],
-						['01','01 クラシック追従'],['02','02 左右ツインパネル'],
-						['03','03 サイドシェルフ'],['04','04 トップエッジ'],
-						['05','05 プレイバック・デッキ'],['06','06 マイクロ・カプセル'],
-						['07','07 3コマ・フィルム'],['08','08 片側引き出し'],
-						['09','09 分離リモコン'],['10','10 スマート自動回避']
-					]),description:'通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。'}],
-				['sceneSearch.seekStepSeconds','シーンサーチ内の前後シーク秒数',{
-					type:'number',description:'0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'}],
-				['sceneSearch.enabled','シーンサーチを表示',{
-					description:'シーンサーチ全体を表示します。OFFでもコメントの個別設定や大きさは保持します。'}],
-				['sceneSearch.commentListScale','コメントプレビューの大きさ',{
-					...slider(100,200,1),unit:'%',description:'文字サイズは変えず、表示領域を広げて一度に見えるコメントを増やします。画面に収まる範囲で適用します。'}],
-				['sceneSearch.commentPreviewVisible','シーンサーチのコメント表示',{
-					description:'ミニコメントとコメントプレビューの共通スイッチです。OFFの間は両方を隠し、下の個別設定は保持します。右側の動画コメント欄とは別です。'}],
-				['sceneSearch.miniCommentVisible','ミニコメントを表示する',{
-					description:'サムネイル画像上のミニコメントを表示します。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
-				['sceneSearch.commentListVisible','コメントプレビューを表示する',{
-					description:'コメントボタンで一覧を開けるようにします。ONにしても一覧は自動では開きません。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'}],
-				['sceneSearch.commentListBackgroundOpacity','コメントプレビューの背景濃度',{
-					...slider(0,100,1),unit:'%',
-					description:'一覧の背景だけを調整します。文字の濃さは変わりません。0%は透明、100%は不透明です。すべての表示方式で、通常表示・全画面共通です。'}],
-				['sceneSearch.thumbnailScale','サムネイルの大きさ',{
-					...slider(50,200,1),unit:'%',
-					description:'サムネイル画像と画像上のミニコメントを一緒に拡大・縮小します。操作ボタンの大きさは変わりません。画面に収まる範囲で表示します。すべての表示方式で、通常表示・全画面共通です。'}],
-				['sceneSearch.miniCommentMode','画像上のミニコメントの表示方式',{
-					...select([
-						['flow','流れる（旧版と同じ）'],
-						['static','静止表示（最大5行）'],
-						['hidden','旧版の非表示設定（引き継ぎ用）']
-					]),
-					description:'ミニコメントの動き方を選びます。表示のON/OFFは上の子スイッチを使います。旧版の静止表示設定も引き継ぎます。'}],
-				['enableCommentPreview','コメントプレビューを開いた状態にする',{
-					description:'コメントボタンによる一覧の開閉と共通です。追従・固定は画像の隣に一覧を表示し、従来表示は切り替えます。上の許可スイッチがOFFの間は閉じた状態になります。'}],
-				['sceneSearch.controlsReveal','追加ボタンの開き方',{hidden:true,
-					...select([
-						['hover-focus','マウスを乗せるかフォーカスで開く'],
-						['click','クリックで開く'],['always','常に表示']
-					])}],
-				['sceneSearch.animation','UIのアニメーション',{
-					...select([
-						['off','無効（動きなし）'],['subtle','控えめ（推奨）'],['full','通常']
-					])}],
-				['sceneSearch.idleHideSeconds','プレビューを自動で隠すまでの時間',{
-					...slider(0,30,0.5),unit:'秒',
-					description:'シークバー上にマウスを置き続けたとき、同じプレビューを表示する時間です。画像とコメント一覧で共通です。既定2秒。0秒にすると自動非表示を無効化します。ピン固定・ドラッグ・ボタン操作中は隠しません。'}]
-			]),
-			...group('画面・映像','スクリーンショット',[
-				['screenshot.prefix','保存ファイル名の先頭に追加する文字',{type:'text',
-					description:'任意の文字に加え {date}（保存日）や {watchId}（動画ID）などの変数も使えます。'}],
-				['screenshot.filenameTemplate','保存ファイル名の構成・順番',{
-					type:'text',
-					description:'空欄は従来どおり「タイトル - 動画ID@再生位置.png」。プリセットまたは変数 {title} {watchId} {videoId} {uploader} {time} {date} {datetime} {suffix} を組み合わせて自由に指定できます。拡張子は常に.pngです。'
-				}]
-			]),
-			...(typeof UiVisibilityRegistry==='undefined'?[]:UiVisibilityRegistry.descriptors()),
-			...group('コメント表示','表示・配置',[
-				['showComment','コメントを表示'],
-				['backComment','コメントを画面全体に流す',{
-					description:'全画面・ワイド表示時に、動画を縮小せず画面全体へコメントを重ねます。通常表示では従来どおりです。'
-				}],
-				['commentSpeedRate','コメントの移動速度',{type:'number'}],
-				['autoCommentSpeedRate','コメント速度を自動調整'],
-				['commentLayerOpacity','コメントの透明度',slider(0,1)],
-				['commentLayer.easyCommentOpacity','かんたんコメントの透明度',slider(0,1)],
-				['commentLayer.aiCommentOpacity','AIコメントの透明度',slider(0,1)],
-				['enableNicosJumpVideo','@ジャンプを有効化']
-			]),
-			...group('コメント表示','コメント一覧',[
-				['enableCommentPanel','コメント一覧を表示'],
-				['enableCommentPanelAutoScroll','コメント一覧を自動スクロール']
-			]),
-			...group('コメント表示','文字・装飾',[
-				['commentLanguage','コメントの言語',select([
-					['ja-jp','日本語'],['en-us','英語（米国）'],['zh-tw','中国語（繁体字）']
-				])],
-				['baseFontFamily','コメントのフォント',{
-					type:'font-picker',
-					description:'候補にないフォントは「その他（自由入力）」を選んで入力できます。使用できないフォントは代替フォントで表示されます。',
-					options:[
-						{value:'',label:'標準（ZenzaWatchにおまかせ）'},
-						{value:"'Yu Gothic','Meiryo',sans-serif",label:'游ゴシック'},
-						{value:"'Meiryo',sans-serif",label:'メイリオ'},
-						{value:"'MS Gothic',monospace",label:'MS ゴシック'},
-						{value:"'Noto Sans JP',sans-serif",label:'Noto Sans JP'},
-						{value:'serif',label:'明朝系'},
-						{value:'sans-serif',label:'ゴシック系'},
-						{value:'monospace',label:'等幅'}
-					]
-				}],
-				['baseChatScale','コメント文字の拡大率',{
-					...slider(0.5,2,0.1),unit:'倍',
-					description:'0.5〜2.0倍、0.1倍刻み。1.0倍が標準の大きさです。'
-				}],
-				['baseFontBolder','コメント文字を太くする'],
-				['cssFontWeight','文字の太さ',select([
-					['normal','標準'],['500','少し太め'],['600','やや太め'],
-					['bold','太字'],['800','かなり太い'],['900','最も太い']
-				])],
-				['commentLayer.textShadowType','文字の影の形式',{
-					...select([
-						['','標準（軽い）'],['shadow-type2','輪郭を強調'],
-						['shadow-type3','ぼかした影（重い）'],
-						['shadow-stroke','縁取り2（対応ブラウザのみ）'],
-						['shadow-dokaben','ドカベン風']
-					]),description:'文字の読みやすさに影響します。ぼかした影は処理が重く、縁取り2は一部環境で表示されません。ドカベン風は主に固定コメント向けです。'
-				}],
-				['commentLayer.ownerCommentShadowColor','投稿者コメントの影色',{
-					type:'color',
-					description:'色見本と #RRGGBB / #RGB 形式のどちらでも変更できます。従来の CSS 色名（green など）も保持できます。'
-				}]
-			]),
-			...group('NG・表示対象','NG条件',[
-				['enableFilter','NGフィルターを有効化'],
-				['wordFilter','NGワード一覧',{type:'textarea'}],
-				['wordRegFilter','NGワード（正規表現）',{type:'text'}],
-				['wordRegFilterFlags','正規表現の適用オプション',{type:'regex-flags',
-					description:'i は大文字・小文字を区別しない設定です。通常は初期値の i をおすすめします。m は ^ と $ を改行ごとの先頭・末尾に、s は「.」に改行も含め、u はUnicodeの文字単位を扱います。'}],
-				['userIdFilter','NGユーザーID一覧',{type:'textarea'}],
-				['commandFilter','NGコマンド一覧',{type:'textarea',
-					description:'コマンドとはコメントの色・大きさ・表示位置などの指定です。1行に1つ記入すると、その文字列を含むコマンドのコメントがNGになります。現在はNGワードなどとの「いずれかに一致」で判定します（AND条件ではありません）。'}],
-				['removeNgMatchedUser','NGに一致する投稿者のコメントを全除外'],
-				['sharedNgLevel','NG共有の強度',sharedNg]
-			]),
-			...group('NG・表示対象','複合NGルール（上級者向け）',[
-				['ngComposite.rules','複合NG・置換ルール',{type:'composite-ng',
-					description:'複数の条件をAND/OR/NOTで組み合わせ、コメントの非表示・置換・装飾解除などを設定します。詳細説明は画面内で開けます。'}]
-			]),
-			...group('NG・表示対象','コメント種別',[
-				['filter.fork0','通常コメントを表示'],
-				['filter.fork1','投稿者コメントを表示'],
-				['filter.fork2','かんたんコメントを表示'],
-				['filter.fork3','追加コメント種別を表示'],
-				['filter.defaultThread','通常スレッド'],
-				['filter.ownerThread','投稿者スレッド'],
-				['filter.communityThread','コミュニティスレッド'],
-				['filter.nicosThread','ニコスクリプトのスレッド'],
-				['filter.easyThread','かんたんコメントのスレッド'],
-				['filter.aiThread','AIコメントのスレッド'],
-				['filter.extraDefaultThread','追加の通常スレッド'],
-				['filter.extraOwnerThread','追加の投稿者スレッド'],
-				['filter.extraCommunityThread','追加のコミュニティスレッド'],
-				['filter.extraNicosThread','追加のニコスクリプトスレッド'],
-				['filter.extraEasyThread','追加のかんたんコメントスレッド']
-			]),
-			...group('プレイリスト・検索','プレイリスト',[
-				['playlistLoop','プレイリストをループ'],
-				['continueNextPage','再生中の動画をページ移動後も再開'],
-				['enableAdDecoration','プレイリストで動画の装飾枠を表示']
-			]),
-			...group('プレイリスト・検索','検索',[
-				['videoSearch.wordCountMode','検索候補のヒット件数を取得するタイミング',{
-					...select([
-						['on-demand','必要なときだけ（推奨・低通信量）'],
-						['auto','自動で表示（通信量が増える）'],
-						['off','件数を表示しない（最も低通信量）']
-					]),
-					description:'検索行とタグ候補の件数を数える追加通信の設定です。「必要なときだけ」はマウスを乗せるか↑↓キーで選んだ候補のみ取得します。「自動」は検索語と表示中のタグ候補を順番に数えます。「表示しない」は件数の追加通信を行いません。通常の検索やタグ予測の通信には影響しません。'
-				}],
-				['videoSearch.videoIdSuggestMode','検索欄に表示する候補の配置',{
-					...select([
-						['merged','すべて縦にまとめる'],
-						['side','タグ候補と動画を左右に表示'],
-						['delayed','タグ候補を先に表示、動画を後から表示']
-					]),
-					description:'検索候補と動画IDのカードをどう並べるかの設定です。検索件数の問い合わせ回数を減らす設定ではありません。'
-				}],
-				['search.limit','検索結果をプレイリストに読み込む最大動画数',{
-					description:'プレイリストへ実際に追加する動画数の上限です。数が多いほど検索データの読み込みに時間と通信がかかります。候補のヒット件数表示とは別の設定です。既定値は1000件です。'
-				}]
-			]),
-			...group('プレイリスト・検索','関連メニュー › カスタムリンク',[
-				['relatedMenu.builtinOptions','標準関連メニューの詳細編集',{type:'related-builtin-options',
-					description:'標準機能の表示名、開き方、動画IDコピーなどの設定です。'}],
-				['relatedMenu.order','関連メニューの並び順と表示／非表示',{
-					type:'related-order',
-					description:'標準7件・カスタムリンク・登録アクションを同じ一覧で移動し、項目ごとに表示を切り替えます。非表示にしても機能や保存したリンクは削除しません。動画固有の表示条件は優先されます。'
-				}],
-				['relatedMenu.hiddenItems','関連メニューで非表示にする項目',{
-					type:'related-visibility',
-					description:'各行の「表示する」で設定します。非表示にしても設定や外部アクションの登録は維持されます。'
-				}]
-			]),
-			...group('プレイリスト・検索','リンク・移動',[
-				['overrideWatchLink','動画リンクをZenzaWatchで開く'],
-				['overrideWatchLink:others','外部サイトの動画リンクをZenzaWatchで開く'],
-				['enablePushState','ブラウザの履歴への反映を利用'],
-				['allowOtherDomain','外部サイトの連携を許可'],
-				['loadLinkedChannelVideo','チャンネル動画のリンクを取得']
-			]),
-			...group('マウス・タッチ','マウス',[
-				['enableTogglePlayOnClick','動画クリックで再生・停止']
-			]),
-			...group('マウス・タッチ','タッチ',[
-				['touch.enable','タッチジェスチャーを有効化']
-			])
-		];
-	}
-	static subcategoryPriority(category,subcategory) {
-		const order={
-			'再生・音声':['再生動作','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
-			'画面・映像':['表示モード','動画ヘッダー','プレイヤーの操作表示','シーンサーチ','表示・非表示','画面フィルター','スクリーンショット'],
-			'コメント表示':['表示・配置','コメント一覧','文字・装飾','追加取得'],
-			'NG・表示対象':['NG条件','コメント種別','動画の除外'],
-			'プレイリスト・検索':['プレイリスト','検索','リンク・移動',
-				'関連メニュー › カスタムリンク','診断'],
-			'ショートカット':['プレイヤー全般','再生','シーク','再生速度','音量','コメント',
-				'画面','画面フィルター','フィルタ/NG','プレイリスト','マイリスト','その他'],
-			'マウス・タッチ':['マウス','タッチ']
-		};
-		const index=(order[category]||[]).indexOf(subcategory);
-		return index<0?1000:index;
-	}
-	static categoryFor(key, action) {
-		if (key === 'relatedMenu.customLinks') {
-			return ['プレイリスト・検索','関連メニュー › カスタムリンク'];
-		}
-		if (/^KEY_/.test(key) || /^PARAM_CUSTOM_SEEK_/.test(key)) {
-			return ['ショートカット',action && action.category || 'シーク'];
-		}
-		if (/^supporterCredit\./.test(key)) { return ['再生・音声','提供画面']; }
-		if (/^audio\./.test(key) || /^(volume|mute|speakLark)/.test(key)) {
-			return ['再生・音声','音量'];
-		}
-		if (/^(commentHistory\.|commentHistory[A-Z]|comments\.history|commentIncrease)/.test(key)) {
-			return ['コメント表示','追加取得'];
-		}
-		if (/^(touch\.|touch[A-Z])/.test(key)) { return ['マウス・タッチ','タッチ']; }
-		if (/^(mouse|enableTogglePlayOnClick|enableFullScreenOnDoubleClick|enableDblclickClose)/.test(key)) {
-			return ['マウス・タッチ','マウス'];
-		}
-		if (/^(word(Reg)?Filter|wordRegFilterFlags|video(Tag|Owner)Filter|enableFilter|sharedNg)/.test(key)) {
-			return ['NG・表示対象',/^video(Tag|Owner)Filter/.test(key)?'動画の除外':'NG条件'];
-		}
-		if (/^(commentLayer\.|enableCommentPanel|autoScrollComment)/.test(key)) {
-			return ['コメント表示',key === 'enableCommentPanel'?'コメント一覧':'表示・配置'];
-		}
-		if (/^screenFilter\./.test(key)) { return ['画面・映像','画面フィルター']; }
-		if (/^videoHeader\./.test(key)) { return ['画面・映像','動画ヘッダー']; }
-		if (/^(screen|smallMode|autoFullScreen|autoCloseFullScreen|fullscreen|enableBackComment)/.test(key)) {
-			return ['画面・映像','表示モード'];
-		}
-		if (/^(search\.|videoSearch\.|videoIdSuggest)/.test(key)) {
-			return ['プレイリスト・検索','検索'];
-		}
-		if (/^(playlist|enableAdDecoration|continueNextPage)/.test(key)) {
-			return ['プレイリスト・検索','プレイリスト'];
-		}
-		if (/^(debug|diagnostic)/.test(key)) { return ['プレイリスト・検索','診断']; }
-		return ['再生・音声','再生動作'];
-	}
-	static dependencyFor(key) {
-		if(key==='ui.scene.commentToggle'||key==='ui.scene.commentSearch'||key==='enableCommentPreview')return 'sceneSearch.commentListVisible';
-		if(key.startsWith('ui.scene.'))return 'sceneSearch.enabled';
-		if(key==='sceneSearch.miniCommentMode')return 'sceneSearch.miniCommentVisible';
-		if(key==='sceneSearch.commentListScale'||key==='sceneSearch.commentListBackgroundOpacity')return 'sceneSearch.commentListVisible';
-		if(key.startsWith('sceneSearch.')&&!['sceneSearch.enabled','sceneSearch.commentPreviewVisible','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible'].includes(key))return 'sceneSearch.enabled';
-		if(key.startsWith('commentHistory.') && key!=='commentHistory.enabled') {
-			return 'commentHistory.enabled';
-		}
-		if(key.startsWith('filter.') || ['wordFilter','wordRegFilter',
-			'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
-			'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
-		const direct={
-			'sceneSearch.commentPreviewVisible':'sceneSearch.enabled',
-			'sceneSearch.miniCommentVisible':'sceneSearch.commentPreviewVisible',
-			'sceneSearch.commentListVisible':'sceneSearch.commentPreviewVisible',
-			'supporterCredit.voice':'supporterCredit.enable',
-			'supporterCredit.gift':'supporterCredit.enable',
-			'supporterCredit.skipInPlaylist':'supporterCredit.enable',
-			'touch.tap2command':'touch.enable','touch.tap3command':'touch.enable',
-			'touch.tap4command':'touch.enable','touch.tap5command':'touch.enable',
-			'enableCommentPanelAutoScroll':'enableCommentPanel',
-			'speakLarkVolume':'speakLark'
-		};
-		return direct[key] || null;
-	}
-	constructor({config,legacyRoot=null,actions=[],screenFilterParams=[],historySchema=[]}) {
-		if (!config || !config.default) { throw new TypeError('Config defaults are required'); }
-		this.config=config;
-		this.actions=actions.slice();
-		this._screenParams=new Map((Array.isArray(screenFilterParams)?screenFilterParams:[])
-			.filter(p=>p&&typeof p.key==='string')
-			.map(p=>['screenFilter.'+p.key,p]));
-		this._historyParams=new Map((Array.isArray(historySchema)?historySchema:[])
-			.filter(p=>p&&typeof p.key==='string')
-			.map(p=>[p.key,p]));
-		this._publicSettings=new Map(ModernAdvancedSettingsModel.visibleExtraSettings()
-			.map((entry,index)=>[entry.id,{...entry,sortIndex:index}]));
-		this._historyOrder=new Map((Array.isArray(historySchema)?historySchema:[])
-			.map((entry,index)=>[entry.key,index+1]));
-		this._screenOrder=new Map((Array.isArray(screenFilterParams)?screenFilterParams:[])
-			.map((entry,index)=>['screenFilter.'+entry.key,index]));
-		this.categories=ModernAdvancedSettingsModel.CATEGORIES.slice();
-		this.descriptors=[];
-		this._byId=new Map();
-		const add=descriptor=>{
-			if (!descriptor || !descriptor.id || !Object.prototype.hasOwnProperty.call(config.default,descriptor.id)) {
-				return;
-			}
-			if (descriptor.id==='screenFilter.enable' || descriptor.id==='screenFilter.saved') {
-				return;
-			}
-			const publicEntry=this._publicSettings.get(descriptor.id);
-			if(publicEntry) { descriptor={...descriptor,...publicEntry}; }
-			const param=this._screenParams.get(descriptor.id);
-			if(param) {
-				const type=param.type==='boolean'?'boolean':
-					param.type==='select'?'select':'slider';
-				descriptor={...descriptor,label:param.label,type,
-					description:param.desc||descriptor.description||'',
-					min:param.min,max:param.max,step:param.step,unit:param.unit||'',
-					sortIndex:this._screenOrder.get(descriptor.id),
-					options:type==='select'?(param.options||[]).map(pair=>({
-						value:pair[0],label:pair[1]
-					})):[],
-					input:type==='slider'?null:descriptor.input};
-			}
-			const history=this._historyParams.get(descriptor.id);
-			if(history) {
-				descriptor={...descriptor,label:history.label,
-					type:history.type==='integer'?'slider':history.type==='boolean'?'boolean':descriptor.type,
-					description:history.description||descriptor.description||'',
-					min:history.min,max:history.max,step:1,
-					sortIndex:this._historyOrder.get(descriptor.id),
-					options:[],
-					input:history.type==='integer'?null:descriptor.input};
-			}
-			if (this._byId.has(descriptor.id)) { return; }
-			if (!this.categories.includes(descriptor.category)) {
-				throw new Error('未定義のカテゴリ: '+descriptor.category);
-			}
-			const entry={...descriptor,dependsOn:ModernAdvancedSettingsModel.dependencyFor(descriptor.id)};
-			if(entry.id==='commentHistory.enabled'){entry.sortIndex=0;}
-			this._byId.set(entry.id,entry);
-			this.descriptors.push(entry);
-		};
-		if (legacyRoot && typeof legacyRoot.querySelectorAll==='function') {
-			legacyRoot.querySelectorAll('[data-setting-name],[data-history-setting]').forEach(input=>{
-				const id=input.dataset.settingName || (input.dataset.historySetting ?
-					'commentHistory.'+input.dataset.historySetting : null);
-				if (!id || /^KEY_/.test(id) || /^PARAM_CUSTOM_SEEK_\d+$/.test(id)) { return; }
-				const category=ModernAdvancedSettingsModel.categoryFor(id);
-				const labelNode=input.closest('label');
-				const labelText=labelNode ? Array.from(labelNode.childNodes)
-					.filter(n=>n.nodeType===3)
-					.map(n=>n.textContent.trim()).filter(Boolean).join(' ').trim() : '';
-				let label=labelText;
-				if (!label) {
-					let node=input.previousElementSibling;
-					while(!node && input.parentElement) {
-						node=input.parentElement.previousElementSibling;
-						break;
-					}
-					if (node && node.matches && node.matches('.caption,.caption.sub')) {
-						label=node.textContent.trim();
-					}
+		static _clone(value) {
+				if (value === undefined || value === null || typeof value !== 'object') {
+						return value;
 				}
-				if (!label) { label=id; }
-				const type=input.type==='checkbox'?'boolean':input.tagName==='SELECT'?'select':
-					input.tagName==='TEXTAREA'?'textarea':'text';
-				const options=type==='select'?
-					Array.from(input.options).map(o=>({
-						value:typeof config.default[id]==='number'?Number(o.value):o.value,
-						label:o.textContent.trim()
-					})):[];
-				const root=input.closest('.control');
-				const note=root && root.querySelector('.settingNote');
-				add({id,label,category:category[0],subcategory:category[1],type,options,
-					description:note ? note.textContent.trim() : '',input});
-			});
+				return JSON.parse(JSON.stringify(value));
 		}
-		actions.forEach(action=>{
-			if (!action || !action.id) { return; }
-			const id='KEY_'+action.id;
-			const [category,subcategory]=ModernAdvancedSettingsModel.categoryFor(id,action);
-			add({id,label:action.label||action.id,category,subcategory,type:'shortcut',
-				description:'',actionId:action.id,defaultKey:action.defaultKey});
-			if (action.customSeekSlot) {
-				const seek='PARAM_'+action.id;
-				add({id:seek,label:(action.label||action.id)+' の秒数',
-					category:'ショートカット',subcategory:'シーク',
-					type:'seconds',description:'マイナスで戻る、プラスで進む',actionId:action.id});
-			}
-		});
-		Object.keys(config.default).forEach(id=>{
-			if (!/^commentHistory\.|^screenFilter\./.test(id) && id!=='touch.enable') { return; }
-			const [category,subcategory]=ModernAdvancedSettingsModel.categoryFor(id);
-			const value=config.default[id];
-			const type=typeof value==='boolean'?'boolean':typeof value==='number'?'number':'text';
-			const name=id.slice(id.indexOf('.')+1);
-			add({id,label:name,category,subcategory,type,options:[],description:''});
-		});
-		this._publicSettings.forEach(entry=>{
-			const type=entry.type|| (typeof config.default[entry.id]==='boolean'?'boolean':
-				typeof config.default[entry.id]==='number'?'number':'text');
-			add({...entry,type,options:[],description:''});
-		});
-		add({id:'relatedMenu.customLinks',label:'カスタム関連メニューのリンク',
-			category:'プレイリスト・検索',subcategory:'関連メニュー › カスタムリンク',
-			type:'related-links',description:''});
-		const groupRank=d=>[
-			this.categories.indexOf(d.category),
-			ModernAdvancedSettingsModel.subcategoryPriority(d.category,d.subcategory),
-			Number.isFinite(d.sortIndex)?d.sortIndex:10000
-		];
-		this.descriptors.sort((a,b)=>{
-			const ar=groupRank(a),br=groupRank(b);
-			for(let i=0;i<ar.length;i++){
-				if(ar[i]!==br[i]) {return ar[i]-br[i];}
-			}
-			return 0;
-		});
-		this.cancel();
-	}
-	descriptor(id) { return this._byId.get(id) || null; }
-	static get SHARED_VISIBILITY() {
-		return typeof UiVisibilityRegistry==='undefined'?[]:UiVisibilityRegistry.SHARED_SETTINGS;
-	}
-	sectionDescriptors(category,subcategory) {
-		const entries=this.descriptors.filter(d=>d.category===category && d.subcategory===subcategory);
-		if(category!=='画面・映像' || subcategory!=='表示・非表示'){return entries;}
-		const aliases=ModernAdvancedSettingsModel.SHARED_VISIBILITY.map(([id,icon])=>{
-			const original=this.descriptor(id);
-			return original?{...original,category,subcategory,icon,visibilityScope:id.startsWith('sceneSearch.')?'scene-comments':'shared',
-				sharedWith:original.category+' / '+original.subcategory}:null;
-		}).filter(Boolean);
-		const scene=entries.filter(d=>d.visibilityScope==='scene');
-		const sceneAliases=aliases.filter(d=>d.visibilityScope==='scene-comments');
-		const firstScene=entries.findIndex(d=>d.visibilityScope==='scene');
-		const ordered=entries.filter(d=>d.visibilityScope!=='scene');
-		ordered.splice(firstScene<0?ordered.length:firstScene,0,...sceneAliases,...scene);
-		return [...ordered,...aliases.filter(d=>d.visibilityScope!=='scene-comments')];
-	}
-	_liveValue(id) {
-		if(typeof this.config.resolveSceneSearch==='function'){
-			const scene=this.config.resolveSceneSearch();
-			if(scene){
-				if(id==='sceneSearch.enabled')return scene.enabled;
-				if(id==='sceneSearch.presentation.normal')return scene.normal;
-				if(id==='sceneSearch.presentation.fullscreen')return scene.fullscreen;
-				if(id==='sceneSearch.miniCommentVisible')return scene.miniVisible;
-			}
+		static _same(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+		static visibleExtraSettings() {
+				const group = (category, subcategory, rows) => rows.map(([id, label, details = {}]) => ({ id, label, category, subcategory, ...details }));
+				const slider = (min, max, step = 0.01) => ({ type: 'slider', min, max, step });
+				const select = (items) => ({ type: 'select', options: items.map(([value, label]) => ({ value, label })) });
+				const screenModes = select([
+						['normal', '通常'], ['big', '大'], ['wide', 'ワイド'],
+						['small', '小'], ['sideView', 'サイドビュー'], ['3D', '3D']
+				]);
+				const sharedNg = select([['NONE', '無効'], ['LOW', '弱'], ['MID', '中'],
+						['HIGH', '強'], ['MAX', '最大']]);
+				return [
+						...group('再生・音声', '再生動作', [
+								['autoPlay', '動画を自動再生'],
+								['autoPlay:ginza', '公式の動画ページで自動再生'],
+								['autoPlay:others', '外部サイトで自動再生'],
+								['enableResume', '前回の再生位置を利用'],
+								['loop', '動画をループ再生'],
+								['autoPauseCommentInput', 'コメント入力中に動画を一時停止'],
+								['playbackRate', '再生速度', { type: 'number' }],
+								['enableSingleton', '複数のプレイヤーを同時起動しない']
+						]),
+						...group('再生・音声', '音量', [
+								['volume', '動画の音量', slider(0, 1)],
+								['mute', '動画をミュート']
+						]),
+						...group('再生・音声', '読み上げ', [
+								['speakLark', 'コメント読み上げ（現在は未対応）', {
+												description: '旧設定ですが、現在のZenzaWatchには再生コメントを音声化する処理が接続されていません。ONにしても読み上げません。保存値は互換性のため保持します。'
+										}],
+								['speakLarkVolume', '読み上げ音量（現在は未対応）', {
+												...slider(0, 1),
+												description: 'コメント読み上げ機能が未実装のため、この音量値も現在の再生には作用しません。'
+										}]
+						]),
+						...group('再生・音声', '動画の取得', [
+								['forceEconomy', 'エコノミー画質で取得'],
+								['autoDisableNew', '旧配信方式の画質を優先'],
+								['dmcVideoQuality', '旧配信方式の優先画質', select([
+												['auto', '自動'], ['veryhigh', '最高'], ['high', '高'],
+												['mid', '中'], ['low', '低']
+										])],
+								['domandVideoQuality', '新配信方式の優先画質', select([
+												['auto', '自動'], ['1080p', '1080p'], ['720p', '720p'],
+												['480p', '480p'], ['360p', '360p'], ['144p', '144p']
+										])]
+						]),
+						...group('再生・音声', '公式プレイヤー連携', [
+								['overrideGinza', '公式の視聴ページでZenzaWatchを優先']
+						]),
+						...group('画面・映像', '画面フィルター', [
+								['screenFilter.flipH', '左右反転'],
+								['screenFilter.flipV', '上下反転'],
+								['screenFilter.applyToScreenshot', 'スクリーンショットにも映像フィルターを適用'],
+								['screenFilter.applyToCommentPip', 'コメント付きPiPにも映像フィルターを適用']
+						]),
+						...group('画面・映像', '表示モード', [
+								['screenMode', '通常の画面モード', screenModes],
+								['screenMode:ginza', '公式動画ページの画面モード', screenModes],
+								['screenMode:others', '外部サイトの画面モード', screenModes]
+						]),
+						...group('画面・映像', '小画面モード', [
+								['smallModeAspectLock', '小モードで縦横比を固定'],
+								['controlBar.showOnPause.small', '一時停止時に操作バーを表示', {
+												description: '既定OFF。「小」モードで一時停止しても下コメントを隠しません。マウス操作時の表示は維持します。'
+										}],
+								['controlBar.hideAfterSeconds.small', '操作バーが消えるまでの時間', {
+												...slider(0.2, 10, 0.1), unit: '秒',
+												description: '「小」モードでマウス移動などにより表示した操作バーを隠すまでの時間。初期値3秒。実際の全画面表示中は全画面側の設定を使います。'
+										}]
+						]),
+						...group('画面・映像', '全画面モード', [
+								['autoFullScreen', '自動でフルスクリーン'],
+								['fullscreenControlBarMode', '全画面での操作バー', select([
+												['auto', '自動'], ['always-show', '常に表示'],
+												['always-hide', '常に隠す']
+										])],
+								['controlBar.showOnPause.fullscreen', '一時停止時に操作バーを表示', {
+												description: '既定OFF。全画面・ワイド・3Dで一時停止しただけでは操作バーを表示しません。マウス操作は従来どおり可能です。操作バーの「常に表示／常に隠す」を優先します。'
+										}],
+								['controlBar.hideAfterSeconds.fullscreen', '操作バーが消えるまでの時間', {
+												...slider(0.2, 10, 0.1), unit: '秒',
+												description: '全画面・ワイド・3Dで操作バーを自動で隠すまでの時間。初期値0.4秒。「常に表示／常に隠す」では自動非表示の設定は作用しません。'
+										}]
+						]),
+						...group('画面・映像', 'PiP（小窓再生）', [
+								['pipPageThumbnail', 'PiP中、元の画面にサムネイルを表示', {
+												description: 'PiP（別の小窓）で動画を再生している間、元のZenzaWatchの動画領域に静止画を表示します。通常のPiPとコメント付きPiPの両方に共通します。\nこの設定をOFFにすると、元画面のサムネイルは表示されず、「元画面のサムネイルの選び方」も選択できなくなります。小窓内の動画・コメントには影響しません。'
+										}],
+								['pipPageThumbnailSource', '元画面のサムネイルの選び方', {
+												...select([
+														['smart', '自動切替（推奨）'],
+														['legacy', '従来方式（OGP優先）']
+												]),
+												description: [
+														'【なぜ切り替えが必要？】',
+														'ニコニコ動画の公式APIは「OGP画像（SNS共有用、主に1280×720）」と「Player画像（視聴プレイヤー用、主に960×540）」を別々に返します。OGPの一部には、中央に大きな再生マークが画像自体に焼き込まれています。ZenzaWatchの再生ボタンが重なっているのではありません。',
+														'',
+														'【自動切替（推奨）】',
+														'OGPが img.cdn.nimg.jp の元画像なら、高解像度のOGPを優先します（例：sm46962870）。OGPが goptim.video.nimg.jp 等の別配信元なら、再生マークを避けるためPlayer画像を優先します（例：sm46949237）。確認されたgoptim画像は候補から外し、画像が読み込めない場合はほかのサムネイルへ切り替えます。',
+														'',
+														'【従来方式（OGP優先）】',
+														'配信元を区別せず、OGPの1280×720画像から順に表示します。元の高解像度画像を優先できますが、goptim配信の動画では中央に大きな再生マークが表示される場合があります。その場合も画像には手を加えません。',
+														'',
+														'【注意】',
+														'この判定は現在確認できた配信方式に基づくもので、すべての動画で再生マークが消えることを保証するものではありません。選択は元ページの静止画だけに適用され、PiP小窓の動画画質・再生速度・コメントには影響しません。画像のURLは公式APIが返す値をそのまま使います。'
+												].join('\n')
+										}]
+						]),
+						...group('画面・映像', 'プレイヤーの操作表示', [
+								['enableHeatMap', 'ヒートマップを表示'],
+								['enableStoryboard', 'シークバーのサムネイルを表示'],
+								['enableStoryboardBar', 'シーンサーチバーを表示'],
+								['menuScale', '操作メニューの拡大率', { type: 'number' }]
+						]),
+						...group('画面・映像', 'シーンサーチ', [
+								['sceneSearch.presentation.normal', '通常表示のシーンサーチ', {
+												...select([['follow', 'シーク位置に追従'], ['fixed', '位置を固定'], ['legacy', '従来表示']])
+										}],
+								['sceneSearch.presentation.fullscreen', '全画面のシーンサーチ', {
+												...select([['follow', 'シーク位置に追従'], ['fixed', '位置を固定'], ['legacy', '従来表示']])
+										}],
+								['sceneSearch.layout.normal', '旧形式の通常表示', { hidden: true,
+												...select([
+														['00', '00 旧式表示（検証中）'],
+														['01', '01 クラシック追従'], ['02', '02 左右ツインパネル'],
+														['03', '03 サイドシェルフ'], ['04', '04 トップエッジ'],
+														['05', '05 プレイバック・デッキ'], ['06', '06 マイクロ・カプセル'],
+														['07', '07 3コマ・フィルム'], ['08', '08 片側引き出し'],
+														['09', '09 分離リモコン'], ['10', '10 スマート自動回避']
+												]), description: '通常時のレイアウトです。動画の再生位置や設定値は変更しません。' }],
+								['sceneSearch.layout.linkFullscreen', '全画面も同じ表示方式を使う', {
+												description: 'ONにしても全画面用に保存したレイアウトは消えません。OFFに戻すとその設定を再利用します。'
+										}],
+								['sceneSearch.layout.fullscreen', '旧形式の全画面表示', { hidden: true,
+												...select([
+														['00', '00 旧式表示（検証中）'],
+														['01', '01 クラシック追従'], ['02', '02 左右ツインパネル'],
+														['03', '03 サイドシェルフ'], ['04', '04 トップエッジ'],
+														['05', '05 プレイバック・デッキ'], ['06', '06 マイクロ・カプセル'],
+														['07', '07 3コマ・フィルム'], ['08', '08 片側引き出し'],
+														['09', '09 分離リモコン'], ['10', '10 スマート自動回避']
+												]), description: '通常表示と別のUIを使えます。連動がONのときは保存値を保持したまま適用を休止します。' }],
+								['sceneSearch.seekStepSeconds', 'シーンサーチ内の前後シーク秒数', {
+												type: 'number', description: '0〜600の整数。0にすると左右のシーク矢印を非表示にして枠を小型化します。既存のキーボード用カスタムシーク設定は変更しません。'
+										}],
+								['sceneSearch.enabled', 'シーンサーチを表示', {
+												description: 'シーンサーチ全体を表示します。OFFでもコメントの個別設定や大きさは保持します。'
+										}],
+								['sceneSearch.commentListScale', 'コメントプレビューの大きさ', {
+												...slider(100, 200, 1), unit: '%', description: '文字サイズは変えず、表示領域を広げて一度に見えるコメントを増やします。画面に収まる範囲で適用します。'
+										}],
+								['sceneSearch.commentPreviewVisible', 'シーンサーチのコメント表示', {
+												description: 'ミニコメントとコメントプレビューの共通スイッチです。OFFの間は両方を隠し、下の個別設定は保持します。右側の動画コメント欄とは別です。'
+										}],
+								['sceneSearch.miniCommentVisible', 'ミニコメントを表示する', {
+												description: 'サムネイル画像上のミニコメントを表示します。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'
+										}],
+								['sceneSearch.commentListVisible', 'コメントプレビューを表示する', {
+												description: 'コメントボタンで一覧を開けるようにします。ONにしても一覧は自動では開きません。すべての表示方式で共通です。親のコメント表示をONにすると、この設定を再利用します。'
+										}],
+								['sceneSearch.commentListBackgroundOpacity', 'コメントプレビューの背景濃度', {
+												...slider(0, 100, 1), unit: '%',
+												description: '一覧の背景だけを調整します。文字の濃さは変わりません。0%は透明、100%は不透明です。すべての表示方式で、通常表示・全画面共通です。'
+										}],
+								['sceneSearch.thumbnailScale', 'サムネイルの大きさ', {
+												...slider(50, 200, 1), unit: '%',
+												description: 'サムネイル画像と画像上のミニコメントを一緒に拡大・縮小します。操作ボタンの大きさは変わりません。画面に収まる範囲で表示します。すべての表示方式で、通常表示・全画面共通です。'
+										}],
+								['sceneSearch.miniCommentMode', '画像上のミニコメントの表示方式', {
+												...select([
+														['flow', '流れる（旧版と同じ）'],
+														['static', '静止表示（最大5行）'],
+														['hidden', '旧版の非表示設定（引き継ぎ用）']
+												]),
+												description: 'ミニコメントの動き方を選びます。表示のON/OFFは上の子スイッチを使います。旧版の静止表示設定も引き継ぎます。'
+										}],
+								['enableCommentPreview', 'コメントプレビューを開いた状態にする', {
+												description: 'コメントボタンによる一覧の開閉と共通です。追従・固定は画像の隣に一覧を表示し、従来表示は切り替えます。上の許可スイッチがOFFの間は閉じた状態になります。'
+										}],
+								['sceneSearch.controlsReveal', '追加ボタンの開き方', { hidden: true,
+												...select([
+														['hover-focus', 'マウスを乗せるかフォーカスで開く'],
+														['click', 'クリックで開く'], ['always', '常に表示']
+												]) }],
+								['sceneSearch.animation', 'UIのアニメーション', {
+												...select([
+														['off', '無効（動きなし）'], ['subtle', '控えめ（推奨）'], ['full', '通常']
+												])
+										}],
+								['sceneSearch.idleHideSeconds', 'プレビューを自動で隠すまでの時間', {
+												...slider(0, 30, 0.5), unit: '秒',
+												description: 'シークバー上にマウスを置き続けたとき、同じプレビューを表示する時間です。画像とコメント一覧で共通です。既定2秒。0秒にすると自動非表示を無効化します。ピン固定・ドラッグ・ボタン操作中は隠しません。'
+										}]
+						]),
+						...group('画面・映像', '通知・ポップアップ', [
+								['popup.notifyColor', '通常・成功通知の背景色', {
+												type: 'color', hexOnly: true,
+												description: '一時的な緑色の通知の背景色です。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'
+										}],
+								['popup.alertColor', 'エラー通知の背景色', {
+												type: 'color', hexOnly: true,
+												description: '一時的な赤色のエラー通知の背景色です。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'
+										}],
+								['popup.backgroundTransparency', '通知背景の透明度', {
+												...slider(0, 100, 1), unit: '%',
+												description: '通常通知とエラー通知に共通の背景透明度です。0%は不透明（従来と同じ）、100%は背景が完全に透明です。文字や影、通知の表示時間には影響しません。'
+										}]
+						]),
+						...group('画面・映像', 'スクリーンショット', [
+								['screenshot.prefix', '保存ファイル名の先頭に追加する文字', { type: 'text',
+												description: '任意の文字に加え {date}（保存日）や {watchId}（動画ID）などの変数も使えます。' }],
+								['screenshot.filenameTemplate', '保存ファイル名の構成・順番', {
+												type: 'text',
+												description: '空欄は従来どおり「タイトル - 動画ID@再生位置.png」。プリセットまたは変数 {title} {watchId} {videoId} {uploader} {time} {date} {datetime} {suffix} を組み合わせて自由に指定できます。拡張子は常に.pngです。'
+										}]
+						]),
+						...(typeof UiVisibilityRegistry === 'undefined' ? [] : UiVisibilityRegistry.descriptors()),
+						...group('コメント表示', '表示・配置', [
+								['showComment', 'コメントを表示'],
+								['backComment', 'コメントを画面全体に流す', {
+												description: '全画面・ワイド表示時に、動画を縮小せず画面全体へコメントを重ねます。通常表示では従来どおりです。'
+										}],
+								['commentSpeedRate', 'コメントの移動速度', { type: 'number' }],
+								['autoCommentSpeedRate', 'コメント速度を自動調整'],
+								['commentLayerOpacity', 'コメントの透明度', slider(0, 1)],
+								['commentLayer.easyCommentOpacity', 'かんたんコメントの透明度', slider(0, 1)],
+								['commentLayer.aiCommentOpacity', 'AIコメントの透明度', slider(0, 1)],
+								['enableNicosJumpVideo', '@ジャンプを有効化']
+						]),
+						...group('コメント表示', 'コメント一覧', [
+								['enableCommentPanel', 'コメント一覧を表示'],
+								['enableCommentPanelAutoScroll', 'コメント一覧を自動スクロール']
+						]),
+						...group('コメント表示', '文字・装飾', [
+								['commentLanguage', 'コメントの言語', select([
+												['ja-jp', '日本語'], ['en-us', '英語（米国）'], ['zh-tw', '中国語（繁体字）']
+										])],
+								['baseFontFamily', 'コメントのフォント', {
+												type: 'font-picker',
+												description: '候補にないフォントは「その他（自由入力）」を選んで入力できます。使用できないフォントは代替フォントで表示されます。',
+												options: [
+														{ value: '', label: '標準（ZenzaWatchにおまかせ）' },
+														{ value: "'Yu Gothic','Meiryo',sans-serif", label: '游ゴシック' },
+														{ value: "'Meiryo',sans-serif", label: 'メイリオ' },
+														{ value: "'MS Gothic',monospace", label: 'MS ゴシック' },
+														{ value: "'Noto Sans JP',sans-serif", label: 'Noto Sans JP' },
+														{ value: 'serif', label: '明朝系' },
+														{ value: 'sans-serif', label: 'ゴシック系' },
+														{ value: 'monospace', label: '等幅' }
+												]
+										}],
+								['baseChatScale', 'コメント文字の拡大率', {
+												...slider(0.5, 2, 0.1), unit: '倍',
+												description: '0.5〜2.0倍、0.1倍刻み。1.0倍が標準の大きさです。'
+										}],
+								['baseFontBolder', 'コメント文字を太くする'],
+								['cssFontWeight', '文字の太さ', select([
+												['normal', '標準'], ['500', '少し太め'], ['600', 'やや太め'],
+												['bold', '太字'], ['800', 'かなり太い'], ['900', '最も太い']
+										])],
+								['commentLayer.textShadowType', '文字の影の形式', {
+												...select([
+														['', '標準（軽い）'], ['shadow-type2', '輪郭を強調'],
+														['shadow-type3', 'ぼかした影（重い）'],
+														['shadow-stroke', '縁取り2（対応ブラウザのみ）'],
+														['shadow-dokaben', 'ドカベン風']
+												]), description: '文字の読みやすさに影響します。ぼかした影は処理が重く、縁取り2は一部環境で表示されません。ドカベン風は主に固定コメント向けです。'
+										}],
+								['commentLayer.ownerCommentShadowColor', '投稿者コメントの影色', {
+												type: 'color',
+												description: '色見本と #RRGGBB / #RGB 形式のどちらでも変更できます。従来の CSS 色名（green など）も保持できます。'
+										}]
+						]),
+						...group('NG・表示対象', 'NG条件', [
+								['enableFilter', 'NGフィルターを有効化'],
+								['wordFilter', 'NGワード一覧', { type: 'textarea' }],
+								['wordRegFilter', 'NGワード（正規表現）', { type: 'text' }],
+								['wordRegFilterFlags', '正規表現の適用オプション', { type: 'regex-flags',
+												description: 'i は大文字・小文字を区別しない設定です。通常は初期値の i をおすすめします。m は ^ と $ を改行ごとの先頭・末尾に、s は「.」に改行も含め、u はUnicodeの文字単位を扱います。' }],
+								['userIdFilter', 'NGユーザーID一覧', { type: 'textarea' }],
+								['commandFilter', 'NGコマンド一覧', { type: 'textarea',
+												description: 'コマンドとはコメントの色・大きさ・表示位置などの指定です。1行に1つ記入すると、その文字列を含むコマンドのコメントがNGになります。現在はNGワードなどとの「いずれかに一致」で判定します（AND条件ではありません）。' }],
+								['removeNgMatchedUser', 'NGに一致する投稿者のコメントを全除外'],
+								['sharedNgLevel', 'NG共有の強度', sharedNg]
+						]),
+						...group('NG・表示対象', '複合NGルール（上級者向け）', [
+								['ngComposite.rules', '複合NG・置換ルール', { type: 'composite-ng',
+												description: '複数の条件をAND/OR/NOTで組み合わせ、コメントの非表示・置換・装飾解除などを設定します。詳細説明は画面内で開けます。' }]
+						]),
+						...group('NG・表示対象', 'コメント種別', [
+								['filter.fork0', '通常コメントを表示'],
+								['filter.fork1', '投稿者コメントを表示'],
+								['filter.fork2', 'かんたんコメントを表示'],
+								['filter.fork3', '追加コメント種別を表示'],
+								['filter.defaultThread', '通常スレッド'],
+								['filter.ownerThread', '投稿者スレッド'],
+								['filter.communityThread', 'コミュニティスレッド'],
+								['filter.nicosThread', 'ニコスクリプトのスレッド'],
+								['filter.easyThread', 'かんたんコメントのスレッド'],
+								['filter.aiThread', 'AIコメントのスレッド'],
+								['filter.extraDefaultThread', '追加の通常スレッド'],
+								['filter.extraOwnerThread', '追加の投稿者スレッド'],
+								['filter.extraCommunityThread', '追加のコミュニティスレッド'],
+								['filter.extraNicosThread', '追加のニコスクリプトスレッド'],
+								['filter.extraEasyThread', '追加のかんたんコメントスレッド']
+						]),
+						...group('プレイリスト・検索', 'プレイリスト', [
+								['playlistLoop', 'プレイリストをループ'],
+								['continueNextPage', '再生中の動画をページ移動後も再開'],
+								['enableAdDecoration', 'プレイリストで動画の装飾枠を表示']
+						]),
+						...group('プレイリスト・検索', '検索', [
+								['videoSearch.wordCountMode', '検索候補のヒット件数を取得するタイミング', {
+												...select([
+														['on-demand', '必要なときだけ（推奨・低通信量）'],
+														['auto', '自動で表示（通信量が増える）'],
+														['off', '件数を表示しない（最も低通信量）']
+												]),
+												description: '検索行とタグ候補の件数を数える追加通信の設定です。「必要なときだけ」はマウスを乗せるか↑↓キーで選んだ候補のみ取得します。「自動」は検索語と表示中のタグ候補を順番に数えます。「表示しない」は件数の追加通信を行いません。通常の検索やタグ予測の通信には影響しません。'
+										}],
+								['videoSearch.videoIdSuggestMode', '検索欄に表示する候補の配置', {
+												...select([
+														['merged', 'すべて縦にまとめる'],
+														['side', 'タグ候補と動画を左右に表示'],
+														['delayed', 'タグ候補を先に表示、動画を後から表示']
+												]),
+												description: '検索候補と動画IDのカードをどう並べるかの設定です。検索件数の問い合わせ回数を減らす設定ではありません。'
+										}],
+								['search.limit', '検索結果をプレイリストに読み込む最大動画数', {
+												description: 'プレイリストへ実際に追加する動画数の上限です。数が多いほど検索データの読み込みに時間と通信がかかります。候補のヒット件数表示とは別の設定です。既定値は1000件です。'
+										}]
+						]),
+						...group('プレイリスト・検索', '関連メニュー › カスタムリンク', [
+								['relatedMenu.builtinOptions', '標準関連メニューの詳細編集', { type: 'related-builtin-options',
+												description: '標準機能の表示名、開き方、動画IDコピーなどの設定です。' }],
+								['relatedMenu.order', '関連メニューの並び順と表示／非表示', {
+												type: 'related-order',
+												description: '標準7件・カスタムリンク・登録アクションを同じ一覧で移動し、項目ごとに表示を切り替えます。非表示にしても機能や保存したリンクは削除しません。動画固有の表示条件は優先されます。'
+										}],
+								['relatedMenu.hiddenItems', '関連メニューで非表示にする項目', {
+												type: 'related-visibility',
+												description: '各行の「表示する」で設定します。非表示にしても設定や外部アクションの登録は維持されます。'
+										}]
+						]),
+						...group('プレイリスト・検索', 'リンク・移動', [
+								['overrideWatchLink', '動画リンクをZenzaWatchで開く'],
+								['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く'],
+								['enablePushState', 'ブラウザの履歴への反映を利用'],
+								['allowOtherDomain', '外部サイトの連携を許可'],
+								['loadLinkedChannelVideo', 'チャンネル動画のリンクを取得']
+						]),
+						...group('マウス・タッチ', 'マウス', [
+								['enableTogglePlayOnClick', '動画クリックで再生・停止']
+						]),
+						...group('マウス・タッチ', 'タッチ', [
+								['touch.enable', 'タッチジェスチャーを有効化']
+						])
+				];
 		}
-		const v=typeof this.config.getValue==='function'?
-			this.config.getValue(id):this.config.props?.[id];
-		return ModernAdvancedSettingsModel._clone(v);
-	}
-	syncLiveValue(id) {
-		if(!this._byId.has(id)){return false;}
-		const live=this._liveValue(id);
-		if(ModernAdvancedSettingsModel._same(this.saved[id],live)){return false;}
-		this.saved[id]=ModernAdvancedSettingsModel._clone(live);
-		this.draft[id]=ModernAdvancedSettingsModel._clone(live);
-		return true;
-	}
-	cancel() {
-		this.saved={};
-		this.draft={};
-		this.descriptors.forEach(descriptor=>{
-			const id=descriptor.id;
-			this.saved[id]=this._liveValue(id);
-			this.draft[id]=ModernAdvancedSettingsModel._clone(this.saved[id]);
-		});
-		return this;
-	}
-	get(id) {
-		if (!this._byId.has(id)) { return undefined; }
-		return ModernAdvancedSettingsModel._clone(this.draft[id]);
-	}
-	set(id,value) {
-		const d=this.descriptor(id);
-		if (!d) { throw new Error('不明な設定: '+id); }
-		if (typeof this.config.default[id]==='number' && typeof value==='string' &&
-			value.trim()!=='' && Number.isFinite(Number(value))) {
-			value=Number(value);
+		static subcategoryPriority(category, subcategory) {
+				const order = {
+						'再生・音声': ['再生動作', '音量', '読み上げ', '動画の取得', '公式プレイヤー連携', '提供画面'],
+						'画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
+						'コメント表示': ['表示・配置', 'コメント一覧', '文字・装飾', '追加取得'],
+						'NG・表示対象': ['NG条件', 'コメント種別', '動画の除外'],
+						'プレイリスト・検索': ['プレイリスト', '検索', 'リンク・移動',
+								'関連メニュー › カスタムリンク', '診断'],
+						'ショートカット': ['プレイヤー全般', '再生', 'シーク', '再生速度', '音量', 'コメント',
+								'画面', '画面フィルター', 'フィルタ/NG', 'プレイリスト', 'マイリスト', 'その他'],
+						'マウス・タッチ': ['マウス', 'タッチ']
+				};
+				const index = (order[category] || []).indexOf(subcategory);
+				return index < 0 ? 1000 : index;
 		}
-		this.draft[id]=ModernAdvancedSettingsModel._clone(value);
-		return this;
-	}
-	resetItem(id) { return this.set(id,this.config.default[id]); }
-	resetSubcategory(category,subcategory) {
-		this.sectionDescriptors(category,subcategory).forEach(d=>this.resetItem(d.id));
-		return this;
-	}
-	resetCategory(category) {
-		this.descriptors.filter(d=>d.category===category)
-			.forEach(d=>this.resetItem(d.id));
-		return this;
-	}
-	isEnabled(id) {
-		if(['sceneSearch.layout.fullscreen','sceneSearch.presentation.fullscreen'].includes(id) &&
-			this.get('sceneSearch.layout.linkFullscreen')===true){return false;}
-		const d=this.descriptor(id);
-		return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
-			(!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
-	}
-	isDifferentFromDefault(id) {
-		return this._byId.has(id) && !ModernAdvancedSettingsModel._same(
-			this.draft[id],this.config.default[id]);
-	}
-	isDirty() {
-		return this.descriptors.some(d=>!ModernAdvancedSettingsModel._same(
-			this.draft[d.id],this.saved[d.id]));
-	}
-	changes() {
-		return this.descriptors.filter(d=>!ModernAdvancedSettingsModel._same(
-			this.draft[d.id],this.saved[d.id]))
-			.map(d=>({id:d.id,value:ModernAdvancedSettingsModel._clone(this.draft[d.id])}));
-	}
-	validate() {
-		const errs=[];
-		for(const change of this.changes()) {
-			const {id,value}=change;
-			const basic=typeof value===typeof this.config.default[id] &&
-				(typeof value!=='number'||Number.isFinite(value));
-			const descriptor=this.descriptor(id);
-			const rangeOk=descriptor.type!=='slider' ||
-				(typeof value==='number' &&
-					(descriptor.min===undefined || value>=descriptor.min) &&
-					(descriptor.max===undefined || value<=descriptor.max));
-			const stepOk=descriptor.type!=='slider' || !Number.isFinite(descriptor.step) ||
-				descriptor.step<=0 ||
-				Math.abs((value-(descriptor.min||0))/descriptor.step-
-					Math.round((value-(descriptor.min||0))/descriptor.step))<1e-6;
-			const colorOk=descriptor.type!=='color' ||
-				(typeof value==='string' && /^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|[a-zA-Z]+)$/.test(value));
-			const prefixOk=id!=='screenshot.prefix' ||
-				(typeof value==='string' && !/[<>:"/\\|?*\u0000-\u001f]/.test(value));
-			const valid=basic && rangeOk && stepOk && colorOk && prefixOk &&
-				(!this.config.options?.validateImport || this.config.options.validateImport(id,value));
-			if (!valid) { errs.push({id,message:prefixOk?
-				'無効な設定値です':'ファイル名に使用できない文字が含まれています'}); }
-		}
-		if(this.changes().some(change=>
-			change.id==='wordRegFilter' || change.id==='wordRegFilterFlags')){
-			try {
-				new RegExp(this.get('wordRegFilter')||'',this.get('wordRegFilterFlags')||'');
-			} catch (error) {
-				errs.push({id:'wordRegFilterFlags',message:'正規表現の条件またはフラグが不正です'});
-			}
-		}
-		return errs;
-	}
-	save() {
-		const changes=this.changes();
-		const errors=this.validate();
-		if(errors.length){throw new Error('不正な設定値: '+errors.map(e=>e.id).join(', '));}
-		for(const {id} of changes) {
-			if (!ModernAdvancedSettingsModel._same(this._liveValue(id),this.saved[id])) {
-				throw new Error('設定が外部で更新されました。競合: '+id);
-			}
-		}
-		if(changes.length && this.config.readonly) {
-			throw new Error('このページでは設定を保存できません（読み取り専用）');
-		}
-		const attempted=[];
-		try {
-			for(const {id,value} of changes) {
-				attempted.push(id);
-				if(id.startsWith('sceneSearch.') && typeof this.config.persistSceneSearchSelection==='function'){
-					this.config.persistSceneSearchSelection({[id]:ModernAdvancedSettingsModel._clone(value)});
-				}else {this.config.setValue(id,ModernAdvancedSettingsModel._clone(value));}
-				if(this.config.storage && typeof this.config.getStorageKey==='function') {
-					const native=typeof this.config.getNativeKey==='function' ?
-						this.config.getNativeKey(id) : id;
-					const storageKey=this.config.getStorageKey(native);
-					if(this.config.storage[storageKey]!==JSON.stringify(value)) {
-						throw new Error('設定保存の確認に失敗しました: '+id);
-					}
+		static categoryFor(key, action) {
+				if (key === 'relatedMenu.customLinks') {
+						return ['プレイリスト・検索', '関連メニュー › カスタムリンク'];
 				}
-			}
-		} catch(error) {
-			for(const id of attempted.reverse()) {
-				try { this.config.setValue(id,ModernAdvancedSettingsModel._clone(this.saved[id])); }
-				catch(_) { /* original error remains authoritative */ }
-			}
-			throw error;
-		}
-		this.cancel();
-		return changes.length;
-	}
-	search(query) {
-		const q=String(query||'').trim().toLocaleLowerCase();
-		if (!q) { return this.descriptors.filter(d=>!d.hidden); }
-		return this.descriptors.filter(d=>!d.hidden &&
-			[d.id,d.label,d.category,d.subcategory,d.description,...(d.aliases||[])]
-				.join(' ').toLocaleLowerCase().includes(q));
-	}
-	keyConflicts(value) {
-		const key=Number(value)||0;
-		if (!key) { return []; }
-		const names=[];
-		this.actions.forEach(action=>{
-			if (Number(this.draft['KEY_'+action.id])===key) {
-				names.push(action.label||action.id);
-			}
-		});
-		const links=this.draft['relatedMenu.customLinks'];
-		if(Array.isArray(links)) {
-			links.forEach(link=>{
-				if(link&&Number(link.shortcutKey)===key&&link.enabled!==false) {
-					names.push(link.label||link.id);
+				if (/^KEY_/.test(key) || /^PARAM_CUSTOM_SEEK_/.test(key)) {
+						return ['ショートカット', action && action.category || 'シーク'];
 				}
-			});
+				if (/^supporterCredit\./.test(key)) {
+						return ['再生・音声', '提供画面'];
+				}
+				if (/^audio\./.test(key) || /^(volume|mute|speakLark)/.test(key)) {
+						return ['再生・音声', '音量'];
+				}
+				if (/^(commentHistory\.|commentHistory[A-Z]|comments\.history|commentIncrease)/.test(key)) {
+						return ['コメント表示', '追加取得'];
+				}
+				if (/^(touch\.|touch[A-Z])/.test(key)) {
+						return ['マウス・タッチ', 'タッチ'];
+				}
+				if (/^(mouse|enableTogglePlayOnClick|enableFullScreenOnDoubleClick|enableDblclickClose)/.test(key)) {
+						return ['マウス・タッチ', 'マウス'];
+				}
+				if (/^(word(Reg)?Filter|wordRegFilterFlags|video(Tag|Owner)Filter|enableFilter|sharedNg)/.test(key)) {
+						return ['NG・表示対象', /^video(Tag|Owner)Filter/.test(key) ? '動画の除外' : 'NG条件'];
+				}
+				if (/^(commentLayer\.|enableCommentPanel|autoScrollComment)/.test(key)) {
+						return ['コメント表示', key === 'enableCommentPanel' ? 'コメント一覧' : '表示・配置'];
+				}
+				if (/^screenFilter\./.test(key)) {
+						return ['画面・映像', '画面フィルター'];
+				}
+				if (/^videoHeader\./.test(key)) {
+						return ['画面・映像', '動画ヘッダー'];
+				}
+				if (/^(screen|smallMode|autoFullScreen|autoCloseFullScreen|fullscreen|enableBackComment)/.test(key)) {
+						return ['画面・映像', '表示モード'];
+				}
+				if (/^(search\.|videoSearch\.|videoIdSuggest)/.test(key)) {
+						return ['プレイリスト・検索', '検索'];
+				}
+				if (/^(playlist|enableAdDecoration|continueNextPage)/.test(key)) {
+						return ['プレイリスト・検索', 'プレイリスト'];
+				}
+				if (/^(debug|diagnostic)/.test(key)) {
+						return ['プレイリスト・検索', '診断'];
+				}
+				return ['再生・音声', '再生動作'];
 		}
-		return names;
-	}
+		static dependencyFor(key) {
+				if (key === 'ui.scene.commentToggle' || key === 'ui.scene.commentSearch' || key === 'enableCommentPreview')
+						return 'sceneSearch.commentListVisible';
+				if (key.startsWith('ui.scene.'))
+						return 'sceneSearch.enabled';
+				if (key === 'sceneSearch.miniCommentMode')
+						return 'sceneSearch.miniCommentVisible';
+				if (key === 'sceneSearch.commentListScale' || key === 'sceneSearch.commentListBackgroundOpacity')
+						return 'sceneSearch.commentListVisible';
+				if (key.startsWith('sceneSearch.') && !['sceneSearch.enabled', 'sceneSearch.commentPreviewVisible', 'sceneSearch.miniCommentVisible', 'sceneSearch.commentListVisible'].includes(key))
+						return 'sceneSearch.enabled';
+				if (key.startsWith('commentHistory.') && key !== 'commentHistory.enabled') {
+						return 'commentHistory.enabled';
+				}
+				if (key.startsWith('filter.') || ['wordFilter', 'wordRegFilter',
+						'wordRegFilterFlags', 'userIdFilter', 'commandFilter', 'sharedNgLevel',
+						'removeNgMatchedUser', 'ngComposite.rules'].includes(key)) {
+						return 'enableFilter';
+				}
+				const direct = {
+						'sceneSearch.commentPreviewVisible': 'sceneSearch.enabled',
+						'sceneSearch.miniCommentVisible': 'sceneSearch.commentPreviewVisible',
+						'sceneSearch.commentListVisible': 'sceneSearch.commentPreviewVisible',
+						'supporterCredit.voice': 'supporterCredit.enable',
+						'supporterCredit.gift': 'supporterCredit.enable',
+						'supporterCredit.skipInPlaylist': 'supporterCredit.enable',
+						'touch.tap2command': 'touch.enable', 'touch.tap3command': 'touch.enable',
+						'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
+						'enableCommentPanelAutoScroll': 'enableCommentPanel',
+						'pipPageThumbnailSource': 'pipPageThumbnail',
+						'speakLarkVolume': 'speakLark'
+				};
+				return direct[key] || null;
+		}
+		constructor({ config, legacyRoot = null, actions = [], screenFilterParams = [], historySchema = [] }) {
+				if (!config || !config.default) {
+						throw new TypeError('Config defaults are required');
+				}
+				this.config = config;
+				this.actions = actions.slice();
+				this._screenParams = new Map((Array.isArray(screenFilterParams) ? screenFilterParams : [])
+						.filter(p => p && typeof p.key === 'string')
+						.map(p => ['screenFilter.' + p.key, p]));
+				this._historyParams = new Map((Array.isArray(historySchema) ? historySchema : [])
+						.filter(p => p && typeof p.key === 'string')
+						.map(p => [p.key, p]));
+				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings()
+						.map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
+				this._historyOrder = new Map((Array.isArray(historySchema) ? historySchema : [])
+						.map((entry, index) => [entry.key, index + 1]));
+				this._screenOrder = new Map((Array.isArray(screenFilterParams) ? screenFilterParams : [])
+						.map((entry, index) => ['screenFilter.' + entry.key, index]));
+				this.categories = ModernAdvancedSettingsModel.CATEGORIES.slice();
+				this.descriptors = [];
+				this._byId = new Map();
+				const add = (descriptor) => {
+						if (!descriptor || !descriptor.id || !Object.prototype.hasOwnProperty.call(config.default, descriptor.id)) {
+								return;
+						}
+						if (descriptor.id === 'screenFilter.enable' || descriptor.id === 'screenFilter.saved') {
+								return;
+						}
+						const publicEntry = this._publicSettings.get(descriptor.id);
+						if (publicEntry) {
+								descriptor = { ...descriptor, ...publicEntry };
+						}
+						const param = this._screenParams.get(descriptor.id);
+						if (param) {
+								const type = param.type === 'boolean' ? 'boolean' :
+										param.type === 'select' ? 'select' : 'slider';
+								descriptor = { ...descriptor, label: param.label, type,
+										description: param.desc || descriptor.description || '',
+										min: param.min, max: param.max, step: param.step, unit: param.unit || '',
+										sortIndex: this._screenOrder.get(descriptor.id),
+										options: type === 'select' ? (param.options || []).map(pair => ({
+												value: pair[0], label: pair[1]
+										})) : [],
+										input: type === 'slider' ? null : descriptor.input };
+						}
+						const history = this._historyParams.get(descriptor.id);
+						if (history) {
+								descriptor = { ...descriptor, label: history.label,
+										type: history.type === 'integer' ? 'slider' : history.type === 'boolean' ? 'boolean' : descriptor.type,
+										description: history.description || descriptor.description || '',
+										min: history.min, max: history.max, step: 1,
+										sortIndex: this._historyOrder.get(descriptor.id),
+										options: [],
+										input: history.type === 'integer' ? null : descriptor.input };
+						}
+						if (this._byId.has(descriptor.id)) {
+								return;
+						}
+						if (!this.categories.includes(descriptor.category)) {
+								throw new Error('未定義のカテゴリ: ' + descriptor.category);
+						}
+						const entry = { ...descriptor, dependsOn: ModernAdvancedSettingsModel.dependencyFor(descriptor.id) };
+						if (entry.id === 'commentHistory.enabled') {
+								entry.sortIndex = 0;
+						}
+						this._byId.set(entry.id, entry);
+						this.descriptors.push(entry);
+				};
+				if (legacyRoot && typeof legacyRoot.querySelectorAll === 'function') {
+						legacyRoot.querySelectorAll('[data-setting-name],[data-history-setting]').forEach(input => {
+								const id = input.dataset.settingName || (input.dataset.historySetting ?
+										'commentHistory.' + input.dataset.historySetting : null);
+								if (!id || /^KEY_/.test(id) || /^PARAM_CUSTOM_SEEK_\d+$/.test(id)) {
+										return;
+								}
+								const category = ModernAdvancedSettingsModel.categoryFor(id);
+								const labelNode = input.closest('label');
+								const labelText = labelNode ? Array.from(labelNode.childNodes)
+										.filter(n => n.nodeType === 3)
+										.map(n => n.textContent.trim()).filter(Boolean).join(' ').trim() : '';
+								let label = labelText;
+								if (!label) {
+										let node = input.previousElementSibling;
+										while (!node && input.parentElement) {
+												node = input.parentElement.previousElementSibling;
+												break;
+										}
+										if (node && node.matches && node.matches('.caption,.caption.sub')) {
+												label = node.textContent.trim();
+										}
+								}
+								if (!label) {
+										label = id;
+								}
+								const type = input.type === 'checkbox' ? 'boolean' : input.tagName === 'SELECT' ? 'select' :
+										input.tagName === 'TEXTAREA' ? 'textarea' : 'text';
+								const options = type === 'select' ?
+										Array.from(input.options).map(o => ({
+												value: typeof config.default[id] === 'number' ? Number(o.value) : o.value,
+												label: o.textContent.trim()
+										})) : [];
+								const root = input.closest('.control');
+								const note = root && root.querySelector('.settingNote');
+								add({ id, label, category: category[0], subcategory: category[1], type, options,
+										description: note ? note.textContent.trim() : '', input });
+						});
+				}
+				actions.forEach(action => {
+						if (!action || !action.id) {
+								return;
+						}
+						const id = 'KEY_' + action.id;
+						const [category, subcategory] = ModernAdvancedSettingsModel.categoryFor(id, action);
+						add({ id, label: action.label || action.id, category, subcategory, type: 'shortcut',
+								description: '', actionId: action.id, defaultKey: action.defaultKey });
+						if (action.customSeekSlot) {
+								const seek = 'PARAM_' + action.id;
+								add({ id: seek, label: (action.label || action.id) + ' の秒数',
+										category: 'ショートカット', subcategory: 'シーク',
+										type: 'seconds', description: 'マイナスで戻る、プラスで進む', actionId: action.id });
+						}
+				});
+				Object.keys(config.default).forEach(id => {
+						if (!/^commentHistory\.|^screenFilter\./.test(id) && id !== 'touch.enable') {
+								return;
+						}
+						const [category, subcategory] = ModernAdvancedSettingsModel.categoryFor(id);
+						const value = config.default[id];
+						const type = typeof value === 'boolean' ? 'boolean' : typeof value === 'number' ? 'number' : 'text';
+						const name = id.slice(id.indexOf('.') + 1);
+						add({ id, label: name, category, subcategory, type, options: [], description: '' });
+				});
+				this._publicSettings.forEach(entry => {
+						const type = entry.type || (typeof config.default[entry.id] === 'boolean' ? 'boolean' :
+								typeof config.default[entry.id] === 'number' ? 'number' : 'text');
+						add({ ...entry, type, options: [], description: '' });
+				});
+				add({ id: 'relatedMenu.customLinks', label: 'カスタム関連メニューのリンク',
+						category: 'プレイリスト・検索', subcategory: '関連メニュー › カスタムリンク',
+						type: 'related-links', description: '' });
+				const groupRank = (d) => [
+						this.categories.indexOf(d.category),
+						ModernAdvancedSettingsModel.subcategoryPriority(d.category, d.subcategory),
+						Number.isFinite(d.sortIndex) ? d.sortIndex : 10000
+				];
+				this.descriptors.sort((a, b) => {
+						const ar = groupRank(a), br = groupRank(b);
+						for (let i = 0; i < ar.length; i++) {
+								if (ar[i] !== br[i]) {
+										return ar[i] - br[i];
+								}
+						}
+						return 0;
+				});
+				this.cancel();
+		}
+		descriptor(id) { return this._byId.get(id) || null; }
+		static get SHARED_VISIBILITY() {
+				return typeof UiVisibilityRegistry === 'undefined' ? [] : UiVisibilityRegistry.SHARED_SETTINGS;
+		}
+		sectionDescriptors(category, subcategory) {
+				const entries = this.descriptors.filter(d => d.category === category && d.subcategory === subcategory);
+				if (category !== '画面・映像' || subcategory !== '表示・非表示') {
+						return entries;
+				}
+				const aliases = ModernAdvancedSettingsModel.SHARED_VISIBILITY.map(([id, icon]) => {
+						const original = this.descriptor(id);
+						return original ? { ...original, category, subcategory, icon, visibilityScope: id.startsWith('sceneSearch.') ? 'scene-comments' : 'shared',
+								sharedWith: original.category + ' / ' + original.subcategory } : null;
+				}).filter((item) => item !== null);
+				const scene = entries.filter(d => d.visibilityScope === 'scene');
+				const sceneAliases = aliases.filter(d => d.visibilityScope === 'scene-comments');
+				const firstScene = entries.findIndex(d => d.visibilityScope === 'scene');
+				const ordered = entries.filter(d => d.visibilityScope !== 'scene');
+				ordered.splice(firstScene < 0 ? ordered.length : firstScene, 0, ...sceneAliases, ...scene);
+				return [...ordered, ...aliases.filter(d => d.visibilityScope !== 'scene-comments')];
+		}
+		_liveValue(id) {
+				if (typeof this.config.resolveSceneSearch === 'function') {
+						const scene = this.config.resolveSceneSearch();
+						if (scene) {
+								if (id === 'sceneSearch.enabled')
+										return scene.enabled;
+								if (id === 'sceneSearch.presentation.normal')
+										return scene.normal;
+								if (id === 'sceneSearch.presentation.fullscreen')
+										return scene.fullscreen;
+								if (id === 'sceneSearch.miniCommentVisible')
+										return scene.miniVisible;
+						}
+				}
+				const v = typeof this.config.getValue === 'function' ?
+						this.config.getValue(id) : this.config.props?.[id];
+				return ModernAdvancedSettingsModel._clone(v);
+		}
+		syncLiveValue(id) {
+				if (!this._byId.has(id)) {
+						return false;
+				}
+				const live = this._liveValue(id);
+				if (ModernAdvancedSettingsModel._same(this.saved[id], live)) {
+						return false;
+				}
+				this.saved[id] = ModernAdvancedSettingsModel._clone(live);
+				this.draft[id] = ModernAdvancedSettingsModel._clone(live);
+				return true;
+		}
+		cancel() {
+				this.saved = {};
+				this.draft = {};
+				this.descriptors.forEach(descriptor => {
+						const id = descriptor.id;
+						this.saved[id] = this._liveValue(id);
+						this.draft[id] = ModernAdvancedSettingsModel._clone(this.saved[id]);
+				});
+				return this;
+		}
+		get(id) {
+				if (!this._byId.has(id)) {
+						return undefined;
+				}
+				return ModernAdvancedSettingsModel._clone(this.draft[id]);
+		}
+		set(id, value) {
+				const d = this.descriptor(id);
+				if (!d) {
+						throw new Error('不明な設定: ' + id);
+				}
+				if (typeof this.config.default[id] === 'number' && typeof value === 'string' &&
+						value.trim() !== '' && Number.isFinite(Number(value))) {
+						value = Number(value);
+				}
+				this.draft[id] = ModernAdvancedSettingsModel._clone(value);
+				return this;
+		}
+		resetItem(id) { return this.set(id, this.config.default[id]); }
+		resetSubcategory(category, subcategory) {
+				this.sectionDescriptors(category, subcategory).forEach(d => this.resetItem(d.id));
+				return this;
+		}
+		resetCategory(category) {
+				this.descriptors.filter(d => d.category === category)
+						.forEach(d => this.resetItem(d.id));
+				return this;
+		}
+		isEnabled(id) {
+				if (['sceneSearch.layout.fullscreen', 'sceneSearch.presentation.fullscreen'].includes(id) &&
+						this.get('sceneSearch.layout.linkFullscreen') === true) {
+						return false;
+				}
+				const d = this.descriptor(id);
+				return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
+						(!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
+		}
+		isDifferentFromDefault(id) {
+				return this._byId.has(id) && !ModernAdvancedSettingsModel._same(this.draft[id], this.config.default[id]);
+		}
+		isDirty() {
+				return this.descriptors.some(d => !ModernAdvancedSettingsModel._same(this.draft[d.id], this.saved[d.id]));
+		}
+		changes() {
+				return this.descriptors.filter(d => !ModernAdvancedSettingsModel._same(this.draft[d.id], this.saved[d.id]))
+						.map(d => ({ id: d.id, value: ModernAdvancedSettingsModel._clone(this.draft[d.id]) }));
+		}
+		validate() {
+				const errs = [];
+				for (const change of this.changes()) {
+						const { id, value } = change;
+						const basic = typeof value === typeof this.config.default[id] &&
+								(typeof value !== 'number' || Number.isFinite(value));
+						const descriptor = this.descriptor(id);
+						const rangeOk = descriptor.type !== 'slider' ||
+								(typeof value === 'number' &&
+										(descriptor.min === undefined || value >= descriptor.min) &&
+										(descriptor.max === undefined || value <= descriptor.max));
+						const stepOk = descriptor.type !== 'slider' || !Number.isFinite(descriptor.step) ||
+								descriptor.step <= 0 ||
+								Math.abs((value - (descriptor.min || 0)) / descriptor.step -
+										Math.round((value - (descriptor.min || 0)) / descriptor.step)) < 1e-6;
+						const colorOk = descriptor.type !== 'color' ||
+								(typeof value === 'string' && (descriptor.hexOnly === true ?
+										/^#(?:[a-fA-F0-9]{3}|[a-fA-F0-9]{6})$/.test(value) :
+										/^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|[a-zA-Z]+)$/.test(value)));
+						const prefixOk = id !== 'screenshot.prefix' ||
+								(typeof value === 'string' && !/[<>:"/\\|?*\u0000-\u001f]/.test(value));
+						const valid = basic && rangeOk && stepOk && colorOk && prefixOk &&
+								(!this.config.options?.validateImport || this.config.options.validateImport(id, value));
+						if (!valid) {
+								errs.push({ id, message: prefixOk ?
+												'無効な設定値です' : 'ファイル名に使用できない文字が含まれています' });
+						}
+				}
+				if (this.changes().some(change => change.id === 'wordRegFilter' || change.id === 'wordRegFilterFlags')) {
+						try {
+								new RegExp((this.get('wordRegFilter') || ''), (this.get('wordRegFilterFlags') || ''));
+						}
+						catch (error) {
+								errs.push({ id: 'wordRegFilterFlags', message: '正規表現の条件またはフラグが不正です' });
+						}
+				}
+				return errs;
+		}
+		save() {
+				const changes = this.changes();
+				const errors = this.validate();
+				if (errors.length) {
+						throw new Error('不正な設定値: ' + errors.map(e => e.id).join(', '));
+				}
+				for (const { id } of changes) {
+						if (!ModernAdvancedSettingsModel._same(this._liveValue(id), this.saved[id])) {
+								throw new Error('設定が外部で更新されました。競合: ' + id);
+						}
+				}
+				if (changes.length && this.config.readonly) {
+						throw new Error('このページでは設定を保存できません（読み取り専用）');
+				}
+				const attempted = [];
+				try {
+						for (const { id, value } of changes) {
+								attempted.push(id);
+								if (id.startsWith('sceneSearch.') && typeof this.config.persistSceneSearchSelection === 'function') {
+										this.config.persistSceneSearchSelection({ [id]: ModernAdvancedSettingsModel._clone(value) });
+								}
+								else {
+										this.config.setValue(id, ModernAdvancedSettingsModel._clone(value));
+								}
+								if (this.config.storage && typeof this.config.getStorageKey === 'function') {
+										const native = typeof this.config.getNativeKey === 'function' ?
+												this.config.getNativeKey(id) : id;
+										const storageKey = this.config.getStorageKey(native);
+										if (this.config.storage[storageKey] !== JSON.stringify(value)) {
+												throw new Error('設定保存の確認に失敗しました: ' + id);
+										}
+								}
+						}
+				}
+				catch (error) {
+						for (const id of attempted.reverse()) {
+								try {
+										this.config.setValue(id, ModernAdvancedSettingsModel._clone(this.saved[id]));
+								}
+								catch (_) { /* original error remains authoritative */ }
+						}
+						throw error;
+				}
+				this.cancel();
+				return changes.length;
+		}
+		search(query) {
+				const q = String(query || '').trim().toLocaleLowerCase();
+				if (!q) {
+						return this.descriptors.filter(d => !d.hidden);
+				}
+				return this.descriptors.filter(d => !d.hidden &&
+						[d.id, d.label, d.category, d.subcategory, d.description, ...(d.aliases || [])]
+								.join(' ').toLocaleLowerCase().includes(q));
+		}
+		keyConflicts(value) {
+				const key = Number(value) || 0;
+				if (!key) {
+						return [];
+				}
+				const names = [];
+				this.actions.forEach(action => {
+						if (Number(this.draft['KEY_' + action.id]) === key) {
+								names.push(action.label || action.id);
+						}
+				});
+				const links = this.draft['relatedMenu.customLinks'];
+				if (Array.isArray(links)) {
+						links.forEach(link => {
+								if (link && Number(link.shortcutKey) === key && link.enabled !== false) {
+										names.push(link.label || link.id);
+								}
+						});
+				}
+				return names;
+		}
 }
 class ModernAdvancedSettingsUI {
-	static _style(doc) {
-		if(doc.querySelector('style[data-zw-modern-ui]')) { return; }
-		const style=doc.createElement('style');
-		style.setAttribute('data-zw-modern-ui','');
-		style.textContent=[
-			'.zenzaAdvancedSettingPanel.zw-modern-active { position:fixed !important; inset:0 !important; width:auto !important; height:auto !important; min-width:0; max-width:none !important; max-height:none !important; margin:0 !important; transform:none !important; transition:none !important; border:0; padding:0; background:#101927; border-radius:0; z-index:2147483647 !important; overflow:hidden; box-sizing:border-box; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active:not(.show) { display:none !important; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active.show { display:block; opacity:1; pointer-events:auto; box-shadow:none; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active > .settingPanelInner { display:none !important; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active > .zenzaAdvancedSetting-close { display:none !important; }',
-			'.zw-modern-root { --zw-dark-bg:#101927; --zw-dark-side:#141e2d; --zw-dark-panel:#1b293a; --zw-dark-card:#243449; --zw-dark-border:#2b394b; --zw-dark-text:#edf4ff; --zw-dark-muted:#a5b7cb; --zw-dark-accent:#82bfff; --zw-sidebar-width:290px; color-scheme:dark; color:var(--zw-dark-text); background:var(--zw-dark-bg); display:flex; flex-direction:column; width:100%; height:100%; font:13px/1.45 system-ui,"Yu Gothic UI",Meiryo,sans-serif; box-sizing:border-box; user-select:text; }',
-			'.zw-modern-root *, .zw-modern-root *::before, .zw-modern-root *::after { box-sizing:border-box; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root label { width:auto; height:auto; padding:0; margin:0; min-width:0; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root input[type=checkbox] { transform:none; margin:0; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root input[type=text],.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root select { font-size:inherit; margin:0; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root input[type=text] { width:auto; }',
-			'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-cardcontrols label:has(textarea),.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-cardcontrols label:has(input[type=text]) { width:100%; display:flex; }',
-			'.zw-modern-root button, .zw-modern-root input, .zw-modern-root select, .zw-modern-root textarea { font:inherit; }',
-			'.zw-modern-root button { cursor:pointer; }',
-			'.zw-modern-root button:disabled, .zw-modern-root input:disabled { opacity:.55; cursor:not-allowed; }',
-			'.zw-modern-header { display:flex; align-items:center; gap:12px; background:var(--zw-dark-panel); border-bottom:1px solid var(--zw-dark-border); padding:13px 17px; flex:none; }',
-			'.zw-modern-header h2 { font-size:17px; font-weight:750; margin:0; flex:1; }',
-			'.zw-modern-root .zw-modern-iconbtn { border:1px solid #405069; background:#23334a; color:var(--zw-dark-text); padding:6px 10px; border-radius:5px; }',
-			'.zw-modern-body { position:relative; display:flex; flex:1; min-height:0; }',
-			'.zw-modern-sidebar { width:var(--zw-sidebar-width); flex:0 0 var(--zw-sidebar-width); overflow:auto; min-width:0; background:var(--zw-dark-side); border-right:1px solid var(--zw-dark-border); padding:14px 9px; transition:width .18s ease,flex-basis .18s ease; }',
-			'.zw-modern-root.is-sidebar-collapsed .zw-modern-sidebar { width:0; flex-basis:0; padding:0; overflow:hidden; border:0; }',
-			'.zw-modern-search { width:100%; background:#0f1a29; color:var(--zw-dark-text); border:1px solid #40516a; border-radius:5px; padding:9px 10px; margin:0 0 12px; outline-offset:1px; }',
-			'.zw-modern-nav { display:flex; flex-direction:column; gap:3px; }',
-			'.zw-modern-nav button { display:block; width:100%; text-align:left; border:0; border-radius:5px; color:var(--zw-dark-text); background:transparent; padding:8px; }',
-			'.zw-modern-nav button:hover, .zw-modern-nav button.is-active { background:var(--zw-dark-card); }',
-			'.zw-modern-nav button.is-active { color:var(--zw-dark-accent); }',
-			'.zw-modern-nav .zw-modern-sub { font-size:12px; padding-left:21px; color:var(--zw-dark-muted); }',
-			'.zw-modern-main { flex:1; min-width:0; overflow:auto; overscroll-behavior:contain; padding:24px clamp(12px,3vw,44px); }',
-			'.zw-modern-content-inner { width:100%; max-width:960px; margin:0 auto; }',
-			'.zw-modern-breadcrumb { font-size:11px; color:var(--zw-dark-muted); margin:0 0 4px; }',
-			'.zw-modern-section-title { font-size:21px; line-height:1.4; margin:0 0 6px; font-weight:750; }',
-			'.zw-modern-section-subtitle { margin:0 0 15px; color:var(--zw-dark-muted); font-size:12px; }',
-			'.zw-modern-toolbar { display:flex; justify-content:flex-end; gap:7px; margin:0 0 14px; }',
-			'.zw-modern-card { background:var(--zw-dark-card); border:1px solid var(--zw-dark-border); border-radius:5px; padding:13px 15px; margin:0 0 10px; min-width:0; }',
-			'.zw-modern-card.is-inline { display:flex; align-items:center; flex-wrap:wrap; column-gap:15px; row-gap:6px; min-height:55px; }',
-			'.zw-modern-card.is-inline > .zw-modern-cardhead { min-width:0; flex:1 1 210px; }',
-			'.zw-modern-card.is-inline > .zw-modern-cardcontrols { flex:0 1 auto; margin:0; min-width:0; }',
-			'.zw-modern-card.is-inline > .zw-modern-note { flex-basis:100%; margin-top:2px; }',
-			'.zw-modern-card.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
-			'.zw-modern-card.is-disabled { opacity:.5; }',
-			'.zw-modern-card.is-child { margin-left:14px; border-left:2px solid #475e77; }',
-			'.zw-modern-cardhead { display:flex; align-items:center; gap:10px; }',
-			'.zw-modern-cardhead strong { font-size:13px; font-weight:650; flex:1; overflow-wrap:anywhere; }',
-			'.zw-modern-visibility-icon { display:inline-flex; justify-content:center; align-items:center; flex:none; width:38px; height:32px; background:#23354b; border:1px solid #60748c; border-radius:5px; color:#edf4ff; font:19px/1 system-ui,sans-serif; white-space:nowrap; overflow:hidden; pointer-events:none; user-select:none; }',
-			'.zw-modern-visibility-icon.is-compact-glyph { font-size:12px; letter-spacing:-.25px; }',
-			'.zw-modern-visibility-icon.is-pair-glyph { font-size:15px; }',
-			'.zw-modern-visibility-icon.is-tweet { font-weight:750; color:#79c8f8; }',
-			'.zw-modern-visibility-icon.is-mylist { font-size:15px; font-weight:750; }',
-			'.zw-modern-visibility-icon.is-like { color:#ffc0d8; font-size:26px; }',
-			'.zw-modern-visibility-icon.is-comment { font-size:20px; }',
-			'.zw-modern-visibility-icon.is-related { width:100px; font-size:10px; gap:6px; background:#59636b; border-color:#7c8992; }',
-			'.zw-modern-visibility-icon.is-comment-input { width:118px; padding:0 6px; justify-content:start; font-size:10px; border-color:#8798a9; color:#c3d3e2; background:#172437; }',
-			'.zw-modern-visibility-icon svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }',
-			'.zw-modern-root .zw-modern-plainbtn { border:1px solid #445a71; border-radius:5px; background:#1d2b3d; color:var(--zw-dark-text); padding:5px 8px; font-size:11px; }',
-			'.zw-modern-cardcontrols { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin:8px 0 0; flex-wrap:wrap; }',
-			'.zw-modern-cardcontrols label { display:inline-flex; gap:8px; align-items:center; }',
-			'.zw-modern-cardcontrols label:has(textarea), .zw-modern-cardcontrols label:has(input[type=text]) { display:flex; flex-direction:column; align-items:stretch; width:100%; }',
-			'.zw-modern-cardcontrols input[type=text], .zw-modern-cardcontrols input[type=number], .zw-modern-cardcontrols textarea, .zw-modern-cardcontrols select { color:var(--zw-dark-text); background:#101927; border:1px solid #445a71; padding:7px 9px; border-radius:5px; min-width:150px; max-width:100%; }',
-			'.zw-modern-cardcontrols textarea { width:100%; min-height:95px; resize:vertical; }',
-			'.zw-modern-cardcontrols input[type=checkbox] { appearance:none; -webkit-appearance:none; display:inline-block; position:relative; width:39px; height:23px; flex:none; margin:0; background:#47576b; border:1px solid #546a82; border-radius:12px; cursor:pointer; }',
-			'.zw-modern-cardcontrols input[type=checkbox]::after { content:""; position:absolute; top:3px; left:3px; width:15px; height:15px; border-radius:50%; background:#fff; transition:transform .14s ease; }',
-			'.zw-modern-cardcontrols input[type=checkbox]:checked { background:#82bfff; border-color:#82bfff; }',
-			'.zw-modern-cardcontrols input[type=checkbox]:checked::after { transform:translateX(16px); }',
-			'.zw-modern-cardcontrols .checkbox { cursor:pointer; }',
-			'.zw-modern-cardcontrols label input[type=checkbox] { order:1; }',
-			'.zw-modern-cardcontrols .zw-modern-native-label { display:none; }',
-			'.zw-modern-seek-editor { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px; width:100%; }',
-			'.zw-modern-seek-editor select,.zw-modern-seek-editor input { background:#101927; color:var(--zw-dark-text); border:1px solid #445a71; border-radius:5px; padding:6px; }',
-			'.zw-modern-seek-editor input { width:100px; }',
-			'.zw-modern-slider { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; width:100%; }',
-			'.zw-modern-slider input[type=range] { flex:1; min-width:160px; max-width:750px; accent-color:var(--zw-dark-accent); }',
-			'.zw-modern-slider input[type=number] { width:91px; color:var(--zw-dark-text); background:var(--zw-dark-bg); border:1px solid #445a71; padding:7px 9px; border-radius:5px; }',
-			'.zw-modern-slider span { color:var(--zw-dark-muted); }',
-			'.zw-modern-cardcontrols .zw-modern-segments { display:flex; flex-wrap:wrap; gap:5px; justify-content:flex-end; }',
-			'.zw-modern-cardcontrols .zw-modern-segments button { background:#1c2c3f; color:var(--zw-dark-text); border:1px solid #435a76; padding:7px 9px; border-radius:5px; font-size:11px; }',
-			'.zw-modern-cardcontrols .zw-modern-segments button.is-selected { color:#101927; background:#82bfff; border-color:#82bfff; }',
-			'.zw-modern-color-editor { display:flex; align-items:center; justify-content:flex-end; gap:9px; flex-wrap:wrap; width:100%; }',
-			'.zw-modern-color-editor input[type=color] { width:46px; height:34px; padding:2px; cursor:pointer; background:#101927; border:1px solid #52657c; border-radius:6px; }',
-			'.zw-modern-color-editor input[type=text] { width:140px; min-width:112px; font:12px/1.4 ui-monospace,Consolas,monospace; }',
-			'.zw-modern-color-hint { color:#a5b7cb; font-size:11px; flex-basis:100%; text-align:right; }',
-			'.zw-modern-font-editor { display:flex; flex-wrap:wrap; gap:7px; width:100%; justify-content:flex-end; }',
-			'.zw-modern-font-editor select { flex:1 1 190px; max-width:420px; }',
-			'.zw-modern-font-editor input[type=text] { flex:1 1 220px; }',
-			'.zw-modern-font-editor [hidden] { display:none!important; }',
-			'.zw-modern-example { display:flex; flex-direction:column; gap:7px; border-top:1px solid #405168; padding:10px 0 1px; margin-top:10px; width:100%; }',
-			'.zw-example-label { color:#a5b7cb; font-size:11px; }',
-			'.zw-example-caption { font-size:11px; line-height:1.5; color:#a5b7cb; }',
-			'.zw-example-text { display:block; align-self:flex-start; background:linear-gradient(145deg,#14253a,#243d50); border-radius:5px; padding:15px; color:white; font-size:24px; line-height:1.35; white-space:nowrap; max-width:100%; overflow:hidden; }',
-			'.zw-example-filename { overflow-wrap:anywhere; background:#14253a; border:1px solid #405168; padding:9px; border-radius:5px; font-size:12px; }',
-			'.zw-example-screen { width:min(365px,100%); height:124px; border:1px solid #51647c; border-radius:5px; background:#142137; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; position:relative; overflow:hidden; }',
-			'.zw-example-video { background:linear-gradient(125deg,#213c57,#3f7481); border:2px solid #8ec8d0; width:69%; aspect-ratio:16/9; position:relative; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:width .12s ease; overflow:hidden; border-radius:3px; }',
-			'.zw-example-title { position:absolute; top:0; left:0; right:0; text-align:center; font-size:10px; background:#15283dcc; color:#fff; }',
-			'.zw-example-fly { font-size:11px; color:#fff; text-shadow:0 1px 1px #000; white-space:nowrap; }',
-			'.zw-example-controlbar { position:absolute; bottom:0;left:0;right:0; background:#111d32dc; font-size:9px; text-align:center; color:#fff; }',
-			'.zw-example-sidebar { background:#22354a; padding:4px; color:#b8d1e8; border-radius:3px; font-size:10px; max-width:80px; }',
-			'.zw-modern-example[data-zw-example-mode=big] .zw-example-video { width:84%; }',
-			'.zw-modern-example[data-zw-example-mode=wide] .zw-example-video { width:95%; }',
-			'.zw-modern-example[data-zw-example-mode=small] .zw-example-video { width:45%; margin-left:auto; }',
-			'.zw-modern-example[data-zw-example-mode=sideView] .zw-example-video { width:51%; margin-left:auto; }',
-			'.zw-modern-example[data-zw-example-mode="3D"] .zw-example-video { transform:perspective(200px) rotateY(-12deg); }',
-			'.zw-modern-example[data-zw-example-mode=auto] .zw-example-controlbar { opacity:.6; }',
-			'.zw-modern-example[data-zw-example-mode=always-hide] .zw-example-controlbar { opacity:.06; }',
-			'.zw-modern-example[data-zw-example-mode=always-show] .zw-example-controlbar { opacity:1; }',
-			'.zw-modern-example[data-zw-example-mode=outside] .zw-example-title { top:-17px; background:#1a314b; }',
-			'.zw-modern-example[data-zw-example-mode=overlay] .zw-example-title { opacity:.3; }',
-			'.zw-modern-example[data-zw-example-mode=overlay-visible] .zw-example-title { opacity:1; background:#08233ecf; }',
-			'.zw-modern-search-guide { padding:12px 15px; margin:0 0 14px; background:#17283c; border:1px solid #39516e; border-radius:5px; color:var(--zw-dark-text); font-size:12px; }',
-			'.zw-modern-search-guide strong { display:block; font-size:13px; margin-bottom:6px; }',
-			'.zw-modern-search-guide p { margin:5px 0; color:var(--zw-dark-muted); }',
-			'.zw-modern-search-guide b { color:var(--zw-dark-text); }',
-			'.zw-modern-note { color:var(--zw-dark-muted); font-size:12px; padding:8px 11px; border-radius:5px; background:var(--zw-dark-panel); margin-top:9px; white-space:pre-wrap; }',
-			'.zw-modern-note[hidden] { display:none; }',
-			'.zw-modern-warning { color:#e6bb75; font-size:11px; display:block; margin-top:5px; }',
-			'.zw-modern-regex-editor { display:grid; grid-template-columns:1fr; gap:7px; width:100%; max-width:700px; }',
-			'.zw-modern-regex-editor label { display:flex; gap:9px; align-items:center; justify-content:flex-start; font-size:12px; }',
-			'.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox] { flex:none; width:17px; height:17px; appearance:checkbox; -webkit-appearance:checkbox; accent-color:#82bfff; border:0; background:transparent; border-radius:0; padding:0; }',
-			'.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox]::after { content:none!important; display:none!important; }',
-			'.zw-modern-regex-editor [data-zw-regex-advanced-panel] { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }',
-			'.zw-modern-regex-editor [data-zw-regex-advanced-panel][hidden] { display:none!important; }',
-			'.zw-modern-regex-editor input[type=text] { width:180px; min-width:0; }',
-			'.zw-modern-regex-current { color:var(--zw-dark-muted); font-size:11px; }',
-			'.zw-modern-regex-editor small { color:var(--zw-dark-muted); font-size:11px; }',
-			'.zw-modern-command-assist { margin-top:10px; padding:12px; background:#1a293c; border:1px solid #445a71; border-radius:5px; display:grid; gap:10px; }',
-			'.zw-modern-command-assist p { margin:0; color:var(--zw-dark-muted); font-size:12px; line-height:1.6; }',
-			'.zw-modern-command-assist p strong { color:var(--zw-dark-text); }',
-			'.zw-modern-command-group { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }',
-			'.zw-modern-command-group > strong { min-width:65px; font-size:11px; color:#c5d9ed; }',
-			'.zw-modern-command-group button { border:1px solid #526c89; border-radius:5px; color:#ecf5ff; background:#23364d; padding:5px 9px; font-size:11px; }',
-			'.zw-modern-command-group button:disabled { opacity:.55; background:#2f4458; }',
-			'.zw-modern-prefix-breakdown { display:flex; gap:5px; flex-wrap:wrap; }',
-			'.zw-modern-prefix-breakdown span { font-size:10px; padding:4px 7px; border-radius:4px; border:1px solid #465971; color:#aebed0; background:#1b293a; }',
-			'.zw-modern-prefix-presets { display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:100%; justify-content:flex-start; }',
-			'.zw-modern-prefix-presets .is-selected { color:#101927; border-color:#82bfff; background:#82bfff; }',
-			'.zw-modern-prefix-hint { color:var(--zw-dark-muted); margin:6px 0 0; font-size:11px; width:100%; }',
-			'.zw-modern-backup { display:grid; gap:10px; }',
-			'.zw-modern-backup textarea { width:100%; min-height:150px; padding:10px; border:1px solid #465a74; border-radius:5px; background:#101927; color:#edf4ff; resize:vertical; font:12px/1.45 ui-monospace,Consolas,monospace; }',
-			'.zw-modern-backup p { color:#a5b7cb; font-size:12px; }',
-			'.zw-modern-backup .zw-modern-actions { display:flex; gap:8px; flex-wrap:wrap; }',
-			'.zw-modern-footer { background:var(--zw-dark-panel); border-top:1px solid var(--zw-dark-border); padding:12px 18px; display:flex; align-items:center; justify-content:flex-end; gap:9px; flex:none; }',
-			'.zw-modern-footer .zw-modern-dirty { color:var(--zw-dark-muted); margin-right:auto; }',
-			'.zw-modern-footer .zw-modern-primary { padding:9px 15px; border:1px solid #82bfff; color:#101927; background:#82bfff; font-weight:700; border-radius:5px; }',
-			'.zw-modern-backdrop { display:none; }',
-			'.zw-modern-root .relatedMenuCustomLinksContainer { width:100%; min-width:0; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor { color:var(--zw-dark-text); width:100%; padding:3px 0 6px; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor h3 { display:none; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor button { border:1px solid #3a4f65; color:var(--zw-dark-text); background:#1b293a; border-radius:5px; cursor:pointer; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor button:hover { border-color:#82bfff; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor .rl-card { background:#1b293a; border-color:#2b394b; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor input[type=text] { background:#101927; color:#edf4ff; border:1px solid #445a71; border-radius:5px; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor input[type=checkbox] { accent-color:#82bfff; }',
-			'.zw-modern-root .zenzaRelatedLinksEditor [hidden] { display:none !important; }',
-			'.zw-modern-root .zw-modern-related-editor { width:100%; }',
-			'.zw-modern-order-editor { width:100%; display:grid; gap:7px; }',
-			'.zw-modern-order-editor .zw-order-hint { color:#a5b7cb; font-size:12px; }',
-			'.zw-modern-order-list { list-style:none; padding:0; margin:0; display:grid; gap:7px; }',
-			'.zw-modern-order-row { position:relative; display:flex; align-items:center; gap:8px; padding:9px; background:#152638; border:1px solid #425b74; border-radius:5px; min-width:0; }',
-			'.zw-modern-order-row .zw-order-name { flex:1 1 auto; width:auto; min-width:0; overflow-wrap:break-word; white-space:normal; }',
-			'.zw-modern-order-row .zw-order-visible { flex:none; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }',
-			'.zw-modern-order-row .zw-order-visible input[type=checkbox] { width:18px; height:18px; flex:none; appearance:auto; accent-color:#82bfff; }',
-			'.zw-modern-order-row .zw-order-visible input[type=checkbox]::after { content:none; display:none; }',
-			'.zw-modern-cardhead [data-zw-shared-setting] { flex:none; color:#a5b7cb; font-size:10px; white-space:nowrap; }',
-			'.zw-modern-order-row .zw-order-name small { display:block; color:#a5b7cb; }',
-			'.zw-modern-order-row.is-dragging { opacity:.4; border-style:dashed; }',
-			'.zw-modern-order-row.is-drop-before::before,.zw-modern-order-row.is-drop-after::before { content:""; position:absolute; left:0; right:0; height:4px; background:#82bfff; box-shadow:0 0 9px #82bfff; z-index:2; pointer-events:none; }',
-			'.zw-modern-order-row.is-drop-before::before { top:-7px; }',
-			'.zw-modern-order-row.is-drop-after::before { bottom:-7px; }',
-			'.zw-modern-order-row.is-missing { opacity:.62; }',
-			'.zw-modern-order-row .zw-order-grip { cursor:grab; }',
-			'.zw-modern-order-row .zw-order-grip:active { cursor:grabbing; }',
-			'.zw-modern-order-compact .zw-modern-order-row { padding:6px 8px; gap:6px; flex-wrap:wrap; }',
-			'.zw-modern-order-compact .zw-order-name { flex:1 1 175px; font-size:12px; }',
-			'.zw-modern-order-compact .zw-order-key-preview { min-width:75px; font-size:10px; color:#a5b7cb; }',
-			'.zw-modern-order-compact .zw-order-key-preview.is-conflict { color:#ffd28a; }',
-			'.zw-modern-order-compact .zw-order-grip { touch-action:none; user-select:none; }',
-			'.zw-modern-order-compact .zw-order-visible { gap:4px; font-size:11px; }',
-			'.zw-modern-order-compact .zw-order-details { flex:1 0 100%; display:grid; gap:10px; padding:10px 6px 5px; border-top:1px solid #465b72; min-width:0; }',
-			'.zw-modern-order-compact .zw-order-details p { margin:0; color:#c3d3e4; }',
-			'.zw-modern-order-compact .zw-order-details small { color:#a5b7cb; }',
-			'.zw-modern-order-compact .zw-order-field { display:grid; gap:5px; min-width:0; font-size:12px; }',
-			'.zw-modern-order-compact .zw-order-field input[type=text],.zw-modern-order-compact .zw-order-field select,.zw-modern-order-compact .zw-order-field input[type=number] { width:min(100%,650px); min-width:0; padding:6px; background:#101927; border:1px solid #445a71; color:#edf4ff; }',
-			'.zw-modern-order-compact .zw-order-field input[type=checkbox] { appearance:auto; width:17px; height:17px; }',
-			'.zw-modern-order-compact .zw-order-field input[type=checkbox]::after { content:none; }',
-			'.zw-modern-order-compact .zw-order-shortcut-editor,.zw-modern-order-compact .zw-order-sizes { display:flex; flex-wrap:wrap; align-items:center; gap:9px; }',
-			'.zw-modern-order-compact .zw-order-sizes .zw-order-field { flex:1 1 130px; }',
-			'.zw-modern-order-compact .zw-order-variable-palette { display:flex; flex-wrap:wrap; gap:5px; }',
-			'.zw-modern-order-compact .zw-order-variable-palette p,.zw-modern-order-compact .zw-order-variable-palette small { flex:1 0 100%; }',
-			'.zw-modern-order-compact .zw-order-warning { color:#ffcb78; }',
-			'.zw-modern-order-compact .zw-modern-order-row.is-touch-dragging { border-color:#82bfff; box-shadow:0 0 0 1px #82bfff; }',
-			'.zw-modern-order-editor [data-zw-order-status] { font-size:12px; color:#a5b7cb; min-height:1.4em; }',
-			'.zw-order-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:3px 0 12px; }',
-			'.zw-order-workspace { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,1fr); gap:16px; align-items:start; width:100%; min-width:0; }',
-			'.zw-order-inspector { min-width:0; background:#1b2c3f; border:1px solid #425b74; border-radius:8px; padding:17px; position:sticky; top:0; max-height:calc(100vh - 220px); overflow:auto; }',
-			'.zw-order-inspector .zw-order-details { border:0; padding:0; } .zw-order-details h3 { font-size:18px; margin:0 0 6px; overflow-wrap:anywhere; }',
-			'.zw-modern-order-compact .zw-order-name { border:0; padding:0; text-align:left; background:transparent; color:inherit; }',
-			'.zw-modern-order-row.is-selected { border-color:#82bfff; background:#253d55; box-shadow:0 0 0 1px #82bfff44; }',
-			'.zw-order-workspace .zw-modern-order-row { flex-wrap:nowrap; min-height:42px; }',
-			'.zw-order-workspace .zw-order-name { flex:1 1 0; min-width:0; font-weight:600; }',
-			'.zw-order-workspace .zw-modern-plainbtn { flex:none; white-space:nowrap; }',
-			'.zw-order-workspace .zw-order-key-preview { min-width:0; max-width:65px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
-			'.zw-order-inspector .is-detail-only .rl-card { padding:0; margin:10px 0 0; border:0; background:transparent; }',
-			'.zw-order-inspector .is-detail-only .rl-fields { grid-template-columns:minmax(0,1fr); }',
-			'.zw-order-inspector .is-detail-only .rl-head .rl-summary,.zw-order-inspector .is-detail-only [data-rl-drag],.zw-order-inspector .is-detail-only [data-rl-expand],.zw-order-inspector .is-detail-only [data-rl-up],.zw-order-inspector .is-detail-only [data-rl-down] { display:none; }',
-			'.zw-order-inspector .is-detail-only .rl-toolbar>button,.zw-order-inspector .is-detail-only [data-rl-count],.zw-order-inspector .is-detail-only .zenzaRelatedLinksEditor>.rl-help { display:none; }',
-			'.zw-order-inspector textarea,.zw-order-inspector select,.zw-order-inspector input[type=text] { max-width:100%; min-width:0!important; width:100%; box-sizing:border-box; }',
-			'.zw-order-inspector [data-rl-preview] { white-space:pre-wrap; }',
-			/* SCUI-10: miniature diagrams are layout previews only: no duplicate video players. */
-			'.zw-scui-picker { padding:14px; margin-bottom:13px; border:1px solid #4b6079; border-radius:12px; background:#182536; }',
-			'.zw-scui-pickerhead { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:12px; }',
-			'.zw-scui-tabs { display:flex; gap:5px; background:#101d2e; padding:4px; border-radius:9px; }',
-			'.zw-scui-tabs button { border:1px solid transparent; border-radius:6px; padding:8px 10px; color:#ddd; background:transparent; cursor:pointer; }',
-			'.zw-scui-tabs button[aria-pressed=true] { background:#45698b; border-color:#8bb9e7; color:#fff; }',
-			'.zw-scui-layout-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(142px,1fr)); gap:8px; }',
-			'.zw-scui-layout-option { display:flex; flex-direction:column; gap:5px; background:#101a2a; border:2px solid #35475f; border-radius:9px; color:#ddd; padding:8px; text-align:left; cursor:pointer; min-width:0; }',
-			'.zw-scui-layout-option[aria-pressed=true] { border-color:#76c9ff; background:#1b3654; box-shadow:0 0 0 1px #76c9ff60; }',
-			'.zw-scui-layout-option:focus-visible,.zw-scui-tabs button:focus-visible { outline:2px solid #e5c075; outline-offset:2px; }',
-			'.zw-scui-layout-option:disabled { opacity:.48; cursor:not-allowed; }',
-			'.zw-scui-layout-option strong { font-size:11px; white-space:normal; line-height:1.35; }',
-			'.zw-scui-mini { position:relative; display:block; height:62px; background:linear-gradient(135deg,#4d6486,#1c2842); border:1px solid #65768d; border-radius:6px; overflow:hidden; }',
-			'.zw-scui-mini > i { position:absolute; display:block; background:#0c1725; border:1px solid #8ab8de; border-radius:3px; width:38%; height:22px; bottom:8px; left:30%; }',
-			'.zw-scui-mini > b { position:absolute; display:block; background:#1b3560a8; border:1px solid #a4b7d0; border-radius:3px; width:29%; height:16px; bottom:9px; left:8px; }',
-			'.zw-scui-mini > em { position:absolute; display:block; background:#6faee4; height:3px; bottom:3px; width:66%; left:17%; }',
-			'.zw-scui-mini[data-layout="00"] > i { width:42%; left:29%; height:26px; bottom:9px; }',
-			'.zw-scui-mini[data-layout="00"] > b { width:24%; left:37%; height:9px; bottom:24px; border-color:#ffe0ab; background:#efd9a588; }',
-			'.zw-scui-mini[data-layout="02"] > i { left:6px; bottom:18px; } .zw-scui-mini[data-layout="02"] > b { left:auto; right:6px; bottom:18px; }',
-			'.zw-scui-mini[data-layout="03"] > i { left:auto; right:6px; bottom:9px; }',
-			'.zw-scui-mini[data-layout="04"] > i { left:31%; bottom:auto; top:5px; }',
-			'.zw-scui-mini[data-layout="05"] > i { width:85%; left:7%; height:21px; bottom:9px; }',
-			'.zw-scui-mini[data-layout="06"] > i { width:25%; left:37%; height:17px; }',
-			'.zw-scui-mini[data-layout="07"] > i { width:25%; left:37%; } .zw-scui-mini[data-layout="07"] > b { width:23%; left:7%; }',
-			'.zw-scui-mini[data-layout="08"] > i { left:auto; right:3px; width:27%; height:51px; bottom:5px; }',
-			'.zw-scui-mini[data-layout="09"] > i { left:10%; bottom:14px; } .zw-scui-mini[data-layout="09"] > b { right:5%; left:auto; }',
-			'.zw-scui-mini[data-layout="10"] > i { left:62%; bottom:24px; width:31%; } .zw-scui-mini[data-layout="10"] > b { left:13%; bottom:8px; }',
-			'.zw-scui-picker.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
-			'.zw-scui-layout-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }',
-			'.zw-scui-mini[data-layout=follow]>i,.zw-scui-mini[data-layout=fixed]>i { left:12%; width:34%; height:30px; bottom:10px; }',
-			'.zw-scui-mini[data-layout=follow]>b,.zw-scui-mini[data-layout=fixed]>b { left:48%; width:36%; height:30px; bottom:10px; color:white; font:9px/14px sans-serif; }',
-			'.zw-scui-mini i span { display:block; color:white; font:9px/25px sans-serif; white-space:nowrap; font-style:normal; text-shadow:1px 1px black; }',
-			'.zw-scui-layout-option small { font-size:11px; line-height:1.5; }',
-			'[data-zw-scene-compat] { margin-top:12px; } [data-zw-scene-compat] summary { cursor:pointer; }',
-			'.zw-modern-cardcontrols input[type=checkbox]:focus-visible { outline:2px solid #e5c075; outline-offset:3px; }',
-			'.zw-scui-note { display:block; font-size:12px; line-height:1.5; color:#bdcfe0; padding-top:9px; }',
-			'@media(max-width:760px) {.zw-scui-layout-grid { grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); }}',
-			'@media(max-width:1050px) { .zw-order-workspace { grid-template-columns:minmax(0,1fr); } .zw-order-inspector { position:static; max-height:none; } }',
-			'@media(max-width:760px) {.zw-modern-sidebar { position:absolute; top:0; bottom:0; left:0; z-index:5; width:min(290px,88vw); flex-basis:auto; transform:translateX(-100%); box-shadow:6px 0 22px #0007; padding:12px; } .zw-modern-root.is-drawer-open .zw-modern-sidebar { transform:translateX(0); } .zw-modern-root.is-drawer-open .zw-modern-backdrop { display:block; background:#0008; position:absolute; inset:0; z-index:4; } .zw-modern-main { padding:15px 11px; } .zw-modern-card { padding:10px; } .zw-modern-footer { padding:9px; } .zw-modern-footer .zw-modern-dirty { font-size:11px; }}'
-		].join('\n');
-		doc.head.append(style);
-	}
-	constructor({panel,legacyRoot,model,storage,onClose,confirm,formatKeyCombo,encodeKeyCombo,relatedEditor=null,relatedOrder=null,relatedActions=null,screenshotFileName=null,playlist=null,reload=null}) {
-		if(!panel || !model) { throw new TypeError('Panel and model are required'); }
-		this.panel=panel;
-		this.legacyRoot=legacyRoot;
-		this.model=model;
-		this.relatedEditor=relatedEditor;
-		this.relatedOrder=relatedOrder;
-		this.relatedActions=relatedActions;
-		this.screenshotFileName=screenshotFileName;
-		this._orderDragKey=null;
-		this._orderDropKey=null;
-		this._orderDropAfter=false;
-		this._orderAnnouncement='';
-		this._expandedRelatedOptions=new Set();
-		this._touchOrder=null;
-		this.playlist=playlist;
-		this.reload=reload || (()=>this.win.location.reload());
-		if (relatedEditor) {
-			relatedEditor.getDraftShortcutValue=id=>this.model.get(id);
-			relatedEditor.getDraftShortcutConflicts=key=>[
-				...this.model.actions.filter(action=>
-					Number(this.model.get('KEY_'+action.id))===key)
-					.map(action=>action.label||action.id),
-				...relatedEditor.draft.filter(link=>link&&link.enabled!==false &&
-					Number(link.shortcutKey)===key).map(link=>link.label||link.id)
-			];
-			relatedEditor.embedded=true;
-			relatedEditor.onDraftChange=value=>this._onCustomMenuDraft(value);
-		}
-		this._relatedOrigin=relatedEditor?{parent:relatedEditor.container.parentNode,
-			next:relatedEditor.container.nextSibling}:null;
-		this.doc=panel.ownerDocument;
-		this.win=this.doc.defaultView;
-		this.storage=storage || this.win.localStorage;
-		this.onClose=onClose || (()=>{});
-		this.confirm=confirm || (message=>this.win.confirm(message));
-		this.formatKeyCombo=formatKeyCombo || (v=>String(v||'(未設定)'));
-		this.encodeKeyCombo=encodeKeyCombo || (e=>e.keyCode);
-		this.expanded=new Set();
-		this._moved=new Map();
-		this._seekDirections=new Map();
-		this._visibleSeekSlots=new Set();
-		this._sceneLayoutTab='normal';
-		this._recordCleanup=null;
-		this.searchTerm='';
-		this._setupSelection();
-		ModernAdvancedSettingsUI._style(this.doc);
-		this.root=this.doc.createElement('section');
-		this.root.className='zw-modern-root';
-		this.root.style.setProperty('--zw-sidebar-width','290px');
-		this.root.setAttribute('role','dialog');
-		this.root.setAttribute('aria-label','ZenzaWatch 上級者設定');
-		this.root.innerHTML=[
-			'<div class="zw-modern-header">',
-			'<button type="button" class="zw-modern-iconbtn" data-zw-sidebar aria-label="サイドバーの開閉">☰</button>',
-			'<h2>ZenzaWatch 上級者設定</h2>',
-			'<button type="button" class="zw-modern-iconbtn" data-zw-close aria-label="設定画面を閉じる">✕</button>',
-			'</div>',
-			'<div class="zw-modern-body">',
-			'<div class="zw-modern-backdrop" data-zw-drawer-dismiss></div>',
-			'<aside class="zw-modern-sidebar">',
-			'<input class="zw-modern-search" type="search" data-zw-search placeholder="すべての設定を検索" aria-label="設定を検索">',
-			'<nav class="zw-modern-nav" aria-label="設定カテゴリ"></nav>',
-			'</aside>',
-			'<main class="zw-modern-main"><div class="zw-modern-content-inner">',
-			'<div class="zw-modern-breadcrumb" data-zw-path></div>',
-			'<h3 class="zw-modern-section-title" data-zw-title></h3>',
-			'<p class="zw-modern-section-subtitle" data-zw-subtitle></p>',
-			'<div class="zw-modern-toolbar"><button class="zw-modern-plainbtn" type="button" data-zw-reset-category>この画面の項目だけ初期値に戻す</button></div>',
-			'<div data-zw-cards></div></div></main>',
-			'</div>',
-			'<div class="zw-modern-footer">',
-			'<span class="zw-modern-dirty" data-zw-dirty>保存済み</span>',
-			'<button class="zw-modern-plainbtn" type="button" data-zw-cancel>キャンセル</button>',
-			'<button class="zw-modern-primary" type="button" data-zw-save>変更を保存</button>',
-			'</div>'
-		].join('');
-		this.nav=this.root.querySelector('.zw-modern-nav');
-		this.cards=this.root.querySelector('[data-zw-cards]');
-		this.root.addEventListener('click',this._onClickBound=e=>this._onClick(e),true);
-		this.root.addEventListener('change',this._onValueBound=e=>this._onValue(e),true);
-		this.root.addEventListener('input',this._onInputBound=e=>this._onInput(e),true);
-		this.root.addEventListener('dragstart',this._onOrderDragStartBound=e=>this._onOrderDragStart(e));
-		this.root.addEventListener('dragover',this._onOrderDragOverBound=e=>this._onOrderDragOver(e));
-		this.root.addEventListener('drop',this._onOrderDropBound=e=>this._onOrderDrop(e));
-		this.root.addEventListener('dragend',this._onOrderDragEndBound=()=>this._onOrderDragEnd());
-		this.root.addEventListener('pointerdown',this._onTouchOrderDownBound=e=>this._onTouchOrderDown(e));
-		this.root.addEventListener('pointermove',this._onTouchOrderMoveBound=e=>this._onTouchOrderMove(e));
-		this.root.addEventListener('pointerup',this._onTouchOrderUpBound=e=>this._onTouchOrderUp(e));
-		this.root.addEventListener('pointercancel',this._onTouchOrderCancelBound=()=>this._clearTouchOrder());
-		this.root.addEventListener('click',this._onRelatedClickBound=e=>this._onRelatedBubble(e));
-		this.root.addEventListener('change',this._onRelatedChangeBound=e=>this._onRelatedBubble(e));
-		this.root.addEventListener('input',this._onRelatedInputBound=e=>this._onRelatedBubble(e));
-		this.doc.addEventListener('keydown',this._onKeyDownBound=e=>this._onDocumentKeyDown(e),true);
-		this.panel.appendChild(this.root);
-		this._onBackCommentConfigUpdate=()=>{
-			if(!this.model.syncLiveValue('backComment')){return;}
-			const checked=!!this.model.get('backComment');
-			this.cards.querySelectorAll('input[data-setting-name="backComment"]')
-				.forEach(input=>{input.checked=checked;});
-			this._refreshCards();
-		};
-		this.model.config.onkey?.('backComment',this._onBackCommentConfigUpdate);
-		this._unwatchRelatedActions=this.relatedActions?.onChange?.(()=>
-			this._refreshRelatedOrderList()) || null;
-		this._renderNavigation();
-		this._renderCards();
-		this._refreshFooter();
-		this.panel.classList.add('zw-modern-active');
-		this._savedPageOverflow=null;
-		this.setModalVisible(this.panel.classList.contains('show'));
-	}
-	setModalVisible(visible) {
-		if(visible) {
-			if(this._savedPageOverflow){return;}
-			const elements=[this.doc.documentElement,this.doc.body].filter(Boolean);
-			this._savedPageOverflow=elements.map(el=>({
-				element:el,value:el.style.getPropertyValue('overflow'),
-				priority:el.style.getPropertyPriority('overflow')
-			}));
-			elements.forEach(el=>el.style.setProperty('overflow','hidden','important'));
-		} else if(this._savedPageOverflow) {
-			this._savedPageOverflow.forEach(({element,value,priority})=>{
-				if(value){element.style.setProperty('overflow',value,priority);}
-				else {element.style.removeProperty('overflow');}
-			});
-			this._savedPageOverflow=null;
-		}
-	}
-	_setupSelection() {
-		const all=this.model.descriptors;
-		const first=all.find(d=>d.category==='再生・音声') || all[0];
-		const fallback=first?{category:first.category,subcategory:first.subcategory}:
-			{category:'再生・音声',subcategory:'再生動作'};
-		const previous=this._readStored('zw-advanced-modern-selection');
-		const saved=previous?.category==='コメント増量' ?
-			{category:'コメント表示',subcategory:'追加取得'} : previous;
-		this.selected=(saved&&(this.model.descriptors.some(d=>d.category===saved.category &&
-			d.subcategory===saved.subcategory)||
-			(saved.category==='プレイリスト・検索'&&saved.subcategory==='データ管理')))?saved:fallback;
-		const open=this._readStored('zw-advanced-modern-expanded');
-		const majors=Array.isArray(open) ?
-			[...new Set(open.map(name=>name==='コメント増量'?'コメント表示':name))]
-				.filter(name=>this.model.categories.includes(name)) : [];
-		this.expanded=new Set(majors.length?majors:[this.selected.category]);
-	}
-	_readStored(key) {
-		try {return JSON.parse(this.storage.getItem(key));}catch(_){return null;}
-	}
-	_saveStored() {
-		try {
-			this.storage.setItem('zw-advanced-modern-selection',JSON.stringify(this.selected));
-			this.storage.setItem('zw-advanced-modern-expanded',JSON.stringify([...this.expanded]));
-		} catch(_) { /* UI navigation still works without persistent storage */ }
-	}
-	_button(text,attribute,value,cssClass='') {
-		const el=this.doc.createElement('button');
-		el.type='button';
-		el.textContent=text;
-		el.setAttribute(attribute,value);
-		el.className=cssClass;
-		return el;
-	}
-	_renderNavigation() {
-		this.nav.replaceChildren();
-		for(const major of this.model.categories) {
-			const subs=[...new Set(this.model.descriptors
-				.filter(d=>d.category===major).map(d=>d.subcategory))];
-			if(major==='プレイリスト・検索'){subs.push('データ管理');}
-			const open=this.expanded.has(major);
-			const b=this._button((open?'⌄ ':'› ')+major,'data-zw-major',major);
-			b.setAttribute('aria-expanded',String(open));
-			if(this.selected.category===major) {b.classList.add('is-active');}
-			this.nav.appendChild(b);
-			if(!open){continue;}
-			for(const sub of subs) {
-				const label=sub==='関連メニュー › カスタムリンク'?'関連メニュー（全項目）':sub;
-				const item=this._button(label,'data-zw-sub',major+'|'+sub,'zw-modern-sub');
-				if(this.selected.category===major&&this.selected.subcategory===sub) {
-					item.classList.add('is-active');
+		_updateSceneSettingsPreview() {
+				const demo = this.cards?.querySelector('[data-zw-scene-demo]');
+				if (!demo)
+						return;
+				const state = this._sceneDemoState, get = (key) => this.model.get('sceneSearch.' + key);
+				const screen = state.screen, mode = get('presentation.' + (screen === 'fullscreen' && !get('layout.linkFullscreen') ? 'fullscreen' : 'normal'));
+				const stage = demo.querySelector('[data-zw-demo-stage]');
+				stage.dataset.screen = screen;
+				for (const b of demo.querySelectorAll('[data-demo-screen]'))
+						b.setAttribute('aria-pressed', String(b.dataset.demoScreen === screen));
+				const panels = demo.querySelector('[data-zw-demo-panels]');
+				panels.hidden = get('enabled') === false;
+				const master = get('commentPreviewVisible') !== false, allowed = master && get('commentListVisible') !== false;
+				const open = allowed && state.list, legacy = mode === 'legacy';
+				const scale = Math.max(.5, Math.min(2, Number(get('thumbnailScale')) / 100 || 1));
+				const listScale = Math.max(1, Math.min(2, Number(get('commentListScale')) / 100 || 1));
+				const image = demo.querySelector('.zw-scene-demo-image'), thumb = demo.querySelector('.zw-scene-demo-thumb'), list = demo.querySelector('.zw-scene-demo-list');
+				image.hidden = legacy && open;
+				image.style.width = 120 * scale + 'px';
+				image.style.height = 60 * scale + 'px';
+				const mini = demo.querySelector('.zw-scene-demo-mini');
+				mini.hidden = !master || get('miniCommentVisible') === false;
+				mini.style.fontSize = 11 * scale + 'px';
+				list.hidden = !open;
+				list.style.width = 155 * listScale + 'px';
+				list.style.height = 140 * listScale + 'px';
+				list.style.backgroundColor = 'rgba(7,13,24,' + Math.max(0, Math.min(100, Number(get('commentListBackgroundOpacity')))) / 100 + ')';
+				for (const row of list.querySelectorAll('div'))
+						row.remove();
+				for (let i = 0; i < 24; i++) {
+						const row = this.doc.createElement('div');
+						row.textContent = '01:' + String(20 + i).padStart(2, '0') + '  ' + ['この場面が好き', 'いいね！', 'もう一度見たい', 'ここから楽しみ'][i % 4];
+						list.append(row);
 				}
-				this.nav.appendChild(item);
-			}
-		}
-	}
-	static _formatNgUserIds(value) {
-		const text=Array.isArray(value)?value.join('\n'):String(value??'');
-		return text.split(/[,\r\n]+/).map(id=>id.trim()).filter(Boolean).join('\n');
-	}
-	static _hexColor(value) {
-		const text=String(value||'').trim().toLowerCase();
-		if(/^#[0-9a-f]{6}$/.test(text)){return text;}
-		if(/^#[0-9a-f]{3}$/.test(text)){
-			return '#'+[...text.slice(1)].map(ch=>ch+ch).join('');
-		}
-		const named={green:'#008000',red:'#ff0000',blue:'#0000ff',
-			black:'#000000',white:'#ffffff',gray:'#808080',grey:'#808080',
-			yellow:'#ffff00',orange:'#ffa500',purple:'#800080'};
-		return named[text]||null;
-	}
-	_makeVisualExample(descriptor) {
-		const id=descriptor.id;
-		if(![
-			'screenMode','screenMode:ginza','screenMode:others',
-			'fullscreenControlBarMode','videoHeader.position',
-			'commentLayer.textShadowType','commentLayer.ownerCommentShadowColor',
-			'cssFontWeight','baseFontFamily','baseChatScale','screenshot.prefix',
-			'screenshot.filenameTemplate'
-		].includes(id)){return null;}
-		const area=this.doc.createElement('div');
-		area.className='zw-modern-example';
-		area.dataset.zwPreviewFor=id;
-		const label=this.doc.createElement('span');
-		label.className='zw-example-label';
-		label.textContent=id==='screenshot.prefix' || id==='screenshot.filenameTemplate'?
-			'保存ファイル名の例':
-			'表示例（選択した設定の模式図）';
-		area.append(label);
-		if(id.startsWith('screenMode')||id==='fullscreenControlBarMode'||
-			id==='videoHeader.position'){
-			const stage=this.doc.createElement('div');
-			stage.className='zw-example-screen';
-			stage.innerHTML='<div class="zw-example-video">'+
-				'<div class="zw-example-title">動画タイトル</div>'+
-				'<div class="zw-example-fly">サンプルコメント　→</div>'+
-				'<div class="zw-example-controlbar">▶ ━━━━━━━━━━ ◖ ))</div>'+
-				'</div><div class="zw-example-sidebar">情報・タグ</div>';
-			area.append(stage);
-		}else if(id==='screenshot.prefix' || id==='screenshot.filenameTemplate'){
-			const code=this.doc.createElement('code');
-			code.className='zw-example-filename';
-			area.append(code);
-			const parts=this.doc.createElement('div');
-			parts.className='zw-modern-prefix-breakdown';
-			for(const [label,text] of [
-				['先頭に追加する文字','自由入力'],
-				['動画タイトル','自動で追加'],['動画ID','自動で追加'],
-				['再生位置','自動で追加'],['.png','自動で追加']
-			]){
-				const item=this.doc.createElement('span');
-				item.textContent=label+'（'+text+'）';
-				parts.append(item);
-			}
-			area.append(parts);
-		}else{
-			const sample=this.doc.createElement('span');
-			sample.className='zw-example-text';
-			sample.textContent=id==='commentLayer.ownerCommentShadowColor' ?
-				'投稿者コメントの影色' : 'サンプルコメント 123';
-			area.append(sample);
-		}
-		const caption=this.doc.createElement('span');
-		caption.className='zw-example-caption';
-		area.append(caption);
-		this._updateVisualExample(area,id);
-		return area;
-	}
-	_updateVisualExample(area,id) {
-		const value=String(this.model.get(id)??'');
-		area.dataset.zwExampleMode=value;
-		const sample=area.querySelector('.zw-example-text');
-		const caption=area.querySelector('.zw-example-caption');
-		if(id.startsWith('screenMode')){
-			const hints={
-				normal:'通常サイズのウィンドウで動画を表示します。',
-				big:'通常より大きなウィンドウで動画を表示します。',
-				wide:'画面幅を広く使う表示です。',
-				'3D':'立体的な視点を使う表示です。',
-				small:'小さなポップアップ形式で表示します。',
-				sideView:'ページの横に小さく配置する表示です。'
-			};
-			caption.textContent=hints[value]||'動画の表示モードの例です。';
-		}else if(id==='fullscreenControlBarMode'){
-			caption.textContent=({
-				auto:'画面サイズなどに応じて操作バーを自動調整します。',
-				'always-show':'操作バーを常に表示する設定です。',
-				'always-hide':'操作バーを常に隠す設定です。'
-			})[value]||'操作バーの表示方法です。';
-		}else if(id==='videoHeader.position'){
-			caption.textContent=({
-				auto:'画面幅によって外側／重ね合わせを自動で切り替えます。',
-				outside:'動画の外側にタイトルなどを表示します。',
-				overlay:'動画に重ね、操作時にだけ表示します。',
-				'overlay-visible':'動画に重ね、常時表示します。'
-			})[value]||'動画ヘッダーの配置例です。';
-		}else if(id==='screenshot.prefix' || id==='screenshot.filenameTemplate'){
-			const prefix=String(this.model.get('screenshot.prefix')??'');
-			const template=String(this.model.get('screenshot.filenameTemplate')??'');
-			area.querySelector('.zw-example-filename').textContent=this.screenshotFileName?
-				this.screenshotFileName.format({
-					prefix,template,title:'動画タイトル',watchId:'sm9',videoId:'sm9',
-					uploader:'投稿者',currentTime:83,formatTime:()=> '1_23',
-					now:new Date('2026-10-10T12:34:56')
-				}):prefix+'動画タイトル - sm9@1_23.png';
-			caption.textContent='拡張子はPNG固定。コメント付き画像はCを追加し、使えない文字は安全な文字に置換します。';
-		}else if(sample){
-			sample.style.textShadow='';
-			sample.style.webkitTextStroke='';
-			sample.style.color='#ffffff';
-			if(id==='commentLayer.textShadowType'){
-				const shadows={
-					'':'1px 1px 0 rgba(0,0,0,.9)',
-					'shadow-type2':'1px 1px 0 #000,-1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000',
-					'shadow-type3':'1px 1px 1px rgba(0,0,0,.8),0 0 3px rgba(0,0,0,.8),-1px -1px 1px #888',
-					'shadow-stroke':'none',
-					'shadow-dokaben':'1px 1px 0 #963200,-1px 1px 0 #963200,-1px -1px 0 #963200,1px -1px 0 #963200'
-				};
-				sample.style.textShadow=shadows[value]||shadows[''];
-				if(value==='shadow-stroke'){
-					sample.style.webkitTextStroke='1px rgba(0,0,0,.7)';
-				}else if(value==='shadow-dokaben'){
-					sample.style.color='rgb(200,80,0)';
+				if (legacy && open) {
+						thumb.prepend(list);
+						thumb.style.width = 155 * listScale + 'px';
 				}
-				caption.textContent=value==='shadow-dokaben'?
-					'専用フォントがない場合は代替文字で表示します。':'同じ文字を使った影の比較見本です。';
-			}else if(id==='commentLayer.ownerCommentShadowColor'){
-				const color=ModernAdvancedSettingsUI._hexColor(value) || value;
-				sample.style.textShadow=[
-					'1px 1px 0 '+color,'-1px 1px 0 '+color,
-					'1px -1px 0 '+color,'-1px -1px 0 '+color
-				].join(',');
-				caption.textContent='現在の影色：'+value;
-			}else if(id==='cssFontWeight'){
-				sample.style.fontWeight=value||'normal';
-				caption.textContent='CSS値 '+value+' の文字の太さです。';
-			}else if(id==='baseFontFamily'){
-				if(value){sample.style.fontFamily=value;}
-				caption.textContent=value?'選択したフォントがない場合は代替フォントで表示します。':
-					'プレイヤーの標準フォントで表示します。';
-			}else if(id==='baseChatScale'){
-				sample.style.fontSize=(24*Math.min(2,Math.max(.5,Number(value)||1)))+'px';
-				caption.textContent='現在の倍率：'+value+'倍（比率を示す見本です）。';
-			}
-		}
-	}
-	_createVisibilityIcon(id,descriptor=this.model.descriptor(id)) {
-		const glyph=descriptor?.icon;
-		if(!glyph){return null;}
-		const icon=this.doc.createElement('span');
-		icon.className='zw-modern-visibility-icon';
-		icon.dataset.zwVisibilityIcon=id;
-		icon.setAttribute('aria-hidden','true');
-		const paths={
-			'comments-video':'M3 5h18v14H3z M6 9h8 M9 13h9',
-			'comments-list':'M5 3h14v18H5z M8 7h1 M11 7h5 M8 12h1 M11 12h5 M8 17h1 M11 17h5',
-			'comments-preview':'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M9 10h6 M9 14h6',
-			'comment-heatmap':'M3 18h18 M4 16v-3 M8 16V8 M12 16V4 M16 16V9 M20 16v-4',
-			'seek-thumbnail':'M4 3h16v13H4z M6 13l4-5 4 4 2-2 2 3 M3 21h18 M12 19v4',
-			'scene-filmstrip':'M2 5h20v14H2z M8 5v14 M16 5v14 M2 8h20 M2 16h20',
-			'ad-crown':'M3 7l5 4 4-7 4 7 5-4-2 12H5z M6 22h12'
-		};
-		if(paths[glyph]){
-			icon.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="'+paths[glyph]+'"/></svg>';
-		}else if(glyph==='shield-ng'){
-			icon.innerHTML='<svg viewBox="0 0 24 24"><path d="M12 2.5 19 5v5.5c0 4.6-2.8 8.4-7 10.8-4.2-2.4-7-6.2-7-10.8V5l7-2.5Z"/><path d="m8 8 8 8"/></svg>';
-		}else if(glyph==='filter-sparkle'){
-			icon.innerHTML='<svg viewBox="0 0 36 36"><path d="M15 10Q15 19 24 19Q15 19 15 28Q15 19 6 19Q15 19 15 10ZM26 5.5Q26 10 30.5 10Q26 10 26 14.5Q26 10 21.5 10Q26 10 26 5.5Z"/></svg>';
-		}else{
-			icon.textContent=glyph==='related-menu'?'関連メニュー ▾':
-				glyph==='comment-input'?'コメント入力(C)':glyph;
-			if(id==='ui.bar.speed' || id==='ui.bar.time'){
-				icon.classList.add('is-compact-glyph');
-			}else if(id==='ui.bar.volume' || id==='ui.info.credits'){
-				icon.classList.add('is-pair-glyph');
-			}
-			if(glyph==='related-menu'){icon.classList.add('is-related');}
-			if(glyph==='comment-input'){icon.classList.add('is-comment-input');}
-			if(id==='ui.hover.like'){icon.classList.add('is-like');}
-			if(id==='ui.hover.tweet'){icon.classList.add('is-tweet');}
-			if(id==='ui.hover.mylist'){icon.classList.add('is-mylist');}
-			if(id==='ui.hover.comments'){icon.classList.add('is-comment');}
-		}
-		return icon;
-	}
-	_createCard(descriptor) {
-		const card=this.doc.createElement('article');
-		card.className='zw-modern-card';
-		card.dataset.zwId=descriptor.id;
-		const seekDescriptor=descriptor.type==='shortcut' ?
-			this.model.descriptor('PARAM_'+descriptor.actionId) : null;
-		if(descriptor.type==='boolean' ||
-			(descriptor.type==='shortcut' && !seekDescriptor)) {
-			card.classList.add('is-inline');
-		}
-		if(this.model.isDifferentFromDefault(descriptor.id) ||
-			(descriptor.type==='related-order' &&
-				(this.model.isDifferentFromDefault('relatedMenu.hiddenItems') ||
-				this.model.isDifferentFromDefault('relatedMenu.builtinOptions'))) ||
-			(seekDescriptor && this.model.isDifferentFromDefault(seekDescriptor.id))) {
-			card.classList.add('is-modified');
-		}
-		if(descriptor.dependsOn) {card.classList.add('is-child');}
-		if(!this.model.isEnabled(descriptor.id)) {card.classList.add('is-disabled');}
-		const head=this.doc.createElement('div');
-		head.className='zw-modern-cardhead';
-		const title=this.doc.createElement('strong');
-		title.textContent=descriptor.label;
-		const icon=this._createVisibilityIcon(descriptor.id,descriptor);
-		if(icon){head.append(icon);}
-		head.append(title);
-		if(descriptor.sharedWith){
-			const shared=this.doc.createElement('small');
-			shared.dataset.zwSharedSetting=descriptor.id;
-			shared.textContent='共通設定';
-			shared.title=descriptor.sharedWith+' と同じ設定値です。';
-			head.append(shared);
-		}
-		if(descriptor.description) {
-			const help=this._button('?','data-zw-help',descriptor.id,'zw-modern-plainbtn');
-			help.setAttribute('aria-label',descriptor.label+'の説明を表示');
-			head.append(help);
-		}
-		const reset=this._button('↺','data-zw-reset-item',descriptor.id,'zw-modern-plainbtn');
-		reset.title='この項目を初期値に戻す';
-		head.append(reset);
-		card.append(head);
-		const controls=this.doc.createElement('div');
-		controls.className='zw-modern-cardcontrols';
-		if(descriptor.type==='shortcut') {
-			const key=this.doc.createElement('span');
-			key.dataset.zwKeyDisplay='';
-			key.textContent=this.formatKeyCombo(this.model.get(descriptor.id));
-			controls.append(key,this._button('変更','data-zw-record',descriptor.id,'zw-modern-plainbtn'),
-				this._button('解除','data-zw-clear-key',descriptor.id,'zw-modern-plainbtn'));
-			const seek=this.model.descriptor('PARAM_'+descriptor.actionId);
-			if(seek) {
-				const raw=Number(this.model.get(seek.id))||0;
-				const sign=this._seekDirections.get(seek.id) || (raw>0?1:-1);
-				const group=this.doc.createElement('div');
-				group.className='zw-modern-seek-editor';
-				const direction=this.doc.createElement('select');
-				direction.dataset.zwSeekDirection=seek.id;
-				direction.setAttribute('aria-label','シーク方向');
-				for(const [value,label] of [['-1','戻る'],['1','進む']]){
-					const option=this.doc.createElement('option');
-					option.value=value;option.textContent=label;direction.append(option);
-				}
-				direction.value=String(sign);
-				const magnitude=this.doc.createElement('input');
-				magnitude.type='number';magnitude.min='0';magnitude.step='0.1';
-				magnitude.value=String(Math.abs(raw));
-				magnitude.dataset.zwSeekMagnitude=seek.id;
-				magnitude.setAttribute('aria-label','シーク秒数');
-				group.append(direction,magnitude);
-				const unit=this.doc.createElement('span');unit.textContent='秒';
-				group.append(unit);
-				controls.append(group);
-				const slot=Number((descriptor.actionId||'').match(/CUSTOM_SEEK_(\d+)/)?.[1]);
-				if(Number.isInteger(slot)){
-					const remove=this._button('削除','data-zw-remove-seek',String(slot),
-						'zw-modern-plainbtn');
-					remove.title='この枠のキーと秒数を初期値に戻す（保存前はキャンセル可能）';
-					controls.append(remove);
-				}
-			}
-			const warns=this.model.keyConflicts(this.model.get(descriptor.id));
-			if(warns.length>1) {
-				const warning=this.doc.createElement('span');
-				warning.className='zw-modern-warning';
-				warning.textContent='⚠ キー重複：'+warns.join('、');
-				controls.append(warning);
-			}
-		} else if(descriptor.type==='composite-ng') {
-			const host=this.doc.createElement('div');
-			host.className='zw-composite-ng-host';
-			host.style.cssText='width:100%;min-width:0;';
-			controls.append(host);
-			if(typeof NgCompositeRuleEditor!=='undefined'){
-				this._ngCompositeEditor=new NgCompositeRuleEditor(host,
-					this.model.get(descriptor.id),draft=>{
-						this.model.set(descriptor.id,draft);
-						this._refreshFooter();
-					});
-			} else {host.textContent='複合NGエディターを読み込めませんでした。';}
-		} else if(descriptor.type==='related-order') {
-			controls.append(this._renderRelatedOrderControls());
-		} else if(descriptor.type==='related-links') {
-			if(this.relatedEditor) {
-				this.relatedEditor.showList();
-				const editor=this.relatedEditor.container;
-				editor.querySelector('[data-rl-save]').hidden=true;
-				editor.querySelector('[data-rl-cancel]').hidden=true;
-				const toolbar=editor.querySelector('.rl-toolbar');
-				if(toolbar){toolbar.setAttribute('aria-label','変更は設定画面の下部から保存します');}
-				controls.append(editor);
-			} else {
-				const info=this.doc.createElement('span');
-				info.textContent='カスタムリンクの編集を利用できません。';
-				controls.append(info);
-			}
-		} else if(descriptor.type==='regex-flags') {
-			const box=this.doc.createElement('div');
-			box.className='zw-modern-regex-editor';
-			const flags=String(this.model.get(descriptor.id)||'');
-			const choices=[
-				['i','大文字・小文字を区別しない（おすすめ）'],
-				['m','^ と $ を行ごとに判定する'],
-				['s','「.」を改行にも一致させる'],
-				['u','日本語などのUnicode文字を正しく扱う']
-			];
-			for(const [flag,label] of choices) {
-				const line=this.doc.createElement('label');
-				const check=this.doc.createElement('input');
-				check.type='checkbox';
-				check.dataset.zwRegexFlag=flag;
-				check.dataset.zwRegexId=descriptor.id;
-				check.checked=flags.includes(flag);
-				check.disabled=!this.model.isEnabled(descriptor.id);
-				line.append(check,this.doc.createTextNode(label));
-				box.append(line);
-			}
-			const current=this.doc.createElement('div');
-			current.className='zw-modern-regex-current';
-			current.textContent='現在のフラグ: ';
-			const value=this.doc.createElement('code');
-			value.dataset.zwRegexValue='';
-			value.textContent=flags||'（なし）';
-			current.append(value);
-			box.append(current);
-			const toggle=this._button('詳細：フラグを直接入力','data-zw-regex-advanced-toggle',
-				descriptor.id,'zw-modern-plainbtn');
-			toggle.setAttribute('aria-expanded','false');
-			box.append(toggle);
-			const advanced=this.doc.createElement('div');
-			advanced.dataset.zwRegexAdvancedPanel='';
-			advanced.hidden=true;
-			const raw=this.doc.createElement('input');
-			raw.type='text';raw.dataset.settingName=descriptor.id;
-			raw.dataset.zwRegexRaw='';
-			raw.value=flags;raw.setAttribute('aria-label','正規表現のフラグを直接入力');
-			raw.disabled=!this.model.isEnabled(descriptor.id);
-			const caution=this.doc.createElement('small');
-			caution.textContent='g・yなどのフラグはNG判定の結果が変化する場合があります。初心者は通常iだけで十分です。';
-			advanced.append(raw,caution);
-			box.append(advanced);
-			controls.append(box);
-		} else if(descriptor.type==='font-picker') {
-			const box=this.doc.createElement('div');
-			box.className='zw-modern-font-editor';
-			const preset=this.doc.createElement('select');
-			preset.dataset.zwFontPreset=descriptor.id;
-			preset.setAttribute('aria-label','フォントの候補から選択');
-			for(const entry of descriptor.options){
-				const option=this.doc.createElement('option');
-				option.value=entry.value;option.textContent=entry.label;preset.append(option);
-			}
-			const free=this.doc.createElement('option');
-			free.value='__custom__';free.textContent='その他（自由入力）';
-			preset.append(free);
-			const value=String(this.model.get(descriptor.id)??'');
-			preset.value=descriptor.options.some(o=>o.value===value)?value:'__custom__';
-			const custom=this.doc.createElement('input');
-			custom.type='text';custom.dataset.settingName=descriptor.id;
-			custom.dataset.zwFontCustom=descriptor.id;
-			custom.value=value;custom.placeholder="'好きなフォント名', sans-serif";
-			custom.setAttribute('aria-label','フォント名を自由に入力');
-			custom.hidden=preset.value!=='__custom__';
-			custom.disabled=!this.model.isEnabled(descriptor.id);
-			preset.disabled=!this.model.isEnabled(descriptor.id);
-			box.append(preset,custom);
-			controls.append(box);
-		} else if(descriptor.type==='color') {
-			const box=this.doc.createElement('div');
-			box.className='zw-modern-color-editor';
-			const picker=this.doc.createElement('input');
-			picker.type='color';picker.dataset.zwColorPicker=descriptor.id;
-			picker.setAttribute('aria-label','カラーピッカーで色を選択');
-			const raw=String(this.model.get(descriptor.id)||'');
-			picker.value=ModernAdvancedSettingsUI._hexColor(raw)||'#008800';
-			picker.disabled=!this.model.isEnabled(descriptor.id);
-			const code=this.doc.createElement('input');
-			code.type='text';code.dataset.settingName=descriptor.id;
-			code.dataset.zwColorCode=descriptor.id;
-			code.value=raw;code.placeholder='#008800';code.spellcheck=false;
-			code.setAttribute('aria-label','カラーコード（HEXまたはCSS色名）');
-			code.disabled=!this.model.isEnabled(descriptor.id);
-			const hint=this.doc.createElement('span');
-			hint.className='zw-modern-color-hint';
-			hint.textContent='カラーコード #RRGGBB または #RGB（CSS色名も使用可）';
-			box.append(picker,code,hint);
-			controls.append(box);
-		} else if(descriptor.type==='slider') {
-			const holder=this.doc.createElement('div');
-			holder.className='zw-modern-slider';
-			const value=this.model.get(descriptor.id);
-			const makeInput=type=>{
-				const input=this.doc.createElement('input');
-				input.type=type;
-				input.dataset.settingName=descriptor.id;
-				input.min=String(descriptor.min);
-				input.max=String(descriptor.max);
-				input.step=String(descriptor.step||1);
-				input.value=String(value);
-				input.disabled=!this.model.isEnabled(descriptor.id);
-				input.setAttribute('aria-label',descriptor.label+(type==='number'?'の数値入力':'のスライダー'));
-				return input;
-			};
-			holder.append(makeInput('range'),makeInput('number'));
-			if(descriptor.unit){
-				const unit=this.doc.createElement('span');
-				unit.textContent=descriptor.unit;
-				holder.append(unit);
-			}
-			controls.append(holder);
-		} else if(descriptor.type==='select'&&descriptor.options.length>0) {
-			const segments=this.doc.createElement('div');
-			segments.className='zw-modern-segments';
-			for(const option of descriptor.options) {
-				const b=this._button(option.label,'data-zw-choice',descriptor.id);
-				b.dataset.zwValue=String(option.value);
-				b.disabled=!this.model.isEnabled(descriptor.id);
-				if(String(this.model.get(descriptor.id))===String(option.value)){
-					b.classList.add('is-selected');
-				}
-				segments.append(b);
-			}
-			const existingValue=String(this.model.get(descriptor.id)??'');
-			if(!descriptor.options.some(o=>String(o.value)===existingValue)) {
-				const legacy=this._button('従来の設定値：'+existingValue,
-					'data-zw-choice',descriptor.id);
-				legacy.dataset.zwValue=existingValue;
-				legacy.classList.add('is-selected');
-				legacy.disabled=true;
-				legacy.title='旧バージョンの値を保持しています。変更しなければそのまま保存されます。';
-				segments.append(legacy);
-			}
-			controls.append(segments);
-		} else {
-			const original=descriptor.input;
-			if(original) {
-				if(!this._moved.has(original)){
-					this._moved.set(original,{parent:original.parentNode,next:original.nextSibling});
-				}
-				original.disabled=!this.model.isEnabled(descriptor.id);
-				original.setAttribute('aria-label',descriptor.label);
-				if(original.type==='checkbox'){original.checked=!!this.model.get(descriptor.id);}
 				else {
-					const value=this.model.get(descriptor.id);
-					original.value=descriptor.id==='userIdFilter'?
-						ModernAdvancedSettingsUI._formatNgUserIds(value):value??'';
+						panels.append(list);
+						thumb.style.width = '';
 				}
-				controls.append(original);
-			} else {
-				const input=this.doc.createElement(descriptor.type==='textarea'?'textarea':'input');
-				if(input.tagName==='INPUT') {
-					input.type=descriptor.type==='boolean'?'checkbox':
-						['number','seconds'].includes(descriptor.type)?'number':'text';
-				}
-				if(input.type==='checkbox'){input.checked=!!this.model.get(descriptor.id);}
-				else {
-					const value=this.model.get(descriptor.id);
-					input.value=descriptor.id==='userIdFilter'?
-						ModernAdvancedSettingsUI._formatNgUserIds(value):String(value??'');
-				}
-				input.dataset.settingName=descriptor.id;
-				input.setAttribute('aria-label',descriptor.label);
-				input.disabled=!this.model.isEnabled(descriptor.id);
-				controls.append(input);
-			}
+				const button = demo.querySelector('[data-demo-comments]');
+				button.disabled = !allowed;
+				button.setAttribute('aria-pressed', String(open));
+				for (const b of demo.querySelectorAll('[data-demo-back],[data-demo-next]'))
+						b.hidden = Number(get('seekStepSeconds')) === 0;
+				const width = stage.clientWidth || 400, total = (legacy ? (open ? 155 * listScale : 120 * scale) : 120 * scale + (open ? 161 * listScale : 0)) + 4;
+				panels.style.left = Math.max(6, Math.min(width - total - 6, mode === 'fixed' ? 10 : width * state.seek / 100 - total / 2)) + 'px';
+				demo.querySelector('[data-demo-caption]').textContent = panels.hidden ? 'シーンサーチは非表示です。個別設定は保持されます。' :
+						(legacy ? '従来表示：画像とコメントプレビューを切り替えます。' : mode === 'fixed' ? '位置を固定：同じ場所に表示します。' : 'シーク位置に追従：シーク先に合わせて動きます。') + ' 文字サイズを保ったまま、表示領域を調整します。';
 		}
-		if(descriptor.id==='screenshot.prefix'){
-			const presets=this.doc.createElement('div');
-			presets.className='zw-modern-prefix-presets';
-			const prompt=this.doc.createElement('span');
-			prompt.textContent='先頭の文字をすぐ設定：';
-			presets.append(prompt);
-			for(const [label,value] of [
-				['追加しない',''],['スクショ_','スクショ_'],
-				['Zenza_','Zenza_'],['clip_','clip_'],
-				['保存日_','{date}_'],['動画ID_','{watchId}_']
-			]){
-				const button=this._button(label,'data-zw-screenshot-prefix',value,
-					'zw-modern-plainbtn');
-				button.disabled=!this.model.isEnabled(descriptor.id);
-				if(String(this.model.get(descriptor.id)??'')===value){
-					button.classList.add('is-selected');
-				}
-				presets.append(button);
-			}
-			controls.append(presets);
-			const help=this.doc.createElement('p');
-			help.className='zw-modern-prefix-hint';
-			help.textContent='先頭に付ける文字には {date}（保存日）、{watchId}（動画ID）、{time}（再生位置）が使えます。ファイル名の残りの構成は下の設定で変更できます。';
-			controls.append(help);
-			const text=controls.querySelector('[data-setting-name="screenshot.prefix"]');
-			if(text){text.setAttribute('placeholder','例：スクショ_{date}_');}
-		}
-		if(descriptor.id==='screenshot.filenameTemplate'){
-			const presets=this.doc.createElement('div');
-			presets.className='zw-modern-prefix-presets';
-			for(const entry of (this.screenshotFileName?.PRESETS || [
-				{name:'従来どおり（標準）',value:''}
-			])){
-				const button=this._button(entry.name,'data-zw-filename-template',entry.value,
-					'zw-modern-plainbtn');
-				if(this.model.get(descriptor.id)===entry.value){button.classList.add('is-selected');}
-				presets.append(button);
-			}
-			controls.append(presets);
-			const hint=this.doc.createElement('p');
-			hint.className='zw-modern-prefix-hint';
-			hint.textContent='下の変数を組み合わせて順番・区切りを自由に指定できます。空欄なら元の保存形式を維持します。';
-			controls.append(hint);
-			const tokens=this.doc.createElement('div');
-			tokens.className='zw-modern-prefix-presets';
-			const labels={title:'動画タイトル',watchId:'視聴ID',videoId:'動画ID',
-				uploader:'投稿者名',time:'再生位置',date:'保存日',datetime:'保存日時',
-				suffix:'コメント付き記号'};
-			for(const key of (this.screenshotFileName?.TOKENS||Object.keys(labels))){
-				const button=this._button('＋ '+labels[key],'data-zw-filename-token',key,'zw-modern-plainbtn');
-				button.title='{'+key+'} を挿入';
-				tokens.append(button);
-			}
-			controls.append(tokens);
-		}
-		card.append(controls);
-		if(descriptor.id==='commandFilter'){
-			const guide=this.doc.createElement('section');
-			guide.className='zw-modern-command-assist';
-			guide.dataset.zwCommandGuide='';
-			const intro=this.doc.createElement('p');
-			intro.textContent='コマンド＝投稿時に指定された色・文字サイズ・表示位置です。下のボタンでNGコマンドを追加できます。1行に1つ記入し、1つでもコマンド欄に含まれるとそのコメントを非表示にします。';
-			const warning=this.doc.createElement('p');
-			warning.textContent='注意：NGワードや別のNGコマンドとは「どれか1つで除外」です。red と big を別行に書いても「赤かつ大文字」にはなりません。本文・色・サイズの組み合わせは別途複合ルールで設定します。';
-			guide.append(intro,warning);
-			const entries=[
-				['文字色',[['red','赤'],['blue','青'],['green','緑'],['yellow','黄'],
-					['pink','ピンク'],['cyan','水色'],['black','黒']]],
-				['文字サイズ',[['big','大きい'],['small','小さい']]],
-				['表示位置',[['ue','画面上部'],['shita','画面下部']]]
-			];
-			const activeCommands=new Set(String(this.model.get('commandFilter')??'')
-				.split(/\r?\n/).map(c=>c.trim().toLowerCase()).filter(Boolean));
-			for(const [name,items] of entries){
-				const group=this.doc.createElement('div');
-				group.className='zw-modern-command-group';
-				const heading=this.doc.createElement('strong');
-				heading.textContent=name;
-				group.append(heading);
-				for(const [token,meaning] of items){
-					const button=this._button(token+'（'+meaning+'）',
-						'data-zw-command-preset',token);
-					button.title=meaning+'のコマンドをNG一覧に追加';
-					button.setAttribute('aria-label','NGコマンドに'+token+'（'+meaning+'）を追加');
-					button.disabled=!this.model.isEnabled('commandFilter')||activeCommands.has(token);
-					group.append(button);
-				}
-				guide.append(group);
-			}
-			card.append(guide);
-		}
-		const example=this._makeVisualExample(descriptor);
-		if(example){card.append(example);}
-		if(descriptor.description) {
-			const note=this.doc.createElement('p');
-			note.className='zw-modern-note';
-			note.textContent=descriptor.description;
-			note.hidden=true;
-			card.append(note);
-		}
-		return card;
-	}
-	_renderDataPanel() {
-		this.root.querySelector('[data-zw-title]').textContent='データ管理';
-		this.root.querySelector('[data-zw-path]').textContent='プレイリスト・検索 / データ管理';
-		this.root.querySelector('[data-zw-subtitle]').textContent='既存の設定JSONとプレイリストの保存・復元';
-		this.root.querySelector('[data-zw-reset-category]').hidden=true;
-		this.cards.innerHTML=[
-			'<section class="zw-modern-card zw-modern-backup">',
-			'<h4>設定JSONのバックアップ</h4>',
-			'<p>バックアップを取り込む操作は通常の下書き保存とは別です。確認後に即時反映し、画面を再読み込みします。</p>',
-			'<textarea data-zw-backup-json spellcheck="false" aria-label="設定JSON"></textarea>',
-			'<div class="zw-modern-actions">',
-			'<button type="button" class="zw-modern-plainbtn" data-zw-backup-export>現在の設定JSONを表示</button>',
-			'<button type="button" class="zw-modern-plainbtn" data-zw-backup-import>設定JSONを取り込む</button>',
-			'</div>',
-			'<h4>プレイリストデータ</h4>',
-			'<textarea data-zw-playlist-json spellcheck="false" aria-label="プレイリストJSON"></textarea>',
-			'<div class="zw-modern-actions">',
-			'<button type="button" class="zw-modern-plainbtn" data-zw-playlist-export>プレイリストを表示</button>',
-			'<button type="button" class="zw-modern-plainbtn" data-zw-playlist-import>プレイリストを取り込む</button>',
-			'</div>',
-			'<p data-zw-backup-status role="status" aria-live="polite"></p>',
-			'</section>'
-		].join('');
-		this.cards.querySelectorAll('[data-zw-playlist-export],[data-zw-playlist-import]')
-			.forEach(button=>{button.disabled=!this.playlist;});
-	}
-	_onCustomMenuDraft(value) {
-		const before=this.model.get('relatedMenu.customLinks')||[];
-		this.model.set('relatedMenu.customLinks',value);
-		if(!this.root){return;}
-		const structure=JSON.stringify(before.map(x=>x?.id))!==JSON.stringify(value.map(x=>x?.id));
-		const keysChanged=JSON.stringify(before.map(x=>x?.shortcutKey))!==JSON.stringify(value.map(x=>x?.shortcutKey));
-		if(structure){
-			const added=value.filter(x=>x && !before.some(old=>old?.id===x.id)).at(-1);
-			const selected=[...this._expandedRelatedOptions][0];
-			if(added){this._expandedRelatedOptions=new Set(['link:'+added.id]);}
-			else if(selected?.startsWith('link:')&&!value.some(x=>'link:'+x?.id===selected)){
-				this._expandedRelatedOptions=new Set(['builtin:official']);
-			}
-		}
-		if(structure||keysChanged){this._refreshRelatedOrderList();}
-		else{
-			for(const row of this.root.querySelectorAll('[data-zw-order-key]')){
-				const item=value.find(x=>'link:'+x?.id===row.dataset.zwOrderKey);
-				if(item){row.querySelector('.zw-order-name').textContent=item.label||item.id;}
-			}
-			const title=this.root.querySelector('[data-zw-order-detail-title]');
-			const selected=[...this._expandedRelatedOptions][0];
-			const item=value.find(x=>'link:'+x?.id===selected);
-			if(title&&item){title.textContent=item.label||item.id;}
-		}
-		this._refreshFooter();
-	}
-	_relatedOrderEntries() {
-		if (!this.relatedOrder || !this.model.descriptor('relatedMenu.order')) { return []; }
-		const links=this.model.get('relatedMenu.customLinks')||[];
-		const actions=this.relatedActions?.getActions?.({})||[];
-		return this.relatedOrder.entries(links,actions,
-			this.model.get('relatedMenu.order'));
-	}
-	_renderRelatedOrderControls() {
-		const holder=this.doc.createElement('div');
-		holder.className='zw-modern-order-editor zw-modern-order-compact';
-		if(!this.relatedOrder){
-			holder.textContent='関連メニューの並び替えを利用できません。';
-			return holder;
-		}
-		const guide=this.doc.createElement('p');
-		guide.className='zw-order-hint';
-		guide.textContent='左の一覧を並べ替え、右側で選択した項目を編集します。⠿をドラッグ（スマホは長押し）／Alt＋↑↓／上下ボタン。変更は下部の保存で確定します。';
-		holder.append(guide);
-		const toolbar=this.doc.createElement('div');toolbar.className='zw-order-toolbar';
-		const refresh=this._button('一覧を更新','data-zw-order-refresh','','zw-modern-plainbtn');
-		refresh.title='追加リンクや外部登録アクションを再読み込み（保存はしません）';
-		toolbar.append(refresh);
-		for(const [attr,label,kind] of [['data-zw-order-add-link','＋ リンク','link'],['data-zw-order-add-copy','＋ コピー','copy']]){
-			const button=this._button(label,attr,kind,'zw-modern-plainbtn');
-			button.disabled=!this.relatedEditor || this.relatedEditor.original===null || this.relatedEditor.draft.length>=40;
-			toolbar.append(button);
-		}
-		toolbar.append(this._button('カスタム項目を初期値に戻す','data-zw-reset-item',
-			'relatedMenu.customLinks','zw-modern-plainbtn'));
-		holder.append(toolbar);
-		const workspace=this.doc.createElement('div');workspace.className='zw-order-workspace';
-		const pane=this.doc.createElement('aside');pane.className='zw-order-inspector';
-		pane.dataset.zwOrderDetailPane='';pane.setAttribute('aria-label','選択項目の詳細設定');
-		const list=this.doc.createElement('ol');
-		list.className='zw-modern-order-list';
-		list.setAttribute('aria-label','関連メニューの全項目');
-		const entries=this._relatedOrderEntries();
-		const prefs=this.model.get(this.relatedOrder.OPTIONS_KEY)||{};
-		this._expandedRelatedOptions=this._expandedRelatedOptions||new Set();
-		const selected=entries.find(item=>item.present&&this._expandedRelatedOptions.has(item.key)) ||
-			entries.find(item=>item.present);
-		this._expandedRelatedOptions=new Set(selected?[selected.key]:[]);
-		const descriptions={
-			official:'公式視聴ページを開きます。ZenzaWatchの横取りを防ぐ識別子は自動で付けられます。',
-			ad:'ニコニ広告の宣伝画面を開きます。既定は小さな別ウィンドウです。',
-			twitter:'動画IDを含むX（Twitter）の投稿を検索します。必要ならURLテンプレートを変更できます。',
-			original:'コミュニティ動画・マイメモリーの場合だけ元の動画へ移動します。',
-			tree:'親作品・コンテンツツリーを開きます。動画によっては利用できません。',
-			'tree-playlist':'親作品・子作品のリストを現在のプレイリストへ追加します。',
-			'copy-url':'現在の動画からURL・動画IDなどをコピーします。'
-		};
-		const variableNames={
-			videoId:'動画ID（例: sm9）',watchId:'視聴ID（例: sm9）',
-			videoUrl:'動画URL',videoTitle:'動画タイトル',
-			uploaderUserId:'投稿者のユーザーID',uploaderChannelId:'投稿者のチャンネルID',
-			uploaderName:'投稿者名',currentTime:'現在の再生位置（秒）'
-		};
-		const addField=(parent,label,control,desc='')=>{
-			const field=this.doc.createElement('label');
-			field.className='zw-order-field';
-			const name=this.doc.createElement('span');name.textContent=label;
-			field.append(name,control);
-			if(desc){
-				const note=this.doc.createElement('small');note.textContent=desc;field.append(note);
-			}
-			parent.append(field);
-			return control;
-		};
-		for(const [index,item] of entries.entries()){
-			const row=this.doc.createElement('li');
-			row.className='zw-modern-order-row';
-			if(!item.present){row.classList.add('is-missing');}
-			row.dataset.zwOrderKey=item.key;
-			const grip=this._button('⠿','data-zw-order-grip',item.key,'zw-modern-plainbtn zw-order-grip');
-			grip.draggable=true;
-			grip.title='ドラッグ・長押し、またはAlt＋上下キーで移動';
-			grip.setAttribute('aria-label',item.label+'を並べ替え');
-			row.append(grip);
-			const builtinId=item.type==='builtin'?item.key.slice(8):null;
-			const opts=builtinId?this.relatedOrder.getOption(prefs,builtinId):{};
-			const label=opts.label||item.label;
-			const name=this._button(label,'data-zw-order-edit',item.key,'zw-order-name');
-			name.disabled=!item.present;
-			row.classList.toggle('is-selected',selected?.key===item.key);
-			row.append(name);
-			const shortcutId=builtinId&&this.relatedOrder.SHORTCUT_ACTION_IDS[builtinId];
-			const keyId=shortcutId?'KEY_'+shortcutId:null;
-			const shortcutValue=keyId?Number(this.model.get(keyId))||0:
-				item.type==='link'?Number((this.model.get('relatedMenu.customLinks')||[])
-					.find(link=>'link:'+link.id===item.key)?.shortcutKey)||0:0;
-			const keyBadge=this.doc.createElement('small');
-			keyBadge.className='zw-order-key-preview';
-			keyBadge.textContent=shortcutValue?this.formatKeyCombo(shortcutValue):'キー未設定';
-			keyBadge.hidden=!shortcutValue;
-			if(shortcutValue){
-				const warnings=this.model.keyConflicts(shortcutValue);
-				if(warnings.length>1){
-					keyBadge.classList.add('is-conflict');
-					keyBadge.title='⚠ ショートカットの重複: '+warnings.join('、');
-					keyBadge.textContent+=' ⚠重複';
-				}
-			}
-			row.append(keyBadge);
-			const visible=this.doc.createElement('label');
-			visible.className='zw-order-visible';
-			const checkbox=this.doc.createElement('input');
-			checkbox.type='checkbox';checkbox.dataset.zwOrderVisible=item.key;
-			checkbox.checked=!(this.model.get('relatedMenu.hiddenItems')||[]).includes(item.key);
-			visible.append(checkbox,this.doc.createTextNode('表示'));
-			row.append(visible);
-			const edit=this._button(this._expandedRelatedOptions.has(item.key)?'編集中':'編集',
-				'data-zw-order-edit',item.key,'zw-modern-plainbtn');
-			edit.disabled=!item.present;
-			edit.setAttribute('aria-expanded',String(this._expandedRelatedOptions.has(item.key)));
-			row.append(edit);
-			const up=this._button('↑','data-zw-order-up',item.key,'zw-modern-plainbtn');
-			const down=this._button('↓','data-zw-order-down',item.key,'zw-modern-plainbtn');
-			up.disabled=index===0;down.disabled=index===entries.length-1;
-			up.title='1つ上へ';down.title='1つ下へ';
-			row.append(up,down);
-			if(this._expandedRelatedOptions.has(item.key)){
-				const details=this.doc.createElement('section');
-				details.className='zw-order-details';details.dataset.zwOrderDetails=item.key;
-				const heading=this.doc.createElement('h3');heading.dataset.zwOrderDetailTitle='';
-				heading.textContent=label;details.append(heading);
-				const help=this.doc.createElement('p');
-				help.textContent=builtinId?descriptions[builtinId]:
-					item.type==='link'?'この項目の動作・内容・ショートカットを編集します。変更は保存するまで下書きです。':
-					'外部スクリプトが登録した機能です。名称・動作の変更は登録元で行います。';
-				details.append(help);
-				if(builtinId){
-					const title=this.doc.createElement('input');
-					title.type='text';title.maxLength=80;title.value=opts.label||'';
-					title.placeholder='標準名を使用: '+item.label;
-					title.dataset.zwBuiltinField='label';title.dataset.zwBuiltinId=builtinId;
-					addField(details,'メニューに表示する名前',title,'空欄に戻すと標準の名前を使用します。');
-					if(keyId&&this.model.descriptor(keyId)){
-						const line=this.doc.createElement('div');
-						line.className='zw-order-shortcut-editor';
-						const caption=this.doc.createElement('span');
-						caption.textContent='ショートカット: '+(shortcutValue?this.formatKeyCombo(shortcutValue):'(未設定)');
-						line.append(caption,
-							this._button('変更','data-zw-record',keyId,'zw-modern-plainbtn'),
-							this._button('解除','data-zw-clear-key',keyId,'zw-modern-plainbtn'));
-						details.append(line);
-						const warning=this.model.keyConflicts(shortcutValue);
-						if(shortcutValue&&warning.length>1){
-							const alert=this.doc.createElement('p');
-							alert.className='zw-order-warning';
-							alert.textContent='⚠ キーが重複しています: '+warning.join('、')+'（既存割り当ては自動解除しません）';
-							details.append(alert);
-						}
-						const sync=this.doc.createElement('small');
-						sync.textContent='「ショートカット」欄と同じ設定値を編集します。変更は保存するまで確定しません。';
-						details.append(sync);
-					}
-					if(['official','ad','twitter','tree'].includes(builtinId)){
-						const select=this.doc.createElement('select');
-						select.dataset.zwBuiltinField='openMode';select.dataset.zwBuiltinId=builtinId;
-						for(const [val,text] of [['default','既定の動作'],['same-tab','現在のタブで開く'],
-							['new-tab','新しいタブで開く'],['new-window','新しいウィンドウを要求']]){
-							const option=this.doc.createElement('option');
-							option.value=val;option.textContent=text;select.append(option);
-						}
-						select.value=opts.openMode||'default';
-						addField(details,'リンクの開き方',select,
-							'新規ウィンドウはブラウザの設定によってタブになる場合があります。');
-						if(select.value==='new-window'){
-							const sizes=this.doc.createElement('div');sizes.className='zw-order-sizes';
-							for(const [field,label,defaultSize] of [
-								['popupWidth','横幅',builtinId==='ad'?428:760],
-								['popupHeight','高さ',builtinId==='ad'?600:650]]){
-								const box=this.doc.createElement('input');
-								box.type='number';box.min='250';box.max='1800';box.step='1';
-								box.value=String(opts[field]||defaultSize);
-								box.dataset.zwBuiltinField=field;box.dataset.zwBuiltinId=builtinId;
-								addField(sizes,label+'（px）',box);
-							}
-							details.append(sizes);
-						}
-					}
-					if(builtinId==='official'){
-						const box=this.doc.createElement('input');
-						box.type='checkbox';box.checked=opts.includePosition!==false;
-						box.dataset.zwBuiltinField='includePosition';box.dataset.zwBuiltinId=builtinId;
-						addField(details,'現在の再生位置を公式プレイヤーへ引き継ぐ',box);
-					}
-					if(builtinId==='copy-url'){
-						const select=this.doc.createElement('select');
-						select.dataset.zwBuiltinField='copyFormat';select.dataset.zwBuiltinId=builtinId;
-						for(const [val,text] of [['url','動画URL（従来どおり）'],['id','動画IDのみ'],
-							['position','再生位置付き動画URL'],['title-url','動画タイトル＋URL'],
-							['markdown','Markdown形式のリンク']]){
-							const option=this.doc.createElement('option');
-							option.value=val;option.textContent=text;select.append(option);
-						}
-						select.value=opts.copyFormat||'url';
-						addField(details,'コピーする形式',select,'「動画IDのみ」では sm9 のような識別子だけをコピーします。');
-					}
-					if(['twitter','tree'].includes(builtinId)){
-						const input=this.doc.createElement('input');
-						input.type='text';input.value=opts.urlTemplate||'';
-						input.placeholder='未入力なら既存の公式URLを使用';
-						input.maxLength=2048;input.dataset.zwBuiltinField='urlTemplate';
-						input.dataset.zwBuiltinId=builtinId;
-						addField(details,'URLテンプレート（任意）',input,
-							'https:// から始めてください。空欄なら従来のリンクを使用します。');
-						const palette=this.doc.createElement('div');
-						palette.className='zw-order-variable-palette';
-						const intro=this.doc.createElement('p');
-						intro.textContent='変数を挿入：動画ごとに自動で値を置き換えます。使える変数は8種類すべて表示しています。';
-						palette.append(intro);
-						for(const token of this.relatedActions?.VARIABLES||Object.keys(variableNames)){
-							const button=this._button('{'+token+'}','data-zw-builtin-insert',token,'zw-modern-plainbtn');
-							button.dataset.zwBuiltinId=builtinId;
-							button.title=variableNames[token]||token;
-							palette.append(button);
-						}
-						const explains=this.doc.createElement('small');
-						explains.textContent=Object.entries(variableNames).map(([v,label])=>'{'+v+'} = '+label).join(' / ');
-						palette.append(explains);
-						details.append(palette);
-					}
-					const reset=this._button('この項目の詳細だけ初期値に戻す','data-zw-builtin-reset',builtinId,'zw-modern-plainbtn');
-					details.append(reset);
-				}
-				pane.append(details);
-			}
-			list.append(row);
-		}
-		if(this.relatedEditor){
-			const editor=this.relatedEditor.container;
-			editor.querySelector('[data-rl-save]').hidden=true;
-			editor.querySelector('[data-rl-cancel]').hidden=true;
-			editor.hidden=selected?.type!=='link';
-			this.relatedEditor.showDetail(selected?.type==='link'?selected.key.slice(5):null);
-			pane.append(editor);
-		}
-		workspace.append(list,pane);holder.append(workspace);
-		const status=this.doc.createElement('p');
-		status.dataset.zwOrderStatus='';
-		status.setAttribute('role','status');
-		status.setAttribute('aria-live','polite');
-		status.textContent=this._orderAnnouncement||'';
-		holder.append(status);
-		return holder;
-	}
-	_refreshRelatedOrderList() {
-		if(!this.root){return;}
-		this._clearTouchOrder();
-		const card=this.root.querySelector('[data-zw-id="relatedMenu.order"]');
-		const controls=card?.querySelector('.zw-modern-cardcontrols');
-		if(controls){controls.replaceChildren(this._renderRelatedOrderControls());}
-		card?.classList.toggle('is-modified',
-			this.model.isDifferentFromDefault('relatedMenu.order') ||
-			this.model.isDifferentFromDefault('relatedMenu.hiddenItems') ||
-			this.model.isDifferentFromDefault('relatedMenu.builtinOptions'));
-	}
-	_moveRelatedOrder(fromKey,toKey,after=false) {
-		const entries=this._relatedOrderEntries();
-		const keys=entries.map(entry=>entry.key);
-		const from=keys.indexOf(fromKey),to=keys.indexOf(toKey);
-		if(from<0 || to<0){return false;}
-		const insertion=to+(after?1:0);
-		const position=from<insertion?insertion-1:insertion;
-		if(position===from){return false;}
-		keys.splice(position,0,keys.splice(from,1)[0]);
-		this.model.set('relatedMenu.order',keys);
-		this._orderAnnouncement='「'+(entries[from]?.label||fromKey)+'」を'+
-			(position+1)+'番目に移動しました。保存前ならキャンセルできます。';
-		this._renderCards();
-		this._refreshFooter();
-		return true;
-	}
-	_clearRelatedOrderDrag() {
-		this._orderDragKey=null;
-		this._orderDropKey=null;
-		this._orderDropAfter=false;
-		this.root.querySelectorAll('.zw-modern-order-row.is-dragging,.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
-			.forEach(row=>row.classList.remove('is-dragging','is-drop-before','is-drop-after'));
-	}
-	_onOrderDragStart(e) {
-		const grip=e.target.closest?.('[data-zw-order-grip]');
-		if(!grip || !this.root.contains(grip)){return;}
-		this._orderDragKey=grip.dataset.zwOrderGrip;
-		grip.closest('.zw-modern-order-row')?.classList.add('is-dragging');
-		if(e.dataTransfer){
-			e.dataTransfer.effectAllowed='move';
-			e.dataTransfer.setData('text/plain',this._orderDragKey);
-		}
-	}
-	_onOrderDragOver(e) {
-		if(!this._orderDragKey){return;}
-		const row=e.target.closest?.('.zw-modern-order-row');
-		if(!row || !this.root.contains(row)){return;}
-		e.preventDefault();
-		if(e.dataTransfer){e.dataTransfer.dropEffect='move';}
-		const rect=row.getBoundingClientRect();
-		const keys=this._relatedOrderEntries().map(entry=>entry.key);
-		this._orderDropAfter=rect.height>0?
-			e.clientY>rect.top+rect.height/2:
-			keys.indexOf(this._orderDragKey)<keys.indexOf(row.dataset.zwOrderKey);
-		this._orderDropKey=row.dataset.zwOrderKey;
-		this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
-			.forEach(item=>item.classList.remove('is-drop-before','is-drop-after'));
-		row.classList.add(this._orderDropAfter?'is-drop-after':'is-drop-before');
-	}
-	_onOrderDrop(e) {
-		if(!this._orderDragKey){return;}
-		e.preventDefault();
-		const from=this._orderDragKey,to=this._orderDropKey,after=this._orderDropAfter;
-		this._clearRelatedOrderDrag();
-		if(to){this._moveRelatedOrder(from,to,after);}
-	}
-	_onOrderDragEnd() {this._clearRelatedOrderDrag();}
-	_onTouchOrderDown(e) {
-		if(e.pointerType!=='touch' || this._touchOrder){return;}
-		const grip=e.target.closest?.('[data-zw-order-grip]');
-		if(!grip || !this.root.contains(grip)){return;}
-		const key=grip.dataset.zwOrderGrip;
-		if(!this._relatedOrderEntries().some(item=>item.key===key)){return;}
-		const state={id:e.pointerId,key,grip,active:false,dropKey:null,after:false,timer:null};
-		this._touchOrder=state;
-		state.timer=this.win.setTimeout(()=>{
-			if(this._touchOrder!==state){return;}
-			if(!this.root.contains(grip)){this._clearTouchOrder();return;}
-			try{grip.setPointerCapture?.(e.pointerId);}
-			catch(_){this._clearTouchOrder();return;}
-			state.active=true;
-			grip.closest('.zw-modern-order-row')?.classList.add('is-touch-dragging');
-		},260);
-	}
-	_onTouchOrderMove(e) {
-		const state=this._touchOrder;
-		if(!state || state.id!==e.pointerId || !state.active){return;}
-		e.preventDefault();
-		const hit=this.doc.elementFromPoint?.(e.clientX,e.clientY)||e.target;
-		const row=hit?.closest?.('[data-zw-order-key]');
-		if(!row || !this.root.contains(row)){return;}
-		state.dropKey=row.dataset.zwOrderKey;
-		const bounds=row.getBoundingClientRect();
-		state.after=bounds.height>0?e.clientY>bounds.top+bounds.height/2:
-			this._relatedOrderEntries().findIndex(i=>i.key===state.key) <
-			this._relatedOrderEntries().findIndex(i=>i.key===state.dropKey);
-		this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
-			.forEach(el=>el.classList.remove('is-drop-before','is-drop-after'));
-		row.classList.add(state.after?'is-drop-after':'is-drop-before');
-	}
-	_onTouchOrderUp(e) {
-		const state=this._touchOrder;
-		if(!state || state.id!==e.pointerId){return;}
-		const shouldMove=state.active && state.dropKey && state.dropKey!==state.key;
-		const from=state.key,to=state.dropKey,after=state.after;
-		this._clearTouchOrder();
-		if(shouldMove){this._moveRelatedOrder(from,to,after);}
-	}
-	_clearTouchOrder() {
-		const state=this._touchOrder;
-		if(!state){return;}
-		this._touchOrder=null;
-		this.win.clearTimeout(state.timer);
-		try{state.grip.releasePointerCapture?.(state.id);}catch(_){}
-		state.grip.closest('.zw-modern-order-row')?.classList.remove('is-touch-dragging');
-		this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
-			.forEach(el=>el.classList.remove('is-drop-before','is-drop-after'));
-	}
-	_customSeekSlots() {
-		return Array.from({length:10},(_,n)=>n+1).filter(n=>
-			this.model.descriptor('KEY_CUSTOM_SEEK_'+n) &&
-			this.model.descriptor('PARAM_CUSTOM_SEEK_'+n));
-	}
-	_usedCustomSeekSlots() {
-		return this._customSeekSlots().filter(n=>
-			this._visibleSeekSlots.has(n) ||
-			Number(this.model.get('KEY_CUSTOM_SEEK_'+n))!==0 ||
-			Number(this.model.get('PARAM_CUSTOM_SEEK_'+n))!==0);
-	}
-	_createSceneSettingsPanel(rows) {
-		const wrap=this.doc.createElement('div');wrap.className='zw-scene-settings';
-		const style=this.doc.createElement('style');style.textContent=`
+		_createSceneSettingsPanel(rows) {
+				const wrap = this.doc.createElement('div');
+				wrap.className = 'zw-scene-settings';
+				const style = this.doc.createElement('style');
+				style.textContent = `
 			.zw-scene-settings{display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1fr);gap:20px;align-items:start}
 			.zw-scene-settings .zw-scui-layout-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 			.zw-scene-settings .zw-scui-layout-option{background:#182b40;color:#dce8f6;border:1px solid #445b72;border-radius:10px;padding:10px;text-align:left;cursor:pointer}
@@ -9153,936 +8286,2852 @@ class ModernAdvancedSettingsUI {
 			.zw-scene-demo-seek{position:absolute;bottom:9px;left:3%;width:94%;accent-color:#80caff}
 			@media(max-width:1100px){.zw-scene-settings{grid-template-columns:minmax(0,1fr)}.zw-scene-demo{position:static;grid-row:1}}
 		`;
-		const controls=this.doc.createElement('div');controls.append(this._createSceneLayoutPicker());
-		const remaining=new Map(rows.map(row=>[row.dataset.zwId,row]));
-		for(const [title,keys] of [
-			['画面ごとの表示',['sceneSearch.layout.linkFullscreen']],
-			['表示するもの',['sceneSearch.enabled','sceneSearch.commentPreviewVisible','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible']],
-			['大きさと背景',['sceneSearch.thumbnailScale','sceneSearch.commentListScale','sceneSearch.commentListBackgroundOpacity']],
-			['操作と自動非表示',['sceneSearch.seekStepSeconds','sceneSearch.idleHideSeconds']]
-		]){
-			const heading=this.doc.createElement('h4');heading.textContent=title;controls.append(heading);
-			for(const key of keys){const row=remaining.get(key);if(row){controls.append(row);remaining.delete(key);}}
-		}
-		if(remaining.size){const extra=this.doc.createElement('details');extra.className='zw-scene-extra';
-			const summary=this.doc.createElement('summary');summary.textContent='その他のシーンサーチ設定';extra.append(summary,...remaining.values());controls.append(extra);}
-		const demo=this.doc.createElement('aside');demo.className='zw-scene-demo';demo.dataset.zwSceneDemo='';
-		demo.setAttribute('aria-label','設定のプレビュー');
-		demo.innerHTML='<strong>見ながら調整</strong><p>設定の見え方を確認する見本です。下のシークバーとコメントボタンを試せます。</p><nav aria-label="見本の画面"></nav><div class="zw-scene-demo-stage" data-zw-demo-stage><div class="zw-scene-demo-video">動画</div><div class="zw-scene-demo-panels" data-zw-demo-panels><div class="zw-scene-demo-thumb"><div class="zw-scene-demo-image">サムネイル<span class="zw-scene-demo-mini">ここ好き　いいね！</span></div><div class="zw-scene-demo-time">01:24</div><div class="zw-scene-demo-controls"><button type="button" data-demo-back aria-label="前へ">‹</button><button type="button" data-demo-comments aria-label="コメントプレビューを開閉">☁</button><button type="button" data-demo-next aria-label="次へ">›</button></div></div><div class="zw-scene-demo-list"><strong>コメントプレビュー</strong></div></div><input class="zw-scene-demo-seek" type="range" min="0" max="100" aria-label="見本のシーク位置"></div><p data-demo-caption></p>';
-		this._sceneDemoState=this._sceneDemoState||{screen:'normal',seek:35,list:true};
-		const nav=demo.querySelector('nav');
-		for(const [screen,label] of [['normal','通常表示'],['fullscreen','全画面'],['small','小画面']]){
-			const b=this.doc.createElement('button');b.type='button';b.textContent=label;b.dataset.demoScreen=screen;
-			b.addEventListener('click',()=>{this._sceneDemoState.screen=screen;this._sceneLayoutTab=screen==='fullscreen'?'fullscreen':'normal';
-				this.cards.querySelector('[data-zw-scene-layout-gallery]')?.replaceWith(this._createSceneLayoutPicker());this._updateSceneSettingsPreview();});nav.append(b);
-		}
-		const seek=demo.querySelector('input');seek.value=String(this._sceneDemoState.seek);
-		seek.addEventListener('input',()=>{this._sceneDemoState.seek=Number(seek.value);this._updateSceneSettingsPreview();});
-		demo.querySelector('[data-demo-comments]').addEventListener('click',()=>{this._sceneDemoState.list=!this._sceneDemoState.list;this._updateSceneSettingsPreview();});
-		for(const [selector,sign] of [['[data-demo-back]',-1],['[data-demo-next]',1]]){
-			demo.querySelector(selector).addEventListener('click',()=>{this._sceneDemoState.seek=Math.max(0,Math.min(100,this._sceneDemoState.seek+sign*Number(this.model.get('sceneSearch.seekStepSeconds')||0)));seek.value=String(this._sceneDemoState.seek);this._updateSceneSettingsPreview();});
-		}
-		wrap.append(style,controls,demo);return wrap;
-	}
-	_updateSceneSettingsPreview() {
-		const demo=this.cards?.querySelector('[data-zw-scene-demo]');if(!demo)return;
-		const state=this._sceneDemoState,get=key=>this.model.get('sceneSearch.'+key);
-		const screen=state.screen,mode=get('presentation.'+(screen==='fullscreen'&&!get('layout.linkFullscreen')?'fullscreen':'normal'));
-		const stage=demo.querySelector('[data-zw-demo-stage]');stage.dataset.screen=screen;
-		for(const b of demo.querySelectorAll('[data-demo-screen]'))b.setAttribute('aria-pressed',String(b.dataset.demoScreen===screen));
-		const panels=demo.querySelector('[data-zw-demo-panels]');panels.hidden=get('enabled')===false;
-		const master=get('commentPreviewVisible')!==false,allowed=master&&get('commentListVisible')!==false;
-		const open=allowed&&state.list,legacy=mode==='legacy';
-		const scale=Math.max(.5,Math.min(2,Number(get('thumbnailScale'))/100||1));
-		const listScale=Math.max(1,Math.min(2,Number(get('commentListScale'))/100||1));
-		const image=demo.querySelector('.zw-scene-demo-image'),thumb=demo.querySelector('.zw-scene-demo-thumb'),list=demo.querySelector('.zw-scene-demo-list');
-		image.hidden=legacy&&open;image.style.width=120*scale+'px';image.style.height=60*scale+'px';
-		const mini=demo.querySelector('.zw-scene-demo-mini');mini.hidden=!master||get('miniCommentVisible')===false;
-		mini.style.fontSize=11*scale+'px';
-		list.hidden=!open;list.style.width=155*listScale+'px';list.style.height=140*listScale+'px';
-		list.style.backgroundColor='rgba(7,13,24,'+Math.max(0,Math.min(100,Number(get('commentListBackgroundOpacity'))))/100+')';
-		for(const row of list.querySelectorAll('div'))row.remove();
-		for(let i=0;i<24;i++){const row=this.doc.createElement('div');row.textContent='01:'+String(20+i).padStart(2,'0')+'  '+['この場面が好き','いいね！','もう一度見たい','ここから楽しみ'][i%4];list.append(row);}
-		if(legacy&&open){thumb.prepend(list);thumb.style.width=155*listScale+'px';}else{panels.append(list);thumb.style.width='';}
-		const button=demo.querySelector('[data-demo-comments]');button.disabled=!allowed;button.setAttribute('aria-pressed',String(open));
-		for(const b of demo.querySelectorAll('[data-demo-back],[data-demo-next]'))b.hidden=Number(get('seekStepSeconds'))===0;
-		const width=stage.clientWidth||400,total=(legacy?(open?155*listScale:120*scale):120*scale+(open?161*listScale:0))+4;
-		panels.style.left=Math.max(6,Math.min(width-total-6,mode==='fixed'?10:width*state.seek/100-total/2))+'px';
-		demo.querySelector('[data-demo-caption]').textContent=panels.hidden?'シーンサーチは非表示です。個別設定は保持されます。':
-			(legacy?'従来表示：画像とコメントプレビューを切り替えます。':mode==='fixed'?'位置を固定：同じ場所に表示します。':'シーク位置に追従：シーク先に合わせて動きます。')+' 文字サイズを保ったまま、表示領域を調整します。';
-	}
-	_createSceneLayoutPicker() {
-		const wrap=this.doc.createElement('section');
-		wrap.className='zw-scui-picker';
-		wrap.dataset.zwSceneLayoutGallery='';
-		wrap.setAttribute('aria-label','シーンサーチの表示方式');
-		const mode=this._sceneLayoutTab;
-		const key='sceneSearch.presentation.'+mode;
-		const current=String(this.model.get(key)||'follow');
-		const linked=mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')===true;
-		wrap.classList.toggle('is-modified',this.model.isDifferentFromDefault(key));
-		const header=this.doc.createElement('div');header.className='zw-scui-pickerhead';
-		const heading=this.doc.createElement('strong');heading.textContent='プレビューの表示方式';
-		const tabs=this.doc.createElement('div');tabs.className='zw-scui-tabs';
-		tabs.setAttribute('role','group');tabs.setAttribute('aria-label','設定する画面');
-		for(const [value,label] of [['normal','通常表示'],['fullscreen','全画面']]){
-			const b=this._button(label,'data-zw-scene-layout-mode',value);
-			b.setAttribute('aria-pressed',String(mode===value));tabs.append(b);
-		}
-		header.append(heading,tabs);wrap.append(header);
-		this._sceneMainLayouts=this._sceneMainLayouts||{};
-		if(current!=='legacy'){this._sceneMainLayouts[mode]=current;}
-		const grid=this.doc.createElement('div');grid.className='zw-scui-layout-grid';
-		grid.setAttribute('role','group');grid.setAttribute('aria-label','プレビューの3つの表示方式');
-		for(const [value,label,description] of [
-			['follow','シーク位置に追従','シーク先の上に表示。端では画面内に収めます。'],
-			['fixed','位置を固定','同じ場所で確認。小画面ではシークバー付近の空き領域を使います。'],
-			['legacy','従来表示','コメントボタンで画像とコメントプレビューを切り替えます。']
-		]){
-			const b=this._button('','data-zw-scene-layout',value,'zw-scui-layout-option');
-			b.dataset.zwSceneLayoutMode=mode;b.disabled=linked||!this.model.isEnabled(key);
-			b.setAttribute('aria-pressed',String(current===value));b.setAttribute('aria-label',label);
-			const mini=this.doc.createElement('span');mini.className='zw-scui-mini';mini.dataset.layout=value;
-			mini.innerHTML='<i><span>☁</span></i><b>☰</b><em></em>';
-			const factor=Math.min(1.5,Math.max(.5,Number(this.model.get('sceneSearch.thumbnailScale')||100)/100));
-			const imageWidth=28*factor,left=(100-imageWidth-38)/2;
-			Object.assign(mini.querySelector('i').style,{left:left+'%',width:imageWidth+'%',height:24*factor+'px'});
-			Object.assign(mini.querySelector('i span').style,{fontSize:9*factor+'px',lineHeight:24*factor+'px'});
-			mini.querySelector('b').style.left=(left+imageWidth+2)+'%';
-			const master=this.model.get('sceneSearch.commentPreviewVisible')!==false;
-			mini.querySelector('i span').hidden=!master||this.model.get('sceneSearch.miniCommentVisible')===false;
-			mini.querySelector('b').style.opacity=master&&this.model.get('sceneSearch.commentListVisible')!==false?'1':'.25';
-			mini.querySelector('b').style.backgroundColor='rgba(0,0,0,'+(Number(this.model.get('sceneSearch.commentListBackgroundOpacity')??90)/100)+')';
-			const title=this.doc.createElement('strong');title.textContent=label;
-			const detail=this.doc.createElement('small');detail.textContent=description;
-			b.append(mini,title,detail);grid.append(b);
-		}
-		wrap.append(grid);
-		const note=this.doc.createElement('small');note.className='zw-scui-note';
-		note.textContent=linked?'通常表示の方式を使用します。全画面用の選択は保持しています。':
-			'中央のコメントボタンで開閉します。変更は「変更を保存」で反映します。';
-		wrap.append(note);
-		const config=this.model.config;
-		const migration=config.resolveSceneSearch?.()?.migration||[];
-		if(migration.length&&config.getValue('sceneSearch.presentation.migrationAcknowledged')!==true){
-			const info=this.doc.createElement('aside');info.dataset.zwSceneMigration='';info.className='zw-scui-note';
-			const names={follow:'シーク位置に追従',fixed:'位置を固定',legacy:'従来表示'};
-			info.append('表示方式を整理しました。');
-			for(const item of migration){
-				const old=this.model.descriptor(item.key.replace('presentation','layout'))?.options?.find(o=>o.value===item.oldValue)?.label||item.oldValue;
-				const line=this.doc.createElement('div');
-				line.textContent=old+' → '+names[item.newValue];info.append(line);
-			}
-			info.append(this._button('確認した','data-zw-scene-migration-ack',''));
-			wrap.append(info);
-		}
-		return wrap;
-	}
-	_renderCards() {
-		this._clearTouchOrder();
-		this._ngCompositeEditor?.dispose();
-		this._ngCompositeEditor=null;
-		if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
-			this.selected.subcategory==='データ管理'){
-			this._renderDataPanel();
-			return;
-		}
-		const hits=this.searchTerm?this.model.search(this.searchTerm):
-			this.model.sectionDescriptors(this.selected.category,this.selected.subcategory);
-		const title=this.root.querySelector('[data-zw-title]');
-		const sectionLabel=this.selected.subcategory==='関連メニュー › カスタムリンク'?
-			'関連メニュー（全項目）':this.selected.subcategory;
-		title.textContent=this.searchTerm?'検索結果':sectionLabel;
-		this.root.querySelector('[data-zw-path]').textContent=this.searchTerm?
-			'全カテゴリ横断検索':this.selected.category+' / '+sectionLabel;
-		this.root.querySelector('[data-zw-subtitle]').textContent=this.searchTerm?
-			hits.length+'件の設定が見つかりました':'関連する設定をまとめて表示しています。';
-		this.root.querySelector('[data-zw-reset-category]').hidden=!!this.searchTerm;
-		const seen=new Set();
-		const entries=[];
-		for(let descriptor of hits){
-			if(descriptor.type==='seconds'){
-				descriptor=this.model.descriptor('KEY_'+descriptor.actionId)||descriptor;
-			}
-			if(!seen.has(descriptor.id)){
-				seen.add(descriptor.id);
-				entries.push(descriptor);
-			}
-		}
-		const seekSection=!this.searchTerm && this.selected.category==='ショートカット' &&
-			this.selected.subcategory==='シーク';
-		const used=seekSection?this._usedCustomSeekSlots():[];
-		const visibleEntries=seekSection?entries.filter(d=>{
-			const n=Number((d.actionId||'').match(/^CUSTOM_SEEK_(\d+)$/)?.[1]);
-			return !n || used.includes(n);
-		}):entries.filter(d=>d.type!=='related-builtin-options' &&
-			(d.type!=='related-links' || !entries.some(item=>item.type==='related-order')));
-		const rows=[];
-		const visibilityMode=!this.searchTerm && this.selected.category==='画面・映像' &&
-			this.selected.subcategory==='表示・非表示';
-		const sceneSection=!this.searchTerm && this.selected.category==='画面・映像' &&
-			this.selected.subcategory==='シーンサーチ';
-		const groupNames={
-			hover:'動画の上に重なるボタン',related:'関連メニュー',comment:'コメント入力',
-			scene:'シーンサーチの操作ボタン','scene-comments':'シーンサーチの表示',
-			bar:'再生操作バー',info:'動画情報パネル',header:'動画上部のヘッダー',
-			shared:'コメント・補助表示（元の設定画面と共通）'
-		};
-		let lastScope=null;
-		for(const d of visibleEntries.filter(item=>!item.hidden&&item.type!=='related-visibility')){
-			if(sceneSection && ['sceneSearch.layout.normal','sceneSearch.layout.fullscreen','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen'].includes(d.id)){
-				continue; // One canonical draft; the visual gallery replaces redundant select cards.
-			}
-			if(visibilityMode && d.visibilityScope && d.visibilityScope!==lastScope){
-				const heading=this.doc.createElement('h4');
-				heading.className='zw-modern-visibility-group';
-				heading.dataset.zwVisibilityGroup=d.visibilityScope;
-				heading.textContent=groupNames[d.visibilityScope]||'その他';
-				rows.push(heading);
-				lastScope=d.visibilityScope;
-			}
-			rows.push(this._createCard(d));
-		}
-		if(sceneSection){rows.splice(0,rows.length,this._createSceneSettingsPanel(rows));}
-		if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
-			this.selected.subcategory==='検索') {
-			const guide=this.doc.createElement('section');
-			guide.className='zw-modern-search-guide';
-			guide.setAttribute('aria-label','検索設定の違い');
-			guide.innerHTML=[
-				'<strong>検索で何が通信されるの？</strong>',
-				'<p><b>① タグ候補・動画の予測：</b>検索欄に入力したときの候補表示。件数表示をOFFにしてもこの機能は使えます。</p>',
-				'<p><b>② ヒット件数：</b>「〇件」という参考数字だけを調べる追加通信。下の設定で取得タイミングを選べます。</p>',
-				'<p><b>③ プレイリストの読み込み：</b>検索を実行して動画を一覧へ追加する処理。最大件数は別の設定です。</p>'
-			].join('');
-			rows.unshift(guide);
-		}
-		if(!this.searchTerm && this.selected.category==='画面・映像' &&
-			this.selected.subcategory==='表示・非表示'){
-			const guide=this.doc.createElement('section');
-			guide.className='zw-modern-search-guide';
-			guide.setAttribute('aria-label','表示・非表示の設定');
-			guide.innerHTML=[
-				'<strong>プレイヤーの表示を自分好みに整理</strong>',
-				'<p>動画上・操作バー・動画情報・ヘッダーごとに項目をまとめました。OFFでも再生機能やショートカットは削除されません。</p>',
-				'<p>再生・停止、シークバー、閉じる、エラー復旧は残ります。歯車を隠した場合も、マイページの上級者設定から再表示できます。</p>',
-				'<p>共通設定の'+ModernAdvancedSettingsModel.SHARED_VISIBILITY.length+'項目は元の場所と同じ値です。変更・キャンセル・初期値への復帰も両方に反映されます。</p>',
-				'<p>変更は画面下部の「変更を保存」で確定します。いつでも表示に戻せます。</p>'
-			].join('');
-			rows.unshift(guide);
-		}
-		if(seekSection){
-			const toolbar=this.doc.createElement('div');
-			toolbar.className='zw-modern-seek-toolbar';
-			const count=this.doc.createElement('span');
-			count.dataset.zwSeekCount='';
-			count.textContent='カスタムシーク '+used.length+' / '+this._customSeekSlots().length+' 枠';
-			const button=this._button('＋ カスタムシークを追加','data-zw-add-seek','',
-				'zw-modern-plainbtn');
-			button.disabled=used.length===this._customSeekSlots().length;
-			toolbar.append(count,button);
-			this.cards.replaceChildren(toolbar,...rows);
-		}else{
-			this.cards.replaceChildren(...rows);
-		}
-		this._updateSceneSettingsPreview();
-	}
-	_applyRelatedDraftFromModel() {
-		if(!this.relatedEditor) {return;}
-		const value=this.model.get('relatedMenu.customLinks');
-		this.relatedEditor.replaceDraftFromParent(value);
-	}
-	_syncRelatedDraft() {
-		if(!this.relatedEditor) {return;}
-		const editor=this.relatedEditor;
-		this.model.set('relatedMenu.customLinks',editor.draft);
-	}
-	_relatedErrors() {
-		if(!this.relatedEditor) {return [];}
-		const editor=this.relatedEditor;
-		const validation=editor.actions.validateLinks(editor.draft);
-		const errs=editor.draft.map((link,index)=>editor._rowError(link,index)).filter(Boolean);
-		return validation.valid && errs.length===0?[]:errs.length?errs:['リンクの入力に不正があります'];
-	}
-	_onRelatedBubble(event) {
-		if(!this.relatedEditor ||
-			!this.relatedEditor.container.contains(event.target)) {return;}
-		this._syncRelatedDraft();
-		this._refreshFooter();
-	}
-	hasPendingEdits() {
-		return this.model.isDirty() || this._visibleSeekSlots.size>0;
-	}
-	discardChanges() {
-		if(this._recordCleanup){this._recordCleanup();}
-		this.model.cancel();
-		this._visibleSeekSlots.clear();
-		this._seekDirections.clear();
-		this._orderAnnouncement='';
-		if(this.relatedEditor){this.relatedEditor._load();}
-		this._renderCards();
-		this._refreshFooter();
-	}
-	_refreshFooter() {
-		const changed=this.model.changes().length;
-		const pendingSeek=this._visibleSeekSlots.size;
-		this.root.querySelector('[data-zw-dirty]').textContent=changed?
-			'● 未保存の変更 '+changed+'件':
-			pendingSeek?'● カスタムシークの追加枠 '+pendingSeek+'件（未設定）':'保存済み';
-		this.root.querySelector('[data-zw-cancel]').disabled=!changed&&!pendingSeek;
-		this.root.querySelector('[data-zw-save]').disabled=!changed||
-			this.model.validate().length>0||this._relatedErrors().length>0;
-	}
-	_refreshCards() {
-		const errors=new Map(this.model.validate().map(e=>[e.id,e.message]));
-		for(const card of this.cards.querySelectorAll('[data-zw-id]')) {
-			const id=card.dataset.zwId,d=this.model.descriptor(id);
-			const seek=d.type==='shortcut'?this.model.descriptor('PARAM_'+d.actionId):null;
-			card.classList.toggle('is-modified',this.model.isDifferentFromDefault(id)||
-				(d.type==='related-order' &&
-					this.model.isDifferentFromDefault('relatedMenu.hiddenItems')) ||
-				(seek && this.model.isDifferentFromDefault(seek.id)));
-			const active=this.model.isEnabled(id);
-			card.classList.toggle('is-disabled',!active);
-			const input=card.querySelector('[data-setting-name]');
-			if(input){input.disabled=!active;}
-			if(id==='commandFilter'){
-				const current=new Set(String(this.model.get(id)??'')
-					.split(/\r?\n/).map(value=>value.trim().toLowerCase()).filter(Boolean));
-				card.querySelectorAll('[data-zw-command-preset]').forEach(button=>{
-					button.disabled=!active||current.has(button.dataset.zwCommandPreset);
-				});
-			}
-			card.querySelectorAll('[data-zw-choice]').forEach(button=>{
-				button.disabled=!active;
-			});
-			if(d.type==='regex-flags'){
-				const flags=String(this.model.get(id)||'');
-				card.querySelectorAll('[data-zw-regex-flag]').forEach(checkbox=>{
-					checkbox.checked=flags.includes(checkbox.dataset.zwRegexFlag);
-					checkbox.disabled=!active;
-				});
-				const field=card.querySelector('[data-zw-regex-raw]');
-				if(field){
-					field.disabled=!active;
-					if(field!==this.doc.activeElement){field.value=flags;}
+				const controls = this.doc.createElement('div');
+				controls.append(this._createSceneLayoutPicker());
+				const remaining = new Map(rows.map(row => [row.dataset.zwId, row]));
+				for (const [title, keys] of [
+						['画面ごとの表示', ['sceneSearch.layout.linkFullscreen']],
+						['表示するもの', ['sceneSearch.enabled', 'sceneSearch.commentPreviewVisible', 'sceneSearch.miniCommentVisible', 'sceneSearch.commentListVisible']],
+						['大きさと背景', ['sceneSearch.thumbnailScale', 'sceneSearch.commentListScale', 'sceneSearch.commentListBackgroundOpacity']],
+						['操作と自動非表示', ['sceneSearch.seekStepSeconds', 'sceneSearch.idleHideSeconds']]
+				]) {
+						const heading = this.doc.createElement('h4');
+						heading.textContent = title;
+						controls.append(heading);
+						for (const key of keys) {
+								const row = remaining.get(key);
+								if (row) {
+										controls.append(row);
+										remaining.delete(key);
+								}
+						}
 				}
-				const display=card.querySelector('[data-zw-regex-value]');
-				if(display){display.textContent=flags||'（なし）';}
-			}
-			if(d.type==='slider') {
-				card.querySelectorAll('input[data-setting-name]').forEach(element=>{
-					element.disabled=!active;
-					if(element!==this.doc.activeElement || element.type!=='number') {
-						element.value=String(this.model.get(id));
-					}
-				});
-			}
-			if(d.type==='font-picker'){
-				const select=card.querySelector('[data-zw-font-preset]');
-				const custom=card.querySelector('[data-zw-font-custom]');
-				const value=String(this.model.get(id)??'');
-				const preset=d.options.some(item=>item.value===value)?value:'__custom__';
-				const editing=custom===this.doc.activeElement && !custom.hidden;
-				if(select){select.disabled=!active;if(!editing){select.value=preset;}}
-				if(custom){
-					custom.disabled=!active;
-					if(!editing){custom.value=value;custom.hidden=preset!=='__custom__';}
+				if (remaining.size) {
+						const extra = this.doc.createElement('details');
+						extra.className = 'zw-scene-extra';
+						const summary = this.doc.createElement('summary');
+						summary.textContent = 'その他のシーンサーチ設定';
+						extra.append(summary, ...remaining.values());
+						controls.append(extra);
 				}
-			}
-			if(d.type==='color'){
-				const code=card.querySelector('[data-zw-color-code]');
-				const picker=card.querySelector('[data-zw-color-picker]');
-				const hint=card.querySelector('.zw-modern-color-hint');
-				const value=String(this.model.get(id)??'');
-				const hex=ModernAdvancedSettingsUI._hexColor(value);
-				if(code && code!==this.doc.activeElement){code.value=value;}
-				if(code){code.disabled=!active;}
-				if(picker){
-					picker.disabled=!active;
-					if(hex){picker.value=hex;}
+				const demo = this.doc.createElement('aside');
+				demo.className = 'zw-scene-demo';
+				demo.dataset.zwSceneDemo = '';
+				demo.setAttribute('aria-label', '設定のプレビュー');
+				demo.innerHTML = '<strong>見ながら調整</strong><p>設定の見え方を確認する見本です。下のシークバーとコメントボタンを試せます。</p><nav aria-label="見本の画面"></nav><div class="zw-scene-demo-stage" data-zw-demo-stage><div class="zw-scene-demo-video">動画</div><div class="zw-scene-demo-panels" data-zw-demo-panels><div class="zw-scene-demo-thumb"><div class="zw-scene-demo-image">サムネイル<span class="zw-scene-demo-mini">ここ好き　いいね！</span></div><div class="zw-scene-demo-time">01:24</div><div class="zw-scene-demo-controls"><button type="button" data-demo-back aria-label="前へ">‹</button><button type="button" data-demo-comments aria-label="コメントプレビューを開閉">☁</button><button type="button" data-demo-next aria-label="次へ">›</button></div></div><div class="zw-scene-demo-list"><strong>コメントプレビュー</strong></div></div><input class="zw-scene-demo-seek" type="range" min="0" max="100" aria-label="見本のシーク位置"></div><p data-demo-caption></p>';
+				this._sceneDemoState = this._sceneDemoState || { screen: 'normal', seek: 35, list: true };
+				const nav = demo.querySelector('nav');
+				for (const [screen, label] of [['normal', '通常表示'], ['fullscreen', '全画面'], ['small', '小画面']]) {
+						const b = this.doc.createElement('button');
+						b.type = 'button';
+						b.textContent = label;
+						b.dataset.demoScreen = screen;
+						b.addEventListener('click', () => {
+								this._sceneDemoState.screen = screen;
+								this._sceneLayoutTab = screen === 'fullscreen' ? 'fullscreen' : 'normal';
+								this.cards.querySelector('[data-zw-scene-layout-gallery]')?.replaceWith(this._createSceneLayoutPicker());
+								this._updateSceneSettingsPreview();
+						});
+						nav.append(b);
 				}
-				if(hint){hint.textContent=hex?
-					'色見本をクリックして選択、またはコードを入力できます。':
-					'CSS色名を使用中／入力途中です。色見本の選択でHEX値に切り替わります。';}
-			}
-			const example=card.querySelector('[data-zw-preview-for]');
-			if(example){this._updateVisualExample(example,id);}
-			let alert=card.querySelector('.zw-modern-validation-error');
-			if(errors.has(id)) {
-				if(!alert){alert=this.doc.createElement('span');alert.className='zw-modern-warning zw-modern-validation-error';card.append(alert);}
-				alert.textContent=errors.get(id);
-			} else if(alert) {alert.remove();}
-			if(seek){
-				const value=Number(this.model.get(seek.id))||0;
-				const direction=card.querySelector('[data-zw-seek-direction]');
-				const magnitude=card.querySelector('[data-zw-seek-magnitude]');
-				const sign=this._seekDirections.get(seek.id)||(value>0?1:-1);
-				if(direction){direction.value=String(sign);}
-				if(magnitude && magnitude!==this.doc.activeElement) {
-					magnitude.value=String(Math.abs(value));
+				const seek = demo.querySelector('input');
+				seek.value = String(this._sceneDemoState.seek);
+				seek.addEventListener('input', () => { this._sceneDemoState.seek = Number(seek.value); this._updateSceneSettingsPreview(); });
+				demo.querySelector('[data-demo-comments]').addEventListener('click', () => { this._sceneDemoState.list = !this._sceneDemoState.list; this._updateSceneSettingsPreview(); });
+				for (const [selector, sign] of [['[data-demo-back]', -1], ['[data-demo-next]', 1]]) {
+						demo.querySelector(selector).addEventListener('click', () => { this._sceneDemoState.seek = Math.max(0, Math.min(100, this._sceneDemoState.seek + sign * Number(this.model.get('sceneSearch.seekStepSeconds') || 0))); seek.value = String(this._sceneDemoState.seek); this._updateSceneSettingsPreview(); });
 				}
-			}
-			if(d.type==='shortcut') {
-				const text=card.querySelector('[data-zw-key-display]');
-				if(text){text.textContent=this.formatKeyCombo(this.model.get(id));}
-			}
+				wrap.append(style, controls, demo);
+				return wrap;
 		}
-		const gallery=this.cards.querySelector('[data-zw-scene-layout-gallery]');
-		if(gallery){gallery.replaceWith(this._createSceneLayoutPicker());}
-		this._updateSceneSettingsPreview();
-		this._refreshFooter();
-	}
-	_interceptValue(e) {
-		const el=e.target;
-		if(el?.hasAttribute?.('data-zw-scene-legacy')&&this.root.contains(el)){
-			e.stopPropagation();e.stopImmediatePropagation?.();
-			const mode=el.dataset.zwSceneLegacy;
-			if(!el.disabled&&['normal','fullscreen'].includes(mode)){
-				const value=el.checked?'legacy':this._sceneMainLayouts?.[mode]||'follow';
-				this.model.set('sceneSearch.presentation.'+mode,value);
-				this._renderCards();this._refreshFooter();
-				this.root.querySelector('[data-zw-scene-legacy]')?.focus();
-			}
-			return true;
-		}
-		if(el?.dataset?.zwRegexFlag && this.root.contains(el)){
-			e.stopPropagation();e.stopImmediatePropagation?.();
-			const id=el.dataset.zwRegexId;
-			const flag=el.dataset.zwRegexFlag;
-			const current=String(this.model.get(id)||'');
-			const flags=new Set(current);
-			if(el.checked){flags.add(flag);}else{flags.delete(flag);}
-			const order='dgimsuvy';
-			const next=[...order].filter(f=>flags.has(f)).join('')+
-				[...flags].filter(f=>!order.includes(f)).join('');
-			this.model.set(id,next);
-			this._refreshCards();
-			return true;
-		}
-		if(el?.dataset?.zwColorPicker && this.root.contains(el)){
-			e.stopPropagation();e.stopImmediatePropagation?.();
-			this.model.set(el.dataset.zwColorPicker,el.value);
-			this._refreshCards();
-			return true;
-		}
-		if(el?.dataset?.zwFontPreset && this.root.contains(el)){
-			e.stopPropagation();e.stopImmediatePropagation?.();
-			const id=el.dataset.zwFontPreset;
-			const custom=el.closest('.zw-modern-font-editor')
-				?.querySelector('[data-zw-font-custom]');
-			if(el.value==='__custom__'){
-				if(custom){custom.hidden=false;custom.focus();}
-			}else{
-				this.model.set(id,el.value);
-				if(custom){custom.hidden=true;}
-				this._refreshCards();
-			}
-			return true;
-		}
-		if(el && el.dataset && this.root.contains(el) &&
-			(el.dataset.zwSeekDirection || el.dataset.zwSeekMagnitude)){
-			e.stopPropagation();
-			e.stopImmediatePropagation?.();
-			const id=el.dataset.zwSeekDirection||el.dataset.zwSeekMagnitude;
-			const old=Number(this.model.get(id))||0;
-			if(el.dataset.zwSeekDirection){
-				const direction=Number(el.value)<0?-1:1;
-				this._seekDirections.set(id,direction);
-				this.model.set(id,direction*Math.abs(old));
-			}else{
-				const input=el.value.trim();
-				const number=input===''?NaN:Number(input);
-				const direction=this._seekDirections.get(id)||(old>0?1:-1);
-				this.model.set(id,Number.isFinite(number)&&number>=0?direction*number:NaN);
-			}
-			this._refreshCards();
-			return true;
-		}
-		if(!el || !el.dataset || !el.dataset.settingName || !this.root.contains(el)){return false;}
-		e.stopPropagation();
-		if(typeof e.stopImmediatePropagation==='function'){e.stopImmediatePropagation();}
-		const key=el.dataset.settingName;
-		const value=el.type==='checkbox'?el.checked:el.value;
-		try {this.model.set(key,key==='userIdFilter'?
-			ModernAdvancedSettingsUI._formatNgUserIds(value):value);}
-		catch(error){this.win.console?.warn?.('Advanced settings input rejected',error);}
-		if(key==='sceneSearch.layout.linkFullscreen'){
-			this._renderCards();this._refreshFooter();
-		}else{
-			this._refreshCards();
-		}
-		return true;
-	}
-	_setBuiltinOptionDraft(id,field,value) {
-		if(!this.relatedOrder?.STANDARD.some(item=>item.id===id)){return;}
-		const key=this.relatedOrder.OPTIONS_KEY;
-		if(!this.model.descriptor(key)){return;}
-		const all=this.model.get(key)||{};
-		const options={...this.relatedOrder.getOption(all,id)};
-		if(field==='popupWidth' || field==='popupHeight'){
-			options[field]=value===''?0:Number(value);
-		}else if(field==='includePosition'){
-			options[field]=!!value;
-		}else if(value==='' || (field==='openMode'&&value==='default') ||
-			(field==='copyFormat'&&value==='url')){
-			delete options[field];
-		}else{
-			options[field]=value;
-		}
-		const next={...all};
-		if(Object.keys(options).length){next[id]=options;}
-		else{delete next[id];}
-		this.model.set(key,next);
-		this._refreshFooter();
-	}
-	_onValue(e) {
-		const builtin=e.target.closest?.('[data-zw-builtin-field]');
-		if(builtin && this.root.contains(builtin)){
-			e.stopPropagation();
-			this._setBuiltinOptionDraft(builtin.dataset.zwBuiltinId,
-				builtin.dataset.zwBuiltinField,builtin.type==='checkbox'?builtin.checked:builtin.value);
-			if(['openMode','copyFormat'].includes(builtin.dataset.zwBuiltinField)){
-				this._refreshRelatedOrderList();
-			}
-			return;
-		}
-		const visible=e.target.closest?.('[data-zw-order-visible]');
-		if(visible && this.root.contains(visible)){
-			e.stopPropagation();
-			const key=visible.dataset.zwOrderVisible;
-			if(!this.relatedOrder?.isValidKey(key)){return;}
-			const hidden=new Set(this.model.get('relatedMenu.hiddenItems')||[]);
-			if(visible.checked){hidden.delete(key);}else{hidden.add(key);}
-			this.model.set('relatedMenu.hiddenItems',[...hidden]);
-			this._orderAnnouncement='表示設定を変更しました。画面下部の「変更を保存」で確定します。';
-			this._refreshRelatedOrderList();
-			this._refreshFooter();
-			return;
-		}
-		this._interceptValue(e);
-	}
-	_onInput(e) {
-		const builtin=e.target.closest?.('[data-zw-builtin-field]');
-		if(builtin && this.root.contains(builtin)){
-			e.stopPropagation();
-			this._setBuiltinOptionDraft(builtin.dataset.zwBuiltinId,
-				builtin.dataset.zwBuiltinField,builtin.type==='checkbox'?builtin.checked:builtin.value);
-			if(builtin.dataset.zwBuiltinField==='label'){
-				const row=this.root.querySelector('[data-zw-order-key="builtin:'+builtin.dataset.zwBuiltinId+'"]');
-				const display=row?.querySelector('.zw-order-name');
-				if(display){
-					const original=this.relatedOrder.STANDARD.find(item=>item.id===builtin.dataset.zwBuiltinId)?.label||'';
-					display.textContent=builtin.value.trim()||original;
+		static _style(doc) {
+				if (doc.querySelector('style[data-zw-modern-ui]')) {
+						return;
 				}
-			}
-			return;
+				const style = doc.createElement('style');
+				style.setAttribute('data-zw-modern-ui', '');
+				style.textContent = [
+						'.zenzaAdvancedSettingPanel.zw-modern-active { position:fixed !important; inset:0 !important; width:auto !important; height:auto !important; min-width:0; max-width:none !important; max-height:none !important; margin:0 !important; transform:none !important; transition:none !important; border:0; padding:0; background:#101927; border-radius:0; z-index:2147483647 !important; overflow:hidden; box-sizing:border-box; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active:not(.show) { display:none !important; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active.show { display:block; opacity:1; pointer-events:auto; box-shadow:none; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active > .settingPanelInner { display:none !important; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active > .zenzaAdvancedSetting-close { display:none !important; }',
+						'.zw-modern-root { --zw-dark-bg:#101927; --zw-dark-side:#141e2d; --zw-dark-panel:#1b293a; --zw-dark-card:#243449; --zw-dark-border:#2b394b; --zw-dark-text:#edf4ff; --zw-dark-muted:#a5b7cb; --zw-dark-accent:#82bfff; --zw-sidebar-width:290px; color-scheme:dark; color:var(--zw-dark-text); background:var(--zw-dark-bg); display:flex; flex-direction:column; width:100%; height:100%; font:13px/1.45 system-ui,"Yu Gothic UI",Meiryo,sans-serif; box-sizing:border-box; user-select:text; }',
+						'.zw-modern-root *, .zw-modern-root *::before, .zw-modern-root *::after { box-sizing:border-box; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root label { width:auto; height:auto; padding:0; margin:0; min-width:0; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root input[type=checkbox] { transform:none; margin:0; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root input[type=text],.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root select { font-size:inherit; margin:0; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-root input[type=text] { width:auto; }',
+						'.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-cardcontrols label:has(textarea),.zenzaAdvancedSettingPanel.zw-modern-active .zw-modern-cardcontrols label:has(input[type=text]) { width:100%; display:flex; }',
+						'.zw-modern-root button, .zw-modern-root input, .zw-modern-root select, .zw-modern-root textarea { font:inherit; }',
+						'.zw-modern-root button { cursor:pointer; }',
+						'.zw-modern-root button:disabled, .zw-modern-root input:disabled { opacity:.55; cursor:not-allowed; }',
+						'.zw-modern-header { display:flex; align-items:center; gap:12px; background:var(--zw-dark-panel); border-bottom:1px solid var(--zw-dark-border); padding:13px 17px; flex:none; }',
+						'.zw-modern-header h2 { font-size:17px; font-weight:750; margin:0; flex:1; }',
+						'.zw-modern-root .zw-modern-iconbtn { border:1px solid #405069; background:#23334a; color:var(--zw-dark-text); padding:6px 10px; border-radius:5px; }',
+						'.zw-modern-body { position:relative; display:flex; flex:1; min-height:0; }',
+						'.zw-modern-sidebar { width:var(--zw-sidebar-width); flex:0 0 var(--zw-sidebar-width); overflow:auto; min-width:0; background:var(--zw-dark-side); border-right:1px solid var(--zw-dark-border); padding:14px 9px; transition:width .18s ease,flex-basis .18s ease; }',
+						'.zw-modern-root.is-sidebar-collapsed .zw-modern-sidebar { width:0; flex-basis:0; padding:0; overflow:hidden; border:0; }',
+						'.zw-modern-search { width:100%; background:#0f1a29; color:var(--zw-dark-text); border:1px solid #40516a; border-radius:5px; padding:9px 10px; margin:0 0 12px; outline-offset:1px; }',
+						'.zw-modern-nav { display:flex; flex-direction:column; gap:3px; }',
+						'.zw-modern-nav button { display:block; width:100%; text-align:left; border:0; border-radius:5px; color:var(--zw-dark-text); background:transparent; padding:8px; }',
+						'.zw-modern-nav button:hover, .zw-modern-nav button.is-active { background:var(--zw-dark-card); }',
+						'.zw-modern-nav button.is-active { color:var(--zw-dark-accent); }',
+						'.zw-modern-nav .zw-modern-sub { font-size:12px; padding-left:21px; color:var(--zw-dark-muted); }',
+						'.zw-modern-main { flex:1; min-width:0; overflow:auto; overscroll-behavior:contain; padding:24px clamp(12px,3vw,44px); }',
+						'.zw-modern-content-inner { width:100%; max-width:960px; margin:0 auto; }',
+						'.zw-modern-breadcrumb { font-size:11px; color:var(--zw-dark-muted); margin:0 0 4px; }',
+						'.zw-modern-section-title { font-size:21px; line-height:1.4; margin:0 0 6px; font-weight:750; }',
+						'.zw-modern-section-subtitle { margin:0 0 15px; color:var(--zw-dark-muted); font-size:12px; }',
+						'.zw-modern-toolbar { display:flex; justify-content:flex-end; gap:7px; margin:0 0 14px; }',
+						'.zw-modern-card { background:var(--zw-dark-card); border:1px solid var(--zw-dark-border); border-radius:5px; padding:13px 15px; margin:0 0 10px; min-width:0; }',
+						'.zw-modern-card.is-inline { display:flex; align-items:center; flex-wrap:wrap; column-gap:15px; row-gap:6px; min-height:55px; }',
+						'.zw-modern-card.is-inline > .zw-modern-cardhead { min-width:0; flex:1 1 210px; }',
+						'.zw-modern-card.is-inline > .zw-modern-cardcontrols { flex:0 1 auto; margin:0; min-width:0; }',
+						'.zw-modern-card.is-inline > .zw-modern-note { flex-basis:100%; margin-top:2px; }',
+						'.zw-modern-card.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
+						'.zw-modern-card.is-disabled { opacity:.5; }',
+						'.zw-modern-card.is-child { margin-left:14px; border-left:2px solid #475e77; }',
+						'.zw-modern-cardhead { display:flex; align-items:center; gap:10px; }',
+						'.zw-modern-cardhead strong { font-size:13px; font-weight:650; flex:1; overflow-wrap:anywhere; }',
+						'.zw-modern-visibility-icon { display:inline-flex; justify-content:center; align-items:center; flex:none; width:38px; height:32px; background:#23354b; border:1px solid #60748c; border-radius:5px; color:#edf4ff; font:19px/1 system-ui,sans-serif; white-space:nowrap; overflow:hidden; pointer-events:none; user-select:none; }',
+						'.zw-modern-visibility-icon.is-compact-glyph { font-size:12px; letter-spacing:-.25px; }',
+						'.zw-modern-visibility-icon.is-pair-glyph { font-size:15px; }',
+						'.zw-modern-visibility-icon.is-tweet { font-weight:750; color:#79c8f8; }',
+						'.zw-modern-visibility-icon.is-mylist { font-size:15px; font-weight:750; }',
+						'.zw-modern-visibility-icon.is-like { color:#ffc0d8; font-size:26px; }',
+						'.zw-modern-visibility-icon.is-comment { font-size:20px; }',
+						'.zw-modern-visibility-icon.is-related { width:100px; font-size:10px; gap:6px; background:#59636b; border-color:#7c8992; }',
+						'.zw-modern-visibility-icon.is-comment-input { width:118px; padding:0 6px; justify-content:start; font-size:10px; border-color:#8798a9; color:#c3d3e2; background:#172437; }',
+						'.zw-modern-visibility-icon svg { width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }',
+						'.zw-modern-root .zw-modern-plainbtn { border:1px solid #445a71; border-radius:5px; background:#1d2b3d; color:var(--zw-dark-text); padding:5px 8px; font-size:11px; }',
+						'.zw-modern-cardcontrols { display:flex; gap:10px; align-items:center; justify-content:flex-end; margin:8px 0 0; flex-wrap:wrap; }',
+						'.zw-modern-cardcontrols label { display:inline-flex; gap:8px; align-items:center; }',
+						'.zw-modern-cardcontrols label:has(textarea), .zw-modern-cardcontrols label:has(input[type=text]) { display:flex; flex-direction:column; align-items:stretch; width:100%; }',
+						'.zw-modern-cardcontrols input[type=text], .zw-modern-cardcontrols input[type=number], .zw-modern-cardcontrols textarea, .zw-modern-cardcontrols select { color:var(--zw-dark-text); background:#101927; border:1px solid #445a71; padding:7px 9px; border-radius:5px; min-width:150px; max-width:100%; }',
+						'.zw-modern-cardcontrols textarea { width:100%; min-height:95px; resize:vertical; }',
+						'.zw-modern-cardcontrols input[type=checkbox] { appearance:none; -webkit-appearance:none; display:inline-block; position:relative; width:39px; height:23px; flex:none; margin:0; background:#47576b; border:1px solid #546a82; border-radius:12px; cursor:pointer; }',
+						'.zw-modern-cardcontrols input[type=checkbox]::after { content:""; position:absolute; top:3px; left:3px; width:15px; height:15px; border-radius:50%; background:#fff; transition:transform .14s ease; }',
+						'.zw-modern-cardcontrols input[type=checkbox]:checked { background:#82bfff; border-color:#82bfff; }',
+						'.zw-modern-cardcontrols input[type=checkbox]:checked::after { transform:translateX(16px); }',
+						'.zw-modern-cardcontrols .checkbox { cursor:pointer; }',
+						'.zw-modern-cardcontrols label input[type=checkbox] { order:1; }',
+						'.zw-modern-cardcontrols .zw-modern-native-label { display:none; }',
+						'.zw-modern-seek-editor { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:6px; width:100%; }',
+						'.zw-modern-seek-editor select,.zw-modern-seek-editor input { background:#101927; color:var(--zw-dark-text); border:1px solid #445a71; border-radius:5px; padding:6px; }',
+						'.zw-modern-seek-editor input { width:100px; }',
+						'.zw-modern-slider { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:12px; width:100%; }',
+						'.zw-modern-slider input[type=range] { flex:1; min-width:160px; max-width:750px; accent-color:var(--zw-dark-accent); }',
+						'.zw-modern-slider input[type=number] { width:91px; color:var(--zw-dark-text); background:var(--zw-dark-bg); border:1px solid #445a71; padding:7px 9px; border-radius:5px; }',
+						'.zw-modern-slider span { color:var(--zw-dark-muted); }',
+						'.zw-modern-cardcontrols .zw-modern-segments { display:flex; flex-wrap:wrap; gap:5px; justify-content:flex-end; }',
+						'.zw-modern-cardcontrols .zw-modern-segments button { background:#1c2c3f; color:var(--zw-dark-text); border:1px solid #435a76; padding:7px 9px; border-radius:5px; font-size:11px; }',
+						'.zw-modern-cardcontrols .zw-modern-segments button.is-selected { color:#101927; background:#82bfff; border-color:#82bfff; }',
+						'.zw-modern-color-editor { display:flex; align-items:center; justify-content:flex-end; gap:9px; flex-wrap:wrap; width:100%; }',
+						'.zw-modern-color-editor input[type=color] { width:46px; height:34px; padding:2px; cursor:pointer; background:#101927; border:1px solid #52657c; border-radius:6px; }',
+						'.zw-modern-color-editor input[type=text] { width:140px; min-width:112px; font:12px/1.4 ui-monospace,Consolas,monospace; }',
+						'.zw-modern-color-hint { color:#a5b7cb; font-size:11px; flex-basis:100%; text-align:right; }',
+						'.zw-popup-settings { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,.85fr); gap:18px; align-items:start; }',
+						'.zw-popup-settings .zw-popup-preview { position:sticky; top:12px; background:#152336; border:1px solid #40566e; border-radius:10px; padding:15px; min-width:0; }',
+						'.zw-popup-settings .zw-popup-preview h4 { margin:0 0 7px; color:#e4edf6; font-size:14px; }',
+						'.zw-popup-settings .zw-popup-preview p { color:#a5b7cb; font-size:12px; line-height:1.6; margin:0 0 12px; }',
+						'.zw-popup-settings .zw-popup-sample { display:block; background:#333; color:#fff; box-shadow:2px 2px 0 #ccc; padding:8px 16px; border-radius:4px; text-align:center; font-weight:bolder; margin:0 2px 12px 0; overflow-wrap:anywhere; }',
+						'@media(max-width:900px){ .zw-popup-settings {grid-template-columns:minmax(0,1fr)} .zw-popup-settings .zw-popup-preview {position:static;grid-row:1} }',
+						'.zw-modern-font-editor { display:flex; flex-wrap:wrap; gap:7px; width:100%; justify-content:flex-end; }',
+						'.zw-modern-font-editor select { flex:1 1 190px; max-width:420px; }',
+						'.zw-modern-font-editor input[type=text] { flex:1 1 220px; }',
+						'.zw-modern-font-editor [hidden] { display:none!important; }',
+						'.zw-modern-example { display:flex; flex-direction:column; gap:7px; border-top:1px solid #405168; padding:10px 0 1px; margin-top:10px; width:100%; }',
+						'.zw-example-label { color:#a5b7cb; font-size:11px; }',
+						'.zw-example-caption { font-size:11px; line-height:1.5; color:#a5b7cb; }',
+						'.zw-example-text { display:block; align-self:flex-start; background:linear-gradient(145deg,#14253a,#243d50); border-radius:5px; padding:15px; color:white; font-size:24px; line-height:1.35; white-space:nowrap; max-width:100%; overflow:hidden; }',
+						'.zw-example-filename { overflow-wrap:anywhere; background:#14253a; border:1px solid #405168; padding:9px; border-radius:5px; font-size:12px; }',
+						'.zw-example-screen { width:min(365px,100%); height:124px; border:1px solid #51647c; border-radius:5px; background:#142137; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; position:relative; overflow:hidden; }',
+						'.zw-example-video { background:linear-gradient(125deg,#213c57,#3f7481); border:2px solid #8ec8d0; width:69%; aspect-ratio:16/9; position:relative; display:flex; flex-direction:column; justify-content:center; align-items:center; transition:width .12s ease; overflow:hidden; border-radius:3px; }',
+						'.zw-example-title { position:absolute; top:0; left:0; right:0; text-align:center; font-size:10px; background:#15283dcc; color:#fff; }',
+						'.zw-example-fly { font-size:11px; color:#fff; text-shadow:0 1px 1px #000; white-space:nowrap; }',
+						'.zw-example-controlbar { position:absolute; bottom:0;left:0;right:0; background:#111d32dc; font-size:9px; text-align:center; color:#fff; }',
+						'.zw-example-sidebar { background:#22354a; padding:4px; color:#b8d1e8; border-radius:3px; font-size:10px; max-width:80px; }',
+						'.zw-modern-example[data-zw-example-mode=big] .zw-example-video { width:84%; }',
+						'.zw-modern-example[data-zw-example-mode=wide] .zw-example-video { width:95%; }',
+						'.zw-modern-example[data-zw-example-mode=small] .zw-example-video { width:45%; margin-left:auto; }',
+						'.zw-modern-example[data-zw-example-mode=sideView] .zw-example-video { width:51%; margin-left:auto; }',
+						'.zw-modern-example[data-zw-example-mode="3D"] .zw-example-video { transform:perspective(200px) rotateY(-12deg); }',
+						'.zw-modern-example[data-zw-example-mode=auto] .zw-example-controlbar { opacity:.6; }',
+						'.zw-modern-example[data-zw-example-mode=always-hide] .zw-example-controlbar { opacity:.06; }',
+						'.zw-modern-example[data-zw-example-mode=always-show] .zw-example-controlbar { opacity:1; }',
+						'.zw-modern-example[data-zw-example-mode=outside] .zw-example-title { top:-17px; background:#1a314b; }',
+						'.zw-modern-example[data-zw-example-mode=overlay] .zw-example-title { opacity:.3; }',
+						'.zw-modern-example[data-zw-example-mode=overlay-visible] .zw-example-title { opacity:1; background:#08233ecf; }',
+						'.zw-modern-search-guide { padding:12px 15px; margin:0 0 14px; background:#17283c; border:1px solid #39516e; border-radius:5px; color:var(--zw-dark-text); font-size:12px; }',
+						'.zw-modern-search-guide strong { display:block; font-size:13px; margin-bottom:6px; }',
+						'.zw-modern-search-guide p { margin:5px 0; color:var(--zw-dark-muted); }',
+						'.zw-modern-search-guide b { color:var(--zw-dark-text); }',
+						'.zw-modern-note { color:var(--zw-dark-muted); font-size:12px; padding:8px 11px; border-radius:5px; background:var(--zw-dark-panel); margin-top:9px; white-space:pre-wrap; }',
+						'.zw-modern-note[hidden] { display:none; }',
+						'.zw-modern-warning { color:#e6bb75; font-size:11px; display:block; margin-top:5px; }',
+						'.zw-modern-regex-editor { display:grid; grid-template-columns:1fr; gap:7px; width:100%; max-width:700px; }',
+						'.zw-modern-regex-editor label { display:flex; gap:9px; align-items:center; justify-content:flex-start; font-size:12px; }',
+						'.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox] { flex:none; width:17px; height:17px; appearance:checkbox; -webkit-appearance:checkbox; accent-color:#82bfff; border:0; background:transparent; border-radius:0; padding:0; }',
+						'.zw-modern-cardcontrols .zw-modern-regex-editor input[type=checkbox]::after { content:none!important; display:none!important; }',
+						'.zw-modern-regex-editor [data-zw-regex-advanced-panel] { display:flex; flex-direction:column; gap:6px; align-items:flex-start; }',
+						'.zw-modern-regex-editor [data-zw-regex-advanced-panel][hidden] { display:none!important; }',
+						'.zw-modern-regex-editor input[type=text] { width:180px; min-width:0; }',
+						'.zw-modern-regex-current { color:var(--zw-dark-muted); font-size:11px; }',
+						'.zw-modern-regex-editor small { color:var(--zw-dark-muted); font-size:11px; }',
+						'.zw-modern-command-assist { margin-top:10px; padding:12px; background:#1a293c; border:1px solid #445a71; border-radius:5px; display:grid; gap:10px; }',
+						'.zw-modern-command-assist p { margin:0; color:var(--zw-dark-muted); font-size:12px; line-height:1.6; }',
+						'.zw-modern-command-assist p strong { color:var(--zw-dark-text); }',
+						'.zw-modern-command-group { display:flex; align-items:center; flex-wrap:wrap; gap:6px; }',
+						'.zw-modern-command-group > strong { min-width:65px; font-size:11px; color:#c5d9ed; }',
+						'.zw-modern-command-group button { border:1px solid #526c89; border-radius:5px; color:#ecf5ff; background:#23364d; padding:5px 9px; font-size:11px; }',
+						'.zw-modern-command-group button:disabled { opacity:.55; background:#2f4458; }',
+						'.zw-modern-prefix-breakdown { display:flex; gap:5px; flex-wrap:wrap; }',
+						'.zw-modern-prefix-breakdown span { font-size:10px; padding:4px 7px; border-radius:4px; border:1px solid #465971; color:#aebed0; background:#1b293a; }',
+						'.zw-modern-prefix-presets { display:flex; flex-wrap:wrap; align-items:center; gap:7px; width:100%; justify-content:flex-start; }',
+						'.zw-modern-prefix-presets .is-selected { color:#101927; border-color:#82bfff; background:#82bfff; }',
+						'.zw-modern-prefix-hint { color:var(--zw-dark-muted); margin:6px 0 0; font-size:11px; width:100%; }',
+						'.zw-modern-backup { display:grid; gap:10px; }',
+						'.zw-modern-backup textarea { width:100%; min-height:150px; padding:10px; border:1px solid #465a74; border-radius:5px; background:#101927; color:#edf4ff; resize:vertical; font:12px/1.45 ui-monospace,Consolas,monospace; }',
+						'.zw-modern-backup p { color:#a5b7cb; font-size:12px; }',
+						'.zw-modern-backup .zw-modern-actions { display:flex; gap:8px; flex-wrap:wrap; }',
+						'.zw-modern-footer { background:var(--zw-dark-panel); border-top:1px solid var(--zw-dark-border); padding:12px 18px; display:flex; align-items:center; justify-content:flex-end; gap:9px; flex:none; }',
+						'.zw-modern-footer .zw-modern-dirty { color:var(--zw-dark-muted); margin-right:auto; }',
+						'.zw-modern-footer .zw-modern-primary { padding:9px 15px; border:1px solid #82bfff; color:#101927; background:#82bfff; font-weight:700; border-radius:5px; }',
+						'.zw-modern-backdrop { display:none; }',
+						'.zw-modern-root .relatedMenuCustomLinksContainer { width:100%; min-width:0; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor { color:var(--zw-dark-text); width:100%; padding:3px 0 6px; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor h3 { display:none; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor button { border:1px solid #3a4f65; color:var(--zw-dark-text); background:#1b293a; border-radius:5px; cursor:pointer; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor button:hover { border-color:#82bfff; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor .rl-card { background:#1b293a; border-color:#2b394b; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor input[type=text] { background:#101927; color:#edf4ff; border:1px solid #445a71; border-radius:5px; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor input[type=checkbox] { accent-color:#82bfff; }',
+						'.zw-modern-root .zenzaRelatedLinksEditor [hidden] { display:none !important; }',
+						'.zw-modern-root .zw-modern-related-editor { width:100%; }',
+						'.zw-modern-order-editor { width:100%; display:grid; gap:7px; }',
+						'.zw-modern-order-editor .zw-order-hint { color:#a5b7cb; font-size:12px; }',
+						'.zw-modern-order-list { list-style:none; padding:0; margin:0; display:grid; gap:7px; }',
+						'.zw-modern-order-row { position:relative; display:flex; align-items:center; gap:8px; padding:9px; background:#152638; border:1px solid #425b74; border-radius:5px; min-width:0; }',
+						'.zw-modern-order-row .zw-order-name { flex:1 1 auto; width:auto; min-width:0; overflow-wrap:break-word; white-space:normal; }',
+						'.zw-modern-order-row .zw-order-visible { flex:none; display:inline-flex; gap:6px; align-items:center; white-space:nowrap; }',
+						'.zw-modern-order-row .zw-order-visible input[type=checkbox] { width:18px; height:18px; flex:none; appearance:auto; accent-color:#82bfff; }',
+						'.zw-modern-order-row .zw-order-visible input[type=checkbox]::after { content:none; display:none; }',
+						'.zw-modern-cardhead [data-zw-shared-setting] { flex:none; color:#a5b7cb; font-size:10px; white-space:nowrap; }',
+						'.zw-modern-order-row .zw-order-name small { display:block; color:#a5b7cb; }',
+						'.zw-modern-order-row.is-dragging { opacity:.4; border-style:dashed; }',
+						'.zw-modern-order-row.is-drop-before::before,.zw-modern-order-row.is-drop-after::before { content:""; position:absolute; left:0; right:0; height:4px; background:#82bfff; box-shadow:0 0 9px #82bfff; z-index:2; pointer-events:none; }',
+						'.zw-modern-order-row.is-drop-before::before { top:-7px; }',
+						'.zw-modern-order-row.is-drop-after::before { bottom:-7px; }',
+						'.zw-modern-order-row.is-missing { opacity:.62; }',
+						'.zw-modern-order-row .zw-order-grip { cursor:grab; }',
+						'.zw-modern-order-row .zw-order-grip:active { cursor:grabbing; }',
+						'.zw-modern-order-compact .zw-modern-order-row { padding:6px 8px; gap:6px; flex-wrap:wrap; }',
+						'.zw-modern-order-compact .zw-order-name { flex:1 1 175px; font-size:12px; }',
+						'.zw-modern-order-compact .zw-order-key-preview { min-width:75px; font-size:10px; color:#a5b7cb; }',
+						'.zw-modern-order-compact .zw-order-key-preview.is-conflict { color:#ffd28a; }',
+						'.zw-modern-order-compact .zw-order-grip { touch-action:none; user-select:none; }',
+						'.zw-modern-order-compact .zw-order-visible { gap:4px; font-size:11px; }',
+						'.zw-modern-order-compact .zw-order-details { flex:1 0 100%; display:grid; gap:10px; padding:10px 6px 5px; border-top:1px solid #465b72; min-width:0; }',
+						'.zw-modern-order-compact .zw-order-details p { margin:0; color:#c3d3e4; }',
+						'.zw-modern-order-compact .zw-order-details small { color:#a5b7cb; }',
+						'.zw-modern-order-compact .zw-order-field { display:grid; gap:5px; min-width:0; font-size:12px; }',
+						'.zw-modern-order-compact .zw-order-field input[type=text],.zw-modern-order-compact .zw-order-field select,.zw-modern-order-compact .zw-order-field input[type=number] { width:min(100%,650px); min-width:0; padding:6px; background:#101927; border:1px solid #445a71; color:#edf4ff; }',
+						'.zw-modern-order-compact .zw-order-field input[type=checkbox] { appearance:auto; width:17px; height:17px; }',
+						'.zw-modern-order-compact .zw-order-field input[type=checkbox]::after { content:none; }',
+						'.zw-modern-order-compact .zw-order-shortcut-editor,.zw-modern-order-compact .zw-order-sizes { display:flex; flex-wrap:wrap; align-items:center; gap:9px; }',
+						'.zw-modern-order-compact .zw-order-sizes .zw-order-field { flex:1 1 130px; }',
+						'.zw-modern-order-compact .zw-order-variable-palette { display:flex; flex-wrap:wrap; gap:5px; }',
+						'.zw-modern-order-compact .zw-order-variable-palette p,.zw-modern-order-compact .zw-order-variable-palette small { flex:1 0 100%; }',
+						'.zw-modern-order-compact .zw-order-warning { color:#ffcb78; }',
+						'.zw-modern-order-compact .zw-modern-order-row.is-touch-dragging { border-color:#82bfff; box-shadow:0 0 0 1px #82bfff; }',
+						'.zw-modern-order-editor [data-zw-order-status] { font-size:12px; color:#a5b7cb; min-height:1.4em; }',
+						'.zw-order-toolbar { display:flex; gap:8px; flex-wrap:wrap; margin:3px 0 12px; }',
+						'.zw-order-workspace { display:grid; grid-template-columns:minmax(0,1.12fr) minmax(0,1fr); gap:16px; align-items:start; width:100%; min-width:0; }',
+						'.zw-order-inspector { min-width:0; background:#1b2c3f; border:1px solid #425b74; border-radius:8px; padding:17px; position:sticky; top:0; max-height:calc(100vh - 220px); overflow:auto; }',
+						'.zw-order-inspector .zw-order-details { border:0; padding:0; } .zw-order-details h3 { font-size:18px; margin:0 0 6px; overflow-wrap:anywhere; }',
+						'.zw-modern-order-compact .zw-order-name { border:0; padding:0; text-align:left; background:transparent; color:inherit; }',
+						'.zw-modern-order-row.is-selected { border-color:#82bfff; background:#253d55; box-shadow:0 0 0 1px #82bfff44; }',
+						'.zw-order-workspace .zw-modern-order-row { flex-wrap:nowrap; min-height:42px; }',
+						'.zw-order-workspace .zw-order-name { flex:1 1 0; min-width:0; font-weight:600; }',
+						'.zw-order-workspace .zw-modern-plainbtn { flex:none; white-space:nowrap; }',
+						'.zw-order-workspace .zw-order-key-preview { min-width:0; max-width:65px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
+						'.zw-order-inspector .is-detail-only .rl-card { padding:0; margin:10px 0 0; border:0; background:transparent; }',
+						'.zw-order-inspector .is-detail-only .rl-fields { grid-template-columns:minmax(0,1fr); }',
+						'.zw-order-inspector .is-detail-only .rl-head .rl-summary,.zw-order-inspector .is-detail-only [data-rl-drag],.zw-order-inspector .is-detail-only [data-rl-expand],.zw-order-inspector .is-detail-only [data-rl-up],.zw-order-inspector .is-detail-only [data-rl-down] { display:none; }',
+						'.zw-order-inspector .is-detail-only .rl-toolbar>button,.zw-order-inspector .is-detail-only [data-rl-count],.zw-order-inspector .is-detail-only .zenzaRelatedLinksEditor>.rl-help { display:none; }',
+						'.zw-order-inspector textarea,.zw-order-inspector select,.zw-order-inspector input[type=text] { max-width:100%; min-width:0!important; width:100%; box-sizing:border-box; }',
+						'.zw-order-inspector [data-rl-preview] { white-space:pre-wrap; }',
+						/* SCUI-10: miniature diagrams are layout previews only: no duplicate video players. */
+						'.zw-scui-picker { padding:14px; margin-bottom:13px; border:1px solid #4b6079; border-radius:12px; background:#182536; }',
+						'.zw-scui-pickerhead { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-bottom:12px; }',
+						'.zw-scui-tabs { display:flex; gap:5px; background:#101d2e; padding:4px; border-radius:9px; }',
+						'.zw-scui-tabs button { border:1px solid transparent; border-radius:6px; padding:8px 10px; color:#ddd; background:transparent; cursor:pointer; }',
+						'.zw-scui-tabs button[aria-pressed=true] { background:#45698b; border-color:#8bb9e7; color:#fff; }',
+						'.zw-scui-layout-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(142px,1fr)); gap:8px; }',
+						'.zw-scui-layout-option { display:flex; flex-direction:column; gap:5px; background:#101a2a; border:2px solid #35475f; border-radius:9px; color:#ddd; padding:8px; text-align:left; cursor:pointer; min-width:0; }',
+						'.zw-scui-layout-option[aria-pressed=true] { border-color:#76c9ff; background:#1b3654; box-shadow:0 0 0 1px #76c9ff60; }',
+						'.zw-scui-layout-option:focus-visible,.zw-scui-tabs button:focus-visible { outline:2px solid #e5c075; outline-offset:2px; }',
+						'.zw-scui-layout-option:disabled { opacity:.48; cursor:not-allowed; }',
+						'.zw-scui-layout-option strong { font-size:11px; white-space:normal; line-height:1.35; }',
+						'.zw-scui-mini { position:relative; display:block; height:62px; background:linear-gradient(135deg,#4d6486,#1c2842); border:1px solid #65768d; border-radius:6px; overflow:hidden; }',
+						'.zw-scui-mini > i { position:absolute; display:block; background:#0c1725; border:1px solid #8ab8de; border-radius:3px; width:38%; height:22px; bottom:8px; left:30%; }',
+						'.zw-scui-mini > b { position:absolute; display:block; background:#1b3560a8; border:1px solid #a4b7d0; border-radius:3px; width:29%; height:16px; bottom:9px; left:8px; }',
+						'.zw-scui-mini > em { position:absolute; display:block; background:#6faee4; height:3px; bottom:3px; width:66%; left:17%; }',
+						'.zw-scui-mini[data-layout="02"] > i { left:6px; bottom:18px; } .zw-scui-mini[data-layout="02"] > b { left:auto; right:6px; bottom:18px; }',
+						'.zw-scui-mini[data-layout="03"] > i { left:auto; right:6px; bottom:9px; }',
+						'.zw-scui-mini[data-layout="04"] > i { left:31%; bottom:auto; top:5px; }',
+						'.zw-scui-mini[data-layout="05"] > i { width:85%; left:7%; height:21px; bottom:9px; }',
+						'.zw-scui-mini[data-layout="06"] > i { width:25%; left:37%; height:17px; }',
+						'.zw-scui-mini[data-layout="07"] > i { width:25%; left:37%; } .zw-scui-mini[data-layout="07"] > b { width:23%; left:7%; }',
+						'.zw-scui-mini[data-layout="08"] > i { left:auto; right:3px; width:27%; height:51px; bottom:5px; }',
+						'.zw-scui-mini[data-layout="09"] > i { left:10%; bottom:14px; } .zw-scui-mini[data-layout="09"] > b { right:5%; left:auto; }',
+						'.zw-scui-mini[data-layout="10"] > i { left:62%; bottom:24px; width:31%; } .zw-scui-mini[data-layout="10"] > b { left:13%; bottom:8px; }',
+						'.zw-scui-picker.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
+						'.zw-scui-layout-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }',
+						'.zw-scui-mini[data-layout=follow]>i,.zw-scui-mini[data-layout=fixed]>i { left:12%; width:34%; height:30px; bottom:10px; }',
+						'.zw-scui-mini[data-layout=follow]>b,.zw-scui-mini[data-layout=fixed]>b { left:48%; width:36%; height:30px; bottom:10px; color:white; font:9px/14px sans-serif; }',
+						'.zw-scui-mini i span { display:block; color:white; font:9px/25px sans-serif; white-space:nowrap; font-style:normal; text-shadow:1px 1px black; }',
+						'.zw-scui-layout-option small { font-size:11px; line-height:1.5; }',
+						'[data-zw-scene-compat] { margin-top:12px; } [data-zw-scene-compat] summary { cursor:pointer; }',
+						'.zw-modern-cardcontrols input[type=checkbox]:focus-visible { outline:2px solid #e5c075; outline-offset:3px; }',
+						'.zw-scui-note { display:block; font-size:12px; line-height:1.5; color:#bdcfe0; padding-top:9px; }',
+						'@media(max-width:760px) {.zw-scui-layout-grid { grid-template-columns:repeat(auto-fit,minmax(126px,1fr)); }}',
+						'@media(max-width:1050px) { .zw-order-workspace { grid-template-columns:minmax(0,1fr); } .zw-order-inspector { position:static; max-height:none; } }',
+						'@media(max-width:760px) {.zw-modern-sidebar { position:absolute; top:0; bottom:0; left:0; z-index:5; width:min(290px,88vw); flex-basis:auto; transform:translateX(-100%); box-shadow:6px 0 22px #0007; padding:12px; } .zw-modern-root.is-drawer-open .zw-modern-sidebar { transform:translateX(0); } .zw-modern-root.is-drawer-open .zw-modern-backdrop { display:block; background:#0008; position:absolute; inset:0; z-index:4; } .zw-modern-main { padding:15px 11px; } .zw-modern-card { padding:10px; } .zw-modern-footer { padding:9px; } .zw-modern-footer .zw-modern-dirty { font-size:11px; }}'
+				].join('\n');
+				doc.head.append(style);
 		}
-		if(e.target.matches('[data-zw-search]')) {
-			this.searchTerm=e.target.value.trim();
-			this._renderCards();
-			this._refreshFooter();
-			return;
-		}
-		this._interceptValue(e);
-	}
-	_onClick(e) {
-		if(e.target.closest?.('[data-zw-drawer-dismiss]')) {
-			this.root.classList.remove('is-drawer-open');
-			return;
-		}
-		const button=e.target.closest('button');
-		if(!button||!this.root.contains(button)||button.disabled){return;}
-		if(button.hasAttribute('data-zw-scene-migration-ack')){
-			try {
-				this.model.config.persistSceneSearchSelection({'sceneSearch.presentation.migrationAcknowledged':true});
+		constructor({ panel, legacyRoot, model, storage, onClose, confirm, formatKeyCombo, encodeKeyCombo, relatedEditor = null, relatedOrder = null, relatedActions = null, screenshotFileName = null, playlist = null, reload = null }) {
+				if (!panel || !model) {
+						throw new TypeError('Panel and model are required');
+				}
+				this.panel = panel;
+				this.legacyRoot = legacyRoot;
+				this.model = model;
+				this.relatedEditor = relatedEditor;
+				this.relatedOrder = relatedOrder;
+				this.relatedActions = relatedActions;
+				this.screenshotFileName = screenshotFileName;
+				this._orderDragKey = null;
+				this._orderDropKey = null;
+				this._orderDropAfter = false;
+				this._orderAnnouncement = '';
+				this._expandedRelatedOptions = new Set();
+				this._touchOrder = null;
+				this.playlist = playlist;
+				this.reload = reload || (() => this.win.location.reload());
+				if (relatedEditor) {
+						relatedEditor.getDraftShortcutValue = id => this.model.get(id);
+						relatedEditor.getDraftShortcutConflicts = key => [
+								...this.model.actions.filter(action => Number(this.model.get('KEY_' + action.id)) === key)
+										.map(action => action.label || action.id),
+								...relatedEditor.draft.filter(link => link && link.enabled !== false &&
+										Number(link.shortcutKey) === key).map(link => link.label || link.id)
+						];
+						relatedEditor.embedded = true;
+						relatedEditor.onDraftChange = value => this._onCustomMenuDraft(value);
+				}
+				this._relatedOrigin = relatedEditor ? { parent: relatedEditor.container.parentNode,
+						next: relatedEditor.container.nextSibling } : null;
+				this.doc = panel.ownerDocument;
+				this.win = this.doc.defaultView;
+				this.storage = storage || this.win.localStorage;
+				this.onClose = onClose || (() => { });
+				this.confirm = confirm || (message => this.win.confirm(message));
+				this.formatKeyCombo = formatKeyCombo || (v => String(v || '(未設定)'));
+				this.encodeKeyCombo = encodeKeyCombo || (e => e.keyCode);
+				this.expanded = new Set();
+				this._moved = new Map();
+				this._seekDirections = new Map();
+				this._visibleSeekSlots = new Set();
+				this._sceneLayoutTab = 'normal';
+				this._recordCleanup = null;
+				this.searchTerm = '';
+				this._setupSelection();
+				ModernAdvancedSettingsUI._style(this.doc);
+				this.root = this.doc.createElement('section');
+				this.root.className = 'zw-modern-root';
+				this.root.style.setProperty('--zw-sidebar-width', '290px');
+				this.root.setAttribute('role', 'dialog');
+				this.root.setAttribute('aria-label', 'ZenzaWatch 上級者設定');
+				this.root.innerHTML = [
+						'<div class="zw-modern-header">',
+						'<button type="button" class="zw-modern-iconbtn" data-zw-sidebar aria-label="サイドバーの開閉">☰</button>',
+						'<h2>ZenzaWatch 上級者設定</h2>',
+						'<button type="button" class="zw-modern-iconbtn" data-zw-close aria-label="設定画面を閉じる">✕</button>',
+						'</div>',
+						'<div class="zw-modern-body">',
+						'<div class="zw-modern-backdrop" data-zw-drawer-dismiss></div>',
+						'<aside class="zw-modern-sidebar">',
+						'<input class="zw-modern-search" type="search" data-zw-search placeholder="すべての設定を検索" aria-label="設定を検索">',
+						'<nav class="zw-modern-nav" aria-label="設定カテゴリ"></nav>',
+						'</aside>',
+						'<main class="zw-modern-main"><div class="zw-modern-content-inner">',
+						'<div class="zw-modern-breadcrumb" data-zw-path></div>',
+						'<h3 class="zw-modern-section-title" data-zw-title></h3>',
+						'<p class="zw-modern-section-subtitle" data-zw-subtitle></p>',
+						'<div class="zw-modern-toolbar"><button class="zw-modern-plainbtn" type="button" data-zw-reset-category>この画面の項目だけ初期値に戻す</button></div>',
+						'<div data-zw-cards></div></div></main>',
+						'</div>',
+						'<div class="zw-modern-footer">',
+						'<span class="zw-modern-dirty" data-zw-dirty>保存済み</span>',
+						'<button class="zw-modern-plainbtn" type="button" data-zw-cancel>キャンセル</button>',
+						'<button class="zw-modern-primary" type="button" data-zw-save>変更を保存</button>',
+						'</div>'
+				].join('');
+				this.nav = this.root.querySelector('.zw-modern-nav');
+				this.cards = this.root.querySelector('[data-zw-cards]');
+				this.root.addEventListener('click', this._onClickBound = e => this._onClick(e), true);
+				this.root.addEventListener('change', this._onValueBound = e => this._onValue(e), true);
+				this.root.addEventListener('input', this._onInputBound = e => this._onInput(e), true);
+				this.root.addEventListener('dragstart', this._onOrderDragStartBound = e => this._onOrderDragStart(e));
+				this.root.addEventListener('dragover', this._onOrderDragOverBound = e => this._onOrderDragOver(e));
+				this.root.addEventListener('drop', this._onOrderDropBound = e => this._onOrderDrop(e));
+				this.root.addEventListener('dragend', this._onOrderDragEndBound = () => this._onOrderDragEnd());
+				this.root.addEventListener('pointerdown', this._onTouchOrderDownBound = e => this._onTouchOrderDown(e));
+				this.root.addEventListener('pointermove', this._onTouchOrderMoveBound = e => this._onTouchOrderMove(e));
+				this.root.addEventListener('pointerup', this._onTouchOrderUpBound = e => this._onTouchOrderUp(e));
+				this.root.addEventListener('pointercancel', this._onTouchOrderCancelBound = () => this._clearTouchOrder());
+				this.root.addEventListener('click', this._onRelatedClickBound = e => this._onRelatedBubble(e));
+				this.root.addEventListener('change', this._onRelatedChangeBound = e => this._onRelatedBubble(e));
+				this.root.addEventListener('input', this._onRelatedInputBound = e => this._onRelatedBubble(e));
+				this.doc.addEventListener('keydown', this._onKeyDownBound = e => this._onDocumentKeyDown(e), true);
+				this.panel.appendChild(this.root);
+				this._onBackCommentConfigUpdate = () => {
+						if (!this.model.syncLiveValue('backComment')) {
+								return;
+						}
+						const checked = !!this.model.get('backComment');
+						this.cards.querySelectorAll('input[data-setting-name="backComment"]')
+								.forEach(input => { input.checked = checked; });
+						this._refreshCards();
+				};
+				this.model.config.onkey?.('backComment', this._onBackCommentConfigUpdate);
+				this._unwatchRelatedActions = this.relatedActions?.onChange?.(() => this._refreshRelatedOrderList()) || null;
+				this._renderNavigation();
 				this._renderCards();
-			} catch(error) {
-				const info=button.closest('[data-zw-scene-migration]');
-				if(info){const note=this.doc.createElement('span');note.setAttribute('role','alert');note.textContent='保存できませんでした。もう一度お試しください。';info.append(note);}
-			}
-			return;
+				this._refreshFooter();
+				this.panel.classList.add('zw-modern-active');
+				this._savedPageOverflow = null;
+				this.setModalVisible(this.panel.classList.contains('show'));
 		}
-		if(button.hasAttribute('data-zw-scene-layout-mode') &&
-			!button.hasAttribute('data-zw-scene-layout')){
-			const mode=button.dataset.zwSceneLayoutMode;
-			if(['normal','fullscreen'].includes(mode)){
-				this._sceneLayoutTab=mode;
-				if(this._sceneDemoState)this._sceneDemoState.screen=mode;
-				this._renderCards();this._refreshFooter();
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-scene-layout')){
-			const id=button.dataset.zwSceneLayout;
-			const mode=button.dataset.zwSceneLayoutMode;
-			if(!['follow','fixed','legacy'].includes(id)||!['normal','fullscreen'].includes(mode) ||
-				mode!==this._sceneLayoutTab){return;}
-			if(mode==='fullscreen'&&this.model.get('sceneSearch.layout.linkFullscreen')){return;}
-			this.model.set('sceneSearch.presentation.'+mode,id);
-			this._renderCards();this._refreshFooter();
-			return;
-		}
-		if(button.hasAttribute('data-zw-order-add-link') || button.hasAttribute('data-zw-order-add-copy')){
-			const kind=button.hasAttribute('data-zw-order-add-copy')?'copy':'link';
-			const id=this.relatedEditor?.addItem(kind);
-			if(id){this._expandedRelatedOptions=new Set(['link:'+id]);this._refreshRelatedOrderList();}
-			this._refreshFooter();return;
-		}
-		if(button.hasAttribute('data-zw-order-edit')){
-			const key=button.dataset.zwOrderEdit;
-			this._expandedRelatedOptions=new Set([key]);
-			this._refreshRelatedOrderList();
-			this.root.querySelector('[data-zw-order-edit="'+key+'"]')?.focus();
-			return;
-		}
-		if(button.hasAttribute('data-zw-builtin-reset')){
-			const id=button.dataset.zwBuiltinReset;
-			const key=this.relatedOrder?.OPTIONS_KEY;
-			if(!key || !this.model.descriptor(key)){return;}
-			const options={...(this.model.get(key)||{})};
-			delete options[id];
-			this.model.set(key,options);
-			this._refreshRelatedOrderList();this._refreshFooter();
-			return;
-		}
-		if(button.hasAttribute('data-zw-builtin-insert')){
-			const id=button.dataset.zwBuiltinId;
-			const token=button.dataset.zwBuiltinInsert;
-			if(!this.relatedActions?.VARIABLES?.includes(token)){return;}
-			const field=this.root.querySelector('[data-zw-builtin-field="urlTemplate"][data-zw-builtin-id="'+id+'"]');
-			if(!field){return;}
-			const at=typeof field.selectionStart==='number'?field.selectionStart:field.value.length;
-			const end=typeof field.selectionEnd==='number'?field.selectionEnd:at;
-			field.setRangeText('{'+token+'}',at,end,'end');
-			this._setBuiltinOptionDraft(id,'urlTemplate',field.value);
-			field.focus();return;
-		}
-		if(button.hasAttribute('data-zw-open-link-editor')){
-			const id=button.dataset.zwOpenLinkEditor.slice(5);
-			const links=this.model.get('relatedMenu.customLinks')||[];
-			const index=links.findIndex(item=>item.id===id);
-			if(index>=0 && this.relatedEditor){
-				const card=this.relatedEditor.container.querySelector('[data-rl-row="'+index+'"]');
-				const expand=card?.querySelector('[data-rl-expand]');
-				if(expand?.getAttribute('aria-expanded')==='false'){expand.click();}
-				card?.scrollIntoView?.({block:'nearest'});
-				expand?.focus?.();
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-order-refresh')){
-			this._refreshRelatedOrderList();return;
-		}
-		if(button.hasAttribute('data-zw-order-up') || button.hasAttribute('data-zw-order-down')){
-			const upward=button.hasAttribute('data-zw-order-up');
-			const key=upward?button.dataset.zwOrderUp:button.dataset.zwOrderDown;
-			const keys=this._relatedOrderEntries().map(item=>item.key);
-			const index=keys.indexOf(key),target=index+(upward?-1:1);
-			if(index>=0 && target>=0 && target<keys.length){
-				this._moveRelatedOrder(key,keys[target],!upward);
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-backup-export')){
-			try {
-				this.root.querySelector('[data-zw-backup-json]').value=
-					this.model.config.exportJson();
-				this.root.querySelector('[data-zw-backup-status]').textContent='';
-			}catch(error){
-				this.root.querySelector('[data-zw-backup-status]').textContent=
-					'設定の書き出しに失敗しました: '+(error.message||error);
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-backup-import')){
-			const status=this.root.querySelector('[data-zw-backup-status]');
-			try{
-				const data=JSON.parse(this.root.querySelector('[data-zw-backup-json]').value);
-				if(!data || typeof data!=='object' || Array.isArray(data)){
-					throw new Error('JSONオブジェクトを指定してください');
+		setModalVisible(visible) {
+				if (visible) {
+						if (this._savedPageOverflow) {
+								return;
+						}
+						const elements = [this.doc.documentElement, this.doc.body].filter(Boolean);
+						this._savedPageOverflow = elements.map(el => ({
+								element: el, value: el.style.getPropertyValue('overflow'),
+								priority: el.style.getPropertyPriority('overflow')
+						}));
+						elements.forEach(el => el.style.setProperty('overflow', 'hidden', 'important'));
 				}
-				if(this.model.isDirty()&&!this.confirm('未保存の編集内容を破棄してバックアップを読み込みますか？')){return;}
-				if(!this.confirm('バックアップを取り込んで設定を上書きしますか？')){return;}
-				this.model.config.import(data);
-				this.model.cancel();
-				if(this.relatedEditor){this.relatedEditor._load();}
-				status.textContent='設定を取り込みました。再読み込みします。';
-				this.reload();
-			}catch(error){
-				status.textContent='設定を読み込めませんでした: '+(error.message||error);
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-playlist-export')){
-			try{
-				this.root.querySelector('[data-zw-playlist-json]').value=
-					JSON.stringify(this.playlist.export(),null,2);
-				this.root.querySelector('[data-zw-backup-status]').textContent='';
-			}catch(error){
-				this.root.querySelector('[data-zw-backup-status]').textContent=
-					'プレイリストの書き出しに失敗しました: '+(error.message||error);
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-playlist-import')){
-			const status=this.root.querySelector('[data-zw-backup-status]');
-			try{
-				const data=JSON.parse(this.root.querySelector('[data-zw-playlist-json]').value);
-				if(!this.confirm('プレイリストデータを上書きしますか？')){return;}
-				this.playlist.import(data);
-				status.textContent='プレイリストを取り込みました。再読み込みします。';
-				this.reload();
-			}catch(error){
-				status.textContent='プレイリストを読み込めませんでした: '+(error.message||error);
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-major')) {
-			const major=button.dataset.zwMajor;
-			if(this.expanded.has(major)){this.expanded.delete(major);}
-			else {this.expanded.add(major);}
-			this._saveStored();this._renderNavigation();return;
-		}
-		if(button.hasAttribute('data-zw-sub')) {
-			const val=button.dataset.zwSub;
-			const sep=val.indexOf('|');
-			this.selected={category:val.slice(0,sep),subcategory:val.slice(sep+1)};
-			this.searchTerm='';
-			this.root.querySelector('[data-zw-search]').value='';
-			this._saveStored();
-			this.root.classList.remove('is-drawer-open');
-			this._renderNavigation();this._renderCards();this._refreshFooter();return;
-		}
-		if(button.hasAttribute('data-zw-sidebar')) {
-			if(this.win.innerWidth<=760) {this.root.classList.toggle('is-drawer-open');}
-			else {this.root.classList.toggle('is-sidebar-collapsed');}
-			return;
-		}
-		if(button.hasAttribute('data-zw-close')) {
-			if(this.hasPendingEdits()&&!this.confirm('未保存の設定変更を破棄して閉じますか？')) {return;}
-			this.discardChanges();
-			this.onClose();return;
-		}
-		if(button.hasAttribute('data-zw-command-preset')){
-			if(!this.model.isEnabled('commandFilter')){return;}
-			const token=button.dataset.zwCommandPreset;
-			if(!['red','blue','green','yellow','pink','cyan','black',
-				'big','small','ue','shita'].includes(token)){return;}
-			const old=String(this.model.get('commandFilter')??'');
-			const existing=new Set(old.split(/\r?\n/)
-				.map(value=>value.trim().toLowerCase()).filter(Boolean));
-			if(existing.has(token)){return;}
-			this.model.set('commandFilter',old.replace(/[\r\n]+$/,'')+
-				(old.trim()?'\n':'')+token);
-			this._renderCards();this._refreshFooter();return;
-		}
-		if(button.hasAttribute('data-zw-regex-advanced-toggle')){
-			const holder=button.closest('.zw-modern-regex-editor');
-			const panel=holder?.querySelector('[data-zw-regex-advanced-panel]');
-			if(panel){
-				panel.hidden=!panel.hidden;
-				button.setAttribute('aria-expanded',String(!panel.hidden));
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-screenshot-prefix')){
-			this.model.set('screenshot.prefix',button.dataset.zwScreenshotPrefix);
-			this._renderCards();this._refreshFooter();
-			return;
-		}
-		if(button.hasAttribute('data-zw-filename-template')){
-			this.model.set('screenshot.filenameTemplate',button.dataset.zwFilenameTemplate);
-			this._renderCards();this._refreshFooter();
-			return;
-		}
-		if(button.hasAttribute('data-zw-filename-token')){
-			const token=button.dataset.zwFilenameToken;
-			if(!this.screenshotFileName?.TOKENS.includes(token)){return;}
-			const id='screenshot.filenameTemplate';
-			this.model.set(id,String(this.model.get(id)||'')+'{'+token+'}');
-			this._renderCards();this._refreshFooter();
-			return;
-		}
-		if(button.hasAttribute('data-zw-help')) {
-			const card=button.closest('.zw-modern-card');
-			const note=card?.querySelector('.zw-modern-note');
-			if(note){note.hidden=!note.hidden;}
-			return;
-		}
-		if(button.hasAttribute('data-zw-add-seek')){
-			const available=this._customSeekSlots().find(n=>
-				!this._usedCustomSeekSlots().includes(n));
-			if(available!==undefined){
-				this._visibleSeekSlots.add(available);
-				this._renderCards();this._refreshFooter();
-				this.cards.querySelector('[data-zw-id="KEY_CUSTOM_SEEK_'+available+'"]')
-					?.scrollIntoView?.({block:'nearest'});
-			}
-			return;
-		}
-		if(button.hasAttribute('data-zw-remove-seek')){
-			const n=Number(button.dataset.zwRemoveSeek);
-			if(!this._customSeekSlots().includes(n)){return;}
-			this.model.resetItem('KEY_CUSTOM_SEEK_'+n);
-			this.model.resetItem('PARAM_CUSTOM_SEEK_'+n);
-			this._visibleSeekSlots.delete(n);
-			this._seekDirections.delete('PARAM_CUSTOM_SEEK_'+n);
-			this._renderCards();this._refreshFooter();
-			return;
-		}
-		if(button.hasAttribute('data-zw-reset-item')) {
-			this.model.resetItem(button.dataset.zwResetItem);
-			if(button.dataset.zwResetItem==='relatedMenu.customLinks') {
-				this._applyRelatedDraftFromModel();
-			}
-			this._renderCards();this._refreshFooter();return;
-		}
-		if(button.hasAttribute('data-zw-reset-category')) {
-			const {category,subcategory}=this.selected;
-			const count=this.model.sectionDescriptors(category,subcategory).length;
-			if(this.confirm(category+' / '+subcategory+' の'+count+
-				'項目だけを初期値に戻しますか？（保存前ならキャンセル可能）')) {
-				this.model.resetSubcategory(category,subcategory);
-				if(subcategory==='関連メニュー › カスタムリンク') {
-					this._applyRelatedDraftFromModel();
+				else if (this._savedPageOverflow) {
+						this._savedPageOverflow.forEach(({ element, value, priority }) => {
+								if (value) {
+										element.style.setProperty('overflow', value, priority);
+								}
+								else {
+										element.style.removeProperty('overflow');
+								}
+						});
+						this._savedPageOverflow = null;
 				}
-				this._renderCards();this._refreshFooter();
-			}
-			return;
 		}
-		if(button.hasAttribute('data-zw-cancel')) {
-			this.discardChanges();return;
+		_setupSelection() {
+				const all = this.model.descriptors;
+				const first = all.find(d => d.category === '再生・音声') || all[0];
+				const fallback = first ? { category: first.category, subcategory: first.subcategory } :
+						{ category: '再生・音声', subcategory: '再生動作' };
+				const previous = this._readStored('zw-advanced-modern-selection');
+				const saved = previous?.category === 'コメント増量' ?
+						{ category: 'コメント表示', subcategory: '追加取得' } : previous;
+				this.selected = (saved && (this.model.descriptors.some(d => d.category === saved.category &&
+						d.subcategory === saved.subcategory) ||
+						(saved.category === 'プレイリスト・検索' && saved.subcategory === 'データ管理'))) ? saved : fallback;
+				const open = this._readStored('zw-advanced-modern-expanded');
+				const majors = Array.isArray(open) ?
+						[...new Set(open.map(name => name === 'コメント増量' ? 'コメント表示' : name))]
+								.filter(name => this.model.categories.includes(name)) : [];
+				this.expanded = new Set(majors.length ? majors : [this.selected.category]);
 		}
-		if(button.hasAttribute('data-zw-save')) {
-			try {
-				if(this._relatedErrors().length>0){throw new Error('カスタムリンクに不正な入力があります');}
+		_readStored(key) {
+				try {
+						return JSON.parse(this.storage.getItem(key));
+				}
+				catch (_) {
+						return null;
+				}
+		}
+		_saveStored() {
+				try {
+						this.storage.setItem('zw-advanced-modern-selection', JSON.stringify(this.selected));
+						this.storage.setItem('zw-advanced-modern-expanded', JSON.stringify([...this.expanded]));
+				}
+				catch (_) { /* UI navigation still works without persistent storage */ }
+		}
+		_button(text, attribute, value, cssClass = '') {
+				const el = this.doc.createElement('button');
+				el.type = 'button';
+				el.textContent = text;
+				el.setAttribute(attribute, value);
+				el.className = cssClass;
+				return el;
+		}
+		_renderNavigation() {
+				this.nav.replaceChildren();
+				for (const major of this.model.categories) {
+						const subs = [...new Set(this.model.descriptors
+										.filter(d => d.category === major).map(d => d.subcategory))];
+						if (major === 'プレイリスト・検索') {
+								subs.push('データ管理');
+						}
+						const open = this.expanded.has(major);
+						const b = this._button((open ? '⌄ ' : '› ') + major, 'data-zw-major', major);
+						b.setAttribute('aria-expanded', String(open));
+						if (this.selected.category === major) {
+								b.classList.add('is-active');
+						}
+						this.nav.appendChild(b);
+						if (!open) {
+								continue;
+						}
+						for (const sub of subs) {
+								const label = sub === '関連メニュー › カスタムリンク' ? '関連メニュー（全項目）' : sub;
+								const item = this._button(label, 'data-zw-sub', major + '|' + sub, 'zw-modern-sub');
+								if (this.selected.category === major && this.selected.subcategory === sub) {
+										item.classList.add('is-active');
+								}
+								this.nav.appendChild(item);
+						}
+				}
+		}
+		static _formatNgUserIds(value) {
+				const text = Array.isArray(value) ? value.join('\n') : String(value ?? '');
+				return text.split(/[,\r\n]+/).map(id => id.trim()).filter(Boolean).join('\n');
+		}
+		static _hexColor(value) {
+				const text = String(value || '').trim().toLowerCase();
+				if (/^#[0-9a-f]{6}$/.test(text)) {
+						return text;
+				}
+				if (/^#[0-9a-f]{3}$/.test(text)) {
+						return '#' + [...text.slice(1)].map(ch => ch + ch).join('');
+				}
+				const named = { green: '#008000', red: '#ff0000', blue: '#0000ff',
+						black: '#000000', white: '#ffffff', gray: '#808080', grey: '#808080',
+						yellow: '#ffff00', orange: '#ffa500', purple: '#800080' };
+				return named[text] || null;
+		}
+		_createColorEditor(descriptor) {
+				const box = this.doc.createElement('div');
+				box.className = 'zw-modern-color-editor';
+				const picker = this.doc.createElement('input');
+				picker.type = 'color';
+				picker.dataset.zwColorPicker = descriptor.id;
+				picker.setAttribute('aria-label', descriptor.label + 'をカラーピッカーで選択');
+				const raw = String(this.model.get(descriptor.id) ?? '');
+				picker.value = ModernAdvancedSettingsUI._hexColor(raw) ||
+						ModernAdvancedSettingsUI._hexColor(this.model.config.default[descriptor.id]) || '#008800';
+				picker.disabled = !this.model.isEnabled(descriptor.id);
+				const code = this.doc.createElement('input');
+				code.type = 'text';
+				code.dataset.settingName = descriptor.id;
+				code.dataset.zwColorCode = descriptor.id;
+				code.value = raw;
+				code.placeholder = String(this.model.config.default[descriptor.id] ?? '#008800');
+				code.spellcheck = false;
+				code.autocomplete = 'off';
+				code.setAttribute('aria-label', descriptor.hexOnly === true ? 'カラーコード（#RRGGBB または #RGB）' : 'カラーコード（HEXまたはCSS色名）');
+				code.disabled = !this.model.isEnabled(descriptor.id);
+				const hint = this.doc.createElement('span');
+				hint.className = 'zw-modern-color-hint';
+				hint.textContent = descriptor.hexOnly === true ?
+						'カラーコード #RRGGBB または #RGB（保存前に見本を確認できます）' :
+						'カラーコード #RRGGBB または #RGB（CSS色名も使用可）';
+				box.append(picker, code, hint);
+				return box;
+		}
+		_refreshColorEditor(card, descriptor, active) {
+				const code = card.querySelector('[data-zw-color-code]');
+				const picker = card.querySelector('[data-zw-color-picker]');
+				const hint = card.querySelector('.zw-modern-color-hint');
+				const value = String(this.model.get(descriptor.id) ?? '');
+				const hex = ModernAdvancedSettingsUI._hexColor(value);
+				const valid = descriptor.hexOnly !== true || /^#(?:[a-fA-F0-9]{3}|[a-fA-F0-9]{6})$/.test(value);
+				if (code && code !== this.doc.activeElement) {
+						code.value = value;
+				}
+				if (code) {
+						code.disabled = !active;
+						code.setAttribute('aria-invalid', String(!valid));
+				}
+				if (picker) {
+						picker.disabled = !active;
+						if (hex && valid) {
+								picker.value = hex;
+						}
+				}
+				if (hint) {
+						hint.textContent = descriptor.hexOnly === true ?
+								(valid ? '色見本をクリック、または #RGB / #RRGGBB を入力できます。' : 'カラーコードを入力中です。#RGB または #RRGGBB が必要です。') :
+								(hex ? '色見本をクリックして選択、またはコードを入力できます。' : 'CSS色名を使用中／入力途中です。色見本の選択でHEX値に切り替わります。');
+				}
+		}
+		_makeVisualExample(descriptor) {
+				const id = descriptor.id;
+				if (![
+						'screenMode', 'screenMode:ginza', 'screenMode:others',
+						'fullscreenControlBarMode', 'videoHeader.position',
+						'commentLayer.textShadowType', 'commentLayer.ownerCommentShadowColor',
+						'cssFontWeight', 'baseFontFamily', 'baseChatScale', 'screenshot.prefix',
+						'screenshot.filenameTemplate'
+				].includes(id)) {
+						return null;
+				}
+				const area = this.doc.createElement('div');
+				area.className = 'zw-modern-example';
+				area.dataset.zwPreviewFor = id;
+				const label = this.doc.createElement('span');
+				label.className = 'zw-example-label';
+				label.textContent = id === 'screenshot.prefix' || id === 'screenshot.filenameTemplate' ?
+						'保存ファイル名の例' :
+						'表示例（選択した設定の模式図）';
+				area.append(label);
+				if (id.startsWith('screenMode') || id === 'fullscreenControlBarMode' ||
+						id === 'videoHeader.position') {
+						const stage = this.doc.createElement('div');
+						stage.className = 'zw-example-screen';
+						stage.innerHTML = '<div class="zw-example-video">' +
+								'<div class="zw-example-title">動画タイトル</div>' +
+								'<div class="zw-example-fly">サンプルコメント　→</div>' +
+								'<div class="zw-example-controlbar">▶ ━━━━━━━━━━ ◖ ))</div>' +
+								'</div><div class="zw-example-sidebar">情報・タグ</div>';
+						area.append(stage);
+				}
+				else if (id === 'screenshot.prefix' || id === 'screenshot.filenameTemplate') {
+						const code = this.doc.createElement('code');
+						code.className = 'zw-example-filename';
+						area.append(code);
+						const parts = this.doc.createElement('div');
+						parts.className = 'zw-modern-prefix-breakdown';
+						for (const [label, text] of [
+								['先頭に追加する文字', '自由入力'],
+								['動画タイトル', '自動で追加'], ['動画ID', '自動で追加'],
+								['再生位置', '自動で追加'], ['.png', '自動で追加']
+						]) {
+								const item = this.doc.createElement('span');
+								item.textContent = label + '（' + text + '）';
+								parts.append(item);
+						}
+						area.append(parts);
+				}
+				else {
+						const sample = this.doc.createElement('span');
+						sample.className = 'zw-example-text';
+						sample.textContent = id === 'commentLayer.ownerCommentShadowColor' ?
+								'投稿者コメントの影色' : 'サンプルコメント 123';
+						area.append(sample);
+				}
+				const caption = this.doc.createElement('span');
+				caption.className = 'zw-example-caption';
+				area.append(caption);
+				this._updateVisualExample(area, id);
+				return area;
+		}
+		_updateVisualExample(area, id) {
+				const value = String(this.model.get(id) ?? '');
+				area.dataset.zwExampleMode = value;
+				const sample = area.querySelector('.zw-example-text');
+				const caption = area.querySelector('.zw-example-caption');
+				if (id.startsWith('screenMode')) {
+						const hints = {
+								normal: '通常サイズのウィンドウで動画を表示します。',
+								big: '通常より大きなウィンドウで動画を表示します。',
+								wide: '画面幅を広く使う表示です。',
+								'3D': '立体的な視点を使う表示です。',
+								small: '小さなポップアップ形式で表示します。',
+								sideView: 'ページの横に小さく配置する表示です。'
+						};
+						caption.textContent = hints[value] || '動画の表示モードの例です。';
+				}
+				else if (id === 'fullscreenControlBarMode') {
+						caption.textContent = ({
+								auto: '画面サイズなどに応じて操作バーを自動調整します。',
+								'always-show': '操作バーを常に表示する設定です。',
+								'always-hide': '操作バーを常に隠す設定です。'
+						})[value] || '操作バーの表示方法です。';
+				}
+				else if (id === 'videoHeader.position') {
+						caption.textContent = ({
+								auto: '画面幅によって外側／重ね合わせを自動で切り替えます。',
+								outside: '動画の外側にタイトルなどを表示します。',
+								overlay: '動画に重ね、操作時にだけ表示します。',
+								'overlay-visible': '動画に重ね、常時表示します。'
+						})[value] || '動画ヘッダーの配置例です。';
+				}
+				else if (id === 'screenshot.prefix' || id === 'screenshot.filenameTemplate') {
+						const prefix = String(this.model.get('screenshot.prefix') ?? '');
+						const template = String(this.model.get('screenshot.filenameTemplate') ?? '');
+						area.querySelector('.zw-example-filename').textContent = this.screenshotFileName ?
+								this.screenshotFileName.format({
+										prefix, template, title: '動画タイトル', watchId: 'sm9', videoId: 'sm9',
+										uploader: '投稿者', currentTime: 83, formatTime: () => '1_23',
+										now: new Date('2026-10-10T12:34:56')
+								}) : prefix + '動画タイトル - sm9@1_23.png';
+						caption.textContent = '拡張子はPNG固定。コメント付き画像はCを追加し、使えない文字は安全な文字に置換します。';
+				}
+				else if (sample) {
+						sample.style.textShadow = '';
+						sample.style.webkitTextStroke = '';
+						sample.style.color = '#ffffff';
+						if (id === 'commentLayer.textShadowType') {
+								const shadows = {
+										'': '1px 1px 0 rgba(0,0,0,.9)',
+										'shadow-type2': '1px 1px 0 #000,-1px 1px 0 #000,-1px -1px 0 #000,1px -1px 0 #000',
+										'shadow-type3': '1px 1px 1px rgba(0,0,0,.8),0 0 3px rgba(0,0,0,.8),-1px -1px 1px #888',
+										'shadow-stroke': 'none',
+										'shadow-dokaben': '1px 1px 0 #963200,-1px 1px 0 #963200,-1px -1px 0 #963200,1px -1px 0 #963200'
+								};
+								sample.style.textShadow = shadows[value] || shadows[''];
+								if (value === 'shadow-stroke') {
+										sample.style.webkitTextStroke = '1px rgba(0,0,0,.7)';
+								}
+								else if (value === 'shadow-dokaben') {
+										sample.style.color = 'rgb(200,80,0)';
+								}
+								caption.textContent = value === 'shadow-dokaben' ?
+										'専用フォントがない場合は代替文字で表示します。' : '同じ文字を使った影の比較見本です。';
+						}
+						else if (id === 'commentLayer.ownerCommentShadowColor') {
+								const color = ModernAdvancedSettingsUI._hexColor(value) || value;
+								sample.style.textShadow = [
+										'1px 1px 0 ' + color, '-1px 1px 0 ' + color,
+										'1px -1px 0 ' + color, '-1px -1px 0 ' + color
+								].join(',');
+								caption.textContent = '現在の影色：' + value;
+						}
+						else if (id === 'cssFontWeight') {
+								sample.style.fontWeight = value || 'normal';
+								caption.textContent = 'CSS値 ' + value + ' の文字の太さです。';
+						}
+						else if (id === 'baseFontFamily') {
+								if (value) {
+										sample.style.fontFamily = value;
+								}
+								caption.textContent = value ? '選択したフォントがない場合は代替フォントで表示します。' :
+										'プレイヤーの標準フォントで表示します。';
+						}
+						else if (id === 'baseChatScale') {
+								sample.style.fontSize = (24 * Math.min(2, Math.max(.5, Number(value) || 1))) + 'px';
+								caption.textContent = '現在の倍率：' + value + '倍（比率を示す見本です）。';
+						}
+				}
+		}
+		_createVisibilityIcon(id, descriptor = this.model.descriptor(id)) {
+				const glyph = descriptor?.icon;
+				if (!glyph) {
+						return null;
+				}
+				const icon = this.doc.createElement('span');
+				icon.className = 'zw-modern-visibility-icon';
+				icon.dataset.zwVisibilityIcon = id;
+				icon.setAttribute('aria-hidden', 'true');
+				const paths = {
+						'comments-video': 'M3 5h18v14H3z M6 9h8 M9 13h9',
+						'comments-list': 'M5 3h14v18H5z M8 7h1 M11 7h5 M8 12h1 M11 12h5 M8 17h1 M11 17h5',
+						'comments-preview': 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M9 10h6 M9 14h6',
+						'comment-heatmap': 'M3 18h18 M4 16v-3 M8 16V8 M12 16V4 M16 16V9 M20 16v-4',
+						'seek-thumbnail': 'M4 3h16v13H4z M6 13l4-5 4 4 2-2 2 3 M3 21h18 M12 19v4',
+						'scene-filmstrip': 'M2 5h20v14H2z M8 5v14 M16 5v14 M2 8h20 M2 16h20',
+						'ad-crown': 'M3 7l5 4 4-7 4 7 5-4-2 12H5z M6 22h12'
+				};
+				if (paths[glyph]) {
+						icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="' + paths[glyph] + '"/></svg>';
+				}
+				else if (glyph === 'shield-ng') {
+						icon.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 2.5 19 5v5.5c0 4.6-2.8 8.4-7 10.8-4.2-2.4-7-6.2-7-10.8V5l7-2.5Z"/><path d="m8 8 8 8"/></svg>';
+				}
+				else if (glyph === 'filter-sparkle') {
+						icon.innerHTML = '<svg viewBox="0 0 36 36"><path d="M15 10Q15 19 24 19Q15 19 15 28Q15 19 6 19Q15 19 15 10ZM26 5.5Q26 10 30.5 10Q26 10 26 14.5Q26 10 21.5 10Q26 10 26 5.5Z"/></svg>';
+				}
+				else {
+						icon.textContent = glyph === 'related-menu' ? '関連メニュー ▾' :
+								glyph === 'comment-input' ? 'コメント入力(C)' : glyph;
+						if (id === 'ui.bar.speed' || id === 'ui.bar.time') {
+								icon.classList.add('is-compact-glyph');
+						}
+						else if (id === 'ui.bar.volume' || id === 'ui.info.credits') {
+								icon.classList.add('is-pair-glyph');
+						}
+						if (glyph === 'related-menu') {
+								icon.classList.add('is-related');
+						}
+						if (glyph === 'comment-input') {
+								icon.classList.add('is-comment-input');
+						}
+						if (id === 'ui.hover.like') {
+								icon.classList.add('is-like');
+						}
+						if (id === 'ui.hover.tweet') {
+								icon.classList.add('is-tweet');
+						}
+						if (id === 'ui.hover.mylist') {
+								icon.classList.add('is-mylist');
+						}
+						if (id === 'ui.hover.comments') {
+								icon.classList.add('is-comment');
+						}
+				}
+				return icon;
+		}
+		_createCard(descriptor) {
+				const card = this.doc.createElement('article');
+				card.className = 'zw-modern-card';
+				card.dataset.zwId = descriptor.id;
+				const seekDescriptor = descriptor.type === 'shortcut' ?
+						this.model.descriptor('PARAM_' + descriptor.actionId) : null;
+				if (descriptor.type === 'boolean' ||
+						(descriptor.type === 'shortcut' && !seekDescriptor)) {
+						card.classList.add('is-inline');
+				}
+				if (this.model.isDifferentFromDefault(descriptor.id) ||
+						(descriptor.type === 'related-order' &&
+								(this.model.isDifferentFromDefault('relatedMenu.hiddenItems') ||
+										this.model.isDifferentFromDefault('relatedMenu.builtinOptions'))) ||
+						(seekDescriptor && this.model.isDifferentFromDefault(seekDescriptor.id))) {
+						card.classList.add('is-modified');
+				}
+				if (descriptor.dependsOn) {
+						card.classList.add('is-child');
+				}
+				if (!this.model.isEnabled(descriptor.id)) {
+						card.classList.add('is-disabled');
+				}
+				const head = this.doc.createElement('div');
+				head.className = 'zw-modern-cardhead';
+				const title = this.doc.createElement('strong');
+				title.textContent = descriptor.label;
+				const icon = this._createVisibilityIcon(descriptor.id, descriptor);
+				if (icon) {
+						head.append(icon);
+				}
+				head.append(title);
+				if (descriptor.sharedWith) {
+						const shared = this.doc.createElement('small');
+						shared.dataset.zwSharedSetting = descriptor.id;
+						shared.textContent = '共通設定';
+						shared.title = descriptor.sharedWith + ' と同じ設定値です。';
+						head.append(shared);
+				}
+				if (descriptor.description) {
+						const help = this._button('?', 'data-zw-help', descriptor.id, 'zw-modern-plainbtn');
+						help.setAttribute('aria-label', descriptor.label + 'の説明を表示');
+						head.append(help);
+				}
+				const reset = this._button('↺', 'data-zw-reset-item', descriptor.id, 'zw-modern-plainbtn');
+				reset.title = 'この項目を初期値に戻す';
+				head.append(reset);
+				card.append(head);
+				const controls = this.doc.createElement('div');
+				controls.className = 'zw-modern-cardcontrols';
+				if (descriptor.type === 'shortcut') {
+						const key = this.doc.createElement('span');
+						key.dataset.zwKeyDisplay = '';
+						key.textContent = this.formatKeyCombo(this.model.get(descriptor.id));
+						controls.append(key, this._button('変更', 'data-zw-record', descriptor.id, 'zw-modern-plainbtn'), this._button('解除', 'data-zw-clear-key', descriptor.id, 'zw-modern-plainbtn'));
+						const seek = this.model.descriptor('PARAM_' + descriptor.actionId);
+						if (seek) {
+								const raw = Number(this.model.get(seek.id)) || 0;
+								const sign = this._seekDirections.get(seek.id) || (raw > 0 ? 1 : -1);
+								const group = this.doc.createElement('div');
+								group.className = 'zw-modern-seek-editor';
+								const direction = this.doc.createElement('select');
+								direction.dataset.zwSeekDirection = seek.id;
+								direction.setAttribute('aria-label', 'シーク方向');
+								for (const [value, label] of [['-1', '戻る'], ['1', '進む']]) {
+										const option = this.doc.createElement('option');
+										option.value = value;
+										option.textContent = label;
+										direction.append(option);
+								}
+								direction.value = String(sign);
+								const magnitude = this.doc.createElement('input');
+								magnitude.type = 'number';
+								magnitude.min = '0';
+								magnitude.step = '0.1';
+								magnitude.value = String(Math.abs(raw));
+								magnitude.dataset.zwSeekMagnitude = seek.id;
+								magnitude.setAttribute('aria-label', 'シーク秒数');
+								group.append(direction, magnitude);
+								const unit = this.doc.createElement('span');
+								unit.textContent = '秒';
+								group.append(unit);
+								controls.append(group);
+								const slot = Number((descriptor.actionId || '').match(/CUSTOM_SEEK_(\d+)/)?.[1]);
+								if (Number.isInteger(slot)) {
+										const remove = this._button('削除', 'data-zw-remove-seek', String(slot), 'zw-modern-plainbtn');
+										remove.title = 'この枠のキーと秒数を初期値に戻す（保存前はキャンセル可能）';
+										controls.append(remove);
+								}
+						}
+						const warns = this.model.keyConflicts(this.model.get(descriptor.id));
+						if (warns.length > 1) {
+								const warning = this.doc.createElement('span');
+								warning.className = 'zw-modern-warning';
+								warning.textContent = '⚠ キー重複：' + warns.join('、');
+								controls.append(warning);
+						}
+				}
+				else if (descriptor.type === 'composite-ng') {
+						const host = this.doc.createElement('div');
+						host.className = 'zw-composite-ng-host';
+						host.style.cssText = 'width:100%;min-width:0;';
+						controls.append(host);
+						if (typeof NgCompositeRuleEditor !== 'undefined') {
+								this._ngCompositeEditor = new NgCompositeRuleEditor(host, this.model.get(descriptor.id), draft => {
+										this.model.set(descriptor.id, draft);
+										this._refreshFooter();
+								});
+						}
+						else {
+								host.textContent = '複合NGエディターを読み込めませんでした。';
+						}
+				}
+				else if (descriptor.type === 'related-order') {
+						controls.append(this._renderRelatedOrderControls());
+				}
+				else if (descriptor.type === 'related-links') {
+						if (this.relatedEditor) {
+								this.relatedEditor.showList();
+								const editor = this.relatedEditor.container;
+								editor.querySelector('[data-rl-save]').hidden = true;
+								editor.querySelector('[data-rl-cancel]').hidden = true;
+								const toolbar = editor.querySelector('.rl-toolbar');
+								if (toolbar) {
+										toolbar.setAttribute('aria-label', '変更は設定画面の下部から保存します');
+								}
+								controls.append(editor);
+						}
+						else {
+								const info = this.doc.createElement('span');
+								info.textContent = 'カスタムリンクの編集を利用できません。';
+								controls.append(info);
+						}
+				}
+				else if (descriptor.type === 'regex-flags') {
+						const box = this.doc.createElement('div');
+						box.className = 'zw-modern-regex-editor';
+						const flags = String(this.model.get(descriptor.id) || '');
+						const choices = [
+								['i', '大文字・小文字を区別しない（おすすめ）'],
+								['m', '^ と $ を行ごとに判定する'],
+								['s', '「.」を改行にも一致させる'],
+								['u', '日本語などのUnicode文字を正しく扱う']
+						];
+						for (const [flag, label] of choices) {
+								const line = this.doc.createElement('label');
+								const check = this.doc.createElement('input');
+								check.type = 'checkbox';
+								check.dataset.zwRegexFlag = flag;
+								check.dataset.zwRegexId = descriptor.id;
+								check.checked = flags.includes(flag);
+								check.disabled = !this.model.isEnabled(descriptor.id);
+								line.append(check, this.doc.createTextNode(label));
+								box.append(line);
+						}
+						const current = this.doc.createElement('div');
+						current.className = 'zw-modern-regex-current';
+						current.textContent = '現在のフラグ: ';
+						const value = this.doc.createElement('code');
+						value.dataset.zwRegexValue = '';
+						value.textContent = flags || '（なし）';
+						current.append(value);
+						box.append(current);
+						const toggle = this._button('詳細：フラグを直接入力', 'data-zw-regex-advanced-toggle', descriptor.id, 'zw-modern-plainbtn');
+						toggle.setAttribute('aria-expanded', 'false');
+						box.append(toggle);
+						const advanced = this.doc.createElement('div');
+						advanced.dataset.zwRegexAdvancedPanel = '';
+						advanced.hidden = true;
+						const raw = this.doc.createElement('input');
+						raw.type = 'text';
+						raw.dataset.settingName = descriptor.id;
+						raw.dataset.zwRegexRaw = '';
+						raw.value = flags;
+						raw.setAttribute('aria-label', '正規表現のフラグを直接入力');
+						raw.disabled = !this.model.isEnabled(descriptor.id);
+						const caution = this.doc.createElement('small');
+						caution.textContent = 'g・yなどのフラグはNG判定の結果が変化する場合があります。初心者は通常iだけで十分です。';
+						advanced.append(raw, caution);
+						box.append(advanced);
+						controls.append(box);
+				}
+				else if (descriptor.type === 'font-picker') {
+						const box = this.doc.createElement('div');
+						box.className = 'zw-modern-font-editor';
+						const preset = this.doc.createElement('select');
+						preset.dataset.zwFontPreset = descriptor.id;
+						preset.setAttribute('aria-label', 'フォントの候補から選択');
+						for (const entry of descriptor.options) {
+								const option = this.doc.createElement('option');
+								option.value = entry.value;
+								option.textContent = entry.label;
+								preset.append(option);
+						}
+						const free = this.doc.createElement('option');
+						free.value = '__custom__';
+						free.textContent = 'その他（自由入力）';
+						preset.append(free);
+						const value = String(this.model.get(descriptor.id) ?? '');
+						preset.value = descriptor.options.some(o => o.value === value) ? value : '__custom__';
+						const custom = this.doc.createElement('input');
+						custom.type = 'text';
+						custom.dataset.settingName = descriptor.id;
+						custom.dataset.zwFontCustom = descriptor.id;
+						custom.value = value;
+						custom.placeholder = "'好きなフォント名', sans-serif";
+						custom.setAttribute('aria-label', 'フォント名を自由に入力');
+						custom.hidden = preset.value !== '__custom__';
+						custom.disabled = !this.model.isEnabled(descriptor.id);
+						preset.disabled = !this.model.isEnabled(descriptor.id);
+						box.append(preset, custom);
+						controls.append(box);
+				}
+				else if (descriptor.type === 'color') {
+						controls.append(this._createColorEditor(descriptor));
+				}
+				else if (descriptor.type === 'slider') {
+						const holder = this.doc.createElement('div');
+						holder.className = 'zw-modern-slider';
+						const value = this.model.get(descriptor.id);
+						const makeInput = (type) => {
+								const input = this.doc.createElement('input');
+								input.type = type;
+								input.dataset.settingName = descriptor.id;
+								input.min = String(descriptor.min);
+								input.max = String(descriptor.max);
+								input.step = String(descriptor.step || 1);
+								input.value = String(value);
+								input.disabled = !this.model.isEnabled(descriptor.id);
+								input.setAttribute('aria-label', descriptor.label + (type === 'number' ? 'の数値入力' : 'のスライダー'));
+								return input;
+						};
+						holder.append(makeInput('range'), makeInput('number'));
+						if (descriptor.unit) {
+								const unit = this.doc.createElement('span');
+								unit.textContent = descriptor.unit;
+								holder.append(unit);
+						}
+						controls.append(holder);
+				}
+				else if (descriptor.type === 'select' && descriptor.options.length > 0) {
+						const segments = this.doc.createElement('div');
+						segments.className = 'zw-modern-segments';
+						for (const option of descriptor.options) {
+								const b = this._button(option.label, 'data-zw-choice', descriptor.id);
+								b.dataset.zwValue = String(option.value);
+								b.disabled = !this.model.isEnabled(descriptor.id);
+								if (String(this.model.get(descriptor.id)) === String(option.value)) {
+										b.classList.add('is-selected');
+								}
+								segments.append(b);
+						}
+						const existingValue = String(this.model.get(descriptor.id) ?? '');
+						if (!descriptor.options.some(o => String(o.value) === existingValue)) {
+								const legacy = this._button('従来の設定値：' + existingValue, 'data-zw-choice', descriptor.id);
+								legacy.dataset.zwValue = existingValue;
+								legacy.classList.add('is-selected');
+								legacy.disabled = true;
+								legacy.title = '旧バージョンの値を保持しています。変更しなければそのまま保存されます。';
+								segments.append(legacy);
+						}
+						controls.append(segments);
+				}
+				else {
+						const original = descriptor.input;
+						if (original) {
+								if (!this._moved.has(original)) {
+										this._moved.set(original, { parent: original.parentNode, next: original.nextSibling });
+								}
+								original.disabled = !this.model.isEnabled(descriptor.id);
+								original.setAttribute('aria-label', descriptor.label);
+								if (original.type === 'checkbox') {
+										original.checked = !!this.model.get(descriptor.id);
+								}
+								else {
+										const value = this.model.get(descriptor.id);
+										original.value = descriptor.id === 'userIdFilter' ?
+												ModernAdvancedSettingsUI._formatNgUserIds(value) : (value ?? '');
+								}
+								controls.append(original);
+						}
+						else {
+								const input = this.doc.createElement(descriptor.type === 'textarea' ? 'textarea' : 'input');
+								if (input.tagName === 'INPUT') {
+										input.type = descriptor.type === 'boolean' ? 'checkbox' :
+												['number', 'seconds'].includes(descriptor.type) ? 'number' : 'text';
+								}
+								if (input.type === 'checkbox') {
+										input.checked = !!this.model.get(descriptor.id);
+								}
+								else {
+										const value = this.model.get(descriptor.id);
+										input.value = descriptor.id === 'userIdFilter' ?
+												ModernAdvancedSettingsUI._formatNgUserIds(value) : String(value ?? '');
+								}
+								input.dataset.settingName = descriptor.id;
+								input.setAttribute('aria-label', descriptor.label);
+								input.disabled = !this.model.isEnabled(descriptor.id);
+								controls.append(input);
+						}
+				}
+				if (descriptor.id === 'screenshot.prefix') {
+						const presets = this.doc.createElement('div');
+						presets.className = 'zw-modern-prefix-presets';
+						const prompt = this.doc.createElement('span');
+						prompt.textContent = '先頭の文字をすぐ設定：';
+						presets.append(prompt);
+						for (const [label, value] of [
+								['追加しない', ''], ['スクショ_', 'スクショ_'],
+								['Zenza_', 'Zenza_'], ['clip_', 'clip_'],
+								['保存日_', '{date}_'], ['動画ID_', '{watchId}_']
+						]) {
+								const button = this._button(label, 'data-zw-screenshot-prefix', value, 'zw-modern-plainbtn');
+								button.disabled = !this.model.isEnabled(descriptor.id);
+								if (String(this.model.get(descriptor.id) ?? '') === value) {
+										button.classList.add('is-selected');
+								}
+								presets.append(button);
+						}
+						controls.append(presets);
+						const help = this.doc.createElement('p');
+						help.className = 'zw-modern-prefix-hint';
+						help.textContent = '先頭に付ける文字には {date}（保存日）、{watchId}（動画ID）、{time}（再生位置）が使えます。ファイル名の残りの構成は下の設定で変更できます。';
+						controls.append(help);
+						const text = controls.querySelector('[data-setting-name="screenshot.prefix"]');
+						if (text) {
+								text.setAttribute('placeholder', '例：スクショ_{date}_');
+						}
+				}
+				if (descriptor.id === 'screenshot.filenameTemplate') {
+						const presets = this.doc.createElement('div');
+						presets.className = 'zw-modern-prefix-presets';
+						for (const entry of (this.screenshotFileName?.PRESETS || [
+								{ name: '従来どおり（標準）', value: '' }
+						])) {
+								const button = this._button(entry.name, 'data-zw-filename-template', entry.value, 'zw-modern-plainbtn');
+								if (this.model.get(descriptor.id) === entry.value) {
+										button.classList.add('is-selected');
+								}
+								presets.append(button);
+						}
+						controls.append(presets);
+						const hint = this.doc.createElement('p');
+						hint.className = 'zw-modern-prefix-hint';
+						hint.textContent = '下の変数を組み合わせて順番・区切りを自由に指定できます。空欄なら元の保存形式を維持します。';
+						controls.append(hint);
+						const tokens = this.doc.createElement('div');
+						tokens.className = 'zw-modern-prefix-presets';
+						const labels = { title: '動画タイトル', watchId: '視聴ID', videoId: '動画ID',
+								uploader: '投稿者名', time: '再生位置', date: '保存日', datetime: '保存日時',
+								suffix: 'コメント付き記号' };
+						for (const key of (this.screenshotFileName?.TOKENS || Object.keys(labels))) {
+								const button = this._button('＋ ' + labels[key], 'data-zw-filename-token', key, 'zw-modern-plainbtn');
+								button.title = '{' + key + '} を挿入';
+								tokens.append(button);
+						}
+						controls.append(tokens);
+				}
+				card.append(controls);
+				if (descriptor.id === 'commandFilter') {
+						const guide = this.doc.createElement('section');
+						guide.className = 'zw-modern-command-assist';
+						guide.dataset.zwCommandGuide = '';
+						const intro = this.doc.createElement('p');
+						intro.textContent = 'コマンド＝投稿時に指定された色・文字サイズ・表示位置です。下のボタンでNGコマンドを追加できます。1行に1つ記入し、1つでもコマンド欄に含まれるとそのコメントを非表示にします。';
+						const warning = this.doc.createElement('p');
+						warning.textContent = '注意：NGワードや別のNGコマンドとは「どれか1つで除外」です。red と big を別行に書いても「赤かつ大文字」にはなりません。本文・色・サイズの組み合わせは別途複合ルールで設定します。';
+						guide.append(intro, warning);
+						const entries = [
+								['文字色', [['red', '赤'], ['blue', '青'], ['green', '緑'], ['yellow', '黄'],
+												['pink', 'ピンク'], ['cyan', '水色'], ['black', '黒']]],
+								['文字サイズ', [['big', '大きい'], ['small', '小さい']]],
+								['表示位置', [['ue', '画面上部'], ['shita', '画面下部']]]
+						];
+						const activeCommands = new Set(String(this.model.get('commandFilter') ?? '')
+								.split(/\r?\n/).map(c => c.trim().toLowerCase()).filter(Boolean));
+						for (const [name, items] of entries) {
+								const group = this.doc.createElement('div');
+								group.className = 'zw-modern-command-group';
+								const heading = this.doc.createElement('strong');
+								heading.textContent = name;
+								group.append(heading);
+								for (const [token, meaning] of items) {
+										const button = this._button(token + '（' + meaning + '）', 'data-zw-command-preset', token);
+										button.title = meaning + 'のコマンドをNG一覧に追加';
+										button.setAttribute('aria-label', 'NGコマンドに' + token + '（' + meaning + '）を追加');
+										button.disabled = !this.model.isEnabled('commandFilter') || activeCommands.has(token);
+										group.append(button);
+								}
+								guide.append(group);
+						}
+						card.append(guide);
+				}
+				const example = this._makeVisualExample(descriptor);
+				if (example) {
+						card.append(example);
+				}
+				if (descriptor.description) {
+						const note = this.doc.createElement('p');
+						note.className = 'zw-modern-note';
+						note.textContent = descriptor.description;
+						note.hidden = true;
+						card.append(note);
+				}
+				return card;
+		}
+		_renderDataPanel() {
+				this.root.querySelector('[data-zw-title]').textContent = 'データ管理';
+				this.root.querySelector('[data-zw-path]').textContent = 'プレイリスト・検索 / データ管理';
+				this.root.querySelector('[data-zw-subtitle]').textContent = '既存の設定JSONとプレイリストの保存・復元';
+				this.root.querySelector('[data-zw-reset-category]').hidden = true;
+				this.cards.innerHTML = [
+						'<section class="zw-modern-card zw-modern-backup">',
+						'<h4>設定JSONのバックアップ</h4>',
+						'<p>バックアップを取り込む操作は通常の下書き保存とは別です。確認後に即時反映し、画面を再読み込みします。</p>',
+						'<textarea data-zw-backup-json spellcheck="false" aria-label="設定JSON"></textarea>',
+						'<div class="zw-modern-actions">',
+						'<button type="button" class="zw-modern-plainbtn" data-zw-backup-export>現在の設定JSONを表示</button>',
+						'<button type="button" class="zw-modern-plainbtn" data-zw-backup-import>設定JSONを取り込む</button>',
+						'</div>',
+						'<h4>プレイリストデータ</h4>',
+						'<textarea data-zw-playlist-json spellcheck="false" aria-label="プレイリストJSON"></textarea>',
+						'<div class="zw-modern-actions">',
+						'<button type="button" class="zw-modern-plainbtn" data-zw-playlist-export>プレイリストを表示</button>',
+						'<button type="button" class="zw-modern-plainbtn" data-zw-playlist-import>プレイリストを取り込む</button>',
+						'</div>',
+						'<p data-zw-backup-status role="status" aria-live="polite"></p>',
+						'</section>'
+				].join('');
+				this.cards.querySelectorAll('[data-zw-playlist-export],[data-zw-playlist-import]')
+						.forEach(button => { button.disabled = !this.playlist; });
+		}
+		_onCustomMenuDraft(value) {
+				const before = (this.model.get('relatedMenu.customLinks') || []);
+				this.model.set('relatedMenu.customLinks', value);
+				if (!this.root) {
+						return;
+				}
+				const structure = JSON.stringify(before.map(x => x?.id)) !== JSON.stringify(value.map(x => x?.id));
+				const keysChanged = JSON.stringify(before.map(x => x?.shortcutKey)) !== JSON.stringify(value.map(x => x?.shortcutKey));
+				if (structure) {
+						const added = value.filter(x => x && !before.some(old => old?.id === x.id)).at(-1);
+						const selected = [...this._expandedRelatedOptions][0];
+						if (added) {
+								this._expandedRelatedOptions = new Set(['link:' + added.id]);
+						}
+						else if (selected?.startsWith('link:') && !value.some(x => 'link:' + x?.id === selected)) {
+								this._expandedRelatedOptions = new Set(['builtin:official']);
+						}
+				}
+				if (structure || keysChanged) {
+						this._refreshRelatedOrderList();
+				}
+				else {
+						for (const row of this.root.querySelectorAll('[data-zw-order-key]')) {
+								const item = value.find(x => 'link:' + x?.id === row.dataset.zwOrderKey);
+								if (item) {
+										row.querySelector('.zw-order-name').textContent = item.label || item.id;
+								}
+						}
+						const title = this.root.querySelector('[data-zw-order-detail-title]');
+						const selected = [...this._expandedRelatedOptions][0];
+						const item = value.find(x => 'link:' + x?.id === selected);
+						if (title && item) {
+								title.textContent = item.label || item.id;
+						}
+				}
+				this._refreshFooter();
+		}
+		_relatedOrderEntries() {
+				if (!this.relatedOrder || !this.model.descriptor('relatedMenu.order')) {
+						return [];
+				}
+				const links = (this.model.get('relatedMenu.customLinks') || []);
+				const actions = this.relatedActions?.getActions?.({}) || [];
+				return this.relatedOrder.entries(links, actions, this.model.get('relatedMenu.order'));
+		}
+		_renderRelatedOrderControls() {
+				const holder = this.doc.createElement('div');
+				holder.className = 'zw-modern-order-editor zw-modern-order-compact';
+				if (!this.relatedOrder) {
+						holder.textContent = '関連メニューの並び替えを利用できません。';
+						return holder;
+				}
+				const guide = this.doc.createElement('p');
+				guide.className = 'zw-order-hint';
+				guide.textContent = '左の一覧を並べ替え、右側で選択した項目を編集します。⠿をドラッグ（スマホは長押し）／Alt＋↑↓／上下ボタン。変更は下部の保存で確定します。';
+				holder.append(guide);
+				const toolbar = this.doc.createElement('div');
+				toolbar.className = 'zw-order-toolbar';
+				const refresh = this._button('一覧を更新', 'data-zw-order-refresh', '', 'zw-modern-plainbtn');
+				refresh.title = '追加リンクや外部登録アクションを再読み込み（保存はしません）';
+				toolbar.append(refresh);
+				for (const [attr, label, kind] of [['data-zw-order-add-link', '＋ リンク', 'link'], ['data-zw-order-add-copy', '＋ コピー', 'copy']]) {
+						const button = this._button(label, attr, kind, 'zw-modern-plainbtn');
+						button.disabled = !this.relatedEditor || this.relatedEditor.original === null || this.relatedEditor.draft.length >= 40;
+						toolbar.append(button);
+				}
+				toolbar.append(this._button('カスタム項目を初期値に戻す', 'data-zw-reset-item', 'relatedMenu.customLinks', 'zw-modern-plainbtn'));
+				holder.append(toolbar);
+				const workspace = this.doc.createElement('div');
+				workspace.className = 'zw-order-workspace';
+				const pane = this.doc.createElement('aside');
+				pane.className = 'zw-order-inspector';
+				pane.dataset.zwOrderDetailPane = '';
+				pane.setAttribute('aria-label', '選択項目の詳細設定');
+				const list = this.doc.createElement('ol');
+				list.className = 'zw-modern-order-list';
+				list.setAttribute('aria-label', '関連メニューの全項目');
+				const entries = this._relatedOrderEntries();
+				const prefs = (this.model.get(this.relatedOrder.OPTIONS_KEY) || {});
+				this._expandedRelatedOptions = this._expandedRelatedOptions || new Set();
+				const selected = entries.find(item => item.present && this._expandedRelatedOptions.has(item.key)) ||
+						entries.find(item => item.present);
+				this._expandedRelatedOptions = new Set(selected ? [selected.key] : []);
+				const descriptions = {
+						official: '公式視聴ページを開きます。ZenzaWatchの横取りを防ぐ識別子は自動で付けられます。',
+						ad: 'ニコニ広告の宣伝画面を開きます。既定は小さな別ウィンドウです。',
+						twitter: '動画IDを含むX（Twitter）の投稿を検索します。必要ならURLテンプレートを変更できます。',
+						original: 'コミュニティ動画・マイメモリーの場合だけ元の動画へ移動します。',
+						tree: '親作品・コンテンツツリーを開きます。動画によっては利用できません。',
+						'tree-playlist': '親作品・子作品のリストを現在のプレイリストへ追加します。',
+						'copy-url': '現在の動画からURL・動画IDなどをコピーします。'
+				};
+				const variableNames = {
+						videoId: '動画ID（例: sm9）', watchId: '視聴ID（例: sm9）',
+						videoUrl: '動画URL', videoTitle: '動画タイトル',
+						uploaderUserId: '投稿者のユーザーID', uploaderChannelId: '投稿者のチャンネルID',
+						uploaderName: '投稿者名', currentTime: '現在の再生位置（秒）'
+				};
+				const addField = (parent, label, control, desc = '') => {
+						const field = this.doc.createElement('label');
+						field.className = 'zw-order-field';
+						const name = this.doc.createElement('span');
+						name.textContent = label;
+						field.append(name, control);
+						if (desc) {
+								const note = this.doc.createElement('small');
+								note.textContent = desc;
+								field.append(note);
+						}
+						parent.append(field);
+						return control;
+				};
+				for (const [index, item] of entries.entries()) {
+						const row = this.doc.createElement('li');
+						row.className = 'zw-modern-order-row';
+						if (!item.present) {
+								row.classList.add('is-missing');
+						}
+						row.dataset.zwOrderKey = item.key;
+						const grip = this._button('⠿', 'data-zw-order-grip', item.key, 'zw-modern-plainbtn zw-order-grip');
+						grip.draggable = true;
+						grip.title = 'ドラッグ・長押し、またはAlt＋上下キーで移動';
+						grip.setAttribute('aria-label', item.label + 'を並べ替え');
+						row.append(grip);
+						const builtinId = item.type === 'builtin' ? item.key.slice(8) : null;
+						const opts = builtinId ? this.relatedOrder.getOption(prefs, builtinId) : {};
+						const label = opts.label || item.label;
+						const name = this._button(label, 'data-zw-order-edit', item.key, 'zw-order-name');
+						name.disabled = !item.present;
+						row.classList.toggle('is-selected', selected?.key === item.key);
+						row.append(name);
+						const shortcutId = builtinId && this.relatedOrder.SHORTCUT_ACTION_IDS[builtinId];
+						const keyId = shortcutId ? 'KEY_' + shortcutId : null;
+						const shortcutValue = keyId ? Number(this.model.get(keyId)) || 0 :
+								item.type === 'link' ? Number((this.model.get('relatedMenu.customLinks') || [])
+										.find(link => 'link:' + link.id === item.key)?.shortcutKey) || 0 : 0;
+						const keyBadge = this.doc.createElement('small');
+						keyBadge.className = 'zw-order-key-preview';
+						keyBadge.textContent = shortcutValue ? this.formatKeyCombo(shortcutValue) : 'キー未設定';
+						keyBadge.hidden = !shortcutValue;
+						if (shortcutValue) {
+								const warnings = this.model.keyConflicts(shortcutValue);
+								if (warnings.length > 1) {
+										keyBadge.classList.add('is-conflict');
+										keyBadge.title = '⚠ ショートカットの重複: ' + warnings.join('、');
+										keyBadge.textContent += ' ⚠重複';
+								}
+						}
+						row.append(keyBadge);
+						const visible = this.doc.createElement('label');
+						visible.className = 'zw-order-visible';
+						const checkbox = this.doc.createElement('input');
+						checkbox.type = 'checkbox';
+						checkbox.dataset.zwOrderVisible = item.key;
+						checkbox.checked = !(this.model.get('relatedMenu.hiddenItems') || []).includes(item.key);
+						visible.append(checkbox, this.doc.createTextNode('表示'));
+						row.append(visible);
+						const edit = this._button(this._expandedRelatedOptions.has(item.key) ? '編集中' : '編集', 'data-zw-order-edit', item.key, 'zw-modern-plainbtn');
+						edit.disabled = !item.present;
+						edit.setAttribute('aria-expanded', String(this._expandedRelatedOptions.has(item.key)));
+						row.append(edit);
+						const up = this._button('↑', 'data-zw-order-up', item.key, 'zw-modern-plainbtn');
+						const down = this._button('↓', 'data-zw-order-down', item.key, 'zw-modern-plainbtn');
+						up.disabled = index === 0;
+						down.disabled = index === entries.length - 1;
+						up.title = '1つ上へ';
+						down.title = '1つ下へ';
+						row.append(up, down);
+						if (this._expandedRelatedOptions.has(item.key)) {
+								const details = this.doc.createElement('section');
+								details.className = 'zw-order-details';
+								details.dataset.zwOrderDetails = item.key;
+								const heading = this.doc.createElement('h3');
+								heading.dataset.zwOrderDetailTitle = '';
+								heading.textContent = label;
+								details.append(heading);
+								const help = this.doc.createElement('p');
+								help.textContent = builtinId ? descriptions[builtinId] :
+										item.type === 'link' ? 'この項目の動作・内容・ショートカットを編集します。変更は保存するまで下書きです。' :
+												'外部スクリプトが登録した機能です。名称・動作の変更は登録元で行います。';
+								details.append(help);
+								if (builtinId) {
+										const title = this.doc.createElement('input');
+										title.type = 'text';
+										title.maxLength = 80;
+										title.value = opts.label || '';
+										title.placeholder = '標準名を使用: ' + item.label;
+										title.dataset.zwBuiltinField = 'label';
+										title.dataset.zwBuiltinId = builtinId;
+										addField(details, 'メニューに表示する名前', title, '空欄に戻すと標準の名前を使用します。');
+										if (keyId && this.model.descriptor(keyId)) {
+												const line = this.doc.createElement('div');
+												line.className = 'zw-order-shortcut-editor';
+												const caption = this.doc.createElement('span');
+												caption.textContent = 'ショートカット: ' + (shortcutValue ? this.formatKeyCombo(shortcutValue) : '(未設定)');
+												line.append(caption, this._button('変更', 'data-zw-record', keyId, 'zw-modern-plainbtn'), this._button('解除', 'data-zw-clear-key', keyId, 'zw-modern-plainbtn'));
+												details.append(line);
+												const warning = this.model.keyConflicts(shortcutValue);
+												if (shortcutValue && warning.length > 1) {
+														const alert = this.doc.createElement('p');
+														alert.className = 'zw-order-warning';
+														alert.textContent = '⚠ キーが重複しています: ' + warning.join('、') + '（既存割り当ては自動解除しません）';
+														details.append(alert);
+												}
+												const sync = this.doc.createElement('small');
+												sync.textContent = '「ショートカット」欄と同じ設定値を編集します。変更は保存するまで確定しません。';
+												details.append(sync);
+										}
+										if (['official', 'ad', 'twitter', 'tree'].includes(builtinId)) {
+												const select = this.doc.createElement('select');
+												select.dataset.zwBuiltinField = 'openMode';
+												select.dataset.zwBuiltinId = builtinId;
+												for (const [val, text] of [['default', '既定の動作'], ['same-tab', '現在のタブで開く'],
+														['new-tab', '新しいタブで開く'], ['new-window', '新しいウィンドウを要求']]) {
+														const option = this.doc.createElement('option');
+														option.value = val;
+														option.textContent = text;
+														select.append(option);
+												}
+												select.value = opts.openMode || 'default';
+												addField(details, 'リンクの開き方', select, '新規ウィンドウはブラウザの設定によってタブになる場合があります。');
+												if (select.value === 'new-window') {
+														const sizes = this.doc.createElement('div');
+														sizes.className = 'zw-order-sizes';
+														for (const [field, label, defaultSize] of [
+																['popupWidth', '横幅', builtinId === 'ad' ? 428 : 760],
+																['popupHeight', '高さ', builtinId === 'ad' ? 600 : 650]
+														]) {
+																const box = this.doc.createElement('input');
+																box.type = 'number';
+																box.min = '250';
+																box.max = '1800';
+																box.step = '1';
+																box.value = String(opts[field] || defaultSize);
+																box.dataset.zwBuiltinField = field;
+																box.dataset.zwBuiltinId = builtinId;
+																addField(sizes, label + '（px）', box);
+														}
+														details.append(sizes);
+												}
+										}
+										if (builtinId === 'official') {
+												const box = this.doc.createElement('input');
+												box.type = 'checkbox';
+												box.checked = opts.includePosition !== false;
+												box.dataset.zwBuiltinField = 'includePosition';
+												box.dataset.zwBuiltinId = builtinId;
+												addField(details, '現在の再生位置を公式プレイヤーへ引き継ぐ', box);
+										}
+										if (builtinId === 'copy-url') {
+												const select = this.doc.createElement('select');
+												select.dataset.zwBuiltinField = 'copyFormat';
+												select.dataset.zwBuiltinId = builtinId;
+												for (const [val, text] of [['url', '動画URL（従来どおり）'], ['id', '動画IDのみ'],
+														['position', '再生位置付き動画URL'], ['title-url', '動画タイトル＋URL'],
+														['markdown', 'Markdown形式のリンク']]) {
+														const option = this.doc.createElement('option');
+														option.value = val;
+														option.textContent = text;
+														select.append(option);
+												}
+												select.value = opts.copyFormat || 'url';
+												addField(details, 'コピーする形式', select, '「動画IDのみ」では sm9 のような識別子だけをコピーします。');
+										}
+										if (['twitter', 'tree'].includes(builtinId)) {
+												const input = this.doc.createElement('input');
+												input.type = 'text';
+												input.value = opts.urlTemplate || '';
+												input.placeholder = '未入力なら既存の公式URLを使用';
+												input.maxLength = 2048;
+												input.dataset.zwBuiltinField = 'urlTemplate';
+												input.dataset.zwBuiltinId = builtinId;
+												addField(details, 'URLテンプレート（任意）', input, 'https:// から始めてください。空欄なら従来のリンクを使用します。');
+												const palette = this.doc.createElement('div');
+												palette.className = 'zw-order-variable-palette';
+												const intro = this.doc.createElement('p');
+												intro.textContent = '変数を挿入：動画ごとに自動で値を置き換えます。使える変数は8種類すべて表示しています。';
+												palette.append(intro);
+												for (const token of this.relatedActions?.VARIABLES || Object.keys(variableNames)) {
+														const button = this._button('{' + token + '}', 'data-zw-builtin-insert', token, 'zw-modern-plainbtn');
+														button.dataset.zwBuiltinId = builtinId;
+														button.title = variableNames[token] || token;
+														palette.append(button);
+												}
+												const explains = this.doc.createElement('small');
+												explains.textContent = Object.entries(variableNames).map(([v, label]) => '{' + v + '} = ' + label).join(' / ');
+												palette.append(explains);
+												details.append(palette);
+										}
+										const reset = this._button('この項目の詳細だけ初期値に戻す', 'data-zw-builtin-reset', builtinId, 'zw-modern-plainbtn');
+										details.append(reset);
+								}
+								pane.append(details);
+						}
+						list.append(row);
+				}
+				if (this.relatedEditor) {
+						const editor = this.relatedEditor.container;
+						editor.querySelector('[data-rl-save]').hidden = true;
+						editor.querySelector('[data-rl-cancel]').hidden = true;
+						editor.hidden = selected?.type !== 'link';
+						this.relatedEditor.showDetail(selected?.type === 'link' ? selected.key.slice(5) : null);
+						pane.append(editor);
+				}
+				workspace.append(list, pane);
+				holder.append(workspace);
+				const status = this.doc.createElement('p');
+				status.dataset.zwOrderStatus = '';
+				status.setAttribute('role', 'status');
+				status.setAttribute('aria-live', 'polite');
+				status.textContent = this._orderAnnouncement || '';
+				holder.append(status);
+				return holder;
+		}
+		_refreshRelatedOrderList() {
+				if (!this.root) {
+						return;
+				}
+				this._clearTouchOrder();
+				const card = this.root.querySelector('[data-zw-id="relatedMenu.order"]');
+				const controls = card?.querySelector('.zw-modern-cardcontrols');
+				if (controls) {
+						controls.replaceChildren(this._renderRelatedOrderControls());
+				}
+				card?.classList.toggle('is-modified', this.model.isDifferentFromDefault('relatedMenu.order') ||
+						this.model.isDifferentFromDefault('relatedMenu.hiddenItems') ||
+						this.model.isDifferentFromDefault('relatedMenu.builtinOptions'));
+		}
+		_moveRelatedOrder(fromKey, toKey, after = false) {
+				const entries = this._relatedOrderEntries();
+				const keys = entries.map(entry => entry.key);
+				const from = keys.indexOf(fromKey), to = keys.indexOf(toKey);
+				if (from < 0 || to < 0) {
+						return false;
+				}
+				const insertion = to + (after ? 1 : 0);
+				const position = from < insertion ? insertion - 1 : insertion;
+				if (position === from) {
+						return false;
+				}
+				keys.splice(position, 0, keys.splice(from, 1)[0]);
+				this.model.set('relatedMenu.order', keys);
+				this._orderAnnouncement = '「' + (entries[from]?.label || fromKey) + '」を' +
+						(position + 1) + '番目に移動しました。保存前ならキャンセルできます。';
+				this._renderCards();
+				this._refreshFooter();
+				return true;
+		}
+		_clearRelatedOrderDrag() {
+				this._orderDragKey = null;
+				this._orderDropKey = null;
+				this._orderDropAfter = false;
+				this.root.querySelectorAll('.zw-modern-order-row.is-dragging,.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
+						.forEach(row => row.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+		}
+		_onOrderDragStart(e) {
+				const grip = e.target.closest?.('[data-zw-order-grip]');
+				if (!grip || !this.root.contains(grip)) {
+						return;
+				}
+				this._orderDragKey = grip.dataset.zwOrderGrip;
+				grip.closest('.zw-modern-order-row')?.classList.add('is-dragging');
+				if (e.dataTransfer) {
+						e.dataTransfer.effectAllowed = 'move';
+						e.dataTransfer.setData('text/plain', this._orderDragKey);
+				}
+		}
+		_onOrderDragOver(e) {
+				if (!this._orderDragKey) {
+						return;
+				}
+				const row = e.target.closest?.('.zw-modern-order-row');
+				if (!row || !this.root.contains(row)) {
+						return;
+				}
+				e.preventDefault();
+				if (e.dataTransfer) {
+						e.dataTransfer.dropEffect = 'move';
+				}
+				const rect = row.getBoundingClientRect();
+				const keys = this._relatedOrderEntries().map(entry => entry.key);
+				this._orderDropAfter = rect.height > 0 ?
+						e.clientY > rect.top + rect.height / 2 :
+						keys.indexOf(this._orderDragKey) < keys.indexOf(row.dataset.zwOrderKey);
+				this._orderDropKey = row.dataset.zwOrderKey;
+				this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
+						.forEach(item => item.classList.remove('is-drop-before', 'is-drop-after'));
+				row.classList.add(this._orderDropAfter ? 'is-drop-after' : 'is-drop-before');
+		}
+		_onOrderDrop(e) {
+				if (!this._orderDragKey) {
+						return;
+				}
+				e.preventDefault();
+				const from = this._orderDragKey, to = this._orderDropKey, after = this._orderDropAfter;
+				this._clearRelatedOrderDrag();
+				if (to) {
+						this._moveRelatedOrder(from, to, after);
+				}
+		}
+		_onOrderDragEnd() { this._clearRelatedOrderDrag(); }
+		_onTouchOrderDown(e) {
+				if (e.pointerType !== 'touch' || this._touchOrder) {
+						return;
+				}
+				const grip = e.target.closest?.('[data-zw-order-grip]');
+				if (!grip || !this.root.contains(grip)) {
+						return;
+				}
+				const key = grip.dataset.zwOrderGrip;
+				if (!this._relatedOrderEntries().some(item => item.key === key)) {
+						return;
+				}
+				const state = { id: e.pointerId, key, grip, active: false, dropKey: null, after: false, timer: null };
+				this._touchOrder = state;
+				state.timer = this.win.setTimeout(() => {
+						if (this._touchOrder !== state) {
+								return;
+						}
+						if (!this.root.contains(grip)) {
+								this._clearTouchOrder();
+								return;
+						}
+						try {
+								grip.setPointerCapture?.(e.pointerId);
+						}
+						catch (_) {
+								this._clearTouchOrder();
+								return;
+						}
+						state.active = true;
+						grip.closest('.zw-modern-order-row')?.classList.add('is-touch-dragging');
+				}, 260);
+		}
+		_onTouchOrderMove(e) {
+				const state = this._touchOrder;
+				if (!state || state.id !== e.pointerId || !state.active) {
+						return;
+				}
+				e.preventDefault();
+				const hit = this.doc.elementFromPoint?.(e.clientX, e.clientY) || e.target;
+				const row = hit?.closest?.('[data-zw-order-key]');
+				if (!row || !this.root.contains(row)) {
+						return;
+				}
+				state.dropKey = row.dataset.zwOrderKey;
+				const bounds = row.getBoundingClientRect();
+				state.after = bounds.height > 0 ? e.clientY > bounds.top + bounds.height / 2 :
+						this._relatedOrderEntries().findIndex(i => i.key === state.key) <
+								this._relatedOrderEntries().findIndex(i => i.key === state.dropKey);
+				this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
+						.forEach(el => el.classList.remove('is-drop-before', 'is-drop-after'));
+				row.classList.add(state.after ? 'is-drop-after' : 'is-drop-before');
+		}
+		_onTouchOrderUp(e) {
+				const state = this._touchOrder;
+				if (!state || state.id !== e.pointerId) {
+						return;
+				}
+				const shouldMove = state.active && state.dropKey && state.dropKey !== state.key;
+				const from = state.key, to = state.dropKey, after = state.after;
+				this._clearTouchOrder();
+				if (shouldMove) {
+						this._moveRelatedOrder(from, to, after);
+				}
+		}
+		_clearTouchOrder() {
+				const state = this._touchOrder;
+				if (!state) {
+						return;
+				}
+				this._touchOrder = null;
+				this.win.clearTimeout(state.timer);
+				try {
+						state.grip.releasePointerCapture?.(state.id);
+				}
+				catch (_) { }
+				state.grip.closest('.zw-modern-order-row')?.classList.remove('is-touch-dragging');
+				this.root.querySelectorAll('.zw-modern-order-row.is-drop-before,.zw-modern-order-row.is-drop-after')
+						.forEach(el => el.classList.remove('is-drop-before', 'is-drop-after'));
+		}
+		_customSeekSlots() {
+				return Array.from({ length: 10 }, (_, n) => n + 1).filter(n => this.model.descriptor('KEY_CUSTOM_SEEK_' + n) &&
+						this.model.descriptor('PARAM_CUSTOM_SEEK_' + n));
+		}
+		_usedCustomSeekSlots() {
+				return this._customSeekSlots().filter(n => this._visibleSeekSlots.has(n) ||
+						Number(this.model.get('KEY_CUSTOM_SEEK_' + n)) !== 0 ||
+						Number(this.model.get('PARAM_CUSTOM_SEEK_' + n)) !== 0);
+		}
+		_createSceneLayoutPicker() {
+				const wrap = this.doc.createElement('section');
+				wrap.className = 'zw-scui-picker';
+				wrap.dataset.zwSceneLayoutGallery = '';
+				wrap.setAttribute('aria-label', 'シーンサーチの表示方式');
+				const mode = this._sceneLayoutTab;
+				const key = 'sceneSearch.presentation.' + mode;
+				const current = String(this.model.get(key) || 'follow');
+				const linked = mode === 'fullscreen' && this.model.get('sceneSearch.layout.linkFullscreen') === true;
+				wrap.classList.toggle('is-modified', this.model.isDifferentFromDefault(key));
+				const header = this.doc.createElement('div');
+				header.className = 'zw-scui-pickerhead';
+				const heading = this.doc.createElement('strong');
+				heading.textContent = 'プレビューの表示方式';
+				const tabs = this.doc.createElement('div');
+				tabs.className = 'zw-scui-tabs';
+				tabs.setAttribute('role', 'group');
+				tabs.setAttribute('aria-label', '設定する画面');
+				for (const [value, label] of [['normal', '通常表示'], ['fullscreen', '全画面']]) {
+						const b = this._button(label, 'data-zw-scene-layout-mode', value);
+						b.setAttribute('aria-pressed', String(mode === value));
+						tabs.append(b);
+				}
+				header.append(heading, tabs);
+				wrap.append(header);
+				this._sceneMainLayouts = this._sceneMainLayouts || {};
+				if (current !== 'legacy') {
+						this._sceneMainLayouts[mode] = current;
+				}
+				const grid = this.doc.createElement('div');
+				grid.className = 'zw-scui-layout-grid';
+				grid.setAttribute('role', 'group');
+				grid.setAttribute('aria-label', 'プレビューの3つの表示方式');
+				for (const [value, label, description] of [
+						['follow', 'シーク位置に追従', 'シーク先の上に表示。端では画面内に収めます。'],
+						['fixed', '位置を固定', '同じ場所で確認。小画面ではシークバー付近の空き領域を使います。'],
+						['legacy', '従来表示', 'コメントボタンで画像とコメントプレビューを切り替えます。']
+				]) {
+						const b = this._button('', 'data-zw-scene-layout', value, 'zw-scui-layout-option');
+						b.dataset.zwSceneLayoutMode = mode;
+						b.disabled = linked || !this.model.isEnabled(key);
+						b.setAttribute('aria-pressed', String(current === value));
+						b.setAttribute('aria-label', label);
+						const mini = this.doc.createElement('span');
+						mini.className = 'zw-scui-mini';
+						mini.dataset.layout = value;
+						mini.innerHTML = '<i><span>☁</span></i><b>☰</b><em></em>';
+						const factor = Math.min(1.5, Math.max(.5, Number(this.model.get('sceneSearch.thumbnailScale') || 100) / 100));
+						const imageWidth = 28 * factor, left = (100 - imageWidth - 38) / 2;
+						Object.assign(mini.querySelector('i').style, { left: left + '%', width: imageWidth + '%', height: 24 * factor + 'px' });
+						Object.assign(mini.querySelector('i span').style, { fontSize: 9 * factor + 'px', lineHeight: 24 * factor + 'px' });
+						mini.querySelector('b').style.left = (left + imageWidth + 2) + '%';
+						const master = this.model.get('sceneSearch.commentPreviewVisible') !== false;
+						mini.querySelector('i span').hidden = !master || this.model.get('sceneSearch.miniCommentVisible') === false;
+						mini.querySelector('b').style.opacity = master && this.model.get('sceneSearch.commentListVisible') !== false ? '1' : '.25';
+						mini.querySelector('b').style.backgroundColor = 'rgba(0,0,0,' + (Number(this.model.get('sceneSearch.commentListBackgroundOpacity') ?? 90) / 100) + ')';
+						const title = this.doc.createElement('strong');
+						title.textContent = label;
+						const detail = this.doc.createElement('small');
+						detail.textContent = description;
+						b.append(mini, title, detail);
+						grid.append(b);
+				}
+				wrap.append(grid);
+				const note = this.doc.createElement('small');
+				note.className = 'zw-scui-note';
+				note.textContent = linked ? '通常表示の方式を使用します。全画面用の選択は保持しています。' :
+						'中央のコメントボタンで開閉します。変更は「変更を保存」で反映します。';
+				wrap.append(note);
+				const config = this.model.config;
+				const migration = config.resolveSceneSearch?.()?.migration || [];
+				if (migration.length && config.getValue?.('sceneSearch.presentation.migrationAcknowledged') !== true) {
+						const info = this.doc.createElement('aside');
+						info.dataset.zwSceneMigration = '';
+						info.className = 'zw-scui-note';
+						const names = { follow: 'シーク位置に追従', fixed: '位置を固定', legacy: '従来表示' };
+						info.append('表示方式を整理しました。');
+						for (const item of migration) {
+								const old = this.model.descriptor(item.key.replace('presentation', 'layout'))?.options?.find(o => o.value === item.oldValue)?.label || item.oldValue;
+								const line = this.doc.createElement('div');
+								line.textContent = old + ' → ' + names[item.newValue];
+								info.append(line);
+						}
+						info.append(this._button('確認した', 'data-zw-scene-migration-ack', ''));
+						wrap.append(info);
+				}
+				return wrap;
+		}
+		_createPopupColorPanel(rows) {
+				const section = this.doc.createElement('section');
+				section.className = 'zw-popup-settings';
+				const controls = this.doc.createElement('div');
+				controls.className = 'zw-popup-settings-controls';
+				controls.append(...rows);
+				const preview = this.doc.createElement('aside');
+				preview.className = 'zw-popup-preview';
+				preview.setAttribute('aria-label', '通知の色のプレビュー');
+				const title = this.doc.createElement('h4');
+				title.textContent = '通知のプレビュー';
+				const note = this.doc.createElement('p');
+				note.textContent = '変更はこの見本にすぐ反映されます。実際のプレイヤーへの反映は「変更を保存」の後です。';
+				preview.append(title, note);
+				for (const [key, label, example] of [
+						['popup.notifyColor', '通常・成功通知', '✓ 保存しました'],
+						['popup.alertColor', 'エラー通知', '! コメントの取得に失敗しました']
+				]) {
+						const labelNode = this.doc.createElement('p');
+						labelNode.textContent = label;
+						const sample = this.doc.createElement('div');
+						sample.className = 'zw-popup-sample';
+						sample.dataset.zwPopupColorSample = key;
+						sample.textContent = example;
+						preview.append(labelNode, sample);
+				}
+				const percent = this.doc.createElement('p');
+				percent.dataset.zwPopupTransparencyLabel = '';
+				preview.append(percent);
+				const warning = this.doc.createElement('p');
+				warning.textContent = '背景だけを透過します。通知の文字色は従来どおり白です。背景を透明にしすぎると動画によっては読みにくくなる場合があります。';
+				preview.append(warning);
+				section.append(controls, preview);
+				return section;
+		}
+		_updatePopupColorPreview() {
+				const rawTransparency = Number(this.model.get('popup.backgroundTransparency'));
+				const transparency = Number.isFinite(rawTransparency) ? Math.max(0, Math.min(100, rawTransparency)) : 0;
+				const label = this.cards.querySelector('[data-zw-popup-transparency-label]');
+				if (label) {
+						label.textContent = '背景の透明度 ' + transparency + '%（0% = 不透明、100% = 完全透明）';
+				}
+				for (const sample of this.cards.querySelectorAll('[data-zw-popup-color-sample]')) {
+						const id = sample.dataset.zwPopupColorSample;
+						const raw = String(this.model.get(id) ?? '');
+						if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(raw)) {
+								sample.dataset.zwPopupLastColor = ModernAdvancedSettingsUI._hexColor(raw);
+						}
+						const fallback = String(this.model.config.default[id] || '#333333');
+						const hex = sample.dataset.zwPopupLastColor || ModernAdvancedSettingsUI._hexColor(fallback) || '#333333';
+						if (transparency === 0) {
+								sample.style.backgroundColor = hex;
+								continue;
+						}
+						const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+						sample.style.backgroundColor = 'rgba(' + r + ', ' + g + ', ' + b + ', ' + (1 - transparency / 100) + ')';
+				}
+		}
+		_renderCards() {
+				this._clearTouchOrder();
+				this._ngCompositeEditor?.dispose();
+				this._ngCompositeEditor = null;
+				if (!this.searchTerm && this.selected.category === 'プレイリスト・検索' &&
+						this.selected.subcategory === 'データ管理') {
+						this._renderDataPanel();
+						return;
+				}
+				const hits = this.searchTerm ? this.model.search(this.searchTerm) :
+						this.model.sectionDescriptors(this.selected.category, this.selected.subcategory);
+				const title = this.root.querySelector('[data-zw-title]');
+				const sectionLabel = this.selected.subcategory === '関連メニュー › カスタムリンク' ?
+						'関連メニュー（全項目）' : this.selected.subcategory;
+				title.textContent = this.searchTerm ? '検索結果' : sectionLabel;
+				this.root.querySelector('[data-zw-path]').textContent = this.searchTerm ?
+						'全カテゴリ横断検索' : this.selected.category + ' / ' + sectionLabel;
+				this.root.querySelector('[data-zw-subtitle]').textContent = this.searchTerm ?
+						hits.length + '件の設定が見つかりました' : '関連する設定をまとめて表示しています。';
+				this.root.querySelector('[data-zw-reset-category]').hidden = !!this.searchTerm;
+				const seen = new Set();
+				const entries = [];
+				for (let descriptor of hits) {
+						if (descriptor.type === 'seconds') {
+								descriptor = this.model.descriptor('KEY_' + descriptor.actionId) || descriptor;
+						}
+						if (!seen.has(descriptor.id)) {
+								seen.add(descriptor.id);
+								entries.push(descriptor);
+						}
+				}
+				const seekSection = !this.searchTerm && this.selected.category === 'ショートカット' &&
+						this.selected.subcategory === 'シーク';
+				const used = seekSection ? this._usedCustomSeekSlots() : [];
+				const visibleEntries = seekSection ? entries.filter(d => {
+						const n = Number((d.actionId || '').match(/^CUSTOM_SEEK_(\d+)$/)?.[1]);
+						return !n || used.includes(n);
+				}) : entries.filter(d => d.type !== 'related-builtin-options' &&
+						(d.type !== 'related-links' || !entries.some(item => item.type === 'related-order')));
+				const rows = [];
+				const visibilityMode = !this.searchTerm && this.selected.category === '画面・映像' &&
+						this.selected.subcategory === '表示・非表示';
+				const sceneSection = !this.searchTerm && this.selected.category === '画面・映像' &&
+						this.selected.subcategory === 'シーンサーチ';
+				const popupSection = !this.searchTerm && this.selected.category === '画面・映像' &&
+						this.selected.subcategory === '通知・ポップアップ';
+				const groupNames = {
+						hover: '動画の上に重なるボタン', related: '関連メニュー', comment: 'コメント入力',
+						scene: 'シーンサーチの操作ボタン', 'scene-comments': 'シーンサーチの表示',
+						bar: '再生操作バー', info: '動画情報パネル', header: '動画上部のヘッダー',
+						shared: 'コメント・補助表示（元の設定画面と共通）'
+				};
+				let lastScope = null;
+				for (const d of visibleEntries.filter(item => !item.hidden && item.type !== 'related-visibility')) {
+						if (sceneSection && ['sceneSearch.layout.normal', 'sceneSearch.layout.fullscreen', 'sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen'].includes(d.id)) {
+								continue; // One canonical draft; the visual gallery replaces redundant select cards.
+						}
+						if (visibilityMode && d.visibilityScope && d.visibilityScope !== lastScope) {
+								const heading = this.doc.createElement('h4');
+								heading.className = 'zw-modern-visibility-group';
+								heading.dataset.zwVisibilityGroup = d.visibilityScope;
+								heading.textContent = groupNames[d.visibilityScope] || 'その他';
+								rows.push(heading);
+								lastScope = d.visibilityScope;
+						}
+						rows.push(this._createCard(d));
+				}
+				if (sceneSection) {
+						rows.splice(0, rows.length, this._createSceneSettingsPanel(rows));
+				}
+				if (!this.searchTerm && this.selected.category === 'プレイリスト・検索' &&
+						this.selected.subcategory === '検索') {
+						const guide = this.doc.createElement('section');
+						guide.className = 'zw-modern-search-guide';
+						guide.setAttribute('aria-label', '検索設定の違い');
+						guide.innerHTML = [
+								'<strong>検索で何が通信されるの？</strong>',
+								'<p><b>① タグ候補・動画の予測：</b>検索欄に入力したときの候補表示。件数表示をOFFにしてもこの機能は使えます。</p>',
+								'<p><b>② ヒット件数：</b>「〇件」という参考数字だけを調べる追加通信。下の設定で取得タイミングを選べます。</p>',
+								'<p><b>③ プレイリストの読み込み：</b>検索を実行して動画を一覧へ追加する処理。最大件数は別の設定です。</p>'
+						].join('');
+						rows.unshift(guide);
+				}
+				if (!this.searchTerm && this.selected.category === '画面・映像' &&
+						this.selected.subcategory === '表示・非表示') {
+						const guide = this.doc.createElement('section');
+						guide.className = 'zw-modern-search-guide';
+						guide.setAttribute('aria-label', '表示・非表示の設定');
+						guide.innerHTML = [
+								'<strong>プレイヤーの表示を自分好みに整理</strong>',
+								'<p>動画上・操作バー・動画情報・ヘッダーごとに項目をまとめました。OFFでも再生機能やショートカットは削除されません。</p>',
+								'<p>再生・停止、シークバー、閉じる、エラー復旧は残ります。歯車を隠した場合も、マイページの上級者設定から再表示できます。</p>',
+								'<p>共通設定の' + ModernAdvancedSettingsModel.SHARED_VISIBILITY.length + '項目は元の場所と同じ値です。変更・キャンセル・初期値への復帰も両方に反映されます。</p>',
+								'<p>変更は画面下部の「変更を保存」で確定します。いつでも表示に戻せます。</p>'
+						].join('');
+						rows.unshift(guide);
+				}
+				if (seekSection) {
+						const toolbar = this.doc.createElement('div');
+						toolbar.className = 'zw-modern-seek-toolbar';
+						const count = this.doc.createElement('span');
+						count.dataset.zwSeekCount = '';
+						count.textContent = 'カスタムシーク ' + used.length + ' / ' + this._customSeekSlots().length + ' 枠';
+						const button = this._button('＋ カスタムシークを追加', 'data-zw-add-seek', '', 'zw-modern-plainbtn');
+						button.disabled = used.length === this._customSeekSlots().length;
+						toolbar.append(count, button);
+						this.cards.replaceChildren(toolbar, ...rows);
+				}
+				else if (popupSection) {
+						this.cards.replaceChildren(this._createPopupColorPanel(rows));
+				}
+				else {
+						this.cards.replaceChildren(...rows);
+				}
+				this._updateSceneSettingsPreview();
+				this._updatePopupColorPreview();
+		}
+		_applyRelatedDraftFromModel() {
+				if (!this.relatedEditor) {
+						return;
+				}
+				const value = this.model.get('relatedMenu.customLinks');
+				this.relatedEditor.replaceDraftFromParent(value);
+		}
+		_syncRelatedDraft() {
+				if (!this.relatedEditor) {
+						return;
+				}
+				const editor = this.relatedEditor;
+				this.model.set('relatedMenu.customLinks', editor.draft);
+		}
+		_relatedErrors() {
+				if (!this.relatedEditor) {
+						return [];
+				}
+				const editor = this.relatedEditor;
+				const validation = editor.actions.validateLinks(editor.draft);
+				const errs = editor.draft.map((link, index) => editor._rowError(link, index)).filter(Boolean);
+				return validation.valid && errs.length === 0 ? [] : errs.length ? errs : ['リンクの入力に不正があります'];
+		}
+		_onRelatedBubble(event) {
+				if (!this.relatedEditor ||
+						!this.relatedEditor.container.contains(event.target)) {
+						return;
+				}
 				this._syncRelatedDraft();
-				const changedKeys=this.model.changes().map(change=>change.id);
-				const historyKeys=changedKeys.filter(key=>key.startsWith('commentHistory.'));
-				this.model.save();
-				if(changedKeys.length && this.win.CustomEvent){
-					this.win.dispatchEvent(new this.win.CustomEvent(
-						'ZenzaWatch-advanced-settings-saved',{detail:{keys:changedKeys}}));
+				this._refreshFooter();
+		}
+		hasPendingEdits() {
+				return this.model.isDirty() || this._visibleSeekSlots.size > 0;
+		}
+		discardChanges() {
+				if (this._recordCleanup) {
+						this._recordCleanup();
 				}
+				this.model.cancel();
 				this._visibleSeekSlots.clear();
 				this._seekDirections.clear();
-				this._orderAnnouncement='';
-				if(historyKeys.length && this.win.CustomEvent){
-					this.win.dispatchEvent(new this.win.CustomEvent(
-						'ZenzaWatch-comment-history-settings',{detail:{keys:historyKeys}}));
+				this._orderAnnouncement = '';
+				if (this.relatedEditor) {
+						this.relatedEditor._load();
 				}
-				if(this.relatedEditor){this.relatedEditor._load();}
-				this._renderCards();this._refreshFooter();
-			}
-			catch(error){this.win.alert?.(String(error.message||error));}
-			return;
-		}
-		if(button.hasAttribute('data-zw-record')) {
-			this._beginRecording(button.dataset.zwRecord,button);return;
-		}
-		if(button.hasAttribute('data-zw-clear-key')) {
-			this.model.set(button.dataset.zwClearKey,0);
-			this._renderCards();this.relatedEditor?._refresh?.();this._refreshFooter();return;
-		}
-		if(button.hasAttribute('data-zw-choice')) {
-			this.model.set(button.dataset.zwChoice,button.dataset.zwValue);
-			this._renderCards();this._refreshFooter();
-		}
-	}
-	openDrawer() {this.root.classList.add('is-drawer-open');}
-	_onDocumentKeyDown(e) {
-		if(this._recordCleanup){return;}
-		const grip=e.target.closest?.('[data-zw-order-grip]');
-		if(grip && e.altKey && ['ArrowUp','ArrowDown'].includes(e.key)){
-			const key=grip.dataset.zwOrderGrip;
-			const keys=this._relatedOrderEntries().map(item=>item.key);
-			const index=keys.indexOf(key);
-			const target=index+(e.key==='ArrowUp'?-1:1);
-			if(index>=0 && target>=0 && target<keys.length){
-				e.preventDefault();
-				this._moveRelatedOrder(key,keys[target],e.key==='ArrowDown');
-				this.root.querySelector('[data-zw-order-grip="'+key+'"]')?.focus();
-			}
-			return;
-		}
-		if(e.key==='Escape' || e.keyCode===27) {
-			if(this.root.classList.contains('is-drawer-open')){
-				this.root.classList.remove('is-drawer-open');
-				e.preventDefault();
-			}
-		}
-	}
-	_beginRecording(id,button) {
-		if(this._recordCleanup){this._recordCleanup();}
-		const original=button.textContent;
-		button.textContent='キーを押してください（Escで中止）';
-		const handler=e=>{
-			e.preventDefault();e.stopPropagation();e.stopImmediatePropagation?.();
-			if([16,17,18,91,92,93,224].includes(e.keyCode)){return;}
-			if(e.keyCode===27&&!e.metaKey&&!e.ctrlKey&&!e.shiftKey&&!e.altKey) {
-				cleanup();return;
-			}
-			const code=this.encodeKeyCombo(e);
-			cleanup();
-			if(Number.isSafeInteger(code)&&code>0&&code<90000000) {
-				this.model.set(id,code);
 				this._renderCards();
-				this.relatedEditor?._refresh?.();
 				this._refreshFooter();
-			}
-		};
-		const cleanup=()=>{
-			this.doc.removeEventListener('keydown',handler,true);
-			button.textContent=original;
-			this._recordCleanup=null;
-		};
-		this._recordCleanup=cleanup;
-		this.doc.addEventListener('keydown',handler,true);
-	}
-	dispose() {
-		this._ngCompositeEditor?.dispose();
-		this._ngCompositeEditor=null;
-		this.setModalVisible(false);
-		if(this._recordCleanup){this._recordCleanup();}
-		this.doc.removeEventListener('keydown',this._onKeyDownBound,true);
-		this.root.removeEventListener('click',this._onClickBound,true);
-		this.root.removeEventListener('change',this._onValueBound,true);
-		this.root.removeEventListener('input',this._onInputBound,true);
-		this.root.removeEventListener('dragstart',this._onOrderDragStartBound);
-		this.root.removeEventListener('dragover',this._onOrderDragOverBound);
-		this.root.removeEventListener('drop',this._onOrderDropBound);
-		this.root.removeEventListener('dragend',this._onOrderDragEndBound);
-		this._clearTouchOrder();
-		this.root.removeEventListener('pointerdown',this._onTouchOrderDownBound);
-		this.root.removeEventListener('pointermove',this._onTouchOrderMoveBound);
-		this.root.removeEventListener('pointerup',this._onTouchOrderUpBound);
-		this.root.removeEventListener('pointercancel',this._onTouchOrderCancelBound);
-		this._unwatchRelatedActions?.();
-		this.model.config.offkey?.('backComment',this._onBackCommentConfigUpdate);
-		this.root.removeEventListener('click',this._onRelatedClickBound);
-		this.root.removeEventListener('change',this._onRelatedChangeBound);
-		this.root.removeEventListener('input',this._onRelatedInputBound);
-		if(this.relatedEditor && this._relatedOrigin?.parent) {
-			const {parent,next}=this._relatedOrigin;
-			const editor=this.relatedEditor.container;
-			if(next&&next.parentNode===parent){parent.insertBefore(editor,next);}
-			else{parent.appendChild(editor);}
-			editor.querySelector('[data-rl-save]').hidden=false;
-			editor.querySelector('[data-rl-cancel]').hidden=false;
-			this.relatedEditor.embedded=false;
-			this.relatedEditor.onDraftChange=null;
-			this.relatedEditor.getDraftShortcutValue=null;
-			this.relatedEditor.getDraftShortcutConflicts=null;
 		}
-		for(const [node,{parent,next}] of this._moved) {
-			if(!parent){continue;}
-			if(next&&next.parentNode===parent){parent.insertBefore(node,next);}
-			else {parent.appendChild(node);}
+		_refreshFooter() {
+				const changed = this.model.changes().length;
+				const pendingSeek = this._visibleSeekSlots.size;
+				this.root.querySelector('[data-zw-dirty]').textContent = changed ?
+						'● 未保存の変更 ' + changed + '件' :
+						pendingSeek ? '● カスタムシークの追加枠 ' + pendingSeek + '件（未設定）' : '保存済み';
+				this.root.querySelector('[data-zw-cancel]').disabled = !changed && !pendingSeek;
+				this.root.querySelector('[data-zw-save]').disabled = !changed ||
+						this.model.validate().length > 0 || this._relatedErrors().length > 0;
 		}
-		this.root.remove();
-		this.panel.classList.remove('zw-modern-active');
-	}
+		_refreshCards() {
+				const errors = new Map(this.model.validate().map(e => [e.id, e.message]));
+				for (const card of this.cards.querySelectorAll('[data-zw-id]')) {
+						const id = card.dataset.zwId, d = this.model.descriptor(id);
+						const seek = d.type === 'shortcut' ? this.model.descriptor('PARAM_' + d.actionId) : null;
+						card.classList.toggle('is-modified', (this.model.isDifferentFromDefault(id) ||
+								(d.type === 'related-order' &&
+										this.model.isDifferentFromDefault('relatedMenu.hiddenItems')) ||
+								(seek && this.model.isDifferentFromDefault(seek.id))));
+						const active = this.model.isEnabled(id);
+						card.classList.toggle('is-disabled', !active);
+						const input = card.querySelector('[data-setting-name]');
+						if (input) {
+								input.disabled = !active;
+						}
+						if (id === 'commandFilter') {
+								const current = new Set(String(this.model.get(id) ?? '')
+										.split(/\r?\n/).map(value => value.trim().toLowerCase()).filter(Boolean));
+								card.querySelectorAll('[data-zw-command-preset]').forEach(button => {
+										button.disabled = !active || current.has(button.dataset.zwCommandPreset);
+								});
+						}
+						card.querySelectorAll('[data-zw-choice]').forEach(button => {
+								button.disabled = !active;
+						});
+						if (d.type === 'regex-flags') {
+								const flags = String(this.model.get(id) || '');
+								card.querySelectorAll('[data-zw-regex-flag]').forEach(checkbox => {
+										checkbox.checked = flags.includes(checkbox.dataset.zwRegexFlag);
+										checkbox.disabled = !active;
+								});
+								const field = card.querySelector('[data-zw-regex-raw]');
+								if (field) {
+										field.disabled = !active;
+										if (field !== this.doc.activeElement) {
+												field.value = flags;
+										}
+								}
+								const display = card.querySelector('[data-zw-regex-value]');
+								if (display) {
+										display.textContent = flags || '（なし）';
+								}
+						}
+						if (d.type === 'slider') {
+								card.querySelectorAll('input[data-setting-name]').forEach(element => {
+										element.disabled = !active;
+										if (element !== this.doc.activeElement || element.type !== 'number') {
+												element.value = String(this.model.get(id));
+										}
+								});
+						}
+						if (d.type === 'font-picker') {
+								const select = card.querySelector('[data-zw-font-preset]');
+								const custom = card.querySelector('[data-zw-font-custom]');
+								const value = String(this.model.get(id) ?? '');
+								const preset = d.options.some(item => item.value === value) ? value : '__custom__';
+								const editing = custom === this.doc.activeElement && !custom.hidden;
+								if (select) {
+										select.disabled = !active;
+										if (!editing) {
+												select.value = preset;
+										}
+								}
+								if (custom) {
+										custom.disabled = !active;
+										if (!editing) {
+												custom.value = value;
+												custom.hidden = preset !== '__custom__';
+										}
+								}
+						}
+						if (d.type === 'color') {
+								this._refreshColorEditor(card, d, active);
+						}
+						const example = card.querySelector('[data-zw-preview-for]');
+						if (example) {
+								this._updateVisualExample(example, id);
+						}
+						let alert = card.querySelector('.zw-modern-validation-error');
+						if (errors.has(id)) {
+								if (!alert) {
+										alert = this.doc.createElement('span');
+										alert.className = 'zw-modern-warning zw-modern-validation-error';
+										card.append(alert);
+								}
+								alert.textContent = errors.get(id);
+						}
+						else if (alert) {
+								alert.remove();
+						}
+						if (seek) {
+								const value = Number(this.model.get(seek.id)) || 0;
+								const direction = card.querySelector('[data-zw-seek-direction]');
+								const magnitude = card.querySelector('[data-zw-seek-magnitude]');
+								const sign = this._seekDirections.get(seek.id) || (value > 0 ? 1 : -1);
+								if (direction) {
+										direction.value = String(sign);
+								}
+								if (magnitude && magnitude !== this.doc.activeElement) {
+										magnitude.value = String(Math.abs(value));
+								}
+						}
+						if (d.type === 'shortcut') {
+								const text = card.querySelector('[data-zw-key-display]');
+								if (text) {
+										text.textContent = this.formatKeyCombo(this.model.get(id));
+								}
+						}
+				}
+				this._updateSceneSettingsPreview();
+				this._updatePopupColorPreview();
+				this._refreshFooter();
+		}
+		_interceptValue(e) {
+				const el = e.target;
+				if (el?.dataset?.zwRegexFlag && this.root.contains(el)) {
+						e.stopPropagation();
+						e.stopImmediatePropagation?.();
+						const id = el.dataset.zwRegexId;
+						const flag = el.dataset.zwRegexFlag;
+						const current = String(this.model.get(id) || '');
+						const flags = new Set(current);
+						if (el.checked) {
+								flags.add(flag);
+						}
+						else {
+								flags.delete(flag);
+						}
+						const order = 'dgimsuvy';
+						const next = [...order].filter(f => flags.has(f)).join('') +
+								[...flags].filter(f => !order.includes(f)).join('');
+						this.model.set(id, next);
+						this._refreshCards();
+						return true;
+				}
+				if (el?.dataset?.zwColorPicker && this.root.contains(el)) {
+						e.stopPropagation();
+						e.stopImmediatePropagation?.();
+						this.model.set(el.dataset.zwColorPicker, el.value);
+						this._refreshCards();
+						return true;
+				}
+				if (el?.dataset?.zwFontPreset && this.root.contains(el)) {
+						e.stopPropagation();
+						e.stopImmediatePropagation?.();
+						const id = el.dataset.zwFontPreset;
+						const custom = el.closest('.zw-modern-font-editor')
+								?.querySelector('[data-zw-font-custom]');
+						if (el.value === '__custom__') {
+								if (custom) {
+										custom.hidden = false;
+										custom.focus();
+								}
+						}
+						else {
+								this.model.set(id, el.value);
+								if (custom) {
+										custom.hidden = true;
+								}
+								this._refreshCards();
+						}
+						return true;
+				}
+				if (el && el.dataset && this.root.contains(el) &&
+						(el.dataset.zwSeekDirection || el.dataset.zwSeekMagnitude)) {
+						e.stopPropagation();
+						e.stopImmediatePropagation?.();
+						const id = el.dataset.zwSeekDirection || el.dataset.zwSeekMagnitude;
+						const old = Number(this.model.get(id)) || 0;
+						if (el.dataset.zwSeekDirection) {
+								const direction = Number(el.value) < 0 ? -1 : 1;
+								this._seekDirections.set(id, direction);
+								this.model.set(id, direction * Math.abs(old));
+						}
+						else {
+								const input = el.value.trim();
+								const number = input === '' ? NaN : Number(input);
+								const direction = this._seekDirections.get(id) || (old > 0 ? 1 : -1);
+								this.model.set(id, Number.isFinite(number) && number >= 0 ? direction * number : NaN);
+						}
+						this._refreshCards();
+						return true;
+				}
+				if (!el || !el.dataset || !el.dataset.settingName || !this.root.contains(el)) {
+						return false;
+				}
+				e.stopPropagation();
+				if (typeof e.stopImmediatePropagation === 'function') {
+						e.stopImmediatePropagation();
+				}
+				const key = el.dataset.settingName;
+				const value = el.type === 'checkbox' ? el.checked : el.value;
+				try {
+						this.model.set(key, key === 'userIdFilter' ?
+								ModernAdvancedSettingsUI._formatNgUserIds(value) : value);
+				}
+				catch (error) {
+						this.win.console?.warn?.('Advanced settings input rejected', error);
+				}
+				if (key === 'sceneSearch.layout.linkFullscreen') {
+						this._renderCards();
+						this._refreshFooter();
+				}
+				else {
+						this._refreshCards();
+				}
+				return true;
+		}
+		_setBuiltinOptionDraft(id, field, value) {
+				if (!this.relatedOrder?.STANDARD.some(item => item.id === id)) {
+						return;
+				}
+				const key = this.relatedOrder.OPTIONS_KEY;
+				if (!this.model.descriptor(key)) {
+						return;
+				}
+				const all = (this.model.get(key) || {});
+				const options = { ...this.relatedOrder.getOption(all, id) };
+				if (field === 'popupWidth' || field === 'popupHeight') {
+						options[field] = value === '' ? 0 : Number(value);
+				}
+				else if (field === 'includePosition') {
+						options[field] = !!value;
+				}
+				else if (value === '' || (field === 'openMode' && value === 'default') ||
+						(field === 'copyFormat' && value === 'url')) {
+						delete options[field];
+				}
+				else {
+						options[field] = value;
+				}
+				const next = { ...all };
+				if (Object.keys(options).length) {
+						next[id] = options;
+				}
+				else {
+						delete next[id];
+				}
+				this.model.set(key, next);
+				this._refreshFooter();
+		}
+		_onValue(e) {
+				const builtin = e.target.closest?.('[data-zw-builtin-field]');
+				if (builtin && this.root.contains(builtin)) {
+						e.stopPropagation();
+						this._setBuiltinOptionDraft(builtin.dataset.zwBuiltinId, builtin.dataset.zwBuiltinField, builtin.type === 'checkbox' ? builtin.checked : builtin.value);
+						if (['openMode', 'copyFormat'].includes(builtin.dataset.zwBuiltinField)) {
+								this._refreshRelatedOrderList();
+						}
+						return;
+				}
+				const visible = e.target.closest?.('[data-zw-order-visible]');
+				if (visible && this.root.contains(visible)) {
+						e.stopPropagation();
+						const key = visible.dataset.zwOrderVisible;
+						if (!this.relatedOrder?.isValidKey(key)) {
+								return;
+						}
+						const hidden = new Set((this.model.get('relatedMenu.hiddenItems') || []));
+						if (visible.checked) {
+								hidden.delete(key);
+						}
+						else {
+								hidden.add(key);
+						}
+						this.model.set('relatedMenu.hiddenItems', [...hidden]);
+						this._orderAnnouncement = '表示設定を変更しました。画面下部の「変更を保存」で確定します。';
+						this._refreshRelatedOrderList();
+						this._refreshFooter();
+						return;
+				}
+				this._interceptValue(e);
+		}
+		_onInput(e) {
+				const builtin = e.target.closest?.('[data-zw-builtin-field]');
+				if (builtin && this.root.contains(builtin)) {
+						e.stopPropagation();
+						this._setBuiltinOptionDraft(builtin.dataset.zwBuiltinId, builtin.dataset.zwBuiltinField, builtin.type === 'checkbox' ? builtin.checked : builtin.value);
+						if (builtin.dataset.zwBuiltinField === 'label') {
+								const row = this.root.querySelector('[data-zw-order-key="builtin:' + builtin.dataset.zwBuiltinId + '"]');
+								const display = row?.querySelector('.zw-order-name');
+								if (display) {
+										const original = this.relatedOrder.STANDARD.find(item => item.id === builtin.dataset.zwBuiltinId)?.label || '';
+										display.textContent = builtin.value.trim() || original;
+								}
+						}
+						return;
+				}
+				if (e.target.matches('[data-zw-search]')) {
+						this.searchTerm = e.target.value.trim();
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				this._interceptValue(e);
+		}
+		_onClick(e) {
+				if (e.target.closest?.('[data-zw-drawer-dismiss]')) {
+						this.root.classList.remove('is-drawer-open');
+						return;
+				}
+				const button = e.target.closest('button');
+				if (!button || !this.root.contains(button) || button.disabled) {
+						return;
+				}
+				if (button.hasAttribute('data-zw-scene-migration-ack')) {
+						try {
+								this.model.config.persistSceneSearchSelection?.({ 'sceneSearch.presentation.migrationAcknowledged': true });
+								this._renderCards();
+						}
+						catch (error) {
+								const info = button.closest('[data-zw-scene-migration]');
+								if (info) {
+										const note = this.doc.createElement('span');
+										note.setAttribute('role', 'alert');
+										note.textContent = '保存できませんでした。もう一度お試しください。';
+										info.append(note);
+								}
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-scene-layout-mode') &&
+						!button.hasAttribute('data-zw-scene-layout')) {
+						const mode = button.dataset.zwSceneLayoutMode;
+						if (['normal', 'fullscreen'].includes(mode)) {
+								this._sceneLayoutTab = mode;
+								this._renderCards();
+								this._refreshFooter();
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-scene-layout')) {
+						const id = button.dataset.zwSceneLayout;
+						const mode = button.dataset.zwSceneLayoutMode;
+						if (!['follow', 'fixed', 'legacy'].includes(id) || !['normal', 'fullscreen'].includes(mode) ||
+								mode !== this._sceneLayoutTab) {
+								return;
+						}
+						if (mode === 'fullscreen' && this.model.get('sceneSearch.layout.linkFullscreen')) {
+								return;
+						}
+						this.model.set('sceneSearch.presentation.' + mode, id);
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-order-add-link') || button.hasAttribute('data-zw-order-add-copy')) {
+						const kind = button.hasAttribute('data-zw-order-add-copy') ? 'copy' : 'link';
+						const id = this.relatedEditor?.addItem(kind);
+						if (id) {
+								this._expandedRelatedOptions = new Set(['link:' + id]);
+								this._refreshRelatedOrderList();
+						}
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-order-edit')) {
+						const key = button.dataset.zwOrderEdit;
+						this._expandedRelatedOptions = new Set([key]);
+						this._refreshRelatedOrderList();
+						this.root.querySelector('[data-zw-order-edit="' + key + '"]')?.focus();
+						return;
+				}
+				if (button.hasAttribute('data-zw-builtin-reset')) {
+						const id = button.dataset.zwBuiltinReset;
+						const key = this.relatedOrder?.OPTIONS_KEY;
+						if (!key || !this.model.descriptor(key)) {
+								return;
+						}
+						const options = { ...(this.model.get(key) || {}) };
+						delete options[id];
+						this.model.set(key, options);
+						this._refreshRelatedOrderList();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-builtin-insert')) {
+						const id = button.dataset.zwBuiltinId;
+						const token = button.dataset.zwBuiltinInsert;
+						if (!this.relatedActions?.VARIABLES?.includes(token)) {
+								return;
+						}
+						const field = this.root.querySelector('[data-zw-builtin-field="urlTemplate"][data-zw-builtin-id="' + id + '"]');
+						if (!field) {
+								return;
+						}
+						const at = typeof field.selectionStart === 'number' ? field.selectionStart : field.value.length;
+						const end = typeof field.selectionEnd === 'number' ? field.selectionEnd : at;
+						field.setRangeText('{' + token + '}', at, end, 'end');
+						this._setBuiltinOptionDraft(id, 'urlTemplate', field.value);
+						field.focus();
+						return;
+				}
+				if (button.hasAttribute('data-zw-open-link-editor')) {
+						const id = button.dataset.zwOpenLinkEditor.slice(5);
+						const links = (this.model.get('relatedMenu.customLinks') || []);
+						const index = links.findIndex(item => item.id === id);
+						if (index >= 0 && this.relatedEditor) {
+								const card = this.relatedEditor.container.querySelector('[data-rl-row="' + index + '"]');
+								const expand = card?.querySelector('[data-rl-expand]');
+								if (expand?.getAttribute('aria-expanded') === 'false') {
+										expand.click();
+								}
+								card?.scrollIntoView?.({ block: 'nearest' });
+								expand?.focus?.();
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-order-refresh')) {
+						this._refreshRelatedOrderList();
+						return;
+				}
+				if (button.hasAttribute('data-zw-order-up') || button.hasAttribute('data-zw-order-down')) {
+						const upward = button.hasAttribute('data-zw-order-up');
+						const key = upward ? button.dataset.zwOrderUp : button.dataset.zwOrderDown;
+						const keys = this._relatedOrderEntries().map(item => item.key);
+						const index = keys.indexOf(key), target = index + (upward ? -1 : 1);
+						if (index >= 0 && target >= 0 && target < keys.length) {
+								this._moveRelatedOrder(key, keys[target], !upward);
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-backup-export')) {
+						try {
+								this.root.querySelector('[data-zw-backup-json]').value =
+										this.model.config.exportJson();
+								this.root.querySelector('[data-zw-backup-status]').textContent = '';
+						}
+						catch (error) {
+								this.root.querySelector('[data-zw-backup-status]').textContent =
+										'設定の書き出しに失敗しました: ' + (error.message || error);
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-backup-import')) {
+						const status = this.root.querySelector('[data-zw-backup-status]');
+						try {
+								const data = JSON.parse(this.root.querySelector('[data-zw-backup-json]').value);
+								if (!data || typeof data !== 'object' || Array.isArray(data)) {
+										throw new Error('JSONオブジェクトを指定してください');
+								}
+								if (this.model.isDirty() && !this.confirm('未保存の編集内容を破棄してバックアップを読み込みますか？')) {
+										return;
+								}
+								if (!this.confirm('バックアップを取り込んで設定を上書きしますか？')) {
+										return;
+								}
+								this.model.config.import(data);
+								this.model.cancel();
+								if (this.relatedEditor) {
+										this.relatedEditor._load();
+								}
+								status.textContent = '設定を取り込みました。再読み込みします。';
+								this.reload();
+						}
+						catch (error) {
+								status.textContent = '設定を読み込めませんでした: ' + (error.message || error);
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-playlist-export')) {
+						try {
+								this.root.querySelector('[data-zw-playlist-json]').value =
+										JSON.stringify(this.playlist.export(), null, 2);
+								this.root.querySelector('[data-zw-backup-status]').textContent = '';
+						}
+						catch (error) {
+								this.root.querySelector('[data-zw-backup-status]').textContent =
+										'プレイリストの書き出しに失敗しました: ' + (error.message || error);
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-playlist-import')) {
+						const status = this.root.querySelector('[data-zw-backup-status]');
+						try {
+								const data = JSON.parse(this.root.querySelector('[data-zw-playlist-json]').value);
+								if (!this.confirm('プレイリストデータを上書きしますか？')) {
+										return;
+								}
+								this.playlist.import(data);
+								status.textContent = 'プレイリストを取り込みました。再読み込みします。';
+								this.reload();
+						}
+						catch (error) {
+								status.textContent = 'プレイリストを読み込めませんでした: ' + (error.message || error);
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-major')) {
+						const major = button.dataset.zwMajor;
+						if (this.expanded.has(major)) {
+								this.expanded.delete(major);
+						}
+						else {
+								this.expanded.add(major);
+						}
+						this._saveStored();
+						this._renderNavigation();
+						return;
+				}
+				if (button.hasAttribute('data-zw-sub')) {
+						const val = button.dataset.zwSub;
+						const sep = val.indexOf('|');
+						this.selected = { category: val.slice(0, sep), subcategory: val.slice(sep + 1) };
+						this.searchTerm = '';
+						this.root.querySelector('[data-zw-search]').value = '';
+						this._saveStored();
+						this.root.classList.remove('is-drawer-open');
+						this._renderNavigation();
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-sidebar')) {
+						if (this.win.innerWidth <= 760) {
+								this.root.classList.toggle('is-drawer-open');
+						}
+						else {
+								this.root.classList.toggle('is-sidebar-collapsed');
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-close')) {
+						if (this.hasPendingEdits() && !this.confirm('未保存の設定変更を破棄して閉じますか？')) {
+								return;
+						}
+						this.discardChanges();
+						this.onClose();
+						return;
+				}
+				if (button.hasAttribute('data-zw-command-preset')) {
+						if (!this.model.isEnabled('commandFilter')) {
+								return;
+						}
+						const token = button.dataset.zwCommandPreset;
+						if (!['red', 'blue', 'green', 'yellow', 'pink', 'cyan', 'black',
+								'big', 'small', 'ue', 'shita'].includes(token)) {
+								return;
+						}
+						const old = String(this.model.get('commandFilter') ?? '');
+						const existing = new Set(old.split(/\r?\n/)
+								.map(value => value.trim().toLowerCase()).filter(Boolean));
+						if (existing.has(token)) {
+								return;
+						}
+						this.model.set('commandFilter', old.replace(/[\r\n]+$/, '') +
+								(old.trim() ? '\n' : '') + token);
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-regex-advanced-toggle')) {
+						const holder = button.closest('.zw-modern-regex-editor');
+						const panel = holder?.querySelector('[data-zw-regex-advanced-panel]');
+						if (panel) {
+								panel.hidden = !panel.hidden;
+								button.setAttribute('aria-expanded', String(!panel.hidden));
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-screenshot-prefix')) {
+						this.model.set('screenshot.prefix', button.dataset.zwScreenshotPrefix);
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-filename-template')) {
+						this.model.set('screenshot.filenameTemplate', button.dataset.zwFilenameTemplate);
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-filename-token')) {
+						const token = button.dataset.zwFilenameToken;
+						if (!this.screenshotFileName?.TOKENS.includes(token)) {
+								return;
+						}
+						const id = 'screenshot.filenameTemplate';
+						this.model.set(id, String(this.model.get(id) || '') + '{' + token + '}');
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-help')) {
+						const card = button.closest('.zw-modern-card');
+						const note = card?.querySelector('.zw-modern-note');
+						if (note) {
+								note.hidden = !note.hidden;
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-add-seek')) {
+						const available = this._customSeekSlots().find(n => !this._usedCustomSeekSlots().includes(n));
+						if (available !== undefined) {
+								this._visibleSeekSlots.add(available);
+								this._renderCards();
+								this._refreshFooter();
+								this.cards.querySelector('[data-zw-id="KEY_CUSTOM_SEEK_' + available + '"]')
+										?.scrollIntoView?.({ block: 'nearest' });
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-remove-seek')) {
+						const n = Number(button.dataset.zwRemoveSeek);
+						if (!this._customSeekSlots().includes(n)) {
+								return;
+						}
+						this.model.resetItem('KEY_CUSTOM_SEEK_' + n);
+						this.model.resetItem('PARAM_CUSTOM_SEEK_' + n);
+						this._visibleSeekSlots.delete(n);
+						this._seekDirections.delete('PARAM_CUSTOM_SEEK_' + n);
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-reset-item')) {
+						this.model.resetItem(button.dataset.zwResetItem);
+						if (button.dataset.zwResetItem === 'relatedMenu.customLinks') {
+								this._applyRelatedDraftFromModel();
+						}
+						this._renderCards();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-reset-category')) {
+						const { category, subcategory } = this.selected;
+						const count = this.model.sectionDescriptors(category, subcategory).length;
+						if (this.confirm(category + ' / ' + subcategory + ' の' + count +
+								'項目だけを初期値に戻しますか？（保存前ならキャンセル可能）')) {
+								this.model.resetSubcategory(category, subcategory);
+								if (subcategory === '関連メニュー › カスタムリンク') {
+										this._applyRelatedDraftFromModel();
+								}
+								this._renderCards();
+								this._refreshFooter();
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-cancel')) {
+						this.discardChanges();
+						return;
+				}
+				if (button.hasAttribute('data-zw-save')) {
+						try {
+								if (this._relatedErrors().length > 0) {
+										throw new Error('カスタムリンクに不正な入力があります');
+								}
+								this._syncRelatedDraft();
+								const changedKeys = this.model.changes().map(change => change.id);
+								const historyKeys = changedKeys.filter(key => key.startsWith('commentHistory.'));
+								this.model.save();
+								if (changedKeys.length && this.win.CustomEvent) {
+										this.win.dispatchEvent(new this.win.CustomEvent('ZenzaWatch-advanced-settings-saved', { detail: { keys: changedKeys } }));
+								}
+								this._visibleSeekSlots.clear();
+								this._seekDirections.clear();
+								this._orderAnnouncement = '';
+								if (historyKeys.length && this.win.CustomEvent) {
+										this.win.dispatchEvent(new this.win.CustomEvent('ZenzaWatch-comment-history-settings', { detail: { keys: historyKeys } }));
+								}
+								if (this.relatedEditor) {
+										this.relatedEditor._load();
+								}
+								this._renderCards();
+								this._refreshFooter();
+						}
+						catch (error) {
+								this.win.alert?.(String(error.message || error));
+						}
+						return;
+				}
+				if (button.hasAttribute('data-zw-record')) {
+						this._beginRecording(button.dataset.zwRecord, button);
+						return;
+				}
+				if (button.hasAttribute('data-zw-clear-key')) {
+						this.model.set(button.dataset.zwClearKey, 0);
+						this._renderCards();
+						this.relatedEditor?._refresh?.();
+						this._refreshFooter();
+						return;
+				}
+				if (button.hasAttribute('data-zw-choice')) {
+						this.model.set(button.dataset.zwChoice, button.dataset.zwValue);
+						this._renderCards();
+						this._refreshFooter();
+				}
+		}
+		openDrawer() { this.root.classList.add('is-drawer-open'); }
+		_onDocumentKeyDown(e) {
+				if (this._recordCleanup) {
+						return;
+				}
+				const grip = e.target.closest?.('[data-zw-order-grip]');
+				if (grip && e.altKey && ['ArrowUp', 'ArrowDown'].includes(e.key)) {
+						const key = grip.dataset.zwOrderGrip;
+						const keys = this._relatedOrderEntries().map(item => item.key);
+						const index = keys.indexOf(key);
+						const target = index + (e.key === 'ArrowUp' ? -1 : 1);
+						if (index >= 0 && target >= 0 && target < keys.length) {
+								e.preventDefault();
+								this._moveRelatedOrder(key, keys[target], e.key === 'ArrowDown');
+								this.root.querySelector('[data-zw-order-grip="' + key + '"]')?.focus();
+						}
+						return;
+				}
+				if (e.key === 'Escape' || e.keyCode === 27) {
+						if (this.root.classList.contains('is-drawer-open')) {
+								this.root.classList.remove('is-drawer-open');
+								e.preventDefault();
+						}
+				}
+		}
+		_beginRecording(id, button) {
+				if (this._recordCleanup) {
+						this._recordCleanup();
+				}
+				const original = button.textContent;
+				button.textContent = 'キーを押してください（Escで中止）';
+				const handler = (e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						e.stopImmediatePropagation?.();
+						if ([16, 17, 18, 91, 92, 93, 224].includes(e.keyCode)) {
+								return;
+						}
+						if (e.keyCode === 27 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+								cleanup();
+								return;
+						}
+						const code = this.encodeKeyCombo(e);
+						cleanup();
+						if (Number.isSafeInteger(code) && code > 0 && code < 90000000) {
+								this.model.set(id, code);
+								this._renderCards();
+								this.relatedEditor?._refresh?.();
+								this._refreshFooter();
+						}
+				};
+				const cleanup = () => {
+						this.doc.removeEventListener('keydown', handler, true);
+						button.textContent = original;
+						this._recordCleanup = null;
+				};
+				this._recordCleanup = cleanup;
+				this.doc.addEventListener('keydown', handler, true);
+		}
+		dispose() {
+				this._ngCompositeEditor?.dispose();
+				this._ngCompositeEditor = null;
+				this.setModalVisible(false);
+				if (this._recordCleanup) {
+						this._recordCleanup();
+				}
+				this.doc.removeEventListener('keydown', this._onKeyDownBound, true);
+				this.root.removeEventListener('click', this._onClickBound, true);
+				this.root.removeEventListener('change', this._onValueBound, true);
+				this.root.removeEventListener('input', this._onInputBound, true);
+				this.root.removeEventListener('dragstart', this._onOrderDragStartBound);
+				this.root.removeEventListener('dragover', this._onOrderDragOverBound);
+				this.root.removeEventListener('drop', this._onOrderDropBound);
+				this.root.removeEventListener('dragend', this._onOrderDragEndBound);
+				this._clearTouchOrder();
+				this.root.removeEventListener('pointerdown', this._onTouchOrderDownBound);
+				this.root.removeEventListener('pointermove', this._onTouchOrderMoveBound);
+				this.root.removeEventListener('pointerup', this._onTouchOrderUpBound);
+				this.root.removeEventListener('pointercancel', this._onTouchOrderCancelBound);
+				this._unwatchRelatedActions?.();
+				this.model.config.offkey?.('backComment', this._onBackCommentConfigUpdate);
+				this.root.removeEventListener('click', this._onRelatedClickBound);
+				this.root.removeEventListener('change', this._onRelatedChangeBound);
+				this.root.removeEventListener('input', this._onRelatedInputBound);
+				if (this.relatedEditor && this._relatedOrigin?.parent) {
+						const { parent, next } = this._relatedOrigin;
+						const editor = this.relatedEditor.container;
+						if (next && next.parentNode === parent) {
+								parent.insertBefore(editor, next);
+						}
+						else {
+								parent.appendChild(editor);
+						}
+						editor.querySelector('[data-rl-save]').hidden = false;
+						editor.querySelector('[data-rl-cancel]').hidden = false;
+						this.relatedEditor.embedded = false;
+						this.relatedEditor.onDraftChange = null;
+						this.relatedEditor.getDraftShortcutValue = null;
+						this.relatedEditor.getDraftShortcutConflicts = null;
+				}
+				for (const [node, { parent, next }] of this._moved) {
+						if (!parent) {
+								continue;
+						}
+						if (next && next.parentNode === parent) {
+								parent.insertBefore(node, next);
+						}
+						else {
+								parent.appendChild(node);
+						}
+				}
+				this.root.remove();
+				this.panel.classList.remove('zw-modern-active');
+		}
 }
 class NgCompositeRuleEditor {
 	constructor(host,saved,onChange){
@@ -10426,20 +11475,18 @@ class NgCompositeRuleEditor {
 	}
 	dispose(){this.shadow?.replaceChildren();}
 }
-    window.ZenzaAdvancedSettings = {
-      config: Config
-    };
-    const global = {
-      PRODUCT
-    };
-
-    let panel;
-
-    const __tpl__ = (`
+        window.ZenzaAdvancedSettings = {
+            config: Config,
+            version: '0.3.79-task965'
+        };
+        const global = {
+            PRODUCT
+        };
+        let panel;
+        const __tpl__ = (`
       <button class="openZenzaAdvancedSettingPanel">ZenzaWatch上級者設定</button>
     `).trim();
-
-    const __css__ = (`
+        const __css__ = (`
       .openZenzaAdvancedSettingPanel {
         font-size: 12px;
         border-radius: 4px;
@@ -10469,42 +11516,37 @@ class NgCompositeRuleEditor {
         display: none !important;
       }
     `).trim();
-
-
-
-    // Task 059: ショートカットキー設定UI。
-    const escapeShortcutHtml = s => String(s).replace(/[&<>"']/g, c => (
-      {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;'}[c]
-    ));
-
-    // Task 065: カスタムシークスロット(CUSTOM_SEEK_1〜10)のうち、
-    // キーも秒数も既定値(未設定)のままの行は初期状態では隠す
-    // (.slotHidden)。ユーザーが以前に使っていた分(キーか秒数のどちらかを
-    // 設定済み)は、パネルを開くたびに毎回隠れてしまうと不便なので
-    // 常に表示する。
-    const isCustomSeekSlotUnset = action => {
-      if (!action.customSeekSlot) { return false; }
-      const key = parseInt(Config.props['KEY_' + action.id], 10) || 0;
-      const seconds = parseFloat(Config.props['PARAM_' + action.id]) || 0;
-      return !key && !seconds;
-    };
-
-    const renderShortcutKeySettingsHtml = () => {
-      const groups = groupShortcutActionsByCategory();
-      return groups.map(group => `
+        // Task 059: ショートカットキー設定UI。
+        const escapeShortcutHtml = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' }[c]));
+        // Task 065: カスタムシークスロット(CUSTOM_SEEK_1〜10)のうち、
+        // キーも秒数も既定値(未設定)のままの行は初期状態では隠す
+        // (.slotHidden)。ユーザーが以前に使っていた分(キーか秒数のどちらかを
+        // 設定済み)は、パネルを開くたびに毎回隠れてしまうと不便なので
+        // 常に表示する。
+        const isCustomSeekSlotUnset = (action) => {
+            if (!action.customSeekSlot) {
+                return false;
+            }
+            const key = parseInt(Config.props['KEY_' + action.id], 10) || 0;
+            const seconds = parseFloat(Config.props['PARAM_' + action.id]) || 0;
+            return !key && !seconds;
+        };
+        const renderShortcutKeySettingsHtml = () => {
+            const groups = groupShortcutActionsByCategory();
+            return groups.map(group => `
         <div class="shortcutCategory">
           <p class="caption sub">${escapeShortcutHtml(group.category)}</p>
           ${group.actions.map(action => {
-            const isCustomSeek = !!action.customSeekSlot;
-            const rowClass = isCustomSeek ?
-              `shortcutRow customSeekSlotRow${isCustomSeekSlotUnset(action) ? ' slotHidden' : ''}` :
-              'shortcutRow';
-            const secondsInputHtml = isCustomSeek ? `
+                const isCustomSeek = !!action.customSeekSlot;
+                const rowClass = isCustomSeek ?
+                    `shortcutRow customSeekSlotRow${isCustomSeekSlotUnset(action) ? ' slotHidden' : ''}` :
+                    'shortcutRow';
+                const secondsInputHtml = isCustomSeek ? `
               <input type="text" class="shortcutSecondsInput" inputmode="numeric"
                 data-setting-name="PARAM_${action.id}"
                 title="秒数を入力(マイナスで戻る・プラスで進む)"
                 placeholder="秒数 例:-10">` : '';
-            return `
+                return `
             <div class="${rowClass}" data-action-id="${action.id}">
               <span class="shortcutLabel">${escapeShortcutHtml(action.label)}</span>
               <span class="shortcutKeyDisplay">${escapeShortcutHtml(formatKeyCombo(Config.props['KEY_' + action.id]))}</span>
@@ -10515,7 +11557,7 @@ class NgCompositeRuleEditor {
               <span class="shortcutConflictWarning"></span>
             </div>
           `;
-          }).join('')}
+            }).join('')}
           ${group.category === 'シーク' ? `
           <div class="customSeekAddRow">
             <button type="button" class="customSeekAddBtn">＋ カスタムシークのスロットを追加(最大10個)</button>
@@ -10523,16 +11565,15 @@ class NgCompositeRuleEditor {
           ` : ''}
         </div>
       `).join('');
-    };
-
-    // Task 077: 画面フィルターの設定欄。項目と説明文は ScreenFilter.PARAMS から作る
-    // （プレイヤー内の専用パネルと同じ文言。項目を足す時は ScreenFilter.js だけ直せばよい）。
-    const renderScreenFilterSettingsHtml = () => {
-      const esc = escapeShortcutHtml;
-      const rows = ScreenFilter.PARAMS.map(p => {
-        const name = ScreenFilter.PREFIX + p.key;
-        if (p.type === 'boolean') {
-          return `
+        };
+        // Task 077: 画面フィルターの設定欄。項目と説明文は ScreenFilter.PARAMS から作る
+        // （プレイヤー内の専用パネルと同じ文言。項目を足す時は ScreenFilter.js だけ直せばよい）。
+        const renderScreenFilterSettingsHtml = () => {
+            const esc = escapeShortcutHtml;
+            const rows = ScreenFilter.PARAMS.map(p => {
+                const name = ScreenFilter.PREFIX + p.key;
+                if (p.type === 'boolean') {
+                    return `
           <div class="screenFilterRow control toggle">
             <label>
               <input type="checkbox" class="checkbox" data-setting-name="${name}">
@@ -10540,9 +11581,9 @@ class NgCompositeRuleEditor {
             </label>
             <div class="settingNote">${esc(p.desc)}</div>
           </div>`;
-        }
-        if (p.type === 'select') {
-          return `
+                }
+                if (p.type === 'select') {
+                    return `
           <div class="screenFilterRow control toggle">
             <label>
               ${esc(p.label)}
@@ -10552,9 +11593,9 @@ class NgCompositeRuleEditor {
             </label>
             <div class="settingNote">${esc(p.desc)}</div>
           </div>`;
-        }
-        const range = `${p.min}〜${p.max}${p.unit || ''}、標準は ${ScreenFilter.formatValue(p.key, p.def)}`;
-        return `
+                }
+                const range = `${p.min}〜${p.max}${p.unit || ''}、標準は ${ScreenFilter.formatValue(p.key, p.def)}`;
+                return `
           <div class="screenFilterRow control toggle">
             <label>
               ${esc(p.label)}${p.heavy ? '（やや重い）' : ''}
@@ -10563,11 +11604,9 @@ class NgCompositeRuleEditor {
             </label>
             <div class="settingNote">${esc(p.desc)}</div>
           </div>`;
-      }).join('');
-      const presets = ScreenFilter.PRESETS.map(p =>
-        `<button type="button" class="screenFilterPresetBtn" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`
-      ).join('');
-      return `
+            }).join('');
+            const presets = ScreenFilter.PRESETS.map(p => `<button type="button" class="screenFilterPresetBtn" data-preset="${p.id}" title="${esc(p.desc)}">${esc(p.label)}</button>`).join('');
+            return `
         <p class="caption">画面フィルター（映像の明るさ・色・反転）</p>
         <div class="settingNote">
           動画の映像だけに明るさ・コントラスト・ガンマなどの補正を掛けます（コメントやボタンには掛かりません）。
@@ -10597,440 +11636,441 @@ class NgCompositeRuleEditor {
           </div>
         </div>
       `;
-    };
-
-    class SettingPanel {
-      constructor(...args) {
-        this.initialize(...args);
-      }
-      initialize(params) {
-        this._playerConfig     = params.playerConfig;
-        this._$container       = params.$container;
-
-        this._update$rawData = _.debounce(this._update$rawData.bind(this), 500);
-        this._playerConfig.on('update', this._onPlayerConfigUpdate.bind(this));
-      }
-      _initializeDom() {
-        if (this._$panel) { return; }
-        const $container = this._$container;
-        const config = this._playerConfig;
-
-        cssUtil.addStyle(SettingPanel.__css__);
-        $container.append(uq.html(SettingPanel.__tpl__));
-
-        const $panel = this._$panel = $container.find('.zenzaAdvancedSettingPanel');
-        this._$view =
-          $container.find('.zenzaAdvancedSettingPanel');
-        this._$view.on('click', e => e.stopPropagation());
-
-        this._$rawData = $panel.find('.zenzaAdvancedSetting-rawData');
-        this._$rawData.val(config.exportJson());
-        this._$rawData.on('change', () => {
-          let val = this._$rawData.val();
-          let data;
-          if (val === '') { val = '{}'; }
-
-          try {
-            data = JSON.parse(val);
-          } catch (e) {
-            alert(e);
-            return;
-          }
-
-          if (confirm('設定データを直接書き換えしますか？')) {
-            try {
-              config.import(data);
-              location.reload();
-            } catch (error) {
-              alert(`設定を読み込めませんでした: ${error.message}`);
-            }
-          }
-
-        });
-
-        this._$playlistData = $panel.find('.zenzaAdvancedSetting-playlistData');
-        this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
-        this._$playlistData.on('change', () => {
-          let val = this._$playlistData.val();
-          let data;
-          if (val === '') { val = '{}'; }
-
-          try {
-            data = JSON.parse(val);
-          } catch (e) {
-            alert(e);
-            return;
-          }
-
-          if (confirm('プレイリストデータを直接書き換えしますか？')) {
-            window.ZenzaWatch.external.playlist.import(data);
-            location.reload();
-          }
-
-        });
-
-        const onInputItemChange = this._onInputItemChange.bind(this);
-        const $check = $panel.find('input[type=checkbox]');
-        $check.forEach(check => {
-          const {settingName} = check.dataset;
-          const val = !!config.props[settingName];
-          check.checked = val;
-          check.closest('.control').classList.toggle('checked', val);
-        });
-        $check.on('change', this._onToggleItemChange.bind(this));
-
-        const $input = $panel.find('input[type=text], select, .textAreaInput');
-        $input.forEach(input => {
-          const {settingName} = input.dataset;
-          const val = config.props[settingName];
-          input.value = val;
-        });
-        $input.on('change', onInputItemChange);
-
-        // Task 059: ショートカットキー設定の初期化。
-        this._$shortcutContainer = $panel.find('.shortcutKeySettingsContainer');
-        $panel.find('.shortcutRecordBtn').on('click', e => {
-          e.stopPropagation();
-          this._onShortcutRecordClick(e);
-        });
-        $panel.find('.shortcutClearBtn').on('click', e => {
-          e.stopPropagation();
-          this._onShortcutClearClick(e);
-        });
-        $panel.find('.shortcutResetBtn').on('click', e => {
-          e.stopPropagation();
-          this._onShortcutResetClick(e);
-        });
-        this._refreshAllShortcutRows();
-
-        // Task 065: カスタムシークの「追加」ボタン。押すたびに、隠れている
-        // (未設定の)スロットのうち一番若い番号のものを1つだけ表示する。
-        // 10個すべて表示し終えたらボタン自体を無効化する。
-        this._$customSeekAddBtn = $panel.find('.customSeekAddBtn');
-        this._$customSeekAddBtn.on('click', e => {
-          e.stopPropagation();
-          this._onCustomSeekAddClick();
-        });
-        this._refreshCustomSeekAddButton();
-
-        // Task 077: 画面フィルターのプリセットボタン。値をまとめて書き換えて、入力欄にも反映する
-        $panel.find('.screenFilterPresetBtn').on('click', e => {
-          e.stopPropagation();
-          const preset = ScreenFilter.PRESETS.find(p => p.id === e.target.dataset.preset);
-          if (!preset) { return; }
-          ScreenFilter.PARAMS.forEach(p => {
-            const name = ScreenFilter.PREFIX + p.key;
-            const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
-            config.props[name] = v;
-            const input = $panel.find(`[data-setting-name="${name}"]`)[0];
-            if (!input) { return; }
-            if (input.type === 'checkbox') {
-              input.checked = !!v;
-              input.closest('.control').classList.toggle('checked', !!v);
-            } else {
-              input.value = v;
-            }
-          });
-        });
-
-        $panel.find('.zenzaAdvancedSetting-close').on('mousedown', e => {
-          e.stopPropagation();
-          this.hide();
-        });
-
-        // Task200: attach after legacy input handlers, avoiding double saves.
-        this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({window, config});
-        this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings(
-          $panel.find('.commentHistorySettingsContainer')[0], {preferences: this._historyPreferences}
-        );
-        // Task314: mount only after legacy input/checkbox handlers have scanned their inputs.
-        // The custom link editor owns its draft; unrelated settings keep their old handlers.
-        this._relatedMenuLinks = RelatedMenuSettings.mount(
-          $panel.find('.relatedMenuCustomLinksContainer')[0],
-          {config, actions: RelatedMenuActions,
-            shortcuts: {encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS}}
-        );
-        $panel.toggleClass('debug', config.props.debug);
-        // Task318: mount the new full-viewport settings only after all legacy
-        // adapters have registered. Existing data sources remain authoritative.
-        const legacyRoot=$panel.find('.settingPanelInner')[0];
-        this._modernModel=new ModernAdvancedSettingsModel({
-          config,legacyRoot,actions:SHORTCUT_ACTIONS,
-          screenFilterParams:ScreenFilter.PARAMS,
-          historySchema:ZenzaCommentHistorySettings.SETTINGS_SCHEMA
-        });
-        this._modernUI=new ModernAdvancedSettingsUI({
-          panel:$panel[0],legacyRoot,model:this._modernModel,
-          relatedEditor:this._relatedMenuLinks,
-          relatedOrder:RelatedMenuOrder,
-          relatedActions:RelatedMenuActions,
-          screenshotFileName:ScreenshotFileName,
-          playlist:window.ZenzaWatch?.external?.playlist,
-          storage:window.localStorage,
-          formatKeyCombo,encodeKeyCombo,
-          onClose:()=>{
-            this._modernModel.cancel();
-            this._relatedMenuLinks._load();
-            this.hide();
-          },
-          confirm:message=>window.confirm(message)
-        });
-      }
-      _onPlayerConfigUpdate(key, value) {
-        switch (key) {
-          case 'debug':
-            this._$panel.toggleClass('debug', value);
-            break;
-          case 'wordRegFilter':
-          case 'wordRegFilterFlags':
-            this._$panel.find('.' + key + 'Input').val(value);
-            break;
-          case 'enableFullScreenOnDoubleClick':
-          case 'autoCloseFullScreen':
-          case 'continueNextPage':
-          case 'smallModeAspectLock':
-            this._$panel
-              .find('.' + key + 'Control').toggleClass('checked', value)
-              .find('input[type=checkbox]').prop('checked', value);
-            break;
-        }
-        this._update$rawData();
-      }
-      _update$rawData() {
-        this._$rawData.val(this._playerConfig.exportJson());
-      }
-      _onToggleItemChange(e) {
-        const {settingName} = e.target.dataset;
-        const val = !!e.target.checked;
-
-        this._playerConfig.props[settingName] = val;
-        e.target.closest('.control').classList.toggle('checked', val);
-      }
-      _onInputItemChange(e) {
-        const $target = $(e.target);
-        const {settingName} = e.target.dataset;
-        const val = e.target.value;
-
-        window.setTimeout(() => $target.removeClass('update error'), 300);
-
-        window.console.log('onInputItemChange', settingName, val);
-        switch (settingName) {
-          case 'wordRegFilter':
-            try {
-              const reg = new RegExp(val, this._playerConfig.props.wordRegFilterFlags);
-              $target.addClass('update');
-            } catch(err) {
-              $target.addClass('error');
-              //alert('正規表現にエラーがあります');
-              return;
-            }
-            break;
-          case 'wordRegFilterFlags': {
-            try {
-              const reg = new RegExp(this._playerConfig.props.wordRegFilter, val);
-              $target.addClass('update');
-            } catch(err) {
-              $target.addClass('error');
-              //alert('正規表現にエラーがあります');
-              return;
-            }
-          }
-            break;
-          default:
-            $target.addClass('update');
-            break;
-        }
-
-        // Task 077: 画面フィルターの数値は範囲内に丸めて数値として保存する
-        if (typeof settingName === 'string' && settingName.startsWith(ScreenFilter.PREFIX)) {
-          const key = settingName.slice(ScreenFilter.PREFIX.length);
-          if (ScreenFilter.PARAM_MAP[key]) {
-            const v = ScreenFilter.normalize(key, val);
-            this._playerConfig.props[settingName] = v;
-            e.target.value = v;
-            return;
-          }
-        }
-
-        // Task 206: 同時表示上限は選択肢の数値として保存する（文字列のまま保存しない）
-        if (settingName === CommentDisplayBudget.CONFIG_KEY) {
-          this._playerConfig.props[settingName] = CommentDisplayBudget.normalizeLimit(val);
-          return;
-        }
-
-        this._playerConfig.props[settingName] = val;
-
-        // Task 065: カスタムシーク秒数の入力欄。キーも秒数も未設定に
-        // 戻ったら、行を「追加」前の状態(非表示)に戻しておく
-        // (常に表示したままだと、使っていないスロットが増えて
-        // 一覧が長くなり続けてしまうため)。
-        if (typeof settingName === 'string' && settingName.startsWith('PARAM_CUSTOM_SEEK_')) {
-          this._hideCustomSeekSlotIfUnset(settingName.replace(/^PARAM_/, ''));
-        }
-      }
-      // Task 065: 指定したカスタムシークのアクションIDが、キー・秒数とも
-      // 未設定に戻っていたら行を隠し、「追加」ボタンの状態も更新する。
-      _hideCustomSeekSlotIfUnset(actionId) {
-        if (!this._$shortcutContainer) { return; }
-        const key = parseInt(this._playerConfig.props['KEY_' + actionId], 10) || 0;
-        const seconds = parseFloat(this._playerConfig.props['PARAM_' + actionId]) || 0;
-        if (key || seconds) { return; }
-        this._$shortcutContainer
-          .find(`.customSeekSlotRow[data-action-id="${actionId}"]`)
-          .addClass('slotHidden');
-        this._refreshCustomSeekAddButton();
-      }
-      // ---- Task 059: ショートカットキー設定 ----
-      _refreshShortcutRow(actionId) {
-        if (!this._$shortcutContainer) { return; }
-        const val = this._playerConfig.props['KEY_' + actionId];
-        this._$shortcutContainer
-          .find(`.shortcutRow[data-action-id="${actionId}"] .shortcutKeyDisplay`)
-          .text(formatKeyCombo(val));
-      }
-      _refreshAllShortcutRows() {
-        if (!this._$shortcutContainer) { return; }
-        SHORTCUT_ACTIONS.forEach(action => this._refreshShortcutRow(action.id));
-        this._refreshShortcutConflictWarnings();
-      }
-      _refreshShortcutConflictWarnings() {
-        if (!this._$shortcutContainer) { return; }
-        const config = this._playerConfig;
-        const byKeyValue = {};
-        SHORTCUT_ACTIONS.forEach(action => {
-          const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
-          if (!val || val >= 90000000) { return; }
-          (byKeyValue[val] = byKeyValue[val] || []).push(action);
-        });
-        SHORTCUT_ACTIONS.forEach(action => {
-          const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
-          const dupes = (byKeyValue[val] || []).filter(a => a.id !== action.id);
-          const $warn = this._$shortcutContainer
-            .find(`.shortcutRow[data-action-id="${action.id}"] .shortcutConflictWarning`);
-          if (val && dupes.length) {
-            $warn.text('⚠ 「' + dupes.map(a => a.label).join('」「') + '」と重複しています')
-              .addClass('show');
-          } else {
-            $warn.text('').removeClass('show');
-          }
-        });
-      }
-      _cancelShortcutRecording() {
-        if (this._shortcutRecordingCleanup) {
-          this._shortcutRecordingCleanup();
-        }
-      }
-      _onShortcutRecordClick(e) {
-        const actionId = e.target.dataset.actionId;
-        this._cancelShortcutRecording();
-        const $btn = $(e.target);
-        const $row = $btn.closest('.shortcutRow');
-        const originalLabel = $btn.text();
-        $btn.text('キーを押してください (Escでキャンセル)');
-        $row.addClass('recording');
-
-        // 修飾キー単体(Shift/Ctrl/Alt/Meta)の押下だけでは確定しない。
-        // 実際のキーが押されるまで待つ。単体のEscはキャンセル扱い。
-        const MODIFIER_ONLY_KEYCODES = [16, 17, 18, 91, 92, 93, 224];
-        const onKeyDown = evt => {
-          evt.preventDefault();
-          evt.stopPropagation();
-          if (MODIFIER_ONLY_KEYCODES.includes(evt.keyCode)) { return; }
-          if (evt.keyCode === 27 &&
-              !evt.shiftKey && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
-            cleanup();
-            return;
-          }
-          const combo = encodeKeyCombo(evt);
-          this._playerConfig.props['KEY_' + actionId] = combo;
-          cleanup();
-          this._refreshAllShortcutRows();
         };
-        const cleanup = () => {
-          document.removeEventListener('keydown', onKeyDown, true);
-          $btn.text(originalLabel);
-          $row.removeClass('recording');
-          this._shortcutRecordingCleanup = null;
-        };
-        this._shortcutRecordingCleanup = cleanup;
-        document.addEventListener('keydown', onKeyDown, true);
-      }
-      _onShortcutClearClick(e) {
-        const actionId = e.target.dataset.actionId;
-        this._cancelShortcutRecording();
-        this._playerConfig.props['KEY_' + actionId] = 0;
-        this._refreshAllShortcutRows();
-        this._hideCustomSeekSlotIfUnset(actionId);
-      }
-      _onShortcutResetClick(e) {
-        const actionId = e.target.dataset.actionId;
-        this._cancelShortcutRecording();
-        const key = 'KEY_' + actionId;
-        // Publish the effective default before removing the persisted override.
-        // deleteValue resets internal data but does not emit a live update.
-        this._playerConfig.props[key] = this._playerConfig.default[key];
-        this._playerConfig.deleteValue(key);
-        this._refreshAllShortcutRows();
-        this._hideCustomSeekSlotIfUnset(actionId);
-      }
-      // Task 065: カスタムシークスロットの「追加」ボタン。
-      // 隠れているスロット行(.customSeekSlotRow.slotHidden)のうち、
-      // 配列(= CUSTOM_SEEK_1〜10、DOM上も番号順)で一番先頭のものだけを
-      // 表示状態に切り替える。全部表示し終えたらボタンを無効化する。
-      _onCustomSeekAddClick() {
-        if (!this._$shortcutContainer) { return; }
-        const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
-        if (hiddenRows.length) {
-          $(hiddenRows[0]).removeClass('slotHidden');
+        class SettingPanel {
+            constructor(...args) {
+                this.initialize(...args);
+            }
+            initialize(params) {
+                this._playerConfig = params.playerConfig;
+                this._$container = params.$container;
+                this._update$rawData = _.debounce(this._update$rawData.bind(this), 500);
+                this._playerConfig.on('update', this._onPlayerConfigUpdate.bind(this));
+            }
+            _initializeDom() {
+                if (this._$panel) {
+                    return;
+                }
+                const $container = this._$container;
+                const config = this._playerConfig;
+                cssUtil.addStyle(SettingPanel.__css__);
+                $container.append(uq.html(SettingPanel.__tpl__));
+                const $panel = this._$panel = $container.find('.zenzaAdvancedSettingPanel');
+                this._$view =
+                    $container.find('.zenzaAdvancedSettingPanel');
+                this._$view.on('click', (e) => e.stopPropagation());
+                this._$rawData = $panel.find('.zenzaAdvancedSetting-rawData');
+                this._$rawData.val(config.exportJson());
+                this._$rawData.on('change', () => {
+                    let val = this._$rawData.val();
+                    let data;
+                    if (val === '') {
+                        val = '{}';
+                    }
+                    try {
+                        data = JSON.parse(val);
+                    }
+                    catch (e) {
+                        alert(e);
+                        return;
+                    }
+                    if (confirm('設定データを直接書き換えしますか？')) {
+                        try {
+                            config.import(data);
+                            location.reload();
+                        }
+                        catch (error) {
+                            alert(`設定を読み込めませんでした: ${error.message}`);
+                        }
+                    }
+                });
+                this._$playlistData = $panel.find('.zenzaAdvancedSetting-playlistData');
+                this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
+                this._$playlistData.on('change', () => {
+                    let val = this._$playlistData.val();
+                    let data;
+                    if (val === '') {
+                        val = '{}';
+                    }
+                    try {
+                        data = JSON.parse(val);
+                    }
+                    catch (e) {
+                        alert(e);
+                        return;
+                    }
+                    if (confirm('プレイリストデータを直接書き換えしますか？')) {
+                        window.ZenzaWatch.external.playlist.import(data);
+                        location.reload();
+                    }
+                });
+                const onInputItemChange = this._onInputItemChange.bind(this);
+                const $check = $panel.find('input[type=checkbox]');
+                $check.forEach((check) => {
+                    const { settingName } = check.dataset;
+                    const val = !!config.props[settingName];
+                    check.checked = val;
+                    check.closest('.control').classList.toggle('checked', val);
+                });
+                $check.on('change', this._onToggleItemChange.bind(this));
+                const $input = $panel.find('input[type=text], select, .textAreaInput');
+                $input.forEach((input) => {
+                    const { settingName } = input.dataset;
+                    const val = config.props[settingName];
+                    input.value = val;
+                });
+                $input.on('change', onInputItemChange);
+                // Task 059: ショートカットキー設定の初期化。
+                this._$shortcutContainer = $panel.find('.shortcutKeySettingsContainer');
+                $panel.find('.shortcutRecordBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    this._onShortcutRecordClick(e);
+                });
+                $panel.find('.shortcutClearBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    this._onShortcutClearClick(e);
+                });
+                $panel.find('.shortcutResetBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    this._onShortcutResetClick(e);
+                });
+                this._refreshAllShortcutRows();
+                // Task 065: カスタムシークの「追加」ボタン。押すたびに、隠れている
+                // (未設定の)スロットのうち一番若い番号のものを1つだけ表示する。
+                // 10個すべて表示し終えたらボタン自体を無効化する。
+                this._$customSeekAddBtn = $panel.find('.customSeekAddBtn');
+                this._$customSeekAddBtn.on('click', (e) => {
+                    e.stopPropagation();
+                    this._onCustomSeekAddClick();
+                });
+                this._refreshCustomSeekAddButton();
+                // Task 077: 画面フィルターのプリセットボタン。値をまとめて書き換えて、入力欄にも反映する
+                $panel.find('.screenFilterPresetBtn').on('click', (e) => {
+                    e.stopPropagation();
+                    const preset = ScreenFilter.PRESETS.find(p => p.id === e.target.dataset.preset);
+                    if (!preset) {
+                        return;
+                    }
+                    ScreenFilter.PARAMS.forEach(p => {
+                        const name = ScreenFilter.PREFIX + p.key;
+                        const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
+                        config.props[name] = v;
+                        const input = $panel.find(`[data-setting-name="${name}"]`)[0];
+                        if (!input) {
+                            return;
+                        }
+                        if (input.type === 'checkbox') {
+                            input.checked = !!v;
+                            input.closest('.control').classList.toggle('checked', !!v);
+                        }
+                        else {
+                            input.value = v;
+                        }
+                    });
+                });
+                $panel.find('.zenzaAdvancedSetting-close').on('mousedown', (e) => {
+                    e.stopPropagation();
+                    this.hide();
+                });
+                // Task200: attach after legacy input handlers, avoiding double saves.
+                this._historyPreferences = ZenzaCommentHistorySettings.createBrowserHistoryPreferences({ window, config });
+                this._historySettings = ZenzaCommentHistorySettings.mountHistorySettings($panel.find('.commentHistorySettingsContainer')[0], { preferences: this._historyPreferences });
+                // Task314: mount only after legacy input/checkbox handlers have scanned their inputs.
+                // The custom link editor owns its draft; unrelated settings keep their old handlers.
+                this._relatedMenuLinks = RelatedMenuSettings.mount($panel.find('.relatedMenuCustomLinksContainer')[0], { config, actions: RelatedMenuActions,
+                    shortcuts: { encodeKeyCombo, formatKeyCombo, actions: SHORTCUT_ACTIONS } });
+                $panel.toggleClass('debug', config.props.debug);
+                // Task318: mount the new full-viewport settings only after all legacy
+                // adapters have registered. Existing data sources remain authoritative.
+                const legacyRoot = $panel.find('.settingPanelInner')[0];
+                this._modernModel = new ModernAdvancedSettingsModel({
+                    config, legacyRoot, actions: SHORTCUT_ACTIONS,
+                    screenFilterParams: ScreenFilter.PARAMS,
+                    historySchema: ZenzaCommentHistorySettings.SETTINGS_SCHEMA
+                });
+                this._modernUI = new ModernAdvancedSettingsUI({
+                    panel: $panel[0], legacyRoot, model: this._modernModel,
+                    relatedEditor: this._relatedMenuLinks,
+                    relatedOrder: RelatedMenuOrder,
+                    relatedActions: RelatedMenuActions,
+                    screenshotFileName: ScreenshotFileName,
+                    playlist: window.ZenzaWatch?.external?.playlist,
+                    storage: window.localStorage,
+                    formatKeyCombo, encodeKeyCombo,
+                    onClose: () => {
+                        this._modernModel.cancel();
+                        this._relatedMenuLinks._load();
+                        this.hide();
+                    },
+                    confirm: (message) => window.confirm(message)
+                });
+            }
+            _onPlayerConfigUpdate(key, value) {
+                switch (key) {
+                    case 'debug':
+                        this._$panel.toggleClass('debug', value);
+                        break;
+                    case 'wordRegFilter':
+                    case 'wordRegFilterFlags':
+                        this._$panel.find('.' + key + 'Input').val(value);
+                        break;
+                    case 'enableFullScreenOnDoubleClick':
+                    case 'autoCloseFullScreen':
+                    case 'continueNextPage':
+                    case 'smallModeAspectLock':
+                        this._$panel
+                            .find('.' + key + 'Control').toggleClass('checked', value)
+                            .find('input[type=checkbox]').prop('checked', value);
+                        break;
+                }
+                this._update$rawData();
+            }
+            _update$rawData() {
+                this._$rawData.val(this._playerConfig.exportJson());
+            }
+            _onToggleItemChange(e) {
+                const { settingName } = e.target.dataset;
+                const val = !!e.target.checked;
+                this._playerConfig.props[settingName] = val;
+                e.target.closest('.control').classList.toggle('checked', val);
+            }
+            _onInputItemChange(e) {
+                const $target = $(e.target);
+                const { settingName } = e.target.dataset;
+                const val = e.target.value;
+                window.setTimeout(() => $target.removeClass('update error'), 300);
+                window.console.log('onInputItemChange', settingName, val);
+                switch (settingName) {
+                    case 'wordRegFilter':
+                        try {
+                            const reg = new RegExp(val, this._playerConfig.props.wordRegFilterFlags);
+                            $target.addClass('update');
+                        }
+                        catch (err) {
+                            $target.addClass('error');
+                            //alert('正規表現にエラーがあります');
+                            return;
+                        }
+                        break;
+                    case 'wordRegFilterFlags':
+                        {
+                            try {
+                                const reg = new RegExp(this._playerConfig.props.wordRegFilter, val);
+                                $target.addClass('update');
+                            }
+                            catch (err) {
+                                $target.addClass('error');
+                                //alert('正規表現にエラーがあります');
+                                return;
+                            }
+                        }
+                        break;
+                    default:
+                        $target.addClass('update');
+                        break;
+                }
+                // Task 077: 画面フィルターの数値は範囲内に丸めて数値として保存する
+                if (typeof settingName === 'string' && settingName.startsWith(ScreenFilter.PREFIX)) {
+                    const key = settingName.slice(ScreenFilter.PREFIX.length);
+                    if (ScreenFilter.PARAM_MAP[key]) {
+                        const v = ScreenFilter.normalize(key, val);
+                        this._playerConfig.props[settingName] = v;
+                        e.target.value = v;
+                        return;
+                    }
+                }
+                // Task 206: 同時表示上限は選択肢の数値として保存する（文字列のまま保存しない）
+                if (settingName === CommentDisplayBudget.CONFIG_KEY) {
+                    this._playerConfig.props[settingName] = CommentDisplayBudget.normalizeLimit(val);
+                    return;
+                }
+                this._playerConfig.props[settingName] = val;
+                // Task 065: カスタムシーク秒数の入力欄。キーも秒数も未設定に
+                // 戻ったら、行を「追加」前の状態(非表示)に戻しておく
+                // (常に表示したままだと、使っていないスロットが増えて
+                // 一覧が長くなり続けてしまうため)。
+                if (typeof settingName === 'string' && settingName.startsWith('PARAM_CUSTOM_SEEK_')) {
+                    this._hideCustomSeekSlotIfUnset(settingName.replace(/^PARAM_/, ''));
+                }
+            }
+            // Task 065: 指定したカスタムシークのアクションIDが、キー・秒数とも
+            // 未設定に戻っていたら行を隠し、「追加」ボタンの状態も更新する。
+            _hideCustomSeekSlotIfUnset(actionId) {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const key = parseInt(this._playerConfig.props['KEY_' + actionId], 10) || 0;
+                const seconds = parseFloat(this._playerConfig.props['PARAM_' + actionId]) || 0;
+                if (key || seconds) {
+                    return;
+                }
+                this._$shortcutContainer
+                    .find(`.customSeekSlotRow[data-action-id="${actionId}"]`)
+                    .addClass('slotHidden');
+                this._refreshCustomSeekAddButton();
+            }
+            // ---- Task 059: ショートカットキー設定 ----
+            _refreshShortcutRow(actionId) {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const val = this._playerConfig.props['KEY_' + actionId];
+                this._$shortcutContainer
+                    .find(`.shortcutRow[data-action-id="${actionId}"] .shortcutKeyDisplay`)
+                    .text(formatKeyCombo(val));
+            }
+            _refreshAllShortcutRows() {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                SHORTCUT_ACTIONS.forEach(action => this._refreshShortcutRow(action.id));
+                this._refreshShortcutConflictWarnings();
+            }
+            _refreshShortcutConflictWarnings() {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const config = this._playerConfig;
+                const byKeyValue = {};
+                SHORTCUT_ACTIONS.forEach(action => {
+                    const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
+                    if (!val || val >= 90000000) {
+                        return;
+                    }
+                    (byKeyValue[val] = byKeyValue[val] || []).push(action);
+                });
+                SHORTCUT_ACTIONS.forEach(action => {
+                    const val = parseInt(config.props['KEY_' + action.id], 10) || 0;
+                    const dupes = (byKeyValue[val] || []).filter(a => a.id !== action.id);
+                    const $warn = this._$shortcutContainer
+                        .find(`.shortcutRow[data-action-id="${action.id}"] .shortcutConflictWarning`);
+                    if (val && dupes.length) {
+                        $warn.text('⚠ 「' + dupes.map(a => a.label).join('」「') + '」と重複しています')
+                            .addClass('show');
+                    }
+                    else {
+                        $warn.text('').removeClass('show');
+                    }
+                });
+            }
+            _cancelShortcutRecording() {
+                if (this._shortcutRecordingCleanup) {
+                    this._shortcutRecordingCleanup();
+                }
+            }
+            _onShortcutRecordClick(e) {
+                const actionId = e.target.dataset.actionId;
+                this._cancelShortcutRecording();
+                const $btn = $(e.target);
+                const $row = $btn.closest('.shortcutRow');
+                const originalLabel = $btn.text();
+                $btn.text('キーを押してください (Escでキャンセル)');
+                $row.addClass('recording');
+                // 修飾キー単体(Shift/Ctrl/Alt/Meta)の押下だけでは確定しない。
+                // 実際のキーが押されるまで待つ。単体のEscはキャンセル扱い。
+                const MODIFIER_ONLY_KEYCODES = [16, 17, 18, 91, 92, 93, 224];
+                const onKeyDown = (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    if (MODIFIER_ONLY_KEYCODES.includes(evt.keyCode)) {
+                        return;
+                    }
+                    if (evt.keyCode === 27 &&
+                        !evt.shiftKey && !evt.ctrlKey && !evt.altKey && !evt.metaKey) {
+                        cleanup();
+                        return;
+                    }
+                    const combo = encodeKeyCombo(evt);
+                    this._playerConfig.props['KEY_' + actionId] = combo;
+                    cleanup();
+                    this._refreshAllShortcutRows();
+                };
+                const cleanup = () => {
+                    document.removeEventListener('keydown', onKeyDown, true);
+                    $btn.text(originalLabel);
+                    $row.removeClass('recording');
+                    this._shortcutRecordingCleanup = null;
+                };
+                this._shortcutRecordingCleanup = cleanup;
+                document.addEventListener('keydown', onKeyDown, true);
+            }
+            _onShortcutClearClick(e) {
+                const actionId = e.target.dataset.actionId;
+                this._cancelShortcutRecording();
+                this._playerConfig.props['KEY_' + actionId] = 0;
+                this._refreshAllShortcutRows();
+                this._hideCustomSeekSlotIfUnset(actionId);
+            }
+            _onShortcutResetClick(e) {
+                const actionId = e.target.dataset.actionId;
+                this._cancelShortcutRecording();
+                const key = 'KEY_' + actionId;
+                // Publish the effective default before removing the persisted override.
+                // deleteValue resets internal data but does not emit a live update.
+                this._playerConfig.props[key] = this._playerConfig.default[key];
+                this._playerConfig.deleteValue(key);
+                this._refreshAllShortcutRows();
+                this._hideCustomSeekSlotIfUnset(actionId);
+            }
+            // Task 065: カスタムシークスロットの「追加」ボタン。
+            // 隠れているスロット行(.customSeekSlotRow.slotHidden)のうち、
+            // 配列(= CUSTOM_SEEK_1〜10、DOM上も番号順)で一番先頭のものだけを
+            // 表示状態に切り替える。全部表示し終えたらボタンを無効化する。
+            _onCustomSeekAddClick() {
+                if (!this._$shortcutContainer) {
+                    return;
+                }
+                const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
+                if (hiddenRows.length) {
+                    $(hiddenRows[0]).removeClass('slotHidden');
+                }
+                this._refreshCustomSeekAddButton();
+            }
+            _refreshCustomSeekAddButton() {
+                if (!this._$shortcutContainer || !this._$customSeekAddBtn) {
+                    return;
+                }
+                const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
+                const isFull = hiddenRows.length === 0;
+                this._$customSeekAddBtn.prop('disabled', isFull);
+                this._$customSeekAddBtn.text(isFull ? 'これ以上は追加できません(最大10個)' : '＋ カスタムシークのスロットを追加(最大10個)');
+            }
+            _beforeShow() {
+                if (this._$playlistData) {
+                    this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
+                }
+            }
+            toggle(v) {
+                this._initializeDom();
+                const willShow = typeof v === 'boolean' ? v : !this._$view.hasClass('show');
+                if (!willShow) {
+                    if (this._modernUI.hasPendingEdits() &&
+                        !window.confirm('未保存の変更を破棄して閉じますか？')) {
+                        return;
+                    }
+                    // A newly opened empty seek slot is UI-only but must also be discarded.
+                    this._cancelShortcutRecording();
+                    this._modernUI.discardChanges();
+                }
+                else if (!this._modernUI.hasPendingEdits()) {
+                    // Import, browser sync and external userscripts can update Config.
+                    // Start each opening from the latest committed values.
+                    this._modernUI.discardChanges();
+                }
+                this._$view.toggleClass('show', willShow);
+                this._modernUI.setModalVisible(willShow);
+                if (willShow) {
+                    this._beforeShow();
+                }
+            }
+            show() {
+                this.toggle(true);
+            }
+            hide() {
+                this.toggle(false);
+            }
         }
-        this._refreshCustomSeekAddButton();
-      }
-      _refreshCustomSeekAddButton() {
-        if (!this._$shortcutContainer || !this._$customSeekAddBtn) { return; }
-        const hiddenRows = this._$shortcutContainer.find('.customSeekSlotRow.slotHidden');
-        const isFull = hiddenRows.length === 0;
-        this._$customSeekAddBtn.prop('disabled', isFull);
-        this._$customSeekAddBtn.text(
-          isFull ? 'これ以上は追加できません(最大10個)' : '＋ カスタムシークのスロットを追加(最大10個)'
-        );
-      }
-      _beforeShow() {
-        if (this._$playlistData) {
-          this._$playlistData.val(
-            JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2)
-          );
-        }
-      }
-      toggle(v) {
-        this._initializeDom();
-        const willShow=typeof v==='boolean'?v:!this._$view.hasClass('show');
-        if (!willShow) {
-          if (this._modernUI.hasPendingEdits() &&
-            !window.confirm('未保存の変更を破棄して閉じますか？')) {
-            return;
-          }
-          // A newly opened empty seek slot is UI-only but must also be discarded.
-          this._cancelShortcutRecording();
-          this._modernUI.discardChanges();
-        } else if (!this._modernUI.hasPendingEdits()) {
-          // Import, browser sync and external userscripts can update Config.
-          // Start each opening from the latest committed values.
-          this._modernUI.discardChanges();
-        }
-        this._$view.toggleClass('show', willShow);
-        this._modernUI.setModalVisible(willShow);
-        if (willShow) { this._beforeShow(); }
-      }
-      show() {
-        this.toggle(true);
-      }
-      hide() {
-        this.toggle(false);
-      }
-    }
-
-
-    SettingPanel.__css__ = (`
+        SettingPanel.__css__ = (`
       .zenzaAdvancedSettingPanel {
         position: fixed;
         left: 50%;
@@ -11331,8 +12371,7 @@ class NgCompositeRuleEditor {
       }
 
     `).trim();
-
-    const commands = (`
+        const commands = (`
       <option value="">なし</option>
       <option value="togglePlay">再生/停止</option>
       <option value="fullScreen">フルスクリーン ON/OFF</option>
@@ -11350,8 +12389,7 @@ class NgCompositeRuleEditor {
       <option value="toggle-supporterCredit.enable">動画の最後の提供画面 ON/OFF</option>
       <option value="toggle-screenFilterPanel">画面フィルターのパネルを開く/閉じる</option>
     `).trim();
-
-    SettingPanel.__tpl__ = (`
+        SettingPanel.__tpl__ = (`
       <div class="zenzaAdvancedSettingPanel zen-family">
         <div class="settingPanelInner">
           <div class="enableFullScreenOnDoubleClickControl control toggle">
@@ -11519,9 +12557,7 @@ class NgCompositeRuleEditor {
             <label>
               同時に表示するコメント数の上限
               <select data-setting-name="commentLayer.maxDisplayComment">
-                ${CommentDisplayBudget.CHOICES.map(n =>
-                  `<option value="${n}">${n}件${n === CommentDisplayBudget.DEFAULT ? '（初期値）' : n === 40 ? '（本家ZenzaWatchと同じ）' : n >= 800 ? '（重い）' : ''}</option>`
-                ).join('')}
+                ${CommentDisplayBudget.CHOICES.map((n) => `<option value="${n}">${n}件${n === CommentDisplayBudget.DEFAULT ? '（初期値）' : n === 40 ? '（本家ZenzaWatchと同じ）' : n >= 800 ? '（重い）' : ''}</option>`).join('')}
               </select>
             </label>
             <div class="settingNote">
@@ -11635,47 +12671,36 @@ class NgCompositeRuleEditor {
         <div class="zenzaAdvancedSetting-close">閉じる</div>
       </div>
     `).trim();
-
-
-
-    const initializePanel = () => {
-      // Config.watch();
-      if (panel == null) {
-        panel = new SettingPanel({
-          playerConfig: Config,
-          $container: $('body')
-        });
-      }
+        const initializePanel = () => {
+            // Config.watch();
+            if (panel == null) {
+                panel = new SettingPanel({
+                    playerConfig: Config,
+                    $container: $('body')
+                });
+            }
+        };
+        const initialize = () => {
+            const $button = $(__tpl__);
+            cssUtil.addStyle(__css__);
+            document.querySelector('#js-initial-userpage-data') ?
+                $('.Dropdown-button').before($button) :
+                $('.accountEdit').after($button);
+            $button.on('click', (e) => {
+                initializePanel();
+                panel.toggle();
+            });
+        };
+        initialize();
     };
-
-    const initialize = () => {
-      const $button = $(__tpl__);
-      cssUtil.addStyle(__css__);
-
-      document.querySelector('#js-initial-userpage-data') ?
-        $('.Dropdown-button').before($button) :
-        $('.accountEdit').after($button);
-
-      $button.on('click', e => {
-        initializePanel();
-        panel.toggle();
-      });
-
+    const loadGM = () => {
+        const script = document.createElement('script');
+        script.id = 'ZenzaWatchAdvancedSettingsLoader';
+        script.setAttribute('type', 'text/javascript');
+        script.setAttribute('charset', 'UTF-8');
+        script.append(`(${monkey})('${PRODUCT}');`);
+        document.body.append(script);
     };
-
-    initialize();
-  };
-
-  const loadGM = () => {
-    const script = document.createElement('script');
-    script.id = 'ZenzaWatchAdvancedSettingsLoader';
-    script.setAttribute('type', 'text/javascript');
-    script.setAttribute('charset', 'UTF-8');
-    script.append(`(${monkey})('${PRODUCT}');`);
-    document.body.append(script);
-  };
-
-
 const ZenzaDetector = (() => {
 	const promise =
 		(window.ZenzaWatch && window.ZenzaWatch.ready) ?
@@ -11688,7 +12713,5 @@ const ZenzaDetector = (() => {
 			});
 	return {detect: () => promise};
 })();
-ZenzaDetector.detect().then(() => loadGM());
-
-
+    ZenzaDetector.detect().then(() => loadGM());
 })(globalThis ? globalThis.window : window);

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target":"ES2022",
+    "module":"ESNext",
+    "moduleResolution":"Bundler",
+    "strict":true,
+    "noEmitOnError":true,
+    "rootDir":"probe-src",
+    "outDir":".generated-probe",
+    "declaration":true,
+    "sourceMap":false,
+    "lib":["ES2022","DOM"],
+    "types":[],
+    "skipLibCheck":false
+  },
+  "include":["probe-src/probe.ts","probe-src/core.d.mts","probe-src/transport.d.mts"]
+}

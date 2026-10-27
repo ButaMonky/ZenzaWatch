@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/advanced-src/RelatedMenuSettings.ts",
+  "emitted": "tools/typescript-stage1/.generated/advanced/RelatedMenuSettings.js",
+  "runtime": "src/RelatedMenuSettings.js",
+  "sourceSha256": "aa256a72bdbe536caeaf3b24d2bf1f3b0391865a1eb48c14641536cb0152e123",
+  "runtimeSha256": "ea9d113981210eb62f189b21acfe2f764c0e2416a257238153554166476243e2",
+  "semanticSha256": "feffe5d17051f0f6be7dd34ec9e6ea599007ca72c700871d28d3faf936edfdab"
+}

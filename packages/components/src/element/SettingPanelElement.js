@@ -4,23 +4,18 @@ import { domEvent } from '../../../lib/src/dom/domEvent';
 // import {textUtil} from '../../../lib/src/text/textUtil';
 // import {cssUtil} from '../../../lib/src/css/css';
 const dll = {};
+// GENERATED FROM tools/typescript-stage1/nico-src/SettingPanelElement.ts (Task965). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-
-
-
-const {SettingPanelElement} = (() => {
-
-  class SettingPanelElement extends DialogElement {
-
-    static get defaultState() {
-      return {
-        isOpen: false,
-        revision: 0
-      };
-    }
-
-    static getPlayerSettingMenu(html, conf) {
-      return html`
+const { SettingPanelElement } = (() => {
+    class SettingPanelElement extends DialogElement {
+        static get defaultState() {
+            return {
+                isOpen: false,
+                revision: 0
+            };
+        }
+        static getPlayerSettingMenu(html, conf) {
+            return html `
         <details class="player-setting">
         <summary>プレイヤーの設定</summary>
         <div class="control">
@@ -234,9 +229,9 @@ const {SettingPanelElement} = (() => {
         </div>
       </div>
       `;
-    }
-    static getCommentSettingMenu(html, conf) {
-      return html`
+        }
+        static getCommentSettingMenu(html, conf) {
+            return html `
         <details class="comment-setting">
         <summary>コメント・フォントの設定</summary>
           <div class="control">
@@ -270,12 +265,12 @@ const {SettingPanelElement} = (() => {
           <label>
             <select class="commentSpeedRate"
               data-setting-name="commentSpeedRate" data-type="number">
-                <option value="0.5" ?selected=${conf.commentSpeedRate==0.5}>0.5倍</option>
-                <option value="0.8" ?selected=${conf.commentSpeedRate==0.8}>0.8倍</option>
-                <option value="1"   ?selected=${conf.commentSpeedRate==1}>標準</option>
-                <option value="1.2" ?selected=${conf.commentSpeedRate==1.2}>1.2倍</option>
-                <option value="1.5" ?selected=${conf.commentSpeedRate==1.5}>1.5倍</option>
-                <option value="2.0" ?selected=${conf.commentSpeedRate==2.0}>2倍</option>
+                <option value="0.5" ?selected=${conf.commentSpeedRate == 0.5}>0.5倍</option>
+                <option value="0.8" ?selected=${conf.commentSpeedRate == 0.8}>0.8倍</option>
+                <option value="1"   ?selected=${conf.commentSpeedRate == 1}>標準</option>
+                <option value="1.2" ?selected=${conf.commentSpeedRate == 1.2}>1.2倍</option>
+                <option value="1.5" ?selected=${conf.commentSpeedRate == 1.5}>1.5倍</option>
+                <option value="2.0" ?selected=${conf.commentSpeedRate == 2.0}>2倍</option>
             </select>
             コメントの速度(倍率)
               <small>※ コメントのレイアウトが一部崩れます</small>
@@ -342,7 +337,7 @@ const {SettingPanelElement} = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType==''}
+              ?checked=${conf.commentLayer.textShadowType == ''}
               value="">
               標準 (軽い)
           </label>
@@ -351,7 +346,7 @@ const {SettingPanelElement} = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType=='shadow-type2'}
+              ?checked=${conf.commentLayer.textShadowType == 'shadow-type2'}
               value="shadow-type2">
               縁取り
           </label>
@@ -360,7 +355,7 @@ const {SettingPanelElement} = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType=='shadow-type3'}
+              ?checked=${conf.commentLayer.textShadowType == 'shadow-type3'}
               value="shadow-type3">
             ぼかし (重い)
           </label>
@@ -369,7 +364,7 @@ const {SettingPanelElement} = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType=='shadow-stroke'}
+              ?checked=${conf.commentLayer.textShadowType == 'shadow-stroke'}
               value="shadow-stroke">
               縁取り2 (対応ブラウザのみ。やや重い)
           </label>
@@ -378,35 +373,35 @@ const {SettingPanelElement} = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType=='shadow-dokaben'}
+              ?checked=${conf.commentLayer.textShadowType == 'shadow-dokaben'}
               value="shadow-dokaben">
               ドカベン <s>(飽きたら消します)</s>
           </label>
         </div>
       </details>
       `;
-    }
-    // Task 077: 画面フィルター（明るさ・色・反転）。細かい調整は動画を見ながら
-    // できる専用パネル（ScreenFilterPanel）で行う。ここではON/OFF・プリセット・反映先だけ。
-    static getScreenFilterSettingMenu(html, conf) {
-      const presets = [
-        ['standard', '標準（フィルターなし）'],
-        ['dark', '暗い動画を見やすく'],
-        ['sharp', 'くっきり'],
-        ['vivid', 'ビビッド'],
-        ['faded', '色あせ補正'],
-        ['cinema', 'シネマ（銀残し風）'],
-        ['film', 'フィルム（レトロ）'],
-        ['pastel', 'パステル'],
-        ['cool', '寒色'],
-        ['warm', '暖色'],
-        ['eyeCare', '目に優しい（夜）'],
-        ['gold', 'ゴールド'],
-        ['mono', '白黒'],
-        ['monoHigh', '白黒（硬調）'],
-        ['invert', '反転（暗転）']
-      ];
-      return html`
+        }
+        // Task 077: 画面フィルター（明るさ・色・反転）。細かい調整は動画を見ながら
+        // できる専用パネル（ScreenFilterPanel）で行う。ここではON/OFF・プリセット・反映先だけ。
+        static getScreenFilterSettingMenu(html, conf) {
+            const presets = [
+                ['standard', '標準（フィルターなし）'],
+                ['dark', '暗い動画を見やすく'],
+                ['sharp', 'くっきり'],
+                ['vivid', 'ビビッド'],
+                ['faded', '色あせ補正'],
+                ['cinema', 'シネマ（銀残し風）'],
+                ['film', 'フィルム（レトロ）'],
+                ['pastel', 'パステル'],
+                ['cool', '寒色'],
+                ['warm', '暖色'],
+                ['eyeCare', '目に優しい（夜）'],
+                ['gold', 'ゴールド'],
+                ['mono', '白黒'],
+                ['monoHigh', '白黒（硬調）'],
+                ['invert', '反転（暗転）']
+            ];
+            return html `
         <details class="screen-filter-setting">
         <summary>画面フィルター（映像の明るさ・色・反転）</summary>
         <div class="control">
@@ -427,7 +422,7 @@ const {SettingPanelElement} = (() => {
           <h3>かんたん設定（プリセット）</h3>
           <p class="setting-note">迷ったらここから選んでください。押すとすぐに切り替わります。</p>
           <div class="screen-filter-presets">
-            ${presets.map(([id, label]) => html`
+            ${presets.map(([id, label]) => html `
               <button class="screen-filter-preset-button"
                 data-command="screenFilter-preset" data-param=${id}>${label}</button>`)}
           </div>
@@ -451,13 +446,12 @@ const {SettingPanelElement} = (() => {
         </div>
         </details>
       `;
-    }
-
-    static getFilterSettingMenu(html, conf) {
-      const word    = Array.isArray(conf.wordFilter)    ? conf.wordFilter   .join('\n') : conf.wordFilter;
-      const command = Array.isArray(conf.commandFilter) ? conf.commandFilter.join('\n') : conf.commandFilter;
-      const userId  = Array.isArray(conf.userIdFilter)  ? conf.userIdFilter .join('\n') : conf.userIdFilter;
-      return html`
+        }
+        static getFilterSettingMenu(html, conf) {
+            const word = Array.isArray(conf.wordFilter) ? conf.wordFilter.join('\n') : conf.wordFilter;
+            const command = Array.isArray(conf.commandFilter) ? conf.commandFilter.join('\n') : conf.commandFilter;
+            const userId = Array.isArray(conf.userIdFilter) ? conf.userIdFilter.join('\n') : conf.userIdFilter;
+            return html `
         <style>
           .filterEdit {
             display: block;
@@ -493,7 +487,7 @@ const {SettingPanelElement} = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel=='NONE'}
+                ?checked=${conf.sharedNgLevel == 'NONE'}
                 value="NONE">
                 OFF
             </label>
@@ -501,7 +495,7 @@ const {SettingPanelElement} = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel=='LOW'}
+                ?checked=${conf.sharedNgLevel == 'LOW'}
                 value="LOW">
                 弱
             </label>
@@ -509,7 +503,7 @@ const {SettingPanelElement} = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel=='MID'}
+                ?checked=${conf.sharedNgLevel == 'MID'}
                 value="MID">
                 中
             </label>
@@ -517,7 +511,7 @@ const {SettingPanelElement} = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel=='HIGH'}
+                ?checked=${conf.sharedNgLevel == 'HIGH'}
                 value="HIGH">
                 強
             </label>
@@ -525,7 +519,7 @@ const {SettingPanelElement} = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel=='MAX'}
+                ?checked=${conf.sharedNgLevel == 'MAX'}
                 value="MAX">
                 MAX
             </label>
@@ -672,11 +666,10 @@ const {SettingPanelElement} = (() => {
 
         </details>
       `;
-    }
-
-    static getContentsTemplate(html, state = {}, props = {}, events = {}) {
-      const conf = props.config.props;
-      return html`
+        }
+        static getContentsTemplate(html, state = {}, props = {}, events = {}) {
+            const conf = props.config.props;
+            return html `
         <style>
           label {
             display: block;
@@ -795,129 +788,119 @@ const {SettingPanelElement} = (() => {
         </details>
         </div>
       `;
-    }
-
-    constructor() {
-      super();
-      Object.assign(this.events, {
-        onChange: this.onChange.bind(this),
-        onImportFileSelect: this.onImportFileSelect.bind(this)
-      });
-      this._boundEnableFilterConfig = null;
-      this._onEnableFilterConfigUpdate = () => {
-        this.state.revision++;
-        if (this.isOpen) { this.requestRender(); }
-      };
-    }
-
-    _bindEnableFilterConfig(config) {
-      if (this._boundEnableFilterConfig === config) { return; }
-      this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
-      this._boundEnableFilterConfig?.offkey?.('backComment', this._onEnableFilterConfigUpdate);
-      this._boundEnableFilterConfig = config || null;
-      this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
-      // The advanced settings and shortcuts share the same Config key.
-      // Re-render the open player setting panel when either changes it.
-      this._boundEnableFilterConfig?.onkey?.('backComment', this._onEnableFilterConfigUpdate);
-    }
-
-    async connectedCallback() {
-      await super.connectedCallback();
-      this._bindEnableFilterConfig(this.config);
-    }
-
-    async disconnectedCallback() {
-      this._bindEnableFilterConfig(null);
-      await super.disconnectedCallback();
-    }
-
-    get config() {
-      return this.props.config;
-    }
-    set config(v) {
-      this.props.config = v;
-      this.state.revision++;
-      if (this._isConnected) {
-        this._bindEnableFilterConfig(v);
-        this.requestRender();
-      }
-    }
-
-    onUIEvent(e) {
-      // console.nicoru('target', e.target.closest('label, input, select, textarea'), e.target);
-      if (e.target.closest('label, input, select, textarea') || e.target.tagName === 'SUMMARY') {
-        e.stopPropagation();
-        return;
-      }
-      super.onUIEvent(e);
-    }
-
-    onChange(e) {
-      const elm = ((e.path && e.path[0]) ? e.path[0] : e.target) || {};
-      const {settingName, type} = elm.dataset || {};
-      if (!settingName) {
-        return super.onChange(e);
-      }
-      let value = elm.value;
-      // console.nicoru('onChange',
-      //   {settingName, checked: elm.checked, value, type, tagName: elm.tagName}, elm, e);
-
-      if (elm.tagName === 'INPUT' && elm.type === 'checkbox') {
-        value = elm.checked;
-      } else {
-        if (['number', 'boolean', 'json'].includes(type)) {
-          value = JSON.parse(value);
-        } else if (type === 'array') {
-          value = value.split('\n');
         }
-      }
-      // console.nicoru({settingName, value, type});
-      this.config.props[settingName] = value;
-      e.stopPropagation();
-    }
-
-    onOpen() {
-      super.onOpen();
-      this.state.revision++;
-    }
-
-    async onImportFileSelect(e) {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const file = e.target.files[0];
-      if (!file || !/\.config\.json$/.test(file.name)) {
-        return;
-      }
-      if (!confirm(`ファイル "${file.name}" で書き換えますか？`)) {
-        return;
-      }
-
-      domEvent.dispatchCommand(e.target, 'close');
-
-      const fileReader = new FileReader();
-      fileReader.onload = ev => {
-        try {
-          this.config.importJson(ev.target.result);
-          location.reload();
-        } catch (error) {
-          alert(`設定を読み込めませんでした: ${error.message}`);
+        constructor() {
+            super();
+            Object.assign(this.events, {
+                onChange: this.onChange.bind(this),
+                onImportFileSelect: this.onImportFileSelect.bind(this)
+            });
+            this._boundEnableFilterConfig = null;
+            this._onEnableFilterConfigUpdate = () => {
+                this.state.revision++;
+                if (this.isOpen) {
+                    this.requestRender();
+                }
+            };
         }
-      };
-
-      fileReader.onerror = () => alert('設定ファイルを読み取れませんでした。');
-      fileReader.readAsText(file);
+        _bindEnableFilterConfig(config) {
+            if (this._boundEnableFilterConfig === config) {
+                return;
+            }
+            this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+            this._boundEnableFilterConfig?.offkey?.('backComment', this._onEnableFilterConfigUpdate);
+            this._boundEnableFilterConfig = config || null;
+            this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
+            // The advanced settings and shortcuts share the same Config key.
+            // Re-render the open player setting panel when either changes it.
+            this._boundEnableFilterConfig?.onkey?.('backComment', this._onEnableFilterConfigUpdate);
+        }
+        async connectedCallback() {
+            await super.connectedCallback();
+            this._bindEnableFilterConfig(this.config);
+        }
+        async disconnectedCallback() {
+            this._bindEnableFilterConfig(null);
+            await super.disconnectedCallback();
+        }
+        get config() {
+            return this.props.config;
+        }
+        set config(v) {
+            this.props.config = v;
+            this.state.revision++;
+            if (this._isConnected) {
+                this._bindEnableFilterConfig(v);
+                this.requestRender();
+            }
+        }
+        onUIEvent(e) {
+            // console.nicoru('target', e.target.closest('label, input, select, textarea'), e.target);
+            if (e.target.closest('label, input, select, textarea') || e.target.tagName === 'SUMMARY') {
+                e.stopPropagation();
+                return;
+            }
+            super.onUIEvent(e);
+        }
+        onChange(e) {
+            const elm = ((e.path && e.path[0]) ? e.path[0] : e.target) || {};
+            const { settingName, type } = elm.dataset || {};
+            if (!settingName) {
+                return super.onChange(e);
+            }
+            let value = elm.value;
+            // console.nicoru('onChange',
+            //   {settingName, checked: elm.checked, value, type, tagName: elm.tagName}, elm, e);
+            if (elm.tagName === 'INPUT' && elm.type === 'checkbox') {
+                value = elm.checked;
+            }
+            else {
+                if (['number', 'boolean', 'json'].includes(type)) {
+                    value = JSON.parse(value);
+                }
+                else if (type === 'array') {
+                    value = value.split('\n');
+                }
+            }
+            // console.nicoru({settingName, value, type});
+            this.config.props[settingName] = value;
+            e.stopPropagation();
+        }
+        onOpen() {
+            super.onOpen();
+            this.state.revision++;
+        }
+        async onImportFileSelect(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const file = e.target.files[0];
+            if (!file || !/\.config\.json$/.test(file.name)) {
+                return;
+            }
+            if (!confirm(`ファイル "${file.name}" で書き換えますか？`)) {
+                return;
+            }
+            domEvent.dispatchCommand(e.target, 'close');
+            const fileReader = new FileReader();
+            fileReader.onload = ev => {
+                try {
+                    this.config.importJson(ev.target.result);
+                    location.reload();
+                }
+                catch (error) {
+                    alert(`設定を読み込めませんでした: ${error.message}`);
+                }
+            };
+            fileReader.onerror = () => alert('設定ファイルを読み取れませんでした。');
+            fileReader.readAsText(file);
+        }
     }
-
-  }
-
-  if (window.customElements) {
-    customElements.get('zenza-setting-panel') || customElements.define('zenza-setting-panel', SettingPanelElement);
-  }
-  return {SettingPanelElement};
+    if (window.customElements) {
+        customElements.get('zenza-setting-panel') || customElements.define('zenza-setting-panel', SettingPanelElement);
+    }
+    return { SettingPanelElement };
 })();
-
-
 //===END===
-
-export { SettingPanelElement };
+export {
+  SettingPanelElement
+};

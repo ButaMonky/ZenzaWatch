@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/advanced-src/NgCompositeRules.ts",
+  "emitted": "tools/typescript-stage1/.generated/advanced/NgCompositeRules.js",
+  "runtime": "src/NgCompositeRules.js",
+  "sourceSha256": "f09866a0bf87bfbfc9a5e816f2ef125806f17511a5c51817870d0c8e0ce93735",
+  "runtimeSha256": "cb5dc7635143e881a7c4dafb09db37377d7a09274b12710fc0620f974e57e517",
+  "semanticSha256": "01642aecbe197e9f81dd53e3607b45d1b2c5248f9d53545451b79046f77d1c95"
+}

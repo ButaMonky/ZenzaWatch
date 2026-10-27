@@ -1,0 +1,56 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [],
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmitOnError": true,
+    "rootDir": "nico-src",
+    "outDir": ".generated/nico",
+    "declaration": true,
+    "sourceMap": false
+  },
+  "include": [
+    "nico-src/**/*.ts"
+  ],
+  "exclude": [
+    "nico-src/BaseCommandElement.ts",
+    "nico-src/CapTubeEntry.ts",
+    "nico-src/CommentInputPanel.ts",
+    "nico-src/CommentPanel.ts",
+    "nico-src/CommentPlayer.ts",
+    "nico-src/DialogElement.ts",
+    "nico-src/GamePadEntry.ts",
+    "nico-src/HeatMapWorker.ts",
+    "nico-src/HeatSyncEntry.ts",
+    "nico-src/HlsEntry.ts",
+    "nico-src/MaskedWatchEntry.ts",
+    "nico-src/NicoVideoPlayer.ts",
+    "nico-src/NicoVideoPlayerDialog.ts",
+    "nico-src/PipPageThumbnail.ts",
+    "nico-src/RootDispatcher.ts",
+    "nico-src/ScreenFilter.ts",
+    "nico-src/SettingPanelElement.ts",
+    "nico-src/ShortcutActions.ts",
+    "nico-src/State.ts",
+    "nico-src/StoryboardView.ts",
+    "nico-src/StoryboardWorker.ts",
+    "nico-src/SupporterCredit.ts",
+    "nico-src/TagListView.ts",
+    "nico-src/UQueryEntry.ts",
+    "nico-src/VideoControlBar.ts",
+    "nico-src/VideoInfo.ts",
+    "nico-src/VideoInfoPanel.ts",
+    "nico-src/VideoItemElement.ts",
+    "nico-src/initializer.ts"
+  ]
+}

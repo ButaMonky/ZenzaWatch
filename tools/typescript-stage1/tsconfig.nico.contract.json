@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.nico.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["nico-src/**/*.ts", "test/nico-api-contract.ts", "test/nico-api-contract-*.ts"]
+}

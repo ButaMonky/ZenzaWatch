@@ -1,15 +1,31 @@
 {
-  "name": "zenzawatch-scene-typescript",
-  "version": "1.0.0",
+  "name": "zenzawatch-typescript-stage1",
   "private": true,
   "type": "module",
+  "description": "Isolated TypeScript/JSDoc migration proof; never wired into legacy build.js",
   "scripts": {
-    "nico:emit": "tsc --project tsconfig.scui.json",
-    "nico:sync": "npm run nico:emit && node scripts/sync-scui.mjs --write",
-    "nico:verify": "npm run nico:emit && npm run nico:types && node scripts/sync-scui.mjs --check",
-    "nico:types": "tsc --project tsconfig.scene-contracts.json"
+    "check": "tsc --project tsconfig.checkjs.json && tsc --project tsconfig.build.json && tsc --project tsconfig.style-contract.json && tsc --project tsconfig.raf.contract.json",
+    "build": "tsc --project tsconfig.build.json",
+    "advanced:emit": "tsc --project tsconfig.advanced.emit.json && node scripts/stamp-advanced.mjs",
+    "advanced:types": "tsc --project tsconfig.advanced.contract.json && node scripts/check-model-strict.mjs && node scripts/check-config-strict.mjs && node scripts/check-legacy-panel-strict.mjs && node scripts/check-ui-strict.mjs && tsc --project tsconfig.advanced.core-strict.json && tsc --project tsconfig.advanced.screenshot-strict.json && tsc --project tsconfig.advanced.related-order-strict.json && tsc --project tsconfig.advanced.composite-rules-strict.json && tsc --project tsconfig.advanced.ng-editor-strict.json",
+    "advanced:sync": "npm run advanced:emit && node scripts/sync-advanced.mjs --write",
+    "advanced:verify": "npm run advanced:emit && npm run advanced:types && node scripts/sync-advanced.mjs --check",
+    "pocket:emit": "tsc --project tsconfig.pocket.json",
+    "pocket:sync": "npm run pocket:emit && node scripts/sync-pocket-thumbnail.mjs --write",
+    "pocket:verify": "npm run pocket:emit && node scripts/sync-pocket-thumbnail.mjs --check",
+    "nico:emit": "tsc --project tsconfig.nico.json && tsc --project tsconfig.nico-legacy.json",
+    "nico:types": "tsc --project tsconfig.nico.contract.json && tsc --project tsconfig.nico-legacy.json --noEmit",
+    "nico:sync": "npm run nico:emit && node scripts/sync-nico-api.mjs --write && npm run scui:sync",
+    "nico:verify": "npm run nico:emit && npm run nico:types && node scripts/sync-nico-api.mjs --check && npm run scui:verify",
+    "generate:legacy": "npm run build && node scripts/sync-all.mjs --write && npm run advanced:sync && npm run nico:sync",
+    "verify:legacy": "node scripts/sync-all.mjs --check && npm run advanced:verify && npm run nico:verify",
+    "test": "npm run check && npm run verify:legacy && node --test --test-concurrency=1 test/*.test.mjs",
+    "scui:emit": "tsc --project tsconfig.scui.json",
+    "scui:sync": "npm run scui:emit && node scripts/sync-scui.mjs --write",
+    "scui:verify": "npm run scui:emit && tsc --project tsconfig.scene-contracts.json && node scripts/sync-scui.mjs --check"
   },
   "devDependencies": {
+    "jsdom": "30.0.1",
     "typescript": "7.0.2"
   }
 }

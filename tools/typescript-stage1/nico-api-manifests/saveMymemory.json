@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/saveMymemory.ts",
+  "runtime": "packages/zenza/src/parts/saveMymemory.js",
+  "sourceSha256": "1e28e18acb83b47ba6d6a039ce13893cc11f4a04d26f043eea777cceeda3999d",
+  "runtimeSha256": "3cc0e3afb64b4cb0a4408306b46dfdc30e631a9a0ba73ba360fc850e75c475a9"
+}

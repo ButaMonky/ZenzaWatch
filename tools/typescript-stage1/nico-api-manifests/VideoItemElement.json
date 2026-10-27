@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/VideoItemElement.ts",
+  "runtime": "packages/components/src/element/VideoItemElement.js",
+  "sourceSha256": "1f49bae6af840857d3d818dff4dbf30a01ad38ec90c5147990f58865045ae448",
+  "runtimeSha256": "10a33b00662c15bf981ec9b69e8dfaf9374fc983a4718f208f7c4882d013b1c9"
+}

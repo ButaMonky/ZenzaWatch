@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target":"ES2022",
+    "module":"ESNext",
+    "moduleResolution":"Bundler",
+    "strict":true,
+    "noEmitOnError":true,
+    "rootDir":"coordinator-src",
+    "outDir":".generated-ts/coordinator",
+    "declaration":true,
+    "sourceMap":false,
+    "skipLibCheck":false,
+    "types":[]
+  },
+  "include":["coordinator-src/*.ts","coordinator-src/*.d.mts"]
+}

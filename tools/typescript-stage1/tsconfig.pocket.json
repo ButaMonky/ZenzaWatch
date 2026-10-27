@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmitOnError": true,
+    "rootDir": "../../packages/zenza/src/pocket",
+    "outDir": ".generated/pocket",
+    "declaration": true
+  },
+  "include": ["../../packages/zenza/src/pocket/PocketThumbnail.ts"]
+}

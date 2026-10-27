@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "source": "layers-src/layers.ts",
+  "runtime": "src/layers.mjs",
+  "sourceSha256": "22fc1228b84f9e843988bdf92590a5fbf323b1f24df15716c16f1643fbf4b5a8",
+  "runtimeSha256": "ef11fb75a8d5a4fdc0ad2e4a86842f0a4a5d75356079a88f28c4741b16d1b04b",
+  "semanticSha256": "1e17b83f550699c81fd758ec16f4c4de562982e4185c5a4e9e13e2189c7fbd28"
+}

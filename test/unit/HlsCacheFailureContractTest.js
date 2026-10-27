@@ -4,7 +4,11 @@ const {read, extract, createContext, run} = require('../helpers/extractSource');
 function storage() {
   const source = read('src/_hls.js');
   const start = source.indexOf('    const Storage = {', source.indexOf('    const createWebWorker'));
-  const end = source.indexOf('\n    try {\n      Storage.worker =', start);
+  // Task966: _hls.js is generated from TypeScript (4-space indentation); match any indent.
+  const tail = /\n[ \t]+try \{\n[ \t]+Storage\.worker =/g;
+  tail.lastIndex = start;
+  const found = tail.exec(source);
+  const end = found ? found.index : -1;
   const timers = new Map(); let sequence = 0;
   const c = createContext({performance: {now: () => sequence++},
     setTimeout: fn => { timers.set(++sequence, fn); return sequence; },

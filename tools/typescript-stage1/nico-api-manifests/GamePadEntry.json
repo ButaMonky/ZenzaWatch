@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/GamePadEntry.ts",
+  "runtime": "src/_gamepad.js",
+  "sourceSha256": "e796a33d264d2b9bd8fd059eadca33eeae0275929a9520869c43fc029d4e70d1",
+  "runtimeSha256": "d177602c25bfea03218df734a9e46eec01904722bf30bbef0ad85e91aaf4bba6"
+}

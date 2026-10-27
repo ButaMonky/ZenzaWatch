@@ -16,6 +16,7 @@ function overlayFixture() {
     on(n,fn){events.set(n,fn);},off(n){events.delete(n);}};
   const config={props:{},on(){},off(){}};
   const c=createContext({document:doc});
+  run('const ThumbnailSourcePolicy='+extract('packages/lib/src/nico/ThumbnailSourcePolicy.js','ThumbnailSourcePolicy','var')+';',c);
   run('const PipPageThumbnail='+extract(
     'packages/zenza/src/videoPlayer/PipPageThumbnail.js',
     'PipPageThumbnail','var')+';this.api=PipPageThumbnail;',c);

@@ -145,12 +145,17 @@ const { ThreadLoader } = (() => {
                 }
             };
             cancel.addEventListener('click', () => complete(null, 'challenge-cancelled', '追加認証を中止しました。コメントは送信していません'));
+            // Task946: keyboard events within the authentication dialog belong to
+            // the user/Turnstile. Do not let them reach Zenza's body-level playback
+            // shortcuts; allow normal Tab and widget inputs (only Escape is handled).
             overlay.addEventListener('keydown', (event) => {
+                event.stopPropagation();
                 if (event.key === 'Escape') {
                     event.preventDefault();
                     complete(null, 'challenge-cancelled', '追加認証を中止しました。コメントは送信していません');
                 }
             });
+            overlay.addEventListener('keyup', event => event.stopPropagation());
             const challengeTimer = setTimeout(() => complete(null, 'challenge-timeout', '追加認証の待ち時間を超えました。コメントは送信していません'), 180000);
             cancel.focus();
             void loadTurnstile().then(client => {
@@ -506,11 +511,17 @@ const { ThreadLoader } = (() => {
             // レート制限で400が続けて返ることがある。3秒1回だけのリトライでは
             // 足りないケースが報告された(Task B-5)ため、間隔を空けて2回リトライする。
             const RETRY_DELAYS_MS = [3000, 6000];
+            // Only an EXPLICIT button-triggered reload refreshes the saved thread key
+            // before its first POST. Checking msgInfo.threadInfo is insufficient:
+            // the post-token recovery path also calls load() after a successful read.
+            // First loads and internal posting retries retain their original behavior.
+            const isReload = options.manualReload === true;
             let result;
             let lastError;
             for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
                 const isRetry = attempt > 0;
-                const loadOptions = isRetry ? { ...options, retrying: true } : options;
+                const loadOptions = isRetry || isReload ?
+                    { ...options, retrying: true } : options;
                 // 直前の失敗が「言語指定が対象動画で無効」(INVALID_PARAMETER)による
                 // ものだった場合、同じ言語で再試行しても必ず同じ結果になるため、
                 // 今回のリトライではユーザー設定の言語指定をやめてサーバー既定の
@@ -571,8 +582,17 @@ const { ThreadLoader } = (() => {
                 const code = typeof failure?.errorCode === 'string' && /^[A-Z0-9_]{1,60}$/.test(failure.errorCode) ? failure.errorCode : '';
                 const detail = [Number.isInteger(status) && status >= 100 && status <= 599 ? 'HTTP ' + status : '', code].filter(Boolean).join(' / ');
                 throw {
-                    message: msgInfo.when > 0 ? '過去ログの取得に失敗しました' + (detail ? '（' + detail + '）' : '') : 'コメントサーバーの通信失敗',
-                    result: lastError.result
+                    message: msgInfo.when > 0 ?
+                        '過去ログの取得に失敗しました' + (detail ? '（' + detail + '）' : '') :
+                        isReload ? 'コメントの再取得に失敗しました' + (detail ? '（' + detail + '）' : '') :
+                            'コメントサーバーの通信失敗',
+                    result: lastError.result,
+                    // For existing first loads, preserve the legacy error shape.
+                    // On explicit reloads, expose only safe diagnostics for the journal.
+                    ...(isReload ? {
+                        statusCode: Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined,
+                        errorCode: code || undefined
+                    } : {})
                 };
             }
             const loaded = result;

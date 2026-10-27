@@ -1,0 +1,275 @@
+// @ts-expect-error Production-relative import; the isolated mirror cannot resolve it.
+import {Emitter} from '../../../lib/src/Emitter';
+// @ts-expect-error Production-relative import is resolved by the legacy bundler.
+import {util} from '../../../../src/util';
+import {NicoTextParser} from './NicoTextParser';
+// import {NicoChatViewModel} from './NicoChatViewModel';
+// @ts-expect-error Production-relative import is resolved by the legacy bundler.
+import {global} from '../../../../src/ZenzaWatchIndex';
+// @ts-expect-error Production-relative import is resolved by the legacy bundler.
+import {cssUtil} from '../../../lib/src/css/css';
+// Task625: type-only bridge for the isolated text measuring layer.
+export interface OffscreenTextFieldContract {
+  setText(text: string): void;
+  setType(type: string, size: string, fontCommand?: string, version?: string): void;
+  setFontSizePixel(pixel: number): void;
+  getOriginalWidth(): number;
+  getWidth(): number;
+  getOriginalHeight(): number;
+  getHeight(): number;
+  measureChat(owner: object, htmlText: string, pixel: number,
+    type: string, size: string, fontCommand: string, version: string):
+    {width: number; height: number};
+}
+export interface OffscreenLayerHandleContract {
+  getTextField(): OffscreenTextFieldContract;
+  appendChild(element: Element): void;
+  removeChild(element: Element): void;
+  readonly optionCss: string;
+}
+export interface OffscreenLayerContract {
+  get(config?: OffscreenConfigContract): Promise<OffscreenLayerHandleContract>;
+  readonly optionCss: string;
+}
+export interface OffscreenConfigPropsContract {
+  baseFontFamily: string;
+  baseFontBolder: boolean;
+  cssFontWeight: string;
+  baseChatScale: number;
+}
+export interface OffscreenConfigContract {
+  readonly props: OffscreenConfigPropsContract;
+  onkey<K extends keyof OffscreenConfigPropsContract>(
+    key: K, callback: (value: OffscreenConfigPropsContract[K]) => void
+  ): unknown;
+}
+interface OffscreenEmitterContract {
+  emitResolve(event: 'GetReady!', layer: OffscreenLayerHandleContract): void;
+  promise(event: 'GetReady!'): Promise<OffscreenLayerHandleContract>;
+}
+interface OffscreenTextMetricContract {
+  htmlText: string;
+  pixel: number;
+  type: string;
+  size: string;
+  fontCommand: string;
+  ver: string;
+  ratio: number;
+  width: number;
+  height: number;
+}
+//===BEGIN===
+// フォントサイズ計算用の非表示レイヤーを取得
+// 変なCSSの影響を受けないように、DOM的に隔離されたiframe内で計算する。
+const OffscreenLayer = (config: OffscreenConfigContract): OffscreenLayerContract => {
+  const __offscreen_tpl__ = (`
+    <!DOCTYPE html>
+    <html lang="ja">
+    <head>
+    <meta charset="utf-8">
+    <title>CommentLayer</title>
+    <style type="text/css" id="layoutCss">%LAYOUT_CSS%</style>
+    <style type="text/css" id="optionCss">%OPTION_CSS%</style>
+    <style type="text/css">
+      .nicoChat { visibility: hidden; }
+    </style>
+    <body>
+    <div id="offScreenLayer"
+      style="
+        width: 4096px;
+        height: 384px;
+        overflow: visible;
+        background: #fff;
+
+        white-space: pre;
+        pointer-events: none;
+        user-select: none;
+        contain: strict;
+    "></div>
+    </body></html>
+      `).trim();
+
+  const emt: OffscreenEmitterContract = new Emitter();
+  let offScreenFrame!: HTMLIFrameElement;
+  let offScreenLayer!: OffscreenLayerHandleContract;
+  let textField!: OffscreenTextFieldContract;
+  let optionStyle!: HTMLStyleElement;
+  let invalidateTextMetrics = () => {};
+
+  const initializeOptionCss = (optionStyle: HTMLStyleElement) => {
+    const update = () => {
+      const tmp = [];
+      let baseFont = config.props.baseFontFamily;
+      const inner = optionStyle.innerHTML;
+      if (baseFont) {
+        baseFont = baseFont.replace(/[;{}*/]/g, '');
+        tmp.push(
+          [
+            '.gothic    {font-family: %BASEFONT%; }\n',
+            'han_group {font-family: %BASEFONT%, Arial; }'
+          ].join('').replace(/%BASEFONT%/g, baseFont)
+        );
+      }
+      tmp.push(`.nicoChat { font-weight: ${config.props.baseFontBolder ? config.props.cssFontWeight : 'normal'} !important; }`);
+      const newCss = tmp.join('\n');
+      if (inner !== newCss) {
+        optionStyle.innerHTML = newCss;
+        invalidateTextMetrics();
+        global.emitter.emit('updateOptionCss', newCss);
+      }
+    };
+    update();
+    config.onkey('baseFontFamily', update);
+    config.onkey('baseFontBolder', update);
+  };
+
+  const initialize = () => {
+    if (offScreenFrame) {
+      return;
+    }
+    window.console.time('createOffscreenLayer');
+    const frame = document.createElement('iframe');
+    offScreenFrame = frame;
+    frame.loading = 'eager';
+    frame.className = 'offScreenLayer';
+    frame.setAttribute('sandbox', 'allow-same-origin');
+    frame.style.position = 'fixed';
+    frame.style.top = '200vw';
+    frame.style.left = '200vh';
+    (document.body || document.documentElement).append(frame);
+
+
+    let layer!: HTMLElement;
+    const onload = () => {
+      frame.onload = null;
+
+      console.log('%conOffScreenLayerLoad', 'background: lightgreen;');
+      createTextField();
+
+      let doc = offScreenFrame.contentWindow!.document;
+      layer = doc.getElementById('offScreenLayer')!;
+      optionStyle = doc.getElementById('optionCss') as HTMLStyleElement;
+      initializeOptionCss(optionStyle);
+      offScreenLayer = {
+        getTextField: () => textField,
+        appendChild: (elm: Element) => {
+          layer.append(elm);
+        },
+        removeChild: (elm: Element) => {
+          layer.removeChild(elm);
+        },
+        get optionCss() { return optionStyle.innerHTML;}
+      };
+
+      window.console.timeEnd('createOffscreenLayer');
+      emt.emitResolve('GetReady!', offScreenLayer);
+    };
+
+    const html = __offscreen_tpl__
+      .replace('%LAYOUT_CSS%', NicoTextParser.__css__)
+      .replace('%OPTION_CSS%', '');
+    if (typeof frame.srcdoc === 'string') {
+      frame.onload = onload;
+      frame.srcdoc = html;
+    } else {
+      // MS IE/Edge用
+      const fcd = frame.contentWindow!.document;
+      fcd.open();
+      fcd.write(html);
+      fcd.close();
+      window.setTimeout(onload, 0);
+    }
+  };
+
+  const getLayer = (_config?: OffscreenConfigContract): Promise<OffscreenLayerHandleContract> => {
+    config = _config || config;
+    initialize();
+    return emt.promise('GetReady!');
+  };
+
+  const createTextField = () => {
+    const layer = offScreenFrame.contentWindow!.document.getElementById('offScreenLayer')!;
+
+    const span = document.createElement('span');
+    span.className = 'nicoChat';
+    let scale = config.props.baseChatScale; //NicoChatViewModel.BASE_SCALE;
+    config.onkey('baseChatScale', (v: number) => scale = v);
+
+    textField = {
+      setText: (text: string) => {
+        span.innerHTML = text;
+      },
+      setType: (type: string, size: string, fontCommand?: string, ver?: string) => {
+        fontCommand = fontCommand ? `cmd-${fontCommand}` : '';
+        span.className = `nicoChat ${type} ${size} ${fontCommand} ${ver}`;
+      },
+      setFontSizePixel:
+        (span.attributeStyleMap ?
+          (pixel: number) => span.attributeStyleMap.set('font-size', CSS.px(pixel)) :
+          (pixel: number) => span.style.fontSize = `${pixel}px`),
+      getOriginalWidth: () => span.offsetWidth,
+      getWidth: () => span.offsetWidth * scale,
+      getOriginalHeight: () => span.offsetHeight,
+      getHeight: () => span.offsetHeight * scale
+    } as OffscreenTextFieldContract;
+
+    layer.append(span);
+
+    // Original CSS-pixel dimensions only: each source comment owns at most one
+    // entry, and this WeakMap belongs to this isolated measuring frame.
+    let metricCache = new WeakMap<object, OffscreenTextMetricContract>();
+    invalidateTextMetrics = () => { metricCache = new WeakMap<object, OffscreenTextMetricContract>(); };
+    const fonts = span.ownerDocument.fonts;
+    const view = span.ownerDocument.defaultView;
+    const fontEvents = fonts && typeof fonts.addEventListener === 'function';
+    if (fontEvents) {
+      for (const name of ['loading', 'loadingdone', 'loadingerror']) {
+        fonts.addEventListener(name, invalidateTextMetrics);
+      }
+      if (fonts.ready && typeof fonts.ready.then === 'function') {
+        fonts.ready.then(invalidateTextMetrics, invalidateTextMetrics);
+      }
+    }
+    if (view && typeof view.addEventListener === 'function') {
+      view.addEventListener('resize', invalidateTextMetrics);
+    }
+    // Registered @font-face / FontFace instances can change without a loading
+    // event (e.g. adding an already-loaded face). Stay on the exact legacy path
+    // in that case; the built-in comment stylesheet uses installed fonts only.
+    const stableEnvironment = () => fontEvents && fonts.status === 'loaded' &&
+      fonts.size === 0 && span.isConnected === true && view &&
+      Number.isFinite(view.devicePixelRatio) && view.devicePixelRatio > 0;
+    textField.measureChat = (owner: object, htmlText: string, pixel: number,
+      type: string, size: string, fontCommand: string, ver: string) => {
+      const validOwner = owner !== null && (typeof owner === 'object' || typeof owner === 'function');
+      const reusable = stableEnvironment() && validOwner && typeof htmlText === 'string' &&
+        Number.isFinite(pixel) && pixel > 0;
+      if (!reusable) { invalidateTextMetrics(); }
+      const cache = metricCache, ratio = view && view.devicePixelRatio;
+      const old = reusable ? cache.get(owner) : null;
+      if (old && old.htmlText === htmlText && old.pixel === pixel && old.type === type &&
+          old.size === size && old.fontCommand === fontCommand && old.ver === ver && old.ratio === ratio) {
+        return {width: old.width, height: old.height};
+      }
+      textField.setText(htmlText);
+      textField.setFontSizePixel(pixel);
+      textField.setType(type, size, fontCommand, ver);
+      const width = textField.getOriginalWidth(), height = textField.getOriginalHeight();
+      if (reusable && cache === metricCache && stableEnvironment() && ratio === view!.devicePixelRatio &&
+          Number.isFinite(width) && width >= 0 && Number.isFinite(height) && height > 0) {
+        cache.set(owner, {htmlText, pixel, type, size, fontCommand, ver, ratio, width, height});
+      }
+      return {width, height};
+    };
+
+    return span;
+  };
+
+  return {
+    get: getLayer,
+    get optionCss() { return optionStyle.innerHTML; }
+  };
+};
+//===END===
+
+export {OffscreenLayer};

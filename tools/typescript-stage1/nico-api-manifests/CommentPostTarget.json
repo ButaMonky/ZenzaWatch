@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/CommentPostTarget.ts",
+  "runtime": "packages/lib/src/nico/CommentPostTarget.js",
+  "sourceSha256": "e3cec6313df1f4d51e1c079093cf7fad900e81e3f8bfeb487aaaaaeb872beb2d",
+  "runtimeSha256": "3733d389250d680d46742fee5871ffa6ac9a41edcffe0fba009e31f990e8d95e"
+}

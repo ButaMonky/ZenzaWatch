@@ -1,0 +1,687 @@
+// @ts-expect-error Stage A mirror retains product-relative import.
+import {Emitter} from '../../../lib/src/Emitter';
+// @ts-expect-error Stage A mirror retains product-relative import.
+import {textUtil} from '../../../lib/src/text/textUtil';
+
+// Task596: typed interface for existing comment-layer behavior.
+export interface NicoScripterContract {
+  currentTime: number;
+  reset(): void;
+  add(chat: NicoScripterSourceChat): void;
+}
+/** Legacy command payloads have heterogeneous shapes by command kind. */
+export interface NicoScriptParsedCommand {
+  id: number | string;
+  type: string;
+  params: any;
+}
+export interface NicoScripterSourceChat {
+  text: string;
+  vpos: number;
+  no: number;
+  uniqNo: string | number;
+  beginTime: number;
+  duration: number;
+  hasDurationSet: boolean;
+  color: string;
+  clor?: string;
+  size: string;
+  type: string;
+}
+export interface NicoScripterTargetChat {
+  beginTime: number;
+  text: string;
+  isNicoScript: boolean;
+  fork: number;
+  hasColorCommand: boolean;
+  hasSizeCommand: boolean;
+  hasTypeCommand: boolean;
+  color: string;
+  size: string;
+  type: string;
+  isReverse: boolean;
+}
+export interface NicoScriptParserContract {
+  parseNiwango(lines: string[]): NicoScriptParsedCommand[];
+  parseNicos(text: string): NicoScriptParsedCommand;
+  splitLines(text: string): string[];
+  parseNicosParams(text: string): string[];
+}
+//===BEGIN===
+
+class NicoScriptParser {
+  declare static _count: number | undefined;
+  static get parseId(): number {
+    if (!NicoScriptParser._count) {
+      NicoScriptParser._count = 1;
+    }
+    return NicoScriptParser._count++;
+  }
+
+  static parseNiwango(lines: string[]): NicoScriptParsedCommand[] {
+    // 構文はいったん無視して、対応できる命令だけ拾っていく。
+    // ニワン語のフル実装は夢
+    let type, params, m;
+    const result = [];
+    for (let i = 0, len = lines.length; i < len; i++) {
+      const text = lines[i];
+      const id = NicoScriptParser.parseId;
+      if ((m = /^\/?replace\((.*?)\)/.exec(text)) !== null) {
+        type = 'REPLACE';
+        params = NicoScriptParser.parseReplace(m[1]);
+        result.push({id, type, params});
+      } else if ((m = /^\/?commentColor\s*=\s*0x([0-9a-f]{6})/i.exec(text)) !== null) {
+        result.push({id, type: 'COLOR', params: {color: '#' + m[1]}});
+      } else if ((m = /^\/?seek\((.*?)\)/i.exec(text)) !== null) {
+        params = NicoScriptParser.parseSeek(m[1]);
+        result.push({id, type: 'SEEK', params});
+      }
+    }
+    return result;
+  }
+
+
+  static parseParams(str: string): Record<string, string> | null {
+    // 雑なパース
+    let result: Record<string,string> = {}, v = '', lastC = '', key: string | undefined, isStr = false, quot = '';
+    for (let i = 0, len = str.length; i < len; i++) {
+      let c = str.charAt(i);
+      switch (c) {
+        case ':':
+          key = v.trim();
+          v = '';
+          break;
+        case ',':
+          if (isStr) {
+            v += c;
+          }
+          else {
+            if (key !== '' && v !== '') {
+              result[key as string] = v.trim();
+            }
+            key = v = '';
+          }
+          break;
+        case ' ':
+          if (v !== '') {
+            v += c;
+          }
+          break;
+        case '\'':
+        case '"':
+          if (v !== '') {
+            if (quot !== c) {
+              v += c;
+            } else if (isStr) {
+              if (lastC === '\\') {
+                v += c;
+              }
+              else {
+                if (quot === '"') {
+                  // ダブルクォートの時だけエスケープがあるらしい
+                  v = v.replace(/(\\r|\\n)/g, '\n').replace(/(\\t)/g, '\t');
+                }
+                result[key as string] = v;
+                key = v = '';
+                isStr = false;
+              }
+            } else {
+              window.console.error('parse fail?', isStr, lastC, str);
+              return null;
+            }
+          } else {
+            quot = c;
+            isStr = true;
+          }
+          break;
+        default:
+          v += c;
+      }
+      lastC = c;
+    }
+    if (key !== '' && v !== '') {
+      result[key as string] = v.trim();
+    }
+
+    return result;
+  }
+
+  static parseNicosParams(str: string): string[] {
+    // 雑なパース
+    let result = [], v = '', lastC = '', quot = '';
+    for (let i = 0, len = str.length; i < len; i++) {
+      let c = str.charAt(i);
+      switch (c) {
+        case ' ':
+        case '　':
+          if (quot) {
+            v += c;
+          } else {
+            if (v !== '') {
+              result.push(v);
+              v = quot = '';
+            }
+          }
+          break;
+        case '\'':
+        case '"':
+          if (v !== '') {
+            if (quot !== c) {
+              v += c;
+            } else {
+              if (lastC === '\\') {
+                v += c;
+              }
+              else {
+                v = v.replace(/(\\r|\\n)/g, '\n').replace(/(\\t)/g, '\t');
+                result.push(v);
+                v = quot = '';
+              }
+            }
+          } else {
+            quot = c;
+          }
+          break;
+        case '「':
+          if (v !== '') {
+            v += c;
+          } else {
+            quot = c;
+          }
+          break;
+        case '」':
+          if (v !== '') {
+            if (quot !== '「') {
+              v += c;
+            } else {
+              if (lastC === '\\') {
+                v += c;
+              }
+              else {
+                result.push(v);
+                v = quot = '';
+              }
+            }
+          } else {
+            v += c;
+          }
+          break;
+        default:
+          v += c;
+      }
+      lastC = c;
+    }
+    if (v !== '') {
+      result.push(v.trim());
+    }
+
+    return result;
+  }
+
+  static parseNicos(text: string): NicoScriptParsedCommand {
+    text = text.trim();
+    const text1 = (text || '').split(/[ 　:：]+/)[0]; // eslint-disable-line
+    let params;
+    let type;
+    switch (text1) {
+      case '@デフォルト':
+      case '＠デフォルト':
+        type = 'DEFAULT';
+        break;
+      case '@逆':
+      case '＠逆':
+        type = 'REVERSE';
+        params = NicoScriptParser.parse逆(text);
+        break;
+      case '@ジャンプ':
+      case '＠ジャンプ':
+        params = NicoScriptParser.parseジャンプ(text);
+        type = params.type;
+        break;
+      case '@ジャンプマーカー':
+      case '＠ジャンプマーカー':
+        type = 'MARKER'; //@ジャンプマーカー：ループ
+        params = NicoScriptParser.parseジャンプマーカー(text);
+        break;
+      default:
+        if (text.indexOf('@置換') === 0 || text.indexOf('＠置換') === 0) {
+          type = 'REPLACE';
+          params = NicoScriptParser.parse置換(text);
+        } else {
+          type = 'PIPE';
+          let lines = NicoScriptParser.splitLines(text);
+          params = NicoScriptParser.parseNiwango(lines);
+        }
+    }
+
+    const id = NicoScriptParser.parseId;
+    return {id, type, params};
+  }
+
+  static splitLines(str: string): string[] {
+    let result = [], v = '', lastC = '', isStr = false, quot = '';
+    for (let i = 0, len = str.length; i < len; i++) {
+      let c = str.charAt(i);
+      switch (c) {
+        case ';':
+          if (isStr) {
+            v += c;
+          }
+          else {
+            result.push(v.trim());
+            v = '';
+          }
+          break;
+        case ' ':
+          if (v !== '') {
+            v += c;
+          }
+          break;
+        case '\'':
+        case '"':
+          if (isStr) {
+            if (quot === c) {
+              if (lastC !== '\\') {
+                isStr = false;
+              }
+            }
+            v += c;
+          } else {
+            quot = c;
+            isStr = true;
+            v += c;
+          }
+          break;
+        default:
+          v += c;
+      }
+      lastC = c;
+    }
+    if (v !== '') {
+      result.push(v.trim());
+    }
+
+    return result;
+  }
+
+
+  static parseReplace(str: string) {
+    const result = NicoScriptParser.parseParams(str);
+
+    if (!result) {
+      return null;
+    }
+    return {
+      src: result.src,
+      dest: result.dest || '',
+      fill: result.fill === 'true' ? true : false,
+      target: result.target || 'user',
+      partial: result.partial === 'false' ? false : true
+    };
+  }
+
+
+  static parseSeek(str: string) {
+    const result = NicoScriptParser.parseParams(str);
+    if (!result) {
+      return null;
+    }
+    return {
+      time: result.vpos
+    };
+  }
+
+
+  static parse置換(str: string) {
+    const tmp = NicoScriptParser.parseNicosParams(str);
+    //＠置換 キーワード 置換後 置換範囲 投コメ 一致条件
+    //＠置換 "И"       "██" 単       投コメ
+
+    // 投稿者コメントを含めるかどうか
+    let target = 'user'; // '投コメ'
+    if (tmp[4] === '含む' || tmp[4] === '全') { // マニュアルにはないが '全' もあるらしい
+      target = 'owner user';
+    } else if (tmp[4] === '投コメ') {
+      target = 'owner';
+    }
+    return {
+      src: tmp[1],
+      dest: tmp[2] || '',
+      fill: tmp[3] === '全' ? true : false,          //全体を置き換えるかどうか
+      target, //(tmp[4] === '含む' || tmp[4] === '投コメ')     ? 'owner user' : 'user',
+      partial: tmp[5] === '完全一致' ? false : true           // 完全一致のみを見るかどうか
+    };
+  }
+
+
+  static parse逆(str: string) {
+    const tmp = NicoScriptParser.parseNicosParams(str);
+    /* eslint-disable */
+    //＠逆　投コメ
+    /* eslint-enable */
+    const target = (tmp[1] || '').trim();
+    //＠置換キーワード置換後置換範囲投コメ一致条件
+    return {
+      target: (target === 'コメ' || target === '投コメ') ? target : '全',
+    };
+  }
+
+
+  static parseジャンプ(str: string) {
+    //＠ジャンプ ジャンプ先 メッセージ 再生開始位置 戻り秒数 戻りメッセージ
+    const tmp = NicoScriptParser.parseNicosParams(str);
+    const target = tmp[1] || '';
+    let type = 'JUMP';
+    let time: string | number = 0;
+    let m;
+    if ((m = /^#(\d+):(\d+)$/.exec(target)) !== null) {
+      type = 'SEEK';
+      time = (m[1] as unknown as number) * 60 + (m[2] as unknown as number) * 1;
+    } else if ((m = /^#(\d+):(\d+\.\d+)$/.exec(target)) !== null) {
+      type = 'SEEK';
+      time = (m[1] as unknown as number) * 60 + (m[2] as unknown as number) * 1;
+    } else if ((m = /^(#|＃)(.+)/.exec(target)) !== null) {
+      type = 'SEEK_MARKER';
+      time = m[2];
+    }
+    return {target, type, time};
+  }
+
+
+  static parseジャンプマーカー(str: string) {
+    const tmp = NicoScriptParser.parseNicosParams(str);
+    const name = tmp[0].split(/[:： 　]/)[1]; // eslint-disable-line
+    return {name};
+  }
+
+}
+
+
+class NicoScripter extends Emitter {
+  declare _hasSort: boolean;
+  declare _list: NicoScripterSourceChat[];
+  declare _eventScript: Array<{p: NicoScriptParsedCommand; nicos: NicoScripterSourceChat}>;
+  declare _assignedEvents: Set<string>;
+  declare _nextVideo: string | null;
+  declare _marker: Record<string,number>;
+  declare _inviewEvents: Record<string,boolean>;
+  declare _currentTime: number;
+  declare _eventId: number;
+  declare emit: (event:string,...args:unknown[])=>void;
+  constructor() {
+    super();
+    this.reset();
+  }
+
+  reset() {
+    this._hasSort = false;
+    this._list = [];
+    this._eventScript = [];
+    this._assignedEvents = new Set();
+    this._nextVideo = null;
+    this._marker = {};
+    this._inviewEvents = {};
+    this._currentTime = 0;
+    this._eventId = 0;
+  }
+
+  add(nicoChat: NicoScripterSourceChat) {
+    this._hasSort = false;
+    this._list.push(nicoChat);
+  }
+
+  get isEmpty() {
+    return this._list.length === 0;
+  }
+
+  getNextVideo() {
+    return this._nextVideo || '';
+  }
+
+  getEventScript() {
+    return this._eventScript || [];
+  }
+
+  get currentTime() {
+    return this._currentTime;
+  }
+
+  set currentTime(v) {
+    this._currentTime = v;
+    if (this._eventScript.length > 0) {
+      this._updateInviewEvents();
+    }
+  }
+
+  _sort() {
+    if (this._hasSort) {
+      return;
+    }
+    const list = this._list.concat().sort((a, b) => {
+      const av = a.vpos, bv = b.vpos;
+      if (av !== bv) {
+        return av - bv;
+      } else {
+        return a.no < b.no ? -1 : 1;
+      }
+    });
+    this._list = list;
+    this._hasSort = true;
+  }
+
+  _updateInviewEvents() {
+    const ct = this._currentTime;
+    this._eventScript.forEach(({p, nicos}) => {
+      const beginTime = nicos.vpos / 100;
+      const endTime = beginTime + nicos.duration;
+      if (beginTime > ct || endTime < ct) {
+        delete this._inviewEvents[p.id];
+        return;
+      }
+      if (this._inviewEvents[p.id]) {
+        return;
+      }
+      this._inviewEvents[p.id] = true;
+      let diff = nicos.vpos / 100 - ct;
+      diff = Math.max(-1, Math.min(1, diff));
+      switch (p.type) {
+        case 'SEEK':
+          this.emit('command', 'nicosSeek', Math.max(0, p.params.time * 1 + diff));
+          break;
+        case 'SEEK_MARKER': {
+          let time = this._marker[p.params.time] || 0;
+          this.emit('command', 'nicosSeek', Math.max(0, time + diff));
+          break;
+        }
+      }
+    });
+  }
+
+  apply(group: any) {
+    this._sort();
+    const registerEvent = (p: NicoScriptParsedCommand, nicos: NicoScripterSourceChat, position?: number) => {
+      const id = JSON.stringify([nicos.uniqNo, position]);
+      if (this._assignedEvents.has(id)) { return; }
+      this._assignedEvents.add(id);
+      p.id = id;
+      this._eventScript.push({p, nicos});
+    };
+
+    // どうせ全動画の1%も使われていないので
+    // 最適化もへったくれもない
+    const eventFunc: Record<string, (p: NicoScriptParsedCommand, nicos: NicoScripterSourceChat, position?: number) => void> = {
+      'JUMP': (p, nicos) => {
+        console.log('@ジャンプ: ', p, nicos);
+        const target = p.params.target;
+        if (/^([a-z]{2}|)[0-9]+$/.test(target)) {
+          this._nextVideo = target;
+        }
+      },
+      'SEEK': registerEvent,
+      'SEEK_MARKER': registerEvent,
+      'MARKER': (p, nicos) => {
+        console.log('@ジャンプマーカー: ', p, nicos);
+        this._marker[p.params.name] = nicos.vpos / 100;
+      }
+    };
+
+    const applyFunc: Record<string, (chat: NicoScripterTargetChat, nicos: NicoScripterSourceChat, params?: any) => void> = {
+      DEFAULT(nicoChat, nicos) {
+        const nicosColor = nicos.color;
+        const hasColor = nicoChat.hasColorCommand;
+        if (nicosColor && !hasColor) {
+          nicoChat.color = nicosColor;
+        }
+
+        const nicosSize = nicos.size;
+        const hasSize = nicoChat.hasSizeCommand;
+        if (nicosSize && !hasSize) {
+          nicoChat.size = nicosSize;
+        }
+
+        const nicosType = nicos.type;
+        const hasType = nicoChat.hasTypeCommand;
+        if (nicosType && !hasType) {
+          nicoChat.type = nicosType;
+        }
+
+      },
+      COLOR(nicoChat, nicos, params) {
+        const hasColor = nicoChat.hasColorCommand;
+        if (!hasColor) {
+          nicoChat.color = params.color;
+        }
+      },
+      REVERSE(nicoChat, nicos, params) {
+        if (params.target === '全') {
+          nicoChat.isReverse = true;
+        } else if (params.target === '投コメ') {
+          if (nicoChat.fork > 0) {
+            nicoChat.isReverse = true;
+          }
+        } else if (params.target === 'コメ') {
+          if (nicoChat.fork === 0) {
+            nicoChat.isReverse = true;
+          }
+        }
+      },
+      REPLACE(nicoChat, nicos, params) {
+        if (!params) {
+          return;
+        }
+        // if (nicoChat.isNicoScript()) { return; }
+        if (nicoChat.fork > 0 && (params.target || '').indexOf('owner') < 0) {
+          return;
+        }
+        if (nicoChat.fork < 1 && params.target === 'owner') {
+          return;
+        }
+
+        let isMatch = false;
+        let text = nicoChat.text;
+
+        if (params.partial === true) {
+          isMatch = text.indexOf(params.src) >= 0;
+        } else {
+          isMatch = text === params.src;
+        }
+        if (!isMatch) {
+          return;
+        }
+
+        if (params.fill === true) {
+          text = params.dest;
+        } else {// ＠置換 "~" "\n" 単 全
+          const reg = new RegExp(textUtil.escapeRegs(params.src), 'g');
+          text = text.replace(reg, params.dest);
+        }
+        nicoChat.text = text;
+
+        const nicosColor = nicos.clor;
+        const hasColor = nicoChat.hasColorCommand;
+        if (nicosColor && !hasColor) {
+          nicoChat.color = nicosColor;
+        }
+
+        const nicosSize = nicos.size;
+        const hasSize = nicoChat.hasSizeCommand;
+        if (nicosSize && !hasSize) {
+          nicoChat.size = nicosSize;
+        }
+
+        const nicosType = nicos.type;
+        const hasType = nicoChat.hasTypeCommand;
+        if (nicosType && !hasType) {
+          nicoChat.type = nicosType;
+        }
+
+      },
+      PIPE(nicoChat, nicos, lines) {
+        lines.forEach((line: NicoScriptParsedCommand) => {
+          const type = line.type;
+          const f = applyFunc[type];
+          if (f) {
+            f(nicoChat, nicos, line.params);
+          }
+        });
+      }
+    };
+
+
+    this._list.forEach(nicos => {
+      const p = NicoScriptParser.parseNicos(nicos.text);
+      if (!p) {
+        return;
+      }
+      if (!nicos.hasDurationSet) {
+        nicos.duration = 99999;
+      }
+
+      const ev = eventFunc[p.type];
+      if (ev) {
+        return ev(p, nicos, 0);
+      }
+      else if (p.type === 'PIPE') {
+        p.params.forEach((line: NicoScriptParsedCommand, position: number) => {
+          const type = line.type;
+          const ev = eventFunc[type];
+          if (ev) {
+            return ev(line, nicos, position);
+          }
+        });
+      }
+
+
+      const func = applyFunc[p.type];
+      if (!func) {
+        return;
+      }
+
+      const beginTime = nicos.beginTime;
+      const endTime = beginTime + nicos.duration;
+
+      (group.members ? group.members : group).forEach((nicoChat: NicoScripterTargetChat) => {
+        if (nicoChat.isNicoScript) {
+          return;
+        }
+        const ct = nicoChat.beginTime;
+
+        if (beginTime > ct || endTime < ct) {
+          return;
+        }
+        func(nicoChat, nicos, p.params);
+      });
+    });
+  }
+}
+
+
+//===END===
+
+export {
+  NicoScripter,
+  NicoScriptParser
+};
+/* eslint-disable */
+//＠置換　U　「( ˘ω˘)ｽﾔｧ」 全
+/* eslint-enable */

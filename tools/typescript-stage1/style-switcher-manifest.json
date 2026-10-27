@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/src/StyleSwitcher.ts",
+  "runtime": "packages/lib/src/css/StyleSwitcher.js",
+  "sourceSha256": "eb38c6110ab4353646c3df10c98fb4d0bdcb260621383fd30f3bb2152277d15a",
+  "runtimeSha256": "bf36573c18bbf8b458e6decda231ae1392963055b5fd27bd89dbff5051f3cb1d"
+}

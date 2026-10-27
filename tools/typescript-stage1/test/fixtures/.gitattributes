@@ -1,0 +1,4 @@
+# Task471: pre-migration fixtures are byte-exact snapshots whose SHA-256 is pinned
+# in scripts/nico-api-registry.mjs. Legacy trailing whitespace must be kept, so
+# git's whitespace lint (diff --check) is disabled for these snapshots only.
+*.before-*.js -whitespace

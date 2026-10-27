@@ -31,10 +31,17 @@ function boot(saved={},storageValues={}) {
     userIdFilter:'',commandFilter:'','ngComposite.rules':[],
     sharedNgLevel:'MID','filter.fork0':true,screenMode:'normal',
     showComment:true,backComment:false,enableCommentPanel:true,enableCommentPreview:false,
-    enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,
+    enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,menuScale:1,
     'sceneSearch.layout.normal':'01','sceneSearch.layout.fullscreen':'01',
     'sceneSearch.layout.linkFullscreen':false,
     enableAdDecoration:true,
+    'popup.notifyColor':'#00cc00','popup.alertColor':'#cc0000',
+    'popup.backgroundTransparency':0,
+    smallModeAspectLock:false,autoFullScreen:false,fullscreenControlBarMode:'auto',
+    pipPageThumbnail:true,pipPageThumbnailSource:'smart',
+    'controlBar.showOnPause.small':false,'controlBar.showOnPause.fullscreen':false,
+    'controlBar.hideAfterSeconds.small':3,'controlBar.hideAfterSeconds.fullscreen':0.4,
+    'commentLayer.ownerCommentShadowColor':'#008800',
     KEY_TOGGLE_PLAY:32, KEY_OPEN_GINZA:0, KEY_OPEN_NICOAD:0,
     KEY_OPEN_TWITTER_HASH:0, KEY_OPEN_ORIGINAL_VIDEO:0, KEY_OPEN_PARENT_VIDEO:0,
     KEY_PLAYLIST_SET_COMMONS_TREE:0, KEY_COPY_WATCH_URL:0,
@@ -409,6 +416,31 @@ describe('Task318 full-viewport advanced-settings shell',()=>{
     assert.strictEqual(note.hidden,true);
     h.click('[data-zw-help="supporterCredit.enable"]');
     assert.strictEqual(note.hidden,false);
+    h.destroy();
+  });
+  it('explains both PiP thumbnail policies from the existing ? button, without expanding by default',()=>{
+    const h=boot();h.click('[data-zw-major="画面・映像"]');
+    h.click('[data-zw-sub="画面・映像|PiP（小窓再生）"]');
+    const note=h.q('[data-zw-id="pipPageThumbnailSource"] .zw-modern-note');
+    const help=h.q('[data-zw-help="pipPageThumbnailSource"]');
+    assert(note&&help);
+    assert.strictEqual(note.hidden,true,'long explanation must be collapsed initially');
+    assert(help.getAttribute('aria-label').includes('説明を表示'));
+    const choices=h.all('[data-zw-id="pipPageThumbnailSource"] [data-zw-choice]');
+    assert.deepStrictEqual(choices.map(button=>button.textContent),[
+      '自動切替（推奨）','従来方式（OGP優先）'
+    ]);
+    assert.deepStrictEqual(choices.map(button=>button.dataset.zwValue),['smart','legacy']);
+    h.click('[data-zw-help="pipPageThumbnailSource"]');
+    assert.strictEqual(note.hidden,false);
+    for(const phrase of ['なぜ切り替えが必要','画像自体に焼き込まれ','img.cdn.nimg.jp',
+      'goptim.video.nimg.jp','sm46962870','sm46949237','従来方式',
+      'すべての動画で再生マークが消えることを保証','PiP小窓の動画画質']) {
+      assert(note.textContent.includes(phrase),'missing explanation: '+phrase);
+    }
+    assert(note.textContent.includes('\n\n'),'explanation must preserve paragraph breaks');
+    h.click('[data-zw-help="pipPageThumbnailSource"]');
+    assert.strictEqual(note.hidden,true);
     h.destroy();
   });
   it('resets the entire selected category only as a draft after confirmation',()=>{
@@ -1525,5 +1557,187 @@ describe('Task710 gallery regression after semantic presentation migration',func
       assert.strictEqual(h.model.get('sceneSearch.presentation.normal'),'follow');
       assert.strictEqual(h.config.hasStoredValue('sceneSearch.presentation.normal'),false);
     }finally{h.dispose();}
+  });
+});
+
+describe('Task926 reusable popup color editor',function(){
+  this.timeout(10000);
+  const open=h=>{
+    h.click('[data-zw-major="画面・映像"]');
+    h.click('[data-zw-sub="画面・映像|通知・ポップアップ"]');
+  };
+  it('shows both defaults and reuses the comment shadow color editor',()=>{
+    const h=boot();
+    try{
+      open(h);
+      assert.strictEqual(h.model.get('popup.notifyColor'),'#00cc00');
+      assert.strictEqual(h.model.get('popup.alertColor'),'#cc0000');
+      assert.strictEqual(h.all('[data-zw-color-picker]').length,2);
+      assert.strictEqual(h.all('[data-zw-color-code]').length,2);
+      assert.strictEqual(h.all('[data-zw-popup-color-sample]').length,2);
+      assert(h.q('[data-zw-popup-color-sample="popup.notifyColor"]').textContent.includes('保存しました'));
+      h.click('[data-zw-sub="画面・映像|表示・非表示"]');
+      assert(h.q('[data-zw-id="ui.bar.notificationHistory"]'));
+      h.click('[data-zw-major="コメント表示"]');
+      h.click('[data-zw-sub="コメント表示|文字・装飾"]');
+      assert(h.q('[data-zw-id="commentLayer.ownerCommentShadowColor"] [data-zw-color-picker]'));
+    }finally{h.destroy();}
+  });
+  it('previews typed and picked HEX immediately, but persists only on save',()=>{
+    const h=boot();
+    try{
+      open(h);
+      const input=h.q('[data-zw-color-code="popup.notifyColor"]');
+      input.value='#123ABC';h.dispatch(input,'input');
+      assert.strictEqual(h.model.get('popup.notifyColor'),'#123ABC');
+      assert.strictEqual(h.config.values['popup.notifyColor'],'#00cc00');
+      assert.strictEqual(h.q('[data-zw-popup-color-sample="popup.notifyColor"]').style.backgroundColor,'rgb(18, 58, 188)');
+      assert.strictEqual(h.q('[data-zw-color-picker="popup.notifyColor"]').value,'#123abc');
+      const picker=h.q('[data-zw-color-picker="popup.alertColor"]');
+      picker.value='#5128ac';h.dispatch(picker,'input');
+      assert.strictEqual(h.model.get('popup.alertColor'),'#5128ac');
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('popup.notifyColor'),'#00cc00');
+      assert.strictEqual(h.config.writes.length,0);
+      const retry=h.q('[data-zw-color-code="popup.notifyColor"]');
+      retry.value='#112233';h.dispatch(retry,'input');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['popup.notifyColor'],'#112233');
+      assert.deepStrictEqual(h.config.writes.map(([key])=>key),['popup.notifyColor']);
+    }finally{h.destroy();}
+  });
+  it('rejects CSS names and injection-like values only for HEX-only popup settings',()=>{
+    const h=boot();
+    try{
+      open(h);
+      const input=h.q('[data-zw-color-code="popup.alertColor"]');
+      for(const invalid of ['red','#12345','#aabbccdd','url(https://example.com)']){
+        input.value=invalid;h.dispatch(input,'input');
+        assert(h.model.validate().some(e=>e.id==='popup.alertColor'),invalid);
+        assert.strictEqual(h.q('[data-zw-save]').disabled,true,invalid);
+        assert.strictEqual(h.q('[data-zw-popup-color-sample="popup.alertColor"]').style.backgroundColor,'rgb(204, 0, 0)');
+      }
+      h.click('[data-zw-cancel]');
+      h.click('[data-zw-major="コメント表示"]');
+      h.click('[data-zw-sub="コメント表示|文字・装飾"]');
+      const shadow=h.q('[data-zw-color-code="commentLayer.ownerCommentShadowColor"]');
+      shadow.value='green';h.dispatch(shadow,'input');
+      assert(!h.model.validate().some(e=>e.id==='commentLayer.ownerCommentShadowColor'));
+    }finally{h.destroy();}
+  });
+});
+
+describe('Task927 shared popup background transparency',function(){
+  this.timeout(12000);
+  const open=h=>{
+    h.click('[data-zw-major="画面・映像"]');
+    h.click('[data-zw-sub="画面・映像|通知・ポップアップ"]');
+  };
+  const sample=(h,key)=>h.q('[data-zw-popup-color-sample="'+key+'"]');
+  it('renders a shared slider and updates both live previews before saving',()=>{
+    const h=boot();
+    try{
+      open(h);
+      const id='popup.backgroundTransparency';
+      const slider=h.q('[data-zw-id="'+id+'"] input[type=range]');
+      assert(slider);
+      assert.strictEqual(h.model.get(id),0);
+      assert(sample(h,'popup.notifyColor').style.backgroundColor==='rgb(0, 204, 0)');
+      slider.value='40';h.dispatch(slider,'input');
+      assert.strictEqual(h.model.get(id),40);
+      assert.strictEqual(h.config.values[id],0);
+      assert.strictEqual(sample(h,'popup.notifyColor').style.backgroundColor,'rgba(0, 204, 0, 0.6)');
+      assert.strictEqual(sample(h,'popup.alertColor').style.backgroundColor,'rgba(204, 0, 0, 0.6)');
+      assert(h.q('[data-zw-popup-transparency-label]').textContent.includes('40%'));
+      assert.strictEqual(h.config.writes.length,0);
+      const hex=h.q('[data-zw-color-code="popup.notifyColor"]');
+      hex.value='#123456';h.dispatch(hex,'input');
+      assert.strictEqual(sample(h,'popup.notifyColor').style.backgroundColor,'rgba(18, 52, 86, 0.6)');
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get(id),0);
+      assert.strictEqual(sample(h,'popup.notifyColor').style.backgroundColor,'rgb(0, 204, 0)');
+      const number=h.q('[data-zw-id="'+id+'"] input[type=number]');
+      number.value='65';h.dispatch(number,'change');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values[id],65);
+      assert.deepStrictEqual(h.config.writes.map(([key])=>key),[id]);
+    }finally{h.destroy();}
+  });
+  it('supports 100% transparency and blocks out-of-range or fractional values',()=>{
+    const h=boot();
+    try{
+      open(h);
+      const id='popup.backgroundTransparency';
+      const slider=h.q('[data-zw-id="'+id+'"] input[type=range]');
+      slider.value='100';h.dispatch(slider,'input');
+      assert.strictEqual(sample(h,'popup.notifyColor').style.backgroundColor,'rgba(0, 204, 0, 0)');
+      assert.strictEqual(sample(h,'popup.alertColor').style.backgroundColor,'rgba(204, 0, 0, 0)');
+      const input=h.q('[data-zw-id="'+id+'"] input[type=number]');
+      for(const invalid of ['101','-1','12.5']){
+        input.value=invalid;h.dispatch(input,'input');
+        assert(h.model.validate().some(e=>e.id===id),invalid);
+        assert.strictEqual(h.q('[data-zw-save]').disabled,true,invalid);
+      }
+      input.value='0';h.dispatch(input,'input');
+      assert(!h.model.validate().some(e=>e.id===id));
+      assert.strictEqual(sample(h,'popup.notifyColor').style.backgroundColor,'rgb(0, 204, 0)');
+      assert.strictEqual(h.config.writes.length,0);
+    }finally{h.destroy();}
+  });
+});
+
+describe('Task936/938 fullscreen/small toolbar preferences',function(){
+  this.timeout(12000);
+  const major=h=>h.click('[data-zw-major="画面・映像"]');
+  const open=(h,group)=>h.click('[data-zw-sub="画面・映像|'+group+'"]');
+  it('separates the two modes and keeps default pause off, with no settings lost',()=>{
+    const h=boot();
+    try{
+      major(h);
+      open(h,'小画面モード');
+      assert(h.q('[data-zw-id="smallModeAspectLock"]'));
+      assert(h.q('[data-zw-id="controlBar.showOnPause.small"] input[type=checkbox]'));
+      assert(h.q('[data-zw-id="controlBar.hideAfterSeconds.small"] input[type=range]'));
+      assert(!h.q('[data-zw-id="controlBar.showOnPause.fullscreen"]'));
+      assert.strictEqual(h.model.get('controlBar.showOnPause.small'),false);
+      assert.strictEqual(h.model.get('controlBar.hideAfterSeconds.small'),3);
+      open(h,'全画面モード');
+      assert(h.q('[data-zw-id="autoFullScreen"]'));
+      assert(h.q('[data-zw-id="fullscreenControlBarMode"]'));
+      assert(h.q('[data-zw-id="controlBar.showOnPause.fullscreen"] input[type=checkbox]'));
+      assert(h.q('[data-zw-id="controlBar.hideAfterSeconds.fullscreen"] input[type=range]'));
+      assert(!h.q('[data-zw-id="controlBar.showOnPause.small"]'));
+      assert.strictEqual(h.model.get('controlBar.showOnPause.fullscreen'),false);
+      assert.strictEqual(h.model.get('controlBar.hideAfterSeconds.fullscreen'),0.4);
+      open(h,'プレイヤーの操作表示');
+      assert(h.q('[data-zw-id="enableStoryboard"]'));
+      assert(h.q('[data-zw-id="menuScale"]'));
+      assert(!h.q('[data-zw-id="controlBar.hideAfterSeconds.fullscreen"]'));
+      assert.strictEqual(h.config.writes.length,0);
+    }finally{h.destroy();}
+  });
+  it('saves/cancels across mode-specific panes without mixing settings',()=>{
+    const h=boot();
+    try{
+      major(h);
+      open(h,'全画面モード');
+      const slider=h.q('[data-zw-id="controlBar.hideAfterSeconds.fullscreen"] input[type=range]');
+      slider.value='1.1';h.dispatch(slider,'input');
+      const check=h.q('[data-zw-id="controlBar.showOnPause.fullscreen"] input[type=checkbox]');
+      check.checked=true;h.dispatch(check,'change');
+      assert.strictEqual(h.model.get('controlBar.hideAfterSeconds.fullscreen'),1.1);
+      assert.strictEqual(h.model.get('controlBar.showOnPause.fullscreen'),true);
+      assert.strictEqual(h.model.get('controlBar.showOnPause.small'),false);
+      assert.strictEqual(h.config.writes.length,0);
+      h.click('[data-zw-cancel]');
+      assert.strictEqual(h.model.get('controlBar.hideAfterSeconds.fullscreen'),0.4);
+      assert.strictEqual(h.model.get('controlBar.showOnPause.fullscreen'),false);
+      open(h,'小画面モード');
+      const retry=h.q('[data-zw-id="controlBar.showOnPause.small"] input[type=checkbox]');
+      retry.checked=true;h.dispatch(retry,'change');
+      h.click('[data-zw-save]');
+      assert.strictEqual(h.config.values['controlBar.showOnPause.small'],true);
+      assert.deepStrictEqual(h.config.writes.map(([id])=>id),['controlBar.showOnPause.small']);
+    }finally{h.destroy();}
   });
 });

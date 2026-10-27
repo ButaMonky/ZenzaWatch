@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "tsSource": "typescript-src/settings.ts",
+  "runtime": "src/settings.mjs",
+  "tsSha256": "b352650e875287d350cde5dc3b123eae9b5fc8e994cbb02f669fa748650774c9",
+  "runtimeSha256": "72b4606304cb23877305242fd297dccba731df16c864179311289246500eb44e",
+  "semanticSha256": "2f24d3878bbf14fbd92808ff249d1eebba70da310c9c2e1a7721b1641909b510"
+}

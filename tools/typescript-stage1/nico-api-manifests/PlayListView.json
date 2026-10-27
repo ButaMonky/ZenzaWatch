@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/PlayListView.ts",
+  "runtime": "packages/zenza/src/Playlist/PlayListView.js",
+  "sourceSha256": "dd4a88b29cca7bdd9111bd13fb11c906c190001d5b3423fc96ec5ab3288c8cc5",
+  "runtimeSha256": "27ba1f006fef48f784502970040543147e4534f292a67a6c47a0cfd8de6a0902"
+}

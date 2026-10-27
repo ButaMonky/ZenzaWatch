@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/reg.ts",
+  "runtime": "packages/lib/src/text/reg.js",
+  "sourceSha256": "62a7c33db507cd0f7701eab81d7e1ee4ec28a0b5978b46561ab4e2e7892348ed",
+  "runtimeSha256": "28ac412cb93532dd2dc236f519c1615f829578ad7f380a769fa0be6720d72823"
+}

@@ -57,8 +57,10 @@ describe('Task178 final resume-position save is not throttled away (Watch V4 aud
     const text = read('src/NicoVideoPlayerDialog.js');
     const dialogText = text.slice(text.indexOf('class NicoVideoPlayerDialog extends'));
     const body = name => {
-      const start = dialogText.indexOf(`\n  ${name}(`);
-      return dialogText.slice(start, dialogText.indexOf('\n  }', start + 1));
+      // Task964: the TS-generated source uses 4-space class-member indentation.
+      const m = new RegExp(`\\n( {4}| {2})${name}\\(`).exec(dialogText);
+      const start = m ? m.index : -1;
+      return dialogText.slice(start, dialogText.indexOf(`\n${m ? m[1] : '  '}}`, start + 1));
     };
     assert(/_saveFinalPlaybackPosition\(this\._videoInfo\.contextWatchId, 0\)/.test(body('_onVideoEnded')));
     assert(/_saveFinalPlaybackPosition\(this\._watchId, this\.currentTime\)/.test(body('close')));

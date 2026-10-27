@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/ShortcutActions.ts",
+  "runtime": "packages/zenza/src/ShortcutActions.js",
+  "sourceSha256": "d55e5eda2b457141b7e6927e32ac7a6c5d1379825b5ee6a5abc88754b860d8c9",
+  "runtimeSha256": "92097a8a48e3103b051686cd067b0e0af9c0b0fc7dac11692e3c56de9f0d3727"
+}

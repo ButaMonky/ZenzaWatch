@@ -16,610 +16,587 @@ import {WindowResizeObserver} from '../packages/lib/src/infra/Observable';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+// GENERATED FROM tools/typescript-stage1/nico-src/VideoControlBar.ts (Task964). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require ZenzaCommentHistoryCore
 //@require UiVisibilityRegistry
-const historyTriggerKeyGuard = event => {
-  if (['Enter', ' ', 'Spacebar'].includes(event.key)) { event.stopPropagation(); }
+const historyTriggerKeyGuard = (event) => {
+    if (['Enter', ' ', 'Spacebar'].includes(event.key)) {
+        event.stopPropagation();
+    }
 };
-
-  class VideoControlBar extends Emitter {
+class VideoControlBar extends Emitter {
     constructor(...args) {
-      super();
-      this.initialize(...args);
+        super();
+        this.initialize(...args);
     }
     initialize(params) {
-      this._playerConfig        = params.playerConfig;
-      this._$playerContainer    = params.$playerContainer;
-      this._playerState         = params.playerState;
-      this._currentTimeGetter   = params.currentTimeGetter;
-      const player = this.player = params.player;
-      this.state = new VideoControlState();
-
-      player.on('open',           this._onPlayerOpen.bind(this));
-      player.on('canPlay',        this._onPlayerCanPlay.bind(this));
-      player.on('durationChange', this._onPlayerDurationChange.bind(this));
-      player.on('close',          this._onPlayerClose.bind(this));
-      player.on('progress',       this._onPlayerProgress.bind(this));
-      player.on('loadVideoInfo',  this._onLoadVideoInfo.bind(this));
-      this._commentParsedHandler = _.debounce(this._onCommentParsed.bind(this), 500);
-      this._commentChangeHandler = _.debounce(this._onCommentChange.bind(this), 100);
-      player.on('commentParsed', this._commentParsedHandler);
-      player.on('commentChange', this._commentChangeHandler);
-      Promise.all([
-        player.promise('firstVideoInitialized'), this.promise('dom-ready')
-      ]).then(() => this._onFirstVideoInitialized());
-
-      this._initializeDom();
-      this._initializePlaybackRateSelectMenu();
-      this._initializeVolumeControl();
-      this._initializeVideoServerTypeSelectMenu();
-
-      global.debug.videoControlBar = this;
+        this._playerConfig = params.playerConfig;
+        this._$playerContainer = params.$playerContainer;
+        this._playerState = params.playerState;
+        this._currentTimeGetter = params.currentTimeGetter;
+        const player = this.player = params.player;
+        this.state = new VideoControlState();
+        player.on('open', this._onPlayerOpen.bind(this));
+        player.on('canPlay', this._onPlayerCanPlay.bind(this));
+        player.on('durationChange', this._onPlayerDurationChange.bind(this));
+        player.on('close', this._onPlayerClose.bind(this));
+        player.on('progress', this._onPlayerProgress.bind(this));
+        player.on('loadVideoInfo', this._onLoadVideoInfo.bind(this));
+        this._commentParsedHandler = _.debounce(this._onCommentParsed.bind(this), 500);
+        this._commentChangeHandler = _.debounce(this._onCommentChange.bind(this), 100);
+        player.on('commentParsed', this._commentParsedHandler);
+        player.on('commentChange', this._commentChangeHandler);
+        Promise.all([
+            player.promise('firstVideoInitialized'), this.promise('dom-ready')
+        ]).then(() => this._onFirstVideoInitialized());
+        this._initializeDom();
+        this._initializePlaybackRateSelectMenu();
+        this._initializeVolumeControl();
+        this._initializeVideoServerTypeSelectMenu();
+        global.debug.videoControlBar = this;
     }
     _initializeDom() {
-      const $view = this._$view = util.$.html(VideoControlBar.__tpl__);
-      const $container = this._$playerContainer;
-      const config = this._playerConfig;
-      this._view = $view[0];
-      const classList = this.classList = ClassList(this._view);
-
-      const mq = $view.mapQuery({
-        _seekBarContainer: '.seekBarContainer',
-        _seekBar: '.seekBar',
-        _currentTime: '.currentTime',
-        _duration: '.duration',
-        _playbackRateMenu: '.playbackRateMenu',
-        _playbackRateSelectMenu: '.playbackRateSelectMenu',
-        _videoServerTypeMenu: '.videoServerTypeMenu',
-        _videoServerTypeSelectMenu: '.videoServerTypeSelectMenu',
-        _resumePointer: 'zenza-seekbar-label',
-        _bufferRange: '.bufferRange',
-        _seekRange: '.seekRange',
-        _seekBarPointer: '.seekBarPointer',
-        resumePointers: 'zenza-seekbar-label',
-      });
-      Object.assign(this, mq.e, {_currentTime: 0});
-      Object.assign(this, mq.$);
-
-      // Task 077c: 画面フィルターのボタン。フィルターが効いている間は光らせる
-      const historyButton = $view.find('.commentHistorySwitch')[0];
-      if (historyButton) {
-        historyButton.addEventListener('keydown', historyTriggerKeyGuard);
-        historyButton.addEventListener('keyup', historyTriggerKeyGuard);
-      }
-      const screenFilterButton = $view.find('.screenFilterSwitch')[0];
-      const updateScreenFilterButton = () => {
-        screenFilterButton && screenFilterButton.classList.toggle('is-active', ScreenFilter.isActive());
-      };
-      ScreenFilter.onChange(updateScreenFilterButton);
-      updateScreenFilterButton();
-      util.$(this._seekRange)
-        .on('input', this._onSeekRangeInput.bind(this))
-        .on('change', e => e.target.blur());
-
-      this._pointer = new SmoothSeekBarPointer({
-        pointer: this._seekBarPointer,
-        playerState: this._playerState
-      });
-      const timeStyle = {
-        widthPx: 44,
-        heightPx: 18,
-        fontFamily: '\'Yu Gothic\', \'YuGothic\', \'Courier New\', Osaka-mono, \'ＭＳ ゴシック\', monospace',
-        fontWeight: '',
-        fontSizePx: 12,
-        color: '#fff'
-      };
-      this.currentTimeLabel = TextLabel.create({
-        container: $view.find('.currentTimeLabel')[0],
-        name: 'currentTimeLabel',
-        text: '--:--',
-        style: timeStyle
-      });
-      this.durationLabel = TextLabel.create({
-        container: $view.find('.durationLabel')[0],
-        name: 'durationLabel',
-        text: '--:--',
-        style: timeStyle
-      });
-
-      this._$seekBar
-        .on('mousedown', this._onSeekBarMouseDown.bind(this))
-        .on('mousemove', this._onSeekBarMouseMove.bind(this));
-
-      $view
-        .on('click', this._onClick.bind(this))
-        .on('command', this._onCommandEvent.bind(this));
-
-      HeatMapWorker.init({container: this._seekBar}).then(hm => this._onHeatMapReady(hm));
-      const updateHeatMapVisibility =
-        v => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
-      updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
-      this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
-      // Task187（監査v2 F13）: 通知に付いた動画IDが今の動画と一致する時だけ、その動画IDで保存する
-      global.emitter.on('heatMapUpdate', payload => {
-        const entry = heatMapCacheEntry(payload, this.player.watchId);
-        entry && WatchInfoCacheDb.putBestEffort(entry.watchId, {heatMap: entry.heatMap});
-      });
-
-      this.storyboard = new Storyboard({
-        playerConfig: config,
-        player: this.player,
-        state: this.state,
-        container: $view[0]
-      });
-      this.state.onkey('isStoryboardAvailable',
-        v => classList.toggle('is-storyboardAvailable', v));
-
-      this._seekBarToolTip = new SeekBarToolTip({
-        $container: this._$seekBarContainer,
-        storyboard: this.storyboard
-      });
-
-      this._commentPreview = new CommentPreview({
-        $container: this._$seekBarContainer
-      });
-      const updateEnableCommentPreview = () => {
-        const v=config.resolveSceneSearch?.()?.listOpen??config.props.enableCommentPreview;
-        this._$seekBarContainer.raf.toggleClass('enableCommentPreview', v);
-        this._commentPreview.mode = v ? 'list' : 'hover';
-      };
-
-      updateEnableCommentPreview(config.props.enableCommentPreview);
-      config.onkey('enableCommentPreview', updateEnableCommentPreview);
-      config.onkey('sceneSearch.commentPreviewVisible', updateEnableCommentPreview);
-      config.onkey('sceneSearch.commentListVisible', updateEnableCommentPreview);
-
-      const watchElement = $container[0].closest('#zenzaVideoPlayerDialog');
-      this._wheelSeeker = new WheelSeeker({
-        parentNode: $view[0],
-        watchElement
-      });
-
-      watchElement.addEventListener('mousedown', e => {
-        if (['A', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
-          return;
+        const $view = this._$view = util.$.html(VideoControlBar.__tpl__);
+        const $container = this._$playerContainer;
+        const config = this._playerConfig;
+        this._view = $view[0];
+        const classList = this.classList = ClassList(this._view);
+        const mq = $view.mapQuery({
+            _seekBarContainer: '.seekBarContainer',
+            _seekBar: '.seekBar',
+            _currentTime: '.currentTime',
+            _duration: '.duration',
+            _playbackRateMenu: '.playbackRateMenu',
+            _playbackRateSelectMenu: '.playbackRateSelectMenu',
+            _videoServerTypeMenu: '.videoServerTypeMenu',
+            _videoServerTypeSelectMenu: '.videoServerTypeSelectMenu',
+            _resumePointer: 'zenza-seekbar-label',
+            _bufferRange: '.bufferRange',
+            _seekRange: '.seekRange',
+            _seekBarPointer: '.seekBarPointer',
+            resumePointers: 'zenza-seekbar-label',
+        });
+        Object.assign(this, mq.e, { _currentTime: 0 });
+        Object.assign(this, mq.$);
+        // Task 077c: 画面フィルターのボタン。フィルターが効いている間は光らせる
+        const historyButton = $view.find('.commentHistorySwitch')[0];
+        if (historyButton) {
+            historyButton.addEventListener('keydown', historyTriggerKeyGuard);
+            historyButton.addEventListener('keyup', historyTriggerKeyGuard);
         }
-        if (e.buttons !== 3 && !(e.button === 0 && e.shiftKey)) {
-          return;
+        const notificationButton = $view.find('.notificationHistorySwitch')[0];
+        if (notificationButton) {
+            notificationButton.addEventListener('keydown', historyTriggerKeyGuard);
+            notificationButton.addEventListener('keyup', historyTriggerKeyGuard);
         }
-        if (e.buttons === 3) {
-          watchElement.addEventListener('contextmenu', e => {
-            window.console.log('contextmenu', e);
-            e.preventDefault();
-            e.stopPropagation();
-          }, {once: true, capture: true});
-        }
-        this._onSeekBarMouseDown(e);
-      });
-
-      global.emitter.on('hideHover', () => {
-        this._hideMenu();
-        this._commentPreview.hide();
-      });
-
-      $container.append($view);
-      this._visibility = UiVisibilityRegistry.connect(config,this._view,'bar');
-      this.emitResolve('dom-ready');
+        const screenFilterButton = $view.find('.screenFilterSwitch')[0];
+        const updateScreenFilterButton = () => {
+            screenFilterButton && screenFilterButton.classList.toggle('is-active', ScreenFilter.isActive());
+        };
+        ScreenFilter.onChange(updateScreenFilterButton);
+        updateScreenFilterButton();
+        util.$(this._seekRange)
+            .on('input', this._onSeekRangeInput.bind(this))
+            .on('change', (e) => e.target.blur());
+        this._pointer = new SmoothSeekBarPointer({
+            pointer: this._seekBarPointer,
+            playerState: this._playerState
+        });
+        const timeStyle = {
+            widthPx: 44,
+            heightPx: 18,
+            fontFamily: '\'Yu Gothic\', \'YuGothic\', \'Courier New\', Osaka-mono, \'ＭＳ ゴシック\', monospace',
+            fontWeight: '',
+            fontSizePx: 12,
+            color: '#fff'
+        };
+        this.currentTimeLabel = TextLabel.create({
+            container: $view.find('.currentTimeLabel')[0],
+            name: 'currentTimeLabel',
+            text: '--:--',
+            style: timeStyle
+        });
+        this.durationLabel = TextLabel.create({
+            container: $view.find('.durationLabel')[0],
+            name: 'durationLabel',
+            text: '--:--',
+            style: timeStyle
+        });
+        this._$seekBar
+            .on('mousedown', this._onSeekBarMouseDown.bind(this))
+            .on('mousemove', this._onSeekBarMouseMove.bind(this));
+        $view
+            .on('click', this._onClick.bind(this))
+            .on('command', this._onCommandEvent.bind(this));
+        HeatMapWorker.init({ container: this._seekBar }).then((hm) => this._onHeatMapReady(hm));
+        const updateHeatMapVisibility = (v) => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
+        updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
+        this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
+        // Task187（監査v2 F13）: 通知に付いた動画IDが今の動画と一致する時だけ、その動画IDで保存する
+        global.emitter.on('heatMapUpdate', (payload) => {
+            const entry = heatMapCacheEntry(payload, this.player.watchId);
+            entry && WatchInfoCacheDb.putBestEffort(entry.watchId, { heatMap: entry.heatMap });
+        });
+        this.storyboard = new Storyboard({
+            playerConfig: config,
+            player: this.player,
+            state: this.state,
+            container: $view[0]
+        });
+        this.state.onkey('isStoryboardAvailable', (v) => classList.toggle('is-storyboardAvailable', v));
+        this._seekBarToolTip = new SeekBarToolTip({
+            $container: this._$seekBarContainer,
+            storyboard: this.storyboard
+        });
+        this._commentPreview = new CommentPreview({
+            $container: this._$seekBarContainer
+        });
+        const updateEnableCommentPreview = () => {
+            const v = config.resolveSceneSearch?.()?.listOpen ?? config.props.enableCommentPreview;
+            this._$seekBarContainer.raf.toggleClass('enableCommentPreview', v);
+            this._commentPreview.mode = v ? 'list' : 'hover';
+        };
+        updateEnableCommentPreview(config.props.enableCommentPreview);
+        config.onkey('enableCommentPreview', updateEnableCommentPreview);
+        config.onkey('sceneSearch.commentPreviewVisible', updateEnableCommentPreview);
+        config.onkey('sceneSearch.commentListVisible', updateEnableCommentPreview);
+        const watchElement = $container[0].closest('#zenzaVideoPlayerDialog');
+        this._wheelSeeker = new WheelSeeker({
+            parentNode: $view[0],
+            watchElement
+        });
+        watchElement.addEventListener('mousedown', (e) => {
+            if (['A', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+                return;
+            }
+            if (e.buttons !== 3 && !(e.button === 0 && e.shiftKey)) {
+                return;
+            }
+            if (e.buttons === 3) {
+                watchElement.addEventListener('contextmenu', (e) => {
+                    window.console.log('contextmenu', e);
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, { once: true, capture: true });
+            }
+            this._onSeekBarMouseDown(e);
+        });
+        global.emitter.on('hideHover', () => {
+            this._hideMenu();
+            this._commentPreview.hide();
+        });
+        $container.append($view);
+        this._visibility = UiVisibilityRegistry.connect(config, this._view, 'bar');
+        this.emitResolve('dom-ready');
     }
     _initializePlaybackRateSelectMenu() {
-      const config = this._playerConfig;
-      const $menu = this._$playbackRateSelectMenu;
-      const $rates = $menu.find('.playbackRate');
-      const style = {
-        widthPx: 48,
-        heightPx: 30,
-        fontFamily: '"ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", "メイリオ", Meiryo, Osaka, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif',
-        fontWeight: '',
-        fontSizePx: 18,
-        color: '#fff'
-      };
-      const rateLabel = TextLabel.create({
-        container: this._$playbackRateMenu.find('.controlButtonInner')[0],
-        name: 'currentTimeLabel',
-        text: '',
-        style
-      });
-
-      const updatePlaybackRate = rate => {
-        rateLabel.text = `x${Math.round(rate * 100) / 100}`;
-        $menu.find('.selected').removeClass('selected');
-        const fr = Math.floor( parseFloat(rate, 10) * 100) / 100;
-        $rates.forEach(item => {
-          const r = parseFloat(item.dataset.param, 10);
-          if (fr === r) {
-            ClassList(item).add('selected');
-          }
+        const config = this._playerConfig;
+        const $menu = this._$playbackRateSelectMenu;
+        const $rates = $menu.find('.playbackRate');
+        const style = {
+            widthPx: 48,
+            heightPx: 30,
+            fontFamily: '"ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", "メイリオ", Meiryo, Osaka, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif',
+            fontWeight: '',
+            fontSizePx: 18,
+            color: '#fff'
+        };
+        const rateLabel = TextLabel.create({
+            container: this._$playbackRateMenu.find('.controlButtonInner')[0],
+            name: 'currentTimeLabel',
+            text: '',
+            style
         });
-        this._pointer.playbackRate = rate;
-      };
-
-      updatePlaybackRate(config.props.playbackRate);
-      config.onkey('playbackRate', updatePlaybackRate);
+        const updatePlaybackRate = (rate) => {
+            rateLabel.text = `x${Math.round(rate * 100) / 100}`;
+            $menu.find('.selected').removeClass('selected');
+            const fr = Math.floor(parseFloat(rate, 10) * 100) / 100;
+            $rates.forEach((item) => {
+                const r = parseFloat(item.dataset.param, 10);
+                if (fr === r) {
+                    ClassList(item).add('selected');
+                }
+            });
+            this._pointer.playbackRate = rate;
+        };
+        updatePlaybackRate(config.props.playbackRate);
+        config.onkey('playbackRate', updatePlaybackRate);
     }
     _initializeVolumeControl() {
-      const $vol = this._$view.find('zenza-range-bar input[type="range"]');
-      const [vol] = $vol;
-
-      const setVolumeBar = this._setVolumeBar = v => (vol.view || vol).value = v;
-      $vol.on('input', e => util.dispatchCommand(e.target, 'volume', e.target.value));
-      setVolumeBar(this._playerConfig.props.volume);
-      this._playerConfig.onkey('volume', setVolumeBar);
+        const $vol = this._$view.find('zenza-range-bar input[type="range"]');
+        const [vol] = $vol;
+        const setVolumeBar = this._setVolumeBar = (v) => (vol.view || vol).value = v;
+        $vol.on('input', (e) => util.dispatchCommand(e.target, 'volume', e.target.value));
+        setVolumeBar(this._playerConfig.props.volume);
+        this._playerConfig.onkey('volume', setVolumeBar);
     }
     _initializeVideoServerTypeSelectMenu() {
-      const config = this._playerConfig;
-      const $button = this._$videoServerTypeMenu;
-      const $select  = this._$videoServerTypeSelectMenu;
-
-      const updateDomandVideoQuality = value => {
-        const $dq = $select.find('.domandVideoQuality > li');
-        $dq.removeClass('selected');
-        $select.find('.select-domand-' + value).addClass('selected');
-      };
-
-      const updateDmcVideoQuality = value => {
-        const $dq = $select.find('.dmcVideoQuality > li');
-        $dq.removeClass('selected');
-        $select.find('.select-dmc-' + value).addClass('selected');
-      };
-
-      // Task 079b: 画質「自動」の時、以前は用意された中で一番上の画質名（例: 720p）を
-      // そのまま出していたため、実際は360pで再生していても「720p」と表示されていた。
-      // 自動の時は「自動（最大720p）」と、実際に選ばれる上限であることが分かる表記にする。
-      const videoQualityLabel = (type, info) => {
-        const label = (info && info.video && info.video.label) || '';
-        const setting = type === 'dmc' ? config.props.dmcVideoQuality : config.props.domandVideoQuality;
-        return setting === 'auto' && label ? `自動（最大${label}）` : label;
-      };
-      const onVideoServerType = (type, videoSessionInfo) => {
-        $button.raf.removeClass('is-domand-playing is-dmc-playing')
-          .raf.addClass(`is-${type === 'dmc' ? 'dmc' : 'domand'}-playing`);
-        $select.find('.serverType').removeClass('selected');
-        const $selectServer = $select.find(`.select-server-${type === 'dmc' ? 'dmc' : 'domand'}`);
-        $selectServer.addClass('selected');
-        $selectServer.find('.currentVideoQuality')
-          .raf.text(videoQualityLabel(type, videoSessionInfo));
-      };
-
-      updateDomandVideoQuality(config.props.domandVideoQuality);
-      updateDmcVideoQuality(config.props.dmcVideoQuality);
-      config.onkey('domandVideoQuality', updateDomandVideoQuality);
-      config.onkey('dmcVideoQuality', updateDmcVideoQuality);
-
-      this.player.on('videoServerType', onVideoServerType);
+        const config = this._playerConfig;
+        const $button = this._$videoServerTypeMenu;
+        const $select = this._$videoServerTypeSelectMenu;
+        const updateDomandVideoQuality = (value) => {
+            const $dq = $select.find('.domandVideoQuality > li');
+            $dq.removeClass('selected');
+            $select.find('.select-domand-' + value).addClass('selected');
+        };
+        const updateDmcVideoQuality = (value) => {
+            const $dq = $select.find('.dmcVideoQuality > li');
+            $dq.removeClass('selected');
+            $select.find('.select-dmc-' + value).addClass('selected');
+        };
+        // Task 079b: 画質「自動」の時、以前は用意された中で一番上の画質名（例: 720p）を
+        // そのまま出していたため、実際は360pで再生していても「720p」と表示されていた。
+        // 自動の時は「自動（最大720p）」と、実際に選ばれる上限であることが分かる表記にする。
+        const videoQualityLabel = (type, info) => {
+            const label = (info && info.video && info.video.label) || '';
+            const setting = type === 'dmc' ? config.props.dmcVideoQuality : config.props.domandVideoQuality;
+            return setting === 'auto' && label ? `自動（最大${label}）` : label;
+        };
+        const onVideoServerType = (type, videoSessionInfo) => {
+            $button.raf.removeClass('is-domand-playing is-dmc-playing')
+                .raf.addClass(`is-${type === 'dmc' ? 'dmc' : 'domand'}-playing`);
+            $select.find('.serverType').removeClass('selected');
+            const $selectServer = $select.find(`.select-server-${type === 'dmc' ? 'dmc' : 'domand'}`);
+            $selectServer.addClass('selected');
+            $selectServer.find('.currentVideoQuality')
+                .raf.text(videoQualityLabel(type, videoSessionInfo));
+        };
+        updateDomandVideoQuality(config.props.domandVideoQuality);
+        updateDmcVideoQuality(config.props.dmcVideoQuality);
+        config.onkey('domandVideoQuality', updateDomandVideoQuality);
+        config.onkey('dmcVideoQuality', updateDmcVideoQuality);
+        this.player.on('videoServerType', onVideoServerType);
     }
     _onCommandEvent(e) {
-      const command = e.detail.command;
-      switch (command) {
-        case 'toggleStoryboard':
-          this.storyboard.toggle();
-          break;
-        case 'wheelSeek-start':
-          window.console.log('start-seek-start');
-          this.state.isWheelSeeking = true;
-          this._wheelSeeker.currentTime = this.player.currentTime;
-          this.classList.add('is-wheelSeeking');
-          break;
-        case 'wheelSeek-end':
-          window.console.log('start-seek-end');
-          this.state.isWheelSeeking = false;
-          this.classList.remove('is-wheelSeeking');
-          break;
-        case 'wheelSeek':
-          this._onWheelSeek(e.detail.param);
-          break;
-        default:
-          return;
-      }
-      e.stopPropagation();
+        const command = e.detail.command;
+        switch (command) {
+            case 'toggleStoryboard':
+                this.storyboard.toggle();
+                break;
+            case 'wheelSeek-start':
+                window.console.log('start-seek-start');
+                this.state.isWheelSeeking = true;
+                this._wheelSeeker.currentTime = this.player.currentTime;
+                this.classList.add('is-wheelSeeking');
+                break;
+            case 'wheelSeek-end':
+                window.console.log('start-seek-end');
+                this.state.isWheelSeeking = false;
+                this.classList.remove('is-wheelSeeking');
+                break;
+            case 'wheelSeek':
+                this._onWheelSeek(e.detail.param);
+                break;
+            default:
+                return;
+        }
+        e.stopPropagation();
     }
     _onClick(e) {
-      e.preventDefault();
-
-      const target = e.target.closest('[data-command]');
-      if (!target) {
-        return;
-      }
-      let {command, param, type} = target.dataset;
-      if (param && (type === 'bool' || type === 'json')) {
-        param = JSON.parse(param);
-      }
-      switch (command) {
-        case 'toggleStoryboard':
-          this.storyboard.toggle();
-          break;
-        default:
-          util.dispatchCommand(target, command, param);
-          break;
-       }
-      e.stopPropagation();
+        e.preventDefault();
+        const target = e.target.closest('[data-command]');
+        if (!target) {
+            return;
+        }
+        let { command, param, type } = target.dataset;
+        if (param && (type === 'bool' || type === 'json')) {
+            param = JSON.parse(param);
+        }
+        switch (command) {
+            case 'toggleStoryboard':
+                this.storyboard.toggle();
+                break;
+            default:
+                util.dispatchCommand(target, command, param);
+                break;
+        }
+        e.stopPropagation();
     }
     _posToTime(pos) {
-      const width = global.innerWidth;
-      return this._duration * (pos / Math.max(width, 1));
+        const width = global.innerWidth;
+        return this._duration * (pos / Math.max(width, 1));
     }
     _timeToPos(time) {
-      return global.innerWidth * (time / Math.max(this._duration, 1));
+        return global.innerWidth * (time / Math.max(this._duration, 1));
     }
     _timeToPer(time) {
-      return (time / Math.max(this._duration, 1)) * 100;
+        return (time / Math.max(this._duration, 1)) * 100;
     }
     _onPlayerOpen(watchId) {
-      this._commentParsedHandler?.cancel?.();
-      this._commentChangeHandler?.cancel?.();
-      this._startTimer();
-      this.duration = 0;
-      this.currentTime = 0;
-      this._heatMapWatchId = typeof watchId === 'string' ? watchId : null;
-      this.heatMap && this.heatMap.reset({watchId: this._heatMapWatchId});
-      this.storyboard.reset();
-      this.resetBufferedRange();
+        this._commentParsedHandler?.cancel?.();
+        this._commentChangeHandler?.cancel?.();
+        this._startTimer();
+        this.duration = 0;
+        this.currentTime = 0;
+        this._heatMapWatchId = typeof watchId === 'string' ? watchId : null;
+        this.heatMap && this.heatMap.reset({ watchId: this._heatMapWatchId });
+        this.storyboard.reset();
+        this.resetBufferedRange();
     }
     _onPlayerCanPlay(watchId, videoInfo) {
-      const duration = this.player.duration;
-      this.duration = duration;
-      this.storyboard.onVideoCanPlay(watchId, videoInfo);
-
-      this._syncCommentHeatMap();
+        const duration = this.player.duration;
+        this.duration = duration;
+        this.storyboard.onVideoCanPlay(watchId, videoInfo);
+        this._syncCommentHeatMap();
     }
     _onHeatMapReady(hm) {
-      this.heatMap = hm;
-      if (this._heatMapWatchId) { this.heatMap.reset({watchId: this._heatMapWatchId}); }
-      this._syncCommentHeatMap();
+        this.heatMap = hm;
+        if (this._heatMapWatchId) {
+            this.heatMap.reset({ watchId: this._heatMapWatchId });
+        }
+        this._syncCommentHeatMap();
     }
     _syncCommentHeatMap() {
-      if (!this._heatMapWatchId || this._heatMapWatchId !== this.player.watchId) { return; }
-      const chatList = this.player.chatList;
-      if (!chatList) { return; }
-      if (this.heatMap) {
-        this.heatMap.setData({watchId: this._heatMapWatchId, duration: this.player.duration, chatList});
-      }
-      if (this._commentPreview) { this._commentPreview.chatList = chatList; }
+        if (!this._heatMapWatchId || this._heatMapWatchId !== this.player.watchId) {
+            return;
+        }
+        const chatList = this.player.chatList;
+        if (!chatList) {
+            return;
+        }
+        if (this.heatMap) {
+            this.heatMap.setData({ watchId: this._heatMapWatchId, duration: this.player.duration, chatList });
+        }
+        if (this._commentPreview) {
+            this._commentPreview.chatList = chatList;
+        }
     }
     _onCommentParsed() { this._syncCommentHeatMap(); }
     _onCommentChange() { this._syncCommentHeatMap(); }
     _onPlayerDurationChange() {
-      this._pointer.duration = this._playerState.videoInfo.duration;
-      this._wheelSeeker.duration = this._playerState.videoInfo.duration;
-      this._syncCommentHeatMap();
+        this._pointer.duration = this._playerState.videoInfo.duration;
+        this._wheelSeeker.duration = this._playerState.videoInfo.duration;
+        this._syncCommentHeatMap();
     }
     _onPlayerClose() {
-      this._cancelStoryboardLongPress();
-      this._commentParsedHandler?.cancel?.();
-      this._commentChangeHandler?.cancel?.();
-      this._heatMapWatchId = null;
-      this.heatMap && this.heatMap.reset();
-      this._stopTimer();
+        this._cancelStoryboardLongPress();
+        // Task944: closing (without opening a successor) must release Task943's
+        // current videoInfo and revoke outstanding thumbnail loader responses.
+        // The existing open-time reset alone cannot protect this close window.
+        this.storyboard?.reset?.();
+        this._commentParsedHandler?.cancel?.();
+        this._commentChangeHandler?.cancel?.();
+        this._heatMapWatchId = null;
+        this.heatMap && this.heatMap.reset();
+        this._stopTimer();
     }
     _onPlayerProgress(range, currentTime) {
-      this.setBufferedRange(range, currentTime);
+        this.setBufferedRange(range, currentTime);
     }
     _startTimer() {
-      this._timerCount = 0;
-      this._raf = this._raf || new RequestAnimationFrame(this._onTimer.bind(this));
-      this._raf.enable();
+        this._timerCount = 0;
+        this._raf = this._raf || new RequestAnimationFrame(this._onTimer.bind(this));
+        this._raf.enable();
     }
     _stopTimer() {
-      this._raf && this._raf.disable();
+        this._raf && this._raf.disable();
     }
     _onSeekRangeInput(e) {
-      const sec = e.target.value * 1;
-      const left = sec / (e.target.max * 1) * global.innerWidth;
-      util.dispatchCommand(e.target, 'seek', sec);
-      this._seekBarToolTip.update(this._sceneSearchPinnedTime?.()??sec, left);
-      this.storyboard.setCurrentTime(sec, true);
+        const sec = e.target.value * 1;
+        const left = sec / (e.target.max * 1) * global.innerWidth;
+        util.dispatchCommand(e.target, 'seek', sec);
+        this._seekBarToolTip.update(this._sceneSearchPinnedTime?.() ?? sec, left);
+        this.storyboard.setCurrentTime(sec, true);
     }
     _onSeekBarMouseDown(e) {
-      // e.preventDefault();
-      e.stopPropagation();
-      this._beginMouseDrag(e);
-      // Keep seeking immediate, but only reveal the large storyboard after a
-      // deliberate 200ms primary-button hold on the seek bar itself.
-      if (e.button === 0 && this._seekBar?.contains(e.target)) {
-        this._scheduleStoryboardLongPress();
-      }
+        // e.preventDefault();
+        e.stopPropagation();
+        this._beginMouseDrag(e);
+        // Keep seeking immediate, but only reveal the large storyboard after a
+        // deliberate 200ms primary-button hold on the seek bar itself.
+        if (e.button === 0 && this._seekBar?.contains(e.target)) {
+            this._scheduleStoryboardLongPress();
+        }
     }
     _scheduleStoryboardLongPress() {
-      this._cancelStoryboardLongPress();
-      this._storyboardLongPressTimer = window.setTimeout(() => {
-        this._storyboardLongPressTimer = null;
-        if (this.state.isDragging) {
-          this.classList.add('is-storyboardLongPress');
-        }
-      }, 200);
+        this._cancelStoryboardLongPress();
+        this._storyboardLongPressTimer = window.setTimeout(() => {
+            this._storyboardLongPressTimer = null;
+            if (this.state.isDragging) {
+                this.classList.add('is-storyboardLongPress');
+            }
+        }, 200);
     }
     _cancelStoryboardLongPress() {
-      if (this._storyboardLongPressTimer != null) {
-        window.clearTimeout(this._storyboardLongPressTimer);
-        this._storyboardLongPressTimer = null;
-      }
-      this.classList?.remove('is-storyboardLongPress');
+        if (this._storyboardLongPressTimer != null) {
+            window.clearTimeout(this._storyboardLongPressTimer);
+            this._storyboardLongPressTimer = null;
+        }
+        this.classList?.remove('is-storyboardLongPress');
     }
     _onSeekBarMouseMove(e) {
-      if (!this.state.isDragging) {
-        e.stopPropagation();
-      }
-      const pinned=this._sceneSearchPinnedTime?.();
-      const left = Number.isFinite(pinned)?this._seekBarMouseX:e.offsetX;
-      const sec = Number.isFinite(pinned)?pinned:this._posToTime(left);
-      this._seekBarMouseX = left;
-
-      this._commentPreview.currentTime = sec;
-      this._commentPreview.update(left);
-
-      this._seekBarToolTip.update(sec, left);
+        if (!this.state.isDragging) {
+            e.stopPropagation();
+        }
+        const pinned = this._sceneSearchPinnedTime?.();
+        const left = Number.isFinite(pinned) ? this._seekBarMouseX : e.offsetX;
+        const sec = Number.isFinite(pinned) ? pinned : this._posToTime(left);
+        this._seekBarMouseX = left;
+        this._commentPreview.currentTime = sec;
+        this._commentPreview.update(left);
+        this._seekBarToolTip.update(sec, left);
     }
     _onWheelSeek(sec) {
-      if (!this.state.isWheelSeeking) {
-        return;
-      }
-      sec = sec * 1;
-      const dur = this._duration;
-      const left = sec / dur * window.innerWidth;
-      this._seekBarMouseX = left;
-
-      const previewTime=this._sceneSearchPinnedTime?.()??sec;
-      this._commentPreview.currentTime = previewTime;
-      this._commentPreview.update(left);
-
-      this._seekBarToolTip.update(previewTime, left);
-      this.storyboard.setCurrentTime(sec, true);
+        if (!this.state.isWheelSeeking) {
+            return;
+        }
+        sec = sec * 1;
+        const dur = this._duration;
+        const left = sec / dur * window.innerWidth;
+        this._seekBarMouseX = left;
+        const previewTime = this._sceneSearchPinnedTime?.() ?? sec;
+        this._commentPreview.currentTime = previewTime;
+        this._commentPreview.update(left);
+        this._seekBarToolTip.update(previewTime, left);
+        this.storyboard.setCurrentTime(sec, true);
     }
     _beginMouseDrag() {
-      this._bindDragEvent();
-      this.classList.add('is-dragging');
-      this.state.isDragging = true;
+        this._bindDragEvent();
+        this.classList.add('is-dragging');
+        this.state.isDragging = true;
     }
     _endMouseDrag() {
-      this._cancelStoryboardLongPress();
-      this._unbindDragEvent();
-      this.classList.remove('is-dragging');
-      this.state.isDragging = false;
+        this._cancelStoryboardLongPress();
+        this._unbindDragEvent();
+        this.classList.remove('is-dragging');
+        this.state.isDragging = false;
     }
     _onBodyMouseUp(e) {
-      if ((e.button === 0 && e.shiftKey)) {
-        this._cancelStoryboardLongPress();
-        return;
-      }
-      this._endMouseDrag();
+        if ((e.button === 0 && e.shiftKey)) {
+            this._cancelStoryboardLongPress();
+            return;
+        }
+        this._endMouseDrag();
     }
     _onWindowBlur() {
-      this._endMouseDrag();
+        this._endMouseDrag();
     }
     _bindDragEvent() {
-      util.$('body')
-        .on('mouseup.ZenzaWatchSeekBar', this._onBodyMouseUp.bind(this));
-
-      util.$(window).on('blur.ZenzaWatchSeekBar', this._onWindowBlur.bind(this), {once: true});
+        util.$('body')
+            .on('mouseup.ZenzaWatchSeekBar', this._onBodyMouseUp.bind(this));
+        util.$(window).on('blur.ZenzaWatchSeekBar', this._onWindowBlur.bind(this), { once: true });
     }
     _unbindDragEvent() {
-      util.$('body')
-        .off('mouseup.ZenzaWatchSeekBar');
-      util.$(window).off('blur.ZenzaWatchSeekBar');
+        util.$('body')
+            .off('mouseup.ZenzaWatchSeekBar');
+        util.$(window).off('blur.ZenzaWatchSeekBar');
     }
     _onTimer() {
-      this._timerCount++;
-
-      const player = this.player;
-      const currentTime = this.state.isWheelSeeking ?
-        this._wheelSeeker.currentTime : player.currentTime;
-      if (this._timerCount % 6 === 0) {
-        this.currentTime = currentTime;
-      }
-      this.storyboard.currentTime = currentTime;
+        this._timerCount++;
+        const player = this.player;
+        const currentTime = this.state.isWheelSeeking ?
+            this._wheelSeeker.currentTime : player.currentTime;
+        if (this._timerCount % 6 === 0) {
+            this.currentTime = currentTime;
+        }
+        this.storyboard.currentTime = currentTime;
     }
     _onLoadVideoInfo(videoInfo) {
-      this.duration = videoInfo.duration;
-      // Task 070: canPlay を待たずに、動画情報が揃った時点でシークバーのサムネイルを読み始める
-      this.storyboard.load(videoInfo.watchId, videoInfo);
-      const [view] = this._$view;
-
-      const resumePoints = videoInfo.resumePoints;
-      for (let i = 0, len = this.$resumePointers.length; i < len; i++) {
-        const pointer = this.$resumePointers[i];
-        const resume = resumePoints[i];
-        if (!resume) {
-          pointer.hidden = true;
-          continue;
+        this.duration = videoInfo.duration;
+        // Task 070: canPlay を待たずに、動画情報が揃った時点でシークバーのサムネイルを読み始める
+        this.storyboard.load(videoInfo.watchId, videoInfo);
+        const [view] = this._$view;
+        const resumePoints = videoInfo.resumePoints;
+        for (let i = 0, len = this.$resumePointers.length; i < len; i++) {
+            const pointer = this.$resumePointers[i];
+            const resume = resumePoints[i];
+            if (!resume) {
+                pointer.hidden = true;
+                continue;
+            }
+            pointer.setAttribute('duration', videoInfo.duration);
+            pointer.setAttribute('time', resume.time);
+            pointer.setAttribute('text', `${resume.now} ここまで見た`);
+            if (resume.now !== '前回') {
+                cssUtil.setProps([pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'], [pointer, '--color', '#aef']);
+            }
+            else {
+                cssUtil.setProps([pointer, '--scale-pp', 1.7]);
+            }
         }
-        pointer.setAttribute('duration', videoInfo.duration);
-        pointer.setAttribute('time', resume.time);
-        pointer.setAttribute('text', `${resume.now} ここまで見た`);
-        if (resume.now !== '前回') {
-          cssUtil.setProps(
-            [pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'],
-            [pointer, '--color', '#aef']);
-        } else {
-          cssUtil.setProps([pointer, '--scale-pp', 1.7]);
-        }
-      }
     }
     async _onFirstVideoInitialized(watchId) {
-      const [view] = this._$view;
-      const handler = (command, param) => this.emit('command', command, param);
-      const ge = global.emitter; // emitAsync は互換用に残してる
-      ge.emitResolve('videoControBar.addonMenuReady',
-        {container: view.querySelector('.controlItemContainer.left .scalingUI'), handler}
-      ).then(({container, handler}) => ge.emitAsync('videoControBar.addonMenuReady', container, handler));
-      ge.emitResolve('seekBar.addonMenuReady',
-        {container: view.querySelector('.seekBar'), handler}
-      ).then(({container, handler}) => ge.emitAsync('seekBar.addonMenuReady', container, handler));
+        const [view] = this._$view;
+        const handler = (command, param) => this.emit('command', command, param);
+        const ge = global.emitter; // emitAsync は互換用に残してる
+        ge.emitResolve('videoControBar.addonMenuReady', { container: view.querySelector('.controlItemContainer.left .addonMenuContainer'), handler }).then(({ container, handler }) => ge.emitAsync('videoControBar.addonMenuReady', container, handler));
+        ge.emitResolve('seekBar.addonMenuReady', { container: view.querySelector('.seekBar'), handler }).then(({ container, handler }) => ge.emitAsync('seekBar.addonMenuReady', container, handler));
     }
     get currentTime() {
-      return this._currentTime;
+        return this._currentTime;
     }
     setCurrentTime(sec) {
-      this.currentTime = sec;
+        this.currentTime = sec;
     }
     set currentTime(sec) {
-      if (this._currentTime === sec) { return; }
-      this._currentTime = sec;
-
-      const currentTimeText = util.secToTime(sec);
-      if (this._currentTimeText !== currentTimeText) {
-        this._currentTimeText = currentTimeText;
-        this.currentTimeLabel.text = currentTimeText;
-      }
-      this._pointer.currentTime = sec;
+        if (this._currentTime === sec) {
+            return;
+        }
+        this._currentTime = sec;
+        const currentTimeText = util.secToTime(sec);
+        if (this._currentTimeText !== currentTimeText) {
+            this._currentTimeText = currentTimeText;
+            this.currentTimeLabel.text = currentTimeText;
+        }
+        this._pointer.currentTime = sec;
     }
     get duration() {
-      return this._duration;
+        return this._duration;
     }
     set duration(sec) {
-      if (sec === this._duration) { return; }
-      this._duration = sec;
-      this._pointer.currentTime = -1;
-      this._pointer.duration = sec;
-      this._wheelSeeker.duration = sec;
-      this._seekRange.max = sec;
-
-      if (sec === 0 || isNaN(sec)) {
-        this.durationLabel.text = '--:--';
-      } else {
-        this.durationLabel.text = util.secToTime(sec);
-      }
-      this.emit('durationChange');
+        if (sec === this._duration) {
+            return;
+        }
+        this._duration = sec;
+        this._pointer.currentTime = -1;
+        this._pointer.duration = sec;
+        this._wheelSeeker.duration = sec;
+        this._seekRange.max = sec;
+        if (sec === 0 || isNaN(sec)) {
+            this.durationLabel.text = '--:--';
+        }
+        else {
+            this.durationLabel.text = util.secToTime(sec);
+        }
+        this.emit('durationChange');
     }
     setBufferedRange(range, currentTime) {
-      const bufferRange = this._bufferRange;
-      if (!range || !range.length || !this._duration) {
-        return;
-      }
-      for (let i = 0, len = range.length; i < len; i++) {
-        try {
-          const start = range.start(i);
-          const end   = range.end(i);
-          const width = end - start;
-          if (start <= currentTime && end >= currentTime) {
-            if (this._bufferStart !== start ||
-                this._bufferEnd   !== end) {
-              const perLeft = (this._timeToPer(start) - 1);
-              const scaleX = (this._timeToPer(width) + 2) / 100;
-              cssUtil.setProps(
-                [bufferRange, '--buffer-range-left', cssUtil.percent(perLeft)],
-                [bufferRange, '--buffer-range-scale', scaleX]
-              );
-              this._bufferStart = start;
-              this._bufferEnd   = end;
+        const bufferRange = this._bufferRange;
+        if (!range || !range.length || !this._duration) {
+            return;
+        }
+        for (let i = 0, len = range.length; i < len; i++) {
+            try {
+                const start = range.start(i);
+                const end = range.end(i);
+                const width = end - start;
+                if (start <= currentTime && end >= currentTime) {
+                    if (this._bufferStart !== start ||
+                        this._bufferEnd !== end) {
+                        const perLeft = (this._timeToPer(start) - 1);
+                        const scaleX = (this._timeToPer(width) + 2) / 100;
+                        cssUtil.setProps([bufferRange, '--buffer-range-left', cssUtil.percent(perLeft)], [bufferRange, '--buffer-range-scale', scaleX]);
+                        this._bufferStart = start;
+                        this._bufferEnd = end;
+                    }
+                    break;
+                }
             }
-            break;
-          }
-        } catch (e) {}
-      }
+            catch (e) { }
+        }
     }
     resetBufferedRange() {
-      this._bufferStart = 0;
-      this._bufferEnd = 0;
-      cssUtil.setProps([this._bufferRange, '--buffer-range-scale', 0]);
+        this._bufferStart = 0;
+        this._bufferEnd = 0;
+        cssUtil.setProps([this._bufferRange, '--buffer-range-scale', 0]);
     }
     _hideMenu() {
-      document.body.focus();
+        document.body.focus();
     }
-  }
-
-  VideoControlBar.BASE_HEIGHT = CONSTANT.CONTROL_BAR_HEIGHT;
-  VideoControlBar.BASE_SEEKBAR_HEIGHT = 10;
-
+}
+VideoControlBar.BASE_HEIGHT = CONSTANT.CONTROL_BAR_HEIGHT;
+VideoControlBar.BASE_SEEKBAR_HEIGHT = 10;
 util.addStyle(`
   .videoControlBar {
     position: fixed;
@@ -1120,6 +1097,24 @@ util.addStyle(`
     margin-right: 0;
   }
 
+  /* Task947: long configured key combinations must not escape a narrow player.
+   * Keep the existing tooltip anchor on normal screens; center only the text
+   * tooltip (not the button or submenu) across the control bar when narrow. */
+  .videoControlBar .playbackRateMenu .tooltip {
+    width: max-content;
+    max-width: min(90vw, 360px);
+    white-space: normal;
+    text-align: center;
+  }
+  @media (max-width: 560px) {
+    .videoControlBar .playbackRateMenu .tooltip {
+      position: fixed;
+      left: 50%;
+      top: auto;
+      bottom: 40px;
+      transform: translateX(-50%);
+    }
+  }
 
   .playbackRateSelectMenu {
     width: 180px;
@@ -1212,6 +1207,33 @@ util.addStyle(`
 
   .videoControlBar .volumeControl {
     display: inline-block;
+    position: relative;
+  }
+  /* Task939: show separate configured volume up/down keys. Keep the hint
+     out of the input hit area and the control bar's layout. */
+  .videoControlBar .volumeControl .tooltip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(90vw, 360px);
+    padding: 2px 5px;
+    font-size: 12px;
+    line-height: 16px;
+    text-align: center;
+    white-space: normal;
+    color: #111;
+    background: #fffbd2;
+    border: 1px solid #000;
+    pointer-events: none;
+  }
+  .is-mouseMoving .videoControlBar .volumeControl:hover .tooltip,
+  .videoControlBar .volumeControl:focus-within .tooltip {
+    display: block;
   }
   .videoControlBar .volumeRange {
     width: 64px;
@@ -1294,11 +1316,15 @@ util.addStyle(`
     height: 100%;
     fill: currentColor;
   }
+  .notificationHistorySwitch,
   .commentHistorySwitch { border: 0; padding: 0; background: transparent; }
   /* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
      while preserving focus-within suppression for existing popup-menu containers. */
+  .videoControlBar .notificationHistorySwitch:focus-within,
   .videoControlBar .commentHistorySwitch:focus-within { pointer-events: auto; }
+  .notificationHistorySwitch:focus-visible,
   .commentHistorySwitch:focus-visible { outline: 2px solid var(--enabled-button-color, #9cf); outline-offset: -2px; }
+  .notificationHistorySwitch:focus-visible .tooltip,
   .commentHistorySwitch:focus-visible .tooltip { display: block; }
   .screenFilterSwitch.is-active {
     color: var(--enabled-button-color);
@@ -1486,7 +1512,7 @@ util.addStyle(`
   }
 
 
-`, {className: 'videoControlBar'});
+`, { className: 'videoControlBar' });
 util.addStyle(`
   .videoControlBar {
     width: 100% !important; /* 100vwだと縦スクロールバーと被る */
@@ -1526,9 +1552,9 @@ util.addStyle(`
         is-mouseMoving（400ms）はホバーメニュー等、他のUI要素と共有の
         タイミングのため変更できず、コントロールバーだけをもっと長く
         （3000ms）表示させたいという要望に応えるため専用化した。
-        一時停止時の一時再表示（_onVideoPause）も同じis-controlBarActiveと
-        同じdebounceインスタンスを使っているため、「マウスを外した時に
-        消えるまでの時間」と常に一致する。 */
+        Task936では一時停止時の再表示を設定可能（小・全画面は既定OFF）にした。
+        ONのときはマウス移動と同じ自動非表示タイマーを使い、秒数は
+        小・全画面で独立して設定できる（Task938の分類整理）。 */
   .volumeChanging .videoControlBar,
   .is-controlBarActive .videoControlBar,
   .videoControlBar.is-dragging,
@@ -1536,7 +1562,7 @@ util.addStyle(`
     opacity: 1;
     background: #000;
   }
-`, {className: 'screenMode for-popup videoControlBar', disabled: true});
+`, { className: 'screenMode for-popup videoControlBar', disabled: true });
 util.addStyle(`
   body .videoControlBar {
     position: absolute !important; /* firefoxのバグ対策 */
@@ -1559,9 +1585,9 @@ util.addStyle(`
         is-mouseMoving（400ms）はホバーメニュー等、他のUI要素と共有の
         タイミングのため変更できず、コントロールバーだけをもっと長く
         （3000ms）表示させたいという要望に応えるため専用化した。
-        一時停止時の一時再表示（_onVideoPause）も同じis-controlBarActiveと
-        同じdebounceインスタンスを使っているため、「マウスを外した時に
-        消えるまでの時間」と常に一致する。 */
+        Task936では一時停止時の再表示を設定可能（小・全画面は既定OFF）にした。
+        ONのときはマウス移動と同じ自動非表示タイマーを使い、秒数は
+        小・全画面で独立して設定できる（Task938の分類整理）。 */
   .volumeChanging .videoControlBar,
   .is-controlBarActive .videoControlBar,
   .videoControlBar.is-dragging,
@@ -1611,7 +1637,7 @@ util.addStyle(`
     outline: none;
   }
 
-`, {className: 'screenMode for-full videoControlBar', disabled: true});
+`, { className: 'screenMode for-full videoControlBar', disabled: true });
 util.addStyle(`
   .screenModeSelectMenu {
     display: none;
@@ -1659,10 +1685,11 @@ util.addStyle(`
     z-index: 320;
   }
 
-  /* Issue #3 / Task935: The transparent right-control wrapper covers the end
-     of the fullscreen seek range. Keep Task101's z-index and real buttons,
-     but let empty wrapper pixels pass mouse input through to the seekbar.
-     Low-specificity button opt-in preserves focus/menu/disabled overrides. */
+  /* Issue #3 / Task951: let the transparent right-controls wrapper and its
+     scaling element pass the seekbar mouse input through. Real buttons retain
+     their z-index:310/320 and their own click/focus/child-menu behavior.
+     Keep this rule in the same fullscreen stylesheet as the seekbar geometry;
+     it must never depend on a separately initialized global CSS module. */
   .videoControlBar .controlItemContainer.right,
   .videoControlBar .controlItemContainer.right > .scalingUI {
     pointer-events: none;
@@ -1671,9 +1698,8 @@ util.addStyle(`
     pointer-events: auto;
   }
 
-`, {className: 'screenMode for-screen-full videoControlBar', disabled: true});
-
-  VideoControlBar.__tpl__ = (`
+`, { className: 'screenMode for-screen-full videoControlBar', disabled: true });
+VideoControlBar.__tpl__ = (`
     <div class="videoControlBar" data-command="nop">
 
       <div class="seekBarContainer">
@@ -1695,6 +1721,12 @@ util.addStyle(`
       <div class="controlItemContainer left">
         <div class="scalingUI">
           <div class="ZenzaWatchVer" data-env="${ZenzaWatch.env}" title="build: ${ZenzaWatch.build || '-'}">ver ${ZenzaWatch.version}${ZenzaWatch.env === 'DEV' ? '(Dev)' : ''}</div>
+          <span class="addonMenuContainer"></span>
+          <button type="button" class="notificationHistorySwitch controlButton" data-command="toggle-notificationHistory"
+            aria-label="通知履歴" aria-expanded="false" aria-controls="zenzaNotificationHistoryDock">
+            <span class="controlButtonInner" aria-hidden="true">☷</span>
+            <span class="tooltip">通知履歴</span>
+          </button>
         </div>
       </div>
       <div class="controlItemContainer center">
@@ -1723,9 +1755,10 @@ util.addStyle(`
             <div class="togglePlay controlButton playControl" data-command="togglePlay">
               <span class="pause"></span>
               <span class="play">▶</span>
+              <span class="tooltip">再生・一時停止</span>
             </div>
 
-            <div class="playbackRateMenu controlButton" tabindex="-1" data-has-submenu="1">
+            <div class="playbackRateMenu controlButton" tabindex="-1" data-has-submenu="1" data-shortcut-hint="speed">
               <div class="controlButtonInner"></div>
               <div class="tooltip">再生速度</div>
               <div class="playbackRateSelectMenu zenzaPopupMenu zenzaSubMenu">
@@ -1756,13 +1789,14 @@ util.addStyle(`
             </div>
 
             <div class="muteSwitch controlButton" data-command="toggle-mute">
-              <div class="tooltip">ミュート(M)</div>
+              <div class="tooltip">ミュート</div>
               <div class="menuButtonInner mute-off">&#x1F50A;</div>
               <div class="menuButtonInner mute-on">&#x1F507;</div>
             </div>
 
-            <div class="volumeControl">
-              <zenza-range-bar><input class="volumeRange" type="range" value="0.5" min="0.01" max="1" step="any"></zenza-range-bar>
+            <div class="volumeControl" data-shortcut-hint="volume">
+              <zenza-range-bar><input class="volumeRange" type="range" value="0.5" min="0.01" max="1" step="any" aria-label="音量調整"></zenza-range-bar>
+              <span class="tooltip">音量調整</span>
             </div>
 
             <div class="nextVideo controlButton playControl" data-command="playNextVideo" data-param="0">
@@ -1859,7 +1893,7 @@ util.addStyle(`
           </div>
 
           <div class="fullscreenSwitch controlButton" data-command="fullscreen">
-            <div class="tooltip">フルスクリーン(F)</div>
+            <div class="tooltip">フルスクリーン</div>
             <div class="controlButtonInner">
               <!-- TODO: YouTubeと同じにする -->
               <span class="toFull">&#8690;</span>
@@ -1877,337 +1911,342 @@ util.addStyle(`
 
     </div>
   `).trim();
-
 //@require HeatMapWorker
-
-  class CommentPreviewModel extends Emitter {
+class CommentPreviewModel extends Emitter {
     reset() {
-      this._chatReady = false;
-      this._vpos = -1;
-      this.emit('reset');
+        this._chatReady = false;
+        this._vpos = -1;
+        this.emit('reset');
     }
     set chatList(chatList) {
-      const list = chatList
-        .top
-        .concat(chatList.naka, chatList.bottom)
-        .sort((a, b) => a.vpos - b.vpos);
-
-      this._chatList = list;
-      this._chatReady = true;
-      this.update();
+        const list = chatList
+            .top
+            .concat(chatList.naka, chatList.bottom)
+            .sort((a, b) => a.vpos - b.vpos);
+        this._chatList = list;
+        this._chatReady = true;
+        this.update();
     }
     get chatList() {
-      return this._chatList || [];
+        return this._chatList || [];
     }
     set currentTime(sec) {
-      this.vpos = sec * 100;
+        this.vpos = sec * 100;
     }
     set vpos(vpos) {
-      if (this._vpos !== vpos) {
-        this._vpos = vpos;
-        this.emit('vpos', vpos);
-      }
+        if (this._vpos !== vpos) {
+            this._vpos = vpos;
+            this.emit('vpos', vpos);
+        }
     }
     get currentIndex() {
-      if (this._vpos < 0 || !this._chatReady) {
-        return -1;
-      }
-      return this.getVposIndex(this._vpos);
+        if (this._vpos < 0 || !this._chatReady) {
+            return -1;
+        }
+        return this.getVposIndex(this._vpos);
     }
     getVposIndex(vpos) {
-      // chatList setter already sorts by vpos. The old reverse scan was O(N)
-      // per mousemove (twice for each CommentPreviewView._onVpos).
-      const list = this._chatList;
-      if (!list || !list.length) { return -1; }
-      const threshold = vpos - 400;
-      let low = 0, high = list.length;
-      while (low < high) {
-        const middle = low + Math.floor((high - low) / 2);
-        if (list[middle].vpos <= threshold) { low = middle + 1; }
-        else { high = middle; }
-      }
-      // The original returns -1 when no item satisfies vpos<=threshold.
-      return low > 0 ? low : -1;
+        // chatList setter already sorts by vpos. The old reverse scan was O(N)
+        // per mousemove (twice for each CommentPreviewView._onVpos).
+        const list = this._chatList;
+        if (!list || !list.length) {
+            return -1;
+        }
+        const threshold = vpos - 400;
+        let low = 0, high = list.length;
+        while (low < high) {
+            const middle = low + Math.floor((high - low) / 2);
+            if (list[middle].vpos <= threshold) {
+                low = middle + 1;
+            }
+            else {
+                high = middle;
+            }
+        }
+        // The original returns -1 when no item satisfies vpos<=threshold.
+        return low > 0 ? low : -1;
     }
     get currentChatList() {
-      if (this._vpos < 0 || !this._chatReady) {
-        return [];
-      }
-      return this.getItemByVpos(this._vpos);
+        if (this._vpos < 0 || !this._chatReady) {
+            return [];
+        }
+        return this.getItemByVpos(this._vpos);
     }
     getItemByVpos(vpos) {
-      const list = this._chatList;
-      const result = [];
-      for (let i = 0, len = list.length; i < len; i++) {
-        const chat = list[i], cv = chat.vpos, diff = vpos - cv;
-        if (diff >= -100 && diff <= 400) {
-          result.push(chat);
+        const list = this._chatList;
+        const result = [];
+        for (let i = 0, len = list.length; i < len; i++) {
+            const chat = list[i], cv = chat.vpos, diff = vpos - cv;
+            if (diff >= -100 && diff <= 400) {
+                result.push(chat);
+            }
         }
-      }
-      return result;
+        return result;
     }
     getItemByUniqNo(uniqNo) {
-      return this._chatList.find(chat => chat.uniqNo === uniqNo);
+        return this._chatList.find((chat) => chat.uniqNo === uniqNo);
     }
     update() {
-      this.emit('update');
+        this.emit('update');
     }
-  }
-
-  class CommentPreviewView {
+}
+class CommentPreviewView {
     constructor(params) {
-      const model = this._model = params.model;
-      this._$parent = params.$container;
-
-      this._disposed = false;
-      this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
-      this._inviewTable = new Map;
-      this._chatList = [];
-      this._initializeDom(this._$parent);
-
-      this._subscriptions = [
-        ['reset', this._onReset.bind(this)],
-        ['update', _.debounce(this._onUpdate.bind(this), 10)],
-        ['vpos', this._onVpos.bind(this)]
-      ];
-      for (const [event, handler] of this._subscriptions) { model.on(event, handler); }
-      this._mode = 'hover';
-      this._view.dataset.commentPreviewMode = 'hover';
-
-      this._left = 0;
-      this.update = _.throttle(this.update.bind(this), 200);
-      this.applyView = throttle.raf(this.applyView.bind(this));
+        const model = this._model = params.model;
+        this._$parent = params.$container;
+        this._disposed = false;
+        this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
+        this._inviewTable = new Map;
+        this._chatList = [];
+        this._initializeDom(this._$parent);
+        this._subscriptions = [
+            ['reset', this._onReset.bind(this)],
+            ['update', _.debounce(this._onUpdate.bind(this), 10)],
+            ['vpos', this._onVpos.bind(this)]
+        ];
+        for (const [event, handler] of this._subscriptions) {
+            model.on(event, handler);
+        }
+        this._mode = 'hover';
+        this._view.dataset.commentPreviewMode = 'hover';
+        this._left = 0;
+        this.update = _.throttle(this.update.bind(this), 200);
+        this.applyView = throttle.raf(this.applyView.bind(this));
     }
     _initializeDom($parent) {
-      cssUtil.registerProps(
-        {name: '--buffer-range-left', syntax: '<percentage>', initialValue: '0%',inherits: false},
-        {name: '--buffer-range-scale', syntax: '<number>', initialValue: 0, inherits: false},
-      );
-      const $view = util.$.html(CommentPreviewView.__tpl__);
-      const view = this._view = $view[0];
-      this._list = view.querySelector('.listContainer');
-      this._domListeners = [
-        ['click', this._onClick.bind(this)],
-        ['wheel', e => e.stopPropagation(), {passive: true}],
-        ['scroll', _.throttle(this._onScroll.bind(this), 50, {trailing: false}), {passive: true}]
-      ];
-      for (const [event, handler, options] of this._domListeners) {
-        view.addEventListener(event, handler, options);
-      }
-
-      $parent.append($view);
+        cssUtil.registerProps({ name: '--buffer-range-left', syntax: '<percentage>', initialValue: '0%', inherits: false }, { name: '--buffer-range-scale', syntax: '<number>', initialValue: 0, inherits: false });
+        const $view = util.$.html(CommentPreviewView.__tpl__);
+        const view = this._view = $view[0];
+        this._list = view.querySelector('.listContainer');
+        this._domListeners = [
+            ['click', this._onClick.bind(this)],
+            ['wheel', (e) => e.stopPropagation(), { passive: true }],
+            ['scroll', _.throttle(this._onScroll.bind(this), 50, { trailing: false }), { passive: true }]
+        ];
+        for (const [event, handler, options] of this._domListeners) {
+            view.addEventListener(event, handler, options);
+        }
+        $parent.append($view);
     }
     set mode(v) {
-      if (this._disposed) { return; }
-      v = v === 'list' ? 'list' : 'hover';
-      // A mode belongs to one view. UI02 has two native views at once.
-      this._view.dataset.commentPreviewMode = v;
-      const previous = this._mode;
-      this._mode = v;
-      if (previous !== v && this._chatList?.length) {
-        // Switching hover/list changes the virtual row window. Recalculate
-        // immediately on the existing seek position; users must not need
-        // another mouse movement just to see their comments.
-        const vpos = this._model?._vpos;
-        if (Number.isFinite(vpos) && vpos >= 0) {
-          this._onVpos(vpos);
-        } else if (v === 'list') {
-          this._refreshInviewElements(0);
+        if (this._disposed) {
+            return;
         }
-      }
+        v = v === 'list' ? 'list' : 'hover';
+        // A mode belongs to one view. UI02 has two native views at once.
+        this._view.dataset.commentPreviewMode = v;
+        const previous = this._mode;
+        this._mode = v;
+        if (previous !== v && this._chatList?.length) {
+            // Switching hover/list changes the virtual row window. Recalculate
+            // immediately on the existing seek position; users must not need
+            // another mouse movement just to see their comments.
+            const vpos = this._model?._vpos;
+            if (Number.isFinite(vpos) && vpos >= 0) {
+                this._onVpos(vpos);
+            }
+            else if (v === 'list') {
+                this._refreshInviewElements(0);
+            }
+        }
     }
     _onClick(e) {
-      e.stopPropagation();
-      const target = e.target.closest('[data-command]');
-      const view = this._view;
-      const command = target ? target.dataset.command : '';
-      const nicoChatElement = e.target.closest('.nicoChat');
-      if (!nicoChatElement) { return; }
-      const uniqNo = nicoChatElement.dataset.nicochatUniqNo;
-      const nicoChat  = this._model.getItemByUniqNo(uniqNo);
-
-      if (command && nicoChat) {
-        view.classList.add('is-updating');
-
-        window.clearTimeout(this._updatingTimer);
-        this._updatingTimer = window.setTimeout(() => {
-          if (!this._disposed) { view.classList.remove('is-updating'); }
-        }, 3000);
-
-        switch (command) {
-          case 'addUserIdFilter':
-            util.dispatchCommand(e.target, command, nicoChat.userId);
-            break;
-          case 'addWordFilter':
-            util.dispatchCommand(e.target, command, nicoChat.text);
-            break;
-          case 'addCommandFilter':
-            util.dispatchCommand(e.target, command, nicoChat.cmd);
-            break;
+        e.stopPropagation();
+        const target = e.target.closest('[data-command]');
+        const view = this._view;
+        const command = target ? target.dataset.command : '';
+        const nicoChatElement = e.target.closest('.nicoChat');
+        if (!nicoChatElement) {
+            return;
         }
-        return;
-      }
-      const vpos = nicoChatElement.dataset.vpos;
-      if (vpos !== undefined) {
-        util.dispatchCommand(e.target, 'seek', vpos / 100);
-      }
+        const uniqNo = nicoChatElement.dataset.nicochatUniqNo;
+        const nicoChat = this._model.getItemByUniqNo(uniqNo);
+        if (command && nicoChat) {
+            view.classList.add('is-updating');
+            window.clearTimeout(this._updatingTimer);
+            this._updatingTimer = window.setTimeout(() => {
+                if (!this._disposed) {
+                    view.classList.remove('is-updating');
+                }
+            }, 3000);
+            switch (command) {
+                case 'addUserIdFilter':
+                    util.dispatchCommand(e.target, command, nicoChat.userId);
+                    break;
+                case 'addWordFilter':
+                    util.dispatchCommand(e.target, command, nicoChat.text);
+                    break;
+                case 'addCommandFilter':
+                    util.dispatchCommand(e.target, command, nicoChat.cmd);
+                    break;
+            }
+            return;
+        }
+        const vpos = nicoChatElement.dataset.vpos;
+        if (vpos !== undefined) {
+            util.dispatchCommand(e.target, 'seek', vpos / 100);
+        }
     }
     _onUpdate() {
-      // reset retains the model cache until the next video's comments arrive.
-      // A new list or a pending debounce must not hydrate that stale cache.
-      if (this._disposed || this._model._chatReady === false) { return; }
-      this.updateList();
-      // Comments can arrive after the mouse stops on the seekbar. Previously
-      // updateList only resized the virtual list; rows stayed empty until the
-      // next vpos event (another mouse move).
-      const vpos = this._model && this._model._vpos;
-      if (Number.isFinite(vpos) && vpos >= 0) {
-        this._onVpos(vpos);
-      } else if (this._mode === 'list') {
-        this._refreshInviewElements(0);
-      }
+        // reset retains the model cache until the next video's comments arrive.
+        // A new list or a pending debounce must not hydrate that stale cache.
+        if (this._disposed || this._model._chatReady === false) {
+            return;
+        }
+        this.updateList();
+        // Comments can arrive after the mouse stops on the seekbar. Previously
+        // updateList only resized the virtual list; rows stayed empty until the
+        // next vpos event (another mouse move).
+        const vpos = this._model && this._model._vpos;
+        if (Number.isFinite(vpos) && vpos >= 0) {
+            this._onVpos(vpos);
+        }
+        else if (this._mode === 'list') {
+            this._refreshInviewElements(0);
+        }
     }
     _onVpos(vpos) {
-      if (this._disposed) { return; }
-      const itemHeight = CommentPreviewView.ITEM_HEIGHT;
-      const index = this._currentStartIndex = Math.max(0, this._model.currentIndex);
-      this._currentEndIndex = Math.max(0, this._model.getVposIndex(vpos + 400));
-      this._scrollTop = itemHeight * index;
-      this._currentTime = vpos / 100;
-      this._refreshInviewElements(this._scrollTop);
-      this.applyView();
+        if (this._disposed) {
+            return;
+        }
+        const itemHeight = CommentPreviewView.ITEM_HEIGHT;
+        const index = this._currentStartIndex = Math.max(0, this._model.currentIndex);
+        this._currentEndIndex = Math.max(0, this._model.getVposIndex(vpos + 400));
+        this._scrollTop = itemHeight * index;
+        this._currentTime = vpos / 100;
+        this._refreshInviewElements(this._scrollTop);
+        this.applyView();
     }
     _onResize() {
-      this._refreshInviewElements();
+        this._refreshInviewElements();
     }
     _onScroll() {
-      this._scrollTop = -1;
-      this._refreshInviewElements();
+        this._scrollTop = -1;
+        this._refreshInviewElements();
     }
     _onReset() {
-      this._list.textContent = '';
-      this._inviewTable.clear();
-      this._scrollTop = 0;
-      this._newListElements = null;
-      this._chatList = [];
+        this._list.textContent = '';
+        this._inviewTable.clear();
+        this._scrollTop = 0;
+        this._newListElements = null;
+        this._chatList = [];
     }
     updateList() {
-      const chatList = this._chatList = this._model.chatList;
-      if (!chatList.length) {
+        const chatList = this._chatList = this._model.chatList;
+        if (!chatList.length) {
+            this._isListUpdated = false;
+            return;
+        }
+        const itemHeight = CommentPreviewView.ITEM_HEIGHT;
+        this._list.style.height = `${(chatList.length + 2) * itemHeight}px`;
         this._isListUpdated = false;
-        return;
-      }
-
-      const itemHeight = CommentPreviewView.ITEM_HEIGHT;
-
-      this._list.style.height = `${(chatList.length + 2) * itemHeight}px`;
-      this._isListUpdated = false;
     }
     _refreshInviewElements(scrollTop) {
-      if (!this._view) { return; }
-      const itemHeight = CommentPreviewView.ITEM_HEIGHT;
-
-      scrollTop = _.isNumber(scrollTop) ? scrollTop : this._view.scrollTop;
-
-      const viewHeight = CommentPreviewView.MAX_HEIGHT;
-      const viewBottom = scrollTop + viewHeight;
-      const chatList = this._chatList;
-      if (!chatList || chatList.length < 1) { return; }
-      const startIndex =
-        this._mode === 'list' ?
-          Math.max(0, Math.floor(scrollTop / itemHeight) - 5) :
-          this._currentStartIndex;
-          const endIndex   =
-        this._mode === 'list' ?
-          Math.min(chatList.length, Math.floor(viewBottom / itemHeight) + 5) :
-          Math.min(this._currentEndIndex, this._currentStartIndex + 15);
-
-      const newItems = [], inviewTable = this._inviewTable;
-      for (let i = startIndex; i < endIndex; i++) {
-        const chat = chatList[i];
-        if (inviewTable.has(i) || !chat) { continue; }
-        const listItem = CommentPreviewChatItem.create(chat, i);
-        listItem.id = 'commentPreview' + this._viewId + '-item' + i;
-        newItems.push(listItem);
-        inviewTable.set(i, listItem);
-      }
-
-      // Remove stale virtual rows even when the new range introduces no new
-      // items; otherwise old comments can remain visible after navigation.
-      for (const i of inviewTable.keys()) {
-        if (i >= startIndex && i < endIndex) { continue; }
-        inviewTable.get(i).remove();
-        inviewTable.delete(i);
-      }
-      if (newItems.length < 1) { return; }
-
-      this._newListElements = this._newListElements || document.createDocumentFragment();
-      this._newListElements.append(...newItems);
-
-      this.applyView();
+        if (!this._view) {
+            return;
+        }
+        const itemHeight = CommentPreviewView.ITEM_HEIGHT;
+        scrollTop = _.isNumber(scrollTop) ? scrollTop : this._view.scrollTop;
+        const viewHeight = CommentPreviewView.MAX_HEIGHT;
+        const viewBottom = scrollTop + viewHeight;
+        const chatList = this._chatList;
+        if (!chatList || chatList.length < 1) {
+            return;
+        }
+        const startIndex = this._mode === 'list' ?
+            Math.max(0, Math.floor(scrollTop / itemHeight) - 5) :
+            this._currentStartIndex;
+        const endIndex = this._mode === 'list' ?
+            Math.min(chatList.length, Math.floor(viewBottom / itemHeight) + 5) :
+            Math.min(this._currentEndIndex, this._currentStartIndex + 15);
+        const newItems = [], inviewTable = this._inviewTable;
+        for (let i = startIndex; i < endIndex; i++) {
+            const chat = chatList[i];
+            if (inviewTable.has(i) || !chat) {
+                continue;
+            }
+            const listItem = CommentPreviewChatItem.create(chat, i);
+            listItem.id = 'commentPreview' + this._viewId + '-item' + i;
+            newItems.push(listItem);
+            inviewTable.set(i, listItem);
+        }
+        // Remove stale virtual rows even when the new range introduces no new
+        // items; otherwise old comments can remain visible after navigation.
+        for (const i of inviewTable.keys()) {
+            if (i >= startIndex && i < endIndex) {
+                continue;
+            }
+            inviewTable.get(i).remove();
+            inviewTable.delete(i);
+        }
+        if (newItems.length < 1) {
+            return;
+        }
+        this._newListElements = this._newListElements || document.createDocumentFragment();
+        this._newListElements.append(...newItems);
+        this.applyView();
     }
     get isEmpty() {
-      return this._chatList.length < 1;
+        return this._chatList.length < 1;
     }
     update(left) {
-      if (this._disposed) { return; }
-      if (this._isListUpdated) {
-        this.updateList();
-      }
-      if (this.isEmpty) {
-        return;
-      }
-      const width = this._mode === 'list' ?
-        CommentPreviewView.WIDTH : CommentPreviewView.HOVER_WIDTH;
-      // Resize and mode switches must use the current viewport and preview width.
-      const containerWidth = global.innerWidth;
-      const maxLeft = Math.max(0, containerWidth - width);
-      left = Math.min(Math.max(0, left - width / 2), maxLeft);
-      this._left = left;
-      this.applyView();
+        if (this._disposed) {
+            return;
+        }
+        if (this._isListUpdated) {
+            this.updateList();
+        }
+        if (this.isEmpty) {
+            return;
+        }
+        const width = this._mode === 'list' ?
+            CommentPreviewView.WIDTH : CommentPreviewView.HOVER_WIDTH;
+        // Resize and mode switches must use the current viewport and preview width.
+        const containerWidth = global.innerWidth;
+        const maxLeft = Math.max(0, containerWidth - width);
+        left = Math.min(Math.max(0, left - width / 2), maxLeft);
+        this._left = left;
+        this.applyView();
     }
     applyView() {
-      if (this._disposed) { return; }
-      const view = this._view;
-      cssUtil.setProps(
-        [view, '--current-time', cssUtil.s(this._currentTime)],
-        [view, '--scroll-top', cssUtil.px(this._scrollTop)],
-        [view, '--trans-x-pp', cssUtil.px(this._left)]
-      );
-      if (this._newListElements && this._newListElements.childElementCount) {
-        this._list.append(this._newListElements);
-      }
-      if (this._scrollTop > 0 && this._mode === 'list') {
-        this._view.scrollTop = this._scrollTop;
-        this._scrollTop = -1;
-      }
-
+        if (this._disposed) {
+            return;
+        }
+        const view = this._view;
+        cssUtil.setProps([view, '--current-time', cssUtil.s(this._currentTime)], [view, '--scroll-top', cssUtil.px(this._scrollTop)], [view, '--trans-x-pp', cssUtil.px(this._left)]);
+        if (this._newListElements && this._newListElements.childElementCount) {
+            this._list.append(this._newListElements);
+        }
+        if (this._scrollTop > 0 && this._mode === 'list') {
+            this._view.scrollTop = this._scrollTop;
+            this._scrollTop = -1;
+        }
     }
     hide() {
     }
     dispose() {
-      if (this._disposed) { return; }
-      this._disposed = true;
-      for (const [event, handler] of this._subscriptions || []) {
-        this._model.off(event, handler);
-        handler.cancel?.();
-      }
-      for (const [event, handler, options] of this._domListeners || []) {
-        this._view.removeEventListener(event, handler, options);
-        handler.cancel?.();
-      }
-      this.update.cancel?.();
-      this.applyView.cancel?.();
-      window.clearTimeout(this._updatingTimer);
-      this._onReset();
-      this._view.remove();
+        if (this._disposed) {
+            return;
+        }
+        this._disposed = true;
+        for (const [event, handler] of this._subscriptions || []) {
+            this._model.off(event, handler);
+            handler.cancel?.();
+        }
+        for (const [event, handler, options] of this._domListeners || []) {
+            this._view.removeEventListener(event, handler, options);
+            handler.cancel?.();
+        }
+        this.update.cancel?.();
+        this.applyView.cancel?.();
+        window.clearTimeout(this._updatingTimer);
+        this._onReset();
+        this._view.remove();
     }
-  }
-
-
-  class CommentPreviewChatItem {
+}
+class CommentPreviewChatItem {
     static get html() {
-      return `
+        return `
        <li class="nicoChat">
          <span class="vposTime"></span>
          <span class="text"></span>
@@ -2218,57 +2257,53 @@ util.addStyle(`
        </li>
       `.trim();
     }
-
     static get template() {
-      if (!this._template) {
-        const t = document.createElement('template');
-        t.id = `${this.name}_${Date.now()}`;
-        t.innerHTML = this.html;
-        const content = t.content;
-        this._template = {
-          clone: () => document.importNode(t.content, true),
-          chat: content.querySelector('.nicoChat'),
-          time: content.querySelector('.vposTime'),
-          text: t.content.querySelector('.text')
-        };
-      }
-      return this._template;
+        if (!this._template) {
+            const t = document.createElement('template');
+            t.id = `${this.name}_${Date.now()}`;
+            t.innerHTML = this.html;
+            const content = t.content;
+            this._template = {
+                clone: () => document.importNode(t.content, true),
+                chat: content.querySelector('.nicoChat'),
+                time: content.querySelector('.vposTime'),
+                text: t.content.querySelector('.text')
+            };
+        }
+        return this._template;
     }
-
     /**
      * @param {NicoChatViewModel} chat
      */
     static create(chat, idx) {
-      const itemHeight = CommentPreviewView.ITEM_HEIGHT;
-      const text = chat.text;
-      const date = (new Date(chat.date * 1000)).toLocaleString();
-      const vpos = chat.vpos;
-      const no = chat.no;
-      const uniqNo = chat.uniqNo;
-      const oe = idx % 2 === 0 ? 'even' : 'odd';
-      const title = `${no} : 投稿日 ${date}\nID:${chat.userId}\n${text}\n`;
-      const color = chat.color || '#fff';
-      const shadow = color === '#fff' ? '' : `text-shadow: 0 0 1px ${color};`;
-
-      const vposToTime = vpos => util.secToTime(Math.floor(vpos / 100));
-      const t = this.template;
-      t.chat.className = `nicoChat fork${chat.fork} ${oe}`;
-      t.chat.id = `commentPreviewItem${idx}`;
-      t.chat.dataset.vpos = vpos;
-      t.chat.dataset.nicochatUniqNo = uniqNo;
-      t.time.textContent = `${vposToTime(vpos)}: `;
-      t.text.title = title;
-      t.text.style = shadow;
-      t.text.textContent = text;
-      t.chat.style.cssText = `
+        const itemHeight = CommentPreviewView.ITEM_HEIGHT;
+        const text = chat.text;
+        const date = (new Date(chat.date * 1000)).toLocaleString();
+        const vpos = chat.vpos;
+        const no = chat.no;
+        const uniqNo = chat.uniqNo;
+        const oe = idx % 2 === 0 ? 'even' : 'odd';
+        const title = `${no} : 投稿日 ${date}\nID:${chat.userId}\n${text}\n`;
+        const color = chat.color || '#fff';
+        const shadow = color === '#fff' ? '' : `text-shadow: 0 0 1px ${color};`;
+        const vposToTime = (vpos) => util.secToTime(Math.floor(vpos / 100));
+        const t = this.template;
+        t.chat.className = `nicoChat fork${chat.fork} ${oe}`;
+        t.chat.id = `commentPreviewItem${idx}`;
+        t.chat.dataset.vpos = vpos;
+        t.chat.dataset.nicochatUniqNo = uniqNo;
+        t.time.textContent = `${vposToTime(vpos)}: `;
+        t.text.title = title;
+        t.text.style = shadow;
+        t.text.textContent = text;
+        t.chat.style.cssText = `
         top: ${idx * itemHeight}px;
         --duration: ${chat.duration}s;
         --vpos-time: ${chat.vpos / 100}s;
       `;
-      return t.clone().firstElementChild;
+        return t.clone().firstElementChild;
     }
-  }
-
+}
 CommentPreviewView.MAX_HEIGHT = 200;
 CommentPreviewView.WIDTH = 350;
 CommentPreviewView.HOVER_WIDTH = 180;
@@ -2278,7 +2313,6 @@ CommentPreviewView.__tpl__ = (`
     <div class="listContainer"></div>
   </div>
   `).trim();
-
 util.addStyle(`
   .zenzaCommentPreview {
     display: none;
@@ -2302,8 +2336,7 @@ util.addStyle(`
     display: block;
   }
 
-`, {className: 'commentPreview'});
-
+`, { className: 'commentPreview' });
 util.addStyle(`
   .zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
     border-bottom: 24px solid transparent;
@@ -2422,8 +2455,7 @@ util.addStyle(`
   .zenzaScreenMode_small .zenzaCommentPreview:where([data-comment-preview-mode="list"]) {
     background: rgba(0, 0, 0, 0.9);
   }
-`, {className: 'commentPreview list'});
-
+`, { className: 'commentPreview list' });
 util.addStyle(`
   .zenzaCommentPreview:where([data-comment-preview-mode="hover"]) {
     bottom: 24px;
@@ -2490,196 +2522,185 @@ util.addStyle(`
     }
   }
 
-`, {className: 'commentPreview hover'});
-
-
-  class CommentPreview {
+`, { className: 'commentPreview hover' });
+class CommentPreview {
     constructor(params) {
-      this._model = new CommentPreviewModel({});
-      this._view = new CommentPreviewView({
-        model:      this._model,
-        $container: params.$container
-      });
-
-      this.reset();
+        this._model = new CommentPreviewModel({});
+        this._view = new CommentPreviewView({
+            model: this._model,
+            $container: params.$container
+        });
+        this.reset();
     }
     reset() {
-      this._model.reset();
-      this._view.hide();
+        this._model.reset();
+        this._view.hide();
     }
     set chatList(chatList) {
-      this._model.chatList = chatList;
+        this._model.chatList = chatList;
     }
     set currentTime(sec) {
-      this._model.currentTime = sec;
+        this._model.currentTime = sec;
     }
     update(left) {
-      this._view.update(left);
+        this._view.update(left);
     }
     hide() {
     }
     set mode(v) {
-      if (v === this._mode) { return; }
-      this._mode = v;
-      this._view.mode = this._twinList ? 'hover' : v;
+        if (v === this._mode) {
+            return;
+        }
+        this._mode = v;
+        this._view.mode = this._twinList ? 'hover' : v;
     }
     createListView(container) {
-      if (this._twinList) { return this._twinList; }
-      const view = new CommentPreviewView({
-        model: this._model, $container: util.$(container)
-      });
-      view.mode = 'list';
-      view._onUpdate();
-      this._view._onUpdate();
-      this._view.mode = 'hover';
-      let disposed = false;
-      const handle = {
-        element: view._view,
-        dispose: () => {
-          if (disposed) { return; }
-          disposed = true;
-          view.dispose();
-          if (this._twinList === handle) {
-            this._twinList = null;
-            this._view.mode = this._mode;
-          }
+        if (this._twinList) {
+            return this._twinList;
         }
-      };
-      this._twinList = handle;
-      return handle;
+        const view = new CommentPreviewView({
+            model: this._model, $container: util.$(container)
+        });
+        view.mode = 'list';
+        view._onUpdate();
+        this._view._onUpdate();
+        this._view.mode = 'hover';
+        let disposed = false;
+        const handle = {
+            element: view._view,
+            dispose: () => {
+                if (disposed) {
+                    return;
+                }
+                disposed = true;
+                view.dispose();
+                if (this._twinList === handle) {
+                    this._twinList = null;
+                    this._view.mode = this._mode;
+                }
+            }
+        };
+        this._twinList = handle;
+        return handle;
     }
     get mode() {
-      return this._mode;
+        return this._mode;
     }
-  }
-
-  class SeekBarToolTip {
+}
+class SeekBarToolTip {
     constructor(params) {
-      this._$container = params.$container;
-      this._storyboard = params.storyboard;
-      this._initializeDom(params.$container);
-
-      this._boundOnRepeat = this._onRepeat.bind(this);
-      this._boundOnMouseUp = this._onMouseUp.bind(this);
+        this._$container = params.$container;
+        this._storyboard = params.storyboard;
+        this._initializeDom(params.$container);
+        this._boundOnRepeat = this._onRepeat.bind(this);
+        this._boundOnMouseUp = this._onMouseUp.bind(this);
     }
     _initializeDom($container) {
-      util.addStyle(SeekBarToolTip.__css__);
-      const $view = this._$view = util.$.html(SeekBarToolTip.__tpl__);
-
-      this._currentTime = $view.find('.currentTime')[0];
-      this.currentTimeLabel = TextLabel.create({
-        container: this._currentTime,
-        name: 'currentTimeLabel',
-        text: '00:00',
-        style: {
-          widthPx: 50,
-          heightPx: 16,
-          fontFamily: 'monospace',
-          fontWeight: '',
-          fontSizePx: 12,
-          color: '#ccc'
-        }
-      });
-
-      $view
-        .on('mousedown',this._onMouseDown.bind(this))
-        .on('click', e => { e.stopPropagation(); e.preventDefault(); });
-
-      this._seekBarThumbnail = new SeekBarThumbnail({
-        storyboard: this._storyboard,
-        container: $view.find('.seekBarThumbnailContainer')[0]
-      });
-
-      $container.append($view);
+        util.addStyle(SeekBarToolTip.__css__);
+        const $view = this._$view = util.$.html(SeekBarToolTip.__tpl__);
+        this._currentTime = $view.find('.currentTime')[0];
+        this.currentTimeLabel = TextLabel.create({
+            container: this._currentTime,
+            name: 'currentTimeLabel',
+            text: '00:00',
+            style: {
+                widthPx: 50,
+                heightPx: 16,
+                fontFamily: 'monospace',
+                fontWeight: '',
+                fontSizePx: 12,
+                color: '#ccc'
+            }
+        });
+        $view
+            .on('mousedown', this._onMouseDown.bind(this))
+            .on('click', (e) => { e.stopPropagation(); e.preventDefault(); });
+        this._seekBarThumbnail = new SeekBarThumbnail({
+            storyboard: this._storyboard,
+            container: $view.find('.seekBarThumbnailContainer')[0]
+        });
+        $container.append($view);
     }
     _onMouseDown(e) {
-      e.stopPropagation();
-      const target = e.target.closest('[data-command]');
-      if (!target) {
-        return;
-      }
-      const {command, param, repeat} = target.dataset;
-      if (!command || target.getAttribute('aria-disabled') === 'true') { return; }
-
-      util.dispatchCommand(e.target, command, param);
-      if (repeat === 'on') {
-        this._beginRepeat(command, param);
-      }
+        e.stopPropagation();
+        const target = e.target.closest('[data-command]');
+        if (!target) {
+            return;
+        }
+        const { command, param, repeat } = target.dataset;
+        if (!command || target.getAttribute('aria-disabled') === 'true') {
+            return;
+        }
+        util.dispatchCommand(e.target, command, param);
+        if (repeat === 'on') {
+            this._beginRepeat(command, param);
+        }
     }
     _onMouseUp(e) {
-      e.preventDefault();
-      this._endRepeat();
+        e.preventDefault();
+        this._endRepeat();
     }
     _beginRepeat(command, param) {
-      this._repeatCommand = command;
-      this._repeatParam   = param;
-
-      util.$('body')
-        .on('mouseup.zenzaSeekbarToolTip', this._boundOnMouseUp);
-      this._$view
-        .on('mouseleave', this._boundOnMouseUp)
-        .on('mouseup', this._boundOnMouseUp);
-      if (this._repeatTimer) {
-        window.clearInterval(this._repeatTimer);
-      }
-      this._repeatTimer = window.setInterval(this._boundOnRepeat, 200);
-      this._isRepeating = true;
+        this._repeatCommand = command;
+        this._repeatParam = param;
+        util.$('body')
+            .on('mouseup.zenzaSeekbarToolTip', this._boundOnMouseUp);
+        this._$view
+            .on('mouseleave', this._boundOnMouseUp)
+            .on('mouseup', this._boundOnMouseUp);
+        if (this._repeatTimer) {
+            window.clearInterval(this._repeatTimer);
+        }
+        this._repeatTimer = window.setInterval(this._boundOnRepeat, 200);
+        this._isRepeating = true;
     }
     _endRepeat() {
-      this._isRepeating = false;
-      if (this._repeatTimer) {
-        window.clearInterval(this._repeatTimer);
-        this._repeatTimer = null;
-      }
-      util.$('body').off('mouseup.zenzaSeekbarToolTip');
-      this._$view.off('mouseleave').off('mouseup');
+        this._isRepeating = false;
+        if (this._repeatTimer) {
+            window.clearInterval(this._repeatTimer);
+            this._repeatTimer = null;
+        }
+        util.$('body').off('mouseup.zenzaSeekbarToolTip');
+        this._$view.off('mouseleave').off('mouseup');
     }
     _onRepeat() {
-      if (!this._isRepeating) {
-        this._endRepeat();
-        return;
-      }
-      util.dispatchCommand(this._$view[0], this._repeatCommand, this._repeatParam);
+        if (!this._isRepeating) {
+            this._endRepeat();
+            return;
+        }
+        util.dispatchCommand(this._$view[0], this._repeatCommand, this._repeatParam);
     }
     update(sec, left) {
-      const timeText = util.secToTime(sec);
-      if (this._timeText !== timeText) {
-        this._timeText = timeText;
-        this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
-      }
-
-      // Update on every mousemove, even within the same displayed second.
-      // Follow the pointer 1:1 in the middle; stop at the visible edges.
-      const container = this._$container[0];
-      const bounds = container.getBoundingClientRect();
-      const containerWidth = container.offsetWidth || bounds.width;
-      const scale = bounds.width && containerWidth ? bounds.width / containerWidth : 1;
-      const tooltipWidth = this._$view[0].offsetWidth;
-      const visibleLeft = Math.max(0, -bounds.left / scale);
-      const visibleRight = Math.max(visibleLeft,
-        Math.min(containerWidth, (window.innerWidth - bounds.left) / scale));
-      const visibleWidth = visibleRight - visibleLeft;
-      let tooltipLeft;
-
-      if (visibleWidth < tooltipWidth) {
-        // Very narrow players cannot contain the tooltip: center within the viewport.
-        const viewportLeft = -bounds.left / scale;
-        const viewportRight = Math.max(viewportLeft,
-          (window.innerWidth - bounds.left) / scale - tooltipWidth);
-        tooltipLeft = Math.max(viewportLeft,
-          Math.min(left - tooltipWidth / 2, viewportRight));
-      } else {
-        tooltipLeft = Math.max(visibleLeft,
-          Math.min(left - tooltipWidth / 2, visibleRight - tooltipWidth));
-      }
-
-      cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(tooltipLeft)]);
-      this._seekBarThumbnail.currentTime = sec;
+        const timeText = util.secToTime(sec);
+        if (this._timeText !== timeText) {
+            this._timeText = timeText;
+            this.currentTimeLabel && (this.currentTimeLabel.text = timeText);
+        }
+        // Update on every mousemove, even within the same displayed second.
+        // Follow the pointer 1:1 in the middle; stop at the visible edges.
+        const container = this._$container[0];
+        const bounds = container.getBoundingClientRect();
+        const containerWidth = container.offsetWidth || bounds.width;
+        const scale = bounds.width && containerWidth ? bounds.width / containerWidth : 1;
+        const tooltipWidth = this._$view[0].offsetWidth;
+        const visibleLeft = Math.max(0, -bounds.left / scale);
+        const visibleRight = Math.max(visibleLeft, Math.min(containerWidth, (window.innerWidth - bounds.left) / scale));
+        const visibleWidth = visibleRight - visibleLeft;
+        let tooltipLeft;
+        if (visibleWidth < tooltipWidth) {
+            // Very narrow players cannot contain the tooltip: center within the viewport.
+            const viewportLeft = -bounds.left / scale;
+            const viewportRight = Math.max(viewportLeft, (window.innerWidth - bounds.left) / scale - tooltipWidth);
+            tooltipLeft = Math.max(viewportLeft, Math.min(left - tooltipWidth / 2, viewportRight));
+        }
+        else {
+            tooltipLeft = Math.max(visibleLeft, Math.min(left - tooltipWidth / 2, visibleRight - tooltipWidth));
+        }
+        cssUtil.setProps([this._$view[0], '--trans-x-pp', cssUtil.px(tooltipLeft)]);
+        this._seekBarThumbnail.currentTime = sec;
     }
-  }
-
-
-  SeekBarToolTip.__css__ = (`
+}
+SeekBarToolTip.__css__ = (`
     .seekBarToolTip {
       position: absolute;
       display: inline-block;
@@ -2770,8 +2791,7 @@ util.addStyle(`
       bottom: 10px;
     }
   `).trim();
-
-  SeekBarToolTip.__tpl__ = (`
+SeekBarToolTip.__tpl__ = (`
     <div class="seekBarToolTip">
       <div class="seekBarThumbnailContainer"></div>
       <div class="seekBarToolTipInner">
@@ -2794,280 +2814,286 @@ util.addStyle(`
       </div>
     </div>
   `).trim();
-
-
-  class SmoothSeekBarPointer {
+class SmoothSeekBarPointer {
     constructor(params) {
-      this._pointer = params.pointer;
-      this._currentTime = 0;
-      this._duration = 1;
-      this._playbackRate = 1;
-      // this._isSmoothMode = (!!this._pointer.animate && 'registerProperty' in CSS);
-      this._isSmoothMode = false;
-      this._isPausing = true;
-      this._isSeeking = false;
-      this._isStalled = false;
-      this.refresh = throttle.raf(this.refresh.bind(this));
-      this.transformLeft = 0;
-      this.applyTransform = throttle.raf(() => {
-        const per = Math.min(100, this._timeToPer(this._currentTime));
-        this._pointer.style.transform = `translateX(${global.innerWidth * per / 100 - 6}px)`;
-      });
-      this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
-      params.playerState.onkey('isPausing', v => this.isPausing = v);
-      params.playerState.onkey('isSeeking', v => this.isSeeking = v);
-      params.playerState.onkey('isStalled', v => this.isStalled = v);
-      if (this._isSmoothMode) {
-        WindowResizeObserver.subscribe(() => this.refresh());
-      }
-     }
+        this._pointer = params.pointer;
+        this._currentTime = 0;
+        this._duration = 1;
+        this._playbackRate = 1;
+        // this._isSmoothMode = (!!this._pointer.animate && 'registerProperty' in CSS);
+        this._isSmoothMode = false;
+        this._isPausing = true;
+        this._isSeeking = false;
+        this._isStalled = false;
+        this.refresh = throttle.raf(this.refresh.bind(this));
+        this.transformLeft = 0;
+        this.applyTransform = throttle.raf(() => {
+            const per = Math.min(100, this._timeToPer(this._currentTime));
+            this._pointer.style.transform = `translateX(${global.innerWidth * per / 100 - 6}px)`;
+        });
+        this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
+        params.playerState.onkey('isPausing', (v) => this.isPausing = v);
+        params.playerState.onkey('isSeeking', (v) => this.isSeeking = v);
+        params.playerState.onkey('isStalled', (v) => this.isStalled = v);
+        if (this._isSmoothMode) {
+            WindowResizeObserver.subscribe(() => this.refresh());
+        }
+    }
     get currentTime() {
-      return this._currentTime;
+        return this._currentTime;
     }
     set currentTime(v) {
-      if (!this._isSmoothMode) {
+        if (!this._isSmoothMode) {
+            this._currentTime = v;
+            this.applyTransform();
+            return;
+        }
+        if (document.hidden) {
+            return;
+        }
+        if (this._currentTime === v) {
+            if (this.isPlaying) {
+                this._animation.currentTime = v;
+                this.isStalled = true;
+                return;
+            }
+        }
+        else {
+            if (this.isStalled) {
+                this.isStalled = false;
+            }
+        }
         this._currentTime = v;
-        return this.applyTransform();
-      }
-      if (document.hidden) { return; }
-      if (this._currentTime === v) {
-        if (this.isPlaying) {
-          this._animation.currentTime = v;
-          this.isStalled = true;
-          return;
+        // 誤差が一定以上になったときのみ補正する
+        // videoのcurrentTimeは秒. Animation APIのcurrentTimeはミリ秒
+        if (this._animation &&
+            Math.abs(v * 1000 - this._animation.currentTime) > 300) {
+            this._animation.currentTime = v * 1000;
         }
-      } else {
-        if (this.isStalled) {
-          this.isStalled = false;
-        }
-      }
-      this._currentTime = v;
-
-      // 誤差が一定以上になったときのみ補正する
-      // videoのcurrentTimeは秒. Animation APIのcurrentTimeはミリ秒
-      if (this._animation &&
-        Math.abs(v * 1000 - this._animation.currentTime) > 300) {
-        this._animation.currentTime = v * 1000;
-      }
     }
     _timeToPer(time) {
-      return (time / Math.max(this._duration, 1)) * 100;
+        return (time / Math.max(this._duration, 1)) * 100;
     }
     set duration(v) {
-      if (this._duration === v) { return; }
-      this._duration = v;
-      this.refresh();
+        if (this._duration === v) {
+            return;
+        }
+        this._duration = v;
+        this.refresh();
     }
     set playbackRate(v) {
-      if (this._playbackRate === v) { return; }
-      this._playbackRate = v;
-      if (!this._animation) { return; }
-      this._animation.playbackRate = v;
+        if (this._playbackRate === v) {
+            return;
+        }
+        this._playbackRate = v;
+        if (!this._animation) {
+            return;
+        }
+        this._animation.playbackRate = v;
     }
     get isPausing() {
-      return this._isPausing;
+        return this._isPausing;
     }
     set isPausing(v) {
-      if (this._isPausing === v) { return; }
-      this._isPausing = v;
-      this._updatePlaying();
+        if (this._isPausing === v) {
+            return;
+        }
+        this._isPausing = v;
+        this._updatePlaying();
     }
     get isSeeking() {
-      return this._isSeeking;
+        return this._isSeeking;
     }
     set isSeeking(v) {
-      if (this._isSeeking === v) { return; }
-      this._isSeeking = v;
-      this._updatePlaying();
+        if (this._isSeeking === v) {
+            return;
+        }
+        this._isSeeking = v;
+        this._updatePlaying();
     }
     get isStalled() {
-      return this._isStalled;
+        return this._isStalled;
     }
     set isStalled(v) {
-      if (this._isStalled === v) { return; }
-      this._isStalled = v;
-      this._updatePlaying();
+        if (this._isStalled === v) {
+            return;
+        }
+        this._isStalled = v;
+        this._updatePlaying();
     }
     get isPlaying() {
-      return !this.isPausing && !this.isStalled && !this.isSeeking;
+        return !this.isPausing && !this.isStalled && !this.isSeeking;
     }
     _updatePlaying() {
-      if (!this._animation) { return; }
-      if (this.isPlaying) {
-        this._animation.play();
-      } else {
-        this._animation.pause();
-      }
+        if (!this._animation) {
+            return;
+        }
+        if (this.isPlaying) {
+            this._animation.play();
+        }
+        else {
+            this._animation.pause();
+        }
     }
     refresh() {
-      if (!this._isSmoothMode) { return; }
-      if (this._animation) {
-        this._animation.finish();
-      }
-      this._animation = this._pointer.animate([
-        {transform: 'translateX(-6px)'},
-        {transform: `translateX(${global.innerWidth - 6}px)`}
-      ], {duration: this._duration * 1000, fill: 'backwards'});
-      this._animation.currentTime = this._currentTime * 1000;
-      this._animation.playbackRate = this._playbackRate;
-      if (this.isPlaying) {
-        this._animation.play();
-      } else {
-        this._animation.pause();
-      }
+        if (!this._isSmoothMode) {
+            return;
+        }
+        if (this._animation) {
+            this._animation.finish();
+        }
+        this._animation = this._pointer.animate([
+            { transform: 'translateX(-6px)' },
+            { transform: `translateX(${global.innerWidth - 6}px)` }
+        ], { duration: this._duration * 1000, fill: 'backwards' });
+        this._animation.currentTime = this._currentTime * 1000;
+        this._animation.playbackRate = this._playbackRate;
+        if (this.isPlaying) {
+            this._animation.play();
+        }
+        else {
+            this._animation.pause();
+        }
     }
-  }
-
-
-  class WheelSeeker extends BaseViewComponent {
+}
+class WheelSeeker extends BaseViewComponent {
     static get template() {
-      return `
+        return `
         <div class="root" style="display: none;">
         </div>
       `;
     }
-
     constructor(params) {
-      super({
-        parentNode: params.parentNode,
-        name: 'WheelSeeker',
-        template: '<div class="WheelSeeker"></div>',
-        shadow: WheelSeeker.template
-      });
-      Object.assign(this._props, {
-        watchElement: params.watchElement,
-        isActive: false,
-        pos: 0,
-        ax: 0,
-        lastWheelTime: 0,
-        duration: 1
-      });
-      this._bound.onWheel = _.throttle(this.onWheel.bind(this), 50);
-      this._bound.onMouseUp = this.onMouseUp.bind(this);
-      this._bound.dispatchSeek =this.dispatchSeek.bind(this);
-
-      this._props.watchElement.addEventListener(
-        'wheel', this._bound.onWheel, {passive: false});
+        super({
+            parentNode: params.parentNode,
+            name: 'WheelSeeker',
+            template: '<div class="WheelSeeker"></div>',
+            shadow: WheelSeeker.template
+        });
+        Object.assign(this._props, {
+            watchElement: params.watchElement,
+            isActive: false,
+            pos: 0,
+            ax: 0,
+            lastWheelTime: 0,
+            duration: 1
+        });
+        this._bound.onWheel = _.throttle(this.onWheel.bind(this), 50);
+        this._bound.onMouseUp = this.onMouseUp.bind(this);
+        this._bound.dispatchSeek = this.dispatchSeek.bind(this);
+        this._props.watchElement.addEventListener('wheel', this._bound.onWheel, { passive: false });
     }
-
     _initDom(...args) {
-      super._initDom(...args);
-
-      this._elm = Object.assign({}, this._elm, {
-        root: this._shadow || this._view,
-        // pointer: (this._shadow || this._view).querySelector('.pointer')
-      });
-      this._shadow.addEventListener('contextmenu', e => {
-        e.stopPropagation();
-        e.preventDefault();
-      });
+        super._initDom(...args);
+        this._elm = Object.assign({}, this._elm, {
+            root: this._shadow || this._view,
+            // pointer: (this._shadow || this._view).querySelector('.pointer')
+        });
+        this._shadow.addEventListener('contextmenu', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+        });
     }
-
     enable() {
-      document.addEventListener(
-        'mouseup', this._bound.onMouseUp, {capture: true, once: true});
-      this.refresh();
-      this.dispatchCommand('wheelSeek-start');
-      this._elm.root.style.display = '';
-      this._props.isActive = true;
-      this._props.ax = 0;
-      this._props.lastWheelTime = performance.now();
+        document.addEventListener('mouseup', this._bound.onMouseUp, { capture: true, once: true });
+        this.refresh();
+        this.dispatchCommand('wheelSeek-start');
+        this._elm.root.style.display = '';
+        this._props.isActive = true;
+        this._props.ax = 0;
+        this._props.lastWheelTime = performance.now();
     }
-
     disable() {
-      document.removeEventListener('mouseup', this._bound.onMouseUp);
-      this.dispatchCommand('wheelSeek-end');
-      this.dispatchCommand('seek', this.currentTime);
-      this._props.isActive = false;
-      setTimeout(() => {
-        this._elm.root.style.display = 'none';
-      }, 300);
+        document.removeEventListener('mouseup', this._bound.onMouseUp);
+        this.dispatchCommand('wheelSeek-end');
+        this.dispatchCommand('seek', this.currentTime);
+        this._props.isActive = false;
+        setTimeout(() => {
+            this._elm.root.style.display = 'none';
+        }, 300);
     }
-
     onWheel(e) {
-      let {buttons, deltaY} = e;
-
-      if (!deltaY) { return; }
-      deltaY = Math.abs(deltaY) >= 100 ? deltaY / 50 : deltaY;
-      if (this.isActive) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!buttons && !e.shiftKey) {
-          return this.disable();
+        let { buttons, deltaY } = e;
+        if (!deltaY) {
+            return;
         }
-        let pos = this._props.pos;
-        let ax = this._props.ax;
-        const deltaReversed = ax * deltaY < 0 ;//lastDelta * deltaY < 0;
-        const now = performance.now();
-        const seconds = ((now - this._props.lastWheelTime) / 1000);
-        this._props.lastWheelTime = now;
-        if (deltaReversed) {
-          ax = deltaY > 0 ? 0.5 : -0.5;
-        } else {
-          ax =
-            ax *
-            Math.pow(1.15, Math.abs(deltaY)) * // speedup
-            Math.pow(0.8, Math.floor(seconds/0.1)) // speeddown
-          ;
-          ax = Math.min(20, Math.abs(ax)) * (ax > 0 ? 1: -1);
-          pos += ax; // / 100;
+        deltaY = Math.abs(deltaY) >= 100 ? deltaY / 50 : deltaY;
+        if (this.isActive) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!buttons && !e.shiftKey) {
+                return this.disable();
+            }
+            let pos = this._props.pos;
+            let ax = this._props.ax;
+            const deltaReversed = ax * deltaY < 0; //lastDelta * deltaY < 0;
+            const now = performance.now();
+            const seconds = ((now - this._props.lastWheelTime) / 1000);
+            this._props.lastWheelTime = now;
+            if (deltaReversed) {
+                ax = deltaY > 0 ? 0.5 : -0.5;
+            }
+            else {
+                ax =
+                    ax *
+                        Math.pow(1.15, Math.abs(deltaY)) * // speedup
+                        Math.pow(0.8, Math.floor(seconds / 0.1)) // speeddown
+                ;
+                ax = Math.min(20, Math.abs(ax)) * (ax > 0 ? 1 : -1);
+                pos += ax; // / 100;
+            }
+            pos = Math.min(100, Math.max(0, pos));
+            this._props.ax = ax;
+            this.pos = pos;
+            this._bound.dispatchSeek();
         }
-        pos = Math.min(100, Math.max(0, pos));
-
-        this._props.ax = ax;
-        this.pos = pos;
-        this._bound.dispatchSeek();
-      } else if (buttons || e.shiftKey) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.enable();
-        this._props.ax = deltaY > 0 ? 0.5 : -0.5;
-      }
+        else if (buttons || e.shiftKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            this.enable();
+            this._props.ax = deltaY > 0 ? 0.5 : -0.5;
+        }
     }
-
     onMouseUp(e) {
-      if (!this.isActive) { return; }
-      e.preventDefault();
-      e.stopPropagation();
-      this.disable();
+        if (!this.isActive) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        this.disable();
     }
-
     dispatchSeek() {
-      this.dispatchCommand('wheelSeek', this.currentTime);
+        this.dispatchCommand('wheelSeek', this.currentTime);
     }
-
     refresh() {
-      // this._elm.pointer.style.transform = `translateX(${this._props.pos}%)`;
+        // this._elm.pointer.style.transform = `translateX(${this._props.pos}%)`;
     }
-
     get isActive() {
-      return this._props.isActive;
+        return this._props.isActive;
     }
     get duration() {
-      return this._props.duration;
+        return this._props.duration;
     }
     set duration(v) {
-      this._props.duration = v;
+        this._props.duration = v;
     }
     get pos() {
-      return this._props.pos;
+        return this._props.pos;
     }
     set pos(v) {
-      this._props.pos = v;
-      if (this.isActive) {
-        this.refresh();
-      }
+        this._props.pos = v;
+        if (this.isActive) {
+            this.refresh();
+        }
     }
     get currentTime() {
-      return this.duration * this.pos / 100;
+        return this.duration * this.pos / 100;
     }
     set currentTime(v) {
-      this.pos = v / this.duration * 100;
+        this.pos = v / this.duration * 100;
     }
-  }
-
+}
 //===END===
-
 export {
   VideoControlBar,
   HeatMapWorker,
@@ -3076,4 +3102,3 @@ export {
   CommentPreview,
   SeekBarToolTip
 };
-

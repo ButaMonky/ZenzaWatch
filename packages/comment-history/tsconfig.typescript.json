@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmitOnError": true,
+    "rootDir": "typescript-src",
+    "outDir": ".generated-ts",
+    "declaration": true,
+    "sourceMap": false,
+    "skipLibCheck": false
+  },
+  "include": ["typescript-src/settings.ts", "typescript-src/core.d.mts"]
+}

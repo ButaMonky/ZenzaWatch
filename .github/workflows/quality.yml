@@ -37,6 +37,8 @@ jobs:
       # Uses only a reduced local page; no login, NicoNico traffic or credentials.
       - name: Verify native fullscreen seek and toolbar controls in Chromium
         run: node test/browser/issue3-public-hit-area.cjs
+      - name: Install comment-history TypeScript and Babel tools
+        run: npm --prefix packages/comment-history ci --no-audit --no-fund
       - name: Generate local comment-history bundles and run all protocol tests
         run: npm --prefix packages/comment-history test
 
@@ -61,4 +63,38 @@ jobs:
       - name: Emit and verify canonical scene sources
         run: npm --prefix tools/typescript-stage1 run nico:verify
       - name: Full offline regression suite
-        run: npm test -- --timeout 15000 --reporter dot
+        run: npm test -- --timeout 20000 --reporter dot
+      # Keep real Chromium regressions for newly published UI features.
+      - name: Volume tooltip Chromium regression
+        run: node test/browser/task939-volume-tooltip.cjs
+      - name: Playback-rate tooltip Chromium regression
+        run: node test/browser/task947-speed-tooltip.cjs
+      - name: MylistPocket linked-card Chromium regression
+        run: node test/browser/task957-pocket-card-legacy-css.cjs
+      - name: Scene preview vertical stability Chromium regression
+        run: node test/browser/task954-scene-preview-vertical.cjs
+      - name: Fullscreen scene controls clearance Chromium regression
+        run: node test/browser/task956-fullscreen-scene-control-clearance.cjs
+
+
+  typescript:
+    name: TypeScript sources, generated files and parity tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tools/typescript-stage1/package-lock.json
+      - name: Install root dependencies for shared test helpers
+        run: npm ci --no-audit --no-fund
+      - name: Install TypeScript toolchain
+        run: npm --prefix tools/typescript-stage1 ci --no-audit --no-fund
+      - name: Type check, generated-source sync and parity tests
+        run: npm --prefix tools/typescript-stage1 test

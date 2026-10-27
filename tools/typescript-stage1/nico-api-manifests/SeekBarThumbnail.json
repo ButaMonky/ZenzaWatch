@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/SeekBarThumbnail.ts",
+  "runtime": "packages/zenza/src/storyboard/SeekBarThumbnail.js",
+  "sourceSha256": "0e1cf2e9e45c9cefd4dd23d5f725dcd82a5c0206d26e7c77a009aa637ddf56d5",
+  "runtimeSha256": "0ef36d386e07112d0f4db1c247d64ec4571d741e2d9b22034f79524754bdf8b1"
+}

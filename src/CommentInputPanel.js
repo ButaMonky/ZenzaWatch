@@ -6,6 +6,7 @@ import {uq} from '../packages/lib/src/uQuery';
 import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
 import {CommentSubmitLifetime} from '../packages/lib/src/nico/CommentSubmitLifetime';
+// GENERATED FROM tools/typescript-stage1/nico-src/CommentInputPanel.ts (Task963). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require UiVisibilityRegistry
 //@require CommentSubmitLifetime
@@ -19,365 +20,382 @@ import {CommentSubmitLifetime} from '../packages/lib/src/nico/CommentSubmitLifet
  * - ボタンを押しても入力欄からフォーカスが外れない（外れると一時停止の解除・パネルの縮小が起きるため）
  */
 const CommandPicker = (() => {
-  const SIZES = ['big', 'medium', 'small'];
-  const POSITIONS = ['ue', 'naka', 'shita'];
-  const FONTS = ['defont', 'mincho', 'gothic'];
-  // 一般会員が使える色（本家の10色と同じ順番）
-  const BASIC_COLORS = [
-    ['white', '#FFFFFF', '白'], ['red', '#FF0000', '赤'], ['pink', '#FF8080', 'ピンク'],
-    ['orange', '#FFC000', 'オレンジ'], ['yellow', '#FFFF00', '黄'], ['green', '#00FF00', '緑'],
-    ['cyan', '#00FFFF', '水色'], ['blue', '#0000FF', '青'], ['purple', '#C000FF', '紫'],
-    ['black', '#000000', '黒']
-  ];
-  // プレミアム会員専用色（NicoChat.COLORS と同じ値）
-  const PREMIUM_COLORS = [
-    ['white2', '#CCCC99', 'niconicowhite'], ['red2', '#CC0033', 'truered'], ['pink2', '#FF33CC', 'pink2'],
-    ['orange2', '#FF6600', 'passionorange'], ['yellow2', '#999900', 'madyellow'], ['green2', '#00CC66', 'elementalgreen'],
-    ['cyan2', '#00CCCC', 'cyan2'], ['blue2', '#3399FF', 'marineblue'], ['purple2', '#6633CC', 'nobleviolet'],
-    ['black2', '#666666', 'black2']
-  ];
-  const COLOR_ALIASES = {
-    niconicowhite: 'white2', truered: 'red2', passionorange: 'orange2', madyellow: 'yellow2',
-    elementalgreen: 'green2', marineblue: 'blue2', nobleviolet: 'purple2'
-  };
-  const ALL_COLOR_NAMES = new Set([
-    ...BASIC_COLORS.map(c => c[0]), ...PREMIUM_COLORS.map(c => c[0]), ...Object.keys(COLOR_ALIASES)
-  ]);
-  const COLOR_HEX = new Map([...BASIC_COLORS, ...PREMIUM_COLORS].map(c => [c[0], c[1]]));
-  const DEFAULTS = {size: 'medium', pos: 'naka', color: 'white', font: 'defont'};
-  // Task 074: 他の選択肢と排他ではなく、単独でON/OFFする表示調整コマンド
-  //   ender     … 改行が多くても文字を縮めない
-  //   full      … 上・下コメントを画面の端まで使う（はみ出し時の縮小を抑える）
-  //   patissier … 行数が多くても文字を縮めない（コメントアート向け）
-  const FLAGS = ['ender', 'full', 'patissier'];
-  const SPLIT = /[\x20\xA0　\t ]+/;
-
-  const groupOf = token => {
-    const t = token.toLowerCase();
-    if (SIZES.includes(t)) { return 'size'; }
-    if (POSITIONS.includes(t)) { return 'pos'; }
-    if (FONTS.includes(t)) { return 'font'; }
-    if (t === '184') { return 'anonymous'; }
-    if (FLAGS.includes(t)) { return `flag:${t}`; }
-    if (ALL_COLOR_NAMES.has(t) || /^#[0-9a-f]{6}$/i.test(t)) { return 'color'; }
-    return null;
-  };
-
-  const parse = text => {
-    const tokens = String(text || '').split(SPLIT).filter(Boolean);
-    const state = Object.assign({anonymous: false, flags: {}}, DEFAULTS);
-    tokens.forEach(token => {
-      const group = groupOf(token);
-      if (!group) { return; }
-      const t = token.toLowerCase();
-      if (group === 'anonymous') {
-        state.anonymous = true;
-      } else if (group.startsWith('flag:')) {
-        state.flags[t] = true;
-      } else if (group === 'color') {
-        state.color = COLOR_ALIASES[t] || t;
-      } else {
-        state[group] = t;
-      }
-    });
-    return state;
-  };
-
-  // groupの語を value に置き換える（既定値なら取り除く）。他の語はそのままの位置に残す
-  const apply = (text, group, value) => {
-    const tokens = String(text || '').split(SPLIT).filter(Boolean);
-    const isToggle = group === 'anonymous' || group.startsWith('flag:');
-    const isDefault = isToggle ? !value : DEFAULTS[group] === value;
-    const newToken = group === 'anonymous' ? '184' : (isToggle ? group.slice(5) : value);
-    const result = [];
-    let placed = false;
-    tokens.forEach(token => {
-      if (groupOf(token) !== group) {
-        result.push(token);
-      } else if (!placed && !isDefault) {
-        result.push(newToken);
-        placed = true;
-      }
-    });
-    if (!placed && !isDefault) {
-      group === 'anonymous' ? result.unshift(newToken) : result.push(newToken);
-    }
-    return result.join(' ');
-  };
-
-  const colorHex = name => {
-    if (/^#[0-9a-f]{6}$/i.test(name)) { return name; }
-    return COLOR_HEX.get(COLOR_ALIASES[name] || name) || '#FFFFFF';
-  };
-
-  return {SIZES, POSITIONS, FONTS, FLAGS, BASIC_COLORS, PREMIUM_COLORS, DEFAULTS, parse, apply, colorHex, groupOf};
-})();
-
-class CommentInputPanel extends Emitter {
-  constructor(params) {
-    super();
-
-    this._$playerContainer = params.$playerContainer;
-    this.config = params.playerConfig;
-
-    this._initializeDom();
-
-    this.config.onkey('autoPauseCommentInput', this._onAutoPauseCommentInputChange.bind(this));
-    this._visibility=UiVisibilityRegistry.connect(this.config,this._$view[0],'comment',{
-      beforeHide:()=>this._endFocusBeforeHide()
-    });
-  }
-  _endFocusBeforeHide() {
-    if(this._$view?.[0]?.contains(document.activeElement)){this.blur();}
-    this._togglePopover?.(false);
-  }
-  _applyVisibility() {
-    if(this._visibility){return this._visibility.apply('ui.commentInput');}
-    return UiVisibilityRegistry.apply(this.config,this._$view?.[0],'ui.commentInput',{
-      beforeHide:()=>this._endFocusBeforeHide()
-    });
-  }
-  _initializeDom() {
-    let $container = this._$playerContainer;
-    let config = this.config;
-
-    css.addStyle(CommentInputPanel.__css__);
-    $container.append(uq.html(CommentInputPanel.__tpl__));
-
-    let $view = this._$view = $container.find('.commentInputPanel');
-    let $input = this._$input = $view.find('.commandInput, .commentInput');
-    this._$form = $container.find('form');
-    let $autoPause = this._$autoPause = $container.find('.autoPause');
-    this._$commandInput = $container.find('.commandInput');
-    let $cmt = this._$commentInput = $container.find('.commentInput');
-    this._$commentSubmit = $container.find('.commentSubmit');
-    let preventEsc = e => {
-      if (e.keyCode === 27) { // ESC
-        e.preventDefault();
-        e.stopPropagation();
-        // Task 073: 詳しいパネルが開いている時は、まずパネルだけを閉じる
-        if (e.type === 'keydown' && this._isPopoverOpen) {
-          this._togglePopover(false);
-          this._popoverEscAt = Date.now();
-          return;
-        }
-        if (e.type === 'keyup' && Date.now() - (this._popoverEscAt || 0) < 500) {
-          return;
-        }
-        this.emit('esc');
-        e.target.blur();
-      }
+    const SIZES = ['big', 'medium', 'small'];
+    const POSITIONS = ['ue', 'naka', 'shita'];
+    const FONTS = ['defont', 'mincho', 'gothic'];
+    // 一般会員が使える色（本家の10色と同じ順番）
+    const BASIC_COLORS = [
+        ['white', '#FFFFFF', '白'], ['red', '#FF0000', '赤'], ['pink', '#FF8080', 'ピンク'],
+        ['orange', '#FFC000', 'オレンジ'], ['yellow', '#FFFF00', '黄'], ['green', '#00FF00', '緑'],
+        ['cyan', '#00FFFF', '水色'], ['blue', '#0000FF', '青'], ['purple', '#C000FF', '紫'],
+        ['black', '#000000', '黒']
+    ];
+    // プレミアム会員専用色（NicoChat.COLORS と同じ値）
+    const PREMIUM_COLORS = [
+        ['white2', '#CCCC99', 'niconicowhite'], ['red2', '#CC0033', 'truered'], ['pink2', '#FF33CC', 'pink2'],
+        ['orange2', '#FF6600', 'passionorange'], ['yellow2', '#999900', 'madyellow'], ['green2', '#00CC66', 'elementalgreen'],
+        ['cyan2', '#00CCCC', 'cyan2'], ['blue2', '#3399FF', 'marineblue'], ['purple2', '#6633CC', 'nobleviolet'],
+        ['black2', '#666666', 'black2']
+    ];
+    const COLOR_ALIASES = {
+        niconicowhite: 'white2', truered: 'red2', passionorange: 'orange2', madyellow: 'yellow2',
+        elementalgreen: 'green2', marineblue: 'blue2', nobleviolet: 'purple2'
     };
-
-    $input
-      .on('focus', this._onFocus.bind(this))
-      .on('blur', _.debounce(this._onBlur.bind(this), 500))
-      .on('keydown', preventEsc)
-      .on('keyup', preventEsc);
-
-    $autoPause.prop('checked', config.props.autoPauseCommentInput);
-    this._$autoPause.on('change', (ev) => {
-      config.props.autoPauseCommentInput = ev.target.checked;
-      $cmt.focus();
-    });
-    this._$view.find('label').on('click', e => e.stopPropagation());
-    this._$form.on('submit', this._onSubmit.bind(this));
-    this._$commentSubmit.on('click', this._onSubmitButtonClick.bind(this));
-    $view.on('click', e => e.stopPropagation()).on('paste', e => e.stopPropagation());
-
-    this._initializeCommandPicker();
-  }
-  // Task 073
-  _initializeCommandPicker() {
-    const view = this._$view[0];
-    const commandInput = this._$commandInput[0];
-    this._drawer = view.querySelector('.commandDrawer');
-    this._popover = view.querySelector('.commandPopover');
-    this._isPopoverOpen = false;
-    if (!this._drawer || !this._popover || !commandInput) {
-      return;
-    }
-    let premium = false;
-    try {
-      premium = !!nicoUtil.isPremium();
-    } catch (e) {
-      premium = false;
-    }
-    view.classList.toggle('is-premium', premium);
-
-    [this._drawer, this._popover].forEach(elm => {
-      // ボタンを押しても入力欄のフォーカスを奪わない（チェックボックスは通常通り）
-      elm.addEventListener('mousedown', e => {
-        if (e.button !== 0 || e.target.closest('.autoPauseLabel')) { return; }
-        e.preventDefault();
-      });
-      elm.addEventListener('click', e => {
-        const button = e.target.closest('[data-picker-group]');
-        if (button) {
-          e.preventDefault();
-          this._onPickerSelect(button.dataset.pickerGroup, button.dataset.pickerValue);
-          return;
+    const ALL_COLOR_NAMES = new Set([
+        ...BASIC_COLORS.map(c => c[0]), ...PREMIUM_COLORS.map(c => c[0]), ...Object.keys(COLOR_ALIASES)
+    ]);
+    const COLOR_HEX = new Map([...BASIC_COLORS, ...PREMIUM_COLORS].map(c => [c[0], c[1]]));
+    const DEFAULTS = { size: 'medium', pos: 'naka', color: 'white', font: 'defont' };
+    // Task 074: 他の選択肢と排他ではなく、単独でON/OFFする表示調整コマンド
+    //   ender     … 改行が多くても文字を縮めない
+    //   full      … 上・下コメントを画面の端まで使う（はみ出し時の縮小を抑える）
+    //   patissier … 行数が多くても文字を縮めない（コメントアート向け）
+    const FLAGS = ['ender', 'full', 'patissier'];
+    const SPLIT = /[\x20\xA0　\t ]+/;
+    const groupOf = (token) => {
+        const t = token.toLowerCase();
+        if (SIZES.includes(t)) {
+            return 'size';
         }
-        if (e.target.closest('.commandPicker-more')) {
-          e.preventDefault();
-          this._togglePopover();
-          return;
+        if (POSITIONS.includes(t)) {
+            return 'pos';
         }
-        if (e.target.closest('.commandPicker-reset')) {
-          e.preventDefault();
-          this._setCommandText('');
+        if (FONTS.includes(t)) {
+            return 'font';
         }
-      });
-    });
-    commandInput.addEventListener('input', () => this._syncPicker());
-    this._syncPicker();
-  }
-  _focusedInput() {
-    const active = document.activeElement;
-    return (active === this._$commandInput[0] || active === this._$commentInput[0]) ?
-      active : this._$commentInput[0];
-  }
-  _onPickerSelect(group, value) {
-    const commandInput = this._$commandInput[0];
-    let next;
-    if (group === 'anonymous') {
-      next = CommandPicker.apply(commandInput.value, group, !CommandPicker.parse(commandInput.value).anonymous);
-    } else if (group === 'flag') {
-      next = CommandPicker.apply(commandInput.value, `flag:${value}`, !CommandPicker.parse(commandInput.value).flags[value]);
-    } else {
-      next = CommandPicker.apply(commandInput.value, group, value);
+        if (t === '184') {
+            return 'anonymous';
+        }
+        if (FLAGS.includes(t)) {
+            return `flag:${t}`;
+        }
+        if (ALL_COLOR_NAMES.has(t) || /^#[0-9a-f]{6}$/i.test(t)) {
+            return 'color';
+        }
+        return null;
+    };
+    const parse = (text) => {
+        const tokens = String(text || '').split(SPLIT).filter(Boolean);
+        const state = Object.assign({ anonymous: false, flags: {} }, DEFAULTS);
+        tokens.forEach(token => {
+            const group = groupOf(token);
+            if (!group) {
+                return;
+            }
+            const t = token.toLowerCase();
+            if (group === 'anonymous') {
+                state.anonymous = true;
+            }
+            else if (group.startsWith('flag:')) {
+                state.flags[t] = true;
+            }
+            else if (group === 'color') {
+                state.color = COLOR_ALIASES[t] || t;
+            }
+            else {
+                state[group] = t;
+            }
+        });
+        return state;
+    };
+    // groupの語を value に置き換える（既定値なら取り除く）。他の語はそのままの位置に残す
+    const apply = (text, group, value) => {
+        const tokens = String(text || '').split(SPLIT).filter(Boolean);
+        const isToggle = group === 'anonymous' || group.startsWith('flag:');
+        const isDefault = isToggle ? !value : DEFAULTS[group] === value;
+        const newToken = group === 'anonymous' ? '184' : (isToggle ? group.slice(5) : value);
+        const result = [];
+        let placed = false;
+        tokens.forEach(token => {
+            if (groupOf(token) !== group) {
+                result.push(token);
+            }
+            else if (!placed && !isDefault) {
+                result.push(newToken);
+                placed = true;
+            }
+        });
+        if (!placed && !isDefault) {
+            group === 'anonymous' ? result.unshift(newToken) : result.push(newToken);
+        }
+        return result.join(' ');
+    };
+    const colorHex = (name) => {
+        if (/^#[0-9a-f]{6}$/i.test(name)) {
+            return name;
+        }
+        return COLOR_HEX.get(COLOR_ALIASES[name] || name) || '#FFFFFF';
+    };
+    return { SIZES, POSITIONS, FONTS, FLAGS, BASIC_COLORS, PREMIUM_COLORS, DEFAULTS, parse, apply, colorHex, groupOf };
+})();
+class CommentInputPanel extends Emitter {
+    constructor(params) {
+        super();
+        this._$playerContainer = params.$playerContainer;
+        this.config = params.playerConfig;
+        this._initializeDom();
+        this.config.onkey('autoPauseCommentInput', this._onAutoPauseCommentInputChange.bind(this));
+        this._visibility = UiVisibilityRegistry.connect(this.config, this._$view[0], 'comment', {
+            beforeHide: () => this._endFocusBeforeHide()
+        });
     }
-    this._setCommandText(next);
-  }
-  _setCommandText(text) {
-    const commandInput = this._$commandInput[0];
-    const maxLength = commandInput.maxLength > 0 ? commandInput.maxLength : 64;
-    if (text.length > maxLength) {
-      // 入りきらない場合は変更しない（途中で切れた語がコマンドとして送られないように）
-      this._drawer.classList.remove('is-overflow');
-      void this._drawer.offsetWidth;
-      this._drawer.classList.add('is-overflow');
-      return;
+    _endFocusBeforeHide() {
+        if (this._$view?.[0]?.contains(document.activeElement)) {
+            this.blur();
+        }
+        this._togglePopover?.(false);
     }
-    commandInput.value = text;
-    this._syncPicker();
-    const focused = this._focusedInput();
-    if (document.activeElement !== focused) {
-      focused.focus();
+    _applyVisibility() {
+        if (this._visibility) {
+            return this._visibility.apply('ui.commentInput');
+        }
+        return UiVisibilityRegistry.apply(this.config, this._$view?.[0], 'ui.commentInput', {
+            beforeHide: () => this._endFocusBeforeHide()
+        });
     }
-  }
-  _syncPicker() {
-    const state = CommandPicker.parse(this._$commandInput[0].value);
-    const view = this._$view[0];
-    Array.from(view.querySelectorAll('[data-picker-group]')).forEach(button => {
-      const {pickerGroup: group, pickerValue: value} = button.dataset;
-      const pressed = group === 'anonymous' ? state.anonymous :
-        (group === 'flag' ? !!state.flags[value] : state[group] === value);
-      button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-    });
-    const hex = CommandPicker.colorHex(state.color);
-    view.style.setProperty('--zenza-command-color', hex);
-    view.classList.toggle('is-commandColorDark', ['#000000', '#0000FF', '#666666', '#6633CC'].includes(hex.toUpperCase()));
-    view.classList.toggle('has-command', !!this._$commandInput[0].value.trim());
-  }
-  _togglePopover(open = !this._isPopoverOpen) {
-    const popover = this._popover;
-    if (!popover) { return; }
-    this._isPopoverOpen = !!open;
-    this._$view[0].classList.toggle('is-popoverOpen', this._isPopoverOpen);
-    if (!this._isPopoverOpen) {
-      return;
+    _initializeDom() {
+        let $container = this._$playerContainer;
+        let config = this.config;
+        css.addStyle(CommentInputPanel.__css__);
+        $container.append(uq.html(CommentInputPanel.__tpl__));
+        let $view = this._$view = $container.find('.commentInputPanel');
+        let $input = this._$input = $view.find('.commandInput, .commentInput');
+        this._$form = $container.find('form');
+        let $autoPause = this._$autoPause = $container.find('.autoPause');
+        this._$commandInput = $container.find('.commandInput');
+        let $cmt = this._$commentInput = $container.find('.commentInput');
+        this._$commentSubmit = $container.find('.commentSubmit');
+        let preventEsc = (e) => {
+            if (e.keyCode === 27) { // ESC
+                e.preventDefault();
+                e.stopPropagation();
+                // Task 073: 詳しいパネルが開いている時は、まずパネルだけを閉じる
+                if (e.type === 'keydown' && this._isPopoverOpen) {
+                    this._togglePopover(false);
+                    this._popoverEscAt = Date.now();
+                    return;
+                }
+                if (e.type === 'keyup' && Date.now() - (this._popoverEscAt || 0) < 500) {
+                    return;
+                }
+                this.emit('esc');
+                e.target.blur();
+            }
+        };
+        $input
+            .on('focus', this._onFocus.bind(this))
+            .on('blur', _.debounce(this._onBlur.bind(this), 500))
+            .on('keydown', preventEsc)
+            .on('keyup', preventEsc);
+        $autoPause.prop('checked', config.props.autoPauseCommentInput);
+        this._$autoPause.on('change', (ev) => {
+            config.props.autoPauseCommentInput = ev.target.checked;
+            $cmt.focus();
+        });
+        this._$view.find('label').on('click', (e) => e.stopPropagation());
+        this._$form.on('submit', this._onSubmit.bind(this));
+        this._$commentSubmit.on('click', this._onSubmitButtonClick.bind(this));
+        $view.on('click', (e) => e.stopPropagation()).on('paste', (e) => e.stopPropagation());
+        this._initializeCommandPicker();
     }
-    this._placePopover();
-  }
-  // 詳しいパネルが画面外にはみ出さないよう、上下の向きと左右のずれを実測して決める
-  // （「小」モードで動画を画面端に置いている時や、上下反転している時にも対応）
-  _placePopover() {
-    const popover = this._popover;
-    const view = this._$view[0];
-    const margin = CommentInputPanel.POPOVER_EDGE_MARGIN;
-    view.classList.remove('is-popoverBelow');
-    view.style.setProperty('--zenza-popover-shift-x', '0px');
-    view.style.removeProperty('--zenza-popover-max-h');
-    const viewportW = window.innerWidth, viewportH = window.innerHeight;
-    const inputRect = this._$commentInput[0].getBoundingClientRect();
-    const drawer = this._drawer;
-    const drawerRect = drawer.getBoundingClientRect();
-    const height = popover.scrollHeight;
-    const spaceAbove = inputRect.top - margin * 2;
-    const spaceBelow = viewportH - drawerRect.bottom - margin * 2;
-    let below = false;
-    if (height > spaceAbove) {
-      // 上に収まらない時は、下に収まるなら下へ。どちらにも収まらなければ広い方に出してスクロールさせる
-      below = height <= spaceBelow || spaceBelow > spaceAbove;
-      const space = below ? spaceBelow : spaceAbove;
-      if (height > space) {
-        view.style.setProperty('--zenza-popover-max-h', `${Math.max(120, Math.floor(space))}px`);
-      }
+    // Task 073
+    _initializeCommandPicker() {
+        const view = this._$view[0];
+        const commandInput = this._$commandInput[0];
+        this._drawer = view.querySelector('.commandDrawer');
+        this._popover = view.querySelector('.commandPopover');
+        this._isPopoverOpen = false;
+        if (!this._drawer || !this._popover || !commandInput) {
+            return;
+        }
+        let premium = false;
+        try {
+            premium = !!nicoUtil.isPremium();
+        }
+        catch (e) {
+            premium = false;
+        }
+        view.classList.toggle('is-premium', premium);
+        [this._drawer, this._popover].forEach(elm => {
+            // ボタンを押しても入力欄のフォーカスを奪わない（チェックボックスは通常通り）
+            elm.addEventListener('mousedown', (e) => {
+                if (e.button !== 0 || e.target.closest('.autoPauseLabel')) {
+                    return;
+                }
+                e.preventDefault();
+            });
+            elm.addEventListener('click', (e) => {
+                const button = e.target.closest('[data-picker-group]');
+                if (button) {
+                    e.preventDefault();
+                    this._onPickerSelect(button.dataset.pickerGroup, button.dataset.pickerValue);
+                    return;
+                }
+                if (e.target.closest('.commandPicker-more')) {
+                    e.preventDefault();
+                    this._togglePopover();
+                    return;
+                }
+                if (e.target.closest('.commandPicker-reset')) {
+                    e.preventDefault();
+                    this._setCommandText('');
+                }
+            });
+        });
+        commandInput.addEventListener('input', () => this._syncPicker());
+        this._syncPicker();
     }
-    if (below) {
-      view.style.setProperty('--zenza-popover-below-top', `${drawer.offsetTop + drawer.offsetHeight + 6}px`);
-      view.classList.add('is-popoverBelow');
+    _focusedInput() {
+        const active = document.activeElement;
+        return (active === this._$commandInput[0] || active === this._$commentInput[0]) ?
+            active : this._$commentInput[0];
     }
-    const rect = popover.getBoundingClientRect();
-    let shift = 0;
-    if (rect.left < margin) {
-      shift = margin - rect.left;
-    } else if (rect.right > viewportW - margin) {
-      shift = (viewportW - margin) - rect.right;
+    _onPickerSelect(group, value) {
+        const commandInput = this._$commandInput[0];
+        let next;
+        if (group === 'anonymous') {
+            next = CommandPicker.apply(commandInput.value, group, !CommandPicker.parse(commandInput.value).anonymous);
+        }
+        else if (group === 'flag') {
+            next = CommandPicker.apply(commandInput.value, `flag:${value}`, !CommandPicker.parse(commandInput.value).flags[value]);
+        }
+        else {
+            next = CommandPicker.apply(commandInput.value, group, value);
+        }
+        this._setCommandText(next);
     }
-    view.style.setProperty('--zenza-popover-shift-x', `${Math.round(shift)}px`);
-  }
-  _onFocus() {
-    if (!this._hasFocus) {
-      this.emit('focus', this.isAutoPause);
+    _setCommandText(text) {
+        const commandInput = this._$commandInput[0];
+        const maxLength = commandInput.maxLength > 0 ? commandInput.maxLength : 64;
+        if (text.length > maxLength) {
+            // 入りきらない場合は変更しない（途中で切れた語がコマンドとして送られないように）
+            this._drawer.classList.remove('is-overflow');
+            void this._drawer.offsetWidth;
+            this._drawer.classList.add('is-overflow');
+            return;
+        }
+        commandInput.value = text;
+        this._syncPicker();
+        const focused = this._focusedInput();
+        if (document.activeElement !== focused) {
+            focused.focus();
+        }
     }
-    this._hasFocus = true;
-  }
-  _onBlur() {
-    if (this._$commandInput.hasFocus() || this._$commentInput.hasFocus() ||
-      !this._hasFocus) {
-      return;
+    _syncPicker() {
+        const state = CommandPicker.parse(this._$commandInput[0].value);
+        const view = this._$view[0];
+        Array.from(view.querySelectorAll('[data-picker-group]')).forEach(button => {
+            const { pickerGroup: group, pickerValue: value } = button.dataset;
+            const pressed = group === 'anonymous' ? state.anonymous :
+                (group === 'flag' ? !!state.flags[value] : state[group] === value);
+            button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        });
+        const hex = CommandPicker.colorHex(state.color);
+        view.style.setProperty('--zenza-command-color', hex);
+        view.classList.toggle('is-commandColorDark', ['#000000', '#0000FF', '#666666', '#6633CC'].includes(hex.toUpperCase()));
+        view.classList.toggle('has-command', !!this._$commandInput[0].value.trim());
     }
-    this._togglePopover(false);
-    this.emit('blur', this.isAutoPause);
-
-    this._hasFocus = false;
-  }
-  _onSubmit(e) {
-    e && e.preventDefault();
-    this.submit();
-  }
-  _onSubmitButtonClick(e) {
-    e && e.preventDefault();
-    this.submit();
-  }
-  _onAutoPauseCommentInputChange(val) {
-    this._$autoPause.prop('checked', !!val);
-  }
-  submit() {
-    // Task505: TS-owned lock and draft lifecycle. Preserve legacy return values.
-    return CommentSubmitLifetime.submit(this);
-  }
-  get isAutoPause() {
-    return this.config.props.autoPauseCommentInput;
-  }
-  focus() {
-    const value = typeof this.config.getValue === 'function' ?
-      this.config.getValue('ui.commentInput') : this.config.props?.['ui.commentInput'];
-    if (value === false) { return; }
-    this._$commentInput.focus();
-    this._onFocus();
-  }
-  blur() {
-    this._$commandInput.blur();
-    this._$commentInput.blur();
-    this._onBlur();
-  }
+    _togglePopover(open = !this._isPopoverOpen) {
+        const popover = this._popover;
+        if (!popover) {
+            return;
+        }
+        this._isPopoverOpen = !!open;
+        this._$view[0].classList.toggle('is-popoverOpen', this._isPopoverOpen);
+        if (!this._isPopoverOpen) {
+            return;
+        }
+        this._placePopover();
+    }
+    // 詳しいパネルが画面外にはみ出さないよう、上下の向きと左右のずれを実測して決める
+    // （「小」モードで動画を画面端に置いている時や、上下反転している時にも対応）
+    _placePopover() {
+        const popover = this._popover;
+        const view = this._$view[0];
+        const margin = CommentInputPanel.POPOVER_EDGE_MARGIN;
+        view.classList.remove('is-popoverBelow');
+        view.style.setProperty('--zenza-popover-shift-x', '0px');
+        view.style.removeProperty('--zenza-popover-max-h');
+        const viewportW = window.innerWidth, viewportH = window.innerHeight;
+        const inputRect = this._$commentInput[0].getBoundingClientRect();
+        const drawer = this._drawer;
+        const drawerRect = drawer.getBoundingClientRect();
+        const height = popover.scrollHeight;
+        const spaceAbove = inputRect.top - margin * 2;
+        const spaceBelow = viewportH - drawerRect.bottom - margin * 2;
+        let below = false;
+        if (height > spaceAbove) {
+            // 上に収まらない時は、下に収まるなら下へ。どちらにも収まらなければ広い方に出してスクロールさせる
+            below = height <= spaceBelow || spaceBelow > spaceAbove;
+            const space = below ? spaceBelow : spaceAbove;
+            if (height > space) {
+                view.style.setProperty('--zenza-popover-max-h', `${Math.max(120, Math.floor(space))}px`);
+            }
+        }
+        if (below) {
+            view.style.setProperty('--zenza-popover-below-top', `${drawer.offsetTop + drawer.offsetHeight + 6}px`);
+            view.classList.add('is-popoverBelow');
+        }
+        const rect = popover.getBoundingClientRect();
+        let shift = 0;
+        if (rect.left < margin) {
+            shift = margin - rect.left;
+        }
+        else if (rect.right > viewportW - margin) {
+            shift = (viewportW - margin) - rect.right;
+        }
+        view.style.setProperty('--zenza-popover-shift-x', `${Math.round(shift)}px`);
+    }
+    _onFocus() {
+        if (!this._hasFocus) {
+            this.emit('focus', this.isAutoPause);
+        }
+        this._hasFocus = true;
+    }
+    _onBlur() {
+        if (this._$commandInput.hasFocus() || this._$commentInput.hasFocus() ||
+            !this._hasFocus) {
+            return;
+        }
+        this._togglePopover(false);
+        this.emit('blur', this.isAutoPause);
+        this._hasFocus = false;
+    }
+    _onSubmit(e) {
+        e && e.preventDefault();
+        this.submit();
+    }
+    _onSubmitButtonClick(e) {
+        e && e.preventDefault();
+        this.submit();
+    }
+    _onAutoPauseCommentInputChange(val) {
+        this._$autoPause.prop('checked', !!val);
+    }
+    submit() {
+        // Task505: TS-owned lock and draft lifecycle. Preserve legacy return values.
+        return CommentSubmitLifetime.submit(this);
+    }
+    get isAutoPause() {
+        return this.config.props.autoPauseCommentInput;
+    }
+    focus() {
+        const value = typeof this.config.getValue === 'function' ?
+            this.config.getValue('ui.commentInput') : this.config.props?.['ui.commentInput'];
+        if (value === false) {
+            return;
+        }
+        this._$commentInput.focus();
+        this._onFocus();
+    }
+    blur() {
+        this._$commandInput.blur();
+        this._$commentInput.blur();
+        this._onBlur();
+    }
 }
 CommentInputPanel.CommandPicker = CommandPicker;
 CommentInputPanel.POPOVER_EDGE_MARGIN = 8;
-
 CommentInputPanel.__css__ = (`
   .commentInputPanel[hidden] { display: none !important; }
   .commentInputPanel {
@@ -848,25 +866,15 @@ CommentInputPanel.__css__ = (`
     }
   }
 `).trim();
-
 CommentInputPanel.__tpl__ = (() => {
-  const P = CommandPicker;
-  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
-  const textButtons = (group, pairs) => pairs.map(([value, label, title]) =>
-    `<button type="button" class="commandPicker-btn" tabindex="-1" data-picker-group="${group}" data-picker-value="${value}" title="${esc(title)}" aria-pressed="false">${esc(label)}</button>`
-  ).join('');
-  const dots = (colors, note) => colors.map(([name, hex, label]) =>
-    `<button type="button" class="commandPicker-dot" tabindex="-1" data-picker-group="color" data-picker-value="${name}" style="--dot-color: ${hex};" title="${esc(label)}（${name}）${note}" aria-label="${esc(label)}" aria-pressed="false"></button>`
-  ).join('');
-  const sizeIcon = fontSize =>
-    `<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1.5" y="1.5" width="45" height="29" rx="4"/><text x="24" y="${16 + fontSize * 0.36}" font-size="${fontSize}" text-anchor="middle">A</text></svg>`;
-  const posIcon = y =>
-    `<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1.5" y="1.5" width="45" height="29" rx="4"/><rect class="fill" x="12" y="${y}" width="24" height="5" rx="2"/></svg>`;
-  const iconButtons = (group, items) => items.map(([value, svg, title]) =>
-    `<button type="button" class="commandPicker-btn commandPicker-icon" tabindex="-1" data-picker-group="${group}" data-picker-value="${value}" title="${esc(title)}" aria-label="${esc(title)}" aria-pressed="false">${svg}</button>`
-  ).join('');
-
-  return (`
+    const P = CommandPicker;
+    const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    const textButtons = (group, pairs) => pairs.map(([value, label, title]) => `<button type="button" class="commandPicker-btn" tabindex="-1" data-picker-group="${group}" data-picker-value="${value}" title="${esc(title)}" aria-pressed="false">${esc(label)}</button>`).join('');
+    const dots = (colors, note) => colors.map(([name, hex, label]) => `<button type="button" class="commandPicker-dot" tabindex="-1" data-picker-group="color" data-picker-value="${name}" style="--dot-color: ${hex};" title="${esc(label)}（${name}）${note}" aria-label="${esc(label)}" aria-pressed="false"></button>`).join('');
+    const sizeIcon = (fontSize) => `<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1.5" y="1.5" width="45" height="29" rx="4"/><text x="24" y="${16 + fontSize * 0.36}" font-size="${fontSize}" text-anchor="middle">A</text></svg>`;
+    const posIcon = (y) => `<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1.5" y="1.5" width="45" height="29" rx="4"/><rect class="fill" x="12" y="${y}" width="24" height="5" rx="2"/></svg>`;
+    const iconButtons = (group, items) => items.map(([value, svg, title]) => `<button type="button" class="commandPicker-btn commandPicker-icon" tabindex="-1" data-picker-group="${group}" data-picker-value="${value}" title="${esc(title)}" aria-label="${esc(title)}" aria-pressed="false">${svg}</button>`).join('');
+    return (`
   <div class="commentInputPanel forMember" autocomplete="new-password">
     <form action="javascript: void(0);">
       <div class="commentInputOuter">
@@ -953,11 +961,7 @@ CommentInputPanel.__tpl__ = (() => {
   </div>
   `).trim();
 })();
-
-
 //===END===
-//
-
 export {
   CommentInputPanel
 };

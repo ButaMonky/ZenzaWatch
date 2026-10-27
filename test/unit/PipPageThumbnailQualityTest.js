@@ -24,6 +24,7 @@ function setup() {
     off(name) { listeners.delete(name); }};
   const config = {props: {}, on() {}, off() {}};
   const c = createContext({document});
+  run('const ThumbnailSourcePolicy = '+extract('packages/lib/src/nico/ThumbnailSourcePolicy.js','ThumbnailSourcePolicy','var')+';',c);
   run('const PipPageThumbnail = ' +
     extract('packages/zenza/src/videoPlayer/PipPageThumbnail.js',
       'PipPageThumbnail','var') + ';this.api=PipPageThumbnail;', c);
@@ -42,11 +43,9 @@ describe('Task711 PiP thumbnail quality and native ownership', () => {
   let h;
   afterEach(() => {if(h){h.cleanup();h=null;}});
 
-  it('prefers API ogp, player, large, and finally small if images fail', () => {
+  it('smart mode uses player if OGP is from an untrusted rendering service', () => {
     h=setup();
     h.fire(h.video,'enterpictureinpicture');
-    assert.strictEqual(h.image().src,'https://cdn.example/ogp.jpg');
-    h.fire(h.image(),'error');
     assert.strictEqual(h.image().src,'https://cdn.example/player.jpg');
     h.fire(h.image(),'error');
     assert.strictEqual(h.image().src,'https://cdn.example/large.jpg');
@@ -54,6 +53,52 @@ describe('Task711 PiP thumbnail quality and native ownership', () => {
     assert.strictEqual(h.image().src,'https://cdn.example/small.jpg');
     h.fire(h.image(),'error');
     assert.strictEqual(h.image(),null);
+  });
+  it('prefers a clean original 1280px OGP over 960px player art',()=>{
+    h=setup();
+    const thumb=h.state.videoInfo._rawData._data.video.thumbnail;
+    thumb.ogp='https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46962870/46962870.50024446.original/r1280x720l?key=test';
+    thumb.player='https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46962870/46962870.50024446.original/a960x540l?key=test';
+    h.fire(h.video,'enterpictureinpicture');
+    assert.strictEqual(h.image().src,thumb.ogp);
+  });
+  it('avoids the play-icon-bearing goptim OGP and keeps clean 960px player art', () => {
+    h=setup();
+    const thumb=h.state.videoInfo._rawData._data.video.thumbnail;
+    thumb.ogp='https://goptim.video.nimg.jp/thumbnail/1280x720?b=p&bs=54&i=46949237.64709125&s=blur&key=example';
+    thumb.player='https://img.cdn.nimg.jp/s/nicovideo/thumbnails/46949237/46949237.64709125.original/a960x540l?key=example';
+    h.fire(h.video,'enterpictureinpicture');
+    assert.strictEqual(h.image().src,thumb.player);
+    const urls=h.controller._getThumbnailUrls();
+    assert(!urls.some(url=>url.includes('goptim.video.nimg.jp')));
+    // A failed clean image must not fall back to the composited social preview.
+    for(let i=0;i<urls.length;i++){const img=h.image();if(!img)break;h.fire(img,'error');}
+    assert.strictEqual(h.image(),null);
+  });
+  it('legacy mode retains original OGP-first order and includes goptim', () => {
+    h=setup();
+    h.controller.config.props.pipPageThumbnailSource='legacy';
+    const thumb=h.state.videoInfo._rawData._data.video.thumbnail;
+    thumb.ogp='https://goptim.video.nimg.jp/thumbnail/1280x720?key=example';
+    h.fire(h.video,'enterpictureinpicture');
+    assert.strictEqual(h.image().src,thumb.ogp);
+    h.fire(h.image(),'error');
+    assert.strictEqual(h.image().src,thumb.player);
+  });
+  it('switches image policy live during active PiP without restarting it', () => {
+    h=setup();
+    const thumb=h.state.videoInfo._rawData._data.video.thumbnail;
+    thumb.ogp='https://goptim.video.nimg.jp/thumbnail/1280x720?key=example';
+    h.fire(h.video,'enterpictureinpicture');
+    assert.strictEqual(h.image().src,thumb.player);
+    const element=h.controller.activePip;
+    h.controller.config.props.pipPageThumbnailSource='legacy';
+    h.controller._refresh();
+    assert.strictEqual(h.image().src,thumb.ogp);
+    assert.strictEqual(h.controller.activePip,element);
+    h.controller.config.props.pipPageThumbnailSource='smart';
+    h.controller._refresh();
+    assert.strictEqual(h.image().src,thumb.player);
   });
   it('uses the watch detail player thumbnail when OGP is absent', () => {
     h=setup();

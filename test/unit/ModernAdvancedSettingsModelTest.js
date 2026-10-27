@@ -469,12 +469,12 @@ describe('Task938 stable fullscreen and small-mode classification with legacy in
         screenMode:'normal','screenMode:ginza':'normal','screenMode:others':'normal',
         autoFullScreen:false,smallModeAspectLock:false,
         fullscreenControlBarMode:'auto',
-        'controlBar.showOnPause.small':false,'controlBar.showOnPause.fullscreen':false,
+        'controlBar.showOnPause.small':true,'controlBar.showOnPause.fullscreen':false,
         'controlBar.hideAfterSeconds.small':3,'controlBar.hideAfterSeconds.fullscreen':0.4,
         enableHeatMap:true,enableStoryboard:true,enableStoryboardBar:false,menuScale:1
       };
       const config={default:defaults,values:{...defaults,
-        'controlBar.showOnPause.small':true,
+        'controlBar.showOnPause.small':false,
         'controlBar.showOnPause.fullscreen':true},
         getValue(k){return this.values[k]},
         setValue(k,v){this.values[k]=v}};
@@ -503,9 +503,9 @@ describe('Task938 stable fullscreen and small-mode classification with legacy in
         [...new Set(model.descriptors.filter(d=>d.category==='画面・映像').map(d=>d.subcategory))],
         ['表示モード','小画面モード','全画面モード','プレイヤーの操作表示']);
       model.resetSubcategory('画面・映像','小画面モード');
-      assert.strictEqual(model.get('controlBar.showOnPause.small'),false);
+      assert.strictEqual(model.get('controlBar.showOnPause.small'),true);
       assert.strictEqual(model.get('controlBar.showOnPause.fullscreen'),true);
-      assert.strictEqual(config.values['controlBar.showOnPause.small'],true,
+      assert.strictEqual(config.values['controlBar.showOnPause.small'],false,
         'reset is draft-only until saved');
     }finally{dom.window.close()}
   });

@@ -77,8 +77,8 @@ const Config = (() => {
     'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
     videoInfoPanelTab: 'videoInfoTab',
     fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
-    // Task936: Pause should not obscure lower comments in small/fullscreen modes.
-    'controlBar.showOnPause.small': false,
+    // Task973: Small mode shows controls on pause by default; fullscreen stays hidden.
+    'controlBar.showOnPause.small': true,
     'controlBar.showOnPause.fullscreen': false,
     // Mouse-initiated toolbar visibility keeps the previous defaults.
     'controlBar.hideAfterSeconds.small': 3,

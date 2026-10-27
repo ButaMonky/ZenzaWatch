@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.79-task965
+// @version     0.3.80-task973
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-27 12:27Z 5e716422
+// build: 2026-10-27 17:09Z a0e15b48
 /* eslint-disable */
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 ((window) => {
@@ -3994,7 +3994,7 @@ const Config = (() => {
 				'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
 				videoInfoPanelTab: 'videoInfoTab',
 				fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
-				'controlBar.showOnPause.small': false,
+				'controlBar.showOnPause.small': true,
 				'controlBar.showOnPause.fullscreen': false,
 				'controlBar.hideAfterSeconds.small': 3,
 				'controlBar.hideAfterSeconds.fullscreen': 0.4,
@@ -7420,7 +7420,7 @@ class ModernAdvancedSettingsModel {
 						...group('画面・映像', '小画面モード', [
 								['smallModeAspectLock', '小モードで縦横比を固定'],
 								['controlBar.showOnPause.small', '一時停止時に操作バーを表示', {
-												description: '既定OFF。「小」モードで一時停止しても下コメントを隠しません。マウス操作時の表示は維持します。'
+												description: '既定ON。「小」モードでは一時停止時に操作バーを表示します。動画や下コメントを隠したくない場合はOFFにできます。マウス操作による表示は維持します。'
 										}],
 								['controlBar.hideAfterSeconds.small', '操作バーが消えるまでの時間', {
 												...slider(0.2, 10, 0.1), unit: '秒',
@@ -11477,7 +11477,7 @@ class NgCompositeRuleEditor {
 }
         window.ZenzaAdvancedSettings = {
             config: Config,
-            version: '0.3.79-task965'
+            version: '0.3.80-task973'
         };
         const global = {
             PRODUCT

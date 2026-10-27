@@ -16,7 +16,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.346-task972`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+  - 最新版：`2.7.347-task973`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
   - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
 
 - **[ZenzaHLS をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)**
@@ -30,7 +30,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
   - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version 0.5.81-task971)
 
 - [ZenzaAdvancedSettings をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js)
-  - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version 0.3.79-task965)
+  - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version 0.3.80-task973)
 
 - [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
   - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version 0.0.5-task928)

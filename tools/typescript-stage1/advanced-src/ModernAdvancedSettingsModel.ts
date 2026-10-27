@@ -160,7 +160,7 @@ class ModernAdvancedSettingsModel {
       ...group('画面・映像','小画面モード',[
         ['smallModeAspectLock','小モードで縦横比を固定'],
         ['controlBar.showOnPause.small','一時停止時に操作バーを表示',{
-          description:'既定OFF。「小」モードで一時停止しても下コメントを隠しません。マウス操作時の表示は維持します。'}],
+          description:'既定ON。「小」モードでは一時停止時に操作バーを表示します。動画や下コメントを隠したくない場合はOFFにできます。マウス操作による表示は維持します。'}],
         ['controlBar.hideAfterSeconds.small','操作バーが消えるまでの時間',{
           ...slider(0.2,10,0.1),unit:'秒',
           description:'「小」モードでマウス移動などにより表示した操作バーを隠すまでの時間。初期値3秒。実際の全画面表示中は全画面側の設定を使います。'}]

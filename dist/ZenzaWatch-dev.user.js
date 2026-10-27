@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.346-task972
+// @version        2.7.347-task973
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-27 16:25Z 92a9cfc5
+// build: 2026-10-27 17:09Z a0e15b48
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.346-task972';
+    var VER = '2.7.347-task973';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-27 16:25Z 92a9cfc5';
+    var BUILD = '2026-10-27 17:09Z a0e15b48';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3859,7 +3859,7 @@ const Config = (() => {
 				'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
 				videoInfoPanelTab: 'videoInfoTab',
 				fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
-				'controlBar.showOnPause.small': false,
+				'controlBar.showOnPause.small': true,
 				'controlBar.showOnPause.fullscreen': false,
 				'controlBar.hideAfterSeconds.small': 3,
 				'controlBar.hideAfterSeconds.fullscreen': 0.4,

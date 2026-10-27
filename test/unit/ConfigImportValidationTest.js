@@ -49,7 +49,7 @@ describe('Config import validation',()=>{
  it('validates the Task936 toolbar pause toggles and bounded seconds',()=>{
   const {options,default:d}=configSchema();
   for(const key of ['controlBar.showOnPause.small','controlBar.showOnPause.fullscreen']){
-    assert.strictEqual(d[key],false,key);
+    assert.strictEqual(d[key],key==='controlBar.showOnPause.small',key);
     assert.strictEqual(options.validateImport(key,true),true,key);
     assert.strictEqual(options.validateImport(key,false),true,key);
     for(const bad of ['false','true',0,1,null]){

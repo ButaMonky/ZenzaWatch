@@ -13,7 +13,7 @@ class PlayListModel extends VideoListModel {
 
   initialize(params: unknown) {
     super.initialize(params);
-    this.maxItems = 10000;
+    this.maxItems = 3000;
     this.items = [];
     this.isUniq = true;
 

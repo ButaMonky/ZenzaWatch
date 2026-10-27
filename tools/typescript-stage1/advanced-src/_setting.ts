@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.80-task973
+// @version     0.3.81-task974
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -78,7 +78,7 @@ const $: typeof uq = uq;
 //@require NgCompositeRuleEditor
     window.ZenzaAdvancedSettings = {
       config: Config,
-      version: '0.3.80-task973'
+      version: '0.3.81-task974'
     };
     const global = {
       PRODUCT
@@ -1164,23 +1164,22 @@ const $: typeof uq = uq;
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>
           <div class="commentHistorySettingsContainer"></div>
 
-          <div class="searchLimitControl control toggle">
-            <label>
-              検索でプレイリストに読み込む最大件数（推奨: 1000件まで）
-              <select data-setting-name="search.limit">
-                <option value="100">100件（軽い）</option>
-                <option value="300">300件（控えめ）</option>
-                <option value="500">500件</option>
-                <option value="1000">1000件（初期値・推奨の上限）</option>
-                <option value="2000">2000件（重い・読み込みに時間がかかる）</option>
-                <option value="3000">3000件（重い）</option>
-                <option value="5000">5000件（最大・とても重い）</option>
+          <div class="playlistRetentionControl control toggle">
+            <label>連続再生で増えるプレイリストの保持上限
+              <select data-setting-name="playlist.maxItems">
+                ${Array.from({length:30},(_,i)=>(i+1)*1000).map(n=>`<option value="${n}">${n}件${n===3000?'（初期値・推奨）':n>=20000?'（高負荷）':''}</option>`).join('')}
               </select>
             </label>
+            <div class="settingNote">検索・マイリスト・シリーズ等から取得した動画は、設定値を超えても保持します。3万件は表示・並べ替え・保存の負荷が大きくなります。</div>
+          </div>
+          <div class="searchLimitControl control toggle">
+            <label>検索1回で取得する最大動画数（初期値:1000件）
+              <input type="number" min="1" max="5000" step="1" data-setting-name="search.limit">
+            </label>
             <div class="settingNote">
-              100件ごとにニコニコへ1回問い合わせるため、多いほど読み込みが遅くなり、プレイリストの表示も重くなります。
-              上限はニコニコの検索の仕様で5000件です（予備の検索方式に切り替わった時は1600件まで）。
-              リロード後に復元されるのは、再生中の動画の前後1000件までです。
+              1～5000件を指定できます。連続再生の保持上限とは別の設定です。
+              多いほど読み込み時間と通信量が増えます。検索方式によって取得可能件数は異なります。
+              リロード時はブラウザの保存容量に入った分を復元します。大きな一覧は書き出しも併用してください。
             </div>
           </div>
 

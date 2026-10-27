@@ -4,7 +4,7 @@ import {VideoListModel} from './VideoListModel';
 class PlayListModel extends VideoListModel {
     initialize(params) {
         super.initialize(params);
-        this.maxItems = 10000;
+        this.maxItems = 3000;
         this.items = [];
         this.isUniq = true;
         // this._boundOnItemUpdate = this.onItemUpdate.bind(this);

@@ -28,7 +28,7 @@ describe('Task193 default search limit is 1000', () => {
 
   it('the advanced settings wording identifies 1000 as the actual default', () => {
     const s = read('src/_setting.js');
-    assert(s.includes('<option value="300">300件（控えめ）</option>'));
-    assert(s.includes('<option value="1000">1000件（初期値・推奨の上限）</option>'));
+    assert(s.includes('<input type="number" min="1" max="5000" step="1" data-setting-name="search.limit">'));
+    assert(s.includes('初期値:1000件'));
   });
 });

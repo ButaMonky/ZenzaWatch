@@ -1152,6 +1152,27 @@ class ModernAdvancedSettingsUI {
             }
             controls.append(holder);
         }
+        else if (descriptor.type === 'select' && descriptor.presentation === 'dropdown') {
+            const select = this.doc.createElement('select');
+            select.dataset.settingName = descriptor.id;
+            select.setAttribute('aria-label', descriptor.label);
+            select.disabled = !this.model.isEnabled(descriptor.id);
+            for (const choice of descriptor.options || []) {
+                const option = this.doc.createElement('option');
+                option.value = String(choice.value);
+                option.textContent = choice.label;
+                select.append(option);
+            }
+            const value = String(this.model.get(descriptor.id));
+            if (!Array.from(select.options).some(option => option.value === value)) {
+                const option = this.doc.createElement('option');
+                option.value = value;
+                option.textContent = '従来の設定値：' + value;
+                select.append(option);
+            }
+            select.value = value;
+            controls.append(select);
+        }
         else if (descriptor.type === 'select' && descriptor.options.length > 0) {
             const segments = this.doc.createElement('div');
             segments.className = 'zw-modern-segments';

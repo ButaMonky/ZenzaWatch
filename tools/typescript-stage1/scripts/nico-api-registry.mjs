@@ -838,7 +838,7 @@ export const NICO_API_MODULES=Object.freeze([
     originalSha256:"c0946bf0435dff7865891caf989d15fb21eb976c1a343cb56d79dab8e4a74ead",
     preamble:[],
     shape:"declarations",
-    topLevel:["const PlayListSession = ((storage) => {","})(sessionStorage);","PlayListSession.MAX_ITEMS = 10000;","PlayListSession.MIN_ITEMS = 100;","const PlaylistSession = PlayListSession;"],
+    topLevel:["const PlayListSession = ((storage) => {","})(sessionStorage);","PlayListSession.MAX_ITEMS = 30000;","PlayListSession.MIN_ITEMS = 100;","const PlaylistSession = PlayListSession;"],
     exportNames:["PlayListSession","PlaylistSession"],
     task:'task851'
   }),
@@ -882,7 +882,7 @@ export const NICO_API_MODULES=Object.freeze([
     preamble:["import {VideoListItem} from './VideoListItem';","import {VideoListModel} from './VideoListModel';","import {VideoListItemView} from './VideoListItemView';","import {PlayListModel} from './PlayListModel';","import {VideoList} from './VideoList';","import {RelatedVideoList} from './RelatedVideoList';","import {NicoSearchApiV2Loader} from '../../../lib/src/nico/VideoSearch';","import {PlayListSession} from './PlayListSession';","import {VideoListView} from './VideoListView';","import {PlayListView} from './PlayListView';","","import {textUtil} from '../../../lib/src/text/textUtil';","import {PlaylistApiLoader} from '../../../lib/src/nico/PlaylistApiLoader';","import {MylistApiLoader} from '../../../lib/src/nico/MylistApiLoader';"],
     beginLines:["//@require VideoListItem","//@require VideoListModel","//@require VideoListItemView","//@require PlayListModel","//@require VideoList","//@require RelatedVideoList","//@require PlayListSession","//@require VideoListView","//@require PlayListView"],
     shape:'declarations',
-    topLevel:["class PlayList extends VideoList {","}","/* Task 073: 検索でプレイリストに読み込む最大件数。本家検索API(nvapi)の上限が5000件。 */","PlayList.DETAIL_CONCURRENCY = 2;","PlayList.DETAIL_FILL_DELAY_MS = 200;","PlayList.SEARCH_LIMIT_DEFAULT = 1000; // Task 193: 設定の初期値（search.limit）と同じ","PlayList.SEARCH_LIMIT_MIN = 100;","PlayList.SEARCH_LIMIT_MAX = 5000;"],
+    topLevel:["class PlayList extends VideoList {","}","/* Task 073: 検索でプレイリストに読み込む最大件数。本家検索API(nvapi)の上限が5000件。 */","PlayList.DETAIL_CONCURRENCY = 2;","PlayList.DETAIL_FILL_DELAY_MS = 200;","PlayList.SEARCH_LIMIT_DEFAULT = 1000; // Task 193: 設定の初期値（search.limit）と同じ","PlayList.SEARCH_LIMIT_MIN = 1;","PlayList.SEARCH_LIMIT_MAX = 5000;"],
     exportNames:["PlayList","PlayListSession","VideoListItem","VideoListModel","VideoListItemView","VideoListView","PlayListView","PlayListModel","VideoList","RelatedVideoList"],
     task:'task870'
   }),

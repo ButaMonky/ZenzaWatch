@@ -113,7 +113,7 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
     async _loadAll(type: PlaylistType, initialUrl: string, requestedMax: number | undefined,
       isCurrent: (() => boolean) | undefined, frontendId: number, frontendVersion: number): Promise<unknown[]> {
       const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
-        Math.min(10000, Math.floor(requestedMax)) : 10000;
+        Math.min(30000, Math.floor(requestedMax)) : 30000;
       const first = new URL(initialUrl);
       const rawSize = Number(first.searchParams.get('pageSize') || 500);
       const pageSize = Number.isInteger(rawSize) && rawSize > 0 ? Math.min(500, rawSize) : 500;
@@ -141,7 +141,7 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
       const items: unknown[] = [], seen = new Set<string>();
       let totalCount: number | null = null, limited = false;
       // A broken API cannot keep a request alive indefinitely by repeating pages.
-      const maxPages = Math.ceil(10000 / pageSize) + 1;
+      const maxPages = Math.ceil(30000 / pageSize) + 1;
       for (let page = 1; ; page++) {
         checkCurrent();
         if (page > maxPages) { throw new Error('プレイリスト取得失敗（ページ数の安全上限）'); }

@@ -4632,9 +4632,15 @@ class NicoVideoPlayerDialog extends Emitter {
       loader: ThumbInfoLoader,
       container: $container[0],
       loop: this._playerConfig.props.playlistLoop,
+      retentionLimit: this._playerConfig.props['playlist.maxItems'],
       enableAdDecoration: this._playerConfig.props.enableAdDecoration,
       debugCheckAdDecoration: this._playerConfig.props.debugCheckAdDecoration
     });
+    if (typeof this._playerConfig.onkey === 'function') {
+      this._playerConfig.onkey('playlist.maxItems', () => {
+        this._playlist?.setRetentionLimit(this._playerConfig.props['playlist.maxItems']);
+      });
+    }
     this._playlist.on('command', this._onCommand.bind(this));
     this._playlist.on('update', _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
     // Task 090（ZW-017）: 保存しておいたプレイリストが壊れていても、プレイリストの準備（と動画を開くこと）は止めない

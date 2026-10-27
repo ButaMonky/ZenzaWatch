@@ -69,6 +69,7 @@ declare const RelatedVideoList: Loose;
 
 class PlayList extends VideoList {
   declare _activeItem: Loose;
+  declare _retentionLimit: number;
   declare _additiveListGeneration: number;
   declare _additiveLoadTail: Promise<unknown> | null;
   declare _container: Loose;
@@ -99,6 +100,7 @@ class PlayList extends VideoList {
     this._isLoop = params.loop;
 
     this.model = new PlayListModel({});
+    this.setRetentionLimit(params.retentionLimit);
     // Task 093: item の watchId の変更で model が重複を外した時も、再生位置（_index）を再生中の item に合わせる
     this.model.on('item-removed', () => this._refreshIndex());
     // Task196: 表示範囲に入った情報不明の項目の詳細を補完する
@@ -118,6 +120,22 @@ class PlayList extends VideoList {
       }
     });
   }
+  static normalizeRetentionLimit(value: unknown): number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 1000 &&
+      value <= 30000 && value % 1000 === 0 ? value : 3000;
+  }
+  setRetentionLimit(value: unknown) {
+    this._retentionLimit = PlayList.normalizeRetentionLimit(value);
+    // Changing a preference is not an instruction to delete current entries.
+    this.model.maxItems = Math.max(this._retentionLimit, this.model.length);
+  }
+  _reserveLoadedItems(items: Loose[], replace = false) {
+    // Reserve for an explicit successful result only, after stale-load checks.
+    // The base model still handles deduplication, active-item retention and
+    // rolling single-item growth. Do not let the preference cap API collection.
+    const count = this.model._dedupe(replace ? [] : this.model.items, items).length;
+    this.model.maxItems = Math.max(this._retentionLimit || 3000, count);
+  }
   serialize() {
     return {
       items: this.model.serialize(),
@@ -135,6 +153,7 @@ class PlayList extends VideoList {
     this._invalidateAdditiveLoads();
     this._initializeView();
     console.log('unserialize: ', data);
+    this.model.maxItems = Math.max(this._retentionLimit || 3000, data.items.length);
     this.model.unserialize(data.items);
     this._isEnable = data.enable;
     this._isLoop = data.loop;
@@ -308,6 +327,7 @@ class PlayList extends VideoList {
   _setItemData(listData: Loose[]) {
     this._invalidateAdditiveLoads();
     const items = listData.map(itemData => new VideoListItem(itemData));
+    this._reserveLoadedItems(items, true);
     this.model.setItem(items);
     this.setIndex(items.length > 0 ? 0 : -1);
   }
@@ -372,30 +392,41 @@ class PlayList extends VideoList {
     if (!anchor) {
       model.insertItem(accepted, this.getIndex() + 1);
     } else {
-      // Existing neighbours are fixed anchors: never move or replace their objects.
-      const next = [...model.items];
+      // Existing neighbours are fixed anchors. Index them once, then attach
+      // before/after buckets; repeated findIndex/splice made a30k load quadratic.
+      const existing = model.items;
+      const positions = new Map(existing.map((item, index) => [item.watchId, index]));
       const acceptedSet = new Set(accepted);
-      let cursor = next.indexOf(anchor);
+      const before = new Map<number, Loose[]>(), after = new Map<number, Loose[]>();
+      const at = model.indexOf(anchor);
+      let cursor = at;
       for (let i = anchorAt - 1; i >= 0; i--) {
         const item = videoListItems[i];
-        const position = next.findIndex(existing => existing.watchId === item.watchId);
-        if (position >= 0 && position < cursor) {
-          cursor = position;
-        } else if (position < 0 && acceptedSet.has(item)) {
-          next.splice(cursor, 0, item);
+        const position = positions.get(item.watchId);
+        if (position !== undefined && position < cursor) { cursor = position; }
+        else if (position === undefined && acceptedSet.has(item)) {
+          const bucket = before.get(cursor) || [];
+          bucket.push(item); before.set(cursor, bucket);
         }
       }
-      cursor = next.indexOf(anchor);
+      cursor = at;
       const tail = anchorAt >= 0 ? videoListItems.slice(anchorAt + 1) : videoListItems;
       for (const item of tail) {
-        const position = next.findIndex(existing => existing.watchId === item.watchId);
-        if (position > cursor) {
-          cursor = position;
-        } else if (position < 0 && acceptedSet.has(item)) {
-          next.splice(cursor + 1, 0, item);
-          cursor++;
+        const position = positions.get(item.watchId);
+        if (position !== undefined && position > cursor) { cursor = position; }
+        else if (position === undefined && acceptedSet.has(item)) {
+          const bucket = after.get(cursor) || [];
+          bucket.push(item); after.set(cursor, bucket);
         }
       }
+      const next: Loose[] = [];
+      existing.forEach((item, index) => {
+        const previous = before.get(index);
+        if (previous) { for (let i=previous.length-1;i>=0;i--) { next.push(previous[i]); } }
+        next.push(item);
+        const following = after.get(index);
+        if (following) { for (const entry of following) { next.push(entry); } }
+      });
       model._commit(next, 'tail');
     }
     this._refreshIndex(false);
@@ -429,14 +460,17 @@ class PlayList extends VideoList {
   }
   replaceItems(videoListItemsRawData: Loose[], options?: Loose) {
     const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
+    this._reserveLoadedItems(items, true);
     return this._replaceAll(items, options);
   }
   appendItems(videoListItemsRawData: Loose[], options?: Loose) {
     const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
+    this._reserveLoadedItems(items);
     return this._appendAll(items, options);
   }
   insertItems(videoListItemsRawData: Loose[], options?: Loose) {
     const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
+    this._reserveLoadedItems(items);
     return this._insertAll(items, options);
   }
   _invalidateAdditiveLoads() {
@@ -502,7 +536,8 @@ class PlayList extends VideoList {
 
     const additiveOwner = this._beginAdditiveLoad(options);
     const network = this._playlistApiLoader.load({...playlist,
-      maxItems: this.model.maxItems,
+      // Independent collection safety budget, never the rolling preference.
+      maxItems: 30000,
       isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
     }, msgInfo);
     return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
@@ -528,6 +563,7 @@ class PlayList extends VideoList {
           videoListItems.reverse();
         }
 
+        this._reserveLoadedItems(videoListItems, !options.insert && !options.append);
         let added: number | null | undefined = null;
         let overflow = 0;
         // Task296: series/user uploads have a meaningful preceding/following order.
@@ -650,6 +686,7 @@ class PlayList extends VideoList {
           videoListItems = _.shuffle(videoListItems);
         }
 
+        this._reserveLoadedItems(videoListItems, !options.insert && !options.append);
         let added: number | null | undefined = null;
         if (options.insert) {
           added = this._insertAll(videoListItems, options);
@@ -1114,7 +1151,7 @@ class PlayList extends VideoList {
 PlayList.DETAIL_CONCURRENCY = 2;
 PlayList.DETAIL_FILL_DELAY_MS = 200;
 PlayList.SEARCH_LIMIT_DEFAULT = 1000; // Task 193: 設定の初期値（search.limit）と同じ
-PlayList.SEARCH_LIMIT_MIN = 100;
+PlayList.SEARCH_LIMIT_MIN = 1;
 PlayList.SEARCH_LIMIT_MAX = 5000;
 
 export {

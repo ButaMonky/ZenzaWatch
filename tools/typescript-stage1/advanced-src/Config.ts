@@ -132,6 +132,8 @@ const Config = (() => {
     autoCommentSpeedRate: false,
 
     playlistLoop: false,
+    // Task974: rolling single-video accumulation, not a bulk-import truncation cap.
+    'playlist.maxItems': 3000,
     enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
     // Task 055: デバッグ用。読み込み済みの全動画について、都度サーバーへ
     // 問い合わせ直して広告装飾の表示がズレていないか確認し、コンソールへ
@@ -514,6 +516,7 @@ const Config = (() => {
         if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && (value as number) >= 0; }
         if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
         if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
+        if (key === 'playlist.maxItems') { return Number.isInteger(value) && (value as number) >= 1000 && (value as number) <= 30000 && (value as number) % 1000 === 0; }
         if (key === 'search.limit') { return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 5000; }
         if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
           'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {

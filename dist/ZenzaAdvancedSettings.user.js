@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.80-task973
+// @version     0.3.81-task974
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-27 17:09Z a0e15b48
+// build: 2026-10-27 17:43Z bf19f517
 /* eslint-disable */
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 ((window) => {
@@ -4033,6 +4033,7 @@ const Config = (() => {
 				commentSpeedRate: 1.0,
 				autoCommentSpeedRate: false,
 				playlistLoop: false,
+				'playlist.maxItems': 3000,
 				enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
 				debugCheckAdDecoration: false,
 				commentLanguage: 'ja-jp',
@@ -4307,6 +4308,9 @@ const Config = (() => {
 						}
 						if (key === 'commentLayer.protectCA') {
 								return typeof value === 'boolean';
+						}
+						if (key === 'playlist.maxItems') {
+								return Number.isInteger(value) && value >= 1000 && value <= 30000 && value % 1000 === 0;
 						}
 						if (key === 'search.limit') {
 								return Number.isInteger(value) && value >= 1 && value <= 5000;
@@ -7664,6 +7668,14 @@ class ModernAdvancedSettingsModel {
 								['filter.extraEasyThread', '追加のかんたんコメントスレッド']
 						]),
 						...group('プレイリスト・検索', 'プレイリスト', [
+								['playlist.maxItems', '連続再生で増えるプレイリストの保持上限', {
+												presentation: 'dropdown',
+												...select(Array.from({ length: 30 }, (_, index) => {
+														const n = (index + 1) * 1000;
+														return [n, `${n.toLocaleString('ja-JP')}件${n === 3000 ? '（初期値・推奨）' : n >= 20000 ? '（高負荷）' : ''}`];
+												})),
+												description: '1000～30000件を1000件刻みで選択します。初期値は3000件です。連続再生などで動画が1件ずつ増える際の保持件数で、再生中の動画は残します。検索・投稿動画・マイリスト・シリーズから取得した一覧は、この設定より多くても切り捨てません。一括追加時は既存の動画も保持し、その時点の件数まで一時的に上限を広げます。以後の1件追加は広げた上限内で入れ替わり、一覧を置き換えると設定値を基準に戻ります。設定を下げただけでは現在の動画は削除しません。多いほどメモリ使用量と表示・並べ替え・保存の負荷が増え、20000～30000件は高負荷です。ブラウザの保存容量不足時は復元対象が減るため、大きな一覧は書き出しも併用してください。'
+										}],
 								['playlistLoop', 'プレイリストをループ'],
 								['continueNextPage', '再生中の動画をページ移動後も再開'],
 								['enableAdDecoration', 'プレイリストで動画の装飾枠を表示']
@@ -7685,8 +7697,9 @@ class ModernAdvancedSettingsModel {
 												]),
 												description: '検索候補と動画IDのカードをどう並べるかの設定です。検索件数の問い合わせ回数を減らす設定ではありません。'
 										}],
-								['search.limit', '検索結果をプレイリストに読み込む最大動画数', {
-												description: 'プレイリストへ実際に追加する動画数の上限です。数が多いほど検索データの読み込みに時間と通信がかかります。候補のヒット件数表示とは別の設定です。既定値は1000件です。'
+								['search.limit', '検索1回で取得する最大動画数', {
+												...slider(1, 5000, 1), unit: '件', input: null,
+												description: '1～5000件を1件刻みで指定できます。初期値は1000件です。連続再生の保持上限とは別に、1回の動画・タグ検索から取り込む最大件数を決めます。取得済みの検索結果は保持上限を超えても残します。1～99件も指定した件数のまま使います。多いほど通信量と待ち時間が増え、候補のヒット件数表示には影響しません。検索APIの制約や予備検索への切り替えにより指定件数まで取得できない場合があります。'
 										}]
 						]),
 						...group('プレイリスト・検索', '関連メニュー › カスタムリンク', [
@@ -9326,6 +9339,27 @@ class ModernAdvancedSettingsUI {
 								holder.append(unit);
 						}
 						controls.append(holder);
+				}
+				else if (descriptor.type === 'select' && descriptor.presentation === 'dropdown') {
+						const select = this.doc.createElement('select');
+						select.dataset.settingName = descriptor.id;
+						select.setAttribute('aria-label', descriptor.label);
+						select.disabled = !this.model.isEnabled(descriptor.id);
+						for (const choice of descriptor.options || []) {
+								const option = this.doc.createElement('option');
+								option.value = String(choice.value);
+								option.textContent = choice.label;
+								select.append(option);
+						}
+						const value = String(this.model.get(descriptor.id));
+						if (!Array.from(select.options).some(option => option.value === value)) {
+								const option = this.doc.createElement('option');
+								option.value = value;
+								option.textContent = '従来の設定値：' + value;
+								select.append(option);
+						}
+						select.value = value;
+						controls.append(select);
 				}
 				else if (descriptor.type === 'select' && descriptor.options.length > 0) {
 						const segments = this.doc.createElement('div');
@@ -11477,7 +11511,7 @@ class NgCompositeRuleEditor {
 }
         window.ZenzaAdvancedSettings = {
             config: Config,
-            version: '0.3.80-task973'
+            version: '0.3.81-task974'
         };
         const global = {
             PRODUCT
@@ -12533,23 +12567,22 @@ class NgCompositeRuleEditor {
           <div class="screenFilterSettingsContainer">${renderScreenFilterSettingsHtml()}</div>
           <div class="commentHistorySettingsContainer"></div>
 
-          <div class="searchLimitControl control toggle">
-            <label>
-              検索でプレイリストに読み込む最大件数（推奨: 1000件まで）
-              <select data-setting-name="search.limit">
-                <option value="100">100件（軽い）</option>
-                <option value="300">300件（控えめ）</option>
-                <option value="500">500件</option>
-                <option value="1000">1000件（初期値・推奨の上限）</option>
-                <option value="2000">2000件（重い・読み込みに時間がかかる）</option>
-                <option value="3000">3000件（重い）</option>
-                <option value="5000">5000件（最大・とても重い）</option>
+          <div class="playlistRetentionControl control toggle">
+            <label>連続再生で増えるプレイリストの保持上限
+              <select data-setting-name="playlist.maxItems">
+                ${Array.from({ length: 30 }, (_, i) => (i + 1) * 1000).map(n => `<option value="${n}">${n}件${n === 3000 ? '（初期値・推奨）' : n >= 20000 ? '（高負荷）' : ''}</option>`).join('')}
               </select>
             </label>
+            <div class="settingNote">検索・マイリスト・シリーズ等から取得した動画は、設定値を超えても保持します。3万件は表示・並べ替え・保存の負荷が大きくなります。</div>
+          </div>
+          <div class="searchLimitControl control toggle">
+            <label>検索1回で取得する最大動画数（初期値:1000件）
+              <input type="number" min="1" max="5000" step="1" data-setting-name="search.limit">
+            </label>
             <div class="settingNote">
-              100件ごとにニコニコへ1回問い合わせるため、多いほど読み込みが遅くなり、プレイリストの表示も重くなります。
-              上限はニコニコの検索の仕様で5000件です（予備の検索方式に切り替わった時は1600件まで）。
-              リロード後に復元されるのは、再生中の動画の前後1000件までです。
+              1～5000件を指定できます。連続再生の保持上限とは別の設定です。
+              多いほど読み込み時間と通信量が増えます。検索方式によって取得可能件数は異なります。
+              リロード時はブラウザの保存容量に入った分を復元します。大きな一覧は書き出しも併用してください。
             </div>
           </div>
 

@@ -1,3 +1,13 @@
+## 2026-10-28 - Configurable rolling playlist retention (2.7.348 / settings0.3.81)
+
+- Add a compact1,000-step rolling-retention setting from1,000 to30,000, default3,000. Applies on initialization and immediately after saving a change; lowering it never deletes the current list.
+- Bulk search/mylist/series/upload/Watch Later results take precedence over rolling retention. Explicit bulk insert/append preserves existing and incoming unique entries, then single-video growth rolls at the temporarily expanded capacity. Replacing/clearing resets that capacity.
+- Collection fetch safety is independently30,000 per request, not the configured rolling-retention value; hitting it is reported. Session storage attempts up to30,000 but still preserves the active item on quota fallback.
+- Fix search1..99 being silently rounded up to100. Search remains independently configurable1..5,000 with default1,000; old controls and stale1,000-item reload advice updated.
+- Replace quadratic series-neighbor scans with indexed insertion, preserving existing anchors, playback position and order.
+- Settings warn about memory, rendering/sorting pauses and reduced reload recovery when storage fills.30,000 is an opt-in high-load setting, not a performance guarantee.
+- Keep Task973's small-mode pause-toolbar default and all prior repairs.
+
 ## 2026-10-28 - Playlist pagination and session capacity (2.7.346-task972)
 
 - User uploads, public mylists, series and Watch Later now fetch successive pages instead of stopping after the first 500 videos, up to the existing 10,000-item player capacity.

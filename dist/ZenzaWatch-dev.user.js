@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.347-task973
+// @version        2.7.348-task974
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-27 17:09Z a0e15b48
+// build: 2026-10-27 17:43Z bf19f517
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.347-task973';
+    var VER = '2.7.348-task974';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-27 17:09Z a0e15b48';
+    var BUILD = '2026-10-27 17:43Z bf19f517';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3898,6 +3898,7 @@ const Config = (() => {
 				commentSpeedRate: 1.0,
 				autoCommentSpeedRate: false,
 				playlistLoop: false,
+				'playlist.maxItems': 3000,
 				enableAdDecoration: true, // プレイリストに広告の金冠・銀冠枠を表示する(Task 054)
 				debugCheckAdDecoration: false,
 				commentLanguage: 'ja-jp',
@@ -4172,6 +4173,9 @@ const Config = (() => {
 						}
 						if (key === 'commentLayer.protectCA') {
 								return typeof value === 'boolean';
+						}
+						if (key === 'playlist.maxItems') {
+								return Number.isInteger(value) && value >= 1000 && value <= 30000 && value % 1000 === 0;
 						}
 						if (key === 'search.limit') {
 								return Number.isInteger(value) && value >= 1 && value <= 5000;
@@ -11101,7 +11105,7 @@ const PlaylistApiLoader = (() => {
 				}
 				async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
 						const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
-								Math.min(10000, Math.floor(requestedMax)) : 10000;
+								Math.min(30000, Math.floor(requestedMax)) : 30000;
 						const first = new URL(initialUrl);
 						const rawSize = Number(first.searchParams.get('pageSize') || 500);
 						const pageSize = Number.isInteger(rawSize) && rawSize > 0 ? Math.min(500, rawSize) : 500;
@@ -11127,7 +11131,7 @@ const PlaylistApiLoader = (() => {
 						}
 						const items = [], seen = new Set();
 						let totalCount = null, limited = false;
-						const maxPages = Math.ceil(10000 / pageSize) + 1;
+						const maxPages = Math.ceil(30000 / pageSize) + 1;
 						for (let page = 1;; page++) {
 								checkCurrent();
 								if (page > maxPages) {
@@ -34826,7 +34830,7 @@ VideoListItemView.map = new WeakMap;
 class PlayListModel extends VideoListModel {
 		initialize(params) {
 				super.initialize(params);
-				this.maxItems = 10000;
+				this.maxItems = 3000;
 				this.items = [];
 				this.isUniq = true;
 		}
@@ -35205,7 +35209,7 @@ const PlayListSession = ((storage) => {
 				}
 		};
 })(sessionStorage);
-PlayListSession.MAX_ITEMS = 10000;
+PlayListSession.MAX_ITEMS = 30000;
 PlayListSession.MIN_ITEMS = 100;
 const PlaylistSession = PlayListSession;
 class VideoListView extends Emitter {
@@ -36072,6 +36076,7 @@ class PlayList extends VideoList {
 				this._isEnable = false;
 				this._isLoop = params.loop;
 				this.model = new PlayListModel({});
+				this.setRetentionLimit(params.retentionLimit);
 				this.model.on('item-removed', () => this._refreshIndex());
 				this.model.on('update', () => this._scheduleDetailFill());
 				this._initializeAdDecoration(params);
@@ -36082,6 +36087,18 @@ class PlayList extends VideoList {
 								this.scrollToActiveItem();
 						}
 				});
+		}
+		static normalizeRetentionLimit(value) {
+				return typeof value === 'number' && Number.isInteger(value) && value >= 1000 &&
+						value <= 30000 && value % 1000 === 0 ? value : 3000;
+		}
+		setRetentionLimit(value) {
+				this._retentionLimit = PlayList.normalizeRetentionLimit(value);
+				this.model.maxItems = Math.max(this._retentionLimit, this.model.length);
+		}
+		_reserveLoadedItems(items, replace = false) {
+				const count = this.model._dedupe(replace ? [] : this.model.items, items).length;
+				this.model.maxItems = Math.max(this._retentionLimit || 3000, count);
 		}
 		serialize() {
 				return {
@@ -36099,6 +36116,7 @@ class PlayList extends VideoList {
 				this._invalidateAdditiveLoads();
 				this._initializeView();
 				console.log('unserialize: ', data);
+				this.model.maxItems = Math.max(this._retentionLimit || 3000, data.items.length);
 				this.model.unserialize(data.items);
 				this._isEnable = data.enable;
 				this._isLoop = data.loop;
@@ -36255,6 +36273,7 @@ class PlayList extends VideoList {
 		_setItemData(listData) {
 				this._invalidateAdditiveLoads();
 				const items = listData.map(itemData => new VideoListItem(itemData));
+				this._reserveLoadedItems(items, true);
 				this.model.setItem(items);
 				this.setIndex(items.length > 0 ? 0 : -1);
 		}
@@ -36307,31 +36326,53 @@ class PlayList extends VideoList {
 						model.insertItem(accepted, this.getIndex() + 1);
 				}
 				else {
-						const next = [...model.items];
+						const existing = model.items;
+						const positions = new Map(existing.map((item, index) => [item.watchId, index]));
 						const acceptedSet = new Set(accepted);
-						let cursor = next.indexOf(anchor);
+						const before = new Map(), after = new Map();
+						const at = model.indexOf(anchor);
+						let cursor = at;
 						for (let i = anchorAt - 1; i >= 0; i--) {
 								const item = videoListItems[i];
-								const position = next.findIndex(existing => existing.watchId === item.watchId);
-								if (position >= 0 && position < cursor) {
+								const position = positions.get(item.watchId);
+								if (position !== undefined && position < cursor) {
 										cursor = position;
 								}
-								else if (position < 0 && acceptedSet.has(item)) {
-										next.splice(cursor, 0, item);
+								else if (position === undefined && acceptedSet.has(item)) {
+										const bucket = before.get(cursor) || [];
+										bucket.push(item);
+										before.set(cursor, bucket);
 								}
 						}
-						cursor = next.indexOf(anchor);
+						cursor = at;
 						const tail = anchorAt >= 0 ? videoListItems.slice(anchorAt + 1) : videoListItems;
 						for (const item of tail) {
-								const position = next.findIndex(existing => existing.watchId === item.watchId);
-								if (position > cursor) {
+								const position = positions.get(item.watchId);
+								if (position !== undefined && position > cursor) {
 										cursor = position;
 								}
-								else if (position < 0 && acceptedSet.has(item)) {
-										next.splice(cursor + 1, 0, item);
-										cursor++;
+								else if (position === undefined && acceptedSet.has(item)) {
+										const bucket = after.get(cursor) || [];
+										bucket.push(item);
+										after.set(cursor, bucket);
 								}
 						}
+						const next = [];
+						existing.forEach((item, index) => {
+								const previous = before.get(index);
+								if (previous) {
+										for (let i = previous.length - 1; i >= 0; i--) {
+												next.push(previous[i]);
+										}
+								}
+								next.push(item);
+								const following = after.get(index);
+								if (following) {
+										for (const entry of following) {
+												next.push(entry);
+										}
+								}
+						});
 						model._commit(next, 'tail');
 				}
 				this._refreshIndex(false);
@@ -36361,14 +36402,17 @@ class PlayList extends VideoList {
 		}
 		replaceItems(videoListItemsRawData, options) {
 				const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
+				this._reserveLoadedItems(items, true);
 				return this._replaceAll(items, options);
 		}
 		appendItems(videoListItemsRawData, options) {
 				const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
+				this._reserveLoadedItems(items);
 				return this._appendAll(items, options);
 		}
 		insertItems(videoListItemsRawData, options) {
 				const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
+				this._reserveLoadedItems(items);
 				return this._insertAll(items, options);
 		}
 		_invalidateAdditiveLoads() {
@@ -36433,7 +36477,7 @@ class PlayList extends VideoList {
 				window.console.time(timeKey);
 				const additiveOwner = this._beginAdditiveLoad(options);
 				const network = this._playlistApiLoader.load({ ...playlist,
-						maxItems: this.model.maxItems,
+						maxItems: 30000,
 						isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
 				}, msgInfo);
 				return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
@@ -36457,6 +36501,7 @@ class PlayList extends VideoList {
 						else if (playlist.type === 'user-uploaded' && playlist.options == null) {
 								videoListItems.reverse();
 						}
+						this._reserveLoadedItems(videoListItems, !options.insert && !options.append);
 						let added = null;
 						let overflow = 0;
 						if (options.insert && ['series', 'user-uploaded'].includes(playlist.type)) {
@@ -36556,6 +36601,7 @@ class PlayList extends VideoList {
 						if (options.shuffle) {
 								videoListItems = _.shuffle(videoListItems);
 						}
+						this._reserveLoadedItems(videoListItems, !options.insert && !options.append);
 						let added = null;
 						if (options.insert) {
 								added = this._insertAll(videoListItems, options);
@@ -36970,7 +37016,7 @@ class PlayList extends VideoList {
 PlayList.DETAIL_CONCURRENCY = 2;
 PlayList.DETAIL_FILL_DELAY_MS = 200;
 PlayList.SEARCH_LIMIT_DEFAULT = 1000; // Task 193: 設定の初期値（search.limit）と同じ
-PlayList.SEARCH_LIMIT_MIN = 100;
+PlayList.SEARCH_LIMIT_MIN = 1;
 PlayList.SEARCH_LIMIT_MAX = 5000;
 
 // already required
@@ -46690,9 +46736,15 @@ class NicoVideoPlayerDialog extends Emitter {
 						loader: ThumbInfoLoader,
 						container: $container[0],
 						loop: this._playerConfig.props.playlistLoop,
+						retentionLimit: this._playerConfig.props['playlist.maxItems'],
 						enableAdDecoration: this._playerConfig.props.enableAdDecoration,
 						debugCheckAdDecoration: this._playerConfig.props.debugCheckAdDecoration
 				});
+				if (typeof this._playerConfig.onkey === 'function') {
+						this._playerConfig.onkey('playlist.maxItems', () => {
+								this._playlist?.setRetentionLimit(this._playerConfig.props['playlist.maxItems']);
+						});
+				}
 				this._playlist.on('command', this._onCommand.bind(this));
 				this._playlist.on('update', _.debounce(this._onPlaylistStatusUpdate.bind(this), 100));
 				try {

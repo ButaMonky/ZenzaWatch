@@ -47,7 +47,7 @@ function boot(saved={},storageValues={}) {
     KEY_PLAYLIST_SET_COMMONS_TREE:0, KEY_COPY_WATCH_URL:0,
     'relatedMenu.builtinOptions':{},
     'videoSearch.wordCountMode':'on-demand','videoSearch.videoIdSuggestMode':'merged',
-    'search.limit':1000,'relatedMenu.order':[],'relatedMenu.hiddenItems':[],
+    'playlist.maxItems':3000,'search.limit':1000,'relatedMenu.order':[],'relatedMenu.hiddenItems':[],
     'ui.hover.like':true,'ui.hover.tweet':true,'ui.hover.mylist':true,
     'ui.hover.watchLater':true,'ui.hover.comments':true,'ui.hover.ngFilter':true,
     'ui.relatedMenu':true,'ui.commentInput':true,
@@ -1740,4 +1740,28 @@ describe('Task936/938 fullscreen/small toolbar preferences',function(){
       assert.deepStrictEqual(h.config.writes.map(([id])=>id),['controlBar.showOnPause.small']);
     }finally{h.destroy();}
   });
+});
+
+
+describe('Task974 playlist retention and search controls',()=>{
+ it('uses a compact30-option dropdown and saves only the requested retention value',()=>{
+  const h=boot();try{
+   h.click('[data-zw-major="プレイリスト・検索"]');h.click('[data-zw-sub="プレイリスト・検索|プレイリスト"]');
+   const row=h.q('[data-zw-id="playlist.maxItems"]');assert(row);
+   const select=row.querySelector('select[data-setting-name="playlist.maxItems"]');assert(select,'do not render30 segmented buttons');
+   assert.strictEqual(select.options.length,30);assert.strictEqual(select.value,'3000');
+   select.value='30000';h.dispatch(select);assert.strictEqual(h.model.get('playlist.maxItems'),30000);
+   h.click('[data-zw-save]');assert.strictEqual(h.config.values['playlist.maxItems'],30000);
+   assert.deepStrictEqual(h.config.writes.map(x=>x[0]),['playlist.maxItems']);
+  }finally{h.destroy();}
+ });
+ it('keeps37 search results visible/editable without changing a saved retention value',()=>{
+  const h=boot({'search.limit':37,'playlist.maxItems':7000});try{
+   h.click('[data-zw-major="プレイリスト・検索"]');h.click('[data-zw-sub="プレイリスト・検索|検索"]');
+   const number=h.q('[data-zw-id="search.limit"] input[type="number"]');assert(number);
+   assert.strictEqual(number.value,'37');assert.strictEqual(number.min,'1');assert.strictEqual(number.max,'5000');assert.strictEqual(number.step,'1');
+   number.value='99';h.dispatch(number,'input');h.click('[data-zw-save]');
+   assert.strictEqual(h.config.values['search.limit'],99);assert.strictEqual(h.config.values['playlist.maxItems'],7000);
+  }finally{h.destroy();}
+ });
 });

@@ -57,8 +57,8 @@ describe('Task972 collection pagination',function(){
   const h=loader();const a=await h.api.load({type:'series',id:3,options:{page:2,pageSize:100}});
   assert.strictEqual(a[0].watchId,'sm101');assert.strictEqual(a.length,100);assert.strictEqual(h.calls.length,1);
  });
- it('stops at player capacity, carries capacity notice through serialized cache',async()=>{
-  const h=loader({total:12050});const req={type:'mylist',id:1};
+ it('honors an explicit fetch budget, carrying safety-limit notice through serialized cache',async()=>{
+  const h=loader({total:12050});const req={type:'mylist',id:1,maxItems:10000};
   for(let i=0;i<2;i++){const a=await h.api.load(req);assert.strictEqual(a.length,10000);assert(a.playlistLoadInfo?.limited);assert.strictEqual(a.playlistLoadInfo.totalCount,12050);}
   assert.strictEqual(h.calls.length,20);
  });
@@ -95,7 +95,7 @@ describe('Task972 collection pagination',function(){
   await p.load({type:'user-uploaded',id:1});assert.strictEqual(p.model.length,1082);
   assert.strictEqual(p.model.items[0].watchId,'sm1082');assert.strictEqual(p.model.items[1081].watchId,'sm1');
   p.model.maxItems=700;const result=await p.load({type:'mylist',id:2});
-  assert.strictEqual(p.model.length,700);assert(result.message.includes('700')&&result.message.includes('上限'));
+  assert.strictEqual(p.model.length,1082);assert(!result.message.includes('上限'),'rolling retention does not truncate a fetched collection');
  });
  it('a newer player load cancels the old pagination before its next page',async()=>{
   const h=createPlaylistContext(),requests=[];let finish;

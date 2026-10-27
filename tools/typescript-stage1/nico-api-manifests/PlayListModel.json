@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/PlayListModel.ts",
   "runtime": "packages/zenza/src/Playlist/PlayListModel.js",
-  "sourceSha256": "1167de61e36b7e06b25ac894d1050d7fceb89f81780cc95068533a45ddd16574",
-  "runtimeSha256": "e894eb036423f0d6d385b902a85adc6d94517646a22b02adb02f621181e67b9b"
+  "sourceSha256": "9cf67d7610285a110a985fdba33ee0d5b450c75206073538cd98ac6504f64fca",
+  "runtimeSha256": "61ff4a89c45db2dda4947a1be9ea2324f361f5e96643f79835a7b5045df803cf"
 }

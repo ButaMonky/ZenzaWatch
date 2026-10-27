@@ -46,19 +46,19 @@ describe('Task296 playlist neighbour insertion recovery (Task223 expectations)',
     assert.deepStrictEqual(Array.from(playlist.model.items), first);
   });
 
-  it('preserves all existing entries when capacity is full', async () => {
+  it('preserves existing AND fetched entries when retention is full', async () => {
     const {playlist, load} = setup(undefined, 4);
     const result = await load(['sm1', 'sm2', 'sm3', 'sm4']);
-    assert.deepStrictEqual(order(playlist), ['sm9', 'sm2', 'sm3', 'sm8']);
-    assert.ok(result.message.includes('上限'));
+    assert.deepStrictEqual(order(playlist), ['sm9', 'sm1', 'sm2', 'sm3', 'sm4', 'sm8']);
+    assert.ok(!result.message.includes('上限'));
     assert.ok(result.message.includes('2'));
   });
 
   it('inserts after current when the anchor is absent from the response', async () => {
     const {playlist, load} = setup(undefined, 5);
     const result = await load(['sm4', 'sm5']);
-    assert.deepStrictEqual(order(playlist), ['sm9', 'sm2', 'sm4', 'sm3', 'sm8']);
-    assert.ok(result.message.includes('上限'));
+    assert.deepStrictEqual(order(playlist), ['sm9', 'sm2', 'sm4', 'sm5', 'sm3', 'sm8']);
+    assert.ok(!result.message.includes('上限'));
   });
 
   it('keeps newly discovered later episodes behind an existing next episode', async () => {

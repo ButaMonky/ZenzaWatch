@@ -65,7 +65,8 @@ describe('Task196 bulk add without waiting for details', () => {
 
   it('the real 10,000 capacity: 9,900 existing + 997 candidates -> 100 added, 897 kept as overflow', async () => {
     const s = setup();
-    assert.strictEqual(s.p.model.maxItems, 10000);
+    assert.strictEqual(s.p.model.maxItems, 3000);
+    s.p.setRetentionLimit(10000); // Task974: this case explicitly selects the10k capacity.
     s.p.model.setItem(ids(9900, 100000).map(id => s.item(id)));
     const report = {};
     const added = await s.p.appendWatchIds(ids(997), {deferDetails: true, report});

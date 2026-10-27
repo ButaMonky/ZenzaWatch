@@ -4,7 +4,7 @@
 
 | ファイル | 役割 | 備考 |
 |---|---|---|
-| `ZenzaWatch-dev.user.js` | **ZenzaWatch本体**。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供 | 現在の推奨版。`2.7.348-task974`（公開版） |
+| `ZenzaWatch-dev.user.js` | **ZenzaWatch本体**。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供 | 現在の推奨版。`2.7.349-task974`（公開版） |
 | `ZenzaWatch.user.js` | ZenzaWatch本体の旧通常版（2.6.2） | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない。DEV版と同時に有効にしないこと |
 | `ZenzaAdvancedSettings.user.js` | 上級者向け設定パネル | ショートカット、表示・非表示、画面フィルター、NG、通知の色・透明度。`0.3.81-task974` |
 | `ZenzaHLS.user.js` | HLS / domand動画再生を担当 | 自動画質切り替えも担当。`0.0.41-task966` |

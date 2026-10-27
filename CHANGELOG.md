@@ -1,4 +1,4 @@
-## 2026-10-28 - Configurable rolling playlist retention (2.7.348 / settings0.3.81)
+## 2026-10-28 - Configurable rolling playlist retention (2.7.349 / settings0.3.81)
 
 - Add a compact1,000-step rolling-retention setting from1,000 to30,000, default3,000. Applies on initialization and immediately after saving a change; lowering it never deletes the current list.
 - Bulk search/mylist/series/upload/Watch Later results take precedence over rolling retention. Explicit bulk insert/append preserves existing and incoming unique entries, then single-video growth rolls at the temporarily expanded capacity. Replacing/clearing resets that capacity.

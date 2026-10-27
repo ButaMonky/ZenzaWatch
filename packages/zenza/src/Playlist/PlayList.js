@@ -891,6 +891,9 @@ class PlayList extends VideoList {
         }
         const item = VideoListItem.createByVideoInfoModel(videoInfo);
         item.isPlayed = true;
+        // The new playing row must be protected before the model trims a full
+        // list; marking it active after insert would already have dropped it.
+        item.isActive = true;
         if (this._activeItem) {
             this._activeItem.isActive = false;
         }

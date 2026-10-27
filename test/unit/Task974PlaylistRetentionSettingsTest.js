@@ -86,6 +86,14 @@ describe('Task974 configured rolling retention and bulk precedence',function(){
   assert.strictEqual(p.model.length,2000);assert.strictEqual(p.model.items[0].watchId,'sm1');assert.strictEqual(p.model.items[1999].watchId,'sm2000');
   assert(h.c.scanWork<20000,'quadratic neighbour scans: '+h.c.scanWork);
  });
+ it('retains a newly playing video at the end of a full rolling playlist',()=>{
+  const h=playlist(),{p}=h;p.setRetentionLimit(1000);
+  p.model.setItem(Array.from({length:1000},(_,i)=>h.item('sm'+(i+1))));p.setIndex(999);
+  p.insertCurrentVideo(h.videoInfo('sm1001'));
+  assert.strictEqual(p.model.length,1000);
+  const current=p.model.findByWatchId('sm1001');assert(current,'newly playing video must not be trimmed');
+  assert.strictEqual(current.isActive,true);assert.strictEqual(p.model.items[p.getIndex()],current);
+ });
  it('stale load cannot inflate retention capacity or replace a newer list',async()=>{
   const {p}=playlist();p.setRetentionLimit(1000);let resolve;
   p._playlistApiLoader={load:q=>q.id===1?new Promise(r=>resolve=r):Promise.resolve(records(10))};

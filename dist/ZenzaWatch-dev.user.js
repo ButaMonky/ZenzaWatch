@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-27 17:43Z bf19f517
+// build: 2026-10-27 17:48Z 7d3810ff
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -118,7 +118,7 @@ AntiPrototypeJs();
     var VER = '2.7.348-task974';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-27 17:43Z bf19f517';
+    var BUILD = '2026-10-27 17:48Z 7d3810ff';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -36824,6 +36824,7 @@ class PlayList extends VideoList {
 				}
 				const item = VideoListItem.createByVideoInfoModel(videoInfo);
 				item.isPlayed = true;
+				item.isActive = true;
 				if (this._activeItem) {
 						this._activeItem.isActive = false;
 				}

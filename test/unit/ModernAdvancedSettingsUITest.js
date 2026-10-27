@@ -1744,14 +1744,14 @@ describe('Task936/938 fullscreen/small toolbar preferences',function(){
 
 
 describe('Task974 playlist retention and search controls',()=>{
- it('uses a compact30-option dropdown and saves only the requested retention value',()=>{
+ it('uses a compact10-option dropdown and saves only the requested retention value',()=>{
   const h=boot();try{
    h.click('[data-zw-major="プレイリスト・検索"]');h.click('[data-zw-sub="プレイリスト・検索|プレイリスト"]');
    const row=h.q('[data-zw-id="playlist.maxItems"]');assert(row);
-   const select=row.querySelector('select[data-setting-name="playlist.maxItems"]');assert(select,'do not render30 segmented buttons');
-   assert.strictEqual(select.options.length,30);assert.strictEqual(select.value,'3000');
-   select.value='30000';h.dispatch(select);assert.strictEqual(h.model.get('playlist.maxItems'),30000);
-   h.click('[data-zw-save]');assert.strictEqual(h.config.values['playlist.maxItems'],30000);
+   const select=row.querySelector('select[data-setting-name="playlist.maxItems"]');assert(select,'do not render10 segmented buttons');
+   assert.strictEqual(select.options.length,10);assert.strictEqual(select.value,'3000');
+   select.value='10000';h.dispatch(select);assert.strictEqual(h.model.get('playlist.maxItems'),10000);
+   h.click('[data-zw-save]');assert.strictEqual(h.config.values['playlist.maxItems'],10000);
    assert.deepStrictEqual(h.config.writes.map(x=>x[0]),['playlist.maxItems']);
   }finally{h.destroy();}
  });

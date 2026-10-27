@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.81-task974
+// @version     0.3.82-task976
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-27 17:43Z bf19f517
+// build: 2026-10-27 18:43Z ef81b7d1
 /* eslint-disable */
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 ((window) => {
@@ -4310,7 +4310,7 @@ const Config = (() => {
 								return typeof value === 'boolean';
 						}
 						if (key === 'playlist.maxItems') {
-								return Number.isInteger(value) && value >= 1000 && value <= 30000 && value % 1000 === 0;
+								return Number.isInteger(value) && value >= 1000 && value <= 10000 && value % 1000 === 0;
 						}
 						if (key === 'search.limit') {
 								return Number.isInteger(value) && value >= 1 && value <= 5000;
@@ -7670,11 +7670,11 @@ class ModernAdvancedSettingsModel {
 						...group('プレイリスト・検索', 'プレイリスト', [
 								['playlist.maxItems', '連続再生で増えるプレイリストの保持上限', {
 												presentation: 'dropdown',
-												...select(Array.from({ length: 30 }, (_, index) => {
+												...select(Array.from({ length: 10 }, (_, index) => {
 														const n = (index + 1) * 1000;
-														return [n, `${n.toLocaleString('ja-JP')}件${n === 3000 ? '（初期値・推奨）' : n >= 20000 ? '（高負荷）' : ''}`];
+														return [n, `${n.toLocaleString('ja-JP')}件${n === 3000 ? '（初期値・推奨）' : n >= 8000 ? '（高負荷）' : ''}`];
 												})),
-												description: '1000～30000件を1000件刻みで選択します。初期値は3000件です。連続再生などで動画が1件ずつ増える際の保持件数で、再生中の動画は残します。検索・投稿動画・マイリスト・シリーズから取得した一覧は、この設定より多くても切り捨てません。一括追加時は既存の動画も保持し、その時点の件数まで一時的に上限を広げます。以後の1件追加は広げた上限内で入れ替わり、一覧を置き換えると設定値を基準に戻ります。設定を下げただけでは現在の動画は削除しません。多いほどメモリ使用量と表示・並べ替え・保存の負荷が増え、20000～30000件は高負荷です。ブラウザの保存容量不足時は復元対象が減るため、大きな一覧は書き出しも併用してください。'
+												description: '1000～10000件を1000件刻みで選択します。初期値は3000件です。連続再生などで1件ずつ増える際の保持件数で、再生中の動画は残します。検索・マイリスト・シリーズ・投稿動画から取得した一覧は、設定値より多くても最大10000件まで保持します。複数の一覧を追加して10000件を超えると、既存動画を優先して余剰分を追加しません。設定を下げるだけでは現在の動画を削除しません。8000～10000件は高負荷になり得ます。動画が多いほど表示・並べ替え・保存が遅くなり、ブラウザの保存容量不足時は再読み込み後に復元できる件数が減るため、大きな一覧は書き出しも併用してください。'
 										}],
 								['playlistLoop', 'プレイリストをループ'],
 								['continueNextPage', '再生中の動画をページ移動後も再開'],
@@ -8019,6 +8019,9 @@ class ModernAdvancedSettingsModel {
 				}
 				const v = typeof this.config.getValue === 'function' ?
 						this.config.getValue(id) : this.config.props?.[id];
+				if (id === 'playlist.maxItems' && typeof v === 'number' && Number.isFinite(v) && v > 10000) {
+						return 10000;
+				}
 				return ModernAdvancedSettingsModel._clone(v);
 		}
 		syncLiveValue(id) {
@@ -11511,7 +11514,7 @@ class NgCompositeRuleEditor {
 }
         window.ZenzaAdvancedSettings = {
             config: Config,
-            version: '0.3.81-task974'
+            version: '0.3.82-task976'
         };
         const global = {
             PRODUCT
@@ -12570,10 +12573,10 @@ class NgCompositeRuleEditor {
           <div class="playlistRetentionControl control toggle">
             <label>連続再生で増えるプレイリストの保持上限
               <select data-setting-name="playlist.maxItems">
-                ${Array.from({ length: 30 }, (_, i) => (i + 1) * 1000).map(n => `<option value="${n}">${n}件${n === 3000 ? '（初期値・推奨）' : n >= 20000 ? '（高負荷）' : ''}</option>`).join('')}
+                ${Array.from({ length: 10 }, (_, i) => (i + 1) * 1000).map(n => `<option value="${n}">${n}件${n === 3000 ? '（初期値・推奨）' : n >= 8000 ? '（高負荷）' : ''}</option>`).join('')}
               </select>
             </label>
-            <div class="settingNote">検索・マイリスト・シリーズ等から取得した動画は、設定値を超えても保持します。3万件は表示・並べ替え・保存の負荷が大きくなります。</div>
+            <div class="settingNote">検索・マイリスト・シリーズ等から取得した動画は、設定値より多くても最大1万件まで保持します。8千～1万件は表示・並べ替え・保存の負荷が大きくなり、保存容量により復元件数が減る場合があります。</div>
           </div>
           <div class="searchLimitControl control toggle">
             <label>検索1回で取得する最大動画数（初期値:1000件）

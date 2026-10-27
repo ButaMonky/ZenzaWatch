@@ -385,11 +385,11 @@ class ModernAdvancedSettingsModel {
       ...group('プレイリスト・検索','プレイリスト',[
         ['playlist.maxItems','連続再生で増えるプレイリストの保持上限',{
           presentation:'dropdown',
-          ...select(Array.from({length:30},(_,index): [number,string]=>{
+          ...select(Array.from({length:10},(_,index): [number,string]=>{
             const n=(index+1)*1000;
-            return [n,`${n.toLocaleString('ja-JP')}件${n===3000?'（初期値・推奨）':n>=20000?'（高負荷）':''}`];
+            return [n,`${n.toLocaleString('ja-JP')}件${n===3000?'（初期値・推奨）':n>=8000?'（高負荷）':''}`];
           })),
-          description:'1000～30000件を1000件刻みで選択します。初期値は3000件です。連続再生などで動画が1件ずつ増える際の保持件数で、再生中の動画は残します。検索・投稿動画・マイリスト・シリーズから取得した一覧は、この設定より多くても切り捨てません。一括追加時は既存の動画も保持し、その時点の件数まで一時的に上限を広げます。以後の1件追加は広げた上限内で入れ替わり、一覧を置き換えると設定値を基準に戻ります。設定を下げただけでは現在の動画は削除しません。多いほどメモリ使用量と表示・並べ替え・保存の負荷が増え、20000～30000件は高負荷です。ブラウザの保存容量不足時は復元対象が減るため、大きな一覧は書き出しも併用してください。'
+          description:'1000～10000件を1000件刻みで選択します。初期値は3000件です。連続再生などで1件ずつ増える際の保持件数で、再生中の動画は残します。検索・マイリスト・シリーズ・投稿動画から取得した一覧は、設定値より多くても最大10000件まで保持します。複数の一覧を追加して10000件を超えると、既存動画を優先して余剰分を追加しません。設定を下げるだけでは現在の動画を削除しません。8000～10000件は高負荷になり得ます。動画が多いほど表示・並べ替え・保存が遅くなり、ブラウザの保存容量不足時は再読み込み後に復元できる件数が減るため、大きな一覧は書き出しも併用してください。'
         }],
         ['playlistLoop','プレイリストをループ'],
         ['continueNextPage','再生中の動画をページ移動後も再開'],
@@ -710,6 +710,10 @@ class ModernAdvancedSettingsModel {
     }
     const v=typeof this.config.getValue==='function'?
       this.config.getValue(id):this.config.props?.[id];
+    if(id==='playlist.maxItems' && typeof v==='number' && Number.isFinite(v) && v>10000) {
+      // Previously persisted 30k is now a bounded 10k choice, not an invalid extra option.
+      return 10000;
+    }
     return ModernAdvancedSettingsModel._clone(v);
   }
   // A player setting or shortcut can be changed while this editor exists.

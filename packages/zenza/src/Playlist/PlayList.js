@@ -51,7 +51,7 @@ class PlayList extends VideoList {
     }
     static normalizeRetentionLimit(value) {
         return typeof value === 'number' && Number.isInteger(value) && value >= 1000 &&
-            value <= 30000 && value % 1000 === 0 ? value : 3000;
+            value % 1000 === 0 ? Math.min(10000, value) : 3000;
     }
     setRetentionLimit(value) {
         this._retentionLimit = PlayList.normalizeRetentionLimit(value);
@@ -63,7 +63,18 @@ class PlayList extends VideoList {
         // The base model still handles deduplication, active-item retention and
         // rolling single-item growth. Do not let the preference cap API collection.
         const count = this.model._dedupe(replace ? [] : this.model.items, items).length;
-        this.model.maxItems = Math.max(this._retentionLimit || 3000, count);
+        this.model.maxItems = Math.max(replace ? 0 : this.model.length, this._retentionLimit || 3000, Math.min(10000, count));
+    }
+    _boundedBulkItems(items, replace = false) {
+        const previous = replace ? [] : this.model.items;
+        const fresh = this.model._dedupe(previous, items).slice(previous.length);
+        // Preserve older oversized lists until replacement. New bulk imports
+        // cannot silently discard existing videos or grow past 10,000 items.
+        const space = Math.max(0, 10000 - previous.length);
+        const accepted = new Set(fresh.slice(0, space));
+        const existingIds = new Set(previous.map(item => item.watchId));
+        return { items: items.filter(item => existingIds.has(item.watchId) || accepted.has(item)),
+            overflow: Math.max(0, fresh.length - space) };
     }
     serialize() {
         return {
@@ -82,13 +93,20 @@ class PlayList extends VideoList {
         this._invalidateAdditiveLoads();
         this._initializeView();
         console.log('unserialize: ', data);
-        this.model.maxItems = Math.max(this._retentionLimit || 3000, data.items.length);
-        this.model.unserialize(data.items);
+        // Older sessions may contain over 10k entries. Keep the active video's
+        // identity/position instead of blindly taking the first 10k rows.
+        const oldIndex = PlayList.normalizeRestoredIndex(data.index, data.items.length, -1);
+        const start = data.items.length > 10000 && oldIndex >= 0 ?
+            Math.max(0, Math.min(oldIndex - 5000, data.items.length - 10000)) : 0;
+        const restored = data.items.slice(start, start + 10000);
+        const restoredIndex = oldIndex < 0 ? -1 : oldIndex - start;
+        this.model.maxItems = Math.max(this._retentionLimit || 3000, restored.length);
+        this.model.unserialize(restored);
         this._isEnable = data.enable;
         this._isLoop = data.loop;
         this.emit('update');
         // Task 093: 保存した位置が無い・範囲外なら、再生中の item 無し（-1）にする（以前は NaN が入ることがあった）
-        const index = PlayList.normalizeRestoredIndex(data.index, this.model.length, -1);
+        const index = PlayList.normalizeRestoredIndex(restoredIndex, this.model.length, -1);
         this.setIndex(index, true);
         return true;
     }
@@ -318,7 +336,7 @@ class PlayList extends VideoList {
         }
         else {
             // Existing neighbours are fixed anchors. Index them once, then attach
-            // before/after buckets; repeated findIndex/splice made a30k load quadratic.
+            // before/after buckets; repeated findIndex/splice made large loads quadratic.
             const existing = model.items;
             const positions = new Map(existing.map((item, index) => [item.watchId, index]));
             const acceptedSet = new Set(accepted);
@@ -401,13 +419,15 @@ class PlayList extends VideoList {
     }
     appendItems(videoListItemsRawData, options) {
         const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
-        this._reserveLoadedItems(items);
-        return this._appendAll(items, options);
+        const bounded = this._boundedBulkItems(items);
+        this._reserveLoadedItems(bounded.items);
+        return this._appendAll(bounded.items, options);
     }
     insertItems(videoListItemsRawData, options) {
         const items = videoListItemsRawData.map(raw => new VideoListItem(raw));
-        this._reserveLoadedItems(items);
-        return this._insertAll(items, options);
+        const bounded = this._boundedBulkItems(items);
+        this._reserveLoadedItems(bounded.items);
+        return this._insertAll(bounded.items, options);
     }
     _invalidateAdditiveLoads() {
         // A new list owner invalidates prior append/insert completions.
@@ -476,7 +496,7 @@ class PlayList extends VideoList {
         const additiveOwner = this._beginAdditiveLoad(options);
         const network = this._playlistApiLoader.load({ ...playlist,
             // Independent collection safety budget, never the rolling preference.
-            maxItems: 30000,
+            maxItems: 10000,
             isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
         }, msgInfo);
         return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
@@ -500,15 +520,17 @@ class PlayList extends VideoList {
             else if (playlist.type === 'user-uploaded' && playlist.options == null) {
                 videoListItems.reverse();
             }
+            const bounded = this._boundedBulkItems(videoListItems, !options.insert && !options.append);
+            videoListItems = bounded.items;
             this._reserveLoadedItems(videoListItems, !options.insert && !options.append);
             let added = null;
-            let overflow = 0;
+            let overflow = bounded.overflow;
             // Task296: series/user uploads have a meaningful preceding/following order.
             // Generic mylist and search insertion retain their existing semantics.
             if (options.insert && ['series', 'user-uploaded'].includes(playlist.type)) {
                 const result = this._insertNeighbourItems(videoListItems, options);
                 added = result.added;
-                overflow = result.overflow;
+                overflow += result.overflow;
             }
             else if (options.insert) {
                 added = this._insertAll(videoListItems, options);
@@ -617,6 +639,8 @@ class PlayList extends VideoList {
             if (options.shuffle) {
                 videoListItems = _.shuffle(videoListItems);
             }
+            const bounded = this._boundedBulkItems(videoListItems, !options.insert && !options.append);
+            videoListItems = bounded.items;
             this._reserveLoadedItems(videoListItems, !options.insert && !options.append);
             let added = null;
             if (options.insert) {
@@ -639,7 +663,8 @@ class PlayList extends VideoList {
                 status: 'ok',
                 message: (added !== null ?
                     `検索結果を${added}件プレイリストに追加しました` :
-                    '検索結果をプレイリストに読み込みしました') + PlayList.searchNotice(searchResult)
+                    '検索結果をプレイリストに読み込みしました') +
+                    (bounded.overflow ? `（上限により${bounded.overflow}件追加できませんでした）` : '') + PlayList.searchNotice(searchResult)
             });
         }, error => {
             if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {

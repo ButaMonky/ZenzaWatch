@@ -494,7 +494,7 @@ const Config = (() => {
                 return typeof value === 'boolean';
             }
             if (key === 'playlist.maxItems') {
-                return Number.isInteger(value) && value >= 1000 && value <= 30000 && value % 1000 === 0;
+                return Number.isInteger(value) && value >= 1000 && value <= 10000 && value % 1000 === 0;
             }
             if (key === 'search.limit') {
                 return Number.isInteger(value) && value >= 1 && value <= 5000;

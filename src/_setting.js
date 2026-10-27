@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.81-task974
+// @version     0.3.82-task976
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -52,7 +52,7 @@ import { CommentDisplayBudget } from '../packages/zenza/src/commentLayer/Comment
         //@require NgCompositeRuleEditor
         window.ZenzaAdvancedSettings = {
             config: Config,
-            version: '0.3.81-task974'
+            version: '0.3.82-task976'
         };
         const global = {
             PRODUCT
@@ -1111,10 +1111,10 @@ import { CommentDisplayBudget } from '../packages/zenza/src/commentLayer/Comment
           <div class="playlistRetentionControl control toggle">
             <label>連続再生で増えるプレイリストの保持上限
               <select data-setting-name="playlist.maxItems">
-                ${Array.from({ length: 30 }, (_, i) => (i + 1) * 1000).map(n => `<option value="${n}">${n}件${n === 3000 ? '（初期値・推奨）' : n >= 20000 ? '（高負荷）' : ''}</option>`).join('')}
+                ${Array.from({ length: 10 }, (_, i) => (i + 1) * 1000).map(n => `<option value="${n}">${n}件${n === 3000 ? '（初期値・推奨）' : n >= 8000 ? '（高負荷）' : ''}</option>`).join('')}
               </select>
             </label>
-            <div class="settingNote">検索・マイリスト・シリーズ等から取得した動画は、設定値を超えても保持します。3万件は表示・並べ替え・保存の負荷が大きくなります。</div>
+            <div class="settingNote">検索・マイリスト・シリーズ等から取得した動画は、設定値より多くても最大1万件まで保持します。8千～1万件は表示・並べ替え・保存の負荷が大きくなり、保存容量により復元件数が減る場合があります。</div>
           </div>
           <div class="searchLimitControl control toggle">
             <label>検索1回で取得する最大動画数（初期値:1000件）

@@ -1,3 +1,20 @@
+## 2026-10-28 - Playlist maximum reduced to 10,000 (2.7.350-task976)
+
+- The rolling playlist setting now offers only 1,000..10,000 items in steps
+  of 1,000, retaining the recommended default of 3,000.
+- All collection-fetch, session persistence and bulk-append safety caps are
+  aligned to 10,000. A mylist/series/search larger than the chosen rolling
+  retention is still accepted up to that safety cap. Additional bulk items
+  that would exceed it are reported, with existing entries protected.
+- Previously stored 30,000 preferences are treated as 10,000 without
+  presenting a disabled old-value option. Older session/import lists beyond
+  10,000 are restored around the currently playing video.
+- Update warnings and docs for 8,000..10,000 items; high-count performance and
+  storage limits still depend on the user's device and browser.
+- This is a new release, not a rewritten Git history, and keeps concurrent
+  private-only code out of the public repository.
+
+
 ## 2026-10-28 - Configurable rolling playlist retention (2.7.349 / settings0.3.81)
 
 - Add a compact1,000-step rolling-retention setting from1,000 to30,000, default3,000. Applies on initialization and immediately after saving a change; lowering it never deletes the current list.

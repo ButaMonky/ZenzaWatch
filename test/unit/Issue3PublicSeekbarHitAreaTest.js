@@ -32,7 +32,7 @@ describe('Issue #3 public right seek hit-area regression',()=>{
    const dist=read('dist/ZenzaWatch-dev.user.js');
    const source=read('src/_template.js');
    const version=source.match(/^\/\/ @version\s+(\S+)/m)?.[1];
-   assert(version&&version.startsWith('2.7.349-'),version);
+   assert(version&&version.startsWith('2.7.350-'),version);
    assert(dist.includes(version),'distributed version differs from source');
    assert(dist.includes('pointer-events: none;'));
    assert(dist.includes(':where(.videoControlBar .controlItemContainer.right > .scalingUI) > .controlButton'));

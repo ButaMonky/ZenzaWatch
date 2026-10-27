@@ -27,7 +27,7 @@ window.runRetentionBenchmark=async n=>{
 };
 </script>`;
 let base=fs.readFileSync(path.join(root,'test/browser/playlist-scroll-content.html'),'utf8');
-base=base.replace('maxItems:2000','maxItems:30000').replace('Math.min(2000,','Math.min(30000,');
+base=base.replace('maxItems:2000','maxItems:10000').replace('Math.min(2000,','Math.min(10000,');
 const server=http.createServer((req,res)=>{
  try{const u=new URL(req.url,'http://localhost');if(u.pathname==='/test/browser/task974-bench.html'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(base+extra);return;}
  const p=path.resolve(root,'.'+decodeURIComponent(u.pathname));if(!p.startsWith(root+path.sep)||!fs.statSync(p).isFile()){res.writeHead(404);res.end();return;}
@@ -48,7 +48,7 @@ async function evaluate(expression){const r=await send('Runtime.evaluate',{expre
  await send('Page.enable');await send('Runtime.enable');await send('Page.navigate',{url:'http://127.0.0.1:'+port+'/test/browser/task974-bench.html?count=1'});
  for(let i=0;i<200;i++){if(await evaluate('typeof runRetentionBenchmark==="function"'))break;await sleep(100);}
  assert(await evaluate('typeof runRetentionBenchmark==="function"'),'fixture did not initialize');
- const results=[];for(const count of [3000,10000,30000]){
+ const results=[];for(const count of [3000,10000]){
   const r=await evaluate('runRetentionBenchmark('+count+')');console.log('TASK974_BROWSER_RAW '+JSON.stringify(r));assert.strictEqual(r.shells,count);assert(r.expanded>0&&r.expanded<count);assert(r.activePreserved&&r.unrelatedPreserved);results.push(r);console.log('TASK974_BROWSER_SAMPLE '+JSON.stringify(r));await sleep(200);
  }
  const report={node:process.version,chrome:(await send('Browser.getVersion')).product,platform:process.platform,cpu:os.cpus()[0]?.model,memoryGiB:Math.round(os.totalmem()/1024**3),scope:'synthetic local data; actual model/lazy renderer/session; separate headless profile; single run, not universal guarantee',results};

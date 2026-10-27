@@ -11,18 +11,18 @@ function configSchema(){
 const records=(n,start=1)=>Array.from({length:n},(_,i)=>({watchId:'sm'+(i+start),content:{id:'sm'+(i+start),title:'video',duration:1,count:{view:1,mylist:1,comment:1},thumbnail:{url:'https://example.invalid/t'},registeredAt:'2026-01-01'}}));
 function playlist(){const h=createPlaylistContext();h.c.console={log(){},warn(){},error(){},time(){},timeEnd(){}};return {...h,p:h.createPlaylist()};}
 describe('Task974 retention config and settings',()=>{
- it('default3000 accepts only 1000 steps from1000 through30000',()=>{
+ it('default3000 accepts only 1000 steps from1000 through10000',()=>{
   const c=configSchema();assert.strictEqual(c.default['playlist.maxItems'],3000);
-  for(let n=1000;n<=30000;n+=1000)assert(c.options.validateImport('playlist.maxItems',n));
-  for(const n of [0,999,1500,30001,31000,NaN,Infinity,'3000',null])assert.strictEqual(c.options.validateImport('playlist.maxItems',n),false,String(n));
+  for(let n=1000;n<=10000;n+=1000)assert(c.options.validateImport('playlist.maxItems',n));
+  for(const n of [0,999,1500,11000,30000,30001,31000,NaN,Infinity,'3000',null])assert.strictEqual(c.options.validateImport('playlist.maxItems',n),false,String(n));
  });
  it('has exactly30 choices with accurate retention/bulk/storage warnings in playlist category',()=>{
   const cfg=configSchema();cfg.getValue=k=>cfg.default[k];cfg.setValue=()=>{};
   const c=createContext();c.UiVisibilityRegistry=loadClass('src/UiVisibilityRegistry.js','UiVisibilityRegistry',c);
   const Model=loadClass('src/ModernAdvancedSettingsModel.js','ModernAdvancedSettingsModel',c),m=new Model({config:cfg});
   const d=m.descriptor('playlist.maxItems');assert(d);assert.strictEqual(d.category,'プレイリスト・検索');assert.strictEqual(d.subcategory,'プレイリスト');
-  assert.strictEqual(d.type,'select');assert.deepStrictEqual(Array.from(d.options,x=>x.value),Array.from({length:30},(_,i)=>(i+1)*1000));
-  for(const word of ['連続再生','取得','3000','30000','保存'])assert(d.description.includes(word),word);
+  assert.strictEqual(d.type,'select');assert.deepStrictEqual(Array.from(d.options,x=>x.value),Array.from({length:10},(_,i)=>(i+1)*1000));
+  for(const word of ['連続再生','取得','3000','10000','保存'])assert(d.description.includes(word),word);
   const search=m.descriptor('search.limit');assert.strictEqual(search.type,'slider');assert.strictEqual(search.min,1);assert.strictEqual(search.max,5000);assert.strictEqual(search.step,1);
   assert.strictEqual(search.subcategory,'検索');assert(search.description.includes('連続再生'));
  });
@@ -45,7 +45,7 @@ describe('Task974 configured rolling retention and bulk precedence',function(){
   p.setRetentionLimit(1000);p.model.setItem(Array.from({length:1000},(_,i)=>item('sm'+i)));
   const active=p.model.items[0];active.isActive=true;
   p.model.appendItem(item('sm1001'));assert.strictEqual(p.model.length,1000);assert(p.model.items.includes(active));
-  p.setRetentionLimit(30000);assert.strictEqual(p.model.maxItems,30000);
+  p.setRetentionLimit(10000);assert.strictEqual(p.model.maxItems,10000);
   p.model.setItem(Array.from({length:4200},(_,i)=>item('sm'+i)));
   p.setRetentionLimit(1000);assert.strictEqual(p.model.length,4200);assert(p.model.maxItems>=4200);
  });
@@ -53,7 +53,7 @@ describe('Task974 configured rolling retention and bulk precedence',function(){
   it(kind+' keeps4200 fetched entries despite retention1000 and uses an independent fetch budget',async()=>{
    const {p}=playlist();p.setRetentionLimit(1000);let request;
    p._playlistApiLoader={load:async q=>{request=q;return records(4200);}};
-   await p.load({type:kind,id:1});assert.strictEqual(p.model.length,4200);assert(request.maxItems>=30000);
+   await p.load({type:kind,id:1});assert.strictEqual(p.model.length,4200);assert(request.maxItems===10000);
    p.model.appendItem(p.model.items[0]);assert.strictEqual(p.model.length,4200);
    p._playlistApiLoader={load:async()=>records(10)};await p.load({type:kind,id:2});
    assert.strictEqual(p.model.length,10);assert.strictEqual(p.model.maxItems,1000);
@@ -108,26 +108,26 @@ describe('Task974 initial/live setting wiring',()=>{
   run(extract('src/NicoVideoPlayerDialog.js','NicoVideoPlayerDialog','class')+';this.P=NicoVideoPlayerDialog;',c);
   const p=Object.create(c.P.prototype);p._view={appendTab:()=>[{}]};p._playerConfig={props:{playlistLoop:false,'playlist.maxItems':7000},onkey:(k,f)=>handlers[k]=f};p._onCommand=()=>{};p._onPlaylistStatusUpdate=()=>{};p.emitResolve=()=>{};
   await p._initializePlaylist();assert.deepStrictEqual(calls,[['initial',7000]]);assert.strictEqual(typeof handlers['playlist.maxItems'],'function');
-  p._playerConfig.props['playlist.maxItems']=12000;handlers['playlist.maxItems']();assert.deepStrictEqual(calls[1],['update',12000]);
+  p._playerConfig.props['playlist.maxItems']=10000;handlers['playlist.maxItems']();assert.deepStrictEqual(calls[1],['update',10000]);
  });
 });
 
 
 describe('Task974 large-budget distribution guards',function(){
  this.timeout(20000);
- it('the emitted session keeps30000 entries when storage permits and retains its active position',()=>{
+ it('the emitted session keeps10000 entries when storage permits and retains its active position',()=>{
   let saved='';const c=createContext({sessionStorage:{getItem:()=>saved,setItem:(k,v)=>saved=v,removeItem:()=>saved=''},window:{console:{warn(){},error(){}}}});
   run(beginSection('packages/zenza/src/Playlist/PlayListSession.js')+';this.session=PlayListSession;',c);
-  c.session.save({items:Array.from({length:30000},(_,i)=>({id:'sm'+i})),index:29000});
-  const value=c.session.restore();assert.strictEqual(value.items.length,30000);assert.strictEqual(value.index,29000);
+  c.session.save({items:Array.from({length:10000},(_,i)=>({id:'sm'+i})),index:9500});
+  const value=c.session.restore();assert.strictEqual(value.items.length,10000);assert.strictEqual(value.index,9500);
  });
- it('the installable player uses30k for collection safety while retaining a3000 default preference',async()=>{
+ it('the installable player uses10k for collection safety while retaining a3000 default preference',async()=>{
   let calls=0;const c=createContext({URL,URLSearchParams,sessionStorage:{},CacheStorage:class{getItem(){return null}setItem(){}},
    netUtil:{fetch:async url=>{calls++;const u=new URL(url),page=Number(u.searchParams.get('page')),size=Number(u.searchParams.get('pageSize'));
     return {json:async()=>({meta:{status:200},data:{totalCount:30001,items:records(size,(page-1)*size+1)}})};
    }}});
   run('const PlaylistApiLoader='+extract('dist/ZenzaWatch-dev.user.js','PlaylistApiLoader','var')+';this.api=PlaylistApiLoader;',c);
-  const list=await c.api.load({type:'series',id:1});assert.strictEqual(list.length,30000);assert.strictEqual(calls,60);assert.strictEqual(list.playlistLoadInfo.limited,true);
+  const list=await c.api.load({type:'series',id:1});assert.strictEqual(list.length,10000);assert.strictEqual(calls,20);assert.strictEqual(list.playlistLoadInfo.limited,true);
   assert(read('dist/ZenzaWatch-dev.user.js').includes("'playlist.maxItems': 3000"));
   assert(read('dist/ZenzaAdvancedSettings.user.js').includes("presentation: 'dropdown'"));
  });

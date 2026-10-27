@@ -1,58 +1,53 @@
-# Playlist retention and search limits (Task974)
+# Playlist retention: Task976 current limits (supersedes Task974 maximum)
 
-## Settings
+## Current behavior
 
-The playlist setting is a rolling retention target, not a bulk-fetch limit. It
-has30 choices from1,000 to30,000 in1,000 increments; default3,000. Saved changes
-apply immediately but never delete existing entries just because a smaller
-number was chosen. Search is separate:1..5,000 results per search, default1,000.
+The rolling-playlist setting provides **10 choices: 1,000 to 10,000 in
+1,000-item steps**, with **3,000** as the recommended default. Search is
+separate (1–5,000 per search, default 1,000).
 
-A fetched list larger than rolling retention is retained. When explicitly
-appending/inserting a fetched collection, existing unique entries are also kept.
-The effective capacity temporarily grows to that combined list size; subsequent
-single-video additions roll at that capacity. A smaller replacement or clearing
-the list resets the capacity to the configured target. This avoids discarding a
-5,000-video collection merely because the user normally keeps3,000 videos.
+A fetched mylist, series, upload list, or search may exceed the rolling
+preference, but never the 10,000-item loading safety budget. Existing videos
+have priority when combining lists. If a second bulk load would exceed
+10,000, only room for new unique videos is used and the rest is reported.
+Changing the preference alone never deletes loaded videos.
 
-Collection loading has a separate30,000-item per-request safety budget and
-reports reaching it. Search API restrictions are not raised to30,000. Storage
-tries up to30,000 items but falls back around the active video on quota errors;
-that fallback does not shorten the live in-memory playlist or clear other keys.
-An accumulation of several explicit lists can exceed30,000; exported JSON is
-recommended for preserving such a list beyond the browser's storage capacity.
+Previously saved values above 10,000 (from the brief Task974 release) are
+treated as 10,000. Import/restoration of an older oversized playlist
+retains the active video by choosing a 10,000-item window around it.
+Previously loaded oversized playlists are never deleted just because a user
+changes the preference; replacement will enforce the current safety bound.
 
-## Local performance check, 2026-10-28
+Session storage attempts to retain up to **10,000** items, with active-video
+preservation and the existing storage-quota fallback. Browser storage is not
+guaranteed to hold 10,000 detailed records. For large lists, export to a
+separate file to protect against loss on reload.
 
-One headless Chromium run on a Windows desktop, synthetic Japanese titles and
-metadata, the actual model/lazy renderer/session implementation, a clean local
-origin. These are observations, not hardware-independent performance promises.
-No personal browser profile, cookies or NicoNico account changes are involved.
+## Observed performance, single synthetic offline Chromium run
 
-| Items | Model construction | Initial render | Reverse + render | Session save | Restored |
+This earlier Task974 benchmark measured the unchanged model/lazy-view/session
+components. It is informative but not a universal speed guarantee.
+
+| Entries | Model | Initial rendering | Reverse + render | Save | Restored |
 | ---: | ---: | ---: | ---: | ---: | ---: |
-|3,000|35 ms|188 ms|121 ms|13 ms|3,000|
-|10,000|66 ms|413 ms|417 ms|61 ms|10,000|
-|30,000|707 ms|2,281 ms|1,148 ms|230 ms|7,500|
+| 3,000 | 35 ms | 188 ms | 121 ms | 13 ms | 3,000 |
+| 10,000 | 66 ms | 413 ms | 417 ms | 61 ms | 10,000 |
 
-All lists had their full number of DOM shells with13 expanded visible cards.
-Lazy details do not make the30,000 outer nodes free. JSON serialized size was
-about1.49/4.97/14.97 MB (UTF-8); browser accounting and actual titles differ. The
-30,000-item case exceeded storage capacity, and the existing fallback preserved
-the active video in7,500 saved entries while an unrelated storage key survived.
+The prior 30,000-item stress benchmark has been retired from the supported
+choices; its historical results remain available in the Task974 Git commit.
 
-Use3,000 by default.20,000..30,000 is opt-in high-load usage; pauses in rendering,
-sorting and saving remain possible. The setting explains this and recommends
-export for large playlists. See test/browser/task974-retention-benchmark.cjs to
-repeat the check; do not treat a timing threshold as a portable correctness test.
+Large lists still create one lazy outer DOM shell per video. At 8,000 to
+10,000 entries, sorting, initial rendering, memory use, or sessionStorage
+capacity can impose noticeable delays. The advanced settings include a
+warning and recommend exporting large playlists.
 
-## Regression coverage
+## Verification
 
-Config/import and UI validation, native30-choice control, live player wiring,
-search1/37/99, bulk4200 over1000, old+new insertion, stale loads, restore,30,000
-session/bundle boundaries, active-item retention and existing playlist ordering.
-Series insertion was changed from repeated full-list scans to indexed buckets;
-a2,000-item case previously needed2,000,000 predicate calls and is now linear.
+Task976 tests cover default/maximum, legacy setting normalization, old
+oversized-session active-video restoration, a 5,000-item collection exceeding
+a 1,000-item rolling setting, a 7,000+5,000 merge that preserves existing
+entries and announces overflow, generated distributables and session limits.
 
-Web Storage behavior reference (not a fixed performance budget):
-https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API
-https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria
+This change updates both the private and public develop channels, while
+keeping private-only functionality private. No live account mutation or
+automatic comment posting is required.

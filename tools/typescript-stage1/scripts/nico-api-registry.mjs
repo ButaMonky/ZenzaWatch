@@ -838,7 +838,7 @@ export const NICO_API_MODULES=Object.freeze([
     originalSha256:"c0946bf0435dff7865891caf989d15fb21eb976c1a343cb56d79dab8e4a74ead",
     preamble:[],
     shape:"declarations",
-    topLevel:["const PlayListSession = ((storage) => {","})(sessionStorage);","PlayListSession.MAX_ITEMS = 30000;","PlayListSession.MIN_ITEMS = 100;","const PlaylistSession = PlayListSession;"],
+    topLevel:["const PlayListSession = ((storage) => {","})(sessionStorage);","PlayListSession.MAX_ITEMS = 10000;","PlayListSession.MIN_ITEMS = 100;","const PlaylistSession = PlayListSession;"],
     exportNames:["PlayListSession","PlaylistSession"],
     task:'task851'
   }),

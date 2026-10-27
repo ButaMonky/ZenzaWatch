@@ -516,7 +516,7 @@ const Config = (() => {
         if (key.startsWith('KEY_')) { return Number.isSafeInteger(value) && (value as number) >= 0; }
         if (key === CommentDisplayBudget.CONFIG_KEY) { return CommentDisplayBudget.isValidLimit(value); }
         if (key === 'commentLayer.protectCA') { return typeof value === 'boolean'; }
-        if (key === 'playlist.maxItems') { return Number.isInteger(value) && (value as number) >= 1000 && (value as number) <= 30000 && (value as number) % 1000 === 0; }
+        if (key === 'playlist.maxItems') { return Number.isInteger(value) && (value as number) >= 1000 && (value as number) <= 10000 && (value as number) % 1000 === 0; }
         if (key === 'search.limit') { return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 5000; }
         if (['volume', 'speakLarkVolume', 'commentLayerOpacity',
           'commentLayer.easyCommentOpacity', 'commentLayer.aiCommentOpacity'].includes(key)) {

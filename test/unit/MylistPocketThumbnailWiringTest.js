@@ -20,6 +20,7 @@ function fixture(hostname='www.nicovideo.jp'){
   };
   const context=createContext({
     window:dom.window,
+    DOMParser:dom.window.DOMParser,
     location:{hostname},
     PocketThumbnail:null,
     VideoInfo:{createByThumbInfo:thumb=>({
@@ -42,10 +43,11 @@ function fixture(hostname='www.nicovideo.jp'){
     loadResolutions.get(id)({v:id,videoId:id,id,title:'Video',thumbnail:thumb});
   };
   const answer=(id,thumb)=>fetchResolutions.get(
-    'https://www.nicovideo.jp/watch/'+id+'?responseType=json')({
-      ok:true,json:()=>Promise.resolve({data:{response:{video:{thumbnail:{
-        ogp:thumb, url:'https://cdn.example/legacy.jpg'
-      }}}}})
+    'https://www.nicovideo.jp/watch/'+id)({
+      ok:true,text:async()=>'<meta name="server-response" content="'+
+        JSON.stringify({data:{response:{$watchV4:{data:{video:{id,thumbnail:{
+          ogp:thumb,url:'https://cdn.example/legacy.jpg'
+        }}}}}}}).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'">'
     });
   return {dom,view,image,load,ready,answer,calls,loadResolutions,fetchResolutions,
     context,cleanup(){dom.window.close();}};
@@ -78,7 +80,7 @@ describe('Task713 MylistPocket popup TypeScript integration',()=>{
     await first;await flush();
     assert.strictEqual(h.image.src,'https://cdn.example/two.jpg');
     assert.strictEqual(h.calls.length,1);
-    assert(h.calls[0].url.includes('/sm2?'));
+    assert.strictEqual(h.calls[0].url,'https://www.nicovideo.jp/watch/sm2');
   });
   it('does not let a late watch response replace the next video thumb',async()=>{
     h=fixture();

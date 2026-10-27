@@ -27,7 +27,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### オプション
 
 - [MylistPocket をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js)
-  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version 0.5.80-task968)
+  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version 0.5.81-task971)
 
 - [ZenzaAdvancedSettings をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js)
   - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version 0.3.79-task965)

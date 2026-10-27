@@ -16,10 +16,6 @@ function fixture(zenza=true) {
   const context=createContext({
     document:s.doc,window:s.w,util:s.util,
     Emitter:class {},
-    PocketThumbnail:{
-      legacyUrls:url=>[url],
-      install(img,urls,isCurrent){if(isCurrent())img.src=urls[0];}
-    },
     ThumbInfoLoader:{load:async id=>{
       infoCalls.push(id);
       return {status:'ok',id,videoId:id,title:'題名 '+id,
@@ -37,6 +33,11 @@ function fixture(zenza=true) {
         icon:'https://img.nicoprofile.nimg.jp/usericon/18/188548.jpg'}};
     }}
   });
+  // Exercise the real selector/installer instead of a legacy-only test stub.
+  run('const ThumbnailSourcePolicy='+extract('packages/lib/src/nico/ThumbnailSourcePolicy.js',
+    'ThumbnailSourcePolicy','var')+';',context);
+  run('const PocketThumbnail='+extract('packages/zenza/src/pocket/PocketThumbnail.js',
+    'PocketThumbnail','var')+';',context);
   run('const PocketDescriptionCard='+extract('packages/zenza/src/pocket/PocketDescriptionCard.js',
     'PocketDescriptionCard','var')+';this.Cards=PocketDescriptionCard;',context);
   run('const VideoInfoView='+extract('src/_pocket.js','VideoInfoView','class')+

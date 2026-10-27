@@ -1,3 +1,12 @@
+## 2026-10-27 - MylistPocket 0.5.81-task971: smart high-quality thumbnail routes
+
+- Repair the popup HQ metadata request to read current watch-page server-response HTML instead of the obsolete responseType=json endpoint.
+- Reuse the Zenza smart image-source policy: clean img.cdn original OGP first, player image otherwise; never fall back to known goptim play-overlay previews.
+- Keep signed API URLs intact and retain safe legacy thumbnails on metadata/image failure.
+- Recover original description HTML from the same watch metadata request, retaining line breaks and separating external links from previous/next video cards. Preserve plain-text newlines and keep sanitization/late-response guards.
+- Upgrade linked description-card images using variants from the existing video metadata request, without extra watch-page requests per card.
+- Preserve cache, coalescing, per-image fallback ownership, hidden/obsolete popup guards and independent page-world execution.
+
 ## 2026-10-27 - Task970：ホバー説明・映像上のボタンの表示時間（2.7.345）
 
 - マウスを止めてから説明文と映像上のホバーボタンを隠すまでの待ち時間を1秒に変更。既存のフェード、ホバー中・フォーカス中の優先動作は維持。

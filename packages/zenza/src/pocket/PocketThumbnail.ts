@@ -9,20 +9,28 @@ declare const ThumbnailSourcePolicy: {
   select(thumbnail: UnknownRecord, fallback: readonly unknown[],
     options?: {mode?: 'smart' | 'legacy'; includeUnknownOgp?: boolean}): unknown[];
 };
-type FetchResponse = {ok: boolean; json(): Promise<unknown>};
+type FetchResponse = {
+  ok: boolean;
+  text?(): Promise<string>;
+  json?(): Promise<unknown>;
+};
 type FetchFunction = (url: string, options: {
   credentials: 'include';
   timeout: number;
 }) => Promise<FetchResponse>;
 type ImageLike = Pick<HTMLImageElement, 'src' | 'onerror'>;
 type VisibleCheck = () => boolean;
+type PocketPresentation = {urls: string[]; description: string | null};
 
 const PocketThumbnail = (() => {
   const CACHE_MS = 5 * 60 * 1000;
   const NEGATIVE_MS = 60 * 1000;
   const MAX_CACHE = 64;
-  const cache = new Map<string, {until: number; urls: string[]}>();
-  const pending = new Map<string, Promise<string[]>>();
+  const cache = new Map<string, {until: number; value: PocketPresentation}>();
+  const pending = new Map<string, Promise<PocketPresentation>>();
+  const emptyPresentation = (): PocketPresentation => ({urls: [], description: null});
+  const copyPresentation = (value: PocketPresentation): PocketPresentation =>
+    ({urls: [...value.urls], description: value.description});
   const imageOwners = new WeakMap<ImageLike, object>();
 
   const record = (value: unknown): UnknownRecord | null =>
@@ -35,7 +43,8 @@ const PocketThumbnail = (() => {
       if (typeof value !== 'string' || !value.trim()) { continue; }
       try {
         const url = new URL(value);
-        if (url.protocol === 'https:' || url.protocol === 'http:') {
+        if ((url.protocol === 'https:' || url.protocol === 'http:') &&
+            !url.username && !url.password) {
           const safe = url.protocol === 'http:' ? 'https:' + url.href.slice(5) : url.href;
           if (!urls.includes(safe)) { urls.push(safe); }
         }
@@ -44,20 +53,40 @@ const PocketThumbnail = (() => {
     return urls;
   };
 
-  const watchUrls = (payload: unknown): string[] => {
+  const metadataUrls = (thumbnail: unknown, fallback: readonly unknown[] = []): string[] => {
+    const thumb = record(thumbnail) || {};
+    return normalize(ThumbnailSourcePolicy.select(thumb, [
+      thumb.large, thumb.largeUrl, thumb.middle, thumb.middleUrl,
+      thumb.normal, thumb.url, ...fallback,
+      ...(typeof thumbnail === 'string' ? [thumbnail] : [])
+    ], {mode: 'smart', includeUnknownOgp: true}));
+  };
+
+  const watchPresentation = (payload: unknown, requestedWatchId?: string): PocketPresentation => {
     const outer = record(payload);
     const data = record(outer?.data);
     const response = record(data?.response) || record(outer?.response);
     const v4 = record(record(response?.$watchV4)?.data);
-    const thumb = record(record((v4 || response)?.video)?.thumbnail);
-    if (!thumb) { return []; }
-    // Reuse the same official-CDN policy as PiP. Pocket retains an unknown
-    // non-goptim OGP as last fallback; PiP intentionally excludes it.
-    // Network/cache/image ownership remain local to this standalone helper.
-    return normalize(ThumbnailSourcePolicy.select(thumb, [
-      thumb.large, thumb.largeUrl, thumb.middle, thumb.middleUrl,
-      thumb.normal, thumb.url
-    ], {mode: 'smart', includeUnknownOgp: true}));
+    const video = record((v4 || response)?.video);
+    // Numeric watch aliases may point at a canonical so/sm ID. Named IDs may not
+    // borrow the poster from an unrelated video after a redirect/cache mismatch.
+    if (requestedWatchId && /^(?:sm|nm|so|ss)/.test(requestedWatchId) &&
+        typeof video?.id === 'string' && video.id !== requestedWatchId) { return emptyPresentation(); }
+    return {urls: metadataUrls(video?.thumbnail),
+      description: typeof video?.description === 'string' ? video.description : null};
+  };
+  const watchUrls = (payload: unknown, requestedWatchId?: string): string[] =>
+    watchPresentation(payload, requestedWatchId).urls;
+
+  const readWatchPage = (html: string): unknown => {
+    // Same inert metadata path as ZenzaWatch's current watch-page loader.
+    // Never inject the downloaded page, execute scripts or invent CDN URLs.
+    if (typeof html !== 'string' || html.length > 4 * 1024 * 1024) { return null; }
+    const page = new DOMParser().parseFromString(html, 'text/html');
+    const raw = page.querySelector('meta[name="server-response"]')?.getAttribute('content');
+    if (!raw) { return null; }
+    try { return JSON.parse(raw) as unknown; }
+    catch (_) { return null; }
   };
 
   const legacyUrls = (thumbnail: unknown, hasLarge = false): string[] => {
@@ -74,7 +103,8 @@ const PocketThumbnail = (() => {
 
   const install = (image: ImageLike, urls: readonly unknown[],
       isCurrent: VisibleCheck = () => true): void => {
-    const sources = normalize(urls);
+    // Keep known composited OGP images out of fallback lists as well.
+    const sources = metadataUrls(null, urls);
     if (!sources.length || !isCurrent()) { return; }
     const token = {};
     imageOwners.set(image, token);
@@ -92,23 +122,27 @@ const PocketThumbnail = (() => {
     next();
   };
 
-  const getHighQuality = async (watchId: string, fetcher: FetchFunction,
-      hostname: string): Promise<string[]> => {
+  const getPresentation = async (watchId: string, fetcher: FetchFunction,
+      hostname: string): Promise<PocketPresentation> => {
     // Only for a user-opened info popup on the official www host.
     if (hostname !== 'www.nicovideo.jp' ||
-        !/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/.test(watchId)) { return []; }
+        !/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/.test(watchId)) { return emptyPresentation(); }
     const now = Date.now();
     const saved = cache.get(watchId);
-    if (saved && saved.until > now) { return [...saved.urls]; }
+    if (saved && saved.until > now) { return copyPresentation(saved.value); }
     const existing = pending.get(watchId);
-    if (existing) { return [...await existing]; }
-    const job = (async (): Promise<string[]> => {
-      let urls: string[] = [];
+    if (existing) { return copyPresentation(await existing); }
+    const job = (async (): Promise<PocketPresentation> => {
+      let value = emptyPresentation();
       try {
         const url = 'https://www.nicovideo.jp/watch/' +
-          encodeURIComponent(watchId) + '?responseType=json';
+          encodeURIComponent(watchId);
         const response = await fetcher(url, {credentials: 'include', timeout: 4000});
-        if (response.ok) { urls = watchUrls(await response.json()); }
+        if (response.ok) {
+          const payload = typeof response.text === 'function' ?
+            readWatchPage(await response.text()) : await response.json?.();
+          value = watchPresentation(payload, watchId);
+        }
       } catch (_) {
         // Keep legacy image; never log authenticated responses or signed URLs.
       }
@@ -116,17 +150,24 @@ const PocketThumbnail = (() => {
         const first = cache.keys().next().value;
         if (first !== undefined) { cache.delete(first); }
       }
-      cache.set(watchId, {until: Date.now() + (urls.length ? CACHE_MS : NEGATIVE_MS), urls});
-      return urls;
+      const complete = value.urls.length > 0 || value.description !== null;
+      cache.set(watchId, {until: Date.now() + (complete ? CACHE_MS : NEGATIVE_MS), value});
+      return value;
     })();
     pending.set(watchId, job);
-    try { return [...await job]; }
+    try { return copyPresentation(await job); }
     finally {
       if (pending.get(watchId) === job) { pending.delete(watchId); }
     }
   };
 
-  return {normalize, watchUrls, legacyUrls, install, getHighQuality};
+  // Both consumers share a single metadata request/cache; no extra page load
+  // just to recover line breaks that getthumbinfo has flattened away.
+  const getHighQuality = async (watchId: string, fetcher: FetchFunction,
+      hostname: string): Promise<string[]> =>
+    (await getPresentation(watchId, fetcher, hostname)).urls;
+
+  return {normalize, metadataUrls, watchUrls, legacyUrls, install, getHighQuality, getPresentation};
 })();
 
 export {PocketThumbnail};

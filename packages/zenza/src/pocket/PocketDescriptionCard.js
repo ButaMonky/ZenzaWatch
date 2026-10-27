@@ -192,7 +192,7 @@ const PocketDescriptionCard = (() => {
     };
     img.src = sources[0];
   };
-  const applyExtra = (card, extra) => {
+  const applyExtra = (card, extra, {installImage, isCurrent} = {}) => {
     if (!card || !extra || typeof extra !== 'object') { return false; }
     if (typeof extra.likeCount === 'number' &&
         Number.isSafeInteger(extra.likeCount) && extra.likeCount >= 0 &&
@@ -212,6 +212,11 @@ const PocketDescriptionCard = (() => {
       showOwner(card, isMissing ? extra.owner : {
         ...previous, icon:extra.owner.icon || previous.icon
       });
+    }
+    // Upgrade the same owned thumbnail from already-fetched nvapi variants.
+    // No second per-card watch request and no replacement of title/owner data.
+    if (extra.thumbnail && card.info && typeof installImage === 'function') {
+      installImage(card.image, extra.thumbnail, isCurrent, card.info);
     }
     return true;
   };
@@ -305,7 +310,10 @@ const PocketDescriptionCard = (() => {
           const card = valid[index++];
           try {
             const extra = await loadExtra(idOf(card));
-            if (isCurrent() && card.root.isConnected) { applyExtra(card, extra); }
+            if (isCurrent() && card.root.isConnected) {
+              applyExtra(card, extra, {installImage,
+                isCurrent: () => isCurrent() && card.root.isConnected});
+            }
           } catch (_) {
             // Like count is unknown; keep the poster from ThumbInfo/OwnerSupplement.
           }

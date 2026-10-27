@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.80-task968
+// @version     0.5.81-task971
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-10-27 12:27Z 5e716422
+// build: 2026-10-27 15:22Z 67d13b35
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -114,6 +114,8 @@ const PocketThumbnail = (() => {
 		const MAX_CACHE = 64;
 		const cache = new Map();
 		const pending = new Map();
+		const emptyPresentation = () => ({ urls: [], description: null });
+		const copyPresentation = (value) => ({ urls: [...value.urls], description: value.description });
 		const imageOwners = new WeakMap();
 		const record = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) ?
 				value : null;
@@ -125,7 +127,8 @@ const PocketThumbnail = (() => {
 						}
 						try {
 								const url = new URL(value);
-								if (url.protocol === 'https:' || url.protocol === 'http:') {
+								if ((url.protocol === 'https:' || url.protocol === 'http:') &&
+										!url.username && !url.password) {
 										const safe = url.protocol === 'http:' ? 'https:' + url.href.slice(5) : url.href;
 										if (!urls.includes(safe)) {
 												urls.push(safe);
@@ -136,19 +139,43 @@ const PocketThumbnail = (() => {
 				}
 				return urls;
 		};
-		const watchUrls = (payload) => {
+		const metadataUrls = (thumbnail, fallback = []) => {
+				const thumb = record(thumbnail) || {};
+				return normalize(ThumbnailSourcePolicy.select(thumb, [
+						thumb.large, thumb.largeUrl, thumb.middle, thumb.middleUrl,
+						thumb.normal, thumb.url, ...fallback,
+						...(typeof thumbnail === 'string' ? [thumbnail] : [])
+				], { mode: 'smart', includeUnknownOgp: true }));
+		};
+		const watchPresentation = (payload, requestedWatchId) => {
 				const outer = record(payload);
 				const data = record(outer?.data);
 				const response = record(data?.response) || record(outer?.response);
 				const v4 = record(record(response?.$watchV4)?.data);
-				const thumb = record(record((v4 || response)?.video)?.thumbnail);
-				if (!thumb) {
-						return [];
+				const video = record((v4 || response)?.video);
+				if (requestedWatchId && /^(?:sm|nm|so|ss)/.test(requestedWatchId) &&
+						typeof video?.id === 'string' && video.id !== requestedWatchId) {
+						return emptyPresentation();
 				}
-				return normalize(ThumbnailSourcePolicy.select(thumb, [
-						thumb.large, thumb.largeUrl, thumb.middle, thumb.middleUrl,
-						thumb.normal, thumb.url
-				], { mode: 'smart', includeUnknownOgp: true }));
+				return { urls: metadataUrls(video?.thumbnail),
+						description: typeof video?.description === 'string' ? video.description : null };
+		};
+		const watchUrls = (payload, requestedWatchId) => watchPresentation(payload, requestedWatchId).urls;
+		const readWatchPage = (html) => {
+				if (typeof html !== 'string' || html.length > 4 * 1024 * 1024) {
+						return null;
+				}
+				const page = new DOMParser().parseFromString(html, 'text/html');
+				const raw = page.querySelector('meta[name="server-response"]')?.getAttribute('content');
+				if (!raw) {
+						return null;
+				}
+				try {
+						return JSON.parse(raw);
+				}
+				catch (_) {
+						return null;
+				}
 		};
 		const legacyUrls = (thumbnail, hasLarge = false) => {
 				const normal = normalize([thumbnail]);
@@ -163,7 +190,7 @@ const PocketThumbnail = (() => {
 				return normalize([large, original]);
 		};
 		const install = (image, urls, isCurrent = () => true) => {
-				const sources = normalize(urls);
+				const sources = metadataUrls(null, urls);
 				if (!sources.length || !isCurrent()) {
 						return;
 				}
@@ -184,28 +211,30 @@ const PocketThumbnail = (() => {
 				};
 				next();
 		};
-		const getHighQuality = async (watchId, fetcher, hostname) => {
+		const getPresentation = async (watchId, fetcher, hostname) => {
 				if (hostname !== 'www.nicovideo.jp' ||
 						!/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/.test(watchId)) {
-						return [];
+						return emptyPresentation();
 				}
 				const now = Date.now();
 				const saved = cache.get(watchId);
 				if (saved && saved.until > now) {
-						return [...saved.urls];
+						return copyPresentation(saved.value);
 				}
 				const existing = pending.get(watchId);
 				if (existing) {
-						return [...await existing];
+						return copyPresentation(await existing);
 				}
 				const job = (async () => {
-						let urls = [];
+						let value = emptyPresentation();
 						try {
 								const url = 'https://www.nicovideo.jp/watch/' +
-										encodeURIComponent(watchId) + '?responseType=json';
+										encodeURIComponent(watchId);
 								const response = await fetcher(url, { credentials: 'include', timeout: 4000 });
 								if (response.ok) {
-										urls = watchUrls(await response.json());
+										const payload = typeof response.text === 'function' ?
+												readWatchPage(await response.text()) : await response.json?.();
+										value = watchPresentation(payload, watchId);
 								}
 						}
 						catch (_) {
@@ -216,12 +245,13 @@ const PocketThumbnail = (() => {
 										cache.delete(first);
 								}
 						}
-						cache.set(watchId, { until: Date.now() + (urls.length ? CACHE_MS : NEGATIVE_MS), urls });
-						return urls;
+						const complete = value.urls.length > 0 || value.description !== null;
+						cache.set(watchId, { until: Date.now() + (complete ? CACHE_MS : NEGATIVE_MS), value });
+						return value;
 				})();
 				pending.set(watchId, job);
 				try {
-						return [...await job];
+						return copyPresentation(await job);
 				}
 				finally {
 						if (pending.get(watchId) === job) {
@@ -229,7 +259,8 @@ const PocketThumbnail = (() => {
 						}
 				}
 		};
-		return { normalize, watchUrls, legacyUrls, install, getHighQuality };
+		const getHighQuality = async (watchId, fetcher, hostname) => (await getPresentation(watchId, fetcher, hostname)).urls;
+		return { normalize, metadataUrls, watchUrls, legacyUrls, install, getHighQuality, getPresentation };
 })();
 const PocketDescriptionCard = (() => {
 	const MAX_CONCURRENT = 3;
@@ -405,7 +436,7 @@ const PocketDescriptionCard = (() => {
 		};
 		img.src = sources[0];
 	};
-	const applyExtra = (card, extra) => {
+	const applyExtra = (card, extra, {installImage, isCurrent} = {}) => {
 		if (!card || !extra || typeof extra !== 'object') { return false; }
 		if (typeof extra.likeCount === 'number' &&
 				Number.isSafeInteger(extra.likeCount) && extra.likeCount >= 0 &&
@@ -423,6 +454,9 @@ const PocketDescriptionCard = (() => {
 			showOwner(card, isMissing ? extra.owner : {
 				...previous, icon:extra.owner.icon || previous.icon
 			});
+		}
+		if (extra.thumbnail && card.info && typeof installImage === 'function') {
+			installImage(card.image, extra.thumbnail, isCurrent, card.info);
 		}
 		return true;
 	};
@@ -512,7 +546,10 @@ const PocketDescriptionCard = (() => {
 					const card = valid[index++];
 					try {
 						const extra = await loadExtra(idOf(card));
-						if (isCurrent() && card.root.isConnected) { applyExtra(card, extra); }
+						if (isCurrent() && card.root.isConnected) {
+							applyExtra(card, extra, {installImage,
+								isCurrent: () => isCurrent() && card.root.isConnected});
+						}
 					} catch (_) {
 					}
 				}
@@ -556,16 +593,33 @@ const PocketCardMetadataLoader = (() => {
 			`https://ch.nicovideo.jp/ch${id}`;
 		return {type: isUser ? 'user' : 'channel', id, name, icon, url};
 	};
+	const normalizeThumbnail = raw => {
+		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { return null; }
+		const result = {};
+		for (const key of ['ogp','player','large','largeUrl','middle','middleUrl','normal','url']) {
+			const value = raw[key];
+			if (typeof value !== 'string') { continue; }
+			try {
+				const url = new URL(value);
+				if (/^https?:$/.test(url.protocol) && !url.username && !url.password) {
+					result[key] = value;
+				}
+			} catch (_) { /* malformed metadata cannot become an image source */ }
+		}
+		return Object.keys(result).length ? result : null;
+	};
 	const parse = (payload, requestedId) => {
 		if (!payload || payload.meta?.status !== 200 ||
 				!Array.isArray(payload.data?.items)) { return null; }
 		const item = payload.data.items.find(row => row && row.watchId === requestedId);
 		const video = item?.video;
 		if (!video || !safeId(video.id)) { return null; }
+		if (/^(?:sm|nm|so|ss)/.test(requestedId) && video.id !== requestedId) { return null; }
 		return {
 			videoId: video.id,
 			likeCount: validLike(video.count?.like) ? video.count.like : null,
-			owner: normalizeOwner(video.owner)
+			owner: normalizeOwner(video.owner),
+			thumbnail: normalizeThumbnail(video.thumbnail)
 		};
 	};
 	const query = async (watchId, fetcher) => {
@@ -2539,8 +2593,18 @@ const PocketCardMetadataLoader = (() => {
           texts.push(node);
         }
         for (const node of texts) {
-          const frag = linkifyText(node.data);
-          if (frag) { node.replaceWith(frag); }
+          // HTML <br> already survives. Plain LF/CRLF must also become visible
+          // breaks, before URL detection, without guessing inside a URL path.
+          const lines = node.data.split(/\r\n?|\n/);
+          const frag = document.createDocumentFragment();
+          let changed = lines.length > 1;
+          lines.forEach((text, index) => {
+            if (index) { frag.append(document.createElement('br')); }
+            const linked = linkifyText(text);
+            if (linked) { frag.append(linked); changed = true; }
+            else { frag.append(text); }
+          });
+          if (changed) { node.replaceWith(frag); }
         }
         return root;
       };
@@ -5801,6 +5865,14 @@ const MylistApiLoader = (() => {
         window.setTimeout(() => { this.addClass('noclip'); }, 800);
       }
 
+      updateDescription(videoInfo, html) {
+        const elm = this._slot && this._slot.description;
+        if (this._videoInfo !== videoInfo || typeof html !== 'string' ||
+            !elm || !elm.isConnected || !this._hostDom.classList.contains('show')) { return; }
+        if (videoInfo._rawData) { videoInfo._rawData.description = html; }
+        this._createDescription(elm, html);
+      }
+
       _createDescription(elm, data) {
         // The description uses DOM links (Task092). Reuse the playlist-style
         // metadata layout, not the old hard-coded "video deleted" thumbnails.
@@ -5830,8 +5902,8 @@ const MylistApiLoader = (() => {
           loadDecoration: ids => AdDecorationLoader.load(ids),
           loadExtra: id => PocketCardMetadataLoader.load(id),
           installImage: (image, thumbnail, owned, info) => PocketThumbnail.install(
-            image, PocketThumbnail.legacyUrls(thumbnail,
-              util.hasLargeThumbnail(info.videoId || info.id || '')), owned),
+            image, PocketThumbnail.metadataUrls(thumbnail, PocketThumbnail.legacyUrls(
+              info.thumbnail, util.hasLargeThumbnail(info.videoId || info.id || ''))), owned),
           isCurrent
         }).catch(error => window.console.warn('MylistPocket: 説明文カードの取得に失敗', error));
       }
@@ -6214,14 +6286,18 @@ const MylistApiLoader = (() => {
         // The old thumbnail remains visible immediately. High-quality metadata
         // is requested only for an explicitly opened popup, not for all cards.
         PocketThumbnail.install(image, legacy, isCurrent);
-        PocketThumbnail.getHighQuality(
+        PocketThumbnail.getPresentation(
           vi.watchId || requestedWatchId,
           (url, options) => netUtil.fetch(url, options),
           location.hostname
-        ).then(urls => {
-          if (urls.length && isCurrent()) {
-            PocketThumbnail.install(image, [...urls, ...legacy], isCurrent);
+        ).then(metadata => {
+          if (!isCurrent()) { return; }
+          if (metadata.urls.length) {
+            PocketThumbnail.install(image, [...metadata.urls, ...legacy], isCurrent);
           }
+          // getthumbinfo removes both <br> and anchor boundaries. Render the
+          // original watch description via the existing sanitizer/linkifier.
+          if (metadata.description !== null) { vv.updateDescription(vi, metadata.description); }
         }).catch(() => {});
       };
 
@@ -6756,10 +6832,11 @@ const MylistApiLoader = (() => {
               item.classList.toggle('is-fav-favorited', !!favChecker.isMatch(info));
 
               for (let img of item.querySelectorAll('img.videoThumbnail.preview')) {
-                // Preview cards only use already-known legacy metadata: never
-                // flood the watch API with calls for every list item.
-                PocketThumbnail.install(img, PocketThumbnail.legacyUrls(
-                  info.thumbnail, util.hasLargeThumbnail(info.id || info.watchId || watchId)));
+                // Reuse known candidates with the shared source policy; do not
+                // fetch watch pages merely because an item entered the list.
+                PocketThumbnail.install(img, PocketThumbnail.metadataUrls(info.thumbnail,
+                  PocketThumbnail.legacyUrls(info.thumbnail,
+                    util.hasLargeThumbnail(info.id || info.watchId || watchId))), isCurrent);
               }
 
               let label = item.querySelector('.label');
@@ -6865,7 +6942,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.80-task968', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.81-task971', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.80-task968
+// @version     0.5.81-task971
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -2009,8 +2009,18 @@ AntiPrototypeJs().then(() => {
           texts.push(node);
         }
         for (const node of texts) {
-          const frag = linkifyText(node.data);
-          if (frag) { node.replaceWith(frag); }
+          // HTML <br> already survives. Plain LF/CRLF must also become visible
+          // breaks, before URL detection, without guessing inside a URL path.
+          const lines = node.data.split(/\r\n?|\n/);
+          const frag = document.createDocumentFragment();
+          let changed = lines.length > 1;
+          lines.forEach((text, index) => {
+            if (index) { frag.append(document.createElement('br')); }
+            const linked = linkifyText(text);
+            if (linked) { frag.append(linked); changed = true; }
+            else { frag.append(text); }
+          });
+          if (changed) { node.replaceWith(frag); }
         }
         return root;
       };
@@ -3069,6 +3079,14 @@ const emitter = util.emitter;
         window.setTimeout(() => { this.addClass('noclip'); }, 800);
       }
 
+      updateDescription(videoInfo, html) {
+        const elm = this._slot && this._slot.description;
+        if (this._videoInfo !== videoInfo || typeof html !== 'string' ||
+            !elm || !elm.isConnected || !this._hostDom.classList.contains('show')) { return; }
+        if (videoInfo._rawData) { videoInfo._rawData.description = html; }
+        this._createDescription(elm, html);
+      }
+
       _createDescription(elm, data) {
         // The description uses DOM links (Task092). Reuse the playlist-style
         // metadata layout, not the old hard-coded "video deleted" thumbnails.
@@ -3098,8 +3116,8 @@ const emitter = util.emitter;
           loadDecoration: ids => AdDecorationLoader.load(ids),
           loadExtra: id => PocketCardMetadataLoader.load(id),
           installImage: (image, thumbnail, owned, info) => PocketThumbnail.install(
-            image, PocketThumbnail.legacyUrls(thumbnail,
-              util.hasLargeThumbnail(info.videoId || info.id || '')), owned),
+            image, PocketThumbnail.metadataUrls(thumbnail, PocketThumbnail.legacyUrls(
+              info.thumbnail, util.hasLargeThumbnail(info.videoId || info.id || ''))), owned),
           isCurrent
         }).catch(error => window.console.warn('MylistPocket: 説明文カードの取得に失敗', error));
       }
@@ -3482,14 +3500,18 @@ const emitter = util.emitter;
         // The old thumbnail remains visible immediately. High-quality metadata
         // is requested only for an explicitly opened popup, not for all cards.
         PocketThumbnail.install(image, legacy, isCurrent);
-        PocketThumbnail.getHighQuality(
+        PocketThumbnail.getPresentation(
           vi.watchId || requestedWatchId,
           (url, options) => netUtil.fetch(url, options),
           location.hostname
-        ).then(urls => {
-          if (urls.length && isCurrent()) {
-            PocketThumbnail.install(image, [...urls, ...legacy], isCurrent);
+        ).then(metadata => {
+          if (!isCurrent()) { return; }
+          if (metadata.urls.length) {
+            PocketThumbnail.install(image, [...metadata.urls, ...legacy], isCurrent);
           }
+          // getthumbinfo removes both <br> and anchor boundaries. Render the
+          // original watch description via the existing sanitizer/linkifier.
+          if (metadata.description !== null) { vv.updateDescription(vi, metadata.description); }
         }).catch(() => {});
       };
 
@@ -4024,10 +4046,11 @@ const emitter = util.emitter;
               item.classList.toggle('is-fav-favorited', !!favChecker.isMatch(info));
 
               for (let img of item.querySelectorAll('img.videoThumbnail.preview')) {
-                // Preview cards only use already-known legacy metadata: never
-                // flood the watch API with calls for every list item.
-                PocketThumbnail.install(img, PocketThumbnail.legacyUrls(
-                  info.thumbnail, util.hasLargeThumbnail(info.id || info.watchId || watchId)));
+                // Reuse known candidates with the shared source policy; do not
+                // fetch watch pages merely because an item entered the list.
+                PocketThumbnail.install(img, PocketThumbnail.metadataUrls(info.thumbnail,
+                  PocketThumbnail.legacyUrls(info.thumbnail,
+                    util.hasLargeThumbnail(info.id || info.watchId || watchId))), isCurrent);
               }
 
               let label = item.querySelector('.label');
@@ -4133,7 +4156,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.80-task968', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.81-task971', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

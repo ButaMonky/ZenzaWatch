@@ -30,16 +30,35 @@ const PocketCardMetadataLoader = (() => {
       `https://ch.nicovideo.jp/ch${id}`;
     return {type: isUser ? 'user' : 'channel', id, name, icon, url};
   };
+  // Carry only documented thumbnail URL fields from the already requested video
+  // metadata. Selection belongs to ThumbnailSourcePolicy, not this transport.
+  const normalizeThumbnail = raw => {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { return null; }
+    const result = {};
+    for (const key of ['ogp','player','large','largeUrl','middle','middleUrl','normal','url']) {
+      const value = raw[key];
+      if (typeof value !== 'string') { continue; }
+      try {
+        const url = new URL(value);
+        if (/^https?:$/.test(url.protocol) && !url.username && !url.password) {
+          result[key] = value;
+        }
+      } catch (_) { /* malformed metadata cannot become an image source */ }
+    }
+    return Object.keys(result).length ? result : null;
+  };
   const parse = (payload, requestedId) => {
     if (!payload || payload.meta?.status !== 200 ||
         !Array.isArray(payload.data?.items)) { return null; }
     const item = payload.data.items.find(row => row && row.watchId === requestedId);
     const video = item?.video;
     if (!video || !safeId(video.id)) { return null; }
+    if (/^(?:sm|nm|so|ss)/.test(requestedId) && video.id !== requestedId) { return null; }
     return {
       videoId: video.id,
       likeCount: validLike(video.count?.like) ? video.count.like : null,
-      owner: normalizeOwner(video.owner)
+      owner: normalizeOwner(video.owner),
+      thumbnail: normalizeThumbnail(video.thumbnail)
     };
   };
   const query = async (watchId, fetcher) => {

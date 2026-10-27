@@ -73,6 +73,8 @@ jobs:
         run: node test/browser/task970-hover-ui-timing.cjs
       - name: MylistPocket linked-card Chromium regression
         run: node test/browser/task957-pocket-card-legacy-css.cjs
+      - name: MylistPocket high-quality thumbnail route regression
+        run: node test/browser/task971-pocket-hq-thumbnail.cjs
       - name: Scene preview vertical stability Chromium regression
         run: node test/browser/task954-scene-preview-vertical.cjs
       - name: Fullscreen scene controls clearance Chromium regression

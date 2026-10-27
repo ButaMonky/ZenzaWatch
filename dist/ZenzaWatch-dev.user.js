@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.345-task970
+// @version        2.7.346-task972
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-27 14:05Z 6fab37f0
+// build: 2026-10-27 16:25Z 92a9cfc5
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.345-task970';
+    var VER = '2.7.346-task972';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-27 14:05Z 6fab37f0';
+    var BUILD = '2026-10-27 16:25Z 92a9cfc5';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -11060,11 +11060,11 @@ const PlaylistApiLoader = (() => {
 								cacheStorage = new CacheStorage(sessionStorage);
 						}
 				}
-				async load({ type, id, options }, { frontendId = 6, frontendVersion = 0 } = {}) {
+				async load({ type, id, options, all, maxItems, isCurrent }, { frontendId = 6, frontendVersion = 0 } = {}) {
 						const { url, cacheKey } = ((type) => {
 								switch (type) {
 										case 'series':
-												return this._buildSeriesURL(id);
+												return this._buildSeriesURL(id, options);
 										case 'user-uploaded':
 												return this._buildUserUploadedURL(id, options);
 										case 'mylist':
@@ -11079,6 +11079,9 @@ const PlaylistApiLoader = (() => {
 						})(type);
 						if (url === undefined || cacheKey === undefined) {
 								throw new Error(`プレイリストの取得失敗(3) ${type}`);
+						}
+						if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
+								return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
 						}
 						const cacheData = cacheStorage.getItem(cacheKey);
 						if (cacheData) {
@@ -11096,8 +11099,124 @@ const PlaylistApiLoader = (() => {
 						cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
 						return data;
 				}
-				_buildSeriesURL(seriesId) {
-						const url = `https://nvapi.nicovideo.jp/v1/playlist/series/${seriesId}`;
+				async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
+						const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
+								Math.min(10000, Math.floor(requestedMax)) : 10000;
+						const first = new URL(initialUrl);
+						const rawSize = Number(first.searchParams.get('pageSize') || 500);
+						const pageSize = Number.isInteger(rawSize) && rawSize > 0 ? Math.min(500, rawSize) : 500;
+						first.searchParams.set('pageSize', String(pageSize));
+						first.searchParams.set('page', '1');
+						const cacheKey = `playlist; all-v1; ${maxItems}; ${first.href}`;
+						const checkCurrent = () => {
+								if (isCurrent && !isCurrent()) {
+										throw new Error('プレイリスト取得中止（表示対象が変更されました）');
+								}
+						};
+						const expose = (value) => {
+								const result = value.items.slice();
+								Object.defineProperty(result, 'playlistLoadInfo', { value: {
+												totalCount: value.totalCount, limited: value.limited, maxItems: value.maxItems
+										}, enumerable: false });
+								return result;
+						};
+						checkCurrent();
+						const cached = cacheStorage.getItem(cacheKey);
+						if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
+								return expose(cached);
+						}
+						const items = [], seen = new Set();
+						let totalCount = null, limited = false;
+						const maxPages = Math.ceil(10000 / pageSize) + 1;
+						for (let page = 1;; page++) {
+								checkCurrent();
+								if (page > maxPages) {
+										throw new Error('プレイリスト取得失敗（ページ数の安全上限）');
+								}
+								const url = new URL(first.href);
+								url.searchParams.set('page', String(page));
+								let result;
+								for (let attempt = 0; attempt < 2; attempt++) {
+										checkCurrent();
+										try {
+												result = await netUtil.fetch(url.href, {
+														headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+														credentials: 'include', timeout: 15000
+												}).then((r) => r.json());
+										}
+										catch (error) {
+												const status = error?.status ||
+														error?.statusCode;
+												if (attempt || [401, 403, 404].includes(Number(status))) {
+														throw new Error(`プレイリストの取得失敗(2) ${type} (${page}ページ目)`);
+												}
+												checkCurrent();
+												await new Promise(resolve => setTimeout(resolve, 400));
+												continue;
+										}
+										checkCurrent();
+										if (!attempt && Number(result?.meta?.status) >= 500) {
+												await new Promise(resolve => setTimeout(resolve, 400));
+												continue;
+										}
+										break;
+								}
+								checkCurrent();
+								if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
+										throw new Error(`プレイリストの取得失敗(1) ${type} (${page}ページ目)`);
+								}
+								const data = result.data, batch = data.items;
+								const count = data.totalCount;
+								if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
+										totalCount = totalCount === null ? count : Math.max(totalCount, count);
+								}
+								if (!batch.length) {
+										if (data.hasNext === true || (totalCount !== null && (page - 1) * pageSize < totalCount)) {
+												throw new Error(`プレイリストの取得失敗（${page}ページ目が空です）`);
+										}
+										break;
+								}
+								const before = items.length;
+								for (const item of batch) {
+										if (!item || typeof item !== 'object') {
+												throw new Error(`プレイリストの取得失敗（${page}ページ目のデータ形式）`);
+										}
+										const value = item;
+										const id = value.watchId ?? value.content?.id;
+										if (typeof id !== 'string' && typeof id !== 'number') {
+												throw new Error(`プレイリストの取得失敗（${page}ページ目の動画ID）`);
+										}
+										const key = String(id);
+										if (!seen.has(key)) {
+												seen.add(key);
+												items.push(item);
+										}
+								}
+								if (items.length === before) {
+										throw new Error('プレイリスト取得失敗（同じページが繰り返されました）');
+								}
+								const more = typeof data.hasNext === 'boolean' ? data.hasNext :
+										totalCount !== null ? page * pageSize < totalCount : batch.length >= pageSize;
+								if (items.length >= maxItems) {
+										limited = items.length > maxItems || more;
+										items.length = maxItems;
+										break;
+								}
+								if (!more) {
+										break;
+								}
+						}
+						checkCurrent();
+						const value = { items, totalCount, limited, maxItems, complete: true };
+						try {
+								cacheStorage.setItem(cacheKey, value, CACHE_EXPIRE_TIME);
+						}
+						catch (_) { /* CacheStorage is best-effort, not part of successful loading. */ }
+						return expose(value);
+				}
+				_buildSeriesURL(seriesId, options = {}) {
+						const query = new URLSearchParams(options).toString();
+						const url = `https://nvapi.nicovideo.jp/v1/playlist/series/${seriesId}${query ? '?' + query : ''}`;
 						return { url, cacheKey: `playlist; ${url}` };
 				}
 				_buildUserUploadedURL(userId, options = {}) {
@@ -35086,7 +35205,7 @@ const PlayListSession = ((storage) => {
 				}
 		};
 })(sessionStorage);
-PlayListSession.MAX_ITEMS = 1000;
+PlayListSession.MAX_ITEMS = 10000;
 PlayListSession.MIN_ITEMS = 100;
 const PlaylistSession = PlayListSession;
 class VideoListView extends Emitter {
@@ -36312,13 +36431,19 @@ class PlayList extends VideoList {
 				}
 				const timeKey = `loadPlaylist: ${playlist.type} ${playlist.id || playlist.options?.tag || playlist.options?.keyword}`;
 				window.console.time(timeKey);
-				const network = this._playlistApiLoader.load(playlist, msgInfo);
 				const additiveOwner = this._beginAdditiveLoad(options);
+				const network = this._playlistApiLoader.load({ ...playlist,
+						maxItems: this.model.maxItems,
+						isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
+				}, msgInfo);
 				return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
 						window.console.timeEnd(timeKey);
 						if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
 								return { status: 'superseded', message: '' };
 						}
+						const loaded = items.playlistLoadInfo;
+						const capacityNotice = loaded?.limited ?
+								`（上限${loaded.maxItems}件まで取得${loaded.totalCount !== null ? `／全${loaded.totalCount}件` : ''}）` : '';
 						let videoListItems = items.map((item) => VideoListItem.createByMylistItem(item));
 						if (videoListItems.length < 1) {
 								return Promise.reject({
@@ -36352,20 +36477,20 @@ class PlayList extends VideoList {
 						if (overflow && added === 0) {
 								return Promise.resolve({
 										status: 'ok',
-										message: `プレイリストの上限により${overflow}件追加できませんでした`
+										message: `プレイリストの上限により${overflow}件追加できませんでした${capacityNotice}`
 								});
 						}
 						if (added === 0) {
 								return Promise.resolve({
 										status: 'ok',
-										message: `追加できる動画がありませんでした（${videoListItems.length}件すべて既にプレイリストにあります）`
+										message: `追加できる動画がありませんでした（${videoListItems.length}件すべて既にプレイリストにあります）${capacityNotice}`
 								});
 						}
 						return Promise.resolve({
 								status: 'ok',
-								message: added !== null ?
+								message: (added !== null ?
 										`プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
-										'プレイリストに読み込みしました'
+										'プレイリストに読み込みしました') + capacityNotice
 						});
 				}, error => {
 						if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {

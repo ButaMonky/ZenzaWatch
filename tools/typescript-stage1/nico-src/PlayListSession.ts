@@ -99,7 +99,7 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
   } as PlayListSessionApi;
 })(sessionStorage);
 // Task 073: セッション（リロード後の復元）に保存するプレイリストの最大件数
-PlayListSession.MAX_ITEMS = 1000;
+PlayListSession.MAX_ITEMS = 10000;
 PlayListSession.MIN_ITEMS = 100;
 const PlaylistSession = PlayListSession;
 

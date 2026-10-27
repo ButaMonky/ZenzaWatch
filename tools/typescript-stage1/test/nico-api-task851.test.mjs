@@ -60,7 +60,8 @@ test('PlayListSession: trim around index, quota fallback, restore',{timeout:2000
   await compare('PlayListSession','PlayListSession',()=>{const log=[];const s=memStorage(log);
     return {log,s,globals:{sessionStorage:s,window:{console:{warn:(...a)=>log.push(['warn',a.length]),error:()=>log.push(['error'])}},
       Object,Math,JSON,Array,parseInt}};},(P,w)=>{
-    const r=[P.MAX_ITEMS,P.MIN_ITEMS,P.isExist(),P.restore()];
+    // Task972 changed the default cap; explicit-limit quota/index behavior stays identical.
+    const r=[P.MIN_ITEMS,P.isExist(),P.restore()];
     P.MAX_ITEMS=20;P.MIN_ITEMS=5;
     const items=n=>Array.from({length:n},(_,i)=>({id:'sm'+i,title:'x'.repeat(200)}));
     P.save({items:items(8),index:3});r.push(P.isExist(),P.restore().items.length);

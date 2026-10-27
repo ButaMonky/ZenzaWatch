@@ -1,3 +1,12 @@
+## 2026-10-28 - Playlist pagination and session capacity (2.7.346-task972)
+
+- User uploads, public mylists, series and Watch Later now fetch successive pages instead of stopping after the first 500 videos, up to the existing 10,000-item player capacity.
+- Join pages in server order, deduplicate repeated video IDs, and reverse default uploader order only once after all pages are collected.
+- Reject failed/incomplete/non-progressing results without overwriting the current playlist or caching them as complete. Stop obsolete loads between pages.
+- Keep explicit page requests and search pagination compatible. A capacity-limited result is labeled rather than presented as the entire source.
+- Raise reload-session retention from 1,000 to 10,000 items when storage space permits. Preserve the active video and the existing quota fallback; other storage keys remain untouched.
+- The independent own-mylist/watch-later readers were verified beyond 500 items; no account mutation behavior was changed.
+
 ## 2026-10-27 - MylistPocket 0.5.81-task971: smart high-quality thumbnail routes
 
 - Repair the popup HQ metadata request to read current watch-page server-response HTML instead of the obsolete responseType=json endpoint.

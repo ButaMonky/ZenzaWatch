@@ -21,6 +21,10 @@ export interface PlaylistLoadRequest {
   type: PlaylistType;
   id?: string | number | undefined;
   options?: PlaylistQueryOptions | undefined;
+  /** Non-search collections default to complete pagination unless page is explicit. */
+  all?: boolean;
+  maxItems?: number;
+  isCurrent?: () => boolean;
 }
 export interface PlaylistFrontend {
   frontendId?: number;
@@ -37,11 +41,12 @@ export interface PlaylistUrl {
  */
 export interface PlaylistEnvelopeProbe {
   readonly meta: {readonly status?: unknown};
-  readonly data: {readonly items?: unknown};
+  readonly data: {readonly items?: unknown; readonly totalCount?: unknown; readonly hasNext?: unknown};
 }
 
 export interface PlaylistApiLoaderClient {
-  /** Resolves `data.items` as received (or cached). Rejects with `プレイリストの取得失敗(1|2|3)`. */
+  /** Resolves the ordered item array. Auto-paged results expose non-enumerable
+   * playlistLoadInfo; explicit page/all:false/search retain single-page semantics. */
   load(request: PlaylistLoadRequest, frontend?: PlaylistFrontend): Promise<unknown>;
 }
 
@@ -56,11 +61,11 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
       }
     }
 
-    async load({ type, id, options }: PlaylistLoadRequest, { frontendId = 6, frontendVersion = 0 }: PlaylistFrontend = {}): Promise<unknown> {
+    async load({ type, id, options, all, maxItems, isCurrent }: PlaylistLoadRequest, { frontendId = 6, frontendVersion = 0 }: PlaylistFrontend = {}): Promise<unknown> {
       const { url, cacheKey } = ((type: PlaylistType): PlaylistUrl => {
         switch (type) {
           case 'series':
-            return this._buildSeriesURL(id);
+            return this._buildSeriesURL(id, options);
           case 'user-uploaded':
             return this._buildUserUploadedURL(id, options);
           case 'mylist':
@@ -76,6 +81,10 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
 
       if (url === undefined || cacheKey === undefined) {
         throw new Error(`プレイリストの取得失敗(3) ${type}`);
+      }
+
+      if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
+        return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
       }
 
       // nvapi でソートされた結果をもらうのでそのままキャッシュする
@@ -100,10 +109,119 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
       return data;
     }
 
+    // Task972: one atomic ordered collection, not the first 500-row page.
+    async _loadAll(type: PlaylistType, initialUrl: string, requestedMax: number | undefined,
+      isCurrent: (() => boolean) | undefined, frontendId: number, frontendVersion: number): Promise<unknown[]> {
+      const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
+        Math.min(10000, Math.floor(requestedMax)) : 10000;
+      const first = new URL(initialUrl);
+      const rawSize = Number(first.searchParams.get('pageSize') || 500);
+      const pageSize = Number.isInteger(rawSize) && rawSize > 0 ? Math.min(500, rawSize) : 500;
+      first.searchParams.set('pageSize', String(pageSize));
+      first.searchParams.set('page', '1');
+      // A previous single-page array is never evidence of a complete collection.
+      const cacheKey = `playlist; all-v1; ${maxItems}; ${first.href}`;
+      const checkCurrent = () => {
+        if (isCurrent && !isCurrent()) { throw new Error('プレイリスト取得中止（表示対象が変更されました）'); }
+      };
+      type Collection = {items: unknown[]; totalCount: number | null; limited: boolean;
+        maxItems: number; complete: true};
+      const expose = (value: Collection): unknown[] => {
+        const result = value.items.slice();
+        Object.defineProperty(result, 'playlistLoadInfo', {value: {
+          totalCount: value.totalCount, limited: value.limited, maxItems: value.maxItems
+        }, enumerable: false});
+        return result;
+      };
+      checkCurrent();
+      const cached = (cacheStorage as PlaylistCacheStorage).getItem(cacheKey) as Collection | null;
+      if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
+        return expose(cached);
+      }
+      const items: unknown[] = [], seen = new Set<string>();
+      let totalCount: number | null = null, limited = false;
+      // A broken API cannot keep a request alive indefinitely by repeating pages.
+      const maxPages = Math.ceil(10000 / pageSize) + 1;
+      for (let page = 1; ; page++) {
+        checkCurrent();
+        if (page > maxPages) { throw new Error('プレイリスト取得失敗（ページ数の安全上限）'); }
+        const url = new URL(first.href); url.searchParams.set('page', String(page));
+        let result: PlaylistEnvelopeProbe | undefined;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          checkCurrent();
+          try {
+            result = await netUtil.fetch(url.href, {
+              headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
+              credentials: 'include', timeout: 15000
+            }).then((r: Response): Promise<PlaylistEnvelopeProbe> => r.json());
+          } catch (error) {
+            const status = (error as {status?: unknown; statusCode?: unknown} | null)?.status ||
+              (error as {statusCode?: unknown} | null)?.statusCode;
+            if (attempt || [401,403,404].includes(Number(status))) {
+              throw new Error(`プレイリストの取得失敗(2) ${type} (${page}ページ目)`);
+            }
+            checkCurrent();
+            await new Promise<void>(resolve => setTimeout(resolve, 400));
+            continue;
+          }
+          checkCurrent();
+          if (!attempt && Number(result?.meta?.status) >= 500) {
+            await new Promise<void>(resolve => setTimeout(resolve, 400)); continue;
+          }
+          break;
+        }
+        checkCurrent();
+        if (result?.meta?.status !== 200 || !Array.isArray(result?.data?.items)) {
+          throw new Error(`プレイリストの取得失敗(1) ${type} (${page}ページ目)`);
+        }
+        const data = result.data, batch = data.items as unknown[];
+        const count = data.totalCount;
+        if (typeof count === 'number' && Number.isSafeInteger(count) && count >= 0) {
+          totalCount = totalCount === null ? count : Math.max(totalCount, count);
+        }
+        if (!batch.length) {
+          if (data.hasNext === true || (totalCount !== null && (page - 1) * pageSize < totalCount)) {
+            throw new Error(`プレイリストの取得失敗（${page}ページ目が空です）`);
+          }
+          break;
+        }
+        const before = items.length;
+        for (const item of batch) {
+          if (!item || typeof item !== 'object') {
+            throw new Error(`プレイリストの取得失敗（${page}ページ目のデータ形式）`);
+          }
+          const value = item as {watchId?: unknown; content?: {id?: unknown}};
+          const id = value.watchId ?? value.content?.id;
+          if (typeof id !== 'string' && typeof id !== 'number') {
+            throw new Error(`プレイリストの取得失敗（${page}ページ目の動画ID）`);
+          }
+          const key = String(id);
+          if (!seen.has(key)) { seen.add(key); items.push(item); }
+        }
+        if (items.length === before) { throw new Error('プレイリスト取得失敗（同じページが繰り返されました）'); }
+        const more = typeof data.hasNext === 'boolean' ? data.hasNext :
+          totalCount !== null ? page * pageSize < totalCount : batch.length >= pageSize;
+        if (items.length >= maxItems) {
+          limited = items.length > maxItems || more;
+          items.length = maxItems;
+          break;
+        }
+        if (!more) { break; }
+      }
+      checkCurrent();
+      const value: Collection = {items, totalCount, limited, maxItems, complete: true};
+      // Large collection cache writes are optional; never lose loaded items if
+      // browser storage is full, or overwrite the live playlist with a partial page.
+      try { (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, value, CACHE_EXPIRE_TIME); }
+      catch (_) { /* CacheStorage is best-effort, not part of successful loading. */ }
+      return expose(value);
+    }
+
     // 動画シリーズ
     // https://nvapi.nicovideo.jp/v1/playlist/series/${seriesId}?sortOrder=${sortOrder}&sortKey=${sortKey}
-    _buildSeriesURL(seriesId: string | number | undefined): PlaylistUrl {
-      const url = `https://nvapi.nicovideo.jp/v1/playlist/series/${seriesId}`;
+    _buildSeriesURL(seriesId: string | number | undefined, options: PlaylistQueryOptions = {}): PlaylistUrl {
+      const query = new URLSearchParams(options as Record<string, string>).toString();
+      const url = `https://nvapi.nicovideo.jp/v1/playlist/series/${seriesId}${query ? '?' + query : ''}`;
       return {url, cacheKey: `playlist; ${url}`};
     }
 

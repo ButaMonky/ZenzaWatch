@@ -76,7 +76,9 @@ function playlistGlobals(scenario){
 }
 const items=[{watchId:'sm9'}];
 const ok={body:{meta:{status:200},data:{items}}};
-const load=(req,fe)=>a=>a.load(req,fe);
+// Task972: legacy parity is for the retained single-page API; full collections
+// are exercised by Task972PlaylistPaginationTest against real generated runtime.
+const load=(req,fe)=>a=>a.load({...req,all:false},fe);
 test('PlaylistApiLoader: URLs per type, cache keys, headers and failure codes (1/2/3)',async()=>{
   const n=await compareSequences('PlaylistApiLoader',playlistGlobals,[
     ['series + cache reuse',[load({type:'series',id:'123'}),load({type:'series',id:'123'})],ok],

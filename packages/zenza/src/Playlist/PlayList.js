@@ -428,13 +428,19 @@ class PlayList extends VideoList {
         }
         const timeKey = `loadPlaylist: ${playlist.type} ${playlist.id || playlist.options?.tag || playlist.options?.keyword}`;
         window.console.time(timeKey);
-        const network = this._playlistApiLoader.load(playlist, msgInfo);
         const additiveOwner = this._beginAdditiveLoad(options);
+        const network = this._playlistApiLoader.load({ ...playlist,
+            maxItems: this.model.maxItems,
+            isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
+        }, msgInfo);
         return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
             window.console.timeEnd(timeKey);
             if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
                 return { status: 'superseded', message: '' };
             }
+            const loaded = items.playlistLoadInfo;
+            const capacityNotice = loaded?.limited ?
+                `（上限${loaded.maxItems}件まで取得${loaded.totalCount !== null ? `／全${loaded.totalCount}件` : ''}）` : '';
             let videoListItems = items.map((item) => VideoListItem.createByMylistItem(item));
             if (videoListItems.length < 1) {
                 return Promise.reject({
@@ -470,7 +476,7 @@ class PlayList extends VideoList {
             if (overflow && added === 0) {
                 return Promise.resolve({
                     status: 'ok',
-                    message: `プレイリストの上限により${overflow}件追加できませんでした`
+                    message: `プレイリストの上限により${overflow}件追加できませんでした${capacityNotice}`
                 });
             }
             // Task 041: 1件も増えなかった場合は、そうと分かるメッセージにする
@@ -479,14 +485,14 @@ class PlayList extends VideoList {
             if (added === 0) {
                 return Promise.resolve({
                     status: 'ok',
-                    message: `追加できる動画がありませんでした（${videoListItems.length}件すべて既にプレイリストにあります）`
+                    message: `追加できる動画がありませんでした（${videoListItems.length}件すべて既にプレイリストにあります）${capacityNotice}`
                 });
             }
             return Promise.resolve({
                 status: 'ok',
-                message: added !== null ?
+                message: (added !== null ?
                     `プレイリストに${added}件追加しました${overflow ? `（上限により${overflow}件追加できませんでした）` : ''}` :
-                    'プレイリストに読み込みしました'
+                    'プレイリストに読み込みしました') + capacityNotice
             });
         }, error => {
             if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {

@@ -1,3 +1,11 @@
+## 2026-10-27 - Task970：ホバー説明・映像上のボタンの表示時間（2.7.345）
+
+- マウスを止めてから説明文と映像上のホバーボタンを隠すまでの待ち時間を1秒に変更。既存のフェード、ホバー中・フォーカス中の優先動作は維持。
+- カーソルと小画面リサイズに使う400ms判定、および小画面・全画面の操作バーの自動非表示設定は変更しない。
+- コメント表示／NG切替直後の1秒表示は引き続き独立して動作。
+- 連続したマウス移動では1つのタイマーを更新し、動画切替・プレイヤー終了で解除。閉じた後の遅延入力で再表示しない。
+- TypeScript正本、生成JavaScript、配布本体を同期。新しい設定項目の追加や、他の配布スクリプトの変更はない。
+
 ## 2026-10-27 - Public promotion of tested development changes (Dev 2.7.344)
 
 - Brought the tested product changes from the private development tree into the public fork, retaining the existing public Issue #3 seek-bar fix (PR #38).

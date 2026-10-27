@@ -1029,6 +1029,8 @@ class NicoVideoPlayerDialogView extends Emitter {
         return Fullscreen.now() || this._state.screenMode === 'wide' || this._state.screenMode === '3D';
     }
     _onMouseMove() {
+        // Refresh before the existing early return: consecutive movements extend UI idle.
+        this._onHoverUiActive();
         if (this._isMouseMoving) {
             return;
         }
@@ -1041,6 +1043,27 @@ class NicoVideoPlayerDialogView extends Emitter {
         }
         this.removeClass('is-mouseMoving');
         this._isMouseMoving = false;
+    }
+    // Discussion #36 / Task970: explanatory UI has a separate one-second idle
+    // owner. Do not extend the shared 400ms cursor/resize state or toolbar timers.
+    _onHoverUiActive() {
+        if (this._hoverUiSuppressed) {
+            return;
+        }
+        clearTimeout(this._hoverUiTimer);
+        if (!this._isHoverUiActive) {
+            this.addClass('is-hoverUiActive');
+            this._isHoverUiActive = true;
+        }
+        this._hoverUiTimer = setTimeout(() => this._clearHoverUiActive(), 1000);
+    }
+    _clearHoverUiActive() {
+        clearTimeout(this._hoverUiTimer);
+        this._hoverUiTimer = undefined;
+        if (this._isHoverUiActive) {
+            this.removeClass('is-hoverUiActive');
+        }
+        this._isHoverUiActive = false;
     }
     _onControlBarTimingConfigChange() {
         if (this._isControlBarActive) {
@@ -1107,6 +1130,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         this.emit('error', e);
     }
     _onBeforeVideoOpen() {
+        this._clearHoverUiActive();
         this._setThumbnail();
     }
     _onVideoInfoLoad(videoInfo) {
@@ -1334,6 +1358,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         util.StyleSwitcher.update({ on, off });
     }
     show() {
+        this._hoverUiSuppressed = false;
         ClassList(this._$dialog[0]).add('is-open');
         if (!Fullscreen.now()) {
             ClassList(document.body).remove('fullscreen');
@@ -1343,6 +1368,8 @@ class NicoVideoPlayerDialogView extends Emitter {
         this._updateScreenModeStyle();
     }
     hide() {
+        this._hoverUiSuppressed = true;
+        this._clearHoverUiActive();
         // Detach one-shot keyboard/toolbar timers with the player, not the page.
         this._clearShortcutToggleFeedback();
         clearTimeout(this._controlBarIdleCustomTimer);
@@ -5208,13 +5235,13 @@ util.addStyle(`
         left: auto;
       }
 
-      .is-mouseMoving .menuButton {
+      .is-hoverUiActive .menuButton {
         opacity: 0.8;
         background: rgba(80, 80, 80, 0.5);
         border: 1px solid #888;
         transition: box-shadow 0.2s ease;
       }
-      .is-mouseMoving .menuButton .menuButtonInner {
+      .is-hoverUiActive .menuButton .menuButtonInner {
         opacity: 0.8;
         word-break: normal;
         transition:
@@ -5510,7 +5537,7 @@ util.addStyle(`
       transform-origin: center center;
     }
 
-    .is-mouseMoving .closeButton,
+    .is-hoverUiActive .closeButton,
     .closeButton:hover {
       opacity: 1;
       background: rgba(0, 0, 0, 0.8);

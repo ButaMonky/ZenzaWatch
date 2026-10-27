@@ -16,7 +16,7 @@ const html='<!doctype html><html><head><meta charset="utf-8"><style>'+
   'height:55px;display:flex;justify-content:center;align-items:center;' +
   'background:#181818;}' +
   '.volumeRange{width:64px;height:8px;}'+css+'</style></head>' +
-  '<body class="is-mouseMoving"><div class="videoControlBar">' +
+  '<body class="is-hoverUiActive"><div class="videoControlBar">' +
   '<div class="volumeControl" data-shortcut-hint="volume">' +
   '<input type="range" class="volumeRange" value="0.5" min="0.01" max="1" ' +
   'step="any" aria-label="音量調整"><span class="tooltip">' +
@@ -106,7 +106,7 @@ async function evaluate(expression){
     snapshots.push({viewport:width,tipWidth:Math.round(info.tip.width),visible:true});
     await send('Input.dispatchMouseEvent',{type:'mouseMoved',x:20,y:30,button:'none'});
   }
-  await evaluate('document.body.classList.remove("is-mouseMoving")');
+  await evaluate('document.body.classList.remove("is-hoverUiActive")');
   assert.strictEqual(await evaluate('getComputedStyle(document.querySelector(".tooltip")).display'),'none');
   await evaluate('document.querySelector(".volumeRange").focus()');
   assert.strictEqual(await evaluate('getComputedStyle(document.querySelector(".tooltip")).display'),'block');

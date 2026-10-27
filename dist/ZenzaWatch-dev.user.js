@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.344-task966
+// @version        2.7.345-task970
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-27 12:27Z 5e716422
+// build: 2026-10-27 14:05Z 6fab37f0
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.344-task966';
+    var VER = '2.7.345-task970';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-27 12:27Z 5e716422';
+    var BUILD = '2026-10-27 14:05Z 6fab37f0';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -23878,7 +23878,7 @@ util.addStyle(`
 		z-index: 100;
 		opacity: 0.8;
 	}
-	.is-mouseMoving .controlButton:hover .tooltip {
+	.is-hoverUiActive .controlButton:hover .tooltip {
 		display: block;
 		opacity: 1;
 	}
@@ -24328,7 +24328,7 @@ util.addStyle(`
 		border: 1px solid #000;
 		pointer-events: none;
 	}
-	.is-mouseMoving .videoControlBar .volumeControl:hover .tooltip,
+	.is-hoverUiActive .videoControlBar .volumeControl:hover .tooltip,
 	.videoControlBar .volumeControl:focus-within .tooltip {
 		display: block;
 	}
@@ -43385,6 +43385,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				return Fullscreen.now() || this._state.screenMode === 'wide' || this._state.screenMode === '3D';
 		}
 		_onMouseMove() {
+				this._onHoverUiActive();
 				if (this._isMouseMoving) {
 						return;
 				}
@@ -43397,6 +43398,25 @@ class NicoVideoPlayerDialogView extends Emitter {
 				}
 				this.removeClass('is-mouseMoving');
 				this._isMouseMoving = false;
+		}
+		_onHoverUiActive() {
+				if (this._hoverUiSuppressed) {
+						return;
+				}
+				clearTimeout(this._hoverUiTimer);
+				if (!this._isHoverUiActive) {
+						this.addClass('is-hoverUiActive');
+						this._isHoverUiActive = true;
+				}
+				this._hoverUiTimer = setTimeout(() => this._clearHoverUiActive(), 1000);
+		}
+		_clearHoverUiActive() {
+				clearTimeout(this._hoverUiTimer);
+				this._hoverUiTimer = undefined;
+				if (this._isHoverUiActive) {
+						this.removeClass('is-hoverUiActive');
+				}
+				this._isHoverUiActive = false;
 		}
 		_onControlBarTimingConfigChange() {
 				if (this._isControlBarActive) {
@@ -43457,6 +43477,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this.emit('error', e);
 		}
 		_onBeforeVideoOpen() {
+				this._clearHoverUiActive();
 				this._setThumbnail();
 		}
 		_onVideoInfoLoad(videoInfo) {
@@ -43670,6 +43691,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				util.StyleSwitcher.update({ on, off });
 		}
 		show() {
+				this._hoverUiSuppressed = false;
 				ClassList(this._$dialog[0]).add('is-open');
 				if (!Fullscreen.now()) {
 						ClassList(document.body).remove('fullscreen');
@@ -43679,6 +43701,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this._updateScreenModeStyle();
 		}
 		hide() {
+				this._hoverUiSuppressed = true;
+				this._clearHoverUiActive();
 				this._clearShortcutToggleFeedback();
 				clearTimeout(this._controlBarIdleCustomTimer);
 				this._controlBarIdleCustomTimer = null;
@@ -47241,13 +47265,13 @@ util.addStyle(`
 				right: 16px;
 				left: auto;
 			}
-			.is-mouseMoving .menuButton {
+			.is-hoverUiActive .menuButton {
 				opacity: 0.8;
 				background: rgba(80, 80, 80, 0.5);
 				border: 1px solid #888;
 				transition: box-shadow 0.2s ease;
 			}
-			.is-mouseMoving .menuButton .menuButtonInner {
+			.is-hoverUiActive .menuButton .menuButtonInner {
 				opacity: 0.8;
 				word-break: normal;
 				transition:
@@ -47524,7 +47548,7 @@ util.addStyle(`
 			pointer-events: auto;
 			transform-origin: center center;
 		}
-		.is-mouseMoving .closeButton,
+		.is-hoverUiActive .closeButton,
 		.closeButton:hover {
 			opacity: 1;
 			background: rgba(0, 0, 0, 0.8);

@@ -69,6 +69,8 @@ jobs:
         run: node test/browser/task939-volume-tooltip.cjs
       - name: Playback-rate tooltip Chromium regression
         run: node test/browser/task947-speed-tooltip.cjs
+      - name: Hover tooltip and overlay duration Chromium regression
+        run: node test/browser/task970-hover-ui-timing.cjs
       - name: MylistPocket linked-card Chromium regression
         run: node test/browser/task957-pocket-card-legacy-css.cjs
       - name: Scene preview vertical stability Chromium regression

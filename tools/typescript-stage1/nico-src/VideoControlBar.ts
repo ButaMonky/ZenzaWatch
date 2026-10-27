@@ -830,7 +830,7 @@ util.addStyle(`
     z-index: 100;
     opacity: 0.8;
   }
-  .is-mouseMoving .controlButton:hover .tooltip {
+  .is-hoverUiActive .controlButton:hover .tooltip {
     display: block;
     opacity: 1;
   }
@@ -1324,7 +1324,7 @@ util.addStyle(`
     border: 1px solid #000;
     pointer-events: none;
   }
-  .is-mouseMoving .videoControlBar .volumeControl:hover .tooltip,
+  .is-hoverUiActive .videoControlBar .volumeControl:hover .tooltip,
   .videoControlBar .volumeControl:focus-within .tooltip {
     display: block;
   }

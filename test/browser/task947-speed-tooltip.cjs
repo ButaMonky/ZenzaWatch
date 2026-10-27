@@ -17,7 +17,7 @@ const html='<!doctype html><html><head><meta charset="utf-8"><style>'+
  'html,body{margin:0;height:100%;overflow:hidden;}' +
  '.videoControlBar{position:fixed;left:0;bottom:0;width:100vw;height:64px;'+
  'background:#181818;will-change:transform;overflow:visible;}' + css +
- '</style></head><body class="is-mouseMoving">'+
+ '</style></head><body class="is-hoverUiActive">'+
  '<div class="videoControlBar"><div class="playbackRateMenu controlButton" '+
  'data-shortcut-hint="speed" style="position:absolute;bottom:0;left:65%">'+
  '<div class="controlButtonInner">1.0×</div><span class="tooltip">'+label+

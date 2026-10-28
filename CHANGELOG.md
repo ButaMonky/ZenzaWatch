@@ -1,4 +1,4 @@
-## 2026-10-28 - Playlist maximum reduced to 10,000 (2.7.350-task976)
+## 2026-10-28 - Playlist maximum reduced to 10,000 (2.7.351-task976)
 
 - The rolling playlist setting now offers only 1,000..10,000 items in steps
   of 1,000, retaining the recommended default of 3,000.

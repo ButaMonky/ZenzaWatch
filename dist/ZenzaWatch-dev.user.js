@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.351-task976
+// @version        2.7.352-task977
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-28 00:37Z fe0638f3
+// build: 2026-10-28 00:58Z 2628c82a
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.351-task976';
+    var VER = '2.7.352-task977';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-28 00:37Z fe0638f3';
+    var BUILD = '2026-10-28 00:58Z 2628c82a';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -23558,6 +23558,7 @@ class VideoControlBar extends Emitter {
 				switch (command) {
 						case 'toggleStoryboard':
 								this.storyboard.toggle();
+								this.emit('actionFeedback', command, e.detail.param);
 								break;
 						case 'wheelSeek-start':
 								window.console.log('start-seek-start');
@@ -23591,6 +23592,7 @@ class VideoControlBar extends Emitter {
 				switch (command) {
 						case 'toggleStoryboard':
 								this.storyboard.toggle();
+								this.emit('actionFeedback', command, param);
 								break;
 						default:
 								util.dispatchCommand(target, command, param);
@@ -23974,8 +23976,57 @@ util.addStyle(`
 		cursor: pointer;
 		opacity: 1;
 	}
-	.controlButton:active .controlButtonInner {
+	.controlButton:active .controlButtonInner,
+	.controlButton.is-feedback-pressed .controlButtonInner {
 		transform: translate(0, 2px) scale(0.8);
+	}
+	/* Discussion #36: press/release is shared with pointer activation. */
+	.controlButtonInner { transition: transform 0.18s ease; }
+	.volumeControl { transition: filter 0.18s ease; }
+	.volumeControl:active,
+	.volumeControl.is-feedback-pressed { filter: brightness(1.35); }
+	.controlButton.is-shortcut-feedback,
+	.volumeControl.is-shortcut-feedback { opacity: 1 !important; }
+	/* Preserve geometry, but expose only the actual target through the hidden
+		bar's parent opacity. The target's configured display/hidden is untouched. */
+	body .videoControlBar.is-action-feedback-only {
+		opacity: 1 !important;
+		background: transparent !important;
+		transition: none !important;
+		pointer-events: none;
+	}
+	.videoControlBar.is-action-feedback-only * {
+		visibility: hidden !important;
+		pointer-events: none !important;
+	}
+	.videoControlBar.is-action-feedback-only .seekBarContainer-mainControl {
+		background: none !important;
+	}
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback,
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback * {
+		visibility: visible !important;
+		pointer-events: auto !important;
+	}
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback .tooltip,
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback .tooltip *,
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback .controlMenu,
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback .controlMenu *,
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback .zenzaPopupMenu,
+	.videoControlBar.is-action-feedback-only .is-shortcut-feedback .zenzaPopupMenu * {
+		visibility: hidden !important;
+		pointer-events: none !important;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.controlButton.is-shortcut-feedback,
+		.controlButton.is-shortcut-feedback .controlButtonInner,
+		.volumeControl.is-shortcut-feedback {
+			transition: none !important;
+			animation: none !important;
+			scale: none !important;
+		}
+		.controlButton.is-feedback-pressed .controlButtonInner { transform: none !important; }
+		.controlButton.is-feedback-pressed { transform: none !important; }
+		.prevVideo.is-feedback-pressed .controlButtonInner { transform: scaleX(-1) !important; }
 	}
 	.is-abort   .playControl,
 	.is-error   .playControl,
@@ -24064,7 +24115,8 @@ util.addStyle(`
 		transition: transform 0.2s ease;
 		transform: scale(1.1);
 	}
-	.togglePlay:active {
+	.togglePlay:active,
+	.togglePlay.is-feedback-pressed {
 		transform: scale(0.75);
 	}
 	.togglePlay .play,
@@ -24312,7 +24364,8 @@ util.addStyle(`
 		font-size: 20px;
 		color: #888;
 	}
-	.loopSwitch:active {
+	.loopSwitch:active,
+	.loopSwitch.is-feedback-pressed {
 		font-size: 15px;
 	}
 	.is-loop .loopSwitch {
@@ -24418,7 +24471,8 @@ util.addStyle(`
 	.videoControlBar .muteSwitch {
 		margin-right: 0;
 	}
-	.videoControlBar .muteSwitch:active {
+	.videoControlBar .muteSwitch:active,
+	.videoControlBar .muteSwitch.is-feedback-pressed {
 		font-size: 15px;
 	}
 	.zenzaPlayerContainer:not(.is-mute) .muteSwitch .mute-on,
@@ -24482,6 +24536,10 @@ util.addStyle(`
 	.prevVideo .controlButtonInner {
 		transform: scaleX(-1);
 	}
+	.prevVideo:active .controlButtonInner,
+	.prevVideo.is-feedback-pressed .controlButtonInner {
+		transform: translate(0, 2px) scale(-0.8, 0.8);
+	}
 	.toggleStoryboard {
 		visibility: hidden;
 		pointer-events: none;
@@ -24510,10 +24568,12 @@ util.addStyle(`
 				transparent 0
 			);
 	}
-	.toggleStoryboard:active .controlButtonInner {
+	.toggleStoryboard:active .controlButtonInner,
+	.toggleStoryboard.is-feedback-pressed .controlButtonInner {
 		transform: translate(-50%, -50%) scaleY(0.1) rotate(45deg);
 	}
-	.toggleStoryboard:active {
+	.toggleStoryboard:active,
+	.toggleStoryboard.is-feedback-pressed {
 		transform: scale(0.75);
 	}
 	/* Task 077c: 画面フィルターのボタン（「画」の左）。効いている時は水色に光る */
@@ -43096,6 +43156,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 						currentTimeGetter: this._currentTimeGetter
 				});
 				this.videoControlBar.on('command', onCommand);
+				this.videoControlBar.on('actionFeedback', this._onActionFeedback.bind(this));
 				this.sceneSearchBinding = new SceneSearchPlayerBinding({
 						view: this, dialog: this._dialog, document, container,
 						events: global.emitter, isFullscreen: () => Fullscreen.now(),
@@ -43471,6 +43532,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				switch (command) {
 						case 'settingPanel':
 								this.toggleSettingPanel();
+								this._onActionFeedback(command, param);
 								break;
 						case 'toggle-flipH':
 								this.emit('command', 'toggle-screenFilter.flipH');
@@ -43480,6 +43542,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 								break;
 						case 'toggle-screenFilterPanel':
 								this.toggleScreenFilterPanel();
+								this._onActionFeedback(command, param);
 								break;
 						default:
 								this.emit('command', command, param);
@@ -43566,6 +43629,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 												: vMargin >= videoControlBarHeight;
 						}
 						this.toggleClass('showVideoControlBar', showVideoControlBar);
+						this._syncActionFeedbackIsolation();
 						if (onlyControlBar) {
 								return;
 						}
@@ -43578,6 +43642,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				return Fullscreen.now() || this._state.screenMode === 'wide' || this._state.screenMode === '3D';
 		}
 		_onMouseMove() {
+				this._releaseActionFeedbackIsolation();
 				this._onHoverUiActive();
 				if (this._isMouseMoving) {
 						return;
@@ -43647,6 +43712,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				}
 		}
 		_onControlBarActive() {
+				this._releaseActionFeedbackIsolation();
 				if (this._isControlBarActive) {
 						return;
 				}
@@ -43659,6 +43725,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				}
 				this.removeClass('is-controlBarActive');
 				this._isControlBarActive = false;
+				this._syncActionFeedbackIsolation();
 		}
 		_onVideoCanPlay(watchId, videoInfo, options) {
 				this.emit('canPlay', watchId, videoInfo, options);
@@ -43670,6 +43737,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this.emit('error', e);
 		}
 		_onBeforeVideoOpen() {
+				this._clearActionFeedback();
 				this._clearHoverUiActive();
 				this._setThumbnail();
 		}
@@ -43692,33 +43760,247 @@ class NicoVideoPlayerDialogView extends Emitter {
 		_onVideoPlaying() {
 		}
 		_clearShortcutToggleFeedback() {
+				this._clearActionFeedback();
+		}
+		_onActionFeedback(command, param) {
+				if (this._keyboardFeedbackCommand) {
+						return;
+				}
+				try {
+						this._flashActionFeedback(command, param);
+				}
+				catch (_) { }
+		}
+		_releaseActionFeedbackIsolation() {
+				this._removeActionFeedbackIsolation(this._shortcutFeedbackBar);
+				this._shortcutFeedbackBar = undefined;
+				this._shortcutFeedbackKeyboard = false;
+		}
+		_removeActionFeedbackIsolation(bar) {
+				if (!bar?.classList.contains('is-action-feedback-only')) {
+						return;
+				}
+				const transition = bar.style.getPropertyValue('transition');
+				const priority = bar.style.getPropertyPriority('transition');
+				bar.style.setProperty('transition', 'none', 'important');
+				bar.classList.remove('is-action-feedback-only');
+				void bar.ownerDocument.defaultView?.getComputedStyle(bar).opacity;
+				if (transition) {
+						bar.style.setProperty('transition', transition, priority);
+				}
+				else {
+						bar.style.removeProperty('transition');
+				}
+		}
+		_syncActionFeedbackIsolation() {
+				const icon = this._shortcutFeedbackIcon;
+				const bar = icon?.closest('.videoControlBar');
+				if (!bar) {
+						return;
+				}
+				const host = this._$playerContainer?.[0];
+				const full = this._isFullscreenControlBarScope();
+				const mode = icon.ownerDocument.body.dataset.fullscreenControlBarMode || 'auto';
+				const autoHides = full || ['small', 'sideView'].includes(this._state.screenMode);
+				const alwaysHide = full && mode === 'always-hide';
+				const forcedVisible = host?.classList.contains('showVideoControlBar') ||
+						(full && mode === 'always-show');
+				const active = !alwaysHide && (this._isControlBarActive ||
+						host?.matches('.is-controlBarActive, .volumeChanging'));
+				const interacting = bar.matches(':hover, .is-dragging') ||
+						(alwaysHide && bar.matches(':focus-within'));
+				const isolate = autoHides && !forcedVisible && !active && !interacting;
+				if (isolate) {
+						bar.classList.add('is-action-feedback-only');
+				}
+				else {
+						this._removeActionFeedbackIsolation(bar);
+				}
+				this._shortcutFeedbackBar = isolate ? bar : undefined;
+		}
+		_clearActionFeedback() {
+				this._shortcutFeedbackToken = undefined;
 				clearTimeout(this._shortcutFeedbackTimer);
+				clearTimeout(this._shortcutFeedbackPressTimer);
 				this._shortcutFeedbackTimer = null;
+				this._shortcutFeedbackPressTimer = undefined;
 				const icon = this._shortcutFeedbackIcon;
 				if (icon) {
-						icon.classList.remove('is-shortcut-feedback');
-						icon.removeAttribute('data-shortcut-state');
-						icon.removeAttribute('aria-label');
+						const transition = icon.style.getPropertyValue('transition');
+						const transitionPriority = icon.style.getPropertyPriority('transition');
+						icon.style.setProperty('transition', 'none', 'important');
+						icon.classList.remove('is-shortcut-feedback', 'is-feedback-pressed');
+						void icon.ownerDocument.defaultView?.getComputedStyle(icon).opacity;
+						if (transition) {
+								icon.style.setProperty('transition', transition, transitionPriority);
+						}
+						else {
+								icon.style.removeProperty('transition');
+						}
+						const saved = this._shortcutFeedbackRestore;
+						for (const [name, { previous, value }] of Object.entries(saved?.attributes || {})) {
+								if (icon.getAttribute(name) !== value) {
+										continue;
+								}
+								if (previous == null) {
+										icon.removeAttribute(name);
+								}
+								else {
+										icon.setAttribute(name, previous);
+								}
+						}
+						const animation = saved?.animation;
+						if (animation && icon.style.getPropertyValue('--zenza-feedback-animation') === animation.value &&
+								!icon.style.getPropertyPriority('--zenza-feedback-animation')) {
+								if (animation.previous) {
+										icon.style.setProperty('--zenza-feedback-animation', animation.previous, animation.priority);
+								}
+								else {
+										icon.style.removeProperty('--zenza-feedback-animation');
+								}
+						}
 				}
 				this._shortcutFeedbackIcon = null;
+				this._shortcutFeedbackRestore = undefined;
+				this._releaseActionFeedbackIsolation();
 		}
 		_flashShortcutToggleFeedback(type, enabled) {
-				const selector = type === 'comment' ? '.showCommentSwitch' :
-						type === 'ng' ? '.ngFilterSwitch' : null;
+				const command = type === 'comment' ? 'toggle-showComment' :
+						type === 'ng' ? 'toggle-enableFilter' : null;
+				if (command) {
+						this._flashActionFeedback(command, undefined, enabled);
+				}
+		}
+		_findActionFeedbackTarget(command, param, allowUnavailable = false) {
 				const host = this._$playerContainer?.[0];
-				const icon = selector && host?.querySelector(selector);
+				if (!host || typeof command !== 'string') {
+						return null;
+				}
+				const aliases = {
+						'toggle-showComment': '.showCommentSwitch',
+						'toggle-enableFilter': '.ngFilterSwitch',
+						'toggle-like': '.toggleLikeButton',
+						deflistAdd: '.mylistButton.deflistAdd', deflistRemove: '.mylistButton.deflistAdd',
+						mylistAdd: '.mylistButton.mylistAddMenu', mylistRemove: '.mylistButton.mylistAddMenu',
+						play: '.videoControlBar .togglePlay', pause: '.videoControlBar .togglePlay',
+						togglePlay: '.videoControlBar .togglePlay',
+						playNextVideo: '.videoControlBar .nextVideo',
+						playPreviousVideo: '.videoControlBar .prevVideo',
+						fullscreen: '.fullscreenSwitch', 'toggle-fullscreen': '.fullscreenSwitch',
+						volume: '.volumeControl', volumeBy: '.volumeControl',
+						volumeUp: '.volumeControl', volumeDown: '.volumeControl',
+						playbackRate: '.playbackRateMenu', shiftUp: '.playbackRateMenu', shiftDown: '.playbackRateMenu',
+						screenMode: '.screenModeMenu',
+						'toggle-enableStoryboardBar': '.toggleStoryboard', toggleStoryboard: '.toggleStoryboard'
+				};
+				if (['nop', 'close'].includes(command)) {
+						return null;
+				}
+				let selector = aliases[command];
+				if (command === 'seek' || command === 'seekTo') {
+						if (param !== 0 && param !== '0') {
+								return null;
+						}
+						selector = '.videoControlBar .seekTop';
+				}
+				const buttons = host.querySelectorAll(selector || '.menuButton[data-command], .controlButton[data-command]');
+				for (const button of buttons) {
+						if (!selector && (button.dataset.command !== command ||
+								(button.hasAttribute('data-param') && button.dataset.param !== String(param)))) {
+								continue;
+						}
+						if (allowUnavailable || this._isActionFeedbackTargetAvailable(button)) {
+								return button;
+						}
+				}
+				return null;
+		}
+		_isActionFeedbackTargetAvailable(icon) {
+				const host = this._$playerContainer[0];
+				const win = icon.ownerDocument.defaultView;
+				for (let node = icon; node; node = node.parentElement) {
+						const style = win?.getComputedStyle(node);
+						if (node.hidden || node.getAttribute('aria-hidden') === 'true' ||
+								style?.display === 'none' || style?.visibility === 'hidden') {
+								return false;
+						}
+						if (node === host) {
+								break;
+						}
+				}
+				if (icon.matches(':disabled, [aria-disabled="true"]') ||
+						(icon.classList.contains('playControl') &&
+								host.matches('.is-abort, .is-error, .is-loading'))) {
+						return false;
+				}
+				return true;
+		}
+		_flashActionFeedback(command, param, enabledOverride) {
+				if (this._hoverUiSuppressed || this._state?.isOpen === false) {
+						return;
+				}
+				if (!this._findActionFeedbackTarget(command, param, true)) {
+						return;
+				}
+				const keyboard = !!this._keyboardFeedbackCommand;
+				this._clearActionFeedback();
+				const icon = this._findActionFeedbackTarget(command, param);
 				if (!icon) {
 						return;
 				}
-				this._clearShortcutToggleFeedback();
+				const token = this._shortcutFeedbackToken = {};
 				this._shortcutFeedbackIcon = icon;
-				icon.dataset.shortcutState = enabled ? 'ON' : 'OFF';
-				icon.setAttribute('aria-label', (type === 'comment' ? 'コメント表示' : 'NGフィルター') +
-						' ' + icon.dataset.shortcutState);
-				icon.classList.add('is-shortcut-feedback');
-				this._shortcutFeedbackTimer = setTimeout(() => this._clearShortcutToggleFeedback(), 1000);
+				this._shortcutFeedbackKeyboard = keyboard;
+				const saved = this._shortcutFeedbackRestore = { attributes: {} };
+				const states = {
+						'toggle-showComment': ['showComment', 'コメント表示'],
+						'toggle-enableFilter': ['enableFilter', 'NGフィルター'],
+						'toggle-mute': ['mute', 'ミュート'], 'toggle-loop': ['loop', 'リピート']
+				};
+				const state = states[command];
+				if (state) {
+						const enabled = enabledOverride ?? (this._playerConfig?.props?.[state[0]] === true);
+						const status = enabled ? 'ON' : 'OFF';
+						const labels = keyboard || enabledOverride !== undefined ?
+								[['data-shortcut-state', status], ['aria-label', `${state[1]} ${status}`]] :
+								[['aria-label', `${state[1]} ${status}`]];
+						for (const [name, value] of labels) {
+								saved.attributes[name] = { previous: icon.getAttribute(name), value };
+								icon.setAttribute(name, value);
+						}
+				}
+				this._syncActionFeedbackIsolation();
+				const animation = icon.dataset.feedbackAnimation;
+				if (animation && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(animation)) {
+						saved.animation = {
+								previous: icon.style.getPropertyValue('--zenza-feedback-animation'),
+								priority: icon.style.getPropertyPriority('--zenza-feedback-animation'), value: animation
+						};
+						icon.style.setProperty('--zenza-feedback-animation', animation);
+				}
+				void icon.offsetWidth;
+				icon.classList.add('is-shortcut-feedback', 'is-feedback-pressed');
+				this._shortcutFeedbackPressTimer = setTimeout(() => {
+						if (this._shortcutFeedbackToken !== token) {
+								return;
+						}
+						icon.classList.remove('is-feedback-pressed');
+						this._shortcutFeedbackPressTimer = undefined;
+				}, 90);
+				const configuredMs = Number(icon.dataset.feedbackVisibleMs);
+				const visibleMs = Number.isInteger(configuredMs) && configuredMs >= 1000 && configuredMs <= 5000 ?
+						configuredMs : 1000;
+				this._shortcutFeedbackTimer = setTimeout(() => {
+						if (this._shortcutFeedbackToken === token) {
+								this._clearActionFeedback();
+						}
+				}, visibleMs);
 		}
 		_onVideoPause() {
+				if (this._keyboardFeedbackCommand || (this._shortcutFeedbackKeyboard &&
+						this._shortcutFeedbackIcon?.classList.contains('togglePlay'))) {
+						return;
+				}
 				const isSmall = this._state.screenMode === 'small' && !Fullscreen.now();
 				if (isSmall && this._playerConfig?.props?.['controlBar.showOnPause.small'] !== true) {
 						return;
@@ -43739,6 +44021,10 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this._updateResponsive();
 		}
 		_onVolumeChange( /*vol, mute*/) {
+				if (this._keyboardFeedbackCommand || (this._shortcutFeedbackKeyboard &&
+						this._shortcutFeedbackIcon?.matches('.volumeControl, .muteSwitch'))) {
+						return;
+				}
 				this.addClass('volumeChanging');
 		}
 		_onVolumeChangeEnd( /*vol, mute*/) {
@@ -43843,6 +44129,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				});
 				modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
 				this._updateScreenModeStyle();
+				this._syncActionFeedbackIsolation();
 				if (this._updateCommentInputLayout) {
 						requestAnimationFrame(() => this._updateCommentInputLayout());
 				}
@@ -45064,251 +45351,264 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._playerConfig.setValue('playbackRate', next);
 		}
 		_onCommand(command, param, request) {
-				if (typeof command === 'string' && command.startsWith('sceneSearch-')) {
-						return this._view?.sceneSearchBinding?.handleShortcut(command) === true;
-				}
-				let v;
-				switch (command) {
-						case 'volume':
-								this.volume = param;
-								break;
-						case 'volumeBy':
-								this.volume = this._nicoVideoPlayer.volume * param;
-								break;
-						case 'volumeUp':
-								this._nicoVideoPlayer.volumeUp();
-								break;
-						case 'volumeDown':
-								this._nicoVideoPlayer.volumeDown();
-								break;
-						case 'togglePlay':
-								this.togglePlay();
-								break;
-						case 'pause':
-								this.pause();
-								break;
-						case 'play':
-								this.play();
-								break;
-						case 'fullscreen':
-						case 'toggle-fullscreen':
-								this._nicoVideoPlayer.toggleFullScreen();
-								break;
-						case 'deflistAdd':
-								return this._onDeflistAdd(param);
-						case 'deflistRemove':
-								return this._onDeflistRemove(param);
-						case 'playlistAdd':
-						case 'playlistAppend':
-								this._onPlaylistAppend(param);
-								break;
-						case 'playlistInsert':
-								this._onPlaylistInsert(param);
-								break;
-						case 'playlistSetMylist':
-								this._onPlaylistSetMylist(param);
-								break;
-						case 'playlistSetUploadedVideo':
-								this._onPlaylistSetUploadedVideo(param);
-								break;
-						case 'playlistSetSearchVideo':
-								this._onPlaylistSetSearchVideo(param);
-								break;
-						case 'playlistSetSeries':
-								this._onPlaylistSetSeriesVideo(param);
-								break;
-						case 'playlistSetCommonsTree':
-								this._onPlaylistSetCommonsTree();
-								break;
-						case 'playNextVideo':
-								this.playNextVideo();
-								break;
-						case 'playPreviousVideo':
-								this.playPreviousVideo();
-								break;
-						case 'shufflePlaylist':
-								this._playlist.shuffle();
-								break;
-						case 'togglePlaylist':
-								this._playlist.toggleEnable();
-								break;
-						case 'toggle-like':
-								return this._onToggleLike();
-						case 'mylistAdd':
-								return this._onMylistAdd(param.mylistId, param.mylistName);
-						case 'mylistRemove':
-								return this._onMylistRemove(param.mylistId, param.mylistName);
-						case 'mylistWindow':
-								util.openMylistWindow(this._videoInfo.watchId);
-								break;
-						case 'seek':
-						case 'seekTo':
-								this.currentTime = param * 1;
-								break;
-						case 'seekBy':
-								this.currentTime = this.currentTime + param * 1;
-								break;
-						case 'seekPrevFrame':
-						case 'seekNextFrame':
-								this.execCommand('pause');
-								this.execCommand('seekBy', command === 'seekNextFrame' ? 1 / 60 : -1 / 60);
-								break;
-						case 'seekRelativePercent': {
-								const dur = this._videoInfo.duration;
-								const mv = Math.abs(param.movePerX) > 10 ?
-										(param.movePerX / 2) : (param.movePerX / 8);
-								const pos = this.currentTime + (mv * dur / 100);
-								this.currentTime = Math.min(Math.max(0, pos), dur);
-								break;
+				const outer = !this._actionFeedbackCommandDepth;
+				this._actionFeedbackCommandDepth = (this._actionFeedbackCommandDepth || 0) + 1;
+				try {
+						if (typeof command === 'string' && command.startsWith('sceneSearch-')) {
+								return this._view?.sceneSearchBinding?.handleShortcut(command) === true;
 						}
-						case 'seekToResumePoint':
-								this.currentTime = this._videoInfo.initialPlaybackTime;
-								break;
-						case 'addWordFilter':
-								this._nicoVideoPlayer.filter.addWordFilter(param);
-								break;
-						case 'setWordRegFilter':
-								this._nicoVideoPlayer.filter.setWordRegFilter(param, this._nicoVideoPlayer.filter.wordRegFilterFlags);
-								break;
-						case 'setWordRegFilterFlags':
-								this._nicoVideoPlayer.filter.setWordRegFilter(this._nicoVideoPlayer.filter.wordRegFilterSource, param);
-								break;
-						case 'addUserIdFilter':
-								this._nicoVideoPlayer.filter.addUserIdFilter(param);
-								break;
-						case 'addCommandFilter':
-								this._nicoVideoPlayer.filter.addCommandFilter(param);
-								break;
-						case 'setWordFilterList':
-								this._nicoVideoPlayer.filter.wordFilterList = param;
-								break;
-						case 'setUserIdFilterList':
-								this._nicoVideoPlayer.filter.userIdFilterList = param;
-								break;
-						case 'setCommandFilterList':
-								this._nicoVideoPlayer.filter.commandFilterList = param;
-								break;
-						case 'openNow':
-								this.open(param, { openNow: true });
-								break;
-						case 'open':
-								this.open(param);
-								break;
-						case 'close':
-								this.close(param);
-								break;
-						case 'reload':
-								this.reload({ currentTime: this.currentTime });
-								break;
-						case 'openGinza': {
-								const option = RelatedMenuOrder.getOption(this._playerConfig.getValue(RelatedMenuOrder.OPTIONS_KEY), 'official');
-								const time = option.includePosition === false ? 0 : this.currentTime;
-								const url = OfficialPlayerRoute.makeUrl(this._watchId, time);
-								RelatedMenuOrder.openUrl('official', url, option, (...args) => window.open(...args));
-								break;
-						}
-						case 'reloadComment':
-								this.reloadComment(param);
-								break;
-						case 'playbackRate':
-								this._playerConfig.setValue(command, param);
-								MediaSessionApi.updatePositionStateByMedia(this);
-								break;
-						case 'shiftUp':
-								this._stepPlaybackRate(1);
-								break;
-						case 'shiftDown':
-								this._stepPlaybackRate(-1);
-								break;
-						case 'screenShot':
-								if (this._state.isYouTube) {
-										util.capTube({
-												title: this._videoInfo.title,
-												videoId: this._videoInfo.videoId,
-												author: this._videoInfo.owner.name
-										});
-										return;
-								}
-								this._nicoVideoPlayer.getScreenShot();
-								break;
-						case 'screenShotWithComment':
-								if (this._state.isYouTube) {
-										return;
-								}
-								this._nicoVideoPlayer.getScreenShotWithComment();
-								break;
-						case 'toggle-flipH':
-								this.execCommand('toggle-screenFilter.flipH');
-								break;
-						case 'toggle-flipV':
-								this.execCommand('toggle-screenFilter.flipV');
-								break;
-						case 'toggle-screenFilterPanel':
-								this._view && this._view.toggleScreenFilterPanel();
-								break;
-						case 'toggle-commentHistoryPanel':
-								this._ensureCommentHistory()?.panel.toggle();
-								break;
-						case 'nextVideo':
-								this._nextVideo = param;
-								break;
-						case 'nicosSeek':
-								this._onNicosSeek(param);
-								break;
-						case 'fastSeek':
-								this._nicoVideoPlayer.fastSeek(param);
-								break;
-						case 'setVideo':
-								this.setVideo(param);
-								break;
-						case 'toggle-notificationHistory':
-								this._toggleNotificationHistory();
-								break;
-						case 'selectTab':
-								this._state.currentTab = param === 'notificationHistory' ? 'videoInfoTab' : param;
-								break;
-						case 'nicoru': {
-								const msgInfo = this._videoInfo?.msgInfo;
-								const loader = this.threadLoader;
-								Promise.resolve().then(() => loader.nicoru(msgInfo, param))
-										.then(result => { request?.resolve?.(result); })
-										.catch(e => {
-										request?.reject?.(e);
-										this.execCommand('alert', e?.message || 'ニコれなかった＞＜');
-								});
-								break;
-						}
-						case 'update-smileVideoQuality':
-								this._playerConfig.props.videoServerType = 'smile';
-								this._playerConfig.props.smileVideoQuality = param;
-								this.reload({ videoServerType: 'smile', economy: param === 'eco' });
-								break;
-						case 'update-dmcVideoQuality':
-								this._playerConfig.props.videoServerType = 'dmc';
-								this._playerConfig.props.dmcVideoQuality = param;
-								this.reload({ videoServerType: 'dmc' });
-								break;
-						case 'update-domandVideoQuality':
-								this._playerConfig.props.videoServerType = 'domand';
-								this._playerConfig.props.domandVideoQuality = param;
-								this.reload({ videoServerType: 'domand' });
-								break;
-						case 'update-videoServerType':
-								this._playerConfig.props.videoServerType = param;
-								this.reload({ videoServerType: param === 'domand' ? 'domand' : 'dmc' });
-								break;
-						case 'update-commentLanguage':
-								if (this._playerConfig.props.commentLanguage === param) {
+						let v;
+						switch (command) {
+								case 'volume':
+										this.volume = param;
+										break;
+								case 'volumeBy':
+										this.volume = this._nicoVideoPlayer.volume * param;
+										break;
+								case 'volumeUp':
+										this._nicoVideoPlayer.volumeUp();
+										break;
+								case 'volumeDown':
+										this._nicoVideoPlayer.volumeDown();
+										break;
+								case 'togglePlay':
+										this.togglePlay();
+										break;
+								case 'pause':
+										this.pause();
+										break;
+								case 'play':
+										this.play();
+										break;
+								case 'fullscreen':
+								case 'toggle-fullscreen':
+										this._nicoVideoPlayer.toggleFullScreen();
+										break;
+								case 'deflistAdd':
+										return this._onDeflistAdd(param);
+								case 'deflistRemove':
+										return this._onDeflistRemove(param);
+								case 'playlistAdd':
+								case 'playlistAppend':
+										this._onPlaylistAppend(param);
+										break;
+								case 'playlistInsert':
+										this._onPlaylistInsert(param);
+										break;
+								case 'playlistSetMylist':
+										this._onPlaylistSetMylist(param);
+										break;
+								case 'playlistSetUploadedVideo':
+										this._onPlaylistSetUploadedVideo(param);
+										break;
+								case 'playlistSetSearchVideo':
+										this._onPlaylistSetSearchVideo(param);
+										break;
+								case 'playlistSetSeries':
+										this._onPlaylistSetSeriesVideo(param);
+										break;
+								case 'playlistSetCommonsTree':
+										this._onPlaylistSetCommonsTree();
+										break;
+								case 'playNextVideo':
+										this.playNextVideo();
+										break;
+								case 'playPreviousVideo':
+										this.playPreviousVideo();
+										break;
+								case 'shufflePlaylist':
+										this._playlist.shuffle();
+										break;
+								case 'togglePlaylist':
+										this._playlist.toggleEnable();
+										break;
+								case 'toggle-like':
+										return this._onToggleLike();
+								case 'mylistAdd':
+										return this._onMylistAdd(param.mylistId, param.mylistName);
+								case 'mylistRemove':
+										return this._onMylistRemove(param.mylistId, param.mylistName);
+								case 'mylistWindow':
+										util.openMylistWindow(this._videoInfo.watchId);
+										break;
+								case 'seek':
+								case 'seekTo':
+										this.currentTime = param * 1;
+										break;
+								case 'seekBy':
+										this.currentTime = this.currentTime + param * 1;
+										break;
+								case 'seekPrevFrame':
+								case 'seekNextFrame':
+										this.execCommand('pause');
+										this.execCommand('seekBy', command === 'seekNextFrame' ? 1 / 60 : -1 / 60);
+										break;
+								case 'seekRelativePercent': {
+										const dur = this._videoInfo.duration;
+										const mv = Math.abs(param.movePerX) > 10 ?
+												(param.movePerX / 2) : (param.movePerX / 8);
+										const pos = this.currentTime + (mv * dur / 100);
+										this.currentTime = Math.min(Math.max(0, pos), dur);
 										break;
 								}
-								this._playerConfig.props.commentLanguage = param;
-								this.reloadComment();
-								break;
-						case 'saveMymemory':
-								util.saveMymemory(this, this._state.videoInfo);
-								break;
-						default:
-								this.emit('command', command, param);
+								case 'seekToResumePoint':
+										this.currentTime = this._videoInfo.initialPlaybackTime;
+										break;
+								case 'addWordFilter':
+										this._nicoVideoPlayer.filter.addWordFilter(param);
+										break;
+								case 'setWordRegFilter':
+										this._nicoVideoPlayer.filter.setWordRegFilter(param, this._nicoVideoPlayer.filter.wordRegFilterFlags);
+										break;
+								case 'setWordRegFilterFlags':
+										this._nicoVideoPlayer.filter.setWordRegFilter(this._nicoVideoPlayer.filter.wordRegFilterSource, param);
+										break;
+								case 'addUserIdFilter':
+										this._nicoVideoPlayer.filter.addUserIdFilter(param);
+										break;
+								case 'addCommandFilter':
+										this._nicoVideoPlayer.filter.addCommandFilter(param);
+										break;
+								case 'setWordFilterList':
+										this._nicoVideoPlayer.filter.wordFilterList = param;
+										break;
+								case 'setUserIdFilterList':
+										this._nicoVideoPlayer.filter.userIdFilterList = param;
+										break;
+								case 'setCommandFilterList':
+										this._nicoVideoPlayer.filter.commandFilterList = param;
+										break;
+								case 'openNow':
+										this.open(param, { openNow: true });
+										break;
+								case 'open':
+										this.open(param);
+										break;
+								case 'close':
+										this.close(param);
+										break;
+								case 'reload':
+										this.reload({ currentTime: this.currentTime });
+										break;
+								case 'openGinza': {
+										const option = RelatedMenuOrder.getOption(this._playerConfig.getValue(RelatedMenuOrder.OPTIONS_KEY), 'official');
+										const time = option.includePosition === false ? 0 : this.currentTime;
+										const url = OfficialPlayerRoute.makeUrl(this._watchId, time);
+										RelatedMenuOrder.openUrl('official', url, option, (...args) => window.open(...args));
+										break;
+								}
+								case 'reloadComment':
+										this.reloadComment(param);
+										break;
+								case 'playbackRate':
+										this._playerConfig.setValue(command, param);
+										MediaSessionApi.updatePositionStateByMedia(this);
+										break;
+								case 'shiftUp':
+										this._stepPlaybackRate(1);
+										break;
+								case 'shiftDown':
+										this._stepPlaybackRate(-1);
+										break;
+								case 'screenShot':
+										if (this._state.isYouTube) {
+												util.capTube({
+														title: this._videoInfo.title,
+														videoId: this._videoInfo.videoId,
+														author: this._videoInfo.owner.name
+												});
+												return;
+										}
+										this._nicoVideoPlayer.getScreenShot();
+										break;
+								case 'screenShotWithComment':
+										if (this._state.isYouTube) {
+												return;
+										}
+										this._nicoVideoPlayer.getScreenShotWithComment();
+										break;
+								case 'toggle-flipH':
+										this.execCommand('toggle-screenFilter.flipH');
+										break;
+								case 'toggle-flipV':
+										this.execCommand('toggle-screenFilter.flipV');
+										break;
+								case 'toggle-screenFilterPanel':
+										this._view && this._view.toggleScreenFilterPanel();
+										break;
+								case 'toggle-commentHistoryPanel':
+										this._ensureCommentHistory()?.panel.toggle();
+										break;
+								case 'nextVideo':
+										this._nextVideo = param;
+										break;
+								case 'nicosSeek':
+										this._onNicosSeek(param);
+										break;
+								case 'fastSeek':
+										this._nicoVideoPlayer.fastSeek(param);
+										break;
+								case 'setVideo':
+										this.setVideo(param);
+										break;
+								case 'toggle-notificationHistory':
+										this._toggleNotificationHistory();
+										break;
+								case 'selectTab':
+										this._state.currentTab = param === 'notificationHistory' ? 'videoInfoTab' : param;
+										break;
+								case 'nicoru': {
+										const msgInfo = this._videoInfo?.msgInfo;
+										const loader = this.threadLoader;
+										Promise.resolve().then(() => loader.nicoru(msgInfo, param))
+												.then(result => { request?.resolve?.(result); })
+												.catch(e => {
+												request?.reject?.(e);
+												this.execCommand('alert', e?.message || 'ニコれなかった＞＜');
+										});
+										break;
+								}
+								case 'update-smileVideoQuality':
+										this._playerConfig.props.videoServerType = 'smile';
+										this._playerConfig.props.smileVideoQuality = param;
+										this.reload({ videoServerType: 'smile', economy: param === 'eco' });
+										break;
+								case 'update-dmcVideoQuality':
+										this._playerConfig.props.videoServerType = 'dmc';
+										this._playerConfig.props.dmcVideoQuality = param;
+										this.reload({ videoServerType: 'dmc' });
+										break;
+								case 'update-domandVideoQuality':
+										this._playerConfig.props.videoServerType = 'domand';
+										this._playerConfig.props.domandVideoQuality = param;
+										this.reload({ videoServerType: 'domand' });
+										break;
+								case 'update-videoServerType':
+										this._playerConfig.props.videoServerType = param;
+										this.reload({ videoServerType: param === 'domand' ? 'domand' : 'dmc' });
+										break;
+								case 'update-commentLanguage':
+										if (this._playerConfig.props.commentLanguage === param) {
+												break;
+										}
+										this._playerConfig.props.commentLanguage = param;
+										this.reloadComment();
+										break;
+								case 'saveMymemory':
+										util.saveMymemory(this, this._state.videoInfo);
+										break;
+								default:
+										this.emit('command', command, param);
+						}
+				}
+				finally {
+						this._actionFeedbackCommandDepth--;
+						if (outer && this._state?.isOpen && !this._view?._keyboardFeedbackCommand) {
+								try {
+										this._view?._flashActionFeedback?.(command, param);
+								}
+								catch (_) { }
+						}
 				}
 		}
 		_onKeyDown(name, e, param) {
@@ -45359,6 +45659,25 @@ class NicoVideoPlayerDialog extends Emitter {
 						'SCREEN_SHOT': 'screenShot',
 						'SCREEN_SHOT_WITH_COMMENT': 'screenShotWithComment'
 				};
+				const runCommand = (command) => {
+						const view = this._view;
+						const previous = view?._keyboardFeedbackCommand;
+						if (view) {
+								view._keyboardFeedbackCommand = command;
+						}
+						try {
+								this.execCommand(command, param);
+								try {
+										view?._flashActionFeedback?.(command, param);
+								}
+								catch (_) { }
+						}
+						finally {
+								if (view) {
+										view._keyboardFeedbackCommand = previous;
+								}
+						}
+				};
 				switch (name) {
 						case 'RELATED_MENU_LINKS': {
 								const context = RelatedMenuActions.makeContext(this._state.videoInfo, this.currentTime);
@@ -45380,7 +45699,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								break;
 						default:
 								if (TABLE[name]) {
-										this.execCommand(TABLE[name], param);
+										runCommand(TABLE[name]);
 										break;
 								}
 								{
@@ -45388,14 +45707,8 @@ class NicoVideoPlayerDialog extends Emitter {
 										if (!action) {
 												return;
 										}
-										this.execCommand(action.command, param);
+										runCommand(action.command);
 								}
-				}
-				if (name === 'VIEW_COMMENT' || name === 'TOGGLE_COMMENT') {
-						this._view?._flashShortcutToggleFeedback('comment', this._playerConfig.props.showComment === true);
-				}
-				else if (name === 'TOGGLE_NG_FILTER') {
-						this._view?._flashShortcutToggleFeedback('ng', this._playerConfig.props.enableFilter === true);
 				}
 				const screenMode = this._playerConfig.props.screenMode;
 				if (['small', 'sideView'].includes(screenMode) && ['TOGGLE_PLAY'].includes(name)) {
@@ -47390,6 +47703,7 @@ util.addStyle(`
 			opacity: 0;
 			transition:
 				opacity 0.4s ease,
+				transform 0.18s ease,
 				box-shadow 0.2s ease 1s,
 				background 0.4s ease;
 			box-sizing: border-box;
@@ -47407,7 +47721,8 @@ util.addStyle(`
 				background: #888;
 				color: #000;
 			}
-			.menuButton:active {
+			.menuButton:active,
+			.menuButton.is-feedback-pressed {
 				transform: translate(0, 2px);
 				box-shadow: 0 0 0 #000;
 				transition: none;
@@ -47533,13 +47848,17 @@ util.addStyle(`
 			.is-enableFilter .ngFilterSwitch .ngFilterIcon svg {
 				filter: drop-shadow(0 0 2px currentColor);
 			}
-			/* Issue #36 / Task936: show just the keyboard-toggled bottom-left icon
-				for one second; do not expose every hover button or alter their timers. */
-			.menuItemContainer.leftBottom .menuButton.is-shortcut-feedback {
+			/* Discussion #36: one real target, shared by commands and pointer input.
+				Custom keyframes opt in via data-feedback-animation on a button. */
+			.menuItemContainer .menuButton.is-shortcut-feedback {
 				opacity: 1 !important;
 				box-shadow: 0 0 0 2px #fff !important;
 			}
-			.menuItemContainer.leftBottom .menuButton.is-shortcut-feedback::after {
+			.is-shortcut-feedback[data-feedback-animation] > .menuButtonInner,
+			.is-shortcut-feedback[data-feedback-animation] > .controlButtonInner {
+				animation: var(--zenza-feedback-animation) 320ms ease-out;
+			}
+			.is-shortcut-feedback[data-shortcut-state]::after {
 				content: attr(data-shortcut-state);
 				position: absolute;
 				bottom: calc(100% + 3px);
@@ -47552,6 +47871,16 @@ util.addStyle(`
 				font: bold 11px/14px system-ui, sans-serif;
 				white-space: nowrap;
 				pointer-events: none;
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.menuButton.is-shortcut-feedback,
+				.menuButton.is-shortcut-feedback .menuButtonInner,
+				.toggleLikeButton.is-shortcut-feedback .heart-effect {
+					transition: none !important;
+					animation: none !important;
+				}
+				.menuButton.is-feedback-pressed { transform: none; }
+				.toggleLikeButton.is-shortcut-feedback .heart-effect { display: none; }
 			}
 		.menuItemContainer .mylistButton {
 			font-size: 21px;
@@ -47716,7 +48045,8 @@ util.addStyle(`
 					visibility 0.8s ease,
 					color 0.8s ease;
 			}
-			.toggleLikeButton:active .heart-effect {
+			.toggleLikeButton:active .heart-effect,
+			.toggleLikeButton.is-feedback-pressed .heart-effect {
 				transition: none;
 				transform: translate(-50%, -50%) scale(0.3);
 				color: pink;
@@ -47835,7 +48165,7 @@ VideoHoverMenu.__tpl__ = (`
 			</div>
 			<div class="menuItemContainer rightTop">
 				<div class="scalingUI">
-					<div class="menuButton toggleLikeButton forMember" data-command="toggle-like">
+					<div class="menuButton toggleLikeButton forMember" data-command="toggle-like" data-feedback-visible-ms="1500">
 						<div class="tooltip">いいね！</div>
 						<div class="menuButtonInner"><div class="not-liked-heart"
 							>♡</div><div class="liked-heart"

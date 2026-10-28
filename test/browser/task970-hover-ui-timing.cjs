@@ -2,12 +2,11 @@
 // Real Chromium checks of production timer methods and production UI CSS. Offline only.
 const assert=require('assert'),fs=require('fs'),path=require('path'),os=require('os');
 const {spawnSync}=require('child_process');
-const {loadClass,createContext,read}=require('../helpers/extractSource');
+const {extract,read}=require('../helpers/extractSource');
 const {startChromeCdp}=require('../helpers/startChromeCdp');
-const View=loadClass('src/NicoVideoPlayerDialog.js','NicoVideoPlayerDialogView',createContext({Emitter:class{}}));
-const methods=['_onMouseMove','_onMouseMoveEnd','_onHoverUiActive','_clearHoverUiActive',
- '_onBeforeVideoOpen','_clearShortcutToggleFeedback','_onControlBarIdle','hide','show'];
-const code=methods.map(n=>{assert.strictEqual(typeof View.prototype[n],'function',n);return View.prototype[n].toString();}).join(',');
+// Keep production helper calls coherent as the View evolves. The constructor
+// is intentionally skipped; only external collaborators are fixture stubs.
+const viewSource=extract('src/NicoVideoPlayerDialog.js','NicoVideoPlayerDialogView');
 const bar=read('src/VideoControlBar.js'),dialog=read('src/NicoVideoPlayerDialog.js');
 function range(source,begin,end){const a=source.indexOf(begin),b=source.indexOf(end,a);assert(a>=0&&b>a,begin);return source.slice(a,b);}
 const tick=String.fromCharCode(96),end=dialog.indexOf("className: 'videoHoverMenu'");
@@ -16,12 +15,13 @@ assert(a>=0&&b>a);
 const css=range(bar,'  .controlButton {','  .settingPanelSwitch {')+
  range(bar,'.videoControlBar .volumeControl {','.videoControlBar .volumeRange {')+
  dialog.slice(a+'util.addStyle('.length+1,b);
-const boot=`window.ClassList=e=>e.classList;window.util={StyleSwitcher:{update(){}}};window.Fullscreen={now:()=>false};
-const host=document.querySelector('#player');window.view={${code},
+const boot=`window.Emitter=class{};window.ClassList=e=>e.classList;window.util={StyleSwitcher:{update(){}}};window.Fullscreen={now:()=>false};
+${viewSource}
+const host=document.querySelector('#player');window.view=Object.assign(Object.create(NicoVideoPlayerDialogView.prototype),{
  addClass(c){host.classList.add(c)},removeClass(c){host.classList.remove(c)},
  _setThumbnail(){},_clearClass(){},_updateScreenModeStyle(){},
  _$dialog:[document.querySelector('#dialog')],_$playerContainer:[host],
- _$body:{raf:{addClass(){},removeClass(){}}},_state:{screenMode:'normal'}};
+ _$body:{raf:{addClass(){},removeClass(){}}},_state:{screenMode:'normal'}});
 let mouseTimer;host.addEventListener('mousemove',()=>{
  view._onMouseMove();clearTimeout(mouseTimer);mouseTimer=setTimeout(()=>view._onMouseMoveEnd(),400);
 });window.drive=()=>host.dispatchEvent(new MouseEvent('mousemove',{bubbles:true}));

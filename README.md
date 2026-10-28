@@ -16,8 +16,9 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.351-task976`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+  - 最新版：`2.7.352-task977`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
   - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
+  - Discussion #36：ショートカット操作時の対象ボタンだけの表示とアニメーションを暫定対応。通常クリックではON/OFF文字を追加せず、いいねの演出は最後まで表示します。引き続き検証・改善します。
 
 - **[ZenzaHLS をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)**
   - HLS / domand動画の再生や自動画質切り替えを担当します。 (version 0.0.41-task966)

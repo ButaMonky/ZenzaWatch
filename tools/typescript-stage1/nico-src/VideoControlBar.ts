@@ -359,6 +359,7 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       switch (command) {
         case 'toggleStoryboard':
           this.storyboard.toggle();
+          this.emit('actionFeedback', command, e.detail.param);
           break;
         case 'wheelSeek-start':
           window.console.log('start-seek-start');
@@ -393,6 +394,7 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       switch (command) {
         case 'toggleStoryboard':
           this.storyboard.toggle();
+          this.emit('actionFeedback', command, param);
           break;
         default:
           util.dispatchCommand(target, command, param);
@@ -800,8 +802,59 @@ util.addStyle(`
     cursor: pointer;
     opacity: 1;
   }
-  .controlButton:active .controlButtonInner {
+  .controlButton:active .controlButtonInner,
+  .controlButton.is-feedback-pressed .controlButtonInner {
     transform: translate(0, 2px) scale(0.8);
+  }
+
+  /* Discussion #36: press/release is shared with pointer activation. */
+  .controlButtonInner { transition: transform 0.18s ease; }
+  .volumeControl { transition: filter 0.18s ease; }
+  .volumeControl:active,
+  .volumeControl.is-feedback-pressed { filter: brightness(1.35); }
+  .controlButton.is-shortcut-feedback,
+  .volumeControl.is-shortcut-feedback { opacity: 1 !important; }
+
+  /* Preserve geometry, but expose only the actual target through the hidden
+     bar's parent opacity. The target's configured display/hidden is untouched. */
+  body .videoControlBar.is-action-feedback-only {
+    opacity: 1 !important;
+    background: transparent !important;
+    transition: none !important;
+    pointer-events: none;
+  }
+  .videoControlBar.is-action-feedback-only * {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  .videoControlBar.is-action-feedback-only .seekBarContainer-mainControl {
+    background: none !important;
+  }
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback,
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback * {
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback .tooltip,
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback .tooltip *,
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback .controlMenu,
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback .controlMenu *,
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback .zenzaPopupMenu,
+  .videoControlBar.is-action-feedback-only .is-shortcut-feedback .zenzaPopupMenu * {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .controlButton.is-shortcut-feedback,
+    .controlButton.is-shortcut-feedback .controlButtonInner,
+    .volumeControl.is-shortcut-feedback {
+      transition: none !important;
+      animation: none !important;
+      scale: none !important;
+    }
+    .controlButton.is-feedback-pressed .controlButtonInner { transform: none !important; }
+    .controlButton.is-feedback-pressed { transform: none !important; }
+    .prevVideo.is-feedback-pressed .controlButtonInner { transform: scaleX(-1) !important; }
   }
 
   .is-abort   .playControl,
@@ -901,7 +954,8 @@ util.addStyle(`
     transition: transform 0.2s ease;
     transform: scale(1.1);
   }
-  .togglePlay:active {
+  .togglePlay:active,
+  .togglePlay.is-feedback-pressed {
     transform: scale(0.75);
   }
 
@@ -1168,7 +1222,8 @@ util.addStyle(`
     font-size: 20px;
     color: #888;
   }
-  .loopSwitch:active {
+  .loopSwitch:active,
+  .loopSwitch.is-feedback-pressed {
     font-size: 15px;
   }
 
@@ -1289,7 +1344,8 @@ util.addStyle(`
   .videoControlBar .muteSwitch {
     margin-right: 0;
   }
-  .videoControlBar .muteSwitch:active {
+  .videoControlBar .muteSwitch:active,
+  .videoControlBar .muteSwitch.is-feedback-pressed {
     font-size: 15px;
   }
 
@@ -1357,6 +1413,11 @@ util.addStyle(`
   .prevVideo .controlButtonInner {
     transform: scaleX(-1);
   }
+  .prevVideo:active .controlButtonInner,
+  .prevVideo.is-feedback-pressed .controlButtonInner {
+    transform: translate(0, 2px) scale(-0.8, 0.8);
+  }
+
 
   .toggleStoryboard {
     visibility: hidden;
@@ -1387,11 +1448,13 @@ util.addStyle(`
         transparent 0
       );
   }
-  .toggleStoryboard:active .controlButtonInner {
+  .toggleStoryboard:active .controlButtonInner,
+  .toggleStoryboard.is-feedback-pressed .controlButtonInner {
     transform: translate(-50%, -50%) scaleY(0.1) rotate(45deg);
   }
 
-  .toggleStoryboard:active {
+  .toggleStoryboard:active,
+  .toggleStoryboard.is-feedback-pressed {
     transform: scale(0.75);
   }
 

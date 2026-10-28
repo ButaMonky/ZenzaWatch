@@ -224,6 +224,15 @@ class NicoVideoPlayerDialogView extends Emitter {
   declare _playerConfig: Loose;
   declare _shortcutFeedbackIcon: Loose;
   declare _shortcutFeedbackTimer: Loose;
+  declare _shortcutFeedbackPressTimer: ReturnType<typeof setTimeout> | undefined;
+  declare _shortcutFeedbackToken: object | undefined;
+  declare _shortcutFeedbackBar: HTMLElement | undefined;
+  declare _shortcutFeedbackRestore: {
+    attributes: Record<string, {previous: string | null; value: string}>;
+    animation?: {previous: string; priority: string; value: string};
+  } | undefined;
+  declare _keyboardFeedbackCommand: string | undefined;
+  declare _shortcutFeedbackKeyboard: boolean | undefined;
   declare _state: Loose;
   declare _suppressSmallModeClick: Loose;
   declare _updateCommentInputLayout: Loose;
@@ -328,7 +337,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     let onMouseMoveEnd = _.debounce(this._onMouseMoveEnd.bind(this), 400);
     // コントロールバー専用の自動非表示はマウスメニュー用の400ms判定と
     // 独立させる。小画面だけ3秒、それ以外は従来の0.4秒とする。
-    // 一時停止時の表示はTask936で任意設定（小・全画面では既定OFF）。
+    // 一時停止時の表示はTask936で任意設定（Task973以降は小で既定ON、全画面はOFF）。
     // ONにした場合はマウス移動と同じ自動非表示の時間を使う。
     let onControlBarActive = this._onControlBarActive.bind(this);
     // Keep the extended delay exclusively for the floating small player.
@@ -428,6 +437,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       currentTimeGetter: this._currentTimeGetter
     });
     this.videoControlBar.on('command', onCommand);
+    this.videoControlBar.on('actionFeedback', this._onActionFeedback.bind(this));
     // SCUI-18: the existing seekbar/worker stays owned by VideoControlBar.
     this.sceneSearchBinding = new SceneSearchPlayerBinding({
       view:this,dialog:this._dialog,document,container,
@@ -955,6 +965,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     switch (command) {
       case 'settingPanel':
         this.toggleSettingPanel();
+        this._onActionFeedback(command, param);
         break;
       // Task 077: 反転は画面フィルターの設定(screenFilter.flipH/flipV)に統合した。
       // 見た目は今まで通り .is-flipH / .is-flipV クラス（transform）で反映する
@@ -967,6 +978,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         break;
       case 'toggle-screenFilterPanel':
         this.toggleScreenFilterPanel();
+        this._onActionFeedback(command, param);
         break;
       default:
         this.emit('command', command, param);
@@ -1070,6 +1082,7 @@ class NicoVideoPlayerDialogView extends Emitter {
             : vMargin >= videoControlBarHeight;
       }
       this.toggleClass('showVideoControlBar', showVideoControlBar);
+      this._syncActionFeedbackIsolation();
       if (onlyControlBar) {
         return;
       }
@@ -1087,6 +1100,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     return Fullscreen.now() || this._state.screenMode === 'wide' || this._state.screenMode === '3D';
   }
   _onMouseMove() {
+    this._releaseActionFeedbackIsolation();
     // Refresh before the existing early return: consecutive movements extend UI idle.
     this._onHoverUiActive();
     if (this._isMouseMoving) {
@@ -1159,6 +1173,7 @@ class NicoVideoPlayerDialogView extends Emitter {
   // コントロールバー専用の表示トリガー（2026-09-11追加）。is-mouseMovingとは
   // 別に持つ理由は_initializeDom側のコメント参照。
   _onControlBarActive() {
+    this._releaseActionFeedbackIsolation();
     if (this._isControlBarActive) {
       return;
     }
@@ -1171,6 +1186,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     }
     this.removeClass('is-controlBarActive');
     this._isControlBarActive = false;
+    this._syncActionFeedbackIsolation();
   }
   _onVideoCanPlay(watchId?: Loose, videoInfo?: Loose, options?: Loose) {
     this.emit('canPlay', watchId, videoInfo, options);
@@ -1182,6 +1198,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     this.emit('error', e);
   }
   _onBeforeVideoOpen() {
+    this._clearActionFeedback();
     this._clearHoverUiActive();
     this._setThumbnail();
   }
@@ -1203,35 +1220,213 @@ class NicoVideoPlayerDialogView extends Emitter {
   _onVideoPlaying() {
   }
   _clearShortcutToggleFeedback() {
+    this._clearActionFeedback();
+  }
+  _onActionFeedback(command: string, param?: Loose) {
+    // Local consumers keep executing their own actions; this notification is
+    // presentation only. The keyboard dispatcher owns its single final cue.
+    if (this._keyboardFeedbackCommand) { return; }
+    try { this._flashActionFeedback(command, param); } catch (_) {}
+  }
+  _releaseActionFeedbackIsolation() {
+    this._removeActionFeedbackIsolation(this._shortcutFeedbackBar);
+    this._shortcutFeedbackBar = undefined;
+    this._shortcutFeedbackKeyboard = false;
+  }
+  _removeActionFeedbackIsolation(bar?: HTMLElement) {
+    if (!bar?.classList.contains('is-action-feedback-only')) { return; }
+    // Otherwise restoring siblings while opacity fades 1 -> 0 exposes the
+    // entire toolbar for one transition after expiry or a different target.
+    const transition = bar.style.getPropertyValue('transition');
+    const priority = bar.style.getPropertyPriority('transition');
+    bar.style.setProperty('transition', 'none', 'important');
+    bar.classList.remove('is-action-feedback-only');
+    void bar.ownerDocument.defaultView?.getComputedStyle(bar).opacity;
+    if (transition) { bar.style.setProperty('transition', transition, priority); }
+    else { bar.style.removeProperty('transition'); }
+  }
+  _syncActionFeedbackIsolation() {
+    const icon = this._shortcutFeedbackIcon;
+    const bar = icon?.closest('.videoControlBar');
+    if (!bar) { return; }
+    const host = this._$playerContainer?.[0];
+    const full = this._isFullscreenControlBarScope();
+    const mode = icon.ownerDocument.body.dataset.fullscreenControlBarMode || 'auto';
+    const autoHides = full || ['small', 'sideView'].includes(this._state.screenMode);
+    const alwaysHide = full && mode === 'always-hide';
+    const forcedVisible = host?.classList.contains('showVideoControlBar') ||
+      (full && mode === 'always-show');
+    const active = !alwaysHide && (this._isControlBarActive ||
+      host?.matches('.is-controlBarActive, .volumeChanging'));
+    const interacting = bar.matches(':hover, .is-dragging') ||
+      (alwaysHide && bar.matches(':focus-within'));
+    // Decide from the owners of visibility, not animated opacity. An old
+    // opacity:1 frame must not expose all controls on a rapid second shortcut.
+    const isolate = autoHides && !forcedVisible && !active && !interacting;
+    if (isolate) { bar.classList.add('is-action-feedback-only'); }
+    else { this._removeActionFeedbackIsolation(bar); }
+    this._shortcutFeedbackBar = isolate ? bar : undefined;
+  }
+  _clearActionFeedback() {
+    this._shortcutFeedbackToken = undefined;
     clearTimeout(this._shortcutFeedbackTimer);
+    clearTimeout(this._shortcutFeedbackPressTimer);
     this._shortcutFeedbackTimer = null;
+    this._shortcutFeedbackPressTimer = undefined;
     const icon = this._shortcutFeedbackIcon;
     if (icon) {
-      icon.classList.remove('is-shortcut-feedback');
-      icon.removeAttribute('data-shortcut-state');
-      icon.removeAttribute('aria-label');
+      // Do not leave a retired hover button visible during its normal .4s
+      // opacity transition when the next shortcut selects a different target.
+      const transition = icon.style.getPropertyValue('transition');
+      const transitionPriority = icon.style.getPropertyPriority('transition');
+      icon.style.setProperty('transition', 'none', 'important');
+      icon.classList.remove('is-shortcut-feedback', 'is-feedback-pressed');
+      void icon.ownerDocument.defaultView?.getComputedStyle(icon).opacity;
+      if (transition) { icon.style.setProperty('transition', transition, transitionPriority); }
+      else { icon.style.removeProperty('transition'); }
+      const saved = this._shortcutFeedbackRestore;
+      for (const [name, {previous, value}] of Object.entries(saved?.attributes || {})) {
+        if (icon.getAttribute(name) !== value) { continue; }
+        if (previous == null) { icon.removeAttribute(name); }
+        else { icon.setAttribute(name, previous); }
+      }
+      const animation = saved?.animation;
+      if (animation && icon.style.getPropertyValue('--zenza-feedback-animation') === animation.value &&
+          !icon.style.getPropertyPriority('--zenza-feedback-animation')) {
+        if (animation.previous) {
+          icon.style.setProperty('--zenza-feedback-animation', animation.previous, animation.priority);
+        } else { icon.style.removeProperty('--zenza-feedback-animation'); }
+      }
     }
     this._shortcutFeedbackIcon = null;
+    this._shortcutFeedbackRestore = undefined;
+    this._releaseActionFeedbackIsolation();
   }
   _flashShortcutToggleFeedback(type?: Loose, enabled?: Loose) {
-    const selector = type === 'comment' ? '.showCommentSwitch' :
-      type === 'ng' ? '.ngFilterSwitch' : null;
+    // Compatibility entry point; all feedback now has the same owner/lifetime.
+    const command = type === 'comment' ? 'toggle-showComment' :
+      type === 'ng' ? 'toggle-enableFilter' : null;
+    if (command) { this._flashActionFeedback(command, undefined, enabled); }
+  }
+  _findActionFeedbackTarget(command: string, param?: Loose, allowUnavailable = false): HTMLElement | null {
     const host = this._$playerContainer?.[0];
-    const icon = selector && host?.querySelector(selector);
+    if (!host || typeof command !== 'string') { return null; }
+    // Only aliases/grouped controls need an entry. A future button with the
+    // same data-command is discovered automatically, including addon buttons.
+    const aliases: Record<string, string> = {
+      'toggle-showComment': '.showCommentSwitch',
+      'toggle-enableFilter': '.ngFilterSwitch',
+      'toggle-like': '.toggleLikeButton',
+      deflistAdd: '.mylistButton.deflistAdd', deflistRemove: '.mylistButton.deflistAdd',
+      mylistAdd: '.mylistButton.mylistAddMenu', mylistRemove: '.mylistButton.mylistAddMenu',
+      play: '.videoControlBar .togglePlay', pause: '.videoControlBar .togglePlay',
+      togglePlay: '.videoControlBar .togglePlay',
+      playNextVideo: '.videoControlBar .nextVideo',
+      playPreviousVideo: '.videoControlBar .prevVideo',
+      fullscreen: '.fullscreenSwitch', 'toggle-fullscreen': '.fullscreenSwitch',
+      volume: '.volumeControl', volumeBy: '.volumeControl',
+      volumeUp: '.volumeControl', volumeDown: '.volumeControl',
+      playbackRate: '.playbackRateMenu', shiftUp: '.playbackRateMenu', shiftDown: '.playbackRateMenu',
+      screenMode: '.screenModeMenu',
+      'toggle-enableStoryboardBar': '.toggleStoryboard', toggleStoryboard: '.toggleStoryboard'
+    };
+    if (['nop', 'close'].includes(command)) { return null; }
+    let selector = aliases[command];
+    if (command === 'seek' || command === 'seekTo') {
+      if (param !== 0 && param !== '0') { return null; }
+      selector = '.videoControlBar .seekTop';
+    }
+    const buttons = host.querySelectorAll(selector || '.menuButton[data-command], .controlButton[data-command]');
+    for (const button of buttons) {
+      if (!selector && (button.dataset.command !== command ||
+          (button.hasAttribute('data-param') && button.dataset.param !== String(param)))) { continue; }
+      if (allowUnavailable || this._isActionFeedbackTargetAvailable(button)) { return button; }
+    }
+    return null;
+  }
+  _isActionFeedbackTargetAvailable(icon: HTMLElement) {
+    const host = this._$playerContainer[0];
+    const win = icon.ownerDocument.defaultView;
+    // opacity:0 is an idle cue, whereas hidden/display:none/visibility:hidden
+    // is a deliberate preference or unavailable control. Never override it.
+    for (let node: HTMLElement | null = icon; node; node = node.parentElement) {
+      const style = win?.getComputedStyle(node);
+      if (node.hidden || node.getAttribute('aria-hidden') === 'true' ||
+          style?.display === 'none' || style?.visibility === 'hidden') { return false; }
+      if (node === host) { break; }
+    }
+    if (icon.matches(':disabled, [aria-disabled="true"]') ||
+        (icon.classList.contains('playControl') &&
+         host.matches('.is-abort, .is-error, .is-loading'))) { return false; }
+    return true;
+  }
+  _flashActionFeedback(command: string, param?: Loose, enabledOverride?: boolean) {
+    if (this._hoverUiSuppressed || this._state?.isOpen === false) { return; }
+    // A later alert/result command has no button and must not shorten the
+    // triggering action's cue. Ignore isolation only for this existence probe.
+    if (!this._findActionFeedbackTarget(command, param, true)) { return; }
+    const keyboard = !!this._keyboardFeedbackCommand;
+    // Restore the previous isolation before checking the new target's normal
+    // visibility; the isolation itself temporarily hides all other controls.
+    this._clearActionFeedback();
+    const icon = this._findActionFeedbackTarget(command, param);
     if (!icon) { return; }
-    this._clearShortcutToggleFeedback();
+    const token = this._shortcutFeedbackToken = {};
     this._shortcutFeedbackIcon = icon;
-    icon.dataset.shortcutState = enabled ? 'ON' : 'OFF';
-    icon.setAttribute('aria-label', (type === 'comment' ? 'コメント表示' : 'NGフィルター')+
-      ' '+icon.dataset.shortcutState);
-    icon.classList.add('is-shortcut-feedback');
-    this._shortcutFeedbackTimer = setTimeout(() =>
-      this._clearShortcutToggleFeedback(), 1000);
+    this._shortcutFeedbackKeyboard = keyboard;
+    const saved = this._shortcutFeedbackRestore = {attributes: {}} as
+      NonNullable<NicoVideoPlayerDialogView['_shortcutFeedbackRestore']>;
+    const states: Record<string, [string, string]> = {
+      'toggle-showComment': ['showComment', 'コメント表示'],
+      'toggle-enableFilter': ['enableFilter', 'NGフィルター'],
+      'toggle-mute': ['mute', 'ミュート'], 'toggle-loop': ['loop', 'リピート']
+    };
+    const state = states[command];
+    if (state) {
+      const enabled = enabledOverride ?? (this._playerConfig?.props?.[state[0]] === true);
+      const status = enabled ? 'ON' : 'OFF';
+      // A visible ON/OFF badge helps shortcuts, but is redundant on a mouse click.
+      // Keep the accessible label updated for either input method.
+      const labels = keyboard || enabledOverride !== undefined ?
+        [['data-shortcut-state', status], ['aria-label', `${state[1]} ${status}`]] :
+        [['aria-label', `${state[1]} ${status}`]];
+      for (const [name, value] of labels) {
+        saved.attributes[name] = {previous: icon.getAttribute(name), value};
+        icon.setAttribute(name, value);
+      }
+    }
+    this._syncActionFeedbackIsolation();
+    const animation = icon.dataset.feedbackAnimation;
+    if (animation && /^[A-Za-z_][A-Za-z0-9_-]*$/.test(animation)) {
+      saved.animation = {
+        previous: icon.style.getPropertyValue('--zenza-feedback-animation'),
+        priority: icon.style.getPropertyPriority('--zenza-feedback-animation'), value: animation
+      };
+      icon.style.setProperty('--zenza-feedback-animation', animation);
+    }
+    // Flush the released state before replaying, including consecutive presses.
+    void icon.offsetWidth;
+    icon.classList.add('is-shortcut-feedback', 'is-feedback-pressed');
+    this._shortcutFeedbackPressTimer = setTimeout(() => {
+      if (this._shortcutFeedbackToken !== token) { return; }
+      icon.classList.remove('is-feedback-pressed');
+      this._shortcutFeedbackPressTimer = undefined;
+    }, 90);
+    // Individual animations may outlast the standard one-second cue. In
+    // particular Like has a delayed 1s + 0.2s release transition.
+    const configuredMs = Number(icon.dataset.feedbackVisibleMs);
+    const visibleMs = Number.isInteger(configuredMs) && configuredMs >= 1000 && configuredMs <= 5000 ?
+      configuredMs : 1000;
+    this._shortcutFeedbackTimer = setTimeout(() => {
+      if (this._shortcutFeedbackToken === token) { this._clearActionFeedback(); }
+    }, visibleMs);
   }
   _onVideoPause() {
-    // Task936 / Issue #8: pause alone must not cover the bottom comments
-    // in small or fullscreen. Mouse hover/focus/manual toolbar activation
-    // still work and their independent idle timer remains unchanged.
+    if (this._keyboardFeedbackCommand || (this._shortcutFeedbackKeyboard &&
+        this._shortcutFeedbackIcon?.classList.contains('togglePlay'))) { return; }
+    // Task936 / Issue #8: ordinary pause follows the per-mode preference
+    // (Task973 defaults small to ON and fullscreen to OFF). Keyboard action
+    // feedback above stays isolated; pointer activity keeps its own timer.
     const isSmall = this._state.screenMode === 'small' && !Fullscreen.now();
     if (isSmall && this._playerConfig?.props?.['controlBar.showOnPause.small'] !== true) {
       return;
@@ -1252,6 +1447,8 @@ class NicoVideoPlayerDialogView extends Emitter {
     this._updateResponsive();
   }
   _onVolumeChange(/*vol, mute*/) {
+    if (this._keyboardFeedbackCommand || (this._shortcutFeedbackKeyboard &&
+        this._shortcutFeedbackIcon?.matches('.volumeControl, .muteSwitch'))) { return; }
     this.addClass('volumeChanging');
   }
   _onVolumeChangeEnd(/*vol, mute*/) {
@@ -1356,6 +1553,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     });
     modes.forEach(m => this._$body.raf.toggleClass(m, m === screenMode && !isFull));
     this._updateScreenModeStyle();
+    this._syncActionFeedbackIsolation();
     // Task 050 (A-4): 他の画面モードから「小」に切り替わった直後は、
     // コメント入力欄の反転・クランプ状態が古いままになるため再計算する。
     // body側のモードclass付与自体がraf.toggleClassで次フレームに遅延するため
@@ -2552,6 +2750,7 @@ NicoVideoPlayerDialogView.__tpl__ = (`
  * TODO: 分割 まにあわなくなっても知らんぞー
  */
 class NicoVideoPlayerDialog extends Emitter {
+  declare _actionFeedbackCommandDepth: number | undefined;
   declare emitAsync: Loose;
   declare emit: Loose;
   declare emitResolve: Loose;
@@ -2743,6 +2942,9 @@ class NicoVideoPlayerDialog extends Emitter {
     this._playerConfig.setValue('playbackRate', next);
   }
   _onCommand(command?: Loose, param?: Loose, request?: Loose) {
+    const outer = !this._actionFeedbackCommandDepth;
+    this._actionFeedbackCommandDepth = (this._actionFeedbackCommandDepth || 0) + 1;
+    try {
     if(typeof command==='string'&&command.startsWith('sceneSearch-')){
       return this._view?.sceneSearchBinding?.handleShortcut(command)===true;
     }
@@ -2996,6 +3198,13 @@ class NicoVideoPlayerDialog extends Emitter {
       default:
         this.emit('command', command, param);
     }
+    } finally {
+      this._actionFeedbackCommandDepth--;
+      if (outer && this._state?.isOpen && !this._view?._keyboardFeedbackCommand) {
+        // Presentation must not turn a completed player/API command into an error.
+        try { this._view?._flashActionFeedback?.(command, param); } catch (_) {}
+      }
+    }
   }
   _onKeyDown(name?: Loose, e?: Loose, param?: Loose) {
     this._onKeyEvent(name, e, param);
@@ -3047,6 +3256,17 @@ class NicoVideoPlayerDialog extends Emitter {
       'SCREEN_SHOT': 'screenShot',
       'SCREEN_SHOT_WITH_COMMENT': 'screenShotWithComment'
     };
+    const runCommand = (command: string) => {
+      const view = this._view;
+      const previous = view?._keyboardFeedbackCommand;
+      if (view) { view._keyboardFeedbackCommand = command; }
+      try {
+        this.execCommand(command, param);
+        try { view?._flashActionFeedback?.(command, param); } catch (_) {}
+      } finally {
+        if (view) { view._keyboardFeedbackCommand = previous; }
+      }
+    };
     switch (name) {
       case 'RELATED_MENU_LINKS': {
         const context=RelatedMenuActions.makeContext(this._state.videoInfo,this.currentTime);
@@ -3074,7 +3294,7 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       default:
         if ((TABLE as Loose)[name]) {
-          this.execCommand((TABLE as Loose)[name], param);
+          runCommand((TABLE as Loose)[name]);
           break;
         }
         // Task 059: ShortcutActions.js に登録された「新規」ショートカット
@@ -3084,17 +3304,8 @@ class NicoVideoPlayerDialog extends Emitter {
         {
           const action = SHORTCUT_ACTIONS.find((a?: Loose) => a.id === name && !a.legacy && a.command);
           if (!action) { return; }
-          this.execCommand(action.command, param);
+          runCommand(action.command);
         }
-    }
-    // Issue #36 / Task936: the existing bottom-left icon confirms keyboard
-    // changes for one second, without invoking the general hover-menu timer.
-    if (name === 'VIEW_COMMENT' || name === 'TOGGLE_COMMENT') {
-      this._view?._flashShortcutToggleFeedback('comment',
-        this._playerConfig.props.showComment === true);
-    } else if (name === 'TOGGLE_NG_FILTER') {
-      this._view?._flashShortcutToggleFeedback('ng',
-        this._playerConfig.props.enableFilter === true);
     }
     const screenMode = this._playerConfig.props.screenMode;
     if (['small', 'sideView'].includes(screenMode) && ['TOGGLE_PLAY'].includes(name)) {
@@ -5327,6 +5538,7 @@ class VideoHoverMenu {
       opacity: 0;
       transition:
         opacity 0.4s ease,
+        transform 0.18s ease,
         box-shadow 0.2s ease 1s,
         background 0.4s ease;
       box-sizing: border-box;
@@ -5344,7 +5556,8 @@ class VideoHoverMenu {
         background: #888;
         color: #000;
       }
-      .menuButton:active {
+      .menuButton:active,
+      .menuButton.is-feedback-pressed {
         transform: translate(0, 2px);
         box-shadow: 0 0 0 #000;
         transition: none;
@@ -5481,13 +5694,17 @@ class VideoHoverMenu {
         filter: drop-shadow(0 0 2px currentColor);
       }
 
-      /* Issue #36 / Task936: show just the keyboard-toggled bottom-left icon
-         for one second; do not expose every hover button or alter their timers. */
-      .menuItemContainer.leftBottom .menuButton.is-shortcut-feedback {
+      /* Discussion #36: one real target, shared by commands and pointer input.
+         Custom keyframes opt in via data-feedback-animation on a button. */
+      .menuItemContainer .menuButton.is-shortcut-feedback {
         opacity: 1 !important;
         box-shadow: 0 0 0 2px #fff !important;
       }
-      .menuItemContainer.leftBottom .menuButton.is-shortcut-feedback::after {
+      .is-shortcut-feedback[data-feedback-animation] > .menuButtonInner,
+      .is-shortcut-feedback[data-feedback-animation] > .controlButtonInner {
+        animation: var(--zenza-feedback-animation) 320ms ease-out;
+      }
+      .is-shortcut-feedback[data-shortcut-state]::after {
         content: attr(data-shortcut-state);
         position: absolute;
         bottom: calc(100% + 3px);
@@ -5500,6 +5717,16 @@ class VideoHoverMenu {
         font: bold 11px/14px system-ui, sans-serif;
         white-space: nowrap;
         pointer-events: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .menuButton.is-shortcut-feedback,
+        .menuButton.is-shortcut-feedback .menuButtonInner,
+        .toggleLikeButton.is-shortcut-feedback .heart-effect {
+          transition: none !important;
+          animation: none !important;
+        }
+        .menuButton.is-feedback-pressed { transform: none; }
+        .toggleLikeButton.is-shortcut-feedback .heart-effect { display: none; }
       }
 
     .menuItemContainer .mylistButton {
@@ -5676,7 +5903,8 @@ class VideoHoverMenu {
           visibility 0.8s ease,
           color 0.8s ease;
       }
-      .toggleLikeButton:active .heart-effect {
+      .toggleLikeButton:active .heart-effect,
+      .toggleLikeButton.is-feedback-pressed .heart-effect {
         transition: none;
         transform: translate(-50%, -50%) scale(0.3);
         color: pink;
@@ -5808,7 +6036,7 @@ VideoHoverMenu.__tpl__ = (`
 
       <div class="menuItemContainer rightTop">
         <div class="scalingUI">
-          <div class="menuButton toggleLikeButton forMember" data-command="toggle-like">
+          <div class="menuButton toggleLikeButton forMember" data-command="toggle-like" data-feedback-visible-ms="1500">
             <div class="tooltip">いいね！</div>
             <div class="menuButtonInner"><div class="not-liked-heart"
               >♡</div><div class="liked-heart"

@@ -102,13 +102,13 @@ describe('Task936 fullscreen/small pause preference and shortcut icon',function(
      assert(a.classList.contains('is-shortcut-feedback'));
      assert.strictEqual(a.dataset.shortcutState,'OFF');
      assert.strictEqual(b.classList.contains('is-shortcut-feedback'),false);
-     assert.deepStrictEqual([...h.pending.values()].map(x=>x.delay),[1000]);
+     assert.strictEqual([...h.pending.values()].filter(x=>x.delay===1000).length,1);
      h.view._flashShortcutToggleFeedback('ng',true);
      assert(!a.classList.contains('is-shortcut-feedback'));
      assert(b.classList.contains('is-shortcut-feedback'));
      assert.strictEqual(b.getAttribute('aria-label'),'NGフィルター ON');
      h.view._flashShortcutToggleFeedback('ng',false);
-     assert.strictEqual(h.pending.size,1,'repeated hotkey restarts timer');
+     assert.strictEqual([...h.pending.values()].filter(x=>x.delay===1000).length,1,'repeated hotkey restarts one reveal timer');
      assert.strictEqual(b.dataset.shortcutState,'OFF');
      h.tick(1000);
      assert(!b.classList.contains('is-shortcut-feedback'));
@@ -147,7 +147,7 @@ describe('Task936 fullscreen/small pause preference and shortcut icon',function(
      assert.strictEqual(h.pending.size,0);
      h.dialog._onKeyEvent('TOGGLE_NG_FILTER',{repeat:false,preventDefault(){},stopPropagation(){}});
      assert.strictEqual(h.cfg.props.enableFilter,false);
-     assert.strictEqual(h.pending.size,1);
+     assert.strictEqual([...h.pending.values()].filter(x=>x.delay===1000).length,1);
    }finally{h.close();}
  });
  it('reschedules an already visible bar on a saved delay change',()=>{
@@ -191,10 +191,16 @@ describe('Task936 fullscreen/small pause preference and shortcut icon',function(
        'keyboard feedback must disappear after 1s');
    }finally{h.close();}
  });
- it('only applies feedback CSS to left-bottom toggles',()=>{
-   const source=read('src/NicoVideoPlayerDialog.js');
-   assert(source.includes('.menuItemContainer.leftBottom .menuButton.is-shortcut-feedback'));
-   assert(source.includes('content: attr(data-shortcut-state)'));
-   assert(!source.includes('is-shortcut-feedback .menuButton:hover'));
+ it('extends the same feedback lifetime to a right-top Like button',()=>{
+   const h=harness();try{
+     const icon=h.dom.window.document.createElement('div');
+     icon.className='menuButton toggleLikeButton';
+     h.element('.zenzaPlayerContainer').append(icon);
+     h.view._flashActionFeedback('toggle-like');
+     assert(icon.classList.contains('is-shortcut-feedback'));
+     assert(!h.element('.showCommentSwitch').classList.contains('is-shortcut-feedback'));
+     assert(!h.element('.ngFilterSwitch').classList.contains('is-shortcut-feedback'));
+     h.tick(1000);assert(!icon.classList.contains('is-shortcut-feedback'));
+   }finally{h.close();}
  });
 });

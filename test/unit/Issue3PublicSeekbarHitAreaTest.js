@@ -32,7 +32,9 @@ describe('Issue #3 public right seek hit-area regression',()=>{
    const dist=read('dist/ZenzaWatch-dev.user.js');
    const source=read('src/_template.js');
    const version=source.match(/^\/\/ @version\s+(\S+)/m)?.[1];
-   assert(version&&version.startsWith('2.7.351-'),version);
+   // The release-version test owns the exact version. This regression only
+   // verifies that the distributed seek fix accompanies the declared build.
+   assert(version,'missing source release version');
    assert(dist.includes(version),'distributed version differs from source');
    assert(dist.includes('pointer-events: none;'));
    assert(dist.includes(':where(.videoControlBar .controlItemContainer.right > .scalingUI) > .controlButton'));

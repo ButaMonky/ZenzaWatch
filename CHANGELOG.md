@@ -1,3 +1,10 @@
+## 2026-11-02 - Restore native comment panel layout (2.7.354-task978)
+
+- Remove the temporary right-edge ribbon introduced in 2.7.353; restore the original information, related videos and comment tabs.
+- Keep the native side or bottom panel accessible in narrow/short viewports, proportionally resizing the player frame without changing saved preferences or comment APIs.
+- Fix fractional CSS breakpoint gaps and the native header auto-placement 8px gap oscillation. Preserve fullscreen, wide, small and side-view layout behavior.
+- Port verified TypeScript canonical source, regenerated distribution, and regression tests. Offline Chromium source/dist: 76 layouts passed; actual nicovideo.jp user testing is pending.
+
 ## 2026-11-02 - Short viewport comment/info panel recovery (2.7.353-viewportfix)
 
 - Chromeのズームや画面倍率によってCSS表示領域が狭く低くなると、通常・大モードの情報/コメント一覧パネルが右側・下側どちらの表示条件にも該当せず、完全に消える問題を修正。

@@ -2663,7 +2663,7 @@ NicoVideoPlayerDialogView.__css__ = `
 
     /* 縦長モニター */
     @media
-      (max-width: 991px) and (min-height: 700px)
+      (width < 992px) and (min-height: 700px)
     {
       .zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
         padding-bottom: 240px;
@@ -2672,7 +2672,7 @@ NicoVideoPlayerDialogView.__css__ = `
     }
 
     @media
-      (max-width: 1215px) and (min-height: 700px)
+      (width < 1216px) and (min-height: 700px)
     {
       .zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
         padding-bottom: 240px;
@@ -2680,6 +2680,72 @@ NicoVideoPlayerDialogView.__css__ = `
       }
     }
 
+    /*
+      Short viewport fallback for the native normal/big layouts. The existing
+      information and comment tabs stay adjacent to the movie. Resize only
+      the video frame at its native aspect ratio, reserving header/toolbar room.
+    */
+    @media (min-width: 640px) and (width < 992px) and (height < 700px) {
+      body.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
+        padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
+        background: none;
+      }
+      body.zenzaScreenMode_normal .zenzaPlayerContainer {
+        width: min(672px, calc(100vw - ${CONSTANT.RIGHT_PANEL_WIDTH}px), calc((100vh - 150px) * 1.75));
+        height: auto;
+        aspect-ratio: 7 / 4;
+      }
+    }
+    @media (min-width: 640px) and (width < 1216px) and (height < 700px) {
+      body.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
+        padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
+        background: none;
+      }
+      body.zenzaScreenMode_big .zenzaPlayerContainer {
+        width: min(896px, calc(100vw - ${CONSTANT.RIGHT_PANEL_WIDTH}px), calc((100vh - 150px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
+      }
+    }
+    /* Below 640px preserve the legacy lower tab panel rather than making
+       the movie unwatchably narrow next to a 320px sidebar. */
+    @media (width < 640px) and (height < 700px) {
+      body.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner,
+      body.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
+        padding-right: 0;
+        padding-bottom: min(${CONSTANT.BOTTOM_PANEL_HEIGHT}px, 35vh);
+        background: none;
+      }
+      body.zenzaScreenMode_normal .zenzaPlayerContainer {
+        width: min(672px, 100vw, max(180px, calc((100vh - min(${CONSTANT.BOTTOM_PANEL_HEIGHT}px, 35vh) - 200px) * 1.75)));
+        height: auto;
+        aspect-ratio: 7 / 4;
+      }
+      body.zenzaScreenMode_big .zenzaPlayerContainer {
+        width: min(896px, 100vw, max(180px, calc((100vh - min(${CONSTANT.BOTTOM_PANEL_HEIGHT}px, 35vh) - 200px) * 1.8666667)));
+        height: auto;
+        aspect-ratio: 28 / 15;
+      }
+    }
+    /* Reserve 200px outside a lower panel/video stack for the native header
+       and fixed toolbar; the header placement algorithm may shift the stack.
+       The legacy below-video layout also exceeded the viewport at 700px
+       high when its fixed-size movie was wider/taller than the available
+       window. Keep the native bottom panel and scale the movie into it. */
+    @media (width < 992px) and (min-height: 700px) {
+      body.zenzaScreenMode_normal .zenzaPlayerContainer {
+        width: min(672px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.75));
+        height: auto;
+        aspect-ratio: 7 / 4;
+      }
+    }
+    @media (width < 1216px) and (min-height: 700px) {
+      body.zenzaScreenMode_big .zenzaPlayerContainer {
+        width: min(896px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.8666667));
+        height: auto;
+        aspect-ratio: 28 / 15;
+      }
+    }
     /* 960x540 */
     @media
       (min-width: 1328px) and (min-height: 700px)

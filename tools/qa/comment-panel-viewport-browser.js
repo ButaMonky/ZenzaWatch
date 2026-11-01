@@ -1,0 +1,81 @@
+'use strict';
+(async()=>{
+ const {templates,styles,native,cases}=window.QA;
+ const escape=s=>s.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+ const init=`
+ const global=window;class Emitter{}
+ const Config={props:{'videoHeader.position':'auto'}};
+ const Fullscreen={now:()=>window.qaFull===true};
+ const util={StyleSwitcher:{update:({on,off})=>{if(off)document.querySelectorAll(off).forEach(s=>{if(s.sheet)s.sheet.disabled=true;});if(on)document.querySelectorAll(on).forEach(s=>{if(s.sheet)s.sheet.disabled=false;});}}};
+ ${native.headerClass}
+ const header=document.querySelector('.zenzaWatchVideoHeaderPanel');
+ const headerView=Object.create(VideoHeaderPanel.prototype);headerView._$view=[header];headerView.classList=header.classList;
+ const tabRoot=document.querySelector('.zenzaWatchVideoInfoPanel');
+ const tabView={_$view:{find:selector=>{const nodes=[...tabRoot.querySelectorAll(selector)];return {addClass:name=>nodes.forEach(n=>n.classList.add(name)),removeClass:name=>nodes.forEach(n=>n.classList.remove(name))};}}};
+ const select=({${native.selectTab}}).selectTab;
+ window.qaSelect=name=>select.call(tabView,name);
+ window.qaState=item=>{
+   window.qaFull=item.mode==='fullscreen';document.body.className='showNicoVideoPlayerDialog '+(window.qaFull?'':'zenzaScreenMode_'+item.mode);
+   document.body.dataset.screenMode=window.qaFull?'big':item.mode;document.body.dataset.fullscreen=window.qaFull?'yes':'no';
+   const root=document.querySelector('#zenzaVideoPlayerDialog');const player=document.querySelector('.zenzaPlayerContainer');
+   root.className='zenzaVideoPlayerDialog zen-family zen-root is-open is-mouseMoving'+(window.qaFull?' is-fullscreen':'');
+   player.classList.toggle('is-fullscreen',window.qaFull);player.classList.add('is-mouseMoving');header.classList.toggle('is-fullscreen',window.qaFull);
+   Config.props['videoHeader.position']=item.header;({${native.modeMethod}})._updateScreenModeStyle.call({_state:{isOpen:true,screenMode:document.body.dataset.screenMode}});
+   headerView._height=undefined;headerView._onResize();window.qaSelect('comment');
+ };
+ window.qaReflow=()=>headerView._onResize();
+ `;
+ const base=templates.dialog.replace('</div>\n      </div>','</div>\n      </div>');
+ const stylesHtml=styles.map(s=>'<style class="'+escape(s.name)+'">'+s.css+'</style>').join('');
+ const html='<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'; style-src \'unsafe-inline\'; img-src data:"><style>html,body{margin:0;padding:0}body{--zenza-control-bar-height:40px;--zenza-ui-scale:1;--zenza-comment-layer-opacity:1}</style>'+stylesHtml+base;
+ const frame=document.createElement('iframe');document.body.append(frame);
+ await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=html;});
+ const doc=frame.contentDocument,win=frame.contentWindow;let scriptError=null;
+ win.addEventListener('error',e=>{scriptError=e.message;});
+ const append=(target,markup)=>{const t=doc.createElement('template');t.innerHTML=markup.trim();target.append(t.content);};
+ const player=doc.querySelector('.zenzaPlayerContainer');append(player,'<div class="videoPlayer"><video></video></div><div class="commentLayerFrame"></div>');
+ for(const key of ['info','header','bar','input'])append(player,templates[key]);
+ const info=doc.querySelector('.zenzaWatchVideoInfoPanel'),header=doc.querySelector('.zenzaWatchVideoHeaderPanel');
+ info.classList.remove('initializing');header.classList.remove('initializing');header.style.display='';
+ header.querySelector('.videoTitle').textContent='Offline layout verification';
+ header.querySelector('.publicStatus').textContent='Views: 100 / Comments: 200';
+ header.querySelector('.videoTagsContainer').textContent='Tag A   Tag B   Tag C';
+ doc.querySelectorAll('img').forEach(n=>n.removeAttribute('src'));
+ append(info.querySelector('.tabSelectContainer'),'<div class="tabSelect playlist" data-command="selectTab" data-param="playlist">プレイリスト</div>');
+ append(info,'<div class="tabs playlist"></div>');
+ append(info.querySelector('.tabSelectContainer'),'<div class="tabSelect comment" data-command="selectTab" data-param="comment">コメント</div>');
+ append(info,'<div class="tabs comment">'+templates.comments+'</div>');
+ const list=info.querySelector('.commentPanel-frame');list.textContent='Offline test comment';
+ doc.querySelectorAll('form').forEach(n=>n.addEventListener('submit',e=>e.preventDefault()));
+ const script=doc.createElement('script');script.textContent=init;doc.body.append(script);if(scriptError)throw Error(scriptError);
+ const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height,right:r.right,bottom:r.bottom};};
+ const settle=()=>{doc.getAnimations().forEach(a=>{try{if(a.effect?.getComputedTiming().iterations!==Infinity)a.finish();}catch(_){}});};
+ const inside=r=>r.w>0&&r.h>0&&r.x>=-0.6&&r.y>=-0.6&&r.right<=win.innerWidth+0.6&&r.bottom<=win.innerHeight+0.6;
+ const hit=e=>{const r=rect(e);const t=doc.elementFromPoint(r.x+r.w/2,r.y+r.h/2);return t===e||e.contains(t);};
+ const input=doc.querySelector('.commentInput'),submit=doc.querySelector('.commentSubmit'),bar=player.querySelector('.videoControlBar');
+ const results=[];
+ for(const item of cases){
+  input.blur();frame.style.width=item.w+'px';frame.style.height=item.h+'px';void doc.body.offsetHeight;
+  win.qaState(item);void doc.body.offsetHeight;settle();win.qaReflow();void doc.body.offsetHeight;settle();
+  const p=rect(info),v=rect(player),b=rect(bar),h=rect(header),tab=info.querySelector('.tabSelect.comment');
+  const noRibbon=['none','normal','""'].includes(win.getComputedStyle(info,'::before').content);
+  const visible=win.getComputedStyle(info).display!=='none'&&p.w>100&&p.h>60;
+  const side=Math.abs(p.x-v.right)<1,below=p.y>=v.bottom-1;
+  const panelFits=inside(p)&&p.bottom<=b.y+0.6,videoFits=inside(v)&&v.bottom<=b.y+0.6;
+  const tabHit=visible&&hit(tab);win.qaSelect('videoInfoTab');const switchAway=!info.querySelector('.tabs.comment').classList.contains('activeTab');
+  win.qaSelect('comment');const switchBack=info.querySelector('.tabs.comment').classList.contains('activeTab');
+  input.focus();void win.getComputedStyle(input).opacity;settle();
+  const inputStyle=win.getComputedStyle(input),submitStyle=win.getComputedStyle(submit);
+  const inputVisible=doc.activeElement===input&&Number(inputStyle.opacity)>0.8;
+  const submitVisible=Number(submitStyle.opacity)>0.8;
+  const inputBox=rect(input),submitBox=rect(submit);
+  const inputUsable=inputVisible&&inside(inputBox)&&hit(input),submitUsable=submitVisible&&inside(submitBox)&&hit(submit);
+  const inputApplicable=item.w>=716&&!item.compatOnly;
+  const headerFits=h.y>=(item.header==='outside'?-0.6:-20.6)&&h.right<=item.w+0.6;
+  const checks={noRibbon,visible,panelFits,videoFits,nonoverlap:side||below,tabHit,switchAway,switchBack,headerFits,inputApplicable,inputUsable,submitUsable};
+  const pass=item.compatOnly?noRibbon:noRibbon&&visible&&panelFits&&videoFits&&(side||below)&&tabHit&&switchAway&&switchBack&&headerFits&&(!inputApplicable||(inputUsable&&submitUsable));
+  results.push({...item,actualViewport:{width:win.innerWidth,height:win.innerHeight,visualWidth:win.visualViewport?.width,visualHeight:win.visualViewport?.height,bigNarrow:win.matchMedia('(width < 1216px)').matches,short:win.matchMedia('(height < 700px)').matches},headerMode:item.header,pass,checks,panel:p,video:v,bar:b,header:h,input:inputBox,submit:submitBox,inputOpacity:inputStyle.opacity,submitOpacity:submitStyle.opacity,styles:styles.filter((s,i)=>!doc.querySelectorAll('style')[i+1]?.sheet?.disabled).length});
+ }
+ input.blur();frame.style.width='1213px';frame.style.height='640px';void doc.body.offsetHeight;win.qaState({mode:'big',header:'outside'});void doc.body.offsetHeight;settle();
+ document.getElementById('qa-result').textContent=encodeURIComponent(JSON.stringify({results}));
+})().catch(e=>{document.getElementById('qa-result').textContent=encodeURIComponent(JSON.stringify({error:e.stack||e.message}));});

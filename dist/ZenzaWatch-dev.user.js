@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.353-viewportfix
+// @version        2.7.354-task978
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-01 17:30Z c4bc247d
+// build: 2026-11-01 19:49Z 8089264c
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.353-viewportfix';
+    var VER = '2.7.354-task978';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-01 17:30Z c4bc247d';
+    var BUILD = '2026-11-01 19:49Z 8089264c';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -45143,7 +45143,7 @@ NicoVideoPlayerDialogView.__css__ = `
 		}
 		/* 縦長モニター */
 		@media
-			(max-width: 991px) and (min-height: 700px)
+			(width < 992px) and (min-height: 700px)
 		{
 			.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
 				padding-bottom: 240px;
@@ -45151,11 +45151,77 @@ NicoVideoPlayerDialogView.__css__ = `
 			}
 		}
 		@media
-			(max-width: 1215px) and (min-height: 700px)
+			(width < 1216px) and (min-height: 700px)
 		{
 			.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
 				padding-bottom: 240px;
 				background: none;
+			}
+		}
+		/*
+			Short viewport fallback for the native normal/big layouts. The existing
+			information and comment tabs stay adjacent to the movie. Resize only
+			the video frame at its native aspect ratio, reserving header/toolbar room.
+		*/
+		@media (min-width: 640px) and (width < 992px) and (height < 700px) {
+			body.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner {
+				padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
+				background: none;
+			}
+			body.zenzaScreenMode_normal .zenzaPlayerContainer {
+				width: min(672px, calc(100vw - ${CONSTANT.RIGHT_PANEL_WIDTH}px), calc((100vh - 150px) * 1.75));
+				height: auto;
+				aspect-ratio: 7 / 4;
+			}
+		}
+		@media (min-width: 640px) and (width < 1216px) and (height < 700px) {
+			body.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
+				padding-right: ${CONSTANT.RIGHT_PANEL_WIDTH}px;
+				background: none;
+			}
+			body.zenzaScreenMode_big .zenzaPlayerContainer {
+				width: min(896px, calc(100vw - ${CONSTANT.RIGHT_PANEL_WIDTH}px), calc((100vh - 150px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
+			}
+		}
+		/* Below 640px preserve the legacy lower tab panel rather than making
+			the movie unwatchably narrow next to a 320px sidebar. */
+		@media (width < 640px) and (height < 700px) {
+			body.zenzaScreenMode_normal .zenzaVideoPlayerDialogInner,
+			body.zenzaScreenMode_big .zenzaVideoPlayerDialogInner {
+				padding-right: 0;
+				padding-bottom: min(${CONSTANT.BOTTOM_PANEL_HEIGHT}px, 35vh);
+				background: none;
+			}
+			body.zenzaScreenMode_normal .zenzaPlayerContainer {
+				width: min(672px, 100vw, max(180px, calc((100vh - min(${CONSTANT.BOTTOM_PANEL_HEIGHT}px, 35vh) - 200px) * 1.75)));
+				height: auto;
+				aspect-ratio: 7 / 4;
+			}
+			body.zenzaScreenMode_big .zenzaPlayerContainer {
+				width: min(896px, 100vw, max(180px, calc((100vh - min(${CONSTANT.BOTTOM_PANEL_HEIGHT}px, 35vh) - 200px) * 1.8666667)));
+				height: auto;
+				aspect-ratio: 28 / 15;
+			}
+		}
+		/* Reserve 200px outside a lower panel/video stack for the native header
+			and fixed toolbar; the header placement algorithm may shift the stack.
+			The legacy below-video layout also exceeded the viewport at 700px
+			high when its fixed-size movie was wider/taller than the available
+			window. Keep the native bottom panel and scale the movie into it. */
+		@media (width < 992px) and (min-height: 700px) {
+			body.zenzaScreenMode_normal .zenzaPlayerContainer {
+				width: min(672px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.75));
+				height: auto;
+				aspect-ratio: 7 / 4;
+			}
+		}
+		@media (width < 1216px) and (min-height: 700px) {
+			body.zenzaScreenMode_big .zenzaPlayerContainer {
+				width: min(896px, 100vw, calc((100vh - ${CONSTANT.BOTTOM_PANEL_HEIGHT}px - 200px) * 1.8666667));
+				height: auto;
+				aspect-ratio: 28 / 15;
 			}
 		}
 		/* 960x540 */
@@ -52547,7 +52613,7 @@ css.addStyle(`
 		}
 		/* 縦長モニター */
 		@media
-			(max-width: 991px) and (min-height: 700px)
+			(width < 992px) and (min-height: 700px)
 		{
 			.zenzaScreenMode_normal .zenzaWatchVideoInfoPanel {
 				display: inherit;
@@ -52572,7 +52638,7 @@ css.addStyle(`
 			}
 		}
 		@media
-			(max-width: 1215px) and (min-height: 700px) {
+			(width < 1216px) and (min-height: 700px) {
 			.zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
 				display: inherit;
 				top: 100%;
@@ -52596,88 +52662,34 @@ css.addStyle(`
 			}
 		}
 	}
-	/* Short CSS viewports (e.g. browser zoom) were neither wide enough for the
-		side panel nor tall enough for the bottom panel. Never lose the comment tab. */
-	@media screen and (max-width: 991px) and (max-height: 699px) {
-		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel {
-			display: block;
-			position: fixed;
-			left: auto;
-			right: 0;
-			top: max(36px, 6vh);
-			width: min(320px, 88vw);
-			height: min(76vh, 430px);
-			z-index: 35000;
-			transform: translateX(calc(100% - 36px));
-			background: #333;
-			border: 1px solid #777;
-			box-shadow: -3px 2px 12px #000;
-			opacity: 0.94;
-			transition: transform 0.2s ease, opacity 0.2s ease;
+	/* Short viewports: retain the native video information/comment tabs
+		beside the proportionally resized player, without introducing a drawer. */
+	@media screen and (height < 700px) {
+		@media (min-width: 640px) and (width < 992px) {
+			body.zenzaScreenMode_normal .zenzaWatchVideoInfoPanel {
+				display: inherit;
+			}
 		}
-		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:hover,
-		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:focus-within {
-			transform: translateX(0);
-			opacity: 1;
+		@media (min-width: 640px) and (width < 1216px) {
+			body.zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
+				display: inherit;
+			}
 		}
-		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel::before {
-			content: 'コメント・情報';
-			position: absolute;
-			left: 0;
-			top: 40px;
-			width: 34px;
-			padding: 8px 5px;
-			box-sizing: border-box;
-			background: #444;
-			border-radius: 4px 0 0 4px;
-			color: #fff;
-			font-size: 12px;
-			writing-mode: vertical-rl;
-			text-orientation: upright;
-			z-index: 101;
-			cursor: pointer;
-			pointer-events: auto;
-		}
-	}
-	@media screen and (max-width: 1215px) and (max-height: 699px) {
-		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel {
-			display: block;
-			position: fixed;
-			left: auto;
-			right: 0;
-			top: max(36px, 6vh);
-			width: min(320px, 88vw);
-			height: min(76vh, 430px);
-			z-index: 35000;
-			transform: translateX(calc(100% - 36px));
-			background: #333;
-			border: 1px solid #777;
-			box-shadow: -3px 2px 12px #000;
-			opacity: 0.94;
-			transition: transform 0.2s ease, opacity 0.2s ease;
-		}
-		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:hover,
-		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:focus-within {
-			transform: translateX(0);
-			opacity: 1;
-		}
-		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel::before {
-			content: 'コメント・情報';
-			position: absolute;
-			left: 0;
-			top: 40px;
-			width: 34px;
-			padding: 8px 5px;
-			box-sizing: border-box;
-			background: #444;
-			border-radius: 4px 0 0 4px;
-			color: #fff;
-			font-size: 12px;
-			writing-mode: vertical-rl;
-			text-orientation: upright;
-			z-index: 101;
-			cursor: pointer;
-			pointer-events: auto;
+		@media (width < 640px) {
+			body.zenzaScreenMode_normal .zenzaWatchVideoInfoPanel,
+			body.zenzaScreenMode_big .zenzaWatchVideoInfoPanel {
+				display: inherit;
+				top: 100%;
+				left: 50%;
+				width: min(480px, 100vw);
+				height: min(240px, 35vh);
+				transform: translateX(-50%);
+				z-index: 20000;
+			}
+			body.zenzaScreenMode_normal .zenzaWatchVideoHeaderPanel,
+			body.zenzaScreenMode_big .zenzaWatchVideoHeaderPanel {
+				width: 100% !important;
+			}
 		}
 	}
 `, { className: 'screenMode for-dialog videoInfoPanel' });
@@ -52687,7 +52699,7 @@ css.addStyle(`
 	}
 `, { className: 'domain slack-com', disabled: true });
 VideoInfoPanel.__tpl__ = (`
-		<div class="zenzaWatchVideoInfoPanel show initializing" tabindex="0" aria-label="動画情報・コメント一覧">
+		<div class="zenzaWatchVideoInfoPanel show initializing">
 			<div class="nowLoading">
 				<div class="kurukuru"><span class="kurukuruInner">&#x262F;</span></div>
 				<div class="loadingMessage">Loading...</div>
@@ -52913,7 +52925,7 @@ class VideoHeaderPanel extends Emitter {
 				if (!this._height && !isOnscreen) {
 						this._height = height;
 				}
-				const top = isOnscreen ? (rect.top - height) : rect.top;
+				const top = isOnscreen ? (rect.top - height - 8) : rect.top;
 				let onscreen;
 				switch (mode) {
 						case 'outside':

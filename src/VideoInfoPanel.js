@@ -1299,6 +1299,91 @@ css.addStyle(`
     }
   }
 
+  /* Short CSS viewports (e.g. browser zoom) were neither wide enough for the
+     side panel nor tall enough for the bottom panel. Never lose the comment tab. */
+  @media screen and (max-width: 991px) and (max-height: 699px) {
+    body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel {
+      display: block;
+      position: fixed;
+      left: auto;
+      right: 0;
+      top: max(36px, 6vh);
+      width: min(320px, 88vw);
+      height: min(76vh, 430px);
+      z-index: 35000;
+      transform: translateX(calc(100% - 36px));
+      background: #333;
+      border: 1px solid #777;
+      box-shadow: -3px 2px 12px #000;
+      opacity: 0.94;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:hover,
+    body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:focus-within {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel::before {
+      content: 'コメント・情報';
+      position: absolute;
+      left: 0;
+      top: 40px;
+      width: 34px;
+      padding: 8px 5px;
+      box-sizing: border-box;
+      background: #444;
+      border-radius: 4px 0 0 4px;
+      color: #fff;
+      font-size: 12px;
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      z-index: 101;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+  }
+  @media screen and (max-width: 1215px) and (max-height: 699px) {
+    body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel {
+      display: block;
+      position: fixed;
+      left: auto;
+      right: 0;
+      top: max(36px, 6vh);
+      width: min(320px, 88vw);
+      height: min(76vh, 430px);
+      z-index: 35000;
+      transform: translateX(calc(100% - 36px));
+      background: #333;
+      border: 1px solid #777;
+      box-shadow: -3px 2px 12px #000;
+      opacity: 0.94;
+      transition: transform 0.2s ease, opacity 0.2s ease;
+    }
+    body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:hover,
+    body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:focus-within {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel::before {
+      content: 'コメント・情報';
+      position: absolute;
+      left: 0;
+      top: 40px;
+      width: 34px;
+      padding: 8px 5px;
+      box-sizing: border-box;
+      background: #444;
+      border-radius: 4px 0 0 4px;
+      color: #fff;
+      font-size: 12px;
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      z-index: 101;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+  }
+
 `, { className: 'screenMode for-dialog videoInfoPanel' });
 css.addStyle(`
   .zenzaWatchVideoInfoPanel .comment {
@@ -1306,7 +1391,7 @@ css.addStyle(`
   }
 `, { className: 'domain slack-com', disabled: true });
 VideoInfoPanel.__tpl__ = (`
-    <div class="zenzaWatchVideoInfoPanel show initializing">
+    <div class="zenzaWatchVideoInfoPanel show initializing" tabindex="0" aria-label="動画情報・コメント一覧">
       <div class="nowLoading">
         <div class="kurukuru"><span class="kurukuruInner">&#x262F;</span></div>
         <div class="loadingMessage">Loading...</div>

@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.352-task977
+// @version        2.7.353-viewportfix
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-10-28 00:58Z 2628c82a
+// build: 2026-11-01 17:30Z c4bc247d
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.352-task977';
+    var VER = '2.7.353-viewportfix';
     const ENV = 'DEV';
 
-    var BUILD = '2026-10-28 00:58Z 2628c82a';
+    var BUILD = '2026-11-01 17:30Z c4bc247d';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -52596,6 +52596,90 @@ css.addStyle(`
 			}
 		}
 	}
+	/* Short CSS viewports (e.g. browser zoom) were neither wide enough for the
+		side panel nor tall enough for the bottom panel. Never lose the comment tab. */
+	@media screen and (max-width: 991px) and (max-height: 699px) {
+		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel {
+			display: block;
+			position: fixed;
+			left: auto;
+			right: 0;
+			top: max(36px, 6vh);
+			width: min(320px, 88vw);
+			height: min(76vh, 430px);
+			z-index: 35000;
+			transform: translateX(calc(100% - 36px));
+			background: #333;
+			border: 1px solid #777;
+			box-shadow: -3px 2px 12px #000;
+			opacity: 0.94;
+			transition: transform 0.2s ease, opacity 0.2s ease;
+		}
+		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:hover,
+		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:focus-within {
+			transform: translateX(0);
+			opacity: 1;
+		}
+		body.zenzaScreenMode_normal #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel::before {
+			content: 'コメント・情報';
+			position: absolute;
+			left: 0;
+			top: 40px;
+			width: 34px;
+			padding: 8px 5px;
+			box-sizing: border-box;
+			background: #444;
+			border-radius: 4px 0 0 4px;
+			color: #fff;
+			font-size: 12px;
+			writing-mode: vertical-rl;
+			text-orientation: upright;
+			z-index: 101;
+			cursor: pointer;
+			pointer-events: auto;
+		}
+	}
+	@media screen and (max-width: 1215px) and (max-height: 699px) {
+		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel {
+			display: block;
+			position: fixed;
+			left: auto;
+			right: 0;
+			top: max(36px, 6vh);
+			width: min(320px, 88vw);
+			height: min(76vh, 430px);
+			z-index: 35000;
+			transform: translateX(calc(100% - 36px));
+			background: #333;
+			border: 1px solid #777;
+			box-shadow: -3px 2px 12px #000;
+			opacity: 0.94;
+			transition: transform 0.2s ease, opacity 0.2s ease;
+		}
+		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:hover,
+		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel:focus-within {
+			transform: translateX(0);
+			opacity: 1;
+		}
+		body.zenzaScreenMode_big #zenzaVideoPlayerDialog.is-open .zenzaWatchVideoInfoPanel::before {
+			content: 'コメント・情報';
+			position: absolute;
+			left: 0;
+			top: 40px;
+			width: 34px;
+			padding: 8px 5px;
+			box-sizing: border-box;
+			background: #444;
+			border-radius: 4px 0 0 4px;
+			color: #fff;
+			font-size: 12px;
+			writing-mode: vertical-rl;
+			text-orientation: upright;
+			z-index: 101;
+			cursor: pointer;
+			pointer-events: auto;
+		}
+	}
 `, { className: 'screenMode for-dialog videoInfoPanel' });
 css.addStyle(`
 	.zenzaWatchVideoInfoPanel .comment {
@@ -52603,7 +52687,7 @@ css.addStyle(`
 	}
 `, { className: 'domain slack-com', disabled: true });
 VideoInfoPanel.__tpl__ = (`
-		<div class="zenzaWatchVideoInfoPanel show initializing">
+		<div class="zenzaWatchVideoInfoPanel show initializing" tabindex="0" aria-label="動画情報・コメント一覧">
 			<div class="nowLoading">
 				<div class="kurukuru"><span class="kurukuruInner">&#x262F;</span></div>
 				<div class="loadingMessage">Loading...</div>

@@ -269,6 +269,7 @@ const {ThreadLoader} = (() => {
   // Keep enough information to reconstruct the failing phase from a copied console log,
   // but never log comment bodies, user IDs, cookies, keys, tokens or credentials.
   let commentPostDiagnosticSeq = 0;
+  let threadLogSequence = 0;
   const safeStatusCode = (value: unknown): number | undefined => {
     const status = Number(value);
     return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
@@ -304,19 +305,16 @@ const {ThreadLoader} = (() => {
   };
   const logCommentPostDiagnostic = (diagnostic: Diagnostic, phase: string, event: string, details: Record<string, unknown> = {}): void => {
     const safe = logSafe.redact({...diagnostic, phase, event, ...details});
-    // Chrome's "Copy console message" collapses object arguments to "Object".
-    // Add a flat JSON string built only from approved diagnostic fields.
+    // Do not copy opaque identifiers, error text, URL or nested payload to the console.
     const copyable: Record<string, unknown> = {};
-    for (const key of [
-      'id', 'attempt', 'videoId', 'threadId', 'language', 'phase', 'event',
-      'statusCode', 'errorCode', 'kind', 'errorName', 'reason', 'outcome',
-      'retryScheduled', 'retryAfterMs', 'delayMs', 'nextAttempt',
-      'postKeyPresent', 'challengeRequired', 'commandCount',
-      'ackType', 'hasNo', 'hasId', 'postedNo'
-    ]) {
-      if (safe[key] !== undefined) { copyable[key] = safe[key]; }
+    for (const key of ['attempt', 'statusCode', 'retryAfterMs', 'delayMs', 'nextAttempt', 'commandCount']) {
+      const value = safe[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) { copyable[key] = value; }
     }
-    window.console.log('[ZenzaWatch][CommentPost]', safe, JSON.stringify(copyable));
+    for (const key of ['retryScheduled', 'postKeyPresent', 'challengeRequired', 'hasNo', 'hasId']) {
+      if (typeof safe[key] === 'boolean') { copyable[key] = safe[key]; }
+    }
+    window.console.log('[ZenzaWatch][CommentPost]', copyable, JSON.stringify(copyable));
   };
   const summarizeCommentPostAck = (ack: unknown): Record<string, unknown> => {
     if (ack === null) { return {ackType: 'null'}; }
@@ -402,7 +400,7 @@ const {ThreadLoader} = (() => {
     async getThreadKey(videoId: string, options: LoadOptions = {}): Promise<{threadKey: string; [key: string]: unknown}> {
       let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
 
-      console.log('getThreadKey url: ', url);
+      console.log('getThreadKey request');
       try {
         const { meta, data } = await readJson(url, {
           headers: {
@@ -428,7 +426,7 @@ const {ThreadLoader} = (() => {
     async getPostKey(threadId: string | number, options: LoadOptions = {}): Promise<unknown> {
       const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
 
-      console.log('getPostKey url: ', url);
+      console.log('getPostKey request');
       const postKeyLanguage = options.language || 'ja-jp';
       try {
         // Task490: TypeScript owns post-key GET request headers and response validation.
@@ -494,7 +492,7 @@ const {ThreadLoader} = (() => {
 
       if (options.retrying) {
         const info = await this.getThreadKey(msgInfo.videoId, options);
-        console.log('threadKey (retry): ', msgInfo.videoId, logSafe.redact(info));
+        console.log('threadKey retry');
         packet.threadKey = info.threadKey;
       }
 
@@ -513,7 +511,7 @@ const {ThreadLoader} = (() => {
       }
 
       const url = new URL('/v1/threads', server);
-      console.log('load threads...', url, logSafe.redact(packet));
+      console.log('load threads request');
       try {
         const { meta, data } = await readJson(url, {
           method: 'POST',
@@ -539,12 +537,8 @@ const {ThreadLoader} = (() => {
         return validData;
       } catch (result) {
         checkAbort(options.signal);
-        // 400/INVALID_TOKEN 等が起きた時にすぐ切り分けられるよう、
-        // ネストせず1行で status / errorCode を出す（Task B-5）。
-        window.console.error(
-          `_load threads fail: videoId=${msgInfo.videoId} status=${result && (result as Failure).status} errorCode=${result && (result as Failure).errorCode}`,
-          logSafe.redact(result)
-        );
+        // Only a bounded event label is logged; the original error is rethrown unchanged.
+        window.console.error('_load threads fail');
         throw {
           result,
           message: `コメントの通信失敗`
@@ -553,10 +547,13 @@ const {ThreadLoader} = (() => {
     }
 
     async load(msgInfo: CommentMsgInfo, options: LoadOptions = {}): Promise<ThreadLoadResult> {
+      // R3: evict any prior module-local nested result before success, failure or Abort.
+      // The returned comment payload remains untouched and is never stored in debug.
+      delete debug.lastMessageServerResult;
       checkAbort(options.signal);
       const { videoId, userId } = msgInfo;
 
-      const timeKey = `loadComment videoId: ${videoId}`;
+      const timeKey = `loadComment request ${++threadLogSequence}`;
       console.time(timeKey);
 
       // 動画を素早く切り替えた直後などは、サーバー側の一時的な不整合や
@@ -608,7 +605,7 @@ const {ThreadLoader} = (() => {
             break;
           }
           const label = isRetry ? `リトライ${attempt}回目` : '1回目';
-          window.console.error(`loadComment fail (${label}): `, logSafe.redact(e));
+          window.console.error(`loadComment fail (${label})`);
 
           let delay = RETRY_DELAYS_MS[attempt];
           if (delay != null && failure && failure.retryAfterMs >= 0) {
@@ -624,7 +621,7 @@ const {ThreadLoader} = (() => {
       }
 
       if (lastError) {
-        window.console.error('loadComment fail finally: ', logSafe.redact(lastError));
+        window.console.error('loadComment fail finally');
         const failure = lastError.result || lastError;
         const status = Number(failure && failure.status);
         const code = typeof failure?.errorCode === 'string' && /^[A-Z0-9_]{1,60}$/.test(failure.errorCode) ? failure.errorCode : '';
@@ -646,16 +643,13 @@ const {ThreadLoader} = (() => {
 
       const loaded = result as ThreadsData;
       console.timeEnd(timeKey);
-      debug.lastMessageServerResult = loaded;
 
       // 選択言語が対象動画で使えず、既定言語にフォールバックして
       // 成功した場合は、以降 threadInfo や次回の再取得(reloadComment等)が
       // 実態と食い違わないよう msgInfo.language 自体を書き換える
       // （Task B-5 追加調査）。
       if (loaded.__usedLanguage && msgInfo.language && loaded.__usedLanguage !== msgInfo.language) {
-        window.console.warn(
-          `loadComment: 言語 "${msgInfo.language}" は videoId=${videoId} のスレッドで使用できないため、"${loaded.__usedLanguage}" にフォールバックしました`
-        );
+        window.console.warn('loadComment language fallback');
         PopupMessage.alert('この動画は選択中のコメント言語に対応していないため、既定の言語で表示します');
         msgInfo.language = loaded.__usedLanguage;
       }
@@ -687,7 +681,7 @@ const {ThreadLoader} = (() => {
 
       msgInfo.threadInfo = threadInfo;
 
-      console.log('threadInfo: ', logSafe.redact(threadInfo));
+      console.log('threadInfo loaded');
       return {threadInfo, body: loaded, format: 'threads'};
     }
 
@@ -941,7 +935,7 @@ const {ThreadLoader} = (() => {
       const url = `https://nvapi.nicovideo.jp/v1/comment/keys/delete?threadId=${threadId}&fork=${options.fork || 'main'}`;
 
       // Task650 (TL-LOG-001): this log was labelled getNicoruKey.
-      console.log('getDeleteKey url: ', url);
+      console.log('getDeleteKey request');
       try {
         const { meta, data } = await netUtil.fetch(url, {
           headers: {
@@ -979,7 +973,7 @@ const {ThreadLoader} = (() => {
         }],
         videoId,
       });
-      console.log('put packet: ', logSafe.redact(packet));
+      console.log('put packet request');
       try {
         await this._delete(url, packet);
         return {
@@ -999,7 +993,7 @@ const {ThreadLoader} = (() => {
     async getNicoruKey(threadId: unknown, options: LoadOptions = {}): Promise<Failure> {
       const url = `https://nvapi.nicovideo.jp/v1/comment/keys/nicoru?threadId=${threadId}`;
 
-      console.log('getNicoruKey url: ', url);
+      console.log('getNicoruKey request');
       try {
         const { meta, data } = await netUtil.fetch(url, {
           headers: {
@@ -1033,7 +1027,7 @@ const {ThreadLoader} = (() => {
         nicoruKey,
         videoId,
       });
-      console.log('post packet: ', logSafe.redact(packet));
+      console.log('post packet request');
       try {
         const { nicoruId, nicoruCount } = await this._post(url, packet) as Failure;
         return {

@@ -120,6 +120,16 @@ class ModernAdvancedSettingsModel {
         ['playbackRate','再生速度',{type:'number'}],
         ['enableSingleton','複数のプレイヤーを同時起動しない']
       ]),
+      ...group('再生・音声','しおり・ABリピート',[
+        ['resume.recordEnabled','「ここまで見た」を自動記録',{
+          description:'既定ON。一時停止・終了時などの再生位置を動画ごとに1件保存します。OFFではZenzaWatchから端末・サーバーへ自動記録しません。保存済みの位置や手動しおりは消えず、位置の編集・削除は利用できます。公式プレイヤー側の記録には影響しません。'}],
+        ['resume.clearOnComplete','最後まで再生したら「ここまで見た」を削除',{
+          description:'既定ON。動画の再生完了時に自動位置だけを消去します。手動しおりは残ります。自動記録OFF時は消去しません。'}],
+        ['bookmark.showToolbarButton','操作バーに「しおり・ABリピート」を表示',{
+          description:'既定ON。現在位置の登録、保存位置の編集、AB区間の設定を開くボタンです。OFFでも動画情報内から利用できます。'}],
+        ['abRepeat.enabled','ABリピートを利用',{
+          description:'既定ON。A（開始）からB（終了）の区間を繰り返します。区間は動画を切り替えると解除されます。OFFにすると実行中の区間リピートも停止します。'}]
+      ]),
       ...group('再生・音声','音量',[
         ['volume','動画の音量',slider(0,1)],
         ['mute','動画をミュート']
@@ -447,7 +457,7 @@ class ModernAdvancedSettingsModel {
   static subcategoryPriority(category: string,subcategory: string): number {
     // The left-hand navigation must not move when legacy DOM order changes.
     const order: Record<string,string[]>={
-      '再生・音声':['再生動作','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
+      '再生・音声':['再生動作','しおり・ABリピート','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
       '画面・映像':['表示モード','小画面モード','全画面モード','動画ヘッダー','PiP（小窓再生）','プレイヤーの操作表示','シーンサーチ','表示・非表示','通知・ポップアップ','画面フィルター','スクリーンショット'],
       'コメント表示':['表示・配置','コメント一覧','文字・装飾','追加取得'],
       'NG・表示対象':['NG条件','コメント種別','動画の除外'],
@@ -467,6 +477,7 @@ class ModernAdvancedSettingsModel {
     if (/^KEY_/.test(key) || /^PARAM_CUSTOM_SEEK_/.test(key)) {
       return ['ショートカット',action && action.category || 'シーク'];
     }
+    if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) { return ['再生・音声','しおり・ABリピート']; }
     if (/^supporterCredit\./.test(key)) { return ['再生・音声','提供画面']; }
     if (/^audio\./.test(key) || /^(volume|mute|speakLark)/.test(key)) {
       return ['再生・音声','音量'];
@@ -831,7 +842,16 @@ class ModernAdvancedSettingsModel {
     if(changes.length && this.config.readonly) {
       throw new Error('このページでは設定を保存できません（読み取り専用）');
     }
-    const attempted=[];
+    const storage=this.config.storage;
+    const snapshots=new Map<string,{storageKey:string;raw:string|undefined}>();
+    if(storage && typeof this.config.getStorageKey==='function'){
+      for(const {id} of changes){
+        const native=this.config.getNativeKey?.(id) ?? id;
+        const storageKey=this.config.getStorageKey(native);
+        snapshots.set(id,{storageKey,raw:storage[storageKey]});
+      }
+    }
+    const attempted:string[]=[];
     try {
       for(const {id,value} of changes) {
         attempted.push(id);
@@ -851,9 +871,25 @@ class ModernAdvancedSettingsModel {
         }
       }
     } catch(error) {
+      const rollbackErrors:unknown[]=[];
       for(const id of attempted.reverse()) {
         try { this.config.setValue(id,ModernAdvancedSettingsModel._clone(this.saved[id])); }
-        catch(_) { /* original error remains authoritative */ }
+        catch(restoreError) { rollbackErrors.push(restoreError); }
+        // Restore the exact raw value, including absence and legacy fallbacks.
+        const snapshot=snapshots.get(id);
+        if(storage && snapshot){
+          try{
+            if(snapshot.raw===undefined){delete storage[snapshot.storageKey];}
+            else{storage[snapshot.storageKey]=snapshot.raw;}
+            if(storage[snapshot.storageKey]!==snapshot.raw){throw new Error('設定の保存状態を復元できません: '+id);}
+          }catch(restoreError){rollbackErrors.push(restoreError);}
+        }
+        if(!ModernAdvancedSettingsModel._same(this._liveValue(id),this.saved[id])){
+          rollbackErrors.push(new Error('設定値を復元できません: '+id));
+        }
+      }
+      if(rollbackErrors.length){
+        throw new AggregateError([error,...rollbackErrors],'設定保存と復元に失敗しました',{cause:error});
       }
       throw error;
     }

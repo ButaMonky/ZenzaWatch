@@ -1,4 +1,5 @@
 import assert from 'power-assert';
+const {assertSafePostDiagnosticRecord} = require('../helpers/strictPostDiagnostic');
 const {beginSection, createContext, run} = require('../helpers/extractSource');
 const {createDialogHarness, flush} = require('../helpers/dialogHarness');
 
@@ -44,7 +45,11 @@ function connect(s, responses) {
     return response;
   };
   s.d.threadLoader = loader;
-  const entries = () => consoleCalls.filter(call => call.args[0] === '[ZenzaWatch][CommentPost]');
+  const entries = () => {
+    const found = consoleCalls.filter(call => call.args[0] === '[ZenzaWatch][CommentPost]');
+    found.forEach(call => assertSafePostDiagnosticRecord(call.args));
+    return found;
+  };
   const diagnostics = () => entries().map(call => call.args[1]);
   const copyableDiagnostics = () => entries().map(call => call.args[2]);
   return {packets, keys, waits, loader, diagnostics, copyableDiagnostics, refreshes: () => refreshes};
@@ -88,17 +93,24 @@ describe('ZW-023/024 posting contract', function() {
     const net = connect(s, [token('EXPIRED_TOKEN'), {no: 41, id: 'new-id'}]);
     await s.d.addChat('diagnostic-fixture-body', 'red', 123);
     const diagnostics = net.diagnostics();
-    const ids = [...new Set(diagnostics.map(d => d && d.id).filter(Boolean))];
-    assert.strictEqual(ids.length, 1);
-    const firstFailure = diagnostics.find(d => d.phase === 'post' && d.event === 'failure' && d.attempt === 1);
-    assert(firstFailure);
-    assert.strictEqual(firstFailure.statusCode, 403);
-    assert.strictEqual(firstFailure.errorCode, 'EXPIRED_TOKEN');
-    assert.strictEqual(firstFailure.retryScheduled, true);
-    assert(diagnostics.some(d => d.phase === 'retry-refresh' && d.event === 'success'));
-    const completed = diagnostics.find(d => d.phase === 'complete' && d.event === 'success' && d.attempt === 2);
-    assert(completed);
-    assert.strictEqual(completed.outcome, 'accepted');
+    // Attempt order and retained primitive values replace intentionally removed IDs/labels.
+    assert.deepEqual(JSON.parse(JSON.stringify(diagnostics)), [
+      {attempt:1}, {attempt:1},
+      {attempt:1,postKeyPresent:true,challengeRequired:false},
+      {attempt:1,commandCount:2},
+      {attempt:1,statusCode:403,retryScheduled:true},
+      {attempt:1}, {attempt:1}, {attempt:1,delayMs:3000,nextAttempt:2},
+      {attempt:2}, {attempt:2},
+      {attempt:2,postKeyPresent:true,challengeRequired:false},
+      {attempt:2,commandCount:2}, {attempt:2}
+    ]);
+    assert.strictEqual(net.refreshes(), 1);
+    assert.strictEqual(net.packets.length, 2);
+    assert.deepEqual(net.keys, [{id:'12',language:'en-us'},{id:'12',language:'en-us'}]);
+    assert.deepEqual(net.packets.map(p => p.body.postKey), ['key-1','key-2']);
+    assert.deepEqual(net.waits, [3000]);
+    assert.strictEqual(s.h.player.chats[0].no, 41);
+    assert.strictEqual(s.h.state.isCommentPosting, false);
     const serialized = JSON.stringify(diagnostics);
     assert(!serialized.includes('diagnostic-fixture-body'));
     assert(!serialized.includes('key-1'));
@@ -122,12 +134,12 @@ describe('ZW-023/024 posting contract', function() {
 
     const copied = net.copyableDiagnostics();
     assert(copied.length > 0 && copied.every(line => typeof line === 'string'));
-    const failed = copied.map(JSON.parse).find(d => d.phase === 'post' && d.event === 'failure');
+    const failedRecords = copied.map(JSON.parse).filter(d => d.statusCode === 400);
+    assert.strictEqual(failedRecords.length, 1);
+    const failed = failedRecords[0];
     assert(failed);
     assert.strictEqual(failed.statusCode, 400);
-    assert.strictEqual(failed.errorCode, 'INVALID_PARAMETER');
     assert.strictEqual(failed.attempt, 1);
-    assert.strictEqual(failed.outcome, 'rejected');
     assert.strictEqual(failed.retryScheduled, false);
     const transcript = copied.join(' ');
     for (const secret of ['private-comment-body', 'sensitive-command', 'key-1', 'private-server-detail']) {
@@ -140,6 +152,7 @@ describe('ZW-023/024 posting contract', function() {
     assert.strictEqual(s.h.player.chats[0].isPostFail, true);
     assert.strictEqual(!!s.h.player.chats[1].isPostFail, false);
     assert.strictEqual(s.h.cachePuts.length, 1);
+    net.diagnostics(); // Validate every record after the explicit retry too.
   });
 
   it('INVALID_TOKEN refreshes once; a second token rejection ends without a third post', async function() {
@@ -163,12 +176,14 @@ describe('ZW-023/024 posting contract', function() {
     };
     await assert.rejects(s.d.addChat('fixture', '', 0));
     assert.strictEqual(net.packets.length, 0);
-    const failure = net.diagnostics().find(d => d.phase === 'post-key' && d.event === 'failure');
-    assert(failure);
-    assert.strictEqual(failure.statusCode, 429);
-    assert.strictEqual(failure.errorCode, 'TOO_MANY_REQUESTS');
-    assert.strictEqual(failure.retryAfterMs, 7000);
-    assert.strictEqual(failure.outcome, 'not-sent');
+    const records = net.diagnostics();
+    assert.deepEqual(JSON.parse(JSON.stringify(records)), [
+      {attempt:1}, {attempt:1}, {attempt:1,statusCode:429,retryAfterMs:7000}
+    ]);
+    assert.strictEqual(net.refreshes(), 0);
+    assert.deepEqual(net.waits, []);
+    assert.strictEqual(s.h.cachePuts.length, 0);
+    assert.strictEqual(s.h.state.isCommentPosting, false);
   });
 
   it('Task215 diagnostics keep only ACK shape when acknowledgement is incomplete', async function() {
@@ -176,13 +191,18 @@ describe('ZW-023/024 posting contract', function() {
     const net = connect(s, [{id: 'only-id', serverNote: 'diagnostic-ack-value'}]);
     const failure = await s.d.addChat('fixture', '', 0).then(() => null, error => error);
     assert.strictEqual(failure.reason, 'ack-incomplete');
-    const ackFailure = net.diagnostics().find(d => d.phase === 'ack' && d.event === 'failure');
-    assert(ackFailure);
-    assert.strictEqual(ackFailure.outcome, 'unknown');
-    assert.strictEqual(ackFailure.ackType, 'object');
-    assert.strictEqual(ackFailure.hasNo, false);
-    assert(ackFailure.ackKeys.includes('id'));
-    assert(ackFailure.ackKeys.includes('serverNote'));
+    const diagnostics = net.diagnostics();
+    assert.deepEqual(JSON.parse(JSON.stringify(diagnostics)), [
+      {attempt:1}, {attempt:1},
+      {attempt:1,postKeyPresent:true,challengeRequired:false},
+      {attempt:1,commandCount:1}, {attempt:1,hasNo:false,hasId:true}
+    ]);
+    assert.strictEqual(failure.outcome, 'unknown', 'outward ambiguity is preserved');
+    assert.strictEqual(net.packets.length, 1, 'unknown acknowledgement is never reposted');
+    assert.strictEqual(net.refreshes(), 0);
+    assert.deepEqual(net.waits, []);
+    assert.strictEqual(s.h.cachePuts.length, 0);
+    assert.strictEqual(s.h.state.isCommentPosting, false);
     assert(!JSON.stringify(net.diagnostics()).includes('diagnostic-ack-value'));
   });
 

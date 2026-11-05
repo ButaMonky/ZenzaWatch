@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.scui.json",
+  "compilerOptions": {"noEmit": true, "rootDir": "."},
+  "include": ["nico-src/SceneSearchPreviewView.ts", "type-tests/scene-dom-ownership.ts"]
+}

@@ -1,8 +1,9 @@
-type SceneListView = {element:HTMLElement;dispose:()=>void};
-type SceneViewState = {shown:boolean;miniEnabled:boolean;listOpen:boolean;listAllowed?:boolean;
+import {SceneSearchDomLease} from '../../../packages/zenza/src/sceneSearch/SceneSearchDomLease';
+
+export type SceneListView = {element:HTMLElement;dispose:()=>void};
+export type SceneViewState = {shown:boolean;miniEnabled:boolean;listOpen:boolean;listAllowed?:boolean;
  opacity:number;scale:number;miniStyle:'flow'|'static';time?:number;pinned?:boolean;seekStepSeconds?:number};
-type SceneNativeSnapshot = {parent:Node|null;next:Node|null;style:string|null;className:string;hidden:HTMLElement['hidden']};
-type SceneViewOptions = {document:Document;host:HTMLElement;image?:HTMLElement|null;mini?:HTMLElement|null;
+export type SceneViewOptions = {document:Document;host:HTMLElement;image?:HTMLElement|null;mini?:HTMLElement|null;
  listView?:SceneListView|null;id?:string;onAction?:(action:string,context:unknown,event:Event)=>void};
 export class SceneSearchPreviewView {
  readonly document:Document;
@@ -16,13 +17,17 @@ export class SceneSearchPreviewView {
  private imageBox:HTMLElement|null=null;
  private listSlot:HTMLElement|null=null;
  private style:HTMLStyleElement|null=null;
- private snapshots=new Map<HTMLElement,SceneNativeSnapshot>();
+ private leases=new Set<SceneSearchDomLease>();
+ private imageLease:SceneSearchDomLease|null=null;
+ private ownedLists=new Set<SceneListView>();
+ private listLeases=new Map<SceneListView,SceneSearchDomLease>();
  private disposed=false;
  private state:SceneViewState|null=null;
  private onAction:(action:string,context:unknown,event:Event)=>void;
  private click:(event:Event)=>void;
  constructor({document,host,image=null,mini=null,listView=null,id='follow',onAction}:SceneViewOptions){
   this.document=document;this.host=host;this.image=image;this.mini=mini;this.listView=listView;this.id=id;
+  if(listView)this.ownedLists.add(listView);
   this.onAction=onAction||(()=>{});
   this.click=event=>{
    const button=(event.target as Element|null)?.closest<HTMLButtonElement>('button[data-scui-action]');
@@ -31,27 +36,31 @@ export class SceneSearchPreviewView {
    this.onAction(action,{layoutId:this.id},event);event.stopPropagation();
   };
  }
- private remember(node:HTMLElement):void{
-  if(this.snapshots.has(node))return;
-  this.snapshots.set(node,{parent:node.parentNode,next:node.nextSibling,
-   style:node.getAttribute('style'),className:node.className,hidden:node.hidden});
+ private releaseLease(lease:SceneSearchDomLease):void{
+  try{lease.restore();}finally{if(lease.released)this.leases.delete(lease);}
  }
- private typography(node:HTMLElement):void{
-  const computed=this.document.defaultView?.getComputedStyle(node);
-  for(const key of ['font-family','font-size','line-height','font-weight','letter-spacing','word-spacing']){
-   const value=computed?.getPropertyValue(key);if(value)node.style.setProperty(key,value);
-  }
+ private attempt(action:()=>void,errors:unknown[]):void{
+  try{action();}catch(error){errors.push(error);}
  }
- private restore(node:HTMLElement):void{
-  const old=this.snapshots.get(node);if(!old)return;
-  if(old.parent){old.parent.insertBefore(node,old.next?.parentNode===old.parent?old.next:null);}
-  else node.remove();
-  if(old.style===null)node.removeAttribute('style');else node.setAttribute('style',old.style);
-  node.className=old.className;node.hidden=old.hidden;this.snapshots.delete(node);
+ private throwErrors(errors:unknown[],message:string):void{
+  if(errors.length===1)throw errors[0];
+  if(errors.length>1)throw new AggregateError(errors,message);
+ }
+ private releaseList(handle:SceneListView):void{
+  const errors:unknown[]=[],lease=this.listLeases.get(handle);
+  if(lease)this.attempt(()=>{
+   this.releaseLease(lease);this.listLeases.delete(handle);
+  },errors);
+  if(this.ownedLists.has(handle))this.attempt(()=>{
+   handle.dispose();this.ownedLists.delete(handle);
+  },errors);
+  this.throwErrors(errors,'Could not fully dispose the scene comment list');
  }
  mount():void{
   if(this.disposed||this.root)return;
+  try{
   const d=this.document,root=d.createElement('section');
+  this.root=root;
   root.className='zenzaSceneSearchHost zenzaSceneSharedPreview';
   root.dataset['layout']=this.id;root.setAttribute('role','group');root.setAttribute('aria-label','シーンサーチ');
   root.hidden=true;
@@ -83,32 +92,66 @@ export class SceneSearchPreviewView {
   this.listSlot.hidden=true;media.append(left,this.listSlot);root.append(media);
   this.style=d.createElement('style');this.style.textContent=SceneSearchPreviewView.CSS;
   this.style.dataset['scuiSharedStyle']='';d.head.append(this.style);
-  this.host.append(root);this.root=root;
+  this.host.append(root);
   root.addEventListener('click',this.click);
   const image=this.image;this.image=null;this.setImage(image);
   if(this.mini){
-   this.remember(this.mini);this.typography(this.mini);this.logical.append(this.mini);
+   const lease=new SceneSearchDomLease(this.mini,{position:true,
+    styles:SceneSearchDomLease.typography,classes:['zenzaSceneNativeMini'],hidden:true});
+   this.leases.add(lease);
+   SceneSearchDomLease.preserveTypography(this.mini);lease.moveTo(this.logical);
    this.mini.classList.add('zenzaSceneNativeMini');
   }
   const list=this.listView;this.listView=null;this.setListView(list);
   this.fit({imageScale:1,listWidth:280,listMaxHeight:240});
+  }catch(error){
+   const errors:unknown[]=[error];this.attempt(()=>this.dispose(),errors);
+   this.throwErrors(errors,'Scene preview mount and rollback both failed');
+  }
  }
  setImage(image:HTMLElement|null):void{
   if(this.disposed)return;
   if(this.image===image){if(this.state)this.render(this.state);return;}
-  if(this.image)this.restore(this.image);
-  this.image=image;
-  if(image&&this.logical){this.remember(image);this.logical.prepend(image);}
+  const logical=this.logical;
+  if(!logical){this.image=image;return;}
+  const previousLease=this.imageLease,previousNext=this.image?.nextSibling||null;
+  const lease=image?new SceneSearchDomLease(image,{position:true}):null;
+  if(lease)this.leases.add(lease);
+  try{
+   // Keep the current canvas in place until its replacement is safely attached.
+   lease?.moveTo(logical,logical.firstChild);
+   if(previousLease)this.releaseLease(previousLease);
+  }catch(error){
+   const errors:unknown[]=[error];
+   if(lease)this.attempt(()=>this.releaseLease(lease),errors);
+   if(previousLease&&!previousLease.released)this.attempt(()=>{
+    previousLease.moveTo(logical,previousNext?.parentNode===logical?previousNext:null);
+   },errors);
+   this.throwErrors(errors,'Scene preview image replacement and rollback both failed');
+  }
+  this.image=image;this.imageLease=lease;
   if(this.state)this.render(this.state);
  }
  setListView(handle:SceneListView|null):void{
   if(this.disposed||this.listView===handle)return;
-  if(this.listView){this.listView.dispose();}
+  const previous=this.listView;this.listView=null;
+  if(previous)this.releaseList(previous);
   this.listView=handle;
+  if(handle)this.ownedLists.add(handle);
   if(handle&&this.listSlot){
-   this.typography(handle.element);this.listSlot.append(handle.element);
-   handle.element.classList.add('zenzaSceneNativeList');
-   handle.element.tabIndex=0;handle.element.setAttribute('aria-label','シーンのコメント一覧');
+   try{
+    const lease=new SceneSearchDomLease(handle.element,{
+     styles:[...SceneSearchDomLease.typography,'--scene-list-alpha','opacity','height'],
+     classes:['zenzaSceneNativeList'],attributes:['tabindex','aria-label'],hidden:true});
+    this.leases.add(lease);this.listLeases.set(handle,lease);
+    SceneSearchDomLease.preserveTypography(handle.element);this.listSlot.append(handle.element);
+    handle.element.classList.add('zenzaSceneNativeList');
+    handle.element.tabIndex=0;handle.element.setAttribute('aria-label','シーンのコメント一覧');
+   }catch(error){
+    this.listView=null;
+    const errors:unknown[]=[error];this.attempt(()=>this.releaseList(handle),errors);
+    this.throwErrors(errors,'Scene comment list attachment and rollback both failed');
+   }
   }
   if(this.state)this.render(this.state);
  }
@@ -170,12 +213,27 @@ export class SceneSearchPreviewView {
    .filter(rect=>rect.width>0&&rect.height>0);
  }
  dispose():void{
-  if(this.disposed)return;this.disposed=true;
-  this.listView?.dispose();this.listView=null;
-  for(const node of [...this.snapshots.keys()].reverse())this.restore(node);
-  this.root?.removeEventListener('click',this.click);
-  this.root?.remove();this.style?.remove();this.root=null;this.style=null;this.state=null;
+  this.disposed=true;
+  const errors:unknown[]=[];
+  // Each successfully released resource is forgotten immediately; failures remain
+  // owned so a later dispose call can retry without repeating successful cleanup.
+  for(const handle of [...this.ownedLists])this.attempt(()=>{
+   handle.dispose();this.ownedLists.delete(handle);
+  },errors);
+  for(const lease of [...this.leases].reverse())this.attempt(()=>this.releaseLease(lease),errors);
+  for(const [handle,lease] of this.listLeases)if(lease.released)this.listLeases.delete(handle);
+  const root=this.root;
+  if(root){
+   const before=errors.length;
+   this.attempt(()=>root.removeEventListener('click',this.click),errors);
+   this.attempt(()=>root.remove(),errors);
+   if(errors.length===before)this.root=null;
+  }
+  const style=this.style;
+  if(style)this.attempt(()=>{style.remove();this.style=null;},errors);
+  this.state=null;this.listView=null;this.imageLease=null;
   this.logical=null;this.imageBox=null;this.listSlot=null;this.image=null;this.mini=null;
+  this.throwErrors(errors,'Could not fully dispose the scene preview');
  }
  static get CSS():string{return `
 .zenzaSceneSharedPreview{position:absolute;box-sizing:border-box;z-index:150;left:0;top:0;bottom:auto;transform:none;width:max-content;max-width:calc(100vw - 16px);padding:4px;border:1px solid #586879;border-radius:6px;background:transparent;color:#eee;font:12px/1.35 system-ui,sans-serif;pointer-events:none;overflow:auto}

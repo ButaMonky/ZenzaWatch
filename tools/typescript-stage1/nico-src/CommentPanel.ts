@@ -2031,20 +2031,21 @@ class TimeMachineView extends BaseViewComponent {
     this._elm.time.textContent = this._currentTime = this._toDate(this._currentTimestamp);
   }
 
-  openSelect() {
-    const input = this._elm.input;
+  openSelect():void {
+    const input = this._elm.input as HTMLInputElement;
     const now = this._toTDate(Date.now());
     input.setAttribute('max', now);
     input.setAttribute('value', this._toTDate(this._currentTimestamp));
+    input.value = this._toTDate(this._currentTimestamp);
     if (Number.isFinite(this._videoPostTime)) { input.setAttribute('min', this._toTDate(this._videoPostTime)); }
     else { input.removeAttribute('min'); }
     this.setState({isSelecting: true});
     window.setTimeout(() => {
-      input.focus();
+      if (this._state.isSelecting && this._elm.input === input) { input.focus(); }
     }, 0);
   }
 
-  closeSelect() {
+  closeSelect():void {
     this.setState({isSelecting: false});
   }
 
@@ -2093,9 +2094,9 @@ class TimeMachineView extends BaseViewComponent {
     return `${yyyy}-${mm}-${dd}T${h}:${m}:${s}`;
   }
 
-  _onSubmit() {
-    const val = this._elm.input.value;
-    if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
+  _onSubmit():void {
+    const val = (this._elm.input as HTMLInputElement).value;
+    if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(:\d\d(?:\.\d{1,3})?)?$/.test(val)) {
       return;
     }
     const time = new Date(val).getTime();
@@ -2105,7 +2106,7 @@ class TimeMachineView extends BaseViewComponent {
     this.closeSelect();
   }
 
-  _onCancel() {
+  _onCancel():void {
     this.closeSelect();
   }
 

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "source": "tools/typescript-stage1/p12-src/AutoResumeClearCoordinator.ts",
+  "runtime": "packages/zenza/src/resume/AutoResumeClearCoordinator.js",
+  "sourceSha256": "d74cb61225c60d6c1e3308f071ff685340346df58a5b3c1499dc0d54c04e76e8",
+  "runtimeSha256": "7eea15a82b44caef9f0b27e28fd8822b07b3ebe7b57d79ade3cc47f97c6e0a70"
+}

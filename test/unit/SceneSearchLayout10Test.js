@@ -75,6 +75,19 @@ describe('SCUI-17 smart position avoiding comment preview without polling',()=>{
      assert.strictEqual(h.card.geometry().cursorX,870);
    }finally{h.dispose();}
  });
+ it('reserves the native 24px flyout action row in short sideView frames',()=>{
+  // Shared Card positions pin/comment/search/seek-step above its root:
+  // .zenzaSceneBtn.scene-* { position:absolute; bottom:100%; height:24px }
+  // A 400x225 side player may otherwise have a valid card box but an
+  // unclickable button beyond the top of the actual screen.
+  const sceneHeight=127.1875,frameHeight=225,flyout=24,safeTop=7;
+  const result=Smart.choose({width:400,height:frameHeight,
+    sceneWidth:180,sceneHeight,cursorX:200,obstacles:[],baseBottom:78});
+  assert(result,'sideView must find a valid slot for a 127px card');
+  assert(frameHeight-result.bottom-sceneHeight-flyout>=safeTop-.01,
+    'UI10 floating button escapes the sideView viewport');
+  assert(result.bottom>=20,'do not cover the 20px native seek hit area');
+ });
  it('ignores invalid geometry and does not invent a position',()=>{
    assert.strictEqual(Smart.choose({width:0,height:200,sceneWidth:180,sceneHeight:100}),null);
    assert.strictEqual(Smart.choose({width:NaN,height:200,sceneWidth:180,sceneHeight:100}),null);

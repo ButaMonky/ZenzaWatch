@@ -86,11 +86,11 @@ describe('Worker の要求と応答（R03）', function() {
         setTimeout(() => ch.port1.postMessage({body: {command: 'commandResult', params: {command: body.command, result: 'extra-reply'}}, sessionId, status: 'ok'}), 30);
       });
       ch.port1.start();
-      w.addPort(ch.port2, {name: 'Extra'}).catch(() => {});
-      await sleep(80);
-      const r = track(w.post({command: 'askBoth', params: {}}, {timeout: 1000}));
-      await sleep(250);
-      ch.port1.close();
+      // Wait for the actual addPort ACK. Fixed sleeps race with a busy event loop.
+      await w.addPort(ch.port2, {name: 'Extra'});
+      const reply = w.post({command: 'askBoth', params: {}}, {timeout: 1000});
+      const r = track(reply);
+      try { await reply; } finally { ch.port1.close(); }
       assert.equal(r.state, 'resolved', String(r.value && r.value.message));
       assert.deepEqual(r.value, {first: 'pong', extra: 'extra-reply'});
     });

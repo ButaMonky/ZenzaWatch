@@ -47,12 +47,10 @@ export class SceneSearchPlacement {
   };
   const result=(rect:SceneRect):PlacementResult=>({rect,imageScale,listWidth,listMaxHeight,footerHeight:footer,
    overlapsVideo:this.overlap(rect,player)>0});
-  // Task934: fullscreen right/center/left controls can cover the preview.
-  // Previous follow/fixed branches returned before checking obstacles at all.
-  // Keep normal/small positioning unchanged and preserve the original geometry
-  // when there is no physical collision, including while pinned or held.
-  const clearFullscreenIcons=(preferred:SceneRect):SceneRect=>{
-   if(input.context!=='fullscreen')return preferred;
+  // Interactive popups can cover the panel in every screen mode. Preserve
+  // the original position when no actual collision exists (including hold).
+  // The fullscreen glyphs are also supplied as measured obstacles (Task934).
+  const avoidInteractiveObstacles=(preferred:SceneRect):SceneRect=>{
    const blockers=(input.obstacles||[]).filter(r=>r.width>0&&r.height>0);
    if(!blockers.some(r=>this.overlap(preferred,r)>0))return preferred;
    // Bounded O(obstacles²) scoring; do not make a Cartesian grid of all
@@ -99,15 +97,15 @@ export class SceneSearchPlacement {
   };
   if(input.hold&&previous){
    const held=make(previous.rect.left,previous.rect.top);
-   return result(clearFullscreenIcons(held));
+   return result(avoidInteractiveObstacles(held));
   }
   const above=stableTop-clearance-height;
-  if(input.layout==='follow')return result(clearFullscreenIcons(make(input.anchorX-width/2,above)));
+  if(input.layout==='follow')return result(avoidInteractiveObstacles(make(input.anchorX-width/2,above)));
   if(input.context==='normal'){
    const below=Math.max(player.top+player.height,seekbar.top+seekbar.height)+gap;
-   return result(make(player.left,below+height<=v.top+v.height-gap?below:above));
+   return result(avoidInteractiveObstacles(make(player.left,below+height<=v.top+v.height-gap?below:above)));
   }
-  if(input.context==='fullscreen')return result(clearFullscreenIcons(make(player.left+gap,above)));
+  if(input.context==='fullscreen')return result(avoidInteractiveObstacles(make(player.left+gap,above)));
   const hard=[seekbar,...input.obstacles].filter(r=>r.width>0&&r.height>0);
   const safe=(r:SceneRect)=>hard.every(o=>this.overlap(r,o)===0)&&this.overlap(r,player)===0;
   if(previous){

@@ -1,5 +1,4 @@
-// SCUI-18: dependency-complete ten-layout bootstrap.
-// Safe to import: no DOM access, player hooks or network work until create().
+// GENERATED FROM tools/typescript-stage1/nico-src/SceneSearchLayoutBootstrap.ts
 import {SceneSearchPreviewView} from './SceneSearchPreviewView';
 import {SceneSearchLayoutCard} from './SceneSearchLayoutCard';
 import {SceneSearchLayout00} from './SceneSearchLayout00';
@@ -23,32 +22,33 @@ import {SceneSearchLayout10} from './layouts/SceneSearchLayout10';
 //@require SceneSearchLayout07
 //@require SceneSearchLayouts08_09
 //@require SceneSearchLayout10
-function createSceneSearchLayoutRegistry({clock}={}) {
-  const registry=new SceneSearchLayoutRegistry();
-  const coverage=SceneSearchLayoutCatalog.install(registry,{
-    Card:SceneSearchLayoutCard,
-    Legacy:SceneSearchLayout00,
-    registerClassic:registerSceneLayouts01_02,
-    SideShelf:SceneSearchLayouts03_04,
-    PlaybackDeck:SceneSearchLayouts05_06,
-    Filmstrip:SceneSearchLayout07,
-    Drawer:SceneSearchLayouts08_09,
-    SmartAvoid:SceneSearchLayout10,
-    clock
-  });
-  if(!coverage.complete||registry.list().length!==11){
-    throw new Error('Scene layout bootstrap must include all ten providers');
-  }
-  if(typeof SceneSearchPreviewView!=='undefined'){
-    for(const id of ['follow','fixed']){
-      registry.register({id,label:id==='follow'?'シーク位置に追従':'位置を固定',
-        factory:({document,container,onAction,settings})=>new SceneSearchPreviewView({
-          document,host:container,id,onAction,image:settings.getThumbnail?.(),
-          mini:settings.getLegacyComment?.()})});
+function createSceneSearchLayoutRegistry({ clock } = {}) {
+    const registry = new SceneSearchLayoutRegistry();
+    const coverage = SceneSearchLayoutCatalog.install(registry, {
+        Card: SceneSearchLayoutCard,
+        Legacy: SceneSearchLayout00,
+        registerClassic: registerSceneLayouts01_02,
+        SideShelf: SceneSearchLayouts03_04,
+        PlaybackDeck: SceneSearchLayouts05_06,
+        Filmstrip: SceneSearchLayout07,
+        Drawer: SceneSearchLayouts08_09,
+        SmartAvoid: SceneSearchLayout10,
+        clock
+    });
+    if (!coverage.complete || registry.list().length !== 11) {
+        throw new Error('Scene layout bootstrap must include all ten providers');
     }
-    registry.register({id:'legacy',label:'従来表示',factory:options=>new SceneSearchLayout00(options)});
-  }
-  return registry;
+    if (typeof SceneSearchPreviewView !== 'undefined') {
+        for (const id of ['follow', 'fixed']) {
+            registry.register({ id, label: id === 'follow' ? 'シーク位置に追従' : '位置を固定',
+                factory: ({ document, container, onAction, settings }) => new SceneSearchPreviewView({
+                    document, host: container, id, onAction, image: settings.getThumbnail?.(),
+                    mini: settings.getLegacyComment?.()
+                }) });
+        }
+        registry.register({ id: 'legacy', label: '従来表示', factory: (options) => new SceneSearchLayout00(options) });
+    }
+    return registry;
 }
 //===END===
 export {createSceneSearchLayoutRegistry};

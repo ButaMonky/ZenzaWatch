@@ -10,8 +10,9 @@ const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 
 const {REPO_ROOT} = require('./buildSandbox');
+const {sceneSearchOwnershipPrelude} = require('./sceneSearchOwnershipDependencies');
 
-const read = rel => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf-8');
+const read = rel => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf-8').replace(/\r\n/g,'\n');
 
 function beginSection(rel) {
   const text = read(rel);
@@ -27,7 +28,7 @@ function beginSection(rel) {
   if (rel === 'packages/lib/src/nico/VideoInfoLoader.js') {
     return beginSection('packages/lib/src/nico/CommentPostTarget.js') + '\n' + body;
   }
-  return body;
+  return sceneSearchOwnershipPrelude(rel, read) + body;
 }
 
 // Index source offsets once per file content. Do not retain Babel nodes or scopes.
@@ -79,12 +80,42 @@ function createContext(extra = {}) {
   return vm.createContext(c);
 }
 
+// UI fixture boot creates many isolated VM contexts from identical source.
+// Compile immutable scripts once (bounded LRU), NEVER cache their contexts,
+// exports, live DOM or any result of running the script. Parsing repeated
+// classes under a 2000ms Mocha deadline caused intermittent setup stalls.
+const scriptCache = new Map();
+const SCRIPT_CACHE_LIMIT = 64;
 function run(code, context) {
-  return new vm.Script(code).runInContext(context, {timeout: 5000});
+  if (typeof code !== 'string') {
+    return new vm.Script(code).runInContext(context, {timeout: 5000});
+  }
+  let script = scriptCache.get(code);
+  if (script) {
+    scriptCache.delete(code);
+  } else {
+    script = new vm.Script(code);
+  }
+  scriptCache.set(code, script);
+  if (scriptCache.size > SCRIPT_CACHE_LIMIT) {
+    scriptCache.delete(scriptCache.keys().next().value);
+  }
+  return script.runInContext(context, {timeout: 5000});
 }
 
 function loadClass(rel, name, context) {
-  run(`${extract(rel, name, 'class')};\nglobalThis.__subject = ${name};`, context);
+  // Class extraction skips the runtime dependency directives. Load the
+  // production geometry module for the existing seekbar/legacy consumers.
+  if (!context.TimelineGeometry &&
+      ((rel === 'src/VideoControlBar.js' && ['VideoControlBar', 'SmoothSeekBarPointer'].includes(name)) ||
+       rel === 'packages/zenza/src/sceneSearch/SceneSearchLegacyAdapter.js')) {
+    context.TimelineGeometry = loadClass('packages/zenza/src/sceneSearch/TimelineGeometry.js',
+      'TimelineGeometry', context);
+  }
+  // Inject production DOM ownership dependencies for isolated class probes.
+  // This and the TimelineGeometry resolution above are both required.
+  run(sceneSearchOwnershipPrelude(rel, read) +
+    `${extract(rel, name, 'class')};\nglobalThis.__subject = ${name};`, context);
   return context.__subject;
 }
 

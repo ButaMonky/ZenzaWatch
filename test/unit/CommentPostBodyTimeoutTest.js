@@ -7,6 +7,9 @@ const {beginSection, run} = require('../helpers/extractSource');
 const {createDialogHarness, flush, deferred} = require('../helpers/dialogHarness');
 
 const ok = data => ({status: 200, ok: true, json: async () => ({meta: {status: 200}, data})});
+
+const {assertSafePostDiagnosticRecord} = require('../helpers/strictPostDiagnostic');
+
 function posting(fetcher) {
   const h = createDialogHarness(), alerts = [];
   const c = h.context;
@@ -81,8 +84,10 @@ describe('Task185 comment post response-body deadline (Watch V4 audit F11)', () 
   });
 
   it('Task215 keeps HTTP status in diagnostics when the POST body is not JSON', async () => {
+    let posts = 0;
     const {h} = posting(async (url, options) => {
       if (options && options.method === 'POST') {
+        posts++;
         return {status: 502, ok: false, json: async () => { throw new SyntaxError('invalid json'); }};
       }
       return ok({postKey: 'fixture'});
@@ -91,13 +96,14 @@ describe('Task185 comment post response-body deadline (Watch V4 audit F11)', () 
     h.context.console.log = (...args) => consoleCalls.push(args);
     const e = await h.dialog.addChat('fixture', '', 0).then(() => null, x => x);
     assert.strictEqual(e.reason, 'network', 'outward behavior stays unchanged');
-    const entry = consoleCalls.find(args =>
-      args[0] === '[ZenzaWatch][CommentPost]' &&
-      args[1] && args[1].phase === 'post' && args[1].event === 'failure');
-    assert(entry, 'structured post failure is logged');
-    assert.strictEqual(entry[1].statusCode, 502);
-    assert.strictEqual(entry[1].errorName, 'SyntaxError');
-    assert.strictEqual(entry[1].outcome, 'unknown');
+    const diagnostics = consoleCalls.filter(args => args[0] === '[ZenzaWatch][CommentPost]');
+    assert(diagnostics.length > 0, 'structured diagnostic records exist');
+    diagnostics.forEach(assertSafePostDiagnosticRecord);
+    const failures = diagnostics.filter(args => args[1].statusCode === 502);
+    assert.strictEqual(failures.length, 1, 'one retained HTTP failure record');
+    assert.strictEqual(failures[0][1].statusCode, 502);
+    assert.strictEqual(posts, 1, 'unknown acceptance must not trigger a duplicate POST');
+    assert.strictEqual(h.state.isCommentPosting, false, 'posting state is released');
   });
 
   it('a network failure is classified and not re-posted', async () => {
@@ -122,5 +128,35 @@ describe('Task185 comment post response-body deadline (Watch V4 audit F11)', () 
     assert.strictEqual(posts, 1);
     assert.strictEqual(h.cachePuts.length, 1);
     assert.strictEqual(h.timers.pending(), 0, 'no deadline timer left behind');
+  });
+});
+
+
+describe('R5 strict diagnostic object and JSON parity', () => {
+  const record = payload => ['[ZenzaWatch][CommentPost]', payload, JSON.stringify(payload)];
+  it('accepts only retained primitive diagnostics and exact JSON', () => {
+    assertSafePostDiagnosticRecord(record({attempt:1,statusCode:502,hasNo:false}));
+    assertSafePostDiagnosticRecord(record({attempt:2,retryAfterMs:0,delayMs:1,nextAttempt:3,
+      commandCount:2,retryScheduled:true,postKeyPresent:true,challengeRequired:false,hasId:false}));
+  });
+  it('rejects opaque or arbitrary fields instead of hiding them from the test', () => {
+    for (const key of ['phase','event','errorName','outcome','videoId','threadId','postKey','body','unknown']) {
+      assert.throws(() => assertSafePostDiagnosticRecord(record({attempt:1,[key]:'synthetic-private'})),
+        undefined, 'unexpected field must fail: '+key);
+    }
+    for (const payload of [{attempt:NaN},{attempt:Infinity},{attempt:-1},
+      {attempt:'1'},{statusCode:99},{statusCode:600},{statusCode:502.5},
+      {hasNo:'false'},{hasNo:0},{attempt:{nested:1}},[]]) {
+      assert.throws(() => assertSafePostDiagnosticRecord(record(payload)));
+    }
+  });
+  it('rejects extra arguments, wrong prefix and missing or inconsistent JSON', () => {
+    for (const args of [record({attempt:1}).concat('extra'),
+      ['other',{attempt:1},'{"attempt":1}'], ['[ZenzaWatch][CommentPost]',{attempt:1}],
+      ['[ZenzaWatch][CommentPost]',{attempt:1},'{"attempt":2}'],
+      ['[ZenzaWatch][CommentPost]',{attempt:1},'{bad'],
+      ['[ZenzaWatch][CommentPost]',{attempt:1},{attempt:1}]]) {
+      assert.throws(() => assertSafePostDiagnosticRecord(args));
+    }
   });
 });

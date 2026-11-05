@@ -16,10 +16,14 @@ import {WindowResizeObserver} from '../packages/lib/src/infra/Observable';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
 import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated/ZenzaCommentHistoryCore.generated.js';
 import {UiVisibilityRegistry} from './UiVisibilityRegistry';
+import {TimelineGeometry} from '../packages/zenza/src/sceneSearch/TimelineGeometry';
+import {SceneResumeMarkerPresenter} from '../packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter';
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoControlBar.ts (Task964). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
 //@require ZenzaCommentHistoryCore
 //@require UiVisibilityRegistry
+//@require TimelineGeometry
+//@require SceneResumeMarkerPresenter
 const historyTriggerKeyGuard = (event) => {
     if (['Enter', ' ', 'Spacebar'].includes(event.key)) {
         event.stopPropagation();
@@ -79,11 +83,23 @@ class VideoControlBar extends Emitter {
         });
         Object.assign(this, mq.e, { _currentTime: 0 });
         Object.assign(this, mq.$);
+        // Native marker nodes remain owned by the bar. Delete is deliberately a
+        // separate explicit action; ordinary marker clicks still seek as before.
+        this._view.addEventListener('contextmenu', this._onResumeMarkerDelete.bind(this), true);
+        this._view.addEventListener('keydown', this._onResumeMarkerDelete.bind(this), true);
         // Task 077c: 画面フィルターのボタン。フィルターが効いている間は光らせる
         const historyButton = $view.find('.commentHistorySwitch')[0];
         if (historyButton) {
             historyButton.addEventListener('keydown', historyTriggerKeyGuard);
             historyButton.addEventListener('keyup', historyTriggerKeyGuard);
+        }
+        const pointsButton = $view.find('.playbackPointsSwitch')[0];
+        if (pointsButton) {
+            pointsButton.addEventListener('keydown', historyTriggerKeyGuard);
+            pointsButton.addEventListener('keyup', historyTriggerKeyGuard);
+            const visibility = () => { pointsButton.hidden = this._playerConfig.getValue('bookmark.showToolbarButton') === false; };
+            visibility();
+            this._playerConfig.onkey?.('bookmark.showToolbarButton', visibility);
         }
         const notificationButton = $view.find('.notificationHistorySwitch')[0];
         if (notificationButton) {
@@ -101,6 +117,7 @@ class VideoControlBar extends Emitter {
             .on('change', (e) => e.target.blur());
         this._pointer = new SmoothSeekBarPointer({
             pointer: this._seekBarPointer,
+            getTimelineGeometry: () => this._getTimelineGeometry(),
             playerState: this._playerState
         });
         const timeStyle = {
@@ -315,15 +332,30 @@ class VideoControlBar extends Emitter {
         }
         e.stopPropagation();
     }
-    _posToTime(pos) {
-        const width = global.innerWidth;
-        return this._duration * (pos / Math.max(width, 1));
+    _getTimelineGeometry() {
+        const element = this._seekBar;
+        const rect = element?.getBoundingClientRect?.();
+        if (!rect) {
+            return null;
+        }
+        return TimelineGeometry.create({
+            clientLeft: rect.left,
+            clientWidth: rect.width,
+            localWidth: element.offsetWidth
+        });
+    }
+    // These legacy helpers keep their local CSS-pixel contract, never clientX.
+    _posToTime(localX) {
+        const ratio = this._getTimelineGeometry()?.localXToRatio(localX);
+        return ratio == null ? null : TimelineGeometry.ratioToTime(ratio, this._duration);
     }
     _timeToPos(time) {
-        return global.innerWidth * (time / Math.max(this._duration, 1));
+        const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+        return ratio === null ? null : this._getTimelineGeometry()?.ratioToLocalX(ratio) ?? null;
     }
     _timeToPer(time) {
-        return (time / Math.max(this._duration, 1)) * 100;
+        const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+        return ratio === null ? 0 : ratio * 100;
     }
     _onPlayerOpen(watchId) {
         this._commentParsedHandler?.cancel?.();
@@ -395,10 +427,19 @@ class VideoControlBar extends Emitter {
         this._raf && this._raf.disable();
     }
     _onSeekRangeInput(e) {
-        const sec = e.target.value * 1;
-        const left = sec / (e.target.max * 1) * global.innerWidth;
+        // The native range value owns dragging and keyboard input; clientX is not required.
+        const duration = Number(e.target.max);
+        const sec = TimelineGeometry.clampTime(Number(e.target.value), duration);
+        if (sec === null) {
+            return;
+        }
+        const ratio = TimelineGeometry.timeToRatio(sec, duration);
+        const left = this._getTimelineGeometry()?.ratioToLocalX(ratio);
         util.dispatchCommand(e.target, 'seek', sec);
-        this._seekBarToolTip.update(this._sceneSearchPinnedTime?.() ?? sec, left);
+        if (left != null) {
+            const pinned = this._sceneSearchPinnedTime?.();
+            this._seekBarToolTip.update(Number.isFinite(pinned) ? pinned : sec, left);
+        }
         this.storyboard.setCurrentTime(sec, true);
     }
     _onSeekBarMouseDown(e) {
@@ -432,8 +473,25 @@ class VideoControlBar extends Emitter {
             e.stopPropagation();
         }
         const pinned = this._sceneSearchPinnedTime?.();
-        const left = Number.isFinite(pinned) ? this._seekBarMouseX : e.offsetX;
-        const sec = Number.isFinite(pinned) ? pinned : this._posToTime(left);
+        let left;
+        let sec;
+        if (Number.isFinite(pinned)) {
+            sec = pinned;
+            // Pinning freezes the existing local anchor as well as the preview time.
+            left = Number.isFinite(this._seekBarMouseX) ? this._seekBarMouseX : this._timeToPos(pinned);
+        }
+        else {
+            const geometry = this._getTimelineGeometry();
+            const ratio = geometry?.clientXToRatio(e.clientX);
+            if (ratio == null) {
+                return;
+            }
+            left = geometry.ratioToLocalX(ratio);
+            sec = TimelineGeometry.ratioToTime(ratio, this._duration);
+        }
+        if (left === null || sec === null) {
+            return;
+        }
         this._seekBarMouseX = left;
         this._commentPreview.currentTime = sec;
         this._commentPreview.update(left);
@@ -443,14 +501,19 @@ class VideoControlBar extends Emitter {
         if (!this.state.isWheelSeeking) {
             return;
         }
-        sec = sec * 1;
-        const dur = this._duration;
-        const left = sec / dur * window.innerWidth;
-        this._seekBarMouseX = left;
-        const previewTime = this._sceneSearchPinnedTime?.() ?? sec;
-        this._commentPreview.currentTime = previewTime;
-        this._commentPreview.update(left);
-        this._seekBarToolTip.update(previewTime, left);
+        sec = TimelineGeometry.clampTime(Number(sec), this._duration);
+        if (sec === null) {
+            return;
+        }
+        const left = this._timeToPos(sec);
+        if (left !== null) {
+            this._seekBarMouseX = left;
+            const pinned = this._sceneSearchPinnedTime?.();
+            const previewTime = Number.isFinite(pinned) ? pinned : sec;
+            this._commentPreview.currentTime = previewTime;
+            this._commentPreview.update(left);
+            this._seekBarToolTip.update(previewTime, left);
+        }
         this.storyboard.setCurrentTime(sec, true);
     }
     _beginMouseDrag() {
@@ -499,23 +562,34 @@ class VideoControlBar extends Emitter {
         // Task 070: canPlay を待たずに、動画情報が揃った時点でシークバーのサムネイルを読み始める
         this.storyboard.load(videoInfo.watchId, videoInfo);
         const [view] = this._$view;
-        const resumePoints = videoInfo.resumePoints;
-        for (let i = 0, len = this.$resumePointers.length; i < len; i++) {
-            const pointer = this.$resumePointers[i];
-            const resume = resumePoints[i];
-            if (!resume) {
-                pointer.hidden = true;
-                continue;
-            }
-            pointer.setAttribute('duration', videoInfo.duration);
-            pointer.setAttribute('time', resume.time);
-            pointer.setAttribute('text', `${resume.now} ここまで見た`);
-            if (resume.now !== '前回') {
-                cssUtil.setProps([pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'], [pointer, '--color', '#aef']);
-            }
-            else {
-                cssUtil.setProps([pointer, '--scale-pp', 1.7]);
-            }
+        // The native controls, marker nodes and seek input are still owned by this bar.
+        this.refreshAutoResumePointers(videoInfo);
+    }
+    /** An explicit user action, independent of the native marker's seek click. */
+    _onResumeMarkerDelete(event) {
+        if (event.type !== 'contextmenu' && event.type !== 'keydown')
+            return;
+        const node = event.target?.closest?.('zenza-seekbar-label.resumePointer');
+        if (!node || node.hidden)
+            return;
+        if (event.type === 'keydown' &&
+            !['Delete', 'Backspace'].includes(event.key))
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (typeof window.confirm === 'function' &&
+            window.confirm('この動画の「ここまで見た」を削除しますか？')) {
+            this.emit('command', 'deleteAutomaticResume');
+        }
+    }
+    /** Refresh markers only, without restarting storyboard or stealing seek DOM. */
+    refreshAutoResumePointers(videoInfo) {
+        if (!videoInfo)
+            return;
+        SceneResumeMarkerPresenter.render(this.$resumePointers, videoInfo.resumePoints, videoInfo.duration, (...tasks) => cssUtil.setProps(...tasks));
+        for (const pointer of this.$resumePointers || []) {
+            pointer.setAttribute('tabindex', '0');
+            pointer.setAttribute('title', '右クリックまたはDeleteキーで「ここまで見た」を削除');
         }
     }
     async _onFirstVideoInitialized(watchId) {
@@ -533,6 +607,8 @@ class VideoControlBar extends Emitter {
     }
     set currentTime(sec) {
         if (this._currentTime === sec) {
+            // Refresh paused geometry without rewriting the unchanged time label.
+            this._pointer.currentTime = sec;
             return;
         }
         this._currentTime = sec;
@@ -1379,6 +1455,9 @@ util.addStyle(`
     height: 100%;
     fill: currentColor;
   }
+  .playbackPointsSwitch[hidden]{display:none!important}
+  .playbackPointsSwitch:focus-visible{outline:2px solid #8ecbff;outline-offset:-2px}
+  .playbackPointsSwitch,
   .notificationHistorySwitch,
   .commentHistorySwitch { border: 0; padding: 0; background: transparent; }
   /* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
@@ -1785,6 +1864,11 @@ VideoControlBar.__tpl__ = (`
         <div class="scalingUI">
           <div class="ZenzaWatchVer" data-env="${ZenzaWatch.env}" title="build: ${ZenzaWatch.build || '-'}">ver ${ZenzaWatch.version}${ZenzaWatch.env === 'DEV' ? '(Dev)' : ''}</div>
           <span class="addonMenuContainer"></span>
+          <button type="button" class="playbackPointsSwitch controlButton" data-command="toggle-playbackPoints"
+            aria-label="しおり・ABリピート" aria-expanded="false">
+            <span class="controlButtonInner" aria-hidden="true">▱</span>
+            <span class="tooltip">しおり・ABリピート</span>
+          </button>
           <button type="button" class="notificationHistorySwitch controlButton" data-command="toggle-notificationHistory"
             aria-label="通知履歴" aria-expanded="false" aria-controls="zenzaNotificationHistoryDock">
             <span class="controlButtonInner" aria-hidden="true">☷</span>
@@ -2058,6 +2142,10 @@ class CommentPreviewView {
         const model = this._model = params.model;
         this._$parent = params.$container;
         this._disposed = false;
+        this._disposeComplete = false;
+        this._disposeRunning = false;
+        this._disposePending = null;
+        this._disposeFailures = [];
         this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
         this._inviewTable = new Map;
         this._chatList = [];
@@ -2114,6 +2202,9 @@ class CommentPreviewView {
         }
     }
     _onClick(e) {
+        if (this._disposed) {
+            return;
+        }
         e.stopPropagation();
         const target = e.target.closest('[data-command]');
         const view = this._view;
@@ -2181,9 +2272,15 @@ class CommentPreviewView {
         this.applyView();
     }
     _onResize() {
+        if (this._disposed) {
+            return;
+        }
         this._refreshInviewElements();
     }
     _onScroll() {
+        if (this._disposed) {
+            return;
+        }
         this._scrollTop = -1;
         this._refreshInviewElements();
     }
@@ -2288,23 +2385,63 @@ class CommentPreviewView {
     hide() {
     }
     dispose() {
-        if (this._disposed) {
+        if (this._disposeComplete || this._disposeRunning) {
             return;
         }
-        this._disposed = true;
-        for (const [event, handler] of this._subscriptions || []) {
-            this._model.off(event, handler);
-            handler.cancel?.();
+        this._disposeRunning = true;
+        try {
+            // Block late callbacks immediately, but only declare disposal complete when
+            // every independent cleanup has succeeded. Failed tasks survive for retry.
+            this._disposed = true;
+            let pending = this._disposePending;
+            if (!pending) {
+                pending = new Map();
+                const model = this._model, view = this._view;
+                for (const [index, [event, handler]] of (this._subscriptions || []).entries()) {
+                    pending.set(`model.off:${event}:${index}`, () => model.off(event, handler));
+                    pending.set(`model.cancel:${event}:${index}`, () => handler.cancel?.());
+                }
+                for (const [index, [event, handler, options]] of (this._domListeners || []).entries()) {
+                    pending.set(`dom.off:${event}:${index}`, () => view.removeEventListener(event, handler, options));
+                    pending.set(`dom.cancel:${event}:${index}`, () => handler.cancel?.());
+                }
+                pending.set('update.cancel', () => this.update.cancel?.());
+                pending.set('applyView.cancel', () => this.applyView.cancel?.());
+                pending.set('timer.clearTimeout', () => window.clearTimeout(this._updatingTimer));
+                pending.set('list.reset', () => this._onReset());
+                pending.set('dom.remove', () => view.remove());
+                this._disposePending = pending;
+            }
+            const failures = [];
+            for (const [step, cleanup] of pending) {
+                try {
+                    cleanup();
+                    pending.delete(step);
+                }
+                catch (error) {
+                    failures.push({ step, error });
+                }
+            }
+            // Keep the remaining step names and original causes inspectable after
+            // failure; do not silently treat a partially disposed view as complete.
+            this._disposeFailures = failures;
+            if (pending.size === 0) {
+                this._disposeComplete = true;
+                this._disposePending = null;
+                this._subscriptions = [];
+                this._domListeners = [];
+            }
+            if (failures.length === 1) {
+                throw failures[0].error;
+            }
+            if (failures.length > 1) {
+                throw new AggregateError(failures.map(item => item.error), 'Native comment view disposal incomplete: ' +
+                    failures.map(item => item.step).join(', '));
+            }
         }
-        for (const [event, handler, options] of this._domListeners || []) {
-            this._view.removeEventListener(event, handler, options);
-            handler.cancel?.();
+        finally {
+            this._disposeRunning = false;
         }
-        this.update.cancel?.();
-        this.applyView.cancel?.();
-        window.clearTimeout(this._updatingTimer);
-        this._onReset();
-        this._view.remove();
     }
 }
 class CommentPreviewChatItem {
@@ -2628,18 +2765,70 @@ class CommentPreview {
         view._onUpdate();
         this._view._onUpdate();
         this._view.mode = 'hover';
-        let disposed = false;
+        let disposed = false, viewDisposed = false, modeRestored = false, disposing = false;
         const handle = {
             element: view._view,
+            disposeFailures: [],
             dispose: () => {
-                if (disposed) {
+                if (disposed || disposing) {
                     return;
                 }
-                disposed = true;
-                view.dispose();
-                if (this._twinList === handle) {
-                    this._twinList = null;
-                    this._view.mode = this._mode;
+                disposing = true;
+                try {
+                    const failures = [];
+                    if (!viewDisposed) {
+                        try {
+                            view.dispose();
+                            // A reentrant call can return early while the view is still
+                            // cleaning up. Only a completed child can release its handle.
+                            if (!view._disposeComplete) {
+                                throw new Error('Native comment view disposal still in progress');
+                            }
+                            viewDisposed = true;
+                        }
+                        catch (error) {
+                            failures.push({ step: 'view.dispose', error });
+                        }
+                    }
+                    // Restore the owner's configured mode only after the child view is
+                    // fully torn down; keep the handle reachable while either step fails.
+                    // A failed handle release can leave the owner in hover mode if its
+                    // preference changed meanwhile. Reapply only when the desired mode differs.
+                    const desiredMode = this._mode === 'list' ? 'list' : 'hover';
+                    if (viewDisposed && (!modeRestored ||
+                        (this._twinList === handle && this._view._mode !== desiredMode))) {
+                        try {
+                            if (this._twinList === handle) {
+                                this._view.mode = this._mode;
+                            }
+                            modeRestored = true;
+                        }
+                        catch (error) {
+                            failures.push({ step: 'restore.mode', error });
+                        }
+                    }
+                    if (viewDisposed && modeRestored) {
+                        try {
+                            if (this._twinList === handle) {
+                                this._twinList = null;
+                            }
+                            disposed = true;
+                        }
+                        catch (error) {
+                            failures.push({ step: 'release.handle', error });
+                        }
+                    }
+                    handle.disposeFailures = failures;
+                    if (failures.length === 1) {
+                        throw failures[0].error;
+                    }
+                    if (failures.length > 1) {
+                        throw new AggregateError(failures.map(item => item.error), 'Native comment list disposal incomplete: ' +
+                            failures.map(item => item.step).join(', '));
+                    }
+                }
+                finally {
+                    disposing = false;
                 }
             }
         };
@@ -2880,6 +3069,7 @@ SeekBarToolTip.__tpl__ = (`
 class SmoothSeekBarPointer {
     constructor(params) {
         this._pointer = params.pointer;
+        this._getTimelineGeometry = params.getTimelineGeometry;
         this._currentTime = 0;
         this._duration = 1;
         this._playbackRate = 1;
@@ -2891,8 +3081,14 @@ class SmoothSeekBarPointer {
         this.refresh = throttle.raf(this.refresh.bind(this));
         this.transformLeft = 0;
         this.applyTransform = throttle.raf(() => {
-            const per = Math.min(100, this._timeToPer(this._currentTime));
-            this._pointer.style.transform = `translateX(${global.innerWidth * per / 100 - 6}px)`;
+            const ratio = TimelineGeometry.timeToRatio(this._currentTime, this._duration);
+            if (ratio === null) {
+                return;
+            }
+            const left = this._getTimelineGeometry()?.ratioToLocalX(ratio);
+            if (left != null) {
+                this._pointer.style.transform = `translateX(${left - 6}px)`;
+            }
         });
         this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
         params.playerState.onkey('isPausing', (v) => this.isPausing = v);
@@ -2935,7 +3131,8 @@ class SmoothSeekBarPointer {
         }
     }
     _timeToPer(time) {
-        return (time / Math.max(this._duration, 1)) * 100;
+        const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+        return ratio === null ? 0 : ratio * 100;
     }
     set duration(v) {
         if (this._duration === v) {
@@ -3002,12 +3199,16 @@ class SmoothSeekBarPointer {
         if (!this._isSmoothMode) {
             return;
         }
+        const right = this._getTimelineGeometry()?.ratioToLocalX(1);
+        if (right == null) {
+            return;
+        }
         if (this._animation) {
             this._animation.finish();
         }
         this._animation = this._pointer.animate([
             { transform: 'translateX(-6px)' },
-            { transform: `translateX(${global.innerWidth - 6}px)` }
+            { transform: `translateX(${right - 6}px)` }
         ], { duration: this._duration * 1000, fill: 'backwards' });
         this._animation.currentTime = this._currentTime * 1000;
         this._animation.playbackRate = this._playbackRate;

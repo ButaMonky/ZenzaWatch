@@ -24,9 +24,12 @@ const logSafe = (() => {
       if ((t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))) {
         try {
           return JSON.stringify(redact(JSON.parse(t), depth + 1, seen));
-        } catch (e) {
-          return value;
+        } catch (_ignored) {
+          // Malformed JSON is still checked for URL-shaped sensitive text below.
         }
+      }
+      if (/(?:[a-z][a-z0-9+.-]*:\/\/|blob:|data:|\/\/)[^\s"'<>]*/i.test(t)) {
+        return MASK;
       }
       return value;
     }
@@ -41,17 +44,33 @@ const logSafe = (() => {
     }
     seen.add(value);
     if (typeof URL !== 'undefined' && value instanceof URL) {
-      return value.toString();
+      // A URL may carry opaque path/query/signature fragments. Do not stringify it.
+      return MASK;
     }
     if (value instanceof Error) {
-      return {name: value.name, message: value.message};
+      // Read only an own data descriptor, never a user-provided name/message getter.
+      const descriptor = Object.getOwnPropertyDescriptor(value, 'name');
+      const name = descriptor && typeof descriptor.value === 'string' &&
+        /^(?:Error|[A-Za-z]{1,32}Error)$/.test(descriptor.value) ? descriptor.value : 'Error';
+      return Object.prototype.hasOwnProperty.call(value, 'cause') ?
+        {name, message: MASK, cause: MASK} : {name, message: MASK};
     }
     if (Array.isArray(value)) {
-      return value.map(v => redact(v, depth + 1, seen));
+      const out: unknown[] = new Array(value.length);
+      for (let i = 0; i < value.length; i++) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+        if (descriptor) {
+          out[i] = Object.prototype.hasOwnProperty.call(descriptor, 'value') ?
+            redact(descriptor.value, depth + 1, seen) : MASK;
+        }
+      }
+      return out;
     }
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(value)) {
-      out[key] = isSecretKey(key) ? MASK : redact((value as Record<string, unknown>)[key], depth + 1, seen);
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      out[key] = isSecretKey(key) || !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') ?
+        MASK : redact(descriptor.value, depth + 1, seen);
     }
     return out;
   };

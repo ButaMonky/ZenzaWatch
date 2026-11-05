@@ -272,7 +272,7 @@ class VideoListView extends Emitter {
         }
         const fileReader = new FileReader();
         fileReader.onload = (ev) => {
-            window.console.log('file data: ', ev.target.result);
+            window.console.log('Playlist import file read');
             this.emit('filedrop', ev.target.result, file.name);
         };
         fileReader.readAsText(file);

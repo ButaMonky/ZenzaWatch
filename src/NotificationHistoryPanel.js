@@ -99,6 +99,7 @@ const NotificationHistoryPanel = (() => {
         let shown = 100;
         let revision = 0;
         let scheduled = false;
+        let dirty = false;
         let disposed = false;
         const snapshot = async () => NotificationJournal.list(2000);
         const matches = (entry) => {
@@ -117,11 +118,10 @@ const NotificationHistoryPanel = (() => {
             return [entry.message, entry.videoId, entry.source, entry.category,
                 JSON.stringify(entry.details || {})].join(' ').toLocaleLowerCase().includes(needle);
         };
-        const render = async () => {
+        const render = async (version) => {
             if (disposed || !isVisible()) {
                 return;
             }
-            const version = ++revision;
             const all = await snapshot();
             if (disposed || !isVisible() || version !== revision) {
                 return;
@@ -156,17 +156,33 @@ const NotificationHistoryPanel = (() => {
             more.hidden = entries.length <= shown;
         };
         const schedule = () => {
-            if (scheduled || disposed || !isVisible()) {
+            if (disposed || !isVisible()) {
+                return;
+            }
+            ++revision;
+            if (scheduled) {
+                dirty = true;
                 return;
             }
             scheduled = true;
-            Promise.resolve().then(() => {
-                scheduled = false;
-                void render().catch(() => {
-                    if (!disposed && isVisible()) {
-                        status.textContent = '履歴の読み込みに失敗しました';
-                    }
-                });
+            void Promise.resolve().then(async () => {
+                try {
+                    do {
+                        dirty = false;
+                        const version = revision;
+                        try {
+                            await render(version);
+                        }
+                        catch (_) {
+                            if (!disposed && isVisible() && version === revision) {
+                                status.textContent = '履歴の読み込みに失敗しました';
+                            }
+                        }
+                    } while (dirty && !disposed && isVisible());
+                }
+                finally {
+                    scheduled = false;
+                }
             });
         };
         query.addEventListener('input', () => { shown = 100; schedule(); });

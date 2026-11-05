@@ -189,3 +189,61 @@ describe('SCUI-03 common SceneSearchController (unwired pure module)',function()
     assert.strictEqual(h.events.length,0);
   });
 });
+
+describe('P15 SceneSearchController synchronous layout lifecycle reentry',function(){
+  const make=(createLayout,onError)=>{
+    const context=createContext({AbortController});
+    const Class=loadClass('packages/zenza/src/sceneSearch/SceneSearchController.js',
+      'SceneSearchController',context);
+    return new Class({
+      getPreference:key=>({'sceneSearch.layout.normal':'07',
+        'sceneSearch.layout.fullscreen':'09'}[key]),
+      createLayout,onError:onError||(()=>{})
+    });
+  };
+  it('disposes adapter once if Controller.dispose() reenters during mount',()=>{
+    const seen=[];let controller;
+    controller=make(({id})=>({
+      mount(){seen.push('mount:'+id);controller.dispose();},
+      render(){seen.push('render:'+id);},
+      dispose(){seen.push('dispose:'+id);}
+    }));
+    controller.start('normal');
+    assert.deepStrictEqual(seen,['mount:07','dispose:07']);
+    assert.strictEqual(controller.snapshot.layoutId,null);
+    assert.throws(()=>controller.start('normal'),/disposed/);
+  });
+  it('keeps the nested fullscreen owner after mount synchronously switches mode',()=>{
+    const seen=[];let controller;
+    controller=make(({id})=>({
+      mount(){seen.push('mount:'+id);if(id==='07')controller.setMode('fullscreen');},
+      render(){seen.push('render:'+id);},
+      dispose(){seen.push('dispose:'+id);}
+    }));
+    const state=controller.start('normal');
+    assert.strictEqual(state.mode,'fullscreen');
+    assert.strictEqual(state.layoutId,'09');
+    assert(seen.includes('render:09'));
+    assert(!seen.includes('render:07'));
+    controller.dispose();
+    assert.deepStrictEqual(seen.filter(x=>x.startsWith('dispose:')).sort(),
+      ['dispose:07','dispose:09']);
+  });
+  it('recovers original mode after desired and fallback layouts both fail',()=>{
+    let failing=true;const seen=[];
+    const controller=make(({id})=>({
+      mount(){seen.push('mount:'+id);if(failing)throw Error('mount failed:'+id);},
+      render(){seen.push('render:'+id);},
+      dispose(){seen.push('dispose:'+id);}
+    }));
+    assert.throws(()=>controller.start('normal'),/mount failed:01/);
+    assert.deepStrictEqual(seen,
+      ['mount:07','dispose:07','mount:01','dispose:01']);
+    failing=false;
+    const state=controller.start('normal');
+    assert.strictEqual(state.layoutId,'07');
+    assert(seen.includes('render:07'));
+    controller.dispose();
+    assert.strictEqual(seen.filter(x=>x==='dispose:07').length,2);
+  });
+});

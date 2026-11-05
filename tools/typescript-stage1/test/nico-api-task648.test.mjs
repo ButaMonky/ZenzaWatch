@@ -46,25 +46,84 @@ function world(opt={}){
     sleep:async ms=>{L('sleep',ms);},
     debug:{},
     console:{log:()=>{},time:()=>{},timeEnd:()=>{},warn:(...a)=>L('warn',a[0])},
-    window:{console:{log:(...a)=>L('wlog',a[0],a[2]),error:(...a)=>L('error',a[0]),warn:(...a)=>L('warn',a[0])}},
+    // Record every logger argument, not only an old JSON field. This is an in-memory synthetic spy.
+    window:{console:{log:(...a)=>L('wlog',...a),error:(...a)=>L('error',...a),warn:(...a)=>L('warn',...a)}},
     setTimeout:(fn,ms)=>{L('setTimeout',ms);return setTimeout(fn,0);},clearTimeout,
     URL,Promise,Object,Error,JSON,Number,Date:{now:()=>1000,parse:Date.parse}};
   return {globals,log};
+}
+// Only these fields may cross the R3 console boundary; transport remains byte-for-byte strict.
+const MARKER='[ZenzaWatch][CommentPost]';
+const NUMERIC=new Set(['attempt','statusCode','retryAfterMs','delayMs','nextAttempt','commandCount']);
+const BOOLEAN=new Set(['retryScheduled','postKeyPresent','challengeRequired','hasNo','hasId']);
+const retryLabel=/^loadComment fail \((?:1回目|リトライ[0-9]+回目)\)$/;
+const retryLabelOld=/^loadComment fail \((?:1回目|リトライ[0-9]+回目)\): $/;
+function legacyOracle(entry){
+  const [type,message]=entry;
+  if(type==='wlog'){
+    assert.equal(message,MARKER,'legacy diagnostic marker');
+    assert.equal(entry.length,4,'legacy diagnostic argument count');
+    const original=JSON.parse(entry[3]);
+    const expected={};
+    for(const [key,value] of Object.entries(original)){
+      if(NUMERIC.has(key)&&typeof value==='number'&&Number.isFinite(value)&&value>=0)expected[key]=value;
+      if(BOOLEAN.has(key)&&typeof value==='boolean')expected[key]=value;
+    }
+    // The frozen fixture predates Task780's explicit no-challenge default.
+    if(original.phase==='post-key'&&original.event==='success')expected.challengeRequired=false;
+    return [type,MARKER,expected];
+  }
+  if(type==='error'){
+    if(/^_load threads fail: videoId=/.test(message))return [type,'_load threads fail'];
+    if(retryLabelOld.test(message))return [type,message.slice(0,-2)];
+    if(message==='loadComment fail finally: ')return [type,'loadComment fail finally'];
+    assert.fail('unexpected legacy error category');
+  }
+  if(type==='warn'){
+    assert.match(message,/^loadComment: 言語 /,'legacy language fallback warning');
+    return [type,'loadComment language fallback'];
+  }
+  return entry; // exact original transport, packet, retry, alert and all other events
+}
+function strictNewOracle(entry){
+  const [type,label]=entry;
+  if(type==='wlog'){
+    assert.equal(entry.length,4,'exact three console.log arguments');
+    assert.equal(label,MARKER,'no unrecognized diagnostic marker');
+    const payload=entry[2],jsonText=entry[3];
+    assert.ok(payload&&typeof payload==='object'&&!Array.isArray(payload),'flat diagnostic object');
+    assert.equal(typeof jsonText,'string');
+    assert.equal(jsonText,JSON.stringify(JSON.parse(jsonText)),'canonical compact diagnostic JSON');
+    assert.deepEqual(JSON.parse(jsonText),payload,'object and text agree');
+    for(const [key,value] of Object.entries(payload)){
+      assert.ok(NUMERIC.has(key)||BOOLEAN.has(key),'unapproved diagnostic field');
+      if(NUMERIC.has(key)){
+        assert.equal(typeof value,'number');assert.ok(Number.isFinite(value)&&value>=0,'bounded finite numeric');
+        if(key==='statusCode')assert.ok(Number.isInteger(value)&&value>=100&&value<=599,'HTTP status');
+      }else assert.equal(typeof value,'boolean','boolean field contract');
+    }
+    return [type,MARKER,payload];
+  }
+  if(type==='error'){
+    assert.equal(entry.length,2,'no error object or extra logger argument');
+    assert.ok(label==='_load threads fail'||label==='loadComment fail finally'||retryLabel.test(label),
+      'only fixed/bounded error labels');
+    return [type,label];
+  }
+  if(type==='warn'){
+    assert.deepEqual(entry,[type,'loadComment language fallback'],'only fixed language warning');
+    return [type,label];
+  }
+  return entry; // any non-logger transport event stays an exact side-effect match
 }
 async function compare(label,run,opt={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(before,'ThreadLoader',a.globals),B=loadLegacy(after,'ThreadLoader',b.globals);
   const ra=await settle(()=>run(A)),rb=await settle(()=>run(B));
-  assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
-  // These legacy fixtures omit challenge; Task780 deliberately reports false.
-  // Preserve exact comparison of every other log field and transport effect.
-  const expectedLog=a.log.map(entry=>{
-    if(entry[0]!=='wlog'||entry[1]!=='[ZenzaWatch][CommentPost]')return entry;
-    const diagnostic=JSON.parse(entry[2]);
-    if(diagnostic.phase!=='post-key'||diagnostic.event!=='success')return entry;
-    return [entry[0],entry[1],JSON.stringify({...diagnostic,challengeRequired:false})];
-  });
-  assert.deepEqual(b.log,expectedLog,label+' side effects');
+  assert.deepEqual(snapshot(rb),snapshot(ra),label+' result/error');
+  // Match position, multiplicity and exact values of all transport/retry events.
+  // The known legacy logger is projected onto R3's restrictive allowlist only.
+  assert.deepEqual(b.log.map(strictNewOracle),a.log.map(legacyOracle),label+' strict parity');
   return ra;
 }
 const msgInfo=(extra={})=>({videoId:'sm9',userId:'u1',threadId:'1',language:'ja-jp',when:0,canPost:true,defaultThread:{is184Forced:false},

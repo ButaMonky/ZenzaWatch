@@ -9,6 +9,7 @@ describe('native preview pin preserves scene without blocking seek',()=>{
    util:{dispatchCommand:(node,c,v)=>seeks.push([c,v])}}));
   const bar=Object.create(Bar.prototype);
   Object.assign(bar,{state:{isDragging:false,isWheelSeeking:true},_duration:100,
+   _seekBar:{offsetWidth:1000,getBoundingClientRect:()=>({left:0,width:1000})},
    _seekBarMouseX:120,_sceneSearchPinnedTime:()=>12,_posToTime:x=>x/10,
    _commentPreview:{update(){},set currentTime(v){seen.push(['mini',v]);}},
    _seekBarToolTip:{update(v){seen.push(['image',v]);}},storyboard:{setCurrentTime:v=>board.push(v)}});

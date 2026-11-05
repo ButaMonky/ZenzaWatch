@@ -1,5 +1,6 @@
 import {textUtil} from '../packages/lib/src/text/textUtil';
 import {PromiseHandler} from '../packages/lib/src/Emitter';
+import {selectAutoResume} from '../packages/zenza/src/resume/AutoResumePolicy';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoInfo.ts (Task962). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
@@ -526,14 +527,25 @@ class VideoInfoModel extends JSONable {
         return this.resumePoints[0]?.time ?? 0;
     }
     get resumePoints() {
-        const duration = this.duration;
-        const MARGIN = 10;
-        const resumePoints = ((this._cacheData && this._cacheData.resume) ? this._cacheData.resume : [])
-            .filter(({ now, time }) => time > MARGIN && time < duration - MARGIN)
-            .map(({ now, time }) => { return { now: new Date(now).toLocaleString(), time }; });
-        const lastResumePoint = this._resumeInfo ? this._resumeInfo.initialPlaybackPosition : 0;
-        lastResumePoint && resumePoints.unshift({ now: '前回', time: lastResumePoint });
-        return resumePoints;
+        const edited = this._cacheData?.resumeOverride;
+        if (typeof edited === 'number' && Number.isFinite(edited) && edited >= 0 && edited < this.duration) {
+            return [{ now: '編集した位置', time: edited }];
+        }
+        const local = Array.isArray(this._cacheData?.resume) ? this._cacheData.resume : [];
+        const clearedAt = this._cacheData?.resumeClearedAt;
+        const reason = this._cacheData?.resumeClearReason === 'completed' ? 'completed' : 'deleted';
+        // Only one automatic point. Keep the local clear barrier even when a
+        // stale server response still returns a previous non-zero position.
+        const chosen = selectAutoResume({
+            videoId: String(this.videoId || ''), duration: this.duration,
+            server: { time: this._resumeInfo?.initialPlaybackPosition },
+            local,
+            ...(clearedAt === undefined ? {} : { clear: { at: clearedAt, reason } })
+        });
+        if (!chosen)
+            return [];
+        return [{ now: chosen.source === 'server' ? '前回' :
+                    new Date(chosen.recordedAt ?? 0).toLocaleString(), time: chosen.time }];
     }
     get csrfToken() {
         return this._rawData.csrfToken || '';

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "source": "tools/typescript-stage1/p12-src/AutoResumePolicy.ts",
+  "runtime": "packages/zenza/src/resume/AutoResumePolicy.js",
+  "sourceSha256": "91680103c29f3516c8d6da089c10804e29460d132023620ec27788f2a78bc2b8",
+  "runtimeSha256": "469a169ea856cb7abdb31a42573a9fba359cda60b80a02485aa5ecb9acfb15e9"
+}

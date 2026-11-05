@@ -1,47 +1,47 @@
-// SCUI-13: 03 side shelf / 04 top edge.
-// Original 2026-10-14 demo: 03 right shelf (normal) / left shelf (full),
-// 04 right top (normal) / top center (full). No independent media owners.
+// GENERATED FROM tools/typescript-stage1/nico-src/SceneSearchLayouts03_04.ts
 //===BEGIN===
 class SceneSearchLayouts03_04 {
-  static get DESCRIPTORS() {
-    return [
-      {id:'03',label:'サイドシェルフ',
-        description:'通常は動画右端、全画面は動画左端。操作レールを画面内側に開く'},
-      {id:'04',label:'トップエッジ',
-        description:'通常は動画右上、全画面では上中央。操作列はカードの下へ展開'}
-    ];
-  }
-  static install(registry,Card) {
-    if(!registry?.register || typeof Card!=='function'){
-      throw new TypeError('Side shelf layouts require the common registry and card');
+    static get DESCRIPTORS() {
+        return [
+            { id: '03', label: 'サイドシェルフ',
+                description: '通常は動画右端、全画面は動画左端。操作レールを画面内側に開く' },
+            { id: '04', label: 'トップエッジ',
+                description: '通常は動画右上、全画面では上中央。操作列はカードの下へ展開' }
+        ];
     }
-    const [shelf,top]=this.DESCRIPTORS;
-    // The 'more' handle stays on the visible card; otherwise the closed
-    // tool tray becomes impossible to open with keyboard or touch.
-    class EdgeCard extends Card {
-      mount(state){
-        super.mount(state);
-        const actions=this.root.querySelector('.zenzaSceneActions');
-        const more=actions.querySelector('.scene-more');
-        actions.parentElement.insertBefore(more,actions);
-        this.render(state);
-      }
-      render(state){
-        super.render(state);
-        if(!this.root){return;}
-        const width=this.container.getBoundingClientRect?.().width||
-          this.container.clientWidth||800;
-        this.root.dataset.scuiNarrow=String(width<440);
-      }
+    static install(registry, Card) {
+        if (!registry?.register || typeof Card !== 'function') {
+            throw new TypeError('Side shelf layouts require the common registry and card');
+        }
+        const [shelf, top] = this.DESCRIPTORS;
+        // The 'more' handle stays on the visible card; otherwise the closed
+        // tool tray becomes impossible to open with keyboard or touch.
+        class EdgeCard extends Card {
+            mount(state) {
+                super.mount(state);
+                const actions = this.root.querySelector('.zenzaSceneActions');
+                const more = actions.querySelector('.scene-more');
+                actions.parentElement.insertBefore(more, actions);
+                this.render(state);
+            }
+            render(state) {
+                super.render(state);
+                if (!this.root) {
+                    return;
+                }
+                const width = this.container.getBoundingClientRect?.().width ||
+                    this.container.clientWidth || 800;
+                this.root.dataset.scuiNarrow = String(width < 440);
+            }
+        }
+        registry.register({ ...shelf, factory: (args) => new EdgeCard({ ...args,
+                layoutClass: 'zenzaSceneSideShelf', extraCss: this.SHELF_STYLE }) });
+        registry.register({ ...top, factory: (args) => new EdgeCard({ ...args,
+                layoutClass: 'zenzaSceneTopEdge', extraCss: this.TOP_STYLE }) });
+        return registry;
     }
-    registry.register({...shelf,factory:args=>new EdgeCard({...args,
-      layoutClass:'zenzaSceneSideShelf',extraCss:this.SHELF_STYLE})});
-    registry.register({...top,factory:args=>new EdgeCard({...args,
-      layoutClass:'zenzaSceneTopEdge',extraCss:this.TOP_STYLE})});
-    return registry;
-  }
-  static get SHELF_STYLE() {
-    return `
+    static get SHELF_STYLE() {
+        return `
 /* Original 03: normal on video right, fullscreen on video left. */
 .zenzaSceneSearchHost.zenzaSceneSideShelf{
   left:auto;right:12px;top:17%;bottom:auto;transform:none;
@@ -98,9 +98,9 @@ class SceneSearchLayouts03_04 {
   .zenzaSceneSearchHost.zenzaSceneSideShelf .zenzaSceneActions{transition:none}
 }
 `;
-  }
-  static get TOP_STYLE() {
-    return `
+    }
+    static get TOP_STYLE() {
+        return `
 /* Original 04: normal on right top; fullscreen at screen top center. */
 .zenzaSceneSearchHost.zenzaSceneTopEdge{
   left:auto;right:16px;top:17px;bottom:auto;transform:none;
@@ -154,7 +154,7 @@ class SceneSearchLayouts03_04 {
   .zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneActions{transition:none}
 }
 `;
-  }
+    }
 }
 //===END===
 export {SceneSearchLayouts03_04};

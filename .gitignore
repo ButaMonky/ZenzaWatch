@@ -21,3 +21,14 @@ session/*
 !/tools/typescript-stage1/
 /tools/typescript-stage1/.generated/
 /.publish-state/
+
+!/tools/check-root-test-generated.cjs
+/qa-profiles/
+/verify-logs/
+/test-results/
+*.har
+
+!/tools/qa/
+/tools/qa/*
+!/tools/qa/scene-vcb-real-source.cjs
+!/tools/qa/scui-native-css-extractor.cjs

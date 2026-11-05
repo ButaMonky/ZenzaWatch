@@ -19,10 +19,21 @@
     "nico:verify": "npm run nico:emit && npm run nico:types && node scripts/sync-nico-api.mjs --check && npm run scui:verify",
     "generate:legacy": "npm run build && node scripts/sync-all.mjs --write && npm run advanced:sync && npm run nico:sync",
     "verify:legacy": "node scripts/sync-all.mjs --check && npm run advanced:verify && npm run nico:verify",
-    "test": "npm run check && npm run verify:legacy && node --test --test-concurrency=1 test/*.test.mjs",
+    "test": "npm run check && npm run verify:legacy && node --test --test-concurrency=1 test/*.test.mjs test/seek-geometry*.test.ts",
+    "test:seek-geometry": "node --test --test-concurrency=1 test/seek-geometry*.test.ts",
+    "test:seek-geometry:browser": "node test/seek-geometry-browser.ts",
     "scui:emit": "tsc --project tsconfig.scui.json",
     "scui:sync": "npm run scui:emit && node scripts/sync-scui.mjs --write",
-    "scui:verify": "npm run scui:emit && tsc --project tsconfig.scene-contracts.json && node scripts/sync-scui.mjs --check"
+    "scui:verify": "npm run scui:emit && tsc --project tsconfig.scene-contracts.json && node scripts/sync-scui.mjs --check",
+    "p12:emit": "tsc --project tsconfig.p12.json",
+    "p12:sync": "npm run p12:emit && node scripts/sync-p12-resume.mjs --write",
+    "p12:verify": "npm run p12:emit && node scripts/sync-p12-resume.mjs --check",
+    "p12:clear:sync": "npm run p12:emit && node scripts/sync-p12-auto-clear.mjs --write",
+    "p12:clear:verify": "npm run p12:emit && node scripts/sync-p12-auto-clear.mjs --check",
+    "p12:manual:sync": "npm run p12:emit && node scripts/sync-p12-manual.mjs --write",
+    "p12:manual:verify": "npm run p12:emit && node scripts/sync-p12-manual.mjs --check",
+    "p12:ui:verify": "npm run nico:emit && node scripts/verify-p12-ui-runtime.mjs",
+    "p12:verify:all": "npm run p12:verify && npm run p12:clear:verify && npm run p12:manual:verify && npm run p12:ui:verify"
   },
   "devDependencies": {
     "jsdom": "30.0.1",

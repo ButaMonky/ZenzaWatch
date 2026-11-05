@@ -120,7 +120,7 @@ class NicoChatGroupViewModel {
     this.reset();
   }
   _onChange(e: unknown) {
-    console.log('NicoChatGroupViewModel.onChange: ', e);
+    console.log('NicoChatGroupViewModel.onChange');
     window.console.time('_onChange');
     this.reset();
     this.addChatArray(this._nicoChatGroup.members);

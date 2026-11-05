@@ -28,7 +28,8 @@ const DISTS = {
 
 // 古い globals パッケージの一覧に無い、現在のブラウザの組み込み
 const MODERN_BROWSER_GLOBALS = [
-  'globalThis', 'AbortController', 'Atomics', 'OffscreenCanvas', 'CSSStyleValue', 'CSSKeywordValue', 'arguments'
+  'globalThis', 'AbortController', 'Atomics', 'OffscreenCanvas', 'CSSStyleValue', 'CSSKeywordValue',
+  'AggregateError', 'arguments'
 ];
 // Worker に文字列として渡すコードへ workerUtil が差し込む名前（Worker 側では定義される）
 const WORKER_INJECTED = ['PID', 'bcast', 'portMap', 'EmitterInitFunc'];
@@ -45,6 +46,19 @@ const KNOWN_UNDEFINED = {
 // 既知の起動直後の例外
 const KNOWN_STARTUP_ERRORS = {
 };
+
+// AggregateError is a standard ES2021 global. The older globals catalog
+// predates it; recognizing it is not an exemption for missing application code.
+describe('modern browser built-ins used by native teardown', function() {
+  it('exposes the standard AggregateError in the real jsdom script realm', function() {
+    const {JSDOM} = require('jsdom');
+    const dom = new JSDOM('', {runScripts: 'outside-only'});
+    try {
+      assert.equal(typeof dom.window.AggregateError, 'function');
+      assert.equal(dom.window.AggregateError.name, 'AggregateError');
+    } finally { dom.window.close(); }
+  });
+});
 
 function freeIdentifiers(src, {hasLodash}) {
   const parser = require('@babel/parser');

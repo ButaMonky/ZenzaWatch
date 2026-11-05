@@ -103,6 +103,53 @@ function harness(options={}){
   close(){bridge.dispose();dom.window.close();}};
 }
 describe('SCUI-18 standalone bridge preflight without touching legacy player',()=>{
+ it('does not reattach config listeners after synchronous disposal inside layout mount',()=>{
+  const h=harness();
+  const create=h.bridge.controller._createLayout;
+  h.bridge.controller._createLayout=options=>{
+   const candidate=create(options);
+   candidate.mount=()=>h.bridge.dispose();
+   return candidate;
+  };
+  try{
+   h.bridge.start('normal');
+   assert.equal(h.bridge._disposed,true);
+   assert.equal(h.listeners.size,0,'disposed bridge must leave no configuration observers');
+   assert.equal(h.d.querySelectorAll('style[data-scui-bridge-style]').length,0);
+   assert.equal(h.bridge._running,false);
+  }finally{h.close();}
+ });
+ it('does not retain config subscriptions after reentrant disposal during onkey',()=>{
+  const h=harness();
+  const register=h.config.onkey;let registered=0;
+  h.config.onkey=(key,handler)=>{
+   register(key,handler);
+   if(++registered===1)h.bridge.dispose();
+  };
+  try{
+   h.bridge.start('normal');
+   assert.equal(h.bridge._disposed,true);
+   assert(registered>0,'the reentrant registration boundary was exercised');
+   assert.equal(h.listeners.size,0,'disposed bridge must leave no config observers');
+   assert.equal(h.bridge._subscriptions.length,0,'disposed bridge retains no subscriptions');
+  }finally{h.close();}
+ });
+ it('stops native seek listener registration after reentrant disposal',()=>{
+  const h=harness(),seek=h.d.getElementById('seek');
+  const add=seek.addEventListener;const added=[];let first=true;
+  seek.addEventListener=function(type,handler,options){
+   added.push(type);
+   add.call(this,type,handler,options);
+   if(first){first=false;h.bridge.dispose();}
+  };
+  try{
+   h.bridge.start('normal');
+   assert.equal(h.bridge._disposed,true);
+   assert.deepStrictEqual(added,['mouseenter'],
+    'disposal during the first native binding must block later bindings');
+   assert.equal(h.listeners.size,0);
+  }finally{seek.addEventListener=add;h.close();}
+ });
  it('reports actual full seek and screen bounds beyond a narrow video box (R547-01)',()=>{
   const h=harness();
   const frame=h.d.getElementById('mount');

@@ -10,6 +10,7 @@ export class SceneSearchController {
  declare private _mode:SceneMode; declare private _videoId:string|null; declare private _time:number;
  declare private _pinned:boolean; declare private _shown:boolean; declare private _started:boolean; declare private _disposed:boolean;
  declare private _layout:SceneLayoutAdapter|null; declare private _layoutId:string|null; declare private _epoch:number;
+ declare private _layoutRevision:number;
  declare private _abort:AbortController|null;
 
   constructor({getPreference,resolvePreferences,createLayout,loadPreview,onSeek,onError}:SceneControllerOptions={}) {
@@ -32,6 +33,7 @@ export class SceneSearchController {
     this._layout=null;
     this._layoutId=null;
     this._epoch=0;
+    this._layoutRevision=0;
     this._abort=null;
   }
   _pref(key:string,fallback:unknown):unknown {
@@ -79,30 +81,59 @@ export class SceneSearchController {
     this._abort=null;
   }
   _activateLayout() {
+    // A layout can synchronously dispose the controller or change the mode
+    // while mount() is still running. Preview epochs are independent: video
+    // changes must not invalidate layout ownership.
+    const revision=++this._layoutRevision;
     this._cancelPreview();
-    this._layout?.dispose?.();
+    const previous=this._layout;
     this._layout=null;
+    previous?.dispose?.();
+    if(this._disposed||this._layoutRevision!==revision)return;
     const desired=this._layoutFor(this._mode);
-    const create=(id:string)=>{
+    if(this._disposed||this._layoutRevision!==revision)return;
+    const create=(id:string):SceneLayoutAdapter|null=>{
       const candidate=this._createLayout({id,mode:this._mode});
       if(!candidate||typeof candidate.dispose!=='function'){
         throw new TypeError('Layout '+id+' must supply dispose()');
       }
+      if(this._disposed||this._layoutRevision!==revision){
+        candidate.dispose();return null;
+      }
       try{candidate.mount?.(this.snapshot);}catch(error){
         candidate.dispose();throw error;
+      }
+      if(this._disposed||this._layoutRevision!==revision){
+        candidate.dispose();return null;
       }
       return candidate;
     };
     try{
       this._layoutId=desired;
-      this._layout=create(desired);
+      const candidate=create(desired);
+      if(!candidate)return;
+      this._layout=candidate;
     }catch(error){
+      if(this._disposed||this._layoutRevision!==revision)return;
       this._onError?.(error,desired);
+      if(this._disposed||this._layoutRevision!==revision)return;
       const fallback=this._resolvePreferences?'follow':'01';
-      if(desired===fallback){this._layoutId=null;throw error;}
+      if(desired===fallback){
+        this._layoutId=null;this._started=false;throw error;
+      }
       this._layoutId=fallback;
-      this._layout=create(fallback);
+      try{
+        const candidate=create(fallback);
+        if(!candidate)return;
+        this._layout=candidate;
+      }catch(fallbackError){
+        if(!this._disposed&&this._layoutRevision===revision){
+          this._layoutId=null;this._started=false;
+        }
+        throw fallbackError;
+      }
     }
+    if(this._disposed||this._layoutRevision!==revision)return;
     this._render();
   }
   _render() {
@@ -209,6 +240,7 @@ export class SceneSearchController {
   dispose() {
     if(this._disposed){return;}
     this._disposed=true;
+    this._layoutRevision++;
     this._cancelPreview();
     this._layout?.dispose?.();
     this._layout=null;

@@ -7,6 +7,9 @@
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
+// Presentation forwards the original model unchanged. Only these two fields
+// are inspected for bookmarks, under the existing string/finite-number checks.
+type DialogVideoInfoFields=Readonly<{watchId?:unknown;duration?:unknown}>|null|undefined;
 // legacy-to-ts: names provided by other bundled modules
 declare const AudioAdjuster: Loose;
 declare const CONSTANT: Loose;
@@ -32,6 +35,18 @@ declare const RelatedMenuActions: Loose;
 declare const RelatedMenuOrder: Loose;
 declare const SHORTCUT_ACTIONS: Loose;
 declare const SceneSearchPlayerBinding: Loose;
+declare const IndexedDbManualBookmarkBackend: Loose;
+declare const ManualBookmarkRepository: Loose;
+declare const ManualBookmarkSession: Loose;
+declare const ManualBookmarkDock: Loose;
+type AutoResumeDeleted = Readonly<{videoId:string;local:'cleared';remote:'acknowledged'|'unavailable'|'failed'|'stale-video';fullyAcknowledged:boolean;retryRemote:boolean}>;
+type AutoResumeClearAgent={delete(videoId:string):Promise<AutoResumeDeleted>};
+declare const AutoResumeClearCoordinator:new(deps:{
+  clearLocal:(videoId:string,reason:'deleted')=>Promise<unknown>;
+  saveRemoteZero?:(videoId:string,seconds:0)=>Promise<unknown>;
+  isLoggedIn:()=>boolean;activeVideoId?:()=>string|null|undefined;
+  activeSessionToken?:()=>unknown;
+})=>AutoResumeClearAgent;
 declare const ScreenFilter: Loose;
 declare const ScreenFilterPanel: Loose;
 declare const ShortcutKeyEmitter: Loose;
@@ -245,6 +260,13 @@ class NicoVideoPlayerDialogView extends Emitter {
   declare varMapper: Loose;
   declare videoControlBar: Loose;
   declare videoInfoPanel: Loose;
+  declare _videoInfoPanelMounting:boolean|undefined;
+  declare _pendingVideoInfo:{requestId:unknown;info:unknown;failed:boolean}|undefined;
+  declare _bookmarkActivation:{requestId:unknown;videoId:string;duration:number}|undefined;
+  declare manualBookmarkDock:{
+    activate(videoId:string,duration:number):Promise<Readonly<{status?:unknown}>|null|undefined>;
+    deactivate():void;dispose():void;
+  }|undefined;
   constructor(...args: Loose[]) {
     super();
     this.initialize(...args);
@@ -954,11 +976,49 @@ class NicoVideoPlayerDialogView extends Emitter {
     if (this.videoInfoPanel) {
       return this.videoInfoPanel;
     }
+    this._videoInfoPanelMounting = true;
     this.videoInfoPanel = new VideoInfoPanel({
       dialog: this,
       node: this._$playerContainer
     });
     this.videoInfoPanel.on('command', this._onCommand.bind(this));
+    // Manual bookmarks live in their own IndexedDB and closed info-tab dock.
+    // No native seek/preview/auto-resume marker is reparented or borrowed.
+    let bookmarkSession:{dispose():void}|undefined;
+    try{
+      const container=this._$playerContainer?.[0];
+      const backend=new IndexedDbManualBookmarkBackend(window.indexedDB);
+      const repository=new ManualBookmarkRepository(backend);
+      bookmarkSession=new ManualBookmarkSession(repository);
+      this.manualBookmarkDock=ManualBookmarkDock.mount(container,bookmarkSession,{
+        currentVideoId:()=>this._state.videoInfo?.watchId??null,
+        currentTime:()=>Number(this._currentTimeGetter())||0,
+        timestamp:()=>Date.now(),
+        newId:()=>{
+          const uuid=window.crypto?.randomUUID?.();
+          return uuid?'B'+uuid.replace(/-/g,''):
+            'B'+Date.now().toString(36)+
+              Math.floor(Math.random()*0x1000000).toString(36);
+        },
+        seek:(seconds:number)=>this.emit('command','seekTo',seconds),
+        duration:()=>Number(this._state.videoInfo?.duration)||0,
+        automaticTime:()=>this._dialog?._videoInfo?.resumePoints?.[0]?.time??null,
+        recordingEnabled:()=>this._playerConfig.getValue('resume.recordEnabled')!==false,
+        repeatEnabled:()=>this._playerConfig.getValue('abRepeat.enabled')!==false,
+        repeatState:(active:boolean)=>{
+          const media=this._dialog?._nicoVideoPlayer?._videoPlayer;
+          if(media)media.isLoop=active?false:!!this._playerConfig.getValue('loop');
+        },
+        editAutomatic:(seconds:number)=>this._dialog._editAutomaticResume(seconds),
+        deleteAutomatic:async()=>!!(await this._dialog._deleteAutomaticResume())
+      });
+    }catch{
+      // A failed optional mount must not strand an IndexedDB subscription.
+      try{bookmarkSession?.dispose();}catch{}
+      console.warn('Manual bookmark dock unavailable');
+    }
+    this._videoInfoPanelMounting = false;
+    this._applyPendingVideoInfo();
     return this.videoInfoPanel;
   }
   _onCommand(command?: Loose, param?: Loose) {
@@ -1198,18 +1258,58 @@ class NicoVideoPlayerDialogView extends Emitter {
     this.emit('error', e);
   }
   _onBeforeVideoOpen() {
+    this._pendingVideoInfo = undefined;
+    this._bookmarkActivation = undefined;
+    this.manualBookmarkDock?.deactivate();
     this._clearActionFeedback();
     this._clearHoverUiActive();
     this._setThumbnail();
   }
-  _onVideoInfoLoad(videoInfo?: Loose) {
-    this.videoInfoPanel.update(videoInfo);
+  _onVideoInfoLoad(videoInfo?: unknown):void {
+    // A failed loader publishes its info through the same state subscription.
+    this._pendingVideoInfo = {requestId:this._dialog?._requestId,
+      info:videoInfo,failed:!!this._state.isError};
+    this._applyPendingVideoInfo();
   }
-  _onVideoInfoFail(videoInfo?: Loose) {
-    if (videoInfo) {
-      this.videoInfoPanel.update(videoInfo);
-    } else {
-      this.videoInfoPanel.onLoadFail();
+  _onVideoInfoFail(videoInfo?: unknown):void {
+    this._pendingVideoInfo = {requestId:this._dialog?._requestId,
+      info:videoInfo,failed:true};
+    this._applyPendingVideoInfo();
+  }
+  _applyPendingVideoInfo():void {
+    const pending = this._pendingVideoInfo;
+    if (!this.videoInfoPanel || this._videoInfoPanelMounting || !pending ||
+      pending.requestId !== this._dialog?._requestId) { return; }
+    const {info:videoInfo,requestId} = pending as {info:DialogVideoInfoFields;requestId:unknown};
+    if (pending.failed || this._state.isError) {
+      this._bookmarkActivation = undefined;
+      this.manualBookmarkDock?.deactivate();
+      if (videoInfo) { this.videoInfoPanel.update(videoInfo); }
+      else { this.videoInfoPanel.onLoadFail(); }
+      return;
+    }
+    this.videoInfoPanel.update(videoInfo);
+    // Rendering may synchronously open another video or deliver a newer result.
+    if (this._pendingVideoInfo !== pending || requestId !== this._dialog?._requestId) { return; }
+    if(this.manualBookmarkDock&&typeof videoInfo?.watchId==='string'&&
+      Number.isFinite(videoInfo.duration as number)&&(videoInfo.duration as number)>0){
+      const active = this._bookmarkActivation;
+      if (active && active.requestId === requestId && active.videoId === videoInfo.watchId &&
+        active.duration === videoInfo.duration) { return; }
+      const activation = {requestId,videoId:videoInfo.watchId,duration:videoInfo.duration as number};
+      this._bookmarkActivation = activation;
+      const clearFailedActivation = ():void => {
+        if (this._bookmarkActivation === activation) { this._bookmarkActivation = undefined; }
+      };
+      void this.manualBookmarkDock.activate(videoInfo.watchId,videoInfo.duration as number).then(result=>{
+        if (result?.status === 'error') { clearFailedActivation(); }
+      },()=>{
+        clearFailedActivation();
+        console.warn('Manual bookmark session unavailable');
+      });
+    }else{
+      this._bookmarkActivation = undefined;
+      this.manualBookmarkDock?.deactivate();
     }
   }
   _onVideoServerType(type?: Loose, sessionInfo?: Loose) {
@@ -1614,6 +1714,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     this._updateScreenModeStyle();
   }
   hide() {
+    this.manualBookmarkDock?.deactivate();
     this._hoverUiSuppressed = true;
     this._clearHoverUiActive();
     // Detach one-shot keyboard/toolbar timers with the player, not the page.
@@ -2848,6 +2949,12 @@ class NicoVideoPlayerDialog extends Emitter {
   declare _playlist: Loose;
   declare _requestId: Loose;
   declare _savePlaybackPositionNow: Loose;
+  declare _playbackPositionSaves:Map<string,Promise<unknown>>|undefined;
+  declare _autoResumeClearCoordinator:AutoResumeClearAgent|null|undefined;
+  declare _autoResumeSaveSuppress:Readonly<{
+    watchId:string;requestId:unknown;videoInfo:unknown;
+  }>|undefined;
+  declare _outgoingAutoResumeSaveSuppress:unknown;
   declare _state: Loose;
   declare _threadInfo: Loose;
   declare _videoFilter: Loose;
@@ -3111,6 +3218,16 @@ class NicoVideoPlayerDialog extends Emitter {
       case 'seekToResumePoint':
         this.currentTime=this._videoInfo.initialPlaybackTime;
         break;
+      case 'toggle-playbackPoints': {
+        const view=this._view;
+        view?._initializeVideoInfoPanel?.();
+        const host=view?._$playerContainer?.[0];
+        const trigger=host?.querySelector('.playbackPointsSwitch');
+        if(host)view.manualBookmarkDock?.toggle(host,trigger);
+        break;
+      }
+      case 'deleteAutomaticResume':
+        return this._deleteAutomaticResume();
       case 'addWordFilter':
         this._nicoVideoPlayer.filter.addWordFilter(param);
         break;
@@ -3381,6 +3498,9 @@ class NicoVideoPlayerDialog extends Emitter {
     e.stopPropagation();
   }
   _onPlayerConfigUpdate(key?: Loose, value?: Loose) {
+    if(['resume.recordEnabled','abRepeat.enabled'].includes(key)){
+      this._view?.manualBookmarkDock?.refreshPreferences();
+    }
     // Task 063: enableCommentPanel(コメントパネル表示ON/OFF)は動画プレイヤー
     // (_nicoVideoPlayer)の有無に関係なく効かせたいタブ表示の切り替えなので、
     // 下の「動画プレイヤーが無ければ何もしない」ガードより前で個別に処理する。
@@ -4163,13 +4283,17 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     this._cancelCommentLoad();
     this._abortCommonsTreeJob();  // Task197: switching video stops the parent/child job
+    // Keep the outgoing session's deletion barrier while the new request takes
+    // ownership. Its final save below must not resurrect an acknowledged clear.
+    this._outgoingAutoResumeSaveSuppress = this._isAutoResumeSaveSuppressed() ?
+      this._autoResumeSaveSuppress : undefined;
     this._requestId = 'play-' + Math.random();
     this._videoWatchOptions = options;
     this._clearVideoTimers();
 
-    window.console.log('%copen video: ', 'color: blue;', watchId);
+    window.console.log('Video open requested');
     // Task188: HLS.jsではmanifest解析時点の互換canplayで止まる。実再生の確認ではない（実再生はzenza-readinessで別記録）
-    window.console.time('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + watchId);
+    window.console.time('Video readiness notification');
 
     // Task 090（監査v2 ZW-012）: この open の世代。await の後で、別の open・close があったら先へ進まない
     const requestId = this._requestId;
@@ -4217,7 +4341,7 @@ class NicoVideoPlayerDialog extends Emitter {
       }, NicoVideoPlayerDialog.OPTIONAL_LOAD_TIMEOUT);
       Promise.resolve().then(func).then(
         result => { window.clearTimeout(timer); resolve(result); },
-        err => { window.clearTimeout(timer); window.console.warn(`${label}: fail`, err); onGiveUp(); resolve(fallback); });
+        () => { window.clearTimeout(timer); window.console.warn(`${label}: fail`); onGiveUp(); resolve(fallback); });
     });
     Promise.all([
       VideoInfoLoader.load(watchId, options.videoLoadOptions),
@@ -4277,7 +4401,7 @@ class NicoVideoPlayerDialog extends Emitter {
     this._playerConfig.props.lastPlayerId = this.id;
   }
   async _onVideoInfoLoaderLoad(requestId: Loose, [videoInfoData, localCacheData]: Loose) {
-    console.log('VideoInfoLoader.load!', requestId, this._watchId, videoInfoData);
+    console.log('Video info load completed');
     if (this._requestId !== requestId) {
       return;
     }
@@ -4448,8 +4572,7 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     const watchId = e.watchId;
     // Task174 (F14): e.info is the raw converted watch response; never log it whole.
-    window.console.error('_onVideoInfoLoaderFail', watchId,
-      {message: e.message, reason: e.reason, type: e.type, name: e.name});
+    window.console.error('Video info load failed');
     if (this._requestId !== requestId) {
       return;
     }
@@ -4484,7 +4607,8 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onVideoSessionFail(serverType?: Loose, result?: Loose) {
     const server = serverType === 'dmc' ? 'dmc.nico' : serverType;
-    window.console.error(`${server} fail`, result);
+    window.console.error('Video session failed',
+      serverType === 'dmc' ? 'dmc' : serverType === 'domand' ? 'domand' : 'other');
     this._recordDiagnostic({
       category: 'player', level: 'error', message: '動画の読み込みに失敗しました',
       videoId: this._watchId, source: 'videoSession',
@@ -4517,7 +4641,7 @@ class NicoVideoPlayerDialog extends Emitter {
     return 'unknown';
   }
   _onVideoPlayStartFail(err?: Loose) {
-    window.console.error('動画再生開始に失敗', err);
+    window.console.error('Video play start failed');
     const type = NicoVideoPlayerDialog.classifyPlayStartError(err);
     this._recordDiagnostic({
       category: 'player', level: type === 'aborted' || type === 'notAllowed' ? 'warning' : 'error',
@@ -4525,8 +4649,7 @@ class NicoVideoPlayerDialog extends Emitter {
       videoId: this._watchId, source: 'playStart',
       details: {kind: type, errorName: err && err.name}
     });
-    console.warn('play() request was rejected type: %s name: %s message: %s',
-      type, err && err.name, err && err.message);
+    console.warn('Play request rejected', type);
     switch (type) {
       case 'sessionClosed':
         // TODO: DMCのセッション切れなら自動リロード
@@ -4634,7 +4757,7 @@ class NicoVideoPlayerDialog extends Emitter {
     const watchId = this._watchId;
     const videoInfo = this._videoInfo;
     const watchOptions = this._videoWatchOptions;
-    window.console.timeEnd('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + this._watchId);
+    window.console.timeEnd('Video readiness notification');
     this._playerConfig.props.lastWatchId = this._watchId;
     WatchInfoCacheDb.putBestEffort(this._watchId, {watchCount: 1});
 
@@ -4662,7 +4785,15 @@ class NicoVideoPlayerDialog extends Emitter {
 
       option.limit = this._playerConfig.props['search.limit'];
 
-      this._playlist.load(query.playlist, option, this._videoInfo.msgInfo);
+      const owner = this._capturePlaylistLoadOwner();
+      const isCurrent = ():boolean => this._isCurrentPlaylistLoadOwner(owner);
+      const onFailure = ():void => {
+        if (isCurrent()) { window.console.warn('Initial playlist load failed'); }
+      };
+      try {
+        void owner.playlist.load(query.playlist, option, owner.videoInfo.msgInfo, isCurrent)
+          .catch(onFailure);
+      } catch (_) { onFailure(); }
       this._playlist.toggleEnable(true);
     }
     // チャンネル動画は、1本の動画がwatchId表記とvideoId表記で2本登録されてしまう。
@@ -4724,6 +4855,7 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onVideoTimeUpdate() {
     this._state.isStalled = false;
+    this._view?.manualBookmarkDock?.tick(this.currentTime,!this.isPlaying,!!this._state.isSeeking);
   }
   _onVideoProgress(range?: Loose, currentTime?: Loose) {
     this.emit('progress', range, currentTime);
@@ -4755,7 +4887,8 @@ class NicoVideoPlayerDialog extends Emitter {
     const {isDomand, isDmc, isDeleted, isAbnormallyClosed} = sessionState;
     const videoWatchOptions = this._videoWatchOptions;
     const code = (e && e.target && e.target.error && e.target.error.code) || 0;
-    window.console.error('VideoError!', code, e, (e.target && e.target.error), {isDeleted, isAbnormallyClosed});
+    window.console.error('Video playback failed',
+      Number.isInteger(code) && code >= 0 && code <= 4 ? code : 0);
     this._recordDiagnostic({
       category: 'player', level: 'error',
       message: '動画の再生に失敗しました',
@@ -4784,7 +4917,7 @@ class NicoVideoPlayerDialog extends Emitter {
     this.emit('error', e, code);
   }
   _onYouTubeVideoError(e?: Loose) {
-    window.console.error('onYouTubeVideoError!', e);
+    window.console.error('YouTube playback failed');
     this._recordDiagnostic({
       category: 'player', level: 'error',
       message: e && e.description || 'YouTube動画の再生に失敗しました',
@@ -4804,10 +4937,16 @@ class NicoVideoPlayerDialog extends Emitter {
     this.emit('aspectRatioFix', ratio);
   }
   _onVideoEnded() {
+    if(this._view?.manualBookmarkDock?.repeatAtEnd()){
+      this.play();return;
+    }
     // ループ再生中は飛んでこない
     this.emitAsync('ended');
     this._state.setVideoEnded();
-    this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, 0);
+    if(this._playerConfig?.getValue('resume.clearOnComplete')!==false){
+      this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, 0);
+      this._clearCompletedAutoResume();
+    }
     if (this.isPlaylistEnable && this._playlist.hasNext) {
       this.playNextVideo({eventType: 'playlist'});
       return;
@@ -4823,6 +4962,119 @@ class NicoVideoPlayerDialog extends Emitter {
       Fullscreen.cancel();
     }
     global.emitter.emitAsync('videoEnded');
+  }
+  // A completed video's own cache key must be invalidated even when the
+  // server's final zero save cannot be sent (offline or logged out).
+  // Never delete the full video cache record or include its ID in error logs.
+  _clearCompletedAutoResume() {
+    if(this._playerConfig?.getValue('resume.clearOnComplete')===false||
+       this._playerConfig?.getValue('resume.recordEnabled')===false)return;
+    const watchId = this._watchId;
+    if (!watchId || typeof WatchInfoCacheDb.clearAutomaticResume !== 'function') return;
+    try {
+      Promise.resolve(WatchInfoCacheDb.clearAutomaticResume(watchId, 'completed'))
+        .catch(() => console.warn('Automatic resume local clear failed'));
+    } catch (_) {
+      console.warn('Automatic resume local clear failed');
+    }
+  }
+  _isAutoResumeSaveSuppressed():boolean {
+    if(this._playerConfig?.getValue('resume.recordEnabled')===false)return true;
+    const owner=this._autoResumeSaveSuppress;
+    return !!owner&&owner.videoInfo===this._videoInfo&&
+      ((owner.watchId===this._watchId&&owner.requestId===this._requestId)||
+       // Native pause from closing the outgoing media can arrive after open()
+       // rotates the request. A newly loaded model never inherits this barrier.
+       owner===this._outgoingAutoResumeSaveSuppress);
+  }
+  /** Delete only the current video's automatic position when explicitly requested.
+   * Other watch-cache metadata and the separate manual bookmark DB are untouched.
+   */
+  async _editAutomaticResume(seconds:number):Promise<boolean> {
+    const vi=this._videoInfo,watchId=this._watchId,requestId=this._requestId;
+    if(!vi||vi.watchId!==watchId||!Number.isFinite(seconds)||seconds<0||
+       !Number.isFinite(vi.duration)||seconds>=vi.duration)return false;
+    try{
+      const record=await WatchInfoCacheDb.put(watchId,{currentTime:seconds,explicitResume:true});
+      if(this._videoInfo!==vi||this._watchId!==watchId||this._requestId!==requestId)return false;
+      if(record?.watchId!==watchId||record.resumeOverride!==seconds)return false;
+      vi._cacheData={...(vi._cacheData||{}),...record};
+      this._autoResumeSaveSuppress=undefined;
+      this._view?.videoControlBar?.refreshAutoResumePointers?.(vi);
+      return true;
+    }catch{return false;}
+  }
+  _deleteAutomaticResume():Promise<AutoResumeDeleted|null> {
+    const vi=this._videoInfo;
+    const watchId=this._watchId;
+    if(!vi||typeof watchId!=='string'||!watchId||
+       vi.watchId!==watchId){return Promise.resolve(null);}
+    const owner=Object.freeze({watchId,requestId:this._requestId,videoInfo:vi});
+    // Pending deletion must also suppress a racing close/pause cache append.
+    this._autoResumeSaveSuppress=owner;
+    if(!this._autoResumeClearCoordinator){
+      this._autoResumeClearCoordinator=new AutoResumeClearCoordinator({
+        clearLocal:async(videoId,reason)=>{
+          const currentRequest=this._requestId;
+          const currentInfo=this._videoInfo;
+          const record=await WatchInfoCacheDb.clearAutomaticResume(videoId,reason);
+          if(record?.watchId===videoId&&Array.isArray(record.resume)&&
+             record.resume.length===0&&record.resumeClearReason==='deleted'&&
+             this._watchId===videoId&&this._videoInfo?.watchId===videoId&&
+             this._requestId===currentRequest&&this._videoInfo===currentInfo){
+            const current=this._videoInfo;
+            current._cacheData={...(current._cacheData||{}),...record};
+            this._view?.videoControlBar?.refreshAutoResumePointers?.(current);
+          }
+          return record;
+        },
+        saveRemoteZero:(videoId,seconds)=>{
+          const current=this._videoInfo;
+          const requestId=this._requestId;
+          if(!current||this._watchId!==videoId||
+             current.watchId!==videoId){
+            throw new Error('Automatic resume video changed');
+          }
+          return this._queuePlaybackPositionSave(current.videoId,()=>{
+            // A previous PUT may keep this operation queued across open/close.
+            // Recheck the same playback owner before dispatching the clear.
+            if(this._requestId!==requestId||this._videoInfo!==current||
+               this._watchId!==videoId){
+              throw new Error('Automatic resume video changed');
+            }
+            return PlaybackPosition.record(
+              current.videoId,seconds,current.msgInfo.frontendId,
+              current.msgInfo.frontendVersion);
+          });
+        },
+        isLoggedIn:()=>util.isLogin(),
+        activeVideoId:()=>this._watchId,
+        activeSessionToken:()=>this._requestId
+      });
+    }
+    const isCurrent=()=>this._watchId===owner.watchId&&
+      this._requestId===owner.requestId&&this._videoInfo===owner.videoInfo;
+    return this._autoResumeClearCoordinator.delete(watchId).then(result=>{
+      // Completion must only be announced for the same playback generation.
+      if(isCurrent()&&result.remote!=='stale-video'){
+        const message=result.fullyAcknowledged?
+          '「ここまで見た」の自動位置を削除しました':
+          result.remote==='unavailable'?
+            'この端末の自動位置を削除しました。サーバー側は未確認です':
+            'この端末の自動位置を削除しました。サーバー側の削除は未確認です';
+        try{this.execCommand('notify',message);}catch{}
+      }
+      return result;
+    },():null=>{
+      // A failed local clear is not a committed deletion; restore ordinary saves.
+      if(this._autoResumeSaveSuppress===owner)this._autoResumeSaveSuppress=undefined;
+      if(isCurrent()){
+        try{this.execCommand('alert','自動位置を削除できませんでした');}catch{}
+      }
+      // Never log the watch ID, server response, tokens or private paths.
+      window.console.warn('Automatic resume delete failed');
+      return null;
+    });
   }
   _onVolumeChange(vol?: Loose, mute?: Loose) {
     this.emit('volumeChange', vol, mute);
@@ -4842,7 +5094,39 @@ class NicoVideoPlayerDialog extends Emitter {
     const save = this._savePlaybackPositionNow || this._savePlaybackPosition;
     save.call(this, contextWatchId, ct);
   }
+  _queuePlaybackPositionSave(videoId:string,record:()=>Promise<unknown>):Promise<unknown> {
+    // Watch aliases can share a video: serialize the actual PUT resource.
+    const queues=this._playbackPositionSaves||(this._playbackPositionSaves=new Map());
+    const previous=queues.get(videoId);
+    let operation:Promise<unknown>;
+    if(previous){
+      // A failed earlier save must not poison a later explicit clear.
+      operation=previous.then(record,record);
+    }else{
+      // Preserve immediate dispatch for unrelated videos and the first save.
+      try{operation=Promise.resolve(record());}
+      catch(error){operation=Promise.reject(error);}
+    }
+    queues.set(videoId,operation);
+    const release=():void=>{if(queues.get(videoId)===operation)queues.delete(videoId);};
+    void operation.then(release,release);
+    // Keep this operation's rejection visible to its own caller.
+    return operation;
+  }
   _savePlaybackPosition(contextWatchId?: Loose, ct?: Loose) {
+    if(this._playerConfig?.getValue('resume.recordEnabled')===false)return;
+    const current=this._videoInfo;
+    if(current&&current.contextWatchId===contextWatchId&&Number.isFinite(ct)&&ct>0&&
+       !this._isAutoResumeSaveSuppressed()){
+      const watchId=this._watchId,requestId=this._requestId;
+      void Promise.resolve(WatchInfoCacheDb.putBestEffort(watchId,{currentTime:ct})).then(record=>{
+        if(!record||this._videoInfo!==current||this._watchId!==watchId||this._requestId!==requestId)return;
+        current._cacheData={...current._cacheData,...record};
+        current._resumeInfo={...current._resumeInfo,initialPlaybackPosition:ct};
+        this._view?.videoControlBar?.refreshAutoResumePointers?.(current);
+        this._view?.manualBookmarkDock?.refreshPreferences();
+      }).catch(()=>{});
+    }
     if (!util.isLogin()) {
       return;
     }
@@ -4850,6 +5134,9 @@ class NicoVideoPlayerDialog extends Emitter {
     if (!vi) {
       return;
     }
+    // Do not restore a position deleted by the user in this playback session.
+    // Explicit completion/server-zero (ct===0) remains permitted.
+    if(ct>0&&this._isAutoResumeSaveSuppressed())return;
     const dr = this.duration;
     console.info('%csave PlaybackPosition:', 'background: cyan', ct, dr); // Task 088: csrfToken はログに出さない
     if (vi.contextWatchId !== contextWatchId) {
@@ -4865,20 +5152,27 @@ class NicoVideoPlayerDialog extends Emitter {
     } // 短尺でも通常long-formは記録し、ss系ショートだけ従来どおり除外
     // Task177 (F09): contextWatchId only guards which video is current; the v2 API
     // takes the canonical video.id (a numeric channel watch ID is not renamed).
-    PlaybackPosition.record(
+    this._queuePlaybackPositionSave(vi.videoId,()=>{
+      if(this._playerConfig?.getValue('resume.recordEnabled')===false)return Promise.resolve();
+      return PlaybackPosition.record(
       vi.videoId,
       ct,
       vi.msgInfo.frontendId,
-      vi.msgInfo.frontendVersion
-    ).catch((e?: Loose) => {
+      vi.msgInfo.frontendVersion);
+    }).catch((e?: Loose) => {
       window.console.warn('save playback fail', {reason: e && e.reason, status: e && e.status});
     });
   }
   close() {
+    this._view?.manualBookmarkDock?.deactivate();
+    this._keyEmitter?.releaseTemporaryPlaybackRate?.();
     if (this.isPlaying) {
       this._saveFinalPlaybackPosition(this._watchId, this.currentTime);
     }
-    WatchInfoCacheDb.putBestEffort(this._watchId, {currentTime: this.currentTime});
+    // A completed video must not be recreated in local resume history by close().
+    WatchInfoCacheDb.putBestEffort(this._watchId,
+      {currentTime: (this._state.isEnded||this._isAutoResumeSaveSuppressed())?
+        0:this.currentTime});
     if (Fullscreen.now()) {
       Fullscreen.cancel();
     }

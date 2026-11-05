@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.354-task978
+// @version        2.7.356-task980
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -46,6 +46,11 @@ import {components} from '../packages/components/src/index';
 import {PlayerState} from './State';
 import {VideoInfoLoader} from '../packages/lib/src/nico/loader';
 import {ThumbInfoLoader, PlaylistApiLoader, MylistApiLoader, CacheStorage, CrossDomainGate, UaaLoader, PlaybackPosition, NicoVideoApi, RecommendAPILoader, NVWatchCaller, CommonsTreeLoader, NicoRssLoader, MatrixRankingLoader} from '../packages/lib/src/nico/loader';
+import {selectAutoResume} from '../packages/zenza/src/resume/AutoResumePolicy';
+import {AutoResumeClearCoordinator} from '../packages/zenza/src/resume/AutoResumeClearCoordinator';
+import {IndexedDbManualBookmarkBackend, ManualBookmarkRepository} from '../packages/zenza/src/resume/ManualBookmarkStore';
+import {ManualBookmarkSession} from '../packages/zenza/src/resume/ManualBookmarkSession';
+import {ManualBookmarkDock} from '../packages/zenza/src/resume/ManualBookmarkDock';
 import {VideoInfoModel} from './VideoInfo';
 import {NicoSearchApiV2Loader} from '../packages/lib/src/nico/VideoSearch';
 import {TagSuggestLoader} from '../packages/lib/src/nico/TagSuggestLoader';
@@ -240,6 +245,11 @@ WindowResizeObserver.subscribe(({width, height}) => {
 //@require components
 //@require PlayerState
 //@require VideoInfoLoader
+//@require selectAutoResume
+//@require AutoResumeClearCoordinator
+//@require ManualBookmarkRepository
+//@require ManualBookmarkSession
+//@require ManualBookmarkDock
 //@require VideoInfoModel
 //@require NicoSearchApiV2Loader
 //@require TagSuggestLoader

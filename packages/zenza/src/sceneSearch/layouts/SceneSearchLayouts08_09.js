@@ -1,32 +1,31 @@
-// SCUI-16 completion provider: 08 Edge Drawer / 09 Detached Remote.
-// No separate thumbnail fetch, timers, observers or global event listeners.
-// The shared Card remains the single owner of actions, image and style.
+// GENERATED FROM tools/typescript-stage1/nico-src/SceneSearchLayouts08_09.ts
 //===BEGIN===
 class SceneSearchLayouts08_09 {
-  static get DESCRIPTORS() {
-    return [
-      {id:'08',label:'片側引き出し',
-        description:'通常は動画の左縁、全画面は右縁。操作列を画面内側へ引き出す'},
-      {id:'09',label:'分離リモコン',
-        description:'左の画像と右の独立操作ドックを分離。狭い画面は上下に退避'}
-    ];
-  }
-  static install(registry,Card) {
-    if(typeof registry?.register!=='function'||typeof Card!=='function') {
-      throw new TypeError('Drawer layouts require the shared registry and card');
+    static get DESCRIPTORS() {
+        return [
+            { id: '08', label: '片側引き出し',
+                description: '通常は動画の左縁、全画面は右縁。操作列を画面内側へ引き出す' },
+            { id: '09', label: '分離リモコン',
+                description: '左の画像と右の独立操作ドックを分離。狭い画面は上下に退避' }
+        ];
     }
-    const [drawer,remote]=SceneSearchLayouts08_09.DESCRIPTORS;
-    registry.register({...drawer,
-      factory:args=>new SceneSearchLayouts08_09({
-        ...args,Card,layoutId:drawer.id
-      })});
-    registry.register({...remote,
-      factory:args=>new SceneSearchLayouts08_09({
-        ...args,Card,layoutId:remote.id
-      })});
-    return registry;
-  }
-  static get CSS() {return `
+    static install(registry, Card) {
+        if (typeof registry?.register !== 'function' || typeof Card !== 'function') {
+            throw new TypeError('Drawer layouts require the shared registry and card');
+        }
+        const [drawer, remote] = SceneSearchLayouts08_09.DESCRIPTORS;
+        registry.register({ ...drawer,
+            factory: (args) => new SceneSearchLayouts08_09({
+                ...args, Card, layoutId: drawer.id
+            }) });
+        registry.register({ ...remote,
+            factory: (args) => new SceneSearchLayouts08_09({
+                ...args, Card, layoutId: remote.id
+            }) });
+        return registry;
+    }
+    static get CSS() {
+        return `
 /* Original 08: left shelf normal, right shelf fullscreen, tools inward. */
 .zenzaSceneSearchHost.zenzaSceneEdgeDrawer{
   position:absolute;left:10px;right:auto;top:29%;bottom:auto;
@@ -90,6 +89,12 @@ class SceneSearchLayouts08_09 {
 .zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-scui-placement="visible-fallback"]{
   top:auto;bottom:96px;
 }
+/* UI09 only: keep the separately owned native list reachable even when
+   the player extends past a very short page-locked viewport. */
+[data-scene-search-layout="09"][data-scene-mode="normal"][data-scene-placement="visible-fallback"]
+ >.zenzaCommentPreview:where([data-comment-preview-mode="list"]){
+  bottom:calc(153px + var(--scui-ui09-list-lift,0px))!important;
+}
 /* When thumbnail auto-hides, the independently placed right-hand remote
    stays operable. Only the image card is collapsed. */
 .zenzaSceneSearchHost.zenzaSceneDetachedRemote.is-preview-suppressed{
@@ -142,96 +147,204 @@ class SceneSearchLayouts08_09 {
   left:0;right:auto;top:calc(100% - 1px);bottom:auto;
   width:100%;box-sizing:border-box;max-width:100%;
 }
+/* UI09 only: shift the image and its detached toolbar together when the
+   real native seek input intersects them. The value is measured in render,
+   not an unconditional lift that covers seek in a short small-mode player. */
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-mode="normal"][data-scui-side="stack"]{
+  transform:translateY(var(--scui-ui09-native-clearance,0px));
+}
 /* When the image is auto-hidden on narrow screens, the toolbar may still
    be accessed at the bottom dock position rather than a stale image gap. */
 .zenzaSceneDetachedRemote[data-scui-side="stack"].is-preview-suppressed .zenzaSceneRemoteControls{
-  left:0;top:0;
+  left:0;top:0;bottom:auto;
 }
 @media(prefers-reduced-motion:reduce){
   .zenzaSceneEdgeDrawer .zenzaSceneActions{transition:none}
 }
-`;}
-  constructor({Card,layoutId,document,container,mode,onAction,settings}={}) {
-    if(typeof Card!=='function'||!document||!container||
-      !['08','09'].includes(layoutId)){
-      throw new TypeError('Drawer layouts require ID, DOM and Card');
+`;
     }
-    this.id=layoutId;
-    this.container=container;
-    this.mode=mode;
-    this.card=new Card({document,container,id:layoutId,mode,onAction,settings,
-      layoutClass:layoutId==='08'?'zenzaSceneEdgeDrawer':'zenzaSceneDetachedRemote',
-      extraCss:SceneSearchLayouts08_09.CSS});
-    this.root=null;this._disposed=false;this._remote=null;
-  }
-  mount(state) {
-    if(this._disposed){throw new Error('Layout disposed');}
-    this.card.mount(state);this.root=this.card.root;
-    try {
-      if(this.id==='08') {
-        // The handle must remain keyboard accessible while the drawer is closed.
-        const handle=this.root.querySelector('.scene-more');
-        const actions=this.root.querySelector('.zenzaSceneActions');
-        const foot=this.root.querySelector('.zenzaSceneFoot');
-        foot.insertBefore(handle,actions);
-      }
-      if(this.id==='09') {
-        const actions=this.root.querySelector('.zenzaSceneActions');
-        const holder=this.card.document.createElement('aside');
-        holder.className='zenzaSceneRemoteControls';
-        holder.setAttribute('role','toolbar');
-        holder.setAttribute('aria-label','シーンサーチ分離リモコン');
-        const more=actions.querySelector('.scene-more');
-        if(more)holder.append(more);
-        holder.append(actions);
-        this.root.append(holder);
-        this._remote=holder;
-      }
-      this.render(state);
-    } catch(error) {this.dispose();throw error;}
-  }
-  render(state) {
-    if(this._disposed||!this.root){return;}
-    this.card.render(state);
-    const frame=this.container.getBoundingClientRect?.();
-    const width=this.container.offsetWidth||frame?.width||
-      this.container.clientWidth||800;
-    if(this.id==='08'){
-      this.root.dataset.scuiSide=width<360?'stack':
-        this.mode==='fullscreen'?'left':'right';
-      return;
+    constructor({ Card, layoutId, document, container, mode, onAction, settings } = {}) {
+        if (typeof Card !== 'function' || !document || !container ||
+            !['08', '09'].includes(layoutId)) {
+            throw new TypeError('Drawer layouts require ID, DOM and Card');
+        }
+        this.id = layoutId;
+        this.container = container;
+        this.mode = mode;
+        this.card = new Card({ document, container, id: layoutId, mode, onAction, settings,
+            layoutClass: layoutId === '08' ? 'zenzaSceneEdgeDrawer' : 'zenzaSceneDetachedRemote',
+            extraCss: SceneSearchLayouts08_09.CSS });
+        this.root = null;
+        this._disposed = false;
+        this._remote = null;
+        if (layoutId === '09') {
+            this._nativeSeekClearance = 0;
+            this._listLiftBefore = this.container.style.getPropertyValue('--scui-ui09-list-lift');
+            this._listLiftPriority = this.container.style.getPropertyPriority('--scui-ui09-list-lift');
+            this._listLiftCurrent = null;
+        }
     }
-    // The independent remote remains usable after thumbnail hover expires.
-    const suppressed=state?.shown===false&&!state?.pinned;
-    this.root.hidden=false;
-    this.root.classList.toggle('is-preview-suppressed',suppressed);
-    const viewportHeight=this.card.document.defaultView?.innerHeight;
-    const room=Number.isFinite(viewportHeight)&&Number.isFinite(frame?.bottom)?
-      viewportHeight-frame.bottom:Infinity;
-    this.root.dataset.scuiPlacement=this.mode==='normal'&&room<165?
-      'visible-fallback':'below';
-    const stack=width<500;
-    this.root.dataset.scuiSide=stack?'stack':'dock';
-    const rootRect=this.root.getBoundingClientRect?.();
-    const scale=frame?.width?width/frame.width:1;
-    const cardWidth=state?.seekStepSeconds===0?119:205;
-    const fallbackX=this.mode==='fullscreen'?16:width*.16-cardWidth*.4;
-    const rootX=Number.isFinite(rootRect?.left)&&rootRect?.width>0&&
-      Number.isFinite(frame?.left)?
-        (rootRect.left-frame.left)*scale:fallbackX;
-    // The remote is still a child for one-event-owner semantics, but its
-    // visual position is computed relative to the far RIGHT of the player.
-    const rightDock=width-12-174-rootX;
-    this.root.style.setProperty('--scene-remote-offset',
-      Math.round(Math.max(0,rightDock))+'px');
-  }
-  onPreview(asset,context){this.card.onPreview(asset,context);}
-  dispose(){
-    if(this._disposed){return;}
-    this._disposed=true;
-    this.card.dispose();
-    this.root=null;this._remote=null;
-  }
+    mount(state) {
+        if (this._disposed) {
+            throw new Error('Layout disposed');
+        }
+        this.card.mount(state);
+        this.root = this.card.root;
+        try {
+            if (this.id === '08') {
+                // The handle must remain keyboard accessible while the drawer is closed.
+                const handle = this.root.querySelector('.scene-more');
+                const actions = this.root.querySelector('.zenzaSceneActions');
+                const foot = this.root.querySelector('.zenzaSceneFoot');
+                foot.insertBefore(handle, actions);
+            }
+            if (this.id === '09') {
+                const actions = this.root.querySelector('.zenzaSceneActions');
+                const holder = this.card.document.createElement('aside');
+                holder.className = 'zenzaSceneRemoteControls';
+                holder.setAttribute('role', 'toolbar');
+                holder.setAttribute('aria-label', 'シーンサーチ分離リモコン');
+                const more = actions.querySelector('.scene-more');
+                if (more)
+                    holder.append(more);
+                holder.append(actions);
+                this.root.append(holder);
+                this._remote = holder;
+            }
+            this.render(state);
+        }
+        catch (error) {
+            this.dispose();
+            throw error;
+        }
+    }
+    render(state) {
+        if (this._disposed || !this.root) {
+            return;
+        }
+        this.card.render(state);
+        const frame = this.container.getBoundingClientRect?.();
+        const width = this.container.offsetWidth || frame?.width ||
+            this.container.clientWidth || 800;
+        if (this.id === '08') {
+            this.root.dataset.scuiSide = width < 360 ? 'stack' :
+                this.mode === 'fullscreen' ? 'left' : 'right';
+            return;
+        }
+        // The independent remote remains usable after thumbnail hover expires.
+        const suppressed = state?.shown === false && !state?.pinned;
+        this.root.hidden = false;
+        this.root.classList.toggle('is-preview-suppressed', suppressed);
+        const viewportHeight = this.card.document.defaultView?.innerHeight;
+        const room = Number.isFinite(viewportHeight) && Number.isFinite(frame?.bottom) ?
+            viewportHeight - frame.bottom : Infinity;
+        // UI09's native list is a sibling of the card, not its child. The old
+        // 165px card-only threshold ignores the 200px list and its 74/112px
+        // below-video offset, leaving the last comments physically unclickable.
+        const list = state?.commentListMode === true && state.commentPreviewVisible !== false ?
+            this.container.querySelector('.zenzaCommentPreview') : null;
+        const rect = list?.getBoundingClientRect?.();
+        // Visible bounds are authoritative; do not force native list content
+        // layout on every moving seek cursor.
+        let panelHeight = rect?.height || 0;
+        // The preference callback can precede the native hover -> list mode
+        // change. Until the real list rectangle is measurable, reserve the
+        // native max-height instead of treating its smaller hover box as a list.
+        if (list && list.dataset.commentPreviewMode !== 'list') {
+            const css = this.card.document.defaultView?.getComputedStyle?.(list);
+            const maximum = Number.parseFloat(css?.maxHeight);
+            panelHeight = Math.max(panelHeight, Number.isFinite(maximum) ? maximum : 200);
+        }
+        if (list && panelHeight <= 0) {
+            const css = this.card.document.defaultView?.getComputedStyle?.(list);
+            const maximum = Number.parseFloat(css?.maxHeight);
+            panelHeight = Math.min(Number.isFinite(maximum) ? maximum : Infinity, list.scrollHeight || 0);
+        }
+        const listOffset = width < 580 ? 112 : 74; // UI09 native comment CSS.
+        const required = list ? Math.max(165, panelHeight + listOffset + 8) : 165;
+        this.root.dataset.scuiPlacement = this.mode === 'normal' && room < required ?
+            'visible-fallback' : 'below';
+        // Do not depend on page scroll: Zenza's normal player locks it.
+        // The native list retains its own scrollbar and click handlers.
+        if (this.mode === 'normal') {
+            const lift = list && this.root.dataset.scuiPlacement === 'visible-fallback' &&
+                Number.isFinite(frame?.bottom) && Number.isFinite(viewportHeight) ?
+                Math.max(0, Math.ceil(frame.bottom - 153 - viewportHeight + 8)) : 0;
+            const value = lift + 'px';
+            if (this._listLiftCurrent !== value) {
+                this.container.style.setProperty('--scui-ui09-list-lift', value);
+                this._listLiftCurrent = value;
+            }
+        }
+        const stack = width < 500;
+        const side = stack ? 'stack' : 'dock';
+        if (this.root.dataset.scuiSide !== side)
+            this.root.dataset.scuiSide = side;
+        this._syncNativeSeekClearance(side);
+        const rootRect = this.root.getBoundingClientRect?.();
+        const scale = frame?.width ? width / frame.width : 1;
+        const cardWidth = state?.seekStepSeconds === 0 ? 119 : 205;
+        const fallbackX = this.mode === 'fullscreen' ? 16 : width * .16 - cardWidth * .4;
+        const rootX = Number.isFinite(rootRect?.left) && rootRect?.width > 0 &&
+            Number.isFinite(frame?.left) ?
+            (rootRect.left - frame.left) * scale : fallbackX;
+        // The remote is still a child for one-event-owner semantics, but its
+        // visual position is computed relative to the far RIGHT of the player.
+        const rightDock = width - 12 - 174 - rootX;
+        this.root.style.setProperty('--scene-remote-offset', Math.round(Math.max(0, rightDock)) + 'px');
+    }
+    _syncNativeSeekClearance(side) {
+        let lift = 0;
+        // The native input is inside this player, unlike a seek control belonging
+        // to another Zenza dialog. Measure the actual painted layout, not viewport
+        // width alone: compact players can have seek above the thumbnail instead.
+        if (this.mode === 'normal' && side === 'stack' &&
+            !this.root.classList.contains('is-preview-suppressed')) {
+            const input = this.container.querySelector('input.seekRange');
+            const range = input?.getBoundingClientRect?.();
+            const card = this.root.getBoundingClientRect?.();
+            const dock = this._remote?.getBoundingClientRect?.();
+            if (range?.width > 0 && range.height > 0 && card?.width > 0 && card.height > 0 &&
+                dock?.width > 0 && dock.height > 0) {
+                const top = Math.min(card.top, dock.top) + this._nativeSeekClearance;
+                const bottom = Math.max(card.bottom, dock.bottom) + this._nativeSeekClearance;
+                const left = Math.min(card.left, dock.left);
+                const right = Math.max(card.right, dock.right);
+                // Keep the whole image/dock above a seek input immediately below it.
+                // 32px also reserves room for the input's hover-size expansion.
+                if (left < range.right && right > range.left && top < range.top &&
+                    bottom > range.top - 32) {
+                    lift = Math.max(0, Math.ceil(bottom - range.top + 32));
+                }
+            }
+        }
+        // Re-renders during cursor movement must not continuously mutate styles.
+        if (lift !== this._nativeSeekClearance) {
+            this._nativeSeekClearance = lift;
+            this.root.style.setProperty('--scui-ui09-native-clearance', -lift + 'px');
+        }
+    }
+    onPreview(asset, context) { this.card.onPreview(asset, context); }
+    dispose() {
+        if (this._disposed) {
+            return;
+        }
+        this._disposed = true;
+        try {
+            this.card.dispose();
+        }
+        finally {
+            if (this.id === '09' && this._listLiftCurrent !== null) {
+                if (this._listLiftBefore)
+                    this.container.style.setProperty('--scui-ui09-list-lift', this._listLiftBefore, this._listLiftPriority);
+                else
+                    this.container.style.removeProperty('--scui-ui09-list-lift');
+                this._listLiftCurrent = null;
+            }
+            this.root = null;
+            this._remote = null;
+        }
+    }
 }
 //===END===
 export {SceneSearchLayouts08_09};

@@ -3,7 +3,7 @@
   "source": "tools/typescript-stage1/advanced-src/Config.ts",
   "emitted": "tools/typescript-stage1/.generated/advanced/Config.js",
   "runtime": "src/Config.js",
-  "sourceSha256": "747a1ac139dcdc406a4c611c06ffa0b41b652e03c1000322c50504f689736028",
-  "runtimeSha256": "69a3b61961069e07560905f5eb925c610975a2082849e7383f1119e580f2264f",
-  "semanticSha256": "85ccd457196eb9c5a5c6fedd634f8a882b0407777a7e7d4786685f48959706a9"
+  "sourceSha256": "f801c0c6836de1c163b4f9c2fcab5f3d819f74376523b96bde615a489eef5bae",
+  "runtimeSha256": "d93c333e13f476f1bebbf04301c32bbdb14c7056efca149cc2b6c2874f8733b6",
+  "semanticSha256": "4301183698c94901d40d5526002f59167c756c2e6f371979a9cac7f695bd24a4"
 }

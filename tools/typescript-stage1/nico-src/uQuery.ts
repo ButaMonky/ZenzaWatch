@@ -26,9 +26,14 @@ declare class PromiseHandler extends Promise<unknown> {
 
 const uQuery = (() => {
   const endMap = new WeakMap<object, unknown>();
-  const emptyMap = new Map<string, Set<Listener>>();
-  const emptySet = new Set<Listener>();
-  const elementsEventMap = new WeakMap<object, Map<string, Set<Listener>>>();
+  interface EventRegistration {
+    callback: Listener;
+    capture: boolean;
+    type: string;
+    listener: EventListener;
+    remove(): void;
+  }
+  const elementsEventMap = new WeakMap<object, Map<string, Set<EventRegistration>>>();
   const HAS_CSSTOM = (window.CSS && (CSS as Loose).number) ? true : false;
   const toCamel = (p: string) => p.replace(/-./g, s => s.charAt(1).toUpperCase());
   // Task850 (UQ-TOSNAKE-001): the match is a single capital letter, so charAt(1) was ''
@@ -449,17 +454,36 @@ const uQuery = (() => {
       }
       eventName = eventName.trim();
       const elementEventName = eventName.split('.')[0] as string;
-      // window.console.log({eventName, callback, options}, this.concat());
+      const capture = typeof options === 'boolean' ? options : !!options?.capture;
+      const once = typeof options === 'object' && !!options.once;
+      const signal = typeof options === 'object' ? options.signal : undefined;
+      if (signal?.aborted) { return this; }
       for (const element of this.filter(isEventTarget)) {
-        const elementEvents = elementsEventMap.get(element) || new Map;
-        const listenerSet = elementEvents.get(eventName) || new Set;
+        const elementEvents = elementsEventMap.get(element) || new Map<string, Set<EventRegistration>>();
+        const listenerSet = elementEvents.get(eventName) || new Set<EventRegistration>();
+        if ([...listenerSet].some(record => record.callback === callback && record.capture === capture)) { continue; }
         elementEvents.set(eventName, listenerSet);
         elementsEventMap.set(element, elementEvents);
-
-        if (!listenerSet.has(callback)) {
-          listenerSet.add(callback);
-          element.addEventListener(elementEventName, callback, options);
-        }
+        const remove = () => {
+          element.removeEventListener(elementEventName, record.listener, capture);
+          signal?.removeEventListener('abort', remove);
+          listenerSet.delete(record);
+          if (!listenerSet.size) { elementEvents.delete(eventName); }
+          if (!elementEvents.size) { elementsEventMap.delete(element); }
+        };
+        const record: EventRegistration = {
+          callback, capture, type: elementEventName, remove,
+          listener: function(this: EventTarget, event: Event) {
+            if (once) { remove(); }
+            return callback.call(this, event);
+          }
+        };
+        listenerSet.add(record);
+        try {
+          element.addEventListener(elementEventName, record.listener, options);
+          signal?.addEventListener('abort', remove, {once: true});
+          if (signal?.aborted) { remove(); }
+        } catch (error) { remove(); throw error; }
       }
       return this;
     }
@@ -488,61 +512,24 @@ const uQuery = (() => {
     }
 
     off(eventName: string | typeof UNDEF = UNDEF, callback: Listener | typeof UNDEF = UNDEF): this {
-
-      if (eventName === UNDEF) {
-        for (const element of this.filter(isEventTarget)) {
-          const eventListenerMap = elementsEventMap.get(element) || emptyMap;
-          for (const [eventName, listenerSet] of eventListenerMap) {
-            for (const listener of listenerSet) {
-              element.removeEventListener(eventName, listener);
-            }
-            listenerSet.clear();
-          }
-          eventListenerMap.clear();
-          elementsEventMap.delete(element);
-        }
-        return this;
-      }
-
-      eventName = eventName.trim();
-      const [elementEventName, eventKey] = eventName.split('.') as [string, string | undefined];
-      if (callback === UNDEF) {
-        for (const element of this.filter(isEventTarget)) {
-          const eventListenerMap = elementsEventMap.get(element) || emptyMap;
-          const listenerSet = eventListenerMap.get(eventName) || emptySet;
-          for (const listener of listenerSet) {
-            element.removeEventListener(elementEventName, listener);
-          }
-
-          listenerSet.clear();
-          eventListenerMap.delete(eventName);
-
-          for (const [key] of eventListenerMap) {
-            if (
-              (!eventKey && key.startsWith(`${elementEventName}.`)) ||
-              (!elementEventName && key.endsWith(`.${eventKey}`))) {
-              this.off(key);
-            }
-          }
-        }
-        return this;
-      }
-
+      const name = eventName === UNDEF ? null : eventName.trim();
+      if (name === '') { return this; }
+      const separator = name?.indexOf('.') ?? -1;
+      const type = name === null ? '' : separator < 0 ? name : name.slice(0, separator);
+      const namespace = separator < 0 ? '' : name!.slice(separator + 1);
       for (const element of this.filter(isEventTarget)) {
-        const eventListenerMap: Map<string, Set<Listener>> = elementsEventMap.get(element) || new Map;
-        eventListenerMap.set(eventName, (eventListenerMap.get(eventName) || new Set));
-        for (const [key, listenerSet] of eventListenerMap) {
-          if (key !== eventName && !key.startsWith(`${elementEventName}.`)) {
-            continue;
+        const registrations = elementsEventMap.get(element);
+        if (!registrations) { continue; }
+        for (const [key, records] of [...registrations]) {
+          const dot = key.indexOf('.');
+          const keyNamespace = dot < 0 ? '' : key.slice(dot + 1);
+          if (namespace && namespace !== keyNamespace) { continue; }
+          for (const record of [...records]) {
+            if ((!type || record.type === type) &&
+              (callback === UNDEF || record.callback === callback)) { record.remove(); }
           }
-          if (!listenerSet.has(callback)) {
-            continue;
-          }
-          listenerSet.delete(callback);
-          element.removeEventListener(elementEventName, callback);
         }
       }
-
       return this;
     }
 

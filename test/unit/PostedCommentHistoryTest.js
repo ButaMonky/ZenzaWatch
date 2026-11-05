@@ -10,7 +10,7 @@ function subject(){
    put(record){const req=eventTarget();records.set(record.watchId,record);Promise.resolve().then(()=>req.fire('success'));return req;}
   });return tx;
  }});
- const cache={};for(const method of ['update','updateTime'])cache[method]=data=>ready.then(c=>c[method]({name:'fixture',storeName:'cache',data}));
+ const cache={};for(const method of ['update','updateTime','get'])cache[method]=data=>ready.then(c=>c[method]({name:'fixture',storeName:'cache',data}));
  const c=createContext({location:{host:'www.nicovideo.jp'},IndexedDbStorage:{open:async()=>({cache})}});
  run(beginSection('packages/lib/src/nico/WatchInfoCacheDb.js')+';globalThis.subject=WatchInfoCacheDb;',c);return c.subject;
 }

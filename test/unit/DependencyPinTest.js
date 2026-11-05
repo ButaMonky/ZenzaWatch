@@ -70,13 +70,18 @@ describe('外部の依存の版の固定（ZW-010・ZW-011）', function() {
   });
 
   it('hls.js は @require・読み込み失敗時の代わり・プレイヤーが読む URL が同じ1つの版', function() {
-    const r = real();
-    const hls = collectCdnRefs({'src/_hls.js': r.files['src/_hls.js'], 'dist/ZenzaHLS.user.js': r.files['dist/ZenzaHLS.user.js']})
-      .filter(x => x.pkg === 'hls.js');
-    assert.ok(hls.some(x => /@require/.test(r.files[x.file].split(/\r?\n/)[x.no - 1])), '@require が見つからない');
+    // This assertion consumes exactly two files. Building the entire source
+    // dependency corpus here re-read thousands of unrelated files and could
+    // time out under Mocha's unchanged 2000ms limit. Keep the SAME evidence.
+    const files = {
+      'src/_hls.js': read('src/_hls.js'),
+      'dist/ZenzaHLS.user.js': read('dist/ZenzaHLS.user.js')
+    };
+    const hls = collectCdnRefs(files).filter(x => x.pkg === 'hls.js');
+    assert.ok(hls.some(x => /@require/.test(files[x.file].split(/\r?\n/)[x.no - 1])), '@require が見つからない');
     assert.equal(new Set(hls.map(x => x.version)).size, 1, JSON.stringify(hls));
-    assert.ok(!/hls_js_ver:\s*'latest'/.test(r.files['src/_hls.js']), '設定の既定値が latest のまま');
-    assert.ok(!/hls\.js@\$\{/.test(r.files['src/_hls.js']), '設定の値で版を変えて読む経路が残っている');
+    assert.ok(!/hls_js_ver:\s*'latest'/.test(files['src/_hls.js']), '設定の既定値が latest のまま');
+    assert.ok(!/hls\.js@\$\{/.test(files['src/_hls.js']), '設定の値で版を変えて読む経路が残っている');
   });
 
   it('HLS: 致命的でないエラーに recoverMediaError を無条件に掛けない（呼び出しが無い）', function() {

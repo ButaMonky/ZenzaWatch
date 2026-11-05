@@ -343,7 +343,7 @@ const createStoryboardClasses = (util) => {
                 if (err === 'api_not_exist') {
                     throw 'Domand storyboard api not exist';
                 }
-                console.error('create domand session fail', err);
+                console.error('create domand session fail');
                 throw 'create domand session fail';
             }
         }
@@ -381,7 +381,7 @@ const createStoryboardClasses = (util) => {
                 if (err === 'api_not_exist') {
                     throw 'DMC storyboard api not exist';
                 }
-                console.error('create dmc session fail', err);
+                console.error('create dmc session fail');
                 throw 'create dmc session fail';
             }
         }
@@ -873,7 +873,7 @@ const VideoSessionWorker = (() => {
                         console.timeEnd('create DMC session');
                         resolve(this.info);
                     }).catch(err => {
-                        console.error('create api fail', err);
+                        console.error('create api fail');
                         reject(err.message || err);
                     });
                 });
@@ -906,7 +906,7 @@ const VideoSessionWorker = (() => {
                         timeout: 10000,
                         body: JSON.stringify(this._lastResponse)
                     });
-                }).catch(err => console.error('delete fail', err));
+                }).catch(err => console.error('delete fail'));
             }
             _onHeartBeatSuccess(result) {
                 let json = result;

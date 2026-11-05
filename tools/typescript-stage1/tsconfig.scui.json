@@ -18,6 +18,7 @@
     "outDir": ".generated/scui"
   },
   "include": [
-    "nico-src/Scene*.ts"
+    "nico-src/Scene*.ts",
+    "nico-src/TimelineGeometry.ts"
   ]
 }

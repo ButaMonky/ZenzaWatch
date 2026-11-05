@@ -46,6 +46,24 @@ describe('per-task git worktree（Task 094）', function() {
 
   const worktreeFor = (task) => path.join(root, 'task-worktrees', `task${task}`);
 
+  // Task961: a closed task's reservation is gone, but its number is still used by history.
+  it('Task961: refuses a number already used by a commit or branch, and reports the next free one', function() {
+    git(main, ['commit', '-q', '--allow-empty', '-m', 'fix(task905): earlier work']);
+    git(main, ['branch', 'task/907-other-lane']);
+    const used = runTool('create', '905', '--slug', 'mine');
+    assert.equal(used.status, 1, used.out);
+    assert.ok(/already used/.test(used.out) && /Next free number: 908/.test(used.out), used.out);
+    const usedBranch = runTool('create', '907');
+    assert.equal(usedBranch.status, 1, usedBranch.out);
+    const next = runTool('next');
+    assert.equal(next.status, 0, next.out);
+    assert.ok(/NEXT_TASK=908/.test(next.out), next.out);
+    const ok = runTool('create', '908');
+    assert.equal(ok.status, 0, ok.out);
+    const reopened = runTool('create', '905', '--slug', 'mine', '--reuse');
+    assert.equal(reopened.status, 0, reopened.out);
+  });
+
   it('Task番号を原子的に予約し、同じ番号の2個目を拒否する', function() {
     const a = runTool('create', '900');
     assert.equal(a.status, 0, a.out);
@@ -116,6 +134,25 @@ describe('per-task git worktree（Task 094）', function() {
     assert.equal(r.status, 1, r.out);
     assert.ok(/cannot integrate while a task run/.test(r.out), r.out);
     assert.equal(git(main, ['rev-parse', 'HEAD']).trim(), before);
+  });
+
+  it('Linuxで別の場所を指すnode_modulesリンクはdirtyとして拒否する', function() {
+    // Windows uses a junction rather than the Unix symlink that triggers this case.
+    if (process.platform === 'win32') { this.skip(); }
+    assert.equal(runTool('create', '906').status, 0);
+    const wt = worktreeFor('906');
+    const link = path.join(wt, 'node_modules');
+    fs.unlinkSync(link);
+    const foreign = path.join(root, 'foreign-dependencies');
+    fs.mkdirSync(foreign);
+    fs.symlinkSync(foreign, link, 'dir');
+    fs.writeFileSync(path.join(wt, 'task.txt'), 'task906\n');
+    git(wt, ['add', '--', 'task.txt']);
+    git(wt, ['commit', '-q', '-m', 'task906']);
+
+    const result = runTool('integrate', '906');
+    assert.equal(result.status, 1, result.out);
+    assert.ok(/worktree is dirty/.test(result.out), result.out);
   });
 
   it('main repoがdirtyなら新しいworktreeを作らない', function() {

@@ -92,7 +92,7 @@ class PlayList extends VideoList {
         this._replaceLoadGeneration = (this._replaceLoadGeneration || 0) + 1;
         this._invalidateAdditiveLoads();
         this._initializeView();
-        console.log('unserialize: ', data);
+        console.log('Playlist session restored');
         // Older sessions may contain over 10k entries. Keep the active video's
         // identity/position instead of blindly taking the first 10k rows.
         const oldIndex = PlayList.normalizeRestoredIndex(data.index, data.items.length, -1);
@@ -182,6 +182,7 @@ class PlayList extends VideoList {
                 break;
             case 'resetPlayedItemFlag':
                 this.model.resetPlayedItemFlag();
+                this.emit('update');
                 break;
             case 'removeNonActiveItem':
                 this.removeNonActiveItem();
@@ -308,8 +309,10 @@ class PlayList extends VideoList {
         const added = this._countNewlyAdded(videoListItems, beforeItemIds);
         const item = this.model.findByWatchId(options.watchId);
         if (item) {
-            item.isActive = true;
             item.isPlayed = true;
+            if (!this._activeItem || this.model.indexOf(this._activeItem) < 0) {
+                this._activeItem = item;
+            }
             this._refreshIndex(false);
         }
         setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
@@ -405,8 +408,10 @@ class PlayList extends VideoList {
         const added = this._countNewlyAdded(videoListItems, beforeItemIds);
         const item = this.model.findByWatchId(options.watchId);
         if (item) {
-            item.isActive = true;
             item.isPlayed = true;
+            if (!this._activeItem || this.model.indexOf(this._activeItem) < 0) {
+                this._activeItem = item;
+            }
             this._refreshIndex(false);
         }
         setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
@@ -491,7 +496,7 @@ class PlayList extends VideoList {
         if (!this._playlistApiLoader) {
             this._playlistApiLoader = PlaylistApiLoader;
         }
-        const timeKey = `loadPlaylist: ${playlist.type} ${playlist.id || playlist.options?.tag || playlist.options?.keyword}`;
+        const timeKey = `loadPlaylist #${PlayList._loadSeq = (PlayList._loadSeq || 0) + 1}`;
         window.console.time(timeKey);
         const additiveOwner = this._beginAdditiveLoad(options);
         const network = this._playlistApiLoader.load({ ...playlist,
@@ -500,7 +505,6 @@ class PlayList extends VideoList {
             isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
         }, msgInfo);
         return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
-            window.console.timeEnd(timeKey);
             if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
                 return { status: 'superseded', message: '' };
             }
@@ -569,6 +573,7 @@ class PlayList extends VideoList {
             }
             throw error;
         }).finally(() => {
+            window.console.timeEnd(timeKey);
             if (additiveOwner) {
                 additiveOwner.release();
             }
@@ -603,7 +608,7 @@ class PlayList extends VideoList {
             this._nicoSearchApiLoader = NicoSearchApiV2Loader;
         }
         // Task 074: 同じ語の検索が並行して走るとconsole.timeのラベルが重複して警告になるため、番号を付ける
-        const timerLabel = `loadSearchVideos${word} #${PlayList._searchSeq = (PlayList._searchSeq || 0) + 1}`;
+        const timerLabel = `loadSearchVideos #${PlayList._searchSeq = (PlayList._searchSeq || 0) + 1}`;
         window.console.time(timerLabel);
         options = options || {};
         const replaceOwner = this._beginReplaceLoad(options);
@@ -624,7 +629,6 @@ class PlayList extends VideoList {
         const network = loadItems();
         const additiveOwner = this._beginAdditiveLoad(options);
         return this._waitForAdditiveTurn(network, additiveOwner).then(videoListItems => {
-            window.console.timeEnd(timerLabel);
             if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
                 return { status: 'superseded', message: '' };
             }
@@ -672,6 +676,7 @@ class PlayList extends VideoList {
             }
             throw error;
         }).finally(() => {
+            window.console.timeEnd(timerLabel);
             if (additiveOwner) {
                 additiveOwner.release();
             }
@@ -1018,10 +1023,10 @@ class PlayList extends VideoList {
         if (this._activeItem) {
             this.model.removeItem(this._activeItem);
             this.model.insertItem(this._activeItem, 0);
-            this.setIndex(0);
+            this.setIndex(0, true);
         }
         else {
-            this.setIndex(-1);
+            this.setIndex(-1, true);
         }
         this.view.scrollTop(0);
     }

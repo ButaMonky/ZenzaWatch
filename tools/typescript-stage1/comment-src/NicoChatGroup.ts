@@ -113,7 +113,7 @@ class NicoChatGroup extends Emitter {
   get nonFilteredMembers() { return this._members; }
   onChange(e: {chat?:NicoGroupChat;composite?:boolean} | null) {
     if(e?.chat&&!e.composite&&this._nicoChatFilter.updateCompositeChat?.(e.chat)?.has(this))return;
-    console.log('NicoChatGroup.onChange: ', e);
+    console.log('NicoChatGroup.onChange');
     this._filteredMembers = [];
     this._filteredMembersValid = false;
     this.emit('change', {

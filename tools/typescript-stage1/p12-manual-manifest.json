@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "modules": [
+    {
+      "name": "ManualBookmarkPolicy",
+      "source": "tools/typescript-stage1/p12-src/ManualBookmarkPolicy.ts",
+      "runtime": "packages/zenza/src/resume/ManualBookmarkPolicy.js",
+      "sourceSha256": "88cf5d536ee16700a6fee83cafb18b525bd651cfc2d904d2d92b5a7e08d6a10a",
+      "emittedSha256": "97a52e2a97a6d0aad2162dac0178f49d5735bda2d8f21f1f95a8ff7a81492016",
+      "runtimeSha256": "97026f265801406a0e5b4a08bdaa31225f69fd8edf1d5d7843819d1e31379b3e"
+    },
+    {
+      "name": "ManualBookmarkStore",
+      "source": "tools/typescript-stage1/p12-src/ManualBookmarkStore.ts",
+      "runtime": "packages/zenza/src/resume/ManualBookmarkStore.js",
+      "sourceSha256": "44beffc6a90564414ae558e7221eba4a365ec38ea65c2c42702f324244bf6a70",
+      "emittedSha256": "2eb377428f2d9395ea1e891a05edac0eaf6d45810eb541317dd627d0fcbe480b",
+      "runtimeSha256": "8111cbf9203018687d2076d37faf088dc14604ae72da8bc311a24897319b821e"
+    },
+    {
+      "name": "ManualBookmarkSession",
+      "source": "tools/typescript-stage1/p12-src/ManualBookmarkSession.ts",
+      "runtime": "packages/zenza/src/resume/ManualBookmarkSession.js",
+      "sourceSha256": "0c61721aab99c5498806fb0ca313903c4dc1b79c17195039184884ca47eb1470",
+      "emittedSha256": "177003bc594b5003d81b8a0399064dc9565bc8ac9b4c76a90f9b951a03e1bb57",
+      "runtimeSha256": "d47842c50bfd942fc37a1dc8eb663fea1559c5c4d22bf5a9ef93d51703fbc26f"
+    },
+    {
+      "name": "ManualBookmarkPanel",
+      "source": "tools/typescript-stage1/p12-src/ManualBookmarkPanel.ts",
+      "runtime": "packages/zenza/src/resume/ManualBookmarkPanel.js",
+      "sourceSha256": "7bad3828ec57e431c91f30d17d0f14ec8917f010ff36629baa59aedf1c2b7f9d",
+      "emittedSha256": "b6f136c505dec57e31c66fc3de40970d85c04b733af05cc9f43076bf80b861c7",
+      "runtimeSha256": "3f27dcd99b80b75654c390aee7673b934c1b3ac76f8946017b15683ecbae6969"
+    },
+    {
+      "name": "ManualBookmarkDock",
+      "source": "tools/typescript-stage1/p12-src/ManualBookmarkDock.ts",
+      "runtime": "packages/zenza/src/resume/ManualBookmarkDock.js",
+      "sourceSha256": "2612eb1c2b0d66e53e0e5682a54326b7e6b107a911b9ff57dfb09008f940f465",
+      "emittedSha256": "6f0ef3aa479b5b36bcb6e5547f496109f65c15ef57027a4764faebc7a80faca1",
+      "runtimeSha256": "557937c12d9617355b5786bbef5007589fb15ab85c35aea3da7081e77f6e09b2"
+    }
+  ]
+}

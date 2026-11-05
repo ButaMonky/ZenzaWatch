@@ -21,7 +21,14 @@ async function compare(name,symbol,makeWorld,run,label){
   }
   assert.equal(out[0].r.ok,true,label+' legacy run failed: '+JSON.stringify(out[0].r.error));
   assert.deepEqual(out[1].r,out[0].r,label+' result');
-  assert.deepEqual(out[1].log,out[0].log,label+' side effects');
+  // AUD-83 deliberately removes the historical quota-failure backup deletion.
+  // Continue checking every other legacy side effect, without requiring the
+  // destructive removeItem call that is the subject of the product fix.
+  const expectedLog = name === 'PlayListSession' ?
+    out[0].log.filter(entry => !(Array.isArray(entry) &&
+      entry[0] === 'remove' && entry[1] === 'ZenzaWatchPlaylist')) :
+    out[0].log;
+  assert.deepEqual(out[1].log,expectedLog,label+' side effects');
 }
 const memStorage=log=>{const m=new Map();return {getItem:k=>m.has(k)?m.get(k):null,
   setItem:(k,v)=>{log.push(['set',k,v.length]);if(v.length>3000){const e=new Error('q');e.name='QuotaExceededError';throw e;}m.set(k,String(v));},

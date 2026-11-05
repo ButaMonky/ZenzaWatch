@@ -166,12 +166,16 @@ const {initialize} = (() => {
     CommentLayoutWorker.getInstance();
     void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
     window.console.time('init Workers');
-    return Promise.all([
+    // Storyboard cache is optional for playback readiness. Keep the Watch
+    // history DB prewarm gate: first-open WatchInfoCacheDb.get may otherwise
+    // move its IndexedDB open wait onto the pre-session playback path.
+    const requiredWorkers = [
       StoryboardWorker.initWorker(),
-      VideoSessionWorker.initWorker(),
-      StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable')),
-      WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'))
-    ]).then(() => window.console.timeEnd('init Workers'));
+      VideoSessionWorker.initWorker()
+    ];
+    void StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable'));
+    const watchCacheReady = WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
+    return Promise.all([...requiredWorkers, watchCacheReady]).then(() => window.console.timeEnd('init Workers'));
   };
 
 //@require replaceRedirectLinks

@@ -169,6 +169,7 @@ describe('Task939 actual shortcut tooltips and volume controls',function(){
       assert(settings.includes(value),'advanced settings missing shared helper: '+value);
     }
     assert(player.includes('https://github.com/ButaMonky/ZenzaWatch/raw/develop/'));
+    assert(!player.includes('ZenzaWatch-Back-up/raw/develop/'));
     assert(!read('src/VideoControlBar.js').includes('ミュート(M)'));
     assert(!read('src/VideoControlBar.js').includes('フルスクリーン(F)'));
   });

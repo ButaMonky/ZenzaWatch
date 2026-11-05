@@ -3339,26 +3339,23 @@ const emitter = util.emitter;
       }
 
       let zenza;
-      let token;
+      // The authenticated Zenza bridge uses the current watch-later API.
+      // Its add/remove requests do not use the retired mylist-page CSRF token.
       return ZenzaDetector.detect().then((z) => {
         zenza = z;
-      }).then(() => {
-        return CsrfTokenLoader.load().then((t) => {
-          token = t;
-        }, () => { return Promise.resolve(); });
       }).then(() => {
         if (!enableAutoComment) { return {}; }
         return ThumbInfoLoader.load(watchId);
       }).then((info) => {
         if (!enableAutoComment) {
-          return zenza.external.deflistAdd({watchId, token});
+          return zenza.external.deflistAdd({watchId});
         }
 
         const originalVideoId = info.originalVideoId ?
           `元動画: ${info.originalVideoId}` : '';
         const description = enableAutoComment ?
           `投稿者: ${info.owner.name} ${info.owner.linkId} ${originalVideoId}` : '';
-        return zenza.external.deflistAdd({watchId, description, token});
+        return zenza.external.deflistAdd({watchId, description});
       });
     };
 
@@ -3368,15 +3365,12 @@ const emitter = util.emitter;
       }
 
       let zenza;
-      let token;
+      // The authenticated Zenza bridge uses the current watch-later API.
+      // Its add/remove requests do not use the retired mylist-page CSRF token.
       return ZenzaDetector.detect().then((z) => {
         zenza = z;
       }).then(() => {
-        return CsrfTokenLoader.load().then((t) => {
-          token = t;
-        }, () => { return Promise.resolve(); });
-      }).then(() => {
-        return zenza.external.deflistRemove({watchId, token});
+        return zenza.external.deflistRemove({watchId});
       });
 
     };
@@ -3938,6 +3932,17 @@ const emitter = util.emitter;
       const mutationObserver = new MutationObserver(mutations => {
         for (const record of mutations) {
           const container = record.target;
+          // A long-lived page can replace whole result lists without toggling NG.
+          // Release removed cards instead of retaining every past DOM subtree.
+          for (const removed of record.removedNodes || []) {
+            for (const item of observed) {
+              if (removed === item || removed.contains?.(item)) {
+                intersectionObserver.unobserve(item);
+                observed.delete(item);
+                item.classList.remove('is-ng-wait', 'is-ng-queue', 'is-ng-current');
+              }
+            }
+          }
           if (record.addedNodes && record.addedNodes.length) {
             update(container);
           }
@@ -3963,6 +3968,7 @@ const emitter = util.emitter;
         observed.forEach(item => {
           item.classList.remove('is-ng-wait', 'is-ng-queue', 'is-ng-current');
         });
+        observed.clear();
       };
     };
 

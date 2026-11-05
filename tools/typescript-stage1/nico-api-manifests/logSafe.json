@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/logSafe.ts",
   "runtime": "packages/lib/src/infra/logSafe.js",
-  "sourceSha256": "736de0d53b69931467c1b15c68ce6f24ddd3fb04b44dbd035053c5114ea7c60c",
-  "runtimeSha256": "7e6bc66c8476e2f8bde3532d10112058a854d57fe587f37d04bbd764fd8308b3"
+  "sourceSha256": "b4bee8be5e7004cc9d11716b7230e2b32643a0b580310796733fd1e20b0fddbe",
+  "runtimeSha256": "e57a7aae295743a1d667d6f8c1f5b7fc3f189bd11f28e693e91a864beca29318"
 }

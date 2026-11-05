@@ -63,7 +63,18 @@ describe('Task934 fullscreen controls must not obstruct scene preview',()=>{
  it('the private installable userscript includes the fix, not just its test fixture',()=>{
    const bundle=read('dist/ZenzaWatch-dev.user.js');
    assert(bundle.includes('class SceneSearchPlacement'));
-   assert(bundle.includes('clearFullscreenIcons'));
+   // Task954 expanded the Task934 fullscreen-only helper into generic obstacle
+   // avoidance in every context. Assert bundled behavior, not a deleted
+   // private helper name from the earlier implementation.
+   const bundlePlacement=loadClass('dist/ZenzaWatch-dev.user.js',
+     'SceneSearchPlacement',createContext());
+   const rightRow=rect(1450,935,470,95);
+   const actual=bundlePlacement.compute(scene({obstacles:[rightRow]}));
+   assert.strictEqual(bundlePlacement.overlap(actual.rect,rightRow),0,
+     'the installable bundle must avoid the measured fullscreen icons');
+   const normal=bundlePlacement.compute(scene({context:'normal',obstacles:[rightRow]}));
+   assert.strictEqual(bundlePlacement.overlap(normal.rect,rightRow),0,
+     'generic avoidance must still protect normal-mode popovers');
    assert(bundle.includes('.controlItemContainer.right'));
    assert(bundle.includes('this.sceneSearchBinding.attach()'));
    // Task937: the feature persists beyond Task934; read the actual release

@@ -321,7 +321,7 @@ class NicoComment extends Emitter {
    * NG設定、フィルタ反映時など
    */
   _onChange(e) {
-    console.log('NicoComment.onChange: ', e);
+    console.log('NicoComment.onChange');
     e = e || {};
     const ev = {
       nicoComment: this,

@@ -8,6 +8,8 @@ TampermonkeyなどのUserscriptマネージャー上で動作します。
 
 ## インストール
 
+インストール・自動更新先は、常に公開版 `ButaMonky/ZenzaWatch` です。
+
 ### かんたんインストール
 
 TampermonkeyなどのUserscriptマネージャーをインストールした状態で、
@@ -16,25 +18,25 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.354-task978`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+  - 最新版：`2.7.356-task980`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
   - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
   - Discussion #36：ショートカット操作時の対象ボタンだけの表示とアニメーションを暫定対応。通常クリックではON/OFF文字を追加せず、いいねの演出は最後まで表示します。引き続き検証・改善します。
 
 - **[ZenzaHLS をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)**
-  - HLS / domand動画の再生や自動画質切り替えを担当します。 (version 0.0.41-task966)
+  - HLS / domand動画の再生や自動画質切り替えを担当します。 (version `0.0.42-task979`)
 
 基本的には上の2つをインストールしてください。
 
 #### オプション
 
 - [MylistPocket をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js)
-  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version 0.5.81-task971)
+  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version `0.5.81-task971`)
 
 - [ZenzaAdvancedSettings をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js)
-  - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version 0.3.82-task976)
+  - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version `0.3.83-task980`)
 
 - [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
-  - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version 0.0.5-task928)
+  - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version `0.0.5-task928`)
 
 > [!IMPORTANT]
 > 現在の改良内容は `ZenzaWatch-dev.user.js` に反映されています。
@@ -56,6 +58,17 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 詳しくは
 [本家ZenzaWatchからの変更点](./CHANGES_FROM_UPSTREAM.md)
 を参照してください。
+
+## しおり・ABリピート
+
+操作バーの「しおり・ABリピート」を押すと、3つのタブを開けます。
+
+- **しおり**：「＋ 現在位置にしおり」で保存します。名前は省略でき、一覧の「ここから再生」で移動、「編集」で名前の変更・削除ができます。
+- **ここまで見た**：自動更新される1件です。時刻を入力して保存、または削除できます。手動編集はこの端末に保存され、次の自動記録で置き換わります。
+- **ABリピート**：「現在位置をAに」「現在位置をBに」で区間を指定し、「リピートを開始」を押します。時刻の直接入力にも対応し、動画を切り替えると解除します。
+
+上級者設定の **再生・音声 → しおり・ABリピート** から、自動記録・完走時の削除・操作ボタン表示・ABリピートを切り替えられます。変更は「保存」で反映し、「キャンセル」「初期値に戻す」も使えます。
+手動しおりはこのブラウザの端末内に保存され、ニコニコの他端末とは同期しません。
 
 ## 上級者設定の表示整理
 

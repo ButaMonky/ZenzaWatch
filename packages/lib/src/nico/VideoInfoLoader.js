@@ -16,7 +16,21 @@ const debug = {};
 //===BEGIN===
 //@require CommentPostTarget
 const VideoInfoLoader = (function () {
+    // Release data left by older builds; full watch responses contain credentials.
+    debug.watchApiData = undefined;
     const cacheStorage = new CacheStorage(sessionStorage);
+    // Anonymous load generation: suppress only late module-level event publication.
+    // Dialog owns its own requestId and remains the final UI gate.
+    let anonymousWatchLoadSerial = 0;
+    // Caller opt-in only. Do not abort requests without a supplied signal.
+    // Use a fixed, non-identifying error; never expose an AbortSignal.reason.
+    const isCancelled = (options) => options.signal?.aborted === true;
+    const cancelledError = () => ({ reason: 'cancelled', message: 'Video info request cancelled' });
+    const requireActive = (options) => {
+        if (isCancelled(options)) {
+            throw cancelledError();
+        }
+    };
     // NICOCOMPAT-04 / Task455: validate only the structural fields that the
     // existing V4-to-legacy conversion must dereference. A missing optional
     // comment/media/owner section is not itself a schema failure.
@@ -413,11 +427,11 @@ const VideoInfoLoader = (function () {
                 }
             }
             catch (e) {
-                window.console.warn('投稿者IDの補完(snapshot)に失敗', videoId, e);
+                window.console.warn('投稿者IDの補完(snapshot)に失敗');
             }
         }
         if (!ownerId) {
-            window.console.info('投稿者IDを補完できませんでした', videoId);
+            window.console.info('投稿者IDを補完できませんでした');
             return;
         }
         wad.uploaderInfo = {
@@ -428,11 +442,11 @@ const VideoInfoLoader = (function () {
             isSupplemented: true,
             supplementedFrom: source
         };
-        window.console.info('%c投稿者IDを補完しました', 'background: lightgreen;', { videoId, ownerId, source });
+        window.console.info('投稿者IDを補完しました');
     };
-    const onLoadPromise = async (watchId, options, isRetry, resp) => {
+    const onLoadPromise = async (watchId, options, isRetry, isCurrent, resp) => {
         const data = await parseWatchApiData(resp, watchId);
-        debug.watchApiData = data;
+        requireActive(options);
         if (!data) {
             throw {
                 reason: 'network',
@@ -442,9 +456,14 @@ const VideoInfoLoader = (function () {
         if (data.reject) {
             throw data;
         }
-        await resolveMissingOwner(data).catch(e => window.console.warn('resolveMissingOwner', e));
+        await resolveMissingOwner(data).catch(() => window.console.warn('resolveMissingOwner failed'));
+        requireActive(options);
         if (data.isPlayable) {
-            emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);
+            // Old responses still settle their own promises, but cannot publish the
+            // module event after a newer load or a caller-supplied abort.
+            if (isCurrent()) {
+                emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);
+            }
             return data;
         }
         if (data.isNeedPayment && data.genreKey === 'anime' && Config.getValue('loadLinkedChannelVideo')) {
@@ -501,14 +520,18 @@ const VideoInfoLoader = (function () {
             info: data,
         };
     };
-    // Task174 (F14): normal logs carry only shareable fields. err.info holds the
-    // converted watch response (lazy/auth/access-right/thread keys, signed URLs).
-    const safeLoadError = (err) => (err && typeof err === 'object') ? {
-        reason: err.reason, message: err.message, type: err.type, name: err.name,
-        errorCode: err.errorCode ?? err.info?.errorCode ?? null,
-        statusCode: err.statusCode ?? err.info?.statusCode ?? null,
-        isPlayable: err.info?.isPlayable, isNeedPayment: err.info?.isNeedPayment
-    } : { message: String(err) };
+    // Even a message, name or status string can contain a URL or server payload.
+    // Keep diagnostics to fixed reasons, HTTP status numbers and boolean flags.
+    const safeLoadError = (err) => {
+        const reasons = ['network', 'forbidden', 'not found', 'flv', 'need payment', 'watch api', 'cancelled'];
+        const status = err?.statusCode ?? err?.info?.statusCode;
+        return {
+            reason: reasons.includes(err?.reason) ? err?.reason : 'unknown',
+            statusCode: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+            isPlayable: typeof err?.info?.isPlayable === 'boolean' ? err.info.isPlayable : undefined,
+            isNeedPayment: typeof err?.info?.isNeedPayment === 'boolean' ? err.info.isNeedPayment : undefined
+        };
+    };
     const createSleep = function (sleepTime) {
         return new Promise(resolve => setTimeout(resolve, sleepTime));
     };
@@ -534,43 +557,62 @@ const VideoInfoLoader = (function () {
         };
     };
     const fetchWatchResponse = async (watchId, options) => {
+        requireActive(options);
+        // Existing callers keep the identical options shape when no signal exists.
+        // CrossDomainGate strips the signal from its serializable transport payload.
+        const fetchOptions = options.signal ?
+            { credentials: 'include', signal: options.signal } : { credentials: 'include' };
         const pageUrl = `https://www.nicovideo.jp/watch/${encodeURIComponent(watchId)}` +
             (options.economy === true ? '?eco=1' : '');
-        const pageResponse = await netUtil.fetch(pageUrl, { credentials: 'include' });
+        const pageResponse = await netUtil.fetch(pageUrl, fetchOptions);
+        requireActive(options);
         // Older test/extension adapters may offer json() only.
         if (typeof pageResponse.text !== 'function') {
-            return pageResponse.json();
+            const json = await pageResponse.json();
+            requireActive(options);
+            return json;
         }
         if (pageResponse.status >= 500) {
             throw { reason: 'network', message: '通信エラー(network)' };
         }
         const html = await pageResponse.text();
+        requireActive(options);
         const embedded = parseWatchPageResponse(html);
         if (embedded)
             return embedded;
         // Keep supporting layouts without the embedded metadata (e.g. older
         // channel/error pages), without making the legacy endpoint the normal path.
         const legacyUrl = pageUrl + (options.economy === true ? '&' : '?') + 'responseType=json';
-        const legacyResponse = await netUtil.fetch(legacyUrl, { credentials: 'include' });
+        const legacyResponse = await netUtil.fetch(legacyUrl, fetchOptions);
+        requireActive(options);
+        let json;
         try {
-            const json = await legacyResponse.json();
-            if (json?.data?.response)
-                return json;
+            json = await legacyResponse.json();
         }
         catch (_) { /* Legacy endpoint may return HTML or 400 without JSON. */ }
+        requireActive(options);
+        if (json?.data?.response)
+            return json;
         throw {
             reason: 'watch api', errorCode: 'WATCH_PAGE_META_MISSING',
             message: '動画情報が見つかりません（公式ページの構造を要確認）'
         };
     };
-    const loadPromise = function (watchId, options, isRetry = false) {
-        console.log('%cloadFromWatchApiData...', 'background: lightgreen;', watchId);
+    const loadPromise = function (watchId, options, isRetry = false, isCurrent = () => true) {
+        if (isCancelled(options)) {
+            return Promise.reject(cancelledError());
+        }
+        console.log('loadFromWatchApiData');
         return fetchWatchResponse(watchId, options)
-            .catch(err => Promise.reject(err && typeof err === 'object' && err.reason ? err :
-            { reason: 'network', message: '通信エラー(network)' }))
-            .then(onLoadPromise.bind(this, watchId, options, isRetry))
+            .catch(err => Promise.reject(isCancelled(options) ? cancelledError() :
+            err && typeof err === 'object' && err.reason ? err :
+                { reason: 'network', message: '通信エラー(network)' }))
+            .then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
             .catch((err) => {
-            window.console.error('err', { err: safeLoadError(err), isRetry, watchId });
+            if (isCancelled(options)) {
+                return Promise.reject(cancelledError());
+            }
+            window.console.error('watch api error', { err: safeLoadError(err), isRetry });
             if (isRetry) {
                 return Promise.reject({
                     watchId,
@@ -590,15 +632,17 @@ const VideoInfoLoader = (function () {
             }
             else if (err.reason === 'network') {
                 return createSleep(5000).then(() => {
+                    requireActive(options);
                     window.console.warn('network error & retry');
-                    return loadPromise(watchId, options, true);
+                    return loadPromise(watchId, options, true, isCurrent);
                 });
             }
             else if (err.reason === 'flv' && !options.economy) {
                 options.economy = true;
                 window.console.log('%cエコノミーにフォールバック(flv)', 'background: cyan; color: red;');
                 return createSleep(500).then(() => {
-                    return loadPromise(watchId, options, true);
+                    requireActive(options);
+                    return loadPromise(watchId, options, true, isCurrent);
                 });
             }
             else {
@@ -613,9 +657,15 @@ const VideoInfoLoader = (function () {
     };
     return {
         load: function (watchId, options) {
-            const timeKey = `watchAPI:${watchId}`;
+            debug.watchApiData = undefined;
+            const generation = ++anonymousWatchLoadSerial;
+            const callerSignal = options.signal;
+            const isCurrent = () => generation === anonymousWatchLoadSerial &&
+                !(callerSignal != null && typeof callerSignal === 'object' &&
+                    callerSignal.aborted === true);
+            const timeKey = `watchAPI:${generation}`;
             window.console.time(timeKey);
-            return loadPromise(watchId, options).then((result) => {
+            return loadPromise(watchId, options, false, isCurrent).then((result) => {
                 window.console.timeEnd(timeKey);
                 return result;
             }, (err) => {

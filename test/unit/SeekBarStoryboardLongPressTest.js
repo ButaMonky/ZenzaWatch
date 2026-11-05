@@ -31,7 +31,11 @@ function harness() {
     add(value) { classes.add(value); },
     remove(value) { classes.delete(value); }
   };
-  bar._seekBar = {contains: target => target?.withinSeekBar === true};
+  bar._seekBar = {
+    contains: target => target?.withinSeekBar === true,
+    offsetWidth: 1000,
+    getBoundingClientRect: () => ({left: 0, width: 1000})
+  };
   bar._bindDragEvent = () => callbacks.push('bind');
   bar._unbindDragEvent = () => callbacks.push('unbind');
   bar.state = {isDragging: false};

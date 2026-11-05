@@ -144,12 +144,13 @@ describe('Task942 storyboard async notification + toolbar click races',()=>{
     h.drain();
     assert.deepStrictEqual(h.actions,[['created',false],['enable']]);
   });
-  it('retains the distinct storyboard BAR shortcut and private distribution channel',()=>{
+  it('retains the distinct storyboard BAR shortcut and public-only update destination',()=>{
     const b=read('src/VideoControlBar.js'),s=read('packages/zenza/src/ShortcutActions.js');
     assert(b.includes('this.storyboard.toggle()'));
     assert(s.includes("command: 'toggle-enableStoryboardBar'"));
     assert(s.includes("command: 'toggle-enableStoryboard'"));
     const dist=read('dist/ZenzaWatch-dev.user.js');
-    assert(dist.includes('ZenzaWatch/raw/develop'));
+    assert(dist.includes('https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js'));
+    assert(!dist.includes('ZenzaWatch-Back-up/raw/develop'));
   });
 });

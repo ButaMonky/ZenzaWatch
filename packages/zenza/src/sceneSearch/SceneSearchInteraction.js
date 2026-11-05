@@ -17,6 +17,10 @@ class SceneSearchInteraction {
         this._hoverSources = new Set();
         this._focusSources = new Set();
         this._dragging = false;
+        this._nativePointerIds = new Set();
+        this._nativePointerDocument = null;
+        this._nativePointerOnStop = null;
+        this._nativePointerEnd = event => this.finishNativePointer(event);
         this._anchor = null;
         this._timer = null;
         this._unsubscribe = null;
@@ -199,6 +203,38 @@ class SceneSearchInteraction {
         }
         this._syncPreviewHold();
     }
+    startNativePointer(e, document, onStop) {
+        if (this._disposed)
+            return;
+        const id = e?.pointerId ?? 'main';
+        const empty = this._nativePointerIds.size === 0;
+        this._nativePointerIds.add(id);
+        if (empty && this._nativePointerIds.size === 1) {
+            // One owner for pointer release outside the seekbar, including cancel.
+            this._nativePointerDocument = document;
+            this._nativePointerOnStop = onStop;
+            document.addEventListener('pointerup', this._nativePointerEnd, true);
+            document.addEventListener('pointercancel', this._nativePointerEnd, true);
+            this.setDragging(true);
+        }
+    }
+    finishNativePointer(e) {
+        const id = e?.pointerId ?? 'main';
+        if (!this._nativePointerIds.delete(id))
+            return;
+        if (!this._nativePointerIds.size)
+            this._nativePointerOnStop?.();
+    }
+    clearNativePointers() {
+        const active = this._nativePointerIds.size > 0;
+        this._nativePointerIds.clear();
+        const doc = this._nativePointerDocument;
+        this._nativePointerDocument = null;
+        this._nativePointerOnStop = null;
+        doc?.removeEventListener('pointerup', this._nativePointerEnd, true);
+        doc?.removeEventListener('pointercancel', this._nativePointerEnd, true);
+        return active;
+    }
     setDragging(value) {
         if (this._disposed) {
             return;
@@ -248,6 +284,7 @@ class SceneSearchInteraction {
         if (this._disposed) {
             return;
         }
+        this.clearNativePointers();
         this.reset();
         this._idle?.dispose();
         this._disposed = true;

@@ -77,13 +77,12 @@
   "scripts": {
     "build": "node ./build.js --dev",
     "watch": "node ./build.js --dev --watch",
+    "pretest": "node tools/check-root-test-generated.cjs",
     "test": "cross-env NODE_ENV=test mocha --require ./test/setup.js test/**/unit/*.js",
     "lint:syntax": "eslint --no-eslintrc --env es2022,node,browser --parser-options \"sourceType: module\" --ext .js ./src ./packages",
     "test:browser": "webpack-dev-server --inline",
     "build:production": "node ./build.js",
     "build:monkey": "node ./build.js --dev",
-    "watch:monkey": "node ./build.js --dev --watch",
-    "nico:sync": "npm --prefix tools/typescript-stage1 run nico:sync",
-    "nico:verify": "npm --prefix tools/typescript-stage1 run nico:verify"
+    "watch:monkey": "node ./build.js --dev --watch"
   }
 }

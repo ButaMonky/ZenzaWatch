@@ -1861,6 +1861,7 @@ class TimeMachineView extends BaseViewComponent {
         const now = this._toTDate(Date.now());
         input.setAttribute('max', now);
         input.setAttribute('value', this._toTDate(this._currentTimestamp));
+        input.value = this._toTDate(this._currentTimestamp);
         if (Number.isFinite(this._videoPostTime)) {
             input.setAttribute('min', this._toTDate(this._videoPostTime));
         }
@@ -1869,7 +1870,9 @@ class TimeMachineView extends BaseViewComponent {
         }
         this.setState({ isSelecting: true });
         window.setTimeout(() => {
-            input.focus();
+            if (this._state.isSelecting && this._elm.input === input) {
+                input.focus();
+            }
         }, 0);
     }
     closeSelect() {
@@ -1917,7 +1920,7 @@ class TimeMachineView extends BaseViewComponent {
     }
     _onSubmit() {
         const val = this._elm.input.value;
-        if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
+        if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(:\d\d(?:\.\d{1,3})?)?$/.test(val)) {
             return;
         }
         const time = new Date(val).getTime();

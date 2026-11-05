@@ -6,13 +6,13 @@ const path=require('path');
 const {inferBuildChannel}=require('../helpers/buildSandbox');
 
 describe('Task955 isolated userscript build channel parity',()=>{
-  it('keeps the private channel in a copied worktree without .git',()=>{
+  it('never infers a private installer channel from copied metadata',()=>{
     const dir=fs.mkdtempSync(path.join(os.tmpdir(),'zw955-private-'));
     try {
       fs.mkdirSync(path.join(dir,'dist'));
       fs.writeFileSync(path.join(dir,'dist','ZenzaWatch-dev.user.js'),
         '// ==UserScript==\n// @downloadURL    https://github.com/ButaMonky/ZenzaWatch-Back-up/raw/develop/dist/ZenzaWatch-dev.user.js\n// ==/UserScript==');
-      assert.strictEqual(inferBuildChannel(dir),'private');
+      assert.strictEqual(inferBuildChannel(dir),'public');
     } finally {fs.rmSync(dir,{recursive:true,force:true});}
   });
   it('keeps public-channel and missing metadata public',()=>{

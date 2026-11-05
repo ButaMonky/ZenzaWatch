@@ -1,5 +1,7 @@
 // GENERATED FROM tools/typescript-stage1/nico-src/SceneSearchPreviewView.ts
+import {SceneSearchDomLease} from './SceneSearchDomLease';
 //===BEGIN===
+//@require SceneSearchDomLease
 class SceneSearchPreviewView {
     document;
     host;
@@ -12,7 +14,10 @@ class SceneSearchPreviewView {
     imageBox = null;
     listSlot = null;
     style = null;
-    snapshots = new Map();
+    leases = new Set();
+    imageLease = null;
+    ownedLists = new Set();
+    listLeases = new Map();
     disposed = false;
     state = null;
     onAction;
@@ -24,6 +29,8 @@ class SceneSearchPreviewView {
         this.mini = mini;
         this.listView = listView;
         this.id = id;
+        if (listView)
+            this.ownedLists.add(listView);
         this.onAction = onAction || (() => { });
         this.click = event => {
             const button = event.target?.closest('button[data-scui-action]');
@@ -36,117 +43,132 @@ class SceneSearchPreviewView {
             event.stopPropagation();
         };
     }
-    remember(node) {
-        if (this.snapshots.has(node))
-            return;
-        this.snapshots.set(node, { parent: node.parentNode, next: node.nextSibling,
-            style: node.getAttribute('style'), className: node.className, hidden: node.hidden });
-    }
-    typography(node) {
-        const computed = this.document.defaultView?.getComputedStyle(node);
-        for (const key of ['font-family', 'font-size', 'line-height', 'font-weight', 'letter-spacing', 'word-spacing']) {
-            const value = computed?.getPropertyValue(key);
-            if (value)
-                node.style.setProperty(key, value);
+    releaseLease(lease) {
+        try {
+            lease.restore();
+        }
+        finally {
+            if (lease.released)
+                this.leases.delete(lease);
         }
     }
-    restore(node) {
-        const old = this.snapshots.get(node);
-        if (!old)
-            return;
-        if (old.parent) {
-            old.parent.insertBefore(node, old.next?.parentNode === old.parent ? old.next : null);
+    attempt(action, errors) {
+        try {
+            action();
         }
-        else
-            node.remove();
-        if (old.style === null)
-            node.removeAttribute('style');
-        else
-            node.setAttribute('style', old.style);
-        node.className = old.className;
-        node.hidden = old.hidden;
-        this.snapshots.delete(node);
+        catch (error) {
+            errors.push(error);
+        }
+    }
+    throwErrors(errors, message) {
+        if (errors.length === 1)
+            throw errors[0];
+        if (errors.length > 1)
+            throw new AggregateError(errors, message);
+    }
+    releaseList(handle) {
+        const errors = [], lease = this.listLeases.get(handle);
+        if (lease)
+            this.attempt(() => {
+                this.releaseLease(lease);
+                this.listLeases.delete(handle);
+            }, errors);
+        if (this.ownedLists.has(handle))
+            this.attempt(() => {
+                handle.dispose();
+                this.ownedLists.delete(handle);
+            }, errors);
+        this.throwErrors(errors, 'Could not fully dispose the scene comment list');
     }
     mount() {
         if (this.disposed || this.root)
             return;
-        const d = this.document, root = d.createElement('section');
-        root.className = 'zenzaSceneSearchHost zenzaSceneSharedPreview';
-        root.dataset['layout'] = this.id;
-        root.setAttribute('role', 'group');
-        root.setAttribute('aria-label', 'シーンサーチ');
-        root.hidden = true;
-        const media = d.createElement('div');
-        media.className = 'zenzaSceneMedia';
-        const left = d.createElement('div');
-        left.className = 'zenzaSceneLeft';
-        this.imageBox = d.createElement('div');
-        this.imageBox.className = 'zenzaSceneImageBox';
-        this.logical = d.createElement('div');
-        this.logical.className = 'zenzaSceneLogical';
-        this.imageBox.append(this.logical);
-        const foot = d.createElement('div');
-        foot.className = 'zenzaSceneFoot';
-        const time = d.createElement('span');
-        time.className = 'zenzaSceneTime';
-        time.textContent = '0:00';
-        foot.append(time);
-        const actions = d.createElement('div');
-        actions.className = 'zenzaSceneActions';
-        for (const [action, symbol, label] of [
-            ['seek-back', '‹', '指定秒数戻る'], ['comment-toggle', '💬', 'コメント一覧を開く'],
-            ['seek-forward', '›', '指定秒数進む']
-        ]) {
-            const button = d.createElement('button');
-            button.type = 'button';
-            button.className = 'zenzaSceneBtn scene-' + action;
-            button.dataset['scuiAction'] = action;
-            button.textContent = symbol;
-            button.title = label;
-            button.setAttribute('aria-label', label);
-            actions.append(button);
+        try {
+            const d = this.document, root = d.createElement('section');
+            this.root = root;
+            root.className = 'zenzaSceneSearchHost zenzaSceneSharedPreview';
+            root.dataset['layout'] = this.id;
+            root.setAttribute('role', 'group');
+            root.setAttribute('aria-label', 'シーンサーチ');
+            root.hidden = true;
+            const media = d.createElement('div');
+            media.className = 'zenzaSceneMedia';
+            const left = d.createElement('div');
+            left.className = 'zenzaSceneLeft';
+            this.imageBox = d.createElement('div');
+            this.imageBox.className = 'zenzaSceneImageBox';
+            this.logical = d.createElement('div');
+            this.logical.className = 'zenzaSceneLogical';
+            this.imageBox.append(this.logical);
+            const foot = d.createElement('div');
+            foot.className = 'zenzaSceneFoot';
+            const time = d.createElement('span');
+            time.className = 'zenzaSceneTime';
+            time.textContent = '0:00';
+            foot.append(time);
+            const actions = d.createElement('div');
+            actions.className = 'zenzaSceneActions';
+            for (const [action, symbol, label] of [
+                ['seek-back', '‹', '指定秒数戻る'], ['comment-toggle', '💬', 'コメント一覧を開く'],
+                ['seek-forward', '›', '指定秒数進む']
+            ]) {
+                const button = d.createElement('button');
+                button.type = 'button';
+                button.className = 'zenzaSceneBtn scene-' + action;
+                button.dataset['scuiAction'] = action;
+                button.textContent = symbol;
+                button.title = label;
+                button.setAttribute('aria-label', label);
+                actions.append(button);
+            }
+            foot.append(actions);
+            left.append(this.imageBox, foot);
+            this.listSlot = d.createElement('div');
+            this.listSlot.className = 'zenzaSceneListSlot';
+            const listHead = d.createElement('div');
+            listHead.className = 'zenzaSceneListHead';
+            const listTitle = d.createElement('span');
+            listTitle.textContent = 'コメント';
+            const search = d.createElement('button');
+            search.type = 'button';
+            search.className = 'zenzaSceneBtn scene-comment-search';
+            search.dataset['scuiAction'] = 'comment-search';
+            search.textContent = '⌕';
+            search.title = 'コメント検索';
+            search.setAttribute('aria-label', 'コメント検索');
+            search.setAttribute('aria-expanded', 'false');
+            listHead.append(listTitle, search);
+            this.listSlot.append(listHead);
+            this.listSlot.hidden = true;
+            media.append(left, this.listSlot);
+            root.append(media);
+            this.style = d.createElement('style');
+            this.style.textContent = SceneSearchPreviewView.CSS;
+            this.style.dataset['scuiSharedStyle'] = '';
+            d.head.append(this.style);
+            this.host.append(root);
+            root.addEventListener('click', this.click);
+            const image = this.image;
+            this.image = null;
+            this.setImage(image);
+            if (this.mini) {
+                const lease = new SceneSearchDomLease(this.mini, { position: true,
+                    styles: SceneSearchDomLease.typography, classes: ['zenzaSceneNativeMini'], hidden: true });
+                this.leases.add(lease);
+                SceneSearchDomLease.preserveTypography(this.mini);
+                lease.moveTo(this.logical);
+                this.mini.classList.add('zenzaSceneNativeMini');
+            }
+            const list = this.listView;
+            this.listView = null;
+            this.setListView(list);
+            this.fit({ imageScale: 1, listWidth: 280, listMaxHeight: 240 });
         }
-        foot.append(actions);
-        left.append(this.imageBox, foot);
-        this.listSlot = d.createElement('div');
-        this.listSlot.className = 'zenzaSceneListSlot';
-        const listHead = d.createElement('div');
-        listHead.className = 'zenzaSceneListHead';
-        const listTitle = d.createElement('span');
-        listTitle.textContent = 'コメント';
-        const search = d.createElement('button');
-        search.type = 'button';
-        search.className = 'zenzaSceneBtn scene-comment-search';
-        search.dataset['scuiAction'] = 'comment-search';
-        search.textContent = '⌕';
-        search.title = 'コメント検索';
-        search.setAttribute('aria-label', 'コメント検索');
-        search.setAttribute('aria-expanded', 'false');
-        listHead.append(listTitle, search);
-        this.listSlot.append(listHead);
-        this.listSlot.hidden = true;
-        media.append(left, this.listSlot);
-        root.append(media);
-        this.style = d.createElement('style');
-        this.style.textContent = SceneSearchPreviewView.CSS;
-        this.style.dataset['scuiSharedStyle'] = '';
-        d.head.append(this.style);
-        this.host.append(root);
-        this.root = root;
-        root.addEventListener('click', this.click);
-        const image = this.image;
-        this.image = null;
-        this.setImage(image);
-        if (this.mini) {
-            this.remember(this.mini);
-            this.typography(this.mini);
-            this.logical.append(this.mini);
-            this.mini.classList.add('zenzaSceneNativeMini');
+        catch (error) {
+            const errors = [error];
+            this.attempt(() => this.dispose(), errors);
+            this.throwErrors(errors, 'Scene preview mount and rollback both failed');
         }
-        const list = this.listView;
-        this.listView = null;
-        this.setListView(list);
-        this.fit({ imageScale: 1, listWidth: 280, listMaxHeight: 240 });
     }
     setImage(image) {
         if (this.disposed)
@@ -156,29 +178,66 @@ class SceneSearchPreviewView {
                 this.render(this.state);
             return;
         }
-        if (this.image)
-            this.restore(this.image);
-        this.image = image;
-        if (image && this.logical) {
-            this.remember(image);
-            this.logical.prepend(image);
+        const logical = this.logical;
+        if (!logical) {
+            this.image = image;
+            return;
         }
+        const previousLease = this.imageLease, previousNext = this.image?.nextSibling || null;
+        const lease = image ? new SceneSearchDomLease(image, { position: true }) : null;
+        if (lease)
+            this.leases.add(lease);
+        try {
+            // Keep the current canvas in place until its replacement is safely attached.
+            lease?.moveTo(logical, logical.firstChild);
+            if (previousLease)
+                this.releaseLease(previousLease);
+        }
+        catch (error) {
+            const errors = [error];
+            if (lease)
+                this.attempt(() => this.releaseLease(lease), errors);
+            if (previousLease && !previousLease.released)
+                this.attempt(() => {
+                    previousLease.moveTo(logical, previousNext?.parentNode === logical ? previousNext : null);
+                }, errors);
+            this.throwErrors(errors, 'Scene preview image replacement and rollback both failed');
+        }
+        this.image = image;
+        this.imageLease = lease;
         if (this.state)
             this.render(this.state);
     }
     setListView(handle) {
         if (this.disposed || this.listView === handle)
             return;
-        if (this.listView) {
-            this.listView.dispose();
-        }
+        const previous = this.listView;
+        this.listView = null;
+        if (previous)
+            this.releaseList(previous);
         this.listView = handle;
+        if (handle)
+            this.ownedLists.add(handle);
         if (handle && this.listSlot) {
-            this.typography(handle.element);
-            this.listSlot.append(handle.element);
-            handle.element.classList.add('zenzaSceneNativeList');
-            handle.element.tabIndex = 0;
-            handle.element.setAttribute('aria-label', 'シーンのコメント一覧');
+            try {
+                const lease = new SceneSearchDomLease(handle.element, {
+                    styles: [...SceneSearchDomLease.typography, '--scene-list-alpha', 'opacity', 'height'],
+                    classes: ['zenzaSceneNativeList'], attributes: ['tabindex', 'aria-label'], hidden: true
+                });
+                this.leases.add(lease);
+                this.listLeases.set(handle, lease);
+                SceneSearchDomLease.preserveTypography(handle.element);
+                this.listSlot.append(handle.element);
+                handle.element.classList.add('zenzaSceneNativeList');
+                handle.element.tabIndex = 0;
+                handle.element.setAttribute('aria-label', 'シーンのコメント一覧');
+            }
+            catch (error) {
+                this.listView = null;
+                const errors = [error];
+                this.attempt(() => this.releaseList(handle), errors);
+                this.throwErrors(errors, 'Scene comment list attachment and rollback both failed');
+            }
         }
         if (this.state)
             this.render(this.state);
@@ -259,24 +318,40 @@ class SceneSearchPreviewView {
             .filter(rect => rect.width > 0 && rect.height > 0);
     }
     dispose() {
-        if (this.disposed)
-            return;
         this.disposed = true;
-        this.listView?.dispose();
-        this.listView = null;
-        for (const node of [...this.snapshots.keys()].reverse())
-            this.restore(node);
-        this.root?.removeEventListener('click', this.click);
-        this.root?.remove();
-        this.style?.remove();
-        this.root = null;
-        this.style = null;
+        const errors = [];
+        // Each successfully released resource is forgotten immediately; failures remain
+        // owned so a later dispose call can retry without repeating successful cleanup.
+        for (const handle of [...this.ownedLists])
+            this.attempt(() => {
+                handle.dispose();
+                this.ownedLists.delete(handle);
+            }, errors);
+        for (const lease of [...this.leases].reverse())
+            this.attempt(() => this.releaseLease(lease), errors);
+        for (const [handle, lease] of this.listLeases)
+            if (lease.released)
+                this.listLeases.delete(handle);
+        const root = this.root;
+        if (root) {
+            const before = errors.length;
+            this.attempt(() => root.removeEventListener('click', this.click), errors);
+            this.attempt(() => root.remove(), errors);
+            if (errors.length === before)
+                this.root = null;
+        }
+        const style = this.style;
+        if (style)
+            this.attempt(() => { style.remove(); this.style = null; }, errors);
         this.state = null;
+        this.listView = null;
+        this.imageLease = null;
         this.logical = null;
         this.imageBox = null;
         this.listSlot = null;
         this.image = null;
         this.mini = null;
+        this.throwErrors(errors, 'Could not fully dispose the scene preview');
     }
     static get CSS() {
         return `

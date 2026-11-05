@@ -14,7 +14,8 @@ test('SHORTCUT-UNSET-ZERO-001: an unset (0) legacy key never matches a keyCode-0
   for(const k of ['old','new']){
     const emitted=[];
     class Emitter{emit(...a){emitted.push(a.slice(0,2));}}
-    const S=loadLegacy(pair('ShortcutKeyEmitter')[k],'ShortcutKeyEmitter',{Emitter,SHORTCUT_ACTIONS:[],document:{}});
+    const S=loadLegacy(pair('ShortcutKeyEmitter')[k],'ShortcutKeyEmitter',{Emitter,SHORTCUT_ACTIONS:[],document:{},
+      window:{addEventListener(){}}});
     const handlers={};
     const element={addEventListener:(type,fn)=>{handlers[type]=fn;}};
     const config={props:{KEY_CLOSE:0,KEY_SEEK_LEFT:37,KEY_TOGGLE_PLAY:32},on(){}};

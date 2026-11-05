@@ -15,6 +15,7 @@ function world(opt={}){
   const store={
     put:async r=>{L('put',r);if(opt.putFails)throw Error('quota');rows.set(r.watchId,r);return 'k';},
     update:async req=>{L('update',req);if(opt.updateResult!==undefined)return opt.updateResult(req);return {watchId:req.key,...req.defaults,...req.patch};},
+    get:async q=>{L('get',q);return rows.get(q.key);},
     updateTime:async q=>{L('updateTime',q);return rows.get(q.key);},
     delete:async q=>{L('delete',q);return 'deleted';},
     close:async()=>{L('close');return 'closed';},
@@ -62,6 +63,34 @@ test('ThumbInfoCacheDb: open, 90-day GC per open, put/get/delete/close',async()=
 });
 
 const watch=pair('WatchInfoCacheDb');
+// The Watch cache now intentionally separates a readonly history snapshot from
+// the best-effort updatedAt write. Retain full legacy parity for everything
+// except the single, explicitly asserted get/updateTime operation split.
+async function compareWatchReadTouch(label,run,opt={}){
+  const a=world(opt),b=world(opt);
+  const A=loadLegacy(watch.before,watch.name,a.globals);
+  const B=loadLegacy(watch.after,watch.name,b.globals);
+  const ra=await settle(()=>run(A,a)),rb=await settle(()=>run(B,b));
+  await tick();
+  assert.deepEqual(snapshot(rb),snapshot(ra),label+' public result');
+  const other=log=>log.filter(entry=>entry[0]!=='get'&&entry[0]!=='updateTime');
+  assert.deepEqual(other(b.log),other(a.log),label+' unchanged side effects');
+  const previous=a.log.filter(entry=>entry[0]==='updateTime');
+  const reads=b.log.filter(entry=>entry[0]==='get');
+  const touches=b.log.filter(entry=>entry[0]==='updateTime');
+  assert.equal(previous.length,1,label+' original touch once');
+  assert.equal(reads.length,1,label+' readonly get once');
+  assert.deepEqual(reads[0][1],previous[0][1],label+' same synthetic key');
+  const hasRow=!!(opt.rows&&Object.prototype.hasOwnProperty.call(opt.rows,'sm9'));
+  assert.equal(touches.length,hasRow?1:0,
+    label+' touch existing history only');
+  if(hasRow){
+    assert.deepEqual(touches[0][1],previous[0][1],label+' unchanged timestamp key');
+    assert.ok(b.log.indexOf(reads[0])<b.log.indexOf(touches[0]),
+      label+' readonly fetch precedes background touch');
+  }
+  return ra;
+}
 const videoInfo=(extra={})=>({videoId:'sm9',threadId:'1173108780',postedAt:'2007-03-06T00:33:00+09:00',owner:{linkId:'user/4'},
   toJSON(){return {raw:true,videoId:'sm9'};},...extra});
 test('WatchInfoCacheDb: update request shape and acknowledgement',async()=>{
@@ -77,9 +106,9 @@ test('WatchInfoCacheDb: update request shape and acknowledgement',async()=>{
 });
 
 test('WatchInfoCacheDb: open, bridge, get/delete/close/gc',async()=>{
-  await compare(watch,'www ops',async d=>[keys(await d.initWorker()),await d.get('sm9'),await d.delete('sm9'),await d.close(),
+  await compareWatchReadTouch('www ops',async d=>[keys(await d.initWorker()),await d.get('sm9'),await d.delete('sm9'),await d.close(),
     await d.gc(),await d.gc(1000),(await d.open())===(await d.open())],{rows:{sm9:{watchId:'sm9'}}});
-  await compare(watch,'bridge',async(d,w)=>{const r=d.api(w.bridge);return [r===w.bridge,await d.get('sm9')];},{host:'live.nicovideo.jp'});
+  await compareWatchReadTouch('bridge',async(d,w)=>{const r=d.api(w.bridge);return [r===w.bridge,await d.get('sm9')];},{host:'live.nicovideo.jp'});
   await compare(watch,'bridge missing',d=>d.get('sm9'),{host:'live.nicovideo.jp'});
   await compare(watch,'open fails',d=>d.get('sm9'),{openFails:true});
 });

@@ -10,7 +10,8 @@ emitNico();
 const pair=name=>{const s=NICO_API_BY_NAME[name];return [read(s.fixture),read(s.runtime)];};
 const flush=async(n=8)=>{for(let i=0;i<n;i++)await Promise.resolve();};
 
-async function compare(name,symbol,makeWorld,run,label,wrap=code=>code){
+async function compare(name,symbol,makeWorld,run,label,wrap=code=>code,
+  checkResult=(actual,expected,title)=>assert.deepEqual(actual,expected,title+' result')){
   const out=[];
   for(const code of pair(name)){
     const w=makeWorld();
@@ -21,7 +22,7 @@ async function compare(name,symbol,makeWorld,run,label,wrap=code=>code){
   }
   // Both sides must actually run: an identical crash would otherwise compare equal.
   assert.equal(out[0].r.ok,true,label+' legacy run failed: '+JSON.stringify(out[0].r.error));
-  assert.deepEqual(out[1].r,out[0].r,label+' result');
+  checkResult(out[1].r,out[0].r,label);
   assert.deepEqual(out[1].log,out[0].log,label+' side effects');
 }
 
@@ -37,7 +38,28 @@ test('logSafe: secrets, personal keys, JSON strings, depth, cycles, URL, Error',
       l.redact([{session:'s'},{x:1}]),
       ['signature','user_name','text','videoId','threadKey','KEYS'].map(l.isSecretKey),l.MASK
     ];
-  },'redact');
+  },'redact',code=>code,(actual,legacy,label)=>{
+    // B18 deliberately masks URL and Error.message; only these legacy outputs differ.
+    assert.equal(actual.ok,true,label+' runtime failed');
+    assert.equal(Array.isArray(actual.value),true,label+' result must be an array');
+    assert.equal(actual.value.length,legacy.value.length,label+' output length');
+    const expected={...legacy,value:legacy.value.slice()};
+    expected.value[9]='[REDACTED]';
+    expected.value[10]={name:'Error',message:'[REDACTED]'};
+    assert.equal(actual.value[9],'[REDACTED]',label+' URL must never be raw');
+    assert.deepEqual(actual.value[10],{name:'Error',message:'[REDACTED]'},
+      label+' Error.message must never be raw');
+    assert.deepEqual(actual,expected,label+' untouched results retain legacy parity');
+  });
+});
+
+test('logSafe: URL-shaped strings and own Error.cause are strictly masked',()=>{
+  const runtime=loadLegacy(pair('logSafe')[1],'logSafe',{JSON,Object,Array,String,WeakSet,URL,Error});
+  const withCause=new Error('synthetic error');
+  withCause.cause='synthetic cause';
+  assert.equal(runtime.redact('https://example.invalid/synthetic?only=test'),'[REDACTED]');
+  assert.deepEqual(snapshot(runtime.redact(withCause)),
+    {name:'Error',message:'[REDACTED]',cause:'[REDACTED]'});
 });
 
 test('objUtil: bridge, isObject, toMap, mapToObj', async()=>{

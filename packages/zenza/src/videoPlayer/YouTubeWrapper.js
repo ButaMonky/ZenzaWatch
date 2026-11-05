@@ -7,6 +7,21 @@ import {textUtil} from '../../../lib/src/text/textUtil';
 const { YouTubeWrapper } = (() => {
     const STATE_PLAYING = 1;
     class YouTubeWrapper extends Emitter {
+        static parseStartTime(value) {
+            if (typeof value !== 'string' || !value) {
+                return 0;
+            }
+            if (/^\d+$/.test(value)) {
+                const seconds = Number(value);
+                return Number.isSafeInteger(seconds) ? seconds : 0;
+            }
+            const match = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(value);
+            if (!match) {
+                return 0;
+            }
+            const seconds = Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
+            return Number.isSafeInteger(seconds) ? seconds : 0;
+        }
         constructor({ parentNode, autoplay = true, volume = 0.3, playbackRate = 1, loop = false }) {
             super();
             this._isInitialized = false;
@@ -29,7 +44,7 @@ const { YouTubeWrapper } = (() => {
             const player = this._player;
             const isFirst = !!player ? false : true;
             const urlParams = this._parseUrlParams(url);
-            this._startDiff = /[0-9]+s/.test(urlParams.t) ? parseInt(urlParams.t) : 0;
+            this._startDiff = YouTubeWrapper.parseStartTime(urlParams.t);
             startSeconds += this._startDiff;
             if (isFirst && !url) {
                 return Promise.resolve();

@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/WatchInfoCacheDb.ts",
   "runtime": "packages/lib/src/nico/WatchInfoCacheDb.js",
-  "sourceSha256": "95f532b68ae74eb3288f14d555c231b6d9049c7f9f10a668f3d0d1d1735aa6ff",
-  "runtimeSha256": "2daea3c516f92b61a98598c95834c20dcc53ebf967879adacf030b5a6aeadc7b"
+  "sourceSha256": "b10302daa35d601eca26fb7f1ba0bb8ac0a071abb62b5e40ba13db0a02fea275",
+  "runtimeSha256": "7a407643698d8eab75c7586f1fe2f3ba2d07c0fe063acbb8661ce81f6d064ba7"
 }

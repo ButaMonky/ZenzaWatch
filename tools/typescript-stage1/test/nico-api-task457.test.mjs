@@ -50,6 +50,12 @@ test('legacy build directives are preserved in each runtime',()=>{
       });
     };
     const expected = directives(before);
+    if (spec.name === 'VideoInfo') {
+      // P12 adds the single canonical automatic-resume policy dependency.
+      // Keep the exact import constrained; any other runtime preamble still fails.
+      expected.splice(expected.indexOf('//===BEGIN==='), 0,
+        "import {selectAutoResume} from '../packages/zenza/src/resume/AutoResumePolicy';");
+    }
     if (spec.name === 'PopupMessage') {
       // Task926: PopupMessage reads validated notification preferences via Config,
       // then records the same messages through NotificationJournal. Both newly
@@ -59,6 +65,29 @@ test('legacy build directives are preserved in each runtime',()=>{
         "import {NotificationJournal} from '../../../../src/NotificationJournal';");
       expected.splice(expected.indexOf('//===END==='), 0,
         '//@require Config', '//@require NotificationJournal');
+    }
+    if (spec.name === 'NicoVideoPlayerDialog') {
+      // P12's local auto-clear coordinator and independent bookmark dock are
+      // new, fixed preamble owners. Keep both the import and require order exact.
+      const beforeVideoInfo=expected.indexOf("import {VideoInfoPanel} from './VideoInfoPanel';");
+      assert(beforeVideoInfo>=0,'Nico Dialog fixture missing VideoInfoPanel owner');
+      expected.splice(beforeVideoInfo,0,
+        "import {AutoResumeClearCoordinator} from '../packages/zenza/src/resume/AutoResumeClearCoordinator';",
+        "import {IndexedDbManualBookmarkBackend, ManualBookmarkRepository} from '../packages/zenza/src/resume/ManualBookmarkStore';",
+        "import {ManualBookmarkSession} from '../packages/zenza/src/resume/ManualBookmarkSession';",
+        "import {ManualBookmarkDock} from '../packages/zenza/src/resume/ManualBookmarkDock';");
+      expected.splice(expected.indexOf('//@require NotificationHistoryPanel'),0,
+        '//@require AutoResumeClearCoordinator','//@require ManualBookmarkRepository',
+        '//@require ManualBookmarkSession','//@require ManualBookmarkDock');
+    }
+    if (spec.name === 'VideoControlBar') {
+      // Preserve the exact order of both added native seek dependencies.
+      // A previously unchanged fixture predates geometry and resume presentation.
+      expected.splice(expected.indexOf('//===BEGIN==='), 0,
+        "import {TimelineGeometry} from '../packages/zenza/src/sceneSearch/TimelineGeometry';",
+        "import {SceneResumeMarkerPresenter} from '../packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter';");
+      expected.splice(expected.indexOf('//@require UiVisibilityRegistry') + 1, 0,
+        '//@require TimelineGeometry', '//@require SceneResumeMarkerPresenter');
     }
     assert.deepEqual(directives(after), expected, spec.name);
     // Task475: compare exported names, since legacy exports may span lines.

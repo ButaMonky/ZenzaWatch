@@ -26,14 +26,9 @@ describe('Task239 package metadata points to the maintained public fork', () => 
     assert.ok(readme.includes(`(${pkg.bugs.url})`), 'README issue tracker must match package.json');
     assert.ok(readme.includes(`(${fork}/discussions)`), 'README discussions must use the maintained fork');
 
-    // Task928: the public project homepage/support stay public, while a
-    // private release may legitimately deliver builds from its private repo.
-    const dev = fs.readFileSync(path.join(REPO_ROOT, 'dist/ZenzaWatch-dev.user.js'), 'utf8');
-    const download = dev.match(/^\/\/ @downloadURL\s+(\S+)/m)?.[1];
-    const isPrivate = !!download?.startsWith('https://github.com/ButaMonky/ZenzaWatch-Back-up/raw/develop/dist/');
-    const installPrefix = isPrivate ?
-      'https://github.com/ButaMonky/ZenzaWatch-Back-up/raw/develop/dist/' :
-      'https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
+    // Installing from this private backup must never turn the updater into
+    // a private-GitHub URL (which may fail authentication and never update).
+    const installPrefix = 'https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
     for (const script of [
       'ZenzaWatch-dev.user.js',
       'ZenzaHLS.user.js',

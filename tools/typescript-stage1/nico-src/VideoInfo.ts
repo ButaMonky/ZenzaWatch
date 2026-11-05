@@ -10,6 +10,12 @@ type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
 declare const PromiseHandler: Loose;
 declare const _: Loose;
+declare const selectAutoResume:(input:{
+  videoId:string;duration:unknown;
+  server?:{time:unknown;updatedAt?:unknown}|null;
+  local?:readonly {time:unknown;now:unknown;videoId?:unknown}[]|null;
+  clear?:{at:unknown;reason:'completed'|'deleted';videoId?:unknown}|null;
+})=>{time:number;source:'server'|'local';recordedAt?:number}|null;
 
 //
 class JSONable {
@@ -677,16 +683,24 @@ class VideoInfoModel extends JSONable {
   }
 
   get resumePoints() {
-    const duration = this.duration;
-    const MARGIN = 10;
-    const resumePoints =
-      ((this._cacheData && this._cacheData.resume) ? this._cacheData.resume : [])
-        .filter(({now, time}: Loose) => time > MARGIN && time < duration - MARGIN)
-        .map(({now, time}: Loose) => { return {now: new Date(now).toLocaleString(), time}; });
-    const lastResumePoint = this._resumeInfo ? this._resumeInfo.initialPlaybackPosition : 0;
-
-    lastResumePoint && resumePoints.unshift({now: '前回', time: lastResumePoint});
-    return resumePoints;
+    const edited=this._cacheData?.resumeOverride;
+    if(typeof edited==='number'&&Number.isFinite(edited)&&edited>=0&&edited<this.duration){
+      return [{now:'編集した位置',time:edited}];
+    }
+    const local=Array.isArray(this._cacheData?.resume)?this._cacheData.resume:[];
+    const clearedAt=this._cacheData?.resumeClearedAt;
+    const reason=this._cacheData?.resumeClearReason==='completed'?'completed':'deleted';
+    // Only one automatic point. Keep the local clear barrier even when a
+    // stale server response still returns a previous non-zero position.
+    const chosen=selectAutoResume({
+      videoId:String(this.videoId||''),duration:this.duration,
+      server:{time:this._resumeInfo?.initialPlaybackPosition},
+      local,
+      ...(clearedAt===undefined?{}:{clear:{at:clearedAt,reason}})
+    });
+    if(!chosen)return [];
+    return [{now:chosen.source==='server'?'前回':
+      new Date(chosen.recordedAt??0).toLocaleString(),time:chosen.time}];
   }
 
   get csrfToken() {

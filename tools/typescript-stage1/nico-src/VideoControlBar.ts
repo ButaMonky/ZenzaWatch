@@ -1,12 +1,20 @@
 /**
  * Canonical TypeScript source for src/VideoControlBar.js (Task964).
  */
+import type {TimelineGeometry as TimelineGeometryClass} from './TimelineGeometry';
+import type {SceneResumeMarkerPresenter as SceneResumeMarkerPresenterClass} from './SceneResumeMarkerPresenter';
+declare const TimelineGeometry: typeof TimelineGeometryClass;
+declare const SceneResumeMarkerPresenter: typeof SceneResumeMarkerPresenterClass;
 /**
  * Values that come from raw API/DOM records or from modules that are still JS; this one
  * documented loose alias covers them.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
+// P13-17: explicit native seek/pin/resume owner contracts, no runtime changes.
+type NativeScenePinnedTime=(()=>number|null)|undefined;
+type NativeSceneSeekTooltip={update(time:number,left:number):void};
+type NativeResumePointerTargets=Parameters<typeof SceneResumeMarkerPresenter.render>[0];
 // legacy-to-ts: names provided by other bundled modules
 declare const BaseViewComponent: Loose;
 declare const CONSTANT: Loose;
@@ -31,27 +39,27 @@ declare const heatMapCacheEntry: Loose;
 declare const throttle: Loose;
 declare const util: Loose;
 
-const historyTriggerKeyGuard = (event?: Loose) => {
+const historyTriggerKeyGuard = (event:KeyboardEvent) => {
   if (['Enter', ' ', 'Spacebar'].includes(event.key)) { event.stopPropagation(); }
 };
 
   class VideoControlBar extends Emitter {
-    declare static BASE_SEEKBAR_HEIGHT: Loose;
-    declare static BASE_HEIGHT: Loose;
-    declare _bufferRange: Loose;
+    declare static BASE_SEEKBAR_HEIGHT: number;
+    declare static BASE_HEIGHT: number;
+    declare _bufferRange: HTMLElement;
     declare emit: Loose;
-    declare $resumePointers: Loose;
-    declare _sceneSearchPinnedTime: Loose;
+    declare $resumePointers: NativeResumePointerTargets;
+    declare _sceneSearchPinnedTime: NativeScenePinnedTime;
     declare _$videoServerTypeSelectMenu: Loose;
     declare _$videoServerTypeMenu: Loose;
     declare _$playbackRateMenu: Loose;
     declare _$playbackRateSelectMenu: Loose;
     declare emitResolve: Loose;
     declare _$seekBarContainer: Loose;
-    declare _seekBar: Loose;
+    declare _seekBar: HTMLElement;
     declare _$seekBar: Loose;
     declare _seekBarPointer: Loose;
-    declare _seekRange: Loose;
+    declare _seekRange: HTMLInputElement;
     declare static __tpl__: Loose;
     declare promise: Loose;
     declare _$playerContainer: Loose;
@@ -61,19 +69,19 @@ const historyTriggerKeyGuard = (event?: Loose) => {
     declare _commentChangeHandler: Loose;
     declare _commentParsedHandler: Loose;
     declare _commentPreview: Loose;
-    declare _currentTime: Loose;
+    declare _currentTime: number;
     declare _currentTimeGetter: Loose;
     declare _currentTimeText: Loose;
-    declare _duration: Loose;
+    declare _duration: number;
     declare _heatMapWatchId: Loose;
     declare _playerConfig: Loose;
     declare _playerState: Loose;
     declare _pointer: Loose;
     declare _raf: Loose;
-    declare _seekBarMouseX: Loose;
-    declare _seekBarToolTip: Loose;
+    declare _seekBarMouseX: number|null;
+    declare _seekBarToolTip: NativeSceneSeekTooltip;
     declare _setVolumeBar: Loose;
-    declare _storyboardLongPressTimer: Loose;
+    declare _storyboardLongPressTimer: number|null;
     declare _timerCount: Loose;
     declare _view: Loose;
     declare _visibility: Loose;
@@ -142,12 +150,25 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       });
       Object.assign(this, mq.e, {_currentTime: 0});
       Object.assign(this, mq.$);
+      // Native marker nodes remain owned by the bar. Delete is deliberately a
+      // separate explicit action; ordinary marker clicks still seek as before.
+      this._view.addEventListener('contextmenu',
+        this._onResumeMarkerDelete.bind(this),true);
+      this._view.addEventListener('keydown',
+        this._onResumeMarkerDelete.bind(this),true);
 
       // Task 077c: 画面フィルターのボタン。フィルターが効いている間は光らせる
       const historyButton = $view.find('.commentHistorySwitch')[0];
       if (historyButton) {
         historyButton.addEventListener('keydown', historyTriggerKeyGuard);
         historyButton.addEventListener('keyup', historyTriggerKeyGuard);
+      }
+      const pointsButton = $view.find('.playbackPointsSwitch')[0];
+      if(pointsButton){
+        pointsButton.addEventListener('keydown',historyTriggerKeyGuard);
+        pointsButton.addEventListener('keyup',historyTriggerKeyGuard);
+        const visibility=()=>{pointsButton.hidden=this._playerConfig.getValue('bookmark.showToolbarButton')===false;};
+        visibility();this._playerConfig.onkey?.('bookmark.showToolbarButton',visibility);
       }
       const notificationButton = $view.find('.notificationHistorySwitch')[0];
       if (notificationButton) {
@@ -166,6 +187,7 @@ const historyTriggerKeyGuard = (event?: Loose) => {
 
       this._pointer = new SmoothSeekBarPointer({
         pointer: this._seekBarPointer,
+        getTimelineGeometry: () => this._getTimelineGeometry(),
         playerState: this._playerState
       });
       const timeStyle = {
@@ -402,15 +424,28 @@ const historyTriggerKeyGuard = (event?: Loose) => {
        }
       e.stopPropagation();
     }
-    _posToTime(pos?: Loose) {
-      const width = global.innerWidth;
-      return this._duration * (pos / Math.max(width, 1));
+    _getTimelineGeometry(): TimelineGeometryClass | null {
+      const element = this._seekBar as HTMLElement | undefined;
+      const rect = element?.getBoundingClientRect?.();
+      if (!rect) { return null; }
+      return TimelineGeometry.create({
+        clientLeft: rect.left,
+        clientWidth: rect.width,
+        localWidth: element!.offsetWidth
+      });
     }
-    _timeToPos(time?: Loose) {
-      return global.innerWidth * (time / Math.max(this._duration, 1));
+    // These legacy helpers keep their local CSS-pixel contract, never clientX.
+    _posToTime(localX: number): number | null {
+      const ratio = this._getTimelineGeometry()?.localXToRatio(localX);
+      return ratio == null ? null : TimelineGeometry.ratioToTime(ratio, this._duration);
     }
-    _timeToPer(time?: Loose) {
-      return (time / Math.max(this._duration, 1)) * 100;
+    _timeToPos(time: number): number | null {
+      const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+      return ratio === null ? null : this._getTimelineGeometry()?.ratioToLocalX(ratio) ?? null;
+    }
+    _timeToPer(time: number): number {
+      const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+      return ratio === null ? 0 : ratio * 100;
     }
     _onPlayerOpen(watchId?: Loose) {
       this._commentParsedHandler?.cancel?.();
@@ -474,20 +509,27 @@ const historyTriggerKeyGuard = (event?: Loose) => {
     _stopTimer() {
       this._raf && this._raf.disable();
     }
-    _onSeekRangeInput(e?: Loose) {
-      const sec = e.target.value * 1;
-      const left = sec / (e.target.max * 1) * global.innerWidth;
+    _onSeekRangeInput(e:Event&{target:HTMLInputElement}) {
+      // The native range value owns dragging and keyboard input; clientX is not required.
+      const duration = Number(e.target.max);
+      const sec = TimelineGeometry.clampTime(Number(e.target.value), duration);
+      if (sec === null) { return; }
+      const ratio = TimelineGeometry.timeToRatio(sec, duration)!;
+      const left = this._getTimelineGeometry()?.ratioToLocalX(ratio);
       util.dispatchCommand(e.target, 'seek', sec);
-      this._seekBarToolTip.update(this._sceneSearchPinnedTime?.()??sec, left);
+      if (left != null) {
+        const pinned = this._sceneSearchPinnedTime?.();
+        this._seekBarToolTip.update(Number.isFinite(pinned) ? pinned : sec, left);
+      }
       this.storyboard.setCurrentTime(sec, true);
     }
-    _onSeekBarMouseDown(e?: Loose) {
+    _onSeekBarMouseDown(e:MouseEvent) {
       // e.preventDefault();
       e.stopPropagation();
       (this as Loose)._beginMouseDrag(e);
       // Keep seeking immediate, but only reveal the large storyboard after a
       // deliberate 200ms primary-button hold on the seek bar itself.
-      if (e.button === 0 && this._seekBar?.contains(e.target)) {
+      if (e.button === 0 && this._seekBar?.contains(e.target as Node)) {
         this._scheduleStoryboardLongPress();
       }
     }
@@ -507,13 +549,25 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       }
       this.classList?.remove('is-storyboardLongPress');
     }
-    _onSeekBarMouseMove(e?: Loose) {
+    _onSeekBarMouseMove(e:MouseEvent) {
       if (!this.state.isDragging) {
         e.stopPropagation();
       }
-      const pinned=this._sceneSearchPinnedTime?.();
-      const left = Number.isFinite(pinned)?this._seekBarMouseX:e.offsetX;
-      const sec = Number.isFinite(pinned)?pinned:this._posToTime(left);
+      const pinned = this._sceneSearchPinnedTime?.();
+      let left: number | null;
+      let sec: number | null;
+      if (Number.isFinite(pinned)) {
+        sec = pinned;
+        // Pinning freezes the existing local anchor as well as the preview time.
+        left = Number.isFinite(this._seekBarMouseX) ? this._seekBarMouseX : this._timeToPos(pinned);
+      } else {
+        const geometry = this._getTimelineGeometry();
+        const ratio = geometry?.clientXToRatio(e.clientX);
+        if (ratio == null) { return; }
+        left = geometry!.ratioToLocalX(ratio);
+        sec = TimelineGeometry.ratioToTime(ratio, this._duration);
+      }
+      if (left === null || sec === null) { return; }
       this._seekBarMouseX = left;
 
       this._commentPreview.currentTime = sec;
@@ -525,16 +579,17 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       if (!this.state.isWheelSeeking) {
         return;
       }
-      sec = sec * 1;
-      const dur = this._duration;
-      const left = sec / dur * window.innerWidth;
-      this._seekBarMouseX = left;
-
-      const previewTime=this._sceneSearchPinnedTime?.()??sec;
-      this._commentPreview.currentTime = previewTime;
-      this._commentPreview.update(left);
-
-      this._seekBarToolTip.update(previewTime, left);
+      sec = TimelineGeometry.clampTime(Number(sec), this._duration);
+      if (sec === null) { return; }
+      const left = this._timeToPos(sec);
+      if (left !== null) {
+        this._seekBarMouseX = left;
+        const pinned = this._sceneSearchPinnedTime?.();
+        const previewTime = Number.isFinite(pinned) ? pinned : sec;
+        this._commentPreview.currentTime = previewTime;
+        this._commentPreview.update(left);
+        this._seekBarToolTip.update(previewTime, left);
+      }
       this.storyboard.setCurrentTime(sec, true);
     }
     _beginMouseDrag() {
@@ -548,7 +603,7 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       this.classList.remove('is-dragging');
       this.state.isDragging = false;
     }
-    _onBodyMouseUp(e?: Loose) {
+    _onBodyMouseUp(e:MouseEvent) {
       if ((e.button === 0 && e.shiftKey)) {
         this._cancelStoryboardLongPress();
         return;
@@ -586,24 +641,33 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       this.storyboard.load(videoInfo.watchId, videoInfo);
       const [view] = this._$view;
 
-      const resumePoints = videoInfo.resumePoints;
-      for (let i = 0, len = this.$resumePointers.length; i < len; i++) {
-        const pointer = this.$resumePointers[i];
-        const resume = resumePoints[i];
-        if (!resume) {
-          pointer.hidden = true;
-          continue;
-        }
-        pointer.setAttribute('duration', videoInfo.duration);
-        pointer.setAttribute('time', resume.time);
-        pointer.setAttribute('text', `${resume.now} ここまで見た`);
-        if (resume.now !== '前回') {
-          cssUtil.setProps(
-            [pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'],
-            [pointer, '--color', '#aef']);
-        } else {
-          cssUtil.setProps([pointer, '--scale-pp', 1.7]);
-        }
+      // The native controls, marker nodes and seek input are still owned by this bar.
+      this.refreshAutoResumePointers(videoInfo);
+    }
+    /** An explicit user action, independent of the native marker's seek click. */
+    _onResumeMarkerDelete(event:Event):void {
+      if(event.type!=='contextmenu'&&event.type!=='keydown')return;
+      const node=(event.target as Element|null)?.closest?.(
+        'zenza-seekbar-label.resumePointer') as HTMLElement|null;
+      if(!node||node.hidden)return;
+      if(event.type==='keydown'&&
+         !['Delete','Backspace'].includes((event as KeyboardEvent).key))return;
+      event.preventDefault();
+      event.stopPropagation();
+      if(typeof window.confirm==='function'&&
+         window.confirm('この動画の「ここまで見た」を削除しますか？')){
+        this.emit('command','deleteAutomaticResume');
+      }
+    }
+    /** Refresh markers only, without restarting storyboard or stealing seek DOM. */
+    refreshAutoResumePointers(videoInfo?:{duration:number;resumePoints:readonly {now:string;time:number}[]}) {
+      if(!videoInfo)return;
+      SceneResumeMarkerPresenter.render(
+        this.$resumePointers, videoInfo.resumePoints, videoInfo.duration,
+        (...tasks) => cssUtil.setProps(...tasks));
+      for(const pointer of this.$resumePointers||[]){
+        pointer.setAttribute('tabindex','0');
+        pointer.setAttribute('title','右クリックまたはDeleteキーで「ここまで見た」を削除');
       }
     }
     async _onFirstVideoInitialized(watchId?: Loose) {
@@ -624,7 +688,11 @@ const historyTriggerKeyGuard = (event?: Loose) => {
       this.currentTime = sec;
     }
     set currentTime(sec: Loose) {
-      if (this._currentTime === sec) { return; }
+      if (this._currentTime === sec) {
+        // Refresh paused geometry without rewriting the unchanged time label.
+        this._pointer.currentTime = sec;
+        return;
+      }
       this._currentTime = sec;
 
       const currentTimeText = util.secToTime(sec);
@@ -1472,6 +1540,9 @@ util.addStyle(`
     height: 100%;
     fill: currentColor;
   }
+  .playbackPointsSwitch[hidden]{display:none!important}
+  .playbackPointsSwitch:focus-visible{outline:2px solid #8ecbff;outline-offset:-2px}
+  .playbackPointsSwitch,
   .notificationHistorySwitch,
   .commentHistorySwitch { border: 0; padding: 0; background: transparent; }
   /* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
@@ -1879,6 +1950,11 @@ util.addStyle(`
         <div class="scalingUI">
           <div class="ZenzaWatchVer" data-env="${ZenzaWatch.env}" title="build: ${ZenzaWatch.build || '-'}">ver ${ZenzaWatch.version}${ZenzaWatch.env === 'DEV' ? '(Dev)' : ''}</div>
           <span class="addonMenuContainer"></span>
+          <button type="button" class="playbackPointsSwitch controlButton" data-command="toggle-playbackPoints"
+            aria-label="しおり・ABリピート" aria-expanded="false">
+            <span class="controlButtonInner" aria-hidden="true">▱</span>
+            <span class="tooltip">しおり・ABリピート</span>
+          </button>
           <button type="button" class="notificationHistorySwitch controlButton" data-command="toggle-notificationHistory"
             aria-label="通知履歴" aria-expanded="false" aria-controls="zenzaNotificationHistoryDock">
             <span class="controlButtonInner" aria-hidden="true">☷</span>
@@ -2162,6 +2238,10 @@ util.addStyle(`
     declare _currentStartIndex: Loose;
     declare _currentTime: Loose;
     declare _disposed: Loose;
+    declare _disposeComplete: boolean;
+    declare _disposeRunning: boolean;
+    declare _disposePending: Map<string, () => void> | null;
+    declare _disposeFailures: Array<{step: string; error: unknown}>;
     declare _domListeners: Loose;
     declare _inviewTable: Loose;
     declare _isListUpdated: Loose;
@@ -2180,6 +2260,10 @@ util.addStyle(`
       this._$parent = params.$container;
 
       this._disposed = false;
+      this._disposeComplete = false;
+      this._disposeRunning = false;
+      this._disposePending = null;
+      this._disposeFailures = [];
       this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
       this._inviewTable = new Map;
       this._chatList = [];
@@ -2237,6 +2321,7 @@ util.addStyle(`
       }
     }
     _onClick(e?: Loose) {
+      if (this._disposed) { return; }
       e.stopPropagation();
       const target = e.target.closest('[data-command]');
       const view = this._view;
@@ -2298,9 +2383,11 @@ util.addStyle(`
       this.applyView();
     }
     _onResize() {
+      if (this._disposed) { return; }
       this._refreshInviewElements();
     }
     _onScroll() {
+      if (this._disposed) { return; }
       this._scrollTop = -1;
       this._refreshInviewElements();
     }
@@ -2406,21 +2493,59 @@ util.addStyle(`
     hide() {
     }
     dispose() {
-      if (this._disposed) { return; }
-      this._disposed = true;
-      for (const [event, handler] of this._subscriptions || []) {
-        this._model.off(event, handler);
-        handler.cancel?.();
+      if (this._disposeComplete || this._disposeRunning) { return; }
+      this._disposeRunning = true;
+      try {
+        // Block late callbacks immediately, but only declare disposal complete when
+        // every independent cleanup has succeeded. Failed tasks survive for retry.
+        this._disposed = true;
+        let pending = this._disposePending;
+        if (!pending) {
+          pending = new Map<string, () => void>();
+          const model = this._model, view = this._view;
+          for (const [index, [event, handler]] of (this._subscriptions || []).entries()) {
+            pending.set(`model.off:${event}:${index}`, () => model.off(event, handler));
+            pending.set(`model.cancel:${event}:${index}`, () => handler.cancel?.());
+          }
+          for (const [index, [event, handler, options]] of (this._domListeners || []).entries()) {
+            pending.set(`dom.off:${event}:${index}`, () =>
+              view.removeEventListener(event, handler, options));
+            pending.set(`dom.cancel:${event}:${index}`, () => handler.cancel?.());
+          }
+          pending.set('update.cancel', () => (this.update as Loose).cancel?.());
+          pending.set('applyView.cancel', () => (this.applyView as Loose).cancel?.());
+          pending.set('timer.clearTimeout', () => window.clearTimeout(this._updatingTimer));
+          pending.set('list.reset', () => this._onReset());
+          pending.set('dom.remove', () => view.remove());
+          this._disposePending = pending;
+        }
+        const failures: Array<{step: string; error: unknown}> = [];
+        for (const [step, cleanup] of pending) {
+          try {
+            cleanup();
+            pending.delete(step);
+          } catch (error) {
+            failures.push({step, error});
+          }
+        }
+        // Keep the remaining step names and original causes inspectable after
+        // failure; do not silently treat a partially disposed view as complete.
+        this._disposeFailures = failures;
+        if (pending.size === 0) {
+          this._disposeComplete = true;
+          this._disposePending = null;
+          this._subscriptions = [];
+          this._domListeners = [];
+        }
+        if (failures.length === 1) { throw failures[0]!.error; }
+        if (failures.length > 1) {
+          throw new AggregateError(failures.map(item => item.error),
+            'Native comment view disposal incomplete: ' +
+            failures.map(item => item.step).join(', '));
+        }
+      } finally {
+        this._disposeRunning = false;
       }
-      for (const [event, handler, options] of this._domListeners || []) {
-        this._view.removeEventListener(event, handler, options);
-        handler.cancel?.();
-      }
-      (this.update as Loose).cancel?.();
-      (this.applyView as Loose).cancel?.();
-      window.clearTimeout(this._updatingTimer);
-      this._onReset();
-      this._view.remove();
     }
   }
 
@@ -2758,16 +2883,59 @@ util.addStyle(`
       view._onUpdate();
       this._view._onUpdate();
       this._view.mode = 'hover';
-      let disposed = false;
+      let disposed = false, viewDisposed = false, modeRestored = false, disposing = false;
       const handle = {
         element: view._view,
+        disposeFailures: [] as Array<{step: string; error: unknown}>,
         dispose: () => {
-          if (disposed) { return; }
-          disposed = true;
-          view.dispose();
-          if (this._twinList === handle) {
-            this._twinList = null;
-            this._view.mode = this._mode;
+          if (disposed || disposing) { return; }
+          disposing = true;
+          try {
+            const failures: Array<{step: string; error: unknown}> = [];
+            if (!viewDisposed) {
+              try {
+                view.dispose();
+                // A reentrant call can return early while the view is still
+                // cleaning up. Only a completed child can release its handle.
+                if (!view._disposeComplete) {
+                  throw new Error('Native comment view disposal still in progress');
+                }
+                viewDisposed = true;
+              } catch (error) {
+                failures.push({step: 'view.dispose', error});
+              }
+            }
+            // Restore the owner's configured mode only after the child view is
+            // fully torn down; keep the handle reachable while either step fails.
+            // A failed handle release can leave the owner in hover mode if its
+            // preference changed meanwhile. Reapply only when the desired mode differs.
+            const desiredMode = this._mode === 'list' ? 'list' : 'hover';
+            if (viewDisposed && (!modeRestored ||
+                (this._twinList === handle && this._view._mode !== desiredMode))) {
+              try {
+                if (this._twinList === handle) { this._view.mode = this._mode; }
+                modeRestored = true;
+              } catch (error) {
+                failures.push({step: 'restore.mode', error});
+              }
+            }
+            if (viewDisposed && modeRestored) {
+              try {
+                if (this._twinList === handle) { this._twinList = null; }
+                disposed = true;
+              } catch (error) {
+                failures.push({step: 'release.handle', error});
+              }
+            }
+            handle.disposeFailures = failures;
+            if (failures.length === 1) { throw failures[0]!.error; }
+            if (failures.length > 1) {
+              throw new AggregateError(failures.map(item => item.error),
+                'Native comment list disposal incomplete: ' +
+                failures.map(item => item.step).join(', '));
+            }
+          } finally {
+            disposing = false;
           }
         }
       };
@@ -3047,10 +3215,12 @@ util.addStyle(`
     declare _isStalled: Loose;
     declare _playbackRate: Loose;
     declare _pointer: Loose;
+    declare _getTimelineGeometry: () => TimelineGeometryClass | null;
     declare applyTransform: Loose;
     declare transformLeft: Loose;
     constructor(params?: Loose) {
       this._pointer = params.pointer;
+      this._getTimelineGeometry = params.getTimelineGeometry;
       this._currentTime = 0;
       this._duration = 1;
       this._playbackRate = 1;
@@ -3062,8 +3232,10 @@ util.addStyle(`
       this.refresh = throttle.raf(this.refresh.bind(this));
       this.transformLeft = 0;
       this.applyTransform = throttle.raf(() => {
-        const per = Math.min(100, this._timeToPer(this._currentTime));
-        this._pointer.style.transform = `translateX(${global.innerWidth * per / 100 - 6}px)`;
+        const ratio = TimelineGeometry.timeToRatio(this._currentTime, this._duration);
+        if (ratio === null) { return; }
+        const left = this._getTimelineGeometry()?.ratioToLocalX(ratio);
+        if (left != null) { this._pointer.style.transform = `translateX(${left - 6}px)`; }
       });
       this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
       params.playerState.onkey('isPausing', (v?: Loose) => this.isPausing = v);
@@ -3103,8 +3275,9 @@ util.addStyle(`
         this._animation.currentTime = v * 1000;
       }
     }
-    _timeToPer(time?: Loose) {
-      return (time / Math.max(this._duration, 1)) * 100;
+    _timeToPer(time: number): number {
+      const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+      return ratio === null ? 0 : ratio * 100;
     }
     set duration(v: Loose) {
       if (this._duration === v) { return; }
@@ -3154,12 +3327,14 @@ util.addStyle(`
     }
     refresh() {
       if (!this._isSmoothMode) { return; }
+      const right = this._getTimelineGeometry()?.ratioToLocalX(1);
+      if (right == null) { return; }
       if (this._animation) {
         this._animation.finish();
       }
       this._animation = this._pointer.animate([
         {transform: 'translateX(-6px)'},
-        {transform: `translateX(${global.innerWidth - 6}px)`}
+        {transform: `translateX(${right - 6}px)`}
       ], {duration: this._duration * 1000, fill: 'backwards'});
       this._animation.currentTime = this._currentTime * 1000;
       this._animation.playbackRate = this._playbackRate;

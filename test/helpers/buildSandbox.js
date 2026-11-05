@@ -29,17 +29,10 @@ function createBuildSandbox(prefix = 'zenza-build-') {
   return dir;
 }
 
-// Sandbox builds have no .git/remote, so build.js otherwise assumes the
-// public distribution channel. Infer it from the copied, already-reviewed
-// userscript metadata; never change the publish target by accident.
-function inferBuildChannel(cwd) {
-  try {
-    const script = fs.readFileSync(path.join(cwd, 'dist', 'ZenzaWatch-dev.user.js'), 'utf8');
-    const isPrivate = /^\/\/ @downloadURL\s+https:\/\/github\.com\/ButaMonky\/ZenzaWatch-Back-up\/raw\/develop\/dist\/ZenzaWatch-dev\.user\.js\s*$/m.test(script);
-    return isPrivate ? 'private' : 'public';
-  } catch (_) {
-    return 'public';
-  }
+// The checkout may be private, but user-facing update links never are.
+// Keep this compatibility helper for tests and sandbox callers.
+function inferBuildChannel(_cwd) {
+  return 'public';
 }
 
 function runNode(args, {cwd, env = {}, timeout = 120000} = {}) {
@@ -49,9 +42,13 @@ function runNode(args, {cwd, env = {}, timeout = 120000} = {}) {
     timeout,
     env: {
       ...process.env,
-      NODE_PATH: path.join(REPO_ROOT, 'node_modules'),
+      // Keep externally resolved dependency roots when an isolated worktree
+      // has no installed dependencies. Replacing NODE_PATH entirely made
+      // temp builds fail to load @babel/parser even though Mocha could.
+      NODE_PATH: [path.join(REPO_ROOT, 'node_modules'), process.env.NODE_PATH]
+        .filter(Boolean).join(path.delimiter),
       ZENZA_BUILD_NO_NOTIFY: '1',
-      ZENZA_PUBLISH_CHANNEL: process.env.ZENZA_PUBLISH_CHANNEL || inferBuildChannel(cwd),
+      ZENZA_PUBLISH_CHANNEL: inferBuildChannel(cwd),
       ...env
     }
   });

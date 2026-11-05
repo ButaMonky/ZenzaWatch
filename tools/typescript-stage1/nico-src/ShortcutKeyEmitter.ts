@@ -16,11 +16,26 @@ declare class Emitter {
 }
 /** The shortcut registry (packages/zenza/src/ShortcutActions.js). */
 declare const SHORTCUT_ACTIONS: Loose[];
+type ShortcutEmitter=Emitter&{releaseTemporaryPlaybackRate():void};
 
 class ShortcutKeyEmitter {
   static create(config?: Loose, element?: Loose, externalEmitter?: Loose) {
-    const emitter = new Emitter();
+    const emitter = new Emitter() as ShortcutEmitter;
     let isVerySlow = false;
+    let slowKey:number|undefined;
+    let slowRate=1;
+    let slowEvent:unknown;
+    let slowModifiers=new Set<number>();
+    const releaseVerySlow=(event:unknown=slowEvent):void=>{
+      if (!isVerySlow) { return; }
+      isVerySlow=false;
+      slowKey=undefined;
+      slowEvent=undefined;
+      slowModifiers.clear();
+      emitter.emit('keyUp','PLAYBACK_RATE',event,slowRate);
+    };
+    // The Dialog must release before closing its shortcut dispatch gate.
+    emitter.releaseTemporaryPlaybackRate=()=>releaseVerySlow();
     // Task960 (SHORTCUT-UNSET-ZERO-001): 0 means "not set" (as for the newer shortcuts), but a
     // legacy key stored as 0 matched every keydown whose keyCode is 0 (some special keys and
     // synthetic events), so e.g. an unset CLOSE closed the player. Unset keys never match now.
@@ -96,6 +111,7 @@ class ShortcutKeyEmitter {
     if (config && typeof config.on === 'function') {
       config.on('update', (key: Loose) => {
         if (typeof key !== 'string' || !key.startsWith('KEY_')) { return; }
+        if (key === 'KEY_SHIFT_RESET') { releaseVerySlow(); }
         Object.keys(map).forEach(k => {
           map[k] = legacyKey(config.props[`KEY_${k}`]);
         });
@@ -198,7 +214,16 @@ class ShortcutKeyEmitter {
           key = 'TOGGLE_PLAYLIST';
           break;
         case map.SHIFT_RESET:
+          if (isVerySlow) { return; }
           key = 'PLAYBACK_RATE';
+          slowKey=e.keyCode;
+          slowEvent=e;
+          slowModifiers=new Set<number>([
+            ...(e.shiftKey?[16]:[]),...(e.ctrlKey?[17]:[]),
+            ...(e.altKey?[18]:[]),...(e.metaKey?[91,93]:[])
+          ]);
+          const currentRate=Number(config.props.playbackRate);
+          slowRate=Number.isFinite(currentRate)&&currentRate>0?currentRate:1;
           isVerySlow = true;
           param = 0.1;
           break;
@@ -294,24 +319,10 @@ class ShortcutKeyEmitter {
     };
 
     const onKeyUp = (e: Loose) => {
-      if (isInputEvent(e)) { return; }
-
-      let key = '';
-      const keyCode = e.keyCode +
-        (e.metaKey ? 0x1000000 : 0) +
-        (e.altKey ? 0x100000 : 0) +
-        (e.ctrlKey ? 0x10000 : 0) +
-        (e.shiftKey ? 0x1000 : 0);
-      let param: Loose = '';
-      switch (keyCode) {
-        case map.SHIFT_RESET:
-          key = 'PLAYBACK_RATE';
-          isVerySlow = false;
-          param = 1;
-          break;
-      }
-      if (key) {
-        emitter.emit('keyUp', key, e, param);
+      // The physical owner releases even if focus, modifiers or the mapping
+      // changed after keydown. Unrelated key releases do nothing.
+      if (e.keyCode === slowKey || slowModifiers.has(e.keyCode)) {
+        releaseVerySlow(e);
       }
     };
 
@@ -320,6 +331,10 @@ class ShortcutKeyEmitter {
       element = element || document.body || document.documentElement;
       element.addEventListener('keydown', onKeyDown);
       element.addEventListener('keyup', onKeyUp);
+      element.addEventListener('focusin', (event:FocusEvent) => {
+        if (isInputEvent(event)) { releaseVerySlow(event); }
+      });
+      window.addEventListener?.('blur', releaseVerySlow);
       externalEmitter.on('keydown', onKeyDown);
       externalEmitter.on('keyup', onKeyUp);
     })();

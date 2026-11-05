@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.354-task978
+// @version        2.7.356-task980
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-01 19:49Z 8089264c
+// build: 2026-11-05 21:43Z 844b93b2
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.354-task978';
+    var VER = '2.7.356-task980';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-01 19:49Z 8089264c';
+    var BUILD = '2026-11-05 21:43Z 844b93b2';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3337,6 +3337,10 @@ class UiVisibilityRegistry {
 								if (e.storageArea && config.storage && e.storageArea !== config.storage) {
 										return;
 								}
+								if (e.key === null) {
+										ownKeys.forEach(key => sync(key, true));
+										return;
+								}
 								const key = byStorageKey.get(e.key);
 								if (key) {
 										sync(key, e.newValue === null);
@@ -3826,6 +3830,10 @@ const Config = (() => {
 				'autoPlay:ginza': true,
 				'autoPlay:others': true,
 				enableResume: false,
+				'resume.recordEnabled': true,
+				'resume.clearOnComplete': true,
+				'bookmark.showToolbarButton': true,
+				'abRepeat.enabled': true,
 				loop: false,
 				mute: false,
 				screenMode: 'normal',
@@ -4316,8 +4324,6 @@ const NaviConfig = Config;
 await Config.promise('restore');
 const uQuery = (() => {
 		const endMap = new WeakMap();
-		const emptyMap = new Map();
-		const emptySet = new Set();
 		const elementsEventMap = new WeakMap();
 		const HAS_CSSTOM = (window.CSS && CSS.number) ? true : false;
 		const toCamel = (p) => p.replace(/-./g, s => s.charAt(1).toUpperCase());
@@ -4690,14 +4696,51 @@ const uQuery = (() => {
 						}
 						eventName = eventName.trim();
 						const elementEventName = eventName.split('.')[0];
+						const capture = typeof options === 'boolean' ? options : !!options?.capture;
+						const once = typeof options === 'object' && !!options.once;
+						const signal = typeof options === 'object' ? options.signal : undefined;
+						if (signal?.aborted) {
+								return this;
+						}
 						for (const element of this.filter(isEventTarget)) {
-								const elementEvents = elementsEventMap.get(element) || new Map;
-								const listenerSet = elementEvents.get(eventName) || new Set;
+								const elementEvents = elementsEventMap.get(element) || new Map();
+								const listenerSet = elementEvents.get(eventName) || new Set();
+								if ([...listenerSet].some(record => record.callback === callback && record.capture === capture)) {
+										continue;
+								}
 								elementEvents.set(eventName, listenerSet);
 								elementsEventMap.set(element, elementEvents);
-								if (!listenerSet.has(callback)) {
-										listenerSet.add(callback);
-										element.addEventListener(elementEventName, callback, options);
+								const remove = () => {
+										element.removeEventListener(elementEventName, record.listener, capture);
+										signal?.removeEventListener('abort', remove);
+										listenerSet.delete(record);
+										if (!listenerSet.size) {
+												elementEvents.delete(eventName);
+										}
+										if (!elementEvents.size) {
+												elementsEventMap.delete(element);
+										}
+								};
+								const record = {
+										callback, capture, type: elementEventName, remove,
+										listener: function (event) {
+												if (once) {
+														remove();
+												}
+												return callback.call(this, event);
+										}
+								};
+								listenerSet.add(record);
+								try {
+										element.addEventListener(elementEventName, record.listener, options);
+										signal?.addEventListener('abort', remove, { once: true });
+										if (signal?.aborted) {
+												remove();
+										}
+								}
+								catch (error) {
+										remove();
+										throw error;
 								}
 						}
 						return this;
@@ -4724,52 +4767,30 @@ const uQuery = (() => {
 						});
 				}
 				off(eventName = UNDEF, callback = UNDEF) {
-						if (eventName === UNDEF) {
-								for (const element of this.filter(isEventTarget)) {
-										const eventListenerMap = elementsEventMap.get(element) || emptyMap;
-										for (const [eventName, listenerSet] of eventListenerMap) {
-												for (const listener of listenerSet) {
-														element.removeEventListener(eventName, listener);
-												}
-												listenerSet.clear();
-										}
-										eventListenerMap.clear();
-										elementsEventMap.delete(element);
-								}
+						const name = eventName === UNDEF ? null : eventName.trim();
+						if (name === '') {
 								return this;
 						}
-						eventName = eventName.trim();
-						const [elementEventName, eventKey] = eventName.split('.');
-						if (callback === UNDEF) {
-								for (const element of this.filter(isEventTarget)) {
-										const eventListenerMap = elementsEventMap.get(element) || emptyMap;
-										const listenerSet = eventListenerMap.get(eventName) || emptySet;
-										for (const listener of listenerSet) {
-												element.removeEventListener(elementEventName, listener);
-										}
-										listenerSet.clear();
-										eventListenerMap.delete(eventName);
-										for (const [key] of eventListenerMap) {
-												if ((!eventKey && key.startsWith(`${elementEventName}.`)) ||
-														(!elementEventName && key.endsWith(`.${eventKey}`))) {
-														this.off(key);
-												}
-										}
-								}
-								return this;
-						}
+						const separator = name?.indexOf('.') ?? -1;
+						const type = name === null ? '' : separator < 0 ? name : name.slice(0, separator);
+						const namespace = separator < 0 ? '' : name.slice(separator + 1);
 						for (const element of this.filter(isEventTarget)) {
-								const eventListenerMap = elementsEventMap.get(element) || new Map;
-								eventListenerMap.set(eventName, (eventListenerMap.get(eventName) || new Set));
-								for (const [key, listenerSet] of eventListenerMap) {
-										if (key !== eventName && !key.startsWith(`${elementEventName}.`)) {
+								const registrations = elementsEventMap.get(element);
+								if (!registrations) {
+										continue;
+								}
+								for (const [key, records] of [...registrations]) {
+										const dot = key.indexOf('.');
+										const keyNamespace = dot < 0 ? '' : key.slice(dot + 1);
+										if (namespace && namespace !== keyNamespace) {
 												continue;
 										}
-										if (!listenerSet.has(callback)) {
-												continue;
+										for (const record of [...records]) {
+												if ((!type || record.type === type) &&
+														(callback === UNDEF || record.callback === callback)) {
+														record.remove();
+												}
 										}
-										listenerSet.delete(callback);
-										element.removeEventListener(elementEventName, callback);
 								}
 						}
 						return this;
@@ -5367,23 +5388,27 @@ const NotificationJournal = (() => {
 		let sequence = 0;
 		let writes = 0;
 		let generation = 0;
+		const privatePath = (path) => path
+				.replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
+				.replace(/(\/(?:token|secret|authorization|password|csrf|session)\/)[^/]+/gi, '$1[REDACTED]');
 		const text = (value) => {
 				if (typeof value !== 'string') {
 						return '';
 				}
 				return value
-						.replace(/(["'](?:token|secret|authorization|cookie|password|csrf|session)["']\s*:\s*)(["'][^"']*["']|[^,}\s]+)/gi, '$1"[REDACTED]"')
-						.replace(/https?:\/\/[^\s<>"']+/gi, match => {
+						.replace(/(["'](?:token|(?:access|refresh)[_-]?token|secret|authorization|cookie|password|csrf|session)["']\s*:\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,}\s]+)/gi, '$1"[REDACTED]"')
+						.replace(/(?:https?|wss?):\/\/[^\s<>"']+/gi, match => {
 						try {
 								const url = new URL(match);
-								return url.origin + url.pathname.replace(/\/[A-Za-z0-9_-]{48,}/g, '/[REDACTED]');
+								return url.origin + privatePath(url.pathname);
 						}
 						catch (_) {
 								return '[URL]';
 						}
 				})
+						.replace(/(?:\/[A-Za-z0-9_~%.+=-]+)+(?:[?#][^\s<>"']*)?/g, match => privatePath(match.split(/[?#]/)[0]))
 						.replace(/\bBearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [REDACTED]')
-						.replace(/\b(token|secret|authorization|cookie|password|csrf|session)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+						.replace(/\b(token|(?:access|refresh)[_-]?token|secret|authorization|cookie|password|csrf|session)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
 						.slice(0, MAX_TEXT);
 		};
 		const code = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value) ? value : undefined;
@@ -5447,13 +5472,18 @@ const NotificationJournal = (() => {
 				if (typeof indexedDB === 'undefined') {
 						return Promise.resolve(null);
 				}
-				opening = new Promise(resolve => {
+				const attempt = new Promise(resolve => {
 						let req;
+						let settled = false;
+						const fail = () => { if (!settled) {
+								settled = true;
+								resolve(null);
+						} };
 						try {
 								req = indexedDB.open(DB_NAME, 1);
 						}
 						catch (_) {
-								resolve(null);
+								fail();
 								return;
 						}
 						req.onupgradeneeded = () => {
@@ -5465,20 +5495,32 @@ const NotificationJournal = (() => {
 						};
 						req.onsuccess = () => {
 								const db = req.result;
-								connection = db;
-								db.onversionchange = () => {
+								if (settled) {
 										db.close();
+										return;
+								}
+								settled = true;
+								connection = db;
+								const release = () => {
 										if (connection === db) {
 												connection = null;
-												opening = null;
+												if (opening === attempt) {
+														opening = null;
+												}
 										}
 								};
+								db.onversionchange = () => { db.close(); release(); };
+								db.onclose = release;
 								resolve(db);
 						};
-						req.onerror = () => resolve(null);
-						req.onblocked = () => resolve(null);
+						req.onerror = fail;
+						req.onblocked = fail;
 				});
-				return opening;
+				opening = attempt;
+				void attempt.then(() => { if (opening === attempt) {
+						opening = null;
+				} });
+				return attempt;
 		};
 		const prune = (db) => {
 				try {
@@ -7137,6 +7179,21 @@ class ShortcutKeyEmitter {
 		static create(config, element, externalEmitter) {
 				const emitter = new Emitter();
 				let isVerySlow = false;
+				let slowKey;
+				let slowRate = 1;
+				let slowEvent;
+				let slowModifiers = new Set();
+				const releaseVerySlow = (event = slowEvent) => {
+						if (!isVerySlow) {
+								return;
+						}
+						isVerySlow = false;
+						slowKey = undefined;
+						slowEvent = undefined;
+						slowModifiers.clear();
+						emitter.emit('keyUp', 'PLAYBACK_RATE', event, slowRate);
+				};
+				emitter.releaseTemporaryPlaybackRate = () => releaseVerySlow();
 				const legacyKey = (value) => parseInt(value, 10) || -1;
 				const map = {
 						CLOSE: 0,
@@ -7190,6 +7247,9 @@ class ShortcutKeyEmitter {
 						config.on('update', (key) => {
 								if (typeof key !== 'string' || !key.startsWith('KEY_')) {
 										return;
+								}
+								if (key === 'KEY_SHIFT_RESET') {
+										releaseVerySlow();
 								}
 								Object.keys(map).forEach(k => {
 										map[k] = legacyKey(config.props[`KEY_${k}`]);
@@ -7297,7 +7357,18 @@ class ShortcutKeyEmitter {
 										key = 'TOGGLE_PLAYLIST';
 										break;
 								case map.SHIFT_RESET:
+										if (isVerySlow) {
+												return;
+										}
 										key = 'PLAYBACK_RATE';
+										slowKey = e.keyCode;
+										slowEvent = e;
+										slowModifiers = new Set([
+												...(e.shiftKey ? [16] : []), ...(e.ctrlKey ? [17] : []),
+												...(e.altKey ? [18] : []), ...(e.metaKey ? [91, 93] : [])
+										]);
+										const currentRate = Number(config.props.playbackRate);
+										slowRate = Number.isFinite(currentRate) && currentRate > 0 ? currentRate : 1;
 										isVerySlow = true;
 										param = 0.1;
 										break;
@@ -7381,25 +7452,8 @@ class ShortcutKeyEmitter {
 						}
 				};
 				const onKeyUp = (e) => {
-						if (isInputEvent(e)) {
-								return;
-						}
-						let key = '';
-						const keyCode = e.keyCode +
-								(e.metaKey ? 0x1000000 : 0) +
-								(e.altKey ? 0x100000 : 0) +
-								(e.ctrlKey ? 0x10000 : 0) +
-								(e.shiftKey ? 0x1000 : 0);
-						let param = '';
-						switch (keyCode) {
-								case map.SHIFT_RESET:
-										key = 'PLAYBACK_RATE';
-										isVerySlow = false;
-										param = 1;
-										break;
-						}
-						if (key) {
-								emitter.emit('keyUp', key, e, param);
+						if (e.keyCode === slowKey || slowModifiers.has(e.keyCode)) {
+								releaseVerySlow(e);
 						}
 				};
 				(async () => {
@@ -7407,6 +7461,12 @@ class ShortcutKeyEmitter {
 						element = element || document.body || document.documentElement;
 						element.addEventListener('keydown', onKeyDown);
 						element.addEventListener('keyup', onKeyUp);
+						element.addEventListener('focusin', (event) => {
+								if (isInputEvent(event)) {
+										releaseVerySlow(event);
+								}
+						});
+						window.addEventListener?.('blur', releaseVerySlow);
 						externalEmitter.on('keydown', onKeyDown);
 						externalEmitter.on('keyup', onKeyUp);
 				})();
@@ -10474,7 +10534,16 @@ const CommentPostTarget = {
 		}
 };
 const VideoInfoLoader = (function () {
+		debug.watchApiData = undefined;
 		const cacheStorage = new CacheStorage(sessionStorage);
+		let anonymousWatchLoadSerial = 0;
+		const isCancelled = (options) => options.signal?.aborted === true;
+		const cancelledError = () => ({ reason: 'cancelled', message: 'Video info request cancelled' });
+		const requireActive = (options) => {
+				if (isCancelled(options)) {
+						throw cancelledError();
+				}
+		};
 		const validWatchV4Structure = (data) => {
 				const record = (value) => value !== null && typeof value === 'object' &&
 						!Array.isArray(value);
@@ -10827,11 +10896,11 @@ const VideoInfoLoader = (function () {
 								}
 						}
 						catch (e) {
-								window.console.warn('投稿者IDの補完(snapshot)に失敗', videoId, e);
+								window.console.warn('投稿者IDの補完(snapshot)に失敗');
 						}
 				}
 				if (!ownerId) {
-						window.console.info('投稿者IDを補完できませんでした', videoId);
+						window.console.info('投稿者IDを補完できませんでした');
 						return;
 				}
 				wad.uploaderInfo = {
@@ -10842,11 +10911,11 @@ const VideoInfoLoader = (function () {
 						isSupplemented: true,
 						supplementedFrom: source
 				};
-				window.console.info('%c投稿者IDを補完しました', 'background: lightgreen;', { videoId, ownerId, source });
+				window.console.info('投稿者IDを補完しました');
 		};
-		const onLoadPromise = async (watchId, options, isRetry, resp) => {
+		const onLoadPromise = async (watchId, options, isRetry, isCurrent, resp) => {
 				const data = await parseWatchApiData(resp, watchId);
-				debug.watchApiData = data;
+				requireActive(options);
 				if (!data) {
 						throw {
 								reason: 'network',
@@ -10856,9 +10925,12 @@ const VideoInfoLoader = (function () {
 				if (data.reject) {
 						throw data;
 				}
-				await resolveMissingOwner(data).catch(e => window.console.warn('resolveMissingOwner', e));
+				await resolveMissingOwner(data).catch(() => window.console.warn('resolveMissingOwner failed'));
+				requireActive(options);
 				if (data.isPlayable) {
-						emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);
+						if (isCurrent()) {
+								emitter.emitAsync('loadVideoInfo', data, 'WATCH_API', watchId);
+						}
 						return data;
 				}
 				if (data.isNeedPayment && data.genreKey === 'anime' && Config.getValue('loadLinkedChannelVideo')) {
@@ -10912,12 +10984,16 @@ const VideoInfoLoader = (function () {
 						info: data,
 				};
 		};
-		const safeLoadError = (err) => (err && typeof err === 'object') ? {
-				reason: err.reason, message: err.message, type: err.type, name: err.name,
-				errorCode: err.errorCode ?? err.info?.errorCode ?? null,
-				statusCode: err.statusCode ?? err.info?.statusCode ?? null,
-				isPlayable: err.info?.isPlayable, isNeedPayment: err.info?.isNeedPayment
-		} : { message: String(err) };
+		const safeLoadError = (err) => {
+				const reasons = ['network', 'forbidden', 'not found', 'flv', 'need payment', 'watch api', 'cancelled'];
+				const status = err?.statusCode ?? err?.info?.statusCode;
+				return {
+						reason: reasons.includes(err?.reason) ? err?.reason : 'unknown',
+						statusCode: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+						isPlayable: typeof err?.info?.isPlayable === 'boolean' ? err.info.isPlayable : undefined,
+						isNeedPayment: typeof err?.info?.isNeedPayment === 'boolean' ? err.info.isNeedPayment : undefined
+				};
+		};
 		const createSleep = function (sleepTime) {
 				return new Promise(resolve => setTimeout(resolve, sleepTime));
 		};
@@ -10940,40 +11016,57 @@ const VideoInfoLoader = (function () {
 				};
 		};
 		const fetchWatchResponse = async (watchId, options) => {
+				requireActive(options);
+				const fetchOptions = options.signal ?
+						{ credentials: 'include', signal: options.signal } : { credentials: 'include' };
 				const pageUrl = `https://www.nicovideo.jp/watch/${encodeURIComponent(watchId)}` +
 						(options.economy === true ? '?eco=1' : '');
-				const pageResponse = await netUtil.fetch(pageUrl, { credentials: 'include' });
+				const pageResponse = await netUtil.fetch(pageUrl, fetchOptions);
+				requireActive(options);
 				if (typeof pageResponse.text !== 'function') {
-						return pageResponse.json();
+						const json = await pageResponse.json();
+						requireActive(options);
+						return json;
 				}
 				if (pageResponse.status >= 500) {
 						throw { reason: 'network', message: '通信エラー(network)' };
 				}
 				const html = await pageResponse.text();
+				requireActive(options);
 				const embedded = parseWatchPageResponse(html);
 				if (embedded)
 						return embedded;
 				const legacyUrl = pageUrl + (options.economy === true ? '&' : '?') + 'responseType=json';
-				const legacyResponse = await netUtil.fetch(legacyUrl, { credentials: 'include' });
+				const legacyResponse = await netUtil.fetch(legacyUrl, fetchOptions);
+				requireActive(options);
+				let json;
 				try {
-						const json = await legacyResponse.json();
-						if (json?.data?.response)
-								return json;
+						json = await legacyResponse.json();
 				}
 				catch (_) { /* Legacy endpoint may return HTML or 400 without JSON. */ }
+				requireActive(options);
+				if (json?.data?.response)
+						return json;
 				throw {
 						reason: 'watch api', errorCode: 'WATCH_PAGE_META_MISSING',
 						message: '動画情報が見つかりません（公式ページの構造を要確認）'
 				};
 		};
-		const loadPromise = function (watchId, options, isRetry = false) {
-				console.log('%cloadFromWatchApiData...', 'background: lightgreen;', watchId);
+		const loadPromise = function (watchId, options, isRetry = false, isCurrent = () => true) {
+				if (isCancelled(options)) {
+						return Promise.reject(cancelledError());
+				}
+				console.log('loadFromWatchApiData');
 				return fetchWatchResponse(watchId, options)
-						.catch(err => Promise.reject(err && typeof err === 'object' && err.reason ? err :
-						{ reason: 'network', message: '通信エラー(network)' }))
-						.then(onLoadPromise.bind(this, watchId, options, isRetry))
+						.catch(err => Promise.reject(isCancelled(options) ? cancelledError() :
+						err && typeof err === 'object' && err.reason ? err :
+								{ reason: 'network', message: '通信エラー(network)' }))
+						.then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
 						.catch((err) => {
-						window.console.error('err', { err: safeLoadError(err), isRetry, watchId });
+						if (isCancelled(options)) {
+								return Promise.reject(cancelledError());
+						}
+						window.console.error('watch api error', { err: safeLoadError(err), isRetry });
 						if (isRetry) {
 								return Promise.reject({
 										watchId,
@@ -10993,15 +11086,17 @@ const VideoInfoLoader = (function () {
 						}
 						else if (err.reason === 'network') {
 								return createSleep(5000).then(() => {
+										requireActive(options);
 										window.console.warn('network error & retry');
-										return loadPromise(watchId, options, true);
+										return loadPromise(watchId, options, true, isCurrent);
 								});
 						}
 						else if (err.reason === 'flv' && !options.economy) {
 								options.economy = true;
 								window.console.log('%cエコノミーにフォールバック(flv)', 'background: cyan; color: red;');
 								return createSleep(500).then(() => {
-										return loadPromise(watchId, options, true);
+										requireActive(options);
+										return loadPromise(watchId, options, true, isCurrent);
 								});
 						}
 						else {
@@ -11016,9 +11111,15 @@ const VideoInfoLoader = (function () {
 		};
 		return {
 				load: function (watchId, options) {
-						const timeKey = `watchAPI:${watchId}`;
+						debug.watchApiData = undefined;
+						const generation = ++anonymousWatchLoadSerial;
+						const callerSignal = options.signal;
+						const isCurrent = () => generation === anonymousWatchLoadSerial &&
+								!(callerSignal != null && typeof callerSignal === 'object' &&
+										callerSignal.aborted === true);
+						const timeKey = `watchAPI:${generation}`;
 						window.console.time(timeKey);
-						return loadPromise(watchId, options).then((result) => {
+						return loadPromise(watchId, options, false, isCurrent).then((result) => {
 								window.console.timeEnd(timeKey);
 								return result;
 						}, (err) => {
@@ -12787,6 +12888,1295 @@ const NicoVideoApi = (() => {
 				bridgeDb(...args) { return init().bridgeDb(...args); }
 		};
 })();
+const marginSeconds = 10;
+const epoch = (value) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+const eligible = (time, duration) => typeof time === 'number' && Number.isFinite(time) &&
+		time > marginSeconds && time < duration - marginSeconds;
+const matches = (itemVideo, videoId) => itemVideo === undefined || itemVideo === videoId;
+function selectAutoResume(input) {
+		if (!input || typeof input.videoId !== 'string' || !input.videoId.trim())
+				return null;
+		const { videoId, duration, server, local, clear } = input;
+		if (typeof duration !== 'number' || !Number.isFinite(duration) ||
+				duration <= marginSeconds * 2)
+				return null;
+		if (clear && clear.videoId !== undefined && !matches(clear.videoId, videoId))
+				return null;
+		const barrier = clear ? epoch(clear.at) : null;
+		if (clear && barrier === null)
+				return null;
+		const serverTime = server && matches(server.videoId, videoId) &&
+				eligible(server.time, duration) ? server.time : null;
+		const serverDate = server ? epoch(server.updatedAt) : null;
+		if (serverTime !== null && (barrier === null ||
+				serverDate !== null && serverDate > barrier)) {
+				const selected = {
+						kind: 'automatic', videoId, source: 'server', time: serverTime,
+						...(serverDate === null ? {} : { recordedAt: serverDate })
+				};
+				return Object.freeze(selected);
+		}
+		let latest = null;
+		let latestAt = -1;
+		if (Array.isArray(local)) {
+				for (const candidate of local) {
+						if (!candidate || !matches(candidate.videoId, videoId) ||
+								!eligible(candidate.time, duration))
+								continue;
+						const at = epoch(candidate.now);
+						if (at === null || (barrier !== null && at <= barrier))
+								continue;
+						if (at > latestAt) {
+								latest = candidate;
+								latestAt = at;
+						}
+				}
+		}
+		if (!latest)
+				return null;
+		return Object.freeze({
+				kind: 'automatic', videoId, source: 'local',
+				time: latest.time, recordedAt: latestAt
+		});
+}
+const valid = (videoId) => typeof videoId === 'string' && videoId.length > 0 && videoId.trim().length > 0 &&
+		videoId.length <= 256;
+class AutoResumeClearCoordinator {
+		pending = new Map();
+		deps;
+		constructor(deps) { this.deps = deps; }
+		delete(videoId) {
+				if (!valid(videoId))
+						return Promise.reject(new TypeError('Invalid automatic resume video ID'));
+				let session;
+				try {
+						session = this.deps.activeSessionToken?.();
+				}
+				catch (error) {
+						return Promise.reject(error);
+				}
+				const existing = this.pending.get(videoId);
+				if (existing && existing.session === session)
+						return existing.operation;
+				const operation = this.run(videoId, session);
+				this.pending.set(videoId, { session, operation });
+				void operation.then(() => { if (this.pending.get(videoId)?.operation === operation)
+						this.pending.delete(videoId); }, () => { if (this.pending.get(videoId)?.operation === operation)
+						this.pending.delete(videoId); });
+				return operation;
+		}
+		async run(videoId, session) {
+				const ownerActive = () => (!this.deps.activeVideoId || this.deps.activeVideoId() === videoId) &&
+						(!this.deps.activeSessionToken || this.deps.activeSessionToken() === session);
+				if (!ownerActive()) {
+						throw new Error('Automatic resume video changed');
+				}
+				const raw = await this.deps.clearLocal(videoId, 'deleted');
+				const local = raw;
+				if (!local || local.watchId !== videoId || !Array.isArray(local.resume) ||
+						local.resume.length !== 0 || local.resumeClearReason !== 'deleted' ||
+						typeof local.resumeClearedAt !== 'number' ||
+						!Number.isSafeInteger(local.resumeClearedAt) || local.resumeClearedAt < 0) {
+						throw new Error('Automatic resume local clear not acknowledged');
+				}
+				const outcome = (remote) => Object.freeze({
+						kind: 'auto-resume-delete', videoId, local: 'cleared', remote,
+						fullyAcknowledged: remote === 'acknowledged',
+						retryRemote: remote === 'failed'
+				});
+				if (!ownerActive()) {
+						return outcome('stale-video');
+				}
+				let loggedIn;
+				try {
+						loggedIn = this.deps.isLoggedIn();
+				}
+				catch {
+						return outcome('unavailable');
+				}
+				if (!loggedIn || typeof this.deps.saveRemoteZero !== 'function') {
+						return outcome('unavailable');
+				}
+				try {
+						await this.deps.saveRemoteZero(videoId, 0);
+						return outcome(ownerActive() ? 'acknowledged' : 'stale-video');
+				}
+				catch {
+						return outcome(ownerActive() ? 'failed' : 'stale-video');
+				}
+		}
+}
+const {normalizeManualBookmarks, addManualBookmark, renameManualBookmark, removeManualBookmark} = (() => {
+const MAX_PER_VIDEO = 100;
+const validId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id);
+const validClock = (n) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+const validTime = (time, duration) => typeof time === 'number' && Number.isFinite(time) && time >= 0 &&
+		typeof duration === 'number' && Number.isFinite(duration) && duration > 0 &&
+		time < duration;
+const labelFor = (raw) => {
+		const label = typeof raw === 'string' ? raw.trim() : '';
+		if (Array.from(label).length > 80)
+				throw new RangeError('Bookmark label is too long');
+		return label || '無題のしおり';
+};
+const immutable = (items) => Object.freeze(items.map(entry => Object.freeze({ ...entry })));
+const forVideo = (items, videoId) => {
+		if (typeof videoId !== 'string' || !videoId.trim())
+				throw new TypeError('Invalid bookmark video ID');
+		return items.filter(item => item.videoId === videoId);
+};
+function normalizeManualBookmarks(raw, videoId, duration) {
+		if (typeof videoId !== 'string' || !videoId.trim() ||
+				typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
+				return Object.freeze([]);
+		}
+		const result = [], seen = new Set();
+		if (!Array.isArray(raw))
+				return Object.freeze(result);
+		for (const item of raw) {
+				if (!item || typeof item !== 'object')
+						continue;
+				const x = item;
+				if (x.videoId !== videoId || !validId(x.id) || seen.has(x.id) ||
+						!validTime(x.time, duration) || !validClock(x.createdAt) ||
+						!validClock(x.updatedAt) || x.updatedAt < x.createdAt)
+						continue;
+				let label;
+				try {
+						label = labelFor(x.label);
+				}
+				catch {
+						continue;
+				}
+				seen.add(x.id);
+				result.push({ id: x.id, videoId, time: x.time, label,
+						createdAt: x.createdAt, updatedAt: x.updatedAt });
+				if (result.length === MAX_PER_VIDEO)
+						break;
+		}
+		return immutable(result);
+}
+function addManualBookmark(existing, draft, duration) {
+		const previous = forVideo(existing, draft.videoId);
+		if (!validId(draft.id) || !validTime(draft.time, duration) ||
+				!validClock(draft.now))
+				throw new TypeError('Invalid bookmark draft');
+		if (previous.some(item => item.id === draft.id))
+				throw new RangeError('Duplicate bookmark ID');
+		if (previous.length >= MAX_PER_VIDEO)
+				throw new RangeError('Bookmark limit reached');
+		const created = { id: draft.id, videoId: draft.videoId,
+				time: draft.time, label: labelFor(draft.label),
+				createdAt: draft.now, updatedAt: draft.now };
+		if (previous.length !== existing.length)
+				throw new TypeError('Mixed bookmark video IDs');
+		return immutable([...existing, created]);
+}
+function renameManualBookmark(existing, videoId, id, label, now) {
+		const previous = forVideo(existing, videoId);
+		if (previous.length !== existing.length || !validId(id) || !validClock(now))
+				throw new TypeError('Invalid bookmark update');
+		const normalized = labelFor(label);
+		return immutable(existing.map(entry => entry.id === id ? { ...entry, label: normalized, updatedAt: Math.max(now, entry.updatedAt, entry.createdAt) } : entry));
+}
+function removeManualBookmark(existing, videoId, id) {
+		const previous = forVideo(existing, videoId);
+		if (previous.length !== existing.length || !validId(id))
+				throw new TypeError('Invalid bookmark delete');
+		return immutable(existing.filter(entry => entry.id !== id));
+}
+return {normalizeManualBookmarks, addManualBookmark, renameManualBookmark, removeManualBookmark};
+})();
+const {IndexedDbManualBookmarkBackend, ManualBookmarkRepository} = (() => {
+const databaseName = 'zenzawatch-manual-bookmarks';
+const storeName = 'bookmarks';
+const validateVideoId = (value) => typeof value === 'string' && value.trim().length > 0 && value.length <= 256;
+class IndexedDbManualBookmarkBackend {
+		db = null;
+		opening = null;
+		cancelOpening = null;
+		activeTransactions = new Set();
+		factory;
+		constructor(factory) { this.factory = factory; }
+		open() {
+				if (this.db)
+						return Promise.resolve(this.db);
+				if (this.opening)
+						return this.opening;
+				const promise = new Promise((resolve, reject) => {
+						let request;
+						try {
+								request = this.factory.open(databaseName, 1);
+						}
+						catch (error) {
+								reject(error);
+								return;
+						}
+						let settled = false;
+						const fail = (error) => {
+								if (settled)
+										return;
+								settled = true;
+								reject(error);
+						};
+						this.cancelOpening = () => {
+								fail(new Error('Bookmark database opening cancelled'));
+								try {
+										request.transaction?.abort();
+								}
+								catch { }
+						};
+						request.onupgradeneeded = () => {
+								if (settled) {
+										try {
+												request.transaction?.abort();
+										}
+										catch { }
+										return;
+								}
+								try {
+										const db = request.result;
+										if (!db.objectStoreNames.contains(storeName)) {
+												db.createObjectStore(storeName, { keyPath: 'videoId' });
+										}
+								}
+								catch (error) {
+										fail(error);
+										try {
+												request.transaction?.abort();
+										}
+										catch { }
+								}
+						};
+						request.onerror = () => fail(request.error || new Error('Bookmark database open failed'));
+						request.onblocked = () => fail(new Error('Bookmark database upgrade blocked'));
+						request.onsuccess = () => {
+								const db = request.result;
+								if (settled) {
+										db.close();
+										return;
+								}
+								settled = true;
+								db.onversionchange = () => {
+										if (this.db === db)
+												this.close();
+										else
+												db.close();
+								};
+								this.db = db;
+								resolve(db);
+						};
+				});
+				this.opening = promise;
+				void promise.then(() => { if (this.opening === promise) {
+						this.opening = null;
+						this.cancelOpening = null;
+				} }, () => { if (this.opening === promise) {
+						this.opening = null;
+						this.cancelOpening = null;
+				} });
+				return promise;
+		}
+		async read(videoId) {
+				if (!validateVideoId(videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				const db = await this.open();
+				return new Promise((resolve, reject) => {
+						let transaction;
+						try {
+								transaction = db.transaction(storeName, 'readonly');
+						}
+						catch (error) {
+								reject(error);
+								return;
+						}
+						const req = transaction.objectStore(storeName).get(videoId);
+						this.activeTransactions.add(transaction);
+						let value;
+						transaction.oncomplete = () => { this.activeTransactions.delete(transaction); resolve(value); };
+						transaction.onabort = () => {
+								this.activeTransactions.delete(transaction);
+								reject(transaction.error || new Error('Bookmark read aborted'));
+						};
+						transaction.onerror = () => {
+								this.activeTransactions.delete(transaction);
+								reject(transaction.error || new Error('Bookmark read failed'));
+						};
+						req.onerror = () => reject(req.error || new Error('Bookmark read failed'));
+						req.onsuccess = () => { value = req.result?.items || []; };
+				});
+		}
+		async update(videoId, change) {
+				if (!validateVideoId(videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				const db = await this.open();
+				return new Promise((resolve, reject) => {
+						let transaction;
+						try {
+								transaction = db.transaction(storeName, 'readwrite');
+						}
+						catch (error) {
+								reject(error);
+								return;
+						}
+						this.activeTransactions.add(transaction);
+						let putIssued = false;
+						transaction.oncomplete = () => {
+								this.activeTransactions.delete(transaction);
+								if (putIssued)
+										resolve();
+								else
+										reject(new Error('Bookmark update was not acknowledged'));
+						};
+						transaction.onabort = () => {
+								this.activeTransactions.delete(transaction);
+								reject(transaction.error || new Error('Bookmark update aborted'));
+						};
+						transaction.onerror = () => {
+								this.activeTransactions.delete(transaction);
+								reject(transaction.error || new Error('Bookmark update failed'));
+						};
+						const request = transaction.objectStore(storeName).get(videoId);
+						request.onerror = () => reject(request.error || new Error('Bookmark update read failed'));
+						request.onsuccess = () => {
+								try {
+										const before = request.result?.items || [];
+										const after = change(before);
+										if (!Array.isArray(after))
+												throw new TypeError('Invalid bookmark update result');
+										transaction.objectStore(storeName).put({ videoId, items: after });
+										putIssued = true;
+								}
+								catch (error) {
+										reject(error);
+										try {
+												transaction.abort();
+										}
+										catch { }
+								}
+						};
+				});
+		}
+		close() {
+				const cancelOpening = this.cancelOpening;
+				this.cancelOpening = null;
+				this.opening = null;
+				cancelOpening?.();
+				const db = this.db;
+				this.db = null;
+				const transactions = [...this.activeTransactions];
+				this.activeTransactions.clear();
+				for (const transaction of transactions) {
+						try {
+								transaction.abort();
+						}
+						catch { /* Already committed/inactive. */ }
+				}
+				db?.close();
+		}
+}
+class ManualBookmarkRepository {
+		backend;
+		constructor(backend) { this.backend = backend; }
+		checked(raw, videoId, duration) {
+				if (raw == null)
+						return Object.freeze([]);
+				if (!Array.isArray(raw))
+						throw new TypeError('Corrupted bookmark record');
+				const normalized = normalizeManualBookmarks(raw, videoId, duration);
+				if (normalized.length !== raw.length)
+						throw new TypeError('Corrupted bookmark record');
+				return normalized;
+		}
+		async load(videoId, duration) {
+				if (!validateVideoId(videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				return this.checked(await this.backend.read(videoId), videoId, duration);
+		}
+		async add(draft, duration) {
+				if (!validateVideoId(draft?.videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				let result = [];
+				await this.backend.update(draft.videoId, raw => {
+						result = addManualBookmark(this.checked(raw, draft.videoId, duration), draft, duration);
+						return result;
+				});
+				return result;
+		}
+		async rename(videoId, id, label, now, duration) {
+				if (!validateVideoId(videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				let result = [];
+				await this.backend.update(videoId, raw => {
+						result = renameManualBookmark(this.checked(raw, videoId, duration), videoId, id, label, now);
+						return result;
+				});
+				return result;
+		}
+		async remove(videoId, id, duration) {
+				if (!validateVideoId(videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				let result = [];
+				await this.backend.update(videoId, raw => {
+						result = removeManualBookmark(this.checked(raw, videoId, duration), videoId, id);
+						return result;
+				});
+				return result;
+		}
+		close() { this.backend.close(); }
+}
+return {IndexedDbManualBookmarkBackend, ManualBookmarkRepository};
+})();
+const {ManualBookmarkSession} = (() => {
+const empty = Object.freeze([]);
+const valid = (id, duration) => typeof id === 'string' && id.trim().length > 0 && id.length <= 256 &&
+		Number.isFinite(duration) && duration > 0;
+const immutable = (rows) => Object.freeze(rows.map(entry => Object.freeze({ ...entry })));
+const makeState = (status, videoId, bookmarks) => Object.freeze({ status, videoId, bookmarks: immutable(bookmarks) });
+class ManualBookmarkSession {
+		repository;
+		listeners = new Set();
+		current = null;
+		generation = 0;
+		latestAction = 0;
+		activating = null;
+		failedAction = null;
+		readbackRevision = 0;
+		disposed = false;
+		state = makeState('idle', null, empty);
+		constructor(repository) { this.repository = repository; }
+		get snapshot() { return this.state; }
+		subscribe(listener) {
+				if (this.disposed)
+						throw new Error('Bookmark session disposed');
+				this.listeners.add(listener);
+				try {
+						listener(this.state);
+				}
+				catch { /* UI observer cannot stop persistence. */ }
+				return () => this.listeners.delete(listener);
+		}
+		update(status, videoId, bookmarks) {
+				this.state = makeState(status, videoId, bookmarks);
+				for (const notify of this.listeners) {
+						try {
+								notify(this.state);
+						}
+						catch { /* Isolate failing view observers. */ }
+				}
+				return this.state;
+		}
+		isCurrent(generation, videoId) {
+				return !this.disposed && this.generation === generation &&
+						this.current?.videoId === videoId;
+		}
+		activate(videoId, duration) {
+				if (this.disposed)
+						return Promise.reject(new Error('Bookmark session disposed'));
+				if (!valid(videoId, duration))
+						return Promise.reject(new TypeError('Invalid bookmark video session'));
+				if (this.current?.videoId === videoId && this.current.duration === duration &&
+						this.state.status !== 'error') {
+						return this.activating ?? Promise.resolve(Object.freeze({ status: 'applied', snapshot: this.state }));
+				}
+				const generation = ++this.generation;
+				this.current = Object.freeze({ videoId, duration });
+				this.latestAction = 0;
+				this.failedAction = null;
+				this.readbackRevision++;
+				const activating = this.loadActivated(generation, videoId, duration);
+				this.activating = activating;
+				this.update('loading', videoId, empty);
+				void activating.then(() => { if (this.activating === activating)
+						this.activating = null; }, () => { if (this.activating === activating)
+						this.activating = null; });
+				return activating;
+		}
+		async loadActivated(generation, videoId, duration) {
+				try {
+						const bookmarks = await this.repository.load(videoId, duration);
+						if (!this.isCurrent(generation, videoId) || this.latestAction > 0)
+								return Object.freeze({ status: 'stale', snapshot: this.state });
+						const snapshot = this.update('ready', videoId, bookmarks);
+						return Object.freeze({ status: 'applied', snapshot });
+				}
+				catch {
+						if (!this.isCurrent(generation, videoId) || this.latestAction > 0)
+								return Object.freeze({ status: 'stale', snapshot: this.state });
+						const snapshot = this.update('error', videoId, empty);
+						return Object.freeze({ status: 'error', snapshot });
+				}
+		}
+		async modify(operation) {
+				if (this.disposed)
+						throw new Error('Bookmark session disposed');
+				const owner = this.current;
+				if (!owner)
+						throw new Error('No active bookmark video');
+				const generation = this.generation;
+				const action = ++this.latestAction;
+				this.failedAction = null;
+				this.readbackRevision++;
+				try {
+						const rows = await operation(owner);
+						if (!this.isCurrent(generation, owner.videoId))
+								return Object.freeze({ status: 'stale', snapshot: this.state });
+						if (this.latestAction !== action) {
+								const failedAction = this.failedAction;
+								if (failedAction !== null && failedAction === this.latestAction) {
+										const revision = ++this.readbackRevision;
+										try {
+												const committed = await this.repository.load(owner.videoId, owner.duration);
+												if (this.isCurrent(generation, owner.videoId) &&
+														this.latestAction === failedAction && this.failedAction === failedAction &&
+														this.readbackRevision === revision) {
+														this.update('error', owner.videoId, committed);
+												}
+										}
+										catch { /* Preserve the last visible state without disclosing errors. */ }
+								}
+								return Object.freeze({ status: 'stale', snapshot: this.state });
+						}
+						const snapshot = this.update('ready', owner.videoId, rows);
+						return Object.freeze({ status: 'applied', snapshot });
+				}
+				catch {
+						if (!this.isCurrent(generation, owner.videoId) || this.latestAction !== action)
+								return Object.freeze({ status: 'stale', snapshot: this.state });
+						this.failedAction = action;
+						const revision = ++this.readbackRevision;
+						let bookmarks = this.state.bookmarks;
+						try {
+								bookmarks = await this.repository.load(owner.videoId, owner.duration);
+						}
+						catch { /* Keep the last visible state if readback is unavailable. */ }
+						if (!this.isCurrent(generation, owner.videoId) || this.latestAction !== action)
+								return Object.freeze({ status: 'stale', snapshot: this.state });
+						if (this.readbackRevision !== revision)
+								return Object.freeze({ status: 'error', snapshot: this.state });
+						const snapshot = this.update('error', owner.videoId, bookmarks);
+						return Object.freeze({ status: 'error', snapshot });
+				}
+		}
+		add(id, time, now, label = '') {
+				return this.modify(owner => this.repository.add({
+						id, videoId: owner.videoId, time, now, label
+				}, owner.duration));
+		}
+		rename(id, label, now) {
+				return this.modify(owner => this.repository.rename(owner.videoId, id, label, now, owner.duration));
+		}
+		remove(id) {
+				return this.modify(owner => this.repository.remove(owner.videoId, id, owner.duration));
+		}
+		deactivate() {
+				if (this.disposed)
+						return;
+				this.generation++;
+				this.latestAction = 0;
+				this.current = null;
+				this.failedAction = null;
+				this.readbackRevision++;
+				this.update('idle', null, empty);
+		}
+		dispose() {
+				if (this.disposed)
+						return;
+				this.deactivate();
+				this.disposed = true;
+				this.listeners.clear();
+				this.repository.close();
+		}
+}
+return {ManualBookmarkSession};
+})();
+const {ManualBookmarkPanel} = (() => {
+const displayTime = (time) => {
+		const seconds = Math.max(0, Math.floor(time));
+		return Math.floor(seconds / 3600) > 0 ?
+				Math.floor(seconds / 3600) + ':' +
+						String(Math.floor(seconds % 3600 / 60)).padStart(2, '0') + ':' +
+						String(seconds % 60).padStart(2, '0') :
+				Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+};
+class ManualBookmarkPanel {
+		root;
+		session;
+		deps;
+		unsubscribe;
+		disposed = false;
+		last;
+		clickHandler;
+		inputHandler;
+		addDraftRevision = 0;
+		pointDrafts = { a: '', b: '' };
+		loop = null;
+		awaitingLoopSeek = false;
+		pointBusy = false;
+		automaticDraftDirty = false;
+		activeTab = 'manual';
+		selectTab(name) {
+				if (!['manual', 'automatic', 'repeat'].includes(name))
+						return;
+				this.activeTab = name;
+				for (const section of this.root.querySelectorAll('[data-point-section]')) {
+						section.hidden = section.dataset.pointSection !== name;
+				}
+				for (const button of this.root.querySelectorAll('[data-point-tab]')) {
+						button.setAttribute('aria-pressed', String(button.dataset.pointTab === name));
+				}
+		}
+		get isRepeating() { return this.loop !== null; }
+		refreshPreferences() {
+				if (this.deps.repeatEnabled?.() === false) {
+						this.loop = null;
+						this.awaitingLoopSeek = false;
+				}
+				this.render(this.last);
+		}
+		static formatTime(time) {
+				const milliseconds = Math.round(time * 1000);
+				const decimal = milliseconds % 1000;
+				return displayTime(Math.floor(milliseconds / 1000)) + (decimal ? '.' + String(decimal).padStart(3, '0') : '');
+		}
+		static parseTime(value) {
+				const text = value.trim();
+				if (!/^\d+(?:\.\d+)?$/.test(text) &&
+						!/^\d+:\d{1,2}(?:\.\d+)?$/.test(text) &&
+						!/^\d+:\d{1,2}:\d{1,2}(?:\.\d+)?$/.test(text))
+						return null;
+				const parts = text.split(':').map(Number);
+				if (parts.slice(1).some(n => n >= 60))
+						return null;
+				const seconds = parts.reduce((n, part) => n * 60 + part, 0);
+				return Number.isFinite(seconds) ? seconds : null;
+		}
+		tick(time, paused, seeking) {
+				if (this.disposed || !this.ownsVideo() || this.deps.repeatEnabled?.() === false) {
+						this.loop = null;
+						this.awaitingLoopSeek = false;
+						this.updateLoopDisplay();
+						return false;
+				}
+				const loop = this.loop;
+				if (loop)
+						this.deps.repeatState?.(true);
+				if (!loop || !Number.isFinite(time))
+						return false;
+				if (time < loop.b)
+						this.awaitingLoopSeek = false;
+				if (paused || seeking || this.awaitingLoopSeek || time < loop.b)
+						return false;
+				this.awaitingLoopSeek = true;
+				this.deps.seek(loop.a);
+				return true;
+		}
+		repeatAtEnd() {
+				if (this.disposed || !this.ownsVideo() || this.deps.repeatEnabled?.() === false || !this.loop)
+						return false;
+				this.awaitingLoopSeek = true;
+				this.deps.seek(this.loop.a);
+				return true;
+		}
+		pointButton(action, label) {
+				const button = this.root.ownerDocument.createElement('button');
+				button.type = 'button';
+				button.dataset.pointAction = action;
+				button.textContent = label;
+				return button;
+		}
+		pointField(name, label, value) {
+				const wrapper = this.root.ownerDocument.createElement('label');
+				wrapper.textContent = label;
+				const field = this.root.ownerDocument.createElement('input');
+				field.type = 'text';
+				field.inputMode = 'decimal';
+				field.dataset.pointField = name;
+				field.value = value;
+				field.placeholder = '0:00';
+				field.setAttribute('aria-label', label);
+				wrapper.append(field);
+				return wrapper;
+		}
+		pointSection(title) {
+				const section = this.root.ownerDocument.createElement('section');
+				section.className = 'zw-point-section';
+				const heading = this.root.ownerDocument.createElement('h3');
+				heading.textContent = title;
+				section.append(heading);
+				return section;
+		}
+		renderPointControls(region, automatic) {
+				if (!this.deps.duration)
+						return;
+				const section = this.pointSection(automatic ? 'ここまで見た' : 'ABリピート');
+				section.dataset.pointSection = automatic ? 'automatic' : 'repeat';
+				const status = this.root.ownerDocument.createElement('p');
+				status.setAttribute('role', 'status');
+				if (automatic) {
+						status.dataset.pointStatus = 'automatic';
+						const time = this.deps.automaticTime?.();
+						status.textContent = this.deps.recordingEnabled?.() === false ?
+								'自動記録はOFFです。手動の編集・しおりは利用できます。' :
+								time === null || time === undefined ? '自動位置はまだありません' : '自動で更新される位置は1件だけです。';
+						section.append(status, this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置を使う'), this.pointButton('delete-automatic', '削除'));
+				}
+				else {
+						status.dataset.pointStatus = 'repeat';
+						status.textContent = this.loop ? '区間リピート中' : 'A（開始）とB（終了）を指定します。';
+						const row = this.root.ownerDocument.createElement('div');
+						row.className = 'zw-point-range-inputs';
+						row.append(this.pointField('a', 'A 開始', this.pointDrafts.a || ''), this.pointButton('set-a', '現在位置をAに'), this.pointField('b', 'B 終了', this.pointDrafts.b || ''), this.pointButton('set-b', '現在位置をBに'));
+						section.append(status, row, this.pointButton('repeat', this.loop ? 'リピートを停止' : 'リピートを開始'), this.pointButton('clear-repeat', '区間をクリア'));
+						const range = this.root.ownerDocument.createElement('div');
+						range.className = 'zw-point-range';
+						range.dataset.pointRange = '1';
+						range.setAttribute('aria-hidden', 'true');
+						const selected = this.root.ownerDocument.createElement('span');
+						range.append(selected);
+						section.append(range);
+						const hint = this.root.ownerDocument.createElement('small');
+						hint.textContent = '時刻は 1:23 ／ 1:02:03 ／ 秒数で入力できます。動画を切り替えると区間は解除されます。';
+						section.append(hint);
+						if (this.deps.repeatEnabled?.() === false) {
+								status.textContent = 'ABリピートは上級者設定でOFFになっています。';
+								for (const control of section.querySelectorAll('input,button'))
+										control.disabled = true;
+						}
+				}
+				region.append(section);
+		}
+		pointMessage(kind, message) {
+				const node = this.root.querySelector('[data-point-status="' + kind + '"]');
+				if (node)
+						node.textContent = message;
+		}
+		updateLoopDisplay() {
+				this.deps.repeatState?.(!!this.loop);
+				const button = this.root.querySelector('[data-point-action="repeat"]');
+				if (button) {
+						button.textContent = this.loop ? 'リピートを停止' : 'リピートを開始';
+						button.setAttribute('aria-pressed', String(!!this.loop));
+				}
+				const span = this.root.querySelector('[data-point-range] span');
+				const duration = this.deps.duration?.() || 0;
+				const a = ManualBookmarkPanel.parseTime(this.pointDrafts.a || '');
+				const b = ManualBookmarkPanel.parseTime(this.pointDrafts.b || '');
+				if (span) {
+						span.style.left = duration > 0 && a !== null ? 100 * a / duration + '%' : '0%';
+						span.style.width = duration > 0 && a !== null && b !== null && b > a ? 100 * (b - a) / duration + '%' : '0%';
+				}
+		}
+		async pointAction(action) {
+				if (!this.ownsVideo())
+						return;
+				const duration = this.deps.duration?.() || 0;
+				const read = (name) => this.root.querySelector('[data-point-field="' + name + '"]');
+				if (action === 'set-a' || action === 'set-b') {
+						const name = action === 'set-a' ? 'a' : 'b', field = read(name), time = this.deps.currentTime();
+						if (!Number.isFinite(time) || time < 0 || time > duration)
+								return;
+						this.pointDrafts[name] = ManualBookmarkPanel.formatTime(time);
+						if (field)
+								field.value = this.pointDrafts[name];
+						this.loop = null;
+						this.awaitingLoopSeek = false;
+						this.updateLoopDisplay();
+						return;
+				}
+				if (action === 'clear-repeat') {
+						this.loop = null;
+						this.awaitingLoopSeek = false;
+						this.pointDrafts = { a: '', b: '' };
+						for (const name of ['a', 'b']) {
+								const field = read(name);
+								if (field)
+										field.value = '';
+						}
+						this.pointMessage('repeat', '区間をクリアしました。');
+						this.updateLoopDisplay();
+						return;
+				}
+				if (action === 'repeat') {
+						if (this.loop) {
+								this.loop = null;
+								this.pointMessage('repeat', '停止しました。区間は残っています。');
+								this.updateLoopDisplay();
+								return;
+						}
+						if (this.deps.repeatEnabled?.() === false)
+								return;
+						const a = ManualBookmarkPanel.parseTime(read('a')?.value || ''), b = ManualBookmarkPanel.parseTime(read('b')?.value || '');
+						if (a === null || b === null || a < 0 || b > duration || b - a < 0.25) {
+								this.pointMessage('repeat', 'Aより後のBを指定してください（間隔0.25秒以上・動画の長さ以内）。');
+								return;
+						}
+						this.pointDrafts = { a: read('a').value, b: read('b').value };
+						this.loop = { a, b };
+						this.awaitingLoopSeek = false;
+						this.pointMessage('repeat', ManualBookmarkPanel.formatTime(a) + ' → ' + ManualBookmarkPanel.formatTime(b) + ' をリピート中');
+						this.updateLoopDisplay();
+						this.deps.seek(a);
+						return;
+				}
+				if (action === 'current-automatic') {
+						this.automaticDraftDirty = true;
+						const field = read('automatic');
+						if (field)
+								field.value = ManualBookmarkPanel.formatTime(this.deps.currentTime());
+						return;
+				}
+				if (this.pointBusy)
+						return;
+				if (action !== 'save-automatic' && action !== 'delete-automatic')
+						return;
+				const seconds = ManualBookmarkPanel.parseTime(read('automatic')?.value || '');
+				if (action === 'save-automatic' && (seconds === null || seconds >= duration)) {
+						this.pointMessage('automatic', '動画の長さより前の時刻を入力してください。');
+						return;
+				}
+				const videoId = this.last.videoId;
+				this.pointBusy = true;
+				try {
+						const ok = action === 'delete-automatic' ? await this.deps.deleteAutomatic?.() :
+								await this.deps.editAutomatic?.(seconds);
+						if (this.disposed || this.last.videoId !== videoId)
+								return;
+						this.pointMessage('automatic', ok ? (action === 'delete-automatic' ? '自動位置を削除しました。' : 'この端末に保存しました。次の自動記録で更新されます。') : '保存できませんでした。入力は残っています。');
+						if (ok)
+								this.automaticDraftDirty = false;
+						if (ok && action === 'delete-automatic') {
+								const field = read('automatic');
+								if (field)
+										field.value = '';
+						}
+				}
+				catch {
+						if (!this.disposed && this.last.videoId === videoId)
+								this.pointMessage('automatic', '保存できませんでした。入力は残っています。');
+				}
+				finally {
+						this.pointBusy = false;
+				}
+		}
+		constructor(root, session, deps) {
+				if (!root || !root.ownerDocument)
+						throw new TypeError('Bookmark panel container missing');
+				this.root = root;
+				this.session = session;
+				this.deps = deps;
+				this.last = session.snapshot;
+				this.clickHandler = event => this.onClick(event);
+				this.inputHandler = event => {
+						const target = event.target;
+						if (target?.matches?.('input[data-point-field]')) {
+								const field = target;
+								if (field.dataset.pointField === 'automatic')
+										this.automaticDraftDirty = true;
+								if (field.dataset.pointField === 'a' || field.dataset.pointField === 'b') {
+										this.pointDrafts[field.dataset.pointField] = field.value;
+										this.loop = null;
+										this.awaitingLoopSeek = false;
+										this.updateLoopDisplay();
+										this.pointMessage('repeat', '区間を変更しました。「リピートを開始」で反映します。');
+								}
+						}
+						if (target?.matches?.('input[data-bookmark-label]') &&
+								this.root.contains(target))
+								this.addDraftRevision++;
+				};
+				root.addEventListener('click', this.clickHandler);
+				root.addEventListener('input', this.inputHandler);
+				this.unsubscribe = session.subscribe(snapshot => {
+						this.render(snapshot);
+						this.last = snapshot;
+				});
+		}
+		ownsVideo() {
+				return !this.disposed && this.last.videoId !== null &&
+						this.last.videoId === this.deps.currentVideoId();
+		}
+		button(action, label, id) {
+				const button = this.root.ownerDocument.createElement('button');
+				button.type = 'button';
+				button.dataset.bookmarkAction = action;
+				if (id !== undefined)
+						button.dataset.bookmarkId = id;
+				button.textContent = label;
+				return button;
+		}
+		render(snapshot) {
+				if (this.disposed)
+						return;
+				const sameVideo = snapshot.videoId !== null &&
+						snapshot.videoId === this.last.videoId;
+				if (!sameVideo) {
+						this.automaticDraftDirty = false;
+						this.loop = null;
+						this.awaitingLoopSeek = false;
+						this.pointDrafts = { a: '', b: '' };
+				}
+				const previousAutomatic = sameVideo ? this.root.querySelector('[data-point-field="automatic"]') : null;
+				const automaticDraft = this.automaticDraftDirty ? previousAutomatic?.value : undefined;
+				const previousAdd = sameVideo ? this.root.querySelector('input[data-bookmark-label]') : null;
+				const addDraft = previousAdd?.value || '';
+				const focusedAdd = previousAdd !== null &&
+						previousAdd === this.root.ownerDocument.activeElement ?
+						{ start: previousAdd.selectionStart, end: previousAdd.selectionEnd } : null;
+				const previousLabels = new Map(this.last.bookmarks.map(item => [item.id, item.label]));
+				const drafts = new Map();
+				let focusedRename = null;
+				if (sameVideo) {
+						for (const field of this.root.querySelectorAll('input[data-bookmark-rename-id]')) {
+								const id = field.dataset.bookmarkRenameId;
+								if (id === undefined || !previousLabels.has(id))
+										continue;
+								if (field.value !== previousLabels.get(id))
+										drafts.set(id, field.value);
+								if (field === this.root.ownerDocument.activeElement) {
+										focusedRename = { id, start: field.selectionStart, end: field.selectionEnd };
+								}
+						}
+				}
+				const doc = this.root.ownerDocument;
+				const region = doc.createElement('section');
+				region.setAttribute('role', 'region');
+				region.setAttribute('aria-label', '手動しおり');
+				const title = doc.createElement('h3');
+				title.textContent = '手動しおり';
+				if (snapshot.videoId !== null)
+						this.renderPointControls(region, true);
+				const manual = doc.createElement('section');
+				manual.dataset.pointSection = 'manual';
+				region.append(manual);
+				manual.append(title);
+				const status = doc.createElement('p');
+				status.dataset.bookmarkStatus = snapshot.status;
+				status.textContent = snapshot.status === 'error' ? 'しおりの保存に失敗しました' :
+						snapshot.status === 'loading' ? 'しおりを読み込み中' : snapshot.status === 'idle' ?
+								'再生する動画を選択してください' : '';
+				manual.append(status);
+				if (snapshot.videoId !== null) {
+						const label = doc.createElement('input');
+						label.type = 'text';
+						label.maxLength = 80;
+						label.dataset.bookmarkLabel = '1';
+						label.value = addDraft;
+						label.placeholder = '名前（省略できます）';
+						label.setAttribute('aria-label', 'しおりの名前');
+						manual.append(label);
+						manual.append(this.button('add', '＋ 現在位置にしおり'));
+				}
+				const list = doc.createElement('ul');
+				for (const entry of [...snapshot.bookmarks].sort((a, b) => a.time - b.time)) {
+						const item = doc.createElement('li');
+						const description = doc.createElement('span');
+						description.textContent = displayTime(entry.time) + ' ' + entry.label;
+						const rename = doc.createElement('input');
+						rename.type = 'text';
+						rename.maxLength = 80;
+						rename.dataset.bookmarkRenameId = entry.id;
+						rename.value = drafts.has(entry.id) &&
+								previousLabels.get(entry.id) === entry.label ?
+								drafts.get(entry.id) : entry.label;
+						rename.setAttribute('aria-label', 'しおり名を編集');
+						const edit = doc.createElement('details');
+						edit.className = 'zw-bookmark-edit';
+						const summary = doc.createElement('summary');
+						summary.textContent = '編集';
+						edit.append(summary, rename, this.button('rename', '名前を変更', entry.id), this.button('remove', '削除', entry.id));
+						item.append(description, this.button('seek', 'ここから再生', entry.id), edit);
+						list.append(item);
+				}
+				if (!snapshot.bookmarks.length) {
+						const empty = doc.createElement('p');
+						empty.className = 'zw-point-empty';
+						empty.textContent = '残しておきたい場面を、現在位置から登録できます。';
+						manual.append(empty);
+				}
+				manual.append(list);
+				if (snapshot.videoId !== null)
+						this.renderPointControls(region, false);
+				if (this.deps.duration) {
+						const nav = doc.createElement('nav');
+						nav.className = 'zw-point-tabs';
+						nav.setAttribute('aria-label', '保存位置の種類');
+						for (const [name, label] of [['manual', 'しおり'], ['automatic', 'ここまで見た'], ['repeat', 'ABリピート']]) {
+								const button = doc.createElement('button');
+								button.type = 'button';
+								button.dataset.pointTab = name;
+								button.textContent = label;
+								nav.append(button);
+						}
+						region.prepend(nav);
+				}
+				this.root.replaceChildren(region);
+				if (automaticDraft !== undefined) {
+						const field = this.root.querySelector('[data-point-field="automatic"]');
+						if (field)
+								field.value = automaticDraft;
+				}
+				this.updateLoopDisplay();
+				if (this.deps.duration)
+						this.selectTab(this.activeTab);
+				if (focusedAdd) {
+						const replacement = this.root.querySelector('input[data-bookmark-label]');
+						if (replacement) {
+								replacement.focus({ preventScroll: true });
+								if (focusedAdd.start !== null && focusedAdd.end !== null) {
+										replacement.setSelectionRange(focusedAdd.start, focusedAdd.end);
+								}
+						}
+				}
+				if (focusedRename) {
+						const replacement = Array.from(this.root.querySelectorAll('input[data-bookmark-rename-id]')).find(field => field.dataset.bookmarkRenameId === focusedRename.id);
+						if (replacement) {
+								replacement.focus({ preventScroll: true });
+								if (focusedRename.start !== null && focusedRename.end !== null) {
+										replacement.setSelectionRange(focusedRename.start, focusedRename.end);
+								}
+						}
+				}
+		}
+		onClick(event) {
+				const target = event.target;
+				const tab = target?.closest?.('button[data-point-tab]');
+				if (tab && this.root.contains(tab)) {
+						event.preventDefault();
+						event.stopPropagation();
+						this.selectTab(tab.dataset.pointTab || '');
+						return;
+				}
+				const point = target?.closest?.('button[data-point-action]');
+				if (point && this.root.contains(point)) {
+						event.preventDefault();
+						event.stopPropagation();
+						void this.pointAction(point.dataset.pointAction || '');
+						return;
+				}
+				const button = target?.closest?.('button[data-bookmark-action]');
+				if (!button || !this.root.contains(button) || !this.ownsVideo())
+						return;
+				const action = button.dataset.bookmarkAction;
+				const id = button.dataset.bookmarkId;
+				const bookmark = this.last.bookmarks.find(item => item.id === id);
+				if (action === 'seek') {
+						if (!bookmark)
+								return;
+						event.preventDefault();
+						event.stopPropagation();
+						this.deps.seek(bookmark.time);
+				}
+				else if (action === 'remove') {
+						if (!bookmark)
+								return;
+						event.preventDefault();
+						event.stopPropagation();
+						void this.session.remove(bookmark.id);
+				}
+				else if (action === 'rename') {
+						if (!bookmark)
+								return;
+						const field = button.closest('li')?.querySelector('input[data-bookmark-rename-id]');
+						if (!field || field.dataset.bookmarkRenameId !== bookmark.id)
+								return;
+						event.preventDefault();
+						event.stopPropagation();
+						void this.session.rename(bookmark.id, field.value, this.deps.timestamp());
+				}
+				else if (action === 'add') {
+						event.preventDefault();
+						event.stopPropagation();
+						const label = this.root.querySelector('input[data-bookmark-label]')?.value || '';
+						const time = this.deps.currentTime(), now = this.deps.timestamp(), newId = this.deps.newId(), videoId = this.last.videoId, submittedRevision = this.addDraftRevision;
+						void this.session.add(newId, time, now, label).then(result => {
+								if (result.status !== 'applied' || this.disposed || this.last.videoId !== videoId ||
+										this.addDraftRevision !== submittedRevision)
+										return;
+								const field = this.root.querySelector('input[data-bookmark-label]');
+								if (field?.value === label)
+										field.value = '';
+						}, () => { });
+				}
+		}
+		dispose() {
+				if (this.disposed)
+						return;
+				this.loop = null;
+				this.deps.repeatState?.(false);
+				this.disposed = true;
+				this.unsubscribe();
+				this.root.removeEventListener('click', this.clickHandler);
+				this.root.removeEventListener('input', this.inputHandler);
+				this.root.replaceChildren();
+		}
+}
+return {ManualBookmarkPanel};
+})();
+const {ManualBookmarkDock} = (() => {
+const contentSelector = '.zenzaWatchVideoInfoPanel .tabs.videoInfoTab .zenzaWatchVideoInfoPanelContent';
+class ManualBookmarkDock {
+		node;
+		root;
+		panel;
+		session;
+		keyHandler;
+		disposed = false;
+		host = null;
+		home;
+		trigger = null;
+		floating = false;
+		style;
+		toggle(host, trigger) {
+				if (this.disposed)
+						return;
+				if (this.floating) {
+						this.close();
+						return;
+				}
+				this.host = host;
+				this.trigger = trigger || null;
+				this.floating = true;
+				host.append(this.node);
+				this.node.classList.add('zw-points-floating');
+				this.panel.refreshPreferences();
+				this.node.open = true;
+				this.trigger?.setAttribute('aria-expanded', 'true');
+				this.node.querySelector('button[data-points-close]')?.focus();
+		}
+		close() {
+				if (this.disposed)
+						return;
+				this.node.open = false;
+				if (this.floating) {
+						this.node.classList.remove('zw-points-floating');
+						this.home.append(this.node);
+						this.floating = false;
+						this.trigger?.setAttribute('aria-expanded', 'false');
+						if (this.trigger?.isConnected)
+								this.trigger.focus({ preventScroll: true });
+				}
+		}
+		get isRepeating() { return this.panel.isRepeating; }
+		repeatAtEnd() { return this.panel.repeatAtEnd(); }
+		refreshPreferences() { this.panel.refreshPreferences(); }
+		tick(time, paused, seeking) {
+				return this.panel.tick(time, paused, seeking);
+		}
+		constructor(target, session, deps) {
+				this.session = session;
+				this.home = target;
+				const doc = target.ownerDocument;
+				const node = this.node = doc.createElement('details');
+				node.className = 'zenzaManualBookmarkDock';
+				node.dataset.bookmarkOwner = 'manual';
+				const summary = doc.createElement('summary');
+				summary.textContent = 'しおり・ABリピート';
+				node.append(summary);
+				const root = this.root = doc.createElement('section');
+				root.className = 'zenzaManualBookmarkDockContent';
+				const close = doc.createElement('button');
+				close.type = 'button';
+				close.dataset.pointsClose = '1';
+				close.className = 'zw-points-close';
+				close.textContent = '閉じる ×';
+				close.setAttribute('aria-label', 'しおり・ABリピートを閉じる');
+				close.addEventListener('click', () => this.close());
+				node.append(close, root);
+				this.style = doc.createElement('style');
+				this.style.textContent = ManualBookmarkDock.styles;
+				node.append(this.style);
+				const series = target.querySelector(':scope > .seriesList');
+				target.insertBefore(node, series || null);
+				this.keyHandler = event => {
+						event.stopPropagation();
+						if (event.type === 'keydown' && event.key === 'Escape') {
+								event.preventDefault();
+								this.close();
+						}
+				};
+				node.addEventListener('keydown', this.keyHandler);
+				node.addEventListener('keyup', this.keyHandler);
+				try {
+						this.panel = new ManualBookmarkPanel(root, session, deps);
+				}
+				catch (error) {
+						node.removeEventListener('keydown', this.keyHandler);
+						node.removeEventListener('keyup', this.keyHandler);
+						node.remove();
+						throw error;
+				}
+		}
+		static mount(host, session, deps) {
+				const target = host?.querySelector(contentSelector);
+				if (!target)
+						throw new Error('Manual bookmark info-tab mount missing');
+				if (target.querySelector(':scope > .zenzaManualBookmarkDock')) {
+						throw new Error('Manual bookmark dock already owned');
+				}
+				return new ManualBookmarkDock(target, session, deps);
+		}
+		get element() { return this.node; }
+		activate(videoId, duration) {
+				if (this.disposed)
+						throw new Error('Manual bookmark dock disposed');
+				return this.session.activate(videoId, duration);
+		}
+		deactivate() {
+				if (this.disposed)
+						return;
+				this.close();
+				this.session.deactivate();
+		}
+		static styles = `
+		.zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
+		.zenzaManualBookmarkDock>summary{padding:10px 82px 10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
+		.zenzaManualBookmarkDock[open]{overflow:auto}
+		.zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:420px;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
+		.zenzaManualBookmarkDockContent{padding:0 14px 14px}
+		.zenzaManualBookmarkDock h3{font-size:13px;margin:12px 0 8px;color:#f4f7ff;letter-spacing:.02em}
+		.zenzaManualBookmarkDock p{margin:5px 0 10px;color:#aebbd1;font-size:12px}
+		.zenzaManualBookmarkDock button,.zenzaManualBookmarkDock input{box-sizing:border-box;font:inherit;line-height:1.4;border-radius:6px;min-height:32px;margin:3px 5px 3px 0}
+		.zenzaManualBookmarkDock button{background:#303c51;color:#f4f7ff;border:1px solid #53627b;padding:6px 10px;cursor:pointer}
+		.zenzaManualBookmarkDock button:hover{background:#435574}
+		.zenzaManualBookmarkDock button:disabled{opacity:.45;cursor:default}
+		.zenzaManualBookmarkDock button:focus-visible,.zenzaManualBookmarkDock input:focus-visible,.zenzaManualBookmarkDock summary:focus-visible{outline:2px solid #8ecbff;outline-offset:2px}
+		.zenzaManualBookmarkDock input{background:#101722;color:#fff;border:1px solid #53627b;padding:6px 8px;max-width:100%}
+		.zenzaManualBookmarkDock label{display:inline-flex;align-items:center;gap:8px;color:#cad5e8}
+		.zenzaManualBookmarkDock input[data-point-field]{width:88px;font-variant-numeric:tabular-nums}
+		.zenzaManualBookmarkDock input[data-bookmark-label]{width:calc(100% - 2px)}
+		.zenzaManualBookmarkDock button[data-bookmark-action="add"]{width:100%;background:#286b91;border-color:#66b8e0;margin-bottom:8px;font-weight:700}
+		.zenzaManualBookmarkDock ul{list-style:none;padding:0;margin:6px 0}
+		.zenzaManualBookmarkDock li{padding:8px 0;border-top:1px solid #354056;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+		.zenzaManualBookmarkDock li>span{display:block;flex:1 1 55%;overflow-wrap:anywhere;color:#e4edff;font-variant-numeric:tabular-nums}
+		.zenzaManualBookmarkDock input[data-bookmark-rename-id]{width:130px;flex:1 1 100px}
+		.zenzaManualBookmarkDock .zw-point-section{border-top:1px solid #354056;margin-top:12px;padding-top:2px}
+		.zenzaManualBookmarkDock .zw-point-section:first-child{border-top:0;margin-top:0}
+		.zenzaManualBookmarkDock .zw-point-range-inputs{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 6px}
+		.zenzaManualBookmarkDock .zw-point-range{height:6px;border-radius:3px;background:#354056;position:relative;margin:12px 0;overflow:hidden}
+		.zenzaManualBookmarkDock .zw-point-range span{position:absolute;height:100%;background:#6ed9bc}
+		.zenzaManualBookmarkDock button[aria-pressed="true"]{background:#245f52;border-color:#6ed9bc}
+		.zenzaManualBookmarkDock .zw-point-tabs{display:flex;gap:4px;position:sticky;top:0;background:#171e2a;padding:4px 0 8px;z-index:1}
+		.zenzaManualBookmarkDock .zw-point-tabs button{flex:1;padding:6px 3px;font-size:12px;margin:0;white-space:nowrap}
+		.zenzaManualBookmarkDock [data-point-section][hidden]{display:none}
+		.zenzaManualBookmarkDock .zw-bookmark-edit{flex:1 1 100%;border:0;background:transparent}
+		.zenzaManualBookmarkDock .zw-bookmark-edit summary{font-size:11px;padding:2px 0;color:#aebbd1}
+		.zenzaManualBookmarkDock small{display:block;color:#aebbd1;font-size:11px;line-height:1.6}
+		.zenzaManualBookmarkDock .zw-points-close{position:absolute;top:5px;right:8px;margin:0;min-height:28px;font-size:12px}
+		`;
+		dispose() {
+				if (this.disposed)
+						return;
+				this.disposed = true;
+				this.node.removeEventListener('keydown', this.keyHandler);
+				this.node.removeEventListener('keyup', this.keyHandler);
+				this.panel.dispose();
+				this.session.dispose();
+				this.node.remove();
+		}
+}
+return {ManualBookmarkDock};
+})();
 class JSONable {
 		toJSON() {
 				const data = Object.create(null);
@@ -13284,14 +14674,23 @@ class VideoInfoModel extends JSONable {
 				return this.resumePoints[0]?.time ?? 0;
 		}
 		get resumePoints() {
-				const duration = this.duration;
-				const MARGIN = 10;
-				const resumePoints = ((this._cacheData && this._cacheData.resume) ? this._cacheData.resume : [])
-						.filter(({ now, time }) => time > MARGIN && time < duration - MARGIN)
-						.map(({ now, time }) => { return { now: new Date(now).toLocaleString(), time }; });
-				const lastResumePoint = this._resumeInfo ? this._resumeInfo.initialPlaybackPosition : 0;
-				lastResumePoint && resumePoints.unshift({ now: '前回', time: lastResumePoint });
-				return resumePoints;
+				const edited = this._cacheData?.resumeOverride;
+				if (typeof edited === 'number' && Number.isFinite(edited) && edited >= 0 && edited < this.duration) {
+						return [{ now: '編集した位置', time: edited }];
+				}
+				const local = Array.isArray(this._cacheData?.resume) ? this._cacheData.resume : [];
+				const clearedAt = this._cacheData?.resumeClearedAt;
+				const reason = this._cacheData?.resumeClearReason === 'completed' ? 'completed' : 'deleted';
+				const chosen = selectAutoResume({
+						videoId: String(this.videoId || ''), duration: this.duration,
+						server: { time: this._resumeInfo?.initialPlaybackPosition },
+						local,
+						...(clearedAt === undefined ? {} : { clear: { at: clearedAt, reason } })
+				});
+				if (!chosen)
+						return [];
+				return [{ now: chosen.source === 'server' ? '前回' :
+										new Date(chosen.recordedAt ?? 0).toLocaleString(), time: chosen.time }];
 		}
 		get csrfToken() {
 				return this._rawData.csrfToken || '';
@@ -14624,9 +16023,11 @@ const logSafe = (() => {
 								try {
 										return JSON.stringify(redact(JSON.parse(t), depth + 1, seen));
 								}
-								catch (e) {
-										return value;
+								catch (_ignored) {
 								}
+						}
+						if (/(?:[a-z][a-z0-9+.-]*:\/\/|blob:|data:|\/\/)[^\s"'<>]*/i.test(t)) {
+								return MASK;
 						}
 						return value;
 				}
@@ -14641,17 +16042,31 @@ const logSafe = (() => {
 				}
 				seen.add(value);
 				if (typeof URL !== 'undefined' && value instanceof URL) {
-						return value.toString();
+						return MASK;
 				}
 				if (value instanceof Error) {
-						return { name: value.name, message: value.message };
+						const descriptor = Object.getOwnPropertyDescriptor(value, 'name');
+						const name = descriptor && typeof descriptor.value === 'string' &&
+								/^(?:Error|[A-Za-z]{1,32}Error)$/.test(descriptor.value) ? descriptor.value : 'Error';
+						return Object.prototype.hasOwnProperty.call(value, 'cause') ?
+								{ name, message: MASK, cause: MASK } : { name, message: MASK };
 				}
 				if (Array.isArray(value)) {
-						return value.map(v => redact(v, depth + 1, seen));
+						const out = new Array(value.length);
+						for (let i = 0; i < value.length; i++) {
+								const descriptor = Object.getOwnPropertyDescriptor(value, String(i));
+								if (descriptor) {
+										out[i] = Object.prototype.hasOwnProperty.call(descriptor, 'value') ?
+												redact(descriptor.value, depth + 1, seen) : MASK;
+								}
+						}
+						return out;
 				}
 				const out = {};
 				for (const key of Object.keys(value)) {
-						out[key] = isSecretKey(key) ? MASK : redact(value[key], depth + 1, seen);
+						const descriptor = Object.getOwnPropertyDescriptor(value, key);
+						out[key] = isSecretKey(key) || !descriptor || !Object.prototype.hasOwnProperty.call(descriptor, 'value') ?
+								MASK : redact(descriptor.value, depth + 1, seen);
 				}
 				return out;
 		};
@@ -15068,6 +16483,7 @@ const { ThreadLoader } = (() => {
 		};
 		const commentSchemaError = (reason) => ({ kind: 'schema', errorCode: 'RESPONSE_SCHEMA', reason });
 		let commentPostDiagnosticSeq = 0;
+		let threadLogSequence = 0;
 		const safeStatusCode = (value) => {
 				const status = Number(value);
 				return Number.isInteger(status) && status >= 100 && status <= 599 ? status : undefined;
@@ -15112,18 +16528,18 @@ const { ThreadLoader } = (() => {
 		const logCommentPostDiagnostic = (diagnostic, phase, event, details = {}) => {
 				const safe = logSafe.redact({ ...diagnostic, phase, event, ...details });
 				const copyable = {};
-				for (const key of [
-						'id', 'attempt', 'videoId', 'threadId', 'language', 'phase', 'event',
-						'statusCode', 'errorCode', 'kind', 'errorName', 'reason', 'outcome',
-						'retryScheduled', 'retryAfterMs', 'delayMs', 'nextAttempt',
-						'postKeyPresent', 'challengeRequired', 'commandCount',
-						'ackType', 'hasNo', 'hasId', 'postedNo'
-				]) {
-						if (safe[key] !== undefined) {
+				for (const key of ['attempt', 'statusCode', 'retryAfterMs', 'delayMs', 'nextAttempt', 'commandCount']) {
+						const value = safe[key];
+						if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+								copyable[key] = value;
+						}
+				}
+				for (const key of ['retryScheduled', 'postKeyPresent', 'challengeRequired', 'hasNo', 'hasId']) {
+						if (typeof safe[key] === 'boolean') {
 								copyable[key] = safe[key];
 						}
 				}
-				window.console.log('[ZenzaWatch][CommentPost]', safe, JSON.stringify(copyable));
+				window.console.log('[ZenzaWatch][CommentPost]', copyable, JSON.stringify(copyable));
 		};
 		const summarizeCommentPostAck = (ack) => {
 				if (ack === null) {
@@ -15230,7 +16646,7 @@ const { ThreadLoader } = (() => {
 				}
 				async getThreadKey(videoId, options = {}) {
 						let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
-						console.log('getThreadKey url: ', url);
+						console.log('getThreadKey request');
 						try {
 								const { meta, data } = await readJson(url, {
 										headers: {
@@ -15254,7 +16670,7 @@ const { ThreadLoader } = (() => {
 				}
 				async getPostKey(threadId, options = {}) {
 						const url = `https://nvapi.nicovideo.jp/v1/comment/keys/post?threadId=${threadId}`;
-						console.log('getPostKey url: ', url);
+						console.log('getPostKey request');
 						const postKeyLanguage = options.language || 'ja-jp';
 						try {
 								return await CommentPostWire.getPostKey(threadId, postKeyLanguage);
@@ -15307,7 +16723,7 @@ const { ThreadLoader } = (() => {
 						};
 						if (options.retrying) {
 								const info = await this.getThreadKey(msgInfo.videoId, options);
-								console.log('threadKey (retry): ', msgInfo.videoId, logSafe.redact(info));
+								console.log('threadKey retry');
 								packet.threadKey = info.threadKey;
 						}
 						if (!options.useServerDefaultLanguage && msgInfo.language && msgInfo.language !== packet.params.language) {
@@ -15317,7 +16733,7 @@ const { ThreadLoader } = (() => {
 								packet.additionals.when = msgInfo.when;
 						}
 						const url = new URL('/v1/threads', server);
-						console.log('load threads...', url, logSafe.redact(packet));
+						console.log('load threads request');
 						try {
 								const { meta, data } = await readJson(url, {
 										method: 'POST',
@@ -15339,7 +16755,7 @@ const { ThreadLoader } = (() => {
 						}
 						catch (result) {
 								checkAbort(options.signal);
-								window.console.error(`_load threads fail: videoId=${msgInfo.videoId} status=${result && result.status} errorCode=${result && result.errorCode}`, logSafe.redact(result));
+								window.console.error('_load threads fail');
 								throw {
 										result,
 										message: `コメントの通信失敗`
@@ -15347,9 +16763,10 @@ const { ThreadLoader } = (() => {
 						}
 				}
 				async load(msgInfo, options = {}) {
+						delete debug.lastMessageServerResult;
 						checkAbort(options.signal);
 						const { videoId, userId } = msgInfo;
-						const timeKey = `loadComment videoId: ${videoId}`;
+						const timeKey = `loadComment request ${++threadLogSequence}`;
 						console.time(timeKey);
 						const RETRY_DELAYS_MS = [3000, 6000];
 						const isReload = options.manualReload === true;
@@ -15393,7 +16810,7 @@ const { ThreadLoader } = (() => {
 												break;
 										}
 										const label = isRetry ? `リトライ${attempt}回目` : '1回目';
-										window.console.error(`loadComment fail (${label}): `, logSafe.redact(e));
+										window.console.error(`loadComment fail (${label})`);
 										let delay = RETRY_DELAYS_MS[attempt];
 										if (delay != null && failure && failure.retryAfterMs >= 0) {
 												if (failure.retryAfterMs > 120000) {
@@ -15408,7 +16825,7 @@ const { ThreadLoader } = (() => {
 								}
 						}
 						if (lastError) {
-								window.console.error('loadComment fail finally: ', logSafe.redact(lastError));
+								window.console.error('loadComment fail finally');
 								const failure = lastError.result || lastError;
 								const status = Number(failure && failure.status);
 								const code = typeof failure?.errorCode === 'string' && /^[A-Z0-9_]{1,60}$/.test(failure.errorCode) ? failure.errorCode : '';
@@ -15427,9 +16844,8 @@ const { ThreadLoader } = (() => {
 						}
 						const loaded = result;
 						console.timeEnd(timeKey);
-						debug.lastMessageServerResult = loaded;
 						if (loaded.__usedLanguage && msgInfo.language && loaded.__usedLanguage !== msgInfo.language) {
-								window.console.warn(`loadComment: 言語 "${msgInfo.language}" は videoId=${videoId} のスレッドで使用できないため、"${loaded.__usedLanguage}" にフォールバックしました`);
+								window.console.warn('loadComment language fallback');
 								PopupMessage.alert('この動画は選択中のコメント言語に対応していないため、既定の言語で表示します');
 								msgInfo.language = loaded.__usedLanguage;
 						}
@@ -15454,7 +16870,7 @@ const { ThreadLoader } = (() => {
 								isWaybackMode: !!msgInfo.when
 						};
 						msgInfo.threadInfo = threadInfo;
-						console.log('threadInfo: ', logSafe.redact(threadInfo));
+						console.log('threadInfo loaded');
 						return { threadInfo, body: loaded, format: 'threads' };
 				}
 				async getChallengeToken(siteKey) {
@@ -15677,7 +17093,7 @@ const { ThreadLoader } = (() => {
 				}
 				async getDeleteKey(threadId, options = {}) {
 						const url = `https://nvapi.nicovideo.jp/v1/comment/keys/delete?threadId=${threadId}&fork=${options.fork || 'main'}`;
-						console.log('getDeleteKey url: ', url);
+						console.log('getDeleteKey request');
 						try {
 								const { meta, data } = await netUtil.fetch(url, {
 										headers: {
@@ -15711,7 +17127,7 @@ const { ThreadLoader } = (() => {
 										}],
 								videoId,
 						});
-						console.log('put packet: ', logSafe.redact(packet));
+						console.log('put packet request');
 						try {
 								await this._delete(url, packet);
 								return {
@@ -15730,7 +17146,7 @@ const { ThreadLoader } = (() => {
 				}
 				async getNicoruKey(threadId, options = {}) {
 						const url = `https://nvapi.nicovideo.jp/v1/comment/keys/nicoru?threadId=${threadId}`;
-						console.log('getNicoruKey url: ', url);
+						console.log('getNicoruKey request');
 						try {
 								const { meta, data } = await netUtil.fetch(url, {
 										headers: {
@@ -15760,7 +17176,7 @@ const { ThreadLoader } = (() => {
 								nicoruKey,
 								videoId,
 						});
-						console.log('post packet: ', logSafe.redact(packet));
+						console.log('post packet request');
 						try {
 								const { nicoruId, nicoruCount } = await this._post(url, packet);
 								return {
@@ -15786,6 +17202,21 @@ const { ThreadLoader } = (() => {
 const { YouTubeWrapper } = (() => {
 		const STATE_PLAYING = 1;
 		class YouTubeWrapper extends Emitter {
+				static parseStartTime(value) {
+						if (typeof value !== 'string' || !value) {
+								return 0;
+						}
+						if (/^\d+$/.test(value)) {
+								const seconds = Number(value);
+								return Number.isSafeInteger(seconds) ? seconds : 0;
+						}
+						const match = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/.exec(value);
+						if (!match) {
+								return 0;
+						}
+						const seconds = Number(match[1] || 0) * 3600 + Number(match[2] || 0) * 60 + Number(match[3] || 0);
+						return Number.isSafeInteger(seconds) ? seconds : 0;
+				}
 				constructor({ parentNode, autoplay = true, volume = 0.3, playbackRate = 1, loop = false }) {
 						super();
 						this._isInitialized = false;
@@ -15808,7 +17239,7 @@ const { YouTubeWrapper } = (() => {
 						const player = this._player;
 						const isFirst = !!player ? false : true;
 						const urlParams = this._parseUrlParams(url);
-						this._startDiff = /[0-9]+s/.test(urlParams.t) ? parseInt(urlParams.t) : 0;
+						this._startDiff = YouTubeWrapper.parseStartTime(urlParams.t);
 						startSeconds += this._startDiff;
 						if (isFirst && !url) {
 								return Promise.resolve();
@@ -23310,6 +24741,119 @@ createBrowserHistoryPreferences: modules[10].createBrowserHistoryPreferences,
 });
 })();
 // already required
+class TimelineGeometry {
+		clientLeft;
+		clientWidth;
+		localWidth;
+		clientRight;
+		constructor(measurement) {
+				this.clientLeft = measurement.clientLeft;
+				this.clientWidth = measurement.clientWidth;
+				this.localWidth = measurement.localWidth;
+				this.clientRight = this.clientLeft + this.clientWidth;
+		}
+		static create(measurement) {
+				if (!measurement) {
+						return null;
+				}
+				const { clientLeft, clientWidth, localWidth } = measurement;
+				const clientRight = clientLeft + clientWidth;
+				if (!Number.isFinite(clientLeft) || !Number.isFinite(clientWidth) || clientWidth <= 0 ||
+						!Number.isFinite(localWidth) || localWidth <= 0 ||
+						!Number.isFinite(clientRight) || clientRight <= clientLeft) {
+						return null;
+				}
+				return new TimelineGeometry({ clientLeft, clientWidth, localWidth });
+		}
+		static clampTime(seconds, duration) {
+				if (!Number.isFinite(seconds) || !Number.isFinite(duration) || duration <= 0) {
+						return null;
+				}
+				return Math.max(0, Math.min(seconds, duration));
+		}
+		static timeToRatio(seconds, duration) {
+				const clamped = TimelineGeometry.clampTime(seconds, duration);
+				return clamped === null ? null : clamped / duration;
+		}
+		static ratioToTime(ratio, duration) {
+				if (!Number.isFinite(duration) || duration <= 0) {
+						return null;
+				}
+				const clamped = TimelineGeometry.clampRatio(ratio);
+				return clamped === null ? null : clamped * duration;
+		}
+		static clampRatio(ratio) {
+				return Number.isFinite(ratio) ? Math.max(0, Math.min(ratio, 1)) : null;
+		}
+		clientXToRatio(clientX) {
+				if (!Number.isFinite(clientX)) {
+						return null;
+				}
+				if (clientX <= this.clientLeft) {
+						return 0;
+				}
+				if (clientX >= this.clientRight) {
+						return 1;
+				}
+				return (clientX - this.clientLeft) / this.clientWidth;
+		}
+		localXToRatio(localX) {
+				if (!Number.isFinite(localX)) {
+						return null;
+				}
+				if (localX <= 0) {
+						return 0;
+				}
+				if (localX >= this.localWidth) {
+						return 1;
+				}
+				return localX / this.localWidth;
+		}
+		ratioToClientX(ratio) {
+				const clamped = TimelineGeometry.clampRatio(ratio);
+				return clamped === null ? null : this.clientLeft + clamped * this.clientWidth;
+		}
+		ratioToLocalX(ratio) {
+				const clamped = TimelineGeometry.clampRatio(ratio);
+				return clamped === null ? null : clamped * this.localWidth;
+		}
+}
+class SceneResumeMarkerPresenter {
+		static render(pointers, resumePoints, duration, setProps) {
+				if (!pointers) {
+						return;
+				}
+				const length = Number(duration);
+				const validDuration = Number.isFinite(length) && length > 0;
+				const points = Array.isArray(resumePoints) ? resumePoints : [];
+				for (let i = 0; i < pointers.length; i++) {
+						const pointer = pointers[i];
+						if (!pointer) {
+								continue;
+						}
+						const resume = points[i];
+						const time = Number(resume?.time);
+						if (!validDuration || !resume || !Number.isFinite(time) ||
+								time <= 0 || time > length || typeof resume.now !== 'string' || !resume.now.trim()) {
+								pointer.hidden = true;
+								pointer.removeAttribute('duration');
+								pointer.removeAttribute('time');
+								pointer.removeAttribute('text');
+								continue;
+						}
+						pointer.setAttribute('duration', String(length));
+						pointer.setAttribute('time', String(time));
+						pointer.setAttribute('text', `${resume.now} ここまで見た`);
+						pointer.hidden = false;
+						if (resume.now !== '前回') {
+								setProps([pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'], [pointer, '--color', '#aef'], [pointer, '--scale-pp', '']);
+						}
+						else {
+								setProps([pointer, '--pointer-color', ''], [pointer, '--color', ''], [pointer, '--scale-pp', 1.7]);
+						}
+				}
+		}
+}
 const historyTriggerKeyGuard = (event) => {
 		if (['Enter', ' ', 'Spacebar'].includes(event.key)) {
 				event.stopPropagation();
@@ -23369,10 +24913,20 @@ class VideoControlBar extends Emitter {
 				});
 				Object.assign(this, mq.e, { _currentTime: 0 });
 				Object.assign(this, mq.$);
+				this._view.addEventListener('contextmenu', this._onResumeMarkerDelete.bind(this), true);
+				this._view.addEventListener('keydown', this._onResumeMarkerDelete.bind(this), true);
 				const historyButton = $view.find('.commentHistorySwitch')[0];
 				if (historyButton) {
 						historyButton.addEventListener('keydown', historyTriggerKeyGuard);
 						historyButton.addEventListener('keyup', historyTriggerKeyGuard);
+				}
+				const pointsButton = $view.find('.playbackPointsSwitch')[0];
+				if (pointsButton) {
+						pointsButton.addEventListener('keydown', historyTriggerKeyGuard);
+						pointsButton.addEventListener('keyup', historyTriggerKeyGuard);
+						const visibility = () => { pointsButton.hidden = this._playerConfig.getValue('bookmark.showToolbarButton') === false; };
+						visibility();
+						this._playerConfig.onkey?.('bookmark.showToolbarButton', visibility);
 				}
 				const notificationButton = $view.find('.notificationHistorySwitch')[0];
 				if (notificationButton) {
@@ -23390,6 +24944,7 @@ class VideoControlBar extends Emitter {
 						.on('change', (e) => e.target.blur());
 				this._pointer = new SmoothSeekBarPointer({
 						pointer: this._seekBarPointer,
+						getTimelineGeometry: () => this._getTimelineGeometry(),
 						playerState: this._playerState
 				});
 				const timeStyle = {
@@ -23600,15 +25155,29 @@ class VideoControlBar extends Emitter {
 				}
 				e.stopPropagation();
 		}
-		_posToTime(pos) {
-				const width = global.innerWidth;
-				return this._duration * (pos / Math.max(width, 1));
+		_getTimelineGeometry() {
+				const element = this._seekBar;
+				const rect = element?.getBoundingClientRect?.();
+				if (!rect) {
+						return null;
+				}
+				return TimelineGeometry.create({
+						clientLeft: rect.left,
+						clientWidth: rect.width,
+						localWidth: element.offsetWidth
+				});
+		}
+		_posToTime(localX) {
+				const ratio = this._getTimelineGeometry()?.localXToRatio(localX);
+				return ratio == null ? null : TimelineGeometry.ratioToTime(ratio, this._duration);
 		}
 		_timeToPos(time) {
-				return global.innerWidth * (time / Math.max(this._duration, 1));
+				const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+				return ratio === null ? null : this._getTimelineGeometry()?.ratioToLocalX(ratio) ?? null;
 		}
 		_timeToPer(time) {
-				return (time / Math.max(this._duration, 1)) * 100;
+				const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+				return ratio === null ? 0 : ratio * 100;
 		}
 		_onPlayerOpen(watchId) {
 				this._commentParsedHandler?.cancel?.();
@@ -23677,10 +25246,18 @@ class VideoControlBar extends Emitter {
 				this._raf && this._raf.disable();
 		}
 		_onSeekRangeInput(e) {
-				const sec = e.target.value * 1;
-				const left = sec / (e.target.max * 1) * global.innerWidth;
+				const duration = Number(e.target.max);
+				const sec = TimelineGeometry.clampTime(Number(e.target.value), duration);
+				if (sec === null) {
+						return;
+				}
+				const ratio = TimelineGeometry.timeToRatio(sec, duration);
+				const left = this._getTimelineGeometry()?.ratioToLocalX(ratio);
 				util.dispatchCommand(e.target, 'seek', sec);
-				this._seekBarToolTip.update(this._sceneSearchPinnedTime?.() ?? sec, left);
+				if (left != null) {
+						const pinned = this._sceneSearchPinnedTime?.();
+						this._seekBarToolTip.update(Number.isFinite(pinned) ? pinned : sec, left);
+				}
 				this.storyboard.setCurrentTime(sec, true);
 		}
 		_onSeekBarMouseDown(e) {
@@ -23711,8 +25288,24 @@ class VideoControlBar extends Emitter {
 						e.stopPropagation();
 				}
 				const pinned = this._sceneSearchPinnedTime?.();
-				const left = Number.isFinite(pinned) ? this._seekBarMouseX : e.offsetX;
-				const sec = Number.isFinite(pinned) ? pinned : this._posToTime(left);
+				let left;
+				let sec;
+				if (Number.isFinite(pinned)) {
+						sec = pinned;
+						left = Number.isFinite(this._seekBarMouseX) ? this._seekBarMouseX : this._timeToPos(pinned);
+				}
+				else {
+						const geometry = this._getTimelineGeometry();
+						const ratio = geometry?.clientXToRatio(e.clientX);
+						if (ratio == null) {
+								return;
+						}
+						left = geometry.ratioToLocalX(ratio);
+						sec = TimelineGeometry.ratioToTime(ratio, this._duration);
+				}
+				if (left === null || sec === null) {
+						return;
+				}
 				this._seekBarMouseX = left;
 				this._commentPreview.currentTime = sec;
 				this._commentPreview.update(left);
@@ -23722,14 +25315,19 @@ class VideoControlBar extends Emitter {
 				if (!this.state.isWheelSeeking) {
 						return;
 				}
-				sec = sec * 1;
-				const dur = this._duration;
-				const left = sec / dur * window.innerWidth;
-				this._seekBarMouseX = left;
-				const previewTime = this._sceneSearchPinnedTime?.() ?? sec;
-				this._commentPreview.currentTime = previewTime;
-				this._commentPreview.update(left);
-				this._seekBarToolTip.update(previewTime, left);
+				sec = TimelineGeometry.clampTime(Number(sec), this._duration);
+				if (sec === null) {
+						return;
+				}
+				const left = this._timeToPos(sec);
+				if (left !== null) {
+						this._seekBarMouseX = left;
+						const pinned = this._sceneSearchPinnedTime?.();
+						const previewTime = Number.isFinite(pinned) ? pinned : sec;
+						this._commentPreview.currentTime = previewTime;
+						this._commentPreview.update(left);
+						this._seekBarToolTip.update(previewTime, left);
+				}
 				this.storyboard.setCurrentTime(sec, true);
 		}
 		_beginMouseDrag() {
@@ -23777,23 +25375,31 @@ class VideoControlBar extends Emitter {
 				this.duration = videoInfo.duration;
 				this.storyboard.load(videoInfo.watchId, videoInfo);
 				const [view] = this._$view;
-				const resumePoints = videoInfo.resumePoints;
-				for (let i = 0, len = this.$resumePointers.length; i < len; i++) {
-						const pointer = this.$resumePointers[i];
-						const resume = resumePoints[i];
-						if (!resume) {
-								pointer.hidden = true;
-								continue;
-						}
-						pointer.setAttribute('duration', videoInfo.duration);
-						pointer.setAttribute('time', resume.time);
-						pointer.setAttribute('text', `${resume.now} ここまで見た`);
-						if (resume.now !== '前回') {
-								cssUtil.setProps([pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'], [pointer, '--color', '#aef']);
-						}
-						else {
-								cssUtil.setProps([pointer, '--scale-pp', 1.7]);
-						}
+				this.refreshAutoResumePointers(videoInfo);
+		}
+		_onResumeMarkerDelete(event) {
+				if (event.type !== 'contextmenu' && event.type !== 'keydown')
+						return;
+				const node = event.target?.closest?.('zenza-seekbar-label.resumePointer');
+				if (!node || node.hidden)
+						return;
+				if (event.type === 'keydown' &&
+						!['Delete', 'Backspace'].includes(event.key))
+						return;
+				event.preventDefault();
+				event.stopPropagation();
+				if (typeof window.confirm === 'function' &&
+						window.confirm('この動画の「ここまで見た」を削除しますか？')) {
+						this.emit('command', 'deleteAutomaticResume');
+				}
+		}
+		refreshAutoResumePointers(videoInfo) {
+				if (!videoInfo)
+						return;
+				SceneResumeMarkerPresenter.render(this.$resumePointers, videoInfo.resumePoints, videoInfo.duration, (...tasks) => cssUtil.setProps(...tasks));
+				for (const pointer of this.$resumePointers || []) {
+						pointer.setAttribute('tabindex', '0');
+						pointer.setAttribute('title', '右クリックまたはDeleteキーで「ここまで見た」を削除');
 				}
 		}
 		async _onFirstVideoInitialized(watchId) {
@@ -23811,6 +25417,7 @@ class VideoControlBar extends Emitter {
 		}
 		set currentTime(sec) {
 				if (this._currentTime === sec) {
+						this._pointer.currentTime = sec;
 						return;
 				}
 				this._currentTime = sec;
@@ -24590,6 +26197,9 @@ util.addStyle(`
 		height: 100%;
 		fill: currentColor;
 	}
+	.playbackPointsSwitch[hidden]{display:none!important}
+	.playbackPointsSwitch:focus-visible{outline:2px solid #8ecbff;outline-offset:-2px}
+	.playbackPointsSwitch,
 	.notificationHistorySwitch,
 	.commentHistorySwitch { border: 0; padding: 0; background: transparent; }
 	/* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
@@ -24957,6 +26567,11 @@ VideoControlBar.__tpl__ = (`
 				<div class="scalingUI">
 					<div class="ZenzaWatchVer" data-env="${ZenzaWatch.env}" title="build: ${ZenzaWatch.build || '-'}">ver ${ZenzaWatch.version}${ZenzaWatch.env === 'DEV' ? '(Dev)' : ''}</div>
 					<span class="addonMenuContainer"></span>
+					<button type="button" class="playbackPointsSwitch controlButton" data-command="toggle-playbackPoints"
+						aria-label="しおり・ABリピート" aria-expanded="false">
+						<span class="controlButtonInner" aria-hidden="true">▱</span>
+						<span class="tooltip">しおり・ABリピート</span>
+					</button>
 					<button type="button" class="notificationHistorySwitch controlButton" data-command="toggle-notificationHistory"
 						aria-label="通知履歴" aria-expanded="false" aria-controls="zenzaNotificationHistoryDock">
 						<span class="controlButtonInner" aria-hidden="true">☷</span>
@@ -25644,6 +27259,10 @@ class CommentPreviewView {
 				const model = this._model = params.model;
 				this._$parent = params.$container;
 				this._disposed = false;
+				this._disposeComplete = false;
+				this._disposeRunning = false;
+				this._disposePending = null;
+				this._disposeFailures = [];
 				this._viewId = CommentPreviewView._nextId = (CommentPreviewView._nextId || 0) + 1;
 				this._inviewTable = new Map;
 				this._chatList = [];
@@ -25696,6 +27315,9 @@ class CommentPreviewView {
 				}
 		}
 		_onClick(e) {
+				if (this._disposed) {
+						return;
+				}
 				e.stopPropagation();
 				const target = e.target.closest('[data-command]');
 				const view = this._view;
@@ -25758,9 +27380,15 @@ class CommentPreviewView {
 				this.applyView();
 		}
 		_onResize() {
+				if (this._disposed) {
+						return;
+				}
 				this._refreshInviewElements();
 		}
 		_onScroll() {
+				if (this._disposed) {
+						return;
+				}
 				this._scrollTop = -1;
 				this._refreshInviewElements();
 		}
@@ -25862,23 +27490,59 @@ class CommentPreviewView {
 		hide() {
 		}
 		dispose() {
-				if (this._disposed) {
+				if (this._disposeComplete || this._disposeRunning) {
 						return;
 				}
-				this._disposed = true;
-				for (const [event, handler] of this._subscriptions || []) {
-						this._model.off(event, handler);
-						handler.cancel?.();
+				this._disposeRunning = true;
+				try {
+						this._disposed = true;
+						let pending = this._disposePending;
+						if (!pending) {
+								pending = new Map();
+								const model = this._model, view = this._view;
+								for (const [index, [event, handler]] of (this._subscriptions || []).entries()) {
+										pending.set(`model.off:${event}:${index}`, () => model.off(event, handler));
+										pending.set(`model.cancel:${event}:${index}`, () => handler.cancel?.());
+								}
+								for (const [index, [event, handler, options]] of (this._domListeners || []).entries()) {
+										pending.set(`dom.off:${event}:${index}`, () => view.removeEventListener(event, handler, options));
+										pending.set(`dom.cancel:${event}:${index}`, () => handler.cancel?.());
+								}
+								pending.set('update.cancel', () => this.update.cancel?.());
+								pending.set('applyView.cancel', () => this.applyView.cancel?.());
+								pending.set('timer.clearTimeout', () => window.clearTimeout(this._updatingTimer));
+								pending.set('list.reset', () => this._onReset());
+								pending.set('dom.remove', () => view.remove());
+								this._disposePending = pending;
+						}
+						const failures = [];
+						for (const [step, cleanup] of pending) {
+								try {
+										cleanup();
+										pending.delete(step);
+								}
+								catch (error) {
+										failures.push({ step, error });
+								}
+						}
+						this._disposeFailures = failures;
+						if (pending.size === 0) {
+								this._disposeComplete = true;
+								this._disposePending = null;
+								this._subscriptions = [];
+								this._domListeners = [];
+						}
+						if (failures.length === 1) {
+								throw failures[0].error;
+						}
+						if (failures.length > 1) {
+								throw new AggregateError(failures.map(item => item.error), 'Native comment view disposal incomplete: ' +
+										failures.map(item => item.step).join(', '));
+						}
 				}
-				for (const [event, handler, options] of this._domListeners || []) {
-						this._view.removeEventListener(event, handler, options);
-						handler.cancel?.();
+				finally {
+						this._disposeRunning = false;
 				}
-				this.update.cancel?.();
-				this.applyView.cancel?.();
-				window.clearTimeout(this._updatingTimer);
-				this._onReset();
-				this._view.remove();
 		}
 }
 class CommentPreviewChatItem {
@@ -26186,18 +27850,64 @@ class CommentPreview {
 				view._onUpdate();
 				this._view._onUpdate();
 				this._view.mode = 'hover';
-				let disposed = false;
+				let disposed = false, viewDisposed = false, modeRestored = false, disposing = false;
 				const handle = {
 						element: view._view,
+						disposeFailures: [],
 						dispose: () => {
-								if (disposed) {
+								if (disposed || disposing) {
 										return;
 								}
-								disposed = true;
-								view.dispose();
-								if (this._twinList === handle) {
-										this._twinList = null;
-										this._view.mode = this._mode;
+								disposing = true;
+								try {
+										const failures = [];
+										if (!viewDisposed) {
+												try {
+														view.dispose();
+														if (!view._disposeComplete) {
+																throw new Error('Native comment view disposal still in progress');
+														}
+														viewDisposed = true;
+												}
+												catch (error) {
+														failures.push({ step: 'view.dispose', error });
+												}
+										}
+										const desiredMode = this._mode === 'list' ? 'list' : 'hover';
+										if (viewDisposed && (!modeRestored ||
+												(this._twinList === handle && this._view._mode !== desiredMode))) {
+												try {
+														if (this._twinList === handle) {
+																this._view.mode = this._mode;
+														}
+														modeRestored = true;
+												}
+												catch (error) {
+														failures.push({ step: 'restore.mode', error });
+												}
+										}
+										if (viewDisposed && modeRestored) {
+												try {
+														if (this._twinList === handle) {
+																this._twinList = null;
+														}
+														disposed = true;
+												}
+												catch (error) {
+														failures.push({ step: 'release.handle', error });
+												}
+										}
+										handle.disposeFailures = failures;
+										if (failures.length === 1) {
+												throw failures[0].error;
+										}
+										if (failures.length > 1) {
+												throw new AggregateError(failures.map(item => item.error), 'Native comment list disposal incomplete: ' +
+														failures.map(item => item.step).join(', '));
+										}
+								}
+								finally {
+										disposing = false;
 								}
 						}
 				};
@@ -26420,6 +28130,7 @@ SeekBarToolTip.__tpl__ = (`
 class SmoothSeekBarPointer {
 		constructor(params) {
 				this._pointer = params.pointer;
+				this._getTimelineGeometry = params.getTimelineGeometry;
 				this._currentTime = 0;
 				this._duration = 1;
 				this._playbackRate = 1;
@@ -26430,8 +28141,14 @@ class SmoothSeekBarPointer {
 				this.refresh = throttle.raf(this.refresh.bind(this));
 				this.transformLeft = 0;
 				this.applyTransform = throttle.raf(() => {
-						const per = Math.min(100, this._timeToPer(this._currentTime));
-						this._pointer.style.transform = `translateX(${global.innerWidth * per / 100 - 6}px)`;
+						const ratio = TimelineGeometry.timeToRatio(this._currentTime, this._duration);
+						if (ratio === null) {
+								return;
+						}
+						const left = this._getTimelineGeometry()?.ratioToLocalX(ratio);
+						if (left != null) {
+								this._pointer.style.transform = `translateX(${left - 6}px)`;
+						}
 				});
 				this._pointer.classList.toggle('is-notSmooth', !this._isSmoothMode);
 				params.playerState.onkey('isPausing', (v) => this.isPausing = v);
@@ -26472,7 +28189,8 @@ class SmoothSeekBarPointer {
 				}
 		}
 		_timeToPer(time) {
-				return (time / Math.max(this._duration, 1)) * 100;
+				const ratio = TimelineGeometry.timeToRatio(time, this._duration);
+				return ratio === null ? 0 : ratio * 100;
 		}
 		set duration(v) {
 				if (this._duration === v) {
@@ -26539,12 +28257,16 @@ class SmoothSeekBarPointer {
 				if (!this._isSmoothMode) {
 						return;
 				}
+				const right = this._getTimelineGeometry()?.ratioToLocalX(1);
+				if (right == null) {
+						return;
+				}
 				if (this._animation) {
 						this._animation.finish();
 				}
 				this._animation = this._pointer.animate([
 						{ transform: 'translateX(-6px)' },
-						{ transform: `translateX(${global.innerWidth - 6}px)` }
+						{ transform: `translateX(${right - 6}px)` }
 				], { duration: this._duration * 1000, fill: 'backwards' });
 				this._animation.currentTime = this._currentTime * 1000;
 				this._animation.playbackRate = this._playbackRate;
@@ -29228,7 +30950,7 @@ class NicoComment extends Emitter {
 		group.removeChat(nicoChat, group);
 	}
 	_onChange(e) {
-		console.log('NicoComment.onChange: ', e);
+		console.log('NicoComment.onChange');
 		e = e || {};
 		const ev = {
 			nicoComment: this,
@@ -29533,7 +31255,7 @@ class NicoCommentViewModel extends Emitter {
 	_onChange(e) {
 		this._lastUpdate = Date.now();
 		this._updateSlotLayout();
-		console.log('NicoCommentViewModel.onChange: ', e);
+		console.log('NicoCommentViewModel.onChange');
 	}
 	_onCommentParsed() {
 		this._lastUpdate = Date.now();
@@ -29692,7 +31414,7 @@ class NicoChatGroup extends Emitter {
 	get nonFilteredMembers() { return this._members; }
 	onChange(e) {
 		if(e?.chat&&!e.composite&&this._nicoChatFilter.updateCompositeChat?.(e.chat)?.has(this))return;
-		console.log('NicoChatGroup.onChange: ', e);
+		console.log('NicoChatGroup.onChange');
 		this._filteredMembers = [];
 		this._filteredMembersValid = false;
 		this.emit('change', {
@@ -29753,7 +31475,7 @@ class NicoChatGroupViewModel {
 		this.reset();
 	}
 	_onChange(e) {
-		console.log('NicoChatGroupViewModel.onChange: ', e);
+		console.log('NicoChatGroupViewModel.onChange');
 		window.console.time('_onChange');
 		this.reset();
 		this.addChatArray(this._nicoChatGroup.members);
@@ -33550,6 +35272,7 @@ class TimeMachineView extends BaseViewComponent {
 				const now = this._toTDate(Date.now());
 				input.setAttribute('max', now);
 				input.setAttribute('value', this._toTDate(this._currentTimestamp));
+				input.value = this._toTDate(this._currentTimestamp);
 				if (Number.isFinite(this._videoPostTime)) {
 						input.setAttribute('min', this._toTDate(this._videoPostTime));
 				}
@@ -33558,7 +35281,9 @@ class TimeMachineView extends BaseViewComponent {
 				}
 				this.setState({ isSelecting: true });
 				window.setTimeout(() => {
-						input.focus();
+						if (this._state.isSelecting && this._elm.input === input) {
+								input.focus();
+						}
 				}, 0);
 		}
 		closeSelect() {
@@ -33606,7 +35331,7 @@ class TimeMachineView extends BaseViewComponent {
 		}
 		_onSubmit() {
 				const val = this._elm.input.value;
-				if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(|:\d\d)$/.test(val)) {
+				if (!val || !/^\d\d\d\d-\d\d-\d\dT\d\d:\d\d(:\d\d(?:\.\d{1,3})?)?$/.test(val)) {
 						return;
 				}
 				const time = new Date(val).getTime();
@@ -35127,8 +36852,7 @@ class VideoList extends Emitter {
 				if (!item) {
 						return;
 				}
-				item.isUpdating = true;
-				window.setTimeout(() => item.isUpdating = false, 1000);
+				this._markRowUpdating(item, itemId);
 		}
 		_onDeflistAdd(watchId, itemId) {
 				this.emit('command', 'deflistAdd', watchId);
@@ -35136,8 +36860,22 @@ class VideoList extends Emitter {
 				if (!item) {
 						return;
 				}
+				this._markRowUpdating(item, itemId);
+		}
+		_markRowUpdating(item, itemId) {
+				const model = this.model;
+				const owners = this._rowUpdateOwners || (this._rowUpdateOwners = new WeakMap());
+				const owner = {};
+				owners.set(item, owner);
 				item.isUpdating = true;
-				window.setTimeout(() => item.isUpdating = false, 1000);
+				window.setTimeout(() => {
+						if (this.model !== model || owners.get(item) !== owner ||
+								model.findByItemId(item.itemId ?? itemId) !== item) {
+								return;
+						}
+						owners.delete(item);
+						item.isUpdating = false;
+				}, 1000);
 		}
 }
 class RelatedVideoList extends VideoList {
@@ -35197,11 +36935,12 @@ const PlayListSession = ((storage) => {
 				if (items.length <= max) {
 						return data;
 				}
+				const isUnselected = parseInt(data.index, 10) === -1;
 				const index = Math.min(Math.max(parseInt(data.index, 10) || 0, 0), items.length - 1);
 				const start = Math.max(0, Math.min(index - Math.floor(max / 2), items.length - max));
 				return Object.assign({}, data, {
 						items: items.slice(start, start + max),
-						index: index - start
+						index: isUnselected ? -1 : index - start
 				});
 		};
 		return {
@@ -35239,11 +36978,6 @@ const PlayListSession = ((storage) => {
 												window.console.error(e);
 												return;
 										}
-										try {
-												storage.removeItem(KEY);
-										}
-										catch (e2) { /* noop */ }
-										lastJson = '';
 										if (max <= PlayListSession.MIN_ITEMS) {
 												window.console.warn('プレイリストをsessionStorageへ保存できませんでした（容量不足）');
 												return;
@@ -35525,7 +37259,7 @@ class VideoListView extends Emitter {
 				}
 				const fileReader = new FileReader();
 				fileReader.onload = (ev) => {
-						window.console.log('file data: ', ev.target.result);
+						window.console.log('Playlist import file read');
 						this.emit('filedrop', ev.target.result, file.name);
 				};
 				fileReader.readAsText(file);
@@ -35911,7 +37645,7 @@ class PlayListView extends Emitter {
 				}
 				const fileReader = new FileReader();
 				fileReader.onload = (ev) => {
-						window.console.log('file data: ', ev.target.result);
+						window.console.log('Playlist import file read');
 						this.emit('command', 'importFile', ev.target.result);
 				};
 				fileReader.readAsText(file);
@@ -35924,7 +37658,7 @@ class PlayListView extends Emitter {
 				}
 				const fileReader = new FileReader();
 				fileReader.onload = (ev) => {
-						window.console.log('file data: ', ev.target.result);
+						window.console.log('Playlist import file read');
 						this.emit('command', 'importFile', ev.target.result);
 				};
 				fileReader.readAsText(file);
@@ -36184,7 +37918,7 @@ class PlayList extends VideoList {
 				this._replaceLoadGeneration = (this._replaceLoadGeneration || 0) + 1;
 				this._invalidateAdditiveLoads();
 				this._initializeView();
-				console.log('unserialize: ', data);
+				console.log('Playlist session restored');
 				const oldIndex = PlayList.normalizeRestoredIndex(data.index, data.items.length, -1);
 				const start = data.items.length > 10000 && oldIndex >= 0 ?
 						Math.max(0, Math.min(oldIndex - 5000, data.items.length - 10000)) : 0;
@@ -36267,6 +38001,7 @@ class PlayList extends VideoList {
 								break;
 						case 'resetPlayedItemFlag':
 								this.model.resetPlayedItemFlag();
+								this.emit('update');
 								break;
 						case 'removeNonActiveItem':
 								this.removeNonActiveItem();
@@ -36375,8 +38110,10 @@ class PlayList extends VideoList {
 				const added = this._countNewlyAdded(videoListItems, beforeItemIds);
 				const item = this.model.findByWatchId(options.watchId);
 				if (item) {
-						item.isActive = true;
 						item.isPlayed = true;
+						if (!this._activeItem || this.model.indexOf(this._activeItem) < 0) {
+								this._activeItem = item;
+						}
 						this._refreshIndex(false);
 				}
 				setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
@@ -36467,8 +38204,10 @@ class PlayList extends VideoList {
 				const added = this._countNewlyAdded(videoListItems, beforeItemIds);
 				const item = this.model.findByWatchId(options.watchId);
 				if (item) {
-						item.isActive = true;
 						item.isPlayed = true;
+						if (!this._activeItem || this.model.indexOf(this._activeItem) < 0) {
+								this._activeItem = item;
+						}
 						this._refreshIndex(false);
 				}
 				setTimeout(() => this.view.scrollToItem(videoListItems[0]), 1000);
@@ -36549,7 +38288,7 @@ class PlayList extends VideoList {
 				if (!this._playlistApiLoader) {
 						this._playlistApiLoader = PlaylistApiLoader;
 				}
-				const timeKey = `loadPlaylist: ${playlist.type} ${playlist.id || playlist.options?.tag || playlist.options?.keyword}`;
+				const timeKey = `loadPlaylist #${PlayList._loadSeq = (PlayList._loadSeq || 0) + 1}`;
 				window.console.time(timeKey);
 				const additiveOwner = this._beginAdditiveLoad(options);
 				const network = this._playlistApiLoader.load({ ...playlist,
@@ -36557,7 +38296,6 @@ class PlayList extends VideoList {
 						isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
 				}, msgInfo);
 				return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
-						window.console.timeEnd(timeKey);
 						if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
 								return { status: 'superseded', message: '' };
 						}
@@ -36621,6 +38359,7 @@ class PlayList extends VideoList {
 						}
 						throw error;
 				}).finally(() => {
+						window.console.timeEnd(timeKey);
 						if (additiveOwner) {
 								additiveOwner.release();
 						}
@@ -36648,7 +38387,7 @@ class PlayList extends VideoList {
 				if (!this._nicoSearchApiLoader) {
 						this._nicoSearchApiLoader = NicoSearchApiV2Loader;
 				}
-				const timerLabel = `loadSearchVideos${word} #${PlayList._searchSeq = (PlayList._searchSeq || 0) + 1}`;
+				const timerLabel = `loadSearchVideos #${PlayList._searchSeq = (PlayList._searchSeq || 0) + 1}`;
 				window.console.time(timerLabel);
 				options = options || {};
 				const replaceOwner = this._beginReplaceLoad(options);
@@ -36666,7 +38405,6 @@ class PlayList extends VideoList {
 				const network = loadItems();
 				const additiveOwner = this._beginAdditiveLoad(options);
 				return this._waitForAdditiveTurn(network, additiveOwner).then(videoListItems => {
-						window.console.timeEnd(timerLabel);
 						if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
 								return { status: 'superseded', message: '' };
 						}
@@ -36712,6 +38450,7 @@ class PlayList extends VideoList {
 						}
 						throw error;
 				}).finally(() => {
+						window.console.timeEnd(timerLabel);
 						if (additiveOwner) {
 								additiveOwner.release();
 						}
@@ -37002,10 +38741,10 @@ class PlayList extends VideoList {
 				if (this._activeItem) {
 						this.model.removeItem(this._activeItem);
 						this.model.insertItem(this._activeItem, 0);
-						this.setIndex(0);
+						this.setIndex(0, true);
 				}
 				else {
-						this.setIndex(-1);
+						this.setIndex(-1, true);
 				}
 				this.view.scrollTop(0);
 		}
@@ -37300,9 +39039,7 @@ class SceneSearchPlacement {
 				};
 				const result = (rect) => ({ rect, imageScale, listWidth, listMaxHeight, footerHeight: footer,
 						overlapsVideo: this.overlap(rect, player) > 0 });
-				const clearFullscreenIcons = (preferred) => {
-						if (input.context !== 'fullscreen')
-								return preferred;
+				const avoidInteractiveObstacles = (preferred) => {
 						const blockers = (input.obstacles || []).filter(r => r.width > 0 && r.height > 0);
 						if (!blockers.some(r => this.overlap(preferred, r) > 0))
 								return preferred;
@@ -37349,17 +39086,17 @@ class SceneSearchPlacement {
 				};
 				if (input.hold && previous) {
 						const held = make(previous.rect.left, previous.rect.top);
-						return result(clearFullscreenIcons(held));
+						return result(avoidInteractiveObstacles(held));
 				}
 				const above = stableTop - clearance - height;
 				if (input.layout === 'follow')
-						return result(clearFullscreenIcons(make(input.anchorX - width / 2, above)));
+						return result(avoidInteractiveObstacles(make(input.anchorX - width / 2, above)));
 				if (input.context === 'normal') {
 						const below = Math.max(player.top + player.height, seekbar.top + seekbar.height) + gap;
-						return result(make(player.left, below + height <= v.top + v.height - gap ? below : above));
+						return result(avoidInteractiveObstacles(make(player.left, below + height <= v.top + v.height - gap ? below : above)));
 				}
 				if (input.context === 'fullscreen')
-						return result(clearFullscreenIcons(make(player.left + gap, above)));
+						return result(avoidInteractiveObstacles(make(player.left + gap, above)));
 				const hard = [seekbar, ...input.obstacles].filter(r => r.width > 0 && r.height > 0);
 				const safe = (r) => hard.every(o => this.overlap(r, o) === 0) && this.overlap(r, player) === 0;
 				if (previous) {
@@ -37391,1180 +39128,1979 @@ class SceneSearchPlacement {
 				return result(best);
 		}
 }
+// already required
 class SceneSearchLegacyAdapter {
-	constructor({Bridge,classes,registry,controlBar,dialog,document,container,
-		clock,onError,defer}={}) {
-		const seek=controlBar?._seekBar;
-		const cfg=controlBar?._playerConfig;
-		const player=controlBar?.player;
-		if(typeof Bridge!=='function'||!classes||!registry||!seek||
-			!cfg||!player||typeof dialog?.execCommand!=='function'||
-			!document||!container) {
-			throw new TypeError('Legacy scene adapter requires the real seekbar, player, config and commands');
+		constructor({ Bridge, classes, registry, controlBar, dialog, document, container, clock, onError, defer } = {}) {
+				const seek = controlBar?._seekBar;
+				const cfg = controlBar?._playerConfig;
+				const player = controlBar?.player;
+				if (typeof Bridge !== 'function' || !classes || !registry || !seek ||
+						!cfg || !player || typeof dialog?.execCommand !== 'function' ||
+						!document || !container) {
+						throw new TypeError('Legacy scene adapter requires the real seekbar, player, config and commands');
+				}
+				this.Bridge = Bridge;
+				this.classes = classes;
+				this.registry = registry;
+				this.bar = controlBar;
+				this.dialog = dialog;
+				this.document = document;
+				this.container = container;
+				this.clock = clock;
+				this._onError = typeof onError === 'function' ? onError : () => { };
+				this._defer = typeof defer === 'function' ? defer :
+						callback => Promise.resolve().then(callback);
+				this._bridge = null;
+				this._owners = [];
+				this._generation = 0;
+				this._disposed = false;
 		}
-		this.Bridge=Bridge;
-		this.classes=classes;
-		this.registry=registry;
-		this.bar=controlBar;
-		this.dialog=dialog;
-		this.document=document;
-		this.container=container;
-		this.clock=clock;
-		this._onError=typeof onError==='function'?onError:()=>{};
-		this._defer=typeof defer==='function'?defer:
-			callback=>Promise.resolve().then(callback);
-		this._bridge=null;
-		this._owners=[];
-		this._generation=0;
-		this._disposed=false;
-	}
-	static seekTime(element,event,duration) {
-		if(!Number.isFinite(duration)||duration<=0){return null;}
-		const rect=element?.getBoundingClientRect?.();
-		if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.width)||
-			rect.width<=0){return null;}
-		const x=event?.clientX;
-		if(!Number.isFinite(x)){return null;}
-		return Math.max(0,Math.min(1,(x-rect.left)/rect.width))*duration;
-	}
-	get seekElement(){return this.bar._seekBar;}
-	get currentVideoId(){
-		return this.bar.player?.watchId||null;
-	}
-	get duration(){
-		for(const n of [this.bar._duration,this.bar.player?.duration,this.dialog?.duration]){
-			if(Number.isFinite(n)&&n>0){return n;}
+		static seekTime(element, event, duration) {
+				if (TimelineGeometry.timeToRatio(0, duration) === null) {
+						return null;
+				}
+				const rect = element?.getBoundingClientRect?.();
+				if (!rect) {
+						return null;
+				}
+				const geometry = TimelineGeometry.create({
+						clientLeft: rect.left, clientWidth: rect.width, localWidth: rect.width
+				});
+				const ratio = geometry?.clientXToRatio(event?.clientX);
+				return ratio == null ? null : TimelineGeometry.ratioToTime(ratio, duration);
 		}
-		return 0;
-	}
-	get commentData(){
-		const existing=this.bar._commentPreview?._model?._chatList;
-		if(Array.isArray(existing)){return existing;}
-		const raw=this.bar.player?.chatList;
-		return Array.isArray(raw)?raw:[];
-	}
-	_makeOptions(){
-		const seek=this.seekElement;
-		const legacy=this.bar._seekBarToolTip;
-		return {
-			classes:this.classes,
-			registry:this.registry,
-			document:this.document,
-			container:this.container,
-			seekElement:seek,
-			legacyTooltipElement:legacy?._$view?.[0]||null,
-			getThumbnailElement:()=>legacy?._seekBarThumbnail?._view||null,
-			commentPreviewElement:this.bar._commentPreview?._view?._view||null,
-			createCommentList:container=>this.bar._commentPreview?.createListView?.(container),
-			config:this.bar._playerConfig,
-			clock:this.clock,
-			getChats:()=>this.commentData,
-			layoutSettings:{getDuration:()=>this.duration},
-			getSeekTime:e=>SceneSearchLegacyAdapter.seekTime(seek,e,this.duration),
-			onSeekRelative:delta=>this.dialog.execCommand('seekBy',delta),
-			onSeekAbsolute:sec=>this.dialog.execCommand('seek',sec),
-			onError:(error,key)=>this._onError(error,key)
-		};
-	}
-	get bridge(){return this._bridge;}
-	_subscribe(owner,event,callback){
-		if(typeof owner?.on!=='function'||typeof owner?.off!=='function'){
-			throw new TypeError('Legacy emitter '+event+' requires on/off lifecycle');
+		get seekElement() { return this.bar._seekBar; }
+		get currentVideoId() {
+				return this.bar.player?.watchId || null;
 		}
-		owner.on(event,callback);
-		this._owners.push([owner,event,callback]);
-	}
-	_onStoryboardEvent(){
-		const generation=this._generation;
-		const active=this._bridge;
-		this._defer(()=>{
-			if(this._disposed||this._generation!==generation||this._bridge!==active){return;}
-			this._bridge?.refreshSharedThumbnail?.();
-		});
-	}
-	start(mode='normal'){
-		if(this._disposed){throw new Error('Legacy adapter disposed');}
-		if(this._bridge){return this._bridge;}
-		const bridge=new this.Bridge(this._makeOptions());
-		this._bridge=bridge;
-		try{
-			bridge.start(mode);
-			bridge.setVideo(this.currentVideoId);
-			this._previousPinnedTime=this.bar._sceneSearchPinnedTime;
-			this._pinnedTimeHook=()=>bridge.state.pinned?bridge.state.time:null;
-			this.bar._sceneSearchPinnedTime=this._pinnedTimeHook;
-			const player=this.bar.player;
-			this._subscribe(player,'open',watchId=>{
-				if(!this._disposed){bridge.setVideo(watchId);}
-			});
-			this._subscribe(player,'close',()=>{
-				if(!this._disposed){bridge.setVideo(null);}
-			});
-			const storyboard=this.bar.storyboard;
-			if(storyboard){
-				this._subscribe(storyboard,'update',()=>this._onStoryboardEvent());
-				this._subscribe(storyboard,'reset',()=>this._onStoryboardEvent());
-			}
-		}catch(error){
-			this.dispose();
-			throw error;
+		get duration() {
+				for (const n of [this.bar._duration, this.bar.player?.duration, this.dialog?.duration]) {
+						if (Number.isFinite(n) && n > 0) {
+								return n;
+						}
+				}
+				return 0;
 		}
-		return bridge;
-	}
-	screenModeChanged(mode){
-		if(this._disposed||!this._bridge){return false;}
-		this._generation++; // obsolete outstanding storyboard async notifications
-		this._bridge.setMode(mode==='fullscreen'?'fullscreen':'normal');
-		this._bridge.refreshSharedThumbnail?.();
-		return true;
-	}
-	dispose(){
-		if(this._disposed){return;}
-		this._disposed=true;
-		this._generation++;
-		for(const [owner,event,callback] of this._owners){
-			try{owner.off(event,callback);}
-			catch(error){this._onError(error,'unsubscribe:'+event);}
+		get commentData() {
+				const existing = this.bar._commentPreview?._model?._chatList;
+				if (Array.isArray(existing)) {
+						return existing;
+				}
+				const raw = this.bar.player?.chatList;
+				return Array.isArray(raw) ? raw : [];
 		}
-		this._owners.length=0;
-		if(this.bar._sceneSearchPinnedTime===this._pinnedTimeHook){
-			if(this._previousPinnedTime===undefined)delete this.bar._sceneSearchPinnedTime;
-			else this.bar._sceneSearchPinnedTime=this._previousPinnedTime;
+		_makeOptions() {
+				const seek = this.seekElement;
+				const legacy = this.bar._seekBarToolTip;
+				return {
+						classes: this.classes,
+						registry: this.registry,
+						document: this.document,
+						container: this.container,
+						seekElement: seek,
+						legacyTooltipElement: legacy?._$view?.[0] || null,
+						getThumbnailElement: () => legacy?._seekBarThumbnail?._view || null,
+						commentPreviewElement: this.bar._commentPreview?._view?._view || null,
+						createCommentList: (container) => this.bar._commentPreview?.createListView?.(container),
+						config: this.bar._playerConfig,
+						clock: this.clock,
+						getChats: () => this.commentData,
+						layoutSettings: { getDuration: () => this.duration },
+						getSeekTime: (e) => SceneSearchLegacyAdapter.seekTime(seek, e, this.duration),
+						onSeekRelative: (delta) => this.dialog.execCommand('seekBy', delta),
+						onSeekAbsolute: (sec) => this.dialog.execCommand('seek', sec),
+						onError: (error, key) => this._onError(error, key)
+				};
 		}
-		this._bridge?.dispose();
-		this._bridge=null;
-	}
+		get bridge() { return this._bridge; }
+		_subscribe(owner, event, callback) {
+				if (typeof owner?.on !== 'function' || typeof owner?.off !== 'function') {
+						throw new TypeError('Legacy emitter ' + event + ' requires on/off lifecycle');
+				}
+				owner.on(event, callback);
+				this._owners.push([owner, event, callback]);
+		}
+		_onStoryboardEvent() {
+				const generation = this._generation;
+				const active = this._bridge;
+				this._defer(() => {
+						if (this._disposed || this._generation !== generation || this._bridge !== active) {
+								return;
+						}
+						this._bridge?.refreshSharedThumbnail?.();
+				});
+		}
+		start(mode = 'normal') {
+				if (this._disposed) {
+						throw new Error('Legacy adapter disposed');
+				}
+				if (this._bridge) {
+						return this._bridge;
+				}
+				const bridge = new this.Bridge(this._makeOptions());
+				this._bridge = bridge;
+				try {
+						bridge.start(mode);
+						bridge.setVideo(this.currentVideoId);
+						this._previousPinnedTime = this.bar._sceneSearchPinnedTime;
+						this._pinnedTimeHook = () => bridge.state.pinned ? bridge.state.time : null;
+						this.bar._sceneSearchPinnedTime = this._pinnedTimeHook;
+						const player = this.bar.player;
+						this._subscribe(player, 'open', watchId => {
+								if (!this._disposed) {
+										bridge.setVideo(watchId);
+								}
+						});
+						this._subscribe(player, 'close', () => {
+								if (!this._disposed) {
+										bridge.setVideo(null);
+								}
+						});
+						const storyboard = this.bar.storyboard;
+						if (storyboard) {
+								this._subscribe(storyboard, 'update', () => this._onStoryboardEvent());
+								this._subscribe(storyboard, 'reset', () => this._onStoryboardEvent());
+						}
+				}
+				catch (error) {
+						this.dispose();
+						throw error;
+				}
+				return bridge;
+		}
+		screenModeChanged(mode) {
+				if (this._disposed || !this._bridge) {
+						return false;
+				}
+				this._generation++; // obsolete outstanding storyboard async notifications
+				this._bridge.setMode(mode === 'fullscreen' ? 'fullscreen' : 'normal');
+				this._bridge.refreshSharedThumbnail?.();
+				return true;
+		}
+		dispose() {
+				if (this._disposed) {
+						return;
+				}
+				this._disposed = true;
+				this._generation++;
+				for (const [owner, event, callback] of this._owners) {
+						try {
+								owner.off(event, callback);
+						}
+						catch (error) {
+								this._onError(error, 'unsubscribe:' + event);
+						}
+				}
+				this._owners.length = 0;
+				if (this.bar._sceneSearchPinnedTime === this._pinnedTimeHook) {
+						if (this._previousPinnedTime === undefined)
+								delete this.bar._sceneSearchPinnedTime;
+						else
+								this.bar._sceneSearchPinnedTime = this._previousPinnedTime;
+				}
+				this._bridge?.dispose();
+				this._bridge = null;
+		}
+}
+class SceneSearchDomLease {
+		static typography = Object.freeze([
+				'font-family', 'font-size', 'line-height', 'font-weight', 'letter-spacing', 'word-spacing'
+		]);
+		static _positionOwners = new WeakMap();
+		static preserveTypography(node) {
+				const computed = node.ownerDocument.defaultView.getComputedStyle(node);
+				const values = this.typography.map(name => [name, computed.getPropertyValue(name)]);
+				values.forEach(([name, value]) => {
+						if (value) {
+								node.style.setProperty(name, value, node.style.getPropertyPriority(name));
+						}
+				});
+		}
+		constructor(node, options = {}) {
+				if (options.position && SceneSearchDomLease._positionOwners.has(node)) {
+						throw new Error('This node already has a position lease');
+				}
+				this._node = node;
+				this._released = false;
+				this._styles = Array.from(new Set(options.styles || []), name => ({
+						name, value: node.style.getPropertyValue(name), priority: node.style.getPropertyPriority(name)
+				}));
+				this._classes = Array.from(new Set(options.classes || []), name => ({
+						name, present: node.classList.contains(name)
+				}));
+				this._attributes = Array.from(new Set(options.attributes || []), name => {
+						if (['class', 'style'].includes(name.toLowerCase())) {
+								throw new TypeError('Lease individual class or style members instead of their whole attribute');
+						}
+						return { name, value: node.getAttribute(name) };
+				});
+				this._hidden = options.hidden ? { value: node.hidden, attribute: node.getAttribute('hidden') } : null;
+				this._emptyStyle = this._styles.length > 0 && !node.hasAttribute('style');
+				this._emptyClass = this._classes.length > 0 && !node.hasAttribute('class');
+				this._position = null;
+				if (options.position) {
+						const parent = node.parentNode;
+						const siblings = parent ? Array.from(parent.childNodes) : [];
+						const index = siblings.indexOf(node);
+						this._position = {
+								parent, anchor: null,
+								previous: siblings.slice(0, index).reverse(), next: siblings.slice(index + 1)
+						};
+						SceneSearchDomLease._positionOwners.set(node, this);
+				}
+		}
+		get node() { return this._node; }
+		get released() { return this._released; }
+		moveTo(parent, before = null) {
+				if (this._released) {
+						throw new Error('Cannot move a released DOM lease');
+				}
+				if (!this._position) {
+						throw new Error('Moving a node requires a position lease');
+				}
+				try {
+						const position = this._position;
+						if (position.parent && !position.anchor) {
+								position.anchor = this._node.ownerDocument.createComment('scene-search-dom-lease');
+								position.parent.insertBefore(position.anchor, this._anchorReference(position));
+						}
+						this._moveNode(parent, before);
+				}
+				catch (error) {
+						try {
+								this.restore();
+						}
+						catch (restoreError) {
+								throw new AggregateError([error, restoreError], 'DOM move and rollback both failed');
+						}
+						throw error;
+				}
+		}
+		restore() {
+				if (this._released) {
+						return;
+				}
+				const errors = [];
+				const attempt = (action) => {
+						try {
+								action();
+								return true;
+						}
+						catch (error) {
+								errors.push(error);
+								return false;
+						}
+				};
+				if (this._position && attempt(() => this._restorePosition())) {
+						this._position = null;
+				}
+				this._styles = this._styles.filter(snapshot => !attempt(() => {
+						const { name, value, priority } = snapshot;
+						const style = this._node.style;
+						if (style.getPropertyValue(name) === value && style.getPropertyPriority(name) === priority) {
+								return;
+						}
+						if (value) {
+								style.setProperty(name, value, priority);
+						}
+						else {
+								style.removeProperty(name);
+						}
+				}));
+				this._classes = this._classes.filter(({ name, present }) => !attempt(() => {
+						if (this._node.classList.contains(name) !== present) {
+								this._node.classList.toggle(name, present);
+						}
+				}));
+				this._attributes = this._attributes.filter(({ name, value }) => !attempt(() => this._restoreAttribute(name, value)));
+				if (this._hidden && attempt(() => {
+						if (this._node.hidden !== this._hidden.value) {
+								this._node.hidden = this._hidden.value;
+						}
+						this._restoreAttribute('hidden', this._hidden.attribute);
+				})) {
+						this._hidden = null;
+				}
+				if (this._emptyStyle && !this._styles.length && attempt(() => {
+						if (this._node.getAttribute('style') === '') {
+								this._node.removeAttribute('style');
+						}
+				})) {
+						this._emptyStyle = false;
+				}
+				if (this._emptyClass && !this._classes.length && attempt(() => {
+						if (this._node.getAttribute('class') === '') {
+								this._node.removeAttribute('class');
+						}
+				})) {
+						this._emptyClass = false;
+				}
+				if (!this._position && !this._styles.length && !this._classes.length &&
+						!this._attributes.length && !this._hidden && !this._emptyStyle && !this._emptyClass) {
+						this._released = true;
+						if (SceneSearchDomLease._positionOwners.get(this._node) === this) {
+								SceneSearchDomLease._positionOwners.delete(this._node);
+						}
+				}
+				this._throwErrors(errors, 'Could not fully restore the DOM lease');
+		}
+		_restoreAttribute(name, value) {
+				if (this._node.getAttribute(name) === value) {
+						return;
+				}
+				if (value === null) {
+						this._node.removeAttribute(name);
+				}
+				else {
+						this._node.setAttribute(name, value);
+				}
+		}
+		_anchorReference(position) {
+				const siblings = Array.from(position.parent.childNodes);
+				const index = siblings.indexOf(this._node);
+				const previous = position.previous.find(node => node.parentNode === position.parent);
+				const next = position.next.find(node => node.parentNode === position.parent);
+				if (index >= 0 && (!previous || siblings.indexOf(previous) < index) &&
+						(!next || siblings.indexOf(next) > index)) {
+						return this._node;
+				}
+				return this._positionReference(position);
+		}
+		_positionReference(position) {
+				if (position.anchor && position.anchor.parentNode === position.parent) {
+						return position.anchor.nextSibling;
+				}
+				const next = position.next.find(node => node.parentNode === position.parent);
+				if (next) {
+						return next;
+				}
+				const previous = position.previous.find(node => node.parentNode === position.parent);
+				return previous ? previous.nextSibling : null;
+		}
+		_restorePosition() {
+				const position = this._position;
+				if (position.parent) {
+						this._moveNode(position.parent, this._positionReference(position));
+				}
+				else if (this._node.parentNode) {
+						this._withFocus(() => this._node.parentNode.removeChild(this._node));
+				}
+				if (position.anchor && position.anchor.parentNode) {
+						position.anchor.parentNode.removeChild(position.anchor);
+				}
+		}
+		_moveNode(parent, before) {
+				if (this._node.parentNode === parent &&
+						(before === this._node || before === this._node.nextSibling)) {
+						return;
+				}
+				this._withFocus(() => parent.insertBefore(this._node, before));
+		}
+		_withFocus(action) {
+				const document = this._node.ownerDocument;
+				const active = document.activeElement;
+				const ownsFocus = active && this._node.contains(active);
+				const errors = [];
+				try {
+						action();
+				}
+				catch (error) {
+						errors.push(error);
+				}
+				const current = document.activeElement;
+				if (ownsFocus && current !== active &&
+						(!current || current === document.body || current === document.documentElement)) {
+						try {
+								active.focus({ preventScroll: true });
+						}
+						catch (error) {
+								errors.push(error);
+						}
+				}
+				this._throwErrors(errors, 'DOM movement and focus restoration both failed');
+		}
+		_throwErrors(errors, message) {
+				if (errors.length === 1) {
+						throw errors[0];
+				}
+				if (errors.length > 1) {
+						throw new AggregateError(errors, message);
+				}
+		}
+}
+class SceneSearchLayoutResources {
+		constructor(onError = () => { }) {
+				this._onError = onError;
+				this._pending = new Map();
+		}
+		get pendingCount() { return this._pending.size; }
+		release(cleanup, key = 'scene-layout-cleanup') {
+				const entry = this._pending.get(cleanup) || { cleanup, key, running: false };
+				if (entry.running)
+						return false;
+				this._pending.set(cleanup, entry);
+				entry.running = true;
+				try {
+						cleanup();
+						this._pending.delete(cleanup);
+						return true;
+				}
+				catch (error) {
+						entry.error = error;
+						try {
+								this._onError(error, key);
+						}
+						catch (reportError) {
+								entry.reportError = reportError;
+						}
+						return false;
+				}
+				finally {
+						entry.running = false;
+				}
+		}
+		retry(onlyKey) {
+				for (const { cleanup, key } of [...this._pending.values()]) {
+						if (onlyKey === undefined || key === onlyKey)
+								this.release(cleanup, key);
+				}
+				return ![...this._pending.values()].some(entry => onlyKey === undefined || entry.key === onlyKey);
+		}
+}
+class SceneSearchPreferenceConnection {
+		constructor({ window, config, keys, isDisposed = () => false, onApplying = () => { }, onRefresh = () => { }, onError = () => { } }) {
+				this.window = window;
+				this.config = config;
+				this.keys = keys.slice();
+				this.isDisposed = isDisposed;
+				this.onApplying = onApplying;
+				this.onRefresh = onRefresh;
+				this.onError = onError;
+				this._disposed = false;
+				this._connected = false;
+				this._listeners = [];
+				this._queue = Promise.resolve();
+				this._allowed = new Set(this.keys);
+		}
+		static validSavedPreference(key, value) {
+				if (key === 'sceneSearch.presentation.normal' || key === 'sceneSearch.presentation.fullscreen')
+						return ['follow', 'fixed', 'legacy'].includes(value);
+				if (key === 'sceneSearch.enabled' || key === 'sceneSearch.miniCommentVisible' || key === 'sceneSearch.commentListVisible')
+						return typeof value === 'boolean';
+				if (key === 'sceneSearch.commentListScale')
+						return Number.isInteger(value) && value >= 100 && value <= 200;
+				if (key === 'sceneSearch.thumbnailScale')
+						return Number.isInteger(value) && value >= 50 && value <= 200;
+				if (key === 'sceneSearch.commentListBackgroundOpacity')
+						return Number.isInteger(value) && value >= 0 && value <= 100;
+				if (key === 'sceneSearch.layout.normal' || key === 'sceneSearch.layout.fullscreen') {
+						return typeof value === 'string' && /^(00|0[1-9]|10)$/.test(value);
+				}
+				if (key === 'sceneSearch.miniCommentMode') {
+						return ['flow', 'static', 'hidden'].includes(value);
+				}
+				if (key === 'enableCommentPreview' || key === 'sceneSearch.layout.linkFullscreen' ||
+						key === 'sceneSearch.commentPreviewVisible') {
+						return typeof value === 'boolean';
+				}
+				if (key === 'sceneSearch.seekStepSeconds') {
+						return Number.isSafeInteger(value) && value >= 0 && value <= 600;
+				}
+				if (key === 'sceneSearch.idleHideSeconds') {
+						return typeof value === 'number' && Number.isFinite(value) && value >= 0 &&
+								value <= 30 && Number.isInteger(value * 2);
+				}
+				if (key === 'sceneSearch.controlsReveal')
+						return ['hover-focus', 'click', 'always'].includes(value);
+				if (key === 'sceneSearch.animation')
+						return ['off', 'subtle', 'full'].includes(value);
+				return false;
+		}
+		_inactive() {
+				return this._disposed || this.isDisposed();
+		}
+		connect() {
+				if (this._inactive() || this._connected)
+						return;
+				const win = this.window, config = this.config;
+				if (!win?.addEventListener || !config.storage ||
+						typeof config.getStorageKey !== 'function' || typeof config.refresh !== 'function')
+						return;
+				const storageKeys = new Map(this.keys.map(key => [config.getStorageKey(key), key]));
+				const onSaved = (event) => this._enqueue(event.detail?.keys);
+				const onStorage = (event) => {
+						if (event.storageArea && event.storageArea !== config.storage)
+								return;
+						if (event.key === null) {
+								this._enqueue(this.keys);
+								return;
+						}
+						const key = storageKeys.get(event.key);
+						if (key)
+								this._enqueue([key]);
+				};
+				this._connected = true;
+				try {
+						for (const [name, listener] of [
+								['ZenzaWatch-advanced-settings-saved', onSaved], ['storage', onStorage]
+						]) {
+								if (this._inactive())
+										break;
+								this._listeners.push([name, listener]);
+								win.addEventListener(name, listener);
+								if (this._inactive()) {
+										if (!this._listeners.some(([registeredName, registeredListener]) => registeredName === name && registeredListener === listener)) {
+												this._listeners.push([name, listener]);
+										}
+										this.dispose();
+										break;
+								}
+						}
+				}
+				catch (error) {
+						try {
+								this.dispose();
+						}
+						catch (_) { }
+						throw error;
+				}
+		}
+		_enqueue(requested) {
+				if (this._inactive() || !Array.isArray(requested))
+						return;
+				const selected = [...new Set(requested.filter(key => this._allowed.has(key)))];
+				if (!selected.length)
+						return;
+				this._queue = this._queue.then(() => this._sync(selected)).catch(error => {
+						if (this._inactive())
+								return;
+						try {
+								this.onError(error);
+						}
+						catch (_) {
+						}
+				});
+		}
+		async _sync(requested) {
+				if (this._inactive())
+						return;
+				const config = this.config;
+				const changes = [], saved = {}, before = {}; // DataStorage.refresh requires hasOwnProperty.
+				for (const key of requested) {
+						const sk = config.getStorageKey(key), raw = config.storage[sk];
+						const value = raw === undefined || raw === null ? config.default?.[key] : JSON.parse(raw);
+						if (!SceneSearchPreferenceConnection.validSavedPreference(key, value) ||
+								(config.options?.validateImport && !config.options.validateImport(key, value))) {
+								throw new TypeError('Invalid saved scene preference: ' + key);
+						}
+						const presenceSensitive = typeof config.resolveSceneSearch === 'function' && [
+								'sceneSearch.enabled', 'sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen',
+								'sceneSearch.miniCommentVisible'
+						].includes(key);
+						if (Object.is(value, config.getValue(key)) && !presenceSensitive)
+								continue;
+						saved[sk] = JSON.stringify(value);
+						before[sk] = JSON.stringify(config.getValue(key));
+						changes.push([key, value]);
+				}
+				if (this._inactive() || !changes.length)
+						return;
+				const loaded = [];
+				try {
+						for (const [key] of changes) {
+								if (this._inactive())
+										return;
+								loaded.push(key);
+								await config.refresh(key, saved); // Read-only: no setValue/localStorage echo.
+						}
+				}
+				catch (error) {
+						for (const key of loaded) {
+								try {
+										await config.refresh(key, before);
+								}
+								catch (_) { }
+						}
+						throw error;
+				}
+				if (this._inactive())
+						return;
+				try {
+						this.onApplying(true);
+						if (this._inactive())
+								return;
+						config.emit?.('change', new Map(changes));
+						for (const [key, value] of changes) {
+								if (this._inactive())
+										return;
+								config.emit?.('update', key, value);
+								if (this._inactive())
+										return;
+								config.emit?.('update-' + key, value);
+						}
+				}
+				finally {
+						this.onApplying(false);
+				}
+				if (!this._inactive())
+						this.onRefresh(changes.map(([key]) => key));
+		}
+		dispose() {
+				this._disposed = true;
+				this._connected = false;
+				const pending = [];
+				let firstError;
+				for (const [name, listener] of this._listeners) {
+						try {
+								this.window.removeEventListener(name, listener);
+						}
+						catch (error) {
+								pending.push([name, listener]);
+								if (!firstError)
+										firstError = error;
+						}
+				}
+				this._listeners = pending;
+				if (firstError)
+						throw firstError;
+		}
+}
+class SceneSearchObstacleCollector {
+		static get SELECTORS() {
+				return '.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,' +
+						'.zenzaPopupMenu,' +
+						'.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,' +
+						'.zenzaSmallModeAspectLockButton,.closeButton,.zenzaSmallModeCloseButton';
+		}
+		static get ACTIONS() {
+				return 'button,input,textarea,select,a[href],[role="button"],' +
+						'[role="menuitem"],[role="option"],[data-action],[tabindex],.controlButton';
+		}
+		static _rect(rect) {
+				if (!rect)
+						return null;
+				const left = Number(rect.left), top = Number(rect.top);
+				const right = Number.isFinite(rect.right) ? rect.right : left + Number(rect.width);
+				const bottom = Number.isFinite(rect.bottom) ? rect.bottom : top + Number(rect.height);
+				if (![left, top, right, bottom].every(Number.isFinite) || right <= left || bottom <= top)
+						return null;
+				return { left, top, right, bottom, width: right - left, height: bottom - top };
+		}
+		static _intersect(a, b, axes = 'xy') {
+				if (!a || !b)
+						return null;
+				const left = axes.includes('x') ? Math.max(a.left, b.left) : a.left;
+				const right = axes.includes('x') ? Math.min(a.right, b.right) : a.right;
+				const top = axes.includes('y') ? Math.max(a.top, b.top) : a.top;
+				const bottom = axes.includes('y') ? Math.min(a.bottom, b.bottom) : a.bottom;
+				return right > left && bottom > top ? { left, top, right, bottom, width: right - left, height: bottom - top } : null;
+		}
+		static _clipPathRect(style, rect, node) {
+				const raw = style.clipPath || style.webkitClipPath || '';
+				const match = /^inset\(\s*([^)]*?)\s*\)$/i.exec(raw);
+				if (!match)
+						return rect;
+				const parts = match[1].split(/\s+round\s+/i)[0].trim().split(/\s+/);
+				if (!parts.length || parts.length > 4)
+						return rect;
+				const expanded = [parts[0], parts[1] || parts[0], parts[2] || parts[0],
+						parts[3] || parts[1] || parts[0]];
+				const scaleX = node?.offsetWidth > 0 ? rect.width / node.offsetWidth : 1;
+				const scaleY = node?.offsetHeight > 0 ? rect.height / node.offsetHeight : 1;
+				const px = (part, length, scale) => {
+						const value = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|%)?$/.exec(part);
+						if (!value)
+								return null;
+						return Number(value[1]) * (value[2] === '%' ? length / 100 : scale);
+				};
+				const [t, r, b, l] = [px(expanded[0], rect.height, scaleY), px(expanded[1], rect.width, scaleX),
+						px(expanded[2], rect.height, scaleY), px(expanded[3], rect.width, scaleX)];
+				if ([t, r, b, l].some(v => v === null))
+						return rect;
+				return this._intersect(rect, { left: rect.left + l, top: rect.top + t,
+						right: rect.right - r, bottom: rect.bottom - b });
+		}
+		static _opaqueBackground(style) {
+				const color = (style.backgroundColor || '').trim().toLowerCase();
+				const alpha = /^rgba\([^)]*,\s*([.\d]+)\s*\)$/.exec(color);
+				const painted = !!color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)' &&
+						!(alpha && Number(alpha[1]) === 0) &&
+						!/^#[a-f0-9]{3}0$/i.test(color);
+				return painted || (!!style.backgroundImage && style.backgroundImage !== 'none');
+		}
+		static collect({ document, container, fullscreen = false }) {
+				const win = document.defaultView;
+				if (!win?.getComputedStyle)
+						return { obstacles: [], controlTops: [] };
+				const styles = new Map(), rects = new Map(), seen = new Set();
+				const style = (node) => {
+						if (!styles.has(node))
+								styles.set(node, win.getComputedStyle(node));
+						return styles.get(node);
+				};
+				const rect = (node) => {
+						if (!rects.has(node))
+								rects.set(node, this._rect(node.getBoundingClientRect?.()));
+						return rects.get(node);
+				};
+				const visible = (node) => {
+						if (!node || node.nodeType !== 1)
+								return null;
+						if (!['visible', ''].includes(style(node).visibility))
+								return null;
+						let box = rect(node);
+						if (!box)
+								return null;
+						let fixedEscapesOverflow = style(node).position === 'fixed';
+						if (fixedEscapesOverflow) {
+								for (let ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
+										const css = style(ancestor);
+										if ((css.transform && css.transform !== 'none') ||
+												(css.filter && css.filter !== 'none') ||
+												(css.perspective && css.perspective !== 'none') ||
+												/\b(paint|layout|strict|content)\b/.test(css.contain || '') ||
+												/\b(transform|filter|perspective)\b/.test(css.willChange || '')) {
+												fixedEscapesOverflow = false;
+												break;
+										}
+								}
+						}
+						for (let current = node; current; current = current.parentElement) {
+								const css = style(current);
+								if (css.display === 'none' || css.contentVisibility === 'hidden')
+										return null;
+								const opacity = Number.parseFloat(css.opacity || '1');
+								if (Number.isFinite(opacity) && opacity <= 0)
+										return null;
+								if (current !== node && !fixedEscapesOverflow) {
+										const overflowX = css.overflowX || css.overflow || 'visible';
+										const overflowY = css.overflowY || css.overflow || 'visible';
+										let axes = '';
+										if (/^(hidden|clip|auto|scroll)$/.test(overflowX) ||
+												/^(hidden|clip|auto|scroll)$/.test(css.overflow))
+												axes += 'x';
+										if (/^(hidden|clip|auto|scroll)$/.test(overflowY) ||
+												/^(hidden|clip|auto|scroll)$/.test(css.overflow))
+												axes += 'y';
+										if (axes) {
+												const bounds = rect(current);
+												if (bounds)
+														box = this._intersect(box, bounds, axes);
+										}
+								}
+								const clip = css.clipPath || css.webkitClipPath;
+								if (box && clip && clip !== 'none') {
+										const bounds = rect(current);
+										if (bounds)
+												box = this._intersect(box, this._clipPathRect(css, bounds, current));
+								}
+								if (!box)
+										return null;
+						}
+						return box;
+				};
+				const obstacles = [], controlTops = [];
+				const add = (node, control = false) => {
+						const box = visible(node);
+						if (!box)
+								return false;
+						if (!seen.has(node)) {
+								obstacles.push(box);
+								seen.add(node);
+						}
+						if (control)
+								controlTops.push(box.top);
+						return true;
+				};
+				const controls = fullscreen ?
+						',.videoControlBar .controlItemContainer,.controlItemContainer.right,' +
+								'.controlItemContainer.left,.controlItemContainer.center' : '';
+				for (const node of container.querySelectorAll(this.SELECTORS + controls)) {
+						const control = fullscreen && node.classList.contains('controlItemContainer');
+						const css = style(node);
+						const comment = node.matches('.commentInputPanel');
+						const activeComment = comment && (node.matches(':focus-within,:hover') ||
+								node.classList.contains('is-popoverOpen'));
+						if (comment && !activeComment)
+								continue;
+						const children = [...node.querySelectorAll(this.ACTIONS)]
+								.filter(child => style(child).pointerEvents !== 'none' && visible(child));
+						const transparent = !this._opaqueBackground(css);
+						const childOnly = control || css.pointerEvents === 'none' || (!comment &&
+								transparent && children.length > 0);
+						if (childOnly) {
+								for (const child of children)
+										add(child, control);
+								if (!children.length && css.pointerEvents !== 'none')
+										add(node, control);
+								else if (!children.length && !control && !transparent)
+										add(node, false);
+						}
+						else {
+								const parentBox = visible(node);
+								if (parentBox) {
+										add(node, control);
+										for (const child of children) {
+												const childBox = visible(child);
+												if (childBox && this._intersect(childBox, parentBox)?.width !== childBox.width)
+														add(child, control);
+										}
+								}
+								else {
+										for (const child of children)
+												add(child, control);
+								}
+						}
+				}
+				return { obstacles, controlTops };
+		}
+}
+class SceneSearchVisibleRectCollector {
+		static seekGeometry({ seekElement, container, document, pointerClientX = null, unclipped = false }) {
+				const seek = seekElement.getBoundingClientRect?.();
+				const frame = container.getBoundingClientRect?.();
+				if (!seek || !frame || !Number.isFinite(seek.left) ||
+						!Number.isFinite(seek.width) || seek.width <= 0 ||
+						!Number.isFinite(frame.left) || !Number.isFinite(frame.width) ||
+						frame.width <= 0) {
+						return null;
+				}
+				const width = container.offsetWidth || frame.width;
+				const scale = width / frame.width;
+				const viewportWidth = document.defaultView?.innerWidth;
+				const visibleLeft = Number.isFinite(viewportWidth) ?
+						(unclipped ? -frame.left * scale : Math.max(0, -frame.left * scale)) : 0;
+				const visibleRight = Number.isFinite(viewportWidth) ?
+						(unclipped ? (viewportWidth - frame.left) * scale :
+								Math.min(width, (viewportWidth - frame.left) * scale)) : width;
+				return {
+						seekLeft: (seek.left - frame.left) * scale,
+						seekWidth: seek.width * scale,
+						pointerX: Number.isFinite(pointerClientX) ?
+								(pointerClientX - frame.left) * scale : null,
+						visibleLeft, visibleRight
+				};
+		}
+		static collect({ root = null, comment = null, twin = null, document }) {
+				const nodes = [
+						root,
+						root?.querySelector('.zenzaSceneActions'),
+						root?.querySelector('.zenzaSceneRemoteControls'),
+						comment, twin
+				].filter((node) => Boolean(node));
+				const regions = [];
+				for (const node of new Set(nodes)) {
+						if (node.hidden || node.closest('[hidden],.is-idle-suppressed'))
+								continue;
+						if (node.classList.contains('zenzaSceneCommentAttached') &&
+								!node.classList.contains('is-scui-active'))
+								continue;
+						const css = document?.defaultView?.getComputedStyle?.(node);
+						if (css && (css.display === 'none' || css.visibility === 'hidden' || css.opacity === '0'))
+								continue;
+						const rect = node.getBoundingClientRect?.();
+						if (rect?.width > 0 && rect.height > 0)
+								regions.push(rect);
+				}
+				return regions;
+		}
 }
 class SceneSearchIntegrationBridge {
-	constructor({classes,document,container,seekElement,commentPreviewElement,
-		legacyTooltipElement,getThumbnailElement,config,registry,clock,layoutSettings,
-		getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError,createCommentList}={}) {
-		if(!document||!container||!seekElement||!config||!registry||
-			typeof config.getValue!=='function'||typeof config.setValue!=='function'||
-			typeof onSeekRelative!=='function'||typeof onSeekAbsolute!=='function'){
-			throw new TypeError('Scene search integration requires DOM, config, registry and seek callbacks');
-		}
-		const required=['Controller','Interaction','IdleLimiter','SeekStepControl',
-			'CommentSearch','CommentSearchPanel','ShortcutRouter','VisibilityRegistry'];
-		if(!classes||required.some(name=>typeof classes[name]!=='function'&&
-			!(name==='VisibilityRegistry'&&typeof classes[name]?.connect==='function'))){
-			throw new TypeError('Missing scene-search integration dependencies');
-		}
-		this.document=document;
-		this.container=container;
-		this.seekElement=seekElement;
-		this._seekClientX=null;
-		this._commentPreviewElement=commentPreviewElement||null;
-		this._commentPreviewOriginal=null;
-		this._commentDock=null;
-		this._createCommentList=createCommentList||null;
-		this._twinList=null;
-		this._twinListCleanup=null;
-		this._commentHoverCleanup=null;
-		this._legacyTooltipElement=legacyTooltipElement||null;
-		this._legacyTooltipOriginal=null;
-		this._getThumbnailElement=typeof getThumbnailElement==='function'?
-			getThumbnailElement:null;
-		this._sharedThumbnail=null;
-		this.config=config;
-		this.registry=registry;
-		this.layoutSettings={...(layoutSettings||{}),
-			getSeekGeometry:()=>this._getSeekGeometry(),
-			getSeekGeometryUnclipped:()=>this._getSeekGeometry(true),
-			getLegacyTooltip:()=>this._legacyTooltipElement,
-			getLegacyComment:()=>this._commentPreviewElement,
-			getMiniCommentMode:()=>this.config.getValue('sceneSearch.miniCommentMode'),
-			...(config.resolveSceneSearch?{getAppearance:()=>config.resolveSceneSearch()}:{}),
-			getThumbnail:()=>this._getThumbnailElement?.(),
-			getSeekBarContainer:()=>this.seekElement.closest?.('.seekBarContainer')||null};
-		this._clock=clock||null;
-		this._classes=classes;
-		this._getChats=typeof getChats==='function'?getChats:()=>[];
-		this._getSeekTime=typeof getSeekTime==='function'?getSeekTime:null;
-		this._onSeekRelative=onSeekRelative;
-		this._onSeekAbsolute=onSeekAbsolute;
-		this._onError=typeof onError==='function'?onError:()=>{};
-		this._active=null;
-		this._cardCleanup=null;
-		this._visibility=null;
-		this._subscriptions=[];
-		this._activePointers=new Set();
-		this._onPointerFinish=this._finishPointer.bind(this);
-		this._running=false;
-		this._disposed=false;
-		this._style=null;
-		this._placementContext='normal';this._placementGeometry=null;this._placementHold=false;
-		this._seekListeners={
-			mouseenter:e=>{
-				this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
-				this.interaction.seekEnter(e);
-			},
-			mousemove:e=>{
-				this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
-				this.interaction.seekMove(e);
-				const seconds=this._getSeekTime?.(e);
-				if(Number.isFinite(seconds)&&seconds>=0){this.controller.setTime(seconds);}
-			},
-			mouseleave:e=>{
-				this.interaction.seekLeave(e);
-			},
-			pointerdown:e=>this._startPointer(e)
-		};
-		this.controller=new classes.Controller({
-			getPreference:key=>config.getValue(key),
-			resolvePreferences:config.resolveSceneSearch?()=>config.resolveSceneSearch():null,
-			createLayout:({id,mode})=>this._createLayout({id,mode}),
-			loadPreview:loadPreview||null,
-			onSeek:delta=>this._onSeekRelative(delta),
-			onError:(error,key)=>this._onError(error,key)
-		});
-		this.commentSearch=new classes.CommentSearch({
-			getChats:()=>this._getChats(),
-			getVideoId:()=>this.controller.snapshot.videoId,
-			seekTo:seconds=>this._onSeekAbsolute(seconds)
-		});
-		this.idleLimiter=new classes.IdleLimiter({
-			controller:this.controller,
-			getSeconds:()=>config.getValue('sceneSearch.idleHideSeconds'),
-			clock:this._clock||undefined,
-			onIdleHidden:hidden=>this._active?.root?.classList.toggle('is-idle-suppressed',hidden)
-		});
-		this.interaction=new classes.Interaction({
-			controller:this.controller,
-			getPreviewRect:()=>this._previewRects(),
-			subscribePointerMove:listener=>{
-				document.addEventListener('mousemove',listener,true);
-				return ()=>document.removeEventListener('mousemove',listener,true);
-			},
-			clock:this._clock||undefined,
-			idleLimiter:this.idleLimiter
-		});
-		this.router=new classes.ShortcutRouter({
-			controller:this.controller,interaction:this.interaction,
-			getPreference:key=>config.getValue(key),
-			setPreference:(key,value)=>key.startsWith('sceneSearch.')&&typeof config.persistSceneSearchSelection==='function'?
-				config.persistSceneSearchSelection({[key]:value}):config.setValue(key,value),
-			onToggleControls:()=>this._active?.root?.classList.toggle('is-expanded'),
-			onError:(error,key)=>this._onError(error,key)
-		});
-	}
-	_getSeekGeometry(unclipped=false) {
-		const seek=this.seekElement.getBoundingClientRect?.();
-		const frame=this.container.getBoundingClientRect?.();
-		if(!seek||!frame||!Number.isFinite(seek.left)||
-			!Number.isFinite(seek.width)||seek.width<=0||
-			!Number.isFinite(frame.left)||!Number.isFinite(frame.width)||
-			frame.width<=0){return null;}
-		const width=this.container.offsetWidth||frame.width;
-		const scale=width/frame.width;
-		const viewportWidth=this.document.defaultView?.innerWidth;
-		const visibleLeft=Number.isFinite(viewportWidth)?
-			(unclipped?-frame.left*scale:Math.max(0,-frame.left*scale)):0;
-		const visibleRight=Number.isFinite(viewportWidth)?
-			(unclipped?(viewportWidth-frame.left)*scale:
-				Math.min(width,(viewportWidth-frame.left)*scale)):width;
-		return {
-			seekLeft:(seek.left-frame.left)*scale,
-			seekWidth:seek.width*scale,
-			pointerX:Number.isFinite(this._seekClientX)?
-				(this._seekClientX-frame.left)*scale:null,
-			visibleLeft,visibleRight
-		};
-	}
-	_startPointer(e) {
-		if(this._disposed){return;}
-		const id=e?.pointerId??'main';
-		const empty=this._activePointers.size===0;
-		this._activePointers.add(id);
-		if(empty && this._activePointers.size===1){
-			this.document.addEventListener('pointerup',this._onPointerFinish,true);
-			this.document.addEventListener('pointercancel',this._onPointerFinish,true);
-			this.interaction.setDragging(true);
-		}
-	}
-	_finishPointer(e) {
-		const id=e?.pointerId??'main';
-		if(!this._activePointers.delete(id)){return;}
-		if(!this._activePointers.size){this._clearPointers();}
-	}
-	_clearPointers() {
-		const active=this._activePointers.size>0;
-		this._activePointers.clear();
-		this.document.removeEventListener('pointerup',this._onPointerFinish,true);
-		this.document.removeEventListener('pointercancel',this._onPointerFinish,true);
-		if(active || this._running){this.interaction.setDragging(false);this._resumePlacement();}
-	}
-	_createLayout({id,mode}) {
-		this._placementGeometry=null;this._placementResult=null;
-		if(id==='follow'||id==='fixed')return this._createModernLayout({id,mode});
-		if(id==='legacy')id='00';
-		const card=this.registry.create({id,mode,document:this.document,
-			container:this.container,settings:this.layoutSettings,
-			onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
-		const wired={
-			get root(){return card.root;},
-			mount:state=>{
-				if(id==='00'){
-					this._restoreSharedThumbnail();
-					this._restoreCommentPreviewDock();
-					this._restoreLegacyTooltip();
+		constructor({ classes, document, container, seekElement, commentPreviewElement, legacyTooltipElement, getThumbnailElement, config, registry, clock, layoutSettings, getChats, getSeekTime, onSeekRelative, onSeekAbsolute, loadPreview, onError, createCommentList } = {}) {
+				if (!document || !container || !seekElement || !config || !registry ||
+						typeof config.getValue !== 'function' || typeof config.setValue !== 'function' ||
+						typeof onSeekRelative !== 'function' || typeof onSeekAbsolute !== 'function') {
+						throw new TypeError('Scene search integration requires DOM, config, registry and seek callbacks');
 				}
-				card.mount(state);
-				if(id==='00'){
-					this._active=card;
-					this._mountLegacyControls(card);
-					return;
+				const required = ['Controller', 'Interaction', 'IdleLimiter', 'SeekStepControl',
+						'CommentSearch', 'CommentSearchPanel', 'ShortcutRouter', 'VisibilityRegistry'];
+				if (!classes || required.some(name => typeof classes[name] !== 'function' &&
+						!(name === 'VisibilityRegistry' && typeof classes[name]?.connect === 'function'))) {
+						throw new TypeError('Missing scene-search integration dependencies');
 				}
-				this._hideLegacyTooltip();
-				if(id!=='01'&&id!=='02'){
-					this.container.dataset.sceneSearchLayout=id;
-					this.container.dataset.sceneMode=mode;
-				}
-				this._active=card;
-				try{this._mountCardControls(card);}catch(error){
-					this._releaseCard(card);card.dispose();throw error;
-				}
-			},
-			renderTime:state=>wired.render(state,true),
-			render:(state,timeOnly=false)=>{
-				card.render(state);
-				if(id==='00')return; // Original tooltip/comment renderer owns UI00.
-				if(!timeOnly||state.commentListMode===true){
-					this._syncCommentPreviewDock(card,state);
-				}
-				if(id==='02'){
-					const player=this.container.getBoundingClientRect?.();
-					const windowHeight=this.document.defaultView?.innerHeight;
-					const width=player?.width||this.container.clientWidth||800;
-					const room=Number.isFinite(windowHeight)&&Number.isFinite(player?.bottom)?
-						windowHeight-player.bottom:0;
-					const enough=mode==='normal'&&room>=230;
-					this.container.dataset.scenePlacement=enough?'below':'visible-fallback';
-					this._updateTwinCommentPlacement(enough,player);
-				}
-				if(id!=='01'&&id!=='02'){
-					const width=this.container.offsetWidth||
-						this.container.getBoundingClientRect?.().width||
-						this.container.clientWidth||800;
-					this.container.dataset.sceneNarrow=String(width<580);
-					this.container.dataset.sceneWide=String(width>=980);
-					this.container.dataset.scenePlacement=
-						card.root?.dataset.scuiPlacement||'overlay';
-					if(id==='10'){
-						const raw=Number.parseFloat(card.root?.style.getPropertyValue('--scene-x'));
-						this.container.dataset.sceneCommentSide=Number.isFinite(raw)&&
-							raw>width*.55?'left':'right';
-					}
-				}
-				if(!timeOnly)this._visibility?.refresh?.();
-				if(card.root&&!timeOnly){
-					const reveal=this.config.getValue('sceneSearch.controlsReveal');
-					const animation=this.config.getValue('sceneSearch.animation');
-					card.root.dataset.sceneReveal=['click','always'].includes(reveal)?reveal:'hover-focus';
-					card.root.dataset.sceneAnimation=['off','full'].includes(animation)?animation:'subtle';
-				}
-			},
-			onPreview:(asset,request)=>{
-				if(id==='00')return; // Existing seekbar still owns storyboard canvas.
-				card.onPreview?.(asset,request);
-				if(this._sharedThumbnail?.node && card.root?.contains(this._sharedThumbnail.node)){
-					const slot=card.root.querySelector('.zenzaSceneImageBox');
-					if(slot){
-						const image=slot.querySelector('.zenzaSceneImage');
-						const placeholder=slot.querySelector('.zenzaSceneImagePlaceholder');
-						if(image){image.hidden=true;}
-						if(placeholder){placeholder.hidden=true;}
-					}
-				}
-			},
-			dispose:()=>{
-				if(id==='00'){
-					this._cardCleanup?.();
-					this._cardCleanup=null;
-					card.dispose(); // restores the exact original seekbar/comment owners
-					if(this._active===card)this._active=null;
-					return;
-				}
-				this._restoreCommentPreviewDock();
-				this._releaseCard(card);
-				card.dispose();
-				if(id==='02'){
-					delete this.container.dataset.scenePlacement;
-					this.container.style.removeProperty('--scui-twin-comment-top');
-				}
-				if(id!=='01'&&id!=='02'&&
-					this.container.dataset.sceneSearchLayout===id){
-					delete this.container.dataset.sceneSearchLayout;
-					delete this.container.dataset.sceneMode;
-					delete this.container.dataset.sceneNarrow;
-					delete this.container.dataset.sceneWide;
-					delete this.container.dataset.scenePlacement;
-					delete this.container.dataset.sceneCommentSide;
-				}
-			}
-		};
-		return wired;
-	}
-	_createModernLayout({id,mode}){
-		const d=this.document,portal=d.createElement('div');
-		portal.className='zenzaScenePreviewPortal zen-family';
-		portal.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
-		(d.fullscreenElement||d.body).append(portal);
-		portal.addEventListener('command',event=>{
-			event.stopPropagation();
-			this.container.dispatchEvent(new d.defaultView.CustomEvent('command',{detail:event.detail,bubbles:true,composed:true}));
-		});
-		const card=this.registry.create({id,mode,document:d,container:portal,settings:this.layoutSettings,
-			onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
-		let list=null;
-		const render=state=>{
-			const prefs=this.config.resolveSceneSearch();
-			if(prefs.listOpen&&!list&&this._createCommentList){
-				list=this._createCommentList(portal);card.setListView(list);
-			}
-			const returnListFocus=!prefs.listOpen&&card.root?.querySelector('.zenzaSceneListSlot')?.contains(d.activeElement);
-			if(!prefs.listOpen)this._commentPanel?.close();
-			card.render({...state,...prefs});
-			if(returnListFocus)card.root.querySelector('[data-scui-action="comment-toggle"]')?.focus();
-			if(card.root){
-				card.root.dataset.sceneReveal=this.config.getValue('sceneSearch.controlsReveal')||'hover-focus';
-				card.root.dataset.sceneAnimation=this.config.getValue('sceneSearch.animation')||'subtle';
-			}
-			this._visibility?.refresh?.();
-			this._placeModern(card,state);
-			if(!state.shown&&!state.pinned)this.interaction?.clearCorridor?.();
-		};
-		return {get root(){return card.root;},
-			mount:()=>{try{
-				card.mount();this._active=card;this._modernPortal=portal;
-				this._hideLegacyTooltip();this._mountCardControls(card);
-			}catch(error){this._releaseCard(card);card.dispose();portal.remove();throw error;}},
-			render,renderTime:render,onPreview:()=>this.refreshSharedThumbnail(),
-			dispose:()=>{
-				this._releaseCard(card);card.dispose();portal.remove();
-				this._modernPortal=null;this._placementResult=null;this._placementGeometry=null;
-			}};
-	}
-	updatePlacementContext({context='normal',interactionActive=false}={}){
-		if(this._disposed)return;
-		this._placementContext=['normal','small','fullscreen'].includes(context)?context:'normal';
-		this._placementHold=interactionActive;
-		this._placementGeometry=null;
-		this.idleLimiter.pause('player-manipulation',interactionActive);
-		if(this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
-	}
-	_placeModern(card,state){
-		if(!card.root||!this._classes.Placement)return;
-		const d=this.document,win=d.defaultView,portal=this._modernPortal;
-		const parent=d.fullscreenElement||d.body;
-		if(portal&&portal.parentNode!==parent)parent.append(portal);
-		if(!this._placementGeometry){
-			const player=(this.container.querySelector('.videoPlayer')||this.container).getBoundingClientRect();
-			const seekbar=this.seekElement.getBoundingClientRect();
-			const obstacles=[];
-			const fullscreen=this._placementContext==='fullscreen'||!!d.fullscreenElement;
-			const seekBottom=Number.isFinite(seekbar.bottom)?seekbar.bottom:seekbar.top+seekbar.height;
-			const seekWrap=this.seekElement.closest?.('.seekBarContainer');
-			const wrapRect=seekWrap?.getBoundingClientRect?.();
-			const wrapScale=wrapRect?.width>0&&seekWrap?.offsetWidth>0?
-				wrapRect.width/seekWrap.offsetWidth:1;
-			let previewAnchorTop=!fullscreen&&Number.isFinite(wrapRect?.top)?
-				wrapRect.top-14*wrapScale:seekBottom-24;
-			if(fullscreen){
-				const controls=this.container.querySelectorAll(
-					'.videoControlBar .controlItemContainer');
-				const bounds=[];
-				for(const row of controls){
-					for(const node of [row,...row.querySelectorAll('.scalingUI,.controlButton')]){
-						if(node.hidden||node.closest('[hidden]'))continue;
-						const style=win.getComputedStyle(node);
-						if(style.display==='none'||style.visibility==='hidden')continue;
-						const rect=node.getBoundingClientRect();
-						if(rect.width>0&&rect.height>0&&Number.isFinite(rect.top)){
-							bounds.push(rect.top);
-						}
-					}
-				}
-				if(bounds.length)previewAnchorTop=Math.min(previewAnchorTop,...bounds);
-			}
-			const controls=fullscreen?',.videoControlBar .controlItemContainer,.controlItemContainer.right,.controlItemContainer.left,.controlItemContainer.center':'';
-			for(const node of this.container.querySelectorAll(
-				'.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,.zenzaSmallModeAspectLockButton,.closeButton,.zenzaSmallModeCloseButton'+controls)){
-				const css=win.getComputedStyle(node),rect=node.getBoundingClientRect();
-				const idleComment=node.matches('.commentInputPanel')&&
-					!node.matches(':focus-within,:hover')&&
-					!node.classList.contains('is-popoverOpen');
-				if(!idleComment&&!node.hidden&&css.display!=='none'&&
-					css.visibility!=='hidden'&&css.opacity!=='0'&&
-					rect.width>0&&rect.height>0)obstacles.push(rect);
-			}
-			const origin=portal?.getBoundingClientRect()||{left:0,top:0,width:0,height:0};
-			this._placementGeometry={player,seekbar,obstacles,origin,previewAnchorTop,
-				viewport:{left:0,top:0,width:win.innerWidth,height:win.innerHeight}};
-		}
-		const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
-		const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
-		const input={...g,layout:state.layoutId,context:this._placementContext,
-			imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,listScale:prefs.listScale,
-			anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold,
-			footerHeight:64};
-		const result=this._classes.Placement.compute(input);
-		this._placementResult=result;card.fit(result);
-		const x=g.origin.width&&portal?.clientWidth?portal.clientWidth/g.origin.width:1;
-		const y=g.origin.height&&portal?.clientHeight?portal.clientHeight/g.origin.height:1;
-		card.root.style.left=(result.rect.left-g.origin.left)*x+'px';
-		card.root.style.top=(result.rect.top-g.origin.top)*y+'px';
-		card.root.style.width=result.rect.width+'px';card.root.style.height=result.rect.height+'px';
-		card.root.style.transformOrigin='0 0';card.root.style.transform='scale('+x+','+y+')';
-		card.root.dataset.sceneContext=this._placementContext;
-	}
-	_updateTwinCommentPlacement(below,player){
-		if(!below||!player){
-			this.container.style.removeProperty('--scui-twin-comment-top');
-			return;
-		}
-		const comment=this._twinList?.element||this._commentPreviewElement;
-		const owner=comment?.offsetParent||comment?.parentElement;
-		const origin=owner?.getBoundingClientRect?.();
-		if(!origin||!Number.isFinite(origin.top)||!Number.isFinite(player.bottom)){
-			return;
-		}
-		const scale=origin.width&&owner.offsetWidth?
-			owner.offsetWidth/origin.width:1;
-		const top=(player.bottom-origin.top)*scale+15;
-		if(Number.isFinite(top)){
-			this.container.style.setProperty('--scui-twin-comment-top',
-				Math.round(Math.max(0,top))+'px');
-		}
-	}
-	_onCardAction(action,context) {
-		if(action==='more'){this._resumePlacement();return;}
-		if(action==='comment-toggle'){
-			if(this.config.resolveSceneSearch?.()?.listAllowed===false)return;
-			this.config.setValue('enableCommentPreview',
-				this.config.getValue('enableCommentPreview')!==true);
-			this.controller.onPreferencesChanged('enableCommentPreview');
-			return;
-		}
-		if(action==='frame-seek'){
-			const seconds=context?.time;
-			if(!Number.isFinite(seconds)||seconds<0){return;}
-			const duration=typeof this.layoutSettings.getDuration==='function'?
-				this.layoutSettings.getDuration():this.layoutSettings.duration;
-			this._onSeekAbsolute(Number.isFinite(duration)&&duration>0?
-				Math.min(seconds,duration):seconds);
-			return;
-		}
-		const commands={
-			'seek-back':'sceneSearch-seekBack',
-			'seek-forward':'sceneSearch-seekForward',
-			pin:'sceneSearch-togglePin',
-			'comment-search':'sceneSearch-toggleCommentSearch'
-		};
-		if(action==='seek-step'){
-			this._stepWidget?.openMenu();
-			return;
-		}
-		if(commands[action]){this.router.handle(commands[action]);}
-	}
-	_mountCardControls(card) {
-		const root=card.root;
-		if(!root){throw new Error('Cannot wire unmounted scene card');}
-		const classNames={
-			pin:'zenzaSceneSearchPin',
-			'comment-toggle':'zenzaSceneCommentToggle',
-			'comment-search':'zenzaSceneCommentSearchToggle',
-			more:'zenzaSceneSearchMore'
-		};
-		for(const [action,css] of Object.entries(classNames)){
-			root.querySelector('[data-scui-action="'+action+'"]')?.classList.add(css);
-		}
-		const actionList=root.querySelector('.zenzaSceneActions');
-		if(!actionList){throw new Error('Scene controls missing');}
-		if(root.dataset.layout==='02'){
-			const foot=root.querySelector('.zenzaSceneFoot');
-			const more=actionList.querySelector('.scene-more');
-			if(foot&&more)foot.insertBefore(more,actionList);
-		}
-		actionList.classList.add('zenzaSceneSeekStepControl');
-		for(const [action,tag] of [
-			['seek-back','back'],['seek-forward','forward'],['seek-step','open']
-		]){
-			const button=root.querySelector('[data-scui-action="'+action+'"]');
-			if(button){button.dataset.scui=tag;}
-		}
-		const C=this._classes;
-		const step=new C.SeekStepControl({
-			document:this.document,
-			getSeconds:()=>this.config.getValue('sceneSearch.seekStepSeconds'),
-			setSeconds:value=>{
-				this.config.setValue('sceneSearch.seekStepSeconds',value);
-				this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds');
-			},
-			onSeek:delta=>this._onSeekRelative(delta),
-			onCompactChange:()=>this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds'),
-			onMenuChange:open=>{
-				if(this._disposed){return;}
-				this.idleLimiter.pause('step-menu',open);
-				if(open){this.interaction.previewEnter('step-menu');}
-				else{
-					this.interaction.previewLeave('step-menu');
-					const focused=this.document.activeElement;
-					if(root.contains(focused)&&focused.closest('[hidden]')){
-						this.interaction.previewFocus(false,root);
-					}
-				}
-			},
-			onError:error=>this._onError(error,'sceneSearch.seekStepSeconds')
-		});
-		const modern=root.classList.contains('zenzaSceneSharedPreview');
-		if(modern)step.updateFromConfig();else step.mount(actionList);
-		this._stepWidget=step;
-		const searchPanel=new C.CommentSearchPanel({
-			document:this.document,search:this.commentSearch,
-			onOpenChange:open=>{
-				const button=root.querySelector('[data-scui-action="comment-search"]');
-				button?.setAttribute('aria-expanded',String(open));
-				if(!open&&searchPanel.root?.contains(this.document.activeElement))button?.focus();
-			}
-		});
-		searchPanel.mount(modern?root.querySelector('.zenzaSceneListSlot'):root);
-		this._commentPanel=searchPanel;
-		this.router.seekStepControl=step;
-		this.router.commentSearchPanel=modern?{toggle:()=>{
-			if(this.config.resolveSceneSearch().listAllowed===false)return;
-			if(this.config.getValue('enableCommentPreview')!==true)this.config.setValue('enableCommentPreview',true);
-			searchPanel.toggle();
-		}}:searchPanel;
-		this._cardCleanup=this._bindPreviewSurface(root);
-		this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
-		this.refreshSharedThumbnail();
-	}
-	_mountLegacyControls(card) {
-		const nodes=[card?.root,this._commentPreviewElement].filter(Boolean);
-		let hovered=false,focused=false,active=false;
-		const owns=node=>nodes.some(root=>root===node||root.contains?.(node));
-		const sync=()=>{
-			const next=hovered||focused;
-			if(next===active)return;
-			active=next;
-			if(next)this.interaction.previewEnter();
-			else this.interaction.previewLeave();
-		};
-		const onEnter=()=>{hovered=true;sync();};
-		const onLeave=e=>{
-			if(owns(e?.relatedTarget))return;
-			hovered=false;sync();
-		};
-		const onFocusIn=()=>{focused=true;sync();};
-		const onFocusOut=e=>{
-			if(owns(e?.relatedTarget))return;
-			focused=false;sync();
-		};
-		const bindings=[
-			['mouseenter',onEnter],['mouseleave',onLeave],
-			['focusin',onFocusIn],['focusout',onFocusOut]
-		];
-		for(const node of nodes)for(const [key,handler] of bindings){
-			node.addEventListener(key,handler);
-		}
-		this._cardCleanup=()=>{
-			for(const node of nodes)for(const [key,handler] of bindings){
-				node.removeEventListener(key,handler);
-			}
-			if(active){active=false;this.interaction.previewLeave();}
-		};
-	}
-	_releaseCard(card) {
-		if(this._active!==card){return;}
-		this._restoreSharedThumbnail();
-		this._cardCleanup?.();
-		this._cardCleanup=null;
-		this._visibility?.dispose?.();
-		this._visibility=null;
-		this._commentPanel?.dispose?.();
-		this._commentPanel=null;
-		this._stepWidget?.dispose?.();
-		this._stepWidget=null;
-		this.router.seekStepControl=null;
-		this.router.commentSearchPanel=null;
-		this._active=null;
-	}
-	refreshSharedThumbnail() {
-		if(this._active?.setImage){
-			this._active.setImage(this._getThumbnailElement?.()||null);
-			return true;
-		}
-		if(['00','legacy'].includes(this.controller.snapshot.layoutId)){
-			this._active?.render?.(this.controller.snapshot);
-			return false;
-		}
-		if(!this._disposed&&this.controller.snapshot.layoutId==='07'){
-			this.controller.onPreferencesChanged('sceneSearch.idleHideSeconds');
-		}
-		if(this._disposed||!this._active?.root||!this._getThumbnailElement){
-			return false;
-		}
-		let node;
-		try{node=this._getThumbnailElement();}
-		catch(error){
-			this._restoreSharedThumbnail();
-			this._hideLegacyTooltip();
-			this._onError(error,'existing-seek-thumbnail');
-			return false;
-		}
-		if(!node||!node.parentNode){
-			this._restoreSharedThumbnail();
-			this._hideLegacyTooltip();
-			return false;
-		}
-		const slot=this._active.root.querySelector('.zenzaSceneImageBox');
-		if(!slot){return false;}
-		if(this._sharedThumbnail?.node===node&&slot.contains(node)){return true;}
-		if(!node.querySelector?.('canvas')){return false;}
-		this._restoreSharedThumbnail();
-		const parent=node.parentNode,nextSibling=node.nextSibling;
-		slot.appendChild(node); // Move the original worker canvas, never clone it.
-		this._sharedThumbnail={node,parent,nextSibling};
-		slot.querySelector('.zenzaSceneImage')?.setAttribute('hidden','');
-		slot.querySelector('.zenzaSceneImagePlaceholder')?.setAttribute('hidden','');
-		this._hideLegacyTooltip();
-		return true;
-	}
-	_restoreSharedThumbnail() {
-		const old=this._sharedThumbnail;
-		if(old){
-			if(old.parent?.insertBefore){
-				if(old.nextSibling?.parentNode===old.parent){
-					old.parent.insertBefore(old.node,old.nextSibling);
-				}else{old.parent.appendChild(old.node);}
-			}
-			this._sharedThumbnail=null;
-			const slot=this._active?.root?.querySelector('.zenzaSceneImageBox');
-			const image=slot?.querySelector('.zenzaSceneImage');
-			const placeholder=slot?.querySelector('.zenzaSceneImagePlaceholder');
-			const hasImage=!!image?.getAttribute('src');
-			if(image){image.hidden=!hasImage;}
-			if(placeholder){placeholder.hidden=hasImage;}
-		}
-	}
-	_hideLegacyTooltip() {
-		const tooltip=this._legacyTooltipElement;
-		if(!tooltip?.style||this._legacyTooltipOriginal){return;}
-		this._legacyTooltipOriginal={
-			hidden:tooltip.hidden,
-			display:tooltip.style.getPropertyValue('display'),
-			priority:tooltip.style.getPropertyPriority('display')
-		};
-		tooltip.hidden=true;
-		tooltip.style.setProperty('display','none','important');
-	}
-	_restoreLegacyTooltip() {
-		const tooltip=this._legacyTooltipElement,previous=this._legacyTooltipOriginal;
-		if(tooltip?.style&&previous){
-			if(previous.display){
-				tooltip.style.setProperty('display',previous.display,previous.priority);
-			}else{tooltip.style.removeProperty('display');}
-			tooltip.hidden=previous.hidden;
-		}
-		this._legacyTooltipOriginal=null;
-	}
-	_resumePlacement(){
-		if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
-	}
-	_bindPreviewSurface(node) {
-		let pointerFocus=false;
-		const enter=()=>{this.interaction.previewEnter(node);this._resumePlacement();};
-		const leave=e=>{
-			const active=this.document.activeElement;
-			const editing=active?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
-			if(pointerFocus&&node.contains(active)&&!editing){
-				active.blur?.();this.interaction.previewFocus(false,node);
-			}
-			this.interaction.previewLeave(node,e);this._resumePlacement();
-		};
-		const focus=()=>{this.interaction.previewFocus(true,node);this._resumePlacement();};
-		const blur=e=>{
-			if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
-		};
-		const pointer=e=>{pointerFocus=true;this._startPointer(e);};
-		const keyboard=()=>{pointerFocus=false;};
-		this.document.addEventListener('keydown',keyboard,true);
-		const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
-			['pointerdown',pointer]];
-		for(const [event,fn] of listeners)node.addEventListener(event,fn);
-		return ()=>{
-			this.document.removeEventListener('keydown',keyboard,true);
-			for(const [event,fn] of listeners)node.removeEventListener(event,fn);
-			this.interaction.previewLeave(node);
-			this.interaction.previewFocus(false,node);
-		};
-	}
-	_restoreTwinList() {
-		const handle=this._twinList;
-		if(!handle)return;
-		this._twinList=null;
-		handle.element?.classList.remove('is-scui-active');
-		this._twinListCleanup?.();
-		this._twinListCleanup=null;
-		handle.dispose();
-	}
-	_previewRects() {
-		if(this._active?.getRects)return this._active.getRects();
-		const root=this._active?.root;
-		const nodes=[root,root?.querySelector('.zenzaSceneActions'),
-			root?.querySelector('.zenzaSceneRemoteControls'),this._commentPreviewElement,
-			this._twinList?.element].filter(Boolean);
-		const regions=[];
-		for(const node of new Set(nodes)){
-			if(node.hidden||node.closest('[hidden],.is-idle-suppressed'))continue;
-			if(node.classList.contains('zenzaSceneCommentAttached')&&
-				!node.classList.contains('is-scui-active'))continue;
-			const css=this.document.defaultView?.getComputedStyle?.(node);
-			if(css&&(css.display==='none'||css.visibility==='hidden'||css.opacity==='0'))continue;
-			const rect=node.getBoundingClientRect?.();
-			if(rect?.width>0&&rect.height>0)regions.push(rect);
-		}
-		return regions;
-	}
-	_syncCommentPreviewDock(card,state) {
-		const node=this._commentPreviewElement,root=card?.root;
-		if(!node||!root)return;
-		if(!this._commentDock){
-			const computed=this.document.defaultView?.getComputedStyle?.(node);
-			const props=['font-family','font-size','line-height',
-				'font-weight','letter-spacing','word-spacing'];
-			const typography=props.map(name=>({
-				name,value:node.style.getPropertyValue(name),
-				priority:node.style.getPropertyPriority(name),
-				native:computed?.getPropertyValue(name)||''
-			}));
-			this._commentDock={parent:node.parentNode,next:node.nextSibling,
-				typography};
-			for(const {name,native} of typography){
-				if(native)node.style.setProperty(name,native);
-			}
-			this._commentHoverCleanup=this._bindPreviewSurface(node);
-		}
-		const listRequested=this.config.getValue('enableCommentPreview')===true;
-		const twin=root.dataset.layout==='02'&&typeof this._createCommentList==='function';
-		if(twin&&listRequested&&!this._twinList){
-			this._twinList=this._createCommentList(this.container)||null;
-			if(this._twinList?.element){
-				const panel=this._twinList.element;
-				panel.classList.add('zenzaSceneTwinList','zenzaSceneCommentAttached','is-scui-list');
-				panel.tabIndex=0;
-				panel.setAttribute('aria-label','シーンのコメント一覧');
-				for(const {name,native} of this._commentDock.typography||[]){
-					if(native)panel.style.setProperty(name,native);
-				}
-				this._twinListCleanup=this._bindPreviewSurface(panel);
-			}
-		}
-		if(!listRequested)this._restoreTwinList();
-		const list=listRequested&&!(twin&&this._twinList);
-		const classic=root.dataset.layout==='01';
-		const image=root.querySelector('.zenzaSceneImageBox');
-		const target=classic?(list?root:image):
-			list?this.container:image;
-		if(target&&node.parentNode!==target)target.appendChild(node);
-		node.classList.add('zenzaSceneCommentAttached');
-		node.classList.toggle('is-scui-list',list);
-		node.classList.toggle('is-scui-flow',!list);
-		node.classList.toggle('is-scui-classic-side',classic&&list);
-		const active=(state?.shown!==false||state?.pinned===true)&&
-			this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
-			!root.classList.contains('is-idle-suppressed');
-		node.classList.toggle('is-scui-active',active);
-		if(this._twinList?.element){
-			this._twinList.element.classList.toggle('is-scui-active',active&&listRequested);
-		}
-		if(twin){
-			const toggle=root.querySelector('[data-scui-action="comment-toggle"]');
-			const label=listRequested?'コメント一覧を閉じる':'コメント一覧を表示';
-			toggle?.setAttribute('aria-label',label);
-			toggle?.setAttribute('title',label);
-			toggle?.setAttribute('aria-expanded',String(listRequested));
-		}
-		if(classic){
-			if(list)this._positionClassicCommentSide(root,list);
-			else root.dataset.scuiSidePlacement='overlay';
-		}else if(list){
-			const x=Number.parseFloat(root.style.getPropertyValue('--scene-x'));
-			if(Number.isFinite(x))this.container.style.setProperty('--scui-list-x',x+'px');
-		}
-	}
-	_positionClassicCommentSide(root,list) {
-		const rect=root.getBoundingClientRect?.();
-		const viewport=this.document.defaultView?.innerWidth||
-			this.document.documentElement?.clientWidth||0;
-		if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
-			!Number.isFinite(viewport)||viewport<=0)return;
-		const scale=rect.width>0&&root.offsetWidth>0?
-			rect.width/root.offsetWidth:1;
-		const configuredGap=Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
-		const configuredWidth=Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
-		const gap=Number.isFinite(configuredGap)?configuredGap:8;
-		const margin=8;
-		const room=(viewport-margin-rect.right-gap*scale)/scale;
-		const panelWidth=Number.isFinite(configuredWidth)&&configuredWidth>0?
-			configuredWidth:Math.min(list?350:180,Math.max(1,room));
-		const cardWidth=rect.width/scale;
-		const left=(root.offsetWidth||cardWidth)+gap;
-		root.dataset.scuiSidePlacement='right';
-		root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
-		root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
-	}
-	_restoreCommentPreviewDock(){
-		this._restoreTwinList();
-		const old=this._commentDock,node=this._commentPreviewElement;
-		if(!old||!node)return;
-		this._commentHoverCleanup?.();
-		this._commentHoverCleanup=null;
-		node.classList.remove('zenzaSceneCommentAttached','is-scui-flow',
-			'is-scui-list','is-scui-active','is-scui-classic-side');
-		if(old.parent){
-			if(old.next?.parentNode===old.parent)old.parent.insertBefore(node,old.next);
-			else old.parent.appendChild(node);
-		}
-		for(const {name,value,priority} of old.typography||[]){
-			if(value)node.style.setProperty(name,value,priority);
-			else node.style.removeProperty(name);
-		}
-		this.container.style.removeProperty('--scui-list-x');
-		this._commentDock=null;
-	}
-	_syncCommentPreviewVisibility() {
-		if(this.config.resolveSceneSearch)return; // Effective state belongs to shared view / legacy adapter.
-		const node=this._commentPreviewElement;
-		if(!node?.style){return;}
-		const visible=this.config.getValue('sceneSearch.commentPreviewVisible')!==false;
-		if(!visible){
-			if(!this._commentPreviewOriginal){
-				this._commentPreviewOriginal={
-					hidden:node.hidden,
-					display:node.style.getPropertyValue('display'),
-					priority:node.style.getPropertyPriority('display')
+				this.document = document;
+				this.container = container;
+				this.seekElement = seekElement;
+				this._seekClientX = null;
+				this._commentPreviewElement = commentPreviewElement || null;
+				this._commentPreviewOriginal = null;
+				this._commentDock = null;
+				this._createCommentList = createCommentList || null;
+				this._twinList = null;
+				this._twinListCleanup = null;
+				this._commentHoverCleanup = null;
+				this._legacyTooltipElement = legacyTooltipElement || null;
+				this._legacyTooltipOriginal = null;
+				this._getThumbnailElement = typeof getThumbnailElement === 'function' ?
+						getThumbnailElement : null;
+				this._sharedThumbnail = null;
+				this.config = config;
+				this.registry = registry;
+				this.layoutSettings = { ...(layoutSettings || {}),
+						getSeekGeometry: () => this._getSeekGeometry(),
+						getSeekGeometryUnclipped: () => this._getSeekGeometry(true),
+						getLegacyTooltip: () => this._legacyTooltipElement,
+						getLegacyComment: () => this._commentPreviewElement,
+						getMiniCommentMode: () => this.config.getValue('sceneSearch.miniCommentMode'),
+						...(config.resolveSceneSearch ? { getAppearance: () => config.resolveSceneSearch() } : {}),
+						getThumbnail: () => this._getThumbnailElement?.(),
+						getSeekBarContainer: () => this.seekElement.closest?.('.seekBarContainer') || null };
+				this._clock = clock || null;
+				this._classes = classes;
+				this._getChats = typeof getChats === 'function' ? getChats : () => [];
+				this._getSeekTime = typeof getSeekTime === 'function' ? getSeekTime : null;
+				this._onSeekRelative = onSeekRelative;
+				this._onSeekAbsolute = onSeekAbsolute;
+				this._onError = typeof onError === 'function' ? onError : () => { };
+				this._cleanup = new SceneSearchLayoutResources((error, key) => this._onError(error, key));
+				this._active = null;
+				this._cardCleanup = null;
+				this._visibility = null;
+				this._subscriptions = [];
+				this._running = false;
+				this._disposed = false;
+				this._style = null;
+				this._placementContext = 'normal';
+				this._placementGeometry = null;
+				this._placementHold = false;
+				this._seekListeners = {
+						mouseenter: e => {
+								if (this._disposed)
+										return;
+								this._seekClientX = Number.isFinite(e?.clientX) ? e.clientX : null;
+								this.interaction.seekEnter(e);
+						},
+						mousemove: e => {
+								if (this._disposed)
+										return;
+								this._seekClientX = Number.isFinite(e?.clientX) ? e.clientX : null;
+								this.interaction.seekMove(e);
+								const seconds = this._getSeekTime?.(e);
+								if (Number.isFinite(seconds) && seconds >= 0) {
+										this.controller.setTime(seconds);
+								}
+						},
+						mouseleave: e => {
+								if (this._disposed)
+										return;
+								this.interaction.seekLeave(e);
+						},
+						pointerdown: e => this._startPointer(e)
 				};
-			}
-			node.hidden=true;
-			node.style.setProperty('display','none','important');
-		}else{
-			this._restoreCommentPreviewVisibility();
+				this.controller = new classes.Controller({
+						getPreference: (key) => config.getValue(key),
+						resolvePreferences: config.resolveSceneSearch ? () => config.resolveSceneSearch() : null,
+						createLayout: ({ id, mode }) => this._createLayout({ id, mode }),
+						loadPreview: loadPreview || null,
+						onSeek: (delta) => this._onSeekRelative(delta),
+						onError: (error, key) => this._onError(error, key)
+				});
+				this.commentSearch = new classes.CommentSearch({
+						getChats: () => this._getChats(),
+						getVideoId: () => this.controller.snapshot.videoId,
+						seekTo: (seconds) => this._onSeekAbsolute(seconds)
+				});
+				this.idleLimiter = new classes.IdleLimiter({
+						controller: this.controller,
+						getSeconds: () => config.getValue('sceneSearch.idleHideSeconds'),
+						clock: this._clock || undefined,
+						onIdleHidden: (hidden) => this._active?.root?.classList.toggle('is-idle-suppressed', hidden)
+				});
+				this.interaction = new classes.Interaction({
+						controller: this.controller,
+						getPreviewRect: () => this._previewRects(),
+						subscribePointerMove: (listener) => {
+								document.addEventListener('mousemove', listener, true);
+								return () => document.removeEventListener('mousemove', listener, true);
+						},
+						clock: this._clock || undefined,
+						idleLimiter: this.idleLimiter
+				});
+				this.router = new classes.ShortcutRouter({
+						controller: this.controller, interaction: this.interaction,
+						getPreference: (key) => config.getValue(key),
+						setPreference: (key, value) => key.startsWith('sceneSearch.') && typeof config.persistSceneSearchSelection === 'function' ?
+								config.persistSceneSearchSelection({ [key]: value }) : config.setValue(key, value),
+						onToggleControls: () => this._active?.root?.classList.toggle('is-expanded'),
+						onError: (error, key) => this._onError(error, key)
+				});
 		}
-	}
-	_restoreCommentPreviewVisibility() {
-		const node=this._commentPreviewElement;
-		const old=this._commentPreviewOriginal;
-		if(!node?.style||!old){return;}
-		if(old.display){node.style.setProperty('display',old.display,old.priority);}
-		else{node.style.removeProperty('display');}
-		node.hidden=old.hidden;
-		this._commentPreviewOriginal=null;
-	}
-	static validSavedPreference(key,value) {
-		if(key==='sceneSearch.presentation.normal'||key==='sceneSearch.presentation.fullscreen')
-			return ['follow','fixed','legacy'].includes(value);
-		if(key==='sceneSearch.enabled'||key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
-		if(key==='sceneSearch.commentListScale')return Number.isInteger(value)&&value>=100&&value<=200;
-		if(key==='sceneSearch.thumbnailScale')return Number.isInteger(value)&&value>=50&&value<=200;
-		if(key==='sceneSearch.commentListBackgroundOpacity')return Number.isInteger(value)&&value>=0&&value<=100;
-		if(key==='sceneSearch.layout.normal'||key==='sceneSearch.layout.fullscreen'){
-			return typeof value==='string'&&/^(00|0[1-9]|10)$/.test(value);
+		_getSeekGeometry(unclipped = false) {
+				return SceneSearchVisibleRectCollector.seekGeometry({
+						seekElement: this.seekElement, container: this.container,
+						document: this.document, pointerClientX: this._seekClientX, unclipped
+				});
 		}
-		if(key==='sceneSearch.miniCommentMode'){
-			return ['flow','static','hidden'].includes(value);
-		}
-		if(key==='enableCommentPreview'||key==='sceneSearch.layout.linkFullscreen'||
-			key==='sceneSearch.commentPreviewVisible'){
-			return typeof value==='boolean';
-		}
-		if(key==='sceneSearch.seekStepSeconds'){
-			return Number.isSafeInteger(value)&&value>=0&&value<=600;
-		}
-		if(key==='sceneSearch.idleHideSeconds'){
-			return typeof value==='number'&&Number.isFinite(value)&&value>=0&&
-				value<=30&&Number.isInteger(value*2);
-		}
-		if(key==='sceneSearch.controlsReveal')return ['hover-focus','click','always'].includes(value);
-		if(key==='sceneSearch.animation')return ['off','subtle','full'].includes(value);
-		return false;
-	}
-	_refreshSavedPreferenceViews(keys) {
-		if(this._disposed||!keys.length){return;}
-		const layoutKey=keys.find(key=>key.startsWith('sceneSearch.layout.')||key.startsWith('sceneSearch.presentation.'));
-		this.controller.onPreferencesChanged(layoutKey||keys[0]);
-		if(keys.includes('sceneSearch.commentPreviewVisible'))this._syncCommentPreviewVisibility();
-		if(keys.includes('sceneSearch.idleHideSeconds'))this.interaction.idlePreferencesChanged();
-		if(keys.includes('sceneSearch.seekStepSeconds'))this._stepWidget?.updateFromConfig();
-	}
-	_connectSavedPreferences(keys) {
-		const win=this.document.defaultView,config=this.config;
-		if(!win?.addEventListener||!config.storage||
-			typeof config.getStorageKey!=='function'||typeof config.refresh!=='function')return;
-		const allowed=new Set(keys);
-		const storageKeys=new Map(keys.map(key=>[config.getStorageKey(key),key]));
-		let queue=Promise.resolve();
-		const sync=async requested=>{
-			if(this._disposed)return;
-			const changes=[],saved={},before={}; // DataStorage.refresh requires hasOwnProperty.
-			for(const key of requested){
-				const sk=config.getStorageKey(key),raw=config.storage[sk];
-				const value=raw===undefined||raw===null?config.default?.[key]:JSON.parse(raw);
-				if(!SceneSearchIntegrationBridge.validSavedPreference(key,value)||
-					(config.options?.validateImport&&!config.options.validateImport(key,value))){
-					throw new TypeError('Invalid saved scene preference: '+key);
+		_startPointer(e) {
+				if (this._disposed) {
+						return;
 				}
-				const presenceSensitive=typeof config.resolveSceneSearch==='function'&&[
-					'sceneSearch.enabled','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen','sceneSearch.miniCommentVisible'
-				].includes(key);
-				if(Object.is(value,config.getValue(key))&&!presenceSensitive)continue;
-				saved[sk]=JSON.stringify(value);before[sk]=JSON.stringify(config.getValue(key));
-				changes.push([key,value]);
-			}
-			if(this._disposed||!changes.length)return;
-			const loaded=[];
-			try{
-				for(const [key] of changes){
-					if(this._disposed)return;
-					loaded.push(key);
-					await config.refresh(key,saved); // read-only, no setValue/localStorage echo
+				this.interaction.startNativePointer(e, this.document, () => this._clearPointers());
+		}
+		_clearPointers() {
+				const active = this.interaction.clearNativePointers();
+				if (active || this._running) {
+						this.interaction.setDragging(false);
+						this._resumePlacement();
 				}
-			}catch(error){
-				for(const key of loaded){
-					try{await config.refresh(key,before);}catch(_){}
-				}
-				throw error;
-			}
-			if(this._disposed)return;
-			this._externalSettingsBatch=true;
-			try{
-				config.emit?.('change',new Map(changes));
-				for(const [key,value] of changes){
-					config.emit?.('update',key,value);
-					config.emit?.('update-'+key,value);
-				}
-			}finally{this._externalSettingsBatch=false;}
-			this._refreshSavedPreferenceViews(changes.map(([key])=>key));
-		};
-		const enqueue=requested=>{
-			if(this._disposed||!Array.isArray(requested))return;
-			const selected=[...new Set(requested.filter(key=>allowed.has(key)))];
-			if(!selected.length)return;
-			queue=queue.then(()=>sync(selected)).catch(error=>{
-				if(!this._disposed)this._onError(error,'saved-scene-settings');
-			});
-		};
-		const onSaved=event=>enqueue(event.detail?.keys);
-		const onStorage=event=>{
-			if(event.storageArea&&event.storageArea!==config.storage)return;
-			if(event.key===null){enqueue(keys);return;}
-			const key=storageKeys.get(event.key);if(key)enqueue([key]);
-		};
-		win.addEventListener('ZenzaWatch-advanced-settings-saved',onSaved);
-		win.addEventListener('storage',onStorage);
-		this._savedPreferencesCleanup=()=>{
-			win.removeEventListener('ZenzaWatch-advanced-settings-saved',onSaved);
-			win.removeEventListener('storage',onStorage);
-		};
-	}
-	start(mode='normal') {
-		if(this._disposed){throw new Error('Integration bridge disposed');}
-		if(this._running){return this.controller.snapshot;}
-		this._running=true;
-		const style=this.document.createElement('style');
-		style.dataset.scuiBridgeStyle='1';
-		style.textContent=SceneSearchIntegrationBridge.CSS;
-		this.document.head.appendChild(style);
-		this._style=style;
-		try{
-			this.controller.start(mode);
-			for(const [event,handler] of Object.entries(this._seekListeners)){
-				this.seekElement.addEventListener(event,handler,event==='mousemove');
-			}
-			const keys=['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
-				'sceneSearch.enabled','sceneSearch.commentListScale','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
-				'sceneSearch.thumbnailScale','sceneSearch.commentListBackgroundOpacity',
-				'sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
-				'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
-				'sceneSearch.commentPreviewVisible','sceneSearch.miniCommentMode','sceneSearch.idleHideSeconds',
-				'sceneSearch.controlsReveal','sceneSearch.animation','enableCommentPreview'];
-			if(typeof this.config.onkey==='function'){
-				for(const key of keys){
-					const callback=()=>{
-						if(this._disposed||this._externalSettingsBatch)return;
-						if(key.startsWith('sceneSearch.presentation.')||key.startsWith('sceneSearch.layout.'))this.interaction.reset();
-						this.controller.onPreferencesChanged(key);
-						if(key==='sceneSearch.commentPreviewVisible'){
-							this._syncCommentPreviewVisibility();
+		}
+		_createLayout({ id, mode }) {
+				this._cleanup.retry();
+				this._placementGeometry = null;
+				this._placementResult = null;
+				if (id === 'follow' || id === 'fixed')
+						return this._createModernLayout({ id, mode });
+				if (id === 'legacy')
+						id = '00';
+				const card = this.registry.create({ id, mode, document: this.document,
+						container: this.container, settings: this.layoutSettings,
+						onAction: (action, ctx, event) => this._onCardAction(action, ctx, event) });
+				let layoutDisposed = false;
+				const wired = {
+						get root() { return card.root; },
+						mount: (state) => {
+								try {
+										if (id === '00') {
+												this._restoreSharedThumbnail();
+												this._restoreCommentPreviewDock();
+												this._restoreLegacyTooltip();
+										}
+										card.mount(state);
+										if (id === '00') {
+												this._active = card;
+												this._mountLegacyControls(card);
+												return;
+										}
+										this._active = card;
+										this._hideLegacyTooltip();
+										if (id !== '01' && id !== '02') {
+												this.container.dataset.sceneSearchLayout = id;
+												this.container.dataset.sceneMode = mode;
+										}
+										this._mountCardControls(card);
+								}
+								catch (error) {
+										wired.dispose();
+										throw error;
+								}
+						},
+						renderTime: (state) => wired.render(state, true),
+						render: (state, timeOnly = false) => {
+								if (this._disposed)
+										return;
+								card.render(state);
+								if (id === '00')
+										return; // Original tooltip/comment renderer owns UI00.
+								if (!timeOnly || state.commentListMode === true) {
+										this._syncCommentPreviewDock(card, state);
+								}
+								if (id === '02') {
+										const player = this.container.getBoundingClientRect?.();
+										const windowHeight = this.document.defaultView?.innerHeight;
+										const width = player?.width || this.container.clientWidth || 800;
+										const room = Number.isFinite(windowHeight) && Number.isFinite(player?.bottom) ?
+												windowHeight - player.bottom : 0;
+										const enough = mode === 'normal' && room >= 230;
+										this.container.dataset.scenePlacement = enough ? 'below' : 'visible-fallback';
+										this._updateTwinCommentPlacement(enough, player);
+								}
+								if (id !== '01' && id !== '02') {
+										const width = this.container.offsetWidth ||
+												this.container.getBoundingClientRect?.().width ||
+												this.container.clientWidth || 800;
+										this.container.dataset.sceneNarrow = String(width < 580);
+										this.container.dataset.sceneWide = String(width >= 980);
+										this.container.dataset.scenePlacement =
+												card.root?.dataset.scuiPlacement || 'overlay';
+										if (id === '10') {
+												const raw = Number.parseFloat(card.root?.style.getPropertyValue('--scene-x'));
+												this.container.dataset.sceneCommentSide = Number.isFinite(raw) &&
+														raw > width * .55 ? 'left' : 'right';
+										}
+								}
+								if (!timeOnly)
+										this._visibility?.refresh?.();
+								if (card.root && !timeOnly) {
+										const reveal = this.config.getValue('sceneSearch.controlsReveal');
+										const animation = this.config.getValue('sceneSearch.animation');
+										card.root.dataset.sceneReveal = ['click', 'always'].includes(reveal) ? reveal : 'hover-focus';
+										card.root.dataset.sceneAnimation = ['off', 'full'].includes(animation) ? animation : 'subtle';
+								}
+						},
+						onPreview: (asset, request) => {
+								if (this._disposed || id === '00')
+										return; // Existing seekbar still owns storyboard canvas.
+								card.onPreview?.(asset, request);
+								if (this._sharedThumbnail?.node && card.root?.contains(this._sharedThumbnail.node)) {
+										const slot = card.root.querySelector('.zenzaSceneImageBox');
+										if (slot) {
+												const image = slot.querySelector('.zenzaSceneImage');
+												const placeholder = slot.querySelector('.zenzaSceneImagePlaceholder');
+												if (image) {
+														image.hidden = true;
+												}
+												if (placeholder) {
+														placeholder.hidden = true;
+												}
+										}
+								}
+						},
+						dispose: () => {
+								if (layoutDisposed)
+										return;
+								layoutDisposed = true;
+								this._releaseCard(card);
+								this._cleanup.release(() => card.dispose(), 'scene-layout-' + id);
+								if (id === '00')
+										return;
+								if (id === '02') {
+										delete this.container.dataset.scenePlacement;
+										this.container.style.removeProperty('--scui-twin-comment-top');
+								}
+								if (id !== '01' && id !== '02' &&
+										this.container.dataset.sceneSearchLayout === id) {
+										delete this.container.dataset.sceneSearchLayout;
+										delete this.container.dataset.sceneMode;
+										delete this.container.dataset.sceneNarrow;
+										delete this.container.dataset.sceneWide;
+										delete this.container.dataset.scenePlacement;
+										delete this.container.dataset.sceneCommentSide;
+								}
 						}
-						if(key==='sceneSearch.idleHideSeconds')this.interaction.idlePreferencesChanged();
-						if(key==='sceneSearch.seekStepSeconds')this._stepWidget?.updateFromConfig();
-					};
-					this.config.onkey(key,callback);
-					this._subscriptions.push([key,callback]);
+				};
+				return wired;
+		}
+		_createModernLayout({ id, mode }) {
+				const d = this.document, portal = d.createElement('div');
+				portal.className = 'zenzaScenePreviewPortal zen-family';
+				portal.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
+				portal.addEventListener('command', event => {
+						event.stopPropagation();
+						this.container.dispatchEvent(new d.defaultView.CustomEvent('command', { detail: event.detail, bubbles: true, composed: true }));
+				});
+				let card;
+				try {
+						(d.fullscreenElement || d.body).append(portal);
+						card = this.registry.create({ id, mode, document: d, container: portal, settings: this.layoutSettings,
+								onAction: (action, ctx, event) => this._onCardAction(action, ctx, event) });
 				}
-			}
-			this._connectSavedPreferences(keys);
-			this._syncCommentPreviewVisibility();
-		}catch(error){
-			this.dispose();
-			throw error;
+				catch (error) {
+						this._cleanup.release(() => portal.remove(), 'scene-preview-portal');
+						throw error;
+				}
+				let list = null, layoutDisposed = false;
+				const dispose = () => {
+						if (layoutDisposed)
+								return;
+						layoutDisposed = true;
+						this._releaseCard(card);
+						this._cleanup.release(() => card.dispose(), 'scene-layout-' + id);
+						this._cleanup.release(() => portal.remove(), 'scene-preview-portal');
+						if (this._modernPortal === portal)
+								this._modernPortal = null;
+						this._placementResult = null;
+						this._placementGeometry = null;
+				};
+				const render = (state) => {
+						if (this._disposed)
+								return;
+						const prefs = this.config.resolveSceneSearch();
+						if (prefs.listOpen && !list && this._createCommentList) {
+								const candidate = this._createCommentList(portal);
+								try {
+										card.setListView(candidate);
+										list = candidate;
+								}
+								catch (error) {
+										if (candidate)
+												this._cleanup.release(() => candidate.dispose(), 'scene-new-comment-list');
+										dispose();
+										throw error;
+								}
+						}
+						const returnListFocus = !prefs.listOpen && card.root?.querySelector('.zenzaSceneListSlot')?.contains(d.activeElement);
+						if (!prefs.listOpen)
+								this._commentPanel?.close();
+						card.render({ ...state, ...prefs });
+						if (returnListFocus)
+								card.root.querySelector('[data-scui-action="comment-toggle"]')?.focus();
+						if (card.root) {
+								card.root.dataset.sceneReveal = this.config.getValue('sceneSearch.controlsReveal') || 'hover-focus';
+								card.root.dataset.sceneAnimation = this.config.getValue('sceneSearch.animation') || 'subtle';
+						}
+						this._visibility?.refresh?.();
+						this._placeModern(card, state);
+						if (!state.shown && !state.pinned)
+								this.interaction?.clearCorridor?.();
+				};
+				return { get root() { return card.root; },
+						mount: () => {
+								try {
+										card.mount();
+										this._active = card;
+										this._modernPortal = portal;
+										this._hideLegacyTooltip();
+										this._mountCardControls(card);
+								}
+								catch (error) {
+										dispose();
+										throw error;
+								}
+						},
+						render, renderTime: render, onPreview: () => this.refreshSharedThumbnail(),
+						dispose };
 		}
-		return this.controller.snapshot;
-	}
-	setMode(mode){
-		this._clearPointers();
-		this.interaction.reset();
-		return this.controller.setMode(mode);
-	}
-	setVideo(videoId){
-		this._clearPointers();
-		this.interaction.reset();
-		this.commentSearch.reset();
-		return this.controller.onVideoChange(videoId);
-	}
-	setTime(seconds){return this.controller.setTime(seconds);}
-	previewAt(seconds,token){
-		const promise=this.controller.previewAt(seconds);
-		return Promise.resolve(promise).then(ok=>{
-			if(ok && token!==undefined)this.interaction.thumbnailChanged(token);
-			return ok;
-		});
-	}
-	get state(){return this.controller.snapshot;}
-	handleShortcut(command){return this.router.handle(command);}
-	dispose(){
-		if(this._disposed){return;}
-		this._clearPointers();
-		this._disposed=true;
-		this._restoreCommentPreviewDock();
-		this._savedPreferencesCleanup?.();
-		this._savedPreferencesCleanup=null;
-		this._restoreSharedThumbnail();
-		this._restoreLegacyTooltip();
-		this._restoreCommentPreviewVisibility();
-		if(this._running){
-			for(const [event,handler] of Object.entries(this._seekListeners)){
-				this.seekElement.removeEventListener(event,handler,event==='mousemove');
-			}
+		updatePlacementContext({ context = 'normal', interactionActive = false } = {}) {
+				if (this._disposed)
+						return;
+				this._placementContext = ['normal', 'small', 'fullscreen'].includes(context) ? context : 'normal';
+				this._placementHold = interactionActive;
+				this._placementGeometry = null;
+				this.idleLimiter.pause('player-manipulation', interactionActive);
+				if (this._active?.fit)
+						this._placeModern(this._active, this.controller.snapshot);
 		}
-		this.interaction.dispose();
-		this.controller.dispose();
-		this.commentSearch.dispose();
-		if(typeof this.config.offkey==='function'){
-			for(const [key,handler] of this._subscriptions){
-				this.config.offkey(key,handler);
-			}
+		_placeModern(card, state) {
+				if (!card.root || !this._classes.Placement)
+						return;
+				const d = this.document, win = d.defaultView, portal = this._modernPortal;
+				const parent = d.fullscreenElement || d.body;
+				if (portal && portal.parentNode !== parent)
+						parent.append(portal);
+				if (!this._placementGeometry) {
+						const player = (this.container.querySelector('.videoPlayer') || this.container).getBoundingClientRect();
+						const seekbar = this.seekElement.getBoundingClientRect();
+						const fullscreen = this._placementContext === 'fullscreen' || !!d.fullscreenElement;
+						const { obstacles, controlTops } = SceneSearchObstacleCollector.collect({
+								document: d, container: this.container, fullscreen
+						});
+						const seekBottom = Number.isFinite(seekbar.bottom) ? seekbar.bottom : seekbar.top + seekbar.height;
+						const seekWrap = this.seekElement.closest?.('.seekBarContainer');
+						const wrapRect = seekWrap?.getBoundingClientRect?.();
+						const wrapScale = wrapRect?.width > 0 && seekWrap?.offsetWidth > 0 ?
+								wrapRect.width / seekWrap.offsetWidth : 1;
+						let previewAnchorTop = !fullscreen && Number.isFinite(wrapRect?.top) ?
+								wrapRect.top - 14 * wrapScale : seekBottom - 24;
+						if (fullscreen && controlTops.length) {
+								previewAnchorTop = Math.min(previewAnchorTop, ...controlTops);
+						}
+						const origin = portal?.getBoundingClientRect() || { left: 0, top: 0, width: 0, height: 0 };
+						this._placementGeometry = { player, seekbar, obstacles, origin, previewAnchorTop,
+								viewport: { left: 0, top: 0, width: win.innerWidth, height: win.innerHeight } };
+				}
+				const g = this._placementGeometry, prefs = this.config.resolveSceneSearch();
+				const hold = this._placementHold || state.pinned || this.interaction?.holdingPreview === true;
+				const input = { ...g, layout: state.layoutId, context: this._placementContext,
+						imageSize: { width: 180, height: 90 }, requestedScale: prefs.scale, listOpen: prefs.listOpen, listScale: prefs.listScale,
+						anchorX: this._seekClientX ?? g.seekbar.left + g.seekbar.width / 2, previous: this._placementResult, hold,
+						footerHeight: 64 };
+				try {
+						const result = this._classes.Placement.compute(input);
+						card.fit(result);
+						const x = g.origin.width && portal?.clientWidth ? portal.clientWidth / g.origin.width : 1;
+						const y = g.origin.height && portal?.clientHeight ? portal.clientHeight / g.origin.height : 1;
+						card.root.style.left = (result.rect.left - g.origin.left) * x + 'px';
+						card.root.style.top = (result.rect.top - g.origin.top) * y + 'px';
+						card.root.style.width = result.rect.width + 'px';
+						card.root.style.height = result.rect.height + 'px';
+						card.root.style.transformOrigin = '0 0';
+						card.root.style.transform = 'scale(' + x + ',' + y + ')';
+						card.root.dataset.sceneContext = this._placementContext;
+						this._placementResult = result;
+				}
+				catch (error) {
+						this._placementGeometry = null;
+						this._placementResult = null;
+						throw error;
+				}
 		}
-		this._subscriptions.length=0;
-		this._style?.remove();
-		this._style=null;
-		this._placementContext='normal';this._placementGeometry=null;this._placementHold=false;
-		this._running=false;
-	}
-	static get CSS(){
-		return `
+		_updateTwinCommentPlacement(below, player) {
+				if (!below || !player) {
+						this.container.style.removeProperty('--scui-twin-comment-top');
+						return;
+				}
+				const comment = this._twinList?.element || this._commentPreviewElement;
+				const owner = (comment?.offsetParent || comment?.parentElement);
+				const origin = owner?.getBoundingClientRect?.();
+				if (!origin || !Number.isFinite(origin.top) || !Number.isFinite(player.bottom)) {
+						return;
+				}
+				const scale = origin.width && owner.offsetWidth ?
+						owner.offsetWidth / origin.width : 1;
+				const top = (player.bottom - origin.top) * scale + 15;
+				if (Number.isFinite(top)) {
+						this.container.style.setProperty('--scui-twin-comment-top', Math.round(Math.max(0, top)) + 'px');
+				}
+		}
+		_onCardAction(action, context) {
+				if (action === 'more') {
+						this._resumePlacement();
+						return;
+				}
+				if (action === 'comment-toggle') {
+						if (this.config.resolveSceneSearch?.()?.listAllowed === false)
+								return;
+						this.config.setValue('enableCommentPreview', this.config.getValue('enableCommentPreview') !== true);
+						this.controller.onPreferencesChanged('enableCommentPreview');
+						return;
+				}
+				if (action === 'frame-seek') {
+						const seconds = context?.time;
+						if (!Number.isFinite(seconds) || seconds < 0) {
+								return;
+						}
+						const duration = typeof this.layoutSettings.getDuration === 'function' ?
+								this.layoutSettings.getDuration() : this.layoutSettings.duration;
+						this._onSeekAbsolute(Number.isFinite(duration) && duration > 0 ?
+								Math.min(seconds, duration) : seconds);
+						return;
+				}
+				const commands = {
+						'seek-back': 'sceneSearch-seekBack',
+						'seek-forward': 'sceneSearch-seekForward',
+						pin: 'sceneSearch-togglePin',
+						'comment-search': 'sceneSearch-toggleCommentSearch'
+				};
+				if (action === 'seek-step') {
+						this._stepWidget?.openMenu();
+						return;
+				}
+				if (commands[action]) {
+						this.router.handle(commands[action]);
+				}
+		}
+		_mountCardControls(card) {
+				const root = card.root;
+				if (!root) {
+						throw new Error('Cannot wire unmounted scene card');
+				}
+				const classNames = {
+						pin: 'zenzaSceneSearchPin',
+						'comment-toggle': 'zenzaSceneCommentToggle',
+						'comment-search': 'zenzaSceneCommentSearchToggle',
+						more: 'zenzaSceneSearchMore'
+				};
+				for (const [action, css] of Object.entries(classNames)) {
+						root.querySelector('[data-scui-action="' + action + '"]')?.classList.add(css);
+				}
+				const actionList = root.querySelector('.zenzaSceneActions');
+				if (!actionList) {
+						throw new Error('Scene controls missing');
+				}
+				if (root.dataset.layout === '02') {
+						const foot = root.querySelector('.zenzaSceneFoot');
+						const more = actionList.querySelector('.scene-more');
+						if (foot && more)
+								foot.insertBefore(more, actionList);
+				}
+				actionList.classList.add('zenzaSceneSeekStepControl');
+				for (const [action, tag] of [
+						['seek-back', 'back'], ['seek-forward', 'forward'], ['seek-step', 'open']
+				]) {
+						const button = root.querySelector('[data-scui-action="' + action + '"]');
+						if (button) {
+								button.dataset.scui = tag;
+						}
+				}
+				const C = this._classes;
+				const step = new C.SeekStepControl({
+						document: this.document,
+						getSeconds: () => this.config.getValue('sceneSearch.seekStepSeconds'),
+						setSeconds: (value) => {
+								this.config.setValue('sceneSearch.seekStepSeconds', value);
+								this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds');
+						},
+						onSeek: (delta) => this._onSeekRelative(delta),
+						onCompactChange: () => this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds'),
+						onMenuChange: (open) => {
+								if (this._disposed) {
+										return;
+								}
+								this.idleLimiter.pause('step-menu', open);
+								if (open) {
+										this.interaction.previewEnter('step-menu');
+								}
+								else {
+										this.interaction.previewLeave('step-menu');
+										const focused = this.document.activeElement;
+										if (root.contains(focused) && focused.closest('[hidden]')) {
+												this.interaction.previewFocus(false, root);
+										}
+								}
+						},
+						onError: (error) => this._onError(error, 'sceneSearch.seekStepSeconds')
+				});
+				const modern = root.classList.contains('zenzaSceneSharedPreview');
+				this._stepWidget = step;
+				if (modern)
+						step.updateFromConfig();
+				else
+						step.mount(actionList);
+				const searchPanel = new C.CommentSearchPanel({
+						document: this.document, search: this.commentSearch,
+						onOpenChange: (open) => {
+								const button = root.querySelector('[data-scui-action="comment-search"]');
+								button?.setAttribute('aria-expanded', String(open));
+								if (!open && searchPanel.root?.contains(this.document.activeElement))
+										button?.focus();
+						}
+				});
+				this._commentPanel = searchPanel;
+				searchPanel.mount(modern ? root.querySelector('.zenzaSceneListSlot') : root);
+				this.router.seekStepControl = step;
+				this.router.commentSearchPanel = modern ? { toggle: () => {
+								if (this.config.resolveSceneSearch().listAllowed === false)
+										return;
+								if (this.config.getValue('enableCommentPreview') !== true)
+										this.config.setValue('enableCommentPreview', true);
+								searchPanel.toggle();
+						} } : searchPanel;
+				this._cardCleanup = this._bindPreviewSurface(root);
+				this._visibility = C.VisibilityRegistry.connect(this.config, root, 'scene');
+				this.refreshSharedThumbnail();
+		}
+		_mountLegacyControls(card) {
+				const nodes = [card?.root, this._commentPreviewElement].filter(Boolean);
+				let hovered = false, focused = false, active = false, retired = false;
+				const owns = (node) => nodes.some(root => root === node ||
+						!!node && 'nodeType' in node && root.contains(node));
+				const sync = () => {
+						const next = hovered || focused;
+						if (next === active)
+								return;
+						active = next;
+						if (next)
+								this.interaction.previewEnter();
+						else
+								this.interaction.previewLeave();
+				};
+				const onEnter = () => { hovered = true; sync(); };
+				const onLeave = (e) => {
+						if (owns(e?.relatedTarget))
+								return;
+						hovered = false;
+						sync();
+				};
+				const onFocusIn = () => { focused = true; sync(); };
+				const onFocusOut = (e) => {
+						if (owns(e?.relatedTarget))
+								return;
+						focused = false;
+						sync();
+				};
+				const bindings = [
+						['mouseenter', onEnter], ['mouseleave', onLeave],
+						['focusin', onFocusIn], ['focusout', onFocusOut]
+				]
+						.map(([event, handler]) => [event, (e) => {
+								if (!retired && !this._disposed)
+										handler(e);
+						}]);
+				this._cardCleanup = () => {
+						retired = true;
+						for (const node of nodes)
+								for (const [key, handler] of bindings) {
+										this._cleanup.release(() => node.removeEventListener(key, handler), 'scene-legacy-events');
+								}
+						if (active) {
+								active = false;
+								this._cleanup.release(() => this.interaction.previewLeave(), 'scene-legacy-hover');
+						}
+				};
+				for (const node of nodes)
+						for (const [key, handler] of bindings)
+								node.addEventListener(key, handler);
+		}
+		_releaseCard(card) {
+				if (this._active !== card) {
+						return;
+				}
+				this._restoreSharedThumbnail();
+				this._restoreCommentPreviewDock();
+				this._restoreLegacyTooltip();
+				const cleanup = this._cardCleanup, visibility = this._visibility;
+				const panel = this._commentPanel, step = this._stepWidget;
+				this._cardCleanup = null;
+				this._visibility = null;
+				this._commentPanel = null;
+				this._stepWidget = null;
+				this.router.seekStepControl = null;
+				this.router.commentSearchPanel = null;
+				this._active = null;
+				if (cleanup)
+						this._cleanup.release(cleanup, 'scene-card-events');
+				if (visibility)
+						this._cleanup.release(() => visibility.dispose?.(), 'scene-card-visibility');
+				if (panel)
+						this._cleanup.release(() => panel.dispose(), 'scene-comment-search');
+				if (step)
+						this._cleanup.release(() => step.dispose(), 'scene-seek-step');
+		}
+		refreshSharedThumbnail() {
+				if (this._disposed)
+						return false;
+				this._cleanup.retry();
+				if (this._active?.setImage) {
+						try {
+								this._active.setImage(this._getThumbnailElement?.() || null);
+								return true;
+						}
+						catch (error) {
+								this._onError(error, 'existing-seek-thumbnail');
+								return false;
+						}
+				}
+				if (['00', 'legacy'].includes(this.controller.snapshot.layoutId)) {
+						this._active?.render?.(this.controller.snapshot);
+						return false;
+				}
+				if (this.controller.snapshot.layoutId === '07') {
+						this.controller.onPreferencesChanged('sceneSearch.idleHideSeconds');
+				}
+				if (!this._active?.root || !this._getThumbnailElement)
+						return false;
+				let node;
+				try {
+						node = this._getThumbnailElement();
+				}
+				catch (error) {
+						this._restoreSharedThumbnail();
+						this._hideLegacyTooltip();
+						this._onError(error, 'existing-seek-thumbnail');
+						return false;
+				}
+				if (!node || !node.parentNode) {
+						this._restoreSharedThumbnail();
+						this._hideLegacyTooltip();
+						return false;
+				}
+				const slot = this._active.root.querySelector('.zenzaSceneImageBox');
+				if (!slot)
+						return false;
+				if (this._sharedThumbnail?.node === node && slot.contains(node))
+						return true;
+				if (!node.querySelector?.('canvas'))
+						return false;
+				this._restoreSharedThumbnail();
+				try {
+						this._sharedThumbnail = new SceneSearchDomLease(node, { position: true });
+						this._sharedThumbnail.moveTo(slot);
+						slot.querySelector('.zenzaSceneImage')?.setAttribute('hidden', '');
+						slot.querySelector('.zenzaSceneImagePlaceholder')?.setAttribute('hidden', '');
+						this._hideLegacyTooltip();
+						return true;
+				}
+				catch (error) {
+						this._restoreSharedThumbnail();
+						this._onError(error, 'existing-seek-thumbnail');
+						return false;
+				}
+		}
+		_restoreSharedThumbnail() {
+				const old = this._sharedThumbnail;
+				if (!old)
+						return;
+				this._sharedThumbnail = null;
+				this._cleanup.release(() => old.restore(), 'scene-thumbnail-return');
+				const slot = this._active?.root?.querySelector('.zenzaSceneImageBox');
+				const image = slot?.querySelector('.zenzaSceneImage');
+				const placeholder = slot?.querySelector('.zenzaSceneImagePlaceholder');
+				const hasImage = !!image?.getAttribute('src');
+				if (image)
+						image.hidden = !hasImage;
+				if (placeholder)
+						placeholder.hidden = hasImage;
+		}
+		_hideLegacyTooltip() {
+				const tooltip = this._legacyTooltipElement;
+				if (!tooltip?.style || this._legacyTooltipOriginal)
+						return;
+				if (!this._cleanup.retry('scene-legacy-tooltip-return')) {
+						throw new Error('Native tooltip return is still pending');
+				}
+				this._legacyTooltipOriginal = new SceneSearchDomLease(tooltip, { styles: ['display'], hidden: true });
+				tooltip.hidden = true;
+				tooltip.style.setProperty('display', 'none', 'important');
+		}
+		_restoreLegacyTooltip() {
+				const previous = this._legacyTooltipOriginal;
+				this._legacyTooltipOriginal = null;
+				if (previous)
+						this._cleanup.release(() => previous.restore(), 'scene-legacy-tooltip-return');
+		}
+		_resumePlacement() {
+				if (!this._disposed && this._active?.fit)
+						this._placeModern(this._active, this.controller.snapshot);
+		}
+		_bindPreviewSurface(node) {
+				let pointerFocus = false, retired = false;
+				const enter = () => { this.interaction.previewEnter(node); this._resumePlacement(); };
+				const leave = (e) => {
+						const active = this.document.activeElement;
+						const editing = active?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+						if (pointerFocus && node.contains(active) && !editing) {
+								active.blur?.();
+								this.interaction.previewFocus(false, node);
+						}
+						this.interaction.previewLeave(node, e);
+						this._resumePlacement();
+				};
+				const focus = () => { this.interaction.previewFocus(true, node); this._resumePlacement(); };
+				const blur = (e) => {
+						const target = e.relatedTarget;
+						if (!target || !('nodeType' in target) || !node.contains(target)) {
+								this.interaction.previewFocus(false, node);
+								this._resumePlacement();
+						}
+				};
+				const pointer = (e) => { pointerFocus = true; this._startPointer(e); };
+				const keyboard = () => { pointerFocus = false; };
+				const bindings = [
+						[this.document, 'keydown', keyboard, true],
+						...[['mouseenter', enter], ['mouseleave', leave], ['focusin', focus], ['focusout', blur],
+								['pointerdown', pointer]]
+								.map(([event, fn]) => [node, event, fn, false])
+				]
+						.map(([target, event, fn, capture]) => [target, event, (e) => {
+								if (!retired && !this._disposed)
+										fn(e);
+						}, capture]);
+				const cleanup = () => {
+						retired = true;
+						for (const [target, event, fn, capture] of bindings) {
+								this._cleanup.release(() => target.removeEventListener(event, fn, capture), 'scene-preview-events');
+						}
+						this._cleanup.release(() => this.interaction.previewLeave(node), 'scene-preview-hover');
+						this._cleanup.release(() => this.interaction.previewFocus(false, node), 'scene-preview-focus');
+				};
+				try {
+						for (const [target, event, fn, capture] of bindings)
+								target.addEventListener(event, fn, capture);
+				}
+				catch (error) {
+						cleanup();
+						throw error;
+				}
+				return cleanup;
+		}
+		_restoreTwinList() {
+				const handle = this._twinList, cleanup = this._twinListCleanup;
+				this._twinList = null;
+				this._twinListCleanup = null;
+				if (cleanup)
+						this._cleanup.release(cleanup, 'scene-twin-list-events');
+				if (handle)
+						this._cleanup.release(() => {
+								handle.element?.classList.remove('is-scui-active');
+								handle.dispose();
+						}, 'scene-twin-list');
+		}
+		_previewRects() {
+				if (this._active?.getRects)
+						return this._active.getRects();
+				return SceneSearchVisibleRectCollector.collect({
+						root: this._active?.root,
+						comment: this._commentPreviewElement,
+						twin: this._twinList?.element,
+						document: this.document
+				});
+		}
+		_syncCommentPreviewDock(card, state) {
+				const node = this._commentPreviewElement, root = card?.root;
+				if (this._disposed || !node || !root)
+						return;
+				try {
+						if (!this._commentDock) {
+								const computed = this.document.defaultView?.getComputedStyle?.(node);
+								const props = SceneSearchDomLease.typography;
+								const typography = props.map(name => ({ name, native: computed?.getPropertyValue(name) || '' }));
+								this._commentDock = { typography, lease: new SceneSearchDomLease(node, {
+												position: true, styles: props, classes: ['zenzaSceneCommentAttached', 'is-scui-flow',
+														'is-scui-list', 'is-scui-active', 'is-scui-classic-side']
+										}) };
+								for (const { name, native } of typography) {
+										if (native)
+												node.style.setProperty(name, native);
+								}
+								this._commentHoverCleanup = this._bindPreviewSurface(node);
+						}
+						const listRequested = this.config.getValue('enableCommentPreview') === true;
+						const twin = root.dataset.layout === '02' && typeof this._createCommentList === 'function';
+						if (twin && listRequested && !this._twinList) {
+								this._twinList = this._createCommentList(this.container) || null;
+								if (this._twinList?.element) {
+										const panel = this._twinList.element;
+										panel.classList.add('zenzaSceneTwinList', 'zenzaSceneCommentAttached', 'is-scui-list');
+										panel.tabIndex = 0;
+										panel.setAttribute('aria-label', 'シーンのコメント一覧');
+										for (const { name, native } of this._commentDock.typography || []) {
+												if (native)
+														panel.style.setProperty(name, native);
+										}
+										this._twinListCleanup = this._bindPreviewSurface(panel);
+								}
+						}
+						if (!listRequested)
+								this._restoreTwinList();
+						const list = listRequested && !(twin && this._twinList);
+						const classic = root.dataset.layout === '01';
+						const image = root.querySelector('.zenzaSceneImageBox');
+						const target = classic ? (list ? root : image) :
+								list ? this.container : image;
+						if (target && node.parentNode !== target)
+								this._commentDock.lease.moveTo(target);
+						node.classList.add('zenzaSceneCommentAttached');
+						node.classList.toggle('is-scui-list', list);
+						node.classList.toggle('is-scui-flow', !list);
+						node.classList.toggle('is-scui-classic-side', classic && list);
+						const active = (state?.shown !== false || state?.pinned === true) &&
+								this.config.getValue('sceneSearch.commentPreviewVisible') !== false &&
+								!root.classList.contains('is-idle-suppressed');
+						node.classList.toggle('is-scui-active', active);
+						if (this._twinList?.element) {
+								this._twinList.element.classList.toggle('is-scui-active', active && listRequested);
+						}
+						if (twin) {
+								const toggle = root.querySelector('[data-scui-action="comment-toggle"]');
+								const label = listRequested ? 'コメント一覧を閉じる' : 'コメント一覧を表示';
+								toggle?.setAttribute('aria-label', label);
+								toggle?.setAttribute('title', label);
+								toggle?.setAttribute('aria-expanded', String(listRequested));
+						}
+						if (classic) {
+								if (list)
+										this._positionClassicCommentSide(root, list);
+								else
+										root.dataset.scuiSidePlacement = 'overlay';
+						}
+						else if (list) {
+								const x = Number.parseFloat(root.style.getPropertyValue('--scene-x'));
+								if (Number.isFinite(x))
+										this.container.style.setProperty('--scui-list-x', x + 'px');
+						}
+				}
+				catch (error) {
+						this._restoreCommentPreviewDock();
+						this._onError(error, 'scene-native-comment-dock');
+				}
+		}
+		_positionClassicCommentSide(root, list) {
+				const rect = root.getBoundingClientRect?.();
+				const viewport = this.document.defaultView?.innerWidth ||
+						this.document.documentElement?.clientWidth || 0;
+				if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.right) ||
+						!Number.isFinite(viewport) || viewport <= 0)
+						return;
+				const scale = rect.width > 0 && root.offsetWidth > 0 ?
+						rect.width / root.offsetWidth : 1;
+				const configuredGap = Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
+				const configuredWidth = Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
+				const gap = Number.isFinite(configuredGap) ? configuredGap : 8;
+				const margin = 8;
+				const room = (viewport - margin - rect.right - gap * scale) / scale;
+				const panelWidth = Number.isFinite(configuredWidth) && configuredWidth > 0 ?
+						configuredWidth : Math.min(list ? 350 : 180, Math.max(1, room));
+				const cardWidth = rect.width / scale;
+				const left = (root.offsetWidth || cardWidth) + gap;
+				root.dataset.scuiSidePlacement = 'right';
+				root.style.setProperty('--scui-side-left', left.toFixed(2) + 'px');
+				root.style.setProperty('--scui-side-width', panelWidth.toFixed(2) + 'px');
+		}
+		_restoreCommentPreviewDock() {
+				this._restoreTwinList();
+				const old = this._commentDock, cleanup = this._commentHoverCleanup;
+				this._commentDock = null;
+				this._commentHoverCleanup = null;
+				if (cleanup)
+						this._cleanup.release(cleanup, 'scene-native-comment-events');
+				if (old)
+						this._cleanup.release(() => old.lease.restore(), 'scene-native-comment-return');
+				if (old)
+						this.container.style.removeProperty('--scui-list-x');
+		}
+		_syncCommentPreviewVisibility() {
+				if (this.config.resolveSceneSearch)
+						return; // Effective state belongs to shared view / legacy adapter.
+				const node = this._commentPreviewElement;
+				if (!node?.style) {
+						return;
+				}
+				const visible = this.config.getValue('sceneSearch.commentPreviewVisible') !== false;
+				if (!visible) {
+						if (!this._commentPreviewOriginal) {
+								if (!this._cleanup.retry('scene-native-comment-visibility'))
+										return;
+								this._commentPreviewOriginal = new SceneSearchDomLease(node, { styles: ['display'], hidden: true });
+						}
+						node.hidden = true;
+						node.style.setProperty('display', 'none', 'important');
+				}
+				else {
+						this._restoreCommentPreviewVisibility();
+				}
+		}
+		_restoreCommentPreviewVisibility() {
+				const previous = this._commentPreviewOriginal;
+				this._commentPreviewOriginal = null;
+				if (previous)
+						this._cleanup.release(() => previous.restore(), 'scene-native-comment-visibility');
+		}
+		static validSavedPreference(key, value) {
+				return SceneSearchPreferenceConnection.validSavedPreference(key, value);
+		}
+		_refreshSavedPreferenceViews(keys) {
+				if (this._disposed || !keys.length) {
+						return;
+				}
+				const layoutKey = keys.find(key => key.startsWith('sceneSearch.layout.') || key.startsWith('sceneSearch.presentation.'));
+				this.controller.onPreferencesChanged(layoutKey || keys[0]);
+				if (keys.includes('sceneSearch.commentPreviewVisible'))
+						this._syncCommentPreviewVisibility();
+				if (keys.includes('sceneSearch.idleHideSeconds'))
+						this.interaction.idlePreferencesChanged();
+				if (keys.includes('sceneSearch.seekStepSeconds'))
+						this._stepWidget?.updateFromConfig();
+		}
+		_connectSavedPreferences(keys) {
+				const connection = new SceneSearchPreferenceConnection({
+						window: this.document.defaultView, config: this.config, keys,
+						isDisposed: () => this._disposed,
+						onApplying: active => { this._externalSettingsBatch = active; },
+						onRefresh: changed => this._refreshSavedPreferenceViews(changed),
+						onError: (error) => this._onError(error, 'saved-scene-settings')
+				});
+				this._savedPreferencesCleanup = () => connection.dispose();
+				connection.connect();
+		}
+		start(mode = 'normal') {
+				if (this._disposed) {
+						throw new Error('Integration bridge disposed');
+				}
+				if (this._running) {
+						return this.controller.snapshot;
+				}
+				this._running = true;
+				try {
+						const style = this.document.createElement('style');
+						this._style = style;
+						style.dataset.scuiBridgeStyle = '1';
+						style.textContent = SceneSearchIntegrationBridge.CSS;
+						this.document.head.appendChild(style);
+						if (this._disposed)
+								return this.controller.snapshot;
+						this.controller.start(mode);
+						if (this._disposed)
+								return this.controller.snapshot;
+						for (const [event, handler] of Object.entries(this._seekListeners)) {
+								if (this._disposed)
+										return this.controller.snapshot;
+								this.seekElement.addEventListener(event, handler, event === 'mousemove');
+						}
+						const keys = ['sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen',
+								'sceneSearch.enabled', 'sceneSearch.commentListScale', 'sceneSearch.miniCommentVisible', 'sceneSearch.commentListVisible',
+								'sceneSearch.thumbnailScale', 'sceneSearch.commentListBackgroundOpacity',
+								'sceneSearch.layout.normal', 'sceneSearch.layout.fullscreen',
+								'sceneSearch.layout.linkFullscreen', 'sceneSearch.seekStepSeconds',
+								'sceneSearch.commentPreviewVisible', 'sceneSearch.miniCommentMode', 'sceneSearch.idleHideSeconds',
+								'sceneSearch.controlsReveal', 'sceneSearch.animation', 'enableCommentPreview'];
+						if (typeof this.config.onkey === 'function') {
+								for (const key of keys) {
+										if (this._disposed)
+												return this.controller.snapshot;
+										const callback = () => {
+												if (this._disposed || this._externalSettingsBatch)
+														return;
+												if (key.startsWith('sceneSearch.presentation.') || key.startsWith('sceneSearch.layout.'))
+														this.interaction.reset();
+												this.controller.onPreferencesChanged(key);
+												if (key === 'sceneSearch.commentPreviewVisible') {
+														this._syncCommentPreviewVisibility();
+												}
+												if (key === 'sceneSearch.idleHideSeconds')
+														this.interaction.idlePreferencesChanged();
+												if (key === 'sceneSearch.seekStepSeconds')
+														this._stepWidget?.updateFromConfig();
+										};
+										this._subscriptions.push([key, callback]);
+										this.config.onkey(key, callback);
+								}
+						}
+						if (this._disposed)
+								return this.controller.snapshot;
+						this._connectSavedPreferences(keys);
+						if (this._disposed)
+								return this.controller.snapshot;
+						this._syncCommentPreviewVisibility();
+				}
+				catch (error) {
+						this.dispose();
+						throw error;
+				}
+				return this.controller.snapshot;
+		}
+		setMode(mode) {
+				this._clearPointers();
+				this.interaction.reset();
+				return this.controller.setMode(mode);
+		}
+		setVideo(videoId) {
+				this._clearPointers();
+				this.interaction.reset();
+				this.commentSearch.reset();
+				return this.controller.onVideoChange(videoId);
+		}
+		setTime(seconds) { return this.controller.setTime(seconds); }
+		previewAt(seconds, token) {
+				const promise = this.controller.previewAt(seconds);
+				return Promise.resolve(promise).then(ok => {
+						if (ok && token !== undefined)
+								this.interaction.thumbnailChanged(token);
+						return ok;
+				});
+		}
+		get state() { return this.controller.snapshot; }
+		handleShortcut(command) { return this.router.handle(command); }
+		dispose() {
+				if (this._disposed) {
+						this._cleanup.retry();
+						return;
+				}
+				this._disposed = true;
+				this._cleanup.release(() => this._clearPointers(), 'scene-active-pointers');
+				this._restoreCommentPreviewDock();
+				const savedCleanup = this._savedPreferencesCleanup;
+				this._savedPreferencesCleanup = null;
+				if (savedCleanup)
+						this._cleanup.release(savedCleanup, 'scene-saved-preferences');
+				this._restoreSharedThumbnail();
+				this._restoreLegacyTooltip();
+				this._restoreCommentPreviewVisibility();
+				if (this._running) {
+						for (const [event, handler] of Object.entries(this._seekListeners)) {
+								this._cleanup.release(() => this.seekElement.removeEventListener(event, handler, event === 'mousemove'), 'scene-seek-events');
+						}
+				}
+				this._cleanup.release(() => this.interaction.dispose(), 'scene-interaction');
+				this._cleanup.release(() => this.controller.dispose(), 'scene-controller');
+				this._cleanup.release(() => this.commentSearch.dispose(), 'scene-comment-model');
+				if (typeof this.config.offkey === 'function') {
+						for (const [key, handler] of this._subscriptions) {
+								this._cleanup.release(() => this.config.offkey(key, handler), 'scene-config-' + key);
+						}
+				}
+				this._subscriptions.length = 0;
+				const style = this._style;
+				this._style = null;
+				if (style)
+						this._cleanup.release(() => style.remove(), 'scene-bridge-style');
+				this._placementContext = 'normal';
+				this._placementGeometry = null;
+				this._placementHold = false;
+				this._running = false;
+				this._cleanup.retry();
+		}
+		static get CSS() {
+				return `
 /* Old seekbar-only hover rules hide previews when the pointer enters a new
 	card. Reuse the actual CommentPreviewView node without cloning its data. */
 .zenzaSceneSearchHost .zenzaSceneImageBox{position:relative}
@@ -38817,8 +41353,9 @@ box-shadow:0 8px 20px #0009
 	top:calc(100% + 112px)!important;bottom:auto!important;
 }
 `;
-	}
+		}
 }
+// already required
 class SceneSearchPreviewView {
 		document;
 		host;
@@ -38831,7 +41368,10 @@ class SceneSearchPreviewView {
 		imageBox = null;
 		listSlot = null;
 		style = null;
-		snapshots = new Map();
+		leases = new Set();
+		imageLease = null;
+		ownedLists = new Set();
+		listLeases = new Map();
 		disposed = false;
 		state = null;
 		onAction;
@@ -38843,6 +41383,8 @@ class SceneSearchPreviewView {
 				this.mini = mini;
 				this.listView = listView;
 				this.id = id;
+				if (listView)
+						this.ownedLists.add(listView);
 				this.onAction = onAction || (() => { });
 				this.click = event => {
 						const button = event.target?.closest('button[data-scui-action]');
@@ -38855,117 +41397,132 @@ class SceneSearchPreviewView {
 						event.stopPropagation();
 				};
 		}
-		remember(node) {
-				if (this.snapshots.has(node))
-						return;
-				this.snapshots.set(node, { parent: node.parentNode, next: node.nextSibling,
-						style: node.getAttribute('style'), className: node.className, hidden: node.hidden });
-		}
-		typography(node) {
-				const computed = this.document.defaultView?.getComputedStyle(node);
-				for (const key of ['font-family', 'font-size', 'line-height', 'font-weight', 'letter-spacing', 'word-spacing']) {
-						const value = computed?.getPropertyValue(key);
-						if (value)
-								node.style.setProperty(key, value);
+		releaseLease(lease) {
+				try {
+						lease.restore();
+				}
+				finally {
+						if (lease.released)
+								this.leases.delete(lease);
 				}
 		}
-		restore(node) {
-				const old = this.snapshots.get(node);
-				if (!old)
-						return;
-				if (old.parent) {
-						old.parent.insertBefore(node, old.next?.parentNode === old.parent ? old.next : null);
+		attempt(action, errors) {
+				try {
+						action();
 				}
-				else
-						node.remove();
-				if (old.style === null)
-						node.removeAttribute('style');
-				else
-						node.setAttribute('style', old.style);
-				node.className = old.className;
-				node.hidden = old.hidden;
-				this.snapshots.delete(node);
+				catch (error) {
+						errors.push(error);
+				}
+		}
+		throwErrors(errors, message) {
+				if (errors.length === 1)
+						throw errors[0];
+				if (errors.length > 1)
+						throw new AggregateError(errors, message);
+		}
+		releaseList(handle) {
+				const errors = [], lease = this.listLeases.get(handle);
+				if (lease)
+						this.attempt(() => {
+								this.releaseLease(lease);
+								this.listLeases.delete(handle);
+						}, errors);
+				if (this.ownedLists.has(handle))
+						this.attempt(() => {
+								handle.dispose();
+								this.ownedLists.delete(handle);
+						}, errors);
+				this.throwErrors(errors, 'Could not fully dispose the scene comment list');
 		}
 		mount() {
 				if (this.disposed || this.root)
 						return;
-				const d = this.document, root = d.createElement('section');
-				root.className = 'zenzaSceneSearchHost zenzaSceneSharedPreview';
-				root.dataset['layout'] = this.id;
-				root.setAttribute('role', 'group');
-				root.setAttribute('aria-label', 'シーンサーチ');
-				root.hidden = true;
-				const media = d.createElement('div');
-				media.className = 'zenzaSceneMedia';
-				const left = d.createElement('div');
-				left.className = 'zenzaSceneLeft';
-				this.imageBox = d.createElement('div');
-				this.imageBox.className = 'zenzaSceneImageBox';
-				this.logical = d.createElement('div');
-				this.logical.className = 'zenzaSceneLogical';
-				this.imageBox.append(this.logical);
-				const foot = d.createElement('div');
-				foot.className = 'zenzaSceneFoot';
-				const time = d.createElement('span');
-				time.className = 'zenzaSceneTime';
-				time.textContent = '0:00';
-				foot.append(time);
-				const actions = d.createElement('div');
-				actions.className = 'zenzaSceneActions';
-				for (const [action, symbol, label] of [
-						['seek-back', '‹', '指定秒数戻る'], ['comment-toggle', '💬', 'コメント一覧を開く'],
-						['seek-forward', '›', '指定秒数進む']
-				]) {
-						const button = d.createElement('button');
-						button.type = 'button';
-						button.className = 'zenzaSceneBtn scene-' + action;
-						button.dataset['scuiAction'] = action;
-						button.textContent = symbol;
-						button.title = label;
-						button.setAttribute('aria-label', label);
-						actions.append(button);
+				try {
+						const d = this.document, root = d.createElement('section');
+						this.root = root;
+						root.className = 'zenzaSceneSearchHost zenzaSceneSharedPreview';
+						root.dataset['layout'] = this.id;
+						root.setAttribute('role', 'group');
+						root.setAttribute('aria-label', 'シーンサーチ');
+						root.hidden = true;
+						const media = d.createElement('div');
+						media.className = 'zenzaSceneMedia';
+						const left = d.createElement('div');
+						left.className = 'zenzaSceneLeft';
+						this.imageBox = d.createElement('div');
+						this.imageBox.className = 'zenzaSceneImageBox';
+						this.logical = d.createElement('div');
+						this.logical.className = 'zenzaSceneLogical';
+						this.imageBox.append(this.logical);
+						const foot = d.createElement('div');
+						foot.className = 'zenzaSceneFoot';
+						const time = d.createElement('span');
+						time.className = 'zenzaSceneTime';
+						time.textContent = '0:00';
+						foot.append(time);
+						const actions = d.createElement('div');
+						actions.className = 'zenzaSceneActions';
+						for (const [action, symbol, label] of [
+								['seek-back', '‹', '指定秒数戻る'], ['comment-toggle', '💬', 'コメント一覧を開く'],
+								['seek-forward', '›', '指定秒数進む']
+						]) {
+								const button = d.createElement('button');
+								button.type = 'button';
+								button.className = 'zenzaSceneBtn scene-' + action;
+								button.dataset['scuiAction'] = action;
+								button.textContent = symbol;
+								button.title = label;
+								button.setAttribute('aria-label', label);
+								actions.append(button);
+						}
+						foot.append(actions);
+						left.append(this.imageBox, foot);
+						this.listSlot = d.createElement('div');
+						this.listSlot.className = 'zenzaSceneListSlot';
+						const listHead = d.createElement('div');
+						listHead.className = 'zenzaSceneListHead';
+						const listTitle = d.createElement('span');
+						listTitle.textContent = 'コメント';
+						const search = d.createElement('button');
+						search.type = 'button';
+						search.className = 'zenzaSceneBtn scene-comment-search';
+						search.dataset['scuiAction'] = 'comment-search';
+						search.textContent = '⌕';
+						search.title = 'コメント検索';
+						search.setAttribute('aria-label', 'コメント検索');
+						search.setAttribute('aria-expanded', 'false');
+						listHead.append(listTitle, search);
+						this.listSlot.append(listHead);
+						this.listSlot.hidden = true;
+						media.append(left, this.listSlot);
+						root.append(media);
+						this.style = d.createElement('style');
+						this.style.textContent = SceneSearchPreviewView.CSS;
+						this.style.dataset['scuiSharedStyle'] = '';
+						d.head.append(this.style);
+						this.host.append(root);
+						root.addEventListener('click', this.click);
+						const image = this.image;
+						this.image = null;
+						this.setImage(image);
+						if (this.mini) {
+								const lease = new SceneSearchDomLease(this.mini, { position: true,
+										styles: SceneSearchDomLease.typography, classes: ['zenzaSceneNativeMini'], hidden: true });
+								this.leases.add(lease);
+								SceneSearchDomLease.preserveTypography(this.mini);
+								lease.moveTo(this.logical);
+								this.mini.classList.add('zenzaSceneNativeMini');
+						}
+						const list = this.listView;
+						this.listView = null;
+						this.setListView(list);
+						this.fit({ imageScale: 1, listWidth: 280, listMaxHeight: 240 });
 				}
-				foot.append(actions);
-				left.append(this.imageBox, foot);
-				this.listSlot = d.createElement('div');
-				this.listSlot.className = 'zenzaSceneListSlot';
-				const listHead = d.createElement('div');
-				listHead.className = 'zenzaSceneListHead';
-				const listTitle = d.createElement('span');
-				listTitle.textContent = 'コメント';
-				const search = d.createElement('button');
-				search.type = 'button';
-				search.className = 'zenzaSceneBtn scene-comment-search';
-				search.dataset['scuiAction'] = 'comment-search';
-				search.textContent = '⌕';
-				search.title = 'コメント検索';
-				search.setAttribute('aria-label', 'コメント検索');
-				search.setAttribute('aria-expanded', 'false');
-				listHead.append(listTitle, search);
-				this.listSlot.append(listHead);
-				this.listSlot.hidden = true;
-				media.append(left, this.listSlot);
-				root.append(media);
-				this.style = d.createElement('style');
-				this.style.textContent = SceneSearchPreviewView.CSS;
-				this.style.dataset['scuiSharedStyle'] = '';
-				d.head.append(this.style);
-				this.host.append(root);
-				this.root = root;
-				root.addEventListener('click', this.click);
-				const image = this.image;
-				this.image = null;
-				this.setImage(image);
-				if (this.mini) {
-						this.remember(this.mini);
-						this.typography(this.mini);
-						this.logical.append(this.mini);
-						this.mini.classList.add('zenzaSceneNativeMini');
+				catch (error) {
+						const errors = [error];
+						this.attempt(() => this.dispose(), errors);
+						this.throwErrors(errors, 'Scene preview mount and rollback both failed');
 				}
-				const list = this.listView;
-				this.listView = null;
-				this.setListView(list);
-				this.fit({ imageScale: 1, listWidth: 280, listMaxHeight: 240 });
 		}
 		setImage(image) {
 				if (this.disposed)
@@ -38975,29 +41532,65 @@ class SceneSearchPreviewView {
 								this.render(this.state);
 						return;
 				}
-				if (this.image)
-						this.restore(this.image);
-				this.image = image;
-				if (image && this.logical) {
-						this.remember(image);
-						this.logical.prepend(image);
+				const logical = this.logical;
+				if (!logical) {
+						this.image = image;
+						return;
 				}
+				const previousLease = this.imageLease, previousNext = this.image?.nextSibling || null;
+				const lease = image ? new SceneSearchDomLease(image, { position: true }) : null;
+				if (lease)
+						this.leases.add(lease);
+				try {
+						lease?.moveTo(logical, logical.firstChild);
+						if (previousLease)
+								this.releaseLease(previousLease);
+				}
+				catch (error) {
+						const errors = [error];
+						if (lease)
+								this.attempt(() => this.releaseLease(lease), errors);
+						if (previousLease && !previousLease.released)
+								this.attempt(() => {
+										previousLease.moveTo(logical, previousNext?.parentNode === logical ? previousNext : null);
+								}, errors);
+						this.throwErrors(errors, 'Scene preview image replacement and rollback both failed');
+				}
+				this.image = image;
+				this.imageLease = lease;
 				if (this.state)
 						this.render(this.state);
 		}
 		setListView(handle) {
 				if (this.disposed || this.listView === handle)
 						return;
-				if (this.listView) {
-						this.listView.dispose();
-				}
+				const previous = this.listView;
+				this.listView = null;
+				if (previous)
+						this.releaseList(previous);
 				this.listView = handle;
+				if (handle)
+						this.ownedLists.add(handle);
 				if (handle && this.listSlot) {
-						this.typography(handle.element);
-						this.listSlot.append(handle.element);
-						handle.element.classList.add('zenzaSceneNativeList');
-						handle.element.tabIndex = 0;
-						handle.element.setAttribute('aria-label', 'シーンのコメント一覧');
+						try {
+								const lease = new SceneSearchDomLease(handle.element, {
+										styles: [...SceneSearchDomLease.typography, '--scene-list-alpha', 'opacity', 'height'],
+										classes: ['zenzaSceneNativeList'], attributes: ['tabindex', 'aria-label'], hidden: true
+								});
+								this.leases.add(lease);
+								this.listLeases.set(handle, lease);
+								SceneSearchDomLease.preserveTypography(handle.element);
+								this.listSlot.append(handle.element);
+								handle.element.classList.add('zenzaSceneNativeList');
+								handle.element.tabIndex = 0;
+								handle.element.setAttribute('aria-label', 'シーンのコメント一覧');
+						}
+						catch (error) {
+								this.listView = null;
+								const errors = [error];
+								this.attempt(() => this.releaseList(handle), errors);
+								this.throwErrors(errors, 'Scene comment list attachment and rollback both failed');
+						}
 				}
 				if (this.state)
 						this.render(this.state);
@@ -39078,24 +41671,38 @@ class SceneSearchPreviewView {
 						.filter(rect => rect.width > 0 && rect.height > 0);
 		}
 		dispose() {
-				if (this.disposed)
-						return;
 				this.disposed = true;
-				this.listView?.dispose();
-				this.listView = null;
-				for (const node of [...this.snapshots.keys()].reverse())
-						this.restore(node);
-				this.root?.removeEventListener('click', this.click);
-				this.root?.remove();
-				this.style?.remove();
-				this.root = null;
-				this.style = null;
+				const errors = [];
+				for (const handle of [...this.ownedLists])
+						this.attempt(() => {
+								handle.dispose();
+								this.ownedLists.delete(handle);
+						}, errors);
+				for (const lease of [...this.leases].reverse())
+						this.attempt(() => this.releaseLease(lease), errors);
+				for (const [handle, lease] of this.listLeases)
+						if (lease.released)
+								this.listLeases.delete(handle);
+				const root = this.root;
+				if (root) {
+						const before = errors.length;
+						this.attempt(() => root.removeEventListener('click', this.click), errors);
+						this.attempt(() => root.remove(), errors);
+						if (errors.length === before)
+								this.root = null;
+				}
+				const style = this.style;
+				if (style)
+						this.attempt(() => { style.remove(); this.style = null; }, errors);
 				this.state = null;
+				this.listView = null;
+				this.imageLease = null;
 				this.logical = null;
 				this.imageBox = null;
 				this.listSlot = null;
 				this.image = null;
 				this.mini = null;
+				this.throwErrors(errors, 'Could not fully dispose the scene preview');
 		}
 		static get CSS() {
 				return `
@@ -39136,183 +41743,197 @@ class SceneSearchPreviewView {
 		}
 }
 class SceneSearchLayoutCard {
-	constructor({document,container,id,mode,layoutClass='',extraCss='',onAction}={}) {
-		if(!document || !container || !/^(0[1-9]|10)$/.test(id) ||
-			!['normal','fullscreen'].includes(mode)){
-			throw new TypeError('SceneSearchLayoutCard requires DOM, layout and mode');
+		constructor({ document, container, id, mode, layoutClass = '', extraCss = '', onAction } = {}) {
+				if (!document || !container || !/^(0[1-9]|10)$/.test(id) ||
+						!['normal', 'fullscreen'].includes(mode)) {
+						throw new TypeError('SceneSearchLayoutCard requires DOM, layout and mode');
+				}
+				this.document = document;
+				this.container = container;
+				this.id = id;
+				this.mode = mode;
+				this.layoutClass = layoutClass;
+				this.extraCss = extraCss;
+				this.onAction = typeof onAction === 'function' ? onAction : () => { };
+				this.root = null;
+				this.style = null;
+				this._lastState = null;
+				this._handlers = {
+						click: this._onClick.bind(this),
+						keydown: this._onKeyDown.bind(this)
+				};
 		}
-		this.document=document;
-		this.container=container;
-		this.id=id;
-		this.mode=mode;
-		this.layoutClass=layoutClass;
-		this.extraCss=extraCss;
-		this.onAction=typeof onAction==='function'?onAction:()=>{};
-		this.root=null;
-		this.style=null;
-		this._lastState=null;
-		this._handlers={
-			click:this._onClick.bind(this),
-			keydown:this._onKeyDown.bind(this)
-		};
-	}
-	static button(doc,name,text,label) {
-		const b=doc.createElement('button');
-		b.type='button';
-		b.dataset.scuiAction=name;
-		b.className='zenzaSceneBtn scene-'+name;
-		b.textContent=text;
-		b.setAttribute('aria-label',label);
-		b.title=label;
-		if(name==='more'){
-			b.setAttribute('aria-haspopup','true');
-			b.setAttribute('aria-expanded','false');
+		static button(doc, name, text, label) {
+				const b = doc.createElement('button');
+				b.type = 'button';
+				b.dataset.scuiAction = name;
+				b.className = 'zenzaSceneBtn scene-' + name;
+				b.textContent = text;
+				b.setAttribute('aria-label', label);
+				b.title = label;
+				if (name === 'more') {
+						b.setAttribute('aria-haspopup', 'true');
+						b.setAttribute('aria-expanded', 'false');
+				}
+				return b;
 		}
-		return b;
-	}
-	mount(state) {
-		if(this.root){throw new Error('Already mounted');}
-		const d=this.document;
-		const style=d.createElement('style');
-		style.dataset.scuiLayoutStyle=this.id;
-		style.textContent=SceneSearchLayoutCard.CSS+'\n'+this.extraCss;
-		d.head.appendChild(style);
-		this.style=style;
-		try {
-			const root=d.createElement('section');
-			root.className='zenzaSceneSearchHost '+this.layoutClass;
-			root.dataset.layout=this.id;
-			root.dataset.mode=this.mode;
-			root.setAttribute('role','group');
-			root.setAttribute('aria-label','シーンサーチ');
-			const imageBox=d.createElement('div');
-			imageBox.className='zenzaSceneImageBox';
-			const image=d.createElement('img');
-			image.className='zenzaSceneImage';
-			image.alt='現在のシーンサーチ画像';
-			image.hidden=true;
-			imageBox.appendChild(image);
-			const message=d.createElement('span');
-			message.className='zenzaSceneImagePlaceholder';
-			message.textContent='プレビュー画像なし';
-			imageBox.appendChild(message);
-			const foot=d.createElement('div');
-			foot.className='zenzaSceneFoot';
-			const label=d.createElement('span');
-			label.className='zenzaSceneTime';
-			label.textContent='0:00';
-			foot.appendChild(label);
-			const buttons=d.createElement('div');
-			buttons.className='zenzaSceneActions';
-			for(const [name,symbol,aria] of [
-				['seek-back','‹','指定秒数戻る'],
-				['seek-forward','›','指定秒数進む'],
-				['more','⋯','シーンサーチの追加操作'],
-				['pin','📌','シーンサーチを固定'],
-				['comment-toggle','💬','流れるコメント／一覧の切替'],
-				['comment-search','⌕','コメント検索'],
-				['seek-step','5秒','移動秒数設定']
-			])buttons.appendChild(SceneSearchLayoutCard.button(d,name,symbol,aria));
-			foot.appendChild(buttons);
-			root.appendChild(imageBox);
-			root.appendChild(foot);
-			root.addEventListener('click',this._handlers.click);
-			root.addEventListener('keydown',this._handlers.keydown);
-			this.container.appendChild(root);
-			this.root=root;
-			this.render(state);
-		}catch(e){this.dispose();throw e;}
-	}
-	_onClick(e) {
-		const button=e.target.closest?.('button[data-scui-action]');
-		if(!button || !this.root?.contains(button) || button.disabled){return;}
-		const action=button.dataset.scuiAction;
-		if(action==='more') {
-			this.root.classList.toggle('is-expanded');
-			button.setAttribute('aria-expanded',
-				String(this.root.classList.contains('is-expanded')));
+		mount(state) {
+				if (this.root) {
+						throw new Error('Already mounted');
+				}
+				const d = this.document;
+				const style = d.createElement('style');
+				style.dataset.scuiLayoutStyle = this.id;
+				style.textContent = SceneSearchLayoutCard.CSS + '\n' + this.extraCss;
+				d.head.appendChild(style);
+				this.style = style;
+				try {
+						const root = d.createElement('section');
+						root.className = 'zenzaSceneSearchHost ' + this.layoutClass;
+						root.dataset.layout = this.id;
+						root.dataset.mode = this.mode;
+						root.setAttribute('role', 'group');
+						root.setAttribute('aria-label', 'シーンサーチ');
+						const imageBox = d.createElement('div');
+						imageBox.className = 'zenzaSceneImageBox';
+						const image = d.createElement('img');
+						image.className = 'zenzaSceneImage';
+						image.alt = '現在のシーンサーチ画像';
+						image.hidden = true;
+						imageBox.appendChild(image);
+						const message = d.createElement('span');
+						message.className = 'zenzaSceneImagePlaceholder';
+						message.textContent = 'プレビュー画像なし';
+						imageBox.appendChild(message);
+						const foot = d.createElement('div');
+						foot.className = 'zenzaSceneFoot';
+						const label = d.createElement('span');
+						label.className = 'zenzaSceneTime';
+						label.textContent = '0:00';
+						foot.appendChild(label);
+						const buttons = d.createElement('div');
+						buttons.className = 'zenzaSceneActions';
+						for (const [name, symbol, aria] of [
+								['seek-back', '‹', '指定秒数戻る'],
+								['seek-forward', '›', '指定秒数進む'],
+								['more', '⋯', 'シーンサーチの追加操作'],
+								['pin', '📌', 'シーンサーチを固定'],
+								['comment-toggle', '💬', '流れるコメント／一覧の切替'],
+								['comment-search', '⌕', 'コメント検索'],
+								['seek-step', '5秒', '移動秒数設定']
+						])
+								buttons.appendChild(SceneSearchLayoutCard.button(d, name, symbol, aria));
+						foot.appendChild(buttons);
+						root.appendChild(imageBox);
+						root.appendChild(foot);
+						root.addEventListener('click', this._handlers.click);
+						root.addEventListener('keydown', this._handlers.keydown);
+						this.container.appendChild(root);
+						this.root = root;
+						this.render(state);
+				}
+				catch (e) {
+						this.dispose();
+						throw e;
+				}
 		}
-		this.onAction(action,{layoutId:this.id,mode:this.mode},e);
-	}
-	_onKeyDown(e) {
-		if(e.key==='Escape' && this.root?.classList.contains('is-expanded')){
-			this.root.classList.remove('is-expanded');
-			const more=this.root.querySelector('[data-scui-action="more"]');
-			more?.setAttribute('aria-expanded','false');
-			more?.focus();
-			e.preventDefault();
-			e.stopPropagation();
+		_onClick(e) {
+				const button = e.target.closest?.('button[data-scui-action]');
+				if (!button || !this.root?.contains(button) || button.disabled) {
+						return;
+				}
+				const action = button.dataset.scuiAction;
+				if (action === 'more') {
+						this.root.classList.toggle('is-expanded');
+						button.setAttribute('aria-expanded', String(this.root.classList.contains('is-expanded')));
+				}
+				this.onAction(action, { layoutId: this.id, mode: this.mode }, e);
 		}
-	}
-	render(state) {
-		if(!this.root){return;}
-		state=state||{};
-		const previous=this._lastState;
-		this._lastState=state;
-		const time=Number.isFinite(state.time)&&state.time>=0?Math.floor(state.time):0;
-		if(!previous||Math.floor(previous.time)!==time){
-			this.root.querySelector('.zenzaSceneTime').textContent=
-				String(Math.floor(time/60))+':'+String(time%60).padStart(2,'0');
+		_onKeyDown(e) {
+				if (e.key === 'Escape' && this.root?.classList.contains('is-expanded')) {
+						this.root.classList.remove('is-expanded');
+						const more = this.root.querySelector('[data-scui-action="more"]');
+						more?.setAttribute('aria-expanded', 'false');
+						more?.focus();
+						e.preventDefault();
+						e.stopPropagation();
+				}
 		}
-		if(previous&&previous.shown===state.shown&&previous.pinned===state.pinned&&
-			previous.seekStepSeconds===state.seekStepSeconds&&
-			previous.commentPreviewVisible===state.commentPreviewVisible&&
-			previous.commentListMode===state.commentListMode&&previous.videoId===state.videoId){
-			return; // Layout subclass still updates geometry; unchanged controls do not.
+		render(state) {
+				if (!this.root) {
+						return;
+				}
+				state = state || {};
+				const previous = this._lastState;
+				this._lastState = state;
+				const time = Number.isFinite(state.time) && state.time >= 0 ? Math.floor(state.time) : 0;
+				if (!previous || Math.floor(previous.time) !== time) {
+						this.root.querySelector('.zenzaSceneTime').textContent =
+								String(Math.floor(time / 60)) + ':' + String(time % 60).padStart(2, '0');
+				}
+				if (previous && previous.shown === state.shown && previous.pinned === state.pinned &&
+						previous.seekStepSeconds === state.seekStepSeconds &&
+						previous.commentPreviewVisible === state.commentPreviewVisible &&
+						previous.commentListMode === state.commentListMode && previous.videoId === state.videoId) {
+						return; // Layout subclass still updates geometry; unchanged controls do not.
+				}
+				this.root.dataset.mode = this.mode;
+				this.root.hidden = state.shown === false && !state.pinned;
+				this.root.classList.toggle('is-pinned', state.pinned === true);
+				const seconds = state.seekStepSeconds;
+				const compact = seconds === 0;
+				this.root.classList.toggle('is-compact', compact);
+				this.root.style.setProperty('--scene-preview-min-width', compact ? '124px' : '180px');
+				for (const action of ['seek-back', 'seek-forward']) {
+						const button = this.root.querySelector('[data-scui-action="' + action + '"]');
+						button.hidden = compact;
+						button.disabled = compact;
+						button.style.display = compact ? 'none' : '';
+				}
+				this.root.querySelector('[data-scui-action="seek-step"]').textContent =
+						String(Number.isSafeInteger(seconds) ? seconds : 5) + '秒';
+				const pin = this.root.querySelector('[data-scui-action="pin"]');
+				pin.setAttribute('aria-pressed', String(state.pinned === true));
+				pin.title = state.pinned ? '固定解除' : 'シーンサーチを固定';
+				const comment = this.root.querySelector('[data-scui-action="comment-toggle"]');
+				comment.setAttribute('aria-pressed', String(state.commentListMode === true));
+				const modeAction = state.commentListMode ? 'サムネイルに重ねて流れるコメントに切り替え' :
+						'シーンサーチのコメント一覧に切り替え';
+				comment.setAttribute('aria-label', modeAction);
+				comment.title = modeAction + (state.commentPreviewVisible === false ? '（コメント表示はOFF）' : '');
 		}
-		this.root.dataset.mode=this.mode;
-		this.root.hidden=state.shown===false && !state.pinned;
-		this.root.classList.toggle('is-pinned',state.pinned===true);
-		const seconds=state.seekStepSeconds;
-		const compact=seconds===0;
-		this.root.classList.toggle('is-compact',compact);
-		this.root.style.setProperty('--scene-preview-min-width',compact?'124px':'180px');
-		for(const action of ['seek-back','seek-forward']){
-			const button=this.root.querySelector('[data-scui-action="'+action+'"]');
-			button.hidden=compact;
-			button.disabled=compact;
-			button.style.display=compact?'none':'';
+		onPreview(asset) {
+				if (!this.root) {
+						return;
+				}
+				const image = this.root.querySelector('.zenzaSceneImage');
+				const placeholder = this.root.querySelector('.zenzaSceneImagePlaceholder');
+				const url = typeof asset === 'string' ? asset :
+						typeof asset?.imageUrl === 'string' ? asset.imageUrl : null;
+				if (url && /^(https?:\/\/|blob:|data:image\/)/i.test(url)) {
+						image.src = url;
+						image.hidden = false;
+						placeholder.hidden = true;
+				}
+				else {
+						image.removeAttribute('src');
+						image.hidden = true;
+						placeholder.hidden = false;
+				}
 		}
-		this.root.querySelector('[data-scui-action="seek-step"]').textContent=
-			String(Number.isSafeInteger(seconds)?seconds:5)+'秒';
-		const pin=this.root.querySelector('[data-scui-action="pin"]');
-		pin.setAttribute('aria-pressed',String(state.pinned===true));
-		pin.title=state.pinned?'固定解除':'シーンサーチを固定';
-		const comment=this.root.querySelector('[data-scui-action="comment-toggle"]');
-		comment.setAttribute('aria-pressed',String(state.commentListMode===true));
-		const modeAction=state.commentListMode?'サムネイルに重ねて流れるコメントに切り替え':
-			'シーンサーチのコメント一覧に切り替え';
-		comment.setAttribute('aria-label',modeAction);
-		comment.title=modeAction+(state.commentPreviewVisible===false?'（コメント表示はOFF）':'');
-	}
-	onPreview(asset) {
-		if(!this.root){return;}
-		const image=this.root.querySelector('.zenzaSceneImage');
-		const placeholder=this.root.querySelector('.zenzaSceneImagePlaceholder');
-		const url=typeof asset==='string'?asset:
-			typeof asset?.imageUrl==='string'?asset.imageUrl:null;
-		if(url && /^(https?:\/\/|blob:|data:image\/)/i.test(url)){
-			image.src=url;
-			image.hidden=false;
-			placeholder.hidden=true;
-		}else{
-			image.removeAttribute('src');
-			image.hidden=true;
-			placeholder.hidden=false;
+		dispose() {
+				if (this.root) {
+						this.root.removeEventListener('click', this._handlers.click);
+						this.root.removeEventListener('keydown', this._handlers.keydown);
+						this.root.remove();
+						this.root = null;
+				}
+				this.style?.remove();
+				this.style = null;
+				this._lastState = null;
 		}
-	}
-	dispose() {
-		if(this.root){
-			this.root.removeEventListener('click',this._handlers.click);
-			this.root.removeEventListener('keydown',this._handlers.keydown);
-			this.root.remove();
-			this.root=null;
-		}
-		this.style?.remove();
-		this.style=null;
-		this._lastState=null;
-	}
-	static get CSS() { return `
+		static get CSS() {
+				return `
 .zenzaSceneSearchHost {
 	--scene-preview-min-width:180px;
 	position:absolute;
@@ -39357,7 +41978,8 @@ class SceneSearchLayoutCard {
 	opacity:1;visibility:visible;pointer-events:auto}
 .zenzaSceneSearchHost.is-compact .zenzaSceneImageBox{min-height:28px}
 .zenzaSceneSearchHost.is-compact .zenzaSceneImage{max-height:75px}
-.zenzaSceneSearchHost .zenzaSeekThumbnail-image{max-width:100%}
+/* Only scene-preview imagery is opaque; native non-scene thumbnails retain their style. */
+.zenzaSceneSearchHost .zenzaSeekThumbnail-image{max-width:100%;opacity:1!important}
 .zenzaSceneSearchHost .zenzaSeekThumbnail-thumbnail{max-width:100%;height:auto}
 /* The original worker always paints 160x90. Scale visually, do not resize its backing store. */
 .zenzaSceneSearchHost.is-compact .zenzaSeekThumbnail-image,
@@ -39370,7 +41992,8 @@ class SceneSearchLayoutCard {
 		transition:none!important;animation:none!important
 	}
 }
-`; }
+`;
+		}
 }
 class SceneSearchLayout00 {
 		document;
@@ -39431,6 +42054,7 @@ class SceneSearchLayout00 {
 				this.track = seekOwner.querySelector('.seekRange') || seekOwner;
 				this.root = tooltip;
 				this.container.classList.add('is-scui00-active');
+				this.container.classList.toggle('is-scui00-fullscreen', this.mode === 'fullscreen');
 				tooltip.classList.add('is-scui00-root');
 				const style = this.document.createElement('style');
 				style.dataset.scui00Style = '1';
@@ -39453,6 +42077,7 @@ class SceneSearchLayout00 {
 		}
 		render(state) {
 				this.pinned = state?.pinned === true;
+				this.container.classList.toggle('is-scui00-pinned', this.pinned && state?.shown !== false);
 				const mode = state?.commentListMode === true;
 				const changed = mode !== this.listMode;
 				this.listMode = mode;
@@ -39595,7 +42220,7 @@ class SceneSearchLayout00 {
 				}
 				this.appearanceStyles = [];
 				this.appearanceScale = 1;
-				this.container.classList.remove('is-scui00-active', 'is-scui00-mini-static', 'is-scui00-mini-hidden', 'is-scui00-inactive');
+				this.container.classList.remove('is-scui00-active', 'is-scui00-pinned', 'is-scui00-fullscreen', 'is-scui00-mini-static', 'is-scui00-mini-hidden', 'is-scui00-inactive');
 				this.style?.remove();
 				this.track = null;
 				this.onMove = null;
@@ -39639,8 +42264,58 @@ class SceneSearchLayout00 {
 .is-scui00-active .seekBarThumbnailContainer .zenzaSeekThumbnail-image{
 	position:absolute!important;left:50%!important;top:0!important;
 	margin-left:-80px!important;margin-right:0!important;
+	/* The transparent scene frame must not also fade the storyboard picture. */
+	opacity:1!important;
 	transform:scale(var(--scene-thumbnail-scale,1));
 	transform-origin:center top;
+}
+/* Pin keeps the ORIGINAL native tooltip visible after the seekbar loses
+	:hover, but never defeats explicit idle/hidden state. */
+.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)
+.seekBarToolTip.is-scui00-root{
+	visibility:visible!important;opacity:1!important;
+}
+/* The original mini-comment is a separate native seekbar sibling. */
+.is-scui00-active.is-scui00-pinned:not(.is-scui00-mini-hidden):not(.is-scui00-inactive)
+.seekBarContainer:not(.enableCommentPreview):has(.zenzaSeekThumbnail.is-visible)
+>.zenzaCommentPreview{display:block!important;}
+/* A pinned UI00 preview shares its ORIGINAL VideoControlBar parent.
+	When the bar fades to opacity:0, tooltip opacity:1 cannot undo ancestor
+	compositing. Keep only the native seek/preview visible while controls idle.
+	Active/hover/focus/menu/shortcut feedback must retain original bar behavior. */
+:is(.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive):is(.is-fullscreen,.zenzaScreenMode_small,.zenzaScreenMode_sideView),body:where(.zenzaScreenMode_small,.zenzaScreenMode_sideView) .is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)) > .videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar):not(.is-controlBarActive .videoControlBar):not(.volumeChanging .videoControlBar){
+	opacity:1!important;background:transparent!important;
+}
+:is(.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive):is(.is-fullscreen,.zenzaScreenMode_small,.zenzaScreenMode_sideView),body:where(.zenzaScreenMode_small,.zenzaScreenMode_sideView) .is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)) > .videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar):not(.is-controlBarActive .videoControlBar):not(.volumeChanging .videoControlBar)>.controlItemContainer{
+	visibility:hidden!important;pointer-events:none!important;
+}
+:is(.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive):is(.is-fullscreen,.zenzaScreenMode_small,.zenzaScreenMode_sideView),body:where(.zenzaScreenMode_small,.zenzaScreenMode_sideView) .is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)) > .videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar):not(.is-controlBarActive .videoControlBar):not(.volumeChanging .videoControlBar)>.seekBarContainer{
+	pointer-events:auto!important;
+}
+/* Fullscreen always-hide and pin have separate ownership contracts:
+	the explicitly pinned ORIGINAL preview stays visible, but the native
+	control glyphs remain hidden until hover/focus. The host opacity must not
+	hide its pinned child during the 3s activity or volume-changing timer.
+	This override is scoped to FULLSCREEN only, never normal/small/sideView. */
+body[data-fullscreen-control-bar-mode="always-hide"]
+.is-scui00-active.is-scui00-pinned.is-fullscreen:not(.is-scui00-inactive)
+>.videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar){
+	opacity:1!important;background:transparent!important;
+}
+body[data-fullscreen-control-bar-mode="always-hide"]
+.is-scui00-active.is-scui00-pinned.is-fullscreen:not(.is-scui00-inactive)
+>.videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar)>.controlItemContainer{
+	visibility:hidden!important;pointer-events:none!important;
+}
+body[data-fullscreen-control-bar-mode="always-hide"]
+.is-scui00-active.is-scui00-pinned.is-fullscreen:not(.is-scui00-inactive)
+>.videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar)>.seekBarContainer{
+	pointer-events:auto!important;
+}
+/* Fullscreen's native control row occupies the tooltip action strip at
+	bottom:10px. Lift ONLY the UI00 tooltip; do not hide or cover VCB buttons. */
+.is-scui00-active.is-scui00-fullscreen .seekBarToolTip.is-scui00-root{
+	bottom:76px!important;
 }
 /* Both native seekbar siblings now track the real full-width range. */
 .is-scui00-active .seekBarContainer>.zenzaCommentPreview{
@@ -39727,117 +42402,124 @@ height:var(--scui00-list-height,200px)!important;max-height:calc(100vh - 16px)!i
 		}
 }
 class SceneSearchLayoutRegistry {
-	constructor() {
-		this._items=new Map();
-	}
-	static validId(id) {
-		return typeof id==='string' && /^(00|0[1-9]|10|follow|fixed|legacy)$/.test(id);
-	}
-	register({id,label,description='',factory}={}) {
-		if(!SceneSearchLayoutRegistry.validId(id) || typeof label!=='string' ||
-			!label || typeof factory!=='function' || this._items.has(id)) {
-			throw new TypeError('Invalid or duplicate SceneSearch layout: '+String(id));
+		constructor() {
+				this._items = new Map();
 		}
-		this._items.set(id,Object.freeze({id,label,description,factory}));
-		return this;
-	}
-	get(id) {
-		return this._items.get(id)||null;
-	}
-	list() {
-		return Array.from(this._items.values(),
-			({id,label,description})=>Object.freeze({id,label,description}));
-	}
-	has(id) {return this._items.has(id);}
-	create({id,mode='normal',document,container,onAction,settings}={}) {
-		const definition=this.get(id);
-		if(!definition) {throw new RangeError('Layout not registered: '+String(id));}
-		if(!document || !container || !['normal','fullscreen'].includes(mode)) {
-			throw new TypeError('Layout requires DOM container and screen mode');
+		static validId(id) {
+				return typeof id === 'string' && /^(00|0[1-9]|10|follow|fixed|legacy)$/.test(id);
 		}
-		const result=definition.factory({id,mode,document,container,onAction,settings});
-		if(!result || typeof result.mount!=='function' ||
-			typeof result.render!=='function' || typeof result.dispose!=='function') {
-			throw new TypeError('Layout factory does not implement mount/render/dispose: '+id);
+		register({ id, label, description = '', factory } = {}) {
+				if (!SceneSearchLayoutRegistry.validId(id) || typeof label !== 'string' ||
+						!label || typeof factory !== 'function' || this._items.has(id)) {
+						throw new TypeError('Invalid or duplicate SceneSearch layout: ' + String(id));
+				}
+				this._items.set(id, Object.freeze({ id, label, description, factory }));
+				return this;
 		}
-		return result;
-	}
-	makeFactory(shared) {
-		return ({id,mode})=>this.create({...shared,id,mode});
-	}
+		get(id) {
+				return this._items.get(id) || null;
+		}
+		list() {
+				return Array.from(this._items.values(), ({ id, label, description }) => Object.freeze({ id, label, description }));
+		}
+		has(id) { return this._items.has(id); }
+		create({ id, mode = 'normal', document, container, onAction, settings } = {}) {
+				const definition = this.get(id);
+				if (!definition) {
+						throw new RangeError('Layout not registered: ' + String(id));
+				}
+				if (!document || !container || !['normal', 'fullscreen'].includes(mode)) {
+						throw new TypeError('Layout requires DOM container and screen mode');
+				}
+				const result = definition.factory({ id, mode, document, container, onAction, settings });
+				if (!result || typeof result.mount !== 'function' ||
+						typeof result.render !== 'function' ||
+						typeof result.dispose !== 'function') {
+						throw new TypeError('Layout factory does not implement mount/render/dispose: ' + id);
+				}
+				return result;
+		}
+		makeFactory(shared) {
+				return ({ id, mode }) => this.create({ ...shared, id, mode });
+		}
 }
 class SceneSearchLayoutCatalog {
-	static get IDS() {
-		return ['00','01','02','03','04','05','06','07','08','09','10'];
-	}
-	static install(registry,{
-		Card,Legacy,registerClassic,SideShelf,PlaybackDeck,Filmstrip,Drawer,SmartAvoid,
-		clock,allowPartial=false
-	}={}) {
-		if(!registry||typeof registry.list!=='function'||
-			typeof registry.register!=='function'||typeof Card!=='function'){
-			throw new TypeError('Scene layout catalog requires a registry and card');
+		static get IDS() {
+				return ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10'];
 		}
-		const staging=new registry.constructor();
-		if(typeof staging.register!=='function'||typeof staging.get!=='function'){
-			throw new TypeError('Registry must support isolated staging');
+		static install(registry, { Card, Legacy, registerClassic, SideShelf, PlaybackDeck, Filmstrip, Drawer, SmartAvoid, clock, allowPartial = false } = {}) {
+				if (!registry || typeof registry.list !== 'function' ||
+						typeof registry.register !== 'function' || typeof Card !== 'function') {
+						throw new TypeError('Scene layout catalog requires a registry and card');
+				}
+				const staging = new registry.constructor();
+				if (typeof staging.register !== 'function' || typeof staging.get !== 'function') {
+						throw new TypeError('Registry must support isolated staging');
+				}
+				const providers = [
+						{ name: '00', ids: ['00'], call: Legacy?.install &&
+										(() => Legacy.install(staging)) },
+						{ name: '01/02', ids: ['01', '02'], call: registerClassic &&
+										(() => registerClassic(staging)) },
+						{ name: '03/04', ids: ['03', '04'], call: SideShelf?.install &&
+										(() => SideShelf.install(staging, Card)) },
+						{ name: '05/06', ids: ['05', '06'], call: PlaybackDeck?.register &&
+										(() => PlaybackDeck.register(staging, { Card })) },
+						{ name: '07', ids: ['07'], call: Filmstrip?.install &&
+										(() => Filmstrip.install(staging, Card)) },
+						{ name: '08/09', ids: ['08', '09'], call: Drawer?.install ?
+										(() => Drawer.install(staging, Card)) :
+										Drawer?.register ? (() => Drawer.register(staging, { Card })) : null },
+						{ name: '10', ids: ['10'], call: SmartAvoid?.register &&
+										(() => SmartAvoid.register(staging, { Card, clock })) }
+				];
+				const missing = providers.filter(p => typeof p.call !== 'function');
+				if (missing.length && !allowPartial) {
+						throw new Error('Scene layout providers missing: ' +
+								missing.map(p => p.name).join(', '));
+				}
+				const taken = new Set(registry.list().map(item => item.id));
+				for (const group of providers) {
+						if (!group.call) {
+								continue;
+						}
+						for (const id of group.ids) {
+								if (taken.has(id)) {
+										throw new Error('Already registered: ' + id);
+								}
+						}
+				}
+				for (const group of providers) {
+						if (!group.call) {
+								continue;
+						}
+						const before = new Set(staging.list().map(item => item.id));
+						group.call();
+						const added = staging.list().filter(item => !before.has(item.id))
+								.map(item => item.id).sort();
+						const expected = group.ids.slice().sort();
+						if (added.join(',') !== expected.join(',')) {
+								throw new Error('Scene layout provider ' + group.name +
+										' registered ' + added.join(',') + ' instead of ' + expected.join(','));
+						}
+				}
+				const installed = staging.list().map(item => item.id).sort();
+				const absent = SceneSearchLayoutCatalog.IDS.filter(id => !installed.includes(id));
+				if (absent.length && !allowPartial) {
+						throw new Error('Scene layout coverage incomplete: ' + absent.join(','));
+				}
+				for (const id of installed) {
+						registry.register(staging.get(id));
+				}
+				return Object.freeze({
+						registered: Object.freeze(installed),
+						missing: Object.freeze(absent),
+						complete: absent.length === 0
+				});
 		}
-		const providers=[
-			{name:'00',ids:['00'],call:Legacy?.install&&
-				(()=>Legacy.install(staging))},
-			{name:'01/02',ids:['01','02'],call:registerClassic&&
-				(()=>registerClassic(staging))},
-			{name:'03/04',ids:['03','04'],call:SideShelf?.install&&
-				(()=>SideShelf.install(staging,Card))},
-			{name:'05/06',ids:['05','06'],call:PlaybackDeck?.register&&
-				(()=>PlaybackDeck.register(staging,{Card}))},
-			{name:'07',ids:['07'],call:Filmstrip?.install&&
-				(()=>Filmstrip.install(staging,Card))},
-			{name:'08/09',ids:['08','09'],call:Drawer?.install?
-				(()=>Drawer.install(staging,Card)):
-				Drawer?.register?(()=>Drawer.register(staging,{Card})):null},
-			{name:'10',ids:['10'],call:SmartAvoid?.register&&
-				(()=>SmartAvoid.register(staging,{Card,clock}))}
-		];
-		const missing=providers.filter(p=>typeof p.call!=='function');
-		if(missing.length&&!allowPartial){
-			throw new Error('Scene layout providers missing: '+
-				missing.map(p=>p.name).join(', '));
-		}
-		const taken=new Set(registry.list().map(item=>item.id));
-		for(const group of providers){
-			if(!group.call){continue;}
-			for(const id of group.ids){
-				if(taken.has(id)){throw new Error('Already registered: '+id);}
-			}
-		}
-		for(const group of providers){
-			if(!group.call){continue;}
-			const before=new Set(staging.list().map(item=>item.id));
-			group.call();
-			const added=staging.list().filter(item=>!before.has(item.id))
-				.map(item=>item.id).sort();
-			const expected=group.ids.slice().sort();
-			if(added.join(',')!==expected.join(',')){
-				throw new Error('Scene layout provider '+group.name+
-					' registered '+added.join(',')+' instead of '+expected.join(','));
-			}
-		}
-		const installed=staging.list().map(item=>item.id).sort();
-		const absent=SceneSearchLayoutCatalog.IDS.filter(id=>!installed.includes(id));
-		if(absent.length&&!allowPartial){
-			throw new Error('Scene layout coverage incomplete: '+absent.join(','));
-		}
-		for(const id of installed){registry.register(staging.get(id));}
-		return Object.freeze({
-			registered:Object.freeze(installed),
-			missing:Object.freeze(absent),
-			complete:absent.length===0
-		});
-	}
 }
 // already required
-const SCENE_01_02_TOOLS_CSS=`
+const SCENE_01_02_TOOLS_CSS = `
 .zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneActions,
 .zenzaSceneSearchHost.zenzaSceneLayout02 .zenzaSceneActions{
 	position:relative;min-width:26px;flex:0 0 auto;gap:2px;
@@ -39875,13 +42557,17 @@ const SCENE_01_02_TOOLS_CSS=`
 	}
 }
 `;
-const SCENE_LAYOUT01_CSS=`
+const SCENE_LAYOUT01_CSS = `
 .zenzaSceneSearchHost.zenzaSceneLayout01{
 	width:var(--scene-preview-min-width);
 	left:var(--scene-x,50%);
 	bottom:var(--scene-bottom,60px);
 	transform:translateX(-50%);
-	border-radius:6px;box-shadow:none;
+	border-radius:6px;box-shadow:none;background:transparent;
+}
+/* UI01's background must remain transparent without fading the thumbnail. */
+.zenzaSceneSearchHost.zenzaSceneLayout01 .zenzaSceneImageBox{
+	background:transparent;
 }
 /* Above the video container AND the independent right information panel.
 	The dialog spans the viewport, unlike its narrow .zenzaPlayerContainer. */
@@ -39917,7 +42603,7 @@ const SCENE_LAYOUT01_CSS=`
 	left:auto;right:3px;
 }
 `;
-const SCENE_LAYOUT02_CSS=`
+const SCENE_LAYOUT02_CSS = `
 .zenzaSceneSearchHost.zenzaSceneLayout02{
 	width:var(--scene-preview-min-width);
 	left:12px;bottom:var(--scene-bottom,64px);transform:none;
@@ -39931,196 +42617,195 @@ const SCENE_LAYOUT02_CSS=`
 	This provider owns only the scene card, including narrow layouts. */
 `;
 function registerSceneLayouts01_02(registry) {
-	if(!registry||typeof registry.register!=='function'){
-		throw new TypeError('A scene layout registry is required');
-	}
-	for(const item of [
-		{id:'01',name:'クラシック追従',
-			description:'シーク位置へ追従する小型プレビュー。通常表示と全画面で下端を調整',
-			layoutClass:'zenzaSceneLayout01',css:SCENE_LAYOUT01_CSS},
-		{id:'02',name:'左右ツインパネル',
-			description:'シーンを左、コメント一覧を右に同時表示',
-			layoutClass:'zenzaSceneLayout02',css:SCENE_LAYOUT02_CSS}
-	]){
-		registry.register({id:item.id,label:item.name,description:item.description,
-			factory:options=>{
-				const card=new SceneSearchLayoutCard({...options,
-					layoutClass:item.layoutClass,
-					extraCss:SCENE_01_02_TOOLS_CSS+'\n'+item.css});
-				const container=options.container,settings=options.settings||{};
-				const portal=item.id==='01'?
-					container.closest?.('.zenzaVideoPlayerDialog'):null;
-				const render=card.render.bind(card),mount=card.mount.bind(card);
-				const dispose=card.dispose.bind(card);
-				let originalPlayerBottom=options.mode==='normal'?38:68;
-				return {
-					get root(){return card.root;},
-					mount(state){
-						mount(state);
-						if(portal&&card.root){
-							const oldComputed=options.document.defaultView?.
-								getComputedStyle?.(card.root);
-							const measured=Number.parseFloat(oldComputed?.bottom);
-							if(Number.isFinite(measured)&&measured>=0){
-								originalPlayerBottom=measured;
-							}
-							card.root.dataset.scuiPortal='1';
-							const owner=options.mode==='fullscreen'?container:portal;
-							owner.appendChild(card.root);
+		if (!registry || typeof registry.register !== 'function') {
+				throw new TypeError('A scene layout registry is required');
+		}
+		for (const item of [
+				{ id: '01', name: 'クラシック追従',
+						description: 'シーク位置へ追従する小型プレビュー。通常表示と全画面で下端を調整',
+						layoutClass: 'zenzaSceneLayout01', css: SCENE_LAYOUT01_CSS },
+				{ id: '02', name: '左右ツインパネル',
+						description: 'シーンを左、コメント一覧を右に同時表示',
+						layoutClass: 'zenzaSceneLayout02', css: SCENE_LAYOUT02_CSS }
+		]) {
+				registry.register({ id: item.id, label: item.name, description: item.description,
+						factory: (options) => {
+								const card = new SceneSearchLayoutCard({ ...options,
+										layoutClass: item.layoutClass,
+										extraCss: SCENE_01_02_TOOLS_CSS + '\n' + item.css });
+								const container = options.container, settings = options.settings || {};
+								const portal = item.id === '01' ?
+										container.closest?.('.zenzaVideoPlayerDialog') : null;
+								const render = card.render.bind(card), mount = card.mount.bind(card);
+								const dispose = card.dispose.bind(card);
+								let originalPlayerBottom = options.mode === 'normal' ? 38 : 68;
+								return {
+										get root() { return card.root; },
+										mount(state) {
+												mount(state);
+												if (portal && card.root) {
+														const oldComputed = options.document.defaultView?.
+																getComputedStyle?.(card.root);
+														const measured = Number.parseFloat(oldComputed?.bottom);
+														if (Number.isFinite(measured) && measured >= 0) {
+																originalPlayerBottom = measured;
+														}
+														card.root.dataset.scuiPortal = '1';
+														const owner = options.mode === 'fullscreen' ? container : portal;
+														owner.appendChild(card.root);
+												}
+												container.dataset.sceneSearchLayout = item.id;
+												container.dataset.sceneMode = options.mode;
+												this.render(state);
+										},
+										render(state) {
+												render(state);
+												if (!card.root)
+														return;
+												const geometry = (item.id === '01' ?
+														settings.getSeekGeometryUnclipped?.() : null) ||
+														settings.getSeekGeometry?.();
+												const width = container.offsetWidth ||
+														container.getBoundingClientRect?.().width ||
+														container.clientWidth || 800;
+												const compact = state.seekStepSeconds === 0;
+												const frameWidth = compact ? 124 : 180;
+												if (item.id === '01') {
+														const duration = typeof settings.getDuration === 'function' ?
+																settings.getDuration() : settings.duration;
+														const pct = Number.isFinite(duration) && duration > 0 ?
+																Math.max(0, Math.min(1, state.time / duration)) : 0.5;
+														const validViewport = Number.isFinite(geometry?.visibleLeft) &&
+																Number.isFinite(geometry?.visibleRight) &&
+																geometry.visibleRight > geometry.visibleLeft;
+														const visibleLeft = validViewport ? geometry.visibleLeft : 0;
+														const visibleRight = validViewport ? geometry.visibleRight : width;
+														const available = visibleRight - visibleLeft;
+														const usable = Math.max(0, Math.min(frameWidth, available - 12));
+														const minX = visibleLeft + usable / 2 + 6;
+														const maxX = visibleRight - usable / 2 - 6;
+														const rawX = Number.isFinite(geometry?.pointerX) ?
+																geometry.pointerX :
+																Number.isFinite(geometry?.seekLeft) &&
+																		Number.isFinite(geometry?.seekWidth) ?
+																		geometry.seekLeft + geometry.seekWidth * pct : width * pct;
+														const clamp = (x) => maxX >= minX ?
+																Math.max(minX, Math.min(maxX, x)) :
+																(visibleLeft + visibleRight) / 2;
+														let x = clamp(rawX);
+														const previous = parseFloat(card.root.style.getPropertyValue('--scene-x'));
+														if (portal) {
+																const frameRect = container.getBoundingClientRect?.();
+																const owner = options.mode === 'fullscreen' ? container : portal;
+																const portalRect = owner.getBoundingClientRect?.();
+																if (Number.isFinite(frameRect?.bottom) &&
+																		Number.isFinite(portalRect?.bottom)) {
+																		const videoScale = container.offsetHeight > 0 && frameRect.height > 0 ?
+																				frameRect.height / container.offsetHeight : 1;
+																		const portalScale = owner.offsetHeight > 0 && portalRect.height > 0 ?
+																				portalRect.height / owner.offsetHeight : 1;
+																		const restoredBottom = (portalRect.bottom - frameRect.bottom +
+																				originalPlayerBottom * videoScale) / portalScale;
+																		if (Number.isFinite(restoredBottom)) {
+																				card.root.style.setProperty('--scene-viewport-bottom', Math.round(restoredBottom) + 'px');
+																		}
+																}
+																const viewport = options.document.defaultView?.innerWidth || 0;
+																const screenScale = frameRect?.width > 0 ?
+																		frameRect.width / (container.offsetWidth || frameRect.width) : 1;
+																if (viewport > 0 && frameRect && screenScale > 0) {
+																		const rootWidth = card.root.getBoundingClientRect?.().width ||
+																				card.root.offsetWidth || frameWidth;
+																		const margin = 8;
+																		const listMode = state.commentListMode === true;
+																		const desiredPaneWidth = listMode ? 350 : 0;
+																		const gap = listMode ? 8 : 0;
+																		const paneWidth = listMode ?
+																				Math.max(1, Math.min(desiredPaneWidth, viewport - margin * 2 - rootWidth - gap)) : 0;
+																		const half = rootWidth / 2;
+																		const minCenter = margin + half;
+																		const maxCenter = viewport - margin - gap - paneWidth - half;
+																		const desired = frameRect.left + rawX * screenScale;
+																		const last = state.pinned === true && Number.isFinite(previous) ?
+																				frameRect.left + previous * screenScale : desired;
+																		const screenX = maxCenter >= minCenter ?
+																				Math.max(minCenter, Math.min(maxCenter, last)) : minCenter;
+																		x = (screenX - frameRect.left) / screenScale;
+																		card.root.style.setProperty('--scene-viewport-x', Math.round(screenX) + 'px');
+																		card.root.style.setProperty('--scui-side-gap', gap + 'px');
+																		card.root.style.setProperty('--scui-side-width', paneWidth + 'px');
+																}
+														}
+														else if (state.pinned === true && Number.isFinite(previous)) {
+																x = clamp(previous);
+														}
+														const railFitsLeft = x - visibleLeft >= usable / 2 + 31;
+														card.root.classList.toggle('is-tools-left', railFitsLeft);
+														card.root.classList.toggle('is-tools-overlap', !railFitsLeft);
+														card.root.style.setProperty('--scene-x', Math.round(x) + 'px');
+												}
+												else {
+														container.dataset.sceneNarrow = String(width < 580);
+														container.style.setProperty('--scene-bottom', options.mode === 'fullscreen' ?
+																'calc(var(--zenza-control-bar-height,40px) + 28px)' : '42px');
+												}
+										},
+										onPreview: (asset, meta) => card.onPreview(asset, meta),
+										dispose() {
+												dispose();
+												if (container.dataset.sceneSearchLayout === item.id) {
+														delete container.dataset.sceneSearchLayout;
+														delete container.dataset.sceneMode;
+														delete container.dataset.sceneNarrow;
+														container.style.removeProperty('--scene-bottom');
+												}
+										}
+								};
 						}
-						container.dataset.sceneSearchLayout=item.id;
-						container.dataset.sceneMode=options.mode;
-						this.render(state);
-					},
-					render(state){
-						render(state);
-						if(!card.root)return;
-						const geometry=(item.id==='01'?
-							settings.getSeekGeometryUnclipped?.():null) ||
-							settings.getSeekGeometry?.();
-						const width=container.offsetWidth ||
-							container.getBoundingClientRect?.().width ||
-							container.clientWidth||800;
-						const compact=state.seekStepSeconds===0;
-						const frameWidth=compact?124:180;
-						if(item.id==='01'){
-							const duration=typeof settings.getDuration==='function'?
-								settings.getDuration():settings.duration;
-							const pct=Number.isFinite(duration)&&duration>0?
-								Math.max(0,Math.min(1,state.time/duration)):0.5;
-							const validViewport=Number.isFinite(geometry?.visibleLeft)&&
-								Number.isFinite(geometry?.visibleRight)&&
-								geometry.visibleRight>geometry.visibleLeft;
-							const visibleLeft=validViewport?geometry.visibleLeft:0;
-							const visibleRight=validViewport?geometry.visibleRight:width;
-							const available=visibleRight-visibleLeft;
-							const usable=Math.max(0,Math.min(frameWidth,available-12));
-							const minX=visibleLeft+usable/2+6;
-							const maxX=visibleRight-usable/2-6;
-							const rawX=Number.isFinite(geometry?.pointerX)?
-								geometry.pointerX:
-								Number.isFinite(geometry?.seekLeft)&&
-								Number.isFinite(geometry?.seekWidth)?
-									geometry.seekLeft+geometry.seekWidth*pct:width*pct;
-							const clamp=x=>maxX>=minX?
-								Math.max(minX,Math.min(maxX,x)):
-								(visibleLeft+visibleRight)/2;
-							let x=clamp(rawX);
-							const previous=parseFloat(card.root.style.getPropertyValue('--scene-x'));
-							if(portal){
-								const frameRect=container.getBoundingClientRect?.();
-								const owner=options.mode==='fullscreen'?container:portal;
-								const portalRect=owner.getBoundingClientRect?.();
-								if(Number.isFinite(frameRect?.bottom)&&
-										Number.isFinite(portalRect?.bottom)){
-									const videoScale=container.offsetHeight>0&&frameRect.height>0?
-										frameRect.height/container.offsetHeight:1;
-									const portalScale=owner.offsetHeight>0&&portalRect.height>0?
-										portalRect.height/owner.offsetHeight:1;
-									const restoredBottom=(portalRect.bottom-frameRect.bottom+
-										originalPlayerBottom*videoScale)/portalScale;
-									if(Number.isFinite(restoredBottom)){
-										card.root.style.setProperty('--scene-viewport-bottom',
-											Math.round(restoredBottom)+'px');
-									}
-								}
-								const viewport=options.document.defaultView?.innerWidth||0;
-								const screenScale=frameRect?.width>0?
-									frameRect.width/(container.offsetWidth||frameRect.width):1;
-								if(viewport>0&&frameRect&&screenScale>0){
-									const rootWidth=card.root.getBoundingClientRect?.().width||
-										card.root.offsetWidth||frameWidth;
-									const margin=8;
-									const listMode=state.commentListMode===true;
-									const desiredPaneWidth=listMode?350:0;
-									const gap=listMode?8:0;
-									const paneWidth=listMode?
-										Math.max(1,Math.min(desiredPaneWidth,
-											viewport-margin*2-rootWidth-gap)):0;
-									const half=rootWidth/2;
-									const minCenter=margin+half;
-									const maxCenter=viewport-margin-gap-paneWidth-half;
-									const desired=frameRect.left+rawX*screenScale;
-									const last=state.pinned===true&&Number.isFinite(previous)?
-										frameRect.left+previous*screenScale:desired;
-									const screenX=maxCenter>=minCenter?
-										Math.max(minCenter,Math.min(maxCenter,last)):minCenter;
-									x=(screenX-frameRect.left)/screenScale;
-									card.root.style.setProperty('--scene-viewport-x',
-										Math.round(screenX)+'px');
-									card.root.style.setProperty('--scui-side-gap',
-										gap+'px');
-									card.root.style.setProperty('--scui-side-width',
-										paneWidth+'px');
-								}
-							}else if(state.pinned===true&&Number.isFinite(previous)){
-								x=clamp(previous);
-							}
-							const railFitsLeft=x-visibleLeft>=usable/2+31;
-							card.root.classList.toggle('is-tools-left',railFitsLeft);
-							card.root.classList.toggle('is-tools-overlap',!railFitsLeft);
-							card.root.style.setProperty('--scene-x',Math.round(x)+'px');
-						}else{
-							container.dataset.sceneNarrow=String(width<580);
-							container.style.setProperty('--scene-bottom',
-								options.mode==='fullscreen'?
-									'calc(var(--zenza-control-bar-height,40px) + 28px)':'42px');
-						}
-					},
-					onPreview:(asset,meta)=>card.onPreview(asset,meta),
-					dispose(){
-						dispose();
-						if(container.dataset.sceneSearchLayout===item.id){
-							delete container.dataset.sceneSearchLayout;
-							delete container.dataset.sceneMode;
-							delete container.dataset.sceneNarrow;
-							container.style.removeProperty('--scene-bottom');
-						}
-					}
-				};
-			}
-		});
-	}
-	return registry;
+				});
+		}
+		return registry;
 }
 class SceneSearchLayouts03_04 {
-	static get DESCRIPTORS() {
-		return [
-			{id:'03',label:'サイドシェルフ',
-				description:'通常は動画右端、全画面は動画左端。操作レールを画面内側に開く'},
-			{id:'04',label:'トップエッジ',
-				description:'通常は動画右上、全画面では上中央。操作列はカードの下へ展開'}
-		];
-	}
-	static install(registry,Card) {
-		if(!registry?.register || typeof Card!=='function'){
-			throw new TypeError('Side shelf layouts require the common registry and card');
+		static get DESCRIPTORS() {
+				return [
+						{ id: '03', label: 'サイドシェルフ',
+								description: '通常は動画右端、全画面は動画左端。操作レールを画面内側に開く' },
+						{ id: '04', label: 'トップエッジ',
+								description: '通常は動画右上、全画面では上中央。操作列はカードの下へ展開' }
+				];
 		}
-		const [shelf,top]=this.DESCRIPTORS;
-		class EdgeCard extends Card {
-			mount(state){
-				super.mount(state);
-				const actions=this.root.querySelector('.zenzaSceneActions');
-				const more=actions.querySelector('.scene-more');
-				actions.parentElement.insertBefore(more,actions);
-				this.render(state);
-			}
-			render(state){
-				super.render(state);
-				if(!this.root){return;}
-				const width=this.container.getBoundingClientRect?.().width||
-					this.container.clientWidth||800;
-				this.root.dataset.scuiNarrow=String(width<440);
-			}
+		static install(registry, Card) {
+				if (!registry?.register || typeof Card !== 'function') {
+						throw new TypeError('Side shelf layouts require the common registry and card');
+				}
+				const [shelf, top] = this.DESCRIPTORS;
+				class EdgeCard extends Card {
+						mount(state) {
+								super.mount(state);
+								const actions = this.root.querySelector('.zenzaSceneActions');
+								const more = actions.querySelector('.scene-more');
+								actions.parentElement.insertBefore(more, actions);
+								this.render(state);
+						}
+						render(state) {
+								super.render(state);
+								if (!this.root) {
+										return;
+								}
+								const width = this.container.getBoundingClientRect?.().width ||
+										this.container.clientWidth || 800;
+								this.root.dataset.scuiNarrow = String(width < 440);
+						}
+				}
+				registry.register({ ...shelf, factory: (args) => new EdgeCard({ ...args,
+								layoutClass: 'zenzaSceneSideShelf', extraCss: this.SHELF_STYLE }) });
+				registry.register({ ...top, factory: (args) => new EdgeCard({ ...args,
+								layoutClass: 'zenzaSceneTopEdge', extraCss: this.TOP_STYLE }) });
+				return registry;
 		}
-		registry.register({...shelf,factory:args=>new EdgeCard({...args,
-			layoutClass:'zenzaSceneSideShelf',extraCss:this.SHELF_STYLE})});
-		registry.register({...top,factory:args=>new EdgeCard({...args,
-			layoutClass:'zenzaSceneTopEdge',extraCss:this.TOP_STYLE})});
-		return registry;
-	}
-	static get SHELF_STYLE() {
-		return `
+		static get SHELF_STYLE() {
+				return `
 /* Original 03: normal on video right, fullscreen on video left. */
 .zenzaSceneSearchHost.zenzaSceneSideShelf{
 	left:auto;right:12px;top:17%;bottom:auto;transform:none;
@@ -40177,9 +42862,9 @@ class SceneSearchLayouts03_04 {
 	.zenzaSceneSearchHost.zenzaSceneSideShelf .zenzaSceneActions{transition:none}
 }
 `;
-	}
-	static get TOP_STYLE() {
-		return `
+		}
+		static get TOP_STYLE() {
+				return `
 /* Original 04: normal on right top; fullscreen at screen top center. */
 .zenzaSceneSearchHost.zenzaSceneTopEdge{
 	left:auto;right:16px;top:17px;bottom:auto;transform:none;
@@ -40233,84 +42918,87 @@ class SceneSearchLayouts03_04 {
 	.zenzaSceneSearchHost.zenzaSceneTopEdge .zenzaSceneActions{transition:none}
 }
 `;
-	}
+		}
 }
 class SceneSearchLayouts05_06 {
-	static register(registry,{Card}={}) {
-		if(!registry || typeof registry.register!=='function' ||
-			typeof Card!=='function') {
-			throw new TypeError('Layout registry and shared semantic Card are required');
-		}
-		class DeckCapsuleCard extends Card {
-			constructor(args){
-				super(args);
-				this.settings=args.settings||{};
-			}
-			mount(state){
-				super.mount(state);
-				const foot=this.root.querySelector('.zenzaSceneFoot');
-				const actions=this.root.querySelector('.zenzaSceneActions');
-				for(const key of ['seek-back','seek-forward','more']){
-					const button=actions.querySelector('[data-scui-action="'+key+'"]');
-					if(button)foot.insertBefore(button,actions);
+		static register(registry, { Card } = {}) {
+				if (!registry || typeof registry.register !== 'function' ||
+						typeof Card !== 'function') {
+						throw new TypeError('Layout registry and shared semantic Card are required');
 				}
-				this.render(state);
-			}
-			render(state){
-				super.render(state);
-				if(!this.root){return;}
-				if(this.id==='05'){
-					const rect=this.container.getBoundingClientRect?.();
-					const viewportHeight=this.document.defaultView?.innerHeight;
-					const expectedHeight=this.root.getBoundingClientRect?.().height||138;
-					const room=Number.isFinite(viewportHeight)&&Number.isFinite(rect?.bottom)?
-						viewportHeight-rect.bottom:Infinity;
-					this.root.dataset.scuiPlacement=this.mode==='normal'&&
-						room<expectedHeight+16?'visible-fallback':'below';
-				}else if(this.id==='06'){
-					this._placeCapsule(state);
+				class DeckCapsuleCard extends Card {
+						constructor(args) {
+								super(args);
+								this.settings = args.settings || {};
+						}
+						mount(state) {
+								super.mount(state);
+								const foot = this.root.querySelector('.zenzaSceneFoot');
+								const actions = this.root.querySelector('.zenzaSceneActions');
+								for (const key of ['seek-back', 'seek-forward', 'more']) {
+										const button = actions.querySelector('[data-scui-action="' + key + '"]');
+										if (button)
+												foot.insertBefore(button, actions);
+								}
+								this.render(state);
+						}
+						render(state) {
+								super.render(state);
+								if (!this.root) {
+										return;
+								}
+								if (this.id === '05') {
+										const rect = this.container.getBoundingClientRect?.();
+										const viewportHeight = this.document.defaultView?.innerHeight;
+										const expectedHeight = this.root.getBoundingClientRect?.().height || 138;
+										const room = Number.isFinite(viewportHeight) && Number.isFinite(rect?.bottom) ?
+												viewportHeight - rect.bottom : Infinity;
+										this.root.dataset.scuiPlacement = this.mode === 'normal' &&
+												room < expectedHeight + 16 ? 'visible-fallback' : 'below';
+								}
+								else if (this.id === '06') {
+										this._placeCapsule(state);
+								}
+						}
+						_placeCapsule(state) {
+								const geometry = this.settings.getSeekGeometry?.();
+								const width = this.container.offsetWidth ||
+										this.container.getBoundingClientRect?.().width ||
+										this.container.clientWidth || 800;
+								const duration = typeof this.settings.getDuration === 'function' ?
+										this.settings.getDuration() : this.settings.duration;
+								const pct = Number.isFinite(duration) && duration > 0 ?
+										Math.max(0, Math.min(1, (state?.time || 0) / duration)) : 0.5;
+								const cardWidth = state?.seekStepSeconds === 0 ? 98 : 166;
+								const visibleLeft = Math.max(0, Math.min(width, Number.isFinite(geometry?.visibleLeft) ? geometry.visibleLeft : 0));
+								const visibleRight = Math.max(visibleLeft, Math.min(width, Number.isFinite(geometry?.visibleRight) ? geometry.visibleRight : width));
+								const minX = visibleLeft + Math.min(cardWidth / 2 + 6, (visibleRight - visibleLeft) / 2);
+								const maxX = visibleRight - Math.min(cardWidth / 2 + 6, (visibleRight - visibleLeft) / 2);
+								const target = Number.isFinite(geometry?.pointerX) ? geometry.pointerX :
+										Number.isFinite(geometry?.seekLeft) && Number.isFinite(geometry?.seekWidth) ?
+												geometry.seekLeft + geometry.seekWidth * pct : width * pct;
+								const previous = parseFloat(this.root.style.getPropertyValue('--scene-x'));
+								const raw = state?.pinned && Number.isFinite(previous) ? previous : target;
+								const x = Math.max(minX, Math.min(maxX, raw));
+								this.root.style.setProperty('--scene-x', Math.round(x) + 'px');
+						}
 				}
-			}
-			_placeCapsule(state){
-				const geometry=this.settings.getSeekGeometry?.();
-				const width=this.container.offsetWidth||
-					this.container.getBoundingClientRect?.().width||
-					this.container.clientWidth||800;
-				const duration=typeof this.settings.getDuration==='function'?
-					this.settings.getDuration():this.settings.duration;
-				const pct=Number.isFinite(duration)&&duration>0?
-					Math.max(0,Math.min(1,(state?.time||0)/duration)):0.5;
-				const cardWidth=state?.seekStepSeconds===0?98:166;
-				const visibleLeft=Math.max(0,Math.min(width,
-					Number.isFinite(geometry?.visibleLeft)?geometry.visibleLeft:0));
-				const visibleRight=Math.max(visibleLeft,Math.min(width,
-					Number.isFinite(geometry?.visibleRight)?geometry.visibleRight:width));
-				const minX=visibleLeft+Math.min(cardWidth/2+6,(visibleRight-visibleLeft)/2);
-				const maxX=visibleRight-Math.min(cardWidth/2+6,(visibleRight-visibleLeft)/2);
-				const target=Number.isFinite(geometry?.pointerX)?geometry.pointerX:
-					Number.isFinite(geometry?.seekLeft)&&Number.isFinite(geometry?.seekWidth)?
-						geometry.seekLeft+geometry.seekWidth*pct:width*pct;
-				const previous=parseFloat(this.root.style.getPropertyValue('--scene-x'));
-				const raw=state?.pinned&&Number.isFinite(previous)?previous:target;
-				const x=Math.max(minX,Math.min(maxX,raw));
-				this.root.style.setProperty('--scene-x',Math.round(x)+'px');
-			}
+				for (const [id, label, description, css] of [
+						['05', 'プレイバック・デッキ',
+								'通常は動画の外・下、全画面ではシークバー直上の横長操作デッキ。',
+								SceneSearchLayouts05_06.CSS_05],
+						['06', 'マイクロ・カプセル',
+								'小型カプセルがシーク位置へ追従し、追加操作は上に展開。',
+								SceneSearchLayouts05_06.CSS_06]
+				]) {
+						registry.register({ id, label, description,
+								factory: (args) => new DeckCapsuleCard({ ...args, id,
+										layoutClass: 'zenzaLayout' + id, extraCss: css }) });
+				}
+				return registry;
 		}
-		for(const [id,label,description,css] of [
-			['05','プレイバック・デッキ',
-				'通常は動画の外・下、全画面ではシークバー直上の横長操作デッキ。',
-				SceneSearchLayouts05_06.CSS_05],
-			['06','マイクロ・カプセル',
-				'小型カプセルがシーク位置へ追従し、追加操作は上に展開。',
-				SceneSearchLayouts05_06.CSS_06]
-		]){
-			registry.register({id,label,description,
-				factory:args=>new DeckCapsuleCard({...args,id,
-					layoutClass:'zenzaLayout'+id,extraCss:css})});
-		}
-		return registry;
-	}
-	static get CSS_05() {return `
+		static get CSS_05() {
+				return `
 /* Original 05: outside/below in normal, above seekbar in fullscreen. */
 .zenzaSceneSearchHost[data-layout="05"]{
 	left:50%;right:auto;top:calc(100% + 12px);bottom:auto;
@@ -40383,8 +43071,10 @@ class SceneSearchLayouts05_06 {
 @media(prefers-reduced-motion:reduce){
 	.zenzaSceneSearchHost[data-layout="05"] .zenzaSceneActions{transition:none}
 }
-`;}
-	static get CSS_06() {return `
+`;
+		}
+		static get CSS_06() {
+				return `
 /* Original 06: micro-capsule follows the true seekbar mouse coordinate. */
 .zenzaSceneSearchHost[data-layout="06"]{
 	left:var(--scene-x,50%);right:auto;top:auto;bottom:86px;
@@ -40446,273 +43136,360 @@ class SceneSearchLayouts05_06 {
 @media(prefers-reduced-motion:reduce){
 	.zenzaSceneSearchHost[data-layout="06"] .zenzaSceneActions{transition:none}
 }
-`;}
+`;
+		}
 }
 class SceneSearchLayout07 {
-	static install(registry,Card) {
-		if(typeof registry?.register!=='function'||typeof Card!=='function'){
-			throw new TypeError('Three-frame filmstrip needs registry and common card');
-		}
-		class FilmstripCard extends Card {
-			constructor(args) {
-				super({...args,layoutClass:'zenzaSceneFilmstrip',
-					extraCss:SceneSearchLayout07.CSS,
-					onAction:(action,ctx,event)=>{
-						if(action==='frame-previous'||action==='frame-next'){
-							const button=event?.target?.closest?.('button[data-scui-action]');
-							const time=Number(button?.dataset?.sceneTime);
-							if(!button||button.disabled||!button.hasAttribute('data-scene-time')||
-								!Number.isFinite(time)||time<0){return;}
-							args.onAction?.('frame-seek',{...ctx,time},event);
-							return;
+		static install(registry, Card) {
+				if (typeof registry?.register !== 'function' || typeof Card !== 'function') {
+						throw new TypeError('Three-frame filmstrip needs registry and common card');
+				}
+				class FilmstripCard extends Card {
+						constructor(args) {
+								super({ ...args, layoutClass: 'zenzaSceneFilmstrip',
+										extraCss: SceneSearchLayout07.CSS,
+										onAction: (action, ctx, event) => {
+												if (action === 'frame-previous' || action === 'frame-next') {
+														const button = event?.target?.closest?.('button[data-scui-action]');
+														const time = Number(button?.dataset?.sceneTime);
+														if (!button || button.disabled || !button.hasAttribute('data-scene-time') ||
+																!Number.isFinite(time) || time < 0) {
+																return;
+														}
+														args.onAction?.('frame-seek', { ...ctx, time }, event);
+														return;
+												}
+												args.onAction?.(action, ctx, event);
+										} });
+								this._frameNodes = null;
+								this._listLiftBefore = this.container.style.getPropertyValue('--scui-ui07-list-lift');
+								this._listLiftPriority = this.container.style.getPropertyPriority('--scui-ui07-list-lift');
+								this._listLiftCurrent = null;
+								this.settings = args.settings || {};
+								this._lastVideoId = null;
+								this._frameSource = null;
+								this._frameViews = new Map();
+								this._failedFrames = new Set();
 						}
-						args.onAction?.(action,ctx,event);
-					}});
-				this._frameNodes=null;
-				this.settings=args.settings||{};
-				this._lastVideoId=null;
-				this._frameSource=null;
-				this._frameViews=new Map();
-				this._failedFrames=new Set();
-			}
-			_makeSideFrame(which) {
-				const d=this.document;
-				const fig=d.createElement('figure');
-				fig.className='zenzaSceneFilmFrame scene-'+which;
-				fig.dataset.frame=which;
-				const img=d.createElement('img');
-				img.alt=which==='previous'?'前の場面':'次の場面';
-				img.hidden=true;
-				const button=d.createElement('button');
-				button.type='button';
-				button.className='zenzaSceneFilmJump';
-				button.dataset.scuiAction=which==='previous'?
-					'frame-previous':'frame-next';
-				button.disabled=true;
-				button.setAttribute('aria-label',which==='previous'?
-					'前の場面へシーク':'次の場面へシーク');
-				button.appendChild(img);
-				const placeholder=d.createElement('span');
-				placeholder.className='zenzaSceneFilmMissing';
-				placeholder.textContent='—';
-				button.appendChild(placeholder);
-				fig.appendChild(button);
-				const label=d.createElement('figcaption');
-				label.className='zenzaSceneFilmFrameTime';
-				label.textContent='';
-				fig.appendChild(label);
-				return {fig,img,placeholder,label,button};
-			}
-			mount(state) {
-				super.mount(state);
-				try {
-					const center=this.root.querySelector('.zenzaSceneImageBox');
-					const wrap=this.document.createElement('div');
-					wrap.className='zenzaSceneFilmstripFrames';
-					const previous=this._makeSideFrame('previous');
-					const next=this._makeSideFrame('next');
-					const current=this.document.createElement('figure');
-					current.className='zenzaSceneFilmFrame scene-current';
-					current.dataset.frame='current';
-					center.parentNode.insertBefore(wrap,center);
-					current.appendChild(center);
-					const caption=this.document.createElement('figcaption');
-					caption.className='zenzaSceneFilmFrameTime';
-					current.appendChild(caption);
-					wrap.append(previous.fig,current,next.fig);
-					this._frameNodes={previous,next,current,caption};
-					this.render(state);
-				}catch(e){this.dispose();throw e;}
-			}
-			static timeLabel(value) {
-				if(!Number.isFinite(value)||value<0){return '';}
-				const n=Math.floor(value);
-				return String(Math.floor(n/60))+':'+String(n%60).padStart(2,'0');
-			}
-			_setSide(which,data) {
-				const node=this._frameNodes?.[which];
-				if(!node){return;}
-				const src=typeof data==='string'?data:
-					typeof data?.imageUrl==='string'?data.imageUrl:null;
-				if(src&&/^(https?:\/\/|blob:|data:image\/)/i.test(src)){
-					node.img.src=src;
-					node.img.hidden=false;
-					node.placeholder.hidden=true;
-				}else{
-					node.img.removeAttribute('src');
-					node.img.hidden=true;
-					node.placeholder.hidden=false;
-				}
-				const time=data?.time;
-				const validTime=Number.isFinite(time)&&time>=0;
-				const usableImage=!node.img.hidden;
-				node.button.disabled=!validTime||!usableImage;
-				if(validTime&&usableImage){
-					node.button.dataset.sceneTime=String(time);
-				}else{
-					delete node.button.dataset.sceneTime;
-				}
-				node.label.textContent=FilmstripCard.timeLabel(time);
-			}
-			_clearFrameSide(which) {
-				const owned=this._frameViews.get(which);
-				if(owned){
-					this._frameViews.delete(which);
-					try{owned.view?.dispose?.();}catch(_){}
-					owned.canvas.remove();
-				}
-				this._setSide(which,null);
-			}
-			_releaseFrameViews(){
-				for(const which of ['previous','next'])this._clearFrameSide(which);
-				this._frameSource=null;
-				this._failedFrames.clear();
-			}
-			_syncFrameViews(state) {
-				if(!this._frameNodes){return;}
-				const create=this.settings.createFilmstripThumbnail;
-				const getModel=this.settings.getStoryboardModel;
-				if(typeof create!=='function'||typeof getModel!=='function'){return;}
-				let model;
-				try{model=getModel();}
-				catch(_){this._releaseFrameViews();return;}
-				const count=model?.cellCount,interval=model?.cellIntervalMs;
-				const duration=model?.duration,raw=model?.rawData;
-				if(state?.seekStepSeconds===0||!model?.isAvailable||!raw||
-					!Number.isSafeInteger(count)||count<1||
-					!Number.isFinite(interval)||interval<=0||
-					!Number.isFinite(duration)||duration<=0||
-					typeof model.getIndex!=='function'){
-					this._releaseFrameViews();return;
-				}
-				if(this._frameSource!==raw){
-					this._releaseFrameViews();
-					this._frameSource=raw;
-				}
-				let index;
-				try{index=model.getIndex(Math.max(0,state?.time||0)*1000);}
-				catch(_){this._releaseFrameViews();return;}
-				if(!Number.isSafeInteger(index)||index<0||index>=count){
-					this._releaseFrameViews();return;
-				}
-				for(const [which,offset] of [['previous',-1],['next',1]]){
-					const sideIndex=index+offset;
-					const node=this._frameNodes[which];
-					if(sideIndex<0||sideIndex>=count){
-						this._clearFrameSide(which);continue;
-					}
-					const seconds=Math.max(0,Math.min(duration,sideIndex*interval/1000));
-					let entry=this._frameViews.get(which);
-					if(!entry){
-						if(this._failedFrames.has(which)){continue;}
-						const canvas=this.document.createElement('canvas');
-						canvas.width=160;canvas.height=90;
-						canvas.className='zenzaSceneAdjacentCanvas';
-						canvas.dataset.scuiSideThumbnail=which;
-						node.button.insertBefore(canvas,node.img);
-						let view;
-						try{
-							view=create({container:node.button,canvas,info:raw,
-								name:'SceneSearchFilmstrip-'+which});
-							if(!view||typeof view.dispose!=='function'){
-								throw new Error('Adjacent thumbnail view not disposable');
-							}
-						}catch(_){
-							canvas.remove();node.button.disabled=true;
-							this._failedFrames.add(which);
-							continue;
+						_makeSideFrame(which) {
+								const d = this.document;
+								const fig = d.createElement('figure');
+								fig.className = 'zenzaSceneFilmFrame scene-' + which;
+								fig.dataset.frame = which;
+								const img = d.createElement('img');
+								img.alt = which === 'previous' ? '前の場面' : '次の場面';
+								img.hidden = true;
+								const button = d.createElement('button');
+								button.type = 'button';
+								button.className = 'zenzaSceneFilmJump';
+								button.dataset.scuiAction = which === 'previous' ?
+										'frame-previous' : 'frame-next';
+								button.disabled = true;
+								button.setAttribute('aria-label', which === 'previous' ?
+										'前の場面へシーク' : '次の場面へシーク');
+								button.appendChild(img);
+								const placeholder = d.createElement('span');
+								placeholder.className = 'zenzaSceneFilmMissing';
+								placeholder.textContent = '—';
+								button.appendChild(placeholder);
+								fig.appendChild(button);
+								const label = d.createElement('figcaption');
+								label.className = 'zenzaSceneFilmFrameTime';
+								label.textContent = '';
+								fig.appendChild(label);
+								return { fig, img, placeholder, label, button };
 						}
-						entry={canvas,view,index:-1};
-						this._frameViews.set(which,entry);
-					}
-					if(entry.index!==sideIndex){
-						try{entry.view.currentTime=seconds;entry.index=sideIndex;}
-						catch(_){this._clearFrameSide(which);continue;}
-					}
-					node.img.hidden=true;node.img.removeAttribute('src');
-					node.placeholder.hidden=true;
-					node.button.disabled=false;
-					node.button.dataset.sceneTime=String(seconds);
-					node.label.textContent=FilmstripCard.timeLabel(seconds);
+						mount(state) {
+								super.mount(state);
+								try {
+										const center = this.root.querySelector('.zenzaSceneImageBox');
+										const wrap = this.document.createElement('div');
+										wrap.className = 'zenzaSceneFilmstripFrames';
+										const previous = this._makeSideFrame('previous');
+										const next = this._makeSideFrame('next');
+										const current = this.document.createElement('figure');
+										current.className = 'zenzaSceneFilmFrame scene-current';
+										current.dataset.frame = 'current';
+										center.parentNode.insertBefore(wrap, center);
+										current.appendChild(center);
+										const caption = this.document.createElement('figcaption');
+										caption.className = 'zenzaSceneFilmFrameTime';
+										current.appendChild(caption);
+										wrap.append(previous.fig, current, next.fig);
+										this._frameNodes = { previous, next, current, caption };
+										this.render(state);
+								}
+								catch (e) {
+										this.dispose();
+										throw e;
+								}
+						}
+						static timeLabel(value) {
+								if (!Number.isFinite(value) || value < 0) {
+										return '';
+								}
+								const n = Math.floor(value);
+								return String(Math.floor(n / 60)) + ':' + String(n % 60).padStart(2, '0');
+						}
+						_setSide(which, data) {
+								const node = this._frameNodes?.[which];
+								if (!node) {
+										return;
+								}
+								const src = typeof data === 'string' ? data :
+										typeof data?.imageUrl === 'string' ? data.imageUrl : null;
+								if (src && /^(https?:\/\/|blob:|data:image\/)/i.test(src)) {
+										node.img.src = src;
+										node.img.hidden = false;
+										node.placeholder.hidden = true;
+								}
+								else {
+										node.img.removeAttribute('src');
+										node.img.hidden = true;
+										node.placeholder.hidden = false;
+								}
+								const time = data?.time;
+								const validTime = Number.isFinite(time) && time >= 0;
+								const usableImage = !node.img.hidden;
+								node.button.disabled = !validTime || !usableImage;
+								if (validTime && usableImage) {
+										node.button.dataset.sceneTime = String(time);
+								}
+								else {
+										delete node.button.dataset.sceneTime;
+								}
+								node.label.textContent = FilmstripCard.timeLabel(time);
+						}
+						_clearFrameSide(which) {
+								const owned = this._frameViews.get(which);
+								if (owned) {
+										this._frameViews.delete(which);
+										try {
+												owned.view?.dispose?.();
+										}
+										catch (_) { }
+										owned.canvas.remove();
+								}
+								this._setSide(which, null);
+						}
+						_releaseFrameViews() {
+								for (const which of ['previous', 'next'])
+										this._clearFrameSide(which);
+								this._frameSource = null;
+								this._failedFrames.clear();
+						}
+						_syncFrameViews(state) {
+								if (!this._frameNodes) {
+										return;
+								}
+								const create = this.settings.createFilmstripThumbnail;
+								const getModel = this.settings.getStoryboardModel;
+								if (typeof create !== 'function' || typeof getModel !== 'function') {
+										return;
+								}
+								let model;
+								try {
+										model = getModel();
+								}
+								catch (_) {
+										this._releaseFrameViews();
+										return;
+								}
+								const count = model?.cellCount, interval = model?.cellIntervalMs;
+								const duration = model?.duration, raw = model?.rawData;
+								if (state?.seekStepSeconds === 0 || !model?.isAvailable || !raw ||
+										!Number.isSafeInteger(count) || count < 1 ||
+										!Number.isFinite(interval) || interval <= 0 ||
+										!Number.isFinite(duration) || duration <= 0 ||
+										typeof model.getIndex !== 'function') {
+										this._releaseFrameViews();
+										return;
+								}
+								if (this._frameSource !== raw) {
+										this._releaseFrameViews();
+										this._frameSource = raw;
+								}
+								let index;
+								try {
+										index = model.getIndex(Math.max(0, state?.time || 0) * 1000);
+								}
+								catch (_) {
+										this._releaseFrameViews();
+										return;
+								}
+								if (!Number.isSafeInteger(index) || index < 0 || index >= count) {
+										this._releaseFrameViews();
+										return;
+								}
+								for (const [which, offset] of [['previous', -1], ['next', 1]]) {
+										const sideIndex = index + offset;
+										const node = this._frameNodes[which];
+										if (sideIndex < 0 || sideIndex >= count) {
+												this._clearFrameSide(which);
+												continue;
+										}
+										const seconds = Math.max(0, Math.min(duration, sideIndex * interval / 1000));
+										let entry = this._frameViews.get(which);
+										if (!entry) {
+												if (this._failedFrames.has(which)) {
+														continue;
+												}
+												const canvas = this.document.createElement('canvas');
+												canvas.width = 160;
+												canvas.height = 90;
+												canvas.className = 'zenzaSceneAdjacentCanvas';
+												canvas.dataset.scuiSideThumbnail = which;
+												node.button.insertBefore(canvas, node.img);
+												let view;
+												try {
+														view = create({ container: node.button, canvas, info: raw,
+																name: 'SceneSearchFilmstrip-' + which });
+														if (!view || typeof view.dispose !== 'function') {
+																throw new Error('Adjacent thumbnail view not disposable');
+														}
+												}
+												catch (_) {
+														canvas.remove();
+														node.button.disabled = true;
+														this._failedFrames.add(which);
+														continue;
+												}
+												entry = { canvas, view, index: -1 };
+												this._frameViews.set(which, entry);
+										}
+										if (entry.index !== sideIndex) {
+												try {
+														entry.view.currentTime = seconds;
+														entry.index = sideIndex;
+												}
+												catch (_) {
+														this._clearFrameSide(which);
+														continue;
+												}
+										}
+										node.img.hidden = true;
+										node.img.removeAttribute('src');
+										node.placeholder.hidden = true;
+										node.button.disabled = false;
+										node.button.dataset.sceneTime = String(seconds);
+										node.label.textContent = FilmstripCard.timeLabel(seconds);
+								}
+						}
+						onPreview(asset) {
+								super.onPreview(asset);
+								const frames = asset?.frames;
+								if (!this._frameViews.size) {
+										this._setSide('previous', frames?.previous);
+										this._setSide('next', frames?.next);
+								}
+								if (this._frameNodes) {
+										this._frameNodes.caption.textContent =
+												FilmstripCard.timeLabel(asset?.time);
+								}
+						}
+						render(state) {
+								super.render(state);
+								if (!this.root) {
+										return;
+								}
+								if (state && Object.prototype.hasOwnProperty.call(state, 'videoId') &&
+										this._lastVideoId !== state.videoId) {
+										this._releaseFrameViews();
+										this._lastVideoId = state.videoId;
+										this._setSide('previous', null);
+										this._setSide('next', null);
+										if (this._frameNodes) {
+												this._frameNodes.caption.textContent = '';
+										}
+										super.onPreview(null);
+								}
+								const compact = state?.seekStepSeconds === 0;
+								if (this._frameNodes) {
+										this._frameNodes.previous.fig.hidden = compact;
+										this._frameNodes.next.fig.hidden = compact;
+								}
+								const frame = this.container.getBoundingClientRect?.();
+								const width = this.container.offsetWidth || frame?.width ||
+										this.container.clientWidth || 800;
+								if (this.mode === 'normal') {
+										const viewportHeight = this.document.defaultView?.innerHeight;
+										const room = Number.isFinite(viewportHeight) && Number.isFinite(frame?.bottom) ?
+												viewportHeight - frame.bottom : Infinity;
+										const list = state?.commentListMode === true && state.commentPreviewVisible !== false ?
+												this.container.querySelector('.zenzaCommentPreview') : null;
+										const rect = list?.getBoundingClientRect?.();
+										let panelHeight = rect?.height || 0;
+										if (list && list.dataset.commentPreviewMode !== 'list') {
+												const css = this.document.defaultView?.getComputedStyle?.(list);
+												const maximum = Number.parseFloat(css?.maxHeight);
+												panelHeight = Math.max(panelHeight, Number.isFinite(maximum) ? maximum : 200);
+										}
+										if (list && panelHeight <= 0) {
+												const css = this.document.defaultView?.getComputedStyle?.(list);
+												const maximum = Number.parseFloat(css?.maxHeight);
+												panelHeight = Math.min(Number.isFinite(maximum) ? maximum : Infinity, list.scrollHeight || 0);
+										}
+										const listOffset = width < 580 ? 157 : 10; // UI07 native comment CSS.
+										const required = list ? Math.max(160, panelHeight + listOffset + 8) : 160;
+										this.root.dataset.scuiPlacement = room < required ? 'visible-fallback' : 'below';
+										const lift = list && this.root.dataset.scuiPlacement === 'visible-fallback' &&
+												Number.isFinite(frame?.bottom) && Number.isFinite(viewportHeight) ?
+												Math.max(0, Math.ceil(frame.bottom - 94 - viewportHeight + 8)) : 0;
+										const value = lift + 'px';
+										if (this._listLiftCurrent !== value) {
+												this.container.style.setProperty('--scui-ui07-list-lift', value);
+												this._listLiftCurrent = value;
+										}
+								}
+								else {
+										this.root.dataset.scuiPlacement = 'seek-follow';
+										const geometry = this.settings.getSeekGeometry?.();
+										const duration = typeof this.settings.getDuration === 'function' ?
+												this.settings.getDuration() : this.settings.duration;
+										const fraction = Number.isFinite(duration) && duration > 0 ?
+												Math.max(0, Math.min(1, (state?.time || 0) / duration)) : 0.5;
+										const desired = Number.isFinite(geometry?.pointerX) ? geometry.pointerX :
+												Number.isFinite(geometry?.seekLeft) && Number.isFinite(geometry?.seekWidth) ?
+														geometry.seekLeft + geometry.seekWidth * fraction : width * fraction;
+										const left = Math.max(0, Math.min(width, Number.isFinite(geometry?.visibleLeft) ? geometry.visibleLeft : 0));
+										const right = Math.max(left, Math.min(width, Number.isFinite(geometry?.visibleRight) ? geometry.visibleRight : width));
+										const actualWidth = Math.min(right - left, compact ? 153 : 342);
+										const minX = left + actualWidth / 2;
+										const maxX = right - actualWidth / 2;
+										const clamp = (x) => maxX >= minX ? Math.max(minX, Math.min(maxX, x)) :
+												(left + right) / 2;
+										const previous = parseFloat(this.root.style.getPropertyValue('--scene-x'));
+										const x = state?.pinned && Number.isFinite(previous) ?
+												clamp(previous) : clamp(desired);
+										this.root.style.setProperty('--scene-x', Math.round(x) + 'px');
+								}
+								this._syncFrameViews(state);
+						}
+						dispose() {
+								this._releaseFrameViews();
+								try {
+										super.dispose();
+								}
+								finally {
+										if (this._listLiftCurrent !== null) {
+												if (this._listLiftBefore)
+														this.container.style.setProperty('--scui-ui07-list-lift', this._listLiftBefore, this._listLiftPriority);
+												else
+														this.container.style.removeProperty('--scui-ui07-list-lift');
+												this._listLiftCurrent = null;
+										}
+								}
+								this._frameNodes = null;
+								this._lastVideoId = null;
+						}
 				}
-			}
-			onPreview(asset) {
-				super.onPreview(asset);
-				const frames=asset?.frames;
-				if(!this._frameViews.size){
-					this._setSide('previous',frames?.previous);
-					this._setSide('next',frames?.next);
-				}
-				if(this._frameNodes){
-					this._frameNodes.caption.textContent=
-						FilmstripCard.timeLabel(asset?.time);
-				}
-			}
-			render(state) {
-				super.render(state);
-				if(!this.root){return;}
-				if(state&&Object.prototype.hasOwnProperty.call(state,'videoId')&&
-					this._lastVideoId!==state.videoId){
-					this._releaseFrameViews();
-					this._lastVideoId=state.videoId;
-					this._setSide('previous',null);
-					this._setSide('next',null);
-					if(this._frameNodes){this._frameNodes.caption.textContent='';}
-					super.onPreview(null);
-				}
-				const compact=state?.seekStepSeconds===0;
-				if(this._frameNodes){
-					this._frameNodes.previous.fig.hidden=compact;
-					this._frameNodes.next.fig.hidden=compact;
-				}
-				const frame=this.container.getBoundingClientRect?.();
-				const width=this.container.offsetWidth||frame?.width||
-					this.container.clientWidth||800;
-				if(this.mode==='normal'){
-					const viewportHeight=this.document.defaultView?.innerHeight;
-					const room=Number.isFinite(viewportHeight)&&Number.isFinite(frame?.bottom)?
-						viewportHeight-frame.bottom:Infinity;
-					this.root.dataset.scuiPlacement=room<160?'visible-fallback':'below';
-				}else{
-					this.root.dataset.scuiPlacement='seek-follow';
-					const geometry=this.settings.getSeekGeometry?.();
-					const duration=typeof this.settings.getDuration==='function'?
-						this.settings.getDuration():this.settings.duration;
-					const fraction=Number.isFinite(duration)&&duration>0?
-						Math.max(0,Math.min(1,(state?.time||0)/duration)):0.5;
-					const desired=Number.isFinite(geometry?.pointerX)?geometry.pointerX:
-						Number.isFinite(geometry?.seekLeft)&&Number.isFinite(geometry?.seekWidth)?
-							geometry.seekLeft+geometry.seekWidth*fraction:width*fraction;
-					const left=Math.max(0,Math.min(width,
-						Number.isFinite(geometry?.visibleLeft)?geometry.visibleLeft:0));
-					const right=Math.max(left,Math.min(width,
-						Number.isFinite(geometry?.visibleRight)?geometry.visibleRight:width));
-					const actualWidth=Math.min(right-left,compact?153:342);
-					const minX=left+actualWidth/2;
-					const maxX=right-actualWidth/2;
-					const clamp=x=>maxX>=minX?Math.max(minX,Math.min(maxX,x)):
-						(left+right)/2;
-					const previous=parseFloat(this.root.style.getPropertyValue('--scene-x'));
-					const x=state?.pinned&&Number.isFinite(previous)?
-						clamp(previous):clamp(desired);
-					this.root.style.setProperty('--scene-x',Math.round(x)+'px');
-				}
-				this._syncFrameViews(state);
-			}
-			dispose() {
-				this._releaseFrameViews();
-				super.dispose();
-				this._frameNodes=null;
-				this._lastVideoId=null;
-			}
+				registry.register({ id: '07', label: '3コマ・フィルム',
+						description: '通常は動画の外・下、全画面ではシークバーを追従。前後画像をクリックで選択',
+						factory: args => new FilmstripCard(args) });
+				return registry;
 		}
-		registry.register({id:'07',label:'3コマ・フィルム',
-			description:'通常は動画の外・下、全画面ではシークバーを追従。前後画像をクリックで選択',
-			factory:args=>new FilmstripCard(args)});
-		return registry;
-	}
-	static get CSS() {
-		return `
+		static get CSS() {
+				return `
 .zenzaSceneSearchHost.zenzaSceneFilmstrip {
 	position:absolute;left:50%;right:auto;top:calc(100% + 12px);bottom:auto;
 	transform:translateX(-50%);width:min(342px,calc(100% - 16px));
@@ -40727,6 +43504,12 @@ class SceneSearchLayout07 {
 	visible above the bar if there is no space below the video. */
 .zenzaSceneSearchHost.zenzaSceneFilmstrip[data-scui-placement="visible-fallback"] {
 	top:auto;bottom:95px;
+}
+/* UI07 only: the native list is a sibling of the card and never gains
+	page scroll in the locked normal player modes. Lift only when necessary. */
+[data-scene-search-layout="07"][data-scene-mode="normal"][data-scene-placement="visible-fallback"]
+>.zenzaCommentPreview:where([data-comment-preview-mode="list"]){
+	bottom:calc(94px + var(--scui-ui07-list-lift,0px))!important;
 }
 .zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmstripFrames {
 	display:grid;
@@ -40805,33 +43588,34 @@ class SceneSearchLayout07 {
 .zenzaSceneSearchHost.zenzaSceneFilmstrip .zenzaSceneFilmFrame img {height:45px}
 }
 `;
-	}
+		}
 }
 class SceneSearchLayouts08_09 {
-	static get DESCRIPTORS() {
-		return [
-			{id:'08',label:'片側引き出し',
-				description:'通常は動画の左縁、全画面は右縁。操作列を画面内側へ引き出す'},
-			{id:'09',label:'分離リモコン',
-				description:'左の画像と右の独立操作ドックを分離。狭い画面は上下に退避'}
-		];
-	}
-	static install(registry,Card) {
-		if(typeof registry?.register!=='function'||typeof Card!=='function') {
-			throw new TypeError('Drawer layouts require the shared registry and card');
+		static get DESCRIPTORS() {
+				return [
+						{ id: '08', label: '片側引き出し',
+								description: '通常は動画の左縁、全画面は右縁。操作列を画面内側へ引き出す' },
+						{ id: '09', label: '分離リモコン',
+								description: '左の画像と右の独立操作ドックを分離。狭い画面は上下に退避' }
+				];
 		}
-		const [drawer,remote]=SceneSearchLayouts08_09.DESCRIPTORS;
-		registry.register({...drawer,
-			factory:args=>new SceneSearchLayouts08_09({
-				...args,Card,layoutId:drawer.id
-			})});
-		registry.register({...remote,
-			factory:args=>new SceneSearchLayouts08_09({
-				...args,Card,layoutId:remote.id
-			})});
-		return registry;
-	}
-	static get CSS() {return `
+		static install(registry, Card) {
+				if (typeof registry?.register !== 'function' || typeof Card !== 'function') {
+						throw new TypeError('Drawer layouts require the shared registry and card');
+				}
+				const [drawer, remote] = SceneSearchLayouts08_09.DESCRIPTORS;
+				registry.register({ ...drawer,
+						factory: (args) => new SceneSearchLayouts08_09({
+								...args, Card, layoutId: drawer.id
+						}) });
+				registry.register({ ...remote,
+						factory: (args) => new SceneSearchLayouts08_09({
+								...args, Card, layoutId: remote.id
+						}) });
+				return registry;
+		}
+		static get CSS() {
+				return `
 /* Original 08: left shelf normal, right shelf fullscreen, tools inward. */
 .zenzaSceneSearchHost.zenzaSceneEdgeDrawer{
 	position:absolute;left:10px;right:auto;top:29%;bottom:auto;
@@ -40895,6 +43679,12 @@ class SceneSearchLayouts08_09 {
 .zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-scui-placement="visible-fallback"]{
 	top:auto;bottom:96px;
 }
+/* UI09 only: keep the separately owned native list reachable even when
+	the player extends past a very short page-locked viewport. */
+[data-scene-search-layout="09"][data-scene-mode="normal"][data-scene-placement="visible-fallback"]
+>.zenzaCommentPreview:where([data-comment-preview-mode="list"]){
+	bottom:calc(153px + var(--scui-ui09-list-lift,0px))!important;
+}
 /* When thumbnail auto-hides, the independently placed right-hand remote
 	stays operable. Only the image card is collapsed. */
 .zenzaSceneSearchHost.zenzaSceneDetachedRemote.is-preview-suppressed{
@@ -40947,95 +43737,188 @@ class SceneSearchLayouts08_09 {
 	left:0;right:auto;top:calc(100% - 1px);bottom:auto;
 	width:100%;box-sizing:border-box;max-width:100%;
 }
+/* UI09 only: shift the image and its detached toolbar together when the
+	real native seek input intersects them. The value is measured in render,
+	not an unconditional lift that covers seek in a short small-mode player. */
+.zenzaSceneSearchHost.zenzaSceneDetachedRemote[data-mode="normal"][data-scui-side="stack"]{
+	transform:translateY(var(--scui-ui09-native-clearance,0px));
+}
 /* When the image is auto-hidden on narrow screens, the toolbar may still
 	be accessed at the bottom dock position rather than a stale image gap. */
 .zenzaSceneDetachedRemote[data-scui-side="stack"].is-preview-suppressed .zenzaSceneRemoteControls{
-	left:0;top:0;
+	left:0;top:0;bottom:auto;
 }
 @media(prefers-reduced-motion:reduce){
 	.zenzaSceneEdgeDrawer .zenzaSceneActions{transition:none}
 }
-`;}
-	constructor({Card,layoutId,document,container,mode,onAction,settings}={}) {
-		if(typeof Card!=='function'||!document||!container||
-			!['08','09'].includes(layoutId)){
-			throw new TypeError('Drawer layouts require ID, DOM and Card');
+`;
 		}
-		this.id=layoutId;
-		this.container=container;
-		this.mode=mode;
-		this.card=new Card({document,container,id:layoutId,mode,onAction,settings,
-			layoutClass:layoutId==='08'?'zenzaSceneEdgeDrawer':'zenzaSceneDetachedRemote',
-			extraCss:SceneSearchLayouts08_09.CSS});
-		this.root=null;this._disposed=false;this._remote=null;
-	}
-	mount(state) {
-		if(this._disposed){throw new Error('Layout disposed');}
-		this.card.mount(state);this.root=this.card.root;
-		try {
-			if(this.id==='08') {
-				const handle=this.root.querySelector('.scene-more');
-				const actions=this.root.querySelector('.zenzaSceneActions');
-				const foot=this.root.querySelector('.zenzaSceneFoot');
-				foot.insertBefore(handle,actions);
-			}
-			if(this.id==='09') {
-				const actions=this.root.querySelector('.zenzaSceneActions');
-				const holder=this.card.document.createElement('aside');
-				holder.className='zenzaSceneRemoteControls';
-				holder.setAttribute('role','toolbar');
-				holder.setAttribute('aria-label','シーンサーチ分離リモコン');
-				const more=actions.querySelector('.scene-more');
-				if(more)holder.append(more);
-				holder.append(actions);
-				this.root.append(holder);
-				this._remote=holder;
-			}
-			this.render(state);
-		} catch(error) {this.dispose();throw error;}
-	}
-	render(state) {
-		if(this._disposed||!this.root){return;}
-		this.card.render(state);
-		const frame=this.container.getBoundingClientRect?.();
-		const width=this.container.offsetWidth||frame?.width||
-			this.container.clientWidth||800;
-		if(this.id==='08'){
-			this.root.dataset.scuiSide=width<360?'stack':
-				this.mode==='fullscreen'?'left':'right';
-			return;
+		constructor({ Card, layoutId, document, container, mode, onAction, settings } = {}) {
+				if (typeof Card !== 'function' || !document || !container ||
+						!['08', '09'].includes(layoutId)) {
+						throw new TypeError('Drawer layouts require ID, DOM and Card');
+				}
+				this.id = layoutId;
+				this.container = container;
+				this.mode = mode;
+				this.card = new Card({ document, container, id: layoutId, mode, onAction, settings,
+						layoutClass: layoutId === '08' ? 'zenzaSceneEdgeDrawer' : 'zenzaSceneDetachedRemote',
+						extraCss: SceneSearchLayouts08_09.CSS });
+				this.root = null;
+				this._disposed = false;
+				this._remote = null;
+				if (layoutId === '09') {
+						this._nativeSeekClearance = 0;
+						this._listLiftBefore = this.container.style.getPropertyValue('--scui-ui09-list-lift');
+						this._listLiftPriority = this.container.style.getPropertyPriority('--scui-ui09-list-lift');
+						this._listLiftCurrent = null;
+				}
 		}
-		const suppressed=state?.shown===false&&!state?.pinned;
-		this.root.hidden=false;
-		this.root.classList.toggle('is-preview-suppressed',suppressed);
-		const viewportHeight=this.card.document.defaultView?.innerHeight;
-		const room=Number.isFinite(viewportHeight)&&Number.isFinite(frame?.bottom)?
-			viewportHeight-frame.bottom:Infinity;
-		this.root.dataset.scuiPlacement=this.mode==='normal'&&room<165?
-			'visible-fallback':'below';
-		const stack=width<500;
-		this.root.dataset.scuiSide=stack?'stack':'dock';
-		const rootRect=this.root.getBoundingClientRect?.();
-		const scale=frame?.width?width/frame.width:1;
-		const cardWidth=state?.seekStepSeconds===0?119:205;
-		const fallbackX=this.mode==='fullscreen'?16:width*.16-cardWidth*.4;
-		const rootX=Number.isFinite(rootRect?.left)&&rootRect?.width>0&&
-			Number.isFinite(frame?.left)?
-				(rootRect.left-frame.left)*scale:fallbackX;
-		const rightDock=width-12-174-rootX;
-		this.root.style.setProperty('--scene-remote-offset',
-			Math.round(Math.max(0,rightDock))+'px');
-	}
-	onPreview(asset,context){this.card.onPreview(asset,context);}
-	dispose(){
-		if(this._disposed){return;}
-		this._disposed=true;
-		this.card.dispose();
-		this.root=null;this._remote=null;
-	}
+		mount(state) {
+				if (this._disposed) {
+						throw new Error('Layout disposed');
+				}
+				this.card.mount(state);
+				this.root = this.card.root;
+				try {
+						if (this.id === '08') {
+								const handle = this.root.querySelector('.scene-more');
+								const actions = this.root.querySelector('.zenzaSceneActions');
+								const foot = this.root.querySelector('.zenzaSceneFoot');
+								foot.insertBefore(handle, actions);
+						}
+						if (this.id === '09') {
+								const actions = this.root.querySelector('.zenzaSceneActions');
+								const holder = this.card.document.createElement('aside');
+								holder.className = 'zenzaSceneRemoteControls';
+								holder.setAttribute('role', 'toolbar');
+								holder.setAttribute('aria-label', 'シーンサーチ分離リモコン');
+								const more = actions.querySelector('.scene-more');
+								if (more)
+										holder.append(more);
+								holder.append(actions);
+								this.root.append(holder);
+								this._remote = holder;
+						}
+						this.render(state);
+				}
+				catch (error) {
+						this.dispose();
+						throw error;
+				}
+		}
+		render(state) {
+				if (this._disposed || !this.root) {
+						return;
+				}
+				this.card.render(state);
+				const frame = this.container.getBoundingClientRect?.();
+				const width = this.container.offsetWidth || frame?.width ||
+						this.container.clientWidth || 800;
+				if (this.id === '08') {
+						this.root.dataset.scuiSide = width < 360 ? 'stack' :
+								this.mode === 'fullscreen' ? 'left' : 'right';
+						return;
+				}
+				const suppressed = state?.shown === false && !state?.pinned;
+				this.root.hidden = false;
+				this.root.classList.toggle('is-preview-suppressed', suppressed);
+				const viewportHeight = this.card.document.defaultView?.innerHeight;
+				const room = Number.isFinite(viewportHeight) && Number.isFinite(frame?.bottom) ?
+						viewportHeight - frame.bottom : Infinity;
+				const list = state?.commentListMode === true && state.commentPreviewVisible !== false ?
+						this.container.querySelector('.zenzaCommentPreview') : null;
+				const rect = list?.getBoundingClientRect?.();
+				let panelHeight = rect?.height || 0;
+				if (list && list.dataset.commentPreviewMode !== 'list') {
+						const css = this.card.document.defaultView?.getComputedStyle?.(list);
+						const maximum = Number.parseFloat(css?.maxHeight);
+						panelHeight = Math.max(panelHeight, Number.isFinite(maximum) ? maximum : 200);
+				}
+				if (list && panelHeight <= 0) {
+						const css = this.card.document.defaultView?.getComputedStyle?.(list);
+						const maximum = Number.parseFloat(css?.maxHeight);
+						panelHeight = Math.min(Number.isFinite(maximum) ? maximum : Infinity, list.scrollHeight || 0);
+				}
+				const listOffset = width < 580 ? 112 : 74; // UI09 native comment CSS.
+				const required = list ? Math.max(165, panelHeight + listOffset + 8) : 165;
+				this.root.dataset.scuiPlacement = this.mode === 'normal' && room < required ?
+						'visible-fallback' : 'below';
+				if (this.mode === 'normal') {
+						const lift = list && this.root.dataset.scuiPlacement === 'visible-fallback' &&
+								Number.isFinite(frame?.bottom) && Number.isFinite(viewportHeight) ?
+								Math.max(0, Math.ceil(frame.bottom - 153 - viewportHeight + 8)) : 0;
+						const value = lift + 'px';
+						if (this._listLiftCurrent !== value) {
+								this.container.style.setProperty('--scui-ui09-list-lift', value);
+								this._listLiftCurrent = value;
+						}
+				}
+				const stack = width < 500;
+				const side = stack ? 'stack' : 'dock';
+				if (this.root.dataset.scuiSide !== side)
+						this.root.dataset.scuiSide = side;
+				this._syncNativeSeekClearance(side);
+				const rootRect = this.root.getBoundingClientRect?.();
+				const scale = frame?.width ? width / frame.width : 1;
+				const cardWidth = state?.seekStepSeconds === 0 ? 119 : 205;
+				const fallbackX = this.mode === 'fullscreen' ? 16 : width * .16 - cardWidth * .4;
+				const rootX = Number.isFinite(rootRect?.left) && rootRect?.width > 0 &&
+						Number.isFinite(frame?.left) ?
+						(rootRect.left - frame.left) * scale : fallbackX;
+				const rightDock = width - 12 - 174 - rootX;
+				this.root.style.setProperty('--scene-remote-offset', Math.round(Math.max(0, rightDock)) + 'px');
+		}
+		_syncNativeSeekClearance(side) {
+				let lift = 0;
+				if (this.mode === 'normal' && side === 'stack' &&
+						!this.root.classList.contains('is-preview-suppressed')) {
+						const input = this.container.querySelector('input.seekRange');
+						const range = input?.getBoundingClientRect?.();
+						const card = this.root.getBoundingClientRect?.();
+						const dock = this._remote?.getBoundingClientRect?.();
+						if (range?.width > 0 && range.height > 0 && card?.width > 0 && card.height > 0 &&
+								dock?.width > 0 && dock.height > 0) {
+								const top = Math.min(card.top, dock.top) + this._nativeSeekClearance;
+								const bottom = Math.max(card.bottom, dock.bottom) + this._nativeSeekClearance;
+								const left = Math.min(card.left, dock.left);
+								const right = Math.max(card.right, dock.right);
+								if (left < range.right && right > range.left && top < range.top &&
+										bottom > range.top - 32) {
+										lift = Math.max(0, Math.ceil(bottom - range.top + 32));
+								}
+						}
+				}
+				if (lift !== this._nativeSeekClearance) {
+						this._nativeSeekClearance = lift;
+						this.root.style.setProperty('--scui-ui09-native-clearance', -lift + 'px');
+				}
+		}
+		onPreview(asset, context) { this.card.onPreview(asset, context); }
+		dispose() {
+				if (this._disposed) {
+						return;
+				}
+				this._disposed = true;
+				try {
+						this.card.dispose();
+				}
+				finally {
+						if (this.id === '09' && this._listLiftCurrent !== null) {
+								if (this._listLiftBefore)
+										this.container.style.setProperty('--scui-ui09-list-lift', this._listLiftBefore, this._listLiftPriority);
+								else
+										this.container.style.removeProperty('--scui-ui09-list-lift');
+								this._listLiftCurrent = null;
+						}
+						this.root = null;
+						this._remote = null;
+				}
+		}
 }
 class SceneSearchLayout10 {
-	static get STYLE() {return `
+		static get STYLE() {
+				return `
 .zenzaSceneSearchHost[data-layout="10"]{
 	--scene-bottom:78px;max-width:calc(100% - 14px);
 	transition:left .12s ease-out,bottom .12s ease-out;
@@ -41049,147 +43932,186 @@ class SceneSearchLayout10 {
 @media(prefers-reduced-motion:reduce){
 .zenzaSceneSearchHost[data-layout="10"]{transition:none}
 }
-`;}
-	static validRect(r){
-		return !!r&&[r.x,r.y,r.width,r.height].every(Number.isFinite)&&
-			r.width>=0&&r.height>=0;
-	}
-	static overlap(a,b){
-		return Math.max(0,Math.min(a.right,b.x+b.width)-Math.max(a.left,b.x))*
-			Math.max(0,Math.min(a.bottom,b.y+b.height)-Math.max(a.top,b.y));
-	}
-	static choose({width,height,sceneWidth,sceneHeight,cursorX,obstacles=[],
-		previous=null,baseBottom=78}={}){
-		if(![width,height,sceneWidth,sceneHeight].every(Number.isFinite)||
-			width<=0||height<=0||sceneWidth<=0||sceneHeight<=0){return null;}
-		const margin=7;
-		const clamp=x=>Math.min(width-sceneWidth/2-margin,
-			Math.max(sceneWidth/2+margin,x));
-		const cursor=clamp(Number.isFinite(cursorX)?cursorX:width/2);
-		const leftSide=cursor>width*.57;
-		const preferred=clamp(width*(leftSide?.29:.68));
-		const opposite=clamp(width*(leftSide?.68:.29));
-		const base=Math.max(0,baseBottom);
-		const raised=base+sceneHeight+12;
-		const choices=[
-			{x:preferred,bottom:base,slot:leftSide?'left':'right'},
-			{x:opposite,bottom:base,slot:leftSide?'right':'left'},
-			{x:clamp(width*.22),bottom:base,slot:'far-left'},
-			{x:clamp(width*.78),bottom:base,slot:'far-right'},
-			{x:cursor,bottom:base,slot:'cursor'},
-			{x:clamp(width*.5),bottom:raised,slot:'raised'},
-			{x:preferred,bottom:raised,slot:'above-smart'}
-		];
-		let winner=null,best=Infinity;
-		for(const c of choices){
-			if(c.bottom+sceneHeight+margin>height){continue;}
-			const box={left:c.x-sceneWidth/2,right:c.x+sceneWidth/2,
-				top:height-c.bottom-sceneHeight,bottom:height-c.bottom};
-			const overlap=obstacles.filter(SceneSearchLayout10.validRect)
-				.reduce((sum,r)=>sum+SceneSearchLayout10.overlap(box,r),0);
-			const shift=Math.abs(c.x-preferred)*.07+
-				Math.max(0,c.bottom-base)*.65;
-			const pointerSide=leftSide?'left':'right';
-			const sticky=previous?.pointerSide===pointerSide&&
-				previous?.slot===c.slot?-50:0;
-			const score=overlap*100+shift+sticky;
-			if(score<best){winner={...c,overlap,score,pointerSide};best=score;}
+`;
 		}
-		return winner;
-	}
-	static register(registry,{Card,clock}={}){
-		if(!registry||typeof registry.register!=='function'||typeof Card!=='function'){
-			throw new TypeError('Layout10 requires registry and shared Card');
+		static validRect(r) {
+				return !!r && [r.x, r.y, r.width, r.height].every(Number.isFinite) &&
+						r.width >= 0 && r.height >= 0;
 		}
-		registry.register({id:'10',label:'スマート自動回避',
-			description:'コメントプレビューとの衝突を低頻度で検出し自動配置する',
-			factory:args=>new SceneSearchLayout10({...args,Card,clock})});
-		return registry;
-	}
-	constructor({document,container,mode,onAction,settings={},Card,clock}={}){
-		if(!Card||!document||!container){throw new TypeError('Missing shared card');}
-		this.document=document;this.container=container;this.mode=mode;
-		this.settings=settings||{};
-		this.clock=clock||{now:()=>Date.now()};
-		this.card=new Card({document,container,mode,id:'10',
-			layoutClass:'zenzaSceneSmartAvoid',
-			extraCss:SceneSearchLayout10.STYLE,onAction});
-		this.root=null;this._lastCheck=-Infinity;this._previous=null;this._disposed=false;
-	}
-	mount(state){
-		if(this._disposed){throw new Error('Layout10 disposed');}
-		this.card.mount(state);this.root=this.card.root;this.render(state);
-	}
-	geometry(){
-		if(typeof this.settings.measure==='function'){
-			return this.settings.measure(this.root,this.container,this.mode);
+		static overlap(a, b) {
+				return Math.max(0, Math.min(a.right, b.x + b.width) - Math.max(a.left, b.x)) *
+						Math.max(0, Math.min(a.bottom, b.y + b.height) - Math.max(a.top, b.y));
 		}
-		const frame=this.container.getBoundingClientRect();
-		const card=this.root.getBoundingClientRect();
-		if(!frame.width||!frame.height||!card.width||!card.height){return null;}
-		const seek=this.settings.getSeekGeometry?.();
-		const cursorX=Number.isFinite(seek?.pointerX)?seek.pointerX:
-			Number.isFinite(seek?.seekLeft)&&Number.isFinite(seek?.seekWidth)?
-				seek.seekLeft+seek.seekWidth/2:frame.width/2;
-		return {width:frame.width,height:frame.height,
-			sceneWidth:card.width,sceneHeight:card.height,cursorX,
-			obstacles:Array.from(this.container.querySelectorAll('.zenzaCommentPreview'))
-				.filter(el=>!el.hidden).map(el=>{
-					const r=el.getBoundingClientRect();
-					return {x:r.x-frame.x,y:r.y-frame.y,width:r.width,height:r.height};
-				})};
-	}
-	render(state){
-		if(this._disposed){return;}
-		this.card.render(state);
-		if(!this.root||this.root.hidden){return;}
-		if(state?.pinned&&this._previous){return;}
-		const now=this.clock.now();
-		if(Number.isFinite(now)&&now-this._lastCheck<160){return;}
-		this._lastCheck=Number.isFinite(now)?now:Date.now();
-		const input=this.geometry();if(!input){return;}
-		const next=SceneSearchLayout10.choose({...input,
-			baseBottom:this.mode==='fullscreen'?88:78,previous:this._previous});
-		if(!next){return;}
-		if(!this._previous||this._previous.x!==next.x||
-			this._previous.bottom!==next.bottom){
-			this.root.style.setProperty('--scene-x',next.x+'px');
-			this.root.style.setProperty('--scene-bottom',next.bottom+'px');
+		static choose({ width, height, sceneWidth, sceneHeight, cursorX, obstacles = [], previous = null, baseBottom = 78 } = {}) {
+				if (![width, height, sceneWidth, sceneHeight].every(Number.isFinite) ||
+						width <= 0 || height <= 0 || sceneWidth <= 0 || sceneHeight <= 0) {
+						return null;
+				}
+				const margin = 7, flyoutTop = 24;
+				const clamp = (x) => Math.min(width - sceneWidth / 2 - margin, Math.max(sceneWidth / 2 + margin, x));
+				const cursor = clamp(Number.isFinite(cursorX) ? cursorX : width / 2);
+				const leftSide = cursor > width * .57;
+				const preferred = clamp(width * (leftSide ? .29 : .68));
+				const opposite = clamp(width * (leftSide ? .68 : .29));
+				const maxBottom = Math.max(0, height - sceneHeight - flyoutTop - margin);
+				const base = Math.min(Math.max(0, baseBottom), maxBottom);
+				const raised = base + sceneHeight + 12;
+				const choices = [
+						{ x: preferred, bottom: base, slot: leftSide ? 'left' : 'right' },
+						{ x: opposite, bottom: base, slot: leftSide ? 'right' : 'left' },
+						{ x: clamp(width * .22), bottom: base, slot: 'far-left' },
+						{ x: clamp(width * .78), bottom: base, slot: 'far-right' },
+						{ x: cursor, bottom: base, slot: 'cursor' },
+						{ x: clamp(width * .5), bottom: raised, slot: 'raised' },
+						{ x: preferred, bottom: raised, slot: 'above-smart' }
+				];
+				let winner = null, best = Infinity;
+				for (const c of choices) {
+						if (c.bottom + sceneHeight + flyoutTop + margin > height) {
+								continue;
+						}
+						const box = { left: c.x - sceneWidth / 2, right: c.x + sceneWidth / 2,
+								top: height - c.bottom - sceneHeight, bottom: height - c.bottom };
+						const overlap = obstacles.filter(SceneSearchLayout10.validRect)
+								.reduce((sum, r) => sum + SceneSearchLayout10.overlap(box, r), 0);
+						const shift = Math.abs(c.x - preferred) * .07 +
+								Math.max(0, c.bottom - base) * .65;
+						const pointerSide = leftSide ? 'left' : 'right';
+						const sticky = previous?.pointerSide === pointerSide &&
+								previous?.slot === c.slot ? -50 : 0;
+						const score = overlap * 100 + shift + sticky;
+						if (score < best) {
+								winner = { ...c, overlap, score, pointerSide };
+								best = score;
+						}
+				}
+				return winner;
 		}
-		this._previous=next;
-	}
-	onPreview(asset,context){this.card.onPreview(asset,context);}
-	dispose(){
-		if(this._disposed){return;}
-		this._disposed=true;this.card.dispose();this.root=null;this._previous=null;
-	}
+		static register(registry, { Card, clock } = {}) {
+				if (!registry || typeof registry.register !== 'function' || typeof Card !== 'function') {
+						throw new TypeError('Layout10 requires registry and shared Card');
+				}
+				registry.register({ id: '10', label: 'スマート自動回避',
+						description: 'コメントプレビューとの衝突を低頻度で検出し自動配置する',
+						factory: (args) => new SceneSearchLayout10({ ...args, Card, clock }) });
+				return registry;
+		}
+		constructor({ document, container, mode, onAction, settings = {}, Card, clock } = {}) {
+				if (!Card || !document || !container) {
+						throw new TypeError('Missing shared card');
+				}
+				this.document = document;
+				this.container = container;
+				this.mode = mode;
+				this.settings = settings || {};
+				this.clock = clock || { now: () => Date.now() };
+				this.card = new Card({ document, container, mode, id: '10',
+						layoutClass: 'zenzaSceneSmartAvoid',
+						extraCss: SceneSearchLayout10.STYLE, onAction });
+				this.root = null;
+				this._lastCheck = -Infinity;
+				this._previous = null;
+				this._disposed = false;
+		}
+		mount(state) {
+				if (this._disposed) {
+						throw new Error('Layout10 disposed');
+				}
+				this.card.mount(state);
+				this.root = this.card.root;
+				this.render(state);
+		}
+		geometry() {
+				if (typeof this.settings.measure === 'function') {
+						return this.settings.measure(this.root, this.container, this.mode);
+				}
+				const frame = this.container.getBoundingClientRect();
+				const card = this.root.getBoundingClientRect();
+				if (!frame.width || !frame.height || !card.width || !card.height) {
+						return null;
+				}
+				const seek = this.settings.getSeekGeometry?.();
+				const cursorX = Number.isFinite(seek?.pointerX) ? seek.pointerX :
+						Number.isFinite(seek?.seekLeft) && Number.isFinite(seek?.seekWidth) ?
+								seek.seekLeft + seek.seekWidth / 2 : frame.width / 2;
+				return { width: frame.width, height: frame.height,
+						sceneWidth: card.width, sceneHeight: card.height, cursorX,
+						obstacles: Array.from(this.container.querySelectorAll('.zenzaCommentPreview'))
+								.filter(el => !el.hidden).map(el => {
+								const r = el.getBoundingClientRect();
+								return { x: r.x - frame.x, y: r.y - frame.y, width: r.width, height: r.height };
+						}) };
+		}
+		render(state) {
+				if (this._disposed) {
+						return;
+				}
+				this.card.render(state);
+				if (!this.root || this.root.hidden) {
+						return;
+				}
+				if (state?.pinned && this._previous) {
+						return;
+				}
+				const now = this.clock.now();
+				if (Number.isFinite(now) && now - this._lastCheck < 160) {
+						return;
+				}
+				this._lastCheck = Number.isFinite(now) ? now : Date.now();
+				const input = this.geometry();
+				if (!input) {
+						return;
+				}
+				const next = SceneSearchLayout10.choose({ ...input,
+						baseBottom: this.mode === 'fullscreen' ? 88 : 78, previous: this._previous });
+				if (!next) {
+						return;
+				}
+				if (!this._previous || this._previous.x !== next.x ||
+						this._previous.bottom !== next.bottom) {
+						this.root.style.setProperty('--scene-x', next.x + 'px');
+						this.root.style.setProperty('--scene-bottom', next.bottom + 'px');
+				}
+				this._previous = next;
+		}
+		onPreview(asset, context) { this.card.onPreview(asset, context); }
+		dispose() {
+				if (this._disposed) {
+						return;
+				}
+				this._disposed = true;
+				this.card.dispose();
+				this.root = null;
+				this._previous = null;
+		}
 }
-function createSceneSearchLayoutRegistry({clock}={}) {
-	const registry=new SceneSearchLayoutRegistry();
-	const coverage=SceneSearchLayoutCatalog.install(registry,{
-		Card:SceneSearchLayoutCard,
-		Legacy:SceneSearchLayout00,
-		registerClassic:registerSceneLayouts01_02,
-		SideShelf:SceneSearchLayouts03_04,
-		PlaybackDeck:SceneSearchLayouts05_06,
-		Filmstrip:SceneSearchLayout07,
-		Drawer:SceneSearchLayouts08_09,
-		SmartAvoid:SceneSearchLayout10,
-		clock
-	});
-	if(!coverage.complete||registry.list().length!==11){
-		throw new Error('Scene layout bootstrap must include all ten providers');
-	}
-	if(typeof SceneSearchPreviewView!=='undefined'){
-		for(const id of ['follow','fixed']){
-			registry.register({id,label:id==='follow'?'シーク位置に追従':'位置を固定',
-				factory:({document,container,onAction,settings})=>new SceneSearchPreviewView({
-					document,host:container,id,onAction,image:settings.getThumbnail?.(),
-					mini:settings.getLegacyComment?.()})});
+function createSceneSearchLayoutRegistry({ clock } = {}) {
+		const registry = new SceneSearchLayoutRegistry();
+		const coverage = SceneSearchLayoutCatalog.install(registry, {
+				Card: SceneSearchLayoutCard,
+				Legacy: SceneSearchLayout00,
+				registerClassic: registerSceneLayouts01_02,
+				SideShelf: SceneSearchLayouts03_04,
+				PlaybackDeck: SceneSearchLayouts05_06,
+				Filmstrip: SceneSearchLayout07,
+				Drawer: SceneSearchLayouts08_09,
+				SmartAvoid: SceneSearchLayout10,
+				clock
+		});
+		if (!coverage.complete || registry.list().length !== 11) {
+				throw new Error('Scene layout bootstrap must include all ten providers');
 		}
-		registry.register({id:'legacy',label:'従来表示',factory:options=>new SceneSearchLayout00(options)});
-	}
-	return registry;
+		if (typeof SceneSearchPreviewView !== 'undefined') {
+				for (const id of ['follow', 'fixed']) {
+						registry.register({ id, label: id === 'follow' ? 'シーク位置に追従' : '位置を固定',
+								factory: ({ document, container, onAction, settings }) => new SceneSearchPreviewView({
+										document, host: container, id, onAction, image: settings.getThumbnail?.(),
+										mini: settings.getLegacyComment?.()
+								}) });
+				}
+				registry.register({ id: 'legacy', label: '従来表示', factory: (options) => new SceneSearchLayout00(options) });
+		}
+		return registry;
 }
 class SceneSearchController {
 		constructor({ getPreference, resolvePreferences, createLayout, loadPreview, onSeek, onError } = {}) {
@@ -41212,6 +44134,7 @@ class SceneSearchController {
 				this._layout = null;
 				this._layoutId = null;
 				this._epoch = 0;
+				this._layoutRevision = 0;
 				this._abort = null;
 		}
 		_pref(key, fallback) {
@@ -41264,14 +44187,24 @@ class SceneSearchController {
 				this._abort = null;
 		}
 		_activateLayout() {
+				const revision = ++this._layoutRevision;
 				this._cancelPreview();
-				this._layout?.dispose?.();
+				const previous = this._layout;
 				this._layout = null;
+				previous?.dispose?.();
+				if (this._disposed || this._layoutRevision !== revision)
+						return;
 				const desired = this._layoutFor(this._mode);
+				if (this._disposed || this._layoutRevision !== revision)
+						return;
 				const create = (id) => {
 						const candidate = this._createLayout({ id, mode: this._mode });
 						if (!candidate || typeof candidate.dispose !== 'function') {
 								throw new TypeError('Layout ' + id + ' must supply dispose()');
+						}
+						if (this._disposed || this._layoutRevision !== revision) {
+								candidate.dispose();
+								return null;
 						}
 						try {
 								candidate.mount?.(this.snapshot);
@@ -41280,22 +44213,48 @@ class SceneSearchController {
 								candidate.dispose();
 								throw error;
 						}
+						if (this._disposed || this._layoutRevision !== revision) {
+								candidate.dispose();
+								return null;
+						}
 						return candidate;
 				};
 				try {
 						this._layoutId = desired;
-						this._layout = create(desired);
+						const candidate = create(desired);
+						if (!candidate)
+								return;
+						this._layout = candidate;
 				}
 				catch (error) {
+						if (this._disposed || this._layoutRevision !== revision)
+								return;
 						this._onError?.(error, desired);
+						if (this._disposed || this._layoutRevision !== revision)
+								return;
 						const fallback = this._resolvePreferences ? 'follow' : '01';
 						if (desired === fallback) {
 								this._layoutId = null;
+								this._started = false;
 								throw error;
 						}
 						this._layoutId = fallback;
-						this._layout = create(fallback);
+						try {
+								const candidate = create(fallback);
+								if (!candidate)
+										return;
+								this._layout = candidate;
+						}
+						catch (fallbackError) {
+								if (!this._disposed && this._layoutRevision === revision) {
+										this._layoutId = null;
+										this._started = false;
+								}
+								throw fallbackError;
+						}
 				}
+				if (this._disposed || this._layoutRevision !== revision)
+						return;
 				this._render();
 		}
 		_render() {
@@ -41436,6 +44395,7 @@ class SceneSearchController {
 						return;
 				}
 				this._disposed = true;
+				this._layoutRevision++;
 				this._cancelPreview();
 				this._layout?.dispose?.();
 				this._layout = null;
@@ -41460,6 +44420,10 @@ class SceneSearchInteraction {
 				this._hoverSources = new Set();
 				this._focusSources = new Set();
 				this._dragging = false;
+				this._nativePointerIds = new Set();
+				this._nativePointerDocument = null;
+				this._nativePointerOnStop = null;
+				this._nativePointerEnd = event => this.finishNativePointer(event);
 				this._anchor = null;
 				this._timer = null;
 				this._unsubscribe = null;
@@ -41634,6 +44598,37 @@ class SceneSearchInteraction {
 				}
 				this._syncPreviewHold();
 		}
+		startNativePointer(e, document, onStop) {
+				if (this._disposed)
+						return;
+				const id = e?.pointerId ?? 'main';
+				const empty = this._nativePointerIds.size === 0;
+				this._nativePointerIds.add(id);
+				if (empty && this._nativePointerIds.size === 1) {
+						this._nativePointerDocument = document;
+						this._nativePointerOnStop = onStop;
+						document.addEventListener('pointerup', this._nativePointerEnd, true);
+						document.addEventListener('pointercancel', this._nativePointerEnd, true);
+						this.setDragging(true);
+				}
+		}
+		finishNativePointer(e) {
+				const id = e?.pointerId ?? 'main';
+				if (!this._nativePointerIds.delete(id))
+						return;
+				if (!this._nativePointerIds.size)
+						this._nativePointerOnStop?.();
+		}
+		clearNativePointers() {
+				const active = this._nativePointerIds.size > 0;
+				this._nativePointerIds.clear();
+				const doc = this._nativePointerDocument;
+				this._nativePointerDocument = null;
+				this._nativePointerOnStop = null;
+				doc?.removeEventListener('pointerup', this._nativePointerEnd, true);
+				doc?.removeEventListener('pointercancel', this._nativePointerEnd, true);
+				return active;
+		}
 		setDragging(value) {
 				if (this._disposed) {
 						return;
@@ -41683,6 +44678,7 @@ class SceneSearchInteraction {
 				if (this._disposed) {
 						return;
 				}
+				this.clearNativePointers();
 				this.reset();
 				this._idle?.dispose();
 				this._disposed = true;
@@ -41853,40 +44849,42 @@ class ScenePreviewIdleLimiter {
 		}
 }
 class SceneSeekStepControl {
-	static get PRESETS() { return [0,1,3,5,10,15,30,60]; }
-	static validStep(value) {
-		return Number.isSafeInteger(value) && value>=0 && value<=600;
-	}
-	constructor({document,getSeconds,setSeconds,onSeek,onCompactChange,onMenuChange,onError}={}) {
-		if(!document || typeof getSeconds!=='function' ||
-			typeof setSeconds!=='function' || typeof onSeek!=='function'){
-			throw new TypeError('SeekStepControl requires document and callbacks');
+		static get PRESETS() { return [0, 1, 3, 5, 10, 15, 30, 60]; }
+		static validStep(value) {
+				return Number.isSafeInteger(value) && value >= 0 && value <= 600;
 		}
-		this.document=document;
-		this._getSeconds=getSeconds;
-		this._setSeconds=setSeconds;
-		this._onSeek=onSeek;
-		this._onCompactChange=onCompactChange||null;
-		this._onMenuChange=typeof onMenuChange==='function'?onMenuChange:null;
-		this._onError=onError||null;
-		this._seconds=5;
-		this._compact=null;
-		this.root=null;
-		this._opened=false;
-		this._onClick=this._handleClick.bind(this);
-		this._onKey=this._handleKey.bind(this);
-		this._onOutside=this._handleOutside.bind(this);
-	}
-	mount(container) {
-		if(!container || typeof container.appendChild!=='function'){
-			throw new TypeError('A mounting container is required');
+		constructor({ document, getSeconds, setSeconds, onSeek, onCompactChange, onMenuChange, onError } = {}) {
+				if (!document || typeof getSeconds !== 'function' ||
+						typeof setSeconds !== 'function' || typeof onSeek !== 'function') {
+						throw new TypeError('SeekStepControl requires document and callbacks');
+				}
+				this.document = document;
+				this._getSeconds = getSeconds;
+				this._setSeconds = setSeconds;
+				this._onSeek = onSeek;
+				this._onCompactChange = onCompactChange || null;
+				this._onMenuChange = typeof onMenuChange === 'function' ? onMenuChange : null;
+				this._onError = onError || null;
+				this._seconds = 5;
+				this._compact = null;
+				this.root = null;
+				this._opened = false;
+				this._onClick = this._handleClick.bind(this);
+				this._onKey = this._handleKey.bind(this);
+				this._onOutside = this._handleOutside.bind(this);
 		}
-		if(this.root){throw new Error('Control already mounted');}
-		const root=this.document.createElement('div');
-		root.className='zenzaSceneSeekStepControl';
-		root.setAttribute('role','group');
-		root.setAttribute('aria-label','シーンサーチの移動秒数');
-		root.innerHTML=`
+		mount(container) {
+				if (!container || typeof container.appendChild !== 'function') {
+						throw new TypeError('A mounting container is required');
+				}
+				if (this.root) {
+						throw new Error('Control already mounted');
+				}
+				const root = this.document.createElement('div');
+				root.className = 'zenzaSceneSeekStepControl';
+				root.setAttribute('role', 'group');
+				root.setAttribute('aria-label', 'シーンサーチの移動秒数');
+				root.innerHTML = `
 			<button type="button" data-scui="back" aria-label="指定秒数戻る">‹</button>
 			<button type="button" data-scui="open" aria-haspopup="true"
 				aria-expanded="false" aria-label="移動秒数を変更">5秒</button>
@@ -41898,139 +44896,175 @@ class SceneSeekStepControl {
 				<button type="button" data-scui="save">適用</button>
 				<button type="button" data-scui="cancel">閉じる</button>
 			</section>`;
-		const list=root.querySelector('[data-scui="presets"]');
-		for(const step of SceneSeekStepControl.PRESETS){
-			const button=this.document.createElement('button');
-			button.type='button';
-			button.dataset.scui='preset';
-			button.dataset.seconds=String(step);
-			button.textContent=step+'秒';
-			list.appendChild(button);
+				const list = root.querySelector('[data-scui="presets"]');
+				for (const step of SceneSeekStepControl.PRESETS) {
+						const button = this.document.createElement('button');
+						button.type = 'button';
+						button.dataset.scui = 'preset';
+						button.dataset.seconds = String(step);
+						button.textContent = step + '秒';
+						list.appendChild(button);
+				}
+				root.addEventListener('click', this._onClick);
+				root.addEventListener('keydown', this._onKey);
+				container.appendChild(root);
+				this.root = root;
+				this.updateFromConfig();
+				return root;
 		}
-		root.addEventListener('click',this._onClick);
-		root.addEventListener('keydown',this._onKey);
-		container.appendChild(root);
-		this.root=root;
-		this.updateFromConfig();
-		return root;
-	}
-	_node(action) {return this.root?.querySelector('[data-scui="'+action+'"]');}
-	get seconds() {return this._seconds;}
-	updateFromConfig() {
-		const value=this._getSeconds();
-		this._seconds=SceneSeekStepControl.validStep(value)?value:5;
-		this._render();
-		return this._seconds;
-	}
-	setStep(value) {
-		if(!SceneSeekStepControl.validStep(value)){
-			this._node('custom')?.setAttribute('aria-invalid','true');
-			return false;
+		_node(action) { return this.root?.querySelector('[data-scui="' + action + '"]'); }
+		get seconds() { return this._seconds; }
+		updateFromConfig() {
+				const value = this._getSeconds();
+				this._seconds = SceneSeekStepControl.validStep(value) ? value : 5;
+				this._render();
+				return this._seconds;
 		}
-		try{this._setSeconds(value);}catch(error){
-			this._onError?.(error);return false;
+		setStep(value) {
+				if (!SceneSeekStepControl.validStep(value)) {
+						this._node('custom')?.setAttribute('aria-invalid', 'true');
+						return false;
+				}
+				try {
+						this._setSeconds(value);
+				}
+				catch (error) {
+						this._onError?.(error);
+						return false;
+				}
+				this._seconds = value;
+				this._node('custom')?.removeAttribute('aria-invalid');
+				this._render();
+				return true;
 		}
-		this._seconds=value;
-		this._node('custom')?.removeAttribute('aria-invalid');
-		this._render();
-		return true;
-	}
-	_render() {
-		if(!this.root){return;}
-		const compact=this._seconds===0;
-		this.root.classList.toggle('is-compact',compact);
-		this.root.style.setProperty('--scene-preview-min-width',
-			compact?'124px':'180px');
-		for(const id of ['back','forward']){
-			const control=this._node(id);
-			control.hidden=compact;
-			control.style.display=compact?'none':'';
-			control.disabled=compact;
+		_render() {
+				if (!this.root) {
+						return;
+				}
+				const compact = this._seconds === 0;
+				this.root.classList.toggle('is-compact', compact);
+				this.root.style.setProperty('--scene-preview-min-width', compact ? '124px' : '180px');
+				for (const id of ['back', 'forward']) {
+						const control = this._node(id);
+						control.hidden = compact;
+						control.style.display = compact ? 'none' : '';
+						control.disabled = compact;
+				}
+				this._node('open').textContent = this._seconds + '秒';
+				this._node('custom').value = String(this._seconds);
+				this.root.querySelectorAll('[data-scui="preset"]').forEach(button => {
+						button.setAttribute('aria-pressed', String(Number(button.dataset.seconds) === this._seconds));
+				});
+				if (this._compact !== compact) {
+						this._compact = compact;
+						this._onCompactChange?.(compact, { minPreviewWidth: compact ? 124 : 180 });
+				}
 		}
-		this._node('open').textContent=this._seconds+'秒';
-		this._node('custom').value=String(this._seconds);
-		this.root.querySelectorAll('[data-scui="preset"]').forEach(button=>{
-			button.setAttribute('aria-pressed',String(
-				Number(button.dataset.seconds)===this._seconds));
-		});
-		if(this._compact!==compact){
-			this._compact=compact;
-			this._onCompactChange?.(compact,{minPreviewWidth:compact?124:180});
+		seek(direction) {
+				if (!this._seconds) {
+						return false;
+				}
+				const sign = Math.sign(Number(direction));
+				if (!Number.isFinite(sign) || sign === 0) {
+						return false;
+				}
+				this._onSeek(sign * this._seconds);
+				return true;
 		}
-	}
-	seek(direction) {
-		if(!this._seconds){return false;}
-		const sign=Math.sign(Number(direction));
-		if(!Number.isFinite(sign)||sign===0){return false;}
-		this._onSeek(sign*this._seconds);
-		return true;
-	}
-	openMenu() {
-		if(!this.root||this._opened){return;}
-		this._opened=true;
-		this._node('panel').hidden=false;
-		this._node('open').setAttribute('aria-expanded','true');
-		this.document.addEventListener('pointerdown',this._onOutside,true);
-		this._onMenuChange?.(true);
-		this._node('custom').focus();
-	}
-	closeMenu() {
-		if(!this.root||!this._opened){return;}
-		this._opened=false;
-		this._node('panel').hidden=true;
-		this._node('open').setAttribute('aria-expanded','false');
-		this.document.removeEventListener('pointerdown',this._onOutside,true);
-		this._onMenuChange?.(false);
-	}
-	_handleOutside(e) {
-		if(this.root&&!this.root.contains(e.target)){this.closeMenu();}
-	}
-	_applyCustom() {
-		const input=this._node('custom');
-		const raw=input?.value.trim();
-		if(!raw||!/^\d+$/.test(raw)){
-			input?.setAttribute('aria-invalid','true');return false;
+		openMenu() {
+				if (!this.root || this._opened) {
+						return;
+				}
+				this._opened = true;
+				this._node('panel').hidden = false;
+				this._node('open').setAttribute('aria-expanded', 'true');
+				this.document.addEventListener('pointerdown', this._onOutside, true);
+				this._onMenuChange?.(true);
+				this._node('custom').focus();
 		}
-		const value=Number(raw);
-		if(!this.setStep(value)){return false;}
-		this.closeMenu();return true;
-	}
-	_handleClick(e) {
-		const button=e.target.closest?.('button[data-scui]');
-		if(!button||!this.root?.contains(button)){return;}
-		const action=button.dataset.scui;
-		if(action==='back'||action==='forward'){
-			this.seek(action==='back'?-1:1);
-		}else if(action==='open'){
-			this._opened?this.closeMenu():this.openMenu();
-		}else if(action==='preset'){
-			if(this.setStep(Number(button.dataset.seconds))){this.closeMenu();}
-		}else if(action==='save'){
-			this._applyCustom();
-		}else if(action==='cancel'){
-			this.closeMenu();
+		closeMenu() {
+				if (!this.root || !this._opened) {
+						return;
+				}
+				this._opened = false;
+				this._node('panel').hidden = true;
+				this._node('open').setAttribute('aria-expanded', 'false');
+				this.document.removeEventListener('pointerdown', this._onOutside, true);
+				this._onMenuChange?.(false);
 		}
-	}
-	_handleKey(e) {
-		if(!this._opened){return;}
-		if(e.key==='Escape'){
-			e.preventDefault();e.stopPropagation();this.closeMenu();
-			this._node('open').focus();
-		}else if(e.key==='Enter'&&e.target===this._node('custom')){
-			e.preventDefault();e.stopPropagation();this._applyCustom();
-		}else if(e.target===this._node('custom')){
-			e.stopPropagation(); // Do not forward text edits to player shortcuts.
+		_handleOutside(e) {
+				if (this.root && !this.root.contains(e.target)) {
+						this.closeMenu();
+				}
 		}
-	}
-	dispose() {
-		if(!this.root){return;}
-		this.closeMenu();
-		this.root.removeEventListener('click',this._onClick);
-		this.root.removeEventListener('keydown',this._onKey);
-		this.root.remove();
-		this.root=null;
-		this._compact=null;
-	}
+		_applyCustom() {
+				const input = this._node('custom');
+				const raw = input?.value.trim();
+				if (!raw || !/^\d+$/.test(raw)) {
+						input?.setAttribute('aria-invalid', 'true');
+						return false;
+				}
+				const value = Number(raw);
+				if (!this.setStep(value)) {
+						return false;
+				}
+				this.closeMenu();
+				return true;
+		}
+		_handleClick(e) {
+				const button = e.target.closest?.('button[data-scui]');
+				if (!button || !this.root?.contains(button)) {
+						return;
+				}
+				const action = button.dataset.scui;
+				if (action === 'back' || action === 'forward') {
+						this.seek(action === 'back' ? -1 : 1);
+				}
+				else if (action === 'open') {
+						this._opened ? this.closeMenu() : this.openMenu();
+				}
+				else if (action === 'preset') {
+						if (this.setStep(Number(button.dataset.seconds))) {
+								this.closeMenu();
+						}
+				}
+				else if (action === 'save') {
+						this._applyCustom();
+				}
+				else if (action === 'cancel') {
+						this.closeMenu();
+				}
+		}
+		_handleKey(e) {
+				if (!this._opened) {
+						return;
+				}
+				if (e.key === 'Escape') {
+						e.preventDefault();
+						e.stopPropagation();
+						this.closeMenu();
+						this._node('open').focus();
+				}
+				else if (e.key === 'Enter' && e.target === this._node('custom')) {
+						e.preventDefault();
+						e.stopPropagation();
+						this._applyCustom();
+				}
+				else if (e.target === this._node('custom')) {
+						e.stopPropagation(); // Do not forward text edits to player shortcuts.
+				}
+		}
+		dispose() {
+				if (!this.root) {
+						return;
+				}
+				this.closeMenu();
+				this.root.removeEventListener('click', this._onClick);
+				this.root.removeEventListener('keydown', this._onKey);
+				this.root.remove();
+				this.root = null;
+				this._compact = null;
+		}
 }
 class SceneCommentSearch {
 		constructor({ getChats, getVideoId, seekTo, onResults, limit = 100 } = {}) {
@@ -42378,139 +45412,293 @@ class SceneSearchShortcutRouter {
 // already required
 // already required
 class SceneSearchPlayerBinding {
-	constructor({view,dialog,document,container,events,isFullscreen,onError,
-		Adapter,Bridge,classes,createRegistry}={}) {
-		if(!view||!dialog||!document||!container||typeof dialog.on!=='function'||
-			typeof dialog.off!=='function'){
-			throw new TypeError('Scene player binding requires a disposable player lifecycle');
-		}
-		this.view=view;this.dialog=dialog;this.document=document;this.container=container;
-		this.events=events;this.isFullscreen=isFullscreen||(()=>false);
-		this.onError=typeof onError==='function'?onError:()=>{};
-		this.Adapter=Adapter||SceneSearchLegacyAdapter;
-		this.Bridge=Bridge||SceneSearchIntegrationBridge;
-		this.createRegistry=createRegistry||createSceneSearchLayoutRegistry;
-		this.classes=classes||{Controller:SceneSearchController,Interaction:SceneSearchInteraction,
-			IdleLimiter:ScenePreviewIdleLimiter,SeekStepControl:SceneSeekStepControl,
-			CommentSearch:SceneCommentSearch,CommentSearchPanel:SceneCommentSearchPanel,
-			ShortcutRouter:SceneSearchShortcutRouter,VisibilityRegistry:UiVisibilityRegistry,
-			Placement:typeof SceneSearchPlacement==='undefined'?null:SceneSearchPlacement};
-		this.adapter=null;this._subscriptions=[];this._attached=false;this._disposed=false;
-		this._pagehide=()=>this.dispose();
-		this._geometryFrame=null;this._manipulating=false;
-		this._geometryChanged=()=>this._scheduleGeometry();
-		this._fullscreenChanged=()=>this._mode();
-	}
-	_listen(owner,event,fn){
-		if(typeof owner?.on!=='function'||typeof owner?.off!=='function'){return;}
-		owner.on(event,fn);this._subscriptions.push([owner,event,fn]);
-	}
-	attach(){
-		if(this._attached||this._disposed){return this;}
-		this._attached=true;
-		this._listen(this.dialog,'open',()=>this._start());
-		this._listen(this.dialog,'close',()=>this._stop());
-		this._listen(this.dialog,'screenModeChange',()=>this._mode());
-		this._listen(this.events,'fullscreenStatusChange',()=>this._mode());
-		this.document.defaultView?.addEventListener('pagehide',this._pagehide);
-		this.document.defaultView?.addEventListener('resize',this._geometryChanged);
-		this.document.addEventListener('fullscreenchange',this._fullscreenChanged);
-		this._listen(this.view,'sceneSearchGeometryChange',event=>{
-			this._manipulating=event?.active===true;this._scheduleGeometry();
-		});
-		if(this.dialog.isOpen){this._start();}
-		return this;
-	}
-	_mode(){
-		if(this._disposed||!this.adapter){return;}
-		try{this.adapter.screenModeChanged(this.document.fullscreenElement||this.isFullscreen()?'fullscreen':'normal');
-			this._scheduleGeometry();}
-		catch(_){this._stop();this.onError('SCENE_MODE_FAILED');}
-	}
-	_start(){
-		if(this._disposed||this.adapter){return;}
-		try{
-			const adapter=new this.Adapter({Bridge:this.Bridge,classes:this.classes,
-				registry:this.createRegistry(),controlBar:this.view.videoControlBar,
-				dialog:this.dialog,document:this.document,container:this.container,
-				onError:()=>this.onError('SCENE_ADAPTER_FAILED')});
-			this.adapter=adapter;
-			const bridge=adapter.start(this.document.fullscreenElement||this.isFullscreen()?'fullscreen':'normal');
-			this._watchGeometry();this._scheduleGeometry();
-			if(bridge?.layoutSettings && this.view.videoControlBar?.storyboard){
-				const bar=this.view.videoControlBar;
-				bridge.layoutSettings.getStoryboardModel=()=>{
-					const board=bar.storyboard;
-					const videoId=bar.player?.watchId;
-					return videoId && board?._watchId===videoId &&
-						board.model?.isAvailable ? board.model:null;
-				};
-				bridge.layoutSettings.createFilmstripThumbnail=options=>
-					StoryboardWorker.createThumbnail(options);
-				if(bridge.state?.layoutId==='07'){
-					bridge.controller?.onPreferencesChanged?.('sceneSearch.idleHideSeconds');
+		constructor({ view, dialog, document, container, events, isFullscreen, onError, Adapter, Bridge, classes, createRegistry } = {}) {
+				if (!view || !dialog || !document || !container || typeof dialog.on !== 'function' ||
+						typeof dialog.off !== 'function') {
+						throw new TypeError('Scene player binding requires a disposable player lifecycle');
 				}
-			}
-		}catch(_){this._stop();this.onError('SCENE_START_FAILED');}
-	}
-	_geometryContext(){
-		if(this.document.fullscreenElement||this.isFullscreen())return 'fullscreen';
-		return this.dialog.screenMode==='small'||this.dialog._state?.screenMode==='small'||
-			this.container.closest('.zenzaScreenMode_small')?'small':'normal';
-	}
-	_scheduleGeometry(){
-		if(this._disposed||!this.adapter||this._geometryFrame!==null)return;
-		const win=this.document.defaultView;
-		const callback=()=>{
-			this._geometryFrame=null;
-			this.adapter?.bridge?.updatePlacementContext?.({context:this._geometryContext(),interactionActive:this._manipulating});
-		};
-		this._geometryFrame=win.requestAnimationFrame?win.requestAnimationFrame(callback):win.setTimeout(callback,0);
-	}
-	_watchGeometry(){
-		const win=this.document.defaultView;
-		const selectors='.videoPlayer,.commentInputPanel,.commandDrawer,.commandPopover,.closeButton,.zenzaSmallModeResizeHandle,.controlItemContainer.right,.controlItemContainer.left,.controlItemContainer.center';
-		if(win.ResizeObserver){
-			this._geometryObserver=new win.ResizeObserver(this._geometryChanged);
-			this._geometryObserver.observe(this.container);
-			for(const node of this.container.querySelectorAll(selectors))this._geometryObserver.observe(node);
+				this.view = view;
+				this.dialog = dialog;
+				this.document = document;
+				this.container = container;
+				this.events = events;
+				this.isFullscreen = isFullscreen || (() => false);
+				this.onError = typeof onError === 'function' ? onError : () => { };
+				this.Adapter = Adapter || SceneSearchLegacyAdapter;
+				this.Bridge = Bridge || SceneSearchIntegrationBridge;
+				this.createRegistry = createRegistry || createSceneSearchLayoutRegistry;
+				this.classes = classes || { Controller: SceneSearchController, Interaction: SceneSearchInteraction,
+						IdleLimiter: ScenePreviewIdleLimiter, SeekStepControl: SceneSeekStepControl,
+						CommentSearch: SceneCommentSearch, CommentSearchPanel: SceneCommentSearchPanel,
+						ShortcutRouter: SceneSearchShortcutRouter, VisibilityRegistry: UiVisibilityRegistry,
+						Placement: typeof SceneSearchPlacement === 'undefined' ? null : SceneSearchPlacement };
+				this.adapter = null;
+				this._subscriptions = [];
+				this._attached = false;
+				this._disposed = false;
+				this._pagehide = () => this.dispose();
+				this._geometryFrame = null;
+				this._manipulating = false;
+				this._geometryChanged = () => this._scheduleGeometry();
+				this._fullscreenChanged = () => this._mode();
 		}
-		if(win.MutationObserver){
-			this._geometryMutation=new win.MutationObserver(records=>{
-				if(records.some(record=>record.target===this.container||record.target.matches?.(selectors)||
-					record.target.closest?.('.commentInputPanel')))this._scheduleGeometry();
-			});
-			this._geometryMutation.observe(this.container,{attributes:true,attributeFilter:['class','style','hidden'],subtree:true});
+		_listen(owner, event, fn) {
+				if (typeof owner?.on !== 'function' || typeof owner?.off !== 'function') {
+						return;
+				}
+				owner.on(event, fn);
+				this._subscriptions.push([owner, event, fn]);
 		}
-	}
-	_stop(){
-		const adapter=this.adapter;this.adapter=null;
-		const win=this.document.defaultView;
-		if(this._geometryFrame!==null){
-			if(win.cancelAnimationFrame)win.cancelAnimationFrame(this._geometryFrame);else win.clearTimeout(this._geometryFrame);
-			this._geometryFrame=null;
+		attach() {
+				if (this._attached || this._disposed) {
+						return this;
+				}
+				this._attached = true;
+				this._listen(this.dialog, 'open', () => this._start());
+				this._listen(this.dialog, 'close', () => this._stop());
+				this._listen(this.dialog, 'screenModeChange', () => this._mode());
+				this._listen(this.events, 'fullscreenStatusChange', () => this._mode());
+				this.document.defaultView?.addEventListener('pagehide', this._pagehide);
+				this.document.defaultView?.addEventListener('resize', this._geometryChanged);
+				this.document.addEventListener('fullscreenchange', this._fullscreenChanged);
+				this._listen(this.view, 'sceneSearchGeometryChange', (event) => {
+						this._manipulating = event?.active === true;
+						this._scheduleGeometry();
+				});
+				if (this.dialog.isOpen) {
+						this._start();
+				}
+				return this;
 		}
-		this._geometryObserver?.disconnect();this._geometryObserver=null;
-		this._geometryMutation?.disconnect();this._geometryMutation=null;this._manipulating=false;
-		try{adapter?.dispose();}catch(_){this.onError('SCENE_DISPOSE_FAILED');}
-	}
-	handleShortcut(command){
-		if(this._disposed||typeof command!=='string'||!command.startsWith('sceneSearch-')){
-			return false;
+		_mode() {
+				if (this._disposed || !this.adapter) {
+						return;
+				}
+				try {
+						this.adapter.screenModeChanged(this.document.fullscreenElement || this.isFullscreen() ? 'fullscreen' : 'normal');
+						this._scheduleGeometry();
+				}
+				catch (_) {
+						this._stop();
+						this.onError('SCENE_MODE_FAILED');
+				}
 		}
-		if(!this.adapter&&this.dialog.isOpen){this._start();}
-		return this.adapter?.bridge?.handleShortcut(command)===true;
-	}
-	dispose(){
-		if(this._disposed){return;}
-		this._disposed=true;this._stop();
-		for(const [owner,event,fn] of this._subscriptions){owner.off(event,fn);}
-		this._subscriptions.length=0;
-		this.document.defaultView?.removeEventListener('pagehide',this._pagehide);
-		this.document.defaultView?.removeEventListener('resize',this._geometryChanged);
-		this.document.removeEventListener('fullscreenchange',this._fullscreenChanged);
-	}
+		_start() {
+				if (this._disposed || this.adapter) {
+						return;
+				}
+				try {
+						const adapter = new this.Adapter({ Bridge: this.Bridge, classes: this.classes,
+								registry: this.createRegistry(), controlBar: this.view.videoControlBar,
+								dialog: this.dialog, document: this.document, container: this.container,
+								onError: () => this.onError('SCENE_ADAPTER_FAILED') });
+						this.adapter = adapter;
+						const bridge = adapter.start(this.document.fullscreenElement || this.isFullscreen() ? 'fullscreen' : 'normal');
+						this._watchGeometry();
+						this._scheduleGeometry();
+						if (bridge?.layoutSettings && this.view.videoControlBar?.storyboard) {
+								const bar = this.view.videoControlBar;
+								bridge.layoutSettings.getStoryboardModel = () => {
+										const board = bar.storyboard;
+										const videoId = bar.player?.watchId;
+										return videoId && board?._watchId === videoId &&
+												board.model?.isAvailable ? board.model : null;
+								};
+								bridge.layoutSettings.createFilmstripThumbnail = options => StoryboardWorker.createThumbnail(options);
+								if (bridge.state?.layoutId === '07') {
+										bridge.controller?.onPreferencesChanged?.('sceneSearch.idleHideSeconds');
+								}
+						}
+				}
+				catch (_) {
+						this._stop();
+						this.onError('SCENE_START_FAILED');
+				}
+		}
+		_geometryContext() {
+				if (this.document.fullscreenElement || this.isFullscreen())
+						return 'fullscreen';
+				return this.dialog.screenMode === 'small' || this.dialog.screenMode === 'sideView' ||
+						this.dialog._state?.screenMode === 'small' || this.dialog._state?.screenMode === 'sideView' ||
+						this.container.closest('.zenzaScreenMode_small,.zenzaScreenMode_sideView') ? 'small' : 'normal';
+		}
+		_scheduleGeometry() {
+				if (this._disposed || !this.adapter || this._geometryFrame !== null)
+						return;
+				const win = this.document.defaultView;
+				const callback = () => {
+						this._geometryFrame = null;
+						this.adapter?.bridge?.updatePlacementContext?.({ context: this._geometryContext(), interactionActive: this._manipulating });
+				};
+				this._geometryFrame = win.requestAnimationFrame ? win.requestAnimationFrame(callback) : win.setTimeout(callback, 0);
+		}
+		_watchGeometry() {
+				const win = this.document.defaultView;
+				const selectors = '.videoPlayer,.videoControlBar,.seekBarContainer,.seekBar,' +
+						'.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,' +
+						'.closeButton,.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,' +
+						'.zenzaSmallModeAspectLockButton,.zenzaSmallModeCloseButton,' +
+						'.controlItemContainer,.controlItemContainer .scalingUI,.controlItemContainer .controlButton';
+				this._geometryTargets = new Set();
+				const refreshTargets = () => {
+						if (!this._geometryObserver)
+								return;
+						const present = new Set([this.container, ...this.container.querySelectorAll(selectors)]);
+						for (const node of present)
+								if (!this._geometryTargets.has(node)) {
+										this._geometryObserver.observe(node);
+										this._geometryTargets.add(node);
+								}
+						for (const node of this._geometryTargets)
+								if (!present.has(node)) {
+										this._geometryObserver.unobserve?.(node);
+										this._geometryTargets.delete(node);
+								}
+				};
+				if (win.ResizeObserver) {
+						this._geometryObserver = new win.ResizeObserver(this._geometryChanged);
+						refreshTargets();
+				}
+				if (win.MutationObserver) {
+						const matches = (node) => node?.nodeType === 1 &&
+								(node.matches?.(selectors) || this._geometryTargets.has(node));
+						const hasTarget = (node) => matches(node) || node?.querySelector?.(selectors);
+						this._geometryMutation = new win.MutationObserver(records => {
+								let changed = false, refresh = false;
+								for (const record of records) {
+										if (record.type === 'childList') {
+												const nodes = [...record.addedNodes, ...record.removedNodes];
+												if (record.target?.matches?.(selectors) ||
+														record.target?.closest?.('.commentInputPanel,.controlItemContainer') ||
+														nodes.some(hasTarget)) {
+														changed = true;
+														refresh = true;
+												}
+										}
+										else if (record.target === this.container || matches(record.target)) {
+												changed = true;
+												if (record.attributeName === 'class')
+														refresh = true;
+										}
+								}
+								if (refresh)
+										refreshTargets();
+								if (changed)
+										this._scheduleGeometry();
+						});
+						this._geometryMutation.observe(this.container, { attributes: true,
+								attributeFilter: ['class', 'style', 'hidden', 'aria-hidden', 'aria-expanded'],
+								childList: true, subtree: true });
+				}
+				const pseudoTargets = '.commentInputPanel,.commandDrawer,.commandPopover,' +
+						'.commandMenu,.commandList,.zenzaPopupMenu,.playbackRateMenu,' +
+						'.controlItemContainer,.scalingUI,.controlButton,.closeButton,' +
+						'.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,' +
+						'.zenzaSmallModeAspectLockButton,.zenzaSmallModeCloseButton';
+				const pseudoScope = (node) => {
+						if (node?.nodeType !== 1 || !this.container.contains(node))
+								return null;
+						const owned = node.closest?.(pseudoTargets);
+						if (owned && this.container.contains(owned))
+								return owned;
+						for (let parent = node; parent && parent !== this.container; parent = parent.parentElement) {
+								if (parent.matches?.('.videoPlayer,.videoControlBar,.seekBar,.seekBarContainer'))
+										break;
+								if (parent.querySelector?.(pseudoTargets))
+										return parent;
+						}
+						return null;
+				};
+				this._geometryInteractionChanged = (event) => {
+						const from = pseudoScope(event.target);
+						const to = pseudoScope(event.relatedTarget);
+						if (!from && !to)
+								return;
+						if (from && to && (from === to || from.contains(event.relatedTarget) ||
+								to.contains(event.target)))
+								return;
+						this._scheduleGeometry(); // RAF coalesces pointer + mouse event pairs.
+				};
+				this._geometryInteractionEvents = [
+						'pointerover', 'pointerout', 'mouseover', 'mouseout', 'focusin', 'focusout'
+				];
+				for (const event of this._geometryInteractionEvents) {
+						this.container.addEventListener(event, this._geometryInteractionChanged, true);
+				}
+				this._geometryTransitionChanged = (event) => {
+						if (event.target?.matches?.('.controlItemContainer,.scalingUI,.controlButton,.commentInputPanel,' +
+								'.commandDrawer,.commandPopover,.commandMenu,.commandList,' +
+								'.zenzaPopupMenu,.playbackRateMenu')) {
+								if (!event.propertyName || ['opacity', 'visibility', 'transform', 'clip-path'].includes(event.propertyName))
+										this._scheduleGeometry();
+						}
+				};
+				this.container.addEventListener('transitionend', this._geometryTransitionChanged, true);
+		}
+		_stop() {
+				const adapter = this.adapter;
+				this.adapter = null;
+				const win = this.document.defaultView;
+				if (this._geometryFrame !== null) {
+						if (win.cancelAnimationFrame)
+								win.cancelAnimationFrame(this._geometryFrame);
+						else
+								win.clearTimeout(this._geometryFrame);
+						this._geometryFrame = null;
+				}
+				this._geometryObserver?.disconnect();
+				this._geometryObserver = null;
+				this._geometryMutation?.disconnect();
+				this._geometryMutation = null;
+				this._geometryTargets?.clear();
+				this._geometryTargets = null;
+				if (this._geometryInteractionChanged) {
+						for (const event of this._geometryInteractionEvents || []) {
+								this.container.removeEventListener(event, this._geometryInteractionChanged, true);
+						}
+						this._geometryInteractionChanged = null;
+						this._geometryInteractionEvents = null;
+				}
+				if (this._geometryTransitionChanged) {
+						this.container.removeEventListener('transitionend', this._geometryTransitionChanged, true);
+						this._geometryTransitionChanged = null;
+				}
+				this._manipulating = false;
+				try {
+						adapter?.dispose();
+				}
+				catch (_) {
+						this.onError('SCENE_DISPOSE_FAILED');
+				}
+		}
+		handleShortcut(command) {
+				if (this._disposed || typeof command !== 'string' || !command.startsWith('sceneSearch-')) {
+						return false;
+				}
+				if (!this.adapter && this.dialog.isOpen) {
+						this._start();
+				}
+				return this.adapter?.bridge?.handleShortcut(command) === true;
+		}
+		dispose() {
+				if (this._disposed) {
+						return;
+				}
+				this._disposed = true;
+				this._stop();
+				for (const [owner, event, fn] of this._subscriptions) {
+						owner.off(event, fn);
+				}
+				this._subscriptions.length = 0;
+				this.document.defaultView?.removeEventListener('pagehide', this._pagehide);
+				this.document.defaultView?.removeEventListener('resize', this._geometryChanged);
+				this.document.removeEventListener('fullscreenchange', this._fullscreenChanged);
+		}
 }
+// already required
+// already required
+// already required
+// already required
 // already required
 const NotificationHistoryPanel = (() => {
 		const STYLE_ID = 'zenzaNotificationHistoryStyle';
@@ -42607,6 +45795,7 @@ const NotificationHistoryPanel = (() => {
 				let shown = 100;
 				let revision = 0;
 				let scheduled = false;
+				let dirty = false;
 				let disposed = false;
 				const snapshot = async () => NotificationJournal.list(2000);
 				const matches = (entry) => {
@@ -42625,11 +45814,10 @@ const NotificationHistoryPanel = (() => {
 						return [entry.message, entry.videoId, entry.source, entry.category,
 								JSON.stringify(entry.details || {})].join(' ').toLocaleLowerCase().includes(needle);
 				};
-				const render = async () => {
+				const render = async (version) => {
 						if (disposed || !isVisible()) {
 								return;
 						}
-						const version = ++revision;
 						const all = await snapshot();
 						if (disposed || !isVisible() || version !== revision) {
 								return;
@@ -42664,17 +45852,33 @@ const NotificationHistoryPanel = (() => {
 						more.hidden = entries.length <= shown;
 				};
 				const schedule = () => {
-						if (scheduled || disposed || !isVisible()) {
+						if (disposed || !isVisible()) {
+								return;
+						}
+							revision;
+						if (scheduled) {
+								dirty = true;
 								return;
 						}
 						scheduled = true;
-						Promise.resolve().then(() => {
-								scheduled = false;
-								void render().catch(() => {
-										if (!disposed && isVisible()) {
-												status.textContent = '履歴の読み込みに失敗しました';
-										}
-								});
+						void Promise.resolve().then(async () => {
+								try {
+										do {
+												dirty = false;
+												const version = revision;
+												try {
+														await render(version);
+												}
+												catch (_) {
+														if (!disposed && isVisible() && version === revision) {
+																status.textContent = '履歴の読み込みに失敗しました';
+														}
+												}
+										} while (dirty && !disposed && isVisible());
+								}
+								finally {
+										scheduled = false;
+								}
 						});
 				};
 				query.addEventListener('input', () => { shown = 100; schedule(); });
@@ -43521,11 +46725,51 @@ class NicoVideoPlayerDialogView extends Emitter {
 				if (this.videoInfoPanel) {
 						return this.videoInfoPanel;
 				}
+				this._videoInfoPanelMounting = true;
 				this.videoInfoPanel = new VideoInfoPanel({
 						dialog: this,
 						node: this._$playerContainer
 				});
 				this.videoInfoPanel.on('command', this._onCommand.bind(this));
+				let bookmarkSession;
+				try {
+						const container = this._$playerContainer?.[0];
+						const backend = new IndexedDbManualBookmarkBackend(window.indexedDB);
+						const repository = new ManualBookmarkRepository(backend);
+						bookmarkSession = new ManualBookmarkSession(repository);
+						this.manualBookmarkDock = ManualBookmarkDock.mount(container, bookmarkSession, {
+								currentVideoId: () => this._state.videoInfo?.watchId ?? null,
+								currentTime: () => Number(this._currentTimeGetter()) || 0,
+								timestamp: () => Date.now(),
+								newId: () => {
+										const uuid = window.crypto?.randomUUID?.();
+										return uuid ? 'B' + uuid.replace(/-/g, '') :
+												'B' + Date.now().toString(36) +
+														Math.floor(Math.random() * 0x1000000).toString(36);
+								},
+								seek: (seconds) => this.emit('command', 'seekTo', seconds),
+								duration: () => Number(this._state.videoInfo?.duration) || 0,
+								automaticTime: () => this._dialog?._videoInfo?.resumePoints?.[0]?.time ?? null,
+								recordingEnabled: () => this._playerConfig.getValue('resume.recordEnabled') !== false,
+								repeatEnabled: () => this._playerConfig.getValue('abRepeat.enabled') !== false,
+								repeatState: (active) => {
+										const media = this._dialog?._nicoVideoPlayer?._videoPlayer;
+										if (media)
+												media.isLoop = active ? false : !!this._playerConfig.getValue('loop');
+								},
+								editAutomatic: (seconds) => this._dialog._editAutomaticResume(seconds),
+								deleteAutomatic: async () => !!(await this._dialog._deleteAutomaticResume())
+						});
+				}
+				catch {
+						try {
+								bookmarkSession?.dispose();
+						}
+						catch { }
+						console.warn('Manual bookmark dock unavailable');
+				}
+				this._videoInfoPanelMounting = false;
+				this._applyPendingVideoInfo();
 				return this.videoInfoPanel;
 		}
 		_onCommand(command, param) {
@@ -43737,19 +46981,71 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this.emit('error', e);
 		}
 		_onBeforeVideoOpen() {
+				this._pendingVideoInfo = undefined;
+				this._bookmarkActivation = undefined;
+				this.manualBookmarkDock?.deactivate();
 				this._clearActionFeedback();
 				this._clearHoverUiActive();
 				this._setThumbnail();
 		}
 		_onVideoInfoLoad(videoInfo) {
-				this.videoInfoPanel.update(videoInfo);
+				this._pendingVideoInfo = { requestId: this._dialog?._requestId,
+						info: videoInfo, failed: !!this._state.isError };
+				this._applyPendingVideoInfo();
 		}
 		_onVideoInfoFail(videoInfo) {
-				if (videoInfo) {
-						this.videoInfoPanel.update(videoInfo);
+				this._pendingVideoInfo = { requestId: this._dialog?._requestId,
+						info: videoInfo, failed: true };
+				this._applyPendingVideoInfo();
+		}
+		_applyPendingVideoInfo() {
+				const pending = this._pendingVideoInfo;
+				if (!this.videoInfoPanel || this._videoInfoPanelMounting || !pending ||
+						pending.requestId !== this._dialog?._requestId) {
+						return;
+				}
+				const { info: videoInfo, requestId } = pending;
+				if (pending.failed || this._state.isError) {
+						this._bookmarkActivation = undefined;
+						this.manualBookmarkDock?.deactivate();
+						if (videoInfo) {
+								this.videoInfoPanel.update(videoInfo);
+						}
+						else {
+								this.videoInfoPanel.onLoadFail();
+						}
+						return;
+				}
+				this.videoInfoPanel.update(videoInfo);
+				if (this._pendingVideoInfo !== pending || requestId !== this._dialog?._requestId) {
+						return;
+				}
+				if (this.manualBookmarkDock && typeof videoInfo?.watchId === 'string' &&
+						Number.isFinite(videoInfo.duration) && videoInfo.duration > 0) {
+						const active = this._bookmarkActivation;
+						if (active && active.requestId === requestId && active.videoId === videoInfo.watchId &&
+								active.duration === videoInfo.duration) {
+								return;
+						}
+						const activation = { requestId, videoId: videoInfo.watchId, duration: videoInfo.duration };
+						this._bookmarkActivation = activation;
+						const clearFailedActivation = () => {
+								if (this._bookmarkActivation === activation) {
+										this._bookmarkActivation = undefined;
+								}
+						};
+						void this.manualBookmarkDock.activate(videoInfo.watchId, videoInfo.duration).then(result => {
+								if (result?.status === 'error') {
+										clearFailedActivation();
+								}
+						}, () => {
+								clearFailedActivation();
+								console.warn('Manual bookmark session unavailable');
+						});
 				}
 				else {
-						this.videoInfoPanel.onLoadFail();
+						this._bookmarkActivation = undefined;
+						this.manualBookmarkDock?.deactivate();
 				}
 		}
 		_onVideoServerType(type, sessionInfo) {
@@ -44181,6 +47477,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this._updateScreenModeStyle();
 		}
 		hide() {
+				this.manualBookmarkDock?.deactivate();
 				this._hoverUiSuppressed = true;
 				this._clearHoverUiActive();
 				this._clearShortcutToggleFeedback();
@@ -45520,6 +48817,17 @@ class NicoVideoPlayerDialog extends Emitter {
 								case 'seekToResumePoint':
 										this.currentTime = this._videoInfo.initialPlaybackTime;
 										break;
+								case 'toggle-playbackPoints': {
+										const view = this._view;
+										view?._initializeVideoInfoPanel?.();
+										const host = view?._$playerContainer?.[0];
+										const trigger = host?.querySelector('.playbackPointsSwitch');
+										if (host)
+												view.manualBookmarkDock?.toggle(host, trigger);
+										break;
+								}
+								case 'deleteAutomaticResume':
+										return this._deleteAutomaticResume();
 								case 'addWordFilter':
 										this._nicoVideoPlayer.filter.addWordFilter(param);
 										break;
@@ -45784,6 +49092,9 @@ class NicoVideoPlayerDialog extends Emitter {
 				e.stopPropagation();
 		}
 		_onPlayerConfigUpdate(key, value) {
+				if (['resume.recordEnabled', 'abRepeat.enabled'].includes(key)) {
+						this._view?.manualBookmarkDock?.refreshPreferences();
+				}
 				if (key === 'enableCommentPanel') {
 						this._applyCommentPanelVisibility(value);
 						return;
@@ -46479,11 +49790,13 @@ class NicoVideoPlayerDialog extends Emitter {
 				}
 				this._cancelCommentLoad();
 				this._abortCommonsTreeJob(); // Task197: switching video stops the parent/child job
+				this._outgoingAutoResumeSaveSuppress = this._isAutoResumeSaveSuppressed() ?
+						this._autoResumeSaveSuppress : undefined;
 				this._requestId = 'play-' + Math.random();
 				this._videoWatchOptions = options;
 				this._clearVideoTimers();
-				window.console.log('%copen video: ', 'color: blue;', watchId);
-				window.console.time('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + watchId);
+				window.console.log('Video open requested');
+				window.console.time('Video readiness notification');
 				const requestId = this._requestId;
 				let nicoVideoPlayer = this._nicoVideoPlayer;
 				if (!nicoVideoPlayer) {
@@ -46521,7 +49834,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								onGiveUp();
 								resolve(fallback);
 						}, NicoVideoPlayerDialog.OPTIONAL_LOAD_TIMEOUT);
-						Promise.resolve().then(func).then(result => { window.clearTimeout(timer); resolve(result); }, err => { window.clearTimeout(timer); window.console.warn(`${label}: fail`, err); onGiveUp(); resolve(fallback); });
+						Promise.resolve().then(func).then(result => { window.clearTimeout(timer); resolve(result); }, () => { window.clearTimeout(timer); window.console.warn(`${label}: fail`); onGiveUp(); resolve(fallback); });
 				});
 				Promise.all([
 						VideoInfoLoader.load(watchId, options.videoLoadOptions),
@@ -46577,7 +49890,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._playerConfig.props.lastPlayerId = this.id;
 		}
 		async _onVideoInfoLoaderLoad(requestId, [videoInfoData, localCacheData]) {
-				console.log('VideoInfoLoader.load!', requestId, this._watchId, videoInfoData);
+				console.log('Video info load completed');
 				if (this._requestId !== requestId) {
 						return;
 				}
@@ -46735,7 +50048,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						e = { message: e === undefined || e === null ? '' : String(e) };
 				}
 				const watchId = e.watchId;
-				window.console.error('_onVideoInfoLoaderFail', watchId, { message: e.message, reason: e.reason, type: e.type, name: e.name });
+				window.console.error('Video info load failed');
 				if (this._requestId !== requestId) {
 						return;
 				}
@@ -46768,7 +50081,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		_onVideoSessionFail(serverType, result) {
 				const server = serverType === 'dmc' ? 'dmc.nico' : serverType;
-				window.console.error(`${server} fail`, result);
+				window.console.error('Video session failed', serverType === 'dmc' ? 'dmc' : serverType === 'domand' ? 'domand' : 'other');
 				this._recordDiagnostic({
 						category: 'player', level: 'error', message: '動画の読み込みに失敗しました',
 						videoId: this._watchId, source: 'videoSession',
@@ -46795,7 +50108,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				return 'unknown';
 		}
 		_onVideoPlayStartFail(err) {
-				window.console.error('動画再生開始に失敗', err);
+				window.console.error('Video play start failed');
 				const type = NicoVideoPlayerDialog.classifyPlayStartError(err);
 				this._recordDiagnostic({
 						category: 'player', level: type === 'aborted' || type === 'notAllowed' ? 'warning' : 'error',
@@ -46803,7 +50116,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						videoId: this._watchId, source: 'playStart',
 						details: { kind: type, errorName: err && err.name }
 				});
-				console.warn('play() request was rejected type: %s name: %s message: %s', type, err && err.name, err && err.message);
+				console.warn('Play request rejected', type);
 				switch (type) {
 						case 'sessionClosed':
 								if (this._state.isError) {
@@ -46895,7 +50208,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				const watchId = this._watchId;
 				const videoInfo = this._videoInfo;
 				const watchOptions = this._videoWatchOptions;
-				window.console.timeEnd('動画選択から再生準備通知までの時間（実再生の確認ではない） watchId=' + this._watchId);
+				window.console.timeEnd('Video readiness notification');
 				this._playerConfig.props.lastWatchId = this._watchId;
 				WatchInfoCacheDb.putBestEffort(this._watchId, { watchCount: 1 });
 				await this.promise('playlist-ready');
@@ -46910,7 +50223,20 @@ class NicoVideoPlayerDialog extends Emitter {
 						option.append = this.isPlaying && this._playlist.isEnable;
 						console.log('playlist option:', option);
 						option.limit = this._playerConfig.props['search.limit'];
-						this._playlist.load(query.playlist, option, this._videoInfo.msgInfo);
+						const owner = this._capturePlaylistLoadOwner();
+						const isCurrent = () => this._isCurrentPlaylistLoadOwner(owner);
+						const onFailure = () => {
+								if (isCurrent()) {
+										window.console.warn('Initial playlist load failed');
+								}
+						};
+						try {
+								void owner.playlist.load(query.playlist, option, owner.videoInfo.msgInfo, isCurrent)
+										.catch(onFailure);
+						}
+						catch (_) {
+								onFailure();
+						}
 						this._playlist.toggleEnable(true);
 				}
 				this._playlist && this._playlist.insertCurrentVideo(this._videoInfo);
@@ -46966,6 +50292,7 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		_onVideoTimeUpdate() {
 				this._state.isStalled = false;
+				this._view?.manualBookmarkDock?.tick(this.currentTime, !this.isPlaying, !!this._state.isSeeking);
 		}
 		_onVideoProgress(range, currentTime) {
 				this.emit('progress', range, currentTime);
@@ -46995,7 +50322,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				const { isDomand, isDmc, isDeleted, isAbnormallyClosed } = sessionState;
 				const videoWatchOptions = this._videoWatchOptions;
 				const code = (e && e.target && e.target.error && e.target.error.code) || 0;
-				window.console.error('VideoError!', code, e, (e.target && e.target.error), { isDeleted, isAbnormallyClosed });
+				window.console.error('Video playback failed', Number.isInteger(code) && code >= 0 && code <= 4 ? code : 0);
 				this._recordDiagnostic({
 						category: 'player', level: 'error',
 						message: '動画の再生に失敗しました',
@@ -47025,7 +50352,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.emit('error', e, code);
 		}
 		_onYouTubeVideoError(e) {
-				window.console.error('onYouTubeVideoError!', e);
+				window.console.error('YouTube playback failed');
 				this._recordDiagnostic({
 						category: 'player', level: 'error',
 						message: e && e.description || 'YouTube動画の再生に失敗しました',
@@ -47045,9 +50372,16 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.emit('aspectRatioFix', ratio);
 		}
 		_onVideoEnded() {
+				if (this._view?.manualBookmarkDock?.repeatAtEnd()) {
+						this.play();
+						return;
+				}
 				this.emitAsync('ended');
 				this._state.setVideoEnded();
-				this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, 0);
+				if (this._playerConfig?.getValue('resume.clearOnComplete') !== false) {
+						this._saveFinalPlaybackPosition(this._videoInfo.contextWatchId, 0);
+						this._clearCompletedAutoResume();
+				}
 				if (this.isPlaylistEnable && this._playlist.hasNext) {
 						this.playNextVideo({ eventType: 'playlist' });
 						return;
@@ -47062,6 +50396,122 @@ class NicoVideoPlayerDialog extends Emitter {
 						Fullscreen.cancel();
 				}
 				global.emitter.emitAsync('videoEnded');
+		}
+		_clearCompletedAutoResume() {
+				if (this._playerConfig?.getValue('resume.clearOnComplete') === false ||
+						this._playerConfig?.getValue('resume.recordEnabled') === false)
+						return;
+				const watchId = this._watchId;
+				if (!watchId || typeof WatchInfoCacheDb.clearAutomaticResume !== 'function')
+						return;
+				try {
+						Promise.resolve(WatchInfoCacheDb.clearAutomaticResume(watchId, 'completed'))
+								.catch(() => console.warn('Automatic resume local clear failed'));
+				}
+				catch (_) {
+						console.warn('Automatic resume local clear failed');
+				}
+		}
+		_isAutoResumeSaveSuppressed() {
+				if (this._playerConfig?.getValue('resume.recordEnabled') === false)
+						return true;
+				const owner = this._autoResumeSaveSuppress;
+				return !!owner && owner.videoInfo === this._videoInfo &&
+						((owner.watchId === this._watchId && owner.requestId === this._requestId) ||
+								owner === this._outgoingAutoResumeSaveSuppress);
+		}
+		async _editAutomaticResume(seconds) {
+				const vi = this._videoInfo, watchId = this._watchId, requestId = this._requestId;
+				if (!vi || vi.watchId !== watchId || !Number.isFinite(seconds) || seconds < 0 ||
+						!Number.isFinite(vi.duration) || seconds >= vi.duration)
+						return false;
+				try {
+						const record = await WatchInfoCacheDb.put(watchId, { currentTime: seconds, explicitResume: true });
+						if (this._videoInfo !== vi || this._watchId !== watchId || this._requestId !== requestId)
+								return false;
+						if (record?.watchId !== watchId || record.resumeOverride !== seconds)
+								return false;
+						vi._cacheData = { ...(vi._cacheData || {}), ...record };
+						this._autoResumeSaveSuppress = undefined;
+						this._view?.videoControlBar?.refreshAutoResumePointers?.(vi);
+						return true;
+				}
+				catch {
+						return false;
+				}
+		}
+		_deleteAutomaticResume() {
+				const vi = this._videoInfo;
+				const watchId = this._watchId;
+				if (!vi || typeof watchId !== 'string' || !watchId ||
+						vi.watchId !== watchId) {
+						return Promise.resolve(null);
+				}
+				const owner = Object.freeze({ watchId, requestId: this._requestId, videoInfo: vi });
+				this._autoResumeSaveSuppress = owner;
+				if (!this._autoResumeClearCoordinator) {
+						this._autoResumeClearCoordinator = new AutoResumeClearCoordinator({
+								clearLocal: async (videoId, reason) => {
+										const currentRequest = this._requestId;
+										const currentInfo = this._videoInfo;
+										const record = await WatchInfoCacheDb.clearAutomaticResume(videoId, reason);
+										if (record?.watchId === videoId && Array.isArray(record.resume) &&
+												record.resume.length === 0 && record.resumeClearReason === 'deleted' &&
+												this._watchId === videoId && this._videoInfo?.watchId === videoId &&
+												this._requestId === currentRequest && this._videoInfo === currentInfo) {
+												const current = this._videoInfo;
+												current._cacheData = { ...(current._cacheData || {}), ...record };
+												this._view?.videoControlBar?.refreshAutoResumePointers?.(current);
+										}
+										return record;
+								},
+								saveRemoteZero: (videoId, seconds) => {
+										const current = this._videoInfo;
+										const requestId = this._requestId;
+										if (!current || this._watchId !== videoId ||
+												current.watchId !== videoId) {
+												throw new Error('Automatic resume video changed');
+										}
+										return this._queuePlaybackPositionSave(current.videoId, () => {
+												if (this._requestId !== requestId || this._videoInfo !== current ||
+														this._watchId !== videoId) {
+														throw new Error('Automatic resume video changed');
+												}
+												return PlaybackPosition.record(current.videoId, seconds, current.msgInfo.frontendId, current.msgInfo.frontendVersion);
+										});
+								},
+								isLoggedIn: () => util.isLogin(),
+								activeVideoId: () => this._watchId,
+								activeSessionToken: () => this._requestId
+						});
+				}
+				const isCurrent = () => this._watchId === owner.watchId &&
+						this._requestId === owner.requestId && this._videoInfo === owner.videoInfo;
+				return this._autoResumeClearCoordinator.delete(watchId).then(result => {
+						if (isCurrent() && result.remote !== 'stale-video') {
+								const message = result.fullyAcknowledged ?
+										'「ここまで見た」の自動位置を削除しました' :
+										result.remote === 'unavailable' ?
+												'この端末の自動位置を削除しました。サーバー側は未確認です' :
+												'この端末の自動位置を削除しました。サーバー側の削除は未確認です';
+								try {
+										this.execCommand('notify', message);
+								}
+								catch { }
+						}
+						return result;
+				}, () => {
+						if (this._autoResumeSaveSuppress === owner)
+								this._autoResumeSaveSuppress = undefined;
+						if (isCurrent()) {
+								try {
+										this.execCommand('alert', '自動位置を削除できませんでした');
+								}
+								catch { }
+						}
+						window.console.warn('Automatic resume delete failed');
+						return null;
+				});
 		}
 		_onVolumeChange(vol, mute) {
 				this.emit('volumeChange', vol, mute);
@@ -47078,7 +50528,43 @@ class NicoVideoPlayerDialog extends Emitter {
 				const save = this._savePlaybackPositionNow || this._savePlaybackPosition;
 				save.call(this, contextWatchId, ct);
 		}
+		_queuePlaybackPositionSave(videoId, record) {
+				const queues = this._playbackPositionSaves || (this._playbackPositionSaves = new Map());
+				const previous = queues.get(videoId);
+				let operation;
+				if (previous) {
+						operation = previous.then(record, record);
+				}
+				else {
+						try {
+								operation = Promise.resolve(record());
+						}
+						catch (error) {
+								operation = Promise.reject(error);
+						}
+				}
+				queues.set(videoId, operation);
+				const release = () => { if (queues.get(videoId) === operation)
+						queues.delete(videoId); };
+				void operation.then(release, release);
+				return operation;
+		}
 		_savePlaybackPosition(contextWatchId, ct) {
+				if (this._playerConfig?.getValue('resume.recordEnabled') === false)
+						return;
+				const current = this._videoInfo;
+				if (current && current.contextWatchId === contextWatchId && Number.isFinite(ct) && ct > 0 &&
+						!this._isAutoResumeSaveSuppressed()) {
+						const watchId = this._watchId, requestId = this._requestId;
+						void Promise.resolve(WatchInfoCacheDb.putBestEffort(watchId, { currentTime: ct })).then(record => {
+								if (!record || this._videoInfo !== current || this._watchId !== watchId || this._requestId !== requestId)
+										return;
+								current._cacheData = { ...current._cacheData, ...record };
+								current._resumeInfo = { ...current._resumeInfo, initialPlaybackPosition: ct };
+								this._view?.videoControlBar?.refreshAutoResumePointers?.(current);
+								this._view?.manualBookmarkDock?.refreshPreferences();
+						}).catch(() => { });
+				}
 				if (!util.isLogin()) {
 						return;
 				}
@@ -47086,6 +50572,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (!vi) {
 						return;
 				}
+				if (ct > 0 && this._isAutoResumeSaveSuppressed())
+						return;
 				const dr = this.duration;
 				console.info('%csave PlaybackPosition:', 'background: cyan', ct, dr); // Task 088: csrfToken はログに出さない
 				if (vi.contextWatchId !== contextWatchId) {
@@ -47098,15 +50586,22 @@ class NicoVideoPlayerDialog extends Emitter {
 				if (dr < 120 && isShortContent) {
 						return;
 				} // 短尺でも通常long-formは記録し、ss系ショートだけ従来どおり除外
-				PlaybackPosition.record(vi.videoId, ct, vi.msgInfo.frontendId, vi.msgInfo.frontendVersion).catch((e) => {
+				this._queuePlaybackPositionSave(vi.videoId, () => {
+						if (this._playerConfig?.getValue('resume.recordEnabled') === false)
+								return Promise.resolve();
+						return PlaybackPosition.record(vi.videoId, ct, vi.msgInfo.frontendId, vi.msgInfo.frontendVersion);
+				}).catch((e) => {
 						window.console.warn('save playback fail', { reason: e && e.reason, status: e && e.status });
 				});
 		}
 		close() {
+				this._view?.manualBookmarkDock?.deactivate();
+				this._keyEmitter?.releaseTemporaryPlaybackRate?.();
 				if (this.isPlaying) {
 						this._saveFinalPlaybackPosition(this._watchId, this.currentTime);
 				}
-				WatchInfoCacheDb.putBestEffort(this._watchId, { currentTime: this.currentTime });
+				WatchInfoCacheDb.putBestEffort(this._watchId, { currentTime: (this._state.isEnded || this._isAutoResumeSaveSuppressed()) ?
+								0 : this.currentTime });
 				if (Fullscreen.now()) {
 						Fullscreen.cancel();
 				}
@@ -56864,12 +60359,13 @@ class HoverMenu {
 				CommentLayoutWorker.getInstance();
 				void ThumbInfoLoader.load('sm9').catch(() => console.warn('Thumb info warm-up unavailable'));
 				window.console.time('init Workers');
-				return Promise.all([
+				const requiredWorkers = [
 						StoryboardWorker.initWorker(),
-						VideoSessionWorker.initWorker(),
-						StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable')),
-						WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'))
-				]).then(() => window.console.timeEnd('init Workers'));
+						VideoSessionWorker.initWorker()
+				];
+				void StoryboardCacheDb.initWorker().catch(() => console.warn('Storyboard cache unavailable'));
+				const watchCacheReady = WatchInfoCacheDb.initWorker().catch(() => console.warn('Watch info cache unavailable'));
+				return Promise.all([...requiredWorkers, watchCacheReady]).then(() => window.console.timeEnd('init Workers'));
 		};
 const replaceRedirectLinks = async () => {
 		await uq.ready();
@@ -58835,7 +62331,15 @@ const WatchInfoCacheDb = (() => {
 												patch[key] = options[key];
 										}
 								}
-								const resume = Number.isFinite(options.currentTime) && options.currentTime > 0 ?
+								const explicit = options.explicitResume === true;
+								if (explicit && (!Number.isFinite(options.currentTime) || options.currentTime < 0)) {
+										throw new TypeError('Invalid explicit resume time');
+								}
+								if (explicit)
+										patch.resumeOverride = options.currentTime;
+								else if (Number.isFinite(options.currentTime) && options.currentTime > 0)
+										patch.resumeOverride = null;
+								const resume = Number.isFinite(options.currentTime) && (options.currentTime > 0 || explicit) ?
 										[{ now, time: options.currentTime }] : [];
 								const record = await cacheDb.update({
 										key: watchId, patch,
@@ -58847,14 +62351,42 @@ const WatchInfoCacheDb = (() => {
 										},
 										increment: { watchCount: options.watchCount === 1 ? 1 : 0 },
 										prepend: { resume }, append: { comment: options.comment ? [options.comment] : [] },
-										limits: { resume: 10 }
+										limits: { resume: 1 }
 								});
 								if (!record || typeof record !== 'object' || record.watchId !== watchId) {
 										throw new Error('Watch history update was not acknowledged');
 								}
 								return record;
 						},
-						get(watchId) { return cacheDb.updateTime({ key: watchId }); },
+						async clearAutomaticResume(watchId, reason = 'deleted') {
+								if (typeof watchId !== 'string' || !watchId.trim() ||
+										!['completed', 'deleted'].includes(reason)) {
+										throw new TypeError('Invalid automatic resume clear request');
+								}
+								const now = Date.now();
+								const record = await cacheDb.update({
+										key: watchId,
+										patch: { watchId, updatedAt: now, resume: [], resumeOverride: null, resumeClearedAt: now, resumeClearReason: reason },
+										defaults: { videoId: watchId, threadId: '', ownerId: '', postedAt: 0,
+												threadInfo: 0, heatMap: null, config: '' }
+								});
+								if (!record || typeof record !== 'object' ||
+										record.watchId !== watchId ||
+										!Array.isArray(record.resume) ||
+										record.resume.length !== 0) {
+										throw new Error('Automatic resume clear was not acknowledged');
+								}
+								return record;
+						},
+						async get(watchId) {
+								const record = await cacheDb.get({ key: watchId });
+								if (record) {
+										void Promise.resolve()
+												.then(() => cacheDb.updateTime({ key: watchId }))
+												.catch(() => console.warn('Watch info cache access timestamp update failed'));
+								}
+								return record;
+						},
 						delete(watchId) { return cacheDb.delete({ key: watchId }); },
 						close() { return cacheDb.close(); },
 						gc(expireTime) { return cacheDb.gc(expireTime); }
@@ -58863,12 +62395,13 @@ const WatchInfoCacheDb = (() => {
 		const put = (watchId, options = {}) => open().then(db => db.put(watchId, options));
 		const putBestEffort = (watchId, options = {}) => put(watchId, options)
 				.catch(() => { console.warn('Watch info cache write failed'); });
+		const clearAutomaticResume = (watchId, reason = 'deleted') => open().then(db => db.clearAutomaticResume(watchId, reason));
 		const get = (watchId) => open().then(db => db.get(watchId));
 		const del = (watchId) => open().then(db => db.delete(watchId));
 		const close = () => open().then(db => db.close());
 		const gc = (expireTime) => open().then(db => db.gc(expireTime));
 		const api = (api) => NicoVideoApi = api;
-		return { initWorker, open, put, putBestEffort, get, delete: del, close, gc, api };
+		return { initWorker, open, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api };
 })();
 function parseThumbInfo(xmlText) {
 		if (typeof xmlText !== 'string' || xmlText.status === 'ok') {
@@ -59369,7 +62902,7 @@ const createStoryboardClasses = (util) => {
 								if (err === 'api_not_exist') {
 										throw 'Domand storyboard api not exist';
 								}
-								console.error('create domand session fail', err);
+								console.error('create domand session fail');
 								throw 'create domand session fail';
 						}
 				}
@@ -59407,7 +62940,7 @@ const createStoryboardClasses = (util) => {
 								if (err === 'api_not_exist') {
 										throw 'DMC storyboard api not exist';
 								}
-								console.error('create dmc session fail', err);
+								console.error('create dmc session fail');
 								throw 'create dmc session fail';
 						}
 				}
@@ -59896,7 +63429,7 @@ const VideoSessionWorker = (() => {
 												console.timeEnd('create DMC session');
 												resolve(this.info);
 										}).catch(err => {
-												console.error('create api fail', err);
+												console.error('create api fail');
 												reject(err.message || err);
 										});
 								});
@@ -59929,7 +63462,7 @@ const VideoSessionWorker = (() => {
 												timeout: 10000,
 												body: JSON.stringify(this._lastResponse)
 										});
-								}).catch(err => console.error('delete fail', err));
+								}).catch(err => console.error('delete fail'));
 						}
 						_onHeartBeatSuccess(result) {
 								let json = result;

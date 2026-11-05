@@ -118,7 +118,7 @@ describe('Task713 TypeScript MylistPocket thumbnail helper',()=>{
     const source=fs.readFileSync(
       path.join(root,'packages/zenza/src/pocket/PocketThumbnail.ts'),'utf8');
     assert(runtime.startsWith('// GENERATED FROM packages/zenza/src/pocket/PocketThumbnail.ts'));
-    const sha=crypto.createHash('sha256').update(source,'utf8').digest('hex');
+    const sha=crypto.createHash('sha256').update(source.replace(/\r\n/g,'\n'),'utf8').digest('hex');
     assert(runtime.includes('// SOURCE_SHA256 '+sha), 'TS source fingerprint stale');
     const emitted=path.join(root,'tools/typescript-stage1/.generated/pocket/PocketThumbnail.js');
     const checker=path.join(root,'tools/typescript-stage1/scripts/sync-pocket-thumbnail.mjs');

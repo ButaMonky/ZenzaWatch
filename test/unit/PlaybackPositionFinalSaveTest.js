@@ -19,10 +19,13 @@ function dialog({duration = 300, contextWatchId = 'sm9', videoId = 'sm9'} = {}) 
 }
 
 describe('Task178 final resume-position save is not throttled away (Watch V4 audit F10)', () => {
-  it('pause at 75s then ended within one second still sends 0', () => {
+  it('pause at 75s then ended within one second still sends 0', async () => {
     const {d, calls} = dialog();
     d._savePlaybackPosition('sm9', 75);
     d._saveFinalPlaybackPosition('sm9', 0);
+    // The final zero bypasses the throttle, then waits behind the pause PUT.
+    // Await the actual per-video tail rather than assuming synchronous dispatch.
+    await d._playbackPositionSaves.get('sm9');
     assert.deepStrictEqual(calls, [['sm9', 75], ['sm9', 0]]);
   });
 

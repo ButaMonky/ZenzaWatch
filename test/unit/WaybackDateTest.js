@@ -14,7 +14,10 @@ const posted='2009-10-27T03:13:22+09:00';
 describe('Task209 historical date selection is independent of opaque thread IDs',()=>{
   for(const id of ['1790214592','1653742625716268575']) {
     it('keeps a 2012 selection with thread '+id,()=>{
-      const h=machine({threadId:id,isWaybackMode:false},posted);h.v.openSelect();h.v._onSubmit();
+      const h=machine({threadId:id,isWaybackMode:false},posted);h.v.openSelect();
+      // A selection is edited after opening; a dirty value from a cancelled
+      // previous opening is deliberately replaced by the current timestamp.
+      h.v._elm.input.value='2012-01-01T00:00:00';h.v._onSubmit();
       assert.strictEqual(h.events[0][2].when,Date.parse('2012-01-01T00:00:00')/1000);
       assert.strictEqual(h.attrs.min,h.v._toTDate(Date.parse(posted)));
     });

@@ -1,86 +1,88 @@
-// SCUI-14: 05 Playback Deck and 06 Micro Capsule.
-// Placement uses the real seekbar geometry; no new thumbnail workers or timers.
+// GENERATED FROM tools/typescript-stage1/nico-src/SceneSearchLayouts05_06.ts
 //===BEGIN===
 class SceneSearchLayouts05_06 {
-  static register(registry,{Card}={}) {
-    if(!registry || typeof registry.register!=='function' ||
-       typeof Card!=='function') {
-      throw new TypeError('Layout registry and shared semantic Card are required');
-    }
-    class DeckCapsuleCard extends Card {
-      constructor(args){
-        super(args);
-        this.settings=args.settings||{};
-      }
-      mount(state){
-        super.mount(state);
-        const foot=this.root.querySelector('.zenzaSceneFoot');
-        const actions=this.root.querySelector('.zenzaSceneActions');
-        // Keep seek-by and the expansion handle usable while extra tools
-        // are collapsed, as in the original 10-design HTML.
-        for(const key of ['seek-back','seek-forward','more']){
-          const button=actions.querySelector('[data-scui-action="'+key+'"]');
-          if(button)foot.insertBefore(button,actions);
+    static register(registry, { Card } = {}) {
+        if (!registry || typeof registry.register !== 'function' ||
+            typeof Card !== 'function') {
+            throw new TypeError('Layout registry and shared semantic Card are required');
         }
-        this.render(state);
-      }
-      render(state){
-        super.render(state);
-        if(!this.root){return;}
-        if(this.id==='05'){
-          const rect=this.container.getBoundingClientRect?.();
-          const viewportHeight=this.document.defaultView?.innerHeight;
-          const expectedHeight=this.root.getBoundingClientRect?.().height||138;
-          const room=Number.isFinite(viewportHeight)&&Number.isFinite(rect?.bottom)?
-            viewportHeight-rect.bottom:Infinity;
-          // Zenza's normal playback mode often hides overflow. Never lose
-          // the deck below the window when there is insufficient space.
-          this.root.dataset.scuiPlacement=this.mode==='normal'&&
-            room<expectedHeight+16?'visible-fallback':'below';
-        }else if(this.id==='06'){
-          this._placeCapsule(state);
+        class DeckCapsuleCard extends Card {
+            constructor(args) {
+                super(args);
+                this.settings = args.settings || {};
+            }
+            mount(state) {
+                super.mount(state);
+                const foot = this.root.querySelector('.zenzaSceneFoot');
+                const actions = this.root.querySelector('.zenzaSceneActions');
+                // Keep seek-by and the expansion handle usable while extra tools
+                // are collapsed, as in the original 10-design HTML.
+                for (const key of ['seek-back', 'seek-forward', 'more']) {
+                    const button = actions.querySelector('[data-scui-action="' + key + '"]');
+                    if (button)
+                        foot.insertBefore(button, actions);
+                }
+                this.render(state);
+            }
+            render(state) {
+                super.render(state);
+                if (!this.root) {
+                    return;
+                }
+                if (this.id === '05') {
+                    const rect = this.container.getBoundingClientRect?.();
+                    const viewportHeight = this.document.defaultView?.innerHeight;
+                    const expectedHeight = this.root.getBoundingClientRect?.().height || 138;
+                    const room = Number.isFinite(viewportHeight) && Number.isFinite(rect?.bottom) ?
+                        viewportHeight - rect.bottom : Infinity;
+                    // Zenza's normal playback mode often hides overflow. Never lose
+                    // the deck below the window when there is insufficient space.
+                    this.root.dataset.scuiPlacement = this.mode === 'normal' &&
+                        room < expectedHeight + 16 ? 'visible-fallback' : 'below';
+                }
+                else if (this.id === '06') {
+                    this._placeCapsule(state);
+                }
+            }
+            _placeCapsule(state) {
+                const geometry = this.settings.getSeekGeometry?.();
+                const width = this.container.offsetWidth ||
+                    this.container.getBoundingClientRect?.().width ||
+                    this.container.clientWidth || 800;
+                const duration = typeof this.settings.getDuration === 'function' ?
+                    this.settings.getDuration() : this.settings.duration;
+                const pct = Number.isFinite(duration) && duration > 0 ?
+                    Math.max(0, Math.min(1, (state?.time || 0) / duration)) : 0.5;
+                const cardWidth = state?.seekStepSeconds === 0 ? 98 : 166;
+                const visibleLeft = Math.max(0, Math.min(width, Number.isFinite(geometry?.visibleLeft) ? geometry.visibleLeft : 0));
+                const visibleRight = Math.max(visibleLeft, Math.min(width, Number.isFinite(geometry?.visibleRight) ? geometry.visibleRight : width));
+                const minX = visibleLeft + Math.min(cardWidth / 2 + 6, (visibleRight - visibleLeft) / 2);
+                const maxX = visibleRight - Math.min(cardWidth / 2 + 6, (visibleRight - visibleLeft) / 2);
+                const target = Number.isFinite(geometry?.pointerX) ? geometry.pointerX :
+                    Number.isFinite(geometry?.seekLeft) && Number.isFinite(geometry?.seekWidth) ?
+                        geometry.seekLeft + geometry.seekWidth * pct : width * pct;
+                const previous = parseFloat(this.root.style.getPropertyValue('--scene-x'));
+                const raw = state?.pinned && Number.isFinite(previous) ? previous : target;
+                const x = Math.max(minX, Math.min(maxX, raw));
+                this.root.style.setProperty('--scene-x', Math.round(x) + 'px');
+            }
         }
-      }
-      _placeCapsule(state){
-        const geometry=this.settings.getSeekGeometry?.();
-        const width=this.container.offsetWidth||
-          this.container.getBoundingClientRect?.().width||
-          this.container.clientWidth||800;
-        const duration=typeof this.settings.getDuration==='function'?
-          this.settings.getDuration():this.settings.duration;
-        const pct=Number.isFinite(duration)&&duration>0?
-          Math.max(0,Math.min(1,(state?.time||0)/duration)):0.5;
-        const cardWidth=state?.seekStepSeconds===0?98:166;
-        const visibleLeft=Math.max(0,Math.min(width,
-          Number.isFinite(geometry?.visibleLeft)?geometry.visibleLeft:0));
-        const visibleRight=Math.max(visibleLeft,Math.min(width,
-          Number.isFinite(geometry?.visibleRight)?geometry.visibleRight:width));
-        const minX=visibleLeft+Math.min(cardWidth/2+6,(visibleRight-visibleLeft)/2);
-        const maxX=visibleRight-Math.min(cardWidth/2+6,(visibleRight-visibleLeft)/2);
-        const target=Number.isFinite(geometry?.pointerX)?geometry.pointerX:
-          Number.isFinite(geometry?.seekLeft)&&Number.isFinite(geometry?.seekWidth)?
-            geometry.seekLeft+geometry.seekWidth*pct:width*pct;
-        const previous=parseFloat(this.root.style.getPropertyValue('--scene-x'));
-        const raw=state?.pinned&&Number.isFinite(previous)?previous:target;
-        const x=Math.max(minX,Math.min(maxX,raw));
-        this.root.style.setProperty('--scene-x',Math.round(x)+'px');
-      }
+        for (const [id, label, description, css] of [
+            ['05', 'プレイバック・デッキ',
+                '通常は動画の外・下、全画面ではシークバー直上の横長操作デッキ。',
+                SceneSearchLayouts05_06.CSS_05],
+            ['06', 'マイクロ・カプセル',
+                '小型カプセルがシーク位置へ追従し、追加操作は上に展開。',
+                SceneSearchLayouts05_06.CSS_06]
+        ]) {
+            registry.register({ id, label, description,
+                factory: (args) => new DeckCapsuleCard({ ...args, id,
+                    layoutClass: 'zenzaLayout' + id, extraCss: css }) });
+        }
+        return registry;
     }
-    for(const [id,label,description,css] of [
-      ['05','プレイバック・デッキ',
-        '通常は動画の外・下、全画面ではシークバー直上の横長操作デッキ。',
-        SceneSearchLayouts05_06.CSS_05],
-      ['06','マイクロ・カプセル',
-        '小型カプセルがシーク位置へ追従し、追加操作は上に展開。',
-        SceneSearchLayouts05_06.CSS_06]
-    ]){
-      registry.register({id,label,description,
-        factory:args=>new DeckCapsuleCard({...args,id,
-          layoutClass:'zenzaLayout'+id,extraCss:css})});
-    }
-    return registry;
-  }
-  static get CSS_05() {return `
+    static get CSS_05() {
+        return `
 /* Original 05: outside/below in normal, above seekbar in fullscreen. */
 .zenzaSceneSearchHost[data-layout="05"]{
   left:50%;right:auto;top:calc(100% + 12px);bottom:auto;
@@ -153,8 +155,10 @@ class SceneSearchLayouts05_06 {
 @media(prefers-reduced-motion:reduce){
   .zenzaSceneSearchHost[data-layout="05"] .zenzaSceneActions{transition:none}
 }
-`;}
-  static get CSS_06() {return `
+`;
+    }
+    static get CSS_06() {
+        return `
 /* Original 06: micro-capsule follows the true seekbar mouse coordinate. */
 .zenzaSceneSearchHost[data-layout="06"]{
   left:var(--scene-x,50%);right:auto;top:auto;bottom:86px;
@@ -216,7 +220,8 @@ class SceneSearchLayouts05_06 {
 @media(prefers-reduced-motion:reduce){
   .zenzaSceneSearchHost[data-layout="06"] .zenzaSceneActions{transition:none}
 }
-`;}
+`;
+    }
 }
 //===END===
 export {SceneSearchLayouts05_06};

@@ -123,7 +123,7 @@ function createDialogHarness() {
   };
   Object.assign(o, {
     _state: state,
-    _playerConfig: {props: {commentLanguage: 'ja-jp', screenMode: 'normal'}, getValue: () => false},
+    _playerConfig: {props: {commentLanguage: 'ja-jp', screenMode: 'normal'}, getValue: key => ['resume.recordEnabled','resume.clearOnComplete','bookmark.showToolbarButton','abRepeat.enabled'].includes(key)},
     _videoFilter: {isNgVideo: v => !!v.isNg},
     _view: {clearPanel() {}, appendTab: () => [{}]},
     _lastOpenAt: 0,

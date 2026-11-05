@@ -68,7 +68,7 @@ for(const [variant,file] of VARIANTS){
       assert(databases.every(db=>db===databases[0]),
         'all callers must receive the identical connection');
       assert.equal(h.opened[0].name,'zenza_hls');
-      assert.equal(h.opened[0].version,4);
+      assert.equal(h.opened[0].version,5);
     });
     it('single-flights 20 concurrent getStore() calls',async()=>{
       const h=harness(file),cache=new h.Cache();

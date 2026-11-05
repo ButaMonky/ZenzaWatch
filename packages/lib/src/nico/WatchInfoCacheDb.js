@@ -91,7 +91,15 @@ const WatchInfoCacheDb = (() => {
                         patch[key] = options[key];
                     }
                 }
-                const resume = Number.isFinite(options.currentTime) && options.currentTime > 0 ?
+                const explicit = options.explicitResume === true;
+                if (explicit && (!Number.isFinite(options.currentTime) || options.currentTime < 0)) {
+                    throw new TypeError('Invalid explicit resume time');
+                }
+                if (explicit)
+                    patch.resumeOverride = options.currentTime;
+                else if (Number.isFinite(options.currentTime) && options.currentTime > 0)
+                    patch.resumeOverride = null;
+                const resume = Number.isFinite(options.currentTime) && (options.currentTime > 0 || explicit) ?
                     [{ now, time: options.currentTime }] : [];
                 const record = await cacheDb.update({
                     key: watchId, patch,
@@ -103,14 +111,47 @@ const WatchInfoCacheDb = (() => {
                     },
                     increment: { watchCount: options.watchCount === 1 ? 1 : 0 },
                     prepend: { resume }, append: { comment: options.comment ? [options.comment] : [] },
-                    limits: { resume: 10 }
+                    limits: { resume: 1 }
                 });
                 if (!record || typeof record !== 'object' || record.watchId !== watchId) {
                     throw new Error('Watch history update was not acknowledged');
                 }
                 return record;
             },
-            get(watchId) { return cacheDb.updateTime({ key: watchId }); },
+            // Atomic per-video clear. The transaction updates only resume and its
+            // barrier, never deleting the watch row (videoInfo/comments/bookmarks).
+            async clearAutomaticResume(watchId, reason = 'deleted') {
+                if (typeof watchId !== 'string' || !watchId.trim() ||
+                    !['completed', 'deleted'].includes(reason)) {
+                    throw new TypeError('Invalid automatic resume clear request');
+                }
+                const now = Date.now();
+                const record = await cacheDb.update({
+                    key: watchId,
+                    patch: { watchId, updatedAt: now, resume: [], resumeOverride: null, resumeClearedAt: now, resumeClearReason: reason },
+                    defaults: { videoId: watchId, threadId: '', ownerId: '', postedAt: 0,
+                        threadInfo: 0, heatMap: null, config: '' }
+                });
+                if (!record || typeof record !== 'object' ||
+                    record.watchId !== watchId ||
+                    !Array.isArray(record.resume) ||
+                    record.resume.length !== 0) {
+                    throw new Error('Automatic resume clear was not acknowledged');
+                }
+                return record;
+            },
+            async get(watchId) {
+                // Playback only needs the saved resume/comment snapshot to start.
+                // A timestamp touch is still requested, but its readwrite commit must
+                // not extend the video's pre-session metadata wait.
+                const record = await cacheDb.get({ key: watchId });
+                if (record) {
+                    void Promise.resolve()
+                        .then(() => cacheDb.updateTime({ key: watchId }))
+                        .catch(() => console.warn('Watch info cache access timestamp update failed'));
+                }
+                return record;
+            },
             delete(watchId) { return cacheDb.delete({ key: watchId }); },
             close() { return cacheDb.close(); },
             gc(expireTime) { return cacheDb.gc(expireTime); }
@@ -120,12 +161,13 @@ const WatchInfoCacheDb = (() => {
     // Playback callers deliberately keep persistence best effort; explicit put still rejects.
     const putBestEffort = (watchId, options = {}) => put(watchId, options)
         .catch(() => { console.warn('Watch info cache write failed'); });
+    const clearAutomaticResume = (watchId, reason = 'deleted') => open().then(db => db.clearAutomaticResume(watchId, reason));
     const get = (watchId) => open().then(db => db.get(watchId));
     const del = (watchId) => open().then(db => db.delete(watchId));
     const close = () => open().then(db => db.close());
     const gc = (expireTime) => open().then(db => db.gc(expireTime));
     const api = (api) => NicoVideoApi = api;
-    return { initWorker, open, put, putBestEffort, get, delete: del, close, gc, api };
+    return { initWorker, open, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api };
 })();
 //===END===
 export {WatchInfoCacheDb};

@@ -351,6 +351,7 @@ class UiVisibilityRegistry {
       };
       onStorage=e=>{
         if(e.storageArea && config.storage && e.storageArea!==config.storage){return;}
+        if(e.key===null){ownKeys.forEach(key=>sync(key,true));return;}
         const key=byStorageKey.get(e.key!);
         if(key){sync(key,e.newValue===null);}
       };

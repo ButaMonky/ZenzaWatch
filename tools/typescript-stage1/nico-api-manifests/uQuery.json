@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/uQuery.ts",
   "runtime": "packages/lib/src/uQuery.js",
-  "sourceSha256": "c5a63d8257e2152e90d287fc4e37c376d6e7c699e82a2fb450ca9834df88c04f",
-  "runtimeSha256": "5a78aaf770e24c23ac8d1695877086fb45e3bff82fe1944e8e1d9246f53fc37f"
+  "sourceSha256": "b8c97cdda838173e45ef8faf8bdec4ef7ae1006815e21726be96b90935ebba50",
+  "runtimeSha256": "dfcdbbbb3dec0dfe33e97488ffea4d22b56a6884f7b396adba1ac0bd49add2c1"
 }

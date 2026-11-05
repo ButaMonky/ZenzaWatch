@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.82-task976
+// @version     0.3.83-task980
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -14,7 +14,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-10-27 18:43Z ef81b7d1
+// build: 2026-11-05 21:43Z 844b93b2
 /* eslint-disable */
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 ((window) => {
@@ -3472,6 +3472,10 @@ class UiVisibilityRegistry {
 								if (e.storageArea && config.storage && e.storageArea !== config.storage) {
 										return;
 								}
+								if (e.key === null) {
+										ownKeys.forEach(key => sync(key, true));
+										return;
+								}
 								const key = byStorageKey.get(e.key);
 								if (key) {
 										sync(key, e.newValue === null);
@@ -3961,6 +3965,10 @@ const Config = (() => {
 				'autoPlay:ginza': true,
 				'autoPlay:others': true,
 				enableResume: false,
+				'resume.recordEnabled': true,
+				'resume.clearOnComplete': true,
+				'bookmark.showToolbarButton': true,
+				'abRepeat.enabled': true,
 				loop: false,
 				mute: false,
 				screenMode: 'normal',
@@ -4451,8 +4459,6 @@ const NaviConfig = Config;
         await Config.promise('restore');
 const uQuery = (() => {
 		const endMap = new WeakMap();
-		const emptyMap = new Map();
-		const emptySet = new Set();
 		const elementsEventMap = new WeakMap();
 		const HAS_CSSTOM = (window.CSS && CSS.number) ? true : false;
 		const toCamel = (p) => p.replace(/-./g, s => s.charAt(1).toUpperCase());
@@ -4825,14 +4831,51 @@ const uQuery = (() => {
 						}
 						eventName = eventName.trim();
 						const elementEventName = eventName.split('.')[0];
+						const capture = typeof options === 'boolean' ? options : !!options?.capture;
+						const once = typeof options === 'object' && !!options.once;
+						const signal = typeof options === 'object' ? options.signal : undefined;
+						if (signal?.aborted) {
+								return this;
+						}
 						for (const element of this.filter(isEventTarget)) {
-								const elementEvents = elementsEventMap.get(element) || new Map;
-								const listenerSet = elementEvents.get(eventName) || new Set;
+								const elementEvents = elementsEventMap.get(element) || new Map();
+								const listenerSet = elementEvents.get(eventName) || new Set();
+								if ([...listenerSet].some(record => record.callback === callback && record.capture === capture)) {
+										continue;
+								}
 								elementEvents.set(eventName, listenerSet);
 								elementsEventMap.set(element, elementEvents);
-								if (!listenerSet.has(callback)) {
-										listenerSet.add(callback);
-										element.addEventListener(elementEventName, callback, options);
+								const remove = () => {
+										element.removeEventListener(elementEventName, record.listener, capture);
+										signal?.removeEventListener('abort', remove);
+										listenerSet.delete(record);
+										if (!listenerSet.size) {
+												elementEvents.delete(eventName);
+										}
+										if (!elementEvents.size) {
+												elementsEventMap.delete(element);
+										}
+								};
+								const record = {
+										callback, capture, type: elementEventName, remove,
+										listener: function (event) {
+												if (once) {
+														remove();
+												}
+												return callback.call(this, event);
+										}
+								};
+								listenerSet.add(record);
+								try {
+										element.addEventListener(elementEventName, record.listener, options);
+										signal?.addEventListener('abort', remove, { once: true });
+										if (signal?.aborted) {
+												remove();
+										}
+								}
+								catch (error) {
+										remove();
+										throw error;
 								}
 						}
 						return this;
@@ -4859,52 +4902,30 @@ const uQuery = (() => {
 						});
 				}
 				off(eventName = UNDEF, callback = UNDEF) {
-						if (eventName === UNDEF) {
-								for (const element of this.filter(isEventTarget)) {
-										const eventListenerMap = elementsEventMap.get(element) || emptyMap;
-										for (const [eventName, listenerSet] of eventListenerMap) {
-												for (const listener of listenerSet) {
-														element.removeEventListener(eventName, listener);
-												}
-												listenerSet.clear();
-										}
-										eventListenerMap.clear();
-										elementsEventMap.delete(element);
-								}
+						const name = eventName === UNDEF ? null : eventName.trim();
+						if (name === '') {
 								return this;
 						}
-						eventName = eventName.trim();
-						const [elementEventName, eventKey] = eventName.split('.');
-						if (callback === UNDEF) {
-								for (const element of this.filter(isEventTarget)) {
-										const eventListenerMap = elementsEventMap.get(element) || emptyMap;
-										const listenerSet = eventListenerMap.get(eventName) || emptySet;
-										for (const listener of listenerSet) {
-												element.removeEventListener(elementEventName, listener);
-										}
-										listenerSet.clear();
-										eventListenerMap.delete(eventName);
-										for (const [key] of eventListenerMap) {
-												if ((!eventKey && key.startsWith(`${elementEventName}.`)) ||
-														(!elementEventName && key.endsWith(`.${eventKey}`))) {
-														this.off(key);
-												}
-										}
-								}
-								return this;
-						}
+						const separator = name?.indexOf('.') ?? -1;
+						const type = name === null ? '' : separator < 0 ? name : name.slice(0, separator);
+						const namespace = separator < 0 ? '' : name.slice(separator + 1);
 						for (const element of this.filter(isEventTarget)) {
-								const eventListenerMap = elementsEventMap.get(element) || new Map;
-								eventListenerMap.set(eventName, (eventListenerMap.get(eventName) || new Set));
-								for (const [key, listenerSet] of eventListenerMap) {
-										if (key !== eventName && !key.startsWith(`${elementEventName}.`)) {
+								const registrations = elementsEventMap.get(element);
+								if (!registrations) {
+										continue;
+								}
+								for (const [key, records] of [...registrations]) {
+										const dot = key.indexOf('.');
+										const keyNamespace = dot < 0 ? '' : key.slice(dot + 1);
+										if (namespace && namespace !== keyNamespace) {
 												continue;
 										}
-										if (!listenerSet.has(callback)) {
-												continue;
+										for (const record of [...records]) {
+												if ((!type || record.type === type) &&
+														(callback === UNDEF || record.callback === callback)) {
+														record.remove();
+												}
 										}
-										listenerSet.delete(callback);
-										element.removeEventListener(elementEventName, callback);
 								}
 						}
 						return this;
@@ -7382,6 +7403,20 @@ class ModernAdvancedSettingsModel {
 								['playbackRate', '再生速度', { type: 'number' }],
 								['enableSingleton', '複数のプレイヤーを同時起動しない']
 						]),
+						...group('再生・音声', 'しおり・ABリピート', [
+								['resume.recordEnabled', '「ここまで見た」を自動記録', {
+												description: '既定ON。一時停止・終了時などの再生位置を動画ごとに1件保存します。OFFではZenzaWatchから端末・サーバーへ自動記録しません。保存済みの位置や手動しおりは消えず、位置の編集・削除は利用できます。公式プレイヤー側の記録には影響しません。'
+										}],
+								['resume.clearOnComplete', '最後まで再生したら「ここまで見た」を削除', {
+												description: '既定ON。動画の再生完了時に自動位置だけを消去します。手動しおりは残ります。自動記録OFF時は消去しません。'
+										}],
+								['bookmark.showToolbarButton', '操作バーに「しおり・ABリピート」を表示', {
+												description: '既定ON。現在位置の登録、保存位置の編集、AB区間の設定を開くボタンです。OFFでも動画情報内から利用できます。'
+										}],
+								['abRepeat.enabled', 'ABリピートを利用', {
+												description: '既定ON。A（開始）からB（終了）の区間を繰り返します。区間は動画を切り替えると解除されます。OFFにすると実行中の区間リピートも停止します。'
+										}]
+						]),
 						...group('再生・音声', '音量', [
 								['volume', '動画の音量', slider(0, 1)],
 								['mute', '動画をミュート']
@@ -7731,7 +7766,7 @@ class ModernAdvancedSettingsModel {
 		}
 		static subcategoryPriority(category, subcategory) {
 				const order = {
-						'再生・音声': ['再生動作', '音量', '読み上げ', '動画の取得', '公式プレイヤー連携', '提供画面'],
+						'再生・音声': ['再生動作', 'しおり・ABリピート', '音量', '読み上げ', '動画の取得', '公式プレイヤー連携', '提供画面'],
 						'画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
 						'コメント表示': ['表示・配置', 'コメント一覧', '文字・装飾', '追加取得'],
 						'NG・表示対象': ['NG条件', 'コメント種別', '動画の除外'],
@@ -7750,6 +7785,9 @@ class ModernAdvancedSettingsModel {
 				}
 				if (/^KEY_/.test(key) || /^PARAM_CUSTOM_SEEK_/.test(key)) {
 						return ['ショートカット', action && action.category || 'シーク'];
+				}
+				if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) {
+						return ['再生・音声', 'しおり・ABリピート'];
 				}
 				if (/^supporterCredit\./.test(key)) {
 						return ['再生・音声', '提供画面'];
@@ -8145,6 +8183,15 @@ class ModernAdvancedSettingsModel {
 				if (changes.length && this.config.readonly) {
 						throw new Error('このページでは設定を保存できません（読み取り専用）');
 				}
+				const storage = this.config.storage;
+				const snapshots = new Map();
+				if (storage && typeof this.config.getStorageKey === 'function') {
+						for (const { id } of changes) {
+								const native = this.config.getNativeKey?.(id) ?? id;
+								const storageKey = this.config.getStorageKey(native);
+								snapshots.set(id, { storageKey, raw: storage[storageKey] });
+						}
+				}
 				const attempted = [];
 				try {
 						for (const { id, value } of changes) {
@@ -8166,11 +8213,37 @@ class ModernAdvancedSettingsModel {
 						}
 				}
 				catch (error) {
+						const rollbackErrors = [];
 						for (const id of attempted.reverse()) {
 								try {
 										this.config.setValue(id, ModernAdvancedSettingsModel._clone(this.saved[id]));
 								}
-								catch (_) { /* original error remains authoritative */ }
+								catch (restoreError) {
+										rollbackErrors.push(restoreError);
+								}
+								const snapshot = snapshots.get(id);
+								if (storage && snapshot) {
+										try {
+												if (snapshot.raw === undefined) {
+														delete storage[snapshot.storageKey];
+												}
+												else {
+														storage[snapshot.storageKey] = snapshot.raw;
+												}
+												if (storage[snapshot.storageKey] !== snapshot.raw) {
+														throw new Error('設定の保存状態を復元できません: ' + id);
+												}
+										}
+										catch (restoreError) {
+												rollbackErrors.push(restoreError);
+										}
+								}
+								if (!ModernAdvancedSettingsModel._same(this._liveValue(id), this.saved[id])) {
+										rollbackErrors.push(new Error('設定値を復元できません: ' + id));
+								}
+						}
+						if (rollbackErrors.length) {
+								throw new AggregateError([error, ...rollbackErrors], '設定保存と復元に失敗しました', { cause: error });
 						}
 						throw error;
 				}
@@ -11514,7 +11587,7 @@ class NgCompositeRuleEditor {
 }
         window.ZenzaAdvancedSettings = {
             config: Config,
-            version: '0.3.82-task976'
+            version: '0.3.83-task980'
         };
         const global = {
             PRODUCT

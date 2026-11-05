@@ -1,32 +1,11 @@
 var srcDir = './src';
 var outFile = 'dist/ZenzaWatch.user.js';
 
-// Task928: Route distribution to the repository being built.
-// Do not silently install the public version from a private development build.
-// The two allowlisted channels share this build logic, avoiding code drift.
-const RELEASE_REPOS = Object.freeze({
-  public: 'https://github.com/ButaMonky/ZenzaWatch',
-  private: 'https://github.com/ButaMonky/ZenzaWatch-Back-up'
-});
-function resolveReleaseChannel() {
-  const explicit = process.env.ZENZA_PUBLISH_CHANNEL;
-  if (explicit === 'public' || explicit === 'private') { return explicit; }
-  const gh = process.env.GITHUB_REPOSITORY || '';
-  if (/^ButaMonky\/ZenzaWatch-Back-up$/i.test(gh)) { return 'private'; }
-  if (/^ButaMonky\/ZenzaWatch$/i.test(gh)) { return 'public'; }
-  try {
-    const origin = require('child_process')
-      .execFileSync('git', ['remote', 'get-url', 'origin'], {
-        encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']
-      }).trim();
-    if (/github\.com[:/]ButaMonky\/ZenzaWatch-Back-up(?:\.git)?$/i.test(origin) ||
-        /github\.com[:/]seiginomikatakaibamann-lang\/wanzawatch(?:\.git)?$/i.test(origin)) {
-      return 'private';
-    }
-  } catch (_) { /* tarball builds retain the public fallback */ }
-  return 'public';
-}
-const PUBLISH_REPO = RELEASE_REPOS[resolveReleaseChannel()];
+// The private repository is a development/backup destination only.
+// Userscript metadata must ALWAYS point to the public distribution, regardless
+// of git remote, GITHUB_REPOSITORY, or the former ZENZA_PUBLISH_CHANNEL override.
+// A private Raw URL is not reliably accessible to Tampermonkey's updater.
+const PUBLISH_REPO = 'https://github.com/ButaMonky/ZenzaWatch';
 const PUBLISH_RAW_BASE = `${PUBLISH_REPO}/raw/develop/`;
 
 // ビルド識別子（Task 039）。

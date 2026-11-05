@@ -1,1109 +1,1181 @@
-// SCUI-18 bridge prototype. Not imported by ZenzaWatch until Task424 QA.
-// The legacy seekbar remains owner of media input/hit testing. This bridge
-// reads events and mounts the selected standalone scene card only.
+// GENERATED FROM tools/typescript-stage1/nico-src/SceneSearchIntegrationBridge.ts
+import {SceneSearchDomLease} from './SceneSearchDomLease';
+import {SceneSearchLayoutResources} from './SceneSearchLayoutResources';
+import {SceneSearchPreferenceConnection} from './SceneSearchPreferenceConnection';
+import {SceneSearchObstacleCollector} from './SceneSearchObstacleCollector';
+import {SceneSearchVisibleRectCollector} from './SceneSearchVisibleRectCollector';
 //===BEGIN===
+//@require SceneSearchDomLease
+//@require SceneSearchLayoutResources
+//@require SceneSearchPreferenceConnection
+//@require SceneSearchObstacleCollector
+//@require SceneSearchVisibleRectCollector
+/** P13-09C: canonical Bridge with typed native DOM, seek and cleanup owners.
+ * Legacy player/Config/card factories are dependency-injected JavaScript. Their
+ * interop remains explicitly scoped, never presented as fully strict typed.
+ */
 class SceneSearchIntegrationBridge {
-  constructor({classes,document,container,seekElement,commentPreviewElement,
-    legacyTooltipElement,getThumbnailElement,config,registry,clock,layoutSettings,
-    getChats,getSeekTime,onSeekRelative,onSeekAbsolute,loadPreview,onError,createCommentList}={}) {
-    if(!document||!container||!seekElement||!config||!registry||
-       typeof config.getValue!=='function'||typeof config.setValue!=='function'||
-       typeof onSeekRelative!=='function'||typeof onSeekAbsolute!=='function'){
-      throw new TypeError('Scene search integration requires DOM, config, registry and seek callbacks');
-    }
-    const required=['Controller','Interaction','IdleLimiter','SeekStepControl',
-      'CommentSearch','CommentSearchPanel','ShortcutRouter','VisibilityRegistry'];
-    if(!classes||required.some(name=>typeof classes[name]!=='function'&&
-       !(name==='VisibilityRegistry'&&typeof classes[name]?.connect==='function'))){
-      throw new TypeError('Missing scene-search integration dependencies');
-    }
-    this.document=document;
-    this.container=container;
-    this.seekElement=seekElement;
-    // Pointer coordinates are measured against the real seekbar, not against
-    // the video duration or the width of the whole player container.
-    this._seekClientX=null;
-    this._commentPreviewElement=commentPreviewElement||null;
-    this._commentPreviewOriginal=null;
-    this._commentDock=null;
-    this._createCommentList=createCommentList||null;
-    this._twinList=null;
-    this._twinListCleanup=null;
-    this._commentHoverCleanup=null;
-    this._legacyTooltipElement=legacyTooltipElement||null;
-    this._legacyTooltipOriginal=null;
-    this._getThumbnailElement=typeof getThumbnailElement==='function'?
-      getThumbnailElement:null;
-    this._sharedThumbnail=null;
-    this.config=config;
-    this.registry=registry;
-    this.layoutSettings={...(layoutSettings||{}),
-      getSeekGeometry:()=>this._getSeekGeometry(),
-      getSeekGeometryUnclipped:()=>this._getSeekGeometry(true),
-      getLegacyTooltip:()=>this._legacyTooltipElement,
-      getLegacyComment:()=>this._commentPreviewElement,
-      getMiniCommentMode:()=>this.config.getValue('sceneSearch.miniCommentMode'),
-      ...(config.resolveSceneSearch?{getAppearance:()=>config.resolveSceneSearch()}:{}),
-      getThumbnail:()=>this._getThumbnailElement?.(),
-      getSeekBarContainer:()=>this.seekElement.closest?.('.seekBarContainer')||null};
-    this._clock=clock||null;
-    this._classes=classes;
-    this._getChats=typeof getChats==='function'?getChats:()=>[];
-    this._getSeekTime=typeof getSeekTime==='function'?getSeekTime:null;
-    this._onSeekRelative=onSeekRelative;
-    this._onSeekAbsolute=onSeekAbsolute;
-    this._onError=typeof onError==='function'?onError:()=>{};
-    this._active=null;
-    this._cardCleanup=null;
-    this._visibility=null;
-    this._subscriptions=[];
-    this._activePointers=new Set();
-    this._onPointerFinish=this._finishPointer.bind(this);
-    this._running=false;
-    this._disposed=false;
-    this._style=null;
-    this._placementContext='normal';this._placementGeometry=null;this._placementHold=false;
-    this._seekListeners={
-      mouseenter:e=>{
-        this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
-        this.interaction.seekEnter(e);
-      },
-      mousemove:e=>{
-        this._seekClientX=Number.isFinite(e?.clientX)?e.clientX:null;
-        this.interaction.seekMove(e);
-        const seconds=this._getSeekTime?.(e);
-        if(Number.isFinite(seconds)&&seconds>=0){this.controller.setTime(seconds);}
-      },
-      mouseleave:e=>{
-        this.interaction.seekLeave(e);
-        // Retain the last seek anchor while travelling to preview controls.
-      },
-      pointerdown:e=>this._startPointer(e)
-    };
-    this.controller=new classes.Controller({
-      getPreference:key=>config.getValue(key),
-      resolvePreferences:config.resolveSceneSearch?()=>config.resolveSceneSearch():null,
-      createLayout:({id,mode})=>this._createLayout({id,mode}),
-      loadPreview:loadPreview||null,
-      onSeek:delta=>this._onSeekRelative(delta),
-      onError:(error,key)=>this._onError(error,key)
-    });
-    this.commentSearch=new classes.CommentSearch({
-      getChats:()=>this._getChats(),
-      getVideoId:()=>this.controller.snapshot.videoId,
-      seekTo:seconds=>this._onSeekAbsolute(seconds)
-    });
-    this.idleLimiter=new classes.IdleLimiter({
-      controller:this.controller,
-      getSeconds:()=>config.getValue('sceneSearch.idleHideSeconds'),
-      clock:this._clock||undefined,
-      onIdleHidden:hidden=>this._active?.root?.classList.toggle('is-idle-suppressed',hidden)
-    });
-    this.interaction=new classes.Interaction({
-      controller:this.controller,
-      getPreviewRect:()=>this._previewRects(),
-      subscribePointerMove:listener=>{
-        document.addEventListener('mousemove',listener,true);
-        return ()=>document.removeEventListener('mousemove',listener,true);
-      },
-      clock:this._clock||undefined,
-      idleLimiter:this.idleLimiter
-    });
-    this.router=new classes.ShortcutRouter({
-      controller:this.controller,interaction:this.interaction,
-      getPreference:key=>config.getValue(key),
-      setPreference:(key,value)=>key.startsWith('sceneSearch.')&&typeof config.persistSceneSearchSelection==='function'?
-        config.persistSceneSearchSelection({[key]:value}):config.setValue(key,value),
-      onToggleControls:()=>this._active?.root?.classList.toggle('is-expanded'),
-      onError:(error,key)=>this._onError(error,key)
-    });
-  }
-  _getSeekGeometry(unclipped=false) {
-    const seek=this.seekElement.getBoundingClientRect?.();
-    const frame=this.container.getBoundingClientRect?.();
-    if(!seek||!frame||!Number.isFinite(seek.left)||
-       !Number.isFinite(seek.width)||seek.width<=0||
-       !Number.isFinite(frame.left)||!Number.isFinite(frame.width)||
-       frame.width<=0){return null;}
-    const width=this.container.offsetWidth||frame.width;
-    const scale=width/frame.width;
-    const viewportWidth=this.document.defaultView?.innerWidth;
-    // Only UI01 uses unclipped screen bounds for a full-width seekRange.
-    // Preserve the old video-box clamps for layouts 02..10.
-    const visibleLeft=Number.isFinite(viewportWidth)?
-      (unclipped?-frame.left*scale:Math.max(0,-frame.left*scale)):0;
-    const visibleRight=Number.isFinite(viewportWidth)?
-      (unclipped?(viewportWidth-frame.left)*scale:
-        Math.min(width,(viewportWidth-frame.left)*scale)):width;
-    return {
-      seekLeft:(seek.left-frame.left)*scale,
-      seekWidth:seek.width*scale,
-      pointerX:Number.isFinite(this._seekClientX)?
-        (this._seekClientX-frame.left)*scale:null,
-      visibleLeft,visibleRight
-    };
-  }
-  _startPointer(e) {
-    if(this._disposed){return;}
-    const id=e?.pointerId??'main';
-    const empty=this._activePointers.size===0;
-    this._activePointers.add(id);
-    if(empty && this._activePointers.size===1){
-      // Observe release even if the pointer leaves the seekbar.
-      this.document.addEventListener('pointerup',this._onPointerFinish,true);
-      this.document.addEventListener('pointercancel',this._onPointerFinish,true);
-      this.interaction.setDragging(true);
-    }
-  }
-  _finishPointer(e) {
-    const id=e?.pointerId??'main';
-    if(!this._activePointers.delete(id)){return;}
-    if(!this._activePointers.size){this._clearPointers();}
-  }
-  _clearPointers() {
-    const active=this._activePointers.size>0;
-    this._activePointers.clear();
-    this.document.removeEventListener('pointerup',this._onPointerFinish,true);
-    this.document.removeEventListener('pointercancel',this._onPointerFinish,true);
-    if(active || this._running){this.interaction.setDragging(false);this._resumePlacement();}
-  }
-  _createLayout({id,mode}) {
-    this._placementGeometry=null;this._placementResult=null;
-    if(id==='follow'||id==='fixed')return this._createModernLayout({id,mode});
-    if(id==='legacy')id='00';
-    const card=this.registry.create({id,mode,document:this.document,
-      container:this.container,settings:this.layoutSettings,
-      onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
-    const wired={
-      get root(){return card.root;},
-      mount:state=>{
-        if(id==='00'){
-          this._restoreSharedThumbnail();
-          this._restoreCommentPreviewDock();
-          this._restoreLegacyTooltip();
+    constructor({ classes, document, container, seekElement, commentPreviewElement, legacyTooltipElement, getThumbnailElement, config, registry, clock, layoutSettings, getChats, getSeekTime, onSeekRelative, onSeekAbsolute, loadPreview, onError, createCommentList } = {}) {
+        if (!document || !container || !seekElement || !config || !registry ||
+            typeof config.getValue !== 'function' || typeof config.setValue !== 'function' ||
+            typeof onSeekRelative !== 'function' || typeof onSeekAbsolute !== 'function') {
+            throw new TypeError('Scene search integration requires DOM, config, registry and seek callbacks');
         }
-        card.mount(state);
-        if(id==='00'){
-          this._active=card;
-          this._mountLegacyControls(card);
-          return;
+        const required = ['Controller', 'Interaction', 'IdleLimiter', 'SeekStepControl',
+            'CommentSearch', 'CommentSearchPanel', 'ShortcutRouter', 'VisibilityRegistry'];
+        if (!classes || required.some(name => typeof classes[name] !== 'function' &&
+            !(name === 'VisibilityRegistry' && typeof classes[name]?.connect === 'function'))) {
+            throw new TypeError('Missing scene-search integration dependencies');
         }
-        this._hideLegacyTooltip();
-        if(id!=='01'&&id!=='02'){
-          this.container.dataset.sceneSearchLayout=id;
-          this.container.dataset.sceneMode=mode;
-        }
-        this._active=card;
-        try{this._mountCardControls(card);}catch(error){
-          this._releaseCard(card);card.dispose();throw error;
-        }
-      },
-      renderTime:state=>wired.render(state,true),
-      render:(state,timeOnly=false)=>{
-        card.render(state);
-        if(id==='00')return; // Original tooltip/comment renderer owns UI00.
-        // The original VideoControlBar already advances flowing mini rows
-        // on mousemove. Leave its DOM untouched on time-only renders. A
-        // separately docked list still needs the card's updated position.
-        if(!timeOnly||state.commentListMode===true){
-          this._syncCommentPreviewDock(card,state);
-        }
-        if(id==='02'){
-          const player=this.container.getBoundingClientRect?.();
-          const windowHeight=this.document.defaultView?.innerHeight;
-          const width=player?.width||this.container.clientWidth||800;
-          const room=Number.isFinite(windowHeight)&&Number.isFinite(player?.bottom)?
-            windowHeight-player.bottom:0;
-          const enough=mode==='normal'&&room>=230;
-          this.container.dataset.scenePlacement=enough?'below':'visible-fallback';
-          this._updateTwinCommentPlacement(enough,player);
-        }
-        if(id!=='01'&&id!=='02'){
-          const width=this.container.offsetWidth||
-            this.container.getBoundingClientRect?.().width||
-            this.container.clientWidth||800;
-          this.container.dataset.sceneNarrow=String(width<580);
-          this.container.dataset.sceneWide=String(width>=980);
-          this.container.dataset.scenePlacement=
-            card.root?.dataset.scuiPlacement||'overlay';
-          if(id==='10'){
-            const raw=Number.parseFloat(card.root?.style.getPropertyValue('--scene-x'));
-            this.container.dataset.sceneCommentSide=Number.isFinite(raw)&&
-              raw>width*.55?'left':'right';
-          }
-        }
-        if(!timeOnly)this._visibility?.refresh?.();
-        if(card.root&&!timeOnly){
-          const reveal=this.config.getValue('sceneSearch.controlsReveal');
-          const animation=this.config.getValue('sceneSearch.animation');
-          card.root.dataset.sceneReveal=['click','always'].includes(reveal)?reveal:'hover-focus';
-          card.root.dataset.sceneAnimation=['off','full'].includes(animation)?animation:'subtle';
-        }
-      },
-      onPreview:(asset,request)=>{
-        if(id==='00')return; // Existing seekbar still owns storyboard canvas.
-        card.onPreview?.(asset,request);
-        if(this._sharedThumbnail?.node && card.root?.contains(this._sharedThumbnail.node)){
-          const slot=card.root.querySelector('.zenzaSceneImageBox');
-          if(slot){
-            const image=slot.querySelector('.zenzaSceneImage');
-            const placeholder=slot.querySelector('.zenzaSceneImagePlaceholder');
-            if(image){image.hidden=true;}
-            if(placeholder){placeholder.hidden=true;}
-          }
-        }
-      },
-      dispose:()=>{
-        if(id==='00'){
-          this._cardCleanup?.();
-          this._cardCleanup=null;
-          card.dispose(); // restores the exact original seekbar/comment owners
-          if(this._active===card)this._active=null;
-          return;
-        }
-        this._restoreCommentPreviewDock();
-        this._releaseCard(card);
-        card.dispose();
-        if(id==='02'){
-          delete this.container.dataset.scenePlacement;
-          this.container.style.removeProperty('--scui-twin-comment-top');
-        }
-        if(id!=='01'&&id!=='02'&&
-          this.container.dataset.sceneSearchLayout===id){
-          delete this.container.dataset.sceneSearchLayout;
-          delete this.container.dataset.sceneMode;
-          delete this.container.dataset.sceneNarrow;
-          delete this.container.dataset.sceneWide;
-          delete this.container.dataset.scenePlacement;
-          delete this.container.dataset.sceneCommentSide;
-        }
-      }
-    };
-    return wired;
-  }
-  _createModernLayout({id,mode}){
-    const d=this.document,portal=d.createElement('div');
-    // The native player disables input/animation on non-player body children.
-    // This portal owns player controls even when it is outside the dialog DOM.
-    portal.className='zenzaScenePreviewPortal zen-family';
-    portal.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
-    (d.fullscreenElement||d.body).append(portal);
-    // Native row actions (seek / NG) still enter the original player dispatcher.
-    portal.addEventListener('command',event=>{
-      event.stopPropagation();
-      this.container.dispatchEvent(new d.defaultView.CustomEvent('command',{detail:event.detail,bubbles:true,composed:true}));
-    });
-    const card=this.registry.create({id,mode,document:d,container:portal,settings:this.layoutSettings,
-      onAction:(action,ctx,event)=>this._onCardAction(action,ctx,event)});
-    let list=null;
-    const render=state=>{
-      const prefs=this.config.resolveSceneSearch();
-      if(prefs.listOpen&&!list&&this._createCommentList){
-        list=this._createCommentList(portal);card.setListView(list);
-      }
-      const returnListFocus=!prefs.listOpen&&card.root?.querySelector('.zenzaSceneListSlot')?.contains(d.activeElement);
-      if(!prefs.listOpen)this._commentPanel?.close();
-      card.render({...state,...prefs});
-      if(returnListFocus)card.root.querySelector('[data-scui-action="comment-toggle"]')?.focus();
-      if(card.root){
-        card.root.dataset.sceneReveal=this.config.getValue('sceneSearch.controlsReveal')||'hover-focus';
-        card.root.dataset.sceneAnimation=this.config.getValue('sceneSearch.animation')||'subtle';
-      }
-      this._visibility?.refresh?.();
-      this._placeModern(card,state);
-      if(!state.shown&&!state.pinned)this.interaction?.clearCorridor?.();
-    };
-    return {get root(){return card.root;},
-      mount:()=>{try{
-        card.mount();this._active=card;this._modernPortal=portal;
-        this._hideLegacyTooltip();this._mountCardControls(card);
-      }catch(error){this._releaseCard(card);card.dispose();portal.remove();throw error;}},
-      render,renderTime:render,onPreview:()=>this.refreshSharedThumbnail(),
-      dispose:()=>{
-        this._releaseCard(card);card.dispose();portal.remove();
-        this._modernPortal=null;this._placementResult=null;this._placementGeometry=null;
-      }};
-  }
-  updatePlacementContext({context='normal',interactionActive=false}={}){
-    if(this._disposed)return;
-    this._placementContext=['normal','small','fullscreen'].includes(context)?context:'normal';
-    this._placementHold=interactionActive;
-    this._placementGeometry=null;
-    this.idleLimiter.pause('player-manipulation',interactionActive);
-    if(this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
-  }
-  _placeModern(card,state){
-    if(!card.root||!this._classes.Placement)return;
-    const d=this.document,win=d.defaultView,portal=this._modernPortal;
-    const parent=d.fullscreenElement||d.body;
-    if(portal&&portal.parentNode!==parent)parent.append(portal);
-    if(!this._placementGeometry){
-      const player=(this.container.querySelector('.videoPlayer')||this.container).getBoundingClientRect();
-      const seekbar=this.seekElement.getBoundingClientRect();
-      const obstacles=[];
-      const fullscreen=this._placementContext==='fullscreen'||!!d.fullscreenElement;
-      // Task954: normal seekbar hover changes both height and margin-top;
-      // even its measured BOTTOM can shift by 2px. The wrapper remains at a
-      // fixed top, so derive the always-expanded 24px bar from that anchor.
-      // Native .seekBar:hover uses margin-top:-14px (scaled with the player).
-      const seekBottom=Number.isFinite(seekbar.bottom)?seekbar.bottom:seekbar.top+seekbar.height;
-      const seekWrap=this.seekElement.closest?.('.seekBarContainer');
-      const wrapRect=seekWrap?.getBoundingClientRect?.();
-      const wrapScale=wrapRect?.width>0&&seekWrap?.offsetWidth>0?
-        wrapRect.width/seekWrap.offsetWidth:1;
-      let previewAnchorTop=!fullscreen&&Number.isFinite(wrapRect?.top)?
-        wrapRect.top-14*wrapScale:seekBottom-24;
-      // Fullscreen anchors above actual controls, not the variable seekbar.
-      if(fullscreen){
-        // Task956: the visible icons may extend ABOVE their wrapper due to UI
-        // scaling/transform. Task954 sampled the wrapper only and could place
-        // the preview over the actual button glyphs in native fullscreen.
-        // Sample the rendered controls, never tooltip/popover descendants.
-        const controls=this.container.querySelectorAll(
-          '.videoControlBar .controlItemContainer');
-        const bounds=[];
-        for(const row of controls){
-          for(const node of [row,...row.querySelectorAll('.scalingUI,.controlButton')]){
-            if(node.hidden||node.closest('[hidden]'))continue;
-            const style=win.getComputedStyle(node);
-            if(style.display==='none'||style.visibility==='hidden')continue;
-            const rect=node.getBoundingClientRect();
-            if(rect.width>0&&rect.height>0&&Number.isFinite(rect.top)){
-              bounds.push(rect.top);
-            }
-          }
-        }
-        if(bounds.length)previewAnchorTop=Math.min(previewAnchorTop,...bounds);
-      }
-      // Task934: original Task101 intentionally raises fullscreen icon columns
-      // above the seekbar. They must be measured as obstacles, not covered or
-      // ignored by the SCUI preview. No icon z-index or click ownership changes.
-      const controls=fullscreen?',.videoControlBar .controlItemContainer,.controlItemContainer.right,.controlItemContainer.left,.controlItemContainer.center':'';
-      for(const node of this.container.querySelectorAll(
-        '.commentInputPanel,.commandDrawer,.commandPopover,.commandMenu,.commandList,.zenzaSmallModeResizeHandle,.zenzaSmallModeResetButton,.zenzaSmallModeAspectLockButton,.closeButton,.zenzaSmallModeCloseButton'+controls)){
-        const css=win.getComputedStyle(node),rect=node.getBoundingClientRect();
-        // The 200x50px comment input sits in the middle of fullscreen even
-        // while idle/transparent. It was treated as an obstacle on every
-        // seek-mousemove, causing the preview to leap upward only at center.
-        // Protect it once focused, hovered or an input popup is open.
-        const idleComment=node.matches('.commentInputPanel')&&
-          !node.matches(':focus-within,:hover')&&
-          !node.classList.contains('is-popoverOpen');
-        if(!idleComment&&!node.hidden&&css.display!=='none'&&
-          css.visibility!=='hidden'&&css.opacity!=='0'&&
-          rect.width>0&&rect.height>0)obstacles.push(rect);
-      }
-      const origin=portal?.getBoundingClientRect()||{left:0,top:0,width:0,height:0};
-      this._placementGeometry={player,seekbar,obstacles,origin,previewAnchorTop,
-        viewport:{left:0,top:0,width:win.innerWidth,height:win.innerHeight}};
-    }
-    const g=this._placementGeometry,prefs=this.config.resolveSceneSearch();
-    const hold=this._placementHold||state.pinned||this.interaction?.holdingPreview===true;
-    const input={...g,layout:state.layoutId,context:this._placementContext,
-      imageSize:{width:180,height:90},requestedScale:prefs.scale,listOpen:prefs.listOpen,listScale:prefs.listScale,
-      anchorX:this._seekClientX??g.seekbar.left+g.seekbar.width/2,previous:this._placementResult,hold,
-      // Constant footer reserve keeps the preview box's height and bottom
-      // edge stable while time labels and buttons change during seeking.
-      footerHeight:64};
-    const result=this._classes.Placement.compute(input);
-    this._placementResult=result;card.fit(result);
-    const x=g.origin.width&&portal?.clientWidth?portal.clientWidth/g.origin.width:1;
-    const y=g.origin.height&&portal?.clientHeight?portal.clientHeight/g.origin.height:1;
-    card.root.style.left=(result.rect.left-g.origin.left)*x+'px';
-    card.root.style.top=(result.rect.top-g.origin.top)*y+'px';
-    card.root.style.width=result.rect.width+'px';card.root.style.height=result.rect.height+'px';
-    card.root.style.transformOrigin='0 0';card.root.style.transform='scale('+x+','+y+')';
-    card.root.dataset.sceneContext=this._placementContext;
-  }
-  _updateTwinCommentPlacement(below,player){
-    if(!below||!player){
-      this.container.style.removeProperty('--scui-twin-comment-top');
-      return;
-    }
-    const comment=this._twinList?.element||this._commentPreviewElement;
-    const owner=comment?.offsetParent||comment?.parentElement;
-    const origin=owner?.getBoundingClientRect?.();
-    if(!origin||!Number.isFinite(origin.top)||!Number.isFinite(player.bottom)){
-      return;
-    }
-    const scale=origin.width&&owner.offsetWidth?
-      owner.offsetWidth/origin.width:1;
-    const top=(player.bottom-origin.top)*scale+15;
-    if(Number.isFinite(top)){
-      this.container.style.setProperty('--scui-twin-comment-top',
-        Math.round(Math.max(0,top))+'px');
-    }
-  }
-  _onCardAction(action,context) {
-    if(action==='more'){this._resumePlacement();return;}
-    if(action==='comment-toggle'){
-      if(this.config.resolveSceneSearch?.()?.listAllowed===false)return;
-      // Legacy tooltip button selects flowing/list mode, NOT global visibility.
-      this.config.setValue('enableCommentPreview',
-        this.config.getValue('enableCommentPreview')!==true);
-      this.controller.onPreferencesChanged('enableCommentPreview');
-      return;
-    }
-    if(action==='frame-seek'){
-      const seconds=context?.time;
-      if(!Number.isFinite(seconds)||seconds<0){return;}
-      const duration=typeof this.layoutSettings.getDuration==='function'?
-        this.layoutSettings.getDuration():this.layoutSettings.duration;
-      this._onSeekAbsolute(Number.isFinite(duration)&&duration>0?
-        Math.min(seconds,duration):seconds);
-      return;
-    }
-    const commands={
-      'seek-back':'sceneSearch-seekBack',
-      'seek-forward':'sceneSearch-seekForward',
-      pin:'sceneSearch-togglePin',
-      'comment-search':'sceneSearch-toggleCommentSearch'
-    };
-    if(action==='seek-step'){
-      this._stepWidget?.openMenu();
-      return;
-    }
-    if(commands[action]){this.router.handle(commands[action]);}
-  }
-  _mountCardControls(card) {
-    const root=card.root;
-    if(!root){throw new Error('Cannot wire unmounted scene card');}
-    const classNames={
-      pin:'zenzaSceneSearchPin',
-      'comment-toggle':'zenzaSceneCommentToggle',
-      'comment-search':'zenzaSceneCommentSearchToggle',
-      more:'zenzaSceneSearchMore'
-    };
-    for(const [action,css] of Object.entries(classNames)){
-      root.querySelector('[data-scui-action="'+action+'"]')?.classList.add(css);
-    }
-    const actionList=root.querySelector('.zenzaSceneActions');
-    if(!actionList){throw new Error('Scene controls missing');}
-    if(root.dataset.layout==='02'){
-      // Keep the expander accessible when the twin-panel action tray is
-      // collapsed below the preview card. Do not edit Task532's provider.
-      const foot=root.querySelector('.zenzaSceneFoot');
-      const more=actionList.querySelector('.scene-more');
-      if(foot&&more)foot.insertBefore(more,actionList);
-    }
-    actionList.classList.add('zenzaSceneSeekStepControl');
-    for(const [action,tag] of [
-      ['seek-back','back'],['seek-forward','forward'],['seek-step','open']
-    ]){
-      const button=root.querySelector('[data-scui-action="'+action+'"]');
-      if(button){button.dataset.scui=tag;}
-    }
-    const C=this._classes;
-    const step=new C.SeekStepControl({
-      document:this.document,
-      getSeconds:()=>this.config.getValue('sceneSearch.seekStepSeconds'),
-      setSeconds:value=>{
-        this.config.setValue('sceneSearch.seekStepSeconds',value);
-        this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds');
-      },
-      onSeek:delta=>this._onSeekRelative(delta),
-      onCompactChange:()=>this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds'),
-      onMenuChange:open=>{
-        if(this._disposed){return;}
-        this.idleLimiter.pause('step-menu',open);
-        if(open){this.interaction.previewEnter('step-menu');}
-        else{
-          this.interaction.previewLeave('step-menu');
-          // Some DOM hosts retain activeElement inside a newly hidden popup.
-          // Release only that stale focus, preserving any visible control.
-          const focused=this.document.activeElement;
-          if(root.contains(focused)&&focused.closest('[hidden]')){
-            this.interaction.previewFocus(false,root);
-          }
-        }
-      },
-      onError:error=>this._onError(error,'sceneSearch.seekStepSeconds')
-    });
-    const modern=root.classList.contains('zenzaSceneSharedPreview');
-    // Modern controls use the shared seek commands; seconds stay in settings.
-    // Retain the step model for existing keyboard shortcuts, without its popup.
-    if(modern)step.updateFromConfig();else step.mount(actionList);
-    this._stepWidget=step;
-    const searchPanel=new C.CommentSearchPanel({
-      document:this.document,search:this.commentSearch,
-      onOpenChange:open=>{
-        const button=root.querySelector('[data-scui-action="comment-search"]');
-        button?.setAttribute('aria-expanded',String(open));
-        if(!open&&searchPanel.root?.contains(this.document.activeElement))button?.focus();
-      }
-    });
-    searchPanel.mount(modern?root.querySelector('.zenzaSceneListSlot'):root);
-    this._commentPanel=searchPanel;
-    this.router.seekStepControl=step;
-    this.router.commentSearchPanel=modern?{toggle:()=>{
-      if(this.config.resolveSceneSearch().listAllowed===false)return;
-      if(this.config.getValue('enableCommentPreview')!==true)this.config.setValue('enableCommentPreview',true);
-      searchPanel.toggle();
-    }}:searchPanel;
-    this._cardCleanup=this._bindPreviewSurface(root);
-    this._visibility=C.VisibilityRegistry.connect(this.config,root,'scene');
-    this.refreshSharedThumbnail();
-  }
-  _mountLegacyControls(card) {
-    // UI00 deliberately has no new scene card. Its native seek tooltip
-    // buttons and the separate scrollable CommentPreview are still controls:
-    // hovering/focusing either must pause BOTH leave/corridor and idle timers.
-    const nodes=[card?.root,this._commentPreviewElement].filter(Boolean);
-    let hovered=false,focused=false,active=false;
-    const owns=node=>nodes.some(root=>root===node||root.contains?.(node));
-    const sync=()=>{
-      const next=hovered||focused;
-      if(next===active)return;
-      active=next;
-      if(next)this.interaction.previewEnter();
-      else this.interaction.previewLeave();
-    };
-    const onEnter=()=>{hovered=true;sync();};
-    const onLeave=e=>{
-      if(owns(e?.relatedTarget))return;
-      hovered=false;sync();
-    };
-    const onFocusIn=()=>{focused=true;sync();};
-    const onFocusOut=e=>{
-      if(owns(e?.relatedTarget))return;
-      focused=false;sync();
-    };
-    const bindings=[
-      ['mouseenter',onEnter],['mouseleave',onLeave],
-      ['focusin',onFocusIn],['focusout',onFocusOut]
-    ];
-    for(const node of nodes)for(const [key,handler] of bindings){
-      node.addEventListener(key,handler);
-    }
-    this._cardCleanup=()=>{
-      for(const node of nodes)for(const [key,handler] of bindings){
-        node.removeEventListener(key,handler);
-      }
-      if(active){active=false;this.interaction.previewLeave();}
-    };
-  }
-  _releaseCard(card) {
-    if(this._active!==card){return;}
-    this._restoreSharedThumbnail();
-    this._cardCleanup?.();
-    this._cardCleanup=null;
-    this._visibility?.dispose?.();
-    this._visibility=null;
-    this._commentPanel?.dispose?.();
-    this._commentPanel=null;
-    this._stepWidget?.dispose?.();
-    this._stepWidget=null;
-    this.router.seekStepControl=null;
-    this.router.commentSearchPanel=null;
-    this._active=null;
-  }
-  refreshSharedThumbnail() {
-    if(this._active?.setImage){
-      this._active.setImage(this._getThumbnailElement?.()||null);
-      return true;
-    }
-    if(['00','legacy'].includes(this.controller.snapshot.layoutId)){
-      // The legacy StoryboardWorker can create its 160x90 canvas after mount.
-      // Retry attachment of the original flowing-comment DOM at that moment.
-      this._active?.render?.(this.controller.snapshot);
-      return false;
-    }
-    // The same storyboard update must refresh UI07 side frames even when
-    // the shared central canvas itself is already mounted.
-    if(!this._disposed&&this.controller.snapshot.layoutId==='07'){
-      this.controller.onPreferencesChanged('sceneSearch.idleHideSeconds');
-    }
-    if(this._disposed||!this._active?.root||!this._getThumbnailElement){
-      return false;
-    }
-    let node;
-    try{node=this._getThumbnailElement();}
-    catch(error){
-      this._restoreSharedThumbnail();
-      this._hideLegacyTooltip();
-      this._onError(error,'existing-seek-thumbnail');
-      return false;
-    }
-    if(!node||!node.parentNode){
-      this._restoreSharedThumbnail();
-      this._hideLegacyTooltip();
-      return false;
-    }
-    const slot=this._active.root.querySelector('.zenzaSceneImageBox');
-    if(!slot){return false;}
-    if(this._sharedThumbnail?.node===node&&slot.contains(node)){return true;}
-    if(!node.querySelector?.('canvas')){return false;}
-    this._restoreSharedThumbnail();
-    const parent=node.parentNode,nextSibling=node.nextSibling;
-    slot.appendChild(node); // Move the original worker canvas, never clone it.
-    this._sharedThumbnail={node,parent,nextSibling};
-    slot.querySelector('.zenzaSceneImage')?.setAttribute('hidden','');
-    slot.querySelector('.zenzaSceneImagePlaceholder')?.setAttribute('hidden','');
-    this._hideLegacyTooltip();
-    return true;
-  }
-  _restoreSharedThumbnail() {
-    const old=this._sharedThumbnail;
-    if(old){
-      if(old.parent?.insertBefore){
-        if(old.nextSibling?.parentNode===old.parent){
-          old.parent.insertBefore(old.node,old.nextSibling);
-        }else{old.parent.appendChild(old.node);}
-      }
-      this._sharedThumbnail=null;
-      const slot=this._active?.root?.querySelector('.zenzaSceneImageBox');
-      const image=slot?.querySelector('.zenzaSceneImage');
-      const placeholder=slot?.querySelector('.zenzaSceneImagePlaceholder');
-      const hasImage=!!image?.getAttribute('src');
-      if(image){image.hidden=!hasImage;}
-      if(placeholder){placeholder.hidden=hasImage;}
-    }
-  }
-  _hideLegacyTooltip() {
-    const tooltip=this._legacyTooltipElement;
-    if(!tooltip?.style||this._legacyTooltipOriginal){return;}
-    this._legacyTooltipOriginal={
-      hidden:tooltip.hidden,
-      display:tooltip.style.getPropertyValue('display'),
-      priority:tooltip.style.getPropertyPriority('display')
-    };
-    tooltip.hidden=true;
-    tooltip.style.setProperty('display','none','important');
-  }
-  _restoreLegacyTooltip() {
-    const tooltip=this._legacyTooltipElement,previous=this._legacyTooltipOriginal;
-    if(tooltip?.style&&previous){
-      if(previous.display){
-        tooltip.style.setProperty('display',previous.display,previous.priority);
-      }else{tooltip.style.removeProperty('display');}
-      tooltip.hidden=previous.hidden;
-    }
-    this._legacyTooltipOriginal=null;
-  }
-  _resumePlacement(){
-    if(!this._disposed&&this._active?.fit)this._placeModern(this._active,this.controller.snapshot);
-  }
-  _bindPreviewSurface(node) {
-    let pointerFocus=false;
-    const enter=()=>{this.interaction.previewEnter(node);this._resumePlacement();};
-    const leave=e=>{
-      const active=this.document.activeElement;
-      // Clicked buttons retain DOM focus after the mouse leaves. That is not
-      // continued keyboard interaction and must not freeze following or idle.
-      // Editable search fields and keyboard navigation keep their focus hold.
-      const editing=active?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
-      if(pointerFocus&&node.contains(active)&&!editing){
-        active.blur?.();this.interaction.previewFocus(false,node);
-      }
-      this.interaction.previewLeave(node,e);this._resumePlacement();
-    };
-    const focus=()=>{this.interaction.previewFocus(true,node);this._resumePlacement();};
-    const blur=e=>{
-      if(!node.contains(e.relatedTarget)){this.interaction.previewFocus(false,node);this._resumePlacement();}
-    };
-    const pointer=e=>{pointerFocus=true;this._startPointer(e);};
-    const keyboard=()=>{pointerFocus=false;};
-    // Tab can enter this surface from outside, before it receives key events.
-    this.document.addEventListener('keydown',keyboard,true);
-    const listeners=[['mouseenter',enter],['mouseleave',leave],['focusin',focus],['focusout',blur],
-      ['pointerdown',pointer]];
-    for(const [event,fn] of listeners)node.addEventListener(event,fn);
-    return ()=>{
-      this.document.removeEventListener('keydown',keyboard,true);
-      for(const [event,fn] of listeners)node.removeEventListener(event,fn);
-      this.interaction.previewLeave(node);
-      this.interaction.previewFocus(false,node);
-    };
-  }
-  _restoreTwinList() {
-    const handle=this._twinList;
-    if(!handle)return;
-    this._twinList=null;
-    handle.element?.classList.remove('is-scui-active');
-    this._twinListCleanup?.();
-    this._twinListCleanup=null;
-    handle.dispose();
-  }
-  _previewRects() {
-    if(this._active?.getRects)return this._active.getRects();
-    const root=this._active?.root;
-    const nodes=[root,root?.querySelector('.zenzaSceneActions'),
-      root?.querySelector('.zenzaSceneRemoteControls'),this._commentPreviewElement,
-      this._twinList?.element].filter(Boolean);
-    const regions=[];
-    for(const node of new Set(nodes)){
-      if(node.hidden||node.closest('[hidden],.is-idle-suppressed'))continue;
-      if(node.classList.contains('zenzaSceneCommentAttached')&&
-         !node.classList.contains('is-scui-active'))continue;
-      const css=this.document.defaultView?.getComputedStyle?.(node);
-      if(css&&(css.display==='none'||css.visibility==='hidden'||css.opacity==='0'))continue;
-      const rect=node.getBoundingClientRect?.();
-      if(rect?.width>0&&rect.height>0)regions.push(rect);
-    }
-    return regions;
-  }
-  _syncCommentPreviewDock(card,state) {
-    const node=this._commentPreviewElement,root=card?.root;
-    if(!node||!root)return;
-    if(!this._commentDock){
-      // CommentPreviewView normally inherits the *player* typography.
-      // Modern scene cards use 12px system-ui: reparenting its original DOM
-      // silently changed every 16px mini row and broke alignment/CA spaces.
-      // Snapshot the native computed typography BEFORE the first move.
-      const computed=this.document.defaultView?.getComputedStyle?.(node);
-      const props=['font-family','font-size','line-height',
-        'font-weight','letter-spacing','word-spacing'];
-      const typography=props.map(name=>({
-        name,value:node.style.getPropertyValue(name),
-        priority:node.style.getPropertyPriority(name),
-        native:computed?.getPropertyValue(name)||''
-      }));
-      this._commentDock={parent:node.parentNode,next:node.nextSibling,
-        typography};
-      for(const {name,native} of typography){
-        if(native)node.style.setProperty(name,native);
-      }
-      this._commentHoverCleanup=this._bindPreviewSurface(node);
-    }
-    const listRequested=this.config.getValue('enableCommentPreview')===true;
-    const twin=root.dataset.layout==='02'&&typeof this._createCommentList==='function';
-    if(twin&&listRequested&&!this._twinList){
-      this._twinList=this._createCommentList(this.container)||null;
-      if(this._twinList?.element){
-        const panel=this._twinList.element;
-        panel.classList.add('zenzaSceneTwinList','zenzaSceneCommentAttached','is-scui-list');
-        panel.tabIndex=0;
-        panel.setAttribute('aria-label','シーンのコメント一覧');
-        for(const {name,native} of this._commentDock.typography||[]){
-          if(native)panel.style.setProperty(name,native);
-        }
-        this._twinListCleanup=this._bindPreviewSurface(panel);
-      }
-    }
-    if(!listRequested)this._restoreTwinList();
-    const list=listRequested&&!(twin&&this._twinList);
-    const classic=root.dataset.layout==='01';
-    // Task728: the ORIGINAL CommentPreviewView flows ON TOP of the
-    // storyboard image in UI01. ONLY the scrollable LIST moves to the right
-    // sibling pane. Never clone native chat rows or replace their animation.
-    const image=root.querySelector('.zenzaSceneImageBox');
-    const target=classic?(list?root:image):
-      list?this.container:image;
-    if(target&&node.parentNode!==target)target.appendChild(node);
-    node.classList.add('zenzaSceneCommentAttached');
-    node.classList.toggle('is-scui-list',list);
-    node.classList.toggle('is-scui-flow',!list);
-    node.classList.toggle('is-scui-classic-side',classic&&list);
-    const active=(state?.shown!==false||state?.pinned===true)&&
-      this.config.getValue('sceneSearch.commentPreviewVisible')!==false&&
-      !root.classList.contains('is-idle-suppressed');
-    node.classList.toggle('is-scui-active',active);
-    if(this._twinList?.element){
-      this._twinList.element.classList.toggle('is-scui-active',active&&listRequested);
-    }
-    if(twin){
-      const toggle=root.querySelector('[data-scui-action="comment-toggle"]');
-      const label=listRequested?'コメント一覧を閉じる':'コメント一覧を表示';
-      toggle?.setAttribute('aria-label',label);
-      toggle?.setAttribute('title',label);
-      toggle?.setAttribute('aria-expanded',String(listRequested));
-    }
-    if(classic){
-      if(list)this._positionClassicCommentSide(root,list);
-      else root.dataset.scuiSidePlacement='overlay';
-    }else if(list){
-      const x=Number.parseFloat(root.style.getPropertyValue('--scene-x'));
-      if(Number.isFinite(x))this.container.style.setProperty('--scui-list-x',x+'px');
-    }
-  }
-  _positionClassicCommentSide(root,list) {
-    const rect=root.getBoundingClientRect?.();
-    const viewport=this.document.defaultView?.innerWidth||
-      this.document.documentElement?.clientWidth||0;
-    if(!rect||!Number.isFinite(rect.left)||!Number.isFinite(rect.right)||
-      !Number.isFinite(viewport)||viewport<=0)return;
-    const scale=rect.width>0&&root.offsetWidth>0?
-      rect.width/root.offsetWidth:1;
-    // Layout01 precomputes a group clamp and pane width with the SAME
-    // viewport geometry. Reuse these values; calculating a second, different
-    // clamp here caused the native comment view to leave the right edge.
-    const configuredGap=Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
-    const configuredWidth=Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
-    const gap=Number.isFinite(configuredGap)?configuredGap:8;
-    const margin=8;
-    const room=(viewport-margin-rect.right-gap*scale)/scale;
-    const panelWidth=Number.isFinite(configuredWidth)&&configuredWidth>0?
-      configuredWidth:Math.min(list?350:180,Math.max(1,room));
-    // Never swap to the left or move above; on the right edge, the entire
-    // group stops together while CommentPreviewView retains native owners.
-    const cardWidth=rect.width/scale;
-    const left=(root.offsetWidth||cardWidth)+gap;
-    root.dataset.scuiSidePlacement='right';
-    root.style.setProperty('--scui-side-left',left.toFixed(2)+'px');
-    root.style.setProperty('--scui-side-width',panelWidth.toFixed(2)+'px');
-    // Flow mode has no independent pane or coordinate offset. Its ORIGINAL
-    // CommentPreviewView is positioned directly inside .zenzaSceneImageBox.
-  }
-  _restoreCommentPreviewDock(){
-    this._restoreTwinList();
-    const old=this._commentDock,node=this._commentPreviewElement;
-    if(!old||!node)return;
-    this._commentHoverCleanup?.();
-    this._commentHoverCleanup=null;
-    node.classList.remove('zenzaSceneCommentAttached','is-scui-flow',
-      'is-scui-list','is-scui-active','is-scui-classic-side');
-    if(old.parent){
-      if(old.next?.parentNode===old.parent)old.parent.insertBefore(node,old.next);
-      else old.parent.appendChild(node);
-    }
-    // UI00 and the regular VideoControlBar must not inherit any inline font
-    // overrides when switching back from modern layouts.
-    for(const {name,value,priority} of old.typography||[]){
-      if(value)node.style.setProperty(name,value,priority);
-      else node.style.removeProperty(name);
-    }
-    this.container.style.removeProperty('--scui-list-x');
-    this._commentDock=null;
-  }
-  _syncCommentPreviewVisibility() {
-    if(this.config.resolveSceneSearch)return; // Effective state belongs to shared view / legacy adapter.
-    const node=this._commentPreviewElement;
-    if(!node?.style){return;}
-    const visible=this.config.getValue('sceneSearch.commentPreviewVisible')!==false;
-    if(!visible){
-      if(!this._commentPreviewOriginal){
-        this._commentPreviewOriginal={
-          hidden:node.hidden,
-          display:node.style.getPropertyValue('display'),
-          priority:node.style.getPropertyPriority('display')
+        this.document = document;
+        this.container = container;
+        this.seekElement = seekElement;
+        // Pointer coordinates are measured against the real seekbar, not against
+        // the video duration or the width of the whole player container.
+        this._seekClientX = null;
+        this._commentPreviewElement = commentPreviewElement || null;
+        this._commentPreviewOriginal = null;
+        this._commentDock = null;
+        this._createCommentList = createCommentList || null;
+        this._twinList = null;
+        this._twinListCleanup = null;
+        this._commentHoverCleanup = null;
+        this._legacyTooltipElement = legacyTooltipElement || null;
+        this._legacyTooltipOriginal = null;
+        this._getThumbnailElement = typeof getThumbnailElement === 'function' ?
+            getThumbnailElement : null;
+        this._sharedThumbnail = null;
+        this.config = config;
+        this.registry = registry;
+        this.layoutSettings = { ...(layoutSettings || {}),
+            getSeekGeometry: () => this._getSeekGeometry(),
+            getSeekGeometryUnclipped: () => this._getSeekGeometry(true),
+            getLegacyTooltip: () => this._legacyTooltipElement,
+            getLegacyComment: () => this._commentPreviewElement,
+            getMiniCommentMode: () => this.config.getValue('sceneSearch.miniCommentMode'),
+            ...(config.resolveSceneSearch ? { getAppearance: () => config.resolveSceneSearch() } : {}),
+            getThumbnail: () => this._getThumbnailElement?.(),
+            getSeekBarContainer: () => this.seekElement.closest?.('.seekBarContainer') || null };
+        this._clock = clock || null;
+        this._classes = classes;
+        this._getChats = typeof getChats === 'function' ? getChats : () => [];
+        this._getSeekTime = typeof getSeekTime === 'function' ? getSeekTime : null;
+        this._onSeekRelative = onSeekRelative;
+        this._onSeekAbsolute = onSeekAbsolute;
+        this._onError = typeof onError === 'function' ? onError : () => { };
+        this._cleanup = new SceneSearchLayoutResources((error, key) => this._onError(error, key));
+        this._active = null;
+        this._cardCleanup = null;
+        this._visibility = null;
+        this._subscriptions = [];
+        this._running = false;
+        this._disposed = false;
+        this._style = null;
+        this._placementContext = 'normal';
+        this._placementGeometry = null;
+        this._placementHold = false;
+        this._seekListeners = {
+            mouseenter: e => {
+                if (this._disposed)
+                    return;
+                this._seekClientX = Number.isFinite(e?.clientX) ? e.clientX : null;
+                this.interaction.seekEnter(e);
+            },
+            mousemove: e => {
+                if (this._disposed)
+                    return;
+                this._seekClientX = Number.isFinite(e?.clientX) ? e.clientX : null;
+                this.interaction.seekMove(e);
+                const seconds = this._getSeekTime?.(e);
+                if (Number.isFinite(seconds) && seconds >= 0) {
+                    this.controller.setTime(seconds);
+                }
+            },
+            mouseleave: e => {
+                if (this._disposed)
+                    return;
+                this.interaction.seekLeave(e);
+                // Retain the last seek anchor while travelling to preview controls.
+            },
+            pointerdown: e => this._startPointer(e)
         };
-      }
-      // CSS :hover can override [hidden]; inline !important is essential.
-      node.hidden=true;
-      node.style.setProperty('display','none','important');
-    }else{
-      this._restoreCommentPreviewVisibility();
+        this.controller = new classes.Controller({
+            getPreference: (key) => config.getValue(key),
+            resolvePreferences: config.resolveSceneSearch ? () => config.resolveSceneSearch() : null,
+            createLayout: ({ id, mode }) => this._createLayout({ id, mode }),
+            loadPreview: loadPreview || null,
+            onSeek: (delta) => this._onSeekRelative(delta),
+            onError: (error, key) => this._onError(error, key)
+        });
+        this.commentSearch = new classes.CommentSearch({
+            getChats: () => this._getChats(),
+            getVideoId: () => this.controller.snapshot.videoId,
+            seekTo: (seconds) => this._onSeekAbsolute(seconds)
+        });
+        this.idleLimiter = new classes.IdleLimiter({
+            controller: this.controller,
+            getSeconds: () => config.getValue('sceneSearch.idleHideSeconds'),
+            clock: this._clock || undefined,
+            onIdleHidden: (hidden) => this._active?.root?.classList.toggle('is-idle-suppressed', hidden)
+        });
+        this.interaction = new classes.Interaction({
+            controller: this.controller,
+            getPreviewRect: () => this._previewRects(),
+            subscribePointerMove: (listener) => {
+                document.addEventListener('mousemove', listener, true);
+                return () => document.removeEventListener('mousemove', listener, true);
+            },
+            clock: this._clock || undefined,
+            idleLimiter: this.idleLimiter
+        });
+        this.router = new classes.ShortcutRouter({
+            controller: this.controller, interaction: this.interaction,
+            getPreference: (key) => config.getValue(key),
+            setPreference: (key, value) => key.startsWith('sceneSearch.') && typeof config.persistSceneSearchSelection === 'function' ?
+                config.persistSceneSearchSelection({ [key]: value }) : config.setValue(key, value),
+            onToggleControls: () => this._active?.root?.classList.toggle('is-expanded'),
+            onError: (error, key) => this._onError(error, key)
+        });
     }
-  }
-  _restoreCommentPreviewVisibility() {
-    const node=this._commentPreviewElement;
-    const old=this._commentPreviewOriginal;
-    if(!node?.style||!old){return;}
-    if(old.display){node.style.setProperty('display',old.display,old.priority);}
-    else{node.style.removeProperty('display');}
-    node.hidden=old.hidden;
-    this._commentPreviewOriginal=null;
-  }
-  static validSavedPreference(key,value) {
-    if(key==='sceneSearch.presentation.normal'||key==='sceneSearch.presentation.fullscreen')
-      return ['follow','fixed','legacy'].includes(value);
-    if(key==='sceneSearch.enabled'||key==='sceneSearch.miniCommentVisible'||key==='sceneSearch.commentListVisible')return typeof value==='boolean';
-    if(key==='sceneSearch.commentListScale')return Number.isInteger(value)&&value>=100&&value<=200;
-    if(key==='sceneSearch.thumbnailScale')return Number.isInteger(value)&&value>=50&&value<=200;
-    if(key==='sceneSearch.commentListBackgroundOpacity')return Number.isInteger(value)&&value>=0&&value<=100;
-    if(key==='sceneSearch.layout.normal'||key==='sceneSearch.layout.fullscreen'){
-      return typeof value==='string'&&/^(00|0[1-9]|10)$/.test(value);
+    _getSeekGeometry(unclipped = false) {
+        // One typed, read-only geometry owner for preview and seek surfaces.
+        return SceneSearchVisibleRectCollector.seekGeometry({
+            seekElement: this.seekElement, container: this.container,
+            document: this.document, pointerClientX: this._seekClientX, unclipped
+        });
     }
-    if(key==='sceneSearch.miniCommentMode'){
-      return ['flow','static','hidden'].includes(value);
-    }
-    if(key==='enableCommentPreview'||key==='sceneSearch.layout.linkFullscreen'||
-      key==='sceneSearch.commentPreviewVisible'){
-      return typeof value==='boolean';
-    }
-    if(key==='sceneSearch.seekStepSeconds'){
-      return Number.isSafeInteger(value)&&value>=0&&value<=600;
-    }
-    if(key==='sceneSearch.idleHideSeconds'){
-      return typeof value==='number'&&Number.isFinite(value)&&value>=0&&
-        value<=30&&Number.isInteger(value*2);
-    }
-    if(key==='sceneSearch.controlsReveal')return ['hover-focus','click','always'].includes(value);
-    if(key==='sceneSearch.animation')return ['off','subtle','full'].includes(value);
-    return false;
-  }
-  _refreshSavedPreferenceViews(keys) {
-    if(this._disposed||!keys.length){return;}
-    const layoutKey=keys.find(key=>key.startsWith('sceneSearch.layout.')||key.startsWith('sceneSearch.presentation.'));
-    this.controller.onPreferencesChanged(layoutKey||keys[0]);
-    if(keys.includes('sceneSearch.commentPreviewVisible'))this._syncCommentPreviewVisibility();
-    if(keys.includes('sceneSearch.idleHideSeconds'))this.interaction.idlePreferencesChanged();
-    if(keys.includes('sceneSearch.seekStepSeconds'))this._stepWidget?.updateFromConfig();
-  }
-  _connectSavedPreferences(keys) {
-    const win=this.document.defaultView,config=this.config;
-    if(!win?.addEventListener||!config.storage||
-      typeof config.getStorageKey!=='function'||typeof config.refresh!=='function')return;
-    const allowed=new Set(keys);
-    const storageKeys=new Map(keys.map(key=>[config.getStorageKey(key),key]));
-    let queue=Promise.resolve();
-    const sync=async requested=>{
-      if(this._disposed)return;
-      const changes=[],saved={},before={}; // DataStorage.refresh requires hasOwnProperty.
-      // Read and validate the ENTIRE batch before mutating in-memory Config.
-      // Event detail contains keys only, never trusted values or executable data.
-      for(const key of requested){
-        const sk=config.getStorageKey(key),raw=config.storage[sk];
-        const value=raw===undefined||raw===null?config.default?.[key]:JSON.parse(raw);
-        if(!SceneSearchIntegrationBridge.validSavedPreference(key,value)||
-          (config.options?.validateImport&&!config.options.validateImport(key,value))){
-          throw new TypeError('Invalid saved scene preference: '+key);
+    _startPointer(e) {
+        if (this._disposed) {
+            return;
         }
-        // Saved presence participates in migration even when the raw default is unchanged.
-        const presenceSensitive=typeof config.resolveSceneSearch==='function'&&[
-          'sceneSearch.enabled','sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen','sceneSearch.miniCommentVisible'
-        ].includes(key);
-        if(Object.is(value,config.getValue(key))&&!presenceSensitive)continue;
-        saved[sk]=JSON.stringify(value);before[sk]=JSON.stringify(config.getValue(key));
-        changes.push([key,value]);
-      }
-      if(this._disposed||!changes.length)return;
-      const loaded=[];
-      try{
-        for(const [key] of changes){
-          if(this._disposed)return;
-          loaded.push(key);
-          await config.refresh(key,saved); // read-only, no setValue/localStorage echo
+        // Only interaction owns the native pointer ID set and document capture.
+        this.interaction.startNativePointer(e, this.document, () => this._clearPointers());
+    }
+    _clearPointers() {
+        const active = this.interaction.clearNativePointers();
+        if (active || this._running) {
+            this.interaction.setDragging(false);
+            this._resumePlacement();
         }
-      }catch(error){
-        // A failing custom storage adapter must not leave a half-applied batch.
-        for(const key of loaded){
-          try{await config.refresh(key,before);}catch(_){}
-        }
-        throw error;
-      }
-      if(this._disposed)return;
-      this._externalSettingsBatch=true;
-      try{
-        config.emit?.('change',new Map(changes));
-        for(const [key,value] of changes){
-          config.emit?.('update',key,value);
-          config.emit?.('update-'+key,value);
-        }
-      }finally{this._externalSettingsBatch=false;}
-      this._refreshSavedPreferenceViews(changes.map(([key])=>key));
-    };
-    const enqueue=requested=>{
-      if(this._disposed||!Array.isArray(requested))return;
-      const selected=[...new Set(requested.filter(key=>allowed.has(key)))];
-      if(!selected.length)return;
-      // Serialized fresh reads prevent an older async save overtaking a newer one.
-      queue=queue.then(()=>sync(selected)).catch(error=>{
-        if(!this._disposed)this._onError(error,'saved-scene-settings');
-      });
-    };
-    const onSaved=event=>enqueue(event.detail?.keys);
-    const onStorage=event=>{
-      if(event.storageArea&&event.storageArea!==config.storage)return;
-      if(event.key===null){enqueue(keys);return;}
-      const key=storageKeys.get(event.key);if(key)enqueue([key]);
-    };
-    win.addEventListener('ZenzaWatch-advanced-settings-saved',onSaved);
-    win.addEventListener('storage',onStorage);
-    this._savedPreferencesCleanup=()=>{
-      win.removeEventListener('ZenzaWatch-advanced-settings-saved',onSaved);
-      win.removeEventListener('storage',onStorage);
-    };
-  }
-  start(mode='normal') {
-    if(this._disposed){throw new Error('Integration bridge disposed');}
-    if(this._running){return this.controller.snapshot;}
-    this._running=true;
-    const style=this.document.createElement('style');
-    style.dataset.scuiBridgeStyle='1';
-    style.textContent=SceneSearchIntegrationBridge.CSS;
-    this.document.head.appendChild(style);
-    this._style=style;
-    try{
-      this.controller.start(mode);
-      for(const [event,handler] of Object.entries(this._seekListeners)){
-        // Match UI00: update follow geometry before the older bubble-phase
-        // comment/thumbnail handler. Do not intercept media click ownership.
-        this.seekElement.addEventListener(event,handler,event==='mousemove');
-      }
-      const keys=['sceneSearch.presentation.normal','sceneSearch.presentation.fullscreen',
-        'sceneSearch.enabled','sceneSearch.commentListScale','sceneSearch.miniCommentVisible','sceneSearch.commentListVisible',
-        'sceneSearch.thumbnailScale','sceneSearch.commentListBackgroundOpacity',
-        'sceneSearch.layout.normal','sceneSearch.layout.fullscreen',
-        'sceneSearch.layout.linkFullscreen','sceneSearch.seekStepSeconds',
-        'sceneSearch.commentPreviewVisible','sceneSearch.miniCommentMode','sceneSearch.idleHideSeconds',
-        'sceneSearch.controlsReveal','sceneSearch.animation','enableCommentPreview'];
-      if(typeof this.config.onkey==='function'){
-        for(const key of keys){
-          const callback=()=>{
-            if(this._disposed||this._externalSettingsBatch)return;
-            if(key.startsWith('sceneSearch.presentation.')||key.startsWith('sceneSearch.layout.'))this.interaction.reset();
-            this.controller.onPreferencesChanged(key);
-            if(key==='sceneSearch.commentPreviewVisible'){
-              this._syncCommentPreviewVisibility();
+    }
+    _createLayout({ id, mode }) {
+        // Finish old native returns before a replacement view captures its owners.
+        this._cleanup.retry();
+        this._placementGeometry = null;
+        this._placementResult = null;
+        if (id === 'follow' || id === 'fixed')
+            return this._createModernLayout({ id, mode });
+        if (id === 'legacy')
+            id = '00';
+        const card = this.registry.create({ id, mode, document: this.document,
+            container: this.container, settings: this.layoutSettings,
+            onAction: (action, ctx, event) => this._onCardAction(action, ctx, event) });
+        let layoutDisposed = false;
+        const wired = {
+            get root() { return card.root; },
+            mount: (state) => {
+                try {
+                    if (id === '00') {
+                        this._restoreSharedThumbnail();
+                        this._restoreCommentPreviewDock();
+                        this._restoreLegacyTooltip();
+                    }
+                    card.mount(state);
+                    if (id === '00') {
+                        this._active = card;
+                        this._mountLegacyControls(card);
+                        return;
+                    }
+                    this._active = card;
+                    this._hideLegacyTooltip();
+                    if (id !== '01' && id !== '02') {
+                        this.container.dataset.sceneSearchLayout = id;
+                        this.container.dataset.sceneMode = mode;
+                    }
+                    this._mountCardControls(card);
+                }
+                catch (error) {
+                    wired.dispose();
+                    throw error;
+                }
+            },
+            renderTime: (state) => wired.render(state, true),
+            render: (state, timeOnly = false) => {
+                if (this._disposed)
+                    return;
+                card.render(state);
+                if (id === '00')
+                    return; // Original tooltip/comment renderer owns UI00.
+                // The original VideoControlBar already advances flowing mini rows
+                // on mousemove. Leave its DOM untouched on time-only renders. A
+                // separately docked list still needs the card's updated position.
+                if (!timeOnly || state.commentListMode === true) {
+                    this._syncCommentPreviewDock(card, state);
+                }
+                if (id === '02') {
+                    const player = this.container.getBoundingClientRect?.();
+                    const windowHeight = this.document.defaultView?.innerHeight;
+                    const width = player?.width || this.container.clientWidth || 800;
+                    const room = Number.isFinite(windowHeight) && Number.isFinite(player?.bottom) ?
+                        windowHeight - player.bottom : 0;
+                    const enough = mode === 'normal' && room >= 230;
+                    this.container.dataset.scenePlacement = enough ? 'below' : 'visible-fallback';
+                    this._updateTwinCommentPlacement(enough, player);
+                }
+                if (id !== '01' && id !== '02') {
+                    const width = this.container.offsetWidth ||
+                        this.container.getBoundingClientRect?.().width ||
+                        this.container.clientWidth || 800;
+                    this.container.dataset.sceneNarrow = String(width < 580);
+                    this.container.dataset.sceneWide = String(width >= 980);
+                    this.container.dataset.scenePlacement =
+                        card.root?.dataset.scuiPlacement || 'overlay';
+                    if (id === '10') {
+                        const raw = Number.parseFloat(card.root?.style.getPropertyValue('--scene-x'));
+                        this.container.dataset.sceneCommentSide = Number.isFinite(raw) &&
+                            raw > width * .55 ? 'left' : 'right';
+                    }
+                }
+                if (!timeOnly)
+                    this._visibility?.refresh?.();
+                if (card.root && !timeOnly) {
+                    const reveal = this.config.getValue('sceneSearch.controlsReveal');
+                    const animation = this.config.getValue('sceneSearch.animation');
+                    card.root.dataset.sceneReveal = ['click', 'always'].includes(reveal) ? reveal : 'hover-focus';
+                    card.root.dataset.sceneAnimation = ['off', 'full'].includes(animation) ? animation : 'subtle';
+                }
+            },
+            onPreview: (asset, request) => {
+                if (this._disposed || id === '00')
+                    return; // Existing seekbar still owns storyboard canvas.
+                card.onPreview?.(asset, request);
+                if (this._sharedThumbnail?.node && card.root?.contains(this._sharedThumbnail.node)) {
+                    const slot = card.root.querySelector('.zenzaSceneImageBox');
+                    if (slot) {
+                        const image = slot.querySelector('.zenzaSceneImage');
+                        const placeholder = slot.querySelector('.zenzaSceneImagePlaceholder');
+                        if (image) {
+                            image.hidden = true;
+                        }
+                        if (placeholder) {
+                            placeholder.hidden = true;
+                        }
+                    }
+                }
+            },
+            dispose: () => {
+                if (layoutDisposed)
+                    return;
+                layoutDisposed = true;
+                this._releaseCard(card);
+                this._cleanup.release(() => card.dispose(), 'scene-layout-' + id);
+                if (id === '00')
+                    return;
+                if (id === '02') {
+                    delete this.container.dataset.scenePlacement;
+                    this.container.style.removeProperty('--scui-twin-comment-top');
+                }
+                if (id !== '01' && id !== '02' &&
+                    this.container.dataset.sceneSearchLayout === id) {
+                    delete this.container.dataset.sceneSearchLayout;
+                    delete this.container.dataset.sceneMode;
+                    delete this.container.dataset.sceneNarrow;
+                    delete this.container.dataset.sceneWide;
+                    delete this.container.dataset.scenePlacement;
+                    delete this.container.dataset.sceneCommentSide;
+                }
             }
-            if(key==='sceneSearch.idleHideSeconds')this.interaction.idlePreferencesChanged();
-            if(key==='sceneSearch.seekStepSeconds')this._stepWidget?.updateFromConfig();
-          };
-          this.config.onkey(key,callback);
-          this._subscriptions.push([key,callback]);
+        };
+        return wired;
+    }
+    _createModernLayout({ id, mode }) {
+        const d = this.document, portal = d.createElement('div');
+        // The native player disables input/animation on non-player body children.
+        // This portal owns player controls even when it is outside the dialog DOM.
+        portal.className = 'zenzaScenePreviewPortal zen-family';
+        portal.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483000;';
+        // Native row actions (seek / NG) still enter the original player dispatcher.
+        portal.addEventListener('command', event => {
+            event.stopPropagation();
+            this.container.dispatchEvent(new d.defaultView.CustomEvent('command', { detail: event.detail, bubbles: true, composed: true }));
+        });
+        let card;
+        try {
+            (d.fullscreenElement || d.body).append(portal);
+            card = this.registry.create({ id, mode, document: d, container: portal, settings: this.layoutSettings,
+                onAction: (action, ctx, event) => this._onCardAction(action, ctx, event) });
         }
-      }
-      this._connectSavedPreferences(keys);
-      this._syncCommentPreviewVisibility();
-    }catch(error){
-      this.dispose();
-      throw error;
+        catch (error) {
+            this._cleanup.release(() => portal.remove(), 'scene-preview-portal');
+            throw error;
+        }
+        let list = null, layoutDisposed = false;
+        const dispose = () => {
+            if (layoutDisposed)
+                return;
+            layoutDisposed = true;
+            this._releaseCard(card);
+            this._cleanup.release(() => card.dispose(), 'scene-layout-' + id);
+            this._cleanup.release(() => portal.remove(), 'scene-preview-portal');
+            if (this._modernPortal === portal)
+                this._modernPortal = null;
+            this._placementResult = null;
+            this._placementGeometry = null;
+        };
+        const render = (state) => {
+            if (this._disposed)
+                return;
+            const prefs = this.config.resolveSceneSearch();
+            if (prefs.listOpen && !list && this._createCommentList) {
+                const candidate = this._createCommentList(portal);
+                try {
+                    card.setListView(candidate);
+                    list = candidate;
+                }
+                catch (error) {
+                    if (candidate)
+                        this._cleanup.release(() => candidate.dispose(), 'scene-new-comment-list');
+                    dispose();
+                    throw error;
+                }
+            }
+            const returnListFocus = !prefs.listOpen && card.root?.querySelector('.zenzaSceneListSlot')?.contains(d.activeElement);
+            if (!prefs.listOpen)
+                this._commentPanel?.close();
+            card.render({ ...state, ...prefs });
+            if (returnListFocus)
+                card.root.querySelector('[data-scui-action="comment-toggle"]')?.focus();
+            if (card.root) {
+                card.root.dataset.sceneReveal = this.config.getValue('sceneSearch.controlsReveal') || 'hover-focus';
+                card.root.dataset.sceneAnimation = this.config.getValue('sceneSearch.animation') || 'subtle';
+            }
+            this._visibility?.refresh?.();
+            this._placeModern(card, state);
+            if (!state.shown && !state.pinned)
+                this.interaction?.clearCorridor?.();
+        };
+        return { get root() { return card.root; },
+            mount: () => {
+                try {
+                    card.mount();
+                    this._active = card;
+                    this._modernPortal = portal;
+                    this._hideLegacyTooltip();
+                    this._mountCardControls(card);
+                }
+                catch (error) {
+                    dispose();
+                    throw error;
+                }
+            },
+            render, renderTime: render, onPreview: () => this.refreshSharedThumbnail(),
+            dispose };
     }
-    return this.controller.snapshot;
-  }
-  setMode(mode){
-    this._clearPointers();
-    this.interaction.reset();
-    return this.controller.setMode(mode);
-  }
-  setVideo(videoId){
-    this._clearPointers();
-    this.interaction.reset();
-    this.commentSearch.reset();
-    return this.controller.onVideoChange(videoId);
-  }
-  setTime(seconds){return this.controller.setTime(seconds);}
-  previewAt(seconds,token){
-    const promise=this.controller.previewAt(seconds);
-    return Promise.resolve(promise).then(ok=>{
-      if(ok && token!==undefined)this.interaction.thumbnailChanged(token);
-      return ok;
-    });
-  }
-  get state(){return this.controller.snapshot;}
-  handleShortcut(command){return this.router.handle(command);}
-  dispose(){
-    if(this._disposed){return;}
-    this._clearPointers();
-    this._disposed=true;
-    this._restoreCommentPreviewDock();
-    this._savedPreferencesCleanup?.();
-    this._savedPreferencesCleanup=null;
-    this._restoreSharedThumbnail();
-    this._restoreLegacyTooltip();
-    this._restoreCommentPreviewVisibility();
-    if(this._running){
-      for(const [event,handler] of Object.entries(this._seekListeners)){
-        this.seekElement.removeEventListener(event,handler,event==='mousemove');
-      }
+    updatePlacementContext({ context = 'normal', interactionActive = false } = {}) {
+        if (this._disposed)
+            return;
+        this._placementContext = ['normal', 'small', 'fullscreen'].includes(context) ? context : 'normal';
+        this._placementHold = interactionActive;
+        this._placementGeometry = null;
+        this.idleLimiter.pause('player-manipulation', interactionActive);
+        if (this._active?.fit)
+            this._placeModern(this._active, this.controller.snapshot);
     }
-    this.interaction.dispose();
-    this.controller.dispose();
-    this.commentSearch.dispose();
-    if(typeof this.config.offkey==='function'){
-      for(const [key,handler] of this._subscriptions){
-        this.config.offkey(key,handler);
-      }
+    _placeModern(card, state) {
+        if (!card.root || !this._classes.Placement)
+            return;
+        const d = this.document, win = d.defaultView, portal = this._modernPortal;
+        const parent = d.fullscreenElement || d.body;
+        if (portal && portal.parentNode !== parent)
+            parent.append(portal);
+        if (!this._placementGeometry) {
+            const player = (this.container.querySelector('.videoPlayer') || this.container).getBoundingClientRect();
+            const seekbar = this.seekElement.getBoundingClientRect();
+            const fullscreen = this._placementContext === 'fullscreen' || !!d.fullscreenElement;
+            // Geometry is in post-transform client coordinates. Keep the native
+            // toolbar and popups intact; only visible, actionable/painted portions
+            // become obstacles. This is sampled on invalidation, not mousemove.
+            const { obstacles, controlTops } = SceneSearchObstacleCollector.collect({
+                document: d, container: this.container, fullscreen
+            });
+            const seekBottom = Number.isFinite(seekbar.bottom) ? seekbar.bottom : seekbar.top + seekbar.height;
+            const seekWrap = this.seekElement.closest?.('.seekBarContainer');
+            const wrapRect = seekWrap?.getBoundingClientRect?.();
+            const wrapScale = wrapRect?.width > 0 && seekWrap?.offsetWidth > 0 ?
+                wrapRect.width / seekWrap.offsetWidth : 1;
+            let previewAnchorTop = !fullscreen && Number.isFinite(wrapRect?.top) ?
+                wrapRect.top - 14 * wrapScale : seekBottom - 24;
+            // In fullscreen anchor against the actual buttons, not their often
+            // oversized transparent wrappers (Issue #3 / Task951, Task956).
+            if (fullscreen && controlTops.length) {
+                previewAnchorTop = Math.min(previewAnchorTop, ...controlTops);
+            }
+            const origin = portal?.getBoundingClientRect() || { left: 0, top: 0, width: 0, height: 0 };
+            this._placementGeometry = { player, seekbar, obstacles, origin, previewAnchorTop,
+                viewport: { left: 0, top: 0, width: win.innerWidth, height: win.innerHeight } };
+        }
+        const g = this._placementGeometry, prefs = this.config.resolveSceneSearch();
+        const hold = this._placementHold || state.pinned || this.interaction?.holdingPreview === true;
+        const input = { ...g, layout: state.layoutId, context: this._placementContext,
+            imageSize: { width: 180, height: 90 }, requestedScale: prefs.scale, listOpen: prefs.listOpen, listScale: prefs.listScale,
+            anchorX: this._seekClientX ?? g.seekbar.left + g.seekbar.width / 2, previous: this._placementResult, hold,
+            // Constant footer reserve keeps the preview box's height and bottom
+            // edge stable while time labels and buttons change during seeking.
+            footerHeight: 64 };
+        try {
+            const result = this._classes.Placement.compute(input);
+            // Modern factory or the caller's fit guard establishes this capability.
+            card.fit(result);
+            const x = g.origin.width && portal?.clientWidth ? portal.clientWidth / g.origin.width : 1;
+            const y = g.origin.height && portal?.clientHeight ? portal.clientHeight / g.origin.height : 1;
+            card.root.style.left = (result.rect.left - g.origin.left) * x + 'px';
+            card.root.style.top = (result.rect.top - g.origin.top) * y + 'px';
+            card.root.style.width = result.rect.width + 'px';
+            card.root.style.height = result.rect.height + 'px';
+            card.root.style.transformOrigin = '0 0';
+            card.root.style.transform = 'scale(' + x + ',' + y + ')';
+            card.root.dataset.sceneContext = this._placementContext;
+            this._placementResult = result;
+        }
+        catch (error) {
+            // A partial fit is not a valid cached placement. The next observation
+            // must recalculate obstacles, then the owning layout can recover/dispose.
+            this._placementGeometry = null;
+            this._placementResult = null;
+            throw error;
+        }
     }
-    this._subscriptions.length=0;
-    this._style?.remove();
-    this._style=null;
-    this._placementContext='normal';this._placementGeometry=null;this._placementHold=false;
-    this._running=false;
-  }
-  static get CSS(){
-    return `
+    _updateTwinCommentPlacement(below, player) {
+        if (!below || !player) {
+            this.container.style.removeProperty('--scui-twin-comment-top');
+            return;
+        }
+        const comment = this._twinList?.element || this._commentPreviewElement;
+        const owner = (comment?.offsetParent || comment?.parentElement);
+        const origin = owner?.getBoundingClientRect?.();
+        if (!origin || !Number.isFinite(origin.top) || !Number.isFinite(player.bottom)) {
+            return;
+        }
+        const scale = origin.width && owner.offsetWidth ?
+            owner.offsetWidth / origin.width : 1;
+        const top = (player.bottom - origin.top) * scale + 15;
+        if (Number.isFinite(top)) {
+            this.container.style.setProperty('--scui-twin-comment-top', Math.round(Math.max(0, top)) + 'px');
+        }
+    }
+    _onCardAction(action, context) {
+        if (action === 'more') {
+            this._resumePlacement();
+            return;
+        }
+        if (action === 'comment-toggle') {
+            if (this.config.resolveSceneSearch?.()?.listAllowed === false)
+                return;
+            // Legacy tooltip button selects flowing/list mode, NOT global visibility.
+            this.config.setValue('enableCommentPreview', this.config.getValue('enableCommentPreview') !== true);
+            this.controller.onPreferencesChanged('enableCommentPreview');
+            return;
+        }
+        if (action === 'frame-seek') {
+            const seconds = context?.time;
+            if (!Number.isFinite(seconds) || seconds < 0) {
+                return;
+            }
+            const duration = typeof this.layoutSettings.getDuration === 'function' ?
+                this.layoutSettings.getDuration() : this.layoutSettings.duration;
+            this._onSeekAbsolute(Number.isFinite(duration) && duration > 0 ?
+                Math.min(seconds, duration) : seconds);
+            return;
+        }
+        const commands = {
+            'seek-back': 'sceneSearch-seekBack',
+            'seek-forward': 'sceneSearch-seekForward',
+            pin: 'sceneSearch-togglePin',
+            'comment-search': 'sceneSearch-toggleCommentSearch'
+        };
+        if (action === 'seek-step') {
+            this._stepWidget?.openMenu();
+            return;
+        }
+        if (commands[action]) {
+            this.router.handle(commands[action]);
+        }
+    }
+    _mountCardControls(card) {
+        const root = card.root;
+        if (!root) {
+            throw new Error('Cannot wire unmounted scene card');
+        }
+        const classNames = {
+            pin: 'zenzaSceneSearchPin',
+            'comment-toggle': 'zenzaSceneCommentToggle',
+            'comment-search': 'zenzaSceneCommentSearchToggle',
+            more: 'zenzaSceneSearchMore'
+        };
+        for (const [action, css] of Object.entries(classNames)) {
+            root.querySelector('[data-scui-action="' + action + '"]')?.classList.add(css);
+        }
+        const actionList = root.querySelector('.zenzaSceneActions');
+        if (!actionList) {
+            throw new Error('Scene controls missing');
+        }
+        if (root.dataset.layout === '02') {
+            // Keep the expander accessible when the twin-panel action tray is
+            // collapsed below the preview card. Do not edit Task532's provider.
+            const foot = root.querySelector('.zenzaSceneFoot');
+            const more = actionList.querySelector('.scene-more');
+            if (foot && more)
+                foot.insertBefore(more, actionList);
+        }
+        actionList.classList.add('zenzaSceneSeekStepControl');
+        for (const [action, tag] of [
+            ['seek-back', 'back'], ['seek-forward', 'forward'], ['seek-step', 'open']
+        ]) {
+            const button = root.querySelector('[data-scui-action="' + action + '"]');
+            if (button) {
+                button.dataset.scui = tag;
+            }
+        }
+        const C = this._classes;
+        const step = new C.SeekStepControl({
+            document: this.document,
+            getSeconds: () => this.config.getValue('sceneSearch.seekStepSeconds'),
+            setSeconds: (value) => {
+                this.config.setValue('sceneSearch.seekStepSeconds', value);
+                this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds');
+            },
+            onSeek: (delta) => this._onSeekRelative(delta),
+            onCompactChange: () => this.controller.onPreferencesChanged('sceneSearch.seekStepSeconds'),
+            onMenuChange: (open) => {
+                if (this._disposed) {
+                    return;
+                }
+                this.idleLimiter.pause('step-menu', open);
+                if (open) {
+                    this.interaction.previewEnter('step-menu');
+                }
+                else {
+                    this.interaction.previewLeave('step-menu');
+                    // Some DOM hosts retain activeElement inside a newly hidden popup.
+                    // Release only that stale focus, preserving any visible control.
+                    const focused = this.document.activeElement;
+                    if (root.contains(focused) && focused.closest('[hidden]')) {
+                        this.interaction.previewFocus(false, root);
+                    }
+                }
+            },
+            onError: (error) => this._onError(error, 'sceneSearch.seekStepSeconds')
+        });
+        const modern = root.classList.contains('zenzaSceneSharedPreview');
+        // Modern controls use the shared seek commands; seconds stay in settings.
+        // Retain the step model for existing keyboard shortcuts, without its popup.
+        this._stepWidget = step;
+        if (modern)
+            step.updateFromConfig();
+        else
+            step.mount(actionList);
+        const searchPanel = new C.CommentSearchPanel({
+            document: this.document, search: this.commentSearch,
+            onOpenChange: (open) => {
+                const button = root.querySelector('[data-scui-action="comment-search"]');
+                button?.setAttribute('aria-expanded', String(open));
+                if (!open && searchPanel.root?.contains(this.document.activeElement))
+                    button?.focus();
+            }
+        });
+        this._commentPanel = searchPanel;
+        searchPanel.mount(modern ? root.querySelector('.zenzaSceneListSlot') : root);
+        this.router.seekStepControl = step;
+        this.router.commentSearchPanel = modern ? { toggle: () => {
+                if (this.config.resolveSceneSearch().listAllowed === false)
+                    return;
+                if (this.config.getValue('enableCommentPreview') !== true)
+                    this.config.setValue('enableCommentPreview', true);
+                searchPanel.toggle();
+            } } : searchPanel;
+        this._cardCleanup = this._bindPreviewSurface(root);
+        this._visibility = C.VisibilityRegistry.connect(this.config, root, 'scene');
+        this.refreshSharedThumbnail();
+    }
+    _mountLegacyControls(card) {
+        // UI00 deliberately has no new scene card. Its native seek tooltip
+        // buttons and the separate scrollable CommentPreview are still controls:
+        // hovering/focusing either must pause BOTH leave/corridor and idle timers.
+        const nodes = [card?.root, this._commentPreviewElement].filter(Boolean);
+        let hovered = false, focused = false, active = false, retired = false;
+        const owns = (node) => nodes.some(root => root === node ||
+            !!node && 'nodeType' in node && root.contains(node));
+        const sync = () => {
+            const next = hovered || focused;
+            if (next === active)
+                return;
+            active = next;
+            if (next)
+                this.interaction.previewEnter();
+            else
+                this.interaction.previewLeave();
+        };
+        const onEnter = () => { hovered = true; sync(); };
+        const onLeave = (e) => {
+            if (owns(e?.relatedTarget))
+                return;
+            hovered = false;
+            sync();
+        };
+        const onFocusIn = () => { focused = true; sync(); };
+        const onFocusOut = (e) => {
+            if (owns(e?.relatedTarget))
+                return;
+            focused = false;
+            sync();
+        };
+        const bindings = [
+            ['mouseenter', onEnter], ['mouseleave', onLeave],
+            ['focusin', onFocusIn], ['focusout', onFocusOut]
+        ]
+            .map(([event, handler]) => [event, (e) => {
+                if (!retired && !this._disposed)
+                    handler(e);
+            }]);
+        this._cardCleanup = () => {
+            retired = true;
+            for (const node of nodes)
+                for (const [key, handler] of bindings) {
+                    this._cleanup.release(() => node.removeEventListener(key, handler), 'scene-legacy-events');
+                }
+            if (active) {
+                active = false;
+                this._cleanup.release(() => this.interaction.previewLeave(), 'scene-legacy-hover');
+            }
+        };
+        for (const node of nodes)
+            for (const [key, handler] of bindings)
+                node.addEventListener(key, handler);
+    }
+    _releaseCard(card) {
+        if (this._active !== card) {
+            return;
+        }
+        this._restoreSharedThumbnail();
+        this._restoreCommentPreviewDock();
+        this._restoreLegacyTooltip();
+        // Detach the references first. Pending disposers retain their own resource,
+        // so a retry can never act on controls belonging to a replacement card.
+        const cleanup = this._cardCleanup, visibility = this._visibility;
+        const panel = this._commentPanel, step = this._stepWidget;
+        this._cardCleanup = null;
+        this._visibility = null;
+        this._commentPanel = null;
+        this._stepWidget = null;
+        this.router.seekStepControl = null;
+        this.router.commentSearchPanel = null;
+        this._active = null;
+        if (cleanup)
+            this._cleanup.release(cleanup, 'scene-card-events');
+        if (visibility)
+            this._cleanup.release(() => visibility.dispose?.(), 'scene-card-visibility');
+        if (panel)
+            this._cleanup.release(() => panel.dispose(), 'scene-comment-search');
+        if (step)
+            this._cleanup.release(() => step.dispose(), 'scene-seek-step');
+    }
+    refreshSharedThumbnail() {
+        if (this._disposed)
+            return false;
+        this._cleanup.retry();
+        if (this._active?.setImage) {
+            try {
+                this._active.setImage(this._getThumbnailElement?.() || null);
+                return true;
+            }
+            catch (error) {
+                this._onError(error, 'existing-seek-thumbnail');
+                return false;
+            }
+        }
+        if (['00', 'legacy'].includes(this.controller.snapshot.layoutId)) {
+            // Native UI00 may acquire its flowing comments after the Canvas arrives.
+            this._active?.render?.(this.controller.snapshot);
+            return false;
+        }
+        if (this.controller.snapshot.layoutId === '07') {
+            this.controller.onPreferencesChanged('sceneSearch.idleHideSeconds');
+        }
+        if (!this._active?.root || !this._getThumbnailElement)
+            return false;
+        let node;
+        try {
+            node = this._getThumbnailElement();
+        }
+        catch (error) {
+            this._restoreSharedThumbnail();
+            this._hideLegacyTooltip();
+            this._onError(error, 'existing-seek-thumbnail');
+            return false;
+        }
+        if (!node || !node.parentNode) {
+            this._restoreSharedThumbnail();
+            this._hideLegacyTooltip();
+            return false;
+        }
+        const slot = this._active.root.querySelector('.zenzaSceneImageBox');
+        if (!slot)
+            return false;
+        if (this._sharedThumbnail?.node === node && slot.contains(node))
+            return true;
+        if (!node.querySelector?.('canvas'))
+            return false;
+        this._restoreSharedThumbnail();
+        try {
+            // Register the return record before the first fallible DOM mutation.
+            this._sharedThumbnail = new SceneSearchDomLease(node, { position: true });
+            this._sharedThumbnail.moveTo(slot);
+            slot.querySelector('.zenzaSceneImage')?.setAttribute('hidden', '');
+            slot.querySelector('.zenzaSceneImagePlaceholder')?.setAttribute('hidden', '');
+            this._hideLegacyTooltip();
+            return true;
+        }
+        catch (error) {
+            this._restoreSharedThumbnail();
+            this._onError(error, 'existing-seek-thumbnail');
+            return false;
+        }
+    }
+    _restoreSharedThumbnail() {
+        const old = this._sharedThumbnail;
+        if (!old)
+            return;
+        this._sharedThumbnail = null;
+        this._cleanup.release(() => old.restore(), 'scene-thumbnail-return');
+        const slot = this._active?.root?.querySelector('.zenzaSceneImageBox');
+        const image = slot?.querySelector('.zenzaSceneImage');
+        const placeholder = slot?.querySelector('.zenzaSceneImagePlaceholder');
+        const hasImage = !!image?.getAttribute('src');
+        if (image)
+            image.hidden = !hasImage;
+        if (placeholder)
+            placeholder.hidden = hasImage;
+    }
+    _hideLegacyTooltip() {
+        const tooltip = this._legacyTooltipElement;
+        if (!tooltip?.style || this._legacyTooltipOriginal)
+            return;
+        if (!this._cleanup.retry('scene-legacy-tooltip-return')) {
+            throw new Error('Native tooltip return is still pending');
+        }
+        this._legacyTooltipOriginal = new SceneSearchDomLease(tooltip, { styles: ['display'], hidden: true });
+        tooltip.hidden = true;
+        tooltip.style.setProperty('display', 'none', 'important');
+    }
+    _restoreLegacyTooltip() {
+        const previous = this._legacyTooltipOriginal;
+        this._legacyTooltipOriginal = null;
+        if (previous)
+            this._cleanup.release(() => previous.restore(), 'scene-legacy-tooltip-return');
+    }
+    _resumePlacement() {
+        if (!this._disposed && this._active?.fit)
+            this._placeModern(this._active, this.controller.snapshot);
+    }
+    _bindPreviewSurface(node) {
+        let pointerFocus = false, retired = false;
+        const enter = () => { this.interaction.previewEnter(node); this._resumePlacement(); };
+        const leave = (e) => {
+            const active = this.document.activeElement;
+            // Clicked buttons retain DOM focus after the mouse leaves. That is not
+            // continued keyboard interaction and must not freeze following or idle.
+            // Editable search fields and keyboard navigation keep their focus hold.
+            const editing = active?.closest?.('input,textarea,select,[contenteditable]:not([contenteditable="false"])');
+            if (pointerFocus && node.contains(active) && !editing) {
+                active.blur?.();
+                this.interaction.previewFocus(false, node);
+            }
+            this.interaction.previewLeave(node, e);
+            this._resumePlacement();
+        };
+        const focus = () => { this.interaction.previewFocus(true, node); this._resumePlacement(); };
+        const blur = (e) => {
+            // relatedTarget may be Window/another non-Node EventTarget. It cannot
+            // belong to this DOM surface and must release, not strand, focus hold.
+            const target = e.relatedTarget;
+            if (!target || !('nodeType' in target) || !node.contains(target)) {
+                this.interaction.previewFocus(false, node);
+                this._resumePlacement();
+            }
+        };
+        const pointer = (e) => { pointerFocus = true; this._startPointer(e); };
+        const keyboard = () => { pointerFocus = false; };
+        // Tab may arrive from outside this surface. All registrations share the
+        // same rollback path, including an addEventListener that throws midway.
+        const bindings = [
+            [this.document, 'keydown', keyboard, true],
+            ...[['mouseenter', enter], ['mouseleave', leave], ['focusin', focus], ['focusout', blur],
+                ['pointerdown', pointer]]
+                .map(([event, fn]) => [node, event, fn, false])
+        ]
+            .map(([target, event, fn, capture]) => [target, event, (e) => {
+                if (!retired && !this._disposed)
+                    fn(e);
+            }, capture]);
+        const cleanup = () => {
+            // A failed listener removal must not keep an old layout's scope alive.
+            retired = true;
+            for (const [target, event, fn, capture] of bindings) {
+                this._cleanup.release(() => target.removeEventListener(event, fn, capture), 'scene-preview-events');
+            }
+            this._cleanup.release(() => this.interaction.previewLeave(node), 'scene-preview-hover');
+            this._cleanup.release(() => this.interaction.previewFocus(false, node), 'scene-preview-focus');
+        };
+        try {
+            for (const [target, event, fn, capture] of bindings)
+                target.addEventListener(event, fn, capture);
+        }
+        catch (error) {
+            cleanup();
+            throw error;
+        }
+        return cleanup;
+    }
+    _restoreTwinList() {
+        const handle = this._twinList, cleanup = this._twinListCleanup;
+        this._twinList = null;
+        this._twinListCleanup = null;
+        if (cleanup)
+            this._cleanup.release(cleanup, 'scene-twin-list-events');
+        if (handle)
+            this._cleanup.release(() => {
+                handle.element?.classList.remove('is-scui-active');
+                handle.dispose();
+            }, 'scene-twin-list');
+    }
+    _previewRects() {
+        if (this._active?.getRects)
+            return this._active.getRects();
+        return SceneSearchVisibleRectCollector.collect({
+            root: this._active?.root,
+            comment: this._commentPreviewElement,
+            twin: this._twinList?.element,
+            document: this.document
+        });
+    }
+    _syncCommentPreviewDock(card, state) {
+        const node = this._commentPreviewElement, root = card?.root;
+        if (this._disposed || !node || !root)
+            return;
+        try {
+            if (!this._commentDock) {
+                // CommentPreviewView normally inherits the *player* typography.
+                // Modern scene cards use 12px system-ui: reparenting its original DOM
+                // silently changed every 16px mini row and broke alignment/CA spaces.
+                // Snapshot the native computed typography BEFORE the first move.
+                const computed = this.document.defaultView?.getComputedStyle?.(node);
+                const props = SceneSearchDomLease.typography;
+                const typography = props.map(name => ({ name, native: computed?.getPropertyValue(name) || '' }));
+                this._commentDock = { typography, lease: new SceneSearchDomLease(node, {
+                        position: true, styles: props, classes: ['zenzaSceneCommentAttached', 'is-scui-flow',
+                            'is-scui-list', 'is-scui-active', 'is-scui-classic-side']
+                    }) };
+                for (const { name, native } of typography) {
+                    if (native)
+                        node.style.setProperty(name, native);
+                }
+                this._commentHoverCleanup = this._bindPreviewSurface(node);
+            }
+            const listRequested = this.config.getValue('enableCommentPreview') === true;
+            const twin = root.dataset.layout === '02' && typeof this._createCommentList === 'function';
+            if (twin && listRequested && !this._twinList) {
+                this._twinList = this._createCommentList(this.container) || null;
+                if (this._twinList?.element) {
+                    const panel = this._twinList.element;
+                    panel.classList.add('zenzaSceneTwinList', 'zenzaSceneCommentAttached', 'is-scui-list');
+                    panel.tabIndex = 0;
+                    panel.setAttribute('aria-label', 'シーンのコメント一覧');
+                    for (const { name, native } of this._commentDock.typography || []) {
+                        if (native)
+                            panel.style.setProperty(name, native);
+                    }
+                    this._twinListCleanup = this._bindPreviewSurface(panel);
+                }
+            }
+            if (!listRequested)
+                this._restoreTwinList();
+            const list = listRequested && !(twin && this._twinList);
+            const classic = root.dataset.layout === '01';
+            // Task728: the ORIGINAL CommentPreviewView flows ON TOP of the
+            // storyboard image in UI01. ONLY the scrollable LIST moves to the right
+            // sibling pane. Never clone native chat rows or replace their animation.
+            const image = root.querySelector('.zenzaSceneImageBox');
+            const target = classic ? (list ? root : image) :
+                list ? this.container : image;
+            if (target && node.parentNode !== target)
+                this._commentDock.lease.moveTo(target);
+            node.classList.add('zenzaSceneCommentAttached');
+            node.classList.toggle('is-scui-list', list);
+            node.classList.toggle('is-scui-flow', !list);
+            node.classList.toggle('is-scui-classic-side', classic && list);
+            const active = (state?.shown !== false || state?.pinned === true) &&
+                this.config.getValue('sceneSearch.commentPreviewVisible') !== false &&
+                !root.classList.contains('is-idle-suppressed');
+            node.classList.toggle('is-scui-active', active);
+            if (this._twinList?.element) {
+                this._twinList.element.classList.toggle('is-scui-active', active && listRequested);
+            }
+            if (twin) {
+                const toggle = root.querySelector('[data-scui-action="comment-toggle"]');
+                const label = listRequested ? 'コメント一覧を閉じる' : 'コメント一覧を表示';
+                toggle?.setAttribute('aria-label', label);
+                toggle?.setAttribute('title', label);
+                toggle?.setAttribute('aria-expanded', String(listRequested));
+            }
+            if (classic) {
+                if (list)
+                    this._positionClassicCommentSide(root, list);
+                else
+                    root.dataset.scuiSidePlacement = 'overlay';
+            }
+            else if (list) {
+                const x = Number.parseFloat(root.style.getPropertyValue('--scene-x'));
+                if (Number.isFinite(x))
+                    this.container.style.setProperty('--scui-list-x', x + 'px');
+            }
+        }
+        catch (error) {
+            this._restoreCommentPreviewDock();
+            this._onError(error, 'scene-native-comment-dock');
+        }
+    }
+    _positionClassicCommentSide(root, list) {
+        const rect = root.getBoundingClientRect?.();
+        const viewport = this.document.defaultView?.innerWidth ||
+            this.document.documentElement?.clientWidth || 0;
+        if (!rect || !Number.isFinite(rect.left) || !Number.isFinite(rect.right) ||
+            !Number.isFinite(viewport) || viewport <= 0)
+            return;
+        const scale = rect.width > 0 && root.offsetWidth > 0 ?
+            rect.width / root.offsetWidth : 1;
+        // Layout01 precomputes a group clamp and pane width with the SAME
+        // viewport geometry. Reuse these values; calculating a second, different
+        // clamp here caused the native comment view to leave the right edge.
+        const configuredGap = Number.parseFloat(root.style.getPropertyValue('--scui-side-gap'));
+        const configuredWidth = Number.parseFloat(root.style.getPropertyValue('--scui-side-width'));
+        const gap = Number.isFinite(configuredGap) ? configuredGap : 8;
+        const margin = 8;
+        const room = (viewport - margin - rect.right - gap * scale) / scale;
+        const panelWidth = Number.isFinite(configuredWidth) && configuredWidth > 0 ?
+            configuredWidth : Math.min(list ? 350 : 180, Math.max(1, room));
+        // Never swap to the left or move above; on the right edge, the entire
+        // group stops together while CommentPreviewView retains native owners.
+        const cardWidth = rect.width / scale;
+        const left = (root.offsetWidth || cardWidth) + gap;
+        root.dataset.scuiSidePlacement = 'right';
+        root.style.setProperty('--scui-side-left', left.toFixed(2) + 'px');
+        root.style.setProperty('--scui-side-width', panelWidth.toFixed(2) + 'px');
+        // Flow mode has no independent pane or coordinate offset. Its ORIGINAL
+        // CommentPreviewView is positioned directly inside .zenzaSceneImageBox.
+    }
+    _restoreCommentPreviewDock() {
+        this._restoreTwinList();
+        const old = this._commentDock, cleanup = this._commentHoverCleanup;
+        this._commentDock = null;
+        this._commentHoverCleanup = null;
+        if (cleanup)
+            this._cleanup.release(cleanup, 'scene-native-comment-events');
+        if (old)
+            this._cleanup.release(() => old.lease.restore(), 'scene-native-comment-return');
+        if (old)
+            this.container.style.removeProperty('--scui-list-x');
+    }
+    _syncCommentPreviewVisibility() {
+        if (this.config.resolveSceneSearch)
+            return; // Effective state belongs to shared view / legacy adapter.
+        const node = this._commentPreviewElement;
+        if (!node?.style) {
+            return;
+        }
+        const visible = this.config.getValue('sceneSearch.commentPreviewVisible') !== false;
+        if (!visible) {
+            if (!this._commentPreviewOriginal) {
+                // Never snapshot the previous generation's unfinished hidden override.
+                if (!this._cleanup.retry('scene-native-comment-visibility'))
+                    return;
+                this._commentPreviewOriginal = new SceneSearchDomLease(node, { styles: ['display'], hidden: true });
+            }
+            // CSS :hover can override [hidden]; inline !important is essential.
+            node.hidden = true;
+            node.style.setProperty('display', 'none', 'important');
+        }
+        else {
+            this._restoreCommentPreviewVisibility();
+        }
+    }
+    _restoreCommentPreviewVisibility() {
+        const previous = this._commentPreviewOriginal;
+        this._commentPreviewOriginal = null;
+        if (previous)
+            this._cleanup.release(() => previous.restore(), 'scene-native-comment-visibility');
+    }
+    static validSavedPreference(key, value) {
+        return SceneSearchPreferenceConnection.validSavedPreference(key, value);
+    }
+    _refreshSavedPreferenceViews(keys) {
+        if (this._disposed || !keys.length) {
+            return;
+        }
+        const layoutKey = keys.find(key => key.startsWith('sceneSearch.layout.') || key.startsWith('sceneSearch.presentation.'));
+        this.controller.onPreferencesChanged(layoutKey || keys[0]);
+        if (keys.includes('sceneSearch.commentPreviewVisible'))
+            this._syncCommentPreviewVisibility();
+        if (keys.includes('sceneSearch.idleHideSeconds'))
+            this.interaction.idlePreferencesChanged();
+        if (keys.includes('sceneSearch.seekStepSeconds'))
+            this._stepWidget?.updateFromConfig();
+    }
+    _connectSavedPreferences(keys) {
+        const connection = new SceneSearchPreferenceConnection({
+            window: this.document.defaultView, config: this.config, keys,
+            isDisposed: () => this._disposed,
+            onApplying: active => { this._externalSettingsBatch = active; },
+            onRefresh: changed => this._refreshSavedPreferenceViews(changed),
+            onError: (error) => this._onError(error, 'saved-scene-settings')
+        });
+        // Keep the disposer before connection: a listener wrapper may install and
+        // then throw, and its failed rollback must remain available to Bridge.
+        this._savedPreferencesCleanup = () => connection.dispose();
+        connection.connect();
+    }
+    start(mode = 'normal') {
+        if (this._disposed) {
+            throw new Error('Integration bridge disposed');
+        }
+        if (this._running) {
+            return this.controller.snapshot;
+        }
+        this._running = true;
+        try {
+            const style = this.document.createElement('style');
+            this._style = style;
+            style.dataset.scuiBridgeStyle = '1';
+            style.textContent = SceneSearchIntegrationBridge.CSS;
+            this.document.head.appendChild(style);
+            if (this._disposed)
+                return this.controller.snapshot;
+            this.controller.start(mode);
+            if (this._disposed)
+                return this.controller.snapshot;
+            for (const [event, handler] of Object.entries(this._seekListeners)) {
+                if (this._disposed)
+                    return this.controller.snapshot;
+                // Match UI00: update follow geometry before the older bubble-phase
+                // comment/thumbnail handler. Do not intercept media click ownership.
+                this.seekElement.addEventListener(event, handler, event === 'mousemove');
+            }
+            const keys = ['sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen',
+                'sceneSearch.enabled', 'sceneSearch.commentListScale', 'sceneSearch.miniCommentVisible', 'sceneSearch.commentListVisible',
+                'sceneSearch.thumbnailScale', 'sceneSearch.commentListBackgroundOpacity',
+                'sceneSearch.layout.normal', 'sceneSearch.layout.fullscreen',
+                'sceneSearch.layout.linkFullscreen', 'sceneSearch.seekStepSeconds',
+                'sceneSearch.commentPreviewVisible', 'sceneSearch.miniCommentMode', 'sceneSearch.idleHideSeconds',
+                'sceneSearch.controlsReveal', 'sceneSearch.animation', 'enableCommentPreview'];
+            if (typeof this.config.onkey === 'function') {
+                for (const key of keys) {
+                    if (this._disposed)
+                        return this.controller.snapshot;
+                    const callback = () => {
+                        if (this._disposed || this._externalSettingsBatch)
+                            return;
+                        if (key.startsWith('sceneSearch.presentation.') || key.startsWith('sceneSearch.layout.'))
+                            this.interaction.reset();
+                        this.controller.onPreferencesChanged(key);
+                        if (key === 'sceneSearch.commentPreviewVisible') {
+                            this._syncCommentPreviewVisibility();
+                        }
+                        if (key === 'sceneSearch.idleHideSeconds')
+                            this.interaction.idlePreferencesChanged();
+                        if (key === 'sceneSearch.seekStepSeconds')
+                            this._stepWidget?.updateFromConfig();
+                    };
+                    this._subscriptions.push([key, callback]);
+                    this.config.onkey(key, callback);
+                }
+            }
+            if (this._disposed)
+                return this.controller.snapshot;
+            this._connectSavedPreferences(keys);
+            if (this._disposed)
+                return this.controller.snapshot;
+            this._syncCommentPreviewVisibility();
+        }
+        catch (error) {
+            this.dispose();
+            throw error;
+        }
+        return this.controller.snapshot;
+    }
+    setMode(mode) {
+        this._clearPointers();
+        this.interaction.reset();
+        return this.controller.setMode(mode);
+    }
+    setVideo(videoId) {
+        this._clearPointers();
+        this.interaction.reset();
+        this.commentSearch.reset();
+        return this.controller.onVideoChange(videoId);
+    }
+    setTime(seconds) { return this.controller.setTime(seconds); }
+    previewAt(seconds, token) {
+        const promise = this.controller.previewAt(seconds);
+        return Promise.resolve(promise).then(ok => {
+            if (ok && token !== undefined)
+                this.interaction.thumbnailChanged(token);
+            return ok;
+        });
+    }
+    get state() { return this.controller.snapshot; }
+    handleShortcut(command) { return this.router.handle(command); }
+    dispose() {
+        // Stop acquisition immediately, but keep failed releases available on every
+        // subsequent dispose. Idempotence must not discard unfinished native returns.
+        if (this._disposed) {
+            this._cleanup.retry();
+            return;
+        }
+        this._disposed = true;
+        this._cleanup.release(() => this._clearPointers(), 'scene-active-pointers');
+        this._restoreCommentPreviewDock();
+        const savedCleanup = this._savedPreferencesCleanup;
+        this._savedPreferencesCleanup = null;
+        if (savedCleanup)
+            this._cleanup.release(savedCleanup, 'scene-saved-preferences');
+        this._restoreSharedThumbnail();
+        this._restoreLegacyTooltip();
+        this._restoreCommentPreviewVisibility();
+        if (this._running) {
+            for (const [event, handler] of Object.entries(this._seekListeners)) {
+                this._cleanup.release(() => this.seekElement.removeEventListener(event, handler, event === 'mousemove'), 'scene-seek-events');
+            }
+        }
+        this._cleanup.release(() => this.interaction.dispose(), 'scene-interaction');
+        this._cleanup.release(() => this.controller.dispose(), 'scene-controller');
+        this._cleanup.release(() => this.commentSearch.dispose(), 'scene-comment-model');
+        if (typeof this.config.offkey === 'function') {
+            for (const [key, handler] of this._subscriptions) {
+                this._cleanup.release(() => this.config.offkey(key, handler), 'scene-config-' + key);
+            }
+        }
+        this._subscriptions.length = 0;
+        const style = this._style;
+        this._style = null;
+        if (style)
+            this._cleanup.release(() => style.remove(), 'scene-bridge-style');
+        this._placementContext = 'normal';
+        this._placementGeometry = null;
+        this._placementHold = false;
+        this._running = false;
+        this._cleanup.retry();
+    }
+    static get CSS() {
+        return `
 /* Old seekbar-only hover rules hide previews when the pointer enters a new
    card. Reuse the actual CommentPreviewView node without cloning its data. */
 .zenzaSceneSearchHost .zenzaSceneImageBox{position:relative}
@@ -1357,7 +1429,7 @@ class SceneSearchIntegrationBridge {
   top:calc(100% + 112px)!important;bottom:auto!important;
 }
 `;
-  }
+    }
 }
 //===END===
 export {SceneSearchIntegrationBridge};

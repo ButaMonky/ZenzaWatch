@@ -208,8 +208,7 @@ class VideoList extends Emitter {
         if (!item) {
             return;
         }
-        item.isUpdating = true;
-        window.setTimeout(() => item.isUpdating = false, 1000);
+        this._markRowUpdating(item, itemId);
     }
     _onDeflistAdd(watchId, itemId) {
         this.emit('command', 'deflistAdd', watchId);
@@ -217,8 +216,22 @@ class VideoList extends Emitter {
         if (!item) {
             return;
         }
+        this._markRowUpdating(item, itemId);
+    }
+    _markRowUpdating(item, itemId) {
+        const model = this.model;
+        const owners = this._rowUpdateOwners || (this._rowUpdateOwners = new WeakMap());
+        const owner = {};
+        owners.set(item, owner);
         item.isUpdating = true;
-        window.setTimeout(() => item.isUpdating = false, 1000);
+        window.setTimeout(() => {
+            if (this.model !== model || owners.get(item) !== owner ||
+                model.findByItemId(item.itemId ?? itemId) !== item) {
+                return;
+            }
+            owners.delete(item);
+            item.isUpdating = false;
+        }, 1000);
     }
 }
 //===END===

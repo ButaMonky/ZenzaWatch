@@ -228,7 +228,9 @@ describe('Task943 storyboard master toggle live behavior',function(){
      'private userscript has not bundled the master synchronizer');
    assert(distributed.includes('_currentVideoInfo'),
      'private userscript cannot restore current video on reenabling');
-   assert(distributed.includes('ZenzaWatch/raw/develop'),
-     'this test must not redirect private installs to public stable');
+   assert(distributed.includes('https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js'),
+     'private backup builds must point their updates at the public distribution');
+   assert(!distributed.includes('ZenzaWatch-Back-up/raw/develop'),
+     'the private repository must never be used as the automatic update source');
  });
 });

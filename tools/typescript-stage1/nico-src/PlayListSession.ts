@@ -28,11 +28,12 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
     if (items.length <= max) {
       return data;
     }
+    const isUnselected = parseInt(data.index as string, 10) === -1;
     const index = Math.min(Math.max(parseInt(data.index as string, 10) || 0, 0), items.length - 1);
     const start = Math.max(0, Math.min(index - Math.floor(max / 2), items.length - max));
     return Object.assign({}, data, {
       items: items.slice(start, start + max),
-      index: index - start
+      index: isUnselected ? -1 : index - start
     });
   };
 
@@ -55,7 +56,7 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
       // storage.clear() で「他の機能のキャッシュも含めて全部」消していたが、
       // 検索結果キャッシュ等まで巻き込んで消えるので廃止した。
       //  1. 件数が多い時は、再生中の動画の前後だけ（最大 MAX_ITEMS 件）を保存する
-      //  2. それでも容量超過なら、自分のキーだけを消し、件数を半分にして再試行する
+      //  2. 容量超過でも前回の保存値は消さず、件数を半分にして原子的な置換を再試行する
       //  3. 最小件数でも入らなければ保存を諦める（プレイリスト本体には影響しない）
       if (!data || !Array.isArray(data.items)) { return; }
       let max = PlayListSession.MAX_ITEMS;
@@ -72,8 +73,9 @@ const PlayListSession: PlayListSessionApi = ((storage: Storage) => {
             window.console.error(e);
             return;
           }
-          try { storage.removeItem(KEY); } catch (e2) { /* noop */ }
-          lastJson = '';
+          // A failed sessionStorage.setItem leaves the previous value intact.
+          // Never remove it: a subsequent failed retry must not lose the last
+          // successfully saved playlist or its cached lastJson.
           if (max <= PlayListSession.MIN_ITEMS) {
             window.console.warn('プレイリストをsessionStorageへ保存できませんでした（容量不足）');
             return;

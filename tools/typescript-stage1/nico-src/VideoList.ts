@@ -22,6 +22,7 @@ declare const AdDecorationLoader: {
 };
 
 class VideoList extends Emitter {
+  declare _rowUpdateOwners: WeakMap<object, object> | undefined;
   declare _adDecorationLoader: typeof AdDecorationLoader;
   declare _adDecorationRequested: Set<string>;
   declare _container: Loose;
@@ -242,15 +243,26 @@ class VideoList extends Emitter {
     this.emit('command', 'playlistAppend', watchId);
     const item = this.model.findByItemId(itemId) || this.model.findByWatchId(watchId);
     if (!item) { return; }
-    item.isUpdating = true;
-    window.setTimeout(() => item.isUpdating = false, 1000);
+    this._markRowUpdating(item, itemId);
   }
   _onDeflistAdd(watchId: Loose, itemId: Loose) {
     this.emit('command', 'deflistAdd', watchId);
     const item = this.model.findByItemId(itemId);
     if (!item) { return; }
+    this._markRowUpdating(item, itemId);
+  }
+  _markRowUpdating(item: Loose, itemId: Loose) {
+    const model = this.model;
+    const owners = this._rowUpdateOwners || (this._rowUpdateOwners = new WeakMap());
+    const owner = {};
+    owners.set(item, owner);
     item.isUpdating = true;
-    window.setTimeout(() => item.isUpdating = false, 1000);
+    window.setTimeout(() => {
+      if (this.model !== model || owners.get(item) !== owner ||
+          model.findByItemId(item.itemId ?? itemId) !== item) { return; }
+      owners.delete(item);
+      item.isUpdating = false;
+    }, 1000);
   }
 }
 

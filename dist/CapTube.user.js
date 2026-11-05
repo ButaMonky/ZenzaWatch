@@ -13,7 +13,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/CapTube.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/CapTube.user.js
 // ==/UserScript==
-// build: 2026-10-27 12:27Z 5e716422
+// build: 2026-11-05 21:43Z 844b93b2
 /* eslint-disable */
 
 

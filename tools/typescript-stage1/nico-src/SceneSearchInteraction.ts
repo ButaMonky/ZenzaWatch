@@ -6,6 +6,11 @@ export class SceneSearchInteraction {
  declare private _subscribe:NonNullable<InteractionOptions['subscribePointerMove']>; declare private _clock:SceneClock;
  declare private _overSeek:boolean; declare private _overPreview:boolean; declare private _hoverSources:Set<InteractionSource>;declare private _focusSources:Set<InteractionSource>;
  declare private _dragging:boolean;declare private _anchor:Point|null;declare private _timer:number|null;declare private _unsubscribe:(()=>void)|null;declare private _disposed:boolean;
+ // Native pointer capture belongs to interaction, not the Bridge.
+ declare private _nativePointerIds:Set<string|number>;
+ declare private _nativePointerDocument:Document|null;
+ declare private _nativePointerEnd:(event:Event)=>void;
+ declare private _nativePointerOnStop:(()=>void)|null;
 
   constructor({controller,getPreviewRect,subscribePointerMove,clock,idleLimiter}:InteractionOptions={}) {
     if(!controller || typeof getPreviewRect!=='function' ||
@@ -23,6 +28,10 @@ export class SceneSearchInteraction {
     this._hoverSources=new Set();
     this._focusSources=new Set();
     this._dragging=false;
+    this._nativePointerIds=new Set();
+    this._nativePointerDocument=null;
+    this._nativePointerOnStop=null;
+    this._nativePointerEnd=event=>this.finishNativePointer(event as PointerEvent);
     this._anchor=null;
     this._timer=null;
     this._unsubscribe=null;
@@ -163,6 +172,35 @@ export class SceneSearchInteraction {
     else{this._focusSources.delete(source);}
     this._syncPreviewHold();
   }
+  startNativePointer(e:{pointerId?:number|string}|null,document:Document,onStop:()=>void):void {
+    if(this._disposed)return;
+    const id=e?.pointerId??'main';
+    const empty=this._nativePointerIds.size===0;
+    this._nativePointerIds.add(id);
+    if(empty && this._nativePointerIds.size===1){
+      // One owner for pointer release outside the seekbar, including cancel.
+      this._nativePointerDocument=document;
+      this._nativePointerOnStop=onStop;
+      document.addEventListener('pointerup',this._nativePointerEnd,true);
+      document.addEventListener('pointercancel',this._nativePointerEnd,true);
+      this.setDragging(true);
+    }
+  }
+  finishNativePointer(e:{pointerId?:number|string}|null):void {
+    const id=e?.pointerId??'main';
+    if(!this._nativePointerIds.delete(id))return;
+    if(!this._nativePointerIds.size)this._nativePointerOnStop?.();
+  }
+  clearNativePointers():boolean {
+    const active=this._nativePointerIds.size>0;
+    this._nativePointerIds.clear();
+    const doc=this._nativePointerDocument;
+    this._nativePointerDocument=null;
+    this._nativePointerOnStop=null;
+    doc?.removeEventListener('pointerup',this._nativePointerEnd,true);
+    doc?.removeEventListener('pointercancel',this._nativePointerEnd,true);
+    return active;
+  }
   setDragging(value:boolean) {
     if(this._disposed){return;}
     this._dragging=!!value;
@@ -198,6 +236,7 @@ export class SceneSearchInteraction {
   }
   dispose() {
     if(this._disposed){return;}
+    this.clearNativePointers();
     this.reset();
     this._idle?.dispose();
     this._disposed=true;

@@ -34,7 +34,13 @@ const v4=(over={})=>{
   return {data:{response:{$watchV4:{data}}}};
 };
 function world(opt={}){
-  const log=[];const L=(...a)=>log.push(snapshot(a));
+  const log=[],diagnostics=[];const L=(...a)=>log.push(snapshot(a));
+  const diagnostic=(level,args)=>{
+    diagnostics.push(snapshot([level,...args]));
+    // Keep the historical side-effect trace, while separately checking all
+    // diagnostic arguments rather than just the previous label-only capture.
+    if(level==='error')L(level,args[0],args[1]);else L(level,args[0]);
+  };
   const routes=opt.routes||{};
   const counters={};
   const netUtil={fetch:(url,o)=>{
@@ -55,12 +61,49 @@ function world(opt={}){
       return {defaultThread:t||null,threadId:t?t.id:null,canPost:!!t,postUnavailableReason:t?null:'no-target',optionalThreads:[]};}},
     URLSearchParams,
     console:{log:()=>{}},
-    window:{console:{warn:(...a)=>L('warn',a[0]),info:(...a)=>L('info',a[0]),error:(...a)=>L('error',a[0],a[1]),log:()=>{},time:()=>{},timeEnd:()=>{}}},
+    window:{console:{warn:(...a)=>diagnostic('warn',a),info:(...a)=>diagnostic('info',a),error:(...a)=>diagnostic('error',a),log:()=>{},time:()=>{},timeEnd:()=>{}}},
     setTimeout:(fn,ms)=>{L('setTimeout',ms);return setTimeout(fn,0);},
     Promise,Object,Array,String,Number,Error,JSON};
   if(opt.snapshotOwner!==undefined)globals.NicoSearchApiV2Loader={lookupOwnerIds:async ids=>{L('lookup',ids);
     if(opt.snapshotOwner instanceof Error)throw opt.snapshotOwner;return new Map(opt.snapshotOwner?[[ids[0],{userId:opt.snapshotOwner}]]:[]);}};
-  return {globals,log};
+  return {globals,log,diagnostics};
+}
+const diagnosticReasons=['network','forbidden','not found','flv','need payment','watch api','cancelled'];
+// Approved privacy projection of the historical error trace. This is applied
+// only to the old fixture; current output must match the exact bounded shape.
+const projectedError=error=>({
+  reason:diagnosticReasons.includes(error.reason)?error.reason:'unknown',
+  statusCode:Number.isInteger(error.statusCode)&&error.statusCode>=100&&error.statusCode<=599?error.statusCode:null,
+  isPlayable:typeof error.isPlayable==='boolean'?error.isPlayable:{$undefined:true},
+  isNeedPayment:typeof error.isNeedPayment==='boolean'?error.isNeedPayment:{$undefined:true}
+});
+function assertPrivateDiagnostics(events,watchId){
+  for(const event of events){
+    const [level,label,...args]=event;
+    if(['投稿者IDを補完しました','投稿者IDを補完できませんでした',
+      '投稿者IDの補完(snapshot)に失敗','resolveMissingOwner failed'].includes(label)){
+      assert.deepEqual(args,[],'owner diagnostics use fixed labels without IDs/errors');
+    }
+    if(label==='%cloadLinkedChannelVideoInfo')assert.deepEqual(args,['background: cyan']);
+    if(level==='error'||label==='watch api fail'){
+      let summary;
+      if(level==='error'){
+        assert.equal(label,'watch api error');assert.equal(args.length,1);
+        assert.deepEqual(Object.keys(args[0]).sort(),['err','isRetry']);
+        assert.equal(typeof args[0].isRetry,'boolean');summary=args[0].err;
+      }else{assert.equal(args.length,1);summary=args[0];}
+      assert.deepEqual(Object.keys(summary).sort(),['isNeedPayment','isPlayable','reason','statusCode']);
+      assert(diagnosticReasons.includes(summary.reason)||summary.reason==='unknown');
+      assert(summary.statusCode===null||(Number.isInteger(summary.statusCode)&&summary.statusCode>=100&&summary.statusCode<=599));
+      for(const key of ['isPlayable','isNeedPayment']){
+        if(typeof summary[key]!=='boolean')assert.deepEqual(summary[key],{$undefined:true});
+      }
+    }
+  }
+  const text=JSON.stringify(events);
+  for(const privateValue of [watchId,'PRIVATE_TASK649_CONSOLE_SECRET','TRK','ARK','TK']){
+    assert.equal(text.includes(privateValue),false,'private value in Watch diagnostics: '+privateValue);
+  }
 }
 async function compare(label,watchId,opt={},options={}){
   const a=world(opt),b=world(opt);
@@ -68,8 +111,13 @@ async function compare(label,watchId,opt={},options={}){
   const ra=await settle(()=>A.load(watchId,{...options})),rb=await settle(()=>B.load(watchId,{...options}));
   assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
   // Task904 intentionally moved watch metadata from legacy JSON to the HTML page.
-  // Preserve strict side-effect parity except for that single known URL change.
-  const normalized=events=>events.map(event=>{
+  // Keep every transport/rights/retry/cache/event comparison. Only the known
+  // owner-label and bounded error diagnostic changes differ from the fixture.
+  const normalized=(events,legacy=false)=>events.map(event=>{
+    if(legacy&&event[0]==='info'&&event[1]==='%c投稿者IDを補完しました')
+      return ['info','投稿者IDを補完しました'];
+    if(legacy&&event[0]==='error'&&event[1]==='err')
+      return ['error','watch api error',{err:projectedError(event[2].err),isRetry:event[2].isRetry}];
     if (event[0]!=='fetch' ||
         typeof event[1]!=='string' ||
         !event[1].startsWith('https://www.nicovideo.jp/watch/')) return event;
@@ -77,7 +125,8 @@ async function compare(label,watchId,opt={},options={}){
     if (url.searchParams.get('responseType')==='json') url.searchParams.delete('responseType');
     return [event[0],url.toString(),...event.slice(2)];
   });
-  assert.deepEqual(normalized(b.log),normalized(a.log),label+' side effects');
+  assert.deepEqual(normalized(b.log),normalized(a.log,true),label+' side effects');
+  assertPrivateDiagnostics(b.diagnostics,watchId);
   return ra;
 }
 const LAZY='/v4/watch/lazy/',WATCH='www.nicovideo.jp/watch/',NICOAD='api.nicoad.nicovideo.jp',DANIME='channelVideoDAnimeLinks';
@@ -94,7 +143,7 @@ test('watch v4 success paths and owner sources',async()=>{
     [NICOAD]:res(200,{data:{id:'sm9',ownerId:44,ownerName:'O',ownerIcon:'OI'}})}});
   await compare('no owner -> snapshot supplement','sm9',{snapshotOwner:55,routes:{[WATCH]:res(200,v4({lazy:undefined,metadata:undefined})),[NICOAD]:res(404,{})}});
   await compare('no owner, nothing found','sm9',{snapshotOwner:null,routes:{[WATCH]:res(200,v4({lazy:undefined,metadata:undefined})),[NICOAD]:Error('x')}});
-  await compare('snapshot lookup throws','sm9',{snapshotOwner:Error('down'),routes:{[WATCH]:res(200,v4({lazy:undefined,metadata:undefined})),[NICOAD]:res(500,{})}});
+  await compare('snapshot lookup throws','sm9',{snapshotOwner:Error('PRIVATE_TASK649_CONSOLE_SECRET'),routes:{[WATCH]:res(200,v4({lazy:undefined,metadata:undefined})),[NICOAD]:res(500,{})}});
   await compare('partial comment structure','sm9',{routes:{[WATCH]:res(200,v4({comment:{nvComment:{server:'s'},threads:'x',layers:[{noComponents:1}]},
     lazy:undefined}))}});
   await compare('no comment at all','sm9',{routes:{[WATCH]:res(200,v4({comment:undefined,lazy:undefined}))}});

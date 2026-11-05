@@ -62,6 +62,7 @@ export class SceneSearchLayout00 {
   this.track=seekOwner.querySelector<HTMLElement>('.seekRange')||seekOwner;
   this.root=tooltip;
   this.container.classList.add('is-scui00-active');
+  this.container.classList.toggle('is-scui00-fullscreen',this.mode==='fullscreen');
   tooltip.classList.add('is-scui00-root');
   const style=this.document.createElement('style');
   style.dataset.scui00Style='1';
@@ -85,6 +86,9 @@ export class SceneSearchLayout00 {
   // the original CommentPreviewView switches CSS + row behavior.
   // Never move, recreate, or independently toggle the original elements.
   this.pinned=state?.pinned===true;
+  // UI00's real tooltip uses native :hover-only visibility; a pinned scene
+  // keeps that same element visible without cloning or moving native DOM.
+  this.container.classList.toggle('is-scui00-pinned',this.pinned&&state?.shown!==false);
   const mode=state?.commentListMode===true;
   const changed=mode!==this.listMode;
   this.listMode=mode;
@@ -214,8 +218,9 @@ export class SceneSearchLayout00 {
    else this.seekOwner?.style.removeProperty(name);
   }
   this.appearanceStyles=[];this.appearanceScale=1;
-  this.container.classList.remove('is-scui00-active',
-   'is-scui00-mini-static','is-scui00-mini-hidden','is-scui00-inactive');
+  this.container.classList.remove('is-scui00-active','is-scui00-pinned',
+   'is-scui00-fullscreen','is-scui00-mini-static','is-scui00-mini-hidden',
+   'is-scui00-inactive');
   this.style?.remove();
   this.track=null;this.onMove=null;this.style=null;
   this.comment=null;this.tooltip=null;this.seekOwner=null;this.root=null;
@@ -256,8 +261,58 @@ export class SceneSearchLayout00 {
 .is-scui00-active .seekBarThumbnailContainer .zenzaSeekThumbnail-image{
   position:absolute!important;left:50%!important;top:0!important;
   margin-left:-80px!important;margin-right:0!important;
+  /* The transparent scene frame must not also fade the storyboard picture. */
+  opacity:1!important;
   transform:scale(var(--scene-thumbnail-scale,1));
   transform-origin:center top;
+}
+/* Pin keeps the ORIGINAL native tooltip visible after the seekbar loses
+   :hover, but never defeats explicit idle/hidden state. */
+.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)
+ .seekBarToolTip.is-scui00-root{
+  visibility:visible!important;opacity:1!important;
+}
+/* The original mini-comment is a separate native seekbar sibling. */
+.is-scui00-active.is-scui00-pinned:not(.is-scui00-mini-hidden):not(.is-scui00-inactive)
+ .seekBarContainer:not(.enableCommentPreview):has(.zenzaSeekThumbnail.is-visible)
+ >.zenzaCommentPreview{display:block!important;}
+/* A pinned UI00 preview shares its ORIGINAL VideoControlBar parent.
+   When the bar fades to opacity:0, tooltip opacity:1 cannot undo ancestor
+   compositing. Keep only the native seek/preview visible while controls idle.
+   Active/hover/focus/menu/shortcut feedback must retain original bar behavior. */
+:is(.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive):is(.is-fullscreen,.zenzaScreenMode_small,.zenzaScreenMode_sideView),body:where(.zenzaScreenMode_small,.zenzaScreenMode_sideView) .is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)) > .videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar):not(.is-controlBarActive .videoControlBar):not(.volumeChanging .videoControlBar){
+  opacity:1!important;background:transparent!important;
+}
+:is(.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive):is(.is-fullscreen,.zenzaScreenMode_small,.zenzaScreenMode_sideView),body:where(.zenzaScreenMode_small,.zenzaScreenMode_sideView) .is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)) > .videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar):not(.is-controlBarActive .videoControlBar):not(.volumeChanging .videoControlBar)>.controlItemContainer{
+  visibility:hidden!important;pointer-events:none!important;
+}
+:is(.is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive):is(.is-fullscreen,.zenzaScreenMode_small,.zenzaScreenMode_sideView),body:where(.zenzaScreenMode_small,.zenzaScreenMode_sideView) .is-scui00-active.is-scui00-pinned:not(.is-scui00-inactive)) > .videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar):not(.is-controlBarActive .videoControlBar):not(.volumeChanging .videoControlBar)>.seekBarContainer{
+  pointer-events:auto!important;
+}
+/* Fullscreen always-hide and pin have separate ownership contracts:
+   the explicitly pinned ORIGINAL preview stays visible, but the native
+   control glyphs remain hidden until hover/focus. The host opacity must not
+   hide its pinned child during the 3s activity or volume-changing timer.
+   This override is scoped to FULLSCREEN only, never normal/small/sideView. */
+body[data-fullscreen-control-bar-mode="always-hide"]
+ .is-scui00-active.is-scui00-pinned.is-fullscreen:not(.is-scui00-inactive)
+ >.videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar){
+  opacity:1!important;background:transparent!important;
+}
+body[data-fullscreen-control-bar-mode="always-hide"]
+ .is-scui00-active.is-scui00-pinned.is-fullscreen:not(.is-scui00-inactive)
+ >.videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar)>.controlItemContainer{
+  visibility:hidden!important;pointer-events:none!important;
+}
+body[data-fullscreen-control-bar-mode="always-hide"]
+ .is-scui00-active.is-scui00-pinned.is-fullscreen:not(.is-scui00-inactive)
+ >.videoControlBar:not(:hover):not(:focus-within):not(.is-dragging):not(.is-menuOpen):not(.is-action-feedback-only):not(.showVideoControlBar .videoControlBar)>.seekBarContainer{
+  pointer-events:auto!important;
+}
+/* Fullscreen's native control row occupies the tooltip action strip at
+   bottom:10px. Lift ONLY the UI00 tooltip; do not hide or cover VCB buttons. */
+.is-scui00-active.is-scui00-fullscreen .seekBarToolTip.is-scui00-root{
+  bottom:76px!important;
 }
 /* Both native seekbar siblings now track the real full-width range. */
 .is-scui00-active .seekBarContainer>.zenzaCommentPreview{

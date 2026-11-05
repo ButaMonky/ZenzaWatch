@@ -5,7 +5,7 @@ const fs=require('fs');
 const path=require('path');
 const root=path.resolve(__dirname,'../..');
 describe('Task948 public Chromium tooltip CI coverage',function(){
-  const workflow=fs.readFileSync(path.join(root,'.github/workflows/quality.yml'),'utf8');
+  const workflow=fs.readFileSync(path.join(root,'.github/workflows/quality.yml'),'utf8').replace(/\r\n/g,'\n');
   it('runs both volume and playback-rate geometry suites after the full regression',()=>{
     const legacy=workflow.indexOf('run: npm test -- --timeout 20000 --reporter dot');
     const volume=workflow.indexOf('run: node test/browser/task939-volume-tooltip.cjs');

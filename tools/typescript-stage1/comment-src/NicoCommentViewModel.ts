@@ -134,7 +134,7 @@ class NicoCommentViewModel extends Emitter {
   _onChange(e:unknown) {
     this._lastUpdate = Date.now();
     this._updateSlotLayout();
-    console.log('NicoCommentViewModel.onChange: ', e);
+    console.log('NicoCommentViewModel.onChange');
   }
   _onCommentParsed() {
     this._lastUpdate = Date.now();

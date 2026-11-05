@@ -21,23 +21,27 @@ const NotificationJournal = (() => {
     let sequence = 0;
     let writes = 0;
     let generation = 0;
+    const privatePath = (path) => path
+        .replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
+        .replace(/(\/(?:token|secret|authorization|password|csrf|session)\/)[^/]+/gi, '$1[REDACTED]');
     const text = (value) => {
         if (typeof value !== 'string') {
             return '';
         }
         return value
-            .replace(/(["'](?:token|secret|authorization|cookie|password|csrf|session)["']\s*:\s*)(["'][^"']*["']|[^,}\s]+)/gi, '$1"[REDACTED]"')
-            .replace(/https?:\/\/[^\s<>"']+/gi, match => {
+            .replace(/(["'](?:token|(?:access|refresh)[_-]?token|secret|authorization|cookie|password|csrf|session)["']\s*:\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^,}\s]+)/gi, '$1"[REDACTED]"')
+            .replace(/(?:https?|wss?):\/\/[^\s<>"']+/gi, match => {
             try {
                 const url = new URL(match);
-                return url.origin + url.pathname.replace(/\/[A-Za-z0-9_-]{48,}/g, '/[REDACTED]');
+                return url.origin + privatePath(url.pathname);
             }
             catch (_) {
                 return '[URL]';
             }
         })
+            .replace(/(?:\/[A-Za-z0-9_~%.+=-]+)+(?:[?#][^\s<>"']*)?/g, match => privatePath(match.split(/[?#]/)[0]))
             .replace(/\bBearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [REDACTED]')
-            .replace(/\b(token|secret|authorization|cookie|password|csrf|session)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+            .replace(/\b(token|(?:access|refresh)[_-]?token|secret|authorization|cookie|password|csrf|session)\s*[:=]\s*[^\s,;]+/gi, '$1=[REDACTED]')
             .slice(0, MAX_TEXT);
     };
     const code = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value) ? value : undefined;
@@ -101,13 +105,18 @@ const NotificationJournal = (() => {
         if (typeof indexedDB === 'undefined') {
             return Promise.resolve(null);
         }
-        opening = new Promise(resolve => {
+        const attempt = new Promise(resolve => {
             let req;
+            let settled = false;
+            const fail = () => { if (!settled) {
+                settled = true;
+                resolve(null);
+            } };
             try {
                 req = indexedDB.open(DB_NAME, 1);
             }
             catch (_) {
-                resolve(null);
+                fail();
                 return;
             }
             req.onupgradeneeded = () => {
@@ -119,20 +128,33 @@ const NotificationJournal = (() => {
             };
             req.onsuccess = () => {
                 const db = req.result;
-                connection = db;
-                db.onversionchange = () => {
+                // A blocked request may succeed after a new attempt already owns open().
+                if (settled) {
                     db.close();
+                    return;
+                }
+                settled = true;
+                connection = db;
+                const release = () => {
                     if (connection === db) {
                         connection = null;
-                        opening = null;
+                        if (opening === attempt) {
+                            opening = null;
+                        }
                     }
                 };
+                db.onversionchange = () => { db.close(); release(); };
+                db.onclose = release;
                 resolve(db);
             };
-            req.onerror = () => resolve(null);
-            req.onblocked = () => resolve(null);
+            req.onerror = fail;
+            req.onblocked = fail;
         });
-        return opening;
+        opening = attempt;
+        void attempt.then(() => { if (opening === attempt) {
+            opening = null;
+        } });
+        return attempt;
     };
     const prune = (db) => {
         try {

@@ -279,7 +279,7 @@ AntiPrototypeJs().then(() => {
         declare db: Loose;
         declare isBusy: Loose;
         static get name() { return 'zenza_hls'; }
-        static get ver() { return 4; }
+        static get ver() { return 5; }
         static get storeNames() { return ['ts-data']; }
 
         static get expireTime() {
@@ -302,6 +302,11 @@ AntiPrototypeJs().then(() => {
           // Task516/931: share a pending IDB open between simultaneous cache requests.
           const pending = new Promise((resolve, reject) => {
             const req = indexedDB.open(this.name, this.ver);
+            let abandoned = false;
+            req.onblocked = () => {
+              abandoned = true;
+              reject(new Error('HLS cache upgrade blocked'));
+            };
             req.onupgradeneeded = e => {
               const db = (e.target as Loose).result;
 
@@ -316,14 +321,21 @@ AntiPrototypeJs().then(() => {
               }
 
               const store = db.createObjectStore(meta,
-                {keyPath: 'expiresAt', autoIncrement: false});
+                {keyPath: 'hash', autoIncrement: false});
               store.createIndex('hash', 'hash', {unique: true});
+              store.createIndex('expiresAt', 'expiresAt', {unique: false});
               store.createIndex('videoId', 'videoId', {unique: false});
             };
 
             req.onsuccess = e => {
-              this.db = (e.target as Loose).result;
-              resolve(this.db);
+              const db = (e.target as Loose).result;
+              if (abandoned) { db.close(); return; }
+              db.onversionchange = () => {
+                db.close();
+                if (this.db === db) { this.db = null; }
+              };
+              this.db = db;
+              resolve(db);
             };
 
             req.onerror = reject;
@@ -468,17 +480,26 @@ AntiPrototypeJs().then(() => {
           };
           // console.log('save', record);
           const {transaction, store} = await this.getStore();
-          try {
-            await this.deleteRecord(store, hash, {index: 'hash', record});
-            const result = await this.putRecord(store, record);
-            transaction.commit && transaction.commit();
-            (this.constructor as Loose).close();
-            return result;
-          } catch (e) {
-            console.error('save fail', e);
-            transaction.abort();
-            return false;
-          }
+          return new Promise((resolve) => {
+            let request: Loose;
+            // Request success may still be rolled back by a transaction abort.
+            transaction.oncomplete = () => {
+              (this.constructor as Loose).close();
+              resolve(request.result);
+            };
+            transaction.onabort = () => {
+              console.error('HLS cache save failed');
+              resolve(false);
+            };
+            try {
+              request = store.put(record);
+              // A hash-keyed put atomically replaces only this fragment.
+              transaction.commit && transaction.commit();
+            } catch (e) {
+              transaction.abort();
+              resolve(false);
+            }
+          });
         }
 
         async gc() {
@@ -491,14 +512,23 @@ AntiPrototypeJs().then(() => {
           const timekey = `storage gc:${new Date().toLocaleString()}`;
           console.time(timekey);
           return new Promise<void>((resolve, reject) => {
-            const range = IDBKeyRange.upperBound(now);
-            const req = store.delete(range);
-            req.onsuccess = (e?: Loose) => {
+            transaction.oncomplete = () => {
               this.isBusy = false;
               (this.constructor as Loose).close();
               console.timeEnd(timekey);
-              transaction.commit && transaction.commit();
               resolve();
+            };
+            transaction.onabort = () => reject(transaction.error || new Error('HLS cache collection aborted'));
+            const range = IDBKeyRange.upperBound(now);
+            const req = store.index('expiresAt').openCursor(range);
+            req.onsuccess = (e?: Loose) => {
+              const cursor = e.target.result;
+              if (cursor) {
+                cursor.delete();
+                cursor.continue();
+              } else {
+                transaction.commit && transaction.commit();
+              }
             };
             req.onerror = (e?: Loose) => {
               reject(e);
@@ -1057,6 +1087,16 @@ AntiPrototypeJs().then(() => {
         return parseUrl(url1).search === parseUrl(url2).search;
       };
 
+      // Only the hls.js surface used while this element owns startup/teardown.
+      interface HlsStartupEngine {
+        on(event: string, listener: (...args: unknown[]) => void): unknown;
+        loadSource(src: string): void;
+        attachMedia(video: HTMLMediaElement): void;
+        stopLoad(): void;
+        detachMedia(): void;
+        destroy(): void;
+      }
+
       class ZenzaVideoElement extends HTMLElement {
         declare buffered: Loose;
         declare _bufferStats: Loose;
@@ -1083,7 +1123,7 @@ AntiPrototypeJs().then(() => {
         declare _src: Loose;
         declare _throttledCurrentTime: Loose;
         declare _video: Loose;
-        declare _videoCount: Loose;
+        declare _videoCount: number;
         static get template() {
           return `
             <style>
@@ -1299,11 +1339,12 @@ AntiPrototypeJs().then(() => {
         }
 
         set src(v: Loose) {
-          this._videoCount++;
+          const videoCount = ++this._videoCount;
           this._resetPlayingStatus();
           if (v === '' || v === '//') {
             this._src = '';
             this._destroyHLSJS();
+            if (this._videoCount !== videoCount) { return; }
             this._video.src = '';
             this.playerMode = PLAYER_MODE.DEFAULT;
             return;
@@ -1316,11 +1357,11 @@ AntiPrototypeJs().then(() => {
               this._video.src = v;
               return;
             }
-            const hls = this._initHLSJS(v);
+            this._initHLSJS(v);
+            // An init/load hook can synchronously replace or clear the source.
+            if (this._videoCount !== videoCount) { return; }
 
             this._src = v;
-            //hls.loadSource(v);
-            //hls.attachMedia(this._video);
             this.playerMode = PLAYER_MODE.HLS_JS;
             return;
           }
@@ -1352,6 +1393,7 @@ AntiPrototypeJs().then(() => {
         }
 
         disconnectedCallback() {
+          ++this._videoCount;
           this._destroyHLSJS();
           for (let [func, events] of this._eventWrapperMap.entries()) {
             for (let eventName of Object.keys(events)) {
@@ -1578,53 +1620,70 @@ AntiPrototypeJs().then(() => {
         }
 
         _destroyHLSJS() {
-          if (this._hls) {
-            this._hls.stopLoad();
-            this._hls.detachMedia();
-            this._hls.destroy();
+          const hls: HlsStartupEngine | null = this._hls;
+          if (hls) {
+            // Release ownership before engine callbacks can install a replacement.
+            this._hls = null;
             if (this._fragmentLoader) {
               delete this._hlsConfig.fLoader;
               delete this._fragmentLoader;
             }
-            this._hls = null;
+            try {
+              hls.stopLoad();
+            } finally {
+              try {
+                hls.detachMedia();
+              } finally {
+                hls.destroy();
+              }
+            }
           }
         }
 
-        _initHLSJS(src?: Loose) {
+        _initHLSJS(src: string) {
+          const videoCount = this._videoCount;
           this._destroyHLSJS();
+          if (this._videoCount !== videoCount) { return this._hls; }
 
           if (!this._hls) {
-            //if (this.dataset.usecase !== 'capture') {
-            //if (Config.get('enable_db_cache') && !window.Prototype) {
-            //  Storage.gc();
-            //}
-              //setTimeout(() => {Storage.gc(); }, 30000);
-            //}
             this._fragmentLoader = createFragmentLoader(Hls);
             this._hlsConfig.fLoader = this._fragmentLoader;
-            const hls = new Hls(this._hlsConfig);
+            const hls: HlsStartupEngine = new Hls(this._hlsConfig);
             this._hls = hls;
 
-            this._hls.on(Hls.Events.MANIFEST_PARSED,
-              this._onHLSJSManifestParsed.bind(this));
-            this._hls.on(Hls.Events.LEVEL_LOADED,
-              this._onHLSJSLevelLoaded.bind(this));
-            this._hls.on(Hls.Events.LEVEL_SWITCHED,
-              this._onHLSJSLevelSwitched.bind(this));
-            this._hls.on(Hls.Events.ERROR,
-              this._onHLSJSError.bind(this));
-            this._hls.on(Hls.Events.FRAG_LOADED,
-              this._onHLSJSFragLoaded.bind(this));
-            // this._hls.on(Hls.Events.FRAG_BUFFERED,
-            //   this._onHLSJSFragBuffered.bind(this));
-            this._hls.on(Hls.Events.BUFFER_EOS,
-              this._onHLSJSBufferEOS.bind(this));
-            this.dispatchEvent(new CustomEvent('init-hls-js', {detail: {hls: hls}}));
-            this._hls.on(Hls.Events.MEDIA_ATTACHED, () => {
-              this._hls.loadSource(src);
-            });
-            // overrideKeyloader(hls);
-            this._hls.attachMedia(this._video);
+            try {
+              // The public init hook also exposes destroy() directly.
+              hls.on(Hls.Events.DESTROYING, () => {
+                if (this._hls !== hls) { return; }
+                this._hls = null;
+                delete this._hlsConfig.fLoader;
+                delete this._fragmentLoader;
+              });
+              hls.on(Hls.Events.MANIFEST_PARSED,
+                this._onHLSJSManifestParsed.bind(this));
+              hls.on(Hls.Events.LEVEL_LOADED,
+                this._onHLSJSLevelLoaded.bind(this));
+              hls.on(Hls.Events.LEVEL_SWITCHED,
+                this._onHLSJSLevelSwitched.bind(this));
+              hls.on(Hls.Events.ERROR,
+                this._onHLSJSError.bind(this));
+              hls.on(Hls.Events.FRAG_LOADED,
+                this._onHLSJSFragLoaded.bind(this));
+              hls.on(Hls.Events.BUFFER_EOS,
+                this._onHLSJSBufferEOS.bind(this));
+              this.dispatchEvent(new CustomEvent('init-hls-js', {detail: {hls}}));
+              if (this._hls !== hls) { return this._hls; }
+
+              // Fetch the authorized manifest while MediaSource attachment proceeds.
+              // startFragPrefetch/ABR/encryption settings remain unchanged.
+              hls.loadSource(src);
+              if (this._hls === hls) { hls.attachMedia(this._video); }
+            } catch (error) {
+              if (this._hls === hls) {
+                try { this._destroyHLSJS(); } catch (_) { /* Keep the startup error. */ }
+              }
+              throw error;
+            }
           }
           return this._hls;
         }
@@ -1708,6 +1767,7 @@ AntiPrototypeJs().then(() => {
           console.info('%cHls.Events.ERROR: WARN', 'background: cyan;',
             this._id,
             data.type,
+            // data,
             `isForbidden403: ${this._isForbidden403}, isStalledBy403: ${this._isStalledBy403}, isSeeking: ${this._isSeeking}`
           );
 

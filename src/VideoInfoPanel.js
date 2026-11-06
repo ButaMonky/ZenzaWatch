@@ -88,6 +88,8 @@ class VideoInfoPanel extends Emitter {
         view.addEventListener('mousemove', (e) => e.stopPropagation());
         view.addEventListener('command', this._onCommandEvent.bind(this));
         view.addEventListener('click', this._onClick.bind(this));
+        view.addEventListener('keydown', this._onTabKeyDown.bind(this));
+        this._syncTabAccessibility();
         view.addEventListener('wheel', (e) => e.stopPropagation(), { passive: true });
         $icon.on('load', () => $icon.raf.removeClass('is-loading'));
         classList.add(Fullscreen.now() ? 'is-fullscreen' : 'is-notFullscreen');
@@ -512,12 +514,90 @@ class VideoInfoPanel extends Emitter {
         this.classList.add('is-loadFailed');
         this._$ownerIcon.raf.removeClass('is-loading');
     }
+    _syncTabAccessibility() {
+        const root = (this._view || this._$view?.[0]);
+        if (!root) {
+            return;
+        }
+        root.querySelector('.tabSelectContainer')?.setAttribute('role', 'tablist');
+        root.querySelectorAll('.tabSelect').forEach((tab) => {
+            const name = tab.dataset.param;
+            if (!name) {
+                return;
+            }
+            const selected = tab.classList.contains('activeTab');
+            tab.id = `zenza-info-tab-${name}`;
+            tab.setAttribute('role', 'tab');
+            tab.setAttribute('aria-selected', String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+            const panel = Array.from(root.querySelectorAll('.tabs')).find((node) => node.classList.contains(name));
+            if (panel) {
+                panel.id = `zenza-info-panel-${name}`;
+                panel.setAttribute('role', 'tabpanel');
+                panel.setAttribute('aria-labelledby', tab.id);
+                tab.setAttribute('aria-controls', panel.id);
+            }
+        });
+    }
+    _onTabKeyDown(event) {
+        const root = (this._view || this._$view?.[0]);
+        const target = event.target;
+        const tab = target?.closest?.('.tabSelect');
+        if (!root || !tab || !root.contains(tab) || event.altKey || event.ctrlKey || event.metaKey) {
+            return;
+        }
+        const available = (node) => {
+            if (node.getAttribute('aria-disabled') === 'true') {
+                return false;
+            }
+            for (let current = node; current && current !== root; current = current.parentElement) {
+                const style = window.getComputedStyle(current);
+                if (current.hidden || style.display === 'none' || style.visibility === 'hidden') {
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (!available(tab)) {
+            return;
+        }
+        const tabs = Array.from(root.querySelectorAll('.tabSelect')).filter(available);
+        const index = tabs.indexOf(tab);
+        let next;
+        switch (event.key) {
+            case 'ArrowRight':
+                next = (index + 1) % tabs.length;
+                break;
+            case 'ArrowLeft':
+                next = (index + tabs.length - 1) % tabs.length;
+                break;
+            case 'Home':
+                next = 0;
+                break;
+            case 'End':
+                next = tabs.length - 1;
+                break;
+            case 'Enter':
+            case ' ':
+                event.preventDefault();
+                event.stopPropagation();
+                domEvent.dispatchCommand(tab, 'selectTab', tab.dataset.param);
+                return;
+            default: return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        root.querySelectorAll('.tabSelect').forEach((node) => { node.tabIndex = -1; });
+        tabs[next].tabIndex = 0;
+        tabs[next].focus();
+    }
     selectTab(tabName) {
         const $view = this._$view;
         const $target = $view.find(`.tabs.${tabName}, .tabSelect.${tabName}`);
         this._activeTabName = tabName;
         $view.find('.activeTab').removeClass('activeTab');
         $target.addClass('activeTab');
+        this._syncTabAccessibility();
     }
     blinkTab(tabName) {
         const $view = this._$view;
@@ -545,6 +625,7 @@ class VideoInfoPanel extends Emitter {
             $select.addClass('activeTab');
             $body.addClass('activeTab');
         }
+        this._syncTabAccessibility();
         return $body;
     }
 }
@@ -600,6 +681,11 @@ css.addStyle(`
     text-align: center;
     transition: text-shadow 0.2s ease, color 0.2s ease;
   }
+  .zenzaWatchVideoInfoPanel .tabSelect:focus-visible {
+    outline: 2px solid #9cf;
+    outline-offset: -2px;
+  }
+
   .zenzaWatchVideoInfoPanel .tabSelect.activeTab {
     font-size: 14px;
     letter-spacing: 0.1em;

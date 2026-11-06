@@ -153,6 +153,7 @@ const Config = (() => {
     allowOtherDomain: true,
 
     overrideWatchLink: false, // すべての動画リンクをZenzaWatchで開く
+    'overrideWatchLink:allowPropagation': false, // Opt-in cooperation with read-marker scripts
     'overrideWatchLink:others': false, // すべての動画リンクをZenzaWatchで開く
 
     speakLark: false, // 一発ネタのコメント読み上げ機能. 飽きたら消す

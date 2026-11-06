@@ -84,9 +84,9 @@ class RelatedMenuOrder {
       return opener(url,'_blank','noopener,noreferrer,width='+width+
         ',height='+height+',scrollbars=yes');
     }
-    if(id==='ad'){return opener(url,'','width=428, height=600, toolbar=no, scrollbars=1');}
+    if(id==='ad'){return opener(url,'_blank','noopener,width=428, height=600, toolbar=no, scrollbars=1');}
     if(id==='official'){return opener(url,'_blank','noopener');}
-    return opener(url);
+    return opener(url,'_blank','noopener');
   }
   static getOption(options: Record<string,unknown> | null | undefined,id: string): RelatedMenuBuiltInOption {
     return options && typeof options==='object' && !Array.isArray(options) &&

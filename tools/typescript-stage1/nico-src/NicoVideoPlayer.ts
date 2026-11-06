@@ -35,6 +35,7 @@ declare const util: Loose;
  *
  */
 class NicoVideoPlayer extends Emitter {
+  declare _setVideoGeneration: number;
   declare static CREDIT_WAIT_MS: Loose;
   declare dispatchEvent: Loose;
   declare _video: Loose;
@@ -476,22 +477,20 @@ class NicoVideoPlayer extends Emitter {
     }
   }
   setVideo(url?: Loose) {
+    const generation = this._setVideoGeneration = (this._setVideoGeneration || 0) + 1;
     this._cancelSupporterCredit();
-    let e = {src: url, url: (null as Loose), promise: (null as Loose)};
-    // デバッグ用
+    const e = {src: url, url: (null as Loose), promise: (null as Loose)};
     global.emitter.emit('beforeSetVideo', e);
-    if (e.url) {
-      url = e.url;
-    }
+    const apply = (source: Loose) => {
+      if (this._setVideoGeneration !== generation) { return; }
+      this._videoPlayer.setSrc(source);
+      this._isEnded = false;
+      this._isSeeking = false;
+    };
     if (e.promise) {
-      return e.promise.then((url?: Loose) => {
-        this._videoPlayer.setSrc(url);
-        this._isEnded = false;
-      });
+      return Promise.resolve(e.promise).then(apply);
     }
-    this._videoPlayer.setSrc(url);
-    this._isEnded = false;
-    this._isSeeking = false;
+    apply(e.url || url);
   }
   setThumbnail(url?: Loose) {
     this._videoPlayer.thumbnail = url;
@@ -573,6 +572,7 @@ class NicoVideoPlayer extends Emitter {
     this._commentPlayer.appendTo(node);
   }
   close() {
+    this._setVideoGeneration = (this._setVideoGeneration || 0) + 1;
     this._cancelSupporterCredit();
     this._creditAbort && this._creditAbort.abort();
     this._videoPlayer.close();
@@ -1311,9 +1311,6 @@ class VideoPlayer extends Emitter {
         this._isAspectRatioFixed = true;
         this.emit('aspectRatioFix',
           this._video.videoHeight / Math.max(1, this._video.videoWidth));
-      }
-      if (this._isYouTube && Config.props.bestZenTube) {
-        this._videoYouTube.selectBestQuality();
       }
     }
   }

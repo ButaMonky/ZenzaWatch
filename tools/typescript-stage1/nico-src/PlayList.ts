@@ -654,7 +654,7 @@ class PlayList extends VideoList {
     const LABEL: Record<string, string> = {selectContentType: '動画の長さ種別', channelVideoListingStatus: 'チャンネル動画の掲載', kind: '投稿者の種類(kind)', genre: 'ジャンル'};
     let notice = unapplied.length ? `（未対応のため適用していない条件: ${unapplied.map((key: string) => LABEL[key] || key).join('、')}）` : '';
     // Task190: 途中のページの取得に失敗した時は、取れた分だけであることを伝える
-    if (result && result.partial === true) {
+    if (result && (result.partial === true || result.isPartial === true)) {
       notice += `（途中のページの取得に失敗したため、取得できた${result.returnedCount ?? (result.list || []).length}件だけです）`;
     }
     return notice;
@@ -696,7 +696,8 @@ class PlayList extends VideoList {
         }
 
         if (videoListItems.length < 1) {
-          return Promise.reject({});
+          const notice = PlayList.searchNotice(searchResult);
+          return notice ? {status: 'ok', message: '追加できる動画がありませんでした' + notice} : Promise.reject({});
         }
 
         if (options.playlistSort) {
@@ -726,7 +727,7 @@ class PlayList extends VideoList {
         if (added === 0) {
           return Promise.resolve({
             status: 'ok',
-            message: `追加できる動画がありませんでした（${videoListItems.length}件すべて既にプレイリストにあります）`
+            message: `追加できる動画がありませんでした（${videoListItems.length}件すべて既にプレイリストにあります）` + PlayList.searchNotice(searchResult)
           });
         }
         return Promise.resolve({

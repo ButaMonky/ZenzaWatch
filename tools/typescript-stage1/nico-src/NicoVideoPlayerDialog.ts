@@ -3339,12 +3339,15 @@ class NicoVideoPlayerDialog extends Emitter {
       case 'nicoru': {
         // The click belongs to the original video's comment thread, even if
         // the player changes before the queued API call starts.
-        const msgInfo = this._videoInfo?.msgInfo;
+        const videoInfo = this._videoInfo;
+        const requestId = this._requestId;
+        const msgInfo = videoInfo?.msgInfo;
         const loader = this.threadLoader;
         Promise.resolve().then(() => loader.nicoru(msgInfo, param))
           .then(result => { request?.resolve?.(result); })
           .catch(e => {
             request?.reject?.(e);
+            if (this._videoInfo !== videoInfo || this._requestId !== requestId || this._state?.isOpen === false) { return; }
             this.execCommand('alert', e?.message || 'ニコれなかった＞＜');
           });
         break;
@@ -4009,18 +4012,22 @@ class NicoVideoPlayerDialog extends Emitter {
       'enableCommentPanelAutoScroll', commentPanel.isAutoScroll);
   }
   _onDeflistAdd(watchId?: Loose) {
-    if (this._state.isUpdatingDeflist || !util.isLogin()) {
+    if (this._deflistMutationOwner || this._state.isUpdatingDeflist || !util.isLogin()) {
       return;
     }
+    const videoInfo = this._videoInfo;
+    const requestId = this._requestId;
+    const isCurrent = () => this._videoInfo === videoInfo && this._requestId === requestId && this._state.isOpen !== false;
     const lockOwner = {};
     this._deflistMutationOwner = lockOwner;
     const unlock = () => {
       if (this._deflistMutationOwner === lockOwner) {
+        this._deflistMutationOwner = null;
         this._state.isUpdatingDeflist = false;
       }
     };
     this._state.isUpdatingDeflist = true;
-    let timer = window.setTimeout(unlock, 10000);
+    // Keep ownership until the request settles; a timer cannot cancel a server mutation.
 
     watchId = watchId || this._videoInfo.watchId;
     let description: Loose;
@@ -4039,38 +4046,40 @@ class NicoVideoPlayerDialog extends Emitter {
       description = enableAutoMylistComment ?
           `投稿者: ${info.owner.name} ${info.owner.linkId} ${originalVideoId}` : '';
     }).then(() => this._mylistApiLoader.addDeflistItem(watchId, description))
-      .then((result?: Loose) => this.execCommand('notify', result.message))
-      .catch((err?: Loose) => this.execCommand('alert', err.message ? err.message : 'あとで見るに登録失敗'))
+      .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', result.message); } })
+      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', err.message ? err.message : 'あとで見るに登録失敗'); } })
       .then(() => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(unlock, 2000);
+      window.setTimeout(unlock, 2000);
     });
   }
   _onDeflistRemove(watchId?: Loose) {
-    if (this._state.isUpdatingDeflist || !util.isLogin()) {
+    if (this._deflistMutationOwner || this._state.isUpdatingDeflist || !util.isLogin()) {
       return;
     }
+    const videoInfo = this._videoInfo;
+    const requestId = this._requestId;
+    const isCurrent = () => this._videoInfo === videoInfo && this._requestId === requestId && this._state.isOpen !== false;
     const lockOwner = {};
     this._deflistMutationOwner = lockOwner;
     const unlock = () => {
       if (this._deflistMutationOwner === lockOwner) {
+        this._deflistMutationOwner = null;
         this._state.isUpdatingDeflist = false;
       }
     };
     this._state.isUpdatingDeflist = true;
-    let timer = window.setTimeout(unlock, 10000);
+    // Keep ownership until the request settles; a timer cannot cancel a server mutation.
 
     watchId = watchId || this._videoInfo.watchId;
     if (!this._mylistApiLoader) {
       this._mylistApiLoader = MylistApiLoader;
     }
 
-    this._mylistApiLoader.removeDeflistItem(watchId)
-      .then((result?: Loose) => this.execCommand('notify', result.message))
-      .catch((err?: Loose) => this.execCommand('alert', err.message))
+    Promise.resolve().then(() => this._mylistApiLoader.removeDeflistItem(watchId))
+      .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', result.message); } })
+      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', err.message); } })
       .then(() => {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(unlock, 2000);
+        window.setTimeout(unlock, 2000);
       });
   }
   _recordDiagnostic(entry?: Loose) {
@@ -4139,20 +4148,24 @@ class NicoVideoPlayerDialog extends Emitter {
     });
   }
   _onMylistAdd(groupId?: Loose, mylistName?: Loose) {
-    if (this._state.isUpdatingMylist || !util.isLogin()) {
+    if (this._mylistMutationOwner || this._state.isUpdatingMylist || !util.isLogin()) {
       return;
     }
 
+    const videoInfo = this._videoInfo;
+    const requestId = this._requestId;
+    const isCurrent = () => this._videoInfo === videoInfo && this._requestId === requestId && this._state.isOpen !== false;
     const lockOwner = {};
     this._mylistMutationOwner = lockOwner;
     const unlock = () => {
       if (this._mylistMutationOwner === lockOwner) {
+        this._mylistMutationOwner = null;
         this._state.isUpdatingMylist = false;
       }
     };
 
     this._state.isUpdatingMylist = true;
-    let timer = window.setTimeout(unlock, 10000);
+    // Keep ownership until the request settles; a timer cannot cancel a server mutation.
 
     const owner = this._videoInfo.owner;
     const originalVideoId = this._videoInfo.originalVideoId ?
@@ -4165,29 +4178,32 @@ class NicoVideoPlayerDialog extends Emitter {
       this._mylistApiLoader = MylistApiLoader;
     }
 
-    this._mylistApiLoader.addMylistItem(watchId, groupId, description)
-      .then((result?: Loose) => this.execCommand('notify', `${result.message}: ${mylistName}`))
-      .catch((err?: Loose) => this.execCommand('alert', `${err.message}: ${mylistName}`))
+    Promise.resolve().then(() => this._mylistApiLoader.addMylistItem(watchId, groupId, description))
+      .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', `${result.message}: ${mylistName}`); } })
+      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', `${err.message}: ${mylistName}`); } })
       .then(() => {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(unlock, 2000);
+        window.setTimeout(unlock, 2000);
       });
   }
   _onMylistRemove(groupId?: Loose, mylistName?: Loose) {
-    if (this._state.isUpdatingMylist || !util.isLogin()) {
+    if (this._mylistMutationOwner || this._state.isUpdatingMylist || !util.isLogin()) {
       return;
     }
 
+    const videoInfo = this._videoInfo;
+    const requestId = this._requestId;
+    const isCurrent = () => this._videoInfo === videoInfo && this._requestId === requestId && this._state.isOpen !== false;
     const lockOwner = {};
     this._mylistMutationOwner = lockOwner;
     const unlock = () => {
       if (this._mylistMutationOwner === lockOwner) {
+        this._mylistMutationOwner = null;
         this._state.isUpdatingMylist = false;
       }
     };
 
     this._state.isUpdatingMylist = true;
-    let timer = window.setTimeout(unlock, 10000);
+    // Keep ownership until the request settles; a timer cannot cancel a server mutation.
 
     let watchId = this._videoInfo.watchId;
 
@@ -4195,12 +4211,11 @@ class NicoVideoPlayerDialog extends Emitter {
       this._mylistApiLoader = MylistApiLoader;
     }
 
-    this._mylistApiLoader.removeMylistItem(watchId, groupId)
-      .then((result?: Loose) => this.execCommand('notify', `${result.message}: ${mylistName}`))
-      .catch((err?: Loose) => this.execCommand('alert', `${err.message}: ${mylistName}`))
+    Promise.resolve().then(() => this._mylistApiLoader.removeMylistItem(watchId, groupId))
+      .then((result?: Loose) => { if (isCurrent()) { this.execCommand('notify', `${result.message}: ${mylistName}`); } })
+      .catch((err?: Loose) => { if (isCurrent()) { this.execCommand('alert', `${err.message}: ${mylistName}`); } })
       .then(() => {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(unlock, 2000);
+        window.setTimeout(unlock, 2000);
       });
   }
   _onCommentParsed() {

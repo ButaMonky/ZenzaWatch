@@ -12,7 +12,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaBlogPartsButton.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaBlogPartsButton.user.js
 // ==/UserScript==
-// build: 2026-11-05 21:43Z 844b93b2
+// build: 2026-11-06 00:57Z 86a17b66
 /* eslint-disable */
 
 

@@ -292,12 +292,9 @@ const {YouTubeWrapper} = (() => {
     }
 
     selectBestQuality() {
-      const levels = this._player.getAvailableQualityLevels();
-      const best = levels[0];
-      this._player.pauseVideo();
-      this._player.setPlaybackQuality(best);
-      this._player.playVideo();
-      window.console.info('bestQuality', {levels, best, current: this._player.getPlaybackQuality()});
+      // YouTube controls playback quality; its former setter is unsupported.
+      // Retain this public method for extensions without changing playback state.
+      return false;
     }
 
     _onSeekEnd() {

@@ -391,8 +391,13 @@ class ModernAdvancedSettingsModel {
                     }]
             ]),
             ...group('プレイリスト・検索', 'リンク・移動', [
-                ['overrideWatchLink', '動画リンクをZenzaWatchで開く'],
-                ['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く'],
+                ['overrideWatchLink', '動画リンクをZenzaWatchで開く', {
+                        description: 'ニコニコ動画内のリンクが対象です。外部サイトの直接クリック切替は非対応です。'
+                    }],
+                ['overrideWatchLink:allowPropagation', '動画リンクのクリックを他のスクリプトにも伝える', {
+                        description: '既読記録などの連携用。ONにすると、サイト側の処理によって公式プレイヤーも開く場合があります。通常はOFFで使用してください。'
+                    }],
+                ['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く', { hidden: true }],
                 ['enablePushState', 'ブラウザの履歴への反映を利用'],
                 ['allowOtherDomain', '外部サイトの連携を許可'],
                 ['loadLinkedChannelVideo', 'チャンネル動画のリンクを取得']
@@ -534,7 +539,8 @@ class ModernAdvancedSettingsModel {
             // screenFilter.enable is obsolete (automatic detection replaced it).
             // screenFilter.saved is an internal toggle snapshot, not a user setting.
             // Preserve both Config values; only omit the unsupported editing controls.
-            if (descriptor.id === 'screenFilter.enable' || descriptor.id === 'screenFilter.saved') {
+            if (descriptor.id === 'screenFilter.enable' || descriptor.id === 'screenFilter.saved' ||
+                descriptor.id === 'bestZenTube') {
                 return;
             }
             const publicEntry = this._publicSettings.get(descriptor.id);

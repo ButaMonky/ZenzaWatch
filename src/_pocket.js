@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.81-task971
+// @version     0.5.82-task981
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -3810,6 +3810,21 @@ const emitter = util.emitter;
       return {query: null, container: null};
     };
 
+    const initRankingNgStyle = ngConfig => {
+      // One stylesheet follows live configuration, including OFF-at-startup and
+      // ranking cards inserted by later SPA navigation.
+      const style = document.createElement('style');
+      document.head.appendChild(style);
+      const update = () => {
+        const tags = ngConfig.props.enable ? String(ngConfig.props.tag || '') : '';
+        style.textContent = [...new Set(tags.split(/[\r\n]/).map(tag => tag.trim()).filter(Boolean))]
+          .map(hideTagCss).join('\n');
+      };
+      ngConfig.onkey('enable', update);
+      ngConfig.onkey('tag', update);
+      update();
+    };
+
     const initNgConfig = onEnable => {
       const ngConfig = config.namespace('ng');
       const favConfig = config.namespace('fav');
@@ -4162,7 +4177,7 @@ const emitter = util.emitter;
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.81-task971', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.82-task981', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -4198,6 +4213,7 @@ const emitter = util.emitter;
 
       const ngLifecycle = createNgLifecycle();
       const ngConfig = ngLifecycle.ngConfig;
+      initRankingNgStyle(ngConfig);
       await ngLifecycle.observe().catch(() => {
         console.warn('Optional NG initialization unavailable');
       });
@@ -4207,16 +4223,6 @@ const emitter = util.emitter;
       }
 
       if (document.querySelector('a[data-anchor-page^="ranking_"]') != null) {
-        // Task 079: NG機能がOFFの時（や対象外のページ）は initNg() が ngConfig を
-        // 返さない。以前はここで ngConfig.props を読んで例外になり、直後の
-        // initExternal() まで届かず MylistPocket.external が作られなかった。
-        // その結果、ランキングページで「？」を押すと VideoInfoView の初期化が
-        // MylistPocket.external.observe で落ちていた。
-        const ngTag = (ngConfig && ngConfig.props && ngConfig.props.enable && ngConfig.props.tag) || '';
-        for (const tagName of ngTag.trim().split(/[\r\n]/)) {
-          if (!tagName.trim()) { continue; }
-          util.addStyle(hideTagCss(tagName));
-        }
         if (config.props.responsive.matrix) {
           util.addStyle(responsiveCss);
         }

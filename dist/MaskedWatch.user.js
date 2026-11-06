@@ -19,7 +19,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MaskedWatch.user.js
 // ==/UserScript==
-// build: 2026-11-05 21:43Z 844b93b2
+// build: 2026-11-06 00:57Z 86a17b66
 /* eslint-disable */
 
 // GENERATED FROM tools/typescript-stage1/nico-src/MaskedWatchEntry.ts (Task966). Edit the .ts and run npm run nico:sync.

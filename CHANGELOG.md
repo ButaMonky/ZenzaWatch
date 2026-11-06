@@ -1,3 +1,13 @@
+## 2026-11-06 - AUD修正 (2.7.357-task981)
+
+- HLSキャッシュの保存・削除を処理完了後に確定し、ワーカー障害からの復旧回数を制限。キャッシュヒット時のメディア再送を避け、保存期限の設定変更を反映します。
+- 動画の切り替え・切断時に、遅れたシーク、古い読み込み結果、イベントリスナーが残る問題を修正しました。
+- ニコる・マイリスト・あとで見るの古い動画向け通知を抑止し、処理中の登録が重複しないようにしました。投稿者動画の一部取得失敗は、追加件数が0でも表示します。
+- 情報・関連動画・コメント・プレイリストのタブをキーボードで操作できます。Tabで移動、左右矢印/Home/Endで選択、Enter/Spaceで開きます。
+- PocketのNGタグ表示を設定変更に追従させ、関連メニューの別ウィンドウを安全に分離します。
+- 上級者設定に既読記録スクリプト向けのクリック連携を追加しました（初期値OFF）。効かない外部サイトの直接クリック設定とYouTube画質強制設定を整理しました。
+- 小画面のNGボタンちらつきは再現条件の確認を継続。検索・プレイリストの視聴進捗バー案は今回の不具合修正には含めていません。
+
 ## 2026-11-06 - しおり・ABリピート (2.7.356-task980)
 
 - 「ここまで見た」を動画ごとに自動更新する1件とし、任意の手動しおりを別に保存します。
@@ -7,25 +17,25 @@
 - 上級者設定の「再生・音声 → しおり・ABリピート」に自動記録、完走時の自動位置削除、操作ボタン表示、ABリピートの4項目を追加しました。既存の保存・キャンセル・初期値復帰を使います。
 - TypeScript正本・生成JavaScript・配布物を同期。既存のシークバー、シーンサーチ、再生開始処理の統合済み更新も公開版へ反映します。
 
-## 2026-11-02 - Restore native comment panel layout (2.7.354-task978)
+## 2026-11-02 - Public-only Userscript update destinations
 
-- Remove the temporary right-edge ribbon introduced in 2.7.353; restore the original information, related videos and comment tabs.
-- Keep the native side or bottom panel accessible in narrow/short viewports, proportionally resizing the player frame without changing saved preferences or comment APIs.
-- Fix fractional CSS breakpoint gaps and the native header auto-placement 8px gap oscillation. Preserve fullscreen, wide, small and side-view layout behavior.
-- Port verified TypeScript canonical source, regenerated distribution, and regression tests. Offline Chromium source/dist: 76 layouts passed; actual nicovideo.jp user testing is pending.
+- The private repository remains the development/test and GitHub backup target, but user-facing installer and update URLs must always point to `ButaMonky/ZenzaWatch` (public).
+- Remove channel-dependent URL generation from `build.js`, migrate all 10 active private-build headers and README install links to public destinations, and add a private-channel forced-build regression guard.
+- No user settings, network API, video UI behavior, or publicly released code is changed by this private backup maintenance task. The three frozen legacy distributions remain untouched.
+
+## Unreleased - Native comment panel repair (2.7.354-task978, 2026-11-02)
+
+- Remove the rejected 2.7.353 right-edge ribbon and restore the original information/comment tabs.
+- Fit the existing side/bottom layout to narrow windows while retaining the player-frame aspect ratio and room for native headers/controls.
+- Close fractional media-query gaps; preserve user preferences and comment/network behavior.
+- Include the existing 8px outside gap in the auto-header decision to prevent repeated layout oscillation.
+- Private repair candidate only; see [investigation, evidence and release gates](docs/maintenance/COMMENT_PANEL_REPAIR_2026-11-02.md).
 
 ## 2026-11-02 - Short viewport comment/info panel recovery (2.7.353-viewportfix)
 
 - Chromeのズームや画面倍率によってCSS表示領域が狭く低くなると、通常・大モードの情報/コメント一覧パネルが右側・下側どちらの表示条件にも該当せず、完全に消える問題を修正。
 - この条件でのみ右端に「コメント・情報」の引き出しを表示。マウスを重ねるかキーボードでフォーカスして開き、従来のコメントタブを使える。広い画面のレイアウトと保存設定は変更しない。
 - スクリプトのTypeScript正本・生成JavaScript・配布物を同期し、狭い画面の回帰テストを追加。HARの生データや認証情報はリポジトリに保存しない。
-
-## 2026-10-28 - Discussion #36 shortcut animation interim repair (2.7.352-task977)
-
-- キーボードショートカットでは、マウスを動かしていなくても操作対象の既存ボタンだけを一時表示し、クリックと共通の押下・復帰アニメーションを再生する。操作バー全体、背景、シークバー、サブメニューは不要に表示しない。
-- クリック時に追加されていたON/OFF文字を出さず、ショートカット時の状態文字のみ維持。いいねはハートとボタンの復帰が完了するまで1.5秒表示する。その他は原則1秒、後からボタンごとに表示時間・アニメーションを指定可能。
-- 元から非表示・利用不可のボタン、動画切替時の解除、マイリストの通信中スピナー、アクセシビリティ属性を維持し、視覚効果でコマンドを二重実行しない。
-- 今回は応急処置であり、実サイトの多様な画面状態や全操作の検証・改善は継続課題。Discussionはクローズせず、利用者からの意見を受け付ける。
 
 ## 2026-10-28 - Playlist maximum reduced to 10,000 (2.7.351-task976)
 
@@ -43,6 +53,12 @@
 - This is a new release, not a rewritten Git history, and keeps concurrent
   private-only code out of the public repository.
 
+## 2026-10-28 - Task975 / Discussion #36 feedback refinement (2.7.350-task975)
+
+- 通常クリックではボタンの押下・復帰アニメーションのみを表示。キーボードショートカット時のコメント表示・NG・ミュート・リピートのON/OFF状態文字は維持する。既存のアクセシビリティ属性は引き続き安全に復元。
+- いいねは、ハートの0.8秒演出に加え、ボタン自体の遅延1秒＋0.2秒の復帰が終わるまで見えるよう一時表示を1.5秒へ延長。ほかのボタンは従来の1秒を維持する。
+- `data-feedback-visible-ms`（1000～5000ms）で後から追加したボタンやアニメーションにも表示時間を指定可能。連続操作、動画切替・終了、非表示設定の契約は維持する。
+- 単体回帰は修正前に2件失敗することを確認し、修正後に26件成功。隔離Chromiumで27ケース成功（文字・いいね表示時間を追加検証）。実サイト・実アカウントへの通信は行わない。
 
 ## 2026-10-28 - Configurable rolling playlist retention (2.7.349 / settings0.3.81)
 
@@ -53,6 +69,15 @@
 - Replace quadratic series-neighbor scans with indexed insertion, preserving existing anchors, playback position and order.
 - Settings warn about memory, rendering/sorting pauses and reduced reload recovery when storage fills.30,000 is an opt-in high-load setting, not a performance guarantee.
 - Keep Task973's small-mode pause-toolbar default and all prior repairs.
+
+## 2026-10-28 - Discussion #36: shared button feedback (2.7.348-task974)
+
+- ショートカット、クリック、共通コマンドから、実際の対象ボタンに同じ押下・復帰アニメーションを表示。マウス停止中は対象だけを約1秒間表示し、操作バー全体・シークバー・背景・サブメニューを出さない。
+- いいねの既存ハートと、とりあえずマイリストの処理中スピナーを維持。コメント・NG・ミュート・リピートの切替後の状態を表示。
+- 連続操作では前の対象を即座に解除し、同じ操作の繰り返しは表示時間を延長。動画切替・終了で解除し、古いタイマーや別の処理の通知で現在の表示を消さない。
+- 非表示設定、使用不可のボタン、独立して更新されたアクセシビリティ情報を尊重。動きを減らす設定では視覚的な状態表示を維持して移動を止める。
+- 共通の data-command 解決と任意の data-feedback-animation により、後からボタン・アニメーションを追加可能。見た目の処理でクリックやAPI操作を再実行しない。
+- Task973の小画面一時停止時の既定表示と上級設定0.3.80を維持し、本体のみ更新。キーボード操作時の対象のみ表示は独立して適用。
 
 ## 2026-10-28 - Playlist pagination and session capacity (2.7.346-task972)
 
@@ -79,55 +104,6 @@
 - コメント表示／NG切替直後の1秒表示は引き続き独立して動作。
 - 連続したマウス移動では1つのタイマーを更新し、動画切替・プレイヤー終了で解除。閉じた後の遅延入力で再表示しない。
 - TypeScript正本、生成JavaScript、配布本体を同期。新しい設定項目の追加や、他の配布スクリプトの変更はない。
-
-## 2026-10-27 - Public promotion of tested development changes (Dev 2.7.344)
-
-- Brought the tested product changes from the private development tree into the public fork, retaining the existing public Issue #3 seek-bar fix (PR #38).
-- Playback rate shortcuts and wheel controls now move through the same stable preset sequence in both directions (Task945, Discussion #40), so four down/up commands from 1.0 return to 1.0.
-- Included notification history, configurable popup colors and background transparency, shortcut hints, preview placement stabilization, and other tested UI improvements. Further UI refinement remains planned.
-- Updated video card like counts and uploader recovery, bounded user-icon fallback, playlist and storyboard behaviour, and asynchronous ownership checks.
-- Included CapTube YouTube uploader/Worker/repeated-capture repairs and HeatSync playback speed recovery.
-- Regenerated ten active userscripts from synchronized sources using the public GitHub download/update channel; the three legacy-frozen userscripts remain unchanged.
-- Published the matching TypeScript source of truth and test suite. The Task969 API catalog now links all 44 records to code in this public tree.
-- Internal private audit material, authentication data, local evidence and sensitive historical fixtures are excluded.
-- This promotion did not send comments, delete tags, or make any other authenticated NicoNico modifications.
-
-## 2026-10-26 - Task935: Issue #3 フルスクリーン右端のシーク操作を修復（2.7.317）
-
-- 全画面の右側操作列の透明な領域がシークバーの終端側を覆い、直接クリックやサムネイル表示を妨げていた問題を修正。
-- 右側操作列の背景部分のみマウス入力を透過し、実際の操作ボタン・画質メニューは引き続き操作可能にする。
-- Task101で保護した重なり順（右操作列310、メニュー展開時320、シークバー300）やレイアウト寸法を変更しない。
-- 公開版にのみ適用する小さな修正。非公開版の通知履歴・通知色・透明度・Task934シーンサーチ配置変更は公開しない。
-- 縮小Chromium実験で修正前の遮断を再現し、修正後に画面幅4種×倍率5種×右端付近12点＝240操作点とボタン・メニュー操作を検証。
-- 実際のニコニコ上での利用者確認は未実施。Issue #3は実機確認まで閉じない。
-
-## 2026-10-24 - Task801: シーンサーチ修正版の統合とTypeScript化（2.7.316 / 設定0.3.66）
-
-- 作業ブランチに残っていたシーンサーチ修正を、Task904の動画読み込み復旧と統合。
-- 追従・固定・従来表示、ミニコメントの重ね表示、3ボタン操作、フォーカス解除と自動非表示を反映。
-- 上級者設定の表示親子関係・コメントプレビュー濃度とサイズ・不要な操作設定の整理を反映。
-- 状態管理、マウス操作、タイマー、ショートカット、コメント検索と検索画面の6モジュールをstrict TypeScript化。既存分を合わせ10モジュールを生成管理。
-- 全体3579テスト成功・78保留・失敗0、配布版ブラウザー956項目成功。実サイトでの最終確認はユーザー確認待ち。
-
-## 2026-10-20 - Task904: 動画読み込みの復旧（ZenzaWatch 2.7.315-task904）
-
-- 古い動画情報取得方式（`/watch/{id}?responseType=json`）がHTTP 400を返す問題に対応。公式動画ページの`server-response`を優先して読み込み、既存のWatch V4正規化処理へ渡す。
-- 情報取得失敗時に`videoInfo = null`を扱えず発生していた二次例外を修正。
-- 関連する自動テストとHARに基づくオフライン再現テストを実施。修正版での実機再生を確認済み。
-- 既存UIや別スクリプトの変更は今回の公開に含めない。
-
-## 2026-10-20 公開 — TypeScript 移行 (Task788〜903) と非公開開発分の反映
-
-開発用リポジトリで統合済みの変更 (〜Task902) を、公開中の develop (Issue #27〜#29 修正、シーンサーチ公開分を含む) の上に取り込んだ。公開側にしかない変更は 3-way マージで残している。主な内容:
-
-- 内部ライブラリ (lib) とプレイリスト一式、ストーリーボード、音量自動調整、ホバーメニューなどを TypeScript 由来の生成コードに置き換えた。動作は既存テストと旧版との比較テストで確認している。
-- プレイリスト一覧に .playlist.json をドロップしても取り込めなかった不具合を修正した。
-- 関連動画 (おすすめ API) に欠けた項目が 1 件あると、一覧全体が出なかった不具合を修正した。
-- マイリストの新形式項目に件数やサムネイルが無いと、例外になっていた不具合を修正した。
-- シークバーのサムネイル Worker の起動失敗時に、動画切り替えのたびに未処理エラーが出ていた不具合を修正した。
-- 動画リンクへのホバーを繰り返すと、クリック待ちのリスナーが溜まっていく問題を修正した。
-- シリーズページで想定の要素が無いと、リンク置換の初期化が止まっていた不具合を修正した。
-- 版: ZenzaWatch 2.7.314-public1020、上級者設定 0.3.64-public1020、MylistPocket 0.5.75-task800、ZenzaHLS 0.0.38-task800、uQuery 0.0.6-task850、CapTube 0.0.22-task800、HeatSync 0.0.22-task800、MaskedWatch 0.3.7-task786。
 
 ## Task422 / 2026-10-13 — Storyboard画像の失敗後再取得を修復
 

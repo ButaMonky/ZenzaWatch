@@ -28,7 +28,7 @@ describe('Task301 Pocket bootstrap continuation', () => {
   it('initializes unrelated features when optional NG discovery rejects', async () => {
     let externalCalls = 0;
     const c = createContext({config: {promise: async () => {}, props: {nicoad: {hide: false}}},
-      initDom() {}, initZenzaBridge() {}, createVideoInfoView: () => ({on() {}}),
+      initDom() {}, initZenzaBridge() {}, initRankingNgStyle() {}, createVideoInfoView: () => ({on() {}}),
       createCommandDispatcher: () => () => {}, HoverMenu: class {on() {}},
       MylistPocket: {debug: {}},
       createNgLifecycle: () => ({ngConfig: {props: {enable: true, tag: ''}},

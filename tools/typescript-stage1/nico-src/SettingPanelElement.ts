@@ -218,8 +218,8 @@ const {SettingPanelElement} = (() => {
             <input type="checkbox" class="checkbox"
               data-setting-name="bestZenTube"
               ?checked=${conf.bestZenTube}
-              data-command="toggle-bestZenTube">
-              ZenTube使用時に最高画質をリクエストする (※ 機能してないかも)
+              disabled>
+              ZenTubeの画質指定は非対応です（YouTube側で選択してください）
           </label>
         </div>
 

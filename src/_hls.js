@@ -22,7 +22,7 @@
 // @exclude        *://dic.nicovideo.jp/p/*
 // @grant          none
 // @author         segabito macmoto
-// @version        0.0.42-task979
+// @version        0.0.43-task981
 // @noframes
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3
 // @run-at         document-start
@@ -75,7 +75,7 @@ AntiPrototypeJs().then(() => {
             xhrSetup: (xhr, url) => {
                 xhr.withCredentials = true;
                 xhr.ontimeout = () => {
-                    window.console.log('xhr timeout', xhr, url);
+                    window.console.log('HLS request timeout');
                 };
             },
             // なんとなくわかる物
@@ -534,19 +534,42 @@ AntiPrototypeJs().then(() => {
                         throw e;
                     });
                 }
-                async clear() {
-                    console.time('storage clear');
-                    const { store } = await this.getStore();
+                async touch({ hash }) {
+                    const { store, transaction } = await this.getStore();
                     return new Promise((resolve, reject) => {
-                        const req = store.clear();
-                        req.onsuccess = (e) => {
-                            console.timeEnd('storage clear');
-                            resolve();
+                        let found = false;
+                        transaction.oncomplete = () => resolve(found);
+                        transaction.onabort = () => reject(new Error('HLS cache touch aborted'));
+                        transaction.onerror = () => reject(new Error('HLS cache touch failed'));
+                        const request = store.openCursor(hash);
+                        request.onsuccess = () => {
+                            const cursor = request.result;
+                            if (!cursor) {
+                                return;
+                            }
+                            const record = cursor.value;
+                            const now = Date.now();
+                            record.updatedAt = now;
+                            record.expiresAt = now + this.constructor.expireTime;
+                            record.expireDate = new Date(record.expiresAt).toLocaleString();
+                            cursor.update(record);
+                            found = true;
                         };
-                        req.onerror = (e) => {
-                            console.timeEnd('storage clear');
-                            reject(e);
-                        };
+                    });
+                }
+                async clear() {
+                    const { store, transaction } = await this.getStore();
+                    return new Promise((resolve, reject) => {
+                        transaction.oncomplete = () => resolve();
+                        transaction.onabort = () => reject(new Error('HLS cache clear aborted'));
+                        transaction.onerror = () => reject(new Error('HLS cache clear failed'));
+                        try {
+                            store.clear();
+                        }
+                        catch (_) {
+                            transaction.abort();
+                            reject(new Error('HLS cache clear failed'));
+                        }
                     });
                 }
             }
@@ -587,6 +610,9 @@ AntiPrototypeJs().then(() => {
                         return IndexDBStorage.getInstance().gc();
                     }
                 },
+                async touch(data) {
+                    return IndexDBStorage.getInstance().touch(data);
+                },
                 async clear() {
                     return IndexDBStorage.getInstance().clear();
                 }
@@ -620,6 +646,9 @@ AntiPrototypeJs().then(() => {
                         case 'gc':
                             await Storage.gc();
                             return self.postMessage({ id, status, result: null });
+                        case 'touch':
+                            result = await Storage.touch(data);
+                            return self.postMessage({ id, status, result });
                         case 'clear':
                             result = await Storage.clear();
                             return self.postMessage({ id, status, result });
@@ -672,7 +701,57 @@ AntiPrototypeJs().then(() => {
                         return request.resolve(e.data.result);
                 }
             },
+            restartCount: 0,
+            generation: 0,
+            ready: null,
+            startWorker() {
+                const generation = ++this.generation;
+                this.worker = createWebWorker(StorageWorker, { name: 'ZenzaWatchHLSWorker' });
+                this.failed = false;
+                this.worker.addEventListener('message', (e) => {
+                    if (generation === this.generation) {
+                        this.onMessage(e);
+                    }
+                });
+                const failed = () => { if (generation === this.generation) {
+                    this.onError();
+                } };
+                this.worker.addEventListener('error', failed);
+                this.worker.addEventListener('messageerror', failed);
+            },
+            async recover() {
+                if (this.ready) {
+                    return this.ready;
+                }
+                if (this.restartCount >= 2) {
+                    throw new Error('HLS cache worker unavailable');
+                }
+                this.restartCount++;
+                const pending = (async () => {
+                    try {
+                        this.startWorker();
+                        await this.sendRequest('config', { cache_expire_time: Config.get('cache_expire_time') }, null, true);
+                    }
+                    catch (_) {
+                        this.onError();
+                        throw new Error('HLS cache worker unavailable');
+                    }
+                })();
+                this.ready = pending;
+                try {
+                    await pending;
+                }
+                finally {
+                    if (this.ready === pending) {
+                        this.ready = null;
+                    }
+                }
+            },
             onError() {
+                ++this.generation;
+                if (this.worker && typeof this.worker.terminate === 'function') {
+                    this.worker.terminate();
+                }
                 this.failed = true;
                 for (const [id, request] of Object.entries(this.request)) {
                     delete this.request[id];
@@ -683,12 +762,20 @@ AntiPrototypeJs().then(() => {
             getId() {
                 return `id:${Math.random()}-${performance.now()}`;
             },
-            async sendRequest(command, data, buffer = null) {
+            async sendRequest(command, data, buffer = null, initializing = false) {
+                if (window.Prototype) {
+                    return null;
+                }
+                if (!initializing) {
+                    if (this.ready) {
+                        await this.ready;
+                    }
+                    if (this.failed) {
+                        await this.recover();
+                    }
+                }
                 if (this.failed) {
                     throw new Error('HLS cache worker unavailable');
-                }
-                if (window.Prototype) {
-                    return Promise.resolve(null);
                 }
                 const id = this.getId();
                 // window.console.info('sendrequest', command, data, buffer);
@@ -738,21 +825,27 @@ AntiPrototypeJs().then(() => {
                     return Promise.resolve();
                 }
             },
+            async touch(data) { return this.sendRequest('touch', data); },
             async clear() {
                 return this.sendRequest('clear', {});
             }
         };
         try {
-            Storage.worker = createWebWorker(StorageWorker, { name: 'ZenzaWatchHLSWorker' });
-            Storage.worker.addEventListener('message', Storage.onMessage.bind(Storage));
-            Storage.worker.addEventListener('error', Storage.onError.bind(Storage));
-            Storage.worker.addEventListener('messageerror', Storage.onError.bind(Storage));
+            Storage.worker = null;
+            Storage.startWorker();
         }
         catch (error) {
             Storage.onError();
         }
         Storage.setConfig({ cache_expire_time: Config.get('cache_expire_time') })
             .catch(() => console.warn('HLS cache configuration failed'));
+        Config.on('update-cache_expire_time', (value) => {
+            if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+                return;
+            }
+            Storage.setConfig({ cache_expire_time: value })
+                .catch(() => console.warn('HLS cache configuration failed'));
+        });
         const runStorageGc = Storage.gc.bind(Storage);
         Storage.gc = debounce(() => runStorageGc()
             .catch(() => console.warn('HLS cache maintenance failed')), 10 * 1000);
@@ -785,7 +878,11 @@ AntiPrototypeJs().then(() => {
                     // levelsを書き込んでいるのはFragmentLoaderClass（下でこの外側の
                     // 変数に代入される）自身なので、そちらを直接参照する必要がある。
                     const levels = FragmentLoaderClass && FragmentLoaderClass.levels;
-                    const [path, videoId, level, sn] = /\/nicovideo-([a-z0-9]+)_.*\/([\d]+)\/ts\/([\d]+)\.ts/.exec(url);
+                    const match = /\/nicovideo-([a-z0-9]+)_.*\/([\d]+)\/ts\/([\d]+)\.ts/.exec(url);
+                    if (!match) {
+                        return null;
+                    }
+                    const [, videoId, , sn] = match;
                     let rel = '';
                     if (fragment.levelkey && fragment.levelkey.reluri) {
                         const m = /h=(.*?)&/.exec(fragment.levelkey.reluri);
@@ -799,68 +896,57 @@ AntiPrototypeJs().then(() => {
                     return { hash: `${videoId}-${fragment.level}-${sn}${rel}`, videoId };
                 };
                 const hasCache = async (fragment) => {
-                    const { hash } = frag2hash(fragment);
-                    return await Storage.hasData({ hash }).catch(() => false);
+                    const key = frag2hash(fragment);
+                    return key ? await Storage.hasData(key).catch(() => false) : false;
                 };
                 const preloadFragment = async (fragment, url) => {
-                    if (fragment.hasCache) {
-                        return true;
+                    const key = frag2hash(fragment);
+                    if (!key) {
+                        return false;
                     }
+                    // A hint may outlive GC or another tab's clear; confirm persisted presence.
                     if (await hasCache(fragment)) {
                         fragment.hasCache = true;
                         return true;
                     }
+                    fragment.hasCache = false;
                     if (fragment.failed >= 3) {
                         return false;
                     }
-                    const { level, sn } = fragment;
-                    const { hash, videoId } = frag2hash(fragment);
                     const abc = new AbortController();
-                    const debounceTimeout = debounce(() => abc.abort(), 30000);
-                    const params = {
-                        method: 'GET',
-                        // mode: 'cors',
-                        credentials: 'include',
-                        cache: 'force-cache',
-                        signal: abc.signal,
-                    };
-                    const request = new Request(url, params);
-                    debounceTimeout();
-                    let res;
-                    for (let i = 0; i < 3; i++) {
-                        res = await fetch(request, params).catch(e => ({ e }));
-                        if (res.ok && res.status !== 206) {
-                            break;
+                    const timeout = debounce(() => abc.abort(), 30000);
+                    timeout();
+                    try {
+                        const params = { method: 'GET', credentials: 'include', cache: 'force-cache', signal: abc.signal };
+                        const request = new Request(url, params);
+                        while ((fragment.failed || 0) < 3) {
+                            const res = await fetch(request, params).catch(() => null);
+                            if (res && res.ok && res.status !== 206) {
+                                const buffer = await res.arrayBuffer();
+                                const saved = await Storage.save({ ...key, meta: {
+                                        contentLength: buffer.byteLength, sn: fragment.sn, resp: { url },
+                                        level: fragment.level, total: buffer.byteLength, stats: {}, url
+                                    } }, buffer).catch(() => false);
+                                fragment.hasCache = saved !== false && saved != null;
+                                if (fragment.hasCache) {
+                                    fragment.failed = 0;
+                                }
+                                return fragment.hasCache;
+                            }
+                            fragment.failed = (fragment.failed || 0) + 1;
+                            console.warn('HLS preload request failed');
+                            if (abc.signal.aborted || (res && res.status >= 400 && res.status < 500)) {
+                                break;
+                            }
+                            if (fragment.failed < 3) {
+                                await new Promise(resolve => setTimeout(resolve, 3000));
+                            }
                         }
-                        fragment.failed = i;
-                        const status = res.status;
-                        console.warn('fetch fail', { i, res, url, request, params });
-                        if (status >= 400 && status < 499) {
-                            break;
-                        }
-                        await new Promise(res => setTimeout(res, 3000));
+                        return false;
                     }
-                    if (!res.ok) {
-                        return;
+                    finally {
+                        timeout.cancel();
                     }
-                    const data = await res.arrayBuffer();
-                    debounceTimeout.cancel();
-                    const buffer = data.slice();
-                    fragment.hasCache = true;
-                    Storage.save({
-                        hash,
-                        videoId,
-                        meta: {
-                            contentLength: buffer.byteLength,
-                            sn,
-                            resp: { url },
-                            level,
-                            total: buffer.byteLength,
-                            stats: {},
-                            url
-                        }
-                    }, buffer).catch(() => console.warn('HLS cache write failed'));
-                    return true;
                 };
                 // hls.config.fLoader にはクラスのインスタンスではなく定義を渡す
                 // loaderはexportされていないため、Hls.DefaultConfig.loader経由で継承する
@@ -884,7 +970,7 @@ AntiPrototypeJs().then(() => {
                      */
                     async load(context, config, callbacks) {
                         if (!context.frag || !/\.(ts|cmfa|cmfv)/.test(context.url)) {
-                            window.console.info('unknown context', context.url, context);
+                            window.console.info('HLS fragment uses default loader');
                             return super.load(context, config, callbacks);
                         }
                         if (/\.cmf(a|v)/.test(context.url)) {
@@ -892,7 +978,11 @@ AntiPrototypeJs().then(() => {
                         }
                         const frag = context.frag;
                         const level = frag.level;
-                        const { hash, videoId } = frag2hash(frag);
+                        const key = frag2hash(frag);
+                        if (!key) {
+                            return super.load(context, config, callbacks);
+                        }
+                        const { hash, videoId } = key;
                         const { onSuccess, onError } = callbacks;
                         if (!context.rangeStart && !context.rangeEnd) {
                             callbacks.onSuccess = async (resp, stats, context, details = null) => {
@@ -904,7 +994,7 @@ AntiPrototypeJs().then(() => {
                                 }
                                 else if (Config.get('enable_db_cache') && !window.Prototype) {
                                     const buffer = resp.data.slice();
-                                    frag.hasCache = true;
+                                    frag.hasCache = false;
                                     Storage.save({
                                         hash,
                                         videoId,
@@ -919,7 +1009,11 @@ AntiPrototypeJs().then(() => {
                                             stats,
                                             url: context.url
                                         }
-                                    }, buffer).catch(() => console.warn('HLS cache write failed'));
+                                    }, buffer).then(saved => {
+                                        if (!this._isAborted && !this._isDestroyed) {
+                                            frag.hasCache = saved !== false && saved != null;
+                                        }
+                                    }).catch(() => console.warn('HLS cache write failed'));
                                 }
                                 onSuccess(resp, stats, context, details);
                             };
@@ -933,13 +1027,15 @@ AntiPrototypeJs().then(() => {
                                 // console.log('cache?', !!meta, hash);
                                 if (meta && buffer && typeof buffer.slice === 'function') {
                                     frag.hasCache = true;
-                                    return callbacks.onSuccess({ url: meta.url, data: buffer }, meta.stats, context, null);
+                                    Storage.touch({ hash }).catch(() => console.warn('HLS cache touch failed'));
+                                    onSuccess({ url: meta.url, data: buffer }, meta.stats, context, null);
+                                    return;
                                 }
                             }
                         }
                         callbacks.onError = (resp /* = {code, text} */, context, xhr) => {
                             if (this._isAborted) {
-                                console.warn('error after aborted', resp, context);
+                                console.warn('HLS fragment failed after abort');
                                 onError({ code: 0, text: `error after aborted ${resp.code}: ${resp.text}` }, context, xhr);
                                 return;
                             }
@@ -1193,7 +1289,9 @@ AntiPrototypeJs().then(() => {
                 set currentTime(v) {
                     if (this.playerMode === PLAYER_MODE.HLS_JS &&
                         this._hlsConfig.autoStartLoad === false) {
-                        this._hls.startLoad(v);
+                        if (this._hls) {
+                            this._hls.startLoad(v);
+                        }
                         return;
                     }
                     this._seekingTime = v;
@@ -1253,6 +1351,10 @@ AntiPrototypeJs().then(() => {
                     }
                     if (/\.m3u8(|\?.*?)$/.test(v)) {
                         if (this._useNativeHLS) {
+                            this._destroyHLSJS();
+                            if (this._videoCount !== videoCount) {
+                                return;
+                            }
                             this._src = v;
                             this.playerMode = PLAYER_MODE.HLS_NATIVE;
                             this._video.src = v;
@@ -1265,6 +1367,10 @@ AntiPrototypeJs().then(() => {
                         }
                         this._src = v;
                         this.playerMode = PLAYER_MODE.HLS_JS;
+                        return;
+                    }
+                    this._destroyHLSJS();
+                    if (this._videoCount !== videoCount) {
                         return;
                     }
                     this._src = v;
@@ -1291,10 +1397,15 @@ AntiPrototypeJs().then(() => {
                 }
                 disconnectedCallback() {
                     ++this._videoCount;
+                    this._throttledCurrentTime.cancel();
+                    this._isSeeking = false;
+                    this._seekingTime = this._video.currentTime;
                     this._destroyHLSJS();
-                    for (let [func, events] of this._eventWrapperMap.entries()) {
-                        for (let eventName of Object.keys(events)) {
-                            this.removeEventListener(eventName, func);
+                    for (const [func, events] of this._eventWrapperMap.entries()) {
+                        for (const [eventName, captures] of events.entries()) {
+                            for (const capture of [...captures.keys()]) {
+                                this.removeEventListener(eventName, func, capture);
+                            }
                         }
                     }
                     this._eventWrapperMap.clear();
@@ -1310,30 +1421,61 @@ AntiPrototypeJs().then(() => {
                 getAttribute(attr) {
                     return this._video.getAttribute(attr);
                 }
-                addEventListener(eventName, callback, ...options) {
-                    const map = this._eventWrapperMap.get(callback) || {};
-                    if (map[eventName]) {
+                addEventListener(eventName, callback, options = false) {
+                    if (!callback) {
                         return;
                     }
-                    const wrapper = (event, ...args) => {
-                        callback(overrideTarget(event, this), ...args);
+                    const capture = typeof options === 'boolean' ? options : !!options?.capture;
+                    if (options && options.signal && options.signal.aborted) {
+                        return;
+                    }
+                    const events = this._eventWrapperMap.get(callback) || new Map();
+                    const captures = events.get(eventName) || new Map();
+                    if (captures.has(capture)) {
+                        return;
+                    }
+                    const wrapper = (event) => {
+                        if (options && options.once) {
+                            this.removeEventListener(eventName, callback, { capture });
+                        }
+                        const forwarded = overrideTarget(event, this);
+                        if (typeof callback === 'function') {
+                            callback.call(this, forwarded);
+                        }
+                        else {
+                            callback.handleEvent(forwarded);
+                        }
                     };
-                    map[eventName] = wrapper;
-                    this._eventWrapperMap.set(callback, map);
-                    super.addEventListener(eventName, wrapper, ...options);
-                    this._video.addEventListener(eventName, wrapper, ...options);
+                    const abort = () => this.removeEventListener(eventName, callback, { capture });
+                    captures.set(capture, { wrapper, signal: options && options.signal, abort });
+                    events.set(eventName, captures);
+                    this._eventWrapperMap.set(callback, events);
+                    super.addEventListener(eventName, wrapper, options);
+                    this._video.addEventListener(eventName, wrapper, options);
+                    if (options && options.signal) {
+                        options.signal.addEventListener('abort', abort, { once: true });
+                    }
                 }
-                removeEventListener(eventName, callback) {
-                    super.removeEventListener(eventName, callback);
-                    this._video.removeEventListener(eventName, callback);
-                    const map = this._eventWrapperMap.get(callback);
-                    if (!map || !map[eventName]) {
+                removeEventListener(eventName, callback, options = false) {
+                    const capture = typeof options === 'boolean' ? options : !!options?.capture;
+                    super.removeEventListener(eventName, callback, { capture });
+                    this._video.removeEventListener(eventName, callback, { capture });
+                    const events = this._eventWrapperMap.get(callback);
+                    const captures = events && events.get(eventName);
+                    const entry = captures && captures.get(capture);
+                    if (!entry) {
                         return;
                     }
-                    super.removeEventListener(eventName, map[eventName]);
-                    this._video.removeEventListener(eventName, map[eventName]);
-                    delete map[eventName];
-                    if (Object.keys(map).length < 1) {
+                    super.removeEventListener(eventName, entry.wrapper, { capture });
+                    this._video.removeEventListener(eventName, entry.wrapper, { capture });
+                    if (entry.signal) {
+                        entry.signal.removeEventListener('abort', entry.abort);
+                    }
+                    captures.delete(capture);
+                    if (!captures.size) {
+                        events.delete(eventName);
+                    }
+                    if (!events.size) {
                         this._eventWrapperMap.delete(callback);
                     }
                 }
@@ -1659,7 +1801,7 @@ AntiPrototypeJs().then(() => {
                                 }
                                 else if (code === 403) {
                                     // 403になるとそのセッションは死ぬ
-                                    console.warn('Forbidden 403: %s\n%s', this._id, this.src);
+                                    console.warn('HLS request forbidden', 403);
                                     this._isForbidden403 = true;
                                     //this._hls.stopLoad();
                                 }
@@ -1688,7 +1830,7 @@ AntiPrototypeJs().then(() => {
                     return;
                 }
                 _onHLSJSFatalError(e, data) {
-                    console.error('%cHls.Events.ERROR: FATAL', 'background: cyan;', this._id, data);
+                    console.error('HLS fatal error');
                     let code;
                     // サンプルコードではここで自動リカバーしているが、
                     // サーバーの障害でエラーが起きてる場合は追加攻撃になりかねないので、やめておく

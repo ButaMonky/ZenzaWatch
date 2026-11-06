@@ -66,13 +66,14 @@ describe('Task324 AUD-44 mutation lock generation ownership',()=>{
         assert.strictEqual(h.requests.length,1);
         assert.strictEqual(h.dialog._state[flag],true);
         h.advance(10000);
-        assert.strictEqual(h.dialog._state[flag],false,'original ten-second fallback');
+        assert.strictEqual(h.dialog._state[flag],true,'pending mutation stays locked');
         actions[second](h.dialog);await flush();
-        assert.strictEqual(h.requests.length,2);
-        assert.strictEqual(h.dialog._state[flag],true);
+        assert.strictEqual(h.requests.length,1,'overlapping mutation is blocked');
         h.requests[0].resolve({message:'A finished'});await flush();
         h.advance(2000);
-        assert.strictEqual(h.dialog._state[flag],true,'A stale timer must not unlock B');
+        assert.strictEqual(h.dialog._state[flag],false);
+        actions[second](h.dialog);await flush();
+        assert.strictEqual(h.requests.length,2);
         actions[first](h.dialog);await flush();
         assert.strictEqual(h.requests.length,2,'a third operation must be blocked');
         h.requests[1].resolve({message:'B finished'});await flush();
@@ -94,11 +95,11 @@ describe('Task324 AUD-44 mutation lock generation ownership',()=>{
       });
     }
     for(const kind of ['mylistAdd','deflistRemove']) {
-      it(file+' retains ten-second failsafe for '+kind,async()=>{
+      it(file+' retains pending ownership beyond ten seconds for '+kind,async()=>{
         const h=harness(file),flag=busyFlag(kind);
         actions[kind](h.dialog);await flush();
         h.advance(9999);assert.strictEqual(h.dialog._state[flag],true);
-        h.advance(1);assert.strictEqual(h.dialog._state[flag],false);
+        h.advance(1);assert.strictEqual(h.dialog._state[flag],true);
       });
     }
   }

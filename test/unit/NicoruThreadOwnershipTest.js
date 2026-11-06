@@ -70,14 +70,14 @@ for(const path of ['src/NicoVideoPlayerDialog.js','dist/ZenzaWatch-dev.user.js']
       assert.strictEqual(h.calls[0].info,original);
       assert.strictEqual(h.rejected.length,0);
     });
-    it('preserves the existing rejection callback and error notification',async()=>{
+    it('rejects the original request without stale video error notification',async()=>{
       const h=fixture(path),chat={no:1};
       h.dialog.threadLoader.nicoru=async()=>{throw new Error('failure');};
       h.send(chat);h.switchToB();
       await h.settle();
       assert.strictEqual(h.rejected.length,1);
       assert.strictEqual(h.fulfilled.length,0);
-      assert.deepStrictEqual(h.alerts[0],['alert','failure']);
+      assert.deepStrictEqual(h.alerts,[]);
     });
     it('does not depend on later mutation of the dialog threadLoader',async()=>{
       const h=fixture(path),chat={no:1};

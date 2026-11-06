@@ -56,7 +56,7 @@ function loader(cacheLoad) {
   const loads = [];
   class Base { load(...args) { loads.push(args); } abort() {} destroy() {} }
   const c = createContext({Hls: {DefaultConfig: {loader: Base}},
-    Storage: {load: cacheLoad, save: () => Promise.resolve(), gc() {}},
+    Storage: {load: cacheLoad, touch: async () => true, save: () => Promise.resolve(), gc() {}},
     Config: {get: key => key === 'enable_db_cache'}, XMLHttpRequest: class {},
     performance: {now: () => 10000}});
   run(`let FragmentLoaderClass; globalThis.Loader = (${extract('src/_hls.js', 'createFragmentLoader', 'var')})(Hls);`, c);
@@ -98,7 +98,7 @@ describe('Task301 HLS optional worker startup', () => {
     const start = source.indexOf('    const Storage = {', source.indexOf('    const createWebWorker'));
     const end = source.indexOf('    const ZenzaVideoElement', start);
     const c = createContext({createWebWorker() { throw new Error('Worker denied'); }, StorageWorker() {},
-      Config: {get: () => false}, debounce: fn => fn, console: {warn() {}}});
+      Config: {get: () => false, on() {}}, debounce: fn => fn, console: {warn() {}}});
     run(source.slice(start, end) + ';globalThis.subject = Storage;', c);
     const {instance, loads} = loader(() => c.subject.load({hash: 'x'}));
     await instance.load(context(), {}, {onSuccess() {}, onError() {}});

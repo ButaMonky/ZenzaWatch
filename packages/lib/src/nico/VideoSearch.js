@@ -944,7 +944,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params);
             const currentPage = params.page ? parseInt(params.page, 10) : 1;
             const currentOffset = (currentPage - 1) * PER_PAGE;
-            if (result.count <= ONCE_LIMIT) {
+            if (result.count <= ONCE_LIMIT || maxLimit <= ONCE_LIMIT) {
+                result.list = result.list.slice(0, maxLimit);
                 return result;
             }
             const searchCount = Math.min(Math.ceil((result.count - currentOffset) / PER_PAGE) - 1, Math.ceil((maxLimit - ONCE_LIMIT) / ONCE_LIMIT));
@@ -961,6 +962,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                     break;
                 }
             }
+            result.list = result.list.slice(0, maxLimit);
             return Object.assign(result, { word, params });
         }
         static _jsonParse(result) {

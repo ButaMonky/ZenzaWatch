@@ -1176,7 +1176,8 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
         const currentPage = params.page ? parseInt(params.page as string, 10) : 1;
         const currentOffset = (currentPage - 1) * PER_PAGE;
 
-        if (result.count <= ONCE_LIMIT) {
+        if (result.count <= ONCE_LIMIT || maxLimit <= ONCE_LIMIT) {
+          result.list = result.list.slice(0, maxLimit);
           return result;
         }
 
@@ -1197,6 +1198,7 @@ const {NicoSearchApiV2Query, NicoSearchApiV2Loader} =
             break;
           }
         }
+        result.list = result.list.slice(0, maxLimit);
         return Object.assign(result, {word, params});
       }
 

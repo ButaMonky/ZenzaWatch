@@ -62,6 +62,17 @@ jobs:
         run: npm --prefix tools/typescript-stage1 ci --no-audit --no-fund
       - name: Emit and verify canonical scene sources
         run: npm --prefix tools/typescript-stage1 run nico:verify
+      # P12 generated JavaScript is intentionally ignored by Git; clean CI checkouts
+      # must compile the canonical TS before pretest without modifying tracked files.
+      - name: Prepare P12 generated sources for root tests
+        run: npm --prefix tools/typescript-stage1 run p12:emit
+      - name: Verify emitted sources against compiler output
+        run: node tools/typescript-stage1/scripts/check-emitted-provenance.mjs
+      - name: Verify distributable files match the checked-in source
+        run: node tools/check_regeneration.js .
+        env:
+          BABEL_DISABLE_CACHE: '1'
+          ZENZA_BUILD_NO_NOTIFY: '1'
       - name: Full offline regression suite
         run: npm test -- --timeout 20000 --reporter dot
       # Keep real Chromium regressions for newly published UI features.
@@ -102,5 +113,7 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Install TypeScript toolchain
         run: npm --prefix tools/typescript-stage1 ci --no-audit --no-fund
+      - name: Prepare P12 generated sources for TypeScript parity tests
+        run: npm --prefix tools/typescript-stage1 run p12:emit
       - name: Type check, generated-source sync and parity tests
         run: npm --prefix tools/typescript-stage1 test

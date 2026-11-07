@@ -58,7 +58,7 @@ const LikeApi: LikeApiClient = {
     }
     // Any truthy body is probed like the legacy JS (`json.meta`); primitives yield undefined.
     const meta = ((json && (json as UnknownPropertyBag).meta) || {}) as UnknownPropertyBag;
-    const status: number = typeof meta.status === 'number' ? meta.status : res.status;
+    const status: number = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
     if (status < 200 || status >= 300) {
       const detail = [status, meta.errorCode].filter(Boolean).join(' ');
       throw Object.assign(new Error(`${label}に失敗しました（${detail}）`),

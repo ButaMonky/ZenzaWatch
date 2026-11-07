@@ -39,7 +39,23 @@ const NicoRssLoader = (() => {
     const load = async (url) => {
         const rssText = await netUtil.fetch(url).then(r => r.text());
         const xml = new DOMParser().parseFromString(rssText, 'application/xml');
-        const items = Array.from(xml.querySelectorAll('item')).map(i => parseItem(i));
+        const entries = Array.from(xml.querySelectorAll('item'));
+        const items = [];
+        let skipped = 0;
+        for (const entry of entries) {
+            try {
+                items.push(parseItem(entry));
+            }
+            catch (_) {
+                skipped++;
+            }
+        }
+        if (skipped > 0 && items.length === 0) {
+            throw new Error('RSSの項目を解析できませんでした');
+        }
+        if (skipped > 0) {
+            window.console.warn('RSSの形式不正の項目をスキップしました', skipped);
+        }
         return items;
     };
     const loadRanking = ({ genre = 'all', term = 'hour', tag = '' }) => {

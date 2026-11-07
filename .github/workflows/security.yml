@@ -42,28 +42,4 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # AUD #268: redacted diagnostic only. No secret value or snippet is logged.
-          report="${RUNNER_TEMP}/gitleaks-redacted.json"
-          status=0
-          "${RUNNER_TEMP}/gitleaks" dir . --no-banner --redact --exit-code 1 \
-            --report-format json --report-path "$report" || status=$?
-          if test -f "$report"; then
-            REPORT_PATH="$report" python3 - <<'PY'
-          import collections
-          import json
-          import os
-          report = json.load(open(os.environ["REPORT_PATH"], encoding="utf-8"))
-          if not isinstance(report, list):
-              raise SystemExit("Malformed redacted scan report")
-          print("REDACTED_FINDINGS_COUNT=" + str(len(report)))
-          by_file = collections.Counter((f.get("File", ""), f.get("RuleID", "")) for f in report)
-          for finding in sorted(report, key=lambda f: (f.get("File", ""), int(f.get("StartLine", 0)))):
-              # Only repository-relative file paths, rule IDs and line numbers;
-              # never serialize Match, Secret, Entropy, or offender snippets.
-              name = str(finding.get("File", "")).removeprefix("./")
-              rule = "".join(ch for ch in str(finding.get("RuleID", "")) if ch.isalnum() or ch in "-_")
-              line = int(finding.get("StartLine", 0))
-              print(f"REDACTED_FINDING file={name} rule={rule} line={line}")
-          PY
-          fi
-          exit "$status"
+          "${RUNNER_TEMP}/gitleaks" dir . --no-banner --redact --exit-code 1

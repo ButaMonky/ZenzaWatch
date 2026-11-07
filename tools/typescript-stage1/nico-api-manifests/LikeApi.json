@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/LikeApi.ts",
   "runtime": "packages/lib/src/nico/LikeApi.js",
-  "sourceSha256": "eb559fb850f540d3b86d987fc8e9774605522c3504179b15c06920b3d3577bf5",
-  "runtimeSha256": "46ada93a96c76aa41fc45c102a6e88075e9e3b602338b151e5c66beba2c0f5d3"
+  "sourceSha256": "7c2d6c36b3ca8fd9567374d0c5d7e5c01b7357264d1117ce29d007aaf1422c17",
+  "runtimeSha256": "0481d1feca5d89b9306e91b15defefb34abf110ea4dfc093a7225c66b2cdf9b1"
 }

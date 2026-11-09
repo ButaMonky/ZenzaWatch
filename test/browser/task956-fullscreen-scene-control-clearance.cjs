@@ -3,11 +3,14 @@
 const fs=require('fs'),path=require('path'),os=require('os'),assert=require('assert');
 const {spawnSync}=require('child_process');
 const {startChromeCdp}=require('../helpers/startChromeCdp');
+const {sceneSearchOwnershipPrelude}=require('../helpers/sceneSearchOwnershipDependencies');
 const root=path.resolve(__dirname,'../..');
 const body=file=>fs.readFileSync(path.join(root,file),'utf8')
   .split('//===BEGIN===')[1].split('//===END===')[0];
 const placement=body('packages/zenza/src/sceneSearch/SceneSearchPlacement.js');
-const bridge=body('packages/zenza/src/sceneSearch/SceneSearchIntegrationBridge.js');
+const bridgePath='packages/zenza/src/sceneSearch/SceneSearchIntegrationBridge.js';
+const bridge=sceneSearchOwnershipPrelude(bridgePath,
+ file=>fs.readFileSync(path.join(root,file),'utf8'))+body(bridgePath);
 const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'+
  'html,body{margin:0;height:100%;background:#101722;overflow:hidden}'+
  '.zenzaPlayerContainer{position:fixed;inset:0}'+
@@ -68,7 +71,8 @@ async function send(method,params={}){
 }
 async function evaluate(expression){
  const result=await send('Runtime.evaluate',{expression,returnByValue:true});
- if(result.exceptionDetails)throw Error(result.exceptionDetails.text);
+ if(result.exceptionDetails)throw Error(String(
+  result.exceptionDetails.exception?.description||result.exceptionDetails.text).split(/\r?\n/)[0]);
  return result.result?.value;
 }
 (async()=>{

@@ -27,9 +27,9 @@ describe('Task201 real toolbar to history panel runtime',function(){
  });
 });
 
-function realStyles(r){
+function realStyles(r,files=['src/VideoControlBar.js','src/NicoVideoPlayerDialog.js']){
  const parser=require('@babel/parser'),traverse=require('@babel/traverse').default;
- for(const file of ['src/VideoControlBar.js','src/NicoVideoPlayerDialog.js']){
+ for(const file of files){
   const text=read(file);traverse(parser.parse(text,{sourceType:'module'}),{CallExpression(p){
    const n=p.node,arg=n.arguments[0];if(n.callee.type!=='MemberExpression'||n.callee.object.name!=='util'||n.callee.property.name!=='addStyle'||arg?.type!=='TemplateLiteral')return;
    const raw=text.slice(arg.start,arg.end);if(!raw.includes('.controlButton:focus-within')&&!raw.includes('body.zenzaScreenMode_big >*'))return;
@@ -63,6 +63,25 @@ describe('Task201 existing menu behavior',function(){
  it('opening and closing the panel does not enable history or change preferences',function(){
   const r=runtime();try{r.button.click();const f=r.d._commentHistory;assert(f.panel.isOpen);assert.strictEqual(f.controller.state.enabled,false);
    r.button.click();assert(!f.panel.isOpen);assert.strictEqual(r.win.localStorage.length,0);
+  }finally{r.close();}
+ });
+});
+
+// Issue214: mouse-down focuses the native bookmark button before mouse-up.
+// A synthetic click alone cannot expose CSS removing it from hit testing.
+for(const files of [['src/VideoControlBar.js','src/NicoVideoPlayerDialog.js'],
+ ['dist/ZenzaWatch-dev.user.js']])describe('Issue214 bookmark pointer ownership: '+files[0],function(){
+ this.timeout(20000);
+ it('keeps the bookmark button and icon hit-testable after pointer focus',function(){
+  const r=runtime();try{
+   r.button.classList.replace('commentHistorySwitch','playbackPointsSwitch');
+   r.button.dataset.command='toggle-playbackPoints';
+   realStyles(r,files);
+   r.button.dispatchEvent(new r.win.MouseEvent('mousedown',{bubbles:true,button:0}));
+   r.button.focus();
+   assert(r.button.matches(':focus-within'));
+   assert.strictEqual(r.win.getComputedStyle(r.button).pointerEvents,'auto');
+   assert.strictEqual(r.win.getComputedStyle(r.button.querySelector('svg')).pointerEvents,'auto');
   }finally{r.close();}
  });
 });

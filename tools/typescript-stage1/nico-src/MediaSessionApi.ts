@@ -34,7 +34,8 @@ export interface MediaPositionLike {
 
 const MediaSessionApi = (() => {
   const emitter = new Emitter();
-  let init = false;
+  let activeSession: MediaSession | null = null;
+  const registeredActions = new Set<string>();
 
   /**
    * MSA-POSITION-001 (Task781): Media Session expects `position`, and throws a
@@ -66,37 +67,53 @@ const MediaSessionApi = (() => {
     if (!('mediaSession' in navigator)) {
       return;
     }
-    navigator.mediaSession.metadata = new self.MediaMetadata({
-      title,
-      artist,
-      album,
-      // Optional artwork must not abort playback when an image URL is missing.
-      artwork: (artwork || []).filter(image => typeof image?.src === 'string' && image.src.trim())
-    });
-
     const nm = navigator.mediaSession;
+    if (!nm) { return; }
+    // Metadata/individual media-key handlers are optional OS integrations,
+    // and must not prevent the VideoSessionWorker from starting playback.
+    try {
+      nm.metadata = new self.MediaMetadata({
+        title,
+        artist,
+        album,
+        artwork: (artwork || []).filter(image => typeof image?.src === 'string' && image.src.trim())
+      });
+    } catch (_) { /* MediaMetadata may be unavailable even if mediaSession exists. */ }
+
     if ('setPositionState' in nm) {
       setPosition(nm, duration);
     }
-    if (init) {
-      return;
+    // A new MediaSession object must not inherit the old object's registrations.
+    if (activeSession !== nm) {
+      activeSession = nm;
+      registeredActions.clear();
     }
-    init = true;
-    nm.setActionHandler('play',          () => emitter.emit('command', 'play'));
-    nm.setActionHandler('pause',         () => emitter.emit('command', 'pause'));
-    nm.setActionHandler('seekbackward',  () => emitter.emit('command', 'seekBy', -5));
-    nm.setActionHandler('seekforward',   () => emitter.emit('command', 'seekBy', +5));
-    nm.setActionHandler('previoustrack', () => emitter.emit('command', 'playPreviousVideo'));
-    nm.setActionHandler('nexttrack',     () => emitter.emit('command', 'playNextVideo'));
-    nm.setActionHandler('stop',          () => emitter.emit('command', 'close'));
-    nm.setActionHandler('seekto',        e => {
+    const register = (action: Parameters<MediaSession['setActionHandler']>[0],
+      handler: Parameters<MediaSession['setActionHandler']>[1]) => {
+      if (registeredActions.has(action)) { return; }
+      try {
+        nm.setActionHandler(action, handler);
+        registeredActions.add(action);
+      } catch (_) {
+        // Unsupported actions or transient permission errors are non-fatal.
+        // A later update may retry only this missing handler.
+      }
+    };
+    register('play',          () => emitter.emit('command', 'play'));
+    register('pause',         () => emitter.emit('command', 'pause'));
+    register('seekbackward',  () => emitter.emit('command', 'seekBy', -5));
+    register('seekforward',   () => emitter.emit('command', 'seekBy', +5));
+    register('previoustrack', () => emitter.emit('command', 'playPreviousVideo'));
+    register('nexttrack',     () => emitter.emit('command', 'playNextVideo'));
+    register('stop',          () => emitter.emit('command', 'close'));
+    register('seekto',        e => {
       emitter.emit('command', 'seekTo', e.seekTime);
     });
   };
 
   const updateByVideoInfo = (videoInfo: MediaSessionVideoInfo) => {
     const title = videoInfo.title;
-    const artist = videoInfo.owner.name;
+    const artist = videoInfo.owner?.name || '';
     const album = '';
     const artwork: MediaImage[] = [{src: videoInfo.thumbnail, sizes: '130x100', type: 'image/jpg'}];
     if (videoInfo.betterThumbnail) {

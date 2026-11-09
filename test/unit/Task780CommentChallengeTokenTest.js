@@ -113,10 +113,12 @@ describe('Task780 in-flight video ownership boundary', () => {
     assert.deepStrictEqual(p.requests.map(x => x.kind), ['key']);
     assert(!JSON.stringify(p.capturedLogs).includes(p.token));
   });
-  it('preserves legacy in-flight posting to the original video when no challenge was required', async () => {
+  it('prevents stale non-challenge posts even when the post key was acquired', async () => {
     const p = createSubject({isRequired: false}, async () => 'SHOULD-NOT-RUN');
-    const result = await p.subject.postChat(p.data, 'draft', '', 1, () => false);
-    assert.strictEqual(result.no, 8);
-    assert.deepStrictEqual(p.requests.map(x => x.kind), ['key', 'post']);
+    const error = await p.subject.postChat(p.data, 'draft', '', 1, () => false)
+      .then(() => null, e => e);
+    assert.strictEqual(error.reason, 'challenge-stale-video');
+    assert.strictEqual(error.outcome, 'not-sent');
+    assert.deepStrictEqual(p.requests.map(x => x.kind), ['key']);
   });
 });

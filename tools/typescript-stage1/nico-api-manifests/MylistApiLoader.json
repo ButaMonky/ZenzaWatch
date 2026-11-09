@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/MylistApiLoader.ts",
   "runtime": "packages/lib/src/nico/MylistApiLoader.js",
-  "sourceSha256": "508ac14d00a34e2e716cc17ad548c2d8240437b3e1ba00d75dab788188ca5230",
-  "runtimeSha256": "173f9721321f4dc2bdba5b2c55dff9365c301be0e6cd92596de78a7b33e41f01"
+  "sourceSha256": "3bb543c92e0f27b7793ccd166380d27bcb0cd62504199800f5ca1ed0ffb4486a",
+  "runtimeSha256": "b350706d58d1f2f3232a8fa343310730a0be2529cba8bab3116a86019743a41e"
 }

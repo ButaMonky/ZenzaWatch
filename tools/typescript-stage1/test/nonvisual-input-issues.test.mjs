@@ -20,6 +20,7 @@ for(const [time,seconds] of [['90',90],['90s',90],['1m30s',90],['1h2m5s',3725],[
   const context=vm.createContext({Emitter:class{},console:{log(){}}});
   vm.runInContext(sourceClass('YouTubeWrapper')+';globalThis.Wrapper=YouTubeWrapper;',context);
   const wrapper=Object.create(context.Wrapper.prototype),calls=[];
+  wrapper._autoplay=true; // This #115 fixture verifies t= parsing on the autoplay-on path.
   wrapper._player={loadVideoById:value=>calls.push(value),loadPlaylist(){}};
   wrapper._parseVideoId=()=> 'synthetic';wrapper._parseUrlParams=()=>({t:time});
   await wrapper.setSrc('https://youtube.invalid/watch',4);
@@ -63,6 +64,7 @@ test('#114 closing the real Dialog restores held speed before its closed shortcu
  run(sourceClass('NicoVideoPlayerDialog')+';globalThis.Dialog=NicoVideoPlayerDialog;',c);
  run('globalThis.config=new Emitter();globalThis.external=new Emitter();external.emitResolve("init");globalThis.dialog=new Emitter();',c);
  c.config.props={KEY_SHIFT_RESET:82,KEY_TOGGLE_PLAY:32,playbackRate:1.75};
+ // Match the real PlayerConfig API, including its read path used at Dialog close.
  c.config.getValue=key=>c.config.props[key];
  c.config.setValue=(key,value)=>{c.config.props[key]=value;if(key==='playbackRate')rates.push(value);c.config.emit('update',key,value);};
  const d=c.dialog;Object.setPrototypeOf(d,c.Dialog.prototype);let toggles=0;

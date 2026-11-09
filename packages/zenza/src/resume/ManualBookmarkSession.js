@@ -10,16 +10,45 @@ const makeState = (status, videoId, bookmarks) => Object.freeze({ status, videoI
 class ManualBookmarkSession {
     repository;
     listeners = new Set();
+    /** Broadcast only invalidation, never video IDs or bookmark content. */
+    changeChannel;
     current = null;
     generation = 0;
     latestAction = 0;
     activating = null;
     failedAction = null;
     readbackRevision = 0;
+    /** A background read must never overwrite an unfinished local edit. */
+    inFlightWrites = 0;
+    refreshing = null;
     disposed = false;
+    failedLoad = false;
     state = makeState('idle', null, empty);
-    constructor(repository) { this.repository = repository; }
+    constructor(repository) {
+        this.repository = repository;
+        let channel = null;
+        try {
+            if (typeof window !== 'undefined' && typeof window.BroadcastChannel === 'function') {
+                channel = new window.BroadcastChannel('zenza-manual-bookmarks-v1');
+                channel.onmessage = event => {
+                    if (event?.data?.kind !== 'changed')
+                        return;
+                    void this.refreshIfIdle();
+                };
+            }
+        }
+        catch { /* Unsupported sandbox/origin: Dock focus/reopen remains the fallback. */ }
+        this.changeChannel = channel;
+    }
+    notifyOtherTabs() {
+        try {
+            this.changeChannel?.postMessage({ kind: 'changed' });
+        }
+        catch { /* Never turn a successful bookmark write into a notification error. */ }
+    }
     get snapshot() { return this.state; }
+    /** Only initial load failures may be retried on Dock open; write failures keep drafts. */
+    get needsLoadRetry() { return !this.disposed && this.failedLoad && this.state.status === 'error'; }
     subscribe(listener) {
         if (this.disposed)
             throw new Error('Bookmark session disposed');
@@ -30,7 +59,7 @@ class ManualBookmarkSession {
         catch { /* UI observer cannot stop persistence. */ }
         return () => this.listeners.delete(listener);
     }
-    update(status, videoId, bookmarks) {
+    publishState(status, videoId, bookmarks) {
         this.state = makeState(status, videoId, bookmarks);
         for (const notify of this.listeners) {
             try {
@@ -59,12 +88,13 @@ class ManualBookmarkSession {
         this.current = Object.freeze({ videoId, duration });
         this.latestAction = 0;
         this.failedAction = null;
+        this.failedLoad = false;
         this.readbackRevision++;
         // Publish the in-flight owner before synchronous loading observers run.
         // An observer can re-enter activate() or switch videos immediately.
         const activating = this.loadActivated(generation, videoId, duration);
         this.activating = activating;
-        this.update('loading', videoId, empty);
+        this.publishState('loading', videoId, empty);
         void activating.then(() => { if (this.activating === activating)
             this.activating = null; }, () => { if (this.activating === activating)
             this.activating = null; });
@@ -75,13 +105,14 @@ class ManualBookmarkSession {
             const bookmarks = await this.repository.load(videoId, duration);
             if (!this.isCurrent(generation, videoId) || this.latestAction > 0)
                 return Object.freeze({ status: 'stale', snapshot: this.state });
-            const snapshot = this.update('ready', videoId, bookmarks);
+            const snapshot = this.publishState('ready', videoId, bookmarks);
             return Object.freeze({ status: 'applied', snapshot });
         }
         catch {
             if (!this.isCurrent(generation, videoId) || this.latestAction > 0)
                 return Object.freeze({ status: 'stale', snapshot: this.state });
-            const snapshot = this.update('error', videoId, empty);
+            this.failedLoad = true;
+            const snapshot = this.publishState('error', videoId, empty);
             return Object.freeze({ status: 'error', snapshot });
         }
     }
@@ -93,10 +124,15 @@ class ManualBookmarkSession {
             throw new Error('No active bookmark video');
         const generation = this.generation;
         const action = ++this.latestAction;
+        this.inFlightWrites++;
+        this.failedLoad = false;
         this.failedAction = null;
         this.readbackRevision++;
         try {
             const rows = await operation(owner);
+            // A committed write still belongs to shared storage even if this tab
+            // has already switched video. Notify peers without exposing the ID.
+            this.notifyOtherTabs();
             if (!this.isCurrent(generation, owner.videoId))
                 return Object.freeze({ status: 'stale', snapshot: this.state });
             if (this.latestAction !== action) {
@@ -110,14 +146,14 @@ class ManualBookmarkSession {
                         if (this.isCurrent(generation, owner.videoId) &&
                             this.latestAction === failedAction && this.failedAction === failedAction &&
                             this.readbackRevision === revision) {
-                            this.update('error', owner.videoId, committed);
+                            this.publishState('error', owner.videoId, committed);
                         }
                     }
                     catch { /* Preserve the last visible state without disclosing errors. */ }
                 }
                 return Object.freeze({ status: 'stale', snapshot: this.state });
             }
-            const snapshot = this.update('ready', owner.videoId, rows);
+            const snapshot = this.publishState('ready', owner.videoId, rows);
             return Object.freeze({ status: 'applied', snapshot });
         }
         catch {
@@ -136,14 +172,73 @@ class ManualBookmarkSession {
                 return Object.freeze({ status: 'stale', snapshot: this.state });
             if (this.readbackRevision !== revision)
                 return Object.freeze({ status: 'error', snapshot: this.state });
-            const snapshot = this.update('error', owner.videoId, bookmarks);
+            const snapshot = this.publishState('error', owner.videoId, bookmarks);
             return Object.freeze({ status: 'error', snapshot });
         }
+        finally {
+            this.inFlightWrites--;
+        }
     }
-    add(id, time, now, label = '') {
+    /**
+     * A Dock reopen or visible-tab event checks the shared IndexedDB without
+     * resetting the active video owner or discarding a pending local write.
+     * Only changed records publish a new snapshot (and re-render the panel).
+     */
+    refreshIfIdle() {
+        const owner = this.current;
+        if (this.refreshing)
+            return this.refreshing;
+        if (this.disposed || !owner || this.state.status !== 'ready' ||
+            this.inFlightWrites !== 0 || this.activating !== null) {
+            return Promise.resolve(Object.freeze({ status: 'stale', snapshot: this.state }));
+        }
+        const generation = this.generation, action = this.latestAction;
+        const revision = this.readbackRevision;
+        const pending = (async () => {
+            try {
+                const rows = await this.repository.load(owner.videoId, owner.duration);
+                if (!this.isCurrent(generation, owner.videoId) ||
+                    this.latestAction !== action || this.readbackRevision !== revision ||
+                    this.inFlightWrites !== 0 || this.state.status !== 'ready') {
+                    return Object.freeze({ status: 'stale', snapshot: this.state });
+                }
+                const previous = this.state.bookmarks;
+                const unchanged = previous.length === rows.length && previous.every((old, i) => {
+                    const next = rows[i];
+                    return next !== undefined && old.id === next.id &&
+                        old.videoId === next.videoId && old.time === next.time &&
+                        old.endTime === next.endTime && old.label === next.label && old.createdAt === next.createdAt &&
+                        old.updatedAt === next.updatedAt;
+                });
+                if (unchanged) {
+                    return Object.freeze({ status: 'applied', snapshot: this.state });
+                }
+                const snapshot = this.publishState('ready', owner.videoId, rows);
+                return Object.freeze({ status: 'applied', snapshot });
+            }
+            catch {
+                // A background read failure must not hide previously loaded markers
+                // or change an otherwise usable session to error.
+                return Object.freeze({ status: 'error', snapshot: this.state });
+            }
+        })();
+        this.refreshing = pending;
+        void pending.then(() => { if (this.refreshing === pending)
+            this.refreshing = null; }, () => { if (this.refreshing === pending)
+            this.refreshing = null; });
+        return pending;
+    }
+    add(id, time, now, label = '', endTime) {
         return this.modify(owner => this.repository.add({
-            id, videoId: owner.videoId, time, now, label
+            id, videoId: owner.videoId, time, now, label, ...(endTime === undefined ? {} : { endTime })
         }, owner.duration));
+    }
+    update(id, changes, now) {
+        return this.modify(owner => {
+            if (!this.repository.update)
+                return Promise.reject(new Error('Bookmark editing unavailable'));
+            return this.repository.update(owner.videoId, id, changes, now, owner.duration);
+        });
     }
     rename(id, label, now) {
         return this.modify(owner => this.repository.rename(owner.videoId, id, label, now, owner.duration));
@@ -158,8 +253,9 @@ class ManualBookmarkSession {
         this.latestAction = 0;
         this.current = null;
         this.failedAction = null;
+        this.failedLoad = false;
         this.readbackRevision++;
-        this.update('idle', null, empty);
+        this.publishState('idle', null, empty);
     }
     dispose() {
         if (this.disposed)
@@ -167,6 +263,10 @@ class ManualBookmarkSession {
         this.deactivate();
         this.disposed = true;
         this.listeners.clear();
+        try {
+            this.changeChannel?.close();
+        }
+        catch { }
         this.repository.close();
     }
 }

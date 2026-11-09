@@ -697,6 +697,10 @@ const {ThreadLoader} = (() => {
     async _postChat(msgInfo: CommentMsgInfo, text: string, cmd: string | null | undefined, vpos: number | null | undefined,
       retrying = false, diagnostic: Diagnostic | null = null, isOriginalVideo?: () => boolean): Promise<PostResult> {
       diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
+      const stillOriginal = () => {
+        try { return !isOriginalVideo || isOriginalVideo() === true; }
+        catch (_error) { return false; }
+      };
       const {
         videoId,
         threadId,
@@ -727,6 +731,13 @@ const {ThreadLoader} = (() => {
           outcome: 'not-sent'
         });
         throw error;
+      }
+      if (!stillOriginal()) {
+          logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
+              reason: 'challenge-stale-video', outcome: 'not-sent'
+          });
+          throw challengeFailure('challenge-stale-video',
+              '動画が切り替わったためコメントを送信していません。');
       }
       const postKey = CommentPostWire.readPostKey(postKeyData);
       const challenge = CommentPostWire.readChallenge(postKeyData);
@@ -768,12 +779,7 @@ const {ThreadLoader} = (() => {
           throw challengeFailure('challenge-unavailable',
             '追加認証の設定を取得できませんでした。公式プレイヤーから投稿してください（コメントは未送信です）');
         }
-        // Keep normal immediate posting compatible with Task090, but discard an
-        // authentication-gated request after the initiating video has changed.
-        const stillOriginal = () => {
-          try { return !isOriginalVideo || isOriginalVideo() === true; }
-          catch (_error) { return false; }
-        };
+
         if (!stillOriginal()) {
           logCommentPostDiagnostic(diagnostic, 'challenge', 'failure', {
             reason: 'challenge-stale-video', outcome: 'not-sent'
@@ -924,6 +930,10 @@ const {ThreadLoader} = (() => {
           nextAttempt: diagnostic.attempt + 1
         });
         await sleep(3000);
+        if (!stillOriginal()) {
+            throw challengeFailure('challenge-stale-video',
+                '動画が切り替わったためコメントを再送していません。');
+        }
         return await this._postChat(msgInfo, text, cmd, vpos, true, {
           ...diagnostic,
           attempt: diagnostic.attempt + 1

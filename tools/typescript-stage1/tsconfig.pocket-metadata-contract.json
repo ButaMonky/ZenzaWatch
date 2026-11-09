@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.pocket-metadata.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "../.."
+  },
+  "include": [
+    "../../packages/zenza/src/pocket/PocketCardMetadataLoader.ts",
+    "test/pocket-card-metadata-contract.ts"
+  ]
+}

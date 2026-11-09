@@ -48,17 +48,31 @@ const WatchPageHistory = (() => {
   // 今、URLをZenzaWatchが書き換えた状態かどうか（Task 046。updateOriginalの
   // コメント参照）
   let isPushed = false;
+  let pushedUrl: string|null = null;
+  let navigationGeneration = 0;
 
   const restore = () => {
-    history.replaceState(null, null as unknown as string, originalUrl);
-    document.title = (isOpen ? '📺' : '') + originalTitle.replace(/^📺/, '');
+    if (isPushed) {
+      // Another script may have navigated to a different route in the meantime.
+      if (window.location.href === pushedUrl) {
+        history.replaceState(history.state, null as unknown as string, originalUrl);
+        document.title = (isOpen ? '📺' : '') + originalTitle.replace(/^📺/, '');
+      } else {
+        originalUrl = window.location.href;
+        originalTitle = document.title;
+      }
+    }
     isPushed = false;
+    pushedUrl = null;
     bouncedRestore.cancel();
   };
   const bouncedRestore = _.debounce(restore, RESTORE_DELAY);
 
   const pushHistory = (path: string, title: string) => {
-    history.replaceState(null, null as unknown as string, path);
+    if (!isPushed) updateOriginal();
+    // Retain the current route state, including changes made by other scripts.
+    history.replaceState(history.state, null as unknown as string, path);
+    pushedUrl = window.location.href;
     document.title = (isOpen ? '📺' : '') + title.replace(/^📺/, '');
     isPushed = true;
     bouncedRestore();
@@ -84,18 +98,22 @@ const WatchPageHistory = (() => {
   // フラグ(isPushed)で明示的に持つ。
   const updateOriginal = () => {
     if (isPushed) {
-      // 今のURLは自分で書き換えたもの。これを「元のURL」にしてはいけない
-      return;
+      // Only the URL we still own may block updating the original route.
+      if (window.location.href === pushedUrl) return;
+      isPushed = false;
+      pushedUrl = null;
     }
     originalUrl = window && window.location && window.location.href;
     originalTitle = window && window.document && window.document.title;
   };
 
-  const onVideoInfoLoad = _.debounce(({watchId, title, owner: {name}}: {watchId?: string; title: string; owner: {name?: string}}): Loose => {
-    if (!watchId || !isOpen) {
+  const onVideoInfoLoad = _.debounce(({watchId, title, owner, generation, requestId}: {watchId?: string; title: string; owner?: {name?: string}|null; generation: number; requestId: Loose}): Loose => {
+    if (!watchId || !isOpen || generation !== navigationGeneration ||
+        requestId !== dialog?._requestId) {
       return;
     }
-    title = `${title} by ${name} - ${PRODUCT}`;
+    const name = owner?.name;
+    title = `${title}${name ? ` by ${name}` : ''} - ${PRODUCT}`;
     path = `/watch/${watchId}`;
 
     if (location.host === 'www.nicovideo.jp') {
@@ -106,17 +124,23 @@ const WatchPageHistory = (() => {
     }
   });
 
+  const onDialogVideoInfoLoad = (info: Loose) => {
+    onVideoInfoLoad({...info, generation: navigationGeneration, requestId: dialog?._requestId});
+  };
   const onDialogOpen = () => {
+    navigationGeneration++;
+    onVideoInfoLoad.cancel();
     updateOriginal();
     isOpen = true;
   };
 
   const onDialogClose = () => {
+    navigationGeneration++;
+    onVideoInfoLoad.cancel();
     isOpen = false;
     watchId = title = path = null;
-    history.replaceState(null, null as unknown as string, originalUrl);
-    document.title = originalTitle;
-    isPushed = false;
+    if (isPushed) restore();
+    else if (window.location.href === originalUrl) document.title = originalTitle;
     bouncedRestore.cancel();
   };
 
@@ -130,7 +154,7 @@ const WatchPageHistory = (() => {
       dialog.on('close', onDialogClose);
     }
     dialog.on('open', onDialogOpen);
-    dialog.on('loadVideoInfo', onVideoInfoLoad);
+    dialog.on('loadVideoInfo', onDialogVideoInfoLoad);
 
     if (location.host !== 'www.nicovideo.jp') { return; }
     window.addEventListener('beforeunload', () => {isOpen && restore()}, {passive: true});
@@ -160,9 +184,12 @@ const WatchPageHistory = (() => {
       if (!lock) {
         return;
       }
-      history.replaceState(null, title, path);
+      history.replaceState(history.state, title, path);
+      const markedUrl = location.href;
       await new Promise(r => setTimeout(r, 3000));
-      history.replaceState(null, lastTitle, lastUrl);
+      if (location.href === markedUrl) {
+        history.replaceState(history.state, lastTitle, lastUrl);
+      }
       await new Promise(r => setTimeout(r, 10000));
     });
   };

@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/HeatSyncEntry.ts",
   "runtime": "src/_heatsync.js",
-  "sourceSha256": "a58a06063d3169010320e744bbc833638a79a1b534f32b706d9e8ce74e038459",
-  "runtimeSha256": "c434e0744378b6d1f4059f03ece4524669a8c0a42ea19bc7010acc48388b1fe0"
+  "sourceSha256": "630f0655741b5b94d41426f6e6bea2f9ca0bb573864d3b49c0fc15d2b130eb43",
+  "runtimeSha256": "a15a1c018bd650a955b31a52dd79b53afcb3020ed2a97a472fb04003e2c73f59"
 }

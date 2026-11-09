@@ -5,7 +5,21 @@
 import type {ManualBookmarkPanelSnapshot}
   from './ManualBookmarkSession.ts';
 import {ManualBookmarkSession} from './ManualBookmarkSession.ts';
+import type {ManualBookmark} from './ManualBookmarkPolicy.ts';
+export interface ManualBookmarkLibraryEntry {
+  videoId:string;title:string;duration:number;updatedAt:number;
+  automaticTime:number|null;bookmarks:readonly ManualBookmark[];
+}
 export interface ManualBookmarkPanelDependencies {
+  setRecordingEnabled?:(enabled:boolean)=>void;
+  createScenePreview?:(host:HTMLElement,videoId:string,time:number)=>()=>void;
+  loadLibrary?:()=>Promise<readonly ManualBookmarkLibraryEntry[]>;
+  openLibraryPosition?:(videoId:string,time:number,endTime?:number)=>void;
+  editLibraryBookmark?:(videoId:string,id:string,changes:{time:number;endTime?:number;label:string},duration:number)=>Promise<void>;
+  deleteLibraryBookmark?:(videoId:string,id:string,duration:number)=>Promise<void>;
+  editLibraryAutomatic?:(videoId:string,time:number,duration:number)=>Promise<void>;
+  deleteLibraryAutomatic?:(videoId:string)=>Promise<void>;
+  onRepeatRangeChange?:(range:{a:number|null;b:number|null;active:boolean}|null)=>void;
   currentVideoId:()=>string|null|undefined;
   currentTime:()=>number;
   timestamp:()=>number;
@@ -18,6 +32,8 @@ export interface ManualBookmarkPanelDependencies {
   recordingEnabled?:()=>boolean;
   repeatEnabled?:()=>boolean;
   repeatState?:(active:boolean)=>void;
+  /** Read-only feed for the seekbar owner; never manipulates native seek DOM. */
+  onBookmarksChange?:(snapshot:ManualBookmarkPanelSnapshot)=>void;
 }
 const displayTime=(time:number):string=>{
   const seconds=Math.max(0,Math.floor(time));
@@ -39,10 +55,95 @@ export class ManualBookmarkPanel {
   private addDraftRevision=0;
   private pointDrafts:Record<string,string>={a:'',b:''};
   private loop:{a:number;b:number}|null=null;
+  /** Persist an AB seek failure across dock redraws, but never across videos. */
+  private loopFailureNotice:string|null=null;
   private awaitingLoopSeek=false;
-  private pointBusy=false;
+  private pointGeneration=0;
+  private pointBusyRequest:{generation:number}|null=null;
   private automaticDraftDirty=false;
-  private activeTab='manual';
+  private automaticDraftRevision=0;
+  private activeTab='automatic';
+  private visible=true;
+  private previewLeases=new Map<HTMLElement,()=>void>();
+  private previewCandidates=new Set<HTMLElement>();
+  private previewObserver:IntersectionObserver|null=null;
+  private library=false;
+  private libraryGeneration=0;
+  private libraryRows:readonly ManualBookmarkLibraryEntry[]=[];
+  private libraryStatus:'idle'|'loading'|'ready'|'error'='idle';
+  private librarySearch='';
+  private libraryFilter='all';
+  private expandedVideos=new Set<string>();
+  private readonly changeHandler:(event:Event)=>void;
+  setVisible(visible:boolean):void {this.visible=visible;this.refreshPreviews();}
+  private clearPreviews():void {
+    this.previewObserver?.disconnect();this.previewObserver=null;this.previewCandidates.clear();
+    for(const cleanup of this.previewLeases.values()){try{cleanup();}catch{/* optional preview */}}
+    this.previewLeases.clear();
+  }
+  private preview(videoId:string,time:number):HTMLElement {
+    const host=this.root.ownerDocument.createElement('div');host.className='zw-scene-preview';
+    host.dataset.sceneVideo=videoId;host.dataset.sceneTime=String(time);
+    host.textContent='場面画像';host.setAttribute('aria-label',displayTime(time)+' 付近の場面画像');
+    return host;
+  }
+  private previewEligible(host:HTMLElement):boolean {
+    if(!this.visible||this.disposed||!this.root.contains(host)||host.closest('[hidden]'))return false;
+    const group=host.closest<HTMLDetailsElement>('details[data-library-video]');
+    return !group||group.open;
+  }
+  private fillPreviewLeases():void {
+    if(!this.visible||this.disposed||!this.deps.createScenePreview)return;
+    const videos=new Set(Array.from(this.previewLeases.keys(),host=>host.dataset.sceneVideo!));
+    for(const host of this.previewCandidates){
+      if(this.previewLeases.size>=12)break;
+      if(this.previewLeases.has(host)||!this.previewEligible(host))continue;
+      const videoId=host.dataset.sceneVideo!;
+      if(!videos.has(videoId)&&videos.size>=3)continue;
+      try{
+        this.previewLeases.set(host,this.deps.createScenePreview(host,videoId,Number(host.dataset.sceneTime)));
+        videos.add(videoId);
+      }catch{/* Missing previews never disable text actions. */}
+    }
+  }
+  private refreshPreviews():void {
+    this.clearPreviews();
+    if(!this.visible||this.disposed||!this.deps.createScenePreview)return;
+    const hosts=Array.from(this.root.querySelectorAll<HTMLElement>('[data-scene-video]'))
+      .filter(host=>this.previewEligible(host));
+    const Observer=this.root.ownerDocument.defaultView?.IntersectionObserver;
+    if(Observer){
+      const observer=new Observer(entries=>{
+        if(this.previewObserver!==observer||!this.visible||this.disposed)return;
+        for(const entry of entries){
+          const host=entry.target as HTMLElement;
+          if(entry.isIntersecting&&this.previewEligible(host))this.previewCandidates.add(host);
+          else{
+            this.previewCandidates.delete(host);
+            const cleanup=this.previewLeases.get(host);
+            if(cleanup){this.previewLeases.delete(host);try{cleanup();}catch{/* optional preview */}}
+          }
+        }
+        this.fillPreviewLeases();
+      },{root:this.root.closest('.zenzaManualBookmarkDock'),rootMargin:'100px'});
+      this.previewObserver=observer;
+      for(const host of hosts)observer.observe(host);
+    }else{
+      // Older engines lack visibility notifications; never load the entire library.
+      for(const host of hosts.slice(0,12))this.previewCandidates.add(host);
+      this.fillPreviewLeases();
+    }
+  }
+  setRepeatRange(a:number,b:number,activate=true):boolean {
+    const duration=this.deps.duration?.()||0;
+    if(!this.ownsVideo()||!Number.isFinite(a)||!Number.isFinite(b)||a<0||b>duration||b-a<0.25||
+       (activate&&this.deps.repeatEnabled?.()===false))return false;
+    this.pointDrafts={a:ManualBookmarkPanel.formatTime(a),b:ManualBookmarkPanel.formatTime(b)};
+    this.loop=activate?{a,b}:null;this.loopFailureNotice=null;this.resetLoopSeek();
+    this.library=false;this.activeTab='repeat';this.render(this.last);
+    if(activate){try{this.deps.seek(a);}catch{this.stopLoopAfterSeekFailure();}}
+    return true;
+  }
   private selectTab(name:string):void {
     if(!['manual','automatic','repeat'].includes(name))return;
     this.activeTab=name;
@@ -52,10 +153,11 @@ export class ManualBookmarkPanel {
     for(const button of this.root.querySelectorAll<HTMLButtonElement>('[data-point-tab]')){
       button.setAttribute('aria-pressed',String(button.dataset.pointTab===name));
     }
+    this.refreshPreviews();
   }
   get isRepeating():boolean{return this.loop!==null;}
   refreshPreferences():void {
-    if(this.deps.repeatEnabled?.()===false){this.loop=null;this.awaitingLoopSeek=false;}
+    if(this.deps.repeatEnabled?.()===false){this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();}
     this.render(this.last);
   }
   private static formatTime(time:number):string {
@@ -73,25 +175,64 @@ export class ManualBookmarkPanel {
     const seconds=parts.reduce((n,part)=>n*60+part,0);
     return Number.isFinite(seconds)?seconds:null;
   }
+  // Media timeupdate is the existing clock; never create a second interval.
+  // Bounded retries handle ignored seeks without locking the repeat state forever.
+  private loopSeekRequestedAt:number|null=null;
+  private loopSeekAttempts=0;
+  private resetLoopSeek():void {
+    this.awaitingLoopSeek=false;this.loopSeekRequestedAt=null;this.loopSeekAttempts=0;
+  }
+  private stopLoopAfterSeekFailure():void {
+    this.loop=null;this.resetLoopSeek();this.updateLoopDisplay();
+    this.loopFailureNotice='シークできなかったため、区間リピートを停止しました。A・Bを確認して再開してください。';
+    this.pointMessage('repeat',this.loopFailureNotice);
+  }
+  private issueLoopSeek(loop:{a:number;b:number}):boolean {
+    this.awaitingLoopSeek=true;
+    const now=this.deps.timestamp();
+    this.loopSeekRequestedAt=Number.isFinite(now)?now:0;
+    this.loopSeekAttempts++;
+    try{this.deps.seek(loop.a);return true;}
+    catch{this.stopLoopAfterSeekFailure();return false;}
+  }
   /** Called by the real media clock. No timer and no forced play on pause. */
   tick(time:number,paused:boolean,seeking:boolean):boolean {
     if(this.disposed||!this.ownsVideo()||this.deps.repeatEnabled?.()===false){
-      this.loop=null;this.awaitingLoopSeek=false;this.updateLoopDisplay();return false;
+      this.loop=null;this.resetLoopSeek();this.updateLoopDisplay();return false;
     }
     const loop=this.loop;
     if(loop)this.deps.repeatState?.(true);
     if(!loop||!Number.isFinite(time))return false;
-    if(time<loop.b)this.awaitingLoopSeek=false;
-    if(paused||seeking||this.awaitingLoopSeek||time<loop.b)return false;
-    this.awaitingLoopSeek=true;
-    this.deps.seek(loop.a);
-    return true;
+    // Pending YouTube seeks report an optimistic target, not a landing.
+    if(seeking)return false;
+    if(time<loop.b){this.resetLoopSeek();return false;}
+    if(paused)return false;
+    if(this.awaitingLoopSeek){
+      const now=this.deps.timestamp();
+      if(!Number.isFinite(now)||this.loopSeekRequestedAt===null||
+         now-this.loopSeekRequestedAt<1800)return false;
+      if(this.loopSeekAttempts>=2){this.stopLoopAfterSeekFailure();return false;}
+    }
+    return this.issueLoopSeek(loop);
+  }
+  /** A seek event is not proof of landing: verify the current interval and clock. */
+  acknowledgeLoopSeek(time:number):void {
+    const loop=this.loop;
+    if(this.disposed||!this.ownsVideo()||this.deps.repeatEnabled?.()===false||
+       !this.awaitingLoopSeek||!loop||!Number.isFinite(time))return;
+    if(time>=loop.a&&time<loop.b)this.resetLoopSeek();
   }
   repeatAtEnd():boolean {
     if(this.disposed||!this.ownsVideo()||this.deps.repeatEnabled?.()===false||!this.loop)return false;
-    this.awaitingLoopSeek=true;
-    this.deps.seek(this.loop.a);
-    return true;
+    // timeupdate and one or more ended events can belong to one terminal seek.
+    // Keep ownership without issuing another seek or consuming its retry budget.
+    if(this.awaitingLoopSeek){
+      const now=this.deps.timestamp();
+      if(!Number.isFinite(now)||this.loopSeekRequestedAt===null||
+         now-this.loopSeekRequestedAt<1800)return true;
+      if(this.loopSeekAttempts>=2){this.stopLoopAfterSeekFailure();return false;}
+    }
+    return this.issueLoopSeek(this.loop);
   }
   private pointButton(action:string,label:string):HTMLButtonElement {
     const button=this.root.ownerDocument.createElement('button');
@@ -124,21 +265,43 @@ export class ManualBookmarkPanel {
       status.textContent=this.deps.recordingEnabled?.()===false?
         '自動記録はOFFです。手動の編集・しおりは利用できます。':
         time===null||time===undefined?'自動位置はまだありません':'自動で更新される位置は1件だけです。';
-      section.append(status,this.pointField('automatic','保存位置',
+      const setting=this.root.ownerDocument.createElement('label');setting.className='zw-auto-setting';
+      const check=this.root.ownerDocument.createElement('input');check.type='checkbox';
+      check.dataset.recordingEnabled='1';check.checked=this.deps.recordingEnabled?.()!==false;
+      check.disabled=!this.deps.setRecordingEnabled;setting.append(check,'再生位置を自動で記録');
+      const note=this.root.ownerDocument.createElement('small');
+      note.textContent='すべての動画に適用。OFFでも保存済みの位置は残ります。';
+      const line=this.root.ownerDocument.createElement('div');line.className='zw-point-line';
+      if(time!==null&&time!==undefined)line.append(this.preview(this.last.videoId!,time));
+      const position=this.root.ownerDocument.createElement('span');position.dataset.automaticPosition='1';
+      position.textContent=time===null||time===undefined?'未記録':displayTime(time);
+      const go=this.pointButton('seek-automatic','続きへ');go.disabled=time===null||time===undefined;
+      line.append(position,go);
+      const edit=this.root.ownerDocument.createElement('details');edit.className='zw-automatic-edit';
+      const summary=this.root.ownerDocument.createElement('summary');summary.textContent='編集';
+      edit.append(summary,this.pointField('automatic','保存位置',
         time===null||time===undefined?'':ManualBookmarkPanel.formatTime(time)),
         this.pointButton('save-automatic','位置を保存'),
-        this.pointButton('current-automatic','現在位置を使う'),
+        this.pointButton('current-automatic','現在位置で更新'),
         this.pointButton('delete-automatic','削除'));
+      section.append(setting,note,line,edit,status);
     }else{
       status.dataset.pointStatus='repeat';
-      status.textContent=this.loop?'区間リピート中':'A（開始）とB（終了）を指定します。';
+      status.textContent=this.loop?'区間リピート中':
+        (this.loopFailureNotice||'A（開始）とB（終了）を指定します。');
       const row=this.root.ownerDocument.createElement('div');row.className='zw-point-range-inputs';
-      row.append(this.pointField('a','A 開始',this.pointDrafts.a||''),
-        this.pointButton('set-a','現在位置をAに'),
-        this.pointField('b','B 終了',this.pointDrafts.b||''),
-        this.pointButton('set-b','現在位置をBに'));
+      for(const name of ['a','b']){
+        const column=this.root.ownerDocument.createElement('div');
+        const time=ManualBookmarkPanel.parseTime(this.pointDrafts[name]||'');
+        const preview=this.root.ownerDocument.createElement('div');preview.className='zw-scene-preview';preview.dataset.endpointPreview=name;
+        if(time!==null){preview.dataset.sceneVideo=this.last.videoId!;preview.dataset.sceneTime=String(time);}
+        preview.textContent=time===null?'時刻を指定':'場面画像';
+        column.append(this.pointField(name,name==='a'?'A 開始':'B 終了',this.pointDrafts[name]||''),preview,
+          this.pointButton('set-'+name,'現在位置を'+name.toUpperCase()+'に'));
+        row.append(column);
+      }
       section.append(status,row,this.pointButton('repeat',this.loop?'リピートを停止':'リピートを開始'),
-        this.pointButton('clear-repeat','区間をクリア'));
+        this.pointButton('save-range','しおりに保存'),this.pointButton('clear-repeat','区間をクリア'));
       const range=this.root.ownerDocument.createElement('div');
       range.className='zw-point-range';range.dataset.pointRange='1';range.setAttribute('aria-hidden','true');
       const selected=this.root.ownerDocument.createElement('span');range.append(selected);section.append(range);
@@ -164,25 +327,58 @@ export class ManualBookmarkPanel {
     const duration=this.deps.duration?.()||0;
     const a=ManualBookmarkPanel.parseTime(this.pointDrafts.a||'');
     const b=ManualBookmarkPanel.parseTime(this.pointDrafts.b||'');
+    this.deps.onRepeatRangeChange?.(!this.ownsVideo()||(a===null&&b===null)?null:{a,b,active:!!this.loop});
+    let previewChanged=false;
+    for(const [name,time] of [['a',a],['b',b]] as const){
+      const host=this.root.querySelector<HTMLElement>('[data-endpoint-preview="'+name+'"]');
+      if(host&&host.dataset.sceneTime!==(time===null?undefined:String(time))){
+        host.replaceChildren();host.textContent=time===null?'時刻を指定':'場面画像';
+        if(time===null){delete host.dataset.sceneVideo;delete host.dataset.sceneTime;}
+        else{host.dataset.sceneVideo=this.last.videoId!;host.dataset.sceneTime=String(time);}
+        previewChanged=true;
+      }
+    }
+    if(previewChanged)this.refreshPreviews();
     if(span){span.style.left=duration>0&&a!==null?100*a/duration+'%':'0%';
       span.style.width=duration>0&&a!==null&&b!==null&&b>a?100*(b-a)/duration+'%':'0%';}
+  }
+  private updatePointBusyControls():void {
+    const busy=this.pointBusyRequest!==null;
+    for(const name of ['save-automatic','delete-automatic','current-automatic']){
+      const button=this.root.querySelector<HTMLButtonElement>('[data-point-action="'+name+'"]');
+      if(button){button.disabled=busy;button.setAttribute('aria-busy',String(busy));}
+    }
   }
   private async pointAction(action:string):Promise<void> {
     if(!this.ownsVideo())return;
     const duration=this.deps.duration?.()||0;
     const read=(name:string)=>this.root.querySelector<HTMLInputElement>('[data-point-field="'+name+'"]');
+    if(action==='seek-automatic'){
+      const time=this.deps.automaticTime?.();if(time!==null&&time!==undefined&&time>=0&&time<duration)this.deps.seek(time);return;
+    }
+    if(action==='save-range'){
+      const a=ManualBookmarkPanel.parseTime(this.pointDrafts.a||''),b=ManualBookmarkPanel.parseTime(this.pointDrafts.b||'');
+      if(a===null||b===null||a<0||b>duration||b-a<0.25){this.pointMessage('repeat','Aより後のBを動画の長さ以内で指定してください。');return;}
+      const generation=this.pointGeneration;
+      try{
+        const result=await this.session.add(this.deps.newId(),a,this.deps.timestamp(),'区間 '+displayTime(a),b);
+        if(!this.disposed&&generation===this.pointGeneration)this.pointMessage('repeat',result.status==='applied'?'区間をしおりに保存しました。':'保存できませんでした。区間は残っています。');
+      }catch{if(!this.disposed&&generation===this.pointGeneration)this.pointMessage('repeat','保存できませんでした。区間は残っています。');}
+      return;
+    }
     if(action==='set-a'||action==='set-b'){
       const name=action==='set-a'?'a':'b',field=read(name),time=this.deps.currentTime();
       if(!Number.isFinite(time)||time<0||time>duration)return;
       this.pointDrafts[name]=ManualBookmarkPanel.formatTime(time);if(field)field.value=this.pointDrafts[name]!;
-      this.loop=null;this.awaitingLoopSeek=false;this.updateLoopDisplay();return;
+      this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.updateLoopDisplay();return;
     }
     if(action==='clear-repeat'){
-      this.loop=null;this.awaitingLoopSeek=false;this.pointDrafts={a:'',b:''};
+      this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.pointDrafts={a:'',b:''};
       for(const name of ['a','b']){const field=read(name);if(field)field.value='';}
       this.pointMessage('repeat','区間をクリアしました。');this.updateLoopDisplay();return;
     }
     if(action==='repeat'){
+      this.loopFailureNotice=null;
       if(this.loop){this.loop=null;this.pointMessage('repeat','停止しました。区間は残っています。');this.updateLoopDisplay();return;}
       if(this.deps.repeatEnabled?.()===false)return;
       const a=ManualBookmarkPanel.parseTime(read('a')?.value||''),b=ManualBookmarkPanel.parseTime(read('b')?.value||'');
@@ -190,30 +386,47 @@ export class ManualBookmarkPanel {
         this.pointMessage('repeat','Aより後のBを指定してください（間隔0.25秒以上・動画の長さ以内）。');return;
       }
       this.pointDrafts={a:read('a')!.value,b:read('b')!.value};
-      this.loop={a,b};this.awaitingLoopSeek=false;
+      this.loop={a,b};this.resetLoopSeek();
       this.pointMessage('repeat',ManualBookmarkPanel.formatTime(a)+' → '+ManualBookmarkPanel.formatTime(b)+' をリピート中');
-      this.updateLoopDisplay();this.deps.seek(a);return;
+      this.updateLoopDisplay();
+      try{this.deps.seek(a);}catch{this.stopLoopAfterSeekFailure();}
+      return;
     }
     if(action==='current-automatic'){
-      this.automaticDraftDirty=true;
-      const field=read('automatic');if(field)field.value=ManualBookmarkPanel.formatTime(this.deps.currentTime());return;
+      if(this.pointBusyRequest)return;
+      this.automaticDraftDirty=true;this.automaticDraftRevision++;
+      const field=read('automatic');if(field)field.value=ManualBookmarkPanel.formatTime(this.deps.currentTime());
+      await this.pointAction('save-automatic');return;
     }
-    if(this.pointBusy)return;
+    if(this.pointBusyRequest!==null)return;
     if(action!=='save-automatic'&&action!=='delete-automatic')return;
     const seconds=ManualBookmarkPanel.parseTime(read('automatic')?.value||'');
     if(action==='save-automatic'&&(seconds===null||seconds>=duration)){
       this.pointMessage('automatic','動画の長さより前の時刻を入力してください。');return;
     }
-    const videoId=this.last.videoId;this.pointBusy=true;
+    const videoId=this.last.videoId,generation=this.pointGeneration,revision=this.automaticDraftRevision;
+    const request={generation};
+    this.pointBusyRequest=request;this.updatePointBusyControls();
     try{
       const ok=action==='delete-automatic'?await this.deps.deleteAutomatic?.():
         await this.deps.editAutomatic?.(seconds!);
-      if(this.disposed||this.last.videoId!==videoId)return;
+      if(this.disposed||this.pointGeneration!==generation||this.last.videoId!==videoId)return;
       this.pointMessage('automatic',ok?(action==='delete-automatic'?'自動位置を削除しました。':'この端末に保存しました。次の自動記録で更新されます。'):'保存できませんでした。入力は残っています。');
-      if(ok)this.automaticDraftDirty=false;
-      if(ok&&action==='delete-automatic'){const field=read('automatic');if(field)field.value='';}
-    }catch{if(!this.disposed&&this.last.videoId===videoId)this.pointMessage('automatic','保存できませんでした。入力は残っています。');}
-    finally{this.pointBusy=false;}
+      if(ok){
+        if(revision===this.automaticDraftRevision)this.automaticDraftDirty=false;
+        this.clearPreviews();
+        const line=this.root.querySelector<HTMLElement>('[data-point-section="automatic"] .zw-point-line');
+        line?.querySelector('[data-scene-video]')?.remove();
+        if(action!=='delete-automatic'&&line)line.prepend(this.preview(videoId!,seconds!));
+        this.refreshPreviews();
+        const position=this.root.querySelector<HTMLElement>('[data-automatic-position]');
+        if(position)position.textContent=action==='delete-automatic'?'未記録':displayTime(seconds!);
+        const go=this.root.querySelector<HTMLButtonElement>('[data-point-action="seek-automatic"]');
+        if(go)go.disabled=action==='delete-automatic';
+      }
+      if(ok&&action==='delete-automatic'&&revision===this.automaticDraftRevision){const field=read('automatic');if(field)field.value='';}
+    }catch{if(!this.disposed&&this.pointGeneration===generation&&this.last.videoId===videoId)this.pointMessage('automatic','保存できませんでした。入力は残っています。');}
+    finally{if(this.pointBusyRequest===request){this.pointBusyRequest=null;this.updatePointBusyControls();}}
   }
   constructor(root:HTMLElement,session:ManualBookmarkSession,
     deps:ManualBookmarkPanelDependencies){
@@ -221,14 +434,22 @@ export class ManualBookmarkPanel {
     this.root=root;this.session=session;this.deps=deps;
     this.last=session.snapshot;
     this.clickHandler=event=>this.onClick(event);
+    this.changeHandler=event=>{
+      const target=event.target as HTMLInputElement|null;
+      if(target?.matches('[data-recording-enabled]')&&this.ownsVideo()){
+        this.deps.setRecordingEnabled?.(target.checked);this.pointMessage('automatic',target.checked?'自動記録をONにしました。':'自動記録をOFFにしました。保存済みの位置は残ります。');
+      }
+      if(target?.matches('[data-library-filter]')){this.libraryFilter=target.value;this.renderLibraryGroups();}
+    };
     this.inputHandler=event=>{
       const target=event.target as Element|null;
+      if(target?.matches?.('[data-library-search]')){this.librarySearch=(target as HTMLInputElement).value;this.renderLibraryGroups();return;}
       if(target?.matches?.('input[data-point-field]')){
         const field=target as HTMLInputElement;
-        if(field.dataset.pointField==='automatic')this.automaticDraftDirty=true;
+        if(field.dataset.pointField==='automatic'){this.automaticDraftDirty=true;this.automaticDraftRevision++;}
         if(field.dataset.pointField==='a'||field.dataset.pointField==='b'){
           this.pointDrafts[field.dataset.pointField]=field.value;
-          this.loop=null;this.awaitingLoopSeek=false;this.updateLoopDisplay();
+          this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.updateLoopDisplay();
           this.pointMessage('repeat','区間を変更しました。「リピートを開始」で反映します。');
         }
       }
@@ -237,9 +458,11 @@ export class ManualBookmarkPanel {
     };
     root.addEventListener('click',this.clickHandler);
     root.addEventListener('input',this.inputHandler);
+    root.addEventListener('change',this.changeHandler);
     this.unsubscribe=session.subscribe(snapshot=>{
       this.render(snapshot);
       this.last=snapshot;
+      deps.onBookmarksChange?.(snapshot);
     });
   }
   private ownsVideo():boolean{
@@ -259,7 +482,16 @@ export class ManualBookmarkPanel {
     const sameVideo=snapshot.videoId!==null&&
       snapshot.videoId===this.last.videoId;
     // A different bookmark's save must not destroy the unsent Add label.
-    if(!sameVideo){this.automaticDraftDirty=false;this.loop=null;this.awaitingLoopSeek=false;this.pointDrafts={a:'',b:''};}
+    if(!sameVideo){this.libraryGeneration++;this.libraryBusyRequest=null;this.library=false;this.libraryStatus='idle';this.expandedVideos=new Set(snapshot.videoId?[snapshot.videoId]:[]);this.pointGeneration++;this.pointBusyRequest=null;this.automaticDraftDirty=false;this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.pointDrafts={a:'',b:''};}
+    this.clearPreviews();
+    const previousTimes=new Map(this.last.bookmarks.map(item=>[item.id,{time:item.time,endTime:item.endTime}]));
+    const timeDrafts=new Map<string,{start:string;end:string}>();
+    if(sameVideo)for(const edit of this.root.querySelectorAll<HTMLElement>('.zw-bookmark-edit')){
+      const start=edit.querySelector<HTMLInputElement>('[data-bookmark-start-id]');
+      const end=edit.querySelector<HTMLInputElement>('[data-bookmark-end-id]');
+      if(start&&end)timeDrafts.set(start.dataset.bookmarkStartId!,{start:start.value,end:end.value});
+    }
+    const automaticOpen=sameVideo&&!!this.root.querySelector<HTMLDetailsElement>('.zw-automatic-edit')?.open;
     const previousAutomatic=sameVideo?this.root.querySelector<HTMLInputElement>('[data-point-field="automatic"]'):null;
     const automaticDraft=this.automaticDraftDirty?previousAutomatic?.value:undefined;
     const previousAdd=sameVideo?this.root.querySelector<HTMLInputElement>(
@@ -270,9 +502,14 @@ export class ManualBookmarkPanel {
       {start:previousAdd.selectionStart,end:previousAdd.selectionEnd}:null;
     const previousLabels=new Map(this.last.bookmarks.map(item=>
       [item.id,item.label] as const));
+    const openRenames=new Set<string>();
     const drafts=new Map<string,string>();
     let focusedRename:{id:string;start:number|null;end:number|null}|null=null;
     if(sameVideo){
+      for(const details of this.root.querySelectorAll<HTMLDetailsElement>('details.zw-bookmark-edit')){
+        const id=details.querySelector<HTMLInputElement>('input[data-bookmark-rename-id]')?.dataset.bookmarkRenameId;
+        if(details.open&&id!==undefined&&previousLabels.has(id))openRenames.add(id);
+      }
       for(const field of this.root.querySelectorAll<HTMLInputElement>(
         'input[data-bookmark-rename-id]')){
         const id=field.dataset.bookmarkRenameId;
@@ -280,10 +517,14 @@ export class ManualBookmarkPanel {
         if(field.value!==previousLabels.get(id))drafts.set(id,field.value);
         if(field===this.root.ownerDocument.activeElement){
           focusedRename={id,start:field.selectionStart,end:field.selectionEnd};
+          openRenames.add(id);
         }
       }
     }
+    this.last=snapshot;
     const doc=this.root.ownerDocument;
+    if(this.library){this.renderLibrary();return;}
+    this.root.closest('.zenzaManualBookmarkDock')?.classList.remove('zw-library-wide');
     const region=doc.createElement('section');
     region.setAttribute('role','region');
     region.setAttribute('aria-label','手動しおり');
@@ -294,7 +535,10 @@ export class ManualBookmarkPanel {
     region.append(manual);manual.append(title);
     const status=doc.createElement('p');
     status.dataset.bookmarkStatus=snapshot.status;
-    status.textContent=snapshot.status==='error'?'しおりの保存に失敗しました':
+    status.textContent=snapshot.status==='error'?
+      (this.session.needsLoadRetry?
+        'しおりの読み込みに失敗しました。パネルを開き直すと再試行します。':
+        'しおりの保存に失敗しました'):
       snapshot.status==='loading'?'しおりを読み込み中':snapshot.status==='idle'?
         '再生する動画を選択してください':'';
     manual.append(status);
@@ -309,10 +553,15 @@ export class ManualBookmarkPanel {
       manual.append(this.button('add','＋ 現在位置にしおり'));
     }
     const list=doc.createElement('ul');
+    const currentDuration=this.deps.duration?.();
     for(const entry of [...snapshot.bookmarks].sort((a,b)=>a.time-b.time)){
+      const outsideCurrent=typeof currentDuration==='number'&&
+        Number.isFinite(currentDuration)&&currentDuration>0&&
+        entry.time>=currentDuration;
       const item=doc.createElement('li');
       const description=doc.createElement('span');
-      description.textContent=displayTime(entry.time)+' '+entry.label;
+      description.textContent=displayTime(entry.time)+(entry.endTime===undefined?'':' – '+displayTime(entry.endTime))+' '+entry.label+
+        (outsideCurrent?'（現在の動画の長さを超えています）':'');
       const rename=doc.createElement('input');
       rename.type='text';rename.maxLength=80;
       rename.dataset.bookmarkRenameId=entry.id;
@@ -321,9 +570,23 @@ export class ManualBookmarkPanel {
         drafts.get(entry.id)!:entry.label;
       rename.setAttribute('aria-label','しおり名を編集');
       const edit=doc.createElement('details');edit.className='zw-bookmark-edit';
+      edit.open=openRenames.has(entry.id);
       const summary=doc.createElement('summary');summary.textContent='編集';
-      edit.append(summary,rename,this.button('rename','名前を変更',entry.id),this.button('remove','削除',entry.id));
-      item.append(description,this.button('seek','ここから再生',entry.id),edit);
+      const start=this.pointField('bookmark-start','開始',ManualBookmarkPanel.formatTime(entry.time));
+      const end=this.pointField('bookmark-end','終了（任意）',entry.endTime===undefined?'':ManualBookmarkPanel.formatTime(entry.endTime));
+      const startInput=start.querySelector('input')!,endInput=end.querySelector('input')!;
+      startInput.dataset.bookmarkStartId=entry.id;endInput.dataset.bookmarkEndId=entry.id;endInput.placeholder='位置のみ';
+      const previous=previousTimes.get(entry.id),draft=timeDrafts.get(entry.id);
+      if(draft&&previous?.time===entry.time&&previous?.endTime===entry.endTime){startInput.value=draft.start;endInput.value=draft.end;}
+      edit.append(summary,rename,start,end,this.button('rename','保存',entry.id),this.button('remove','削除',entry.id));
+      const seekButton=this.button('seek','ここから再生',entry.id);
+      if(outsideCurrent){
+        seekButton.disabled=true;
+        seekButton.title='現在の動画の長さを超えているためシークできません';
+      }
+      item.append(this.preview(snapshot.videoId!,entry.time),description,seekButton);
+      if(entry.endTime!==undefined)item.append(this.button('repeat-range','リピート',entry.id));
+      item.append(edit);
       list.append(item);
     }
     if(!snapshot.bookmarks.length){
@@ -334,19 +597,23 @@ export class ManualBookmarkPanel {
     if(snapshot.videoId!==null)this.renderPointControls(region,false);
     if(this.deps.duration){
       const nav=doc.createElement('nav');nav.className='zw-point-tabs';nav.setAttribute('aria-label','保存位置の種類');
-      for(const [name,label] of [['manual','しおり'],['automatic','ここまで見た'],['repeat','ABリピート']]){
+      for(const [name,label] of [['automatic','ここまで見た'],['manual','しおり'],['repeat','ABリピート']]){
         const button=doc.createElement('button');button.type='button';button.dataset.pointTab=name!;
         button.textContent=label!;nav.append(button);
       }
       region.prepend(nav);
     }
+    if(this.deps.loadLibrary){const nav=this.libraryButton('open','保存一覧');nav.className='zw-library-nav';region.prepend(nav);}
+    const hint=doc.createElement('small');hint.textContent='画像は近い時刻の代表コマです。';region.append(hint);
     // Only this dedicated container is mutated, not native marker DOM.
     this.root.replaceChildren(region);
     if(automaticDraft!==undefined){
       const field=this.root.querySelector<HTMLInputElement>('[data-point-field="automatic"]');
       if(field)field.value=automaticDraft;
     }
+    const autoEdit=this.root.querySelector<HTMLDetailsElement>('.zw-automatic-edit');if(autoEdit)autoEdit.open=automaticOpen;
     this.updateLoopDisplay();
+    this.updatePointBusyControls();
     if(this.deps.duration)this.selectTab(this.activeTab);
     if(focusedAdd){
       const replacement=this.root.querySelector<HTMLInputElement>(
@@ -372,6 +639,8 @@ export class ManualBookmarkPanel {
   }
   private onClick(event:MouseEvent):void{
     const target=event.target as Element|null;
+    const library=target?.closest?.('button[data-library-action]') as HTMLButtonElement|null;
+    if(library&&this.root.contains(library)){event.preventDefault();event.stopPropagation();void this.libraryAction(library);return;}
     const tab=target?.closest?.('button[data-point-tab]') as HTMLButtonElement|null;
     if(tab&&this.root.contains(tab)){event.preventDefault();event.stopPropagation();this.selectTab(tab.dataset.pointTab||'');return;}
     const point=target?.closest?.('button[data-point-action]') as HTMLButtonElement|null;
@@ -384,9 +653,15 @@ export class ManualBookmarkPanel {
     const action=button.dataset.bookmarkAction;
     const id=button.dataset.bookmarkId;
     const bookmark=this.last.bookmarks.find(item=>item.id===id);
-    if(action==='seek'){
+    if(action==='repeat-range'){
+      if(bookmark?.endTime!==undefined)this.setRepeatRange(bookmark.time,bookmark.endTime);
+      event.preventDefault();event.stopPropagation();
+    }else if(action==='seek'){
       if(!bookmark)return;
       event.preventDefault();event.stopPropagation();
+      const currentDuration=this.deps.duration?.();
+      if(typeof currentDuration==='number'&&Number.isFinite(currentDuration)&&
+         currentDuration>0&&bookmark.time>=currentDuration)return;
       this.deps.seek(bookmark.time);
     }else if(action==='remove'){
       if(!bookmark)return;
@@ -398,7 +673,18 @@ export class ManualBookmarkPanel {
         'input[data-bookmark-rename-id]');
       if(!field||field.dataset.bookmarkRenameId!==bookmark.id)return;
       event.preventDefault();event.stopPropagation();
-      void this.session.rename(bookmark.id,field.value,this.deps.timestamp());
+      const start=button.closest('li')?.querySelector<HTMLInputElement>('[data-bookmark-start-id]');
+      const end=button.closest('li')?.querySelector<HTMLInputElement>('[data-bookmark-end-id]');
+      const time=ManualBookmarkPanel.parseTime(start?.value||'');
+      const endTime=end?.value.trim()?ManualBookmarkPanel.parseTime(end.value):undefined;
+      const duration=this.deps.duration?.()||Infinity;
+      if(time===bookmark.time&&endTime===bookmark.endTime&&(time>=duration||(endTime!==undefined&&endTime>duration))){
+        void this.session.rename(bookmark.id,field.value,this.deps.timestamp());return;
+      }
+      if(time===null||time>=duration||endTime===null||(endTime!==undefined&&(endTime<=time||endTime>duration))){
+        const status=this.root.querySelector<HTMLElement>('[data-bookmark-status]');if(status)status.textContent='開始と終了を動画の長さ以内で指定してください。';return;
+      }
+      void this.session.update(bookmark.id,{time,...(endTime===undefined?{}:{endTime}),label:field.value},this.deps.timestamp());
     }else if(action==='add'){
       event.preventDefault();event.stopPropagation();
       const label=this.root.querySelector<HTMLInputElement>(
@@ -417,12 +703,150 @@ export class ManualBookmarkPanel {
       },()=>{/* A failed edit must leave the draft available for retry. */});
     }
   }
+
+  private libraryButton(action:string,label:string,videoId?:string,id?:string):HTMLButtonElement {
+    const button=this.root.ownerDocument.createElement('button');button.type='button';
+    button.dataset.libraryAction=action;button.textContent=label;
+    if(videoId)button.dataset.videoId=videoId;if(id)button.dataset.bookmarkId=id;return button;
+  }
+  private async loadLibrary():Promise<void> {
+    const generation=++this.libraryGeneration,videoId=this.last.videoId;
+    this.libraryStatus='loading';this.render(this.last);
+    try{
+      const rows=await this.deps.loadLibrary?.()||[];
+      if(this.disposed||generation!==this.libraryGeneration||videoId!==this.last.videoId||!this.library)return;
+      this.libraryRows=rows;this.libraryStatus='ready';
+    }catch{
+      if(this.disposed||generation!==this.libraryGeneration||videoId!==this.last.videoId||!this.library)return;
+      this.libraryStatus='error';
+    }
+    this.render(this.last);
+  }
+  private renderLibrary():void {
+    const doc=this.root.ownerDocument,region=doc.createElement('section');
+    this.root.closest('.zenzaManualBookmarkDock')?.classList.add('zw-library-wide');
+    region.append(this.libraryButton('back','← 今の動画へ'));
+    const title=doc.createElement('h3');title.textContent='保存一覧';region.append(title);
+    const search=doc.createElement('input');search.type='search';search.dataset.librarySearch='1';
+    search.placeholder='動画名・しおり名で検索';search.setAttribute('aria-label',search.placeholder);search.value=this.librarySearch;
+    const filter=doc.createElement('select');filter.dataset.libraryFilter='1';filter.setAttribute('aria-label','保存情報の種類');
+    for(const [value,label] of [['all','すべて'],['resume','ここまで見た'],['point','しおり'],['range','区間']]){
+      const option=doc.createElement('option');option.value=value!;option.textContent=label!;filter.append(option);
+    }
+    filter.value=this.libraryFilter;const toolbar=doc.createElement('div');toolbar.className='zw-library-search';toolbar.append(search,filter);region.append(toolbar);
+    const status=doc.createElement('p');status.dataset.libraryStatus='1';status.setAttribute('role','status');region.append(status);
+    if(this.libraryStatus==='loading')status.textContent='保存一覧を読み込んでいます…';
+    if(this.libraryStatus==='error'){status.textContent='保存一覧を読み込めませんでした。';region.append(this.libraryButton('retry','再試行'));}
+    const groups=doc.createElement('div');groups.dataset.libraryGroups='1';region.append(groups);
+    this.root.replaceChildren(region);
+    if(this.libraryStatus==='ready')this.renderLibraryGroups();
+  }
+  private renderLibraryGroups():void {
+    const groups=this.root.querySelector<HTMLElement>('[data-library-groups]');if(!groups||this.disposed)return;
+    this.clearPreviews();groups.replaceChildren();const doc=this.root.ownerDocument;
+    const query=this.librarySearch.trim().toLocaleLowerCase(),filter=this.libraryFilter;
+    let count=0,videoCount=0;
+    for(const video of [...this.libraryRows].sort((a,b)=>b.updatedAt-a.updatedAt)){
+      const matches=video.title.toLocaleLowerCase().includes(query);
+      const automatic=video.automaticTime!==null&&(filter==='all'||filter==='resume')&&(matches||'ここまで見た'.includes(query));
+      const bookmarks=video.bookmarks.filter(item=>(filter==='all'||filter===(item.endTime===undefined?'point':'range'))&&
+        (matches||item.label.toLocaleLowerCase().includes(query))).sort((a,b)=>a.time-b.time);
+      if(!automatic&&!bookmarks.length)continue;
+      const group=doc.createElement('details');group.className='zw-library-group';group.dataset.libraryVideo=video.videoId;
+      group.open=this.expandedVideos.has(video.videoId);
+      const summary=doc.createElement('summary');summary.textContent=video.title+(video.videoId===this.last.videoId?' · 再生中':'')+' · '+(bookmarks.length+Number(automatic))+'件';
+      const list=doc.createElement('ul');group.append(summary,list);
+      if(automatic)list.append(this.libraryRow(video,null));
+      for(const item of bookmarks)list.append(this.libraryRow(video,item));
+      group.addEventListener('toggle',()=>{
+        if(this.disposed||!group.isConnected)return;
+        if(group.open)this.expandedVideos.add(video.videoId);else this.expandedVideos.delete(video.videoId);
+        this.refreshPreviews();
+      });groups.append(group);count+=bookmarks.length+Number(automatic);videoCount++;
+    }
+    const status=this.root.querySelector<HTMLElement>('[data-library-status]');
+    if(status)status.textContent=videoCount+' 動画 · '+count+' 件 · 更新が新しい順';
+    if(!count){const empty=doc.createElement('p');empty.textContent='該当する保存情報はありません';groups.append(empty);}
+    this.refreshPreviews();
+  }
+  private libraryRow(video:ManualBookmarkLibraryEntry,item:ManualBookmark|null):HTMLElement {
+    const doc=this.root.ownerDocument,row=doc.createElement('li'),time=item?.time??video.automaticTime!;
+    row.dataset.libraryRow='1';
+    const description=doc.createElement('span');description.textContent=(item?.label||'ここまで見た')+' · '+displayTime(time)+
+      (item?.endTime===undefined?'':' – '+displayTime(item.endTime));
+    const seek=this.libraryButton(item?'seek':'seek-auto',item?'ここから再生':'続きへ',video.videoId,item?.id);
+    seek.disabled=time<0||time>=video.duration||!this.deps.openLibraryPosition;
+    row.append(this.preview(video.videoId,time),description,seek);
+    if(item?.endTime!==undefined){const repeat=this.libraryButton('repeat','リピート',video.videoId,item.id);
+      repeat.disabled=!this.deps.openLibraryPosition||this.deps.repeatEnabled?.()===false;row.append(repeat);}
+    const edit=doc.createElement('details');edit.className='zw-bookmark-edit';const summary=doc.createElement('summary');summary.textContent='編集';edit.append(summary);
+    if(item){const name=doc.createElement('input');name.dataset.libraryName='1';name.value=item.label;name.maxLength=80;name.setAttribute('aria-label','名前');edit.append(name);}
+    const start=this.pointField('library-start',item?'開始':'保存位置',ManualBookmarkPanel.formatTime(time));
+    start.querySelector('input')!.dataset.libraryStart='1';edit.append(start);
+    if(item){const end=this.pointField('library-end','終了（任意）',item.endTime===undefined?'':ManualBookmarkPanel.formatTime(item.endTime));
+      end.querySelector('input')!.dataset.libraryEnd='1';end.querySelector('input')!.placeholder='位置のみ';edit.append(end);}
+    const save=this.libraryButton(item?'save':'save-auto','保存',video.videoId,item?.id);
+    const remove=this.libraryButton(item?'delete':'delete-auto','削除',video.videoId,item?.id);
+    save.disabled=item?!this.deps.editLibraryBookmark:!this.deps.editLibraryAutomatic;
+    remove.disabled=item?!this.deps.deleteLibraryBookmark:!this.deps.deleteLibraryAutomatic;
+    edit.append(save,remove);row.append(edit);return row;
+  }
+  private libraryBusyRequest:{generation:number}|null=null;
+  private async libraryAction(button:HTMLButtonElement):Promise<void> {
+    if(this.disposed||button.disabled)return;
+    const action=button.dataset.libraryAction;
+    if(action==='back'){this.library=false;this.libraryGeneration++;this.libraryBusyRequest=null;this.render(this.last);return;}
+    if(action==='open'){this.libraryBusyRequest=null;this.library=true;this.expandedVideos.add(this.last.videoId||'');await this.loadLibrary();return;}
+    if(action==='retry'){await this.loadLibrary();return;}
+    if(!this.library||!this.ownsVideo())return;
+    const video=this.libraryRows.find(v=>v.videoId===button.dataset.videoId);
+    if(!video)return;
+    const item=video.bookmarks.find(row=>row.id===button.dataset.bookmarkId);
+    const time=item?.time??video.automaticTime;
+    if(action==='seek'||action==='seek-auto'||action==='repeat'){
+      if(time===null||time<0||time>=video.duration)return;
+      if(action==='repeat'&&item?.endTime!==undefined&&video.videoId===this.last.videoId){this.setRepeatRange(time,item.endTime);return;}
+      this.library=false;this.libraryGeneration++;this.render(this.last);
+      this.deps.openLibraryPosition?.(video.videoId,time,action==='repeat'?item?.endTime:undefined);return;
+    }
+    if(this.libraryBusyRequest)return;
+    const row=button.closest<HTMLElement>('[data-library-row]');if(!row)return;
+    const a=ManualBookmarkPanel.parseTime(row.querySelector<HTMLInputElement>('[data-library-start]')?.value||'');
+    const end=row.querySelector<HTMLInputElement>('[data-library-end]')?.value.trim()||'';
+    const b=end?ManualBookmarkPanel.parseTime(end):undefined;
+    const status=this.root.querySelector<HTMLElement>('[data-library-status]');
+    if((action==='save'||action==='save-auto')&&(a===null||a>=video.duration||b===null||(b!==undefined&&(b<=a||b>video.duration)))){
+      if(status)status.textContent='動画の長さ以内の時刻を入力してください。終了は開始より後にします。';return;
+    }
+    const generation=this.libraryGeneration,owner=this.last.videoId;
+    const request={generation};this.libraryBusyRequest=request;
+    const controls=Array.from(row.querySelectorAll<HTMLButtonElement>('button'));
+    controls.forEach(control=>control.disabled=true);
+    try{
+      if(action==='save'&&item)await this.deps.editLibraryBookmark?.(video.videoId,item.id,
+        {time:a!,...(b===undefined||b===null?{}:{endTime:b}),label:row.querySelector<HTMLInputElement>('[data-library-name]')?.value||''},video.duration);
+      else if(action==='save-auto')await this.deps.editLibraryAutomatic?.(video.videoId,a!,video.duration);
+      else if(action==='delete'&&item)await this.deps.deleteLibraryBookmark?.(video.videoId,item.id,video.duration);
+      else if(action==='delete-auto')await this.deps.deleteLibraryAutomatic?.(video.videoId);
+      else return;
+      if(this.disposed||generation!==this.libraryGeneration||owner!==this.last.videoId||!this.library)return;
+      await this.loadLibrary();
+    }catch{
+      if(!this.disposed&&generation===this.libraryGeneration&&owner===this.last.videoId&&status?.isConnected)
+        status.textContent='保存できませんでした。入力は残っています。再度お試しください。';
+    }finally{
+      if(this.libraryBusyRequest===request)this.libraryBusyRequest=null;
+      if(row.isConnected)controls.forEach(control=>control.disabled=false);
+    }
+  }
+
   dispose():void{
     if(this.disposed)return;
-    this.loop=null;this.deps.repeatState?.(false);
-    this.disposed=true;this.unsubscribe();
+    this.loop=null;this.deps.repeatState?.(false);this.deps.onRepeatRangeChange?.(null);this.clearPreviews();this.libraryGeneration++;
+    this.disposed=true;this.pointGeneration++;this.pointBusyRequest=null;this.unsubscribe();
     this.root.removeEventListener('click',this.clickHandler);
     this.root.removeEventListener('input',this.inputHandler);
+    this.root.removeEventListener('change',this.changeHandler);
     this.root.replaceChildren();
   }
 }

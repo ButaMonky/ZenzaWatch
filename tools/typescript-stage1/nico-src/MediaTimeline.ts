@@ -114,9 +114,11 @@ class MediaTimeline {
     }
   }
   detach(): void {
-    const media = this.media as TimelineMedia;
-    for (const [eventName, handler] of this.eventMap) {
-      media.removeEventListener(eventName, handler);
+    const media = this.media;
+    if (media) {
+      for (const [eventName, handler] of this.eventMap) {
+        media.removeEventListener(eventName, handler);
+      }
     }
     this.media = null;
     clearInterval(this.timer);

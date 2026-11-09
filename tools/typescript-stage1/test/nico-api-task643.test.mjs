@@ -65,13 +65,21 @@ async function compare(label,run,opt={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(before,SUBJECT,a.globals),B=loadLegacy(after,SUBJECT,b.globals);
   const ra=await settle(()=>run(A)),rb=await settle(()=>run(B));
+  // Audit #269: a formerly silent unsupported owner sort must now be disclosed.
+  // Everything else, including network side effects, must retain legacy parity.
+  if (label === 'owner 3' && ra.ok && rb.ok) {
+    assert.deepEqual(snapshot(rb.value.unappliedConditions), ['sort']);
+    const {unappliedConditions: _intentionalWarning, ...value} = rb.value;
+    rb.value = value;
+  }
   assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
   assert.deepEqual(b.log,a.log,label+' side effects');
   return ra;
 }
 const queryView=q=>({str:q.toString(),q:q.q,targets:q.targets,sort:q.sort,order:q.order,limit:q.limit,offset:q.offset,
-  fields:q.fields,context:q.context,filters:q.filters,sf:q.stringfiedFilters,hotField:q.hotField,
-  hotFrom:q.hotFrom&&q.hotFrom.getTime(),hotTo:q.hotTo&&q.hotTo.getTime(),now:q.now});
+  // Issue #264: removed inert hotField/hotFrom/hotTo getters; the historical
+  // query string (not these never-transmitted fields) is the compatibility API.
+  fields:q.fields,context:q.context,filters:q.filters,sf:q.stringfiedFilters,now:q.now});
 
 test('snapshot query: params to v2 query string and filters',async()=>{
   const cases=[
@@ -88,6 +96,37 @@ test('snapshot query: params to v2 query string and filters',async()=>{
   }
   await compare('static tables',({NicoSearchApiV2Query:Q})=>[Q.SORT,Q.F_RANGE,Q.L_RANGE]);
   await compare('missing word throws',({NicoSearchApiV2Query:Q})=>new Q());
+});
+
+// #264: `h` formerly calculated but never serialized hotField/hotFrom/hotTo.
+// Removing that dead path must not change any network query or cache sort key.
+test('Issue264: snapshot popular sort preserves its actual request without phantom parameters',async()=>{
+  const old=loadLegacy(before,SUBJECT,world().globals);
+  const next=loadLegacy(after,SUBJECT,world().globals);
+  const samples=[
+    {sort:'h',order:'d',_now:NOW},
+    {sort:'h',order:'a',_now:NOW},
+    {sort:'h',searchType:'tag',page:2,_now:NOW},
+    {sort:'h',order:'d',f_range:1,_now:NOW},
+    {sort:'f',order:'d',_now:NOW},
+    {sort:'v',order:'a',_now:NOW},
+    {sort:'m',order:'d',_now:NOW}
+  ];
+  for(const params of samples){
+    const legacy=new old.NicoSearchApiV2Query('test',params);
+    const fixed=new next.NicoSearchApiV2Query('test',params);
+    assert.equal(fixed.toString(),legacy.toString(),JSON.stringify(params));
+    assert.equal(fixed.sort,legacy.sort,JSON.stringify(params));
+    assert.equal(fixed.toString().includes('hotField='),false);
+    assert.equal(fixed.toString().includes('hotFrom='),false);
+    assert.equal(fixed.toString().includes('hotTo='),false);
+    if(params.sort==='h'){
+      assert.equal(fixed.sort,'-_hotMylistCounter');
+      assert.equal(fixed.hotField,undefined);
+      assert.equal(fixed.hotFrom,undefined);
+      assert.equal(fixed.hotTo,undefined);
+    }
+  }
 });
 
 test('parseVideoSearchSortValue',async()=>{

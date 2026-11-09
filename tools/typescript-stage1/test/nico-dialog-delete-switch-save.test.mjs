@@ -36,9 +36,10 @@ function fixture({record}={}){
   _videoInfo:{watchId:'sm1',contextWatchId:'sm1',videoId:'sm1',duration:300,
    msgInfo:{frontendId:6,frontendVersion:0}},
   _state:{isError:false,isPlaying:false,isEnded:false,resetVideoLoadingStatus(){},setPausing(){}},
-  // The suite validates saves and deletion ownership with recording enabled;
-  // getValue(false) incorrectly disabled every normal save.
-  _playerConfig:{props:{},getValue:key=>key==='resume.recordEnabled'?true:false},
+  // The shipping Config defaults automatic position recording to ON; the old
+  // fake getValue returned false for every key, silently disabling all saves.
+  _playerConfig:{props:{'resume.recordEnabled':true},
+   getValue:key=>key==='resume.recordEnabled'},
   _nicoVideoPlayer:{currentTime:85,close:()=>events.push('player-close')},
   _view:{clearPanel(){},videoControlBar:{refreshAutoResumePointers(){}}},
   _initializePlaylist:()=>pending,

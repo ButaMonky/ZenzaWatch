@@ -129,7 +129,7 @@ class NicoCommentPlayer extends Emitter {
         }
         return this._commentHistoryRenderer.apply(data, control);
     }
-    clearCommentHistory() { this._commentHistoryRenderer?.clear(); }
+    clearCommentHistory(options) { this._commentHistoryRenderer?.clear(options); }
     removeChat(nicoChat) {
         this._commentHistoryRenderer?.removed(nicoChat);
         this._model.removeChat(nicoChat);

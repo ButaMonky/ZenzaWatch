@@ -46,6 +46,7 @@ export interface AdvancedScreenParam {
   unit?: string;
   options?: Array<[string | number, string]>;
 }
+export interface AdvancedScreenPreset { id: string; label: string; user?: boolean; }
 export interface AdvancedHistoryParam {
   key: string;
   label: string;
@@ -72,6 +73,7 @@ type AdvancedModelDescriptor = AdvancedSettingsDescriptor & {
 class ModernAdvancedSettingsModel {
   declare config: AdvancedSettingsConfigStore;
   declare actions: AdvancedShortcutAction[];
+  declare _screenPresets: AdvancedScreenPreset[] | (() => AdvancedScreenPreset[]);
   declare _screenParams: Map<string, AdvancedScreenParam>;
   declare _historyParams: Map<string, AdvancedHistoryParam>;
   declare _publicSettings: Map<string, AdvancedModelDescriptor>;
@@ -121,14 +123,14 @@ class ModernAdvancedSettingsModel {
         ['enableSingleton','複数のプレイヤーを同時起動しない']
       ]),
       ...group('再生・音声','しおり・ABリピート',[
-        ['resume.recordEnabled','「ここまで見た」を自動記録',{
+        ['resume.recordEnabled','再生位置を自動で記録',{
           description:'既定ON。一時停止・終了時などの再生位置を動画ごとに1件保存します。OFFではZenzaWatchから端末・サーバーへ自動記録しません。保存済みの位置や手動しおりは消えず、位置の編集・削除は利用できます。公式プレイヤー側の記録には影響しません。'}],
         ['resume.clearOnComplete','最後まで再生したら「ここまで見た」を削除',{
           description:'既定ON。動画の再生完了時に自動位置だけを消去します。手動しおりは残ります。自動記録OFF時は消去しません。'}],
         ['bookmark.showToolbarButton','操作バーに「しおり・ABリピート」を表示',{
-          description:'既定ON。現在位置の登録、保存位置の編集、AB区間の設定を開くボタンです。OFFでも動画情報内から利用できます。'}],
+          description:'既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画はキャッシュがある場合に表示します。OFFでも動画情報内から利用できます。'}],
         ['abRepeat.enabled','ABリピートを利用',{
-          description:'既定ON。A（開始）からB（終了）の区間を繰り返します。区間は動画を切り替えると解除されます。OFFにすると実行中の区間リピートも停止します。'}]
+          description:'既定ON。A（開始）からB（終了）の区間を繰り返し、再生バーに範囲を表示します。区間はしおりとして保存できます。動画の切替では実行中のリピートを解除しますが、保存した区間は残ります。OFFにすると実行中の区間リピートも停止します。'}]
       ]),
       ...group('再生・音声','音量',[
         ['volume','動画の音量',slider(0,1)],
@@ -157,6 +159,15 @@ class ModernAdvancedSettingsModel {
         ['overrideGinza','公式の視聴ページでZenzaWatchを優先']
       ]),
       ...group('画面・映像','画面フィルター',[
+        ['screenFilter.showDescriptions','画面フィルターの説明を表示'],
+        ['screenFilter.showAdjustments','画面フィルターの調整欄を表示'],
+        ['screenFilter.renderQuality','追加エフェクトの描画品質',{
+          ...select([['normal','通常（元の解像度）'],['light','軽量（最大480p・30fps）']]),
+          description:'軽量は追加エフェクトを縮小した映像へ適用します。画質と動きの滑らかさを抑えて処理量を制限します。スクリーンショットには影響しません。'}],
+        ['screenFilter.changedOnly','変更した項目だけ表示'],
+        ['screenFilter.splitPosition','左右比較の境界位置',{...slider(0,100,1),unit:'%'}],
+        ['screenFilter.presetOrder','プリセットの並び順',{type:'screen-preset-order',
+          description:'標準プリセットと保存したプリセットをそれぞれ並べ替えます。よく使うものは「先頭へ」で上に置けます。変更は下部の保存で確定します。'}],
         ['screenFilter.flipH','左右反転'],
         ['screenFilter.flipV','上下反転'],
         ['screenFilter.applyToScreenshot','スクリーンショットにも映像フィルターを適用'],
@@ -539,16 +550,18 @@ class ModernAdvancedSettingsModel {
     };
     return direct[key] || null;
   }
-  constructor({config,legacyRoot=null,actions=[],screenFilterParams=[],historySchema=[]}: {
+  constructor({config,legacyRoot=null,actions=[],screenFilterParams=[],screenFilterPresets=[],historySchema=[]}: {
     config: AdvancedSettingsConfigStore;
     legacyRoot?: HTMLElement | null;
     actions?: AdvancedShortcutAction[];
     screenFilterParams?: AdvancedScreenParam[];
+    screenFilterPresets?: AdvancedScreenPreset[] | (() => AdvancedScreenPreset[]);
     historySchema?: AdvancedHistoryParam[];
   }) {
     if (!config || !config.default) { throw new TypeError('Config defaults are required'); }
     this.config=config;
     this.actions=actions.slice();
+    this._screenPresets=screenFilterPresets;
     this._screenParams=new Map((Array.isArray(screenFilterParams)?screenFilterParams:[])
       .filter(p=>p&&typeof p.key==='string')
       .map(p=>['screenFilter.'+p.key,p]));
@@ -571,7 +584,7 @@ class ModernAdvancedSettingsModel {
       // screenFilter.enable is obsolete (automatic detection replaced it).
       // screenFilter.saved is an internal toggle snapshot, not a user setting.
       // Preserve both Config values; only omit the unsupported editing controls.
-      if (descriptor.id==='screenFilter.enable' || descriptor.id==='screenFilter.saved' ||
+      if (descriptor.id==='screenFilter.enable' || descriptor.id==='screenFilter.saved' || descriptor.id==='screenFilter.userPresets' ||
           descriptor.id==='bestZenTube') {
         return;
       }
@@ -605,7 +618,8 @@ class ModernAdvancedSettingsModel {
         throw new Error('未定義のカテゴリ: '+descriptor.category);
       }
       const entry={...descriptor,dependsOn:ModernAdvancedSettingsModel.dependencyFor(descriptor.id)};
-      if(entry.id==='commentHistory.enabled'){entry.sortIndex=0;}
+      if(entry.id==='commentHistory.enabled'){entry.sortIndex=0;entry.label='自動で増量';entry.description='動画を開いたときにコメントを自動で増量します。今の動画だけ増量分を隠す場合は、再生画面のコメント増量パネルで「非表示」を使います。';}
+      if(entry.id==='commentHistory.maxAdditionalComments'){entry.label='読み込むコメント数';entry.description='読み込みの目標件数です。追加コメント数スライダーの上限にもなります。実際に読み込めた数が少ない場合は、その数が上限です。変更だけでは追加取得せず、読込ボタンで不足分を取得します。';}
       this._byId.set(entry.id,entry);
       this.descriptors.push(entry);
     };
@@ -691,6 +705,39 @@ class ModernAdvancedSettingsModel {
       return 0;
     });
     this.cancel();
+  }
+  screenFilterPresetList(): AdvancedScreenPreset[] {
+    const source=typeof this._screenPresets==='function'?this._screenPresets():this._screenPresets;
+    const unique=new Map<string,AdvancedScreenPreset>();
+    for(const preset of source) {
+      if(preset && typeof preset.id==='string' && !unique.has(preset.id)) {
+        unique.set(preset.id,{...preset,user:preset.user===true});
+      }
+    }
+    let order: unknown=[];
+    try {order=JSON.parse(String(this.get('screenFilter.presetOrder')||'[]'));} catch (_) {}
+    const ids=Array.isArray(order)?Array.from(new Set(order.filter(id=>typeof id==='string'))):[];
+    const sorted=[...ids.filter(id=>unique.has(id)).map(id=>unique.get(id)!),
+      ...Array.from(unique.values()).filter(p=>!ids.includes(p.id))];
+    return [...sorted.filter(p=>!p.user),...sorted.filter(p=>p.user)];
+  }
+  moveScreenFilterPreset(id: string,offset: number): boolean {
+    const list=this.screenFilterPresetList();
+    const preset=list.find(p=>p.id===id);
+    if(!preset || !Number.isFinite(offset)){return false;}
+    const group=list.filter(p=>p.user===preset.user);
+    const from=group.findIndex(p=>p.id===id),to=Math.max(0,Math.min(group.length-1,from+offset));
+    if(from===to){return false;}
+    group.splice(to,0,group.splice(from,1)[0]);
+    let index=0;
+    const reordered=list.map(p=>p.user===preset.user?group[index++]:p);
+    // Keep temporarily unavailable user IDs while editing; they may reappear.
+    let previous: unknown=[];
+    try {previous=JSON.parse(String(this.get('screenFilter.presetOrder')||'[]'));} catch (_) {}
+    const missing=Array.isArray(previous)?Array.from(new Set(previous.filter(
+      item=>typeof item==='string' && !list.some(p=>p.id===item)))):[];
+    this.set('screenFilter.presetOrder',JSON.stringify([...reordered.map(p=>p.id),...missing]));
+    return true;
   }
   descriptor(id: string): AdvancedModelDescriptor | null { return this._byId.get(id) || null; }
   static get SHARED_VISIBILITY() {

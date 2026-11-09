@@ -35,6 +35,206 @@
  * 「押している間だけ元の映像」は廃止し、画面の左半分だけ元の映像を重ねる比較モードにした。
  */
 const ScreenFilter = (() => {
+    // BEGIN SCREEN_FILTER_LOW_POWER_RENDERER
+    // SVG sees only the downsampled scratch canvas. The source video stays visible
+    // underneath, unfiltered, so unsupported/failed rendering cannot blank playback.
+    const createScreenFilterLowPowerRenderer = ({ getVideo, onStatus = () => { }, doc = document, win = window }) => {
+        let options = {}, running = false, video = null, source = null;
+        let canvas = null, scratch = null, ctx = null, sample = null;
+        let timer = 0, raf = 0, observer = null, savedFilter = '', savedPriority = '';
+        let failed = false, sourceKey = '', status = '', attached = [], resizer = null;
+        const events = ['play', 'pause', 'seeked', 'loadeddata', 'loadedmetadata', 'emptied', 'resize'];
+        const report = (next) => { if (next !== status) {
+            status = next;
+            onStatus(next);
+        } };
+        const cancel = () => {
+            if (timer)
+                win.clearTimeout(timer);
+            if (raf)
+                win.cancelAnimationFrame(raf);
+            timer = raf = 0;
+        };
+        const hide = () => { if (canvas)
+            canvas.style.display = 'none'; };
+        const detach = () => {
+            cancel();
+            if (resizer)
+                resizer.disconnect();
+            resizer = null;
+            attached.forEach(el => events.forEach(name => el.removeEventListener(name, wake)));
+            attached = [];
+            if (video) {
+                if (savedFilter)
+                    video.style.setProperty('filter', savedFilter, savedPriority);
+                else
+                    video.style.removeProperty('filter');
+            }
+            if (canvas)
+                canvas.remove();
+            video = source = canvas = scratch = ctx = sample = null;
+            failed = false;
+            sourceKey = '';
+        };
+        const sync = () => {
+            const found = getVideo();
+            const next = found && found.isConnected !== false && found.parentNode ? found : null;
+            const drawable = next && (next.drawableElement || next);
+            if (next !== video || drawable !== source || (canvas && canvas.parentNode !== next?.parentNode)) {
+                detach();
+                video = next;
+                source = drawable;
+                if (video) {
+                    savedFilter = video.style.getPropertyValue('filter');
+                    savedPriority = video.style.getPropertyPriority('filter');
+                    video.style.setProperty('filter', 'none', 'important');
+                    attached = source !== video ? [video, source] : [video];
+                    attached = attached.filter(el => el && el.addEventListener);
+                    attached.forEach(el => events.forEach(name => el.addEventListener(name, wake)));
+                    if (win.ResizeObserver) {
+                        resizer = new win.ResizeObserver(wake);
+                        resizer.observe(video);
+                    }
+                }
+            }
+            const key = source && (source.currentSrc || source.src || '');
+            if (key !== sourceKey) {
+                sourceKey = key;
+                failed = false;
+                hide();
+            }
+            return !!video;
+        };
+        const schedule = () => {
+            if (!running || timer || raf || failed || doc.hidden || !video ||
+                source?.tagName !== 'VIDEO' || !source.videoWidth || !source.videoHeight || source.readyState < 2)
+                return;
+            // Wait AFTER the previous draw completes: slow draws never queue catch-up work.
+            timer = win.setTimeout(() => {
+                timer = 0;
+                raf = win.requestAnimationFrame(draw);
+            }, 1000 / 30);
+        };
+        const draw = () => {
+            raf = 0;
+            if (!running || doc.hidden || !sync() || failed)
+                return;
+            if (source?.tagName !== 'VIDEO' || !source.videoWidth || !source.videoHeight || source.readyState < 2) {
+                hide();
+                return;
+            }
+            const vw = source.videoWidth, vh = source.videoHeight;
+            const ew = video.offsetWidth, eh = video.offsetHeight;
+            if (!ew || !eh) {
+                hide();
+                return;
+            }
+            try {
+                if (!canvas) {
+                    scratch = doc.createElement('canvas');
+                    canvas = doc.createElement('canvas');
+                    canvas.className = 'zenzaScreenFilterLowPower';
+                    canvas.setAttribute('aria-hidden', 'true');
+                    canvas.style.cssText = 'position:absolute;z-index:5;pointer-events:none;display:none;';
+                    video.after(canvas);
+                    sample = scratch.getContext('2d', { alpha: false });
+                    ctx = canvas.getContext('2d', { alpha: false });
+                    if (!sample || !ctx || !('filter' in ctx))
+                        throw new Error('Canvas filter unavailable');
+                }
+                const ratio = Math.min(1, 854 / vw, 480 / vh);
+                const w = Math.max(1, Math.floor(vw * ratio)), h = Math.max(1, Math.floor(vh * ratio));
+                if (canvas.width !== w || canvas.height !== h) {
+                    scratch.width = canvas.width = w;
+                    scratch.height = canvas.height = h;
+                }
+                sample.filter = 'none';
+                sample.drawImage(source, 0, 0, w, h);
+                ctx.filter = options.filter || 'none';
+                ctx.clearRect(0, 0, w, h);
+                ctx.drawImage(scratch, 0, 0, w, h);
+                const scale = Math.min(ew / vw, eh / vh), cw = vw * scale, ch = vh * scale;
+                Object.assign(canvas.style, {
+                    display: 'block', left: `${video.offsetLeft + (ew - cw) / 2}px`,
+                    top: `${video.offsetTop + (eh - ch) / 2}px`, width: `${cw}px`, height: `${ch}px`,
+                    transform: `scale(${options.flipH ? -1 : 1}, ${options.flipV ? -1 : 1})`
+                });
+                report('active');
+                if (!source.paused && !source.ended)
+                    schedule();
+            }
+            catch (e) {
+                failed = true;
+                cancel();
+                hide();
+                report('unavailable');
+            }
+        };
+        function wake() {
+            if (!running)
+                return;
+            if (!sync()) {
+                report('waiting');
+                return;
+            }
+            if (doc.hidden) {
+                cancel();
+                hide();
+                report('hidden');
+                return;
+            }
+            if (source?.tagName !== 'VIDEO') {
+                cancel();
+                hide();
+                report('unsupported');
+                return;
+            }
+            if (failed) {
+                report('unavailable');
+                return;
+            }
+            if (!source.videoWidth || !source.videoHeight || source.readyState < 2) {
+                cancel();
+                hide();
+                report('waiting');
+                return;
+            }
+            schedule();
+        }
+        const stop = () => {
+            running = false;
+            if (observer)
+                observer.disconnect();
+            observer = null;
+            doc.removeEventListener('visibilitychange', wake);
+            win.removeEventListener('resize', wake);
+            detach();
+            report('normal');
+        };
+        const update = (next) => {
+            options = Object.assign({}, options, next);
+            if (!options.enabled) {
+                stop();
+                return;
+            }
+            if (!running) {
+                running = true;
+                doc.addEventListener('visibilitychange', wake);
+                win.addEventListener('resize', wake);
+                observer = new win.MutationObserver(() => {
+                    const found = getVideo();
+                    if (found !== video || video?.isConnected === false ||
+                        (video && (video.drawableElement || video) !== source) ||
+                        (canvas && canvas.parentNode !== video?.parentNode))
+                        wake();
+                });
+                observer.observe(doc.documentElement, { childList: true, subtree: true });
+            }
+            wake();
+        };
+        return { start: update, update, stop };
+    };
+    // END SCREEN_FILTER_LOW_POWER_RENDERER
     const PREFIX = 'screenFilter.';
     const SVG_ID = 'zenzaScreenFilterSvg';
     const STYLE_ID = 'zenzaScreenFilterStyle';
@@ -142,7 +342,40 @@ const ScreenFilter = (() => {
             ],
             desc: '映像をいったん白黒にして、選んだ色のグラデーションで塗り直します。' +
                 'ゴールドは金属っぽい高級感、セピアは古い写真、グリーンは暗視カメラのような見た目になります。'
-        }
+        },
+        { key: 'bloom', label: 'ブルーム（光のにじみ）', group: 'style', heavy: true,
+            min: 0, max: 100, step: 1, def: 0, unit: '%',
+            desc: '明るい色をぼかして重ねます。0で無効。強くすると白飛びしやすく、ぼかし処理の負荷が増えます。' },
+        { key: 'bloomThreshold', label: 'ブルームの明るさ基準', group: 'style',
+            min: 0, max: 95, step: 1, def: 70, unit: '%',
+            desc: '高いほど明るい色だけが光ります。ブルームが0の間は映像に影響しません。' },
+        { key: 'bloomRadius', label: 'ブルームの広がり', group: 'style',
+            min: 0.5, max: 12, step: 0.5, def: 3, unit: 'px',
+            desc: '光を広げる範囲です。大きいほど柔らかく広がります。' },
+        { key: 'posterize', label: 'ポスタライズ（階調数）', group: 'style',
+            min: 0, max: 16, step: 1, def: 0, unit: '',
+            desc: '0で無効。1・2は各色2段階、3以上はその段階数に減色します。少ないほどポスター風になります。' },
+        { key: 'edge', label: '輪郭エフェクトの強さ', group: 'style', heavy: true,
+            min: 0, max: 100, step: 1, def: 0, unit: '%',
+            desc: '輪郭を抽出した映像と混ぜます。100で輪郭だけ、0で無効。周囲の画素を調べる処理を使います。' },
+        { key: 'edgeStyle', label: '輪郭エフェクトの種類', group: 'style', type: 'select', def: 'sketch',
+            options: [['sketch', '鉛筆スケッチ'], ['neon', 'ネオン輪郭'], ['emboss', 'エンボス']],
+            desc: '白地の線画、黒地の色付き輪郭、浮き彫りから選びます。強さが0の間は映像に影響しません。' },
+        { key: 'rgbShift', label: 'RGBずらし（色収差）', group: 'style',
+            min: -12, max: 12, step: 0.5, def: 0, unit: 'px', signed: true,
+            desc: '赤と青を左右へ逆向きにずらします。符号で方向を反転、0で無効。' },
+        { key: 'grain', label: 'フィルム粒子', group: 'style',
+            min: 0, max: 100, step: 1, def: 0, unit: '%',
+            desc: '固定の白黒粒子を重ねます。粒子は動かず、細かなフィルムの質感を加えます。0で無効。' },
+        { key: 'grainSize', label: 'フィルム粒子の大きさ', group: 'style',
+            min: 1, max: 4, step: 0.5, def: 1, unit: '',
+            desc: '粒子を細かく／粗くします。フィルム粒子が0の間は映像に影響しません。' },
+        { key: 'scanlines', label: '走査線（CRT風）', group: 'style',
+            min: 0, max: 100, step: 1, def: 0, unit: '%',
+            desc: '細い横線を重ねてブラウン管風にします。0で無効。RGBずらしや周辺減光と組み合わせられます。' },
+        { key: 'scanlineSpacing', label: '走査線の間隔', group: 'style',
+            min: 2, max: 8, step: 1, def: 4, unit: 'px',
+            desc: '横線の間隔です。画面サイズによって見え方が変わります。' }
     ];
     const PARAM_MAP = PARAMS.reduce((map, p) => { map[p.key] = p; return map; }, {});
     const DEFAULTS = PARAMS.reduce((map, p) => { map[p.key] = p.def; return map; }, {});
@@ -180,7 +413,23 @@ const ScreenFilter = (() => {
         { id: 'monoHigh', label: '白黒（硬調）', values: { saturate: 0, contrast: 135 },
             desc: 'コントラストの強い白黒。' },
         { id: 'invert', label: '反転（暗転）', values: { invert: true, hue: 180 },
-            desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。' }
+            desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。' },
+        { id: 'softGlow', label: 'ソフトグロー', values: { bloom: 35, bloomThreshold: 65, bloomRadius: 4 },
+            desc: '明るい色を柔らかくにじませます。' },
+        { id: 'popPoster', label: 'ポップポスター', values: { posterize: 4, saturate: 130, contrast: 110 },
+            desc: '色を各4段階に減らし、鮮やかなポスター風に。' },
+        { id: 'pencilSketch', label: '鉛筆スケッチ', values: { edge: 100, edgeStyle: 'sketch' },
+            desc: '白地に輪郭を描く線画風。' },
+        { id: 'neonEdges', label: 'ネオン輪郭', values: { edge: 100, edgeStyle: 'neon', saturate: 150 },
+            desc: '黒地に色付きの輪郭を浮かべます。' },
+        { id: 'emboss', label: '浮き彫り', values: { edge: 100, edgeStyle: 'emboss', saturate: 0 },
+            desc: '輪郭に明暗を付けた浮き彫り風。' },
+        { id: 'chromatic', label: '色収差', values: { rgbShift: 3 },
+            desc: '赤と青の輪郭を左右にずらします。' },
+        { id: 'grainFilm', label: '粒子フィルム', values: { grain: 45, saturate: 75, blackLevel: 5, temperature: 10 },
+            desc: '固定粒子と淡い暖色を合わせたフィルム風。' },
+        { id: 'retroCrt', label: 'レトロCRT', values: { scanlines: 45, scanlineSpacing: 4, rgbShift: 1, vignette: 30, saturate: 115 },
+            desc: '走査線・軽い色収差・周辺減光でブラウン管風に。' }
     ];
     const PRESET_MAP = PRESETS.reduce((map, p) => { map[p.id] = p; return map; }, {});
     /* 着色（colorize）のグラデーション。暗い所→明るい所の順の色（0〜1） */
@@ -234,6 +483,40 @@ const ScreenFilter = (() => {
         PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
         return values;
     };
+    let historyCurrent = null;
+    const historyPast = [], historyFuture = [];
+    const snapshot = () => ({ ...read(), flipH: !!prop('flipH'), flipV: !!prop('flipV') });
+    const sameSnapshot = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const recordHistory = () => {
+        const next = snapshot();
+        if (historyCurrent && !sameSnapshot(historyCurrent, next)) {
+            historyPast.push(historyCurrent);
+            if (historyPast.length > 50)
+                historyPast.shift();
+            historyFuture.length = 0;
+        }
+        historyCurrent = next;
+    };
+    const stepHistory = (back) => {
+        recordHistory();
+        const from = back ? historyPast : historyFuture, to = back ? historyFuture : historyPast;
+        const target = from[from.length - 1];
+        if (!target)
+            return false;
+        const before = snapshot();
+        Object.entries(target).forEach(([key, value]) => setProp(key, value));
+        const actual = snapshot();
+        if (!sameSnapshot(target, actual)) {
+            recordHistory();
+            apply();
+            return false;
+        }
+        from.pop();
+        to.push(before);
+        historyCurrent = actual;
+        apply();
+        return true;
+    };
     // Task 080: 「使う」を廃止。標準（全部既定値）なら何も掛からないので、常に有効として扱う
     const isEnabled = () => true;
     const isDefaultValue = (key, value) => {
@@ -255,9 +538,134 @@ const ScreenFilter = (() => {
         }
         return Math.abs(a - b) < 1e-6;
     };
+    const getUserPresets = () => {
+        const invalid = () => new Error('保存されたマイプリセットを読み込めません。データは変更していません。');
+        let raw = prop('userPresets');
+        // DataStorage caches defaults after malformed outer JSON. Inspect the
+        // preserved storage value as well, never mistake corruption for no presets.
+        if (config?.storage && typeof config.getStorageKey === 'function') {
+            try {
+                const stored = config.storage[config.getStorageKey(PREFIX + 'userPresets')];
+                raw = stored === undefined || stored === null ? '' : JSON.parse(stored);
+            }
+            catch {
+                throw invalid();
+            }
+        }
+        if (raw === undefined || raw === '')
+            return [];
+        if (typeof raw !== 'string' || raw.length > 100000)
+            throw invalid();
+        let data;
+        try {
+            data = JSON.parse(raw);
+        }
+        catch {
+            throw invalid();
+        }
+        if (!Array.isArray(data) || data.length > 20)
+            throw invalid();
+        const ids = new Set(), names = new Set();
+        return data.map(entry => {
+            if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' ||
+                !/^user_[a-z0-9_-]+$/.test(entry.id) || typeof entry.label !== 'string' ||
+                !entry.label.trim() || entry.label.length > 40 || ids.has(entry.id) || names.has(entry.label.trim()) ||
+                !entry.values || typeof entry.values !== 'object' || Array.isArray(entry.values))
+                throw invalid();
+            ids.add(entry.id);
+            names.add(entry.label.trim());
+            const values = {};
+            for (const p of PARAMS) {
+                const value = entry.values[p.key];
+                if (value !== undefined && (typeof value !== typeof p.def ||
+                    (typeof value === 'number' && !Number.isFinite(value))))
+                    throw invalid();
+                values[p.key] = normalize(p.key, value === undefined ? p.def : value);
+            }
+            return { id: entry.id, label: entry.label.trim(), values };
+        });
+    };
+    const writeUserPresets = (presets) => {
+        if (!config?.props || config.readonly)
+            throw new Error('マイプリセットを保存できませんでした。');
+        const json = JSON.stringify(presets);
+        setProp('userPresets', json);
+        if (prop('userPresets') !== json || JSON.stringify(getUserPresets()) !== json)
+            throw new Error('マイプリセットを保存できませんでした。');
+        emitChange();
+    };
+    const saveUserPreset = (name) => {
+        const label = name.trim();
+        if (!label || label.length > 40)
+            throw new Error('名前を1〜40文字で入力してください。');
+        const presets = getUserPresets();
+        if (presets.some(p => p.label === label))
+            throw new Error('同じ名前があります。別の名前で保存してください。');
+        if (presets.length >= 20)
+            throw new Error('保存できるのは20件までです。不要なプリセットを削除してください。');
+        const preset = { id: 'user_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2), label, values: read() };
+        writeUserPresets([...presets, preset]);
+        return preset;
+    };
+    const deleteUserPreset = (id) => {
+        const presets = getUserPresets();
+        if (!presets.some(p => p.id === id))
+            throw new Error('このマイプリセットは見つかりません。');
+        writeUserPresets(presets.filter(p => p.id !== id));
+    };
+    const renameUserPreset = (id, name) => {
+        const label = name.trim(), presets = getUserPresets(), preset = presets.find(p => p.id === id);
+        if (!preset)
+            throw new Error('このマイプリセットは見つかりません。');
+        if (!label || label.length > 40)
+            throw new Error('名前を1〜40文字で入力してください。');
+        if (presets.some(p => p.id !== id && p.label === label))
+            throw new Error('同じ名前があります。別の名前で保存してください。');
+        preset.label = label;
+        writeUserPresets(presets);
+    };
+    const overwriteUserPreset = (id) => {
+        const presets = getUserPresets(), preset = presets.find(p => p.id === id);
+        if (!preset)
+            throw new Error('このマイプリセットは見つかりません。');
+        preset.values = read();
+        writeUserPresets(presets);
+    };
+    const allPresets = () => {
+        // Corrupt user storage must not disable the built-in filters or playback.
+        try {
+            return [...PRESETS, ...getUserPresets()];
+        }
+        catch {
+            return PRESETS;
+        }
+    };
+    const orderedPresets = (items) => {
+        try {
+            const order = JSON.parse(prop('presetOrder') || '[]');
+            if (!Array.isArray(order))
+                return items;
+            const positions = new Map();
+            order.forEach(id => { if (typeof id === 'string' && !positions.has(id))
+                positions.set(id, positions.size); });
+            return [...items].sort((a, b) => (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity));
+        }
+        catch {
+            return items;
+        }
+    };
+    const getPresetList = (sorted = true) => {
+        let users = [];
+        try {
+            users = getUserPresets();
+        }
+        catch { }
+        const list = [...PRESETS.map(p => ({ id: p.id, label: p.label, user: false })), ...users.map(p => ({ id: p.id, label: p.label, user: true }))];
+        return sorted ? orderedPresets(list) : list;
+    };
     /** 今の値が一致するプリセットのid。どれとも違えば 'custom'（手動調整中） */
     const detectPreset = (values = read()) => {
-        const found = PRESETS.find(preset => PARAMS.every(p => {
+        const found = allPresets().find(preset => PARAMS.every(p => {
             const target = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
             return sameValue(p, values[p.key], target);
         }));
@@ -386,6 +794,74 @@ const ScreenFilter = (() => {
      */
     const SHARPEN_GAIN = 6;
     /** SVGフィルターの中身（<filter> の子要素）を作る。何もしない時は '' */
+    /** Optional artistic stages. No external images, frame reads, or animated noise. */
+    const buildArtisticEffects = (values = {}, input = 'SourceGraphic') => {
+        const parts = [];
+        const n = (key) => normalize(key, values[key]);
+        const f = (value) => +value.toFixed(4);
+        if (n('bloom') > 0) {
+            const threshold = n('bloomThreshold') / 100;
+            const slope = f(1 / (1 - threshold));
+            const intercept = f(-threshold / (1 - threshold));
+            const channel = (ch) => `<feFunc${ch} type="linear" slope="${slope}" intercept="${intercept}"/>`;
+            parts.push(`<feComponentTransfer in="${input}" result="sfBloomBright">${channel('R')}${channel('G')}${channel('B')}</feComponentTransfer>`);
+            parts.push(`<feGaussianBlur in="sfBloomBright" stdDeviation="${n('bloomRadius')}" result="sfBloomBlur"/>`);
+            parts.push(`<feComposite in="${input}" in2="sfBloomBlur" operator="arithmetic" k1="0" k2="1" k3="${f(n('bloom') / 100 * 1.5)}" k4="0" result="sfBloom"/>`);
+            input = 'sfBloom';
+        }
+        if (n('posterize') > 0) {
+            const levels = Math.max(2, n('posterize'));
+            const table = Array.from({ length: levels }, (_, i) => f(i / (levels - 1))).join(' ');
+            const channel = (ch) => `<feFunc${ch} type="discrete" tableValues="${table}"/>`;
+            parts.push(`<feComponentTransfer in="${input}" result="sfPosterize">${channel('R')}${channel('G')}${channel('B')}</feComponentTransfer>`);
+            input = 'sfPosterize';
+        }
+        if (n('edge') > 0) {
+            const style = n('edgeStyle');
+            let source = input;
+            if (style === 'sketch') {
+                parts.push(`<feColorMatrix in="${input}" type="saturate" values="0" result="sfEdgeMono"/>`);
+                source = 'sfEdgeMono';
+            }
+            const kernel = style === 'emboss' ? '-2 -1 0 -1 1 1 0 1 2' :
+                style === 'neon' ? '-1 -1 -1 -1 8 -1 -1 -1 -1' : '1 1 1 1 -8 1 1 1 1';
+            const bias = style === 'emboss' ? 0.5 : style === 'sketch' ? 1 : 0;
+            parts.push(`<feConvolveMatrix in="${source}" order="3" kernelMatrix="${kernel}" divisor="1" bias="${bias}" edgeMode="duplicate" preserveAlpha="true" result="sfEdgeKernel"/>`);
+            const amount = n('edge') / 100;
+            parts.push(`<feComposite in="${input}" in2="sfEdgeKernel" operator="arithmetic" k1="0" k2="${f(1 - amount)}" k3="${f(amount)}" k4="0" result="sfEdge"/>`);
+            input = 'sfEdge';
+        }
+        const shift = n('rgbShift');
+        if (shift !== 0) {
+            ['R', 'G', 'B'].forEach((channel, index) => {
+                const matrix = Array.from({ length: 4 }, (_, row) => Array.from({ length: 5 }, (_, col) => row === col && (row === index || row === 3) ? 1 : 0).join(' ')).join(' ');
+                parts.push(`<feColorMatrix in="${input}" type="matrix" values="${matrix}" result="sfRgb${channel}"/>`);
+            });
+            parts.push(`<feOffset in="sfRgbR" dx="${shift}" dy="0" result="sfRgbOffsetR"/>`);
+            parts.push(`<feOffset in="sfRgbB" dx="${-shift}" dy="0" result="sfRgbOffsetB"/>`);
+            parts.push('<feComposite in="sfRgbOffsetR" in2="sfRgbG" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="sfRgbRG"/>');
+            parts.push('<feComposite in="sfRgbRG" in2="sfRgbOffsetB" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="sfRgb"/>');
+            input = 'sfRgb';
+        }
+        if (n('grain') > 0) {
+            // Limit noise generation to one small, deterministic tile, then repeat it.
+            parts.push(`<feTurbulence type="fractalNoise" baseFrequency="${f(0.8 / n('grainSize'))}" numOctaves="1" seed="17" stitchTiles="stitch" width="64" height="64" result="sfGrainNoise"/>`);
+            parts.push(`<feColorMatrix in="sfGrainNoise" type="matrix" values="0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0 0 0 0 ${f(n('grain') / 100)}" width="64" height="64" result="sfGrainTile"/>`);
+            parts.push('<feTile in="sfGrainTile" result="sfGrainTexture"/>');
+            parts.push(`<feBlend in="sfGrainTexture" in2="${input}" mode="soft-light" result="sfGrain"/>`);
+            input = 'sfGrain';
+        }
+        if (n('scanlines') > 0) {
+            const period = n('scanlineSpacing');
+            parts.push(`<feFlood flood-color="black" flood-opacity="${f(n('scanlines') / 100 * 0.85)}" width="1" height="1" result="sfScanStripe"/>`);
+            // feTile repeats the input primitive subregion, including its transparent gap.
+            parts.push(`<feMerge width="1" height="${period}" result="sfScanTile"><feMergeNode in="sfScanStripe"/></feMerge>`);
+            parts.push('<feTile in="sfScanTile" result="sfScanPattern"/>');
+            parts.push(`<feComposite in="sfScanPattern" in2="${input}" operator="over" result="sfScanlines"/>`);
+            input = 'sfScanlines';
+        }
+        return { markup: parts.join(''), output: input };
+    };
     const buildSvgFilterMarkup = (values) => {
         const parts = [];
         let input = 'SourceGraphic';
@@ -404,7 +880,12 @@ const ScreenFilter = (() => {
         if (!isDefaultValue('sharpen', values.sharpen)) {
             const amount = +(values.sharpen / 100 * SHARPEN_GAIN).toFixed(3);
             parts.push(`<feGaussianBlur in="${input}" stdDeviation="0.6" result="sfBlur"/>`);
-            parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0"/>`);
+            parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0" result="sfSharpen"/>`);
+            input = 'sfSharpen';
+        }
+        const artistic = buildArtisticEffects(values, input);
+        if (artistic.markup) {
+            parts.push(artistic.markup);
         }
         return parts.join('');
     };
@@ -504,6 +985,7 @@ const ScreenFilter = (() => {
         lastVignette = key;
     };
     const emitChange = () => {
+        recordHistory();
         listeners.forEach(fn => {
             try {
                 fn();
@@ -513,7 +995,20 @@ const ScreenFilter = (() => {
             }
         });
     };
-    /** 動画要素へ反映する（CSS変数を書き換えるだけなので軽い） */
+    let lowPowerStatus = 'normal';
+    let lowPowerRenderer = null;
+    const updateLowPower = (values, filter) => {
+        const enabled = prop('renderQuality') === 'light' && !bypass &&
+            ['bloom', 'posterize', 'edge', 'rgbShift', 'grain', 'scanlines'].some(key => normalize(key, values[key]) !== 0);
+        if (enabled && !lowPowerRenderer) {
+            lowPowerRenderer = createScreenFilterLowPowerRenderer({
+                getVideo: () => document.querySelector('.zenzaWatchVideoElement'),
+                onStatus: (status) => { lowPowerStatus = status; emitChange(); }
+            });
+        }
+        lowPowerRenderer?.update({ enabled, filter, flipH: !!prop('flipH'), flipV: !!prop('flipV') });
+    };
+    /** Reflect settings; light mode downsamples before SVG work instead of filtering the full video. */
     const apply = (values = read(), { notify = true } = {}) => {
         applyScheduled = false;
         if (typeof document === 'undefined') {
@@ -525,6 +1020,7 @@ const ScreenFilter = (() => {
             lastCss = css;
             document.documentElement.style.setProperty(CSS_VAR, css);
         }
+        updateLowPower(values, css);
         applyVignette(vignetteAlpha(values));
         updateAutoLevelsTimer(values);
         notify && emitChange();
@@ -629,7 +1125,9 @@ const ScreenFilter = (() => {
         if (!PARAM_MAP[key]) {
             return;
         }
+        recordHistory();
         setProp(key, normalize(key, value));
+        recordHistory();
         scheduleApply();
     };
     /** スライダーを動かしている間のプレビュー（保存はしない） */
@@ -640,18 +1138,28 @@ const ScreenFilter = (() => {
         apply(values, { notify: false });
     };
     const applyPreset = (id) => {
-        const preset = PRESET_MAP[id];
+        const preset = allPresets().find(p => p.id === id);
         if (!preset) {
             return null;
         }
+        recordHistory();
         PARAMS.forEach(p => {
             const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
             setProp(p.key, normalize(p.key, v));
         });
+        recordHistory();
         scheduleApply();
         return preset;
     };
     const reset = () => applyPreset('standard');
+    const isPresetActive = (id) => {
+        const preset = allPresets().find(p => p.id === id);
+        if (!preset)
+            return false;
+        const values = read();
+        return PARAMS.every(p => sameValue(p, values[p.key], preset.values[p.key] ?? p.def));
+    };
+    const togglePreset = (id) => isPresetActive(id) ? reset() : applyPreset(id);
     const nextPreset = () => {
         const current = detectPreset();
         const index = PRESETS.findIndex(p => p.id === current);
@@ -682,8 +1190,7 @@ const ScreenFilter = (() => {
         }
         const delta = parseFloat(deltaText) || 0;
         const next = normalize(key, normalize(key, prop(key)) + delta);
-        setProp(key, next);
-        scheduleApply();
+        set(key, next);
         return { param: p, value: next };
     };
     const onOff = (v) => v ? 'ON' : 'OFF';
@@ -793,6 +1300,9 @@ const ScreenFilter = (() => {
         const filter = use && !bypass ? buildFilter() : 'none';
         const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
         ctx.save();
+        ctx.beginPath();
+        ctx.rect(dx, dy, w, h);
+        ctx.clip();
         if (filter !== 'none') {
             ctx.filter = filter;
         }
@@ -837,14 +1347,124 @@ const ScreenFilter = (() => {
     // フィルターは <video> 全体に CSS で掛かるので、左半分の上に「加工前の映像」を
     // canvas へ描いて重ねる（drawImage は加工前のフレームを描く）。反転中は反転して描く。
     const SPLIT_CLASS = 'zenzaScreenFilterSplit';
-    const split = { on: false, raf: 0, canvas: null, ctx: null, lastKey: '' };
+    const split = { on: false, raf: 0, canvas: null, ctx: null, lastKey: '', lastGeometryKey: '', lastDrawTime: 0, handle: null, dragging: false, pointerId: null, position: null };
+    const getSplitPosition = () => {
+        const value = split.position ?? Number(prop('splitPosition') ?? 50);
+        return Number.isFinite(value) ? clamp(value, 0, 100) : 50;
+    };
+    const setSplitPosition = (value, persist = true) => {
+        if (!Number.isFinite(value))
+            return getSplitPosition();
+        const position = Math.round(clamp(value, 0, 100));
+        if (persist) {
+            setProp('splitPosition', position);
+            split.position = null;
+        }
+        else
+            split.position = position;
+        split.lastKey = '';
+        return getSplitPosition();
+    };
+    const moveSplit = (event) => {
+        if (!split.dragging || !split.canvas || event.pointerId !== split.pointerId)
+            return;
+        if (event.buttons === 0) {
+            endSplitDrag();
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = split.canvas.getBoundingClientRect();
+        if (rect.width)
+            setSplitPosition((event.clientX - rect.left) / rect.width * 100, false);
+    };
+    const endSplitDrag = (event) => {
+        if (!split.dragging)
+            return;
+        if (event && event.pointerId !== split.pointerId)
+            return;
+        if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        if (event?.type === 'pointerup')
+            setSplitPosition(getSplitPosition());
+        else
+            split.position = null;
+        split.dragging = false;
+        split.lastKey = '';
+        const pointerId = split.pointerId;
+        split.pointerId = null;
+        if (pointerId !== null && split.handle?.hasPointerCapture?.(pointerId))
+            split.handle.releasePointerCapture(pointerId);
+        window.removeEventListener('blur', cancelSplitDrag);
+        window.removeEventListener('pointermove', moveSplit, true);
+        window.removeEventListener('pointerup', endSplitDrag, true);
+        window.removeEventListener('pointercancel', endSplitDrag, true);
+    };
+    const cancelSplitDrag = () => endSplitDrag();
+    const ensureSplitHandle = (parent) => {
+        if (!split.handle) {
+            const handle = split.handle = document.createElement('button');
+            handle.type = 'button';
+            handle.className = 'zenzaScreenFilterSplitHandle';
+            handle.setAttribute('role', 'slider');
+            handle.setAttribute('aria-label', '左右比較の境界位置');
+            handle.setAttribute('aria-valuemin', '0');
+            handle.setAttribute('aria-valuemax', '100');
+            handle.setAttribute('aria-orientation', 'horizontal');
+            handle.textContent = '↔';
+            handle.style.cssText = 'position:absolute;z-index:102;width:28px;height:44px;transform:translate(-50%,-50%);padding:0;border:1px solid #aaa;border-radius:5px;background:#18181cee;color:#fff;cursor:ew-resize;touch-action:none;pointer-events:auto;';
+            handle.addEventListener('pointerdown', event => {
+                if (event.button !== 0)
+                    return;
+                event.preventDefault();
+                event.stopPropagation();
+                split.dragging = true;
+                split.pointerId = event.pointerId;
+                try {
+                    handle.setPointerCapture?.(event.pointerId);
+                }
+                catch { }
+                window.addEventListener('blur', cancelSplitDrag);
+                window.addEventListener('pointermove', moveSplit, true);
+                window.addEventListener('pointerup', endSplitDrag, true);
+                window.addEventListener('pointercancel', endSplitDrag, true);
+            });
+            handle.addEventListener('lostpointercapture', cancelSplitDrag);
+            for (const name of ['click', 'dblclick', 'mousedown', 'mouseup', 'keyup'])
+                handle.addEventListener(name, event => event.stopPropagation());
+            handle.addEventListener('keydown', event => {
+                event.stopPropagation();
+                let next = getSplitPosition();
+                if (event.key === 'ArrowLeft')
+                    next -= event.shiftKey ? 10 : 1;
+                else if (event.key === 'ArrowRight')
+                    next += event.shiftKey ? 10 : 1;
+                else if (event.key === 'Home')
+                    next = 0;
+                else if (event.key === 'End')
+                    next = 100;
+                else
+                    return;
+                event.preventDefault();
+                setSplitPosition(next);
+            });
+        }
+        if (split.handle.parentNode !== parent)
+            parent.appendChild(split.handle);
+        return split.handle;
+    };
     const hideSplitCanvas = () => {
         if (split.canvas) {
             split.canvas.style.display = 'none';
         }
+        if (split.handle)
+            split.handle.hidden = true;
+        endSplitDrag();
         split.lastKey = '';
     };
-    const drawSplit = () => {
+    const drawSplit = (timestamp) => {
         split.raf = 0;
         if (!split.on || typeof document === 'undefined') {
             return;
@@ -865,6 +1485,7 @@ const ScreenFilter = (() => {
             video.after(canvas);
             split.canvas = canvas;
             split.ctx = canvas.getContext('2d');
+            split.lastKey = '';
         }
         const vw = src.videoWidth, vh = src.videoHeight;
         const ew = video.offsetWidth, eh = video.offsetHeight;
@@ -876,23 +1497,47 @@ const ScreenFilter = (() => {
         const cw = vw * scale, ch = vh * scale;
         const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
         const flipH = !!prop('flipH'), flipV = !!prop('flipV');
-        const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
-        if (key === split.lastKey && canvas.style.display !== 'none') {
+        const position = getSplitPosition();
+        Object.assign(canvas.style, {
+            display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
+        });
+        // The touch cover is z10 inside videoPlayer (z100), with comments at z101.
+        // Place only the small button above both; the rest of the video keeps its
+        // normal hit targets. Measure the canvas after layout so small-mode motion
+        // and scaling are reflected even while the video is paused.
+        const handleParent = video.closest('.zenzaPlayerContainer') || parent;
+        const handle = ensureSplitHandle(handleParent);
+        handle.hidden = false;
+        const picture = canvas.getBoundingClientRect(), bounds = handleParent.getBoundingClientRect();
+        const scaleX = handleParent.offsetWidth ? bounds.width / handleParent.offsetWidth : 1;
+        const scaleY = handleParent.offsetHeight ? bounds.height / handleParent.offsetHeight : 1;
+        handle.style.left = `${(picture.left + picture.width * position / 100 - bounds.left) / (scaleX || 1) - handleParent.clientLeft + handleParent.scrollLeft}px`;
+        handle.style.top = `${(picture.top + picture.height / 2 - bounds.top) / (scaleY || 1) - handleParent.clientTop + handleParent.scrollTop}px`;
+        handle.setAttribute('aria-valuenow', String(position));
+        const light = prop('renderQuality') === 'light';
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const geometryKey = [left, top, cw, ch, vw, vh, flipH, flipV, position, light, dpr].join(',');
+        const key = [src.currentTime, geometryKey].join(',');
+        if (key === split.lastKey) {
             return;
         }
+        const now = typeof timestamp === 'number' ? timestamp : performance.now();
+        // Keep pointer/keyboard edits immediate; only repeated video frames are
+        // capped in light mode so the original-side copy stays inexpensive too.
+        if (light && split.lastKey && geometryKey === split.lastGeometryKey && now - split.lastDrawTime < 1000 / 30)
+            return;
         split.lastKey = key;
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
-        const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
+        split.lastGeometryKey = geometryKey;
+        split.lastDrawTime = now;
+        const copyScale = Math.min(cw * dpr / vw, ch * dpr / vh, 1, ...(light ? [854 / vw, 480 / vh] : []));
+        const w = Math.max(1, Math.round(vw * copyScale));
+        const h = Math.max(1, Math.round(vh * copyScale));
         if (canvas.width !== w || canvas.height !== h) {
             canvas.width = w;
             canvas.height = h;
         }
-        Object.assign(canvas.style, {
-            display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
-        });
         const ctx = split.ctx;
-        const half = Math.round(w / 2);
+        const half = Math.round(w * position / 100);
         ctx.clearRect(0, 0, w, h);
         ctx.save();
         ctx.beginPath();
@@ -949,6 +1594,9 @@ const ScreenFilter = (() => {
         // 反転は従来通り「ページを開き直すと元に戻る」扱いにする（ずっと反転したままの事故防止）
         setProp('flipH', false);
         setProp('flipV', false);
+        historyPast.length = 0;
+        historyFuture.length = 0;
+        historyCurrent = snapshot();
         if (config && typeof config.on === 'function') {
             config.on('update', (key) => {
                 if (typeof key === 'string' && key.startsWith(PREFIX)) {
@@ -963,14 +1611,26 @@ const ScreenFilter = (() => {
         PARAMS,
         PARAM_MAP,
         PRESETS,
+        getPresetList,
         DEFAULTS,
         COLORIZE_MAPS,
         initialize,
         read,
         set,
+        undo: () => stepHistory(true),
+        redo: () => stepHistory(false),
+        get canUndo() { recordHistory(); return historyPast.length > 0; },
+        get canRedo() { recordHistory(); return historyFuture.length > 0; },
         preview,
         apply,
         applyPreset,
+        isPresetActive,
+        togglePreset,
+        getUserPresets,
+        saveUserPreset,
+        deleteUserPreset,
+        renameUserPreset,
+        overwriteUserPreset,
         reset,
         nextPreset,
         adjust,
@@ -989,9 +1649,12 @@ const ScreenFilter = (() => {
         isEnabled,
         isStandard,
         setSplit,
+        setSplitPosition,
+        get splitPosition() { return getSplitPosition(); },
         get isSplit() { return split.on; },
         resetAutoLevels,
         get autoLevelsAvailable() { return auto.available; },
+        get renderStatus() { return lowPowerStatus; },
         get flipH() { return !!prop('flipH'); },
         get flipV() { return !!prop('flipV'); },
         /** （旧）押している間だけ元の映像。Task 080 からパネルでは使っていない */
@@ -1006,6 +1669,13 @@ const ScreenFilter = (() => {
         },
         /** テスト用 */
         _reset() {
+            listeners.clear();
+            lowPowerRenderer?.stop();
+            lowPowerRenderer = null;
+            lowPowerStatus = 'normal';
+            historyPast.length = 0;
+            historyFuture.length = 0;
+            historyCurrent = null;
             config = null;
             bypass = false;
             lastCss = null;
@@ -1017,6 +1687,16 @@ const ScreenFilter = (() => {
             auto.available = true;
             listeners.clear();
             split.on = false;
+            if (split.raf)
+                cancelAnimationFrame(split.raf);
+            split.raf = 0;
+            endSplitDrag();
+            split.canvas?.remove();
+            split.handle?.remove();
+            split.canvas = null;
+            split.ctx = null;
+            split.handle = null;
+            split.position = null;
         }
     };
 })();
@@ -1032,7 +1712,7 @@ const ScreenFilterPanel = (() => {
       position: fixed;
       top: 16px;
       right: 16px;
-      width: 380px;
+      width: 960px;
       max-width: calc(100vw - 32px);
       max-height: calc(100vh - 32px);
       overflow-y: auto;
@@ -1093,6 +1773,14 @@ const ScreenFilterPanel = (() => {
     }
     .zenzaScreenFilterPanel * { box-sizing: border-box; }
     .zenzaScreenFilterPanel .sfHead {
+      flex-shrink: 0;
+      position: sticky;
+      top: -12px;
+      z-index: 3;
+      flex-wrap: wrap;
+      margin: -12px -14px 8px;
+      padding: 12px 14px 8px;
+      background: rgb(24, 24, 28);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -1114,11 +1802,6 @@ const ScreenFilterPanel = (() => {
       cursor: pointer;
     }
     .zenzaScreenFilterPanel button:hover { background: #4a4a58; }
-    .zenzaScreenFilterPanel .sfClose {
-      font-size: 16px;
-      line-height: 1;
-      padding: 2px 8px;
-    }
     .zenzaScreenFilterPanel .sfIntro,
     .zenzaScreenFilterPanel .sfDesc,
     .zenzaScreenFilterPanel .sfNote {
@@ -1142,6 +1825,9 @@ const ScreenFilterPanel = (() => {
       margin-top: 4px;
     }
     .zenzaScreenFilterPanel .sfPresets button { text-align: left; }
+    .zenzaScreenFilterPanel .sfUserPresetRow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+    .zenzaScreenFilterPanel .sfUserPresetRow input,.zenzaScreenFilterPanel .sfUserPresetRow select{flex:1 1 160px;min-width:0;max-width:100%;box-sizing:border-box;font:inherit;color:#eee;background:#25252d;border:1px solid #666;border-radius:4px;padding:6px 8px}
+    .zenzaScreenFilterPanel .sfUserPresetRow input:focus-visible,.zenzaScreenFilterPanel .sfUserPresetRow select:focus-visible{outline:2px solid #9cf;outline-offset:2px}
     .zenzaScreenFilterPanel .sfPresets button.is-current {
       background: #2d6a3e;
       border-color: #5fbf78;
@@ -1202,7 +1888,47 @@ const ScreenFilterPanel = (() => {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      margin-top: 12px;
+      margin: 0 0 0 auto;
+      justify-content: flex-end;
+    }
+    .zenzaScreenFilterPanel .sfTitleRow{display:contents}
+    .zenzaScreenFilterPanel .sfTitleRow>button{order:2}
+    .zenzaScreenFilterPanel .sfHead .sfTitle{flex:1 0 auto}
+    .zenzaScreenFilterPanel .sfHead button{min-height:28px;white-space:nowrap}
+    .zenzaScreenFilterPanel .sfHead .sfFoot{order:1}
+    .zenzaScreenFilterPanel.sf-compact .sfTitleRow{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+    .zenzaScreenFilterPanel.sf-compact .sfHead .sfFoot{width:100%;justify-content:flex-start}
+    .zenzaScreenFilterPanel.sf-compact .sfHead button{padding-left:6px;padding-right:6px}
+    .zenzaScreenFilterPanel .sfBody{display:grid;grid-template-columns:minmax(220px,30%) minmax(0,1fr);gap:18px;align-items:start}
+    .zenzaScreenFilterPanel .sfBody>*{min-width:0}
+    .zenzaScreenFilterPanel.sf-compact{width:380px}
+    .zenzaScreenFilterPanel.sf-compact .sfBody{grid-template-columns:minmax(0,1fr)}
+    .zenzaScreenFilterPanel .sfQuality{flex-shrink:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+    .zenzaScreenFilterPanel .sfQuality select{background:#111;color:#ddd;border:1px solid #555;padding:3px;font:inherit;max-width:100%}
+    .zenzaScreenFilterPanel [data-render-status]{color:#ffcf99;font-size:11px}
+    .zenzaScreenFilterPanel .sfAdjustColumn{padding-left:16px;border-left:1px solid rgba(255,255,255,.12)}
+    .zenzaScreenFilterPanel .sfRows{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:6px 18px;align-items:start}
+    .zenzaScreenFilterPanel .sfRow{min-width:0}
+    .zenzaScreenFilterPanel .sfRowHead{flex-wrap:wrap}
+    .zenzaScreenFilterPanel .sfPresets button{min-width:0;overflow-wrap:anywhere}
+    .zenzaScreenFilterPanel .sfUserPresetHead{display:flex;justify-content:space-between;align-items:center;gap:6px}
+    .zenzaScreenFilterPanel .sfSavePreset{width:100%;margin-top:8px}
+    .zenzaScreenFilterPanel .sfUserPresetForm{margin-top:8px}
+    .zenzaScreenFilterPanel .sfUserPresetForm input{display:block;width:100%;min-width:0;color:#eee;background:#111;border:1px solid #555;border-radius:3px;padding:5px;font:inherit}
+    .zenzaScreenFilterPanel .sfUserPresetStatus{font-size:11px;color:#9c9;margin-top:6px;overflow-wrap:anywhere}
+    .zenzaScreenFilterPanel [data-user-preset-confirm]{margin-top:8px;overflow-wrap:anywhere}
+    .zenzaScreenFilterPanel button.is-editing{outline:2px dashed #9c9;outline-offset:1px}
+    .zenzaScreenFilterPanel .sfFold>summary{color:#fff;font-weight:bold;cursor:pointer}
+    .zenzaScreenFilterPanel .sfFold>div{padding-top:6px}
+    .zenzaScreenFilterPanel [hidden]{display:none!important}
+    .zenzaScreenFilterPanel.sf-hide-descriptions .sfIntro,
+    .zenzaScreenFilterPanel.sf-hide-descriptions .sfDesc,
+    .zenzaScreenFilterPanel.sf-hide-descriptions .sfNote{display:none}
+    @media(max-width:700px){
+      .zenzaScreenFilterPanel .sfBody{grid-template-columns:1fr;gap:0}
+      .zenzaScreenFilterPanel .sfAdjustColumn{border-left:0;padding-left:0}
+      .zenzaScreenFilterPanel .sfRows{grid-template-columns:1fr}
+      .zenzaScreenFilterPanel .sfHead .sfFoot{justify-content:flex-start;margin-left:0}
     }
     .zenzaScreenFilterPanel.is-disabled .sfAdjust { opacity: 0.45; }
     .zenzaScreenFilterPanel .sfDesc.is-unavailable::after {
@@ -1249,7 +1975,6 @@ const ScreenFilterPanel = (() => {
     const TEMPLATE = () => `
     <div class="sfHead">
       <span class="sfTitle">画面フィルター</span>
-      <button type="button" class="sfClose" data-action="close" title="閉じる">×</button>
     </div>
     <div class="sfIntro">
       動画の映像だけに効きます（コメントやボタンには効きません）。
@@ -1265,9 +1990,28 @@ const ScreenFilterPanel = (() => {
       <div class="sfPresetState"></div>
       <div class="sfNote">
         ボタンにマウスを乗せると、それぞれの説明が出ます。
-        「くっきり」だけは輪郭の強調を使うので少し重めです（グラフィックボードの無いノートパソコンなどで
-        カクつく時は、下の「シャープ」を 0 に）。ほかのプリセットは色の計算だけなので軽いです。
+        ぼかし・輪郭の強調・追加エフェクトは負荷が増えます。追加エフェクトでカクつく場合は、
+        描画品質の「軽量」を試してください。処理量を抑える代わりに、解像度と更新頻度が下がります。
       </div>
+    </div>
+    <div class="sfSection sfUserPresets">
+      <div class="sfUserPresetHead"><div class="sfSectionTitle">マイプリセット</div><button type="button" data-action="edit-user-presets" aria-pressed="false">編集</button></div>
+      <div class="sfDesc">今の色・明るさ・画質を名前付きで保存します（20件まで）。反転や反映する場所は含みません。</div>
+      <div class="sfPresets" data-user-preset-buttons></div>
+      <button type="button" class="sfSavePreset" data-action="new-user-preset">＋ 今の設定を保存</button>
+      <div class="sfUserPresetForm" data-user-preset-new hidden>
+        <label>新しいプリセット名<input type="text" data-user-preset-name maxlength="40" placeholder="例：夜に見る動画"></label>
+        <div class="sfUserPresetRow"><button type="button" data-action="save-user-preset">保存する</button><button type="button" data-action="cancel-user-preset">キャンセル</button></div>
+      </div>
+      <div class="sfUserPresetForm" data-user-preset-edit hidden>
+        <label>編集するプリセット名<input type="text" data-user-preset-rename maxlength="40"></label>
+        <div class="sfUserPresetRow"><button type="button" data-action="rename-user-preset">名前を変更</button><button type="button" data-action="overwrite-user-preset">今の設定で上書き</button><button type="button" data-action="delete-user-preset">削除</button></div>
+      </div>
+      <div data-user-preset-confirm hidden>
+        <div data-user-preset-confirm-text></div>
+        <div class="sfUserPresetRow"><button type="button" data-action="confirm-user-preset">確定</button><button type="button" data-action="cancel-confirm-user-preset">キャンセル</button></div>
+      </div>
+      <div class="sfUserPresetStatus" data-user-preset-status role="status" aria-live="polite"></div>
     </div>
     <div class="sfSection sfAdjust">
       <div class="sfSectionTitle">色と明るさ</div>
@@ -1297,11 +2041,14 @@ const ScreenFilterPanel = (() => {
       </div>
     </div>
     <div class="sfFoot">
-      <button type="button" data-action="reset" title="すべての調整を標準に戻します（反転はそのまま）">すべて標準に戻す</button>
-      <button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる（左: 元の映像）</button>
+      <button type="button" data-action="reset" title="すべての調整を標準に戻し、左右比較を終了します（反転はそのまま）">すべて標準に戻す</button>
+      <button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる</button>
     </div>
   `;
     class Panel {
+        _presetEditing = false;
+        _editingPresetId = '';
+        _pendingPresetAction = null;
         constructor({ config }) {
             this.config = config;
             this.view = null;
@@ -1323,6 +2070,69 @@ const ScreenFilterPanel = (() => {
             // pointer-events: none にしている（裏のページの無効化）。付けないとパネルが操作できない。
             view.className = 'zenzaScreenFilterPanel zen-family';
             view.innerHTML = TEMPLATE();
+            const header = view.querySelector('.sfHead');
+            const titleRow = document.createElement('div');
+            titleRow.className = 'sfTitleRow';
+            titleRow.append(header.querySelector('.sfTitle'));
+            header.append(titleRow);
+            const actions = view.querySelector('.sfFoot');
+            header.append(actions);
+            const descriptions = document.createElement('button');
+            descriptions.type = 'button';
+            descriptions.dataset.action = 'toggle-descriptions';
+            actions.append(descriptions);
+            for (const [action, label, title] of [['toggle-adjustments', '調整欄を隠す', '調整欄の表示を切り替える'], ['undo', '↶', '一つ前に戻す'], ['redo', '↷', '一つ先に進む'], ['toggle-changed-only', '変更した項目だけ表示', '変更した項目だけ表示']]) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.action = action;
+                button.textContent = label;
+                button.title = title;
+                button.setAttribute('aria-label', title);
+                (action === 'toggle-changed-only' ? actions : titleRow).append(button);
+            }
+            const body = document.createElement('div');
+            body.className = 'sfBody';
+            const presets = document.createElement('div');
+            presets.className = 'sfPresetColumn';
+            const adjustments = document.createElement('div');
+            adjustments.className = 'sfAdjustColumn';
+            presets.append(view.querySelector('.sfIntro'));
+            const quality = document.createElement('div');
+            quality.className = 'sfQuality';
+            quality.innerHTML = '<label>追加エフェクトの描画品質 <select data-render-quality><option value="normal">通常（元の解像度）</option><option value="light">軽量（最大480p・30fps）</option></select></label><span data-render-status role="status" aria-live="polite"></span>';
+            header.after(quality);
+            const sections = Array.from(view.querySelectorAll(':scope > .sfSection'));
+            for (const [index, section] of sections.entries()) {
+                if (index < 2) {
+                    presets.append(section);
+                    continue;
+                }
+                const rows = document.createElement('div');
+                rows.className = 'sfRows';
+                section.querySelectorAll(':scope > .sfRow').forEach(row => rows.append(row));
+                if (rows.childElementCount)
+                    section.append(rows);
+                if (index > 2) {
+                    const details = document.createElement('details');
+                    details.className = 'sfSection sfFold';
+                    const title = section.querySelector('.sfSectionTitle');
+                    const summary = document.createElement('summary');
+                    summary.textContent = title.textContent;
+                    title.remove();
+                    section.classList.remove('sfSection');
+                    details.append(summary, section);
+                    adjustments.append(details);
+                }
+                else
+                    adjustments.append(section);
+            }
+            const empty = document.createElement('div');
+            empty.dataset.changedEmpty = '';
+            empty.textContent = '変更した項目はありません。';
+            empty.hidden = true;
+            adjustments.prepend(empty);
+            body.append(presets, adjustments);
+            view.append(body);
             // 全画面中はプレイヤーの中に置かれるため、クリック等がプレイヤー側
             // （再生/一時停止の切り替え・preventDefault）へ伝わらないようにする。
             ['click', 'dblclick', 'mousedown', 'mouseup', 'wheel', 'contextmenu', 'keydown', 'keyup']
@@ -1342,6 +2152,22 @@ const ScreenFilterPanel = (() => {
                 }
             });
             view.addEventListener('change', e => {
+                if (e.target.hasAttribute('data-render-quality')) {
+                    try {
+                        const value = e.target.value;
+                        if (this.config.readonly)
+                            throw new Error();
+                        this.config.props['screenFilter.renderQuality'] = value;
+                        if (this.config.props['screenFilter.renderQuality'] !== value)
+                            throw new Error();
+                        ScreenFilter.apply();
+                        this._refresh();
+                    }
+                    catch {
+                        view.querySelector('[data-render-status]').textContent = '描画品質を保存できませんでした。';
+                    }
+                    return;
+                }
                 const { param, setting, num } = e.target.dataset;
                 if (num) {
                     const v = ScreenFilter.normalize(num, e.target.value);
@@ -1369,17 +2195,66 @@ const ScreenFilterPanel = (() => {
                     return;
                 }
                 const { preset, reset, action } = target.dataset;
-                if (preset) {
-                    ScreenFilter.execCommand('screenFilter-preset', preset);
+                if (action === 'edit-user-presets' || action?.endsWith('-user-preset')) {
+                    this._handleUserPresetAction(action);
+                }
+                else if (action === 'undo' || action === 'redo') {
+                    (action === 'undo' ? ScreenFilter.undo : ScreenFilter.redo)();
+                    this._refresh();
+                }
+                else if (action === 'toggle-adjustments') {
+                    try {
+                        const value = this.config.props['screenFilter.showAdjustments'] === false;
+                        if (this.config.readonly)
+                            throw new Error();
+                        this.config.props['screenFilter.showAdjustments'] = value;
+                        if (this.config.props['screenFilter.showAdjustments'] !== value)
+                            throw new Error();
+                        this._refresh();
+                        this._updateOrigin();
+                    }
+                    catch {
+                        this.view.querySelector('[data-render-status]').textContent = '調整欄の表示設定を保存できませんでした。';
+                    }
+                }
+                else if (action === 'toggle-changed-only') {
+                    this.config.props['screenFilter.changedOnly'] = !this.config.props['screenFilter.changedOnly'];
+                    this._refresh();
+                }
+                else if (action === 'toggle-descriptions') {
+                    const value = this.config.props['screenFilter.showDescriptions'] === false;
+                    try {
+                        if (this.config.readonly)
+                            throw new Error();
+                        this.config.props['screenFilter.showDescriptions'] = value;
+                        if (this.config.props['screenFilter.showDescriptions'] !== value)
+                            throw new Error();
+                        this._refresh();
+                    }
+                    catch {
+                        this.view.querySelector('[data-user-preset-status]').textContent = '説明の表示設定を保存できませんでした。';
+                    }
+                }
+                else if (preset) {
+                    if (this._presetEditing && target.hasAttribute('data-user-preset')) {
+                        this._editingPresetId = preset;
+                        this._pendingPresetAction = null;
+                        const saved = ScreenFilter.getUserPresets().find(p => p.id === preset);
+                        if (saved)
+                            view.querySelector('[data-user-preset-rename]').value = saved.label;
+                        this._refreshUserPresets();
+                    }
+                    else {
+                        ScreenFilter.togglePreset(preset);
+                        this._refresh();
+                    }
                 }
                 else if (reset) {
                     ScreenFilter.set(reset, ScreenFilter.PARAM_MAP[reset].def);
                 }
                 else if (action === 'reset') {
                     ScreenFilter.reset();
-                }
-                else if (action === 'close') {
-                    this.close();
+                    ScreenFilter.setSplit(false);
                 }
                 else if (action === 'split') {
                     ScreenFilter.setSplit(!ScreenFilter.isSplit);
@@ -1395,7 +2270,7 @@ const ScreenFilterPanel = (() => {
                 if (path.includes(this.view)) {
                     return;
                 }
-                if (path.some((el) => el && el.classList && el.classList.contains('screenFilterSwitch'))) {
+                if (path.some((el) => el && el.classList && (el.classList.contains('screenFilterSwitch') || el.classList.contains('zenzaScreenFilterSplitHandle')))) {
                     return;
                 }
                 const onVideo = path.some((el) => el && el.classList &&
@@ -1423,12 +2298,167 @@ const ScreenFilterPanel = (() => {
             }
             label.classList.toggle('is-changed', Math.abs(value - ScreenFilter.PARAM_MAP[key].def) > 1e-6);
         }
+        _handleUserPresetAction(action) {
+            const q = (selector) => this.view.querySelector(selector);
+            const status = q('[data-user-preset-status]');
+            try {
+                if (action === 'new-user-preset') {
+                    q('[data-user-preset-new]').hidden = false;
+                    q('[data-user-preset-name]').focus();
+                }
+                else if (action === 'cancel-user-preset') {
+                    q('[data-user-preset-new]').hidden = true;
+                }
+                else if (action === 'save-user-preset') {
+                    const saved = ScreenFilter.saveUserPreset(q('[data-user-preset-name]').value);
+                    q('[data-user-preset-name]').value = '';
+                    q('[data-user-preset-new]').hidden = true;
+                    status.textContent = `「${saved.label}」を保存しました。`;
+                    this._refresh();
+                }
+                else if (action === 'edit-user-presets') {
+                    this._presetEditing = !this._presetEditing;
+                    this._editingPresetId = '';
+                    this._pendingPresetAction = null;
+                    q('[data-user-preset-new]').hidden = true;
+                    status.textContent = this._presetEditing ? '編集するマイプリセットを選んでください。' : '';
+                }
+                else if (action === 'rename-user-preset') {
+                    ScreenFilter.renameUserPreset(this._editingPresetId, q('[data-user-preset-rename]').value);
+                    status.textContent = '名前を変更しました。';
+                }
+                else if (action === 'overwrite-user-preset' || action === 'delete-user-preset') {
+                    const saved = ScreenFilter.getUserPresets().find(p => p.id === this._editingPresetId);
+                    if (!saved)
+                        throw new Error('編集するマイプリセットを選んでください。');
+                    this._pendingPresetAction = { action, id: saved.id };
+                    q('[data-user-preset-confirm-text]').textContent = action === 'delete-user-preset' ? `「${saved.label}」を削除しますか？` : `「${saved.label}」を今の調整値で上書きしますか？`;
+                }
+                else if (action === 'cancel-confirm-user-preset') {
+                    this._pendingPresetAction = null;
+                }
+                else if (action === 'confirm-user-preset' && this._pendingPresetAction) {
+                    const pending = this._pendingPresetAction;
+                    if (pending.action === 'delete-user-preset') {
+                        ScreenFilter.deleteUserPreset(pending.id);
+                        this._editingPresetId = '';
+                        status.textContent = '削除しました。現在の映像の調整はそのままです。';
+                    }
+                    else {
+                        ScreenFilter.overwriteUserPreset(pending.id);
+                        status.textContent = '今の調整値で上書きしました。';
+                    }
+                    this._pendingPresetAction = null;
+                    this._refresh();
+                }
+                this._refreshUserPresets();
+            }
+            catch (error) {
+                status.textContent = error instanceof Error ? error.message : 'マイプリセットを保存できませんでした。';
+            }
+        }
+        _refreshUserPresets() {
+            const q = (selector) => this.view.querySelector(selector);
+            const list = q('[data-user-preset-buttons]');
+            try {
+                const order = ScreenFilter.getPresetList().map(p => p.id);
+                const presets = ScreenFilter.getUserPresets().sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+                const signature = JSON.stringify(presets.map(p => [p.id, p.label]));
+                if (list.dataset.signature !== signature) {
+                    list.replaceChildren();
+                    for (const preset of presets) {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.dataset.preset = preset.id;
+                        button.dataset.userPreset = '';
+                        button.textContent = preset.label;
+                        list.append(button);
+                    }
+                    if (!presets.length) {
+                        const empty = document.createElement('span');
+                        empty.textContent = 'まだ保存されていません';
+                        list.append(empty);
+                    }
+                    list.dataset.signature = signature;
+                }
+                if (!presets.some(p => p.id === this._editingPresetId)) {
+                    this._editingPresetId = '';
+                    this._pendingPresetAction = null;
+                }
+                list.querySelectorAll('button').forEach((button) => {
+                    button.classList.toggle('is-editing', this._presetEditing && button.dataset.preset === this._editingPresetId);
+                    button.classList.toggle('is-current', ScreenFilter.isPresetActive(button.dataset.preset || ''));
+                    button.setAttribute('aria-pressed', String(ScreenFilter.isPresetActive(button.dataset.preset || '')));
+                });
+            }
+            catch (error) {
+                q('[data-user-preset-status]').textContent = error instanceof Error ? error.message : '保存データを読み込めません。';
+            }
+            const edit = q('[data-action="edit-user-presets"]');
+            edit.textContent = this._presetEditing ? '編集を終了' : '編集';
+            edit.setAttribute('aria-pressed', String(this._presetEditing));
+            q('[data-action="new-user-preset"]').hidden = this._presetEditing;
+            q('[data-user-preset-edit]').hidden = !this._presetEditing || !this._editingPresetId;
+            q('[data-user-preset-confirm]').hidden = !this._pendingPresetAction;
+        }
         _refresh() {
             if (!this.view || !this.isOpen) {
                 return;
             }
+            this._refreshUserPresets();
             const values = ScreenFilter.read();
             const props = this.config.props;
+            const showAdjustments = props['screenFilter.showAdjustments'] !== false;
+            this.view.classList.toggle('sf-compact', !showAdjustments);
+            this.view.querySelector('.sfAdjustColumn').hidden = !showAdjustments;
+            const adjustmentButton = this.view.querySelector('[data-action="toggle-adjustments"]');
+            adjustmentButton.textContent = showAdjustments ? '調整欄を隠す' : '調整欄を表示';
+            adjustmentButton.setAttribute('aria-expanded', String(showAdjustments));
+            this.view.querySelector('[data-render-quality]').value = props['screenFilter.renderQuality'] === 'light' ? 'light' : 'normal';
+            const qualityStatus = {
+                active: '軽量で描画中（最大480p・30fps）',
+                waiting: '軽量描画の映像を待っています。',
+                hidden: '非表示中は軽量描画を停止しています。',
+                unsupported: 'この映像は軽量描画に対応していません。元の映像を表示しています。',
+                unavailable: '軽量描画を実行できませんでした。元の映像を表示しています。'
+            };
+            this.view.querySelector('[data-render-status]').textContent = qualityStatus[ScreenFilter.renderStatus] || '';
+            const changedOnly = !!props['screenFilter.changedOnly'];
+            const changedButton = this.view.querySelector('[data-action="toggle-changed-only"]');
+            changedButton.hidden = !showAdjustments;
+            changedButton.setAttribute('aria-pressed', String(changedOnly));
+            changedButton.classList.toggle('is-on', changedOnly);
+            this.view.querySelector('[data-action="undo"]').disabled = !ScreenFilter.canUndo;
+            this.view.querySelector('[data-action="redo"]').disabled = !ScreenFilter.canRedo;
+            for (const p of ScreenFilter.PARAMS) {
+                const row = this.view.querySelector(`.sfRow[data-key="${p.key}"]`);
+                if (row)
+                    row.hidden = changedOnly && values[p.key] === p.def;
+            }
+            const rows = Array.from(this.view.querySelectorAll('.sfAdjustColumn .sfRow[data-key]'));
+            this.view.querySelector('[data-changed-empty]').hidden = !changedOnly || rows.some(row => !row.hidden);
+            for (const section of Array.from(this.view.querySelectorAll('.sfAdjustColumn > .sfSection'))) {
+                const parameters = Array.from(section.querySelectorAll('.sfRow[data-key]'));
+                section.hidden = changedOnly && parameters.length > 0 && parameters.every(row => row.hidden);
+                if (changedOnly && section.tagName === 'DETAILS' && !section.hidden)
+                    section.open = true;
+            }
+            const builtin = this.view.querySelector('.sfPresetColumn .sfPresets');
+            const presetOrder = ScreenFilter.getPresetList().filter(p => !p.user).map(p => p.id);
+            const orderSignature = JSON.stringify(presetOrder);
+            if (builtin.dataset.order !== orderSignature) {
+                for (const id of presetOrder) {
+                    const button = builtin.querySelector(`[data-preset="${id}"]`);
+                    if (button)
+                        builtin.append(button);
+                }
+                builtin.dataset.order = orderSignature;
+            }
+            const descriptions = props['screenFilter.showDescriptions'] !== false;
+            this.view.classList.toggle('sf-hide-descriptions', !descriptions);
+            const descriptionButton = this.view.querySelector('[data-action="toggle-descriptions"]');
+            descriptionButton.textContent = descriptions ? '説明を非表示' : '説明を表示';
+            descriptionButton.setAttribute('aria-pressed', String(descriptions));
             ScreenFilter.PARAMS.forEach(p => {
                 const input = this.view.querySelector(`[data-param="${p.key}"]`);
                 if (!input) {
@@ -1456,9 +2486,16 @@ const ScreenFilterPanel = (() => {
             });
             const current = ScreenFilter.detectPreset(values);
             this.view.querySelectorAll('[data-preset]').forEach((button) => {
-                button.classList.toggle('is-current', button.dataset.preset === current);
+                const active = ScreenFilter.isPresetActive(button.dataset.preset || '');
+                button.classList.toggle('is-current', active);
+                button.setAttribute('aria-pressed', String(active));
             });
-            const preset = ScreenFilter.PRESETS.find(p => p.id === current);
+            let userPresets = [];
+            try {
+                userPresets = ScreenFilter.getUserPresets();
+            }
+            catch { /* Keep the built-in controls usable. */ }
+            const preset = [...ScreenFilter.PRESETS, ...userPresets].find(p => p.id === current);
             this.view.querySelector('.sfPresetState').textContent = preset ?
                 `いまの設定: ${preset.label}` : 'いまの設定: 手動で調整中（どのプリセットとも違う値）';
             const autoRow = this.view.querySelector('.sfRow[data-key="autoLevels"] .sfDesc');
@@ -1467,7 +2504,10 @@ const ScreenFilterPanel = (() => {
                 autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
             }
             const splitButton = this.view.querySelector('[data-action="split"]');
-            splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
+            if (splitButton) {
+                splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
+                splitButton.setAttribute('aria-pressed', String(ScreenFilter.isSplit));
+            }
         }
         _getParentNode() {
             const fs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -1511,7 +2551,7 @@ const ScreenFilterPanel = (() => {
                 return;
             }
             const vw = window.innerWidth, vh = window.innerHeight;
-            const panelW = Math.min(380, vw - 32);
+            const panelW = this.view.getBoundingClientRect().width || Math.min(960, vw - 32);
             const panelLeft = vw - 16 - panelW;
             const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
             const y = rect.top > vh / 2 ? 100 : 0;

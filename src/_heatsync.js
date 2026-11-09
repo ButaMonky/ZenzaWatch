@@ -197,7 +197,8 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
                     if (localStorage.hasOwnProperty(storageKey)) {
                         try {
                             let lastValue = config[key];
-                            let newValue = JSON.parse(localStorage.getItem(storageKey));
+                            // JSON.parse coerces null to 'null' in legacy JS; make that conversion explicit.
+                            let newValue = JSON.parse(String(localStorage.getItem(storageKey)));
                             if (lastValue !== newValue) {
                                 config[key] = newValue;
                                 if (emitChange) {
@@ -997,7 +998,8 @@ import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
                 ZenzaWatch.emitter.on('DialogPlayerOpen', () => {
                     util.emitter.emit('zenzaOpen');
                     if (configPanel) {
-                        document.querySelector('.zenzaPlayerContainer').append(configPanel.view);
+                        // The player container can be absent during a close/open transition.
+                        document.querySelector('.zenzaPlayerContainer')?.append(configPanel.view);
                     }
                 });
                 ZenzaWatch.emitter.on('DialogPlayerClose', () => {

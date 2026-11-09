@@ -132,4 +132,26 @@ describe('MediaTimeline の短いシーク（ZW-022）', function() {
     assert.equal(s.rafs.size, 0, '予約中の rAF が残っていない');
     assert.doesNotThrow(() => pending.forEach(f => f()));
   });
+  it('AUD #270: detach before first attach and repeated detach are safe no-ops', function() {
+    const s = subject();
+    const t = new s.MT();
+    assert.doesNotThrow(() => t.detach());
+    assert.doesNotThrow(() => t.detach());
+    assert.strictEqual(t.media, null);
+  });
+
+  it('AUD #270: detach twice and reattach do not retain old media listeners', function() {
+    const s = subject();
+    const t = new s.MT({media: s.media});
+    assert.ok(s.listeners.has('seeked'));
+    t.detach();
+    assert.strictEqual(s.listeners.size, 0);
+    assert.doesNotThrow(() => t.detach());
+    t.attach(s.media);
+    assert.ok(s.listeners.has('seeked'));
+    t.detach();
+    assert.strictEqual(s.listeners.size, 0);
+    assert.strictEqual(s.rafs.size, 0);
+  });
+
 });

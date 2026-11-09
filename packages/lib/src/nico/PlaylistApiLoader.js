@@ -4,6 +4,10 @@ import {CacheStorage} from '../infra/CacheStorage';
 //===BEGIN===
 const PlaylistApiLoader = (() => {
     const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
+    // #238: These endpoints can return account-private rows. Without a reliable
+    // viewer identity, URL-only sessionStorage keys are unsafe across login changes.
+    // Cache only public series / uploader collections; leave private loads live.
+    const mayUseSharedCache = (type) => type === 'series' || type === 'user-uploaded';
     let cacheStorage = null;
     class PlaylistApiLoader {
         constructor() {
@@ -35,7 +39,7 @@ const PlaylistApiLoader = (() => {
                 return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
             }
             // nvapi でソートされた結果をもらうのでそのままキャッシュする
-            const cacheData = cacheStorage.getItem(cacheKey);
+            const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
             if (cacheData) {
                 return cacheData;
             }
@@ -49,7 +53,9 @@ const PlaylistApiLoader = (() => {
                 throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
             }
             const data = result.data.items;
-            cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+            if (mayUseSharedCache(type)) {
+                cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+            }
             return data;
         }
         // Task972: one atomic ordered collection, not the first 500-row page.
@@ -76,7 +82,8 @@ const PlaylistApiLoader = (() => {
                 return result;
             };
             checkCurrent();
-            const cached = cacheStorage.getItem(cacheKey);
+            const cached = (mayUseSharedCache(type) ?
+                cacheStorage.getItem(cacheKey) : null);
             if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
                 return expose(cached);
             }
@@ -167,7 +174,9 @@ const PlaylistApiLoader = (() => {
             // Large collection cache writes are optional; never lose loaded items if
             // browser storage is full, or overwrite the live playlist with a partial page.
             try {
-                cacheStorage.setItem(cacheKey, value, CACHE_EXPIRE_TIME);
+                if (mayUseSharedCache(type)) {
+                    cacheStorage.setItem(cacheKey, value, CACHE_EXPIRE_TIME);
+                }
             }
             catch (_) { /* CacheStorage is best-effort, not part of successful loading. */ }
             return expose(value);

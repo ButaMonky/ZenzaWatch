@@ -121,12 +121,22 @@ const ItemDataConverter = {
     return textUtil.convertKansuEi(text)
       .replace(/([0-9]{1,9})/g, m => m.padStart(10, '0')).replace(/([０-９]{1,9})/g, m => m.padStart(10, '０'));
   },
+  safeIso: (value: string | number | null | undefined, fallback = '1970-01-01T00:00:00.000Z'): string => {
+    if (value === null || value === undefined || value === '') { return fallback; }
+    const normalized = typeof value === 'string' && /^\d{4}-\d{2}-\d{2} /.test(value) ?
+      value.replace(/-/g, '/') : value;
+    const date = new Date(normalized);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : fallback;
+  },
   fromFlapiMylistItem: (data: LegacyListItemData): ConvertedItem => {
     const isChannel = data.id.startsWith('so');
     const isMymemory = /^[0-9]+$/.test(data.id);
     const thumbnail =
       data.is_middle_thumbnail ?
         `${data.thumbnail_url}.M` : data.thumbnail_url;
+    const postedAt = ItemDataConverter.safeIso(data.first_retrieve);
+    const createdAt = ItemDataConverter.safeIso(data.create_time == null ? null : Number(data.create_time) * 1000, postedAt);
+    const updatedAt = ItemDataConverter.safeIso(data.thread_update_time, createdAt);
     return {
       watchId: data.id,
       videoId: data.id,
@@ -136,9 +146,9 @@ const ItemDataConverter = {
       mylistCount: (data.mylist_counter as number) * 1,
       viewCount: (data.view_counter as number) * 1,
       thumbnail,
-      postedAt: new Date(data.first_retrieve.replace(/-/g, '/')).toISOString(),
-      createdAt: new Date((data.create_time as number) * 1000).toISOString(),
-      updatedAt: new Date((data.thread_update_time as string).replace(/-/g, '/')).toISOString(),
+      postedAt,
+      createdAt,
+      updatedAt,
       isChannel,
       isMymemory,
       mylistComment: data.mylist_comment || '',
@@ -149,6 +159,9 @@ const ItemDataConverter = {
     const data = item.item_data;
     const isChannel = data.video_id.startsWith('so');
     const isMymemory = !isChannel && /^[0-9]+$/.test(data.watch_id);
+    const postedAt = ItemDataConverter.safeIso(Number(data.first_retrieve) * 1000);
+    const createdAt = ItemDataConverter.safeIso(Number(item.create_time) * 1000, postedAt);
+    const updatedAt = ItemDataConverter.safeIso(Number(data.update_time) * 1000, createdAt);
     return {
       watchId: isChannel ? data.video_id : data.watch_id,
       videoId: data.video_id,
@@ -158,9 +171,9 @@ const ItemDataConverter = {
       mylistCount: (data.mylist_counter as number) * 1,
       viewCount: (data.view_counter as number) * 1,
       thumbnail: data.thumbnail_url,
-      postedAt: new Date((data.first_retrieve as number) * 1000).toISOString(),
-      createdAt: new Date((item.create_time as number) * 1000).toISOString(),
-      updatedAt: new Date((data.update_time as number) * 1000).toISOString(),
+      postedAt,
+      createdAt,
+      updatedAt,
       isChannel,
       isMymemory,
       mylistComment: item.description || '',
@@ -173,13 +186,16 @@ const ItemDataConverter = {
     const thumbnail =
       data.is_middle_thumbnail ?
         `${data.thumbnail_url}.M` : data.thumbnail_url;
-    const [min, sec] = (data.length as string).split(':');
-    const postedAt = new Date(data.first_retrieve.replace(/-/g, '/')).toISOString();
+    const rawDuration = Number(data.length_seconds);
+    const matchedLength = typeof data.length === 'string' ? /^(\d+):([0-5]?\d)$/.exec(data.length) : null;
+    const duration = data.length_seconds != null && Number.isFinite(rawDuration) && rawDuration >= 0 ? rawDuration : matchedLength ? Number(matchedLength[1]) * 60 + Number(matchedLength[2]) : 0;
+    const postedAt = ItemDataConverter.safeIso(data.first_retrieve);
+
     return {
       watchId: data.id,
       videoId: data.id,
       title: data.title,
-      duration: (min as unknown as number) * 60 + (sec as unknown as number) * 1,
+      duration,
       commentCount: (data.num_res as number) * 1,
       mylistCount: (data.mylist_counter as number) * 1,
       viewCount: (data.view_counter as number) * 1,
@@ -196,7 +212,7 @@ const ItemDataConverter = {
     const thumbnail =
       data.is_middle_thumbnail ?
         `${data.thumbnail_url}.M` : data.thumbnail_url;
-    const postedAt = new Date(data.first_retrieve.replace(/-/g, '/')).toISOString();
+    const postedAt = ItemDataConverter.safeIso(data.first_retrieve);
     return {
       watchId: data.id,
       videoId: data.id,

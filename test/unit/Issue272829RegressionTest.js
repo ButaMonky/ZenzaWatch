@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const {createContext, loadClass} = require('../helpers/extractSource');
+const {createContext, loadClass, loadSearchDependencies} = require('../helpers/extractSource');
 
 // Offline fixtures for three separate user-reported audit candidates.
 const quiet = {log() {}, info() {}, warn() {}, error() {},
@@ -9,6 +9,7 @@ function snapshotLoader(path = 'packages/lib/src/nico/VideoSearch.js') {
   const c = createContext({console: quiet, sleep: async () => {},
     NicoSearchApiV2Version: class {},
     textUtil: {dateToString: d => d.toISOString()}});
+  loadSearchDependencies(path, c);
   const Loader = loadClass(path, 'NicoSearchApiV2Loader', c);
   c.NicoSearchApiV2Loader = Loader;
   return Loader;

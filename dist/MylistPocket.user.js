@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.82-task981
+// @version     0.5.83-task989
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-06 00:57Z 86a17b66
+// build: 2026-11-09 21:18Z 5cc4ce6
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -565,92 +565,121 @@ const PocketDescriptionCard = (() => {
 		formatCount, formatDuration};
 })();
 const PocketCardMetadataLoader = (() => {
-	const API = 'https://nvapi.nicovideo.jp/v1/videos?watchIds=';
-	const OK_TTL_MS = 10 * 60 * 1000;
-	const FAILED_TTL_MS = 30 * 1000;
-	const MAX_CACHE = 200;
-	const cache = new Map();
-	const inFlight = new Map();
-	const safeId = id => typeof id === 'string' &&
-		/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/.test(id);
-	const validLike = n =>
-		typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
-	const normalizeOwner = raw => {
-		if (!raw || typeof raw !== 'object' || raw.visibility === 'hidden') {
-			return null;
-		}
-		const type = raw.ownerType || raw.type;
-		const rawId = String(raw.id ?? '');
-		const isUser = type === 'user' && /^\d+$/.test(rawId);
-		const isChannel = type === 'channel' && /^(?:ch)?\d+$/.test(rawId);
-		if (!isUser && !isChannel) { return null; }
-		const id = isChannel ? rawId.replace(/^ch/, '') : rawId;
-		const name = typeof raw.name === 'string' && raw.name.trim() ?
-			raw.name.trim() : '(投稿者情報なし)';
-		const icon = typeof raw.iconUrl === 'string' &&
-			/^https?:\/\//i.test(raw.iconUrl) ? raw.iconUrl.replace(/^http:/i,'https:') : '';
-		const url = isUser ? `https://www.nicovideo.jp/user/${id}` :
-			`https://ch.nicovideo.jp/ch${id}`;
-		return {type: isUser ? 'user' : 'channel', id, name, icon, url};
-	};
-	const normalizeThumbnail = raw => {
-		if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { return null; }
-		const result = {};
-		for (const key of ['ogp','player','large','largeUrl','middle','middleUrl','normal','url']) {
-			const value = raw[key];
-			if (typeof value !== 'string') { continue; }
-			try {
-				const url = new URL(value);
-				if (/^https?:$/.test(url.protocol) && !url.username && !url.password) {
-					result[key] = value;
+		const API = 'https://nvapi.nicovideo.jp/v1/videos?watchIds=';
+		const OK_TTL_MS = 10 * 60 * 1000;
+		const FAILED_TTL_MS = 30 * 1000;
+		const MAX_CACHE = 200;
+		const cache = new Map();
+		const inFlight = new Map();
+		const asRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) ?
+				value : null;
+		const safeId = (id) => typeof id === 'string' &&
+				/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/.test(id);
+		const validLike = (n) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
+		const normalizeOwner = (raw) => {
+				if (!raw || typeof raw !== 'object' || raw.visibility === 'hidden') {
+						return null;
 				}
-			} catch (_) { /* malformed metadata cannot become an image source */ }
-		}
-		return Object.keys(result).length ? result : null;
-	};
-	const parse = (payload, requestedId) => {
-		if (!payload || payload.meta?.status !== 200 ||
-				!Array.isArray(payload.data?.items)) { return null; }
-		const item = payload.data.items.find(row => row && row.watchId === requestedId);
-		const video = item?.video;
-		if (!video || !safeId(video.id)) { return null; }
-		if (/^(?:sm|nm|so|ss)/.test(requestedId) && video.id !== requestedId) { return null; }
-		return {
-			videoId: video.id,
-			likeCount: validLike(video.count?.like) ? video.count.like : null,
-			owner: normalizeOwner(video.owner),
-			thumbnail: normalizeThumbnail(video.thumbnail)
+				const value = raw;
+				const type = value.ownerType || value.type;
+				const rawId = String(value.id ?? '');
+				const isUser = type === 'user' && /^\d+$/.test(rawId);
+				const isChannel = type === 'channel' && /^(?:ch)?\d+$/.test(rawId);
+				if (!isUser && !isChannel) {
+						return null;
+				}
+				const id = isChannel ? rawId.replace(/^ch/, '') : rawId;
+				const name = typeof value.name === 'string' && value.name.trim() ?
+						value.name.trim() : '(投稿者情報なし)';
+				const icon = typeof value.iconUrl === 'string' &&
+						/^https?:\/\//i.test(value.iconUrl) ? value.iconUrl.replace(/^http:/i, 'https:') : '';
+				const url = isUser ? `https://www.nicovideo.jp/user/${id}` :
+						`https://ch.nicovideo.jp/ch${id}`;
+				return { type: isUser ? 'user' : 'channel', id, name, icon, url };
 		};
-	};
-	const query = async (watchId, fetcher) => {
-		const fetchApi = fetcher || (typeof netUtil !== 'undefined' ? netUtil.fetch.bind(netUtil) : fetch);
-		const response = await fetchApi(API + encodeURIComponent(watchId), {
-			credentials:'omit', timeout:6000,
-			headers:{'X-Frontend-Id':'6','X-Frontend-Version':'0'}
-		});
-		if (!response || !response.ok) { return null; }
-		return parse(await response.json(), watchId);
-	};
-	const load = (watchId, fetcher) => {
-		if (!safeId(watchId)) { return Promise.resolve(null); }
-		const now = Date.now();
-		const old = cache.get(watchId);
-		if (old && old.expires > now) { return Promise.resolve(old.value); }
-		if (inFlight.has(watchId)) { return inFlight.get(watchId); }
-		const pending = Promise.resolve()
-			.then(() => query(watchId, fetcher))
-			.catch(() => null)
-			.then(value => {
-				cache.delete(watchId);
-				cache.set(watchId, {value, expires:Date.now()+(value ? OK_TTL_MS : FAILED_TTL_MS)});
-				if (cache.size > MAX_CACHE) { cache.delete(cache.keys().next().value); }
-				return value;
-			})
-			.finally(() => inFlight.delete(watchId));
-		inFlight.set(watchId, pending);
-		return pending;
-	};
-	return {load, parse, normalizeOwner, validLike};
+		const normalizeThumbnail = (raw) => {
+				if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+						return null;
+				}
+				const record = raw;
+				const result = {};
+				for (const key of ['ogp', 'player', 'large', 'largeUrl', 'middle', 'middleUrl', 'normal', 'url']) {
+						const value = record[key];
+						if (typeof value !== 'string') {
+								continue;
+						}
+						try {
+								const url = new URL(value);
+								if (/^https?:$/.test(url.protocol) && !url.username && !url.password) {
+										result[key] = value;
+								}
+						}
+						catch (_) { /* malformed metadata cannot become an image source */ }
+				}
+				return Object.keys(result).length ? result : null;
+		};
+		const parse = (payload, requestedId) => {
+				const outer = asRecord(payload);
+				const meta = asRecord(outer?.meta);
+				const data = asRecord(outer?.data);
+				if (meta?.status !== 200 || !Array.isArray(data?.items)) {
+						return null;
+				}
+				const item = data.items.find(row => asRecord(row)?.watchId === requestedId);
+				const video = asRecord(asRecord(item)?.video);
+				if (!video || !safeId(video.id)) {
+						return null;
+				}
+				if (/^(?:sm|nm|so|ss)/.test(requestedId) && video.id !== requestedId) {
+						return null;
+				}
+				const like = asRecord(video.count)?.like;
+				return {
+						videoId: video.id,
+						likeCount: validLike(like) ? like : null,
+						owner: normalizeOwner(video.owner),
+						thumbnail: normalizeThumbnail(video.thumbnail)
+				};
+		};
+		const query = async (watchId, fetcher) => {
+				const fetchApi = fetcher || (typeof netUtil !== 'undefined' ? netUtil.fetch.bind(netUtil) : fetch);
+				const response = await fetchApi(API + encodeURIComponent(watchId), {
+						credentials: 'omit', timeout: 6000,
+						headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }
+				});
+				if (!response || !response.ok) {
+						return null;
+				}
+				return parse(await response.json(), watchId);
+		};
+		const load = (watchId, fetcher) => {
+				if (!safeId(watchId)) {
+						return Promise.resolve(null);
+				}
+				const now = Date.now();
+				const old = cache.get(watchId);
+				if (old && old.expires > now) {
+						return Promise.resolve(old.value);
+				}
+				if (inFlight.has(watchId)) {
+						return inFlight.get(watchId);
+				}
+				const pending = Promise.resolve()
+						.then(() => query(watchId, fetcher))
+						.catch(() => null)
+						.then(value => {
+						cache.delete(watchId);
+						cache.set(watchId, { value, expires: Date.now() + (value ? OK_TTL_MS : FAILED_TTL_MS) });
+						if (cache.size > MAX_CACHE) {
+								cache.delete(cache.keys().next().value);
+						}
+						return value;
+				})
+						.finally(() => inFlight.delete(watchId));
+				inFlight.set(watchId, pending);
+				return pending;
+		};
+		return { load, parse, normalizeOwner, validLike };
 })();
     const console = window.console;
     const {workerUtil} = window.MylistPocketLib;
@@ -4751,6 +4780,8 @@ class CrossDomainGate extends Emitter {
 										close: (params) => post('close', params, storeName),
 										put: (record, transfer) => post('put', record, storeName, transfer),
 										update: (data) => post('update', data, storeName),
+										scrubWatchVideoInfo: (data) => post('scrubWatchVideoInfo', data, storeName),
+										listSavedPoints: (data) => post('listSavedPoints', data, storeName),
 										get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
 										updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
 										delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),
@@ -4969,8 +5000,6 @@ const OwnerSupplement = (() => {
 
 const emitter = util.emitter;
 const MylistApiLoader = (() => {
-		const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
-		const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
 		const createMylistError = (message, { status = 'fail', result, code, cause } = {}) => {
 				const error = new Error(message);
 				error.status = status;
@@ -4990,9 +5019,6 @@ const MylistApiLoader = (() => {
 		if (window.ZenzaWatch) {
 				emitter.on('csrfTokenUpdate', (t) => {
 						token = t;
-						if (cacheStorage) {
-								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-						}
 				});
 		}
 		class MylistApiLoader {
@@ -5000,102 +5026,108 @@ const MylistApiLoader = (() => {
 						if (!cacheStorage) {
 								cacheStorage = new CacheStorage(sessionStorage);
 						}
-						if (!token) {
-								token = cacheStorage.getItem('csrfToken');
-								if (token) {
-										console.log('cached token exists'); // Task 088: トークンの値はログに出さない
-								}
-						}
+						cacheStorage.removeItem('csrfToken');
+						cacheStorage.removeItem('mylistList');
 				}
 				setCsrfToken(t) {
 						token = t;
-						if (cacheStorage) {
-								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-						}
-						else {
-								cacheStorage = new CacheStorage(sessionStorage);
-								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-						}
 				}
 				async _getCsrfToken() {
-						if (!cacheStorage) {
-								cacheStorage = new CacheStorage(sessionStorage);
+						const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
+						let page;
+						try {
+								page = await netUtil.fetch(tokenUrl, { credentials: 'include' })
+										.then((r) => r.text());
 						}
-						token = cacheStorage.getItem('csrfToken');
-						if (token) {
-								console.log('cached token exists'); // Task 088: トークンの値はログに出さない
+						catch (_) {
+								token = '';
+								throw createMylistError('マイリストトークン取得失敗');
 						}
-						else {
-								const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
-								const result = await netUtil.fetch(tokenUrl, {
+						try {
+								const dom = new DOMParser().parseFromString(page, 'text/html');
+								const element = dom.querySelector('#js-initial-userpage-data');
+								const rawEnvironment = element?.getAttribute('data-environment');
+								if (!rawEnvironment) {
+										throw new Error('missing environment');
+								}
+								const env = JSON.parse(rawEnvironment);
+								const csrfToken = env?.csrfToken;
+								if (typeof csrfToken !== 'string' || !csrfToken.trim()) {
+										throw new Error('missing CSRF token');
+								}
+								token = csrfToken;
+								return csrfToken;
+						}
+						catch (_) {
+								token = '';
+								throw createMylistError('マイリストトークン取得失敗（認証情報がありません）');
+						}
+				}
+				async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
+						const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+						const url = kind === 'watchLater' ?
+								'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
+								`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
+						const query = new URLSearchParams({ pageSize: 100, page: 1 });
+						const results = [];
+						const fingerprints = new Set();
+						const ensureCurrent = () => {
+								if (!isCurrent)
+										return;
+								let current = false;
+								try {
+										current = isCurrent() === true;
+								}
+								catch { }
+								if (!current)
+										throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+						};
+						const maxPages = 100;
+						for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+								ensureCurrent();
+								const delimiter = kind === 'watchLater' ? '&' : '?';
+								const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
 										credentials: 'include'
-								}).then((r) => r.text()).catch((result) => {
-										throw new Error('マイリストトークン取得失敗', { result, status: 'fail' });
+								}).then((r) => r.json())
+										.catch((e) => {
+										throw createMylistError(label + 'の取得失敗(2)', { cause: e });
 								});
-								const dom = new DOMParser().parseFromString(result, 'text/html');
-								const initUserpageDataContena = dom.querySelector('#js-initial-userpage-data');
-								const env = JSON.parse(initUserpageDataContena.getAttribute('data-environment'));
-								this.setCsrfToken(env.csrfToken);
+								ensureCurrent();
+								const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
+								if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
+										throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+								}
+								if (watchId !== undefined) {
+										const found = pageData.items.find(item => item?.watchId === watchId);
+										if (found) {
+												ensureCurrent();
+												return [found];
+										}
+								}
+								results.push(...pageData.items);
+								if (!pageData.hasNext)
+										return results;
+								if (!pageData.items.length) {
+										throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
+								}
+								const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
+								if (fingerprints.has(fingerprint)) {
+										throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
+								}
+								fingerprints.add(fingerprint);
+								query.set('page', String(pageNumber + 1));
 						}
-						return token;
+						throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
 				}
-				async _getDeflistItems(frontendId = 6, frontendVersion = 0) {
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc';
-						const page = new URLSearchParams({ pageSize: 100, page: 1 });
-						let data;
-						do {
-								const res = await netUtil.fetch(`${url}&${page.toString()}`, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => { throw createMylistError('あとで見るの取得失敗(2)', { result: e, cause: e }); });
-								if (res.meta.status !== 200 || !res.data.watchLater) {
-										throw createMylistError('あとで見るの取得失敗(1)', { result: res, code: res?.error?.code });
-								}
-								if (data == null) {
-										data = res.data.watchLater;
-								}
-								else {
-										data.hasInvisibleItems = data.hasInvisibleItems || res.data.watchLater.hasInvisibleItems;
-										data.hasNext = res.data.watchLater.hasNext;
-										data.items = data.items.concat(res.data.watchLater.items);
-								}
-								page.set('page', String(parseInt(page.get('page')) + 1));
-						} while (data && data.hasNext);
-						return data.items;
+				async _getDeflistItems(frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
+						return this._scanItems('watchLater', null, frontendId, frontendVersion, watchId, isCurrent);
 				}
-				async _getMylistItems(id, frontendId = 6, frontendVersion = 0) {
-						const url = `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-						const page = new URLSearchParams({ pageSize: 100, page: 1 });
-						let data;
-						do {
-								const res = await netUtil.fetch(`${url}?${page.toString()}`, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => { throw createMylistError('マイリスト取得失敗(2)', { result: e, cause: e }); });
-								if (res.meta.status !== 200 || !res.data.mylist) {
-										throw createMylistError('マイリスト取得失敗(1)', { result: res, code: res?.error?.code });
-								}
-								if (data == null) {
-										data = res.data.mylist;
-								}
-								else {
-										data.hasInvisibleItems = data.hasInvisibleItems || res.data.mylist.hasInvisibleItems;
-										data.hasNext = res.data.mylist.hasNext;
-										data.items = data.items.concat(res.data.mylist.items);
-								}
-								page.set('page', String(parseInt(page.get('page')) + 1));
-						} while (data && data.hasNext);
-						return data.items;
+				async _getMylistItems(id, frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
+						return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
 				}
 				async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
 						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-						const cacheKey = 'mylistList';
-						const cacheData = cacheStorage.getItem(cacheKey);
-						if (cacheData) {
-								return cacheData;
-						}
 						const result = await netUtil.fetch(url, {
 								headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
 								credentials: 'include'
@@ -5105,11 +5137,10 @@ const MylistApiLoader = (() => {
 								throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
 						}
 						const data = result.data.mylists;
-						cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
 						return data;
 				}
-				async findDeflistItemByWatchId(watchId) {
-						const items = await this._getDeflistItems();
+				async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);
 						for (let item of items) {
 								if (item.watchId === watchId) {
 										return item;
@@ -5121,8 +5152,8 @@ const MylistApiLoader = (() => {
 								result: { watchId, list: 'watchLater' }
 						});
 				}
-				async findMylistItemByWatchId(watchId, groupId) {
-						const items = await this._getMylistItems(groupId);
+				async findMylistItemByWatchId(watchId, groupId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const items = await this._getMylistItems(groupId, frontendId, frontendVersion, watchId, isCurrent);
 						for (let item of items) {
 								if (item.watchId === watchId) {
 										return item;
@@ -5134,8 +5165,10 @@ const MylistApiLoader = (() => {
 								result: { watchId, groupId, list: 'mylist' }
 						});
 				}
-				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0 } = {}) {
-						const item = await this.findDeflistItemByWatchId(watchId);
+				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const item = await this.findDeflistItemByWatchId(watchId, { frontendId, frontendVersion, isCurrent });
+						if (isCurrent && isCurrent() !== true)
+								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
 						const body = `itemIds=${item.itemId}`;
 						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
 						const cacheKey = 'deflistItems';
@@ -5164,8 +5197,10 @@ const MylistApiLoader = (() => {
 								result, code: result.error.code
 						});
 				}
-				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0 } = {}) {
-						const item = await this.findMylistItemByWatchId(watchId, groupId);
+				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const item = await this.findMylistItemByWatchId(watchId, groupId, { frontendId, frontendVersion, isCurrent });
+						if (isCurrent && isCurrent() !== true)
+								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
 						let body = 'itemIds=' + item.itemId;
 						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
 						const cacheKey = `mylistItems: ${groupId}`;
@@ -5224,19 +5259,7 @@ const MylistApiLoader = (() => {
 								};
 						}
 						if (result.meta.status && result.meta.status === 409 && !isRetry) {
-								await this.removeDeflistItem(watchId).catch((err) => {
-										throw createMylistError('あとで見る登録失敗(101)', {
-												result: err.result,
-												code: err.code,
-												cause: err
-										});
-								});
-								const added = await this.addDeflistItem(watchId, description, true, { frontendId, frontendVersion });
-								return {
-										status: 'ok',
-										result: added,
-										message: 'あとで見るの先頭に移動'
-								};
+								return { status: 'ok', result, message: 'あとで見るに登録済み（既存の登録を保持しました）' };
 						}
 						if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
 								throw createMylistError('あとで見る登録失敗(100)', {
@@ -5269,13 +5292,13 @@ const MylistApiLoader = (() => {
 						});
 						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
 								cacheStorage.removeItem(cacheKey);
+								emitter.emitAsync('mylistAdd', watchId, groupId, description);
 								this.removeDeflistItem(watchId).catch(() => { });
 								return { status: 'ok', result, message: 'マイリスト登録' };
 						}
 						if (!result.meta.status /*|| !result.error*/) {
 								throw createMylistError('マイリスト登録失敗(100)', { result });
 						}
-						emitter.emitAsync('mylistAdd', watchId, groupId, description);
 						throw createMylistError(result.error.description, {
 								result, code: result.error.code
 						});
@@ -6963,7 +6986,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.82-task981', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.83-task989', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -7754,6 +7777,57 @@ const IndexedDbStorage = (() => {
 				const db = Object.create(null);
 				const initializing = new Map();
 				const schemas = new Map();
+				const pickPublicVideoInfo = (value) => {
+						const data = {};
+						if (!value || typeof value !== 'object' || Array.isArray(value)) {
+								return data;
+						}
+						const source = value;
+						for (const key of ['videoId', 'watchId', 'contextWatchId', 'originalVideoId',
+								'title', 'postedAt', 'thumbnail', 'betterThumbnail', 'duration', 'threadId',
+								'description', 'watchUrl']) {
+								const v = source[key];
+								if (typeof v === 'string' || typeof v === 'boolean' ||
+										(typeof v === 'number' && Number.isFinite(v))) {
+										data[key] = v;
+								}
+						}
+						if (source.count && typeof source.count === 'object' && !Array.isArray(source.count)) {
+								const counts = {};
+								for (const key of ['comment', 'mylist', 'view', 'like']) {
+										const v = source.count[key];
+										if (typeof v === 'number' && Number.isFinite(v)) {
+												counts[key] = v;
+										}
+								}
+								data.count = counts;
+						}
+						if (source.owner && typeof source.owner === 'object' && !Array.isArray(source.owner)) {
+								const owner = {};
+								for (const key of ['type', 'url', 'icon', 'id', 'linkId', 'name']) {
+										const v = source.owner[key];
+										if (typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v))) {
+												owner[key] = v;
+										}
+								}
+								data.owner = owner;
+						}
+						if (source.genre && typeof source.genre === 'object' && !Array.isArray(source.genre)) {
+								data.genre = {
+										key: typeof source.genre.key === 'string' ? source.genre.key : '',
+										label: typeof source.genre.label === 'string' ? source.genre.label : ''
+								};
+						}
+						return data;
+				};
+				const projectWatchHistoryRecord = (name, storeName, row) => {
+						if (name !== 'watch-info' || storeName !== 'cache' ||
+								!row || typeof row !== 'object' || Array.isArray(row) ||
+								row.videoInfo == null) {
+								return row;
+						}
+						return { ...row, videoInfo: pickPublicVideoInfo(row.videoInfo) };
+				};
 				const controller = {
 						async init({ name, ver, stores }) {
 								if (db[name] && (ver === undefined || db[name].version === ver)) {
@@ -7942,7 +8016,10 @@ const IndexedDbStorage = (() => {
 												req.onsuccess = req.onerror = null;
 												callback(result);
 										};
-										req.onsuccess = (event) => finish(resolve, event.target.result);
+										req.onsuccess = (event) => {
+												const row = event.target.result;
+												finish(resolve, projectWatchHistoryRecord(name, storeName, row));
+										};
 										req.onerror = (event) => finish(reject, event);
 										if (timeout) {
 												timer = setTimeout(() => finish(reject, 'IndexedDB get timed out'), timeout);
@@ -7996,12 +8073,160 @@ const IndexedDbStorage = (() => {
 														}
 														const write = store.put(record);
 														write.onerror = fail;
-														write.onsuccess = () => result(record);
+														write.onsuccess = () => result(projectWatchHistoryRecord(name, storeName, record));
 												}
 												catch (error) {
 														fail(error);
 												}
 										};
+								});
+						},
+						async scrubWatchVideoInfo({ name, storeName, data }) {
+								if (name !== 'watch-info' || storeName !== 'cache') {
+										throw new TypeError('Legacy watch-info scrub restricted to cache store');
+								}
+								const afterKey = data?.afterKey ?? null;
+								const maxRecords = data?.maxRecords ?? 64;
+								if ((afterKey !== null && (typeof afterKey !== 'string' || !afterKey)) ||
+										!Number.isSafeInteger(maxRecords) || maxRecords < 1 ||
+										maxRecords > 256) {
+										throw new TypeError('Invalid legacy watch-info scrub cursor');
+								}
+								const same = (old, projected) => {
+										if (!old || typeof old !== 'object' || Array.isArray(old)) {
+												return false;
+										}
+										const fields = old, keys = Object.keys(fields);
+										if (keys.length !== Object.keys(projected).length) {
+												return false;
+										}
+										return keys.every(key => {
+												if (!Object.prototype.hasOwnProperty.call(projected, key)) {
+														return false;
+												}
+												if (!['count', 'owner', 'genre'].includes(key)) {
+														return fields[key] === projected[key];
+												}
+												const nested = fields[key], safe = projected[key];
+												return !!nested && typeof nested === 'object' && !Array.isArray(nested) &&
+														Object.keys(nested).length === Object.keys(safe).length &&
+														Object.keys(safe).every(child => nested[child] === safe[child]);
+										});
+								};
+								return this._write({ name, storeName }, (store, result, fail) => {
+										const range = afterKey === null ? undefined :
+												IDBKeyRange.lowerBound(afterKey, true);
+										const req = store.openCursor(range);
+										let scanned = 0, changed = 0;
+										req.onerror = fail;
+										req.onsuccess = () => {
+												try {
+														const cursor = req.result;
+														if (!cursor) {
+																result({ scanned, changed, nextKey: null });
+																return;
+														}
+														if (typeof cursor.primaryKey !== 'string' || !cursor.primaryKey) {
+																throw new TypeError('Unexpected watch-info cursor key');
+														}
+														const record = cursor.value;
+														if (record && typeof record === 'object' && !Array.isArray(record) &&
+																record.videoInfo != null &&
+																Object.prototype.hasOwnProperty.call(record, 'videoInfo')) {
+																const projected = pickPublicVideoInfo(record.videoInfo);
+																if (!same(record.videoInfo, projected)) {
+																		const request = cursor.update({ ...record, videoInfo: projected });
+																		request.onerror = fail;
+																		changed++;
+																}
+														}
+														scanned++;
+														if (scanned >= maxRecords) {
+																result({ scanned, changed, nextKey: cursor.primaryKey });
+														}
+														else {
+																cursor.continue();
+														}
+												}
+												catch (error) {
+														fail(error);
+												}
+										};
+								});
+						},
+						async listSavedPoints({ name, storeName, data }) {
+								if (name !== 'watch-info' || storeName !== 'cache') {
+										throw new TypeError('Saved points restricted to watch history cache');
+								}
+								const afterKey = data?.afterKey ?? null;
+								const maxRecords = data?.maxRecords ?? 200;
+								if ((afterKey !== null && (typeof afterKey !== 'string' || !afterKey)) ||
+										!Number.isSafeInteger(maxRecords) || maxRecords < 1 || maxRecords > 200) {
+										throw new TypeError('Invalid saved points cursor');
+								}
+								const { store, transaction } = await this.getStore({ name, storeName, mode: 'readonly' });
+								return new Promise((resolve, reject) => {
+										const items = [];
+										let nextKey = null, scanned = 0, settled = false;
+										const cleanup = () => { transaction.oncomplete = transaction.onabort = transaction.onerror = null; };
+										const fail = (error) => {
+												if (settled)
+														return;
+												settled = true;
+												cleanup();
+												const reason = error?.target?.error || transaction.error || error;
+												reject(reason || new Error('Saved points read failed'));
+										};
+										transaction.onabort = transaction.onerror = fail;
+										transaction.oncomplete = () => {
+												if (settled)
+														return;
+												settled = true;
+												cleanup();
+												resolve({ items, nextKey });
+										};
+										try {
+												const range = afterKey === null ? undefined : IDBKeyRange.lowerBound(afterKey, true);
+												const req = store.openCursor(range);
+												req.onerror = fail;
+												req.onsuccess = () => {
+														if (settled)
+																return;
+														try {
+																const cursor = req.result;
+																if (!cursor) {
+																		nextKey = null;
+																		return;
+																}
+																if (typeof cursor.primaryKey !== 'string' || !cursor.primaryKey) {
+																		throw new TypeError('Unexpected saved points cursor key');
+																}
+																const row = cursor.value;
+																if (row && typeof row === 'object' && !Array.isArray(row) && row.watchId === cursor.primaryKey) {
+																		const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+																		const resume = Array.isArray(row.resume) ? row.resume[0]?.time : null;
+																		items.push({
+																				watchId: cursor.primaryKey,
+																				title: typeof row.videoInfo?.title === 'string' ? row.videoInfo.title : cursor.primaryKey,
+																				duration: finite(row.videoInfo?.duration) ? row.videoInfo.duration : 0,
+																				updatedAt: finite(row.updatedAt) ? row.updatedAt : 0,
+																				automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null
+																		});
+																}
+																scanned++;
+																if (scanned >= maxRecords)
+																		nextKey = cursor.primaryKey;
+																else
+																		cursor.continue();
+														}
+														catch (error) {
+																fail(error);
+														}
+												};
+										}
+										catch (error) {
+												fail(error);
+										}
 								});
 						},
 						async updateTime({ name, storeName, data: { key, index } }) {
@@ -8084,7 +8309,8 @@ const IndexedDbStorage = (() => {
 								}
 						}
 						catch (err) {
-								console.warn('command failed: ', { command, params });
+								const diagnosticCommand = typeof command === 'string' && /^(?:init|put|update|scrubWatchVideoInfo|updateTime|get|delete|gc|clear|close)$/.test(command) ? command : 'unknown';
+								console.warn('IndexedDB command failed:', diagnosticCommand);
 								throw err;
 						}
 				};
@@ -8123,6 +8349,8 @@ const IndexedDbStorage = (() => {
 										close: (params) => post('close', params, storeName),
 										put: (record, transfer) => post('put', record, storeName, transfer),
 										update: (data) => post('update', data, storeName),
+										scrubWatchVideoInfo: (data) => post('scrubWatchVideoInfo', data, storeName),
+										listSavedPoints: (data) => post('listSavedPoints', data, storeName),
 										get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
 										updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
 										delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),

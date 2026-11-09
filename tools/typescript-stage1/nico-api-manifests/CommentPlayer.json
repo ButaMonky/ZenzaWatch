@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/CommentPlayer.ts",
   "runtime": "src/CommentPlayer.js",
-  "sourceSha256": "3d9bacb7eb63757b240a9b28aec19ce2582dccab8dbf27e7128aa7cbfe00c398",
-  "runtimeSha256": "3a2bb73d38a633a77b9f2e0f9e82dc2575673cbbbf3d3810b1a931da6291ef8c"
+  "sourceSha256": "e450a7c904e9ccda732d62a0795dfb48bb5c28d7e1a51df96a488418b7921232",
+  "runtimeSha256": "f090dfda79df2f98f77c34e1d8d7f3af6db211c064cd881ca4f6f3563b0fdc94"
 }

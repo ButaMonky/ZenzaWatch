@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/NicoQuery.ts",
   "runtime": "packages/lib/src/nico/NicoQuery.js",
-  "sourceSha256": "c0059c966caa1b3aa188d3fad323b5f4c951b5a06306605624d077d400cc2d55",
-  "runtimeSha256": "465406f1cb4d4616e0550b7d86837816a610a32d007969001364b35d46837eca"
+  "sourceSha256": "05704627d8f6eb67126bf1cb07cb46a60504769b22a53255e9a420524a6ca84e",
+  "runtimeSha256": "0397589d4bab900e097ed0651a46a902ff58c3982b660054440b4e78aafa048f"
 }

@@ -883,15 +883,38 @@ const VideoSessionWorker = (() => {
                     this._dmcInfo.protocols.includes('hls');
             }
             _heartBeat() {
-                let url = this.info.heartBeatUrl;
+                if (this._isClosed || this._isDeleted)
+                    return;
+                const { heartBeatUrl: url, sessionId } = this.info;
+                const requestSeq = this._heartbeatRequestSeq = (this._heartbeatRequestSeq || 0) + 1;
+                const isCurrent = () => !this._isClosed && !this._isDeleted &&
+                    this._heartbeatRequestSeq === requestSeq &&
+                    this.info.heartBeatUrl === url && this.info.sessionId === sessionId;
                 util.fetch(url, {
                     method: 'post',
                     dataType: 'text',
                     timeout: 10000,
                     body: JSON.stringify(this._lastResponse)
-                }).then(res => res.json())
-                    .then(this._onHeartBeatSuccess)
-                    .catch(this._onHeartBeatFail);
+                }).then(res => {
+                    if (res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
+                        throw new Error('DMC heartbeat HTTP failure');
+                    }
+                    return res.json();
+                }).then(json => {
+                    if (!isCurrent())
+                        return;
+                    const session = json?.data?.session;
+                    if (Number(json?.meta?.status) !== 200 || !session ||
+                        typeof session !== 'object' || Array.isArray(session) ||
+                        (session.id != null && sessionId != null && String(session.id) !== String(sessionId))) {
+                        throw new Error('DMC heartbeat invalid response');
+                    }
+                    this._onHeartBeatSuccess(json);
+                }).catch(() => {
+                    // A stale or closed session must not alter the new session's failure count.
+                    if (isCurrent())
+                        this._onHeartBeatFail();
+                });
             }
             _deleteSession() {
                 if (this._isDeleted) {

@@ -1,3 +1,4 @@
+import type {ZenzaHlsEngine, ZenzaHlsReadinessStage, ZenzaHlsReadinessRecord} from './HlsLifecycleTypes';
 /**
  * Canonical TypeScript source for src/_hls.js (Task966).
  */
@@ -1126,15 +1127,8 @@ AntiPrototypeJs().then(() => {
         return parseUrl(url1).search === parseUrl(url2).search;
       };
 
-      // Only the hls.js surface used while this element owns startup/teardown.
-      interface HlsStartupEngine {
-        on(event: string, listener: (...args: unknown[]) => void): unknown;
-        loadSource(src: string): void;
-        attachMedia(video: HTMLMediaElement): void;
-        stopLoad(): void;
-        detachMedia(): void;
-        destroy(): void;
-      }
+      // The global type-only contract is shared with negative lifetime tests.
+      type HlsStartupEngine = ZenzaHlsEngine;
 
       class ZenzaVideoElement extends HTMLElement {
         declare buffered: Loose;
@@ -1143,7 +1137,7 @@ AntiPrototypeJs().then(() => {
         declare _error429Count: Loose;
         declare _eventWrapperMap: Loose;
         declare _fragmentLoader: Loose;
-        declare _hls: Loose;
+        declare _hls: HlsStartupEngine | null;
         declare _hlsConfig: Loose;
         declare _id: Loose;
         declare _isBufferCompleted: Loose;
@@ -1155,7 +1149,7 @@ AntiPrototypeJs().then(() => {
         declare _levelData: Loose;
         declare _manifest: Loose;
         declare _playerMode: Loose;
-        declare _readiness: Loose;
+        declare _readiness: ZenzaHlsReadinessRecord | undefined;
         declare _root: Loose;
         declare _seekingTime: Loose;
         declare _shadow: Loose;
@@ -1547,7 +1541,7 @@ AntiPrototypeJs().then(() => {
           return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
         }
 
-        _markReadiness(stage?: Loose) {
+        _markReadiness(stage: ZenzaHlsReadinessStage) {
           const r = this._readiness;
           if (!r || r[stage]) { return false; }
           r[stage] = true;
@@ -1586,7 +1580,7 @@ AntiPrototypeJs().then(() => {
         }
 
         get readiness() {
-          const r = this._readiness || {};
+          const r: Partial<ZenzaHlsReadinessRecord> = this._readiness || {};
           return {
             manifestReady: !!r.manifestReady, mediaCanPlay: !!r.mediaCanPlay, firstPlaying: !!r.firstPlaying,
             firstProgress: !!r.firstProgress, firstFrame: !!r.firstFrame,

@@ -1,3 +1,4 @@
+import type {ZenzaDialogRequestId, ZenzaPlaylistLoadOwner} from './PlayerLifetimeTypes';
 /**
  * Canonical TypeScript source for src/NicoVideoPlayerDialog.js (Task964).
  */
@@ -261,10 +262,16 @@ class NicoVideoPlayerDialogView extends Emitter {
   declare videoControlBar: Loose;
   declare videoInfoPanel: Loose;
   declare _videoInfoPanelMounting:boolean|undefined;
+  declare _manualBookmarkDockMounting:boolean|undefined;
   declare _pendingVideoInfo:{requestId:unknown;info:unknown;failed:boolean}|undefined;
   declare _bookmarkActivation:{requestId:unknown;videoId:string;duration:number}|undefined;
+  declare _pendingLibraryRepeat:{requestId:unknown;videoId:string;a:number;b:number}|undefined;
+  declare _libraryCanPlayVideo:string|undefined;
   declare manualBookmarkDock:{
+    readonly bookmarkStatus:string;
+    readonly bookmarkNeedsReload:boolean;
     activate(videoId:string,duration:number):Promise<Readonly<{status?:unknown}>|null|undefined>;
+    setRepeatRange?(a:number,b:number,activate?:boolean):boolean;
     deactivate():void;dispose():void;
   }|undefined;
   constructor(...args: Loose[]) {
@@ -973,17 +980,33 @@ class NicoVideoPlayerDialogView extends Emitter {
     }, 200));
   }
   _initializeVideoInfoPanel() {
-    if (this.videoInfoPanel) {
+    if(this.videoInfoPanel){
+      // The info panel and bookmark Dock have independent lifetimes.
+      // A transient Dock mount failure must not permanently disable the button.
+      if(!this.manualBookmarkDock && this._mountManualBookmarkDock()){
+        this._applyPendingVideoInfo();
+      }
       return this.videoInfoPanel;
     }
-    this._videoInfoPanelMounting = true;
-    this.videoInfoPanel = new VideoInfoPanel({
-      dialog: this,
-      node: this._$playerContainer
-    });
-    this.videoInfoPanel.on('command', this._onCommand.bind(this));
-    // Manual bookmarks live in their own IndexedDB and closed info-tab dock.
-    // No native seek/preview/auto-resume marker is reparented or borrowed.
+    this._videoInfoPanelMounting=true;
+    try{
+      this.videoInfoPanel=new VideoInfoPanel({
+        dialog:this,
+        node:this._$playerContainer
+      });
+      this.videoInfoPanel.on('command',this._onCommand.bind(this));
+      this._mountManualBookmarkDock();
+    }finally{
+      this._videoInfoPanelMounting=false;
+      this._applyPendingVideoInfo();
+    }
+    return this.videoInfoPanel;
+  }
+  _mountManualBookmarkDock():boolean {
+    if(this.manualBookmarkDock)return true;
+    // Prevent re-entrant listeners from opening parallel DB owners.
+    if(this._manualBookmarkDockMounting)return false;
+    this._manualBookmarkDockMounting=true;
     let bookmarkSession:{dispose():void}|undefined;
     try{
       const container=this._$playerContainer?.[0];
@@ -1004,22 +1027,137 @@ class NicoVideoPlayerDialogView extends Emitter {
         duration:()=>Number(this._state.videoInfo?.duration)||0,
         automaticTime:()=>this._dialog?._videoInfo?.resumePoints?.[0]?.time??null,
         recordingEnabled:()=>this._playerConfig.getValue('resume.recordEnabled')!==false,
+        setRecordingEnabled:(enabled:boolean)=>this._playerConfig.setValue('resume.recordEnabled',enabled),
+        createScenePreview:(host:HTMLElement,videoId:string,time:number)=>
+          this.videoControlBar?.storyboard?.createSavedPreview?.(host,videoId,time)||(()=>{}),
+        loadLibrary:()=>this._loadSavedPointLibrary(repository),
+        openLibraryPosition:(videoId:string,time:number,endTime?:number)=>{
+          if(videoId===this._state.videoInfo?.watchId){
+            if(endTime!==undefined)this.manualBookmarkDock?.setRepeatRange?.(time,endTime,true);
+            else this.emit('command','seekTo',time);
+            return;
+          }
+          void Promise.resolve(this._dialog.open(videoId,{openNow:true,currentTime:time})).then(()=>{
+            if(endTime===undefined||this._dialog._watchId!==videoId)return;
+            this._pendingLibraryRepeat={requestId:this._dialog._requestId,videoId,a:time,b:endTime};
+            this._trySavedLibraryRepeat();
+          }).catch(()=>console.warn('Saved position navigation unavailable'));
+        },
+        editLibraryBookmark:async(videoId:string,id:string,changes:Loose,duration:number)=>{
+          await repository.update(videoId,id,changes,Date.now(),duration);
+          await (bookmarkSession as Loose)?.refreshIfIdle?.();
+        },
+        deleteLibraryBookmark:async(videoId:string,id:string,duration:number)=>{
+          await repository.remove(videoId,id,duration);
+          await (bookmarkSession as Loose)?.refreshIfIdle?.();
+        },
+        editLibraryAutomatic:async(videoId:string,time:number,duration:number)=>{
+          if(!Number.isFinite(time)||time<0||time>=duration)throw Error('Invalid saved position');
+          if(videoId===this._dialog._watchId){
+            if(!await this._dialog._editAutomaticResume(time))throw Error('Position update failed');
+          }else await WatchInfoCacheDb.put(videoId,{currentTime:time,explicitResume:true});
+        },
+        deleteLibraryAutomatic:async(videoId:string)=>{
+          if(videoId===this._dialog._watchId){
+            if(!await this._dialog._deleteAutomaticResume())throw Error('Position delete failed');
+          }else await WatchInfoCacheDb.clearAutomaticResume(videoId,'deleted');
+        },
+        onRepeatRangeChange:(range:{a:number|null;b:number|null;active:boolean}|null)=>{
+          const info=this._state.videoInfo;
+          this.videoControlBar?.setABRepeatRange?.(range,Number(info?.duration)||0,info?.watchId??null);
+        },
         repeatEnabled:()=>this._playerConfig.getValue('abRepeat.enabled')!==false,
         repeatState:(active:boolean)=>{
           const media=this._dialog?._nicoVideoPlayer?._videoPlayer;
           if(media)media.isLoop=active?false:!!this._playerConfig.getValue('loop');
         },
         editAutomatic:(seconds:number)=>this._dialog._editAutomaticResume(seconds),
-        deleteAutomatic:async()=>!!(await this._dialog._deleteAutomaticResume())
+        deleteAutomatic:async()=>!!(await this._dialog._deleteAutomaticResume()),
+        onBookmarksChange:(snapshot:{status:string;videoId:string|null;bookmarks:readonly {id:string;time:number;label:string}[]})=>{
+          const info=this._state?.videoInfo;
+          this.videoControlBar?.setManualBookmarkMarkers?.(
+            (snapshot.status==='ready'||snapshot.status==='error')&&
+              snapshot.videoId===info?.watchId?snapshot.bookmarks:[],
+            Number(info?.duration)||0,info?.watchId??null);
+        }
       });
     }catch{
       // A failed optional mount must not strand an IndexedDB subscription.
       try{bookmarkSession?.dispose();}catch{}
       console.warn('Manual bookmark dock unavailable');
     }
-    this._videoInfoPanelMounting = false;
+
+    this._manualBookmarkDockMounting=false;
+    return !!this.manualBookmarkDock;
+  }
+  async _loadSavedPointLibrary(repository:Loose):Promise<Loose[]> {
+    const [manual,history]=await Promise.all([repository.list(),WatchInfoCacheDb.listSavedPoints()]);
+    const byId=new Map<string,Loose>();
+    for(const record of history){
+      if(typeof record.watchId!=='string'||!record.watchId)continue;
+      byId.set(record.watchId,{videoId:record.watchId,title:record.title||record.watchId,
+        duration:Number.isFinite(record.duration)&&record.duration>0?record.duration:Number.MAX_SAFE_INTEGER,
+        updatedAt:record.updatedAt||0,automaticTime:record.automaticTime,bookmarks:[]});
+    }
+    for(const row of manual){
+      const entry=byId.get(row.videoId)||{videoId:row.videoId,title:row.videoId,
+        duration:Number.MAX_SAFE_INTEGER,updatedAt:0,automaticTime:null,bookmarks:[]};
+      entry.bookmarks=row.items;
+      for(const point of row.items)entry.updatedAt=Math.max(entry.updatedAt,point.updatedAt||0);
+      byId.set(row.videoId,entry);
+    }
+    const current=this._state.videoInfo;
+    const entry=byId.get(current?.watchId);
+    if(entry){entry.title=current.title||entry.title;entry.duration=current.duration||entry.duration;
+      entry.automaticTime=this._dialog?._videoInfo?.resumePoints?.[0]?.time??entry.automaticTime;}
+    return [...byId.values()].filter(row=>row.automaticTime!==null||row.bookmarks.length)
+      .sort((a,b)=>b.updatedAt-a.updatedAt);
+  }
+  _trySavedLibraryRepeat():void {
+    const pending=this._pendingLibraryRepeat;
+    if(!pending||pending.requestId!==this._dialog?._requestId||
+       pending.videoId!==this._state?.videoInfo?.watchId||
+       pending.videoId!==this._libraryCanPlayVideo||
+       this._bookmarkActivation?.requestId!==pending.requestId)return;
+    if(this.manualBookmarkDock?.setRepeatRange?.(pending.a,pending.b,true))this._pendingLibraryRepeat=undefined;
+  }
+  /** Explicit retry only: an existing Dock with a failed DB read needs a fresh
+   * activation, not a second Dock/IDB owner or an automatic polling loop. */
+  _retryFailedManualBookmarkSession():void {
+    if(this.manualBookmarkDock?.bookmarkNeedsReload!==true)return;
+    const pending=this._pendingVideoInfo;
+    const info=this._state?.videoInfo;
+    if(!pending||pending.failed||this._state?.isError||
+       pending.requestId!==this._dialog?._requestId||
+       !info||pending.info!==info||
+       typeof info.watchId!=='string'||!Number.isFinite(info.duration)||
+       info.duration<=0)return;
+    this._bookmarkActivation=undefined;
     this._applyPendingVideoInfo();
-    return this.videoInfoPanel;
+  }
+  _showManualBookmarkUnavailable():void {
+    const host=this._$playerContainer?.[0] as HTMLElement|undefined;
+    const trigger=host?.querySelector<HTMLElement>('.playbackPointsSwitch');
+    if(!host||!trigger)return;
+    let note=host.querySelector<HTMLElement>('.zw-points-unavailable');
+    if(!note){
+      note=host.ownerDocument.createElement('output');
+      note.className='zw-points-unavailable';
+      note.setAttribute('role','status');
+      note.setAttribute('aria-live','polite');
+      Object.assign(note.style,{
+        position:'absolute',left:'12px',bottom:'72px',zIndex:'150001',
+        maxWidth:'calc(100% - 24px)',padding:'6px 10px',borderRadius:'6px',
+        background:'rgba(25,30,40,.95)',color:'#fff',
+        font:'12px/1.5 sans-serif',pointerEvents:'none'
+      });
+      host.append(note);
+    }
+    note.textContent='しおりを開けませんでした。もう一度押すと再試行します。';
+    trigger.setAttribute('aria-expanded','false');
+  }
+  _clearManualBookmarkUnavailable():void {
+    this._$playerContainer?.[0]?.querySelector('.zw-points-unavailable')?.remove();
   }
   _onCommand(command?: Loose, param?: Loose) {
     switch (command) {
@@ -1249,6 +1387,8 @@ class NicoVideoPlayerDialogView extends Emitter {
     this._syncActionFeedbackIsolation();
   }
   _onVideoCanPlay(watchId?: Loose, videoInfo?: Loose, options?: Loose) {
+    this._libraryCanPlayVideo=watchId;
+    this._trySavedLibraryRepeat();
     this.emit('canPlay', watchId, videoInfo, options);
   }
   _onVideoCount({comment, view, mylist}: Loose = {}) {
@@ -1258,6 +1398,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     this.emit('error', e);
   }
   _onBeforeVideoOpen() {
+    this._pendingLibraryRepeat=undefined;this._libraryCanPlayVideo=undefined;
     this._pendingVideoInfo = undefined;
     this._bookmarkActivation = undefined;
     this.manualBookmarkDock?.deactivate();
@@ -1303,6 +1444,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       };
       void this.manualBookmarkDock.activate(videoInfo.watchId,videoInfo.duration as number).then(result=>{
         if (result?.status === 'error') { clearFailedActivation(); }
+        else this._trySavedLibraryRepeat();
       },()=>{
         clearFailedActivation();
         console.warn('Manual bookmark session unavailable');
@@ -2947,7 +3089,7 @@ class NicoVideoPlayerDialog extends Emitter {
   declare _offScreenLayer: Loose;
   declare _playerConfig: Loose;
   declare _playlist: Loose;
-  declare _requestId: Loose;
+  declare _requestId: ZenzaDialogRequestId | null | undefined;
   declare _savePlaybackPositionNow: Loose;
   declare _playbackPositionSaves:Map<string,Promise<unknown>>|undefined;
   declare _autoResumeClearCoordinator:AutoResumeClearAgent|null|undefined;
@@ -2963,7 +3105,7 @@ class NicoVideoPlayerDialog extends Emitter {
   declare _videoTimers: Loose;
   declare _videoWatchOptions: Loose;
   declare _view: Loose;
-  declare _watchId: Loose;
+  declare _watchId: string | null | undefined;
   declare threadLoader: Loose;
   // Task 090（監査v2 ZW-017）: キャッシュ・プレイリストの初期化を待つ最長の時間（ミリ秒）
   static get OPTIONAL_LOAD_TIMEOUT() { return 3000; }
@@ -3049,6 +3191,15 @@ class NicoVideoPlayerDialog extends Emitter {
       volume: Math.max(config.props.volume, 0),
       loop: config.props.loop,
     });
+    // The active Dock owns the AB range. Intercept only native video end so
+    // SupporterCredit cannot postpone a B=duration return to A.
+    nicoVideoPlayer.beforeSupporterCreditEnd=()=>{
+      const dock=this._view?.manualBookmarkDock;
+      if(!dock?.isRepeating||!this.isOpen)return false;
+      if(!dock.repeatAtEnd())return false;
+      this.play();
+      return true;
+    };
 
     // Task 074: 音声の自動調整（倍率が変わるたびにプレイヤーへ反映する）
     AudioAdjuster.initialize(config);
@@ -3220,10 +3371,22 @@ class NicoVideoPlayerDialog extends Emitter {
         break;
       case 'toggle-playbackPoints': {
         const view=this._view;
-        view?._initializeVideoInfoPanel?.();
-        const host=view?._$playerContainer?.[0];
-        const trigger=host?.querySelector('.playbackPointsSwitch');
-        if(host)view.manualBookmarkDock?.toggle(host,trigger);
+        try{
+          view?._initializeVideoInfoPanel?.();
+          const host=view?._$playerContainer?.[0];
+          const trigger=host?.querySelector('.playbackPointsSwitch');
+          if(!host||!view?.manualBookmarkDock){
+            view?._showManualBookmarkUnavailable?.();
+            break;
+          }
+          view._clearManualBookmarkUnavailable?.();
+          // A previous IndexedDB read may have failed after a successful mount.
+          view._retryFailedManualBookmarkSession?.();
+          view.manualBookmarkDock.toggle(host,trigger);
+        }catch{
+          try{view?.manualBookmarkDock?.close?.();}catch{}
+          view?._showManualBookmarkUnavailable?.();
+        }
         break;
       }
       case 'deleteAutomaticResume':
@@ -3587,7 +3750,7 @@ class NicoVideoPlayerDialog extends Emitter {
   _onPlaylistInsert(watchId?: Loose) {
     this._playlist.insert(watchId);
   }
-  _capturePlaylistLoadOwner() {
+  _capturePlaylistLoadOwner(): ZenzaPlaylistLoadOwner {
     return {
       videoInfo: this._videoInfo,
       watchId: this._watchId,
@@ -3595,7 +3758,7 @@ class NicoVideoPlayerDialog extends Emitter {
       playlist: this._playlist
     };
   }
-  _isCurrentPlaylistLoadOwner(owner?: Loose) {
+  _isCurrentPlaylistLoadOwner(owner: ZenzaPlaylistLoadOwner): boolean {
     return this._videoInfo === owner.videoInfo &&
       this._watchId === owner.watchId &&
       this._requestId === owner.requestId &&
@@ -3610,7 +3773,7 @@ class NicoVideoPlayerDialog extends Emitter {
     (option as Loose).insert = this._playlist.isEnable;
 
     owner.playlist.load({ type: 'mylist', id }, option, owner.videoInfo.msgInfo,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then((result?: Loose) => {
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
         // A stale response must never insert the new video's metadata into the old list.
         if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
         this.execCommand('notify', result.message);
@@ -3627,7 +3790,7 @@ class NicoVideoPlayerDialog extends Emitter {
     (option as Loose).insert = this._playlist.isEnable;
 
     owner.playlist.load({ type: 'user-uploaded', id }, option, owner.videoInfo.msgInfo,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then((result?: Loose) => {
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
         if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
         this.execCommand('notify', result.message);
         this._state.currentTab = 'playlist';
@@ -3672,7 +3835,7 @@ class NicoVideoPlayerDialog extends Emitter {
     // 設定（search.limit、上級者向け設定で変更可）の件数を渡す。範囲外の値はPlayList側で丸める。
     const searchLimit = this._playerConfig.props['search.limit'];
     owner.playlist.loadSearchVideo(word, option, searchLimit,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then((result?: Loose) => {
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
         if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
         this.execCommand('notify', result.message);
         owner.playlist.insertCurrentVideo(owner.videoInfo);
@@ -3694,7 +3857,7 @@ class NicoVideoPlayerDialog extends Emitter {
     (option as Loose).insert = this._playlist.isEnable;
     this._state.currentTab = 'playlist';
     owner.playlist.load({ type: 'series', id }, option, owner.videoInfo.msgInfo,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then((result?: Loose) => {
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
       if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
       this.execCommand('notify', result.message);
       owner.playlist.insertCurrentVideo(owner.videoInfo);
@@ -4302,7 +4465,7 @@ class NicoVideoPlayerDialog extends Emitter {
     // ownership. Its final save below must not resurrect an acknowledged clear.
     this._outgoingAutoResumeSaveSuppress = this._isAutoResumeSaveSuppressed() ?
       this._autoResumeSaveSuppress : undefined;
-    this._requestId = 'play-' + Math.random();
+    this._requestId = 'play-' + Math.random() as ZenzaDialogRequestId;
     this._videoWatchOptions = options;
     this._clearVideoTimers();
 
@@ -4856,12 +5019,21 @@ class NicoVideoPlayerDialog extends Emitter {
   }
   _onVideoSeeked() {
     this._state.isSeeking = false;
+    // Short/high-rate loops may reach B again before the next timeupdate.
+    // Preserve the real landing sample without trusting a bare seeked signal.
+    // Dialog.currentTime retains its last positive display value at 0/NaN.
+    // Read the actual media sample so 0s works and cached targets cannot fake ACK.
+    this._view?.manualBookmarkDock?.acknowledgeLoopSeek?.(this._nicoVideoPlayer?.currentTime);
     MediaSessionApi.updatePositionStateByMedia(this);
     this.emit('seeked');
   }
   _onVideoPause() {
     this._state.setPausing();
-    this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
+    // Metadata may have been cleared by a failed replacement video request.
+    // A late native pause must not dereference null or save an old watch ID.
+    if (this._videoInfo?.contextWatchId) {
+      this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
+    }
     this.emit('pause');
   }
   _onVideoStalled() {
@@ -4952,6 +5124,8 @@ class NicoVideoPlayerDialog extends Emitter {
     this.emit('aspectRatioFix', ratio);
   }
   _onVideoEnded() {
+    // No current metadata: this ended event belongs to an invalidated source.
+    if (!this._videoInfo) return;
     if(this._view?.manualBookmarkDock?.repeatAtEnd()){
       this.play();return;
     }
@@ -5182,7 +5356,9 @@ class NicoVideoPlayerDialog extends Emitter {
     this._view?.manualBookmarkDock?.deactivate();
     this._keyEmitter?.releaseTemporaryPlaybackRate?.();
     if (this.isPlaying) {
-      this._saveFinalPlaybackPosition(this._watchId, this.currentTime);
+      // Keep the resume API's context ID while preserving legacy fallback.
+      const contextWatchId = this._videoInfo?.contextWatchId || this._watchId;
+      this._saveFinalPlaybackPosition(contextWatchId, this.currentTime);
     }
     // A completed video must not be recreated in local resume history by close().
     WatchInfoCacheDb.putBestEffort(this._watchId,

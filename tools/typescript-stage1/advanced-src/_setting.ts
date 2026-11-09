@@ -3,7 +3,7 @@
 // @namespace   https://github.com/segabito/
 // @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
 // @include     *//www.nicovideo.jp/my*
-// @version     0.3.84-task981
+// @version     0.3.89-task989
 // @author      segabito macmoto
 // @license     public domain
 // @grant       none
@@ -78,7 +78,7 @@ const $: typeof uq = uq;
 //@require NgCompositeRuleEditor
     window.ZenzaAdvancedSettings = {
       config: Config,
-      version: '0.3.84-task981'
+      version: '0.3.89-task989'
     };
     const global = {
       PRODUCT
@@ -426,6 +426,7 @@ const $: typeof uq = uq;
         this._modernModel=new ModernAdvancedSettingsModel({
           config,legacyRoot,actions:SHORTCUT_ACTIONS,
           screenFilterParams:ScreenFilter.PARAMS,
+          screenFilterPresets:()=>ScreenFilter.getPresetList(false),
           historySchema:ZenzaCommentHistorySettings.SETTINGS_SCHEMA
         });
         this._modernUI=new ModernAdvancedSettingsUI({

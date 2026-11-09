@@ -14,11 +14,19 @@ const CommentSubmitLifetime = (() => {
             return;
         }
         panel._submitPending = true;
+        // Value equality alone is insufficient: a new draft can be edited back to
+        // the same text while the earlier network POST is still outstanding.
+        let draftRevision = 0;
+        const onEdit = () => { draftRevision++; };
+        const editEvents = 'input.zwSubmitLifetime change.zwSubmitLifetime compositionend.zwSubmitLifetime';
+        panel._$commentInput.on?.(editEvents, onEdit);
+        panel._$commandInput.on?.(editEvents, onEdit);
         panel._$view.addClass('updating');
         const post = new Promise((resolve, reject) => panel.emit('post', { resolve, reject }, chat, cmd));
         const settled = post.then(() => {
             // Never erase a new draft edited while the previous POST was pending.
-            if (panel._$commentInput.val() === originalChat &&
+            if (draftRevision === 0 &&
+                panel._$commentInput.val() === originalChat &&
                 panel._$commandInput.val() === originalCommand) {
                 panel._$commentInput.val('').blur();
                 panel._$commandInput.blur();
@@ -28,6 +36,8 @@ const CommentSubmitLifetime = (() => {
         }, () => false // Keep the failed draft for explicit retry.
         );
         panel._submitPromise = settled.finally(() => {
+            panel._$commentInput.off?.(editEvents, onEdit);
+            panel._$commandInput.off?.(editEvents, onEdit);
             panel._submitPending = false;
             panel._submitPromise = null;
             panel._$view.removeClass('updating');

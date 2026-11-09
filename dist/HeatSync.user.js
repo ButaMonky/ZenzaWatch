@@ -25,7 +25,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // ==/UserScript==
-// build: 2026-11-06 00:57Z 86a17b66
+// build: 2026-11-09 21:18Z 5cc4ce6
 /* eslint-disable */
 
 // GENERATED FROM tools/typescript-stage1/nico-src/HeatSyncEntry.ts (Task966). Edit the .ts and run npm run nico:sync.
@@ -453,7 +453,8 @@ const ZenzaDetector = (() => {
                     if (localStorage.hasOwnProperty(storageKey)) {
                         try {
                             let lastValue = config[key];
-                            let newValue = JSON.parse(localStorage.getItem(storageKey));
+                            // JSON.parse coerces null to 'null' in legacy JS; make that conversion explicit.
+                            let newValue = JSON.parse(String(localStorage.getItem(storageKey)));
                             if (lastValue !== newValue) {
                                 config[key] = newValue;
                                 if (emitChange) {
@@ -1253,7 +1254,8 @@ const ZenzaDetector = (() => {
                 ZenzaWatch.emitter.on('DialogPlayerOpen', () => {
                     util.emitter.emit('zenzaOpen');
                     if (configPanel) {
-                        document.querySelector('.zenzaPlayerContainer').append(configPanel.view);
+                        // The player container can be absent during a close/open transition.
+                        document.querySelector('.zenzaPlayerContainer')?.append(configPanel.view);
                     }
                 });
                 ZenzaWatch.emitter.on('DialogPlayerClose', () => {

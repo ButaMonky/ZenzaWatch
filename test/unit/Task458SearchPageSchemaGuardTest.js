@@ -2,7 +2,7 @@
 // Offline synthetic fixtures only; never fetches actual NicoNico.
 'use strict';
 const assert = require('assert');
-const {extract, createContext, run} = require('../helpers/extractSource');
+const {extract, createContext, run, loadSearchDependencies} = require('../helpers/extractSource');
 
 function item(n) {
   return {id: 'sm' + n, title: 'synthetic', duration: 30,
@@ -18,6 +18,7 @@ function harness(handler) {
     console: {log() {}, info() {}, warn(...args) {warnings.push(args);}},
     textUtil: {dateToString: x => x.toISOString()}
   });
+  loadSearchDependencies('packages/lib/src/nico/VideoSearch.js', c);
   run('const API=' + extract('packages/lib/src/nico/VideoSearch.js',
     'NicoSearchNvapi', 'var') + ';globalThis.API=API;', c);
   c.window = {console: c.console};

@@ -10,26 +10,36 @@ const MAX_ADDITIONAL=20000;
  *  appliedTarget     = requested applied additional count (0 = normal comments only, the feature stays ON).
  *  appliedAdditional = additional comments actually applied to Zenza (<= cachedAdditional).
  */
-const RESET={phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
+const RESET={hidden:false,phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
 
 /** One player's lifecycle. It owns no DOM and never controls playback or posting. */
 export class CommentHistoryController {
   #preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
-  #epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+  #displayLimit;#cachedRequest=0;#displayRevision=0;#restoreTarget=0;#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
   #state={enabled:false,videoId:null,normalCount:0,...RESET};
-  constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
+  constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{},displayLimit=()=>MAX_ADDITIONAL}={}){
     if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
     this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+    if(typeof displayLimit!=='function')throw new TypeError('Invalid display limit');
+    this.#displayLimit=displayLimit;
     this.#state.enabled=preferences.get().enabled===true;
     this.#off=preferences.subscribe(snapshot=>{
       if(this.#disposed)return;
       const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
       // OFF is the explicit release: the in-memory cache is discarded (existing Task200 rule).
       if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
-      else {this.#emit({});if(!before&&this.#seed)void this.start();}
+      else {
+        const limit=this.#limit();
+        const reduced=this.#state.appliedTarget>limit;
+        if(reduced){this.#displayRevision++;this.#restoreTarget=Math.min(this.#restoreTarget,limit);this.#state.appliedTarget=limit;}
+        this.#emit({});
+        if(!before&&this.#seed)void this.start();
+        else if(reduced&&!this.#operation&&!this.#state.hidden&&this.#report)void this.setCachedCount(limit);
+      }
     });
   }
   get state(){return JSON.parse(JSON.stringify(this.#state));}
+  #limit(){try{const n=Number(this.#displayLimit());return Number.isFinite(n)?Math.max(0,Math.min(MAX_ADDITIONAL,Math.floor(n))):0;}catch{return 0;}}
   subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
   #emit(changes){
     Object.assign(this.#state,changes);
@@ -37,7 +47,7 @@ export class CommentHistoryController {
     for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
   }
   #cancel(clear){
-    this.#epoch++;this.#operation?.abort();this.#operation=null;
+    this.#epoch++;this.#cachedRequest++;this.#displayRevision++;this.#restoreTarget=0;this.#operation?.abort();this.#operation=null;
     this.#session?.removeHistory();this.#session=null;this.#report=null;
     if(clear){try{this.#clear();}catch{}}
   }
@@ -60,9 +70,42 @@ export class CommentHistoryController {
     if(this.#state.phase==='queued'){this.#operation?.abort();}
     else this.#session?.cancel();
   }
+  /** Temporary visibility belongs only to this normal-comment generation. Fetching may continue. */
+  setHidden(value){
+    const hidden=!!value;
+    if(this.#disposed||!this.#seed||!this.#state.enabled||hidden===this.#state.hidden)return Promise.resolve(this.state);
+    this.#displayRevision++;
+    this.#cachedRequest++;
+    if(hidden){
+      this.#restoreTarget=this.#state.appliedTarget;
+      this.#clear({retain:true});
+      this.#emit({hidden:true,appliedAdditional:0});
+      return Promise.resolve(this.state);
+    }
+    this.#emit({hidden:false});
+    if(this.#operation)return this.#promise;
+    return this.start({displayOnly:true,target:this.#restoreTarget});
+  }
   whenIdle(){return this.#promise;}
   more(){return this.start({more:true});}
   restart(){return this.start({restart:true});}
+  /** Explicit load button: the selection is a total target, not another increment. */
+  loadSelectedCount(){
+    let target;try{target=normalizeSettings(this.#preferences.get().settings).maxAdditionalComments;}catch{return this.start();}
+    if(this.#state.phase==='render-error'||(this.#report&&(!this.#report.resumeAvailable||this.#state.cachedAdditional>=target)))return this.setCachedCount(target);
+    return this.start({target,more:!!this.#report?.resumeAvailable});
+  }
+  /** Slider commits can only use the current video's cache; newer commits supersede queued ones. */
+  setCachedCount(value){
+    if(!Number.isInteger(value)||value<0||value>MAX_ADDITIONAL)throw new TypeError('Invalid cached count');
+    if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
+    if(this.#operation){
+      const request=++this.#cachedRequest,seed=this.#seed;
+      return this.#promise=this.#promise.then(()=>request===this.#cachedRequest&&seed===this.#seed?this.setCachedCount(value):this.state);
+    }
+    if(!this.#report||!this.#session)return Promise.resolve(this.state);
+    return this.start({displayOnly:true,target:Math.min(value,this.#limit(),this.#report.counts.additionalCount)});
+  }
   /**
    * Task207: change how many cached additional comments are applied. Reducing (including to 0) never discards
    * the cache; a count within the cache is re-applied without network; only the missing part is fetched.
@@ -70,7 +113,7 @@ export class CommentHistoryController {
   setAppliedCount(value){
     const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
     if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
-    if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+    if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
     if(this.#operation)return this.#promise;
     if(!this.#session||!this.#report){
       if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
@@ -81,7 +124,7 @@ export class CommentHistoryController {
     return this.start({displayOnly:true,target:n});
   }
   start({more=false,restart=false,target,displayOnly=false}={}){
-    if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+    if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
     if(this.#operation)return this.#promise;
     let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
     if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
@@ -96,7 +139,7 @@ export class CommentHistoryController {
     const goal=applyOnly?oldGoal:
       target!==undefined?Math.min(MAX_ADDITIONAL,target):
       continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
-    const appliedTarget=target!==undefined?target:retryRender?this.#state.appliedTarget:goal;
+    const appliedTarget=Math.min(this.#limit(),target!==undefined?target:retryRender?this.#state.appliedTarget:goal);
     const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
     const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
     const seed=this.#seed;
@@ -122,17 +165,23 @@ export class CommentHistoryController {
         this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
         let applied;
         // Only the first appliedTarget of the fetch order are applied; the rest stays cached in the session.
-        const limit=Math.min(appliedTarget,report.counts.additionalCount);
-        try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:current,signal:operation.signal});}
-        catch{
-          if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
-          return;
+        let limit=0;
+        while(current()&&!this.#state.hidden){
+          limit=Math.min(this.#state.appliedTarget,this.#limit(),report.counts.additionalCount);
+          const revision=this.#displayRevision;
+          const displayCurrent=()=>current()&&!this.#state.hidden&&revision===this.#displayRevision;
+          try{
+            applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:displayCurrent,signal:operation.signal});
+            if(displayCurrent())break;
+          }catch{
+            if(displayCurrent()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');return;}
+          }
         }
         if(!current())return;
         const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
-        this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??limit,
+        this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:this.#state.hidden?0:applied?.additionalCount??limit,
           canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
-        if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+        if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify(this.#state.hidden?'コメント増量：一部取得で終了しました。取得済みのコメントは保持しています。':'コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
       }catch{
         if(this.#epoch===epoch&&this.#state.enabled){
           this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});

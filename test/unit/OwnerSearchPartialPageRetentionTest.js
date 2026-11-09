@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const {createContext, loadClass} = require('../helpers/extractSource');
+const {createContext, loadClass, loadSearchDependencies} = require('../helpers/extractSource');
 
 function fixture(file, failedPages=[]) {
   const requests=[], snapshotBatches=[];
@@ -29,6 +29,7 @@ function fixture(file, failedPages=[]) {
     }}
   });
   context.window=context;
+  loadSearchDependencies(file, context);
   const Loader=loadClass(file,'NicoSearchApiV2Loader',context);
   context.NicoSearchApiV2Loader=Loader;
   Loader.nvapi={toLegacyItem:v=>({id:v.id})};

@@ -912,10 +912,10 @@ const {SettingPanelElement} = (() => {
       const fileReader = new FileReader();
       fileReader.onload = ev => {
         try {
-          this.config.importJson(ev.target.result);
+          this.config.importJson(ev.target!.result);
           location.reload();
         } catch (error) {
-          alert(`設定を読み込めませんでした: ${error.message}`);
+          alert(`設定を読み込めませんでした: ${(error as Error).message}`);
         }
       };
 

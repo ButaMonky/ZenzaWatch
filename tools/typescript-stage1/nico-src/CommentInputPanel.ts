@@ -878,7 +878,7 @@ CommentInputPanel.__css__ = (`
 
 CommentInputPanel.__tpl__ = (() => {
   const P = CommandPicker;
-  const esc = (s?: Loose) => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c]);
+  const esc = (s?: Loose) => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[c as '&' | '<' | '>' | '"']);
   const textButtons = (group?: Loose, pairs?: Loose) => pairs.map(([value, label, title]: Loose) =>
     `<button type="button" class="commandPicker-btn" tabindex="-1" data-picker-group="${group}" data-picker-value="${value}" title="${esc(title)}" aria-pressed="false">${esc(label)}</button>`
   ).join('');

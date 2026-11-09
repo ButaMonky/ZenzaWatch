@@ -12,6 +12,60 @@ const IndexedDbStorage = (() => {
         const db = Object.create(null);
         const initializing = new Map();
         const schemas = new Map();
+        // #286: Common projection for both legacy cursor scrub and read-only
+        // cross-domain responses. Do not serialize old authentication fields into
+        // a page/iframe reply while the background migration is still pending.
+        const pickPublicVideoInfo = (value) => {
+            const data = {};
+            if (!value || typeof value !== 'object' || Array.isArray(value)) {
+                return data;
+            }
+            const source = value;
+            for (const key of ['videoId', 'watchId', 'contextWatchId', 'originalVideoId',
+                'title', 'postedAt', 'thumbnail', 'betterThumbnail', 'duration', 'threadId',
+                'description', 'watchUrl']) {
+                const v = source[key];
+                if (typeof v === 'string' || typeof v === 'boolean' ||
+                    (typeof v === 'number' && Number.isFinite(v))) {
+                    data[key] = v;
+                }
+            }
+            if (source.count && typeof source.count === 'object' && !Array.isArray(source.count)) {
+                const counts = {};
+                for (const key of ['comment', 'mylist', 'view', 'like']) {
+                    const v = source.count[key];
+                    if (typeof v === 'number' && Number.isFinite(v)) {
+                        counts[key] = v;
+                    }
+                }
+                data.count = counts;
+            }
+            if (source.owner && typeof source.owner === 'object' && !Array.isArray(source.owner)) {
+                const owner = {};
+                for (const key of ['type', 'url', 'icon', 'id', 'linkId', 'name']) {
+                    const v = source.owner[key];
+                    if (typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v))) {
+                        owner[key] = v;
+                    }
+                }
+                data.owner = owner;
+            }
+            if (source.genre && typeof source.genre === 'object' && !Array.isArray(source.genre)) {
+                data.genre = {
+                    key: typeof source.genre.key === 'string' ? source.genre.key : '',
+                    label: typeof source.genre.label === 'string' ? source.genre.label : ''
+                };
+            }
+            return data;
+        };
+        const projectWatchHistoryRecord = (name, storeName, row) => {
+            if (name !== 'watch-info' || storeName !== 'cache' ||
+                !row || typeof row !== 'object' || Array.isArray(row) ||
+                row.videoInfo == null) {
+                return row;
+            }
+            return { ...row, videoInfo: pickPublicVideoInfo(row.videoInfo) };
+        };
         const controller = {
             async init({ name, ver, stores }) {
                 if (db[name] && (ver === undefined || db[name].version === ver)) {
@@ -203,7 +257,10 @@ const IndexedDbStorage = (() => {
                         req.onsuccess = req.onerror = null;
                         callback(result);
                     };
-                    req.onsuccess = (event) => finish(resolve, event.target.result);
+                    req.onsuccess = (event) => {
+                        const row = event.target.result;
+                        finish(resolve, projectWatchHistoryRecord(name, storeName, row));
+                    };
                     req.onerror = (event) => finish(reject, event);
                     if (timeout) {
                         timer = setTimeout(() => finish(reject, 'IndexedDB get timed out'), timeout);
@@ -259,12 +316,168 @@ const IndexedDbStorage = (() => {
                             }
                             const write = store.put(record);
                             write.onerror = fail;
-                            write.onsuccess = () => result(record);
+                            // update()/updateTime() return full rows through the bridge too.
+                            // Project the response only; the persisted row remains unchanged
+                            // until the bounded background scrub reaches it.
+                            write.onsuccess = () => result(projectWatchHistoryRecord(name, storeName, record));
                         }
                         catch (error) {
                             fail(error);
                         }
                     };
+                });
+            },
+            // #286: read/modify/write only legacy videoInfo in the SAME transaction.
+            // This is a fixed internal operation; never accept arbitrary JS callbacks,
+            // field names or full records from an untrusted bridge message.
+            async scrubWatchVideoInfo({ name, storeName, data }) {
+                if (name !== 'watch-info' || storeName !== 'cache') {
+                    throw new TypeError('Legacy watch-info scrub restricted to cache store');
+                }
+                const afterKey = data?.afterKey ?? null;
+                const maxRecords = data?.maxRecords ?? 64;
+                if ((afterKey !== null && (typeof afterKey !== 'string' || !afterKey)) ||
+                    !Number.isSafeInteger(maxRecords) || maxRecords < 1 ||
+                    maxRecords > 256) {
+                    throw new TypeError('Invalid legacy watch-info scrub cursor');
+                }
+                const same = (old, projected) => {
+                    if (!old || typeof old !== 'object' || Array.isArray(old)) {
+                        return false;
+                    }
+                    const fields = old, keys = Object.keys(fields);
+                    if (keys.length !== Object.keys(projected).length) {
+                        return false;
+                    }
+                    return keys.every(key => {
+                        if (!Object.prototype.hasOwnProperty.call(projected, key)) {
+                            return false;
+                        }
+                        if (!['count', 'owner', 'genre'].includes(key)) {
+                            return fields[key] === projected[key];
+                        }
+                        const nested = fields[key], safe = projected[key];
+                        return !!nested && typeof nested === 'object' && !Array.isArray(nested) &&
+                            Object.keys(nested).length === Object.keys(safe).length &&
+                            Object.keys(safe).every(child => nested[child] === safe[child]);
+                    });
+                };
+                return this._write({ name, storeName }, (store, result, fail) => {
+                    const range = afterKey === null ? undefined :
+                        IDBKeyRange.lowerBound(afterKey, true);
+                    const req = store.openCursor(range);
+                    let scanned = 0, changed = 0;
+                    req.onerror = fail;
+                    req.onsuccess = () => {
+                        try {
+                            const cursor = req.result;
+                            if (!cursor) {
+                                result({ scanned, changed, nextKey: null });
+                                return;
+                            }
+                            if (typeof cursor.primaryKey !== 'string' || !cursor.primaryKey) {
+                                throw new TypeError('Unexpected watch-info cursor key');
+                            }
+                            const record = cursor.value;
+                            if (record && typeof record === 'object' && !Array.isArray(record) &&
+                                record.videoInfo != null &&
+                                Object.prototype.hasOwnProperty.call(record, 'videoInfo')) {
+                                const projected = pickPublicVideoInfo(record.videoInfo);
+                                if (!same(record.videoInfo, projected)) {
+                                    const request = cursor.update({ ...record, videoInfo: projected });
+                                    request.onerror = fail;
+                                    changed++;
+                                }
+                            }
+                            scanned++;
+                            // The resume key is a cursor, not user data for telemetry/logging.
+                            if (scanned >= maxRecords) {
+                                result({ scanned, changed, nextKey: cursor.primaryKey });
+                            }
+                            else {
+                                cursor.continue();
+                            }
+                        }
+                        catch (error) {
+                            fail(error);
+                        }
+                    };
+                });
+            },
+            /** Read-only, allowlisted projection; never transfer full history rows. */
+            async listSavedPoints({ name, storeName, data }) {
+                if (name !== 'watch-info' || storeName !== 'cache') {
+                    throw new TypeError('Saved points restricted to watch history cache');
+                }
+                const afterKey = data?.afterKey ?? null;
+                const maxRecords = data?.maxRecords ?? 200;
+                if ((afterKey !== null && (typeof afterKey !== 'string' || !afterKey)) ||
+                    !Number.isSafeInteger(maxRecords) || maxRecords < 1 || maxRecords > 200) {
+                    throw new TypeError('Invalid saved points cursor');
+                }
+                const { store, transaction } = await this.getStore({ name, storeName, mode: 'readonly' });
+                return new Promise((resolve, reject) => {
+                    const items = [];
+                    let nextKey = null, scanned = 0, settled = false;
+                    const cleanup = () => { transaction.oncomplete = transaction.onabort = transaction.onerror = null; };
+                    const fail = (error) => {
+                        if (settled)
+                            return;
+                        settled = true;
+                        cleanup();
+                        const reason = error?.target?.error || transaction.error || error;
+                        reject(reason || new Error('Saved points read failed'));
+                    };
+                    transaction.onabort = transaction.onerror = fail;
+                    transaction.oncomplete = () => {
+                        if (settled)
+                            return;
+                        settled = true;
+                        cleanup();
+                        resolve({ items, nextKey });
+                    };
+                    try {
+                        const range = afterKey === null ? undefined : IDBKeyRange.lowerBound(afterKey, true);
+                        const req = store.openCursor(range);
+                        req.onerror = fail;
+                        req.onsuccess = () => {
+                            if (settled)
+                                return;
+                            try {
+                                const cursor = req.result;
+                                if (!cursor) {
+                                    nextKey = null;
+                                    return;
+                                }
+                                if (typeof cursor.primaryKey !== 'string' || !cursor.primaryKey) {
+                                    throw new TypeError('Unexpected saved points cursor key');
+                                }
+                                const row = cursor.value;
+                                if (row && typeof row === 'object' && !Array.isArray(row) && row.watchId === cursor.primaryKey) {
+                                    const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+                                    const resume = Array.isArray(row.resume) ? row.resume[0]?.time : null;
+                                    items.push({
+                                        watchId: cursor.primaryKey,
+                                        title: typeof row.videoInfo?.title === 'string' ? row.videoInfo.title : cursor.primaryKey,
+                                        duration: finite(row.videoInfo?.duration) ? row.videoInfo.duration : 0,
+                                        updatedAt: finite(row.updatedAt) ? row.updatedAt : 0,
+                                        automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null
+                                    });
+                                }
+                                scanned++;
+                                if (scanned >= maxRecords)
+                                    nextKey = cursor.primaryKey;
+                                else
+                                    cursor.continue();
+                            }
+                            catch (error) {
+                                fail(error);
+                            }
+                        };
+                    }
+                    catch (error) {
+                        fail(error);
+                    }
                 });
             },
             async updateTime({ name, storeName, data: { key, index } }) {
@@ -347,7 +560,8 @@ const IndexedDbStorage = (() => {
                 }
             }
             catch (err) {
-                console.warn('command failed: ', { command, params });
+                const diagnosticCommand = typeof command === 'string' && /^(?:init|put|update|scrubWatchVideoInfo|updateTime|get|delete|gc|clear|close)$/.test(command) ? command : 'unknown';
+                console.warn('IndexedDB command failed:', diagnosticCommand);
                 throw err;
             }
         };
@@ -388,6 +602,8 @@ const IndexedDbStorage = (() => {
                     close: (params) => post('close', params, storeName),
                     put: (record, transfer) => post('put', record, storeName, transfer),
                     update: (data) => post('update', data, storeName),
+                    scrubWatchVideoInfo: (data) => post('scrubWatchVideoInfo', data, storeName),
+                    listSavedPoints: (data) => post('listSavedPoints', data, storeName),
                     get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
                     updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
                     delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),

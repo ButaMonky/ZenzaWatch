@@ -11,13 +11,14 @@ const manifest='tools/typescript-stage1/p12-manual-manifest.json';
 const specs=Object.freeze([
  {name:'ManualBookmarkPolicy',imports:[],tops:[
   'const MAX_PER_VIDEO','const validId','const validClock','const validTime',
-  'const labelFor','};','const immutable','const forVideo','};',
+  'const validEnd','const labelFor','};','const immutable','const forVideo','};',
   'export function normalizeManualBookmarks','}',
   'export function addManualBookmark','}',
+  'export function updateManualBookmark','}',
   'export function renameManualBookmark','}',
   'export function removeManualBookmark','}']},
  {name:'ManualBookmarkStore',imports:[
-  "import { normalizeManualBookmarks, addManualBookmark, renameManualBookmark, removeManualBookmark } from './ManualBookmarkPolicy.js';"
+  "import { normalizeManualBookmarks, addManualBookmark, renameManualBookmark, removeManualBookmark, updateManualBookmark } from './ManualBookmarkPolicy.js';"
  ],tops:['const databaseName','const storeName','const validateVideoId',
   'export class IndexedDbManualBookmarkBackend','}',
   'export class ManualBookmarkRepository','}']},

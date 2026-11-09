@@ -133,7 +133,7 @@ class TagEditApi {
     }
     // Any truthy body is probed like the legacy JS (`json.meta`); primitives yield undefined.
     const meta = ((json && (json as UnknownPropertyBag).meta) || {}) as UnknownPropertyBag;
-    const status: number = typeof meta.status === 'number' ? meta.status : res.status;
+    const status: number = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
     const errorCode = meta.errorCode || '';
     // 2026-09-16の実機確認: 不正なキーを送ると 403 {errorCode:"FORBIDDEN"} が返った。
     // 期限切れのキーが KEY_EXPIRED と FORBIDDEN のどちらになるかは未確認のため、

@@ -5,41 +5,41 @@
       "name": "ManualBookmarkPolicy",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkPolicy.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkPolicy.js",
-      "sourceSha256": "88cf5d536ee16700a6fee83cafb18b525bd651cfc2d904d2d92b5a7e08d6a10a",
-      "emittedSha256": "97a52e2a97a6d0aad2162dac0178f49d5735bda2d8f21f1f95a8ff7a81492016",
-      "runtimeSha256": "97026f265801406a0e5b4a08bdaa31225f69fd8edf1d5d7843819d1e31379b3e"
+      "sourceSha256": "f52c64657efdfc86c3547218abdddb5c26f427362b5c3be278df9ad563e27ba9",
+      "emittedSha256": "65615d16cbd4c223f47f1d20eaae9fb104ecd0cdd7fbebc047f6ec4928a9350d",
+      "runtimeSha256": "a98906fc61180d5066ac499aaab8079d68b26901aca03cb8c4e05d072ae52e3e"
     },
     {
       "name": "ManualBookmarkStore",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkStore.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkStore.js",
-      "sourceSha256": "44beffc6a90564414ae558e7221eba4a365ec38ea65c2c42702f324244bf6a70",
-      "emittedSha256": "2eb377428f2d9395ea1e891a05edac0eaf6d45810eb541317dd627d0fcbe480b",
-      "runtimeSha256": "8111cbf9203018687d2076d37faf088dc14604ae72da8bc311a24897319b821e"
+      "sourceSha256": "eaf15bc7c6c4758c840d7cb9f54be434c4b39722f561bfa7582f200b72c5f104",
+      "emittedSha256": "7175f1e6bee0054c5859d3f16228f40739748248319b8becc8b470bd21a6d013",
+      "runtimeSha256": "26f6d10b9e7bdc28bcdd54b7ee7c8ca8c55d11995c2c1b86fb870cc601f22d86"
     },
     {
       "name": "ManualBookmarkSession",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkSession.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkSession.js",
-      "sourceSha256": "0c61721aab99c5498806fb0ca313903c4dc1b79c17195039184884ca47eb1470",
-      "emittedSha256": "177003bc594b5003d81b8a0399064dc9565bc8ac9b4c76a90f9b951a03e1bb57",
-      "runtimeSha256": "d47842c50bfd942fc37a1dc8eb663fea1559c5c4d22bf5a9ef93d51703fbc26f"
+      "sourceSha256": "076b2cf4086cd0e4a6cee2062a008f43c0da610a46d02ff17ebf1729fc531515",
+      "emittedSha256": "fe19b9854ec761409fb1a5129e51ac241c67f55f8e6e4fca258cc8dcad60d0df",
+      "runtimeSha256": "925cd49f0c07d3f2d838318fa6fabaa7c45a9c35a3ed59d0d7a122193023a51f"
     },
     {
       "name": "ManualBookmarkPanel",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkPanel.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkPanel.js",
-      "sourceSha256": "7bad3828ec57e431c91f30d17d0f14ec8917f010ff36629baa59aedf1c2b7f9d",
-      "emittedSha256": "b6f136c505dec57e31c66fc3de40970d85c04b733af05cc9f43076bf80b861c7",
-      "runtimeSha256": "3f27dcd99b80b75654c390aee7673b934c1b3ac76f8946017b15683ecbae6969"
+      "sourceSha256": "3ae6278f69234161a0526abf25bcfa35a8ff4b93d98c2c4915e95d3bc3c20e43",
+      "emittedSha256": "4cae933c8608ab8d7f2392a326fc667f5d45714f6ea981caf3418fab6c304726",
+      "runtimeSha256": "682ad4e1836d34db01642b34deb14f7ef300c30c611e9cfb9306e477cd75e8c8"
     },
     {
       "name": "ManualBookmarkDock",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkDock.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkDock.js",
-      "sourceSha256": "2612eb1c2b0d66e53e0e5682a54326b7e6b107a911b9ff57dfb09008f940f465",
-      "emittedSha256": "6f0ef3aa479b5b36bcb6e5547f496109f65c15ef57027a4764faebc7a80faca1",
-      "runtimeSha256": "557937c12d9617355b5786bbef5007589fb15ab85c35aea3da7081e77f6e09b2"
+      "sourceSha256": "232accd153081124d649e504b441f3ef6608b98ff69c81a37980083d2dcb8687",
+      "emittedSha256": "e665ab4536a9200cee93802cca08a7709711f07a8b8ba9c25d764271e0e6d922",
+      "runtimeSha256": "f424737bf1db37b9947ad4af05f4450c25a6a79af3e0d112bea53cd2eeaf496d"
     }
   ]
 }

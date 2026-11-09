@@ -135,12 +135,9 @@ class PlayerState extends BaseState {
             this.emit('update-videoInfo', null);
             return;
         }
-        if (this._videoInfo) {
-            this._videoInfo.update(videoInfo);
-        }
-        else {
-            this._videoInfo = videoInfo;
-        }
+        // The emitted event and the stored model must refer to the same video.
+        // In-place mutation keeps the previous video's object identity alive.
+        this._videoInfo = videoInfo;
         global.debug.videoInfo = videoInfo;
         this.videoCount = videoInfo.count;
         this.thumbnail = videoInfo.betterThumbnail;

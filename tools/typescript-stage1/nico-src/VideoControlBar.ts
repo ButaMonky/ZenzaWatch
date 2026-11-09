@@ -15,6 +15,8 @@ type Loose = any;
 type NativeScenePinnedTime=(()=>number|null)|undefined;
 type NativeSceneSeekTooltip={update(time:number,left:number):void};
 type NativeResumePointerTargets=Parameters<typeof SceneResumeMarkerPresenter.render>[0];
+// Only the real seekbar marker element may be handed to the native pointer owner.
+type NativeSeekPointerTarget = HTMLElement;
 // legacy-to-ts: names provided by other bundled modules
 declare const BaseViewComponent: Loose;
 declare const CONSTANT: Loose;
@@ -49,6 +51,10 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
     declare _bufferRange: HTMLElement;
     declare emit: Loose;
     declare $resumePointers: NativeResumePointerTargets;
+    declare _abRepeatRangeLayer:HTMLElement|undefined;
+    declare _timelineVideoId:string|null|undefined;
+    declare _timelineClosed:boolean|undefined;
+    declare _manualBookmarkMarkerLayer:HTMLElement|undefined;
     declare _sceneSearchPinnedTime: NativeScenePinnedTime;
     declare _$videoServerTypeSelectMenu: Loose;
     declare _$videoServerTypeMenu: Loose;
@@ -58,7 +64,7 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
     declare _$seekBarContainer: Loose;
     declare _seekBar: HTMLElement;
     declare _$seekBar: Loose;
-    declare _seekBarPointer: Loose;
+    declare _seekBarPointer: NativeSeekPointerTarget;
     declare _seekRange: HTMLInputElement;
     declare static __tpl__: Loose;
     declare promise: Loose;
@@ -219,7 +225,9 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
         .on('click', this._onClick.bind(this))
         .on('command', this._onCommandEvent.bind(this));
 
-      HeatMapWorker.init({container: this._seekBar}).then((hm?: Loose) => this._onHeatMapReady(hm));
+      HeatMapWorker.init({container: this._seekBar})
+        .then((hm?: Loose) => this._onHeatMapReady(hm))
+        .catch(() => { window.console.warn('HeatMap initialization unavailable'); });
       const updateHeatMapVisibility =
         (v?: Loose) => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
       updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
@@ -448,6 +456,7 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
       return ratio === null ? 0 : ratio * 100;
     }
     _onPlayerOpen(watchId?: Loose) {
+      this._clearTimelinePresentation(typeof watchId==='string'?watchId:null);
       this._commentParsedHandler?.cancel?.();
       this._commentChangeHandler?.cancel?.();
       this._startTimer();
@@ -487,6 +496,7 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
       this._syncCommentHeatMap();
     }
     _onPlayerClose() {
+      this._clearTimelinePresentation(null,true);
       this._cancelStoryboardLongPress();
       // Task944: closing (without opening a successor) must release Task943's
       // current videoInfo and revoke outstanding thumbnail loader responses.
@@ -519,11 +529,14 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
       util.dispatchCommand(e.target, 'seek', sec);
       if (left != null) {
         const pinned = this._sceneSearchPinnedTime?.();
-        this._seekBarToolTip.update(Number.isFinite(pinned) ? pinned : sec, left);
+        this._seekBarToolTip.update(Number.isFinite(pinned) ? pinned! : sec, left);
       }
       this.storyboard.setCurrentTime(sec, true);
     }
     _onSeekBarMouseDown(e:MouseEvent) {
+      // Native point labels now share the track containing block, but retain
+      // their own click command rather than beginning a track drag/long press.
+      if((e.target as Element|null)?.closest?.('.resumePointer,.manualBookmarkMarker'))return;
       // e.preventDefault();
       e.stopPropagation();
       (this as Loose)._beginMouseDrag(e);
@@ -557,9 +570,9 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
       let left: number | null;
       let sec: number | null;
       if (Number.isFinite(pinned)) {
-        sec = pinned;
+        sec = pinned!;
         // Pinning freezes the existing local anchor as well as the preview time.
-        left = Number.isFinite(this._seekBarMouseX) ? this._seekBarMouseX : this._timeToPos(pinned);
+        left = Number.isFinite(this._seekBarMouseX) ? this._seekBarMouseX : this._timeToPos(pinned!);
       } else {
         const geometry = this._getTimelineGeometry();
         const ratio = geometry?.clientXToRatio(e.clientX);
@@ -636,12 +649,15 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
       this.storyboard.currentTime = currentTime;
     }
     _onLoadVideoInfo(videoInfo?: Loose) {
+      if(this._timelineVideoId&&this._timelineVideoId!==videoInfo.watchId){
+        this._clearTimelinePresentation(videoInfo.watchId,this._timelineClosed);
+      }
+      this._timelineVideoId=videoInfo.watchId;
       this.duration = videoInfo.duration;
       // Task 070: canPlay を待たずに、動画情報が揃った時点でシークバーのサムネイルを読み始める
       this.storyboard.load(videoInfo.watchId, videoInfo);
       const [view] = this._$view;
 
-      // The native controls, marker nodes and seek input are still owned by this bar.
       this.refreshAutoResumePointers(videoInfo);
     }
     /** An explicit user action, independent of the native marker's seek click. */
@@ -661,7 +677,14 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
     }
     /** Refresh markers only, without restarting storyboard or stealing seek DOM. */
     refreshAutoResumePointers(videoInfo?:{duration:number;resumePoints:readonly {now:string;time:number}[]}) {
-      if(!videoInfo)return;
+      if(!videoInfo||this._timelineClosed)return;
+      // Preserve native instances/listeners while giving them the real track's
+      // containing block. Their presenter-supplied ratio opts out of legacy vw.
+      for(const pointer of this.$resumePointers||[]){
+        if(this._seekBar&&pointer instanceof HTMLElement&&pointer.parentElement!==this._seekBar){
+          this._seekBar.append(pointer);
+        }
+      }
       SceneResumeMarkerPresenter.render(
         this.$resumePointers, videoInfo.resumePoints, videoInfo.duration,
         (...tasks) => cssUtil.setProps(...tasks));
@@ -669,6 +692,117 @@ const historyTriggerKeyGuard = (event:KeyboardEvent) => {
         pointer.setAttribute('tabindex','0');
         pointer.setAttribute('title','右クリックまたはDeleteキーで「ここまで見た」を削除');
       }
+    }
+    /** One ownership gate for every timeline presentation source. */
+    _canPresentTimeline(videoId:string|null|undefined):boolean {
+      return !this._timelineClosed&&typeof videoId==='string'&&!!videoId&&
+        this._playerState?.videoInfo?.watchId===videoId&&
+        (!this._timelineVideoId||this._timelineVideoId===videoId);
+    }
+    /** Open/close/video replacement invalidate all point and interval owners. */
+    _clearTimelinePresentation(videoId:string|null=null,closed=false):void {
+      this._clearABRepeatRange();
+      this._clearManualBookmarkMarkers();
+      if(this.$resumePointers)SceneResumeMarkerPresenter.clearNative(this.$resumePointers);
+      this._timelineVideoId=videoId;
+      this._timelineClosed=closed;
+    }
+    /** Passive decoration in the same local coordinate space as the native range. */
+    setABRepeatRange(
+      range:{a:number|null;b:number|null;active:boolean}|null,
+      duration:number,videoId:string|null|undefined
+    ):void {
+      // A late result from a previous video must not replace the current overlay.
+      if(typeof videoId==='string'&&!this._canPresentTimeline(videoId))return;
+      this._clearABRepeatRange();
+      const host=this._seekBar;
+      if(!host||!range||this._timelineClosed||typeof videoId!=='string'||!videoId||
+         !Number.isFinite(duration)||duration<=0)return;
+      let layer=this._abRepeatRangeLayer;
+      if(!layer){
+        layer=SceneResumeMarkerPresenter.createLayer(host,'abRepeatRangeLayer');
+        layer.setAttribute('aria-hidden','true');
+        this._abRepeatRangeLayer=layer;
+      }
+      const projection=SceneResumeMarkerPresenter.projectInterval(range.a,range.b,duration,{clamp:true});
+      layer.classList.toggle('is-active',!!projection.band&&range.active===true);
+      if(projection.band){
+        const band=host.ownerDocument.createElement('div');
+        band.className='timelineInterval abRepeatRangeBand';
+        SceneResumeMarkerPresenter.placeInterval(band,projection.band);
+        layer.append(band);
+      }
+      for(const [name,point] of [['A',projection.start],['B',projection.end]] as const){
+        if(!point)continue;
+        const marker=host.ownerDocument.createElement('span');
+        marker.className=`abRepeatMarker abRepeatMarker${name}`;
+        marker.textContent=name;
+        SceneResumeMarkerPresenter.placePoint(marker,point);
+        layer.append(marker);
+      }
+      this._timelineVideoId=videoId;
+    }
+    _clearABRepeatRange():void {
+      this._abRepeatRangeLayer?.replaceChildren();
+      this._abRepeatRangeLayer?.classList.remove('is-active');
+    }
+    /** Manual markers have their own narrow hit targets; native range stays untouched. */
+    setManualBookmarkMarkers(
+      bookmarks:readonly {id:string;time:number;label:string;endTime?:number}[]|null|undefined,
+      duration:number,videoId:string|null|undefined
+    ):void {
+      if(typeof videoId==='string'&&!this._canPresentTimeline(videoId))return;
+      const host=this._seekBar;
+      if(!host)return;
+      let layer=this._manualBookmarkMarkerLayer;
+      if(!layer){
+        layer=SceneResumeMarkerPresenter.createLayer(host,'manualBookmarkMarkerLayer');
+        layer.setAttribute('aria-label','手動しおり');
+        this._manualBookmarkMarkerLayer=layer;
+      }
+      layer.replaceChildren();
+      if(typeof videoId!=='string'||!Number.isFinite(duration)||duration<=0||
+         !Array.isArray(bookmarks)||this._playerState?.videoInfo?.watchId!==videoId)return;
+      const fragment=host.ownerDocument.createDocumentFragment();
+      const seen=new Set<string>();
+      for(const bookmark of bookmarks){
+        if(!bookmark||typeof bookmark.id!=='string'||seen.has(bookmark.id)||
+           typeof bookmark.label!=='string')continue;
+        const point=SceneResumeMarkerPresenter.projectPoint(bookmark.time,duration,{includeEnd:false});
+        if(!point)continue;
+        seen.add(bookmark.id);
+        const interval=SceneResumeMarkerPresenter.projectInterval(bookmark.time,bookmark.endTime,duration);
+        if(interval.band){
+          const band=host.ownerDocument.createElement('div');
+          band.className='timelineInterval manualBookmarkRangeBand';
+          band.setAttribute('aria-hidden','true');
+          SceneResumeMarkerPresenter.placeInterval(band,interval.band);
+          fragment.append(band);
+        }
+        const marker=host.ownerDocument.createElement('button');
+        marker.type='button';
+        marker.className='manualBookmarkMarker';
+        marker.dataset.bookmarkId=bookmark.id;
+        SceneResumeMarkerPresenter.placePoint(marker,point);
+        marker.title=`${bookmark.label}（${Math.floor(bookmark.time)}秒）へ移動`;
+        marker.setAttribute('aria-label',marker.title);
+        const expectedVideo=videoId;
+        const time=bookmark.time;
+        marker.addEventListener('click',(event:MouseEvent)=>{
+          event.preventDefault();event.stopPropagation();
+          if(this._playerState?.videoInfo?.watchId===expectedVideo){
+            this.emit('command','seekTo',time);
+          }
+        });
+        marker.addEventListener('pointerdown',(event:PointerEvent)=>event.stopPropagation());
+        marker.addEventListener('mousedown',(event:MouseEvent)=>event.stopPropagation());
+        fragment.append(marker);
+      }
+      layer.append(fragment);
+      this._timelineVideoId=videoId;
+    }
+    _clearManualBookmarkMarkers():void {
+      this._manualBookmarkMarkerLayer?.replaceChildren();
     }
     async _onFirstVideoInitialized(watchId?: Loose) {
       const [view] = this._$view;
@@ -1260,6 +1394,68 @@ util.addStyle(`
     opacity: 0.8;
   }
 
+  /* The native seekBar owns normal/hover/fullscreen height and scaling.
+     Inset percentages follow that exact rectangle, including its transition. */
+  .timelineMarkerLayer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .timelineMarkerLayer * {pointer-events: none;}
+  .timelineInterval {
+    position: absolute;
+    top: 0;
+    height: 100%;
+  }
+  .abRepeatRangeLayer {
+    z-index: 195;
+    color: #fce8a6;
+  }
+  .abRepeatRangeBand {
+    background: rgba(255, 211, 105, 0.22);
+    box-shadow: inset 0 1px rgba(255, 227, 151, 0.55), inset 0 -1px rgba(255, 227, 151, 0.55);
+  }
+  .abRepeatRangeLayer.is-active .abRepeatRangeBand {
+    background: rgba(255, 211, 105, 0.48);
+    box-shadow: inset 0 1px #ffe397, inset 0 -1px #ffe397;
+  }
+  .abRepeatMarker {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 2px;
+    transform: translateX(-1px);
+    background: currentColor;
+    font: bold 9px/10px sans-serif;
+    text-indent: 3px;
+    text-shadow: 0 1px 2px #000, 0 0 2px #000;
+  }
+  .abRepeatMarkerB {text-indent: -10px;}
+  .is-loading .timelineMarkerLayer {display:none;}
+  /* Saved points have narrow hit targets; range bands remain passive. */
+  .manualBookmarkMarkerLayer {z-index: 205;}
+  .manualBookmarkRangeBand {background: rgba(255, 211, 105, 0.12);}
+  .manualBookmarkMarker {
+    position: absolute;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #eac66b;
+    border-radius: 3px;
+    background: #ffd86b;
+    transform: translateX(-50%);
+    box-shadow: 0 0 0 1px #171e2a;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+  .manualBookmarkMarker:hover,.manualBookmarkMarker:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 1px;
+  }
+  .seekBarContainer .seekBar .manualBookmarkMarker,
+  .seekBarContainer .seekBar .resumePointer {pointer-events: auto;}
   .resumePointer {
     position: absolute;
     mix-blend-mode: color-dodge;
@@ -1545,8 +1741,9 @@ util.addStyle(`
   .playbackPointsSwitch,
   .notificationHistorySwitch,
   .commentHistorySwitch { border: 0; padding: 0; background: transparent; }
-  /* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
+  /* Native action buttons receive focus on mouse-down. Keep their hit targets active,
      while preserving focus-within suppression for existing popup-menu containers. */
+  .videoControlBar .playbackPointsSwitch:focus-within,
   .videoControlBar .notificationHistorySwitch:focus-within,
   .videoControlBar .commentHistorySwitch:focus-within { pointer-events: auto; }
   .notificationHistorySwitch:focus-visible,
@@ -3214,11 +3411,15 @@ util.addStyle(`
     declare _isSmoothMode: Loose;
     declare _isStalled: Loose;
     declare _playbackRate: Loose;
-    declare _pointer: Loose;
+    declare _pointer: NativeSeekPointerTarget;
     declare _getTimelineGeometry: () => TimelineGeometryClass | null;
     declare applyTransform: Loose;
     declare transformLeft: Loose;
-    constructor(params?: Loose) {
+    constructor(params: {
+      pointer: NativeSeekPointerTarget;
+      getTimelineGeometry: () => TimelineGeometryClass | null;
+      playerState: Loose;
+    }) {
       this._pointer = params.pointer;
       this._getTimelineGeometry = params.getTimelineGeometry;
       this._currentTime = 0;

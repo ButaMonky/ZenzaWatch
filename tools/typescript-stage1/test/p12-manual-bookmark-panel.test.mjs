@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {ManualBookmarkPanel} from '../p12-src/ManualBookmarkPanel.ts';
 import {ManualBookmarkSession} from '../p12-src/ManualBookmarkSession.ts';
-import {addManualBookmark,removeManualBookmark,renameManualBookmark}
+import {updateManualBookmark,addManualBookmark,removeManualBookmark,renameManualBookmark}
   from '../p12-src/ManualBookmarkPolicy.ts';
 const require=createRequire(import.meta.url);
 const {JSDOM}=require('jsdom');
@@ -24,9 +24,13 @@ class Repo{
   const rows=removeManualBookmark(this.rows.get(id)||[],id,bookmarkId);
   this.rows.set(id,rows);return rows;
  }
+ async update(videoId,id,changes,now,duration){
+  const rows=updateManualBookmark(this.rows.get(videoId)||[],videoId,id,changes,now,duration);
+  this.rows.set(videoId,rows);return rows;
+ }
  close(){this.closed++;}
 }
-function harness(){
+function harness(dependencies={}){
  const dom=new JSDOM('<!doctype html><html><body>'+
   '<div id="native"><input id="native-seek" type="range">'+
   '<zenza-seekbar-label class="resumePointer"></zenza-seekbar-label></div>'+
@@ -40,7 +44,8 @@ function harness(){
  let active='sm1',now=100,time=70,next=0;const seeks=[];
  const panel=new ManualBookmarkPanel(root,session,{
   currentVideoId:()=>active,currentTime:()=>time,timestamp:()=>now,
-  newId:()=>('B'+(++next)),seek:seconds=>seeks.push(seconds)
+  newId:()=>('B'+(++next)),seek:seconds=>seeks.push(seconds),
+  ...dependencies
  });
  const button=action=>root.querySelector('[data-bookmark-action="'+action+'"]');
  const close=()=>{panel.dispose();session.dispose();dom.window.close();};
@@ -308,5 +313,87 @@ test('same-text retyping during an in-flight Add remains a new unsaved draft',as
  assert.equal(h.repo.rows.get('sm1')[0].label,'repeat label');
  assert.equal(h.root.querySelector('input[data-bookmark-label]').value,
   'repeat label','same visible text can represent a later edit generation');
+ h.close();
+});
+
+test('audit #253: a previous video pending save cannot block or unlock the next video',async()=>{
+ const releases=[];
+ const h=harness({
+  duration:()=>300,automaticTime:()=>50,
+  editAutomatic:()=>new Promise(resolve=>releases.push(resolve))
+ });
+ const save=()=>h.root.querySelector('[data-point-action="save-automatic"]');
+ await h.session.activate('sm1',300);
+ save().click();await step();
+ assert.equal(releases.length,1);
+ assert.equal(save().disabled,true);
+ assert.equal(save().getAttribute('aria-busy'),'true');
+ h.active('sm2');await h.session.activate('sm2',300);
+ assert.equal(save().disabled,false,'new video may save independently');
+ save().click();await step();
+ assert.equal(releases.length,2);
+ assert.equal(save().disabled,true);
+ releases[0](true);await step();
+ assert.equal(save().disabled,true,'old completion must not unlock the new request');
+ assert.equal(h.root.querySelector('[data-point-status="automatic"]').textContent,
+  '自動で更新される位置は1件だけです。','old success must not claim the new save completed');
+ releases[1](true);await step();
+ assert.equal(save().disabled,false);
+ assert.equal(save().getAttribute('aria-busy'),'false');
+ assert.match(h.root.querySelector('[data-point-status="automatic"]').textContent,/保存しました/);
+ h.close();
+});
+
+test('audit #254: same-video rerender keeps expanded rename fields, focus and caret',async()=>{
+ const h=harness();
+ await h.session.activate('sm1',300);
+ h.button('add').click();await step();
+ await h.session.add('B2',120,101,'second');
+ const details=Array.from(h.root.querySelectorAll('details.zw-bookmark-edit'));
+ assert.equal(details.length,2);
+ details[0].open=true;details[1].open=true;
+ const input=details[0].querySelector('input[data-bookmark-rename-id]');
+ input.value='draft stays';input.focus();input.setSelectionRange(2,7);
+ h.panel.refreshPreferences();
+ const updated=Array.from(h.root.querySelectorAll('details.zw-bookmark-edit'));
+ assert(updated.every(d=>d.open),'all expanded details stay expanded');
+ const focused=updated[0].querySelector('input[data-bookmark-rename-id]');
+ assert.equal(focused.value,'draft stays');
+ assert.equal(h.dom.window.document.activeElement,focused);
+ assert.equal(focused.selectionStart,2);
+ assert.equal(focused.selectionEnd,7);
+ await h.session.add('B3',170,102,'third');
+ assert.equal(h.root.querySelectorAll('details.zw-bookmark-edit[open]').length,2);
+ h.active('sm2');await h.session.activate('sm2',300);
+ await h.session.add('B1',60,103,'new video uses old ID');
+ assert.equal(h.root.querySelector('details.zw-bookmark-edit').open,false,
+  'a different video must not inherit expansion by matching bookmark ID');
+ h.close();
+});
+
+test('shorter video keeps out-of-range bookmarks visible and editable, but cannot seek',async()=>{
+ const h=harness({duration:()=>110});
+ h.repo.rows.set('sm1',[
+  {id:'B1',videoId:'sm1',time:50,label:'safe',createdAt:100,updatedAt:100},
+  {id:'B2',videoId:'sm1',time:115,label:'old scene',createdAt:100,updatedAt:100}
+ ]);
+ await h.session.activate('sm1',110);
+ assert.equal(h.root.querySelectorAll('li').length,2);
+ const oldRow=h.root.querySelector('button[data-bookmark-action="seek"][data-bookmark-id="B2"]').closest('li');
+ assert(oldRow.textContent.includes('現在の動画の長さを超えています'));
+ assert.equal(oldRow.querySelector('[data-bookmark-action="seek"]').disabled,true);
+ assert.equal(h.root.querySelector('button[data-bookmark-action="seek"][data-bookmark-id="B1"]').disabled,false);
+ oldRow.querySelector('[data-bookmark-action="seek"]').click();
+ assert.deepEqual(h.seeks,[]);
+ const field=oldRow.querySelector('[data-bookmark-rename-id="B2"]');
+ field.value='retained';
+ oldRow.querySelector('[data-bookmark-action="rename"]').click();
+ await step();
+ assert.equal(h.repo.rows.get('sm1').find(x=>x.id==='B2').label,'retained');
+ const kept=h.root.querySelector('button[data-bookmark-action="seek"][data-bookmark-id="B2"]').closest('li');
+ kept.querySelector('[data-bookmark-action="remove"]').click();await step();
+ assert.deepEqual(h.repo.rows.get('sm1').map(x=>x.id),['B1']);
+ h.button('seek').click();
+ assert.deepEqual(h.seeks,[50]);
  h.close();
 });

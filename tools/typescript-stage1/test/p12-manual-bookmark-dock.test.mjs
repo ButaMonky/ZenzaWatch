@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {ManualBookmarkDock} from '../p12-src/ManualBookmarkDock.ts';
 import {ManualBookmarkSession} from '../p12-src/ManualBookmarkSession.ts';
-import {addManualBookmark,renameManualBookmark,removeManualBookmark}
+import {updateManualBookmark,addManualBookmark,renameManualBookmark,removeManualBookmark}
   from '../p12-src/ManualBookmarkPolicy.ts';
 const require=createRequire(import.meta.url);
 const {JSDOM}=require('jsdom');
@@ -23,6 +23,10 @@ class Repo {
  async remove(videoId,id){
    const rows=removeManualBookmark(this.rows.get(videoId)||[],videoId,id);
    this.rows.set(videoId,rows);return rows;
+ }
+ async update(videoId,id,changes,now,duration){
+  const rows=updateManualBookmark(this.rows.get(videoId)||[],videoId,id,changes,now,duration);
+  this.rows.set(videoId,rows);return rows;
  }
  close(){this.closed++;}
 }

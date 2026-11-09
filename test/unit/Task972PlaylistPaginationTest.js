@@ -57,10 +57,13 @@ describe('Task972 collection pagination',function(){
   const h=loader();const a=await h.api.load({type:'series',id:3,options:{page:2,pageSize:100}});
   assert.strictEqual(a[0].watchId,'sm101');assert.strictEqual(a.length,100);assert.strictEqual(h.calls.length,1);
  });
- it('honors an explicit fetch budget, carrying safety-limit notice through serialized cache',async()=>{
+ it('honors an explicit fetch budget, never reusing a cross-account private cache',async()=>{
   const h=loader({total:12050});const req={type:'mylist',id:1,maxItems:10000};
   for(let i=0;i<2;i++){const a=await h.api.load(req);assert.strictEqual(a.length,10000);assert(a.playlistLoadInfo?.limited);assert.strictEqual(a.playlistLoadInfo.totalCount,12050);}
-  assert.strictEqual(h.calls.length,20);
+  // #238: each invocation must retrieve its own ten pages from the current
+  // account. Public series/uploader cache serialization is covered above.
+  assert.strictEqual(h.calls.length,40);
+  assert.strictEqual(h.writes.length,0,'private mylist data is never stored');
  });
  it('can follow hasNext even after a short page and deduplicates overlaps',async()=>{
   const h=loader({respond:page=>({meta:{status:200},data:{hasNext:page<3,items:page===1?rows(4):page===2?rows(4,4):rows(2,8)}})});

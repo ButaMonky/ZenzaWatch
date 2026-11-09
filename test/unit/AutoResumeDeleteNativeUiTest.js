@@ -27,6 +27,7 @@ function prepare(){
      element.style.setProperty(key,String(value));
    }}}
  });
+ ctx.TimelineGeometry=loadClass('packages/zenza/src/sceneSearch/TimelineGeometry.js','TimelineGeometry',ctx);
  const Presenter=loadClass('packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter.js',
    'SceneResumeMarkerPresenter',ctx);
  ctx.SceneResumeMarkerPresenter=Presenter;

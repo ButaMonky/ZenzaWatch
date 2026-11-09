@@ -202,6 +202,18 @@ const GateAPI = (() => {
                 case 'update':
                     result = await db.update(data);
                     break;
+                case 'scrubWatchVideoInfo':
+                    if (name !== 'watch-info' || storeName !== 'cache' || !db.scrubWatchVideoInfo) {
+                        throw new TypeError('Invalid legacy watch history cleanup target');
+                    }
+                    result = await db.scrubWatchVideoInfo(data);
+                    break;
+                case 'listSavedPoints':
+                    if (name !== 'watch-info' || storeName !== 'cache' || !db.listSavedPoints) {
+                        throw new TypeError('Invalid saved points target');
+                    }
+                    result = await db.listSavedPoints(data);
+                    break;
                 case 'updateTime':
                     result = await db.updateTime({ key, index, timeout });
                     break;

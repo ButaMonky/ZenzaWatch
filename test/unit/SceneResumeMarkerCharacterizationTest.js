@@ -10,6 +10,7 @@ function setup(){
   Emitter:class {},
   cssUtil:{setProps(...items){changes.push(items);}}
  });
+ ctx.TimelineGeometry=loadClass('packages/zenza/src/sceneSearch/TimelineGeometry.js','TimelineGeometry',ctx);
  const Presenter=loadClass('packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter.js',
   'SceneResumeMarkerPresenter',ctx);
  const renderCalls=[];
@@ -26,6 +27,9 @@ function setup(){
  const owner={
   duration:0,_$view:[{}],$resumePointers:pointers,
   refreshAutoResumePointers:VCB.prototype.refreshAutoResumePointers,
+  _clearTimelinePresentation:VCB.prototype._clearTimelinePresentation,
+  _clearManualBookmarkMarkers:VCB.prototype._clearManualBookmarkMarkers,
+  _clearABRepeatRange:VCB.prototype._clearABRepeatRange,
   storyboard:{load(...args){loads.push(args);}}
  };
  const apply=info=>VCB.prototype._onLoadVideoInfo.call(owner,info);

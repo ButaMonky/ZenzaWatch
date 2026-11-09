@@ -23,7 +23,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
         l: 'lengthSeconds',
         n: 'lastCommentTime',
         likeCount: 'likeCounter',
-        // Task 068: 「ニコニコで人気」をスナップショット側でも近い並び(-_hotMylistCounter)にする
+        // Keep the historical public sort map for parity; _initialize always
+        // maps this legacy '_hot' marker to '-_hotMylistCounter' before sending.
         h: '_hot',
     };
     // 公式検索の日時指定パラメータ -1h -24h -1w -1m
@@ -86,15 +87,6 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
         get context() {
             return this._context;
         }
-        get hotField() {
-            return this._hotField;
-        }
-        get hotFrom() {
-            return this._hotFrom;
-        }
-        get hotTo() {
-            return this._hotTo;
-        }
         _initialize(word, params) {
             if (params._now) {
                 this.now = params._now;
@@ -118,15 +110,13 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                 'lengthSeconds', 'startTime', 'thumbnailUrl'
             ];
             this._context = 'ZenzaWatch';
-            const n = new Date(), now = this.now;
-            if (/^._hot/.test(this.sort)) {
-                // 人気が高い順ソート
-                (() => {
-                    this._hotField = 'mylistCounter';
-                    this._hotFrom = new Date(now - 1 * 24 * 60 * 60 * 1000);
-                    this._hotTo = n;
-                    this._sort = '-_hotMylistCounter';
-                })();
+            const now = this.now;
+            // The old code computed 24h hotField/hotFrom/hotTo but never sent
+            // them: the sort had already been changed from '-_hot' to this key.
+            // Keep the exact current fallback request (including ascending 'h')
+            // until the live API's period-specific contract can be verified.
+            if (params.sort === 'h') {
+                this._sort = '-_hotMylistCounter';
             }
             if (params.f_range &&
                 [F_RANGE.U_1H, F_RANGE.U_24H, F_RANGE.U_1W, F_RANGE.U_30D]
@@ -285,11 +275,6 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             result.push('_limit=' + this.limit);
             result.push('_offset=' + this.offset);
             result.push('_context=' + this.context);
-            if (this.sort === '-_hot') {
-                result.push('hotField=' + this.hotField);
-                result.push('hotFrom=' + this.hotFrom);
-                result.push('hotTo=' + this.hotTo);
-            }
             const filters = this.stringfiedFilters;
             if (filters) {
                 result.push(filters);
@@ -556,7 +541,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             }
             return data;
         };
-        const fetchPage = async (query, page, pageSize) => {
+        const fetchPage = async (query, page, pageSize, isCurrent) => {
+            ensureCurrent(isCurrent);
             const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
             const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
             const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
@@ -578,7 +564,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
         /**
          * @return {Promise<{status:'ok', count:number, list:Object[], engine:'nvapi'}>}
          */
-        const search = async (word, params = {}, maxLimit = 100) => {
+        const search = async (word, params = {}, maxLimit = 100, isCurrent) => {
+            ensureCurrent(isCurrent);
             const query = buildQuery(word, params);
             // page=N は本家検索ページ(32件/ページ)のN ページ目から、と解釈する
             const officialPage = Math.max(parseInt(params.page, 10) || 1, 1);
@@ -599,7 +586,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                 return (apiPage === firstPage ? pageItems.slice(firstSkip) : pageItems).map(toLegacyItem);
             };
             // 1ページ目は単独で取得する（総件数が分かり、失敗時はスナップショット検索へ切り替えるため）
-            const first = await fetchPage(query, firstPage, PAGE_SIZE);
+            const first = await fetchPage(query, firstPage, PAGE_SIZE, isCurrent);
+            ensureCurrent(isCurrent);
             const count = first.totalCount;
             let list = toItems(first, firstPage);
             // Task190: 続きがあるか。hasNextが返っていればそれに従い、無い時だけ従来どおり件数で判断する
@@ -622,8 +610,9 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                 const results = new Array(pages.length);
                 let failedAt = pages.length;
                 for (let i = 0; i < pages.length && i < failedAt; i += SEARCH_CONCURRENCY) {
+                    ensureCurrent(isCurrent);
                     const chunk = pages.slice(i, i + SEARCH_CONCURRENCY);
-                    await Promise.all(chunk.map((pg, k) => fetchPage(query, pg, PAGE_SIZE)
+                    await Promise.all(chunk.map((pg, k) => fetchPage(query, pg, PAGE_SIZE, isCurrent)
                         .then(data => { results[i + k] = data; })
                         .catch(e => {
                         failedAt = Math.min(failedAt, i + k);
@@ -647,6 +636,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                     window.console.warn('nvapi検索: 途中のページで失敗したため、%d件で打ち切ります', list.length);
                 }
             }
+            ensureCurrent(isCurrent);
             // Task190: 結果の状態を返す（既存のstatus:'ok'の契約は変えない）。
             //  complete: 最後まで取れた / truncated: 件数上限・APIのページ上限で止めた（続きはある）
             //  partial: 途中のページが失敗し、その直前までの連続した分だけ / empty: 正常な0件
@@ -666,6 +656,13 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
         return { canHandle, buildQuery, search, toLegacyItem, normalizeConditions };
     })();
     const KIND_NEUTRAL_FOR_SNAPSHOT = ['', 'any', 'all'];
+    // #245: a stale PlayList request must not schedule additional GET pages.
+    const SEARCH_SUPERSEDED = new Error('SEARCH_SUPERSEDED');
+    const ensureCurrent = (check) => {
+        if (check && !check()) {
+            throw SEARCH_SUPERSEDED;
+        }
+    };
     class NicoSearchApiV2Loader {
         static version = new NicoSearchApiV2Version;
         static cacheStorage;
@@ -684,13 +681,15 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             }
             return NicoSearchApiV2Loader.searchBySnapshot(word, params);
         }
-        static async searchBySnapshot(word, params) {
+        static async searchBySnapshot(word, params, isCurrent) {
+            ensureCurrent(isCurrent);
             initializeCrossDomainGate();
             const query = new NicoSearchApiV2Query(word, params);
             const url = API_BASE_URL + '?' + query.toString();
             const version = this.version.isLatest
                 ? this.version.date.getTime()
                 : await this.version.update().then(date => date.getTime());
+            ensureCurrent(isCurrent);
             if (!this.cacheStorage) {
                 this.cacheStorage = new CacheStorage(sessionStorage);
             }
@@ -705,7 +704,9 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             if (cacheData && cacheData.version === version) {
                 return cacheData.data;
             }
+            ensureCurrent(isCurrent);
             return gate.fetch(url).then(res => res.text()).then(text => {
+                ensureCurrent(isCurrent);
                 const result = NicoSearchApiV2Loader.parseResult(text);
                 if (typeof result !== 'number' && result.status === 'ok') {
                     let data = Object.assign(result, { word, params });
@@ -782,26 +783,34 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
         /**
          * 100件以上検索する用
          */
-        static async searchMore(word, params, maxLimit = 300) {
+        static async searchMore(word, params, maxLimit = 300, isCurrent) {
+            ensureCurrent(isCurrent);
             // Task 074: 「再生中の動画の投稿者の動画のみ」。スナップショット検索の userId 絞り込みは
             // 廃止されており(400 QUERY_PARSE_ERROR)、本家検索API(nvapi)も userId を無視するため専用の方法で探す
             if (params && (params.userId || params.channelId)) {
-                return NicoSearchApiV2Loader.searchByOwner(word, params, maxLimit);
+                return NicoSearchApiV2Loader.searchByOwner(word, params, maxLimit, isCurrent);
             }
             // Task 067: 本家と同じ検索API（100件ずつ取得）
             if (!(params && params.useSnapshotSearch) && typeof word === 'string' && NicoSearchNvapi.canHandle(params || {})) {
                 try {
-                    const result = await NicoSearchNvapi.search(word, params || {}, maxLimit);
+                    const result = await NicoSearchNvapi.search(word, params || {}, maxLimit, isCurrent);
+                    ensureCurrent(isCurrent);
                     window.console.info('%c検索(nvapi): "%s" %d件/全%d件', 'background: lightgreen;', word, result.list.length, result.count);
                     return result;
                 }
                 catch (e) {
+                    if (e === SEARCH_SUPERSEDED) {
+                        throw e;
+                    }
+                    ensureCurrent(isCurrent);
                     window.console.warn('本家検索API(nvapi)での検索に失敗したため、スナップショット検索を使います', e);
                 }
             }
             // Task189: スナップショット検索では本家専用の条件（長さ種別・チャンネル掲載・kind・ジャンル）を反映できない。
             // 黙って同じ結果にせず、適用していない条件として返す
-            const result = await NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit);
+            ensureCurrent(isCurrent);
+            const result = await NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit, isCurrent);
+            ensureCurrent(isCurrent);
             const p = params || {};
             const unapplied = ['selectContentType', 'channelVideoListingStatus', 'kind']
                 .filter(key => p[key] !== undefined && p[key] !== null && !KIND_NEUTRAL_FOR_SNAPSHOT.includes(String(p[key])));
@@ -822,7 +831,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
          * 注意: スナップショットは約1日1回の更新のため、投稿から1日以内の動画はタグ・語が一致しても出ない。
          *       チャンネル動画は投稿動画一覧のAPIが無いため未対応。ジャンルの絞り込みは反映しない。
          */
-        static async searchByOwner(word, params = {}, maxLimit = 300) {
+        static async searchByOwner(word, params = {}, maxLimit = 300, isCurrent) {
+            ensureCurrent(isCurrent);
             if (params.channelId && !params.userId) {
                 throw Object.assign(new Error('チャンネル動画では「投稿者の動画のみ」を使えません'), { status: 'fail' });
             }
@@ -834,9 +844,11 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             const headers = { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' };
             const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
             const fetchUserPage = async (page) => {
+                ensureCurrent(isCurrent);
                 const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
                 const res = await net.fetch(url, { credentials: 'include', headers });
                 const json = await res.json();
+                ensureCurrent(isCurrent);
                 if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
                     throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
                 }
@@ -849,6 +861,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             const lastPage = Math.ceil(total / 100);
             const missingOwnerPages = [];
             for (let pg = 2; pg <= lastPage; pg += 4) {
+                ensureCurrent(isCurrent);
                 const chunk = [];
                 for (let k = pg; k < pg + 4 && k <= lastPage; k++) {
                     chunk.push(k);
@@ -859,6 +872,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                     missingOwnerPages.push(k);
                     return null;
                 }))));
+                ensureCurrent(isCurrent);
                 for (const data of pages) {
                     // A failed page must not discard successful later siblings in this batch.
                     if (!data) {
@@ -873,6 +887,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             const matched = new Set();
             const ids = videos.map(v => v.id);
             for (let i = 0; i < ids.length; i += 100) {
+                ensureCurrent(isCurrent);
                 const batch = ids.slice(i, i + 100);
                 const q = [
                     `q=${encodeURIComponent(word)}`,
@@ -886,16 +901,103 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                 batch.forEach((id, n) => q.push(`filters[contentId][${n}]=${encodeURIComponent(id)}`));
                 const res = await gate.fetch(API_BASE_URL + '?' + q.join('&'));
                 const json = NicoSearchApiV2Loader._jsonParse(await res.text());
+                ensureCurrent(isCurrent);
                 if (!json || !json.meta || json.meta.status !== 200) {
                     throw Object.assign(new Error('スナップショット検索に失敗しました'), { status: 'fail' });
                 }
                 (json.data || []).forEach(item => matched.add(item.contentId));
             }
-            // 3. 期間・長さの絞り込みと並び順
-            const now = Date.now();
-            const fRange = params.f_range * 1;
-            const rangeMs = { 4: 3600e3, 1: 86400e3, 2: 7 * 86400e3, 3: 31 * 86400e3, 5: 365 * 86400e3 }[fRange];
-            const lRange = params.l_range * 1;
+            // 3. Apply owner-only conditions locally. Never report unsupported inputs as applied.
+            const unapplied = [];
+            const warn = (key) => {
+                if (!unapplied.includes(key)) {
+                    unapplied.push(key);
+                }
+            };
+            const has = (value) => value !== undefined && value !== null && value !== '';
+            const parseDate = (value, endOfDay = false) => {
+                if (typeof value === 'number') {
+                    return Number.isFinite(value) ? value : null;
+                }
+                if (typeof value !== 'string' || !value.trim()) {
+                    return null;
+                }
+                const raw = value.trim();
+                const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+                if (dayOnly) {
+                    const [year, month, day] = raw.split('-').map(Number);
+                    if (new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== raw) {
+                        return null;
+                    }
+                }
+                // Date-only search conditions are inclusive JST calendar dates.
+                const timestamp = Date.parse(dayOnly ?
+                    raw + (endOfDay ? 'T23:59:59.999+09:00' : 'T00:00:00+09:00') : raw);
+                return Number.isFinite(timestamp) ? timestamp : null;
+            };
+            const now = (typeof params._now === 'number' && Number.isFinite(params._now)) ?
+                params._now : Date.now();
+            const fRange = Number(params.f_range);
+            const rangeMs = { 4: 3600e3, 1: 86400e3, 2: 7 * 86400e3,
+                3: 31 * 86400e3, 5: 365 * 86400e3 }[fRange];
+            let minTime = null;
+            let maxTime = null;
+            if (has(params.f_range)) {
+                if (rangeMs) {
+                    minTime = now - rangeMs;
+                }
+                else {
+                    warn('f_range');
+                }
+            }
+            const applyDate = (raw, key, upper) => {
+                if (!has(raw)) {
+                    return;
+                }
+                const value = parseDate(raw, upper);
+                if (value === null) {
+                    warn(key);
+                    return;
+                }
+                if (upper) {
+                    maxTime = value;
+                }
+                else {
+                    minTime = value;
+                }
+            };
+            applyDate(params.start, 'start', false);
+            applyDate(params.end, 'end', true);
+            applyDate(params.dateFrom, 'dateFrom', false);
+            applyDate(params.dateTo, 'dateTo', true);
+            const applyUnix = (raw, key, upper) => {
+                if (!has(raw)) {
+                    return;
+                }
+                const seconds = Number(raw);
+                if (!Number.isFinite(seconds) || seconds < 0) {
+                    warn(key);
+                    return;
+                }
+                if (upper) {
+                    maxTime = seconds * 1000;
+                }
+                else {
+                    minTime = seconds * 1000;
+                }
+            };
+            applyUnix(params.utimeFrom, 'utimeFrom', false);
+            applyUnix(params.utimeTo, 'utimeTo', true);
+            const lRange = Number(params.l_range);
+            if (has(params.l_range) && lRange !== 1 && lRange !== 2) {
+                warn('l_range');
+            }
+            const commentMinimum = has(params.commentCount) ? Number(params.commentCount) : null;
+            const filterComments = commentMinimum !== null && Number.isSafeInteger(commentMinimum) &&
+                commentMinimum >= 0;
+            if (commentMinimum !== null && !filterComments) {
+                warn('commentCount');
+            }
             let list = videos.filter(v => matched.has(v.id)).filter(v => {
                 const sec = v.duration || 0;
                 if (lRange === 1 && sec > 300) {
@@ -904,34 +1006,88 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                 if (lRange === 2 && sec < 1200) {
                     return false;
                 }
-                if (rangeMs && v.registeredAt && now - new Date(v.registeredAt).getTime() > rangeMs) {
-                    return false;
+                if (minTime !== null || maxTime !== null) {
+                    const timestamp = Date.parse(v.registeredAt || '');
+                    if (!Number.isFinite(timestamp)) {
+                        return false;
+                    }
+                    if (minTime !== null && timestamp < minTime) {
+                        return false;
+                    }
+                    if (maxTime !== null && timestamp > maxTime) {
+                        return false;
+                    }
+                }
+                if (filterComments) {
+                    const comments = Number(v.count?.comment);
+                    if (!Number.isSafeInteger(comments) || comments < commentMinimum) {
+                        return false;
+                    }
                 }
                 return true;
             });
             const count = (v) => v.count || {};
             const SORT = {
                 f: v => new Date(v.registeredAt || 0).getTime(),
-                v: v => count(v).view || 0,
-                r: v => count(v).comment || 0,
-                m: v => count(v).mylist || 0,
-                likeCount: v => count(v).like || 0,
+                v: v => Number(count(v).view) || 0,
+                r: v => Number(count(v).comment) || 0,
+                m: v => Number(count(v).mylist) || 0,
+                likeCount: v => Number(count(v).like) || 0,
                 l: v => v.duration || 0
             };
-            const key = SORT[params.sort] || SORT.f;
+            const sortAliases = {
+                registeredAt: 'f', viewCount: 'v', commentCount: 'r',
+                mylistCount: 'm', duration: 'l'
+            };
+            const sortName = String(params.sort || 'f');
+            const sortKey = sortAliases[sortName] || sortName;
+            if (has(params.sort) && !SORT[sortKey]) {
+                warn('sort');
+            }
+            const key = SORT[sortKey] || SORT.f;
+            if (has(params.order) && !['a', 'asc', 'd', 'desc'].includes(String(params.order))) {
+                warn('order');
+            }
             const dir = (params.order === 'a' || params.order === 'asc') ? 1 : -1;
             list.sort((a, b) => (key(a) - key(b)) * dir);
+            if (has(params.channelId)) {
+                warn('channelId');
+            }
+            if (has(params.genre) && params.genre !== 'all') {
+                warn('genre');
+            }
+            if (has(params.selectContentType)) {
+                warn('selectContentType');
+            }
+            if (has(params.channelVideoListingStatus)) {
+                warn('channelVideoListingStatus');
+            }
+            if (has(params.kind) && !['any', 'all'].includes(String(params.kind))) {
+                warn('kind');
+            }
+            // The official search UI's page=N starts at (N-1)*32, not at item N.
+            const page = has(params.page) ? Number(params.page) : 1;
+            const validPage = Number.isSafeInteger(page) && page >= 1 && page <= 157;
+            if (!validPage) {
+                warn('page');
+            }
+            const startOffset = validPage ? (page - 1) * 32 : 0;
+            ensureCurrent(isCurrent);
             const nvapi = NicoSearchApiV2Loader.nvapi;
-            const result = list.slice(0, limit).map(v => nvapi.toLegacyItem(v));
+            const result = list.slice(startOffset, startOffset + limit).map(v => nvapi.toLegacyItem(v));
             window.console.info('%c投稿者の動画から検索: "%s" 投稿動画%d件中 %d件一致', 'background: lightgreen;', word, videos.length, list.length);
             const response = { status: 'ok', count: list.length, list: result, engine: 'owner', word, params };
+            if (unapplied.length) {
+                response.unappliedConditions = unapplied;
+            }
             if (missingOwnerPages.length) {
                 response.isPartial = true;
                 response.missingOwnerPages = missingOwnerPages.sort((a, b) => a - b);
             }
             return response;
         }
-        static async searchMoreBySnapshot(word, params, maxLimit = 300) {
+        static async searchMoreBySnapshot(word, params, maxLimit = 300, isCurrent) {
+            ensureCurrent(isCurrent);
             const ONCE_LIMIT = 100; // 一回で取れる件数
             const PER_PAGE = 25; // 検索ページで1ページあたりに表示される件数
             const MAX_PAGE = 64; // 25 * 64 = 1600
@@ -941,19 +1097,24 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             // Task644 (VS-PARAMS-MUTATE-003): 下のページ送りで page を書き換えるため、
             // 呼び出し元の検索条件オブジェクトではなく複製を使う。
             params = Object.assign({}, params || {});
-            const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params);
+            const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params, isCurrent);
+            ensureCurrent(isCurrent);
             const currentPage = params.page ? parseInt(params.page, 10) : 1;
             const currentOffset = (currentPage - 1) * PER_PAGE;
-            if (result.count <= ONCE_LIMIT) {
+            if (result.count <= ONCE_LIMIT || maxLimit <= ONCE_LIMIT) {
+                result.list = result.list.slice(0, maxLimit);
                 return result;
             }
             const searchCount = Math.min(Math.ceil((result.count - currentOffset) / PER_PAGE) - 1, Math.ceil((maxLimit - ONCE_LIMIT) / ONCE_LIMIT));
             //// TODO: 途中で失敗したらそこまででもいいので返す？
             for (let i = 1; i <= searchCount; i++) {
+                ensureCurrent(isCurrent);
                 await sleep(300 * i);
+                ensureCurrent(isCurrent);
                 let page = currentPage + i * (ONCE_LIMIT / PER_PAGE);
                 console.log('searchNext: "%s"', word, page, params);
-                let res = await NicoSearchApiV2Loader.searchBySnapshot(word, Object.assign(params, { page }));
+                let res = await NicoSearchApiV2Loader.searchBySnapshot(word, Object.assign(params, { page }), isCurrent);
+                ensureCurrent(isCurrent);
                 if (res && res.list && res.list.length) {
                     result.list = result.list.concat(res.list);
                 }
@@ -961,6 +1122,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
                     break;
                 }
             }
+            result.list = result.list.slice(0, maxLimit);
             return Object.assign(result, { word, params });
         }
         static _jsonParse(result) {

@@ -20,10 +20,78 @@ declare const StoryboardView: new (params: Loose) => Loose;
 declare const StoryboardInfoModel: new (data: Loose) => Loose;
 declare const SeekBarThumbnail: Loose;
 declare const StoryboardWorker: Loose;
+declare const StoryboardCacheDb: {get(key:string):Promise<Loose>};
 declare const global: {debug: Loose};
 
 
 class Storyboard extends Emitter {
+  declare _savedPreviewInfo:Map<string,{refs:number;promise:Promise<Loose>}>|undefined;
+  declare _savedPreviewBytes:Map<object,{refs:number;url:string}>|undefined;
+  /** Independent passive sprite crop; never moves or seeks the live preview canvas.
+   * Historical videos use cached bytes only: opening a library must not start
+   * video sessions or fetch every storyboard sheet in the user's history. */
+  createSavedPreview(host:HTMLElement,videoId:string,time:number):()=>void {
+    let disposed=false,revision=0,releaseImage:(()=>void)|null=null;
+    host.textContent='画像なし';
+    host.style.position='relative';host.style.overflow='hidden';
+    host.setAttribute('role','img');host.setAttribute('aria-label','場面画像を利用できません');
+    if(!Number.isFinite(time)||time<0||typeof videoId!=='string'||!videoId||
+       this.config?.props?.enableStoryboard===false)return ()=>{};
+    const infos=this._savedPreviewInfo??=(new Map());
+    const bytes=this._savedPreviewBytes??=(new Map());
+    const isCurrent=()=>this._currentVideoWatchId===videoId&&this.model?.isAvailable===true;
+    let infoLease: {refs:number;promise:Promise<Loose>}|undefined;
+    const cached=()=>{
+      if(infoLease)return infoLease.promise;
+      infoLease=infos.get(videoId);
+      if(!infoLease){
+        const pending=Promise.resolve().then(async()=>{
+          for(const type of ['domand','dmc']){
+            const raw=await StoryboardCacheDb.get(videoId+'_'+type).catch(()=>null);
+            if(raw?.watchId===videoId&&raw.status==='ok'&&raw.storyboard)return raw;
+          }
+          return null;
+        });
+        infoLease={refs:0,promise:pending};infos.set(videoId,infoLease);
+      }
+      infoLease.refs++;return infoLease.promise;
+    };
+    const draw=async()=>{
+      const seq=++revision;
+      releaseImage?.();releaseImage=null;host.textContent='画像なし';
+      if(this.config?.props?.enableStoryboard===false)return;
+      const live=isCurrent(),raw=live?this.model.rawData:await cached();
+      if(disposed||seq!==revision||!raw||raw.watchId!==videoId)return;
+      const model=new StoryboardInfoModel(raw);
+      if(!model.isAvailable||model.cellCount<=0||time>model.duration)return;
+      const pos=model.getThumbnailPosition(time*1000),page=raw.storyboard.images[pos.page];
+      let src:string;
+      if(page?.buffer&&Object.prototype.toString.call(page.buffer)==='[object ArrayBuffer]'){
+        const key=page.buffer as object;
+        let entry=bytes.get(key);
+        if(!entry){entry={refs:0,url:URL.createObjectURL(new Blob([page.buffer]))};bytes.set(key,entry);}
+        entry.refs++;src=entry.url;
+        releaseImage=()=>{if(--entry!.refs===0){URL.revokeObjectURL(entry!.url);bytes.delete(key);}};
+      }else{
+        // Only the already-open current video may reuse its live URL.
+        if(!live||typeof page?.url!=='string'||!/^https?:\/\//.test(page.url))return;
+        src=page.url;
+      }
+      const image=host.ownerDocument.createElement('img');image.alt='';image.draggable=false;image.crossOrigin='anonymous';
+      image.style.cssText=`position:absolute;max-width:none;width:${model.cols*100}%;height:${model.rows*100}%;left:${-pos.col*100}%;top:${-pos.row*100}%;pointer-events:none;`;
+      image.onload=()=>{if(!disposed&&seq===revision){host.setAttribute('aria-label','保存時刻付近の場面画像');}};
+      image.onerror=()=>{if(!disposed&&seq===revision){host.textContent='画像なし';releaseImage?.();releaseImage=null;}};
+      host.style.aspectRatio=String(model.cellWidth)+' / '+String(model.cellHeight);
+      host.replaceChildren(image);image.src=src;
+    };
+    const update=()=>{void draw().catch(()=>{if(!disposed)host.textContent='画像なし';});};
+    this.on?.('update',update);this.on?.('reset',update);update();
+    return ()=>{if(disposed)return;disposed=true;revision++;releaseImage?.();releaseImage=null;
+      (this as Loose).off?.('update',update);(this as Loose).off?.('reset',update);
+      if(infoLease&&--infoLease.refs===0&&infos.get(videoId)===infoLease)infos.delete(videoId);
+      host.replaceChildren();
+    };
+  }
   declare _loadingWatchId: Loose;
   declare _requestId: Loose;
   declare _watchId: Loose;

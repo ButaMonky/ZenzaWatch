@@ -36,13 +36,51 @@ function pair(name){
   const spec=NICO_API_BY_NAME[name];
   return {before:read(spec.fixture),after:read(spec.runtime),name};
 }
-async function compare(mod,label,run,opt={}){
+async function compare(mod,label,run,opt={},policy={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(mod.before,mod.name,a.globals),B=loadLegacy(mod.after,mod.name,b.globals);
   const ra=await settle(()=>run(A,a)),rb=await settle(()=>run(B,b));
   await tick();
-  assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
-  assert.deepEqual(b.log,a.log,label+' side effects');
+  const current=snapshot(rb),previous=snapshot(ra),currentLog=snapshot(b.log);
+  if(mod.name==='WatchInfoCacheDb'){
+    // The maintained implementation intentionally retains ONE automatic resume
+    // position per video; the frozen pre-Task646 snapshot retained TEN. Assert
+    // both exact capacities rather than dropping the update request comparison.
+    const updates=currentLog.filter(entry=>entry[0]==='update');
+    const oldUpdates=a.log.filter(entry=>entry[0]==='update');
+    assert.equal(updates.length,oldUpdates.length,label+' update count unchanged');
+    for(let i=0;i<updates.length;i++){
+      assert.equal(updates[i][1].limits.resume,1,label+' current one-record policy');
+      assert.equal(oldUpdates[i][1].limits.resume,10,label+' frozen ten-record baseline');
+      updates[i][1].limits.resume=10;
+    }
+  }
+  if(policy.expectPublicSnapshot){
+    // #255 intentionally removes authentication-bearing getters from the
+    // cached videoInfo. Only this subfield may differ from the legacy fixture.
+    const nowUpdate=currentLog.find(e=>e[0]==='update');
+    const oldUpdate=a.log.find(e=>e[0]==='update');
+    assert.ok(nowUpdate&&oldUpdate);
+    const safe=nowUpdate[1].patch.videoInfo;
+    assert.equal(safe.videoId,'sm9');
+    assert.equal(Object.prototype.hasOwnProperty.call(safe,'raw'),false);
+    nowUpdate[1].patch.videoInfo=oldUpdate[1].patch.videoInfo;
+    current.value.videoInfo=previous.value.videoInfo;
+  }
+  if(policy.expectResumeOverrideClear){
+    // Current watch history deliberately clears stale manual overrides when
+    // ordinary nonzero playback time is saved; the pre-Task646 fixture lacks
+    // this field. Assert this *specific* difference, retain all other parity.
+    assert.equal(current.ok,true,label+' must commit successfully');
+    assert.equal(current.value.resumeOverride,null,label+' clears stale override');
+    delete current.value.resumeOverride;
+    const updates=currentLog.filter(entry=>entry[0]==='update');
+    assert.equal(updates.length,1,label+' sends exactly one update');
+    assert.equal(updates[0][1].patch.resumeOverride,null,label+' reset persisted atomically');
+    delete updates[0][1].patch.resumeOverride;
+  }
+  assert.deepEqual(current,previous,label+' unchanged fields');
+  assert.deepEqual(currentLog,a.log,label+' unchanged side effects');
   return ra;
 }
 
@@ -63,36 +101,9 @@ test('ThumbInfoCacheDb: open, 90-day GC per open, put/get/delete/close',async()=
 });
 
 const watch=pair('WatchInfoCacheDb');
-// The canonical current runtime deliberately clears a manual resume override
-// on positive automatic writes, and retains only the latest resume point.
-// Keep all other legacy request/response and error behavior under comparison.
-async function compareWatchPut(label,run,opt={}){
-  const a=world(opt),b=world(opt);
-  const A=loadLegacy(watch.before,watch.name,a.globals);
-  const B=loadLegacy(watch.after,watch.name,b.globals);
-  const oldResult=snapshot(await settle(()=>run(A,a)));
-  const newResult=snapshot(await settle(()=>run(B,b)));
-  const sameResult=structuredClone(newResult);
-  if(sameResult?.ok && sameResult.value && typeof sameResult.value==='object' &&
-      Object.hasOwn(sameResult.value,'resumeOverride')){
-    assert.equal(sameResult.value.resumeOverride,null,label+' resets stale manual position');
-    delete sameResult.value.resumeOverride;
-  }
-  assert.deepEqual(sameResult,oldResult,label+' legacy record fields');
-  const oldLog=structuredClone(a.log),newLog=structuredClone(b.log);
-  for(const event of newLog){
-    if(event[0]!=='update')continue;
-    const req=event[1];
-    if(req?.patch && Object.hasOwn(req.patch,'resumeOverride')){
-      assert.equal(req.patch.resumeOverride,null,label+' clear override only');
-      delete req.patch.resumeOverride;
-    }
-    assert.equal(req?.limits?.resume,1,label+' retains exactly one automatic point');
-    req.limits.resume=10; // the pre-migration fixture kept ten points.
-  }
-  assert.deepEqual(newLog,oldLog,label+' unchanged non-resume side effects');
-}
-// A read is intentionally split from the best-effort updatedAt write.
+// The Watch cache now intentionally separates a readonly history snapshot from
+// the best-effort updatedAt write. Retain full legacy parity for everything
+// except the single, explicitly asserted get/updateTime operation split.
 async function compareWatchReadTouch(label,run,opt={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(watch.before,watch.name,a.globals);
@@ -121,15 +132,45 @@ async function compareWatchReadTouch(label,run,opt={}){
 const videoInfo=(extra={})=>({videoId:'sm9',threadId:'1173108780',postedAt:'2007-03-06T00:33:00+09:00',owner:{linkId:'user/4'},
   toJSON(){return {raw:true,videoId:'sm9'};},...extra});
 test('WatchInfoCacheDb: update request shape and acknowledgement',async()=>{
-  await compareWatchPut('full put',d=>d.put('sm9',{videoInfo:videoInfo(),threadInfo:{t:1},heatMap:[1,2],config:{c:1},
-    currentTime:12.5,watchCount:1,comment:{text:'x'}}));
-  await compareWatchPut('minimal put',d=>d.put('sm9'));
-  await compareWatchPut('videoInfo without toJSON/owner',d=>d.put('so1',{videoInfo:{videoId:'',threadId:'x',postedAt:'bad'},currentTime:0,watchCount:2}));
-  await compareWatchPut('negative/NaN time, falsy extras',d=>d.put('sm1',{currentTime:NaN,threadInfo:0,heatMap:'',config:null,comment:''}));
+  await compare(watch,'full put',d=>d.put('sm9',{videoInfo:videoInfo(),threadInfo:{t:1},heatMap:[1,2],config:{c:1},
+    currentTime:12.5,watchCount:1,comment:{text:'x'}}),{}, {expectResumeOverrideClear:true,expectPublicSnapshot:true});
+  await compare(watch,'minimal put',d=>d.put('sm9'));
+  await compare(watch,'videoInfo without toJSON/owner',d=>d.put('so1',{videoInfo:{videoId:'',threadId:'x',postedAt:'bad'},currentTime:0,watchCount:2}));
+  await compare(watch,'negative/NaN time, falsy extras',d=>d.put('sm1',{currentTime:NaN,threadInfo:0,heatMap:'',config:null,comment:''}));
   for(const [i,res] of [null,'ok',{watchId:'other'},{}].entries())
-    await compareWatchPut('unacknowledged '+i,d=>d.put('sm9',{}),{updateResult:()=>res});
-  await compareWatchPut('best effort swallows',d=>d.putBestEffort('sm9',{}),{updateResult:()=>null});
-  await compareWatchPut('best effort success',d=>d.putBestEffort('sm9',{watchCount:1}));
+    await compare(watch,'unacknowledged '+i,d=>d.put('sm9',{}),{updateResult:()=>res});
+  await compare(watch,'best effort swallows',d=>d.putBestEffort('sm9',{}),{updateResult:()=>null});
+  await compare(watch,'best effort success',d=>d.putBestEffort('sm9',{watchCount:1}));
+});
+
+test('#255: videoInfo history snapshots never serialize playback auth material',async()=>{
+  const w=world();
+  const d=loadLegacy(watch.after,'WatchInfoCacheDb',w.globals);
+  const sampleInfo={
+    ...videoInfo({title:'公開タイトル',thumbnail:'https://example.test/thumb.jpg',
+      count:{comment:5,view:12},owner:{linkId:'user/4',name:'投稿者'}}),
+    csrfToken:'TEST_ONLY_CSRF',watchAuthKey:'TEST_ONLY_AUTH',
+    playlistToken:'TEST_ONLY_PLAYLIST',seekToken:'TEST_ONLY_SEEK',
+    domandInfo:{accessRightKey:'TEST_ONLY_KEY'},
+    dmcInfo:{signature:'TEST_ONLY_SIG',token:'TEST_ONLY_DMC_TOKEN'},
+    toJSON(){throw Error('Unsafe videoInfo getter enumeration');}
+  };
+  const saved=await d.put('sm9',{videoInfo:sampleInfo});
+  assert.equal(saved.watchId,'sm9');
+  const updates=w.log.filter(e=>e[0]==='update');
+  assert.equal(updates.length,1);
+  const safe=updates[0][1].patch.videoInfo;
+  assert.equal(safe.title,'公開タイトル');
+  assert.equal(safe.thumbnail,'https://example.test/thumb.jpg');
+  assert.equal(safe.count.view,12);
+  assert.equal(safe.owner.name,'投稿者');
+  for(const marker of ['TEST_ONLY_CSRF','TEST_ONLY_AUTH','TEST_ONLY_PLAYLIST',
+    'TEST_ONLY_SEEK','TEST_ONLY_KEY','TEST_ONLY_SIG','TEST_ONLY_DMC_TOKEN']){
+    assert.equal(JSON.stringify(safe).includes(marker),false,'must not persist '+marker);
+  }
+  for(const field of ['csrfToken','watchAuthKey','playlistToken','seekToken','domandInfo','dmcInfo']){
+    assert.equal(Object.prototype.hasOwnProperty.call(safe,field),false,field+' is forbidden');
+  }
 });
 
 test('WatchInfoCacheDb: explicit manual 0s is retained and normal resume remains bounded',async()=>{
@@ -224,7 +265,17 @@ test('ItemDataConverter: legacy list items',async()=>{
     mylist_counter:3,view_counter:4,thumbnail_url:'u',first_retrieve:1,update_time:2},create_time:3,description:'d'}),
     C.fromDeflistItem({item_data:{video_id:'so2',watch_id:'9',title:'t',first_retrieve:1,update_time:2},create_time:3})]);
   await nqCompare('sort text',({ItemDataConverter:C})=>[C.makeSortText('第一話 12 ３'),C.makeSortText('')]);
-  await nqCompare('bad item throws',({ItemDataConverter:C})=>C.fromFlapiMylistItem({id:'sm1',title:'t',first_retrieve:'bad'}));
+  // Audit #266 deliberately changes malformed timestamps from throwing to a safe fallback.
+  // Keep legacy parity for valid inputs above, but assert the intended exception boundary separately.
+  const converterSubset='({NicoQuery, ItemDataConverter})';
+  const oldConverter=loadLegacy(nq.before,converterSubset,nqWorld().globals).ItemDataConverter;
+  const newConverter=loadLegacy(nq.after,converterSubset,nqWorld().globals).ItemDataConverter;
+  const malformed={id:'sm1',title:'t',first_retrieve:'bad'};
+  assert.equal((await settle(()=>oldConverter.fromFlapiMylistItem(malformed))).ok,false,'legacy invalid date throws');
+  const recovered=newConverter.fromFlapiMylistItem(malformed);
+  assert.equal(recovered.postedAt,'1970-01-01T00:00:00.000Z');
+  assert.equal(recovered.createdAt,recovered.postedAt);
+  assert.equal(recovered.updatedAt,recovered.postedAt);
 });
 
 // ---- Task647 fixes on Task646 modules ----

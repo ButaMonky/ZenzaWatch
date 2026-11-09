@@ -72,10 +72,12 @@ interface ThumbCacheDb {
 declare const ThumbInfoCacheDb: {open(): Promise<ThumbCacheDb>};
 
 interface IdbStore {
+  listSavedPoints?(data:{afterKey?:string|null;maxRecords?:number}):Promise<unknown>;
   close(): Promise<unknown>;
   put(data: unknown, transfer?: unknown): Promise<unknown>;
   get(query: {key?: unknown; index?: unknown; timeout?: unknown}): Promise<unknown>;
   update(data: unknown): Promise<unknown>;
+  scrubWatchVideoInfo?(data: {afterKey?: string | null; maxRecords?: number}): Promise<unknown>;
   updateTime(query: {key?: unknown; index?: unknown; timeout?: unknown}): Promise<unknown>;
   delete(query: {key?: unknown; index?: unknown; timeout?: unknown}): Promise<unknown>;
   gc(expireTime: unknown, index: unknown): Promise<unknown>;
@@ -309,6 +311,18 @@ const GateAPI: GateAPIClient = (() => {
           break;
         case 'update':
           result = await db.update(data);
+          break;
+        case 'scrubWatchVideoInfo':
+          if (name !== 'watch-info' || storeName !== 'cache' || !db.scrubWatchVideoInfo) {
+            throw new TypeError('Invalid legacy watch history cleanup target');
+          }
+          result = await db.scrubWatchVideoInfo(data as {afterKey?: string | null; maxRecords?: number});
+          break;
+        case 'listSavedPoints':
+          if(name!=='watch-info'||storeName!=='cache'||!db.listSavedPoints){
+            throw new TypeError('Invalid saved points target');
+          }
+          result=await db.listSavedPoints(data as {afterKey?:string|null;maxRecords?:number});
           break;
         case 'updateTime':
           result = await db.updateTime({key, index, timeout});

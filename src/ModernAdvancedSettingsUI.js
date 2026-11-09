@@ -912,6 +912,53 @@ class ModernAdvancedSettingsUI {
         }
         return icon;
     }
+    _renderScreenPresetOrderControls() {
+        const host = this.doc.createElement('div');
+        host.style.cssText = 'width:100%;display:grid;gap:12px';
+        const list = this.model.screenFilterPresetList();
+        for (const user of [false, true]) {
+            const group = this.doc.createElement('fieldset');
+            group.style.cssText = 'min-width:0;border:1px solid #48515c;border-radius:8px;padding:10px';
+            const legend = this.doc.createElement('legend');
+            legend.textContent = user ? '保存したプリセット' : '標準プリセット';
+            group.append(legend);
+            const presets = list.filter(p => !!p.user === user);
+            if (!presets.length) {
+                const empty = this.doc.createElement('p');
+                empty.textContent = '保存したプリセットはありません。画面フィルターで保存できます。';
+                group.append(empty);
+            }
+            presets.forEach((preset, index) => {
+                const row = this.doc.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 0;flex-wrap:wrap';
+                const label = this.doc.createElement('span');
+                label.textContent = preset.label;
+                label.style.cssText = 'flex:1;min-width:80px;overflow-wrap:anywhere';
+                row.append(label);
+                for (const [caption, offset] of [['上へ', -1], ['下へ', 1], ['先頭へ', -index]]) {
+                    const button = this._button(caption, 'data-zw-screen-preset', preset.id, 'zw-modern-plainbtn');
+                    button.dataset.zwScreenPresetMove = String(offset);
+                    button.setAttribute('aria-label', preset.label + 'を' + caption);
+                    button.disabled = offset === 0 || (offset < 0 && index === 0) || (offset > 0 && index === presets.length - 1);
+                    button.addEventListener('click', () => {
+                        if (!this.model.moveScreenFilterPreset(preset.id, offset)) {
+                            return;
+                        }
+                        this._renderCards();
+                        this._refreshFooter();
+                        const card = this.cards?.querySelector('[data-zw-id="screenFilter.presetOrder"]');
+                        const next = Array.from(card?.querySelectorAll('[data-zw-screen-preset]') || [])
+                            .find(b => b.dataset.zwScreenPreset === preset.id && b.textContent === caption && !b.disabled);
+                        (next || card?.querySelector('[data-zw-reset-item]'))?.focus();
+                    });
+                    row.append(button);
+                }
+                group.append(row);
+            });
+            host.append(group);
+        }
+        return host;
+    }
     _createCard(descriptor) {
         const card = this.doc.createElement('article');
         card.className = 'zw-modern-card';
@@ -1024,6 +1071,9 @@ class ModernAdvancedSettingsUI {
             else {
                 host.textContent = '複合NGエディターを読み込めませんでした。';
             }
+        }
+        else if (descriptor.type === 'screen-preset-order') {
+            controls.append(this._renderScreenPresetOrderControls());
         }
         else if (descriptor.type === 'related-order') {
             controls.append(this._renderRelatedOrderControls());

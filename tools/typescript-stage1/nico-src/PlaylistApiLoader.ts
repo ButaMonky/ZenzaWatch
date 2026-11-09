@@ -52,6 +52,11 @@ export interface PlaylistApiLoaderClient {
 
 const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
   const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
+  // #238: These endpoints can return account-private rows. Without a reliable
+  // viewer identity, URL-only sessionStorage keys are unsafe across login changes.
+  // Cache only public series / uploader collections; leave private loads live.
+  const mayUseSharedCache = (type: PlaylistType): boolean =>
+    type === 'series' || type === 'user-uploaded';
   let cacheStorage: PlaylistCacheStorage | null = null;
 
   class PlaylistApiLoader {
@@ -88,7 +93,7 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
       }
 
       // nvapi でソートされた結果をもらうのでそのままキャッシュする
-      const cacheData = (cacheStorage as PlaylistCacheStorage).getItem(cacheKey);
+      const cacheData = mayUseSharedCache(type) ? (cacheStorage as PlaylistCacheStorage).getItem(cacheKey) : null;
       if (cacheData) {
         return cacheData;
       }
@@ -105,7 +110,9 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
       }
 
       const data = result.data.items;
-      (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+      if (mayUseSharedCache(type)) {
+        (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+      }
       return data;
     }
 
@@ -134,7 +141,8 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
         return result;
       };
       checkCurrent();
-      const cached = (cacheStorage as PlaylistCacheStorage).getItem(cacheKey) as Collection | null;
+      const cached = (mayUseSharedCache(type) ?
+        (cacheStorage as PlaylistCacheStorage).getItem(cacheKey) : null) as Collection | null;
       if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
         return expose(cached);
       }
@@ -212,7 +220,11 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
       const value: Collection = {items, totalCount, limited, maxItems, complete: true};
       // Large collection cache writes are optional; never lose loaded items if
       // browser storage is full, or overwrite the live playlist with a partial page.
-      try { (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, value, CACHE_EXPIRE_TIME); }
+      try {
+        if (mayUseSharedCache(type)) {
+          (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, value, CACHE_EXPIRE_TIME);
+        }
+      }
       catch (_) { /* CacheStorage is best-effort, not part of successful loading. */ }
       return expose(value);
     }

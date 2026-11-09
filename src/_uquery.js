@@ -258,7 +258,9 @@ AntiPrototypeJs().then(() => {
                 const cookies = document.cookie.split(';').sort();
                 cookies.forEach(cookie => {
                     const [key, val] = cookie.split('=').map(k => k.trim());
-                    result[decodeURIComponent(key)] = decodeURIComponent(val);
+                    // decodeURIComponent performs ToString in JS; explicit conversion also
+                    // handles an empty/malformed cookie segment without strict-null errors.
+                    result[decodeURIComponent(String(key))] = decodeURIComponent(String(val));
                 });
                 console.table(result);
                 return result;

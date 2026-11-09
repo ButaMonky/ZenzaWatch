@@ -66,7 +66,8 @@ describe('Task178 final resume-position save is not throttled away (Watch V4 aud
       return dialogText.slice(start, dialogText.indexOf(`\n${m ? m[1] : '  '}}`, start + 1));
     };
     assert(/_saveFinalPlaybackPosition\(this\._videoInfo\.contextWatchId, 0\)/.test(body('_onVideoEnded')));
-    assert(/_saveFinalPlaybackPosition\(this\._watchId, this\.currentTime\)/.test(body('close')));
+    assert(/const contextWatchId = this\._videoInfo\?\.contextWatchId \|\| this\._watchId;/.test(body('close')));
+    assert(/_saveFinalPlaybackPosition\(contextWatchId, this\.currentTime\)/.test(body('close')));
     assert(/_savePlaybackPosition\(this\._videoInfo\.contextWatchId, this\.currentTime\)/.test(body('_onVideoPause')));
     assert(/_saveFinalPlaybackPosition\(this\._videoInfo\.contextWatchId, this\.currentTime\);\s*\}\s*nicoVideoPlayer\.close\(\);/.test(text));
   });

@@ -14,8 +14,6 @@ const NotificationHistoryPanel = (() => {
         '.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:auto;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
         '.zenzaNotificationDock[hidden]{display:none!important;}',
         '.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
-        '.zenzaNotificationDock .znh-close{font:inherit;background:#333;color:#eee;border:1px solid #777;border-radius:4px;cursor:pointer;padding:4px 10px;}',
-        '.zenzaNotificationDock .znh-close:focus-visible{outline:2px solid #9cf;}',
         // Scroll the complete history view on short players: shrinking only the list
         // lets the toolbar consume its entire height and makes stored entries unreadable.
         '.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;display:block;overflow:auto;overscroll-behavior:contain;}',
@@ -261,13 +259,39 @@ const NotificationHistoryPanel = (() => {
         dock.setAttribute('role', 'dialog');
         dock.setAttribute('aria-label', '通知・エラー履歴');
         const header = element('div', 'znh-dock-header');
-        const closeButton = element('button', 'znh-close', '閉じる');
-        closeButton.type = 'button';
-        header.append(element('strong', '', '通知・エラー履歴'), closeButton);
+        header.append(element('strong', '', '通知・エラー履歴'));
         dock.append(header);
         container.append(dock);
         let open = false;
         let disposed = false;
+        let animation = null;
+        const cancelAnimation = () => {
+            if (animation) {
+                animation.onfinish = null;
+                animation.cancel();
+                animation = null;
+            }
+        };
+        const animate = (opening, done = () => { }) => {
+            cancelAnimation();
+            if (typeof dock.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+                done();
+                return;
+            }
+            const frames = opening ?
+                [{ opacity: 0, transform: 'translate(12px,18px) scale(.86)' }, { opacity: 1, transform: 'none' }] :
+                [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translate(8px,12px) scale(.92)' }];
+            try {
+                const current = animation = dock.animate(frames, { duration: opening ? 220 : 160, easing: opening ? 'cubic-bezier(.2,.9,.3,1.15)' : 'ease-in', fill: 'both' });
+                current.onfinish = () => { if (animation !== current) {
+                    return;
+                } cancelAnimation(); done(); };
+            }
+            catch {
+                cancelAnimation();
+                done();
+            }
+        };
         let previousFocus = null;
         let addedContainerTabIndex = false;
         let refresh = () => { };
@@ -281,13 +305,17 @@ const NotificationHistoryPanel = (() => {
             on: (_event, listener) => { refresh = listener; },
             off: () => { refresh = () => { }; }
         }, () => open);
-        const close = () => {
+        const close = (restoreFocus = true) => {
             if (!open) {
                 return;
             }
             open = false;
-            dock.hidden = true;
+            dock.inert = true;
+            animate(false, () => { dock.hidden = true; dock.inert = false; });
             button.setAttribute('aria-expanded', 'false');
+            if (!restoreFocus) {
+                return;
+            }
             const canFocus = (target) => {
                 if (!target?.isConnected || target === document.body || target === document.documentElement ||
                     target.closest('[hidden], [inert]') || target.matches(':disabled')) {
@@ -323,7 +351,18 @@ const NotificationHistoryPanel = (() => {
         };
         // Capture before the player's document-level shortcut handler can close playback.
         window.addEventListener('keydown', onKeyDown, true);
-        closeButton.addEventListener('click', close);
+        const onOutside = (event) => {
+            if (!open) {
+                return;
+            }
+            const path = event.composedPath();
+            if (path.includes(dock) || path.includes(button)) {
+                return;
+            }
+            close(false);
+        };
+        document.addEventListener('pointerdown', onOutside, true);
+        document.addEventListener('click', onOutside, true);
         // The player cancels all bubbled clicks and maps button key presses to playback.
         // Keep native summary/button/select behavior inside this independent surface.
         const stopPlayerEvent = (event) => { event.stopPropagation(); };
@@ -342,11 +381,14 @@ const NotificationHistoryPanel = (() => {
                     return;
                 }
                 previousFocus = document.activeElement;
+                cancelAnimation();
                 open = true;
+                dock.inert = false;
                 dock.hidden = false;
                 button.setAttribute('aria-expanded', 'true');
                 refresh();
                 dock.querySelector('input')?.focus();
+                animate(true);
             },
             close,
             dispose() {
@@ -355,8 +397,10 @@ const NotificationHistoryPanel = (() => {
                 }
                 close();
                 disposed = true;
+                cancelAnimation();
                 window.removeEventListener('keydown', onKeyDown, true);
-                closeButton.removeEventListener('click', close);
+                document.removeEventListener('pointerdown', onOutside, true);
+                document.removeEventListener('click', onOutside, true);
                 for (const name of localEvents) {
                     dock.removeEventListener(name, stopPlayerEvent);
                 }

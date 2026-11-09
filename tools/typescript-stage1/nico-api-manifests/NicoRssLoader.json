@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/NicoRssLoader.ts",
   "runtime": "packages/lib/src/nico/NicoRssLoader.js",
-  "sourceSha256": "9f25decf0c1f88738fd89158dec41e7c499ee75a8136d850c0ecebb2043e3bfe",
-  "runtimeSha256": "70f903c176a5f67e60d6a0a99ba430a6043f80e6f27cc057ad608c5e7727dc11"
+  "sourceSha256": "88459314d6590d9dd2f4f0fa5940138a55b71dc6178c16b4dd4af92354a8fa34",
+  "runtimeSha256": "d45bb9350674e510ce914bc2716cd96f5da12caa64439c19a80cd98c085a2e66"
 }

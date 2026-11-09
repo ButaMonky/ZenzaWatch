@@ -32,6 +32,14 @@ describe('Task200 comment history integration', function() {
     assert.strictEqual(typeof v.applyHistoryThreads,'function');assert.strictEqual(await v.applyHistoryThreads(data,control),7);
     v.clearCommentHistory();assert.strictEqual(cleared,1);
   });
+  it('preserves cached display objects when hiding through both player layers', function() {
+    const V=loadClass('src/NicoVideoPlayer.js','NicoVideoPlayer',createContext({Emitter:class {}}));
+    const P=playerClass(),v=Object.create(V.prototype),p=Object.create(P.prototype);
+    const options={retain:true};let received;
+    p._commentHistoryRenderer={clear(value){received=value;}};v._commentPlayer=p;
+    v.clearCommentHistory(options);assert.strictEqual(received,options);
+    v.clearCommentHistory();assert.strictEqual(received,undefined);
+  });
   it('cancels the old history generation when normal comments are reloaded', function() {
     const D=loadClass('src/NicoVideoPlayerDialog.js','NicoVideoPlayerDialog',createContext({Emitter:class {}}));
     const d=Object.create(D.prototype);let n=0,aborts=0;

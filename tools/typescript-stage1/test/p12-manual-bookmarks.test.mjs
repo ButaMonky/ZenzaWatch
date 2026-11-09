@@ -40,6 +40,16 @@ test('delete targets only an explicit manual bookmark ID',()=>{
  assert.deepEqual(b.map(x=>x.id),['B2']);
  assert.deepEqual(removeManualBookmark(b,videoId,'B1'),b);
 });
+test('rename of a concurrently deleted bookmark must fail rather than succeed as a no-op',()=>{
+ const before=addManualBookmark(first(),draft('B2',110),duration);
+ const committed=removeManualBookmark(before,videoId,'B1');
+ assert.throws(()=>renameManualBookmark(committed,videoId,'B1','stale edit',300),
+  /Bookmark no longer exists/);
+ assert.deepEqual(committed.map(x=>x.id),['B2']);
+ assert.equal(committed[0].label,'無題のしおり');
+ // Remove remains idempotent when retrying after a remote delete.
+ assert.deepEqual(removeManualBookmark(committed,videoId,'B1'),committed);
+});
 test('rename preserves time, original creation and other entries',()=>{
  const b=addManualBookmark(first(),draft('B2',112,105),duration);
  const c=renameManualBookmark(b,videoId,'B1','??',200);
@@ -61,7 +71,7 @@ test('normalize discards wrong-video, malformed, duplicate and unsafe records',(
  const good=first()[0];
  const raw=[good,{...good,id:'B2',videoId:'smOther'},
   {...good,id:'B1',time:88},{...good,id:'bad/ID'},
-  {...good,id:'B3',time:duration},{...good,id:'B4',label:'x'.repeat(100)}];
+  {...good,id:'B3',time:-1},{...good,id:'B4',label:'x'.repeat(100)}];
  const b=normalizeManualBookmarks(raw,videoId,duration);
  assert.equal(b.length,1);
  assert.deepEqual(b[0],good);
@@ -90,4 +100,14 @@ test('automatic completion is absent from this model: manual markers remain inta
  const autoClear={resume:[],resumeClearedAt:400,reason:'completed'};
  assert.equal(autoClear.resume.length,0);
  assert.deepEqual(bookmarks,first());
+});
+
+test('duration shrink retains previously valid stored bookmark for recovery',()=>{
+ const old=addManualBookmark([],draft('B1',115),120);
+ const shorter=normalizeManualBookmarks(old,videoId,110);
+ assert.deepEqual(shorter,old);
+ assert(Object.isFrozen(shorter)&&Object.isFrozen(shorter[0]));
+ assert.throws(()=>addManualBookmark(shorter,draft('B2',115),110),/Invalid bookmark draft/);
+ const recovered=normalizeManualBookmarks(shorter,videoId,120);
+ assert.deepEqual(recovered,old);
 });

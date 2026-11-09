@@ -39,7 +39,16 @@ async function parity(name,method,arg,body,flags={}) {
   const newApi=loadLegacy(after,'NicoRssLoader',right.globals);
   const oldResult=await settle(()=>oldApi[method](arg));
   const newResult=await settle(()=>newApi[method](arg));
-  assert.deepEqual(snapshot(newResult),snapshot(oldResult),name+' result');
+  // AUD #263 deliberately changes the externally visible *error class*
+  // for an all-malformed feed, while keeping the failure outcome. For mixed
+  // feeds the new implementation isolates each broken item instead.
+  if(['bad GUID','bad time'].includes(name)){
+    assert.equal(oldResult.ok,false,name+' legacy rejected');
+    assert.equal(newResult.ok,false,name+' now reports an RSS parse failure');
+    assert.match(String(newResult.error?.message),/RSS/,name+' explicit error');
+  }else{
+    assert.deepEqual(snapshot(newResult),snapshot(oldResult),name+' result');
+  }
   assert.deepEqual(right.calls,left.calls,name+' network calls');
   return {result:newResult,calls:right.calls};
 }

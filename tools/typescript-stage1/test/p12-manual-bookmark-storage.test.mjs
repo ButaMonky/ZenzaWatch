@@ -68,6 +68,18 @@ test('manual bookmark CRUD remains separate and survives automatic resume cleari
  assert.equal(prior[0].label,'??????','frozen previous values remain untouched');
  repo.close();assert.equal(b.closed,true);
 });
+test('rename with a stale ID rejects atomically after another owner deleted it',async()=>{
+ const backend=new AtomicFakeBackend(),first=new ManualBookmarkRepository(backend),
+  second=new ManualBookmarkRepository(backend);
+ await first.add(draft('B1',40),duration);
+ await first.add(draft('B2',55),duration);
+ await second.remove(videoId,'B1',duration);
+ const before=await first.load(videoId,duration);
+ await assert.rejects(first.rename(videoId,'B1','stale change',400,duration),
+  /Bookmark no longer exists/);
+ assert.deepEqual(await first.load(videoId,duration),before,
+  'an absent target must not commit or alter unrelated bookmarks');
+});
 test('two concurrent adds serialize atomic writes, losing no bookmark',async()=>{
  const b=new AtomicFakeBackend(),repo=new ManualBookmarkRepository(b);
  await Promise.all([repo.add(draft('B1',40),duration),
@@ -285,4 +297,21 @@ test('close aborts an already-started native database upgrade',async()=>{
  await tick();
  assert.equal(h.db.closed,true);
  await observed;
+});
+
+test('duration shrink preserves out-of-range bookmark across atomic edits and deletion',async()=>{
+ const b=new AtomicFakeBackend(),repo=new ManualBookmarkRepository(b);
+ await repo.add(draft('B1',50),120);
+ await repo.add(draft('B2',115,200),120);
+ const original=b.rows.get(videoId);
+ assert.deepEqual((await repo.load(videoId,110)).map(x=>x.time),[50,115]);
+ assert.strictEqual(b.rows.get(videoId),original,'loading must not write or trim');
+ await repo.rename(videoId,'B1','safe',250,110);
+ assert.deepEqual((await repo.load(videoId,110)).map(x=>x.time),[50,115]);
+ await repo.add(draft('B3',100,300),110);
+ assert.deepEqual((await repo.load(videoId,110)).map(x=>x.time),[50,115,100]);
+ await assert.rejects(repo.add(draft('B4',115,350),110),/Invalid bookmark draft/);
+ await repo.remove(videoId,'B2',110);
+ assert.deepEqual((await repo.load(videoId,110)).map(x=>x.time),[50,100]);
+ assert.deepEqual((await repo.load(videoId,120)).map(x=>x.time),[50,100]);
 });

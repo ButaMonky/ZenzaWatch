@@ -363,6 +363,15 @@ class NicoVideoPlayer extends Emitter {
             this._creditCommentHold = null;
         }
         this._commentPlayer.currentTime = videoTime;
+        // The YouTube IFrame API has no native HTMLVideoElement timeupdate event.
+        // Reuse the existing 100ms comment clock only while that source is playing.
+        // The cached isPlaying flag can remain true during IFrame BUFFERING.
+        // Its active media paused getter reflects the provider state, so paused,
+        // buffering/cued/ended video must not consume AB seek retry attempts.
+        if (this._videoPlayer._isYouTube && this.isPlaying &&
+            !this._videoPlayer.paused && Number.isFinite(videoTime)) {
+            this.emit('timeupdate');
+        }
     }
     _onAspectRatioFix(ratio) {
         this._commentPlayer.setAspectRatio(ratio);
@@ -372,17 +381,8 @@ class NicoVideoPlayer extends Emitter {
         this.emit('loadedMetaData');
     }
     _onVideoCanPlay() {
+        // The native VideoPlayer owns autoplay. Never issue a second, stale play().
         this.emit('canPlay');
-        if (this.autoplay && !this.paused) {
-            this._video.play().catch((err) => {
-                if (err instanceof DOMException) {
-                    // 他によくあるのはcode: 20 Aborted など
-                    if (err.code === 35 /* NotAllowedError */) {
-                        this.dispatchEvent(new CustomEvent('autoplay-rejected'));
-                    }
-                }
-            });
-        }
     }
     _onPlay() {
         this._isPlaying = true;
@@ -405,6 +405,15 @@ class NicoVideoPlayer extends Emitter {
         this.emit('pause');
     }
     _onEnded() {
+        // B=duration must return to A before credit preload/credit playback.
+        // The Dialog owns the active AB range; non-AB videos retain old behavior.
+        try {
+            if (this.beforeSupporterCreditEnd?.() === true)
+                return;
+        }
+        catch {
+            console.warn('AB repeat end handler unavailable');
+        }
         // Task 080: 提供画面を出す時は、終わってから ended を出す
         if (this._tryStartSupporterCredit()) {
             return;
@@ -662,7 +671,7 @@ class NicoVideoPlayer extends Emitter {
     getVpos() { return Math.floor(this.vpos); }
     setComment(xmlText, options) { this._commentPlayer.setComment(xmlText, options); }
     applyHistoryThreads(data, control) { return this._commentPlayer.applyHistoryThreads(data, control); }
-    clearCommentHistory() { this._commentPlayer?.clearCommentHistory(); }
+    clearCommentHistory(options) { this._commentPlayer?.clearCommentHistory(options); }
     getNonFilteredChatList() { return this._commentPlayer.nonFilteredChatList; }
     getBufferedRange() { return this._videoPlayer.bufferedRange; }
     setVideoInfo(v) {
@@ -1152,28 +1161,40 @@ class VideoPlayer extends Emitter {
             console.log('%c_on-%s:', 'background: cyan;', name, ...args);
             this.emit(name, ...args);
         };
+        // Media lifecycle events belong to the active source, not the inactive HTML video.
+        // Keep click/contextmenu and touch-wrapper UI input independent of playback source.
+        const fromNative = (handler) => (...args) => {
+            if (this._currentVideo !== this._videoElement ||
+                /(?:youtube\.com|youtu\.be)/.test(this._src || '')) {
+                return;
+            }
+            handler(...args);
+        };
         util.$(this._video)
-            .on('canplay', this._onCanPlay.bind(this))
-            .on('canplaythrough', eventBridge.bind(this, 'canplaythrough'))
-            .on('loadstart', eventBridge.bind(this, 'loadstart'))
-            .on('loadeddata', eventBridge.bind(this, 'loadeddata'))
-            .on('loadedmetadata', eventBridge.bind(this, 'loadedmetadata'))
-            .on('ended', eventBridge.bind(this, 'ended'))
-            .on('emptied', eventBridge.bind(this, 'emptied'))
+            .on('canplay', fromNative(this._onCanPlay.bind(this)))
+            .on('canplaythrough', fromNative(eventBridge.bind(this, 'canplaythrough')))
+            .on('loadstart', fromNative(eventBridge.bind(this, 'loadstart')))
+            .on('loadeddata', fromNative(eventBridge.bind(this, 'loadeddata')))
+            .on('loadedmetadata', fromNative(eventBridge.bind(this, 'loadedmetadata')))
+            // P12 #217: the parent Dialog's AB loop runs only on timeupdate.
+            // Forward the normal HTMLVideoElement event without debug logging per tick.
+            .on('timeupdate', fromNative(() => this.emit('timeupdate')))
+            .on('ended', fromNative(eventBridge.bind(this, 'ended')))
+            .on('emptied', fromNative(eventBridge.bind(this, 'emptied')))
             // .on('stalled', this._onStalled.bind(this))
-            .on('suspend', eventBridge.bind(this, 'suspend'))
-            .on('waiting', eventBridge.bind(this, 'waiting'))
-            .on('progress', this._onProgress.bind(this))
-            .on('durationchange', this._onDurationChange.bind(this))
-            .on('abort', this._onAbort.bind(this))
-            .on('error', this._onError.bind(this))
-            .on('buffercomplete', eventBridge.bind(this, 'buffercomplete'))
-            .on('pause', this._onPause.bind(this))
-            .on('play', this._onPlay.bind(this))
-            .on('playing', this._onPlaying.bind(this))
-            .on('seeking', this._onSeeking.bind(this))
-            .on('seeked', this._onSeeked.bind(this))
-            .on('volumechange', this._onVolumeChange.bind(this))
+            .on('suspend', fromNative(eventBridge.bind(this, 'suspend')))
+            .on('waiting', fromNative(eventBridge.bind(this, 'waiting')))
+            .on('progress', fromNative(this._onProgress.bind(this)))
+            .on('durationchange', fromNative(this._onDurationChange.bind(this)))
+            .on('abort', fromNative(this._onAbort.bind(this)))
+            .on('error', fromNative(this._onError.bind(this)))
+            .on('buffercomplete', fromNative(eventBridge.bind(this, 'buffercomplete')))
+            .on('pause', fromNative(this._onPause.bind(this)))
+            .on('play', fromNative(this._onPlay.bind(this)))
+            .on('playing', fromNative(this._onPlaying.bind(this)))
+            .on('seeking', fromNative(this._onSeeking.bind(this)))
+            .on('seeked', fromNative(this._onSeeked.bind(this)))
+            .on('volumechange', fromNative(this._onVolumeChange.bind(this)))
             .on('contextmenu', eventBridge.bind(this, 'contextmenu'))
             .on('click', eventBridge.bind(this, 'click'));
         const touch = util.$(this._touchWrapper.body);
@@ -1230,8 +1251,9 @@ class VideoPlayer extends Emitter {
             this._videoElement.src === '//') {
             return;
         }
-        window.console.error('error src', this._video.src);
-        window.console.error('%c_onError:', 'background: cyan; color: red;', arguments);
+        // Never log signed media URLs or raw Event/target objects.
+        const mediaCode = e?.target?.error?.code;
+        window.console.error('Media playback failed', Number.isInteger(mediaCode) && mediaCode >= 1 && mediaCode <= 4 ? mediaCode : 0);
         this.addClass('is-error');
         this._canPlay = false;
         this.emit('error', {
@@ -1241,12 +1263,12 @@ class VideoPlayer extends Emitter {
         });
     }
     _onYouTubeError(e) {
-        window.console.error('error src', this._video.src);
-        window.console.error('%c_onError:', 'background: cyan; color: red;', e);
+        const code = Number.isInteger(e?.data) && e.data >= 0 && e.data <= 150 ? e.data : 0;
+        // Error code only; neither raw IFrame events nor signed source URLs.
+        window.console.error('YouTube playback failed', code);
         this.addClass('is-error');
         this._canPlay = false;
         let fallback = false;
-        const code = e.data;
         const description = (() => {
             switch (code) {
                 case 2:
@@ -1357,7 +1379,6 @@ class VideoPlayer extends Emitter {
         return this._video.paused;
     }
     set thumbnail(url) {
-        console.log('%csetThumbnail: %s', 'background: cyan;', url);
         this._thumbnail = url;
         this._video.poster = url;
         //this.emit('setThumbnail', url);
@@ -1366,7 +1387,6 @@ class VideoPlayer extends Emitter {
         return this._thumbnail;
     }
     set src(url) {
-        console.log('%csetSc: %s', 'background: cyan;', url);
         this._reset();
         // Invalidate any previous asynchronous YouTube transition on every source assignment.
         const sourceGeneration = this._sourceGeneration = (this._sourceGeneration || 0) + 1;
@@ -1389,8 +1409,21 @@ class VideoPlayer extends Emitter {
                     return;
                 }
                 this._changePlayer('YouTube');
+            }).catch(() => {
+                // API/script/constructor failure belongs only to the current source.
+                // Never leave the loading overlay pending or leak raw URLs/errors.
+                if (!isCurrent()) {
+                    return;
+                }
+                this.removeClass('is-loading');
+                this._onYouTubeError({ data: 0 });
             });
             return;
+        }
+        // The iframe may still be initializing even when _currentVideo remains native.
+        // Invalidate that pending owner before a late YouTube onReady can play A.
+        if (this._videoYouTube && this._currentVideo !== this._videoYouTube) {
+            this._videoYouTube.cancelPendingSource?.();
         }
         this._changePlayer('normal');
         if (url.indexOf('dmc.nico') >= 0 && location.host.indexOf('.nicovideo.jp') >= 0) {
@@ -1415,17 +1448,26 @@ class VideoPlayer extends Emitter {
         const eventBridge = function (...args) {
             this.emit(...args);
         };
-        yt.on('canplay', this._onCanPlay.bind(this));
-        yt.on('loadedmetadata', eventBridge.bind(this, 'loadedmetadata'));
-        yt.on('ended', eventBridge.bind(this, 'ended'));
-        yt.on('stalled', eventBridge.bind(this, 'stalled'));
-        yt.on('pause', this._onPause.bind(this));
-        yt.on('play', this._onPlay.bind(this));
-        yt.on('playing', this._onPlaying.bind(this));
-        yt.on('seeking', this._onSeeking.bind(this));
-        yt.on('seeked', this._onSeeked.bind(this));
-        yt.on('volumechange', this._onVolumeChange.bind(this));
-        yt.on('error', this._onYouTubeError.bind(this));
+        // An initializing YouTube source may signal metadata before the player switch.
+        // Transport events from an inactive wrapper must not affect the current video.
+        const fromYouTube = (handler, allowPending = false) => (...args) => {
+            if (this._currentVideo !== yt &&
+                !(allowPending && /(?:youtube\.com|youtu\.be)/.test(this._src || ''))) {
+                return;
+            }
+            handler(...args);
+        };
+        yt.on('canplay', fromYouTube(this._onCanPlay.bind(this), true));
+        yt.on('loadedmetadata', fromYouTube(eventBridge.bind(this, 'loadedmetadata'), true));
+        yt.on('ended', fromYouTube(eventBridge.bind(this, 'ended')));
+        yt.on('stalled', fromYouTube(eventBridge.bind(this, 'stalled')));
+        yt.on('pause', fromYouTube(this._onPause.bind(this)));
+        yt.on('play', fromYouTube(this._onPlay.bind(this)));
+        yt.on('playing', fromYouTube(this._onPlaying.bind(this)));
+        yt.on('seeking', fromYouTube(this._onSeeking.bind(this)));
+        yt.on('seeked', fromYouTube(this._onSeeked.bind(this)));
+        yt.on('volumechange', fromYouTube(this._onVolumeChange.bind(this)));
+        yt.on('error', fromYouTube(this._onYouTubeError.bind(this), true));
         global.debug.youtube = yt;
         return Promise.resolve(this._videoYouTube);
     }

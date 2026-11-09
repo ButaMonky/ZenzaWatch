@@ -1,0 +1,4 @@
+# Stable source hashes and frozen userscript bytes across Windows and CI.
+packages/comment-history/src/** text eol=lf
+dist/*.user.js text eol=lf
+tools/typescript-stage1/*manifest.json text eol=lf

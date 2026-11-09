@@ -243,6 +243,24 @@ const Config = (() => {
     'screenFilter.enable': true,
     // Task 080: ON/OFFショートカットで「標準」にした時の、直前の値（JSON）
     'screenFilter.saved': '',
+    'screenFilter.bloom': 0,
+    'screenFilter.bloomThreshold': 70,
+    'screenFilter.bloomRadius': 3,
+    'screenFilter.posterize': 0,
+    'screenFilter.edge': 0,
+    'screenFilter.edgeStyle': 'sketch',
+    'screenFilter.rgbShift': 0,
+    'screenFilter.grain': 0,
+    'screenFilter.grainSize': 1,
+    'screenFilter.scanlines': 0,
+    'screenFilter.scanlineSpacing': 4,
+    'screenFilter.userPresets': '', // 名前付きの色・画質調整（JSON）
+    'screenFilter.showDescriptions': true,
+    'screenFilter.showAdjustments': true,
+    'screenFilter.renderQuality': 'normal',
+    'screenFilter.changedOnly': false,
+    'screenFilter.splitPosition': 50,
+    'screenFilter.presetOrder': '',
     'screenFilter.brightness': 100,     // 明るさ(%)
     'screenFilter.contrast': 100,       // コントラスト(%)
     'screenFilter.saturate': 100,       // 彩度(%)
@@ -535,7 +553,7 @@ const Config = (() => {
         }
         return true;
       },
-      preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
+      preserveInvalidKeys: [...Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS), 'screenFilter.userPresets'],
       prefix: PRODUCT,
       ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
       readonly: !location || location.host !== 'www.nicovideo.jp',

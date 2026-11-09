@@ -64,3 +64,13 @@ test('Task207: retained objects are released on OFF and video switch and never r
  await h.renderer.apply(h.page([2,3,4]));assert(!h.groups[1]._members.some(c=>c.no===2),'deleted stays deleted');
  h.renderer.clear();assert.equal(h.renderer.retainedCount,0);
 });
+
+test('temporary clear invalidates late layouts and retains history objects for showing',async()=>{
+ const h=setup();await h.renderer.apply(h.page([2]));const chat=h.groups[1]._members[1];chat.nicoru=9;
+ let release;h.vms[1]._layoutWorker.post=p=>new Promise(r=>release=()=>r({...p.params}));
+ const pending=h.renderer.apply(h.page([2,3]));while(!release)await Promise.resolve();
+ h.renderer.clear({retain:true});assert.deepEqual(h.groups[1]._members,[h.normal]);assert.equal(h.renderer.retainedCount,1);
+ release();await assert.rejects(pending);
+ h.vms[1]._layoutWorker.post=async({params:p})=>({...p});
+ await h.renderer.apply(h.page([2]));assert.strictEqual(h.groups[1]._members[1],chat);assert.equal(chat.nicoru,9);
+});

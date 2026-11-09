@@ -77,6 +77,9 @@ const {initialize} = (() => {
       return;
     }
 
+    const root = document.getElementById('root');
+    // On SPA transitions the root can already have been detached.
+    if (!root) { return; }
     new MutationObserver((records, observer) => {
       for (const record of records) {
         if(record.addedNodes.length === 0) {
@@ -92,7 +95,7 @@ const {initialize} = (() => {
         video.pause();
         observer.disconnect();
       }
-    }).observe(document.getElementById('root'), {
+    }).observe(root, {
       childList: true,
       subtree: true,
     });

@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/ScreenFilter.ts",
   "runtime": "packages/zenza/src/videoPlayer/ScreenFilter.js",
-  "sourceSha256": "5d49f0f545a6c5076825bedbf0524482ca7b9a39704beabdb16370dc8310e3ba",
-  "runtimeSha256": "282117c7e8c082e525df0fd0683cc44e34bd91e68b6fa518a4c6444ac4c066b9"
+  "sourceSha256": "c37facaf480554608f67942115f14d6306df40a30d6376333e43101b689a812b",
+  "runtimeSha256": "a95bfff12e9bc73abaaf6947b508c97bb22aa00e299e97aad6411a3eceb58a5e"
 }

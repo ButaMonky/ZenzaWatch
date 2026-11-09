@@ -393,15 +393,20 @@ const HeatMapWorker = (() => {
     if (!isOffscreenCanvasAvailable) {
       return createMainThreadHeatMap({container, width, height});
     }
-    const activeWorker = worker =
-      worker || workerUtil.createCrossMessageWorker(func, {name: 'HeatMapWorker'});
-    const canvas = container.querySelector('canvas.heatMap');
-    const layer = canvas.transferControlToOffscreen();
+    let activeWorker: Loose = null, canvas: Loose = null, transferred = false;
     try {
+      canvas = container.querySelector('canvas.heatMap');
+      if (!canvas) throw new Error('Heatmap canvas missing');
+      activeWorker = worker = worker || workerUtil.createCrossMessageWorker(func, {name: 'HeatMapWorker'});
+      const layer = canvas.transferControlToOffscreen();
+      transferred = true;
       await activeWorker.post({command: 'init', params: {canvas: layer}}, {transfer: [layer]});
     } catch (e) {
       stopWorker(activeWorker);
-      const replacement = replaceTransferredCanvas(container, canvas);
+      // A failed pre-transfer setup has not detached the original canvas.
+      // Only replace a canvas after successful transfer (or when it was missing).
+      const replacement = !transferred && canvas?.getContext ? canvas :
+        replaceTransferredCanvas(container, canvas);
       if (!replacement) {
         window.console.warn('HeatMap worker init failed; fallback canvas unavailable');
         throw e;

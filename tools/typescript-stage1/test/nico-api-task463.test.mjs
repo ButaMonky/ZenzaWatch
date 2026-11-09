@@ -17,7 +17,17 @@ async function compareSequences(name,makeGlobals,cases){
       const ra=await settle(()=>step(sa)),rb=await settle(()=>step(sb));
       assert.deepEqual(snapshot(rb),snapshot(ra),`${label} step ${i}`);
     }
-    assert.deepEqual(snapshot(b.log),snapshot(a.log),label+' side effects');
+    if(name==='PlaylistApiLoader' && ['mylist sort override','watchlater default','search keyword'].includes(label)){
+      const oldLog=snapshot(a.log),newLog=snapshot(b.log);
+      // #238: private endpoints must bypass URL-only browser caches, even when
+      // the frozen legacy fixture cached the same URL across user sessions.
+      assert.equal(newLog.filter(row=>row[0]==='cache:get'||row[0]==='cache:set').length,0,
+        label+' does not store or reuse private collections');
+      assert.deepEqual(newLog.filter(row=>!row[0].startsWith('cache:')),
+        oldLog.filter(row=>!row[0].startsWith('cache:')),label+' network contract unchanged');
+    }else{
+      assert.deepEqual(snapshot(b.log),snapshot(a.log),label+' side effects');
+    }
   }
   return cases.length;
 }
@@ -99,4 +109,23 @@ test('PlaylistApiLoader: URLs per type, cache keys, headers and failure codes (1
     ['fetch fails -> (2)',[load({type:'series',id:1})],{fail:true}]
   ]);
   assert.equal(n,15);
+});
+
+test('#238: cached watch-later rows from account A are ignored after account switch',async()=>{
+  const cachedKey='playlist; https://nvapi.nicovideo.jp/v1/playlist/watch-later?sortOrder=asc&sortKey=registeredAt';
+  const w=playlistGlobals({...ok,cached:{[cachedKey]:[{watchId:'smFromA'}]}});
+  const loader=loadLegacy(pair('PlaylistApiLoader')[1],'PlaylistApiLoader',w.globals);
+  const result=await loader.load({type:'watchlater',all:false});
+  assert.deepEqual(snapshot(result),[{watchId:'sm9'}],'returns the fresh account response');
+  assert.equal(w.log.filter(row=>row[0]==='fetch').length,1,'must contact nvapi');
+  assert.equal(w.log.filter(row=>row[0]==='cache:get'||row[0]==='cache:set').length,0);
+});
+test('#238: multi-page private collections do not reuse cache',async()=>{
+  const w=playlistGlobals({body:{meta:{status:200},data:{items:[{watchId:'smB'}],hasNext:false,totalCount:1}}});
+  w.globals.URL=URL;
+  const loader=loadLegacy(pair('PlaylistApiLoader')[1],'PlaylistApiLoader',w.globals);
+  assert.deepEqual(snapshot(await loader.load({type:'watchlater',all:true,maxItems:1000})),[{watchId:'smB'}]);
+  assert.deepEqual(snapshot(await loader.load({type:'watchlater',all:true,maxItems:1000})),[{watchId:'smB'}]);
+  assert.equal(w.log.filter(row=>row[0]==='fetch').length,2);
+  assert.equal(w.log.filter(row=>row[0]==='cache:get'||row[0]==='cache:set').length,0);
 });

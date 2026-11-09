@@ -49,6 +49,7 @@ const stubs={
       PREFIX:string;PARAMS:ScreenFilterParam[];
       PARAM_MAP:Record<string, ScreenFilterParam>;
       PRESETS:Preset[];
+      getPresetList(sorted?:boolean):Array<{id:string;label:string;user:boolean}>;
       normalize(key:string,value:unknown):number;
       formatValue(key:string,value:number):string;
     };

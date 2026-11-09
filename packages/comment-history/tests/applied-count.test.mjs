@@ -25,9 +25,9 @@ function server({failAfterPages=Infinity}={}){
  };
  return {calls,fetchPage};
 }
-function make({settings={maxAdditionalComments:5000},failAfterPages}={}){
+function make({settings={maxAdditionalComments:5000},failAfterPages,limitToQuota=false}={}){
  const srv=server({failAfterPages});const renders=[],clears=[],notices=[];const prefs=preferences(true,settings);let clock=0;
- const controller=new CommentHistoryController({preferences:prefs,
+ const controller=new CommentHistoryController({preferences:prefs,displayLimit:limitToQuota?()=>prefs.get().settings.maxAdditionalComments:undefined,
   render:async data=>{const ids=data.threads.flatMap(t=>t.comments.map(c=>c.id));renders.push(ids);return {additionalCount:ids.length};},
   clearRender:()=>clears.push(1),notify:m=>notices.push(m),
   createSession:(context,o)=>new HistorySession(context,{...o,coordinator:new RequestCoordinator({settings:o.settings,now:()=>clock,sleep:async n=>{clock+=n;}}),fetchPage:srv.fetchPage})});
@@ -134,4 +134,51 @@ test('the history store keeps a deterministic fetch order across continuation (r
 test('display preparation source does not depend on Task206 simultaneous display limit',()=>{
  for(const f of ['controller.mjs','panel.mjs','renderer.mjs','layers.mjs','session.mjs'])
   assert(!fs.readFileSync(new URL('../src/'+f,import.meta.url),'utf8').includes('maxDisplayComment'),f);
+});
+
+test('temporary hide retains cache and chosen count; showing uses cache only and next video resets hide',async()=>{
+ const h=make({settings:{maxAdditionalComments:5000}});await start(h);await h.controller.setAppliedCount(2500);
+ const calls=h.srv.calls.length;await h.controller.setHidden(true);
+ assert.equal(h.controller.state.hidden,true);assert.equal(h.controller.state.appliedAdditional,0);assert.equal(h.controller.state.appliedTarget,2500);
+ assert.equal(h.controller.state.cachedAdditional,5000);assert.equal(h.prefs.get().enabled,true);
+ await h.controller.setHidden(false);assert.equal(h.controller.state.appliedAdditional,2500);assert.equal(h.srv.calls.length,calls);
+ await h.controller.setHidden(true);await h.controller.normalReady(normal('sm2'));
+ assert.equal(h.controller.state.hidden,false);assert.equal(h.controller.state.appliedAdditional,5000);
+});
+test('temporary showing after a partial target does not fetch its missing portion',async()=>{
+ const h=make({failAfterPages:2});await start(h);const calls=h.srv.calls.length;
+ await h.controller.setHidden(true);await h.controller.setHidden(false);
+ assert.equal(h.srv.calls.length,calls);assert.equal(h.controller.state.appliedAdditional,2000);
+});
+
+test('hidden state rejects new fetch and count commands until shown',async()=>{
+ const h=make();await start(h);await h.controller.setAppliedCount(2500);await h.controller.setHidden(true);const calls=h.srv.calls.length;
+ await h.controller.more();await h.controller.restart();await h.controller.setAppliedCount(10000);
+ assert.equal(h.srv.calls.length,calls);assert.equal(h.controller.state.appliedTarget,2500);
+ await h.controller.setHidden(false);assert.equal(h.controller.state.appliedAdditional,2500);
+});
+
+
+test('compact slider applies cached counts only, bounded by selected load count',async()=>{
+ const h=make({limitToQuota:true});await start(h);const calls=h.srv.calls.length;
+ await h.controller.setCachedCount(20000);assert.equal(h.srv.calls.length,calls);assert.equal(h.controller.state.appliedAdditional,5000);
+ await h.controller.setCachedCount(1850);assert.equal(h.controller.state.appliedAdditional,1850);
+ await h.controller.setCachedCount(0);assert.equal(h.controller.state.appliedAdditional,0);assert.equal(h.controller.state.cachedAdditional,5000);
+ await h.controller.setCachedCount(5000);assert.equal(h.srv.calls.length,calls);
+});
+test('compact display cap follows smaller quota without discarding cache, including hidden restore',async()=>{
+ const h=make({limitToQuota:true});await start(h);await h.controller.more();
+ assert.equal(h.controller.state.cachedAdditional,10000);assert.equal(h.controller.state.appliedAdditional,5000);
+ const calls=h.srv.calls.length;h.prefs.patch({maxAdditionalComments:2500});await h.controller.whenIdle();
+ assert.equal(h.controller.state.appliedAdditional,2500);assert.equal(h.controller.state.cachedAdditional,10000);
+ await h.controller.setHidden(true);h.prefs.patch({maxAdditionalComments:1000});await h.controller.setHidden(false);
+ assert.equal(h.controller.state.appliedAdditional,1000);assert.equal(h.srv.calls.length,calls);
+});
+
+test('load selection fills only the missing cache and does not add another quota on repeated clicks',async()=>{
+ const h=make({limitToQuota:true});await start(h);const first=h.srv.calls.length;
+ await h.controller.loadSelectedCount();assert.equal(h.srv.calls.length,first);
+ h.prefs.patch({maxAdditionalComments:7500});await h.controller.loadSelectedCount();
+ assert.equal(h.controller.state.appliedAdditional,7500);assert.equal(h.srv.calls.length,8);
+ await h.controller.setCachedCount(1000);await h.controller.loadSelectedCount();assert.equal(h.srv.calls.length,8);assert.equal(h.controller.state.appliedAdditional,7500);
 });

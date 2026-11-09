@@ -329,7 +329,7 @@ class VideoInfoModel extends JSONable {
   }
 
   update(videoInfoModel?: Loose) {
-    this._update(videoInfoModel._rawData);
+    this._update(videoInfoModel._rawData, videoInfoModel._cacheData || {});
     return true;
   }
 

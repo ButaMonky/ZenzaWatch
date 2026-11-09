@@ -37,6 +37,7 @@ const {YouTubeWrapper} = (() => {
       const seconds=Number(match[1]||0)*3600+Number(match[2]||0)*60+Number(match[3]||0);
       return Number.isSafeInteger(seconds)?seconds:0;
     }
+    declare _actualPlaybackRate: Loose;
     declare _autoplay: Loose;
     declare _canPlay: Loose;
     declare _isInitialized: Loose;
@@ -50,7 +51,13 @@ const {YouTubeWrapper} = (() => {
     declare _player: Loose;
     declare _playerInitPromise: Loose;
     declare _seekTime: Loose;
+    /** Seek attempts are distinct from video-source generation. */
+    declare _seekSequence: number;
+    declare _seekDispatchedSequence: number;
+    declare _seekCompletionTimer: ReturnType<typeof setTimeout> | null;
     declare _src: Loose;
+    /** Monotonic owner of the latest requested YouTube source. */
+    declare _sourceRequest: number;
     declare _startDiff: number;
     declare _videoId: Loose;
     declare _volume: Loose;
@@ -64,47 +71,80 @@ const {YouTubeWrapper} = (() => {
       this._autoplay = autoplay;
       this._volume = volume;
       this._playbackRate = playbackRate;
+      this._actualPlaybackRate = playbackRate;
       this._loop = loop;
+      this._sourceRequest = 0;
       this._startDiff = 0;
 
       this._isSeeking = false;
       this._seekTime = 0;
+      this._seekSequence = 0;
+      this._seekDispatchedSequence = 0;
+      this._seekCompletionTimer = null;
 
       this._onSeekEnd = _.debounce(this._onSeekEnd.bind(this), 500);
     }
 
     async setSrc(url?: Loose, startSeconds: Loose = 0): Promise<Loose> {
+      const request = this._sourceRequest = (this._sourceRequest || 0) + 1;
+      const pendingSeek: Loose = this._onSeekEnd;
+      pendingSeek.cancel?.();
+      this._cancelSeekCompletion();
       this._src = url;
       this._videoId = this._parseVideoId(url);
       this._canPlay = false;
       this._isSeeking = false;
       this._seekTime = 0;
-      const player = this._player;
-      const isFirst = !!player ? false : true;
-      const urlParams = this._parseUrlParams(url);
-      this._startDiff = YouTubeWrapper.parseStartTime(urlParams.t);
+      const params = this._parseUrlParams(url);
+      // The URL's t= is a startup offset only. IFrame getCurrentTime(),
+      // seekTo() and getDuration() already use absolute seconds from video 0.
+      this._startDiff = YouTubeWrapper.parseStartTime(params.t);
       startSeconds += this._startDiff;
-      if (isFirst && !url) {
-        return Promise.resolve();
-      }
-      if (isFirst) {
-        return this._initPlayer(this._videoId, startSeconds);//.then(({player}) => {
-          // YouTube APIにはプレイリストのループしか存在しないため、
-          // プレイリストにも同じ動画を入れる
-          // player.loadPlaylist({list: [this._videoId]});
-        // });
-      }
+      const requestedVideoId = this._videoId;
 
+      // Clear also invalidates an in-flight iframe creation. A late onReady
+      // must never autoplay or select the superseded video.
       if (!url) {
-        player.stopVideo();
+        this._player?.stopVideo?.();
         return;
       }
 
-      player.loadVideoById({
-        videoId: this._videoId,
-        startSeconds: startSeconds
-      });
-      player.loadPlaylist({list: [this._videoId]});
+      let player = this._player;
+      if (this._playerInitPromise) {
+        // A shared initialization is only the iframe readiness gate.
+        // Never let its original A videoId satisfy a newer B request.
+        const ready = await this._playerInitPromise;
+        player = ready.player;
+      } else if (!player) {
+        // Start initially paused; the newest source will decide whether to
+        // load or cue after readiness, preventing an orphan autoplaying A.
+        const ready = await this._initPlayer(requestedVideoId, startSeconds, true);
+        player = ready.player;
+      }
+
+      if (request !== this._sourceRequest || !this._src || !player) { return; }
+      // Provider single-video loads reset playback rate; the existing PLAYING
+      // rate reconciliation handles that separately.
+      this._actualPlaybackRate = 1;
+      const payload = {videoId: requestedVideoId, startSeconds};
+      if (this._autoplay) {
+        player.loadVideoById(payload);
+      } else {
+        player.cueVideoById(payload);
+      }
+    }
+
+    cancelPendingSource() {
+      // Used when native playback wins while the YouTube iframe is still initializing.
+      ++this._sourceRequest;
+      this._src = '';
+      this._videoId = '';
+      const pending: Loose = this._onSeekEnd;
+      pending.cancel?.();
+      this._cancelSeekCompletion();
+      // The API may not expose stopVideo before onReady; stale work stays
+      // invalidated even if stopping an incomplete iframe throws.
+      try { this._player?.stopVideo?.(); } catch (_) {}
     }
 
     set src(v: Loose) {
@@ -140,7 +180,7 @@ const {YouTubeWrapper} = (() => {
       return a.search.startsWith('?') ? textUtil.parseQuery(a.search) : {};
     }
 
-    async _initPlayer(videoId?: Loose, startSeconds: Loose = 0) {
+    async _initPlayer(videoId?: Loose, startSeconds: Loose = 0, suppressAutoplay = false) {
       if (this._playerInitPromise) {
         return this._playerInitPromise;
       }
@@ -151,18 +191,37 @@ const {YouTubeWrapper} = (() => {
       // ready, not allocate an additional iframe.
       const init = (async () => {
         const YT = await this._initYT();
-        const {player} = await new Promise<Loose>(resolve => {
+        const {player} = await new Promise<Loose>((resolve, reject) => {
+          let ready = false;
+          const timeout = setTimeout(() => {
+            if (ready) { return; }
+            ready = true;
+            reject(new Error('YouTube player ready timed out'));
+          }, 20000);
+          const onReady = () => {
+            if (ready) { return; }
+            ready = true;
+            clearTimeout(timeout);
+            resolve({player: this._player});
+          };
+          try {
           this._player = new YT.Player(
             this._parentNode, {
               videoId,
               events: {
-                onReady: () => resolve({player: this._player}),
+                onReady,
                 onStateChange: this._onPlayerStateChange.bind(this),
                 onPlaybackQualityChange: (e: Loose) => window.console.info('video quality: ', e.data),
+                onPlaybackRateChange: (e: Loose) => {
+                  const actual = Number(e?.data);
+                  if (Number.isFinite(actual) && actual > 0) {
+                    this._actualPlaybackRate = actual;
+                  }
+                },
                 onError: (e: Loose) => this.emit('error', e)
               },
               playerVars: {
-                autoplay: this._autoplay ? 1 : 0,
+                autoplay: suppressAutoplay ? 0 : (this._autoplay ? 1 : 0),
                 volume: this._volume * 100,
                 start: startSeconds,
                 fs: 0,
@@ -175,16 +234,32 @@ const {YouTubeWrapper} = (() => {
                 showInfo: 1
               }
             });
+          } catch (error) {
+            if (!ready) {
+              ready = true;
+              clearTimeout(timeout);
+              // Preserve the internal rejection contract; the owner handles it
+              // without logging or displaying the opaque error body.
+              reject(error);
+            }
+          }
         });
-        this._onPlayerReady();
+        if (!suppressAutoplay || this._src) {
+          this._onPlayerReady();
+        } else {
+          // The source was cleared before onReady; stop any late iframe.
+          player?.stopVideo?.();
+        }
         return {player};
       })();
       this._playerInitPromise = init;
       try {
         return await init;
       } catch (error) {
-        // The next caller may retry a constructor/API failure safely.
+        // Do not leave a partially constructed iframe playing after timeout.
+        const abandoned = this._player;
         this._player = null;
+        try { abandoned?.stopVideo?.(); abandoned?.destroy?.(); } catch (_) {}
         throw error;
       } finally {
         if (this._playerInitPromise === init) { this._playerInitPromise = null; }
@@ -197,35 +272,46 @@ const {YouTubeWrapper} = (() => {
       if (YouTubeWrapper._ytApiPromise) { return YouTubeWrapper._ytApiPromise; }
       const loader = new Promise((resolve, reject) => {
         const previousReady = window.onYouTubeIframeAPIReady;
+        let settled = false;
+        let tag: Loose;
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const restore = () => {
           if (window.onYouTubeIframeAPIReady === onReady) {
             window.onYouTubeIframeAPIReady = previousReady;
           }
         };
-        const onReady = () => {
+        const finish = (yt: Loose, failed: boolean) => {
+          if (settled) { return; }
+          settled = true;
+          if (timer !== undefined) { clearTimeout(timer); }
           restore();
+          if (failed) {
+            tag?.remove?.();
+            reject(new Error('YouTube IFrame API unavailable'));
+          } else {
+            resolve(yt);
+          }
+        };
+        const onReady = () => {
+          if (settled) { return; }
           // Do not steal the callback from another script using the same API.
           if (typeof previousReady === 'function') {
-            try { previousReady(); } catch (e) { console.warn('YouTube prior ready callback failed', e); }
+            try { previousReady(); } catch (_) {
+              console.warn('YouTube prior ready callback failed');
+            }
           }
-          if (window.YT?.Player) {
-            resolve(window.YT);
-          } else {
-            reject(new Error('YouTube IFrame API ready without Player'));
-          }
+          finish(window.YT, !window.YT?.Player);
         };
-        const onError = (error?: Loose) => {
-          restore();
-          reject(error || new Error('YouTube IFrame API unavailable'));
-        };
+        const onError = () => finish(null, true);
         window.onYouTubeIframeAPIReady = onReady;
+        timer = setTimeout(onError, 15000);
         try {
-          const tag = document.createElement('script');
+          tag = document.createElement('script');
           tag.src = 'https://www.youtube.com/iframe_api';
           tag.addEventListener?.('error', onError, {once: true});
           document.head.append(tag);
-        } catch (error) {
-          onError(error);
+        } catch (_) {
+          onError();
         }
       });
       YouTubeWrapper._ytApiPromise = loader.catch(error => {
@@ -236,8 +322,22 @@ const {YouTubeWrapper} = (() => {
     }
 
     _onPlayerReady() {
+      this._restorePlaybackRate();
       this.emitAsync('loadedMetaData');
       // this.emitAsync('canplay');
+    }
+
+    _restorePlaybackRate() {
+      const player = this._player;
+      if (!player || typeof player.getPlaybackRate !== 'function' ||
+          typeof player.setPlaybackRate !== 'function') { return; }
+      try {
+        const actual = Number(player.getPlaybackRate());
+        if (Number.isFinite(actual) && actual > 0 &&
+            actual !== this._playbackRate) {
+          player.setPlaybackRate(this._playbackRate);
+        }
+      } catch (_) { /* the video can still play at the provider's default speed */ }
     }
 
     _onPlayerStateChange(e?: Loose) {
@@ -254,6 +354,7 @@ const {YouTubeWrapper} = (() => {
           }
           break;
         case YT.PlayerState.PLAYING:
+          this._restorePlaybackRate();
           if (!this._canPlay) {
             this._canPlay = true;
             this.muted = this._muted;
@@ -262,17 +363,18 @@ const {YouTubeWrapper} = (() => {
           }
           this.emit('play');
           this.emit('playing');
-          if (this._isSeeking) {
-            this.emit('seeked');
-          }
+          this._completeSeekFromState();
           break;
         case YT.PlayerState.PAUSED:
+          this._completeSeekFromState();
           this.emit('pause');
           break;
         case YT.PlayerState.BUFFERING:
           //this.emit('stalled');
           break;
         case YT.PlayerState.CUED:
+          this._restorePlaybackRate();
+          this._completeSeekFromState();
           break;
       }
     }
@@ -297,16 +399,83 @@ const {YouTubeWrapper} = (() => {
       return false;
     }
 
-    _onSeekEnd() {
+    /** Cancels completion ownership, including a timer from the previous video. */
+    _cancelSeekCompletion() {
+      this._seekSequence = (this._seekSequence || 0) + 1;
+      this._seekDispatchedSequence = 0;
+      if (this._seekCompletionTimer != null) {
+        clearTimeout(this._seekCompletionTimer);
+        this._seekCompletionTimer = null;
+      }
       this._isSeeking = false;
-      this._player.seekTo(this._seekTime + this._startDiff);
+    }
+
+    /** A settled request only clears "seeking"; landing is verified by the AB clock. */
+    _completeSeek(sequence: number, source: number) {
+      if (!this._isSeeking || this._seekSequence !== sequence ||
+          this._seekDispatchedSequence !== sequence ||
+          this._sourceRequest !== source || !this._src) { return; }
+      if (this._seekCompletionTimer != null) {
+        clearTimeout(this._seekCompletionTimer);
+        this._seekCompletionTimer = null;
+      }
+      this._seekDispatchedSequence = 0;
+      this._isSeeking = false;
+      this.emit('seeked');
+    }
+
+    /** Ignore PLAYING emitted before the actual debounced seekTo or at old time. */
+    _completeSeekFromState() {
+      if (!this._isSeeking ||
+          this._seekDispatchedSequence !== this._seekSequence) { return; }
+      const getter = this._player?.getCurrentTime;
+      if (typeof getter !== 'function') { return; }
+      try {
+        const position = Number(getter.call(this._player));
+        if (!Number.isFinite(position) ||
+            Math.abs(position - this._seekTime) > 0.2) { return; }
+      } catch (_) { return; }
+      this._completeSeek(this._seekSequence, this._sourceRequest);
+    }
+
+    _onSeekEnd() {
+      if (!this._src || !this._player) {
+        this._cancelSeekCompletion();
+        return;
+      }
+      const sequence = this._seekSequence, source = this._sourceRequest;
+      this._seekDispatchedSequence = sequence;
+      try {
+        // _seekTime is absolute; the URL t= affects initial load only.
+        this._player.seekTo(this._seekTime, true);
+      } catch (_) {
+        // A rejected seek must not strand the dialog in the seeking state.
+        // No opaque provider exception is emitted or logged.
+        this._completeSeek(sequence, source);
+        return;
+      }
+      // IFrame API has no native "seeked" event. PAUSED/CUED might never
+      // transition to PLAYING, so a bounded settlement is required.
+      if (this._isSeeking && this._seekSequence === sequence &&
+          this._sourceRequest === source) {
+        this._seekCompletionTimer = setTimeout(
+          () => this._completeSeek(sequence, source), 1500);
+      }
     }
 
     set currentTime(v: Loose) {
+      if (this._seekCompletionTimer != null) {
+        clearTimeout(this._seekCompletionTimer);
+        this._seekCompletionTimer = null;
+      }
+      this._seekSequence = (this._seekSequence || 0) + 1;
+      this._seekDispatchedSequence = 0;
       this._isSeeking = true;
       this._seekTime = Math.max(0, Math.min(v, this.duration));
-      this._onSeekEnd();
+      // "seeking" must precede the debounced operation even in test harnesses
+      // where debounce executes synchronously.
       this.emit('seeking');
+      this._onSeekEnd();
     }
 
     get currentTime() {
@@ -316,7 +485,7 @@ const {YouTubeWrapper} = (() => {
         return this._seekTime;
       }
       const state = this._player.getPlayerState();
-      const currentTime = this._player.getCurrentTime() + this._startDiff;
+      const currentTime = this._player.getCurrentTime();
 
       if (state !== STATE_PLAYING || this._lastCurrentTime !== currentTime) {
         this._lastCurrentTime = currentTime;
@@ -335,7 +504,7 @@ const {YouTubeWrapper} = (() => {
     }
 
     get duration() {
-      return this._player.getDuration() - this._startDiff;
+      return this._player.getDuration();
     }
 
     set muted(v: Loose) {
@@ -364,15 +533,23 @@ const {YouTubeWrapper} = (() => {
     }
 
     set playbackRate(v: Loose) {
-      if (this._playbackRate !== v) {
-        this._playbackRate = v;
-        this._player.setPlaybackRate(v);
-        //this.emit('changePlaybackRate');
+      const rate = Number(v);
+      if (!Number.isFinite(rate) || rate <= 0) { return; }
+      this._playbackRate = rate;
+      // A new YouTube video resets its actual speed even if our desired speed
+      // did not change; always compare with the provider, not just the cache.
+      if (this._player && typeof this._player.setPlaybackRate === 'function' &&
+          this.playbackRate !== rate) {
+        this._player.setPlaybackRate(rate);
       }
     }
 
     get playbackRate() {
-      return this._playbackRate;
+      try {
+        const actual = Number(this._player?.getPlaybackRate?.());
+        if (Number.isFinite(actual) && actual > 0) { return actual; }
+      } catch (_) { /* provider state is temporarily unavailable */ }
+      return this._actualPlaybackRate || this._playbackRate;
     }
 
     set loop(v: Loose) {

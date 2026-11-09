@@ -295,10 +295,11 @@ describe('Task318 settings storage failure safety',()=>{
 });
 
 describe('Task318 history schema and live dependency metadata',()=>{
-  it('takes Japanese labels, bounds and numeric controls from the real history schema',()=>{
+  it('uses compact-panel wording with bounds and numeric controls from the real history schema',()=>{
     const {model,config,dom}=setup();
     const d=model.descriptor('commentHistory.maxAdditionalComments');
-    assert.strictEqual(d.label,'追加コメント上限');
+    assert.strictEqual(d.label,'読み込むコメント数');
+    assert(d.description.includes('スライダーの上限'));
     assert.strictEqual(d.type,'slider');
     assert.strictEqual(d.min,1);
     assert.strictEqual(d.max,20000);

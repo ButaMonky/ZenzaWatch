@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/WatchPageHistory.ts",
   "runtime": "packages/zenza/src/init/WatchPageHistory.js",
-  "sourceSha256": "72d9a8af3f44577a9cb28ad642f66bfea1c73d3a9df2cff81eb9933986bf36bc",
-  "runtimeSha256": "389545168c8a7cc643045dd50f990afe605f242593dcb2a9506526d29d9e3595"
+  "sourceSha256": "62f109880194e839356141658e1d21192b90d215c31ffa5d3f15ead9bb631129",
+  "runtimeSha256": "92d112f684b111df2763142760235ed9ceeeae507e58df9fd95d769f1495a347"
 }

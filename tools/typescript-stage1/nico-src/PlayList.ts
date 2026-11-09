@@ -51,7 +51,8 @@ declare const PlayListModel: new (params: Loose) => PlaylistModelLike;
 declare const PlayListSession: {save(data: unknown): void; restore(): Loose};
 declare const PlayListView: new (params: Loose) => Loose;
 declare const PlaylistApiLoader: {load(playlist: Loose, msgInfo: Loose): Promise<Loose[]>};
-declare const NicoSearchApiV2Loader: {searchMore(word: string, options: Loose, limit: number): Promise<Loose>};
+declare const NicoSearchApiV2Loader: {searchMore(word: string, options: Loose, limit: number,
+  isCurrent?: () => boolean): Promise<Loose>};
 declare const textUtil: {dateToString(v: unknown): string; isValidJson(v: unknown): boolean; escapeToZenkaku(v: string): string};
 declare const global: {api: Loose; debug: Loose; emitter: {on(name: string, callback: (...args: Loose[]) => unknown): unknown}};
 declare const _: {
@@ -157,7 +158,7 @@ class PlayList extends VideoList {
       loop: this._isLoop
     };
   }
-  unserialize(data?: Loose) {
+  unserialize(data?: Loose, preparedItems?: Loose[]) {
     if (!data || !Array.isArray(data.items)) {
       return false;
     }
@@ -174,7 +175,13 @@ class PlayList extends VideoList {
     const restored = data.items.slice(start, start + 10000);
     const restoredIndex = oldIndex < 0 ? -1 : oldIndex - start;
     this.model.maxItems = Math.max(this._retentionLimit || 3000, restored.length);
-    this.model.unserialize(restored);
+    // A validated file import can commit preconstructed items atomically,
+    // without running constructors after the live playlist has been changed.
+    if (preparedItems) {
+      this.model.setItem(preparedItems);
+    } else {
+      this.model.unserialize(restored);
+    }
     this._isEnable = data.enable;
     this._isLoop = data.loop;
     this.emit('update');
@@ -299,25 +306,60 @@ class PlayList extends VideoList {
       window.URL.revokeObjectURL(url);
     }, 1000);
   }
+  // #242: Validate every imported item before pausing or replacing the live
+  // playlist. The constructor reads item IDs, title and dates immediately;
+  // JSON.parse success alone does not make an item safe to construct.
+  static prepareImportItems(data: Loose): Loose[] | null {
+    if (!data || !Array.isArray(data.items) || data.items.length > 10000 ||
+        (data.index != null && !['number', 'string'].includes(typeof data.index)) ||
+        (data.enable != null && typeof data.enable !== 'boolean') ||
+        (data.loop != null && typeof data.loop !== 'boolean')) {
+      return null;
+    }
+    const result: Loose[] = [];
+    try {
+      for (const raw of data.items) {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+            !Object.prototype.hasOwnProperty.call(raw, 'id') ||
+            !((typeof raw.id === 'string' && raw.id.trim().length > 0 && raw.id.length <= 128) ||
+              (typeof raw.id === 'number' && Number.isSafeInteger(raw.id) && raw.id > 0)) ||
+            (raw.title != null && typeof raw.title !== 'string') ||
+            (raw.uniq_id != null && !['string', 'number'].includes(typeof raw.uniq_id)) ||
+            (raw.uniqId != null && !['string', 'number'].includes(typeof raw.uniqId)) ||
+            (raw.first_retrieve != null && !['string', 'number'].includes(typeof raw.first_retrieve))) {
+          return null;
+        }
+        // VideoListItem normalizes some raw fields; do not mutate the parsed
+        // payload used for the live commit if preflight fails partway through.
+        result.push(new VideoListItem({...raw}));
+      }
+    } catch (_) {
+      return null;
+    }
+    return result;
+  }
   _onImportFileCommand(fileData?: Loose) {
-    if (!textUtil.isValidJson(fileData)) {
-      return;
-    }
+    const invalid = () => this.emit('command', 'alert', 'ファイルの形式が正しくありません');
+    if (!textUtil.isValidJson(fileData)) { invalid(); return; }
 
-    // Task 093: 以前は JSON.parse した結果ではなく元の文字列（fileData）から index を読んでいたため、
-    // 保存した位置が復元されず、いつも先頭の動画を開いていた。1回だけ parse して、その結果を使う。
-    const data = JSON.parse(fileData);
-    if (!data || !Array.isArray(data.items)) {
+    // Task 093: restore index from the parsed object, not the raw JSON string.
+    let data: Loose;
+    try { data = JSON.parse(fileData); }
+    catch (_) { invalid(); return; }
+    const preparedItems = PlayList.prepareImportItems(data);
+    if (!preparedItems) { invalid(); return; }
+    // Commit only after complete validation; malformed files must not pause
+    // playback, alter the current playlist or schedule an old openNow.
+    try {
+      if (!this.unserialize(data, preparedItems)) { invalid(); return; }
+    } catch (_) {
+      invalid();
       return;
     }
-    // A newer import must take ownership of its own delayed resume. Capture
-    // the exact restored row so other list edits cannot turn the old timer
-    // into an unrelated playback request.
     const importGeneration = this._importCompletionGeneration =
       (this._importCompletionGeneration || 0) + 1;
     this.emit('command', 'pause');
     this.emit('command', 'notify', 'プレイリストを復元');
-    this.unserialize(data);
 
     const restoredModel = this.model;
     const index = PlayList.normalizeRestoredIndex(data.index, restoredModel.length, 0);
@@ -672,13 +714,16 @@ class PlayList extends VideoList {
     window.console.time(timerLabel);
     options = options || {};
     const replaceOwner = this._beginReplaceLoad(options);
+    // Own the additive turn before starting the request, like load() above.
+    const additiveOwner = this._beginAdditiveLoad(options);
+    const searchCurrent = () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner);
 
     // Task 067: 検索は NicoSearchApiV2Loader.searchMore() 側で本家と同じ検索API(nvapi)を
     // 使うようになったため、Task 066で追加した「0件の時にnvapiで取り直す」処理は撤去した
     // （同じ条件で同じAPIをもう一度呼ぶだけになるため）。
     let searchResult: Loose = null;
     const loadItems = async () => {
-      const result = searchResult = await this._nicoSearchApiLoader.searchMore(word, options, limit);
+      const result = searchResult = await this._nicoSearchApiLoader.searchMore(word, options, limit, searchCurrent);
       const items: Loose[] = (result && result.list) || [];
       return items
         .filter(item => {
@@ -689,7 +734,6 @@ class PlayList extends VideoList {
     };
 
     const network = loadItems();
-    const additiveOwner = this._beginAdditiveLoad(options);
     return this._waitForAdditiveTurn(network, additiveOwner).then(videoListItems => {
         if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
           return {status: 'superseded', message: ''};
@@ -697,6 +741,11 @@ class PlayList extends VideoList {
 
         if (videoListItems.length < 1) {
           const notice = PlayList.searchNotice(searchResult);
+          if (searchResult?.status === 'ok' && Array.isArray(searchResult.list)) {
+            const empty = searchResult.count === 0 && searchResult.list.length === 0;
+            return {status: 'ok', message: (empty ?
+              '該当する動画がありませんでした（0件）' : '追加できる動画がありませんでした') + notice};
+          }
           return notice ? {status: 'ok', message: '追加できる動画がありませんでした' + notice} : Promise.reject({});
         }
 
@@ -876,7 +925,9 @@ class PlayList extends VideoList {
     const active = Math.max(0, this.model.activeIndex);
     const candidates = this.model.items
       .map((item, index) => ({item, index}))
-      .filter(({item}) => item.isBlankData && !item.isLazy && !item.state.detailRequested && /^[a-z]{2}\d+$/.test(item.watchId))
+      .filter(({item}) => item.isBlankData && !item.isLazy && !item.state.detailRequested &&
+        (item.state.detailAttempts || 0) < 3 &&
+        (item.state.detailRetryAt || 0) <= Date.now() && /^[a-z]{2}\d+$/.test(item.watchId))
       .sort((a, b) => Math.abs(a.index - active) - Math.abs(b.index - active))
       .slice(0, slots);
     for (const {item} of candidates) {
@@ -885,9 +936,23 @@ class PlayList extends VideoList {
       Promise.resolve().then(() => loader.load(item.watchId)).then(info => {
         if (this.model.findByItemId(item.itemId) === item && item.isBlankData) {
           item.upgradeByThumbInfo(info);
+          item.state.detailFailed = false;
+          item.state.detailAttempts = 0;
+          item.state.detailRetryAt = 0;
         }
       }).catch(() => {
+        if (this.model.findByItemId(item.itemId) !== item || !item.isBlankData) return;
+        const attempts = (item.state.detailAttempts || 0) + 1;
+        item.state.detailAttempts = attempts;
         item.state.detailFailed = true;
+        if (attempts >= 3) return; // Permanently unavailable videos must not retry forever.
+        item.state.detailRequested = false;
+        const delay = Math.min(8000, 1000 * 2 ** (attempts - 1));
+        item.state.detailRetryAt = Date.now() + delay;
+        window.setTimeout(() => {
+          if (this.model.findByItemId(item.itemId) === item && !item.isLazy &&
+              item.isBlankData) this._scheduleDetailFill();
+        }, delay);
       }).then(() => {
         this._detailRunning--;
         this._scheduleDetailFill();
@@ -915,11 +980,12 @@ class PlayList extends VideoList {
     }
 
     const model = this.model;
+    const generation = this._additiveListGeneration || 0;
     const anchor = this._activeItem;
     // The numeric position can change while thumbnail metadata is loading.
     // Re-resolve the original playing item against the same playlist model.
     const getInsertIndex = () => {
-      if (this.model !== model) { return null; }
+      if (this.model !== model || (this._additiveListGeneration || 0) !== generation) { return null; }
       if (anchor) {
         const currentIndex = model.indexOf(anchor);
         return currentIndex >= 0 ? currentIndex + 1 : null;
@@ -1005,7 +1071,11 @@ class PlayList extends VideoList {
     }
 
     const model = this.model;
+    const generation = this._additiveListGeneration || 0;
+    const isCurrent = () => this.model === model &&
+      (this._additiveListGeneration || 0) === generation;
     return this._thumbInfoLoader.load(watchId).then(info => {
+      if (!isCurrent()) { return; }
       // APIにwatchIdを指定してもvideoIdが返るので上書きする. バッドノウハウ
       info.id = watchId;
       const item = VideoListItem.createByThumbInfo(info);
@@ -1017,6 +1087,7 @@ class PlayList extends VideoList {
         `リストの末尾に追加: <img src="${item.thumbnail}" style="width: 96px;">${textUtil.escapeToZenkaku(item.title)}`
       );
     }).catch(result => {
+      if (!isCurrent()) { return; }
       const item = VideoListItem.createBlankInfo(watchId);
       model.appendItem(item);
       this._refreshIndex(true);

@@ -16,31 +16,64 @@ export class ManualBookmarkDock {
   private readonly panel:ManualBookmarkPanel;
   private readonly session:ManualBookmarkSession;
   private readonly keyHandler:(event:KeyboardEvent)=>void;
+  private readonly visibilityHandler:()=>void;
+  private readonly toggleHandler:()=>void;
+  private readonly outsideHandler:(event:Event)=>void;
   private disposed=false;
   private host:HTMLElement|null=null;
   private readonly home:HTMLElement;
   private trigger:HTMLElement|null=null;
   private floating=false;
+  private closing=false;
+  private animation:Animation|null=null;
+  private cancelAnimation():void {
+    if(this.animation){this.animation.onfinish=null;this.animation.cancel();this.animation=null;}
+  }
+  private animate(open:boolean,done:()=>void=()=>{}):void {
+    this.cancelAnimation();
+    const win=this.node.ownerDocument.defaultView;
+    if(typeof this.node.animate!=='function'||win?.matchMedia?.('(prefers-reduced-motion: reduce)').matches){done();return;}
+    const frames=open?
+      [{opacity:0,transform:'translate(12px,18px) scale(.86)'},{opacity:1,transform:'none'}]:
+      [{opacity:1,transform:'none'},{opacity:0,transform:'translate(8px,12px) scale(.92)'}];
+    try {
+      const animation=this.animation=this.node.animate(frames,{duration:open?220:160,easing:open?'cubic-bezier(.2,.9,.3,1.15)':'ease-in',fill:'both'});
+      animation.onfinish=()=>{if(this.animation!==animation)return;this.cancelAnimation();done();};
+    }catch {this.cancelAnimation();done();}
+  }
   private style:HTMLStyleElement;
   toggle(host:HTMLElement,trigger?:HTMLElement|null):void {
     if(this.disposed)return;
-    if(this.floating){this.close();return;}
+    if(this.floating&&!this.closing){this.close();return;}
+    this.cancelAnimation();this.closing=false;this.node.inert=false;
     this.host=host;this.trigger=trigger||null;this.floating=true;
     host.append(this.node);this.node.classList.add('zw-points-floating');
-    this.panel.refreshPreferences();this.node.open=true;this.trigger?.setAttribute('aria-expanded','true');
-    this.node.querySelector<HTMLButtonElement>('button[data-points-close]')?.focus();
+    this.panel.refreshPreferences();this.node.open=true;this.panel.setVisible(true);this.trigger?.setAttribute('aria-expanded','true');
+    // Refresh shared IndexedDB only on explicit reopen, without polling.
+    void this.session.refreshIfIdle();
+    this.node.querySelector<HTMLElement>('summary')?.focus();
+    this.animate(true);
   }
-  close():void {
-    if(this.disposed)return;
-    this.node.open=false;
+  close(restoreFocus=true):void {
+    if(this.disposed||this.closing)return;
+    this.panel.setVisible(false);
     if(this.floating){
-      this.node.classList.remove('zw-points-floating');this.home.append(this.node);
-      this.floating=false;this.trigger?.setAttribute('aria-expanded','false');
-      if(this.trigger?.isConnected)this.trigger.focus({preventScroll:true});
-    }
+      this.closing=true;this.node.inert=true;
+      this.trigger?.setAttribute('aria-expanded','false');
+      if(restoreFocus&&this.trigger?.isConnected)this.trigger.focus({preventScroll:true});
+      this.animate(false,()=>{
+        this.node.open=false;this.node.inert=false;
+        this.node.classList.remove('zw-points-floating');this.home.append(this.node);
+        this.floating=false;this.closing=false;
+      });
+    }else{this.node.open=false;}
   }
+  get bookmarkStatus():string{return this.session.snapshot.status;}
+  get bookmarkNeedsReload():boolean{return this.session.needsLoadRetry;}
   get isRepeating():boolean{return this.panel.isRepeating;}
+  setRepeatRange(a:number,b:number,activate=true):boolean {return this.panel.setRepeatRange(a,b,activate);}
   repeatAtEnd():boolean {return this.panel.repeatAtEnd();}
+  acknowledgeLoopSeek(time:number):void {this.panel.acknowledgeLoopSeek(time);}
   refreshPreferences():void {this.panel.refreshPreferences();}
   tick(time:number,paused:boolean,seeking:boolean):boolean {
     return this.panel.tick(time,paused,seeking);
@@ -57,11 +90,7 @@ export class ManualBookmarkDock {
     node.append(summary);
     const root=this.root=doc.createElement('section');
     root.className='zenzaManualBookmarkDockContent';
-    const close=doc.createElement('button');close.type='button';
-    close.dataset.pointsClose='1';close.className='zw-points-close';
-    close.textContent='閉じる ×';close.setAttribute('aria-label','しおり・ABリピートを閉じる');
-    close.addEventListener('click',()=>this.close());
-    node.append(close,root);
+    node.append(root);
     this.style=doc.createElement('style');
     this.style.textContent=ManualBookmarkDock.styles;
     node.append(this.style);
@@ -76,9 +105,29 @@ export class ManualBookmarkDock {
     };
     node.addEventListener('keydown',this.keyHandler);
     node.addEventListener('keyup',this.keyHandler);
+    // When another tab was editing the same video, a visible open Dock
+    // checks the latest record. Broadcast no video IDs or bookmark content.
+    this.visibilityHandler=()=>{
+      if(this.disposed||!this.node.open||
+         doc.visibilityState!=='visible')return;
+      void this.session.refreshIfIdle();
+    };
+    this.outsideHandler=event=>{
+      if(this.disposed||!this.node.open)return;
+      const path=event.composedPath();
+      if(path.includes(this.node)||(this.trigger&&path.includes(this.trigger)))return;
+      this.close(false);
+    };
+    this.toggleHandler=()=>this.panel?.setVisible(this.node.open&&!this.closing);
+    node.addEventListener('toggle',this.toggleHandler);
     try {
       this.panel=new ManualBookmarkPanel(root,session,deps);
+      this.panel.setVisible(false);
+      doc.addEventListener('visibilitychange',this.visibilityHandler);
+      doc.addEventListener('pointerdown',this.outsideHandler,true);
+      doc.addEventListener('click',this.outsideHandler,true);
     }catch(error){
+      node.removeEventListener('toggle',this.toggleHandler);
       node.removeEventListener('keydown',this.keyHandler);
       node.removeEventListener('keyup',this.keyHandler);
       node.remove();
@@ -101,13 +150,15 @@ export class ManualBookmarkDock {
   }
   deactivate():void{
     if(this.disposed)return;
-    this.close();this.session.deactivate();
+    this.cancelAnimation();this.closing=false;this.node.open=false;this.node.inert=false;
+    if(this.floating){this.node.classList.remove('zw-points-floating');this.home.append(this.node);this.floating=false;}
+    this.trigger?.setAttribute('aria-expanded','false');this.panel.setVisible(false);this.session.deactivate();
   }
   private static readonly styles=`
     .zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
-    .zenzaManualBookmarkDock>summary{padding:10px 82px 10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
+    .zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
     .zenzaManualBookmarkDock[open]{overflow:auto}
-    .zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:420px;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
+    .zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:400px;transition:width .18s ease;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
     .zenzaManualBookmarkDockContent{padding:0 14px 14px}
     .zenzaManualBookmarkDock h3{font-size:13px;margin:12px 0 8px;color:#f4f7ff;letter-spacing:.02em}
     .zenzaManualBookmarkDock p{margin:5px 0 10px;color:#aebbd1;font-size:12px}
@@ -127,7 +178,7 @@ export class ManualBookmarkDock {
     .zenzaManualBookmarkDock input[data-bookmark-rename-id]{width:130px;flex:1 1 100px}
     .zenzaManualBookmarkDock .zw-point-section{border-top:1px solid #354056;margin-top:12px;padding-top:2px}
     .zenzaManualBookmarkDock .zw-point-section:first-child{border-top:0;margin-top:0}
-    .zenzaManualBookmarkDock .zw-point-range-inputs{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 6px}
+    .zenzaManualBookmarkDock .zw-point-range-inputs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:10px}
     .zenzaManualBookmarkDock .zw-point-range{height:6px;border-radius:3px;background:#354056;position:relative;margin:12px 0;overflow:hidden}
     .zenzaManualBookmarkDock .zw-point-range span{position:absolute;height:100%;background:#6ed9bc}
     .zenzaManualBookmarkDock button[aria-pressed="true"]{background:#245f52;border-color:#6ed9bc}
@@ -137,13 +188,41 @@ export class ManualBookmarkDock {
     .zenzaManualBookmarkDock .zw-bookmark-edit{flex:1 1 100%;border:0;background:transparent}
     .zenzaManualBookmarkDock .zw-bookmark-edit summary{font-size:11px;padding:2px 0;color:#aebbd1}
     .zenzaManualBookmarkDock small{display:block;color:#aebbd1;font-size:11px;line-height:1.6}
-    .zenzaManualBookmarkDock .zw-points-close{position:absolute;top:5px;right:8px;margin:0;min-height:28px;font-size:12px}
+    .zenzaManualBookmarkDock.zw-library-wide{width:620px}
+    .zenzaManualBookmarkDock [hidden]{display:none!important}
+    .zenzaManualBookmarkDock .zw-scene-preview{flex:none;width:80px;aspect-ratio:16/9;background:#253346;color:#b9c9d9;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:11px}
+    .zenzaManualBookmarkDock .zw-scene-preview img,.zenzaManualBookmarkDock .zw-scene-preview canvas{width:100%;height:100%;object-fit:cover}
+    .zenzaManualBookmarkDock li>span{flex:1 1 80px}
+    .zenzaManualBookmarkDock .zw-point-line{display:flex;align-items:center;gap:8px;margin:10px 0}
+    .zenzaManualBookmarkDock .zw-point-line>span{flex:1}
+    .zenzaManualBookmarkDock .zw-auto-setting{display:flex;margin-top:10px}
+    .zenzaManualBookmarkDock input[type=checkbox]{width:16px;height:16px;min-height:0;accent-color:#6ed9bc}
+    .zenzaManualBookmarkDock .zw-automatic-edit summary,.zenzaManualBookmarkDock .zw-bookmark-edit summary{cursor:pointer}
+    .zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:zw-bookmark-reveal .14s ease}
+    .zenzaManualBookmarkDock .zw-library-nav{display:block;margin-left:auto}
+    .zenzaManualBookmarkDock .zw-library-search{display:flex;gap:8px;flex-wrap:wrap}
+    .zenzaManualBookmarkDock .zw-library-search input{flex:1;min-width:150px}
+    .zenzaManualBookmarkDock select{background:#101722;color:#f4f7ff;border:1px solid #53627b;border-radius:5px;padding:6px;font:inherit}
+    .zenzaManualBookmarkDock .zw-library-group{margin-top:12px}
+    .zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+    .zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{width:100%;margin:8px 0}
+    .zenzaManualBookmarkDock .zw-point-range-inputs label{display:block}
+    .zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%}
+    .zenzaManualBookmarkDock .zw-point-range-inputs button{width:100%;padding:5px 2px;font-size:12px}
+    @keyframes zw-bookmark-reveal{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+    @media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock.zw-points-floating{transition:none}.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:none}}
+    @media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
     `;
   dispose():void {
     if(this.disposed)return;
     this.disposed=true;
+    this.cancelAnimation();
     this.node.removeEventListener('keydown',this.keyHandler);
     this.node.removeEventListener('keyup',this.keyHandler);
+    this.node.ownerDocument.removeEventListener('visibilitychange',this.visibilityHandler);
+    this.node.ownerDocument.removeEventListener('pointerdown',this.outsideHandler,true);
+    this.node.ownerDocument.removeEventListener('click',this.outsideHandler,true);
+    this.node.removeEventListener('toggle',this.toggleHandler);
     this.panel.dispose();
     this.session.dispose();
     this.node.remove();

@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "packages/zenza/src/pocket/PocketCardMetadataLoader.ts",
+  "runtime": "packages/zenza/src/pocket/PocketCardMetadataLoader.js",
+  "sourceSha256": "ecf29e19d1070b7aa1b6a10795673ee94f8f101be56047f2f66331516528bc4e",
+  "runtimeSha256": "76c5288d3e51a461e28ebce8f13f796edaac42da3c61cfb773679e55868eb1ba"
+}

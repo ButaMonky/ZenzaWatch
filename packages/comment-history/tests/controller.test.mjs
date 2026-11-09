@@ -15,3 +15,51 @@ test('OFF cancels obsolete work and late completion cannot reapply it',async()=>
 test('manual stop keeps successful partial pages and leaves next-video auto mode enabled',async()=>{let count=0,release;const h=make({preferences:preferences(true,{maxAdditionalComments:5}),fetchPage:async()=>++count===1?[{id:'10',fork:'main',commentCount:10,comments:[comment(3,1700000003),comment(4,1700000004)]}]:new Promise(r=>release=r)});const pending=h.controller.normalReady(normal());while(!release)await new Promise(r=>setImmediate(r));h.controller.stop();await pending;assert.equal(h.calls.length,1);assert.equal(h.controller.state.additionalCount,2);assert.equal(h.controller.state.enabled,true);assert.equal(h.controller.state.phase,'partial');assert.equal(h.notices.length,0);release([]);});
 test('failure uses valid partial result once and emits one notification',async()=>{let n=0;const h=make({preferences:preferences(true,{maxAdditionalComments:5}),fetchPage:async()=>{if(n++)throw Object.assign(new Error('sensitive'),{code:'API_ERROR'});return [{id:'10',fork:'main',commentCount:10,comments:[comment(3,1700000003),comment(4,1700000004)]}];}});await h.controller.normalReady(normal());assert.equal(h.calls.length,1);assert.equal(h.notices.length,1);assert.equal(h.controller.state.phase,'partial');const diagnostic=JSON.stringify(h.controller.state);for(const secret of [KEY,'SYNTHETIC_BODY','SYNTHETIC_USER','sensitive'])assert(!diagnostic.includes(secret));});
 test('acquisition failures notify once without leaking the original error',async()=>{const h=make({acquire:async()=>{throw new Error('private lock failure');}});await h.controller.normalReady(normal());assert.equal(h.controller.state.reason,'operation_failed');assert.equal(h.notices.length,1);assert(!JSON.stringify(h.controller.state).includes('private lock failure'));});
+
+test('hiding during fetch prevents final application without cancelling successful cache',async()=>{
+ let release;const h=make({fetchPage:()=>new Promise(r=>release=r)});const pending=h.controller.normalReady(normal());
+ while(!release)await new Promise(r=>setImmediate(r));
+ await h.controller.setHidden(true);release([{id:'10',fork:'main',commentCount:2,comments:[comment(2,1700000002),comment(3,1700000003)]}]);await pending;
+ assert.equal(h.calls.length,0);assert.equal(h.controller.state.cachedAdditional,2);assert.equal(h.controller.state.hidden,true);
+ await h.controller.setHidden(false);assert.equal(h.calls.length,1);assert.equal(h.controller.state.appliedAdditional,2);
+});
+test('hide invalidates pending display; rapid show re-applies without an error notification',async()=>{
+ let release,control,calls=0;const h=make({render:async(data,o)=>{calls++;if(calls===1){control=o;await new Promise(r=>release=r);if(!o.isCurrent())throw Error('superseded');}return {additionalCount:2};}});
+ const pending=h.controller.normalReady(normal());while(!release)await new Promise(r=>setImmediate(r));
+ await h.controller.setHidden(true);assert.equal(control.isCurrent(),false);
+ const showing=h.controller.setHidden(false);release();await pending;await showing;
+ assert.equal(h.controller.state.hidden,false);assert.equal(h.controller.state.appliedAdditional,2);assert.equal(calls,2);assert.equal(h.notices.length,0);
+});
+
+test('hide while queued keeps the eventual cache without applying it',async()=>{
+ let release;const h=make({acquire:async run=>{await new Promise(r=>release=r);return run();}});
+ const pending=h.controller.normalReady(normal());assert.equal(h.controller.state.phase,'queued');
+ await h.controller.setHidden(true);release();await pending;
+ assert.equal(h.controller.state.hidden,true);assert.equal(h.controller.state.cachedAdditional,2);assert.equal(h.controller.state.appliedAdditional,0);assert.equal(h.calls.length,0);
+ await h.controller.setHidden(false);assert.equal(h.calls.length,1);assert.equal(h.controller.state.appliedAdditional,2);
+});
+
+test('display limit changed during a pending render invalidates the old result and applies new cap',async()=>{
+ let cap=2,release,control;const sizes=[];
+ const h=make({displayLimit:()=>cap,render:async(data,o)=>{const n=data.threads.reduce((v,t)=>v+t.comments.length,0);sizes.push(n);if(sizes.length===1){control=o;await new Promise(r=>release=r);if(!o.isCurrent())throw Error('superseded');}return {additionalCount:n};}});
+ const pending=h.controller.normalReady(normal());while(!release)await new Promise(r=>setImmediate(r));
+ cap=1;h.prefs.setEnabled(true);assert.equal(control.isCurrent(),false);release();await pending;
+ assert.deepEqual(sizes,[2,1]);assert.equal(h.controller.state.appliedAdditional,1);assert.equal(h.notices.length,0);
+});
+test('cached slider requests queued behind a render keep only the latest',async()=>{
+ let release,first=true;const sizes=[];const h=make({render:async(data)=>{const n=data.threads.reduce((v,t)=>v+t.comments.length,0);sizes.push(n);if(first){first=false;await new Promise(r=>release=r);}return {additionalCount:n};}});
+ const initial=h.controller.normalReady(normal());while(!release)await new Promise(r=>setImmediate(r));
+ const a=h.controller.setCachedCount(1),b=h.controller.setCachedCount(0);release();await initial;await a;await b;
+ assert.deepEqual(sizes,[2,0]);assert.equal(h.controller.state.appliedAdditional,0);
+});
+
+test('queued slider commit cannot affect the next video',async()=>{
+ let release,first=true;const sizes=[];const h=make({render:async data=>{const n=data.threads.reduce((v,t)=>v+t.comments.length,0);sizes.push(n);if(first){first=false;await new Promise(r=>release=r);}return {additionalCount:n};}});
+ const old=h.controller.normalReady(normal());while(!release)await new Promise(r=>setImmediate(r));
+ const queued=h.controller.setCachedCount(0);await h.controller.normalReady(normal('sm2'));release();await old;await queued;
+ assert.equal(h.controller.state.videoId,'sm2');assert.equal(h.controller.state.appliedAdditional,2);assert.deepEqual(sizes,[2,2]);
+});
+test('loading an exhausted selection does not restart its network request',async()=>{
+ let requests=0;const h=make({fetchPage:async()=>{requests++;return [];}});await h.controller.normalReady(normal());
+ const before=requests;await h.controller.loadSelectedCount();assert.equal(requests,before);
+});

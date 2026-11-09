@@ -50,7 +50,7 @@ describe('Task318 real source setting inventory',()=>{
     const model=new Model({config:ctx.actual,legacyRoot:root,actions:ctx.actions,
       historySchema:ZenzaCommentHistorySettings.SETTINGS_SCHEMA});
     const legacy=[...root.querySelectorAll('[data-setting-name]')].map(x=>x.dataset.settingName);
-    const internalKeys=new Set(['screenFilter.enable','screenFilter.saved']);
+    const internalKeys=new Set(['screenFilter.enable','screenFilter.saved','screenFilter.userPresets']);
     const missing=legacy.filter(key=>!model.descriptor(key)&&!internalKeys.has(key));
     const ignored=featureIds.filter(key=>!model.descriptor(key)&&!internalKeys.has(key));
     assert.deepStrictEqual(missing,[]);
@@ -73,6 +73,7 @@ describe('Task318 real source setting inventory',()=>{
     assert.strictEqual(model.descriptor('commentLayer.maxDisplayComment').category,'コメント表示');
     assert.strictEqual(model.descriptor('screenFilter.enable'),null);
     assert.strictEqual(model.descriptor('screenFilter.saved'),null);
+    assert.strictEqual(model.descriptor('screenFilter.userPresets'),null);
     assert(model.descriptor('enableFilter'));
     assert(model.descriptor('sharedNgLevel'));
     assert(model.descriptor('screenFilter.applyToScreenshot'));

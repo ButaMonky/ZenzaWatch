@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.357-task981
+// @version        2.7.365-task989
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-06 00:57Z 86a17b66
+// build: 2026-11-09 21:18Z 5cc4ce6
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.357-task981';
+    var VER = '2.7.365-task989';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-06 00:57Z 86a17b66';
+    var BUILD = '2026-11-09 21:18Z 5cc4ce6';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -2155,23 +2155,33 @@ const {HistorySession} = modules[7];
 const {createZenzaSeed,toZenzaThreads} = modules[8];
 const {normalizeSettings} = modules[1];
 const MAX_ADDITIONAL=20000;
-const RESET={phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
+const RESET={hidden:false,phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
 class CommentHistoryController {
 	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
-	#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+	#displayLimit;#cachedRequest=0;#displayRevision=0;#restoreTarget=0;#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
 	#state={enabled:false,videoId:null,normalCount:0,...RESET};
-	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
+	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{},displayLimit=()=>MAX_ADDITIONAL}={}){
 		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
 		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+		if(typeof displayLimit!=='function')throw new TypeError('Invalid display limit');
+		this.#displayLimit=displayLimit;
 		this.#state.enabled=preferences.get().enabled===true;
 		this.#off=preferences.subscribe(snapshot=>{
 			if(this.#disposed)return;
 			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
 			if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
-			else {this.#emit({});if(!before&&this.#seed)void this.start();}
+			else {
+				const limit=this.#limit();
+				const reduced=this.#state.appliedTarget>limit;
+				if(reduced){this.#displayRevision++;this.#restoreTarget=Math.min(this.#restoreTarget,limit);this.#state.appliedTarget=limit;}
+				this.#emit({});
+				if(!before&&this.#seed)void this.start();
+				else if(reduced&&!this.#operation&&!this.#state.hidden&&this.#report)void this.setCachedCount(limit);
+			}
 		});
 	}
 	get state(){return JSON.parse(JSON.stringify(this.#state));}
+	#limit(){try{const n=Number(this.#displayLimit());return Number.isFinite(n)?Math.max(0,Math.min(MAX_ADDITIONAL,Math.floor(n))):0;}catch{return 0;}}
 	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
 	#emit(changes){
 		Object.assign(this.#state,changes);
@@ -2179,7 +2189,7 @@ class CommentHistoryController {
 		for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
 	}
 	#cancel(clear){
-		this.#epoch++;this.#operation?.abort();this.#operation=null;
+		this.#epoch++;this.#cachedRequest++;this.#displayRevision++;this.#restoreTarget=0;this.#operation?.abort();this.#operation=null;
 		this.#session?.removeHistory();this.#session=null;this.#report=null;
 		if(clear){try{this.#clear();}catch{}}
 	}
@@ -2202,13 +2212,43 @@ class CommentHistoryController {
 		if(this.#state.phase==='queued'){this.#operation?.abort();}
 		else this.#session?.cancel();
 	}
+	setHidden(value){
+		const hidden=!!value;
+		if(this.#disposed||!this.#seed||!this.#state.enabled||hidden===this.#state.hidden)return Promise.resolve(this.state);
+		this.#displayRevision++;
+		this.#cachedRequest++;
+		if(hidden){
+			this.#restoreTarget=this.#state.appliedTarget;
+			this.#clear({retain:true});
+			this.#emit({hidden:true,appliedAdditional:0});
+			return Promise.resolve(this.state);
+		}
+		this.#emit({hidden:false});
+		if(this.#operation)return this.#promise;
+		return this.start({displayOnly:true,target:this.#restoreTarget});
+	}
 	whenIdle(){return this.#promise;}
 	more(){return this.start({more:true});}
 	restart(){return this.start({restart:true});}
+	loadSelectedCount(){
+		let target;try{target=normalizeSettings(this.#preferences.get().settings).maxAdditionalComments;}catch{return this.start();}
+		if(this.#state.phase==='render-error'||(this.#report&&(!this.#report.resumeAvailable||this.#state.cachedAdditional>=target)))return this.setCachedCount(target);
+		return this.start({target,more:!!this.#report?.resumeAvailable});
+	}
+	setCachedCount(value){
+		if(!Number.isInteger(value)||value<0||value>MAX_ADDITIONAL)throw new TypeError('Invalid cached count');
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
+		if(this.#operation){
+			const request=++this.#cachedRequest,seed=this.#seed;
+			return this.#promise=this.#promise.then(()=>request===this.#cachedRequest&&seed===this.#seed?this.setCachedCount(value):this.state);
+		}
+		if(!this.#report||!this.#session)return Promise.resolve(this.state);
+		return this.start({displayOnly:true,target:Math.min(value,this.#limit(),this.#report.counts.additionalCount)});
+	}
 	setAppliedCount(value){
 		const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
 		if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
-		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
 		if(this.#operation)return this.#promise;
 		if(!this.#session||!this.#report){
 			if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
@@ -2219,7 +2259,7 @@ class CommentHistoryController {
 		return this.start({displayOnly:true,target:n});
 	}
 	start({more=false,restart=false,target,displayOnly=false}={}){
-		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
 		if(this.#operation)return this.#promise;
 		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
 		if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
@@ -2234,7 +2274,7 @@ class CommentHistoryController {
 		const goal=applyOnly?oldGoal:
 			target!==undefined?Math.min(MAX_ADDITIONAL,target):
 			continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
-		const appliedTarget=target!==undefined?target:retryRender?this.#state.appliedTarget:goal;
+		const appliedTarget=Math.min(this.#limit(),target!==undefined?target:retryRender?this.#state.appliedTarget:goal);
 		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
 		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
 		const seed=this.#seed;
@@ -2259,17 +2299,23 @@ class CommentHistoryController {
 				const report=this.#report;
 				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
 				let applied;
-				const limit=Math.min(appliedTarget,report.counts.additionalCount);
-				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:current,signal:operation.signal});}
-				catch{
-					if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
-					return;
+				let limit=0;
+				while(current()&&!this.#state.hidden){
+					limit=Math.min(this.#state.appliedTarget,this.#limit(),report.counts.additionalCount);
+					const revision=this.#displayRevision;
+					const displayCurrent=()=>current()&&!this.#state.hidden&&revision===this.#displayRevision;
+					try{
+						applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:displayCurrent,signal:operation.signal});
+						if(displayCurrent())break;
+					}catch{
+						if(displayCurrent()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');return;}
+					}
 				}
 				if(!current())return;
 				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
-				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??limit,
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:this.#state.hidden?0:applied?.additionalCount??limit,
 					canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
-				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify(this.#state.hidden?'コメント増量：一部取得で終了しました。取得済みのコメントは保持しています。':'コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
 			}catch{
 				if(this.#epoch===epoch&&this.#state.enabled){
 					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
@@ -2286,7 +2332,7 @@ return Object.freeze({CommentHistoryController});
 })();
 modules[10] = (() => {
 const {SETTINGS_SCHEMA} = modules[1];
-const {HISTORY_PRESETS,APPLIED_PRESETS,createBrowserHistoryPreferences} = modules[3];
+const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[3];
 const {CommentHistoryController} = modules[9];
 const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
 const CSS=`
@@ -2296,7 +2342,7 @@ const CSS=`
 .commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
 .commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
 @keyframes zenzaHistoryPulse{50%{opacity:.48}}
-.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:16px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
+.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:12px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
 .zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
 .zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
 @keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
@@ -2306,15 +2352,17 @@ const CSS=`
 .zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
 .zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
 .zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
-.ch-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.ch-header strong{font-size:16px;flex:1}.ch-header button{padding:1px 8px;font-size:22px;background:none;border:0}
+.ch-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}.ch-header strong{font-size:16px;flex:1}
+.ch-visibility{display:flex;align-items:center;justify-content:space-between;gap:8px}.ch-visibility strong{font-size:13px}.zenzaCommentHistoryPanel [data-ch-visibility]{min-width:76px;min-height:32px;padding:5px 8px;font-weight:700;background:#79dfc9;color:#0c2b28;border-color:#79dfc9}
 .ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
-.ch-counter{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#91f2dc}.ch-counter small{font-size:12px;font-weight:400;color:#b4c2d0;margin-left:5px}
-.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:9px 0}
-.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:10px 0 14px}
-.ch-action-row{display:grid;grid-template-columns:124px minmax(0,1fr);gap:10px;align-items:end;margin-top:12px}.ch-action-row label{display:grid;gap:3px;color:#b4c2d0;font-size:11px}
-.zenzaCommentHistoryPanel select{width:100%;height:36px;padding:4px 8px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
-.zenzaCommentHistoryPanel [data-ch-primary]{background:#79dfc9;color:#0c2b28;border-color:#79dfc9;min-height:36px;font-weight:700}
-.ch-details{border-top:1px solid #33475d;margin-top:14px;padding-top:11px}.ch-details summary{cursor:pointer;color:#cedde9}.ch-details>div{margin-top:10px}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin-bottom:9px;font-size:12px}.ch-footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px}.ch-footer button{background:none;font-size:12px;padding:5px 8px}
+.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:6px 0}.ch-status{margin-top:6px}
+.zenzaCommentHistoryPanel [hidden]{display:none!important}.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:8px 0}
+.ch-slider{margin:10px 0 6px}.ch-slider-label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;color:#b4c2d0;font-size:12px}.ch-slider-label output{color:#e6eef5;font-variant-numeric:tabular-nums}.ch-slider input{display:block;width:100%;height:24px;margin:2px 0;accent-color:#72e4cc}.ch-slider input:disabled{opacity:.45}.ch-slider-ticks{display:flex;justify-content:space-between;color:#b4c2d0;font-size:11px}
+.ch-action-row{display:grid;grid-template-columns:112px minmax(0,1fr) 68px;gap:6px;align-items:center;margin-top:8px}.ch-action-row label{color:#b4c2d0;font-size:12px}
+.zenzaCommentHistoryPanel select{width:100%;min-width:0;height:32px;padding:4px 6px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
+.zenzaCommentHistoryPanel [data-ch-primary]{min-height:32px;padding:5px 6px;font-weight:700}
+.ch-bottom{margin-top:12px;padding-top:10px;border-top:1px solid #33475d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px}.ch-details{display:contents}.ch-details:not([open])>div{display:none}.ch-details summary{grid-column:1;grid-row:1;padding:5px 0;cursor:pointer;color:#cedde9}.ch-details>div{grid-column:1/-1}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin:8px 0;font-size:12px}.ch-bottom [data-ch-advanced]{grid-column:2;grid-row:1;background:none;font-size:12px;padding:5px 8px;min-height:32px}.zenzaCommentHistoryPanel .ch-setting-error:empty{display:none}
+@media(max-width:360px){.ch-action-row{grid-template-columns:100px minmax(0,1fr) 60px;gap:5px}}
 .ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
 .is-youTube .commentHistorySwitch{display:none}
 `;
@@ -2324,7 +2372,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 function mountHistorySettings(container,{preferences}={}){
 	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
 	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
-		`<label><span>${esc(d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
+		`<label><span>${esc(d.name==='maxAdditionalComments'?'読み込むコメント数':d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
 	).join('')+'<p class="ch-setting-error" role="status"></p>';
 	const error=container.querySelector('.ch-setting-error');
 	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
@@ -2344,24 +2392,56 @@ class CommentHistoryPanel {
 	_init(){
 		if(this.view)return;
 		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel zen-family';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
-		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><div class="ch-action-row ch-apply-row"><label>適用する件数<select data-ch-applied-target aria-label="適用する件数">${APPLIED_PRESETS.map(n=>`<option value="${n}">${n?fmt(n)+' 件':'0 件（増量前）'}</option>`).join('')}</select></label><span class="ch-note" data-ch-apply-summary></span></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。適用する件数を減らしても取得済みの分は保持し、戻すときは再取得しません。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>取得済みの追加分（保持中）</span><span data-ch-cached></span><span>適用中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> 自動で増量</label></header>
+<div class="ch-visibility"><strong data-ch-visibility-status role="status" aria-live="polite"></strong><button type="button" data-ch-visibility aria-pressed="false">非表示</button></div>
+<div class="ch-status" data-ch-status role="status" aria-live="polite" hidden></div><div class="ch-progress" hidden><progress value="0" max="5000" aria-label="読み込みの進捗"></progress></div>
+<div class="ch-slider"><div class="ch-slider-label"><label for="zenza-history-percentage" data-ch-apply-label>追加コメント数</label><output for="zenza-history-percentage" data-ch-apply-summary></output></div><input id="zenza-history-percentage" type="range" min="0" max="100" step="1" value="0" data-ch-applied-target aria-label="追加コメント数"><div class="ch-slider-ticks"><span>0%</span><span>100%</span></div></div>
+<div class="ch-action-row"><label for="zenza-history-quota">読み込むコメント数</label><select id="zenza-history-quota" data-ch-quota aria-label="読み込むコメント数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select><button type="button" data-ch-primary>読込</button></div>
+<div class="ch-bottom"><details class="ch-details"><summary>詳細・説明</summary><div><p class="ch-note">非表示は今の動画だけです。再表示では読み込み済みデータを使います。次の動画は「自動で増量」の設定に従います。</p><p class="ch-note">「自動で増量」をOFFにすると通常コメントだけに戻り、読み込み済みデータを破棄します。追加コメント数の100%は、選択した読み込み数と読み込み済み数の小さい方です。</p><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>読み込み済みの追加分（保持中）</span><span data-ch-cached></span><span>表示中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button><p class="ch-note" data-ch-pages></p></div></details><button type="button" data-ch-advanced>上級者設定</button></div><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
 		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
-		el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
+		el.querySelector('[data-ch-visibility]').onclick=()=>safe(()=>{void this.controller.setHidden(!this.controller.state.hidden);});
 		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
 		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
-		el.querySelector('[data-ch-applied-target]').onchange=e=>safe(()=>{void this.controller.setAppliedCount(Number(e.target.value)).catch?.(()=>{});});
+		const slider=el.querySelector('[data-ch-applied-target]');
+		slider.oninput=()=>{if(slider.disabled)return;this.sliderDraft={key:this._sliderKey(),percent:Number(slider.value)};this._slider(this.controller.state,this.preferences.get());};
+		slider.onchange=()=>safe(()=>{
+			if(slider.disabled)return;
+			const count=Math.round(this._sliderLimit(this.controller.state,this.preferences.get())*Number(slider.value)/100);
+			this.sliderDraft=null;
+			void this.controller.setCachedCount(count).catch(()=>{if(!this.disposed)this.refresh(this.controller.state);});
+		});
 		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
-		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
+		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else void this.controller.loadSelectedCount();};
 		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
 		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
 		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
 	}
+	_sliderLimit(state,p){return state.cacheAvailable?Math.max(0,Math.min(Number(p.settings.maxAdditionalComments)||0,Number(state.cachedAdditional)||0)):0;}
+	_sliderKey(){const s=this.controller.state,p=this.preferences.get();return JSON.stringify([s.videoId,s.phase,s.hidden,s.enabled,s.appliedTarget,this._sliderLimit(s,p)]);}
+	_slider(state,p){
+		const slider=this.view.querySelector('[data-ch-applied-target]'),limit=this._sliderLimit(state,p);
+		const key=this._sliderKey();if(this.sliderDraft?.key!==key)this.sliderDraft=null;
+		const count=Math.min(limit,Math.max(0,Number(state.appliedTarget)||0));
+		const percent=this.sliderDraft?.percent??(limit?Math.round(count/limit*100):0);
+		const preview=this.sliderDraft?Math.round(limit*percent/100):count;
+		slider.value=String(percent);slider.disabled=!!state.hidden||!state.enabled||['fetching','queued','applying'].includes(state.phase)||!limit||p.valid===false;
+		slider.setAttribute('aria-valuetext',`${fmt(preview)} 件、${percent}%`);
+		this.view.querySelector('[data-ch-apply-summary]').textContent=`${fmt(preview)} / ${fmt(limit)} 件（${percent}%）`;
+		this.view.querySelector('[data-ch-apply-label]').textContent=state.hidden?'追加コメント数（保持）':'追加コメント数';
+	}
 	refresh(state){
 		const a=this.anchor?.();
-		if(a){a.classList.toggle('is-active',state.enabled);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：ON':'：OFF'));}
+		if(a){a.classList.toggle('is-active',state.enabled&&!state.hidden);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：自動で増量 有効':'：自動で増量 無効'));}
 		if(!this.view)return;
 		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
 		q('[data-ch-enabled]').checked=state.enabled;
+		const visibility=q('[data-ch-visibility]');
+		visibility.textContent=state.hidden?'再表示':'非表示';
+		visibility.setAttribute('aria-label',state.hidden?'増量分を再表示':'増量分を非表示');
+		visibility.setAttribute('aria-pressed',String(!!state.hidden));
+		visibility.disabled=!state.enabled||!state.videoId||p.valid===false||(!running&&!state.hidden&&!state.cachedAdditional);
+		q('.ch-visibility').classList.toggle('is-hidden',!!state.hidden);
+		q('[data-ch-visibility-status]').textContent=state.hidden?'増量分：非表示中':!state.enabled?'自動増量：OFF':state.appliedAdditional>0?'増量分：表示中':running?'増量分：準備中':state.cachedAdditional?'増量分：表示なし':'増量分なし';
 		const quota=q('[data-ch-quota]');
 		quota.querySelector('[data-ch-custom]')?.remove();
 		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
@@ -2369,24 +2449,18 @@ class CommentHistoryPanel {
 			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
 		}
 		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
-		q('[data-ch-count]').textContent=fmt(state.additionalCount);q('[data-ch-goal]').textContent=` / ${fmt(state.goal||p.settings.maxAdditionalComments)} 件`;
+		q('.ch-progress').hidden=!running;
 		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
-		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
+		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'自動増量なし · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
 		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
 		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
-		const appliedSelect=q('[data-ch-applied-target]');appliedSelect.querySelector('[data-ch-custom]')?.remove();
-		const appliedTarget=Number(state.appliedTarget)||0;
-		if(!APPLIED_PRESETS.includes(appliedTarget)){
-			const option=this.doc.createElement('option');option.dataset.chCustom='';option.value=String(appliedTarget);option.textContent=fmt(appliedTarget)+' 件';appliedSelect.append(option);
-		}
-		appliedSelect.value=String(appliedTarget);
-		appliedSelect.disabled=!state.enabled||running||!state.cacheAvailable||p.valid===false;
-		q('[data-ch-apply-summary]').textContent=state.cacheAvailable?`取得済み ${fmt(state.cachedAdditional)} 件 · 適用中 ${fmt(state.appliedAdditional)} 件`:'';
-		if(state.cacheAvailable&&!running&&['ready','partial'].includes(state.phase)&&state.appliedAdditional<state.cachedAdditional)
-			q('[data-ch-status]').textContent+=state.appliedAdditional===0?'（増量前の表示・取得済み分は保持）':'（一部を適用中・取得済み分は保持）';
+		if(state.hidden)q('[data-ch-status]').textContent=running?'増量分は非表示 · 取得済みデータを保持しています':'増量分は非表示 · 再表示できます';
+		q('[data-ch-status]').hidden=!running&&!['partial','unavailable','render-error'].includes(state.phase)&&p.valid!==false;
+		this._slider(state,p);
 		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-cached]').textContent=fmt(state.cachedAdditional);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
-		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
-		button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
+		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機中止':state.phase==='fetching'?'読込中止':state.phase==='applying'?'反映中':state.phase==='render-error'?'再反映':'読込';
+		button.title='選択したコメント数まで読み込みます。読み込み済みの分は再取得しません。';
+		button.disabled=(state.hidden&&!['fetching','queued'].includes(state.phase))||state.phase==='applying'||state.phase==='unavailable'||(state.phase!=='render-error'&&!running&&state.cacheAvailable&&state.appliedTarget>=this._sliderLimit(state,p)&&(state.cachedAdditional>=p.settings.maxAdditionalComments||state.canContinue===false))||p.valid===false;q('[data-ch-restart]').disabled=state.hidden||running||!state.enabled;
 	}
 	_place(){
 		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
@@ -2414,7 +2488,7 @@ class CommentHistoryPanel {
 		}
 	}
 	open(){
-		if(this.disposed)return;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
 	}
 	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
 	toggle(){this.isOpen?this.close(true):this.open();}
@@ -2423,9 +2497,9 @@ class CommentHistoryPanel {
 function createHistoryFeature({dialog,config,window:win=globalThis.window}){
 	const preferences=createBrowserHistoryPreferences({window:win,config});
 	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
-	const controller=new CommentHistoryController({preferences,acquire,
+	const controller=new CommentHistoryController({preferences,acquire,displayLimit:()=>preferences.get().settings.maxAdditionalComments,
 		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
-		clearRender:()=>dialog._nicoVideoPlayer?.clearCommentHistory(),
+		clearRender:options=>dialog._nicoVideoPlayer?.clearCommentHistory(options),
 		notify:text=>dialog.execCommand('notify',text)});
 	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
 	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
@@ -4012,6 +4086,24 @@ const Config = (() => {
 				'supporterCredit.skipInPlaylist': false, // 連続再生中は表示しない
 				'screenFilter.enable': true,
 				'screenFilter.saved': '',
+				'screenFilter.bloom': 0,
+				'screenFilter.bloomThreshold': 70,
+				'screenFilter.bloomRadius': 3,
+				'screenFilter.posterize': 0,
+				'screenFilter.edge': 0,
+				'screenFilter.edgeStyle': 'sketch',
+				'screenFilter.rgbShift': 0,
+				'screenFilter.grain': 0,
+				'screenFilter.grainSize': 1,
+				'screenFilter.scanlines': 0,
+				'screenFilter.scanlineSpacing': 4,
+				'screenFilter.userPresets': '', // 名前付きの色・画質調整（JSON）
+				'screenFilter.showDescriptions': true,
+				'screenFilter.showAdjustments': true,
+				'screenFilter.renderQuality': 'normal',
+				'screenFilter.changedOnly': false,
+				'screenFilter.splitPosition': 50,
+				'screenFilter.presetOrder': '',
 				'screenFilter.brightness': 100, // 明るさ(%)
 				'screenFilter.contrast': 100, // コントラスト(%)
 				'screenFilter.saturate': 100, // 彩度(%)
@@ -4251,7 +4343,7 @@ const Config = (() => {
 						}
 						return true;
 				},
-				preserveInvalidKeys: Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS),
+				preserveInvalidKeys: [...Object.keys(ZenzaCommentHistorySettings.HISTORY_PREFERENCE_DEFAULTS), 'screenFilter.userPresets'],
 				prefix: PRODUCT,
 				ignoreExportKeys: ['message', 'lastPlayerId', 'lastWatchId', 'debug'],
 				readonly: !location || location.host !== 'www.nicovideo.jp',
@@ -6515,31 +6607,50 @@ const WatchPageHistory = (() => {
 		let dialog, watchId, path, title;
 		const RESTORE_DELAY = 3000;
 		let isPushed = false;
+		let pushedUrl = null;
+		let navigationGeneration = 0;
 		const restore = () => {
-				history.replaceState(null, null, originalUrl);
-				document.title = (isOpen ? '📺' : '') + originalTitle.replace(/^📺/, '');
+				if (isPushed) {
+						if (window.location.href === pushedUrl) {
+								history.replaceState(history.state, null, originalUrl);
+								document.title = (isOpen ? '📺' : '') + originalTitle.replace(/^📺/, '');
+						}
+						else {
+								originalUrl = window.location.href;
+								originalTitle = document.title;
+						}
+				}
 				isPushed = false;
+				pushedUrl = null;
 				bouncedRestore.cancel();
 		};
 		const bouncedRestore = _.debounce(restore, RESTORE_DELAY);
 		const pushHistory = (path, title) => {
-				history.replaceState(null, null, path);
+				if (!isPushed)
+						updateOriginal();
+				history.replaceState(history.state, null, path);
+				pushedUrl = window.location.href;
 				document.title = (isOpen ? '📺' : '') + title.replace(/^📺/, '');
 				isPushed = true;
 				bouncedRestore();
 		};
 		const updateOriginal = () => {
 				if (isPushed) {
-						return;
+						if (window.location.href === pushedUrl)
+								return;
+						isPushed = false;
+						pushedUrl = null;
 				}
 				originalUrl = window && window.location && window.location.href;
 				originalTitle = window && window.document && window.document.title;
 		};
-		const onVideoInfoLoad = _.debounce(({ watchId, title, owner: { name } }) => {
-				if (!watchId || !isOpen) {
+		const onVideoInfoLoad = _.debounce(({ watchId, title, owner, generation, requestId }) => {
+				if (!watchId || !isOpen || generation !== navigationGeneration ||
+						requestId !== dialog?._requestId) {
 						return;
 				}
-				title = `${title} by ${name} - ${PRODUCT}`;
+				const name = owner?.name;
+				title = `${title}${name ? ` by ${name}` : ''} - ${PRODUCT}`;
 				path = `/watch/${watchId}`;
 				if (location.host === 'www.nicovideo.jp') {
 						return pushHistory(path, title);
@@ -6548,16 +6659,24 @@ const WatchPageHistory = (() => {
 						return NicoVideoApi.pushHistory(path, title);
 				}
 		});
+		const onDialogVideoInfoLoad = (info) => {
+				onVideoInfoLoad({ ...info, generation: navigationGeneration, requestId: dialog?._requestId });
+		};
 		const onDialogOpen = () => {
+				navigationGeneration++;
+				onVideoInfoLoad.cancel();
 				updateOriginal();
 				isOpen = true;
 		};
 		const onDialogClose = () => {
+				navigationGeneration++;
+				onVideoInfoLoad.cancel();
 				isOpen = false;
 				watchId = title = path = null;
-				history.replaceState(null, null, originalUrl);
-				document.title = originalTitle;
-				isPushed = false;
+				if (isPushed)
+						restore();
+				else if (window.location.href === originalUrl)
+						document.title = originalTitle;
 				bouncedRestore.cancel();
 		};
 		const initialize = (_dialog) => {
@@ -6569,7 +6688,7 @@ const WatchPageHistory = (() => {
 						dialog.on('close', onDialogClose);
 				}
 				dialog.on('open', onDialogOpen);
-				dialog.on('loadVideoInfo', onVideoInfoLoad);
+				dialog.on('loadVideoInfo', onDialogVideoInfoLoad);
 				if (location.host !== 'www.nicovideo.jp') {
 						return;
 				}
@@ -6596,9 +6715,12 @@ const WatchPageHistory = (() => {
 						if (!lock) {
 								return;
 						}
-						history.replaceState(null, title, path);
+						history.replaceState(history.state, title, path);
+						const markedUrl = location.href;
 						await new Promise(r => setTimeout(r, 3000));
-						history.replaceState(null, lastTitle, lastUrl);
+						if (location.href === markedUrl) {
+								history.replaceState(history.state, lastTitle, lastUrl);
+						}
 						await new Promise(r => setTimeout(r, 10000));
 				});
 		};
@@ -7933,11 +8055,23 @@ const ItemDataConverter = {
 				return textUtil.convertKansuEi(text)
 						.replace(/([0-9]{1,9})/g, m => m.padStart(10, '0')).replace(/([０-９]{1,9})/g, m => m.padStart(10, '０'));
 		},
+		safeIso: (value, fallback = '1970-01-01T00:00:00.000Z') => {
+				if (value === null || value === undefined || value === '') {
+						return fallback;
+				}
+				const normalized = typeof value === 'string' && /^\d{4}-\d{2}-\d{2} /.test(value) ?
+						value.replace(/-/g, '/') : value;
+				const date = new Date(normalized);
+				return Number.isFinite(date.getTime()) ? date.toISOString() : fallback;
+		},
 		fromFlapiMylistItem: (data) => {
 				const isChannel = data.id.startsWith('so');
 				const isMymemory = /^[0-9]+$/.test(data.id);
 				const thumbnail = data.is_middle_thumbnail ?
 						`${data.thumbnail_url}.M` : data.thumbnail_url;
+				const postedAt = ItemDataConverter.safeIso(data.first_retrieve);
+				const createdAt = ItemDataConverter.safeIso(data.create_time == null ? null : Number(data.create_time) * 1000, postedAt);
+				const updatedAt = ItemDataConverter.safeIso(data.thread_update_time, createdAt);
 				return {
 						watchId: data.id,
 						videoId: data.id,
@@ -7947,9 +8081,9 @@ const ItemDataConverter = {
 						mylistCount: data.mylist_counter * 1,
 						viewCount: data.view_counter * 1,
 						thumbnail,
-						postedAt: new Date(data.first_retrieve.replace(/-/g, '/')).toISOString(),
-						createdAt: new Date(data.create_time * 1000).toISOString(),
-						updatedAt: new Date(data.thread_update_time.replace(/-/g, '/')).toISOString(),
+						postedAt,
+						createdAt,
+						updatedAt,
 						isChannel,
 						isMymemory,
 						mylistComment: data.mylist_comment || '',
@@ -7960,6 +8094,9 @@ const ItemDataConverter = {
 				const data = item.item_data;
 				const isChannel = data.video_id.startsWith('so');
 				const isMymemory = !isChannel && /^[0-9]+$/.test(data.watch_id);
+				const postedAt = ItemDataConverter.safeIso(Number(data.first_retrieve) * 1000);
+				const createdAt = ItemDataConverter.safeIso(Number(item.create_time) * 1000, postedAt);
+				const updatedAt = ItemDataConverter.safeIso(Number(data.update_time) * 1000, createdAt);
 				return {
 						watchId: isChannel ? data.video_id : data.watch_id,
 						videoId: data.video_id,
@@ -7969,9 +8106,9 @@ const ItemDataConverter = {
 						mylistCount: data.mylist_counter * 1,
 						viewCount: data.view_counter * 1,
 						thumbnail: data.thumbnail_url,
-						postedAt: new Date(data.first_retrieve * 1000).toISOString(),
-						createdAt: new Date(item.create_time * 1000).toISOString(),
-						updatedAt: new Date(data.update_time * 1000).toISOString(),
+						postedAt,
+						createdAt,
+						updatedAt,
 						isChannel,
 						isMymemory,
 						mylistComment: item.description || '',
@@ -7983,13 +8120,15 @@ const ItemDataConverter = {
 				const isMymemory = /^[0-9]+$/.test(data.id);
 				const thumbnail = data.is_middle_thumbnail ?
 						`${data.thumbnail_url}.M` : data.thumbnail_url;
-				const [min, sec] = data.length.split(':');
-				const postedAt = new Date(data.first_retrieve.replace(/-/g, '/')).toISOString();
+				const rawDuration = Number(data.length_seconds);
+				const matchedLength = typeof data.length === 'string' ? /^(\d+):([0-5]?\d)$/.exec(data.length) : null;
+				const duration = data.length_seconds != null && Number.isFinite(rawDuration) && rawDuration >= 0 ? rawDuration : matchedLength ? Number(matchedLength[1]) * 60 + Number(matchedLength[2]) : 0;
+				const postedAt = ItemDataConverter.safeIso(data.first_retrieve);
 				return {
 						watchId: data.id,
 						videoId: data.id,
 						title: data.title,
-						duration: min * 60 + sec * 1,
+						duration,
 						commentCount: data.num_res * 1,
 						mylistCount: data.mylist_counter * 1,
 						viewCount: data.view_counter * 1,
@@ -8005,7 +8144,7 @@ const ItemDataConverter = {
 				const isMymemory = /^[0-9]+$/.test(data.id);
 				const thumbnail = data.is_middle_thumbnail ?
 						`${data.thumbnail_url}.M` : data.thumbnail_url;
-				const postedAt = new Date(data.first_retrieve.replace(/-/g, '/')).toISOString();
+				const postedAt = ItemDataConverter.safeIso(data.first_retrieve);
 				return {
 						watchId: data.id,
 						videoId: data.id,
@@ -10397,12 +10536,7 @@ class PlayerState extends BaseState {
 						this.emit('update-videoInfo', null);
 						return;
 				}
-				if (this._videoInfo) {
-						this._videoInfo.update(videoInfo);
-				}
-				else {
-						this._videoInfo = videoInfo;
-				}
+				this._videoInfo = videoInfo;
 				global.debug.videoInfo = videoInfo;
 				this.videoCount = videoInfo.count;
 				this.thumbnail = videoInfo.betterThumbnail;
@@ -11209,6 +11343,7 @@ const ThumbInfoLoader = (() => {
 })();
 const PlaylistApiLoader = (() => {
 		const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
+		const mayUseSharedCache = (type) => type === 'series' || type === 'user-uploaded';
 		let cacheStorage = null;
 		class PlaylistApiLoader {
 				constructor() {
@@ -11239,7 +11374,7 @@ const PlaylistApiLoader = (() => {
 						if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
 								return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
 						}
-						const cacheData = cacheStorage.getItem(cacheKey);
+						const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
 						if (cacheData) {
 								return cacheData;
 						}
@@ -11252,7 +11387,9 @@ const PlaylistApiLoader = (() => {
 								throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
 						}
 						const data = result.data.items;
-						cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+						if (mayUseSharedCache(type)) {
+								cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+						}
 						return data;
 				}
 				async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
@@ -11277,7 +11414,8 @@ const PlaylistApiLoader = (() => {
 								return result;
 						};
 						checkCurrent();
-						const cached = cacheStorage.getItem(cacheKey);
+						const cached = (mayUseSharedCache(type) ?
+								cacheStorage.getItem(cacheKey) : null);
 						if (cached?.complete === true && Array.isArray(cached.items) && cached.maxItems === maxItems) {
 								return expose(cached);
 						}
@@ -11365,7 +11503,9 @@ const PlaylistApiLoader = (() => {
 						checkCurrent();
 						const value = { items, totalCount, limited, maxItems, complete: true };
 						try {
-								cacheStorage.setItem(cacheKey, value, CACHE_EXPIRE_TIME);
+								if (mayUseSharedCache(type)) {
+										cacheStorage.setItem(cacheKey, value, CACHE_EXPIRE_TIME);
+								}
 						}
 						catch (_) { /* CacheStorage is best-effort, not part of successful loading. */ }
 						return expose(value);
@@ -11399,8 +11539,6 @@ const PlaylistApiLoader = (() => {
 		return new PlaylistApiLoader();
 })();
 const MylistApiLoader = (() => {
-		const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
-		const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
 		const createMylistError = (message, { status = 'fail', result, code, cause } = {}) => {
 				const error = new Error(message);
 				error.status = status;
@@ -11420,9 +11558,6 @@ const MylistApiLoader = (() => {
 		if (window.ZenzaWatch) {
 				emitter.on('csrfTokenUpdate', (t) => {
 						token = t;
-						if (cacheStorage) {
-								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-						}
 				});
 		}
 		class MylistApiLoader {
@@ -11430,102 +11565,108 @@ const MylistApiLoader = (() => {
 						if (!cacheStorage) {
 								cacheStorage = new CacheStorage(sessionStorage);
 						}
-						if (!token) {
-								token = cacheStorage.getItem('csrfToken');
-								if (token) {
-										console.log('cached token exists'); // Task 088: トークンの値はログに出さない
-								}
-						}
+						cacheStorage.removeItem('csrfToken');
+						cacheStorage.removeItem('mylistList');
 				}
 				setCsrfToken(t) {
 						token = t;
-						if (cacheStorage) {
-								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-						}
-						else {
-								cacheStorage = new CacheStorage(sessionStorage);
-								cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-						}
 				}
 				async _getCsrfToken() {
-						if (!cacheStorage) {
-								cacheStorage = new CacheStorage(sessionStorage);
+						const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
+						let page;
+						try {
+								page = await netUtil.fetch(tokenUrl, { credentials: 'include' })
+										.then((r) => r.text());
 						}
-						token = cacheStorage.getItem('csrfToken');
-						if (token) {
-								console.log('cached token exists'); // Task 088: トークンの値はログに出さない
+						catch (_) {
+								token = '';
+								throw createMylistError('マイリストトークン取得失敗');
 						}
-						else {
-								const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
-								const result = await netUtil.fetch(tokenUrl, {
+						try {
+								const dom = new DOMParser().parseFromString(page, 'text/html');
+								const element = dom.querySelector('#js-initial-userpage-data');
+								const rawEnvironment = element?.getAttribute('data-environment');
+								if (!rawEnvironment) {
+										throw new Error('missing environment');
+								}
+								const env = JSON.parse(rawEnvironment);
+								const csrfToken = env?.csrfToken;
+								if (typeof csrfToken !== 'string' || !csrfToken.trim()) {
+										throw new Error('missing CSRF token');
+								}
+								token = csrfToken;
+								return csrfToken;
+						}
+						catch (_) {
+								token = '';
+								throw createMylistError('マイリストトークン取得失敗（認証情報がありません）');
+						}
+				}
+				async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
+						const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+						const url = kind === 'watchLater' ?
+								'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
+								`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
+						const query = new URLSearchParams({ pageSize: 100, page: 1 });
+						const results = [];
+						const fingerprints = new Set();
+						const ensureCurrent = () => {
+								if (!isCurrent)
+										return;
+								let current = false;
+								try {
+										current = isCurrent() === true;
+								}
+								catch { }
+								if (!current)
+										throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+						};
+						const maxPages = 100;
+						for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+								ensureCurrent();
+								const delimiter = kind === 'watchLater' ? '&' : '?';
+								const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
 										credentials: 'include'
-								}).then((r) => r.text()).catch((result) => {
-										throw new Error('マイリストトークン取得失敗', { result, status: 'fail' });
+								}).then((r) => r.json())
+										.catch((e) => {
+										throw createMylistError(label + 'の取得失敗(2)', { cause: e });
 								});
-								const dom = new DOMParser().parseFromString(result, 'text/html');
-								const initUserpageDataContena = dom.querySelector('#js-initial-userpage-data');
-								const env = JSON.parse(initUserpageDataContena.getAttribute('data-environment'));
-								this.setCsrfToken(env.csrfToken);
+								ensureCurrent();
+								const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
+								if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
+										throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+								}
+								if (watchId !== undefined) {
+										const found = pageData.items.find(item => item?.watchId === watchId);
+										if (found) {
+												ensureCurrent();
+												return [found];
+										}
+								}
+								results.push(...pageData.items);
+								if (!pageData.hasNext)
+										return results;
+								if (!pageData.items.length) {
+										throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
+								}
+								const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
+								if (fingerprints.has(fingerprint)) {
+										throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
+								}
+								fingerprints.add(fingerprint);
+								query.set('page', String(pageNumber + 1));
 						}
-						return token;
+						throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
 				}
-				async _getDeflistItems(frontendId = 6, frontendVersion = 0) {
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc';
-						const page = new URLSearchParams({ pageSize: 100, page: 1 });
-						let data;
-						do {
-								const res = await netUtil.fetch(`${url}&${page.toString()}`, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => { throw createMylistError('あとで見るの取得失敗(2)', { result: e, cause: e }); });
-								if (res.meta.status !== 200 || !res.data.watchLater) {
-										throw createMylistError('あとで見るの取得失敗(1)', { result: res, code: res?.error?.code });
-								}
-								if (data == null) {
-										data = res.data.watchLater;
-								}
-								else {
-										data.hasInvisibleItems = data.hasInvisibleItems || res.data.watchLater.hasInvisibleItems;
-										data.hasNext = res.data.watchLater.hasNext;
-										data.items = data.items.concat(res.data.watchLater.items);
-								}
-								page.set('page', String(parseInt(page.get('page')) + 1));
-						} while (data && data.hasNext);
-						return data.items;
+				async _getDeflistItems(frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
+						return this._scanItems('watchLater', null, frontendId, frontendVersion, watchId, isCurrent);
 				}
-				async _getMylistItems(id, frontendId = 6, frontendVersion = 0) {
-						const url = `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-						const page = new URLSearchParams({ pageSize: 100, page: 1 });
-						let data;
-						do {
-								const res = await netUtil.fetch(`${url}?${page.toString()}`, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => { throw createMylistError('マイリスト取得失敗(2)', { result: e, cause: e }); });
-								if (res.meta.status !== 200 || !res.data.mylist) {
-										throw createMylistError('マイリスト取得失敗(1)', { result: res, code: res?.error?.code });
-								}
-								if (data == null) {
-										data = res.data.mylist;
-								}
-								else {
-										data.hasInvisibleItems = data.hasInvisibleItems || res.data.mylist.hasInvisibleItems;
-										data.hasNext = res.data.mylist.hasNext;
-										data.items = data.items.concat(res.data.mylist.items);
-								}
-								page.set('page', String(parseInt(page.get('page')) + 1));
-						} while (data && data.hasNext);
-						return data.items;
+				async _getMylistItems(id, frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
+						return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
 				}
 				async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
 						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-						const cacheKey = 'mylistList';
-						const cacheData = cacheStorage.getItem(cacheKey);
-						if (cacheData) {
-								return cacheData;
-						}
 						const result = await netUtil.fetch(url, {
 								headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
 								credentials: 'include'
@@ -11535,11 +11676,10 @@ const MylistApiLoader = (() => {
 								throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
 						}
 						const data = result.data.mylists;
-						cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
 						return data;
 				}
-				async findDeflistItemByWatchId(watchId) {
-						const items = await this._getDeflistItems();
+				async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);
 						for (let item of items) {
 								if (item.watchId === watchId) {
 										return item;
@@ -11551,8 +11691,8 @@ const MylistApiLoader = (() => {
 								result: { watchId, list: 'watchLater' }
 						});
 				}
-				async findMylistItemByWatchId(watchId, groupId) {
-						const items = await this._getMylistItems(groupId);
+				async findMylistItemByWatchId(watchId, groupId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const items = await this._getMylistItems(groupId, frontendId, frontendVersion, watchId, isCurrent);
 						for (let item of items) {
 								if (item.watchId === watchId) {
 										return item;
@@ -11564,8 +11704,10 @@ const MylistApiLoader = (() => {
 								result: { watchId, groupId, list: 'mylist' }
 						});
 				}
-				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0 } = {}) {
-						const item = await this.findDeflistItemByWatchId(watchId);
+				async removeDeflistItem(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const item = await this.findDeflistItemByWatchId(watchId, { frontendId, frontendVersion, isCurrent });
+						if (isCurrent && isCurrent() !== true)
+								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
 						const body = `itemIds=${item.itemId}`;
 						const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
 						const cacheKey = 'deflistItems';
@@ -11594,8 +11736,10 @@ const MylistApiLoader = (() => {
 								result, code: result.error.code
 						});
 				}
-				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0 } = {}) {
-						const item = await this.findMylistItemByWatchId(watchId, groupId);
+				async removeMylistItem(watchId, groupId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
+						const item = await this.findMylistItemByWatchId(watchId, groupId, { frontendId, frontendVersion, isCurrent });
+						if (isCurrent && isCurrent() !== true)
+								throw createMylistError('削除中止（動画が変更されました）', { code: 'STALE' });
 						let body = 'itemIds=' + item.itemId;
 						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
 						const cacheKey = `mylistItems: ${groupId}`;
@@ -11654,19 +11798,7 @@ const MylistApiLoader = (() => {
 								};
 						}
 						if (result.meta.status && result.meta.status === 409 && !isRetry) {
-								await this.removeDeflistItem(watchId).catch((err) => {
-										throw createMylistError('あとで見る登録失敗(101)', {
-												result: err.result,
-												code: err.code,
-												cause: err
-										});
-								});
-								const added = await this.addDeflistItem(watchId, description, true, { frontendId, frontendVersion });
-								return {
-										status: 'ok',
-										result: added,
-										message: 'あとで見るの先頭に移動'
-								};
+								return { status: 'ok', result, message: 'あとで見るに登録済み（既存の登録を保持しました）' };
 						}
 						if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
 								throw createMylistError('あとで見る登録失敗(100)', {
@@ -11699,13 +11831,13 @@ const MylistApiLoader = (() => {
 						});
 						if (result.meta.status && (result.meta.status === 200 || result.meta.status === 201)) {
 								cacheStorage.removeItem(cacheKey);
+								emitter.emitAsync('mylistAdd', watchId, groupId, description);
 								this.removeDeflistItem(watchId).catch(() => { });
 								return { status: 'ok', result, message: 'マイリスト登録' };
 						}
 						if (!result.meta.status /*|| !result.error*/) {
 								throw createMylistError('マイリスト登録失敗(100)', { result });
 						}
-						emitter.emitAsync('mylistAdd', watchId, groupId, description);
 						throw createMylistError(result.error.description, {
 								result, code: result.error.code
 						});
@@ -11750,7 +11882,23 @@ const NicoRssLoader = (() => {
 		const load = async (url) => {
 				const rssText = await netUtil.fetch(url).then(r => r.text());
 				const xml = new DOMParser().parseFromString(rssText, 'application/xml');
-				const items = Array.from(xml.querySelectorAll('item')).map(i => parseItem(i));
+				const entries = Array.from(xml.querySelectorAll('item'));
+				const items = [];
+				let skipped = 0;
+				for (const entry of entries) {
+						try {
+								items.push(parseItem(entry));
+						}
+						catch (_) {
+								skipped++;
+						}
+				}
+				if (skipped > 0 && items.length === 0) {
+						throw new Error('RSSの項目を解析できませんでした');
+				}
+				if (skipped > 0) {
+						window.console.warn('RSSの形式不正の項目をスキップしました', skipped);
+				}
 				return items;
 		};
 		const loadRanking = ({ genre = 'all', term = 'hour', tag = '' }) => {
@@ -12892,6 +13040,8 @@ class CrossDomainGate extends Emitter {
 										close: (params) => post('close', params, storeName),
 										put: (record, transfer) => post('put', record, storeName, transfer),
 										update: (data) => post('update', data, storeName),
+										scrubWatchVideoInfo: (data) => post('scrubWatchVideoInfo', data, storeName),
+										listSavedPoints: (data) => post('listSavedPoints', data, storeName),
 										get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
 										updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
 										delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),
@@ -13057,13 +13207,15 @@ class AutoResumeClearCoordinator {
 				}
 		}
 }
-const {normalizeManualBookmarks, addManualBookmark, renameManualBookmark, removeManualBookmark} = (() => {
+const {normalizeManualBookmarks, addManualBookmark, updateManualBookmark, renameManualBookmark, removeManualBookmark} = (() => {
 const MAX_PER_VIDEO = 100;
 const validId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(id);
 const validClock = (n) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0;
 const validTime = (time, duration) => typeof time === 'number' && Number.isFinite(time) && time >= 0 &&
-		typeof duration === 'number' && Number.isFinite(duration) && duration > 0 &&
-		time < duration;
+		(duration === undefined || (typeof duration === 'number' &&
+				Number.isFinite(duration) && duration > 0 && time < duration));
+const validEnd = (time, end, duration) => end === undefined || (typeof end === 'number' && Number.isFinite(end) && end > time &&
+		(duration === undefined || (end - time >= 0.25 && end <= duration)));
 const labelFor = (raw) => {
 		const label = typeof raw === 'string' ? raw.trim() : '';
 		if (Array.from(label).length > 80)
@@ -13089,7 +13241,7 @@ function normalizeManualBookmarks(raw, videoId, duration) {
 						continue;
 				const x = item;
 				if (x.videoId !== videoId || !validId(x.id) || seen.has(x.id) ||
-						!validTime(x.time, duration) || !validClock(x.createdAt) ||
+						!validTime(x.time) || !validEnd(x.time, x.endTime) || !validClock(x.createdAt) ||
 						!validClock(x.updatedAt) || x.updatedAt < x.createdAt)
 						continue;
 				let label;
@@ -13101,6 +13253,7 @@ function normalizeManualBookmarks(raw, videoId, duration) {
 				}
 				seen.add(x.id);
 				result.push({ id: x.id, videoId, time: x.time, label,
+						...(x.endTime === undefined ? {} : { endTime: x.endTime }),
 						createdAt: x.createdAt, updatedAt: x.updatedAt });
 				if (result.length === MAX_PER_VIDEO)
 						break;
@@ -13110,7 +13263,7 @@ function normalizeManualBookmarks(raw, videoId, duration) {
 function addManualBookmark(existing, draft, duration) {
 		const previous = forVideo(existing, draft.videoId);
 		if (!validId(draft.id) || !validTime(draft.time, duration) ||
-				!validClock(draft.now))
+				!validEnd(draft.time, draft.endTime, duration) || !validClock(draft.now))
 				throw new TypeError('Invalid bookmark draft');
 		if (previous.some(item => item.id === draft.id))
 				throw new RangeError('Duplicate bookmark ID');
@@ -13118,15 +13271,35 @@ function addManualBookmark(existing, draft, duration) {
 				throw new RangeError('Bookmark limit reached');
 		const created = { id: draft.id, videoId: draft.videoId,
 				time: draft.time, label: labelFor(draft.label),
+				...(draft.endTime === undefined ? {} : { endTime: draft.endTime }),
 				createdAt: draft.now, updatedAt: draft.now };
 		if (previous.length !== existing.length)
 				throw new TypeError('Mixed bookmark video IDs');
 		return immutable([...existing, created]);
 }
+function updateManualBookmark(existing, videoId, id, changes, now, duration) {
+		const previous = forVideo(existing, videoId);
+		if (previous.length !== existing.length || !validId(id) || !validClock(now) ||
+				!validTime(changes.time, duration) || !validEnd(changes.time, changes.endTime, duration))
+				throw new TypeError('Invalid bookmark update');
+		if (!previous.some(entry => entry.id === id))
+				throw new RangeError('Bookmark no longer exists');
+		const label = labelFor(changes.label);
+		return immutable(previous.map(entry => {
+				if (entry.id !== id)
+						return entry;
+				const { endTime: oldEnd, ...point } = entry;
+				return { ...point, time: changes.time, label,
+						...(changes.endTime === undefined ? {} : { endTime: changes.endTime }),
+						updatedAt: Math.max(now, entry.updatedAt, entry.createdAt) };
+		}));
+}
 function renameManualBookmark(existing, videoId, id, label, now) {
 		const previous = forVideo(existing, videoId);
 		if (previous.length !== existing.length || !validId(id) || !validClock(now))
 				throw new TypeError('Invalid bookmark update');
+		if (!previous.some(entry => entry.id === id))
+				throw new RangeError('Bookmark no longer exists');
 		const normalized = labelFor(label);
 		return immutable(existing.map(entry => entry.id === id ? { ...entry, label: normalized, updatedAt: Math.max(now, entry.updatedAt, entry.createdAt) } : entry));
 }
@@ -13136,7 +13309,7 @@ function removeManualBookmark(existing, videoId, id) {
 				throw new TypeError('Invalid bookmark delete');
 		return immutable(existing.filter(entry => entry.id !== id));
 }
-return {normalizeManualBookmarks, addManualBookmark, renameManualBookmark, removeManualBookmark};
+return {normalizeManualBookmarks, addManualBookmark, updateManualBookmark, renameManualBookmark, removeManualBookmark};
 })();
 const {IndexedDbManualBookmarkBackend, ManualBookmarkRepository} = (() => {
 const databaseName = 'zenzawatch-manual-bookmarks';
@@ -13257,6 +13430,41 @@ class IndexedDbManualBookmarkBackend {
 						req.onsuccess = () => { value = req.result?.items || []; };
 				});
 		}
+		async list() {
+				const db = await this.open();
+				return new Promise((resolve, reject) => {
+						let transaction;
+						try {
+								transaction = db.transaction(storeName, 'readonly');
+						}
+						catch (error) {
+								reject(error);
+								return;
+						}
+						this.activeTransactions.add(transaction);
+						const rows = [];
+						transaction.oncomplete = () => { this.activeTransactions.delete(transaction); resolve(rows); };
+						transaction.onabort = () => {
+								this.activeTransactions.delete(transaction);
+								reject(transaction.error || new Error('Bookmark list aborted'));
+						};
+						transaction.onerror = () => {
+								this.activeTransactions.delete(transaction);
+								reject(transaction.error || new Error('Bookmark list failed'));
+						};
+						const request = transaction.objectStore(storeName).openCursor();
+						request.onerror = () => reject(request.error || new Error('Bookmark list failed'));
+						request.onsuccess = () => {
+								const cursor = request.result;
+								if (!cursor)
+										return;
+								const row = cursor.value;
+								if (row && validateVideoId(row.videoId))
+										rows.push({ videoId: row.videoId, items: row.items });
+								cursor.continue();
+						};
+				});
+		}
 		async update(videoId, change) {
 				if (!validateVideoId(videoId))
 						throw new TypeError('Invalid bookmark video ID');
@@ -13344,6 +13552,25 @@ class ManualBookmarkRepository {
 						throw new TypeError('Invalid bookmark video ID');
 				return this.checked(await this.backend.read(videoId), videoId, duration);
 		}
+		async list() {
+				if (!this.backend.list)
+						return [];
+				const rows = await this.backend.list();
+				return rows.filter(row => row && validateVideoId(row.videoId)).map(row => ({
+						videoId: row.videoId,
+						items: normalizeManualBookmarks(row.items, row.videoId, Number.MAX_VALUE)
+				}));
+		}
+		async update(videoId, id, changes, now, duration) {
+				if (!validateVideoId(videoId))
+						throw new TypeError('Invalid bookmark video ID');
+				let result = [];
+				await this.backend.update(videoId, raw => {
+						result = updateManualBookmark(this.checked(raw, videoId, duration), videoId, id, changes, now, duration);
+						return result;
+				});
+				return result;
+		}
 		async add(draft, duration) {
 				if (!validateVideoId(draft?.videoId))
 						throw new TypeError('Invalid bookmark video ID');
@@ -13387,16 +13614,42 @@ const makeState = (status, videoId, bookmarks) => Object.freeze({ status, videoI
 class ManualBookmarkSession {
 		repository;
 		listeners = new Set();
+		changeChannel;
 		current = null;
 		generation = 0;
 		latestAction = 0;
 		activating = null;
 		failedAction = null;
 		readbackRevision = 0;
+		inFlightWrites = 0;
+		refreshing = null;
 		disposed = false;
+		failedLoad = false;
 		state = makeState('idle', null, empty);
-		constructor(repository) { this.repository = repository; }
+		constructor(repository) {
+				this.repository = repository;
+				let channel = null;
+				try {
+						if (typeof window !== 'undefined' && typeof window.BroadcastChannel === 'function') {
+								channel = new window.BroadcastChannel('zenza-manual-bookmarks-v1');
+								channel.onmessage = event => {
+										if (event?.data?.kind !== 'changed')
+												return;
+										void this.refreshIfIdle();
+								};
+						}
+				}
+				catch { /* Unsupported sandbox/origin: Dock focus/reopen remains the fallback. */ }
+				this.changeChannel = channel;
+		}
+		notifyOtherTabs() {
+				try {
+						this.changeChannel?.postMessage({ kind: 'changed' });
+				}
+				catch { /* Never turn a successful bookmark write into a notification error. */ }
+		}
 		get snapshot() { return this.state; }
+		get needsLoadRetry() { return !this.disposed && this.failedLoad && this.state.status === 'error'; }
 		subscribe(listener) {
 				if (this.disposed)
 						throw new Error('Bookmark session disposed');
@@ -13407,7 +13660,7 @@ class ManualBookmarkSession {
 				catch { /* UI observer cannot stop persistence. */ }
 				return () => this.listeners.delete(listener);
 		}
-		update(status, videoId, bookmarks) {
+		publishState(status, videoId, bookmarks) {
 				this.state = makeState(status, videoId, bookmarks);
 				for (const notify of this.listeners) {
 						try {
@@ -13434,10 +13687,11 @@ class ManualBookmarkSession {
 				this.current = Object.freeze({ videoId, duration });
 				this.latestAction = 0;
 				this.failedAction = null;
+				this.failedLoad = false;
 				this.readbackRevision++;
 				const activating = this.loadActivated(generation, videoId, duration);
 				this.activating = activating;
-				this.update('loading', videoId, empty);
+				this.publishState('loading', videoId, empty);
 				void activating.then(() => { if (this.activating === activating)
 						this.activating = null; }, () => { if (this.activating === activating)
 						this.activating = null; });
@@ -13448,13 +13702,14 @@ class ManualBookmarkSession {
 						const bookmarks = await this.repository.load(videoId, duration);
 						if (!this.isCurrent(generation, videoId) || this.latestAction > 0)
 								return Object.freeze({ status: 'stale', snapshot: this.state });
-						const snapshot = this.update('ready', videoId, bookmarks);
+						const snapshot = this.publishState('ready', videoId, bookmarks);
 						return Object.freeze({ status: 'applied', snapshot });
 				}
 				catch {
 						if (!this.isCurrent(generation, videoId) || this.latestAction > 0)
 								return Object.freeze({ status: 'stale', snapshot: this.state });
-						const snapshot = this.update('error', videoId, empty);
+						this.failedLoad = true;
+						const snapshot = this.publishState('error', videoId, empty);
 						return Object.freeze({ status: 'error', snapshot });
 				}
 		}
@@ -13466,10 +13721,13 @@ class ManualBookmarkSession {
 						throw new Error('No active bookmark video');
 				const generation = this.generation;
 				const action = ++this.latestAction;
+				this.inFlightWrites++;
+				this.failedLoad = false;
 				this.failedAction = null;
 				this.readbackRevision++;
 				try {
 						const rows = await operation(owner);
+						this.notifyOtherTabs();
 						if (!this.isCurrent(generation, owner.videoId))
 								return Object.freeze({ status: 'stale', snapshot: this.state });
 						if (this.latestAction !== action) {
@@ -13481,14 +13739,14 @@ class ManualBookmarkSession {
 												if (this.isCurrent(generation, owner.videoId) &&
 														this.latestAction === failedAction && this.failedAction === failedAction &&
 														this.readbackRevision === revision) {
-														this.update('error', owner.videoId, committed);
+														this.publishState('error', owner.videoId, committed);
 												}
 										}
 										catch { /* Preserve the last visible state without disclosing errors. */ }
 								}
 								return Object.freeze({ status: 'stale', snapshot: this.state });
 						}
-						const snapshot = this.update('ready', owner.videoId, rows);
+						const snapshot = this.publishState('ready', owner.videoId, rows);
 						return Object.freeze({ status: 'applied', snapshot });
 				}
 				catch {
@@ -13505,14 +13763,66 @@ class ManualBookmarkSession {
 								return Object.freeze({ status: 'stale', snapshot: this.state });
 						if (this.readbackRevision !== revision)
 								return Object.freeze({ status: 'error', snapshot: this.state });
-						const snapshot = this.update('error', owner.videoId, bookmarks);
+						const snapshot = this.publishState('error', owner.videoId, bookmarks);
 						return Object.freeze({ status: 'error', snapshot });
 				}
+				finally {
+						this.inFlightWrites--;
+				}
 		}
-		add(id, time, now, label = '') {
+		refreshIfIdle() {
+				const owner = this.current;
+				if (this.refreshing)
+						return this.refreshing;
+				if (this.disposed || !owner || this.state.status !== 'ready' ||
+						this.inFlightWrites !== 0 || this.activating !== null) {
+						return Promise.resolve(Object.freeze({ status: 'stale', snapshot: this.state }));
+				}
+				const generation = this.generation, action = this.latestAction;
+				const revision = this.readbackRevision;
+				const pending = (async () => {
+						try {
+								const rows = await this.repository.load(owner.videoId, owner.duration);
+								if (!this.isCurrent(generation, owner.videoId) ||
+										this.latestAction !== action || this.readbackRevision !== revision ||
+										this.inFlightWrites !== 0 || this.state.status !== 'ready') {
+										return Object.freeze({ status: 'stale', snapshot: this.state });
+								}
+								const previous = this.state.bookmarks;
+								const unchanged = previous.length === rows.length && previous.every((old, i) => {
+										const next = rows[i];
+										return next !== undefined && old.id === next.id &&
+												old.videoId === next.videoId && old.time === next.time &&
+												old.endTime === next.endTime && old.label === next.label && old.createdAt === next.createdAt &&
+												old.updatedAt === next.updatedAt;
+								});
+								if (unchanged) {
+										return Object.freeze({ status: 'applied', snapshot: this.state });
+								}
+								const snapshot = this.publishState('ready', owner.videoId, rows);
+								return Object.freeze({ status: 'applied', snapshot });
+						}
+						catch {
+								return Object.freeze({ status: 'error', snapshot: this.state });
+						}
+				})();
+				this.refreshing = pending;
+				void pending.then(() => { if (this.refreshing === pending)
+						this.refreshing = null; }, () => { if (this.refreshing === pending)
+						this.refreshing = null; });
+				return pending;
+		}
+		add(id, time, now, label = '', endTime) {
 				return this.modify(owner => this.repository.add({
-						id, videoId: owner.videoId, time, now, label
+						id, videoId: owner.videoId, time, now, label, ...(endTime === undefined ? {} : { endTime })
 				}, owner.duration));
+		}
+		update(id, changes, now) {
+				return this.modify(owner => {
+						if (!this.repository.update)
+								return Promise.reject(new Error('Bookmark editing unavailable'));
+						return this.repository.update(owner.videoId, id, changes, now, owner.duration);
+				});
 		}
 		rename(id, label, now) {
 				return this.modify(owner => this.repository.rename(owner.videoId, id, label, now, owner.duration));
@@ -13527,8 +13837,9 @@ class ManualBookmarkSession {
 				this.latestAction = 0;
 				this.current = null;
 				this.failedAction = null;
+				this.failedLoad = false;
 				this.readbackRevision++;
-				this.update('idle', null, empty);
+				this.publishState('idle', null, empty);
 		}
 		dispose() {
 				if (this.disposed)
@@ -13536,6 +13847,10 @@ class ManualBookmarkSession {
 				this.deactivate();
 				this.disposed = true;
 				this.listeners.clear();
+				try {
+						this.changeChannel?.close();
+				}
+				catch { }
 				this.repository.close();
 		}
 }
@@ -13562,10 +13877,133 @@ class ManualBookmarkPanel {
 		addDraftRevision = 0;
 		pointDrafts = { a: '', b: '' };
 		loop = null;
+		loopFailureNotice = null;
 		awaitingLoopSeek = false;
-		pointBusy = false;
+		pointGeneration = 0;
+		pointBusyRequest = null;
 		automaticDraftDirty = false;
-		activeTab = 'manual';
+		automaticDraftRevision = 0;
+		activeTab = 'automatic';
+		visible = true;
+		previewLeases = new Map();
+		previewCandidates = new Set();
+		previewObserver = null;
+		library = false;
+		libraryGeneration = 0;
+		libraryRows = [];
+		libraryStatus = 'idle';
+		librarySearch = '';
+		libraryFilter = 'all';
+		expandedVideos = new Set();
+		changeHandler;
+		setVisible(visible) { this.visible = visible; this.refreshPreviews(); }
+		clearPreviews() {
+				this.previewObserver?.disconnect();
+				this.previewObserver = null;
+				this.previewCandidates.clear();
+				for (const cleanup of this.previewLeases.values()) {
+						try {
+								cleanup();
+						}
+						catch { /* optional preview */ }
+				}
+				this.previewLeases.clear();
+		}
+		preview(videoId, time) {
+				const host = this.root.ownerDocument.createElement('div');
+				host.className = 'zw-scene-preview';
+				host.dataset.sceneVideo = videoId;
+				host.dataset.sceneTime = String(time);
+				host.textContent = '場面画像';
+				host.setAttribute('aria-label', displayTime(time) + ' 付近の場面画像');
+				return host;
+		}
+		previewEligible(host) {
+				if (!this.visible || this.disposed || !this.root.contains(host) || host.closest('[hidden]'))
+						return false;
+				const group = host.closest('details[data-library-video]');
+				return !group || group.open;
+		}
+		fillPreviewLeases() {
+				if (!this.visible || this.disposed || !this.deps.createScenePreview)
+						return;
+				const videos = new Set(Array.from(this.previewLeases.keys(), host => host.dataset.sceneVideo));
+				for (const host of this.previewCandidates) {
+						if (this.previewLeases.size >= 12)
+								break;
+						if (this.previewLeases.has(host) || !this.previewEligible(host))
+								continue;
+						const videoId = host.dataset.sceneVideo;
+						if (!videos.has(videoId) && videos.size >= 3)
+								continue;
+						try {
+								this.previewLeases.set(host, this.deps.createScenePreview(host, videoId, Number(host.dataset.sceneTime)));
+								videos.add(videoId);
+						}
+						catch { /* Missing previews never disable text actions. */ }
+				}
+		}
+		refreshPreviews() {
+				this.clearPreviews();
+				if (!this.visible || this.disposed || !this.deps.createScenePreview)
+						return;
+				const hosts = Array.from(this.root.querySelectorAll('[data-scene-video]'))
+						.filter(host => this.previewEligible(host));
+				const Observer = this.root.ownerDocument.defaultView?.IntersectionObserver;
+				if (Observer) {
+						const observer = new Observer(entries => {
+								if (this.previewObserver !== observer || !this.visible || this.disposed)
+										return;
+								for (const entry of entries) {
+										const host = entry.target;
+										if (entry.isIntersecting && this.previewEligible(host))
+												this.previewCandidates.add(host);
+										else {
+												this.previewCandidates.delete(host);
+												const cleanup = this.previewLeases.get(host);
+												if (cleanup) {
+														this.previewLeases.delete(host);
+														try {
+																cleanup();
+														}
+														catch { /* optional preview */ }
+												}
+										}
+								}
+								this.fillPreviewLeases();
+						}, { root: this.root.closest('.zenzaManualBookmarkDock'), rootMargin: '100px' });
+						this.previewObserver = observer;
+						for (const host of hosts)
+								observer.observe(host);
+				}
+				else {
+						for (const host of hosts.slice(0, 12))
+								this.previewCandidates.add(host);
+						this.fillPreviewLeases();
+				}
+		}
+		setRepeatRange(a, b, activate = true) {
+				const duration = this.deps.duration?.() || 0;
+				if (!this.ownsVideo() || !Number.isFinite(a) || !Number.isFinite(b) || a < 0 || b > duration || b - a < 0.25 ||
+						(activate && this.deps.repeatEnabled?.() === false))
+						return false;
+				this.pointDrafts = { a: ManualBookmarkPanel.formatTime(a), b: ManualBookmarkPanel.formatTime(b) };
+				this.loop = activate ? { a, b } : null;
+				this.loopFailureNotice = null;
+				this.resetLoopSeek();
+				this.library = false;
+				this.activeTab = 'repeat';
+				this.render(this.last);
+				if (activate) {
+						try {
+								this.deps.seek(a);
+						}
+						catch {
+								this.stopLoopAfterSeekFailure();
+						}
+				}
+				return true;
+		}
 		selectTab(name) {
 				if (!['manual', 'automatic', 'repeat'].includes(name))
 						return;
@@ -13576,12 +14014,14 @@ class ManualBookmarkPanel {
 				for (const button of this.root.querySelectorAll('[data-point-tab]')) {
 						button.setAttribute('aria-pressed', String(button.dataset.pointTab === name));
 				}
+				this.refreshPreviews();
 		}
 		get isRepeating() { return this.loop !== null; }
 		refreshPreferences() {
 				if (this.deps.repeatEnabled?.() === false) {
 						this.loop = null;
-						this.awaitingLoopSeek = false;
+						this.loopFailureNotice = null;
+						this.resetLoopSeek();
 				}
 				this.render(this.last);
 		}
@@ -13602,10 +14042,38 @@ class ManualBookmarkPanel {
 				const seconds = parts.reduce((n, part) => n * 60 + part, 0);
 				return Number.isFinite(seconds) ? seconds : null;
 		}
+		loopSeekRequestedAt = null;
+		loopSeekAttempts = 0;
+		resetLoopSeek() {
+				this.awaitingLoopSeek = false;
+				this.loopSeekRequestedAt = null;
+				this.loopSeekAttempts = 0;
+		}
+		stopLoopAfterSeekFailure() {
+				this.loop = null;
+				this.resetLoopSeek();
+				this.updateLoopDisplay();
+				this.loopFailureNotice = 'シークできなかったため、区間リピートを停止しました。A・Bを確認して再開してください。';
+				this.pointMessage('repeat', this.loopFailureNotice);
+		}
+		issueLoopSeek(loop) {
+				this.awaitingLoopSeek = true;
+				const now = this.deps.timestamp();
+				this.loopSeekRequestedAt = Number.isFinite(now) ? now : 0;
+				this.loopSeekAttempts++;
+				try {
+						this.deps.seek(loop.a);
+						return true;
+				}
+				catch {
+						this.stopLoopAfterSeekFailure();
+						return false;
+				}
+		}
 		tick(time, paused, seeking) {
 				if (this.disposed || !this.ownsVideo() || this.deps.repeatEnabled?.() === false) {
 						this.loop = null;
-						this.awaitingLoopSeek = false;
+						this.resetLoopSeek();
 						this.updateLoopDisplay();
 						return false;
 				}
@@ -13614,20 +14082,48 @@ class ManualBookmarkPanel {
 						this.deps.repeatState?.(true);
 				if (!loop || !Number.isFinite(time))
 						return false;
-				if (time < loop.b)
-						this.awaitingLoopSeek = false;
-				if (paused || seeking || this.awaitingLoopSeek || time < loop.b)
+				if (seeking)
 						return false;
-				this.awaitingLoopSeek = true;
-				this.deps.seek(loop.a);
-				return true;
+				if (time < loop.b) {
+						this.resetLoopSeek();
+						return false;
+				}
+				if (paused)
+						return false;
+				if (this.awaitingLoopSeek) {
+						const now = this.deps.timestamp();
+						if (!Number.isFinite(now) || this.loopSeekRequestedAt === null ||
+								now - this.loopSeekRequestedAt < 1800)
+								return false;
+						if (this.loopSeekAttempts >= 2) {
+								this.stopLoopAfterSeekFailure();
+								return false;
+						}
+				}
+				return this.issueLoopSeek(loop);
+		}
+		acknowledgeLoopSeek(time) {
+				const loop = this.loop;
+				if (this.disposed || !this.ownsVideo() || this.deps.repeatEnabled?.() === false ||
+						!this.awaitingLoopSeek || !loop || !Number.isFinite(time))
+						return;
+				if (time >= loop.a && time < loop.b)
+						this.resetLoopSeek();
 		}
 		repeatAtEnd() {
 				if (this.disposed || !this.ownsVideo() || this.deps.repeatEnabled?.() === false || !this.loop)
 						return false;
-				this.awaitingLoopSeek = true;
-				this.deps.seek(this.loop.a);
-				return true;
+				if (this.awaitingLoopSeek) {
+						const now = this.deps.timestamp();
+						if (!Number.isFinite(now) || this.loopSeekRequestedAt === null ||
+								now - this.loopSeekRequestedAt < 1800)
+								return true;
+						if (this.loopSeekAttempts >= 2) {
+								this.stopLoopAfterSeekFailure();
+								return false;
+						}
+				}
+				return this.issueLoopSeek(this.loop);
 		}
 		pointButton(action, label) {
 				const button = this.root.ownerDocument.createElement('button');
@@ -13670,15 +14166,54 @@ class ManualBookmarkPanel {
 						status.textContent = this.deps.recordingEnabled?.() === false ?
 								'自動記録はOFFです。手動の編集・しおりは利用できます。' :
 								time === null || time === undefined ? '自動位置はまだありません' : '自動で更新される位置は1件だけです。';
-						section.append(status, this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置を使う'), this.pointButton('delete-automatic', '削除'));
+						const setting = this.root.ownerDocument.createElement('label');
+						setting.className = 'zw-auto-setting';
+						const check = this.root.ownerDocument.createElement('input');
+						check.type = 'checkbox';
+						check.dataset.recordingEnabled = '1';
+						check.checked = this.deps.recordingEnabled?.() !== false;
+						check.disabled = !this.deps.setRecordingEnabled;
+						setting.append(check, '再生位置を自動で記録');
+						const note = this.root.ownerDocument.createElement('small');
+						note.textContent = 'すべての動画に適用。OFFでも保存済みの位置は残ります。';
+						const line = this.root.ownerDocument.createElement('div');
+						line.className = 'zw-point-line';
+						if (time !== null && time !== undefined)
+								line.append(this.preview(this.last.videoId, time));
+						const position = this.root.ownerDocument.createElement('span');
+						position.dataset.automaticPosition = '1';
+						position.textContent = time === null || time === undefined ? '未記録' : displayTime(time);
+						const go = this.pointButton('seek-automatic', '続きへ');
+						go.disabled = time === null || time === undefined;
+						line.append(position, go);
+						const edit = this.root.ownerDocument.createElement('details');
+						edit.className = 'zw-automatic-edit';
+						const summary = this.root.ownerDocument.createElement('summary');
+						summary.textContent = '編集';
+						edit.append(summary, this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置で更新'), this.pointButton('delete-automatic', '削除'));
+						section.append(setting, note, line, edit, status);
 				}
 				else {
 						status.dataset.pointStatus = 'repeat';
-						status.textContent = this.loop ? '区間リピート中' : 'A（開始）とB（終了）を指定します。';
+						status.textContent = this.loop ? '区間リピート中' :
+								(this.loopFailureNotice || 'A（開始）とB（終了）を指定します。');
 						const row = this.root.ownerDocument.createElement('div');
 						row.className = 'zw-point-range-inputs';
-						row.append(this.pointField('a', 'A 開始', this.pointDrafts.a || ''), this.pointButton('set-a', '現在位置をAに'), this.pointField('b', 'B 終了', this.pointDrafts.b || ''), this.pointButton('set-b', '現在位置をBに'));
-						section.append(status, row, this.pointButton('repeat', this.loop ? 'リピートを停止' : 'リピートを開始'), this.pointButton('clear-repeat', '区間をクリア'));
+						for (const name of ['a', 'b']) {
+								const column = this.root.ownerDocument.createElement('div');
+								const time = ManualBookmarkPanel.parseTime(this.pointDrafts[name] || '');
+								const preview = this.root.ownerDocument.createElement('div');
+								preview.className = 'zw-scene-preview';
+								preview.dataset.endpointPreview = name;
+								if (time !== null) {
+										preview.dataset.sceneVideo = this.last.videoId;
+										preview.dataset.sceneTime = String(time);
+								}
+								preview.textContent = time === null ? '時刻を指定' : '場面画像';
+								column.append(this.pointField(name, name === 'a' ? 'A 開始' : 'B 終了', this.pointDrafts[name] || ''), preview, this.pointButton('set-' + name, '現在位置を' + name.toUpperCase() + 'に'));
+								row.append(column);
+						}
+						section.append(status, row, this.pointButton('repeat', this.loop ? 'リピートを停止' : 'リピートを開始'), this.pointButton('save-range', 'しおりに保存'), this.pointButton('clear-repeat', '区間をクリア'));
 						const range = this.root.ownerDocument.createElement('div');
 						range.className = 'zw-point-range';
 						range.dataset.pointRange = '1';
@@ -13713,9 +14248,39 @@ class ManualBookmarkPanel {
 				const duration = this.deps.duration?.() || 0;
 				const a = ManualBookmarkPanel.parseTime(this.pointDrafts.a || '');
 				const b = ManualBookmarkPanel.parseTime(this.pointDrafts.b || '');
+				this.deps.onRepeatRangeChange?.(!this.ownsVideo() || (a === null && b === null) ? null : { a, b, active: !!this.loop });
+				let previewChanged = false;
+				for (const [name, time] of [['a', a], ['b', b]]) {
+						const host = this.root.querySelector('[data-endpoint-preview="' + name + '"]');
+						if (host && host.dataset.sceneTime !== (time === null ? undefined : String(time))) {
+								host.replaceChildren();
+								host.textContent = time === null ? '時刻を指定' : '場面画像';
+								if (time === null) {
+										delete host.dataset.sceneVideo;
+										delete host.dataset.sceneTime;
+								}
+								else {
+										host.dataset.sceneVideo = this.last.videoId;
+										host.dataset.sceneTime = String(time);
+								}
+								previewChanged = true;
+						}
+				}
+				if (previewChanged)
+						this.refreshPreviews();
 				if (span) {
 						span.style.left = duration > 0 && a !== null ? 100 * a / duration + '%' : '0%';
 						span.style.width = duration > 0 && a !== null && b !== null && b > a ? 100 * (b - a) / duration + '%' : '0%';
+				}
+		}
+		updatePointBusyControls() {
+				const busy = this.pointBusyRequest !== null;
+				for (const name of ['save-automatic', 'delete-automatic', 'current-automatic']) {
+						const button = this.root.querySelector('[data-point-action="' + name + '"]');
+						if (button) {
+								button.disabled = busy;
+								button.setAttribute('aria-busy', String(busy));
+						}
 				}
 		}
 		async pointAction(action) {
@@ -13723,6 +14288,30 @@ class ManualBookmarkPanel {
 						return;
 				const duration = this.deps.duration?.() || 0;
 				const read = (name) => this.root.querySelector('[data-point-field="' + name + '"]');
+				if (action === 'seek-automatic') {
+						const time = this.deps.automaticTime?.();
+						if (time !== null && time !== undefined && time >= 0 && time < duration)
+								this.deps.seek(time);
+						return;
+				}
+				if (action === 'save-range') {
+						const a = ManualBookmarkPanel.parseTime(this.pointDrafts.a || ''), b = ManualBookmarkPanel.parseTime(this.pointDrafts.b || '');
+						if (a === null || b === null || a < 0 || b > duration || b - a < 0.25) {
+								this.pointMessage('repeat', 'Aより後のBを動画の長さ以内で指定してください。');
+								return;
+						}
+						const generation = this.pointGeneration;
+						try {
+								const result = await this.session.add(this.deps.newId(), a, this.deps.timestamp(), '区間 ' + displayTime(a), b);
+								if (!this.disposed && generation === this.pointGeneration)
+										this.pointMessage('repeat', result.status === 'applied' ? '区間をしおりに保存しました。' : '保存できませんでした。区間は残っています。');
+						}
+						catch {
+								if (!this.disposed && generation === this.pointGeneration)
+										this.pointMessage('repeat', '保存できませんでした。区間は残っています。');
+						}
+						return;
+				}
 				if (action === 'set-a' || action === 'set-b') {
 						const name = action === 'set-a' ? 'a' : 'b', field = read(name), time = this.deps.currentTime();
 						if (!Number.isFinite(time) || time < 0 || time > duration)
@@ -13731,13 +14320,15 @@ class ManualBookmarkPanel {
 						if (field)
 								field.value = this.pointDrafts[name];
 						this.loop = null;
-						this.awaitingLoopSeek = false;
+						this.loopFailureNotice = null;
+						this.resetLoopSeek();
 						this.updateLoopDisplay();
 						return;
 				}
 				if (action === 'clear-repeat') {
 						this.loop = null;
-						this.awaitingLoopSeek = false;
+						this.loopFailureNotice = null;
+						this.resetLoopSeek();
 						this.pointDrafts = { a: '', b: '' };
 						for (const name of ['a', 'b']) {
 								const field = read(name);
@@ -13749,6 +14340,7 @@ class ManualBookmarkPanel {
 						return;
 				}
 				if (action === 'repeat') {
+						this.loopFailureNotice = null;
 						if (this.loop) {
 								this.loop = null;
 								this.pointMessage('repeat', '停止しました。区間は残っています。');
@@ -13764,20 +14356,29 @@ class ManualBookmarkPanel {
 						}
 						this.pointDrafts = { a: read('a').value, b: read('b').value };
 						this.loop = { a, b };
-						this.awaitingLoopSeek = false;
+						this.resetLoopSeek();
 						this.pointMessage('repeat', ManualBookmarkPanel.formatTime(a) + ' → ' + ManualBookmarkPanel.formatTime(b) + ' をリピート中');
 						this.updateLoopDisplay();
-						this.deps.seek(a);
+						try {
+								this.deps.seek(a);
+						}
+						catch {
+								this.stopLoopAfterSeekFailure();
+						}
 						return;
 				}
 				if (action === 'current-automatic') {
+						if (this.pointBusyRequest)
+								return;
 						this.automaticDraftDirty = true;
+						this.automaticDraftRevision++;
 						const field = read('automatic');
 						if (field)
 								field.value = ManualBookmarkPanel.formatTime(this.deps.currentTime());
+						await this.pointAction('save-automatic');
 						return;
 				}
-				if (this.pointBusy)
+				if (this.pointBusyRequest !== null)
 						return;
 				if (action !== 'save-automatic' && action !== 'delete-automatic')
 						return;
@@ -13786,28 +14387,47 @@ class ManualBookmarkPanel {
 						this.pointMessage('automatic', '動画の長さより前の時刻を入力してください。');
 						return;
 				}
-				const videoId = this.last.videoId;
-				this.pointBusy = true;
+				const videoId = this.last.videoId, generation = this.pointGeneration, revision = this.automaticDraftRevision;
+				const request = { generation };
+				this.pointBusyRequest = request;
+				this.updatePointBusyControls();
 				try {
 						const ok = action === 'delete-automatic' ? await this.deps.deleteAutomatic?.() :
 								await this.deps.editAutomatic?.(seconds);
-						if (this.disposed || this.last.videoId !== videoId)
+						if (this.disposed || this.pointGeneration !== generation || this.last.videoId !== videoId)
 								return;
 						this.pointMessage('automatic', ok ? (action === 'delete-automatic' ? '自動位置を削除しました。' : 'この端末に保存しました。次の自動記録で更新されます。') : '保存できませんでした。入力は残っています。');
-						if (ok)
-								this.automaticDraftDirty = false;
-						if (ok && action === 'delete-automatic') {
+						if (ok) {
+								if (revision === this.automaticDraftRevision)
+										this.automaticDraftDirty = false;
+								this.clearPreviews();
+								const line = this.root.querySelector('[data-point-section="automatic"] .zw-point-line');
+								line?.querySelector('[data-scene-video]')?.remove();
+								if (action !== 'delete-automatic' && line)
+										line.prepend(this.preview(videoId, seconds));
+								this.refreshPreviews();
+								const position = this.root.querySelector('[data-automatic-position]');
+								if (position)
+										position.textContent = action === 'delete-automatic' ? '未記録' : displayTime(seconds);
+								const go = this.root.querySelector('[data-point-action="seek-automatic"]');
+								if (go)
+										go.disabled = action === 'delete-automatic';
+						}
+						if (ok && action === 'delete-automatic' && revision === this.automaticDraftRevision) {
 								const field = read('automatic');
 								if (field)
 										field.value = '';
 						}
 				}
 				catch {
-						if (!this.disposed && this.last.videoId === videoId)
+						if (!this.disposed && this.pointGeneration === generation && this.last.videoId === videoId)
 								this.pointMessage('automatic', '保存できませんでした。入力は残っています。');
 				}
 				finally {
-						this.pointBusy = false;
+						if (this.pointBusyRequest === request) {
+								this.pointBusyRequest = null;
+								this.updatePointBusyControls();
+						}
 				}
 		}
 		constructor(root, session, deps) {
@@ -13818,16 +14438,35 @@ class ManualBookmarkPanel {
 				this.deps = deps;
 				this.last = session.snapshot;
 				this.clickHandler = event => this.onClick(event);
+				this.changeHandler = event => {
+						const target = event.target;
+						if (target?.matches('[data-recording-enabled]') && this.ownsVideo()) {
+								this.deps.setRecordingEnabled?.(target.checked);
+								this.pointMessage('automatic', target.checked ? '自動記録をONにしました。' : '自動記録をOFFにしました。保存済みの位置は残ります。');
+						}
+						if (target?.matches('[data-library-filter]')) {
+								this.libraryFilter = target.value;
+								this.renderLibraryGroups();
+						}
+				};
 				this.inputHandler = event => {
 						const target = event.target;
+						if (target?.matches?.('[data-library-search]')) {
+								this.librarySearch = target.value;
+								this.renderLibraryGroups();
+								return;
+						}
 						if (target?.matches?.('input[data-point-field]')) {
 								const field = target;
-								if (field.dataset.pointField === 'automatic')
+								if (field.dataset.pointField === 'automatic') {
 										this.automaticDraftDirty = true;
+										this.automaticDraftRevision++;
+								}
 								if (field.dataset.pointField === 'a' || field.dataset.pointField === 'b') {
 										this.pointDrafts[field.dataset.pointField] = field.value;
 										this.loop = null;
-										this.awaitingLoopSeek = false;
+										this.loopFailureNotice = null;
+										this.resetLoopSeek();
 										this.updateLoopDisplay();
 										this.pointMessage('repeat', '区間を変更しました。「リピートを開始」で反映します。');
 								}
@@ -13838,9 +14477,11 @@ class ManualBookmarkPanel {
 				};
 				root.addEventListener('click', this.clickHandler);
 				root.addEventListener('input', this.inputHandler);
+				root.addEventListener('change', this.changeHandler);
 				this.unsubscribe = session.subscribe(snapshot => {
 						this.render(snapshot);
 						this.last = snapshot;
+						deps.onBookmarksChange?.(snapshot);
 				});
 		}
 		ownsVideo() {
@@ -13862,11 +14503,30 @@ class ManualBookmarkPanel {
 				const sameVideo = snapshot.videoId !== null &&
 						snapshot.videoId === this.last.videoId;
 				if (!sameVideo) {
+						this.libraryGeneration++;
+						this.libraryBusyRequest = null;
+						this.library = false;
+						this.libraryStatus = 'idle';
+						this.expandedVideos = new Set(snapshot.videoId ? [snapshot.videoId] : []);
+						this.pointGeneration++;
+						this.pointBusyRequest = null;
 						this.automaticDraftDirty = false;
 						this.loop = null;
-						this.awaitingLoopSeek = false;
+						this.loopFailureNotice = null;
+						this.resetLoopSeek();
 						this.pointDrafts = { a: '', b: '' };
 				}
+				this.clearPreviews();
+				const previousTimes = new Map(this.last.bookmarks.map(item => [item.id, { time: item.time, endTime: item.endTime }]));
+				const timeDrafts = new Map();
+				if (sameVideo)
+						for (const edit of this.root.querySelectorAll('.zw-bookmark-edit')) {
+								const start = edit.querySelector('[data-bookmark-start-id]');
+								const end = edit.querySelector('[data-bookmark-end-id]');
+								if (start && end)
+										timeDrafts.set(start.dataset.bookmarkStartId, { start: start.value, end: end.value });
+						}
+				const automaticOpen = sameVideo && !!this.root.querySelector('.zw-automatic-edit')?.open;
 				const previousAutomatic = sameVideo ? this.root.querySelector('[data-point-field="automatic"]') : null;
 				const automaticDraft = this.automaticDraftDirty ? previousAutomatic?.value : undefined;
 				const previousAdd = sameVideo ? this.root.querySelector('input[data-bookmark-label]') : null;
@@ -13875,9 +14535,15 @@ class ManualBookmarkPanel {
 						previousAdd === this.root.ownerDocument.activeElement ?
 						{ start: previousAdd.selectionStart, end: previousAdd.selectionEnd } : null;
 				const previousLabels = new Map(this.last.bookmarks.map(item => [item.id, item.label]));
+				const openRenames = new Set();
 				const drafts = new Map();
 				let focusedRename = null;
 				if (sameVideo) {
+						for (const details of this.root.querySelectorAll('details.zw-bookmark-edit')) {
+								const id = details.querySelector('input[data-bookmark-rename-id]')?.dataset.bookmarkRenameId;
+								if (details.open && id !== undefined && previousLabels.has(id))
+										openRenames.add(id);
+						}
 						for (const field of this.root.querySelectorAll('input[data-bookmark-rename-id]')) {
 								const id = field.dataset.bookmarkRenameId;
 								if (id === undefined || !previousLabels.has(id))
@@ -13886,10 +14552,17 @@ class ManualBookmarkPanel {
 										drafts.set(id, field.value);
 								if (field === this.root.ownerDocument.activeElement) {
 										focusedRename = { id, start: field.selectionStart, end: field.selectionEnd };
+										openRenames.add(id);
 								}
 						}
 				}
+				this.last = snapshot;
 				const doc = this.root.ownerDocument;
+				if (this.library) {
+						this.renderLibrary();
+						return;
+				}
+				this.root.closest('.zenzaManualBookmarkDock')?.classList.remove('zw-library-wide');
 				const region = doc.createElement('section');
 				region.setAttribute('role', 'region');
 				region.setAttribute('aria-label', '手動しおり');
@@ -13903,7 +14576,10 @@ class ManualBookmarkPanel {
 				manual.append(title);
 				const status = doc.createElement('p');
 				status.dataset.bookmarkStatus = snapshot.status;
-				status.textContent = snapshot.status === 'error' ? 'しおりの保存に失敗しました' :
+				status.textContent = snapshot.status === 'error' ?
+						(this.session.needsLoadRetry ?
+								'しおりの読み込みに失敗しました。パネルを開き直すと再試行します。' :
+								'しおりの保存に失敗しました') :
 						snapshot.status === 'loading' ? 'しおりを読み込み中' : snapshot.status === 'idle' ?
 								'再生する動画を選択してください' : '';
 				manual.append(status);
@@ -13919,10 +14595,15 @@ class ManualBookmarkPanel {
 						manual.append(this.button('add', '＋ 現在位置にしおり'));
 				}
 				const list = doc.createElement('ul');
+				const currentDuration = this.deps.duration?.();
 				for (const entry of [...snapshot.bookmarks].sort((a, b) => a.time - b.time)) {
+						const outsideCurrent = typeof currentDuration === 'number' &&
+								Number.isFinite(currentDuration) && currentDuration > 0 &&
+								entry.time >= currentDuration;
 						const item = doc.createElement('li');
 						const description = doc.createElement('span');
-						description.textContent = displayTime(entry.time) + ' ' + entry.label;
+						description.textContent = displayTime(entry.time) + (entry.endTime === undefined ? '' : ' – ' + displayTime(entry.endTime)) + ' ' + entry.label +
+								(outsideCurrent ? '（現在の動画の長さを超えています）' : '');
 						const rename = doc.createElement('input');
 						rename.type = 'text';
 						rename.maxLength = 80;
@@ -13933,10 +14614,30 @@ class ManualBookmarkPanel {
 						rename.setAttribute('aria-label', 'しおり名を編集');
 						const edit = doc.createElement('details');
 						edit.className = 'zw-bookmark-edit';
+						edit.open = openRenames.has(entry.id);
 						const summary = doc.createElement('summary');
 						summary.textContent = '編集';
-						edit.append(summary, rename, this.button('rename', '名前を変更', entry.id), this.button('remove', '削除', entry.id));
-						item.append(description, this.button('seek', 'ここから再生', entry.id), edit);
+						const start = this.pointField('bookmark-start', '開始', ManualBookmarkPanel.formatTime(entry.time));
+						const end = this.pointField('bookmark-end', '終了（任意）', entry.endTime === undefined ? '' : ManualBookmarkPanel.formatTime(entry.endTime));
+						const startInput = start.querySelector('input'), endInput = end.querySelector('input');
+						startInput.dataset.bookmarkStartId = entry.id;
+						endInput.dataset.bookmarkEndId = entry.id;
+						endInput.placeholder = '位置のみ';
+						const previous = previousTimes.get(entry.id), draft = timeDrafts.get(entry.id);
+						if (draft && previous?.time === entry.time && previous?.endTime === entry.endTime) {
+								startInput.value = draft.start;
+								endInput.value = draft.end;
+						}
+						edit.append(summary, rename, start, end, this.button('rename', '保存', entry.id), this.button('remove', '削除', entry.id));
+						const seekButton = this.button('seek', 'ここから再生', entry.id);
+						if (outsideCurrent) {
+								seekButton.disabled = true;
+								seekButton.title = '現在の動画の長さを超えているためシークできません';
+						}
+						item.append(this.preview(snapshot.videoId, entry.time), description, seekButton);
+						if (entry.endTime !== undefined)
+								item.append(this.button('repeat-range', 'リピート', entry.id));
+						item.append(edit);
 						list.append(item);
 				}
 				if (!snapshot.bookmarks.length) {
@@ -13952,7 +14653,7 @@ class ManualBookmarkPanel {
 						const nav = doc.createElement('nav');
 						nav.className = 'zw-point-tabs';
 						nav.setAttribute('aria-label', '保存位置の種類');
-						for (const [name, label] of [['manual', 'しおり'], ['automatic', 'ここまで見た'], ['repeat', 'ABリピート']]) {
+						for (const [name, label] of [['automatic', 'ここまで見た'], ['manual', 'しおり'], ['repeat', 'ABリピート']]) {
 								const button = doc.createElement('button');
 								button.type = 'button';
 								button.dataset.pointTab = name;
@@ -13961,13 +14662,25 @@ class ManualBookmarkPanel {
 						}
 						region.prepend(nav);
 				}
+				if (this.deps.loadLibrary) {
+						const nav = this.libraryButton('open', '保存一覧');
+						nav.className = 'zw-library-nav';
+						region.prepend(nav);
+				}
+				const hint = doc.createElement('small');
+				hint.textContent = '画像は近い時刻の代表コマです。';
+				region.append(hint);
 				this.root.replaceChildren(region);
 				if (automaticDraft !== undefined) {
 						const field = this.root.querySelector('[data-point-field="automatic"]');
 						if (field)
 								field.value = automaticDraft;
 				}
+				const autoEdit = this.root.querySelector('.zw-automatic-edit');
+				if (autoEdit)
+						autoEdit.open = automaticOpen;
 				this.updateLoopDisplay();
+				this.updatePointBusyControls();
 				if (this.deps.duration)
 						this.selectTab(this.activeTab);
 				if (focusedAdd) {
@@ -13991,6 +14704,13 @@ class ManualBookmarkPanel {
 		}
 		onClick(event) {
 				const target = event.target;
+				const library = target?.closest?.('button[data-library-action]');
+				if (library && this.root.contains(library)) {
+						event.preventDefault();
+						event.stopPropagation();
+						void this.libraryAction(library);
+						return;
+				}
 				const tab = target?.closest?.('button[data-point-tab]');
 				if (tab && this.root.contains(tab)) {
 						event.preventDefault();
@@ -14011,11 +14731,21 @@ class ManualBookmarkPanel {
 				const action = button.dataset.bookmarkAction;
 				const id = button.dataset.bookmarkId;
 				const bookmark = this.last.bookmarks.find(item => item.id === id);
-				if (action === 'seek') {
+				if (action === 'repeat-range') {
+						if (bookmark?.endTime !== undefined)
+								this.setRepeatRange(bookmark.time, bookmark.endTime);
+						event.preventDefault();
+						event.stopPropagation();
+				}
+				else if (action === 'seek') {
 						if (!bookmark)
 								return;
 						event.preventDefault();
 						event.stopPropagation();
+						const currentDuration = this.deps.duration?.();
+						if (typeof currentDuration === 'number' && Number.isFinite(currentDuration) &&
+								currentDuration > 0 && bookmark.time >= currentDuration)
+								return;
 						this.deps.seek(bookmark.time);
 				}
 				else if (action === 'remove') {
@@ -14033,7 +14763,22 @@ class ManualBookmarkPanel {
 								return;
 						event.preventDefault();
 						event.stopPropagation();
-						void this.session.rename(bookmark.id, field.value, this.deps.timestamp());
+						const start = button.closest('li')?.querySelector('[data-bookmark-start-id]');
+						const end = button.closest('li')?.querySelector('[data-bookmark-end-id]');
+						const time = ManualBookmarkPanel.parseTime(start?.value || '');
+						const endTime = end?.value.trim() ? ManualBookmarkPanel.parseTime(end.value) : undefined;
+						const duration = this.deps.duration?.() || Infinity;
+						if (time === bookmark.time && endTime === bookmark.endTime && (time >= duration || (endTime !== undefined && endTime > duration))) {
+								void this.session.rename(bookmark.id, field.value, this.deps.timestamp());
+								return;
+						}
+						if (time === null || time >= duration || endTime === null || (endTime !== undefined && (endTime <= time || endTime > duration))) {
+								const status = this.root.querySelector('[data-bookmark-status]');
+								if (status)
+										status.textContent = '開始と終了を動画の長さ以内で指定してください。';
+								return;
+						}
+						void this.session.update(bookmark.id, { time, ...(endTime === undefined ? {} : { endTime }), label: field.value }, this.deps.timestamp());
 				}
 				else if (action === 'add') {
 						event.preventDefault();
@@ -14050,15 +14795,277 @@ class ManualBookmarkPanel {
 						}, () => { });
 				}
 		}
+		libraryButton(action, label, videoId, id) {
+				const button = this.root.ownerDocument.createElement('button');
+				button.type = 'button';
+				button.dataset.libraryAction = action;
+				button.textContent = label;
+				if (videoId)
+						button.dataset.videoId = videoId;
+				if (id)
+						button.dataset.bookmarkId = id;
+				return button;
+		}
+		async loadLibrary() {
+				const generation = ++this.libraryGeneration, videoId = this.last.videoId;
+				this.libraryStatus = 'loading';
+				this.render(this.last);
+				try {
+						const rows = await this.deps.loadLibrary?.() || [];
+						if (this.disposed || generation !== this.libraryGeneration || videoId !== this.last.videoId || !this.library)
+								return;
+						this.libraryRows = rows;
+						this.libraryStatus = 'ready';
+				}
+				catch {
+						if (this.disposed || generation !== this.libraryGeneration || videoId !== this.last.videoId || !this.library)
+								return;
+						this.libraryStatus = 'error';
+				}
+				this.render(this.last);
+		}
+		renderLibrary() {
+				const doc = this.root.ownerDocument, region = doc.createElement('section');
+				this.root.closest('.zenzaManualBookmarkDock')?.classList.add('zw-library-wide');
+				region.append(this.libraryButton('back', '← 今の動画へ'));
+				const title = doc.createElement('h3');
+				title.textContent = '保存一覧';
+				region.append(title);
+				const search = doc.createElement('input');
+				search.type = 'search';
+				search.dataset.librarySearch = '1';
+				search.placeholder = '動画名・しおり名で検索';
+				search.setAttribute('aria-label', search.placeholder);
+				search.value = this.librarySearch;
+				const filter = doc.createElement('select');
+				filter.dataset.libraryFilter = '1';
+				filter.setAttribute('aria-label', '保存情報の種類');
+				for (const [value, label] of [['all', 'すべて'], ['resume', 'ここまで見た'], ['point', 'しおり'], ['range', '区間']]) {
+						const option = doc.createElement('option');
+						option.value = value;
+						option.textContent = label;
+						filter.append(option);
+				}
+				filter.value = this.libraryFilter;
+				const toolbar = doc.createElement('div');
+				toolbar.className = 'zw-library-search';
+				toolbar.append(search, filter);
+				region.append(toolbar);
+				const status = doc.createElement('p');
+				status.dataset.libraryStatus = '1';
+				status.setAttribute('role', 'status');
+				region.append(status);
+				if (this.libraryStatus === 'loading')
+						status.textContent = '保存一覧を読み込んでいます…';
+				if (this.libraryStatus === 'error') {
+						status.textContent = '保存一覧を読み込めませんでした。';
+						region.append(this.libraryButton('retry', '再試行'));
+				}
+				const groups = doc.createElement('div');
+				groups.dataset.libraryGroups = '1';
+				region.append(groups);
+				this.root.replaceChildren(region);
+				if (this.libraryStatus === 'ready')
+						this.renderLibraryGroups();
+		}
+		renderLibraryGroups() {
+				const groups = this.root.querySelector('[data-library-groups]');
+				if (!groups || this.disposed)
+						return;
+				this.clearPreviews();
+				groups.replaceChildren();
+				const doc = this.root.ownerDocument;
+				const query = this.librarySearch.trim().toLocaleLowerCase(), filter = this.libraryFilter;
+				let count = 0, videoCount = 0;
+				for (const video of [...this.libraryRows].sort((a, b) => b.updatedAt - a.updatedAt)) {
+						const matches = video.title.toLocaleLowerCase().includes(query);
+						const automatic = video.automaticTime !== null && (filter === 'all' || filter === 'resume') && (matches || 'ここまで見た'.includes(query));
+						const bookmarks = video.bookmarks.filter(item => (filter === 'all' || filter === (item.endTime === undefined ? 'point' : 'range')) &&
+								(matches || item.label.toLocaleLowerCase().includes(query))).sort((a, b) => a.time - b.time);
+						if (!automatic && !bookmarks.length)
+								continue;
+						const group = doc.createElement('details');
+						group.className = 'zw-library-group';
+						group.dataset.libraryVideo = video.videoId;
+						group.open = this.expandedVideos.has(video.videoId);
+						const summary = doc.createElement('summary');
+						summary.textContent = video.title + (video.videoId === this.last.videoId ? ' · 再生中' : '') + ' · ' + (bookmarks.length + Number(automatic)) + '件';
+						const list = doc.createElement('ul');
+						group.append(summary, list);
+						if (automatic)
+								list.append(this.libraryRow(video, null));
+						for (const item of bookmarks)
+								list.append(this.libraryRow(video, item));
+						group.addEventListener('toggle', () => {
+								if (this.disposed || !group.isConnected)
+										return;
+								if (group.open)
+										this.expandedVideos.add(video.videoId);
+								else
+										this.expandedVideos.delete(video.videoId);
+								this.refreshPreviews();
+						});
+						groups.append(group);
+						count += bookmarks.length + Number(automatic);
+						videoCount++;
+				}
+				const status = this.root.querySelector('[data-library-status]');
+				if (status)
+						status.textContent = videoCount + ' 動画 · ' + count + ' 件 · 更新が新しい順';
+				if (!count) {
+						const empty = doc.createElement('p');
+						empty.textContent = '該当する保存情報はありません';
+						groups.append(empty);
+				}
+				this.refreshPreviews();
+		}
+		libraryRow(video, item) {
+				const doc = this.root.ownerDocument, row = doc.createElement('li'), time = item?.time ?? video.automaticTime;
+				row.dataset.libraryRow = '1';
+				const description = doc.createElement('span');
+				description.textContent = (item?.label || 'ここまで見た') + ' · ' + displayTime(time) +
+						(item?.endTime === undefined ? '' : ' – ' + displayTime(item.endTime));
+				const seek = this.libraryButton(item ? 'seek' : 'seek-auto', item ? 'ここから再生' : '続きへ', video.videoId, item?.id);
+				seek.disabled = time < 0 || time >= video.duration || !this.deps.openLibraryPosition;
+				row.append(this.preview(video.videoId, time), description, seek);
+				if (item?.endTime !== undefined) {
+						const repeat = this.libraryButton('repeat', 'リピート', video.videoId, item.id);
+						repeat.disabled = !this.deps.openLibraryPosition || this.deps.repeatEnabled?.() === false;
+						row.append(repeat);
+				}
+				const edit = doc.createElement('details');
+				edit.className = 'zw-bookmark-edit';
+				const summary = doc.createElement('summary');
+				summary.textContent = '編集';
+				edit.append(summary);
+				if (item) {
+						const name = doc.createElement('input');
+						name.dataset.libraryName = '1';
+						name.value = item.label;
+						name.maxLength = 80;
+						name.setAttribute('aria-label', '名前');
+						edit.append(name);
+				}
+				const start = this.pointField('library-start', item ? '開始' : '保存位置', ManualBookmarkPanel.formatTime(time));
+				start.querySelector('input').dataset.libraryStart = '1';
+				edit.append(start);
+				if (item) {
+						const end = this.pointField('library-end', '終了（任意）', item.endTime === undefined ? '' : ManualBookmarkPanel.formatTime(item.endTime));
+						end.querySelector('input').dataset.libraryEnd = '1';
+						end.querySelector('input').placeholder = '位置のみ';
+						edit.append(end);
+				}
+				const save = this.libraryButton(item ? 'save' : 'save-auto', '保存', video.videoId, item?.id);
+				const remove = this.libraryButton(item ? 'delete' : 'delete-auto', '削除', video.videoId, item?.id);
+				save.disabled = item ? !this.deps.editLibraryBookmark : !this.deps.editLibraryAutomatic;
+				remove.disabled = item ? !this.deps.deleteLibraryBookmark : !this.deps.deleteLibraryAutomatic;
+				edit.append(save, remove);
+				row.append(edit);
+				return row;
+		}
+		libraryBusyRequest = null;
+		async libraryAction(button) {
+				if (this.disposed || button.disabled)
+						return;
+				const action = button.dataset.libraryAction;
+				if (action === 'back') {
+						this.library = false;
+						this.libraryGeneration++;
+						this.libraryBusyRequest = null;
+						this.render(this.last);
+						return;
+				}
+				if (action === 'open') {
+						this.libraryBusyRequest = null;
+						this.library = true;
+						this.expandedVideos.add(this.last.videoId || '');
+						await this.loadLibrary();
+						return;
+				}
+				if (action === 'retry') {
+						await this.loadLibrary();
+						return;
+				}
+				if (!this.library || !this.ownsVideo())
+						return;
+				const video = this.libraryRows.find(v => v.videoId === button.dataset.videoId);
+				if (!video)
+						return;
+				const item = video.bookmarks.find(row => row.id === button.dataset.bookmarkId);
+				const time = item?.time ?? video.automaticTime;
+				if (action === 'seek' || action === 'seek-auto' || action === 'repeat') {
+						if (time === null || time < 0 || time >= video.duration)
+								return;
+						if (action === 'repeat' && item?.endTime !== undefined && video.videoId === this.last.videoId) {
+								this.setRepeatRange(time, item.endTime);
+								return;
+						}
+						this.library = false;
+						this.libraryGeneration++;
+						this.render(this.last);
+						this.deps.openLibraryPosition?.(video.videoId, time, action === 'repeat' ? item?.endTime : undefined);
+						return;
+				}
+				if (this.libraryBusyRequest)
+						return;
+				const row = button.closest('[data-library-row]');
+				if (!row)
+						return;
+				const a = ManualBookmarkPanel.parseTime(row.querySelector('[data-library-start]')?.value || '');
+				const end = row.querySelector('[data-library-end]')?.value.trim() || '';
+				const b = end ? ManualBookmarkPanel.parseTime(end) : undefined;
+				const status = this.root.querySelector('[data-library-status]');
+				if ((action === 'save' || action === 'save-auto') && (a === null || a >= video.duration || b === null || (b !== undefined && (b <= a || b > video.duration)))) {
+						if (status)
+								status.textContent = '動画の長さ以内の時刻を入力してください。終了は開始より後にします。';
+						return;
+				}
+				const generation = this.libraryGeneration, owner = this.last.videoId;
+				const request = { generation };
+				this.libraryBusyRequest = request;
+				const controls = Array.from(row.querySelectorAll('button'));
+				controls.forEach(control => control.disabled = true);
+				try {
+						if (action === 'save' && item)
+								await this.deps.editLibraryBookmark?.(video.videoId, item.id, { time: a, ...(b === undefined || b === null ? {} : { endTime: b }), label: row.querySelector('[data-library-name]')?.value || '' }, video.duration);
+						else if (action === 'save-auto')
+								await this.deps.editLibraryAutomatic?.(video.videoId, a, video.duration);
+						else if (action === 'delete' && item)
+								await this.deps.deleteLibraryBookmark?.(video.videoId, item.id, video.duration);
+						else if (action === 'delete-auto')
+								await this.deps.deleteLibraryAutomatic?.(video.videoId);
+						else
+								return;
+						if (this.disposed || generation !== this.libraryGeneration || owner !== this.last.videoId || !this.library)
+								return;
+						await this.loadLibrary();
+				}
+				catch {
+						if (!this.disposed && generation === this.libraryGeneration && owner === this.last.videoId && status?.isConnected)
+								status.textContent = '保存できませんでした。入力は残っています。再度お試しください。';
+				}
+				finally {
+						if (this.libraryBusyRequest === request)
+								this.libraryBusyRequest = null;
+						if (row.isConnected)
+								controls.forEach(control => control.disabled = false);
+				}
+		}
 		dispose() {
 				if (this.disposed)
 						return;
 				this.loop = null;
 				this.deps.repeatState?.(false);
+				this.deps.onRepeatRangeChange?.(null);
+				this.clearPreviews();
+				this.libraryGeneration++;
 				this.disposed = true;
+				this.pointGeneration++;
+				this.pointBusyRequest = null;
 				this.unsubscribe();
 				this.root.removeEventListener('click', this.clickHandler);
 				this.root.removeEventListener('input', this.inputHandler);
+				this.root.removeEventListener('change', this.changeHandler);
 				this.root.replaceChildren();
 		}
 }
@@ -14072,19 +15079,54 @@ class ManualBookmarkDock {
 		panel;
 		session;
 		keyHandler;
+		visibilityHandler;
+		toggleHandler;
+		outsideHandler;
 		disposed = false;
 		host = null;
 		home;
 		trigger = null;
 		floating = false;
+		closing = false;
+		animation = null;
+		cancelAnimation() {
+				if (this.animation) {
+						this.animation.onfinish = null;
+						this.animation.cancel();
+						this.animation = null;
+				}
+		}
+		animate(open, done = () => { }) {
+				this.cancelAnimation();
+				const win = this.node.ownerDocument.defaultView;
+				if (typeof this.node.animate !== 'function' || win?.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+						done();
+						return;
+				}
+				const frames = open ?
+						[{ opacity: 0, transform: 'translate(12px,18px) scale(.86)' }, { opacity: 1, transform: 'none' }] :
+						[{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translate(8px,12px) scale(.92)' }];
+				try {
+						const animation = this.animation = this.node.animate(frames, { duration: open ? 220 : 160, easing: open ? 'cubic-bezier(.2,.9,.3,1.15)' : 'ease-in', fill: 'both' });
+						animation.onfinish = () => { if (this.animation !== animation)
+								return; this.cancelAnimation(); done(); };
+				}
+				catch {
+						this.cancelAnimation();
+						done();
+				}
+		}
 		style;
 		toggle(host, trigger) {
 				if (this.disposed)
 						return;
-				if (this.floating) {
+				if (this.floating && !this.closing) {
 						this.close();
 						return;
 				}
+				this.cancelAnimation();
+				this.closing = false;
+				this.node.inert = false;
 				this.host = host;
 				this.trigger = trigger || null;
 				this.floating = true;
@@ -14092,24 +15134,41 @@ class ManualBookmarkDock {
 				this.node.classList.add('zw-points-floating');
 				this.panel.refreshPreferences();
 				this.node.open = true;
+				this.panel.setVisible(true);
 				this.trigger?.setAttribute('aria-expanded', 'true');
-				this.node.querySelector('button[data-points-close]')?.focus();
+				void this.session.refreshIfIdle();
+				this.node.querySelector('summary')?.focus();
+				this.animate(true);
 		}
-		close() {
-				if (this.disposed)
+		close(restoreFocus = true) {
+				if (this.disposed || this.closing)
 						return;
-				this.node.open = false;
+				this.panel.setVisible(false);
 				if (this.floating) {
-						this.node.classList.remove('zw-points-floating');
-						this.home.append(this.node);
-						this.floating = false;
+						this.closing = true;
+						this.node.inert = true;
 						this.trigger?.setAttribute('aria-expanded', 'false');
-						if (this.trigger?.isConnected)
+						if (restoreFocus && this.trigger?.isConnected)
 								this.trigger.focus({ preventScroll: true });
+						this.animate(false, () => {
+								this.node.open = false;
+								this.node.inert = false;
+								this.node.classList.remove('zw-points-floating');
+								this.home.append(this.node);
+								this.floating = false;
+								this.closing = false;
+						});
+				}
+				else {
+						this.node.open = false;
 				}
 		}
+		get bookmarkStatus() { return this.session.snapshot.status; }
+		get bookmarkNeedsReload() { return this.session.needsLoadRetry; }
 		get isRepeating() { return this.panel.isRepeating; }
+		setRepeatRange(a, b, activate = true) { return this.panel.setRepeatRange(a, b, activate); }
 		repeatAtEnd() { return this.panel.repeatAtEnd(); }
+		acknowledgeLoopSeek(time) { this.panel.acknowledgeLoopSeek(time); }
 		refreshPreferences() { this.panel.refreshPreferences(); }
 		tick(time, paused, seeking) {
 				return this.panel.tick(time, paused, seeking);
@@ -14126,14 +15185,7 @@ class ManualBookmarkDock {
 				node.append(summary);
 				const root = this.root = doc.createElement('section');
 				root.className = 'zenzaManualBookmarkDockContent';
-				const close = doc.createElement('button');
-				close.type = 'button';
-				close.dataset.pointsClose = '1';
-				close.className = 'zw-points-close';
-				close.textContent = '閉じる ×';
-				close.setAttribute('aria-label', 'しおり・ABリピートを閉じる');
-				close.addEventListener('click', () => this.close());
-				node.append(close, root);
+				node.append(root);
 				this.style = doc.createElement('style');
 				this.style.textContent = ManualBookmarkDock.styles;
 				node.append(this.style);
@@ -14148,10 +15200,31 @@ class ManualBookmarkDock {
 				};
 				node.addEventListener('keydown', this.keyHandler);
 				node.addEventListener('keyup', this.keyHandler);
+				this.visibilityHandler = () => {
+						if (this.disposed || !this.node.open ||
+								doc.visibilityState !== 'visible')
+								return;
+						void this.session.refreshIfIdle();
+				};
+				this.outsideHandler = event => {
+						if (this.disposed || !this.node.open)
+								return;
+						const path = event.composedPath();
+						if (path.includes(this.node) || (this.trigger && path.includes(this.trigger)))
+								return;
+						this.close(false);
+				};
+				this.toggleHandler = () => this.panel?.setVisible(this.node.open && !this.closing);
+				node.addEventListener('toggle', this.toggleHandler);
 				try {
 						this.panel = new ManualBookmarkPanel(root, session, deps);
+						this.panel.setVisible(false);
+						doc.addEventListener('visibilitychange', this.visibilityHandler);
+						doc.addEventListener('pointerdown', this.outsideHandler, true);
+						doc.addEventListener('click', this.outsideHandler, true);
 				}
 				catch (error) {
+						node.removeEventListener('toggle', this.toggleHandler);
 						node.removeEventListener('keydown', this.keyHandler);
 						node.removeEventListener('keyup', this.keyHandler);
 						node.remove();
@@ -14176,14 +15249,24 @@ class ManualBookmarkDock {
 		deactivate() {
 				if (this.disposed)
 						return;
-				this.close();
+				this.cancelAnimation();
+				this.closing = false;
+				this.node.open = false;
+				this.node.inert = false;
+				if (this.floating) {
+						this.node.classList.remove('zw-points-floating');
+						this.home.append(this.node);
+						this.floating = false;
+				}
+				this.trigger?.setAttribute('aria-expanded', 'false');
+				this.panel.setVisible(false);
 				this.session.deactivate();
 		}
 		static styles = `
 		.zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
-		.zenzaManualBookmarkDock>summary{padding:10px 82px 10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
+		.zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
 		.zenzaManualBookmarkDock[open]{overflow:auto}
-		.zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:420px;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
+		.zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:400px;transition:width .18s ease;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
 		.zenzaManualBookmarkDockContent{padding:0 14px 14px}
 		.zenzaManualBookmarkDock h3{font-size:13px;margin:12px 0 8px;color:#f4f7ff;letter-spacing:.02em}
 		.zenzaManualBookmarkDock p{margin:5px 0 10px;color:#aebbd1;font-size:12px}
@@ -14203,7 +15286,7 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock input[data-bookmark-rename-id]{width:130px;flex:1 1 100px}
 		.zenzaManualBookmarkDock .zw-point-section{border-top:1px solid #354056;margin-top:12px;padding-top:2px}
 		.zenzaManualBookmarkDock .zw-point-section:first-child{border-top:0;margin-top:0}
-		.zenzaManualBookmarkDock .zw-point-range-inputs{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 6px}
+		.zenzaManualBookmarkDock .zw-point-range-inputs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:10px}
 		.zenzaManualBookmarkDock .zw-point-range{height:6px;border-radius:3px;background:#354056;position:relative;margin:12px 0;overflow:hidden}
 		.zenzaManualBookmarkDock .zw-point-range span{position:absolute;height:100%;background:#6ed9bc}
 		.zenzaManualBookmarkDock button[aria-pressed="true"]{background:#245f52;border-color:#6ed9bc}
@@ -14213,14 +15296,42 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock .zw-bookmark-edit{flex:1 1 100%;border:0;background:transparent}
 		.zenzaManualBookmarkDock .zw-bookmark-edit summary{font-size:11px;padding:2px 0;color:#aebbd1}
 		.zenzaManualBookmarkDock small{display:block;color:#aebbd1;font-size:11px;line-height:1.6}
-		.zenzaManualBookmarkDock .zw-points-close{position:absolute;top:5px;right:8px;margin:0;min-height:28px;font-size:12px}
+		.zenzaManualBookmarkDock.zw-library-wide{width:620px}
+		.zenzaManualBookmarkDock [hidden]{display:none!important}
+		.zenzaManualBookmarkDock .zw-scene-preview{flex:none;width:80px;aspect-ratio:16/9;background:#253346;color:#b9c9d9;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:11px}
+		.zenzaManualBookmarkDock .zw-scene-preview img,.zenzaManualBookmarkDock .zw-scene-preview canvas{width:100%;height:100%;object-fit:cover}
+		.zenzaManualBookmarkDock li>span{flex:1 1 80px}
+		.zenzaManualBookmarkDock .zw-point-line{display:flex;align-items:center;gap:8px;margin:10px 0}
+		.zenzaManualBookmarkDock .zw-point-line>span{flex:1}
+		.zenzaManualBookmarkDock .zw-auto-setting{display:flex;margin-top:10px}
+		.zenzaManualBookmarkDock input[type=checkbox]{width:16px;height:16px;min-height:0;accent-color:#6ed9bc}
+		.zenzaManualBookmarkDock .zw-automatic-edit summary,.zenzaManualBookmarkDock .zw-bookmark-edit summary{cursor:pointer}
+		.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:zw-bookmark-reveal .14s ease}
+		.zenzaManualBookmarkDock .zw-library-nav{display:block;margin-left:auto}
+		.zenzaManualBookmarkDock .zw-library-search{display:flex;gap:8px;flex-wrap:wrap}
+		.zenzaManualBookmarkDock .zw-library-search input{flex:1;min-width:150px}
+		.zenzaManualBookmarkDock select{background:#101722;color:#f4f7ff;border:1px solid #53627b;border-radius:5px;padding:6px;font:inherit}
+		.zenzaManualBookmarkDock .zw-library-group{margin-top:12px}
+		.zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+		.zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{width:100%;margin:8px 0}
+		.zenzaManualBookmarkDock .zw-point-range-inputs label{display:block}
+		.zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%}
+		.zenzaManualBookmarkDock .zw-point-range-inputs button{width:100%;padding:5px 2px;font-size:12px}
+		@keyframes zw-bookmark-reveal{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+		@media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock.zw-points-floating{transition:none}.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:none}}
+		@media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
 		`;
 		dispose() {
 				if (this.disposed)
 						return;
 				this.disposed = true;
+				this.cancelAnimation();
 				this.node.removeEventListener('keydown', this.keyHandler);
 				this.node.removeEventListener('keyup', this.keyHandler);
+				this.node.ownerDocument.removeEventListener('visibilitychange', this.visibilityHandler);
+				this.node.ownerDocument.removeEventListener('pointerdown', this.outsideHandler, true);
+				this.node.ownerDocument.removeEventListener('click', this.outsideHandler, true);
+				this.node.removeEventListener('toggle', this.toggleHandler);
 				this.panel.dispose();
 				this.session.dispose();
 				this.node.remove();
@@ -14459,7 +15570,7 @@ class VideoInfoModel extends JSONable {
 				this._currentVideoPromise = null;
 		}
 		update(videoInfoModel) {
-				this._update(videoInfoModel._rawData);
+				this._update(videoInfoModel._rawData, videoInfoModel._cacheData || {});
 				return true;
 		}
 		_update(info, localCacheData = {}) {
@@ -14849,15 +15960,6 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 				get context() {
 						return this._context;
 				}
-				get hotField() {
-						return this._hotField;
-				}
-				get hotFrom() {
-						return this._hotFrom;
-				}
-				get hotTo() {
-						return this._hotTo;
-				}
 				_initialize(word, params) {
 						if (params._now) {
 								this.now = params._now;
@@ -14881,14 +15983,9 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 								'lengthSeconds', 'startTime', 'thumbnailUrl'
 						];
 						this._context = 'ZenzaWatch';
-						const n = new Date(), now = this.now;
-						if (/^._hot/.test(this.sort)) {
-								(() => {
-										this._hotField = 'mylistCounter';
-										this._hotFrom = new Date(now - 1 * 24 * 60 * 60 * 1000);
-										this._hotTo = n;
-										this._sort = '-_hotMylistCounter';
-								})();
+						const now = this.now;
+						if (params.sort === 'h') {
+								this._sort = '-_hotMylistCounter';
 						}
 						if (params.f_range &&
 								[F_RANGE.U_1H, F_RANGE.U_24H, F_RANGE.U_1W, F_RANGE.U_30D]
@@ -15042,11 +16139,6 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						result.push('_limit=' + this.limit);
 						result.push('_offset=' + this.offset);
 						result.push('_context=' + this.context);
-						if (this.sort === '-_hot') {
-								result.push('hotField=' + this.hotField);
-								result.push('hotFrom=' + this.hotFrom);
-								result.push('hotTo=' + this.hotTo);
-						}
 						const filters = this.stringfiedFilters;
 						if (filters) {
 								result.push(filters);
@@ -15260,7 +16352,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						}
 						return data;
 				};
-				const fetchPage = async (query, page, pageSize) => {
+				const fetchPage = async (query, page, pageSize, isCurrent) => {
+						ensureCurrent(isCurrent);
 						const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
 						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
 						const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
@@ -15276,7 +16369,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						}
 						return validateSearchPage(json.data);
 				};
-				const search = async (word, params = {}, maxLimit = 100) => {
+				const search = async (word, params = {}, maxLimit = 100, isCurrent) => {
+						ensureCurrent(isCurrent);
 						const query = buildQuery(word, params);
 						const officialPage = Math.max(parseInt(params.page, 10) || 1, 1);
 						const startOffset = (officialPage - 1) * OFFICIAL_PAGE_SIZE;
@@ -15291,7 +16385,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 								}
 								return (apiPage === firstPage ? pageItems.slice(firstSkip) : pageItems).map(toLegacyItem);
 						};
-						const first = await fetchPage(query, firstPage, PAGE_SIZE);
+						const first = await fetchPage(query, firstPage, PAGE_SIZE, isCurrent);
+						ensureCurrent(isCurrent);
 						const count = first.totalCount;
 						let list = toItems(first, firstPage);
 						const pageHasNext = (data) => data.hasNext === false ? false : (data.hasNext === true ? true : data.items.length >= PAGE_SIZE);
@@ -15310,8 +16405,9 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 								const results = new Array(pages.length);
 								let failedAt = pages.length;
 								for (let i = 0; i < pages.length && i < failedAt; i += SEARCH_CONCURRENCY) {
+										ensureCurrent(isCurrent);
 										const chunk = pages.slice(i, i + SEARCH_CONCURRENCY);
-										await Promise.all(chunk.map((pg, k) => fetchPage(query, pg, PAGE_SIZE)
+										await Promise.all(chunk.map((pg, k) => fetchPage(query, pg, PAGE_SIZE, isCurrent)
 												.then(data => { results[i + k] = data; })
 												.catch(e => {
 												failedAt = Math.min(failedAt, i + k);
@@ -15335,6 +16431,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 										window.console.warn('nvapi検索: 途中のページで失敗したため、%d件で打ち切ります', list.length);
 								}
 						}
+						ensureCurrent(isCurrent);
 						const returned = list.slice(0, limit);
 						if (!stopReason) {
 								stopReason = list.length >= limit ? 'limit' :
@@ -15351,6 +16448,12 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 				return { canHandle, buildQuery, search, toLegacyItem, normalizeConditions };
 		})();
 		const KIND_NEUTRAL_FOR_SNAPSHOT = ['', 'any', 'all'];
+		const SEARCH_SUPERSEDED = new Error('SEARCH_SUPERSEDED');
+		const ensureCurrent = (check) => {
+				if (check && !check()) {
+						throw SEARCH_SUPERSEDED;
+				}
+		};
 		class NicoSearchApiV2Loader {
 				static version = new NicoSearchApiV2Version;
 				static cacheStorage;
@@ -15368,13 +16471,15 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						}
 						return NicoSearchApiV2Loader.searchBySnapshot(word, params);
 				}
-				static async searchBySnapshot(word, params) {
+				static async searchBySnapshot(word, params, isCurrent) {
+						ensureCurrent(isCurrent);
 						initializeCrossDomainGate();
 						const query = new NicoSearchApiV2Query(word, params);
 						const url = API_BASE_URL + '?' + query.toString();
 						const version = this.version.isLatest
 								? this.version.date.getTime()
 								: await this.version.update().then(date => date.getTime());
+						ensureCurrent(isCurrent);
 						if (!this.cacheStorage) {
 								this.cacheStorage = new CacheStorage(sessionStorage);
 						}
@@ -15389,7 +16494,9 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						if (cacheData && cacheData.version === version) {
 								return cacheData.data;
 						}
+						ensureCurrent(isCurrent);
 						return gate.fetch(url).then(res => res.text()).then(text => {
+								ensureCurrent(isCurrent);
 								const result = NicoSearchApiV2Loader.parseResult(text);
 								if (typeof result !== 'number' && result.status === 'ok') {
 										let data = Object.assign(result, { word, params });
@@ -15449,21 +16556,29 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						});
 						return result;
 				}
-				static async searchMore(word, params, maxLimit = 300) {
+				static async searchMore(word, params, maxLimit = 300, isCurrent) {
+						ensureCurrent(isCurrent);
 						if (params && (params.userId || params.channelId)) {
-								return NicoSearchApiV2Loader.searchByOwner(word, params, maxLimit);
+								return NicoSearchApiV2Loader.searchByOwner(word, params, maxLimit, isCurrent);
 						}
 						if (!(params && params.useSnapshotSearch) && typeof word === 'string' && NicoSearchNvapi.canHandle(params || {})) {
 								try {
-										const result = await NicoSearchNvapi.search(word, params || {}, maxLimit);
+										const result = await NicoSearchNvapi.search(word, params || {}, maxLimit, isCurrent);
+										ensureCurrent(isCurrent);
 										window.console.info('%c検索(nvapi): "%s" %d件/全%d件', 'background: lightgreen;', word, result.list.length, result.count);
 										return result;
 								}
 								catch (e) {
+										if (e === SEARCH_SUPERSEDED) {
+												throw e;
+										}
+										ensureCurrent(isCurrent);
 										window.console.warn('本家検索API(nvapi)での検索に失敗したため、スナップショット検索を使います', e);
 								}
 						}
-						const result = await NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit);
+						ensureCurrent(isCurrent);
+						const result = await NicoSearchApiV2Loader.searchMoreBySnapshot(word, params, maxLimit, isCurrent);
+						ensureCurrent(isCurrent);
 						const p = params || {};
 						const unapplied = ['selectContentType', 'channelVideoListingStatus', 'kind']
 								.filter(key => p[key] !== undefined && p[key] !== null && !KIND_NEUTRAL_FOR_SNAPSHOT.includes(String(p[key])));
@@ -15475,7 +16590,8 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						}
 						return result;
 				}
-				static async searchByOwner(word, params = {}, maxLimit = 300) {
+				static async searchByOwner(word, params = {}, maxLimit = 300, isCurrent) {
+						ensureCurrent(isCurrent);
 						if (params.channelId && !params.userId) {
 								throw Object.assign(new Error('チャンネル動画では「投稿者の動画のみ」を使えません'), { status: 'fail' });
 						}
@@ -15487,9 +16603,11 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						const headers = { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' };
 						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
 						const fetchUserPage = async (page) => {
+								ensureCurrent(isCurrent);
 								const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
 								const res = await net.fetch(url, { credentials: 'include', headers });
 								const json = await res.json();
+								ensureCurrent(isCurrent);
 								if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
 										throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
 								}
@@ -15501,6 +16619,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						const lastPage = Math.ceil(total / 100);
 						const missingOwnerPages = [];
 						for (let pg = 2; pg <= lastPage; pg += 4) {
+								ensureCurrent(isCurrent);
 								const chunk = [];
 								for (let k = pg; k < pg + 4 && k <= lastPage; k++) {
 										chunk.push(k);
@@ -15509,6 +16628,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 										missingOwnerPages.push(k);
 										return null;
 								}))));
+								ensureCurrent(isCurrent);
 								for (const data of pages) {
 										if (!data) {
 												continue;
@@ -15521,6 +16641,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						const matched = new Set();
 						const ids = videos.map(v => v.id);
 						for (let i = 0; i < ids.length; i += 100) {
+								ensureCurrent(isCurrent);
 								const batch = ids.slice(i, i + 100);
 								const q = [
 										`q=${encodeURIComponent(word)}`,
@@ -15534,15 +16655,101 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 								batch.forEach((id, n) => q.push(`filters[contentId][${n}]=${encodeURIComponent(id)}`));
 								const res = await gate.fetch(API_BASE_URL + '?' + q.join('&'));
 								const json = NicoSearchApiV2Loader._jsonParse(await res.text());
+								ensureCurrent(isCurrent);
 								if (!json || !json.meta || json.meta.status !== 200) {
 										throw Object.assign(new Error('スナップショット検索に失敗しました'), { status: 'fail' });
 								}
 								(json.data || []).forEach(item => matched.add(item.contentId));
 						}
-						const now = Date.now();
-						const fRange = params.f_range * 1;
-						const rangeMs = { 4: 3600e3, 1: 86400e3, 2: 7 * 86400e3, 3: 31 * 86400e3, 5: 365 * 86400e3 }[fRange];
-						const lRange = params.l_range * 1;
+						const unapplied = [];
+						const warn = (key) => {
+								if (!unapplied.includes(key)) {
+										unapplied.push(key);
+								}
+						};
+						const has = (value) => value !== undefined && value !== null && value !== '';
+						const parseDate = (value, endOfDay = false) => {
+								if (typeof value === 'number') {
+										return Number.isFinite(value) ? value : null;
+								}
+								if (typeof value !== 'string' || !value.trim()) {
+										return null;
+								}
+								const raw = value.trim();
+								const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw);
+								if (dayOnly) {
+										const [year, month, day] = raw.split('-').map(Number);
+										if (new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== raw) {
+												return null;
+										}
+								}
+								const timestamp = Date.parse(dayOnly ?
+										raw + (endOfDay ? 'T23:59:59.999+09:00' : 'T00:00:00+09:00') : raw);
+								return Number.isFinite(timestamp) ? timestamp : null;
+						};
+						const now = (typeof params._now === 'number' && Number.isFinite(params._now)) ?
+								params._now : Date.now();
+						const fRange = Number(params.f_range);
+						const rangeMs = { 4: 3600e3, 1: 86400e3, 2: 7 * 86400e3,
+								3: 31 * 86400e3, 5: 365 * 86400e3 }[fRange];
+						let minTime = null;
+						let maxTime = null;
+						if (has(params.f_range)) {
+								if (rangeMs) {
+										minTime = now - rangeMs;
+								}
+								else {
+										warn('f_range');
+								}
+						}
+						const applyDate = (raw, key, upper) => {
+								if (!has(raw)) {
+										return;
+								}
+								const value = parseDate(raw, upper);
+								if (value === null) {
+										warn(key);
+										return;
+								}
+								if (upper) {
+										maxTime = value;
+								}
+								else {
+										minTime = value;
+								}
+						};
+						applyDate(params.start, 'start', false);
+						applyDate(params.end, 'end', true);
+						applyDate(params.dateFrom, 'dateFrom', false);
+						applyDate(params.dateTo, 'dateTo', true);
+						const applyUnix = (raw, key, upper) => {
+								if (!has(raw)) {
+										return;
+								}
+								const seconds = Number(raw);
+								if (!Number.isFinite(seconds) || seconds < 0) {
+										warn(key);
+										return;
+								}
+								if (upper) {
+										maxTime = seconds * 1000;
+								}
+								else {
+										minTime = seconds * 1000;
+								}
+						};
+						applyUnix(params.utimeFrom, 'utimeFrom', false);
+						applyUnix(params.utimeTo, 'utimeTo', true);
+						const lRange = Number(params.l_range);
+						if (has(params.l_range) && lRange !== 1 && lRange !== 2) {
+								warn('l_range');
+						}
+						const commentMinimum = has(params.commentCount) ? Number(params.commentCount) : null;
+						const filterComments = commentMinimum !== null && Number.isSafeInteger(commentMinimum) &&
+								commentMinimum >= 0;
+						if (commentMinimum !== null && !filterComments) {
+								warn('commentCount');
+						}
 						let list = videos.filter(v => matched.has(v.id)).filter(v => {
 								const sec = v.duration || 0;
 								if (lRange === 1 && sec > 300) {
@@ -15551,51 +16758,109 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 								if (lRange === 2 && sec < 1200) {
 										return false;
 								}
-								if (rangeMs && v.registeredAt && now - new Date(v.registeredAt).getTime() > rangeMs) {
-										return false;
+								if (minTime !== null || maxTime !== null) {
+										const timestamp = Date.parse(v.registeredAt || '');
+										if (!Number.isFinite(timestamp)) {
+												return false;
+										}
+										if (minTime !== null && timestamp < minTime) {
+												return false;
+										}
+										if (maxTime !== null && timestamp > maxTime) {
+												return false;
+										}
+								}
+								if (filterComments) {
+										const comments = Number(v.count?.comment);
+										if (!Number.isSafeInteger(comments) || comments < commentMinimum) {
+												return false;
+										}
 								}
 								return true;
 						});
 						const count = (v) => v.count || {};
 						const SORT = {
 								f: v => new Date(v.registeredAt || 0).getTime(),
-								v: v => count(v).view || 0,
-								r: v => count(v).comment || 0,
-								m: v => count(v).mylist || 0,
-								likeCount: v => count(v).like || 0,
+								v: v => Number(count(v).view) || 0,
+								r: v => Number(count(v).comment) || 0,
+								m: v => Number(count(v).mylist) || 0,
+								likeCount: v => Number(count(v).like) || 0,
 								l: v => v.duration || 0
 						};
-						const key = SORT[params.sort] || SORT.f;
+						const sortAliases = {
+								registeredAt: 'f', viewCount: 'v', commentCount: 'r',
+								mylistCount: 'm', duration: 'l'
+						};
+						const sortName = String(params.sort || 'f');
+						const sortKey = sortAliases[sortName] || sortName;
+						if (has(params.sort) && !SORT[sortKey]) {
+								warn('sort');
+						}
+						const key = SORT[sortKey] || SORT.f;
+						if (has(params.order) && !['a', 'asc', 'd', 'desc'].includes(String(params.order))) {
+								warn('order');
+						}
 						const dir = (params.order === 'a' || params.order === 'asc') ? 1 : -1;
 						list.sort((a, b) => (key(a) - key(b)) * dir);
+						if (has(params.channelId)) {
+								warn('channelId');
+						}
+						if (has(params.genre) && params.genre !== 'all') {
+								warn('genre');
+						}
+						if (has(params.selectContentType)) {
+								warn('selectContentType');
+						}
+						if (has(params.channelVideoListingStatus)) {
+								warn('channelVideoListingStatus');
+						}
+						if (has(params.kind) && !['any', 'all'].includes(String(params.kind))) {
+								warn('kind');
+						}
+						const page = has(params.page) ? Number(params.page) : 1;
+						const validPage = Number.isSafeInteger(page) && page >= 1 && page <= 157;
+						if (!validPage) {
+								warn('page');
+						}
+						const startOffset = validPage ? (page - 1) * 32 : 0;
+						ensureCurrent(isCurrent);
 						const nvapi = NicoSearchApiV2Loader.nvapi;
-						const result = list.slice(0, limit).map(v => nvapi.toLegacyItem(v));
+						const result = list.slice(startOffset, startOffset + limit).map(v => nvapi.toLegacyItem(v));
 						window.console.info('%c投稿者の動画から検索: "%s" 投稿動画%d件中 %d件一致', 'background: lightgreen;', word, videos.length, list.length);
 						const response = { status: 'ok', count: list.length, list: result, engine: 'owner', word, params };
+						if (unapplied.length) {
+								response.unappliedConditions = unapplied;
+						}
 						if (missingOwnerPages.length) {
 								response.isPartial = true;
 								response.missingOwnerPages = missingOwnerPages.sort((a, b) => a - b);
 						}
 						return response;
 				}
-				static async searchMoreBySnapshot(word, params, maxLimit = 300) {
+				static async searchMoreBySnapshot(word, params, maxLimit = 300, isCurrent) {
+						ensureCurrent(isCurrent);
 						const ONCE_LIMIT = 100; // 一回で取れる件数
 						const PER_PAGE = 25; // 検索ページで1ページあたりに表示される件数
 						const MAX_PAGE = 64; // 25 * 64 = 1600
 						maxLimit = Math.min(Math.max(1, parseInt(maxLimit, 10) || 300), PER_PAGE * MAX_PAGE);
 						params = Object.assign({}, params || {});
-						const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params);
+						const result = await NicoSearchApiV2Loader.searchBySnapshot(word, params, isCurrent);
+						ensureCurrent(isCurrent);
 						const currentPage = params.page ? parseInt(params.page, 10) : 1;
 						const currentOffset = (currentPage - 1) * PER_PAGE;
-						if (result.count <= ONCE_LIMIT) {
+						if (result.count <= ONCE_LIMIT || maxLimit <= ONCE_LIMIT) {
+								result.list = result.list.slice(0, maxLimit);
 								return result;
 						}
 						const searchCount = Math.min(Math.ceil((result.count - currentOffset) / PER_PAGE) - 1, Math.ceil((maxLimit - ONCE_LIMIT) / ONCE_LIMIT));
 						for (let i = 1; i <= searchCount; i++) {
+								ensureCurrent(isCurrent);
 								await sleep(300 * i);
+								ensureCurrent(isCurrent);
 								let page = currentPage + i * (ONCE_LIMIT / PER_PAGE);
 								console.log('searchNext: "%s"', word, page, params);
-								let res = await NicoSearchApiV2Loader.searchBySnapshot(word, Object.assign(params, { page }));
+								let res = await NicoSearchApiV2Loader.searchBySnapshot(word, Object.assign(params, { page }), isCurrent);
+								ensureCurrent(isCurrent);
 								if (res && res.list && res.list.length) {
 										result.list = result.list.concat(res.list);
 								}
@@ -15603,6 +16868,7 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 										break;
 								}
 						}
+						result.list = result.list.slice(0, maxLimit);
 						return Object.assign(result, { word, params });
 				}
 				static _jsonParse(result) {
@@ -15768,7 +17034,7 @@ class TagEditApi {
 						json = null;
 				}
 				const meta = ((json && json.meta) || {});
-				const status = typeof meta.status === 'number' ? meta.status : res.status;
+				const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
 				const errorCode = meta.errorCode || '';
 				if (errorCode === 'KEY_EXPIRED' || /KEY_EXPIRED/.test(JSON.stringify(meta)) ||
 						(status === 403 && errorCode === 'FORBIDDEN')) {
@@ -15910,8 +17176,10 @@ class MediaTimeline {
 		}
 		detach() {
 				const media = this.media;
-				for (const [eventName, handler] of this.eventMap) {
-						media.removeEventListener(eventName, handler);
+				if (media) {
+						for (const [eventName, handler] of this.eventMap) {
+								media.removeEventListener(eventName, handler);
+						}
 				}
 				this.media = null;
 				clearInterval(this.timer);
@@ -16932,6 +18200,14 @@ const { ThreadLoader } = (() => {
 				}
 				async _postChat(msgInfo, text, cmd, vpos, retrying = false, diagnostic = null, isOriginalVideo) {
 						diagnostic = diagnostic || createCommentPostDiagnostic(msgInfo);
+						const stillOriginal = () => {
+								try {
+										return !isOriginalVideo || isOriginalVideo() === true;
+								}
+								catch (_error) {
+										return false;
+								}
+						};
 						const { videoId, threadId, language, is184Forced } = msgInfo.threadInfo;
 						logCommentPostDiagnostic(diagnostic, 'precheck', 'start', {
 								canPost: msgInfo.threadInfo.canPost !== false,
@@ -16956,6 +18232,12 @@ const { ThreadLoader } = (() => {
 										outcome: 'not-sent'
 								});
 								throw error;
+						}
+						if (!stillOriginal()) {
+								logCommentPostDiagnostic(diagnostic, 'post-key', 'failure', {
+										reason: 'challenge-stale-video', outcome: 'not-sent'
+								});
+								throw challengeFailure('challenge-stale-video', '動画が切り替わったためコメントを送信していません。');
 						}
 						const postKey = CommentPostWire.readPostKey(postKeyData);
 						const challenge = CommentPostWire.readChallenge(postKeyData);
@@ -16991,14 +18273,6 @@ const { ThreadLoader } = (() => {
 										});
 										throw challengeFailure('challenge-unavailable', '追加認証の設定を取得できませんでした。公式プレイヤーから投稿してください（コメントは未送信です）');
 								}
-								const stillOriginal = () => {
-										try {
-												return !isOriginalVideo || isOriginalVideo() === true;
-										}
-										catch (_error) {
-												return false;
-										}
-								};
 								if (!stillOriginal()) {
 										logCommentPostDiagnostic(diagnostic, 'challenge', 'failure', {
 												reason: 'challenge-stale-video', outcome: 'not-sent'
@@ -17136,6 +18410,9 @@ const { ThreadLoader } = (() => {
 										nextAttempt: diagnostic.attempt + 1
 								});
 								await sleep(3000);
+								if (!stillOriginal()) {
+										throw challengeFailure('challenge-stale-video', '動画が切り替わったためコメントを再送していません。');
+								}
 								return await this._postChat(msgInfo, text, cmd, vpos, true, {
 										...diagnostic,
 										attempt: diagnostic.attempt + 1
@@ -17275,38 +18552,67 @@ const { YouTubeWrapper } = (() => {
 						this._autoplay = autoplay;
 						this._volume = volume;
 						this._playbackRate = playbackRate;
+						this._actualPlaybackRate = playbackRate;
 						this._loop = loop;
+						this._sourceRequest = 0;
 						this._startDiff = 0;
 						this._isSeeking = false;
 						this._seekTime = 0;
+						this._seekSequence = 0;
+						this._seekDispatchedSequence = 0;
+						this._seekCompletionTimer = null;
 						this._onSeekEnd = _.debounce(this._onSeekEnd.bind(this), 500);
 				}
 				async setSrc(url, startSeconds = 0) {
+						const request = this._sourceRequest = (this._sourceRequest || 0) + 1;
+						const pendingSeek = this._onSeekEnd;
+						pendingSeek.cancel?.();
+						this._cancelSeekCompletion();
 						this._src = url;
 						this._videoId = this._parseVideoId(url);
 						this._canPlay = false;
 						this._isSeeking = false;
 						this._seekTime = 0;
-						const player = this._player;
-						const isFirst = !!player ? false : true;
-						const urlParams = this._parseUrlParams(url);
-						this._startDiff = YouTubeWrapper.parseStartTime(urlParams.t);
+						const params = this._parseUrlParams(url);
+						this._startDiff = YouTubeWrapper.parseStartTime(params.t);
 						startSeconds += this._startDiff;
-						if (isFirst && !url) {
-								return Promise.resolve();
-						}
-						if (isFirst) {
-								return this._initPlayer(this._videoId, startSeconds); //.then(({player}) => {
-						}
+						const requestedVideoId = this._videoId;
 						if (!url) {
-								player.stopVideo();
+								this._player?.stopVideo?.();
 								return;
 						}
-						player.loadVideoById({
-								videoId: this._videoId,
-								startSeconds: startSeconds
-						});
-						player.loadPlaylist({ list: [this._videoId] });
+						let player = this._player;
+						if (this._playerInitPromise) {
+								const ready = await this._playerInitPromise;
+								player = ready.player;
+						}
+						else if (!player) {
+								const ready = await this._initPlayer(requestedVideoId, startSeconds, true);
+								player = ready.player;
+						}
+						if (request !== this._sourceRequest || !this._src || !player) {
+								return;
+						}
+						this._actualPlaybackRate = 1;
+						const payload = { videoId: requestedVideoId, startSeconds };
+						if (this._autoplay) {
+								player.loadVideoById(payload);
+						}
+						else {
+								player.cueVideoById(payload);
+						}
+				}
+				cancelPendingSource() {
+							this._sourceRequest;
+						this._src = '';
+						this._videoId = '';
+						const pending = this._onSeekEnd;
+						pending.cancel?.();
+						this._cancelSeekCompletion();
+						try {
+								this._player?.stopVideo?.();
+						}
+						catch (_) { }
 				}
 				set src(v) {
 						this.setSrc(v);
@@ -17335,7 +18641,7 @@ const { YouTubeWrapper } = (() => {
 						const a = textUtil.parseUrl(url);
 						return a.search.startsWith('?') ? textUtil.parseQuery(a.search) : {};
 				}
-				async _initPlayer(videoId, startSeconds = 0) {
+				async _initPlayer(videoId, startSeconds = 0, suppressAutoplay = false) {
 						if (this._playerInitPromise) {
 								return this._playerInitPromise;
 						}
@@ -17344,31 +18650,67 @@ const { YouTubeWrapper } = (() => {
 						}
 						const init = (async () => {
 								const YT = await this._initYT();
-								const { player } = await new Promise(resolve => {
-										this._player = new YT.Player(this._parentNode, {
-												videoId,
-												events: {
-														onReady: () => resolve({ player: this._player }),
-														onStateChange: this._onPlayerStateChange.bind(this),
-														onPlaybackQualityChange: (e) => window.console.info('video quality: ', e.data),
-														onError: (e) => this.emit('error', e)
-												},
-												playerVars: {
-														autoplay: this._autoplay ? 1 : 0,
-														volume: this._volume * 100,
-														start: startSeconds,
-														fs: 0,
-														loop: 0,
-														controls: 1,
-														disablekb: 1,
-														modestbranding: 0,
-														playsinline: 1,
-														rel: 0,
-														showInfo: 1
+								const { player } = await new Promise((resolve, reject) => {
+										let ready = false;
+										const timeout = setTimeout(() => {
+												if (ready) {
+														return;
 												}
-										});
+												ready = true;
+												reject(new Error('YouTube player ready timed out'));
+										}, 20000);
+										const onReady = () => {
+												if (ready) {
+														return;
+												}
+												ready = true;
+												clearTimeout(timeout);
+												resolve({ player: this._player });
+										};
+										try {
+												this._player = new YT.Player(this._parentNode, {
+														videoId,
+														events: {
+																onReady,
+																onStateChange: this._onPlayerStateChange.bind(this),
+																onPlaybackQualityChange: (e) => window.console.info('video quality: ', e.data),
+																onPlaybackRateChange: (e) => {
+																		const actual = Number(e?.data);
+																		if (Number.isFinite(actual) && actual > 0) {
+																				this._actualPlaybackRate = actual;
+																		}
+																},
+																onError: (e) => this.emit('error', e)
+														},
+														playerVars: {
+																autoplay: suppressAutoplay ? 0 : (this._autoplay ? 1 : 0),
+																volume: this._volume * 100,
+																start: startSeconds,
+																fs: 0,
+																loop: 0,
+																controls: 1,
+																disablekb: 1,
+																modestbranding: 0,
+																playsinline: 1,
+																rel: 0,
+																showInfo: 1
+														}
+												});
+										}
+										catch (error) {
+												if (!ready) {
+														ready = true;
+														clearTimeout(timeout);
+														reject(error);
+												}
+										}
 								});
-								this._onPlayerReady();
+								if (!suppressAutoplay || this._src) {
+										this._onPlayerReady();
+								}
+								else {
+										player?.stopVideo?.();
+								}
 								return { player };
 						})();
 						this._playerInitPromise = init;
@@ -17376,7 +18718,13 @@ const { YouTubeWrapper } = (() => {
 								return await init;
 						}
 						catch (error) {
+								const abandoned = this._player;
 								this._player = null;
+								try {
+										abandoned?.stopVideo?.();
+										abandoned?.destroy?.();
+								}
+								catch (_) { }
 								throw error;
 						}
 						finally {
@@ -17394,41 +18742,56 @@ const { YouTubeWrapper } = (() => {
 						}
 						const loader = new Promise((resolve, reject) => {
 								const previousReady = window.onYouTubeIframeAPIReady;
+								let settled = false;
+								let tag;
+								let timer;
 								const restore = () => {
 										if (window.onYouTubeIframeAPIReady === onReady) {
 												window.onYouTubeIframeAPIReady = previousReady;
 										}
 								};
-								const onReady = () => {
+								const finish = (yt, failed) => {
+										if (settled) {
+												return;
+										}
+										settled = true;
+										if (timer !== undefined) {
+												clearTimeout(timer);
+										}
 										restore();
+										if (failed) {
+												tag?.remove?.();
+												reject(new Error('YouTube IFrame API unavailable'));
+										}
+										else {
+												resolve(yt);
+										}
+								};
+								const onReady = () => {
+										if (settled) {
+												return;
+										}
 										if (typeof previousReady === 'function') {
 												try {
 														previousReady();
 												}
-												catch (e) {
-														console.warn('YouTube prior ready callback failed', e);
+												catch (_) {
+														console.warn('YouTube prior ready callback failed');
 												}
 										}
-										if (window.YT?.Player) {
-												resolve(window.YT);
-										}
-										else {
-												reject(new Error('YouTube IFrame API ready without Player'));
-										}
+										finish(window.YT, !window.YT?.Player);
 								};
-								const onError = (error) => {
-										restore();
-										reject(error || new Error('YouTube IFrame API unavailable'));
-								};
+								const onError = () => finish(null, true);
 								window.onYouTubeIframeAPIReady = onReady;
+								timer = setTimeout(onError, 15000);
 								try {
-										const tag = document.createElement('script');
+										tag = document.createElement('script');
 										tag.src = 'https://www.youtube.com/iframe_api';
 										tag.addEventListener?.('error', onError, { once: true });
 										document.head.append(tag);
 								}
-								catch (error) {
-										onError(error);
+								catch (_) {
+										onError();
 								}
 						});
 						YouTubeWrapper._ytApiPromise = loader.catch(error => {
@@ -17438,7 +18801,23 @@ const { YouTubeWrapper } = (() => {
 						return YouTubeWrapper._ytApiPromise;
 				}
 				_onPlayerReady() {
+						this._restorePlaybackRate();
 						this.emitAsync('loadedMetaData');
+				}
+				_restorePlaybackRate() {
+						const player = this._player;
+						if (!player || typeof player.getPlaybackRate !== 'function' ||
+								typeof player.setPlaybackRate !== 'function') {
+								return;
+						}
+						try {
+								const actual = Number(player.getPlaybackRate());
+								if (Number.isFinite(actual) && actual > 0 &&
+										actual !== this._playbackRate) {
+										player.setPlaybackRate(this._playbackRate);
+								}
+						}
+						catch (_) { /* the video can still play at the provider's default speed */ }
 				}
 				_onPlayerStateChange(e) {
 						const state = e.data;
@@ -17455,6 +18834,7 @@ const { YouTubeWrapper } = (() => {
 										}
 										break;
 								case YT.PlayerState.PLAYING:
+										this._restorePlaybackRate();
 										if (!this._canPlay) {
 												this._canPlay = true;
 												this.muted = this._muted;
@@ -17463,16 +18843,17 @@ const { YouTubeWrapper } = (() => {
 										}
 										this.emit('play');
 										this.emit('playing');
-										if (this._isSeeking) {
-												this.emit('seeked');
-										}
+										this._completeSeekFromState();
 										break;
 								case YT.PlayerState.PAUSED:
+										this._completeSeekFromState();
 										this.emit('pause');
 										break;
 								case YT.PlayerState.BUFFERING:
 										break;
 								case YT.PlayerState.CUED:
+										this._restorePlaybackRate();
+										this._completeSeekFromState();
 										break;
 						}
 				}
@@ -17490,15 +18871,80 @@ const { YouTubeWrapper } = (() => {
 				selectBestQuality() {
 						return false;
 				}
-				_onSeekEnd() {
+				_cancelSeekCompletion() {
+						this._seekSequence = (this._seekSequence || 0) + 1;
+						this._seekDispatchedSequence = 0;
+						if (this._seekCompletionTimer != null) {
+								clearTimeout(this._seekCompletionTimer);
+								this._seekCompletionTimer = null;
+						}
 						this._isSeeking = false;
-						this._player.seekTo(this._seekTime + this._startDiff);
+				}
+				_completeSeek(sequence, source) {
+						if (!this._isSeeking || this._seekSequence !== sequence ||
+								this._seekDispatchedSequence !== sequence ||
+								this._sourceRequest !== source || !this._src) {
+								return;
+						}
+						if (this._seekCompletionTimer != null) {
+								clearTimeout(this._seekCompletionTimer);
+								this._seekCompletionTimer = null;
+						}
+						this._seekDispatchedSequence = 0;
+						this._isSeeking = false;
+						this.emit('seeked');
+				}
+				_completeSeekFromState() {
+						if (!this._isSeeking ||
+								this._seekDispatchedSequence !== this._seekSequence) {
+								return;
+						}
+						const getter = this._player?.getCurrentTime;
+						if (typeof getter !== 'function') {
+								return;
+						}
+						try {
+								const position = Number(getter.call(this._player));
+								if (!Number.isFinite(position) ||
+										Math.abs(position - this._seekTime) > 0.2) {
+										return;
+								}
+						}
+						catch (_) {
+								return;
+						}
+						this._completeSeek(this._seekSequence, this._sourceRequest);
+				}
+				_onSeekEnd() {
+						if (!this._src || !this._player) {
+								this._cancelSeekCompletion();
+								return;
+						}
+						const sequence = this._seekSequence, source = this._sourceRequest;
+						this._seekDispatchedSequence = sequence;
+						try {
+								this._player.seekTo(this._seekTime, true);
+						}
+						catch (_) {
+								this._completeSeek(sequence, source);
+								return;
+						}
+						if (this._isSeeking && this._seekSequence === sequence &&
+								this._sourceRequest === source) {
+								this._seekCompletionTimer = setTimeout(() => this._completeSeek(sequence, source), 1500);
+						}
 				}
 				set currentTime(v) {
+						if (this._seekCompletionTimer != null) {
+								clearTimeout(this._seekCompletionTimer);
+								this._seekCompletionTimer = null;
+						}
+						this._seekSequence = (this._seekSequence || 0) + 1;
+						this._seekDispatchedSequence = 0;
 						this._isSeeking = true;
 						this._seekTime = Math.max(0, Math.min(v, this.duration));
-						this._onSeekEnd();
 						this.emit('seeking');
+						this._onSeekEnd();
 				}
 				get currentTime() {
 						const now = performance.now();
@@ -17507,7 +18953,7 @@ const { YouTubeWrapper } = (() => {
 								return this._seekTime;
 						}
 						const state = this._player.getPlayerState();
-						const currentTime = this._player.getCurrentTime() + this._startDiff;
+						const currentTime = this._player.getCurrentTime();
 						if (state !== STATE_PLAYING || this._lastCurrentTime !== currentTime) {
 								this._lastCurrentTime = currentTime;
 								this._lastTime = now;
@@ -17518,7 +18964,7 @@ const { YouTubeWrapper } = (() => {
 						return Math.min(currentTime + timeDiff, this.duration);
 				}
 				get duration() {
-						return this._player.getDuration() - this._startDiff;
+						return this._player.getDuration();
 				}
 				set muted(v) {
 						if (v) {
@@ -17543,13 +18989,25 @@ const { YouTubeWrapper } = (() => {
 						return this._volume;
 				}
 				set playbackRate(v) {
-						if (this._playbackRate !== v) {
-								this._playbackRate = v;
-								this._player.setPlaybackRate(v);
+						const rate = Number(v);
+						if (!Number.isFinite(rate) || rate <= 0) {
+								return;
+						}
+						this._playbackRate = rate;
+						if (this._player && typeof this._player.setPlaybackRate === 'function' &&
+								this.playbackRate !== rate) {
+								this._player.setPlaybackRate(rate);
 						}
 				}
 				get playbackRate() {
-						return this._playbackRate;
+						try {
+								const actual = Number(this._player?.getPlaybackRate?.());
+								if (Number.isFinite(actual) && actual > 0) {
+										return actual;
+								}
+						}
+						catch (_) { /* provider state is temporarily unavailable */ }
+						return this._actualPlaybackRate || this._playbackRate;
 				}
 				set loop(v) {
 						if (this._loop !== v) {
@@ -17740,6 +19198,201 @@ AudioAdjuster.register({
 * 「押している間だけ元の映像」は廃止し、画面の左半分だけ元の映像を重ねる比較モードにした。
 */
 const ScreenFilter = (() => {
+		const createScreenFilterLowPowerRenderer = ({ getVideo, onStatus = () => { }, doc = document, win = window }) => {
+				let options = {}, running = false, video = null, source = null;
+				let canvas = null, scratch = null, ctx = null, sample = null;
+				let timer = 0, raf = 0, observer = null, savedFilter = '', savedPriority = '';
+				let failed = false, sourceKey = '', status = '', attached = [], resizer = null;
+				const events = ['play', 'pause', 'seeked', 'loadeddata', 'loadedmetadata', 'emptied', 'resize'];
+				const report = (next) => { if (next !== status) {
+						status = next;
+						onStatus(next);
+				} };
+				const cancel = () => {
+						if (timer)
+								win.clearTimeout(timer);
+						if (raf)
+								win.cancelAnimationFrame(raf);
+						timer = raf = 0;
+				};
+				const hide = () => { if (canvas)
+						canvas.style.display = 'none'; };
+				const detach = () => {
+						cancel();
+						if (resizer)
+								resizer.disconnect();
+						resizer = null;
+						attached.forEach(el => events.forEach(name => el.removeEventListener(name, wake)));
+						attached = [];
+						if (video) {
+								if (savedFilter)
+										video.style.setProperty('filter', savedFilter, savedPriority);
+								else
+										video.style.removeProperty('filter');
+						}
+						if (canvas)
+								canvas.remove();
+						video = source = canvas = scratch = ctx = sample = null;
+						failed = false;
+						sourceKey = '';
+				};
+				const sync = () => {
+						const found = getVideo();
+						const next = found && found.isConnected !== false && found.parentNode ? found : null;
+						const drawable = next && (next.drawableElement || next);
+						if (next !== video || drawable !== source || (canvas && canvas.parentNode !== next?.parentNode)) {
+								detach();
+								video = next;
+								source = drawable;
+								if (video) {
+										savedFilter = video.style.getPropertyValue('filter');
+										savedPriority = video.style.getPropertyPriority('filter');
+										video.style.setProperty('filter', 'none', 'important');
+										attached = source !== video ? [video, source] : [video];
+										attached = attached.filter(el => el && el.addEventListener);
+										attached.forEach(el => events.forEach(name => el.addEventListener(name, wake)));
+										if (win.ResizeObserver) {
+												resizer = new win.ResizeObserver(wake);
+												resizer.observe(video);
+										}
+								}
+						}
+						const key = source && (source.currentSrc || source.src || '');
+						if (key !== sourceKey) {
+								sourceKey = key;
+								failed = false;
+								hide();
+						}
+						return !!video;
+				};
+				const schedule = () => {
+						if (!running || timer || raf || failed || doc.hidden || !video ||
+								source?.tagName !== 'VIDEO' || !source.videoWidth || !source.videoHeight || source.readyState < 2)
+								return;
+						timer = win.setTimeout(() => {
+								timer = 0;
+								raf = win.requestAnimationFrame(draw);
+						}, 1000 / 30);
+				};
+				const draw = () => {
+						raf = 0;
+						if (!running || doc.hidden || !sync() || failed)
+								return;
+						if (source?.tagName !== 'VIDEO' || !source.videoWidth || !source.videoHeight || source.readyState < 2) {
+								hide();
+								return;
+						}
+						const vw = source.videoWidth, vh = source.videoHeight;
+						const ew = video.offsetWidth, eh = video.offsetHeight;
+						if (!ew || !eh) {
+								hide();
+								return;
+						}
+						try {
+								if (!canvas) {
+										scratch = doc.createElement('canvas');
+										canvas = doc.createElement('canvas');
+										canvas.className = 'zenzaScreenFilterLowPower';
+										canvas.setAttribute('aria-hidden', 'true');
+										canvas.style.cssText = 'position:absolute;z-index:5;pointer-events:none;display:none;';
+										video.after(canvas);
+										sample = scratch.getContext('2d', { alpha: false });
+										ctx = canvas.getContext('2d', { alpha: false });
+										if (!sample || !ctx || !('filter' in ctx))
+												throw new Error('Canvas filter unavailable');
+								}
+								const ratio = Math.min(1, 854 / vw, 480 / vh);
+								const w = Math.max(1, Math.floor(vw * ratio)), h = Math.max(1, Math.floor(vh * ratio));
+								if (canvas.width !== w || canvas.height !== h) {
+										scratch.width = canvas.width = w;
+										scratch.height = canvas.height = h;
+								}
+								sample.filter = 'none';
+								sample.drawImage(source, 0, 0, w, h);
+								ctx.filter = options.filter || 'none';
+								ctx.clearRect(0, 0, w, h);
+								ctx.drawImage(scratch, 0, 0, w, h);
+								const scale = Math.min(ew / vw, eh / vh), cw = vw * scale, ch = vh * scale;
+								Object.assign(canvas.style, {
+										display: 'block', left: `${video.offsetLeft + (ew - cw) / 2}px`,
+										top: `${video.offsetTop + (eh - ch) / 2}px`, width: `${cw}px`, height: `${ch}px`,
+										transform: `scale(${options.flipH ? -1 : 1}, ${options.flipV ? -1 : 1})`
+								});
+								report('active');
+								if (!source.paused && !source.ended)
+										schedule();
+						}
+						catch (e) {
+								failed = true;
+								cancel();
+								hide();
+								report('unavailable');
+						}
+				};
+				function wake() {
+						if (!running)
+								return;
+						if (!sync()) {
+								report('waiting');
+								return;
+						}
+						if (doc.hidden) {
+								cancel();
+								hide();
+								report('hidden');
+								return;
+						}
+						if (source?.tagName !== 'VIDEO') {
+								cancel();
+								hide();
+								report('unsupported');
+								return;
+						}
+						if (failed) {
+								report('unavailable');
+								return;
+						}
+						if (!source.videoWidth || !source.videoHeight || source.readyState < 2) {
+								cancel();
+								hide();
+								report('waiting');
+								return;
+						}
+						schedule();
+				}
+				const stop = () => {
+						running = false;
+						if (observer)
+								observer.disconnect();
+						observer = null;
+						doc.removeEventListener('visibilitychange', wake);
+						win.removeEventListener('resize', wake);
+						detach();
+						report('normal');
+				};
+				const update = (next) => {
+						options = Object.assign({}, options, next);
+						if (!options.enabled) {
+								stop();
+								return;
+						}
+						if (!running) {
+								running = true;
+								doc.addEventListener('visibilitychange', wake);
+								win.addEventListener('resize', wake);
+								observer = new win.MutationObserver(() => {
+										const found = getVideo();
+										if (found !== video || video?.isConnected === false ||
+												(video && (video.drawableElement || video) !== source) ||
+												(canvas && canvas.parentNode !== video?.parentNode))
+												wake();
+								});
+								observer.observe(doc.documentElement, { childList: true, subtree: true });
+						}
+						wake();
+				};
+				return { start: update, update, stop };
+		};
 		const PREFIX = 'screenFilter.';
 		const SVG_ID = 'zenzaScreenFilterSvg';
 		const STYLE_ID = 'zenzaScreenFilterStyle';
@@ -17847,7 +19500,40 @@ const ScreenFilter = (() => {
 						],
 						desc: '映像をいったん白黒にして、選んだ色のグラデーションで塗り直します。' +
 								'ゴールドは金属っぽい高級感、セピアは古い写真、グリーンは暗視カメラのような見た目になります。'
-				}
+				},
+				{ key: 'bloom', label: 'ブルーム（光のにじみ）', group: 'style', heavy: true,
+						min: 0, max: 100, step: 1, def: 0, unit: '%',
+						desc: '明るい色をぼかして重ねます。0で無効。強くすると白飛びしやすく、ぼかし処理の負荷が増えます。' },
+				{ key: 'bloomThreshold', label: 'ブルームの明るさ基準', group: 'style',
+						min: 0, max: 95, step: 1, def: 70, unit: '%',
+						desc: '高いほど明るい色だけが光ります。ブルームが0の間は映像に影響しません。' },
+				{ key: 'bloomRadius', label: 'ブルームの広がり', group: 'style',
+						min: 0.5, max: 12, step: 0.5, def: 3, unit: 'px',
+						desc: '光を広げる範囲です。大きいほど柔らかく広がります。' },
+				{ key: 'posterize', label: 'ポスタライズ（階調数）', group: 'style',
+						min: 0, max: 16, step: 1, def: 0, unit: '',
+						desc: '0で無効。1・2は各色2段階、3以上はその段階数に減色します。少ないほどポスター風になります。' },
+				{ key: 'edge', label: '輪郭エフェクトの強さ', group: 'style', heavy: true,
+						min: 0, max: 100, step: 1, def: 0, unit: '%',
+						desc: '輪郭を抽出した映像と混ぜます。100で輪郭だけ、0で無効。周囲の画素を調べる処理を使います。' },
+				{ key: 'edgeStyle', label: '輪郭エフェクトの種類', group: 'style', type: 'select', def: 'sketch',
+						options: [['sketch', '鉛筆スケッチ'], ['neon', 'ネオン輪郭'], ['emboss', 'エンボス']],
+						desc: '白地の線画、黒地の色付き輪郭、浮き彫りから選びます。強さが0の間は映像に影響しません。' },
+				{ key: 'rgbShift', label: 'RGBずらし（色収差）', group: 'style',
+						min: -12, max: 12, step: 0.5, def: 0, unit: 'px', signed: true,
+						desc: '赤と青を左右へ逆向きにずらします。符号で方向を反転、0で無効。' },
+				{ key: 'grain', label: 'フィルム粒子', group: 'style',
+						min: 0, max: 100, step: 1, def: 0, unit: '%',
+						desc: '固定の白黒粒子を重ねます。粒子は動かず、細かなフィルムの質感を加えます。0で無効。' },
+				{ key: 'grainSize', label: 'フィルム粒子の大きさ', group: 'style',
+						min: 1, max: 4, step: 0.5, def: 1, unit: '',
+						desc: '粒子を細かく／粗くします。フィルム粒子が0の間は映像に影響しません。' },
+				{ key: 'scanlines', label: '走査線（CRT風）', group: 'style',
+						min: 0, max: 100, step: 1, def: 0, unit: '%',
+						desc: '細い横線を重ねてブラウン管風にします。0で無効。RGBずらしや周辺減光と組み合わせられます。' },
+				{ key: 'scanlineSpacing', label: '走査線の間隔', group: 'style',
+						min: 2, max: 8, step: 1, def: 4, unit: 'px',
+						desc: '横線の間隔です。画面サイズによって見え方が変わります。' }
 		];
 		const PARAM_MAP = PARAMS.reduce((map, p) => { map[p.key] = p; return map; }, {});
 		const DEFAULTS = PARAMS.reduce((map, p) => { map[p.key] = p.def; return map; }, {});
@@ -17885,7 +19571,23 @@ const ScreenFilter = (() => {
 				{ id: 'monoHigh', label: '白黒（硬調）', values: { saturate: 0, contrast: 135 },
 						desc: 'コントラストの強い白黒。' },
 				{ id: 'invert', label: '反転（暗転）', values: { invert: true, hue: 180 },
-						desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。' }
+						desc: '白い背景の資料動画などを暗い画面にします（色味はなるべく保ったまま明暗だけ反転）。' },
+				{ id: 'softGlow', label: 'ソフトグロー', values: { bloom: 35, bloomThreshold: 65, bloomRadius: 4 },
+						desc: '明るい色を柔らかくにじませます。' },
+				{ id: 'popPoster', label: 'ポップポスター', values: { posterize: 4, saturate: 130, contrast: 110 },
+						desc: '色を各4段階に減らし、鮮やかなポスター風に。' },
+				{ id: 'pencilSketch', label: '鉛筆スケッチ', values: { edge: 100, edgeStyle: 'sketch' },
+						desc: '白地に輪郭を描く線画風。' },
+				{ id: 'neonEdges', label: 'ネオン輪郭', values: { edge: 100, edgeStyle: 'neon', saturate: 150 },
+						desc: '黒地に色付きの輪郭を浮かべます。' },
+				{ id: 'emboss', label: '浮き彫り', values: { edge: 100, edgeStyle: 'emboss', saturate: 0 },
+						desc: '輪郭に明暗を付けた浮き彫り風。' },
+				{ id: 'chromatic', label: '色収差', values: { rgbShift: 3 },
+						desc: '赤と青の輪郭を左右にずらします。' },
+				{ id: 'grainFilm', label: '粒子フィルム', values: { grain: 45, saturate: 75, blackLevel: 5, temperature: 10 },
+						desc: '固定粒子と淡い暖色を合わせたフィルム風。' },
+				{ id: 'retroCrt', label: 'レトロCRT', values: { scanlines: 45, scanlineSpacing: 4, rgbShift: 1, vignette: 30, saturate: 115 },
+						desc: '走査線・軽い色収差・周辺減光でブラウン管風に。' }
 		];
 		const PRESET_MAP = PRESETS.reduce((map, p) => { map[p.id] = p; return map; }, {});
 		/* 着色（colorize）のグラデーション。暗い所→明るい所の順の色（0〜1） */
@@ -17937,6 +19639,40 @@ const ScreenFilter = (() => {
 				PARAMS.forEach(p => { values[p.key] = normalize(p.key, prop(p.key)); });
 				return values;
 		};
+		let historyCurrent = null;
+		const historyPast = [], historyFuture = [];
+		const snapshot = () => ({ ...read(), flipH: !!prop('flipH'), flipV: !!prop('flipV') });
+		const sameSnapshot = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+		const recordHistory = () => {
+				const next = snapshot();
+				if (historyCurrent && !sameSnapshot(historyCurrent, next)) {
+						historyPast.push(historyCurrent);
+						if (historyPast.length > 50)
+								historyPast.shift();
+						historyFuture.length = 0;
+				}
+				historyCurrent = next;
+		};
+		const stepHistory = (back) => {
+				recordHistory();
+				const from = back ? historyPast : historyFuture, to = back ? historyFuture : historyPast;
+				const target = from[from.length - 1];
+				if (!target)
+						return false;
+				const before = snapshot();
+				Object.entries(target).forEach(([key, value]) => setProp(key, value));
+				const actual = snapshot();
+				if (!sameSnapshot(target, actual)) {
+						recordHistory();
+						apply();
+						return false;
+				}
+				from.pop();
+				to.push(before);
+				historyCurrent = actual;
+				apply();
+				return true;
+		};
 		const isEnabled = () => true;
 		const isDefaultValue = (key, value) => {
 				const p = PARAM_MAP[key];
@@ -17957,8 +19693,130 @@ const ScreenFilter = (() => {
 				}
 				return Math.abs(a - b) < 1e-6;
 		};
+		const getUserPresets = () => {
+				const invalid = () => new Error('保存されたマイプリセットを読み込めません。データは変更していません。');
+				let raw = prop('userPresets');
+				if (config?.storage && typeof config.getStorageKey === 'function') {
+						try {
+								const stored = config.storage[config.getStorageKey(PREFIX + 'userPresets')];
+								raw = stored === undefined || stored === null ? '' : JSON.parse(stored);
+						}
+						catch {
+								throw invalid();
+						}
+				}
+				if (raw === undefined || raw === '')
+						return [];
+				if (typeof raw !== 'string' || raw.length > 100000)
+						throw invalid();
+				let data;
+				try {
+						data = JSON.parse(raw);
+				}
+				catch {
+						throw invalid();
+				}
+				if (!Array.isArray(data) || data.length > 20)
+						throw invalid();
+				const ids = new Set(), names = new Set();
+				return data.map(entry => {
+						if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string' ||
+								!/^user_[a-z0-9_-]+$/.test(entry.id) || typeof entry.label !== 'string' ||
+								!entry.label.trim() || entry.label.length > 40 || ids.has(entry.id) || names.has(entry.label.trim()) ||
+								!entry.values || typeof entry.values !== 'object' || Array.isArray(entry.values))
+								throw invalid();
+						ids.add(entry.id);
+						names.add(entry.label.trim());
+						const values = {};
+						for (const p of PARAMS) {
+								const value = entry.values[p.key];
+								if (value !== undefined && (typeof value !== typeof p.def ||
+										(typeof value === 'number' && !Number.isFinite(value))))
+										throw invalid();
+								values[p.key] = normalize(p.key, value === undefined ? p.def : value);
+						}
+						return { id: entry.id, label: entry.label.trim(), values };
+				});
+		};
+		const writeUserPresets = (presets) => {
+				if (!config?.props || config.readonly)
+						throw new Error('マイプリセットを保存できませんでした。');
+				const json = JSON.stringify(presets);
+				setProp('userPresets', json);
+				if (prop('userPresets') !== json || JSON.stringify(getUserPresets()) !== json)
+						throw new Error('マイプリセットを保存できませんでした。');
+				emitChange();
+		};
+		const saveUserPreset = (name) => {
+				const label = name.trim();
+				if (!label || label.length > 40)
+						throw new Error('名前を1〜40文字で入力してください。');
+				const presets = getUserPresets();
+				if (presets.some(p => p.label === label))
+						throw new Error('同じ名前があります。別の名前で保存してください。');
+				if (presets.length >= 20)
+						throw new Error('保存できるのは20件までです。不要なプリセットを削除してください。');
+				const preset = { id: 'user_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2), label, values: read() };
+				writeUserPresets([...presets, preset]);
+				return preset;
+		};
+		const deleteUserPreset = (id) => {
+				const presets = getUserPresets();
+				if (!presets.some(p => p.id === id))
+						throw new Error('このマイプリセットは見つかりません。');
+				writeUserPresets(presets.filter(p => p.id !== id));
+		};
+		const renameUserPreset = (id, name) => {
+				const label = name.trim(), presets = getUserPresets(), preset = presets.find(p => p.id === id);
+				if (!preset)
+						throw new Error('このマイプリセットは見つかりません。');
+				if (!label || label.length > 40)
+						throw new Error('名前を1〜40文字で入力してください。');
+				if (presets.some(p => p.id !== id && p.label === label))
+						throw new Error('同じ名前があります。別の名前で保存してください。');
+				preset.label = label;
+				writeUserPresets(presets);
+		};
+		const overwriteUserPreset = (id) => {
+				const presets = getUserPresets(), preset = presets.find(p => p.id === id);
+				if (!preset)
+						throw new Error('このマイプリセットは見つかりません。');
+				preset.values = read();
+				writeUserPresets(presets);
+		};
+		const allPresets = () => {
+				try {
+						return [...PRESETS, ...getUserPresets()];
+				}
+				catch {
+						return PRESETS;
+				}
+		};
+		const orderedPresets = (items) => {
+				try {
+						const order = JSON.parse(prop('presetOrder') || '[]');
+						if (!Array.isArray(order))
+								return items;
+						const positions = new Map();
+						order.forEach(id => { if (typeof id === 'string' && !positions.has(id))
+								positions.set(id, positions.size); });
+						return [...items].sort((a, b) => (positions.get(a.id) ?? Infinity) - (positions.get(b.id) ?? Infinity));
+				}
+				catch {
+						return items;
+				}
+		};
+		const getPresetList = (sorted = true) => {
+				let users = [];
+				try {
+						users = getUserPresets();
+				}
+				catch { }
+				const list = [...PRESETS.map(p => ({ id: p.id, label: p.label, user: false })), ...users.map(p => ({ id: p.id, label: p.label, user: true }))];
+				return sorted ? orderedPresets(list) : list;
+		};
 		const detectPreset = (values = read()) => {
-				const found = PRESETS.find(preset => PARAMS.every(p => {
+				const found = allPresets().find(preset => PARAMS.every(p => {
 						const target = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
 						return sameValue(p, values[p.key], target);
 				}));
@@ -18076,6 +19934,71 @@ const ScreenFilter = (() => {
 		* 077b は a = シャープ/100 × 2 で、効きが弱すぎた（077c で修正）。
 		*/
 		const SHARPEN_GAIN = 6;
+		const buildArtisticEffects = (values = {}, input = 'SourceGraphic') => {
+				const parts = [];
+				const n = (key) => normalize(key, values[key]);
+				const f = (value) => +value.toFixed(4);
+				if (n('bloom') > 0) {
+						const threshold = n('bloomThreshold') / 100;
+						const slope = f(1 / (1 - threshold));
+						const intercept = f(-threshold / (1 - threshold));
+						const channel = (ch) => `<feFunc${ch} type="linear" slope="${slope}" intercept="${intercept}"/>`;
+						parts.push(`<feComponentTransfer in="${input}" result="sfBloomBright">${channel('R')}${channel('G')}${channel('B')}</feComponentTransfer>`);
+						parts.push(`<feGaussianBlur in="sfBloomBright" stdDeviation="${n('bloomRadius')}" result="sfBloomBlur"/>`);
+						parts.push(`<feComposite in="${input}" in2="sfBloomBlur" operator="arithmetic" k1="0" k2="1" k3="${f(n('bloom') / 100 * 1.5)}" k4="0" result="sfBloom"/>`);
+						input = 'sfBloom';
+				}
+				if (n('posterize') > 0) {
+						const levels = Math.max(2, n('posterize'));
+						const table = Array.from({ length: levels }, (_, i) => f(i / (levels - 1))).join(' ');
+						const channel = (ch) => `<feFunc${ch} type="discrete" tableValues="${table}"/>`;
+						parts.push(`<feComponentTransfer in="${input}" result="sfPosterize">${channel('R')}${channel('G')}${channel('B')}</feComponentTransfer>`);
+						input = 'sfPosterize';
+				}
+				if (n('edge') > 0) {
+						const style = n('edgeStyle');
+						let source = input;
+						if (style === 'sketch') {
+								parts.push(`<feColorMatrix in="${input}" type="saturate" values="0" result="sfEdgeMono"/>`);
+								source = 'sfEdgeMono';
+						}
+						const kernel = style === 'emboss' ? '-2 -1 0 -1 1 1 0 1 2' :
+								style === 'neon' ? '-1 -1 -1 -1 8 -1 -1 -1 -1' : '1 1 1 1 -8 1 1 1 1';
+						const bias = style === 'emboss' ? 0.5 : style === 'sketch' ? 1 : 0;
+						parts.push(`<feConvolveMatrix in="${source}" order="3" kernelMatrix="${kernel}" divisor="1" bias="${bias}" edgeMode="duplicate" preserveAlpha="true" result="sfEdgeKernel"/>`);
+						const amount = n('edge') / 100;
+						parts.push(`<feComposite in="${input}" in2="sfEdgeKernel" operator="arithmetic" k1="0" k2="${f(1 - amount)}" k3="${f(amount)}" k4="0" result="sfEdge"/>`);
+						input = 'sfEdge';
+				}
+				const shift = n('rgbShift');
+				if (shift !== 0) {
+						['R', 'G', 'B'].forEach((channel, index) => {
+								const matrix = Array.from({ length: 4 }, (_, row) => Array.from({ length: 5 }, (_, col) => row === col && (row === index || row === 3) ? 1 : 0).join(' ')).join(' ');
+								parts.push(`<feColorMatrix in="${input}" type="matrix" values="${matrix}" result="sfRgb${channel}"/>`);
+						});
+						parts.push(`<feOffset in="sfRgbR" dx="${shift}" dy="0" result="sfRgbOffsetR"/>`);
+						parts.push(`<feOffset in="sfRgbB" dx="${-shift}" dy="0" result="sfRgbOffsetB"/>`);
+						parts.push('<feComposite in="sfRgbOffsetR" in2="sfRgbG" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="sfRgbRG"/>');
+						parts.push('<feComposite in="sfRgbRG" in2="sfRgbOffsetB" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" result="sfRgb"/>');
+						input = 'sfRgb';
+				}
+				if (n('grain') > 0) {
+						parts.push(`<feTurbulence type="fractalNoise" baseFrequency="${f(0.8 / n('grainSize'))}" numOctaves="1" seed="17" stitchTiles="stitch" width="64" height="64" result="sfGrainNoise"/>`);
+						parts.push(`<feColorMatrix in="sfGrainNoise" type="matrix" values="0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0.2126 0.7152 0.0722 0 0 0 0 0 0 ${f(n('grain') / 100)}" width="64" height="64" result="sfGrainTile"/>`);
+						parts.push('<feTile in="sfGrainTile" result="sfGrainTexture"/>');
+						parts.push(`<feBlend in="sfGrainTexture" in2="${input}" mode="soft-light" result="sfGrain"/>`);
+						input = 'sfGrain';
+				}
+				if (n('scanlines') > 0) {
+						const period = n('scanlineSpacing');
+						parts.push(`<feFlood flood-color="black" flood-opacity="${f(n('scanlines') / 100 * 0.85)}" width="1" height="1" result="sfScanStripe"/>`);
+						parts.push(`<feMerge width="1" height="${period}" result="sfScanTile"><feMergeNode in="sfScanStripe"/></feMerge>`);
+						parts.push('<feTile in="sfScanTile" result="sfScanPattern"/>');
+						parts.push(`<feComposite in="sfScanPattern" in2="${input}" operator="over" result="sfScanlines"/>`);
+						input = 'sfScanlines';
+				}
+				return { markup: parts.join(''), output: input };
+		};
 		const buildSvgFilterMarkup = (values) => {
 				const parts = [];
 				let input = 'SourceGraphic';
@@ -18094,7 +20017,12 @@ const ScreenFilter = (() => {
 				if (!isDefaultValue('sharpen', values.sharpen)) {
 						const amount = +(values.sharpen / 100 * SHARPEN_GAIN).toFixed(3);
 						parts.push(`<feGaussianBlur in="${input}" stdDeviation="0.6" result="sfBlur"/>`);
-						parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0"/>`);
+						parts.push(`<feComposite in="${input}" in2="sfBlur" operator="arithmetic" k1="0" k2="${+(1 + amount).toFixed(3)}" k3="${-amount}" k4="0" result="sfSharpen"/>`);
+						input = 'sfSharpen';
+				}
+				const artistic = buildArtisticEffects(values, input);
+				if (artistic.markup) {
+						parts.push(artistic.markup);
 				}
 				return parts.join('');
 		};
@@ -18188,6 +20116,7 @@ const ScreenFilter = (() => {
 				lastVignette = key;
 		};
 		const emitChange = () => {
+				recordHistory();
 				listeners.forEach(fn => {
 						try {
 								fn();
@@ -18196,6 +20125,19 @@ const ScreenFilter = (() => {
 								window.console.warn('ScreenFilter listener error', e);
 						}
 				});
+		};
+		let lowPowerStatus = 'normal';
+		let lowPowerRenderer = null;
+		const updateLowPower = (values, filter) => {
+				const enabled = prop('renderQuality') === 'light' && !bypass &&
+						['bloom', 'posterize', 'edge', 'rgbShift', 'grain', 'scanlines'].some(key => normalize(key, values[key]) !== 0);
+				if (enabled && !lowPowerRenderer) {
+						lowPowerRenderer = createScreenFilterLowPowerRenderer({
+								getVideo: () => document.querySelector('.zenzaWatchVideoElement'),
+								onStatus: (status) => { lowPowerStatus = status; emitChange(); }
+						});
+				}
+				lowPowerRenderer?.update({ enabled, filter, flipH: !!prop('flipH'), flipV: !!prop('flipV') });
 		};
 		const apply = (values = read(), { notify = true } = {}) => {
 				applyScheduled = false;
@@ -18208,6 +20150,7 @@ const ScreenFilter = (() => {
 						lastCss = css;
 						document.documentElement.style.setProperty(CSS_VAR, css);
 				}
+				updateLowPower(values, css);
 				applyVignette(vignetteAlpha(values));
 				updateAutoLevelsTimer(values);
 				notify && emitChange();
@@ -18307,7 +20250,9 @@ const ScreenFilter = (() => {
 				if (!PARAM_MAP[key]) {
 						return;
 				}
+				recordHistory();
 				setProp(key, normalize(key, value));
+				recordHistory();
 				scheduleApply();
 		};
 		const preview = (key, value) => {
@@ -18316,18 +20261,28 @@ const ScreenFilter = (() => {
 				apply(values, { notify: false });
 		};
 		const applyPreset = (id) => {
-				const preset = PRESET_MAP[id];
+				const preset = allPresets().find(p => p.id === id);
 				if (!preset) {
 						return null;
 				}
+				recordHistory();
 				PARAMS.forEach(p => {
 						const v = preset.values[p.key] !== undefined ? preset.values[p.key] : p.def;
 						setProp(p.key, normalize(p.key, v));
 				});
+				recordHistory();
 				scheduleApply();
 				return preset;
 		};
 		const reset = () => applyPreset('standard');
+		const isPresetActive = (id) => {
+				const preset = allPresets().find(p => p.id === id);
+				if (!preset)
+						return false;
+				const values = read();
+				return PARAMS.every(p => sameValue(p, values[p.key], preset.values[p.key] ?? p.def));
+		};
+		const togglePreset = (id) => isPresetActive(id) ? reset() : applyPreset(id);
 		const nextPreset = () => {
 				const current = detectPreset();
 				const index = PRESETS.findIndex(p => p.id === current);
@@ -18357,8 +20312,7 @@ const ScreenFilter = (() => {
 				}
 				const delta = parseFloat(deltaText) || 0;
 				const next = normalize(key, normalize(key, prop(key)) + delta);
-				setProp(key, next);
-				scheduleApply();
+				set(key, next);
 				return { param: p, value: next };
 		};
 		const onOff = (v) => v ? 'ON' : 'OFF';
@@ -18457,6 +20411,9 @@ const ScreenFilter = (() => {
 				const filter = use && !bypass ? buildFilter() : 'none';
 				const flipH = use && !!prop('flipH'), flipV = use && !!prop('flipV');
 				ctx.save();
+				ctx.beginPath();
+				ctx.rect(dx, dy, w, h);
+				ctx.clip();
 				if (filter !== 'none') {
 						ctx.filter = filter;
 				}
@@ -18497,14 +20454,124 @@ const ScreenFilter = (() => {
 				return out;
 		};
 		const SPLIT_CLASS = 'zenzaScreenFilterSplit';
-		const split = { on: false, raf: 0, canvas: null, ctx: null, lastKey: '' };
+		const split = { on: false, raf: 0, canvas: null, ctx: null, lastKey: '', lastGeometryKey: '', lastDrawTime: 0, handle: null, dragging: false, pointerId: null, position: null };
+		const getSplitPosition = () => {
+				const value = split.position ?? Number(prop('splitPosition') ?? 50);
+				return Number.isFinite(value) ? clamp(value, 0, 100) : 50;
+		};
+		const setSplitPosition = (value, persist = true) => {
+				if (!Number.isFinite(value))
+						return getSplitPosition();
+				const position = Math.round(clamp(value, 0, 100));
+				if (persist) {
+						setProp('splitPosition', position);
+						split.position = null;
+				}
+				else
+						split.position = position;
+				split.lastKey = '';
+				return getSplitPosition();
+		};
+		const moveSplit = (event) => {
+				if (!split.dragging || !split.canvas || event.pointerId !== split.pointerId)
+						return;
+				if (event.buttons === 0) {
+						endSplitDrag();
+						return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				const rect = split.canvas.getBoundingClientRect();
+				if (rect.width)
+						setSplitPosition((event.clientX - rect.left) / rect.width * 100, false);
+		};
+		const endSplitDrag = (event) => {
+				if (!split.dragging)
+						return;
+				if (event && event.pointerId !== split.pointerId)
+						return;
+				if (event) {
+						event.preventDefault();
+						event.stopPropagation();
+				}
+				if (event?.type === 'pointerup')
+						setSplitPosition(getSplitPosition());
+				else
+						split.position = null;
+				split.dragging = false;
+				split.lastKey = '';
+				const pointerId = split.pointerId;
+				split.pointerId = null;
+				if (pointerId !== null && split.handle?.hasPointerCapture?.(pointerId))
+						split.handle.releasePointerCapture(pointerId);
+				window.removeEventListener('blur', cancelSplitDrag);
+				window.removeEventListener('pointermove', moveSplit, true);
+				window.removeEventListener('pointerup', endSplitDrag, true);
+				window.removeEventListener('pointercancel', endSplitDrag, true);
+		};
+		const cancelSplitDrag = () => endSplitDrag();
+		const ensureSplitHandle = (parent) => {
+				if (!split.handle) {
+						const handle = split.handle = document.createElement('button');
+						handle.type = 'button';
+						handle.className = 'zenzaScreenFilterSplitHandle';
+						handle.setAttribute('role', 'slider');
+						handle.setAttribute('aria-label', '左右比較の境界位置');
+						handle.setAttribute('aria-valuemin', '0');
+						handle.setAttribute('aria-valuemax', '100');
+						handle.setAttribute('aria-orientation', 'horizontal');
+						handle.textContent = '↔';
+						handle.style.cssText = 'position:absolute;z-index:102;width:28px;height:44px;transform:translate(-50%,-50%);padding:0;border:1px solid #aaa;border-radius:5px;background:#18181cee;color:#fff;cursor:ew-resize;touch-action:none;pointer-events:auto;';
+						handle.addEventListener('pointerdown', event => {
+								if (event.button !== 0)
+										return;
+								event.preventDefault();
+								event.stopPropagation();
+								split.dragging = true;
+								split.pointerId = event.pointerId;
+								try {
+										handle.setPointerCapture?.(event.pointerId);
+								}
+								catch { }
+								window.addEventListener('blur', cancelSplitDrag);
+								window.addEventListener('pointermove', moveSplit, true);
+								window.addEventListener('pointerup', endSplitDrag, true);
+								window.addEventListener('pointercancel', endSplitDrag, true);
+						});
+						handle.addEventListener('lostpointercapture', cancelSplitDrag);
+						for (const name of ['click', 'dblclick', 'mousedown', 'mouseup', 'keyup'])
+								handle.addEventListener(name, event => event.stopPropagation());
+						handle.addEventListener('keydown', event => {
+								event.stopPropagation();
+								let next = getSplitPosition();
+								if (event.key === 'ArrowLeft')
+										next -= event.shiftKey ? 10 : 1;
+								else if (event.key === 'ArrowRight')
+										next += event.shiftKey ? 10 : 1;
+								else if (event.key === 'Home')
+										next = 0;
+								else if (event.key === 'End')
+										next = 100;
+								else
+										return;
+								event.preventDefault();
+								setSplitPosition(next);
+						});
+				}
+				if (split.handle.parentNode !== parent)
+						parent.appendChild(split.handle);
+				return split.handle;
+		};
 		const hideSplitCanvas = () => {
 				if (split.canvas) {
 						split.canvas.style.display = 'none';
 				}
+				if (split.handle)
+						split.handle.hidden = true;
+				endSplitDrag();
 				split.lastKey = '';
 		};
-		const drawSplit = () => {
+		const drawSplit = (timestamp) => {
 				split.raf = 0;
 				if (!split.on || typeof document === 'undefined') {
 						return;
@@ -18525,6 +20592,7 @@ const ScreenFilter = (() => {
 						video.after(canvas);
 						split.canvas = canvas;
 						split.ctx = canvas.getContext('2d');
+						split.lastKey = '';
 				}
 				const vw = src.videoWidth, vh = src.videoHeight;
 				const ew = video.offsetWidth, eh = video.offsetHeight;
@@ -18536,23 +20604,41 @@ const ScreenFilter = (() => {
 				const cw = vw * scale, ch = vh * scale;
 				const left = video.offsetLeft + (ew - cw) / 2, top = video.offsetTop + (eh - ch) / 2;
 				const flipH = !!prop('flipH'), flipV = !!prop('flipV');
-				const key = [src.currentTime, left, top, cw, ch, flipH, flipV].join(',');
-				if (key === split.lastKey && canvas.style.display !== 'none') {
+				const position = getSplitPosition();
+				Object.assign(canvas.style, {
+						display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
+				});
+				const handleParent = video.closest('.zenzaPlayerContainer') || parent;
+				const handle = ensureSplitHandle(handleParent);
+				handle.hidden = false;
+				const picture = canvas.getBoundingClientRect(), bounds = handleParent.getBoundingClientRect();
+				const scaleX = handleParent.offsetWidth ? bounds.width / handleParent.offsetWidth : 1;
+				const scaleY = handleParent.offsetHeight ? bounds.height / handleParent.offsetHeight : 1;
+				handle.style.left = `${(picture.left + picture.width * position / 100 - bounds.left) / (scaleX || 1) - handleParent.clientLeft + handleParent.scrollLeft}px`;
+				handle.style.top = `${(picture.top + picture.height / 2 - bounds.top) / (scaleY || 1) - handleParent.clientTop + handleParent.scrollTop}px`;
+				handle.setAttribute('aria-valuenow', String(position));
+				const light = prop('renderQuality') === 'light';
+				const dpr = Math.min(window.devicePixelRatio || 1, 2);
+				const geometryKey = [left, top, cw, ch, vw, vh, flipH, flipV, position, light, dpr].join(',');
+				const key = [src.currentTime, geometryKey].join(',');
+				if (key === split.lastKey) {
 						return;
 				}
+				const now = typeof timestamp === 'number' ? timestamp : performance.now();
+				if (light && split.lastKey && geometryKey === split.lastGeometryKey && now - split.lastDrawTime < 1000 / 30)
+						return;
 				split.lastKey = key;
-				const dpr = Math.min(window.devicePixelRatio || 1, 2);
-				const w = Math.max(1, Math.round(Math.min(cw * dpr, vw)));
-				const h = Math.max(1, Math.round(Math.min(ch * dpr, vh)));
+				split.lastGeometryKey = geometryKey;
+				split.lastDrawTime = now;
+				const copyScale = Math.min(cw * dpr / vw, ch * dpr / vh, 1, ...(light ? [854 / vw, 480 / vh] : []));
+				const w = Math.max(1, Math.round(vw * copyScale));
+				const h = Math.max(1, Math.round(vh * copyScale));
 				if (canvas.width !== w || canvas.height !== h) {
 						canvas.width = w;
 						canvas.height = h;
 				}
-				Object.assign(canvas.style, {
-						display: 'block', left: `${left}px`, top: `${top}px`, width: `${cw}px`, height: `${ch}px`
-				});
 				const ctx = split.ctx;
-				const half = Math.round(w / 2);
+				const half = Math.round(w * position / 100);
 				ctx.clearRect(0, 0, w, h);
 				ctx.save();
 				ctx.beginPath();
@@ -18606,6 +20692,9 @@ const ScreenFilter = (() => {
 				}
 				setProp('flipH', false);
 				setProp('flipV', false);
+				historyPast.length = 0;
+				historyFuture.length = 0;
+				historyCurrent = snapshot();
 				if (config && typeof config.on === 'function') {
 						config.on('update', (key) => {
 								if (typeof key === 'string' && key.startsWith(PREFIX)) {
@@ -18620,14 +20709,26 @@ const ScreenFilter = (() => {
 				PARAMS,
 				PARAM_MAP,
 				PRESETS,
+				getPresetList,
 				DEFAULTS,
 				COLORIZE_MAPS,
 				initialize,
 				read,
 				set,
+				undo: () => stepHistory(true),
+				redo: () => stepHistory(false),
+				get canUndo() { recordHistory(); return historyPast.length > 0; },
+				get canRedo() { recordHistory(); return historyFuture.length > 0; },
 				preview,
 				apply,
 				applyPreset,
+				isPresetActive,
+				togglePreset,
+				getUserPresets,
+				saveUserPreset,
+				deleteUserPreset,
+				renameUserPreset,
+				overwriteUserPreset,
 				reset,
 				nextPreset,
 				adjust,
@@ -18646,9 +20747,12 @@ const ScreenFilter = (() => {
 				isEnabled,
 				isStandard,
 				setSplit,
+				setSplitPosition,
+				get splitPosition() { return getSplitPosition(); },
 				get isSplit() { return split.on; },
 				resetAutoLevels,
 				get autoLevelsAvailable() { return auto.available; },
+				get renderStatus() { return lowPowerStatus; },
 				get flipH() { return !!prop('flipH'); },
 				get flipV() { return !!prop('flipV'); },
 				setBypass(v) {
@@ -18661,6 +20765,13 @@ const ScreenFilter = (() => {
 						return () => listeners.delete(fn);
 				},
 				_reset() {
+						listeners.clear();
+						lowPowerRenderer?.stop();
+						lowPowerRenderer = null;
+						lowPowerStatus = 'normal';
+						historyPast.length = 0;
+						historyFuture.length = 0;
+						historyCurrent = null;
 						config = null;
 						bypass = false;
 						lastCss = null;
@@ -18672,6 +20783,16 @@ const ScreenFilter = (() => {
 						auto.available = true;
 						listeners.clear();
 						split.on = false;
+						if (split.raf)
+								cancelAnimationFrame(split.raf);
+						split.raf = 0;
+						endSplitDrag();
+						split.canvas?.remove();
+						split.handle?.remove();
+						split.canvas = null;
+						split.ctx = null;
+						split.handle = null;
+						split.position = null;
 				}
 		};
 })();
@@ -18687,7 +20808,7 @@ const ScreenFilterPanel = (() => {
 			position: fixed;
 			top: 16px;
 			right: 16px;
-			width: 380px;
+			width: 960px;
 			max-width: calc(100vw - 32px);
 			max-height: calc(100vh - 32px);
 			overflow-y: auto;
@@ -18748,6 +20869,14 @@ const ScreenFilterPanel = (() => {
 		}
 		.zenzaScreenFilterPanel * { box-sizing: border-box; }
 		.zenzaScreenFilterPanel .sfHead {
+			flex-shrink: 0;
+			position: sticky;
+			top: -12px;
+			z-index: 3;
+			flex-wrap: wrap;
+			margin: -12px -14px 8px;
+			padding: 12px 14px 8px;
+			background: rgb(24, 24, 28);
 			display: flex;
 			align-items: center;
 			gap: 8px;
@@ -18769,11 +20898,6 @@ const ScreenFilterPanel = (() => {
 			cursor: pointer;
 		}
 		.zenzaScreenFilterPanel button:hover { background: #4a4a58; }
-		.zenzaScreenFilterPanel .sfClose {
-			font-size: 16px;
-			line-height: 1;
-			padding: 2px 8px;
-		}
 		.zenzaScreenFilterPanel .sfIntro,
 		.zenzaScreenFilterPanel .sfDesc,
 		.zenzaScreenFilterPanel .sfNote {
@@ -18797,6 +20921,9 @@ const ScreenFilterPanel = (() => {
 			margin-top: 4px;
 		}
 		.zenzaScreenFilterPanel .sfPresets button { text-align: left; }
+		.zenzaScreenFilterPanel .sfUserPresetRow{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+		.zenzaScreenFilterPanel .sfUserPresetRow input,.zenzaScreenFilterPanel .sfUserPresetRow select{flex:1 1 160px;min-width:0;max-width:100%;box-sizing:border-box;font:inherit;color:#eee;background:#25252d;border:1px solid #666;border-radius:4px;padding:6px 8px}
+		.zenzaScreenFilterPanel .sfUserPresetRow input:focus-visible,.zenzaScreenFilterPanel .sfUserPresetRow select:focus-visible{outline:2px solid #9cf;outline-offset:2px}
 		.zenzaScreenFilterPanel .sfPresets button.is-current {
 			background: #2d6a3e;
 			border-color: #5fbf78;
@@ -18857,7 +20984,47 @@ const ScreenFilterPanel = (() => {
 			display: flex;
 			flex-wrap: wrap;
 			gap: 6px;
-			margin-top: 12px;
+			margin: 0 0 0 auto;
+			justify-content: flex-end;
+		}
+		.zenzaScreenFilterPanel .sfTitleRow{display:contents}
+		.zenzaScreenFilterPanel .sfTitleRow>button{order:2}
+		.zenzaScreenFilterPanel .sfHead .sfTitle{flex:1 0 auto}
+		.zenzaScreenFilterPanel .sfHead button{min-height:28px;white-space:nowrap}
+		.zenzaScreenFilterPanel .sfHead .sfFoot{order:1}
+		.zenzaScreenFilterPanel.sf-compact .sfTitleRow{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+		.zenzaScreenFilterPanel.sf-compact .sfHead .sfFoot{width:100%;justify-content:flex-start}
+		.zenzaScreenFilterPanel.sf-compact .sfHead button{padding-left:6px;padding-right:6px}
+		.zenzaScreenFilterPanel .sfBody{display:grid;grid-template-columns:minmax(220px,30%) minmax(0,1fr);gap:18px;align-items:start}
+		.zenzaScreenFilterPanel .sfBody>*{min-width:0}
+		.zenzaScreenFilterPanel.sf-compact{width:380px}
+		.zenzaScreenFilterPanel.sf-compact .sfBody{grid-template-columns:minmax(0,1fr)}
+		.zenzaScreenFilterPanel .sfQuality{flex-shrink:0;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:8px}
+		.zenzaScreenFilterPanel .sfQuality select{background:#111;color:#ddd;border:1px solid #555;padding:3px;font:inherit;max-width:100%}
+		.zenzaScreenFilterPanel [data-render-status]{color:#ffcf99;font-size:11px}
+		.zenzaScreenFilterPanel .sfAdjustColumn{padding-left:16px;border-left:1px solid rgba(255,255,255,.12)}
+		.zenzaScreenFilterPanel .sfRows{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:6px 18px;align-items:start}
+		.zenzaScreenFilterPanel .sfRow{min-width:0}
+		.zenzaScreenFilterPanel .sfRowHead{flex-wrap:wrap}
+		.zenzaScreenFilterPanel .sfPresets button{min-width:0;overflow-wrap:anywhere}
+		.zenzaScreenFilterPanel .sfUserPresetHead{display:flex;justify-content:space-between;align-items:center;gap:6px}
+		.zenzaScreenFilterPanel .sfSavePreset{width:100%;margin-top:8px}
+		.zenzaScreenFilterPanel .sfUserPresetForm{margin-top:8px}
+		.zenzaScreenFilterPanel .sfUserPresetForm input{display:block;width:100%;min-width:0;color:#eee;background:#111;border:1px solid #555;border-radius:3px;padding:5px;font:inherit}
+		.zenzaScreenFilterPanel .sfUserPresetStatus{font-size:11px;color:#9c9;margin-top:6px;overflow-wrap:anywhere}
+		.zenzaScreenFilterPanel [data-user-preset-confirm]{margin-top:8px;overflow-wrap:anywhere}
+		.zenzaScreenFilterPanel button.is-editing{outline:2px dashed #9c9;outline-offset:1px}
+		.zenzaScreenFilterPanel .sfFold>summary{color:#fff;font-weight:bold;cursor:pointer}
+		.zenzaScreenFilterPanel .sfFold>div{padding-top:6px}
+		.zenzaScreenFilterPanel [hidden]{display:none!important}
+		.zenzaScreenFilterPanel.sf-hide-descriptions .sfIntro,
+		.zenzaScreenFilterPanel.sf-hide-descriptions .sfDesc,
+		.zenzaScreenFilterPanel.sf-hide-descriptions .sfNote{display:none}
+		@media(max-width:700px){
+			.zenzaScreenFilterPanel .sfBody{grid-template-columns:1fr;gap:0}
+			.zenzaScreenFilterPanel .sfAdjustColumn{border-left:0;padding-left:0}
+			.zenzaScreenFilterPanel .sfRows{grid-template-columns:1fr}
+			.zenzaScreenFilterPanel .sfHead .sfFoot{justify-content:flex-start;margin-left:0}
 		}
 		.zenzaScreenFilterPanel.is-disabled .sfAdjust { opacity: 0.45; }
 		.zenzaScreenFilterPanel .sfDesc.is-unavailable::after {
@@ -18903,7 +21070,6 @@ const ScreenFilterPanel = (() => {
 		const TEMPLATE = () => `
 		<div class="sfHead">
 			<span class="sfTitle">画面フィルター</span>
-			<button type="button" class="sfClose" data-action="close" title="閉じる">×</button>
 		</div>
 		<div class="sfIntro">
 			動画の映像だけに効きます（コメントやボタンには効きません）。
@@ -18919,9 +21085,28 @@ const ScreenFilterPanel = (() => {
 			<div class="sfPresetState"></div>
 			<div class="sfNote">
 				ボタンにマウスを乗せると、それぞれの説明が出ます。
-				「くっきり」だけは輪郭の強調を使うので少し重めです（グラフィックボードの無いノートパソコンなどで
-				カクつく時は、下の「シャープ」を 0 に）。ほかのプリセットは色の計算だけなので軽いです。
+				ぼかし・輪郭の強調・追加エフェクトは負荷が増えます。追加エフェクトでカクつく場合は、
+				描画品質の「軽量」を試してください。処理量を抑える代わりに、解像度と更新頻度が下がります。
 			</div>
+		</div>
+		<div class="sfSection sfUserPresets">
+			<div class="sfUserPresetHead"><div class="sfSectionTitle">マイプリセット</div><button type="button" data-action="edit-user-presets" aria-pressed="false">編集</button></div>
+			<div class="sfDesc">今の色・明るさ・画質を名前付きで保存します（20件まで）。反転や反映する場所は含みません。</div>
+			<div class="sfPresets" data-user-preset-buttons></div>
+			<button type="button" class="sfSavePreset" data-action="new-user-preset">＋ 今の設定を保存</button>
+			<div class="sfUserPresetForm" data-user-preset-new hidden>
+				<label>新しいプリセット名<input type="text" data-user-preset-name maxlength="40" placeholder="例：夜に見る動画"></label>
+				<div class="sfUserPresetRow"><button type="button" data-action="save-user-preset">保存する</button><button type="button" data-action="cancel-user-preset">キャンセル</button></div>
+			</div>
+			<div class="sfUserPresetForm" data-user-preset-edit hidden>
+				<label>編集するプリセット名<input type="text" data-user-preset-rename maxlength="40"></label>
+				<div class="sfUserPresetRow"><button type="button" data-action="rename-user-preset">名前を変更</button><button type="button" data-action="overwrite-user-preset">今の設定で上書き</button><button type="button" data-action="delete-user-preset">削除</button></div>
+			</div>
+			<div data-user-preset-confirm hidden>
+				<div data-user-preset-confirm-text></div>
+				<div class="sfUserPresetRow"><button type="button" data-action="confirm-user-preset">確定</button><button type="button" data-action="cancel-confirm-user-preset">キャンセル</button></div>
+			</div>
+			<div class="sfUserPresetStatus" data-user-preset-status role="status" aria-live="polite"></div>
 		</div>
 		<div class="sfSection sfAdjust">
 			<div class="sfSectionTitle">色と明るさ</div>
@@ -18951,11 +21136,14 @@ const ScreenFilterPanel = (() => {
 			</div>
 		</div>
 		<div class="sfFoot">
-			<button type="button" data-action="reset" title="すべての調整を標準に戻します（反転はそのまま）">すべて標準に戻す</button>
-			<button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる（左: 元の映像）</button>
+			<button type="button" data-action="reset" title="すべての調整を標準に戻し、左右比較を終了します（反転はそのまま）">すべて標準に戻す</button>
+			<button type="button" data-action="split" title="画面の左半分に元の映像、右半分にエフェクトを掛けた映像を並べて見比べます（もう一度押すと元に戻ります）">左右で見比べる</button>
 		</div>
 	`;
 		class Panel {
+				_presetEditing = false;
+				_editingPresetId = '';
+				_pendingPresetAction = null;
 				constructor({ config }) {
 						this.config = config;
 						this.view = null;
@@ -18975,6 +21163,69 @@ const ScreenFilterPanel = (() => {
 						const view = this.view = document.createElement('div');
 						view.className = 'zenzaScreenFilterPanel zen-family';
 						view.innerHTML = TEMPLATE();
+						const header = view.querySelector('.sfHead');
+						const titleRow = document.createElement('div');
+						titleRow.className = 'sfTitleRow';
+						titleRow.append(header.querySelector('.sfTitle'));
+						header.append(titleRow);
+						const actions = view.querySelector('.sfFoot');
+						header.append(actions);
+						const descriptions = document.createElement('button');
+						descriptions.type = 'button';
+						descriptions.dataset.action = 'toggle-descriptions';
+						actions.append(descriptions);
+						for (const [action, label, title] of [['toggle-adjustments', '調整欄を隠す', '調整欄の表示を切り替える'], ['undo', '↶', '一つ前に戻す'], ['redo', '↷', '一つ先に進む'], ['toggle-changed-only', '変更した項目だけ表示', '変更した項目だけ表示']]) {
+								const button = document.createElement('button');
+								button.type = 'button';
+								button.dataset.action = action;
+								button.textContent = label;
+								button.title = title;
+								button.setAttribute('aria-label', title);
+								(action === 'toggle-changed-only' ? actions : titleRow).append(button);
+						}
+						const body = document.createElement('div');
+						body.className = 'sfBody';
+						const presets = document.createElement('div');
+						presets.className = 'sfPresetColumn';
+						const adjustments = document.createElement('div');
+						adjustments.className = 'sfAdjustColumn';
+						presets.append(view.querySelector('.sfIntro'));
+						const quality = document.createElement('div');
+						quality.className = 'sfQuality';
+						quality.innerHTML = '<label>追加エフェクトの描画品質 <select data-render-quality><option value="normal">通常（元の解像度）</option><option value="light">軽量（最大480p・30fps）</option></select></label><span data-render-status role="status" aria-live="polite"></span>';
+						header.after(quality);
+						const sections = Array.from(view.querySelectorAll(':scope > .sfSection'));
+						for (const [index, section] of sections.entries()) {
+								if (index < 2) {
+										presets.append(section);
+										continue;
+								}
+								const rows = document.createElement('div');
+								rows.className = 'sfRows';
+								section.querySelectorAll(':scope > .sfRow').forEach(row => rows.append(row));
+								if (rows.childElementCount)
+										section.append(rows);
+								if (index > 2) {
+										const details = document.createElement('details');
+										details.className = 'sfSection sfFold';
+										const title = section.querySelector('.sfSectionTitle');
+										const summary = document.createElement('summary');
+										summary.textContent = title.textContent;
+										title.remove();
+										section.classList.remove('sfSection');
+										details.append(summary, section);
+										adjustments.append(details);
+								}
+								else
+										adjustments.append(section);
+						}
+						const empty = document.createElement('div');
+						empty.dataset.changedEmpty = '';
+						empty.textContent = '変更した項目はありません。';
+						empty.hidden = true;
+						adjustments.prepend(empty);
+						body.append(presets, adjustments);
+						view.append(body);
 						['click', 'dblclick', 'mousedown', 'mouseup', 'wheel', 'contextmenu', 'keydown', 'keyup']
 								.forEach(name => view.addEventListener(name, e => e.stopPropagation()));
 						view.addEventListener('keydown', e => {
@@ -18991,6 +21242,22 @@ const ScreenFilterPanel = (() => {
 								}
 						});
 						view.addEventListener('change', e => {
+								if (e.target.hasAttribute('data-render-quality')) {
+										try {
+												const value = e.target.value;
+												if (this.config.readonly)
+														throw new Error();
+												this.config.props['screenFilter.renderQuality'] = value;
+												if (this.config.props['screenFilter.renderQuality'] !== value)
+														throw new Error();
+												ScreenFilter.apply();
+												this._refresh();
+										}
+										catch {
+												view.querySelector('[data-render-status]').textContent = '描画品質を保存できませんでした。';
+										}
+										return;
+								}
 								const { param, setting, num } = e.target.dataset;
 								if (num) {
 										const v = ScreenFilter.normalize(num, e.target.value);
@@ -19018,17 +21285,66 @@ const ScreenFilterPanel = (() => {
 										return;
 								}
 								const { preset, reset, action } = target.dataset;
-								if (preset) {
-										ScreenFilter.execCommand('screenFilter-preset', preset);
+								if (action === 'edit-user-presets' || action?.endsWith('-user-preset')) {
+										this._handleUserPresetAction(action);
+								}
+								else if (action === 'undo' || action === 'redo') {
+										(action === 'undo' ? ScreenFilter.undo : ScreenFilter.redo)();
+										this._refresh();
+								}
+								else if (action === 'toggle-adjustments') {
+										try {
+												const value = this.config.props['screenFilter.showAdjustments'] === false;
+												if (this.config.readonly)
+														throw new Error();
+												this.config.props['screenFilter.showAdjustments'] = value;
+												if (this.config.props['screenFilter.showAdjustments'] !== value)
+														throw new Error();
+												this._refresh();
+												this._updateOrigin();
+										}
+										catch {
+												this.view.querySelector('[data-render-status]').textContent = '調整欄の表示設定を保存できませんでした。';
+										}
+								}
+								else if (action === 'toggle-changed-only') {
+										this.config.props['screenFilter.changedOnly'] = !this.config.props['screenFilter.changedOnly'];
+										this._refresh();
+								}
+								else if (action === 'toggle-descriptions') {
+										const value = this.config.props['screenFilter.showDescriptions'] === false;
+										try {
+												if (this.config.readonly)
+														throw new Error();
+												this.config.props['screenFilter.showDescriptions'] = value;
+												if (this.config.props['screenFilter.showDescriptions'] !== value)
+														throw new Error();
+												this._refresh();
+										}
+										catch {
+												this.view.querySelector('[data-user-preset-status]').textContent = '説明の表示設定を保存できませんでした。';
+										}
+								}
+								else if (preset) {
+										if (this._presetEditing && target.hasAttribute('data-user-preset')) {
+												this._editingPresetId = preset;
+												this._pendingPresetAction = null;
+												const saved = ScreenFilter.getUserPresets().find(p => p.id === preset);
+												if (saved)
+														view.querySelector('[data-user-preset-rename]').value = saved.label;
+												this._refreshUserPresets();
+										}
+										else {
+												ScreenFilter.togglePreset(preset);
+												this._refresh();
+										}
 								}
 								else if (reset) {
 										ScreenFilter.set(reset, ScreenFilter.PARAM_MAP[reset].def);
 								}
 								else if (action === 'reset') {
 										ScreenFilter.reset();
-								}
-								else if (action === 'close') {
-										this.close();
+										ScreenFilter.setSplit(false);
 								}
 								else if (action === 'split') {
 										ScreenFilter.setSplit(!ScreenFilter.isSplit);
@@ -19042,7 +21358,7 @@ const ScreenFilterPanel = (() => {
 								if (path.includes(this.view)) {
 										return;
 								}
-								if (path.some((el) => el && el.classList && el.classList.contains('screenFilterSwitch'))) {
+								if (path.some((el) => el && el.classList && (el.classList.contains('screenFilterSwitch') || el.classList.contains('zenzaScreenFilterSplitHandle')))) {
 										return;
 								}
 								const onVideo = path.some((el) => el && el.classList &&
@@ -19070,12 +21386,167 @@ const ScreenFilterPanel = (() => {
 						}
 						label.classList.toggle('is-changed', Math.abs(value - ScreenFilter.PARAM_MAP[key].def) > 1e-6);
 				}
+				_handleUserPresetAction(action) {
+						const q = (selector) => this.view.querySelector(selector);
+						const status = q('[data-user-preset-status]');
+						try {
+								if (action === 'new-user-preset') {
+										q('[data-user-preset-new]').hidden = false;
+										q('[data-user-preset-name]').focus();
+								}
+								else if (action === 'cancel-user-preset') {
+										q('[data-user-preset-new]').hidden = true;
+								}
+								else if (action === 'save-user-preset') {
+										const saved = ScreenFilter.saveUserPreset(q('[data-user-preset-name]').value);
+										q('[data-user-preset-name]').value = '';
+										q('[data-user-preset-new]').hidden = true;
+										status.textContent = `「${saved.label}」を保存しました。`;
+										this._refresh();
+								}
+								else if (action === 'edit-user-presets') {
+										this._presetEditing = !this._presetEditing;
+										this._editingPresetId = '';
+										this._pendingPresetAction = null;
+										q('[data-user-preset-new]').hidden = true;
+										status.textContent = this._presetEditing ? '編集するマイプリセットを選んでください。' : '';
+								}
+								else if (action === 'rename-user-preset') {
+										ScreenFilter.renameUserPreset(this._editingPresetId, q('[data-user-preset-rename]').value);
+										status.textContent = '名前を変更しました。';
+								}
+								else if (action === 'overwrite-user-preset' || action === 'delete-user-preset') {
+										const saved = ScreenFilter.getUserPresets().find(p => p.id === this._editingPresetId);
+										if (!saved)
+												throw new Error('編集するマイプリセットを選んでください。');
+										this._pendingPresetAction = { action, id: saved.id };
+										q('[data-user-preset-confirm-text]').textContent = action === 'delete-user-preset' ? `「${saved.label}」を削除しますか？` : `「${saved.label}」を今の調整値で上書きしますか？`;
+								}
+								else if (action === 'cancel-confirm-user-preset') {
+										this._pendingPresetAction = null;
+								}
+								else if (action === 'confirm-user-preset' && this._pendingPresetAction) {
+										const pending = this._pendingPresetAction;
+										if (pending.action === 'delete-user-preset') {
+												ScreenFilter.deleteUserPreset(pending.id);
+												this._editingPresetId = '';
+												status.textContent = '削除しました。現在の映像の調整はそのままです。';
+										}
+										else {
+												ScreenFilter.overwriteUserPreset(pending.id);
+												status.textContent = '今の調整値で上書きしました。';
+										}
+										this._pendingPresetAction = null;
+										this._refresh();
+								}
+								this._refreshUserPresets();
+						}
+						catch (error) {
+								status.textContent = error instanceof Error ? error.message : 'マイプリセットを保存できませんでした。';
+						}
+				}
+				_refreshUserPresets() {
+						const q = (selector) => this.view.querySelector(selector);
+						const list = q('[data-user-preset-buttons]');
+						try {
+								const order = ScreenFilter.getPresetList().map(p => p.id);
+								const presets = ScreenFilter.getUserPresets().sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+								const signature = JSON.stringify(presets.map(p => [p.id, p.label]));
+								if (list.dataset.signature !== signature) {
+										list.replaceChildren();
+										for (const preset of presets) {
+												const button = document.createElement('button');
+												button.type = 'button';
+												button.dataset.preset = preset.id;
+												button.dataset.userPreset = '';
+												button.textContent = preset.label;
+												list.append(button);
+										}
+										if (!presets.length) {
+												const empty = document.createElement('span');
+												empty.textContent = 'まだ保存されていません';
+												list.append(empty);
+										}
+										list.dataset.signature = signature;
+								}
+								if (!presets.some(p => p.id === this._editingPresetId)) {
+										this._editingPresetId = '';
+										this._pendingPresetAction = null;
+								}
+								list.querySelectorAll('button').forEach((button) => {
+										button.classList.toggle('is-editing', this._presetEditing && button.dataset.preset === this._editingPresetId);
+										button.classList.toggle('is-current', ScreenFilter.isPresetActive(button.dataset.preset || ''));
+										button.setAttribute('aria-pressed', String(ScreenFilter.isPresetActive(button.dataset.preset || '')));
+								});
+						}
+						catch (error) {
+								q('[data-user-preset-status]').textContent = error instanceof Error ? error.message : '保存データを読み込めません。';
+						}
+						const edit = q('[data-action="edit-user-presets"]');
+						edit.textContent = this._presetEditing ? '編集を終了' : '編集';
+						edit.setAttribute('aria-pressed', String(this._presetEditing));
+						q('[data-action="new-user-preset"]').hidden = this._presetEditing;
+						q('[data-user-preset-edit]').hidden = !this._presetEditing || !this._editingPresetId;
+						q('[data-user-preset-confirm]').hidden = !this._pendingPresetAction;
+				}
 				_refresh() {
 						if (!this.view || !this.isOpen) {
 								return;
 						}
+						this._refreshUserPresets();
 						const values = ScreenFilter.read();
 						const props = this.config.props;
+						const showAdjustments = props['screenFilter.showAdjustments'] !== false;
+						this.view.classList.toggle('sf-compact', !showAdjustments);
+						this.view.querySelector('.sfAdjustColumn').hidden = !showAdjustments;
+						const adjustmentButton = this.view.querySelector('[data-action="toggle-adjustments"]');
+						adjustmentButton.textContent = showAdjustments ? '調整欄を隠す' : '調整欄を表示';
+						adjustmentButton.setAttribute('aria-expanded', String(showAdjustments));
+						this.view.querySelector('[data-render-quality]').value = props['screenFilter.renderQuality'] === 'light' ? 'light' : 'normal';
+						const qualityStatus = {
+								active: '軽量で描画中（最大480p・30fps）',
+								waiting: '軽量描画の映像を待っています。',
+								hidden: '非表示中は軽量描画を停止しています。',
+								unsupported: 'この映像は軽量描画に対応していません。元の映像を表示しています。',
+								unavailable: '軽量描画を実行できませんでした。元の映像を表示しています。'
+						};
+						this.view.querySelector('[data-render-status]').textContent = qualityStatus[ScreenFilter.renderStatus] || '';
+						const changedOnly = !!props['screenFilter.changedOnly'];
+						const changedButton = this.view.querySelector('[data-action="toggle-changed-only"]');
+						changedButton.hidden = !showAdjustments;
+						changedButton.setAttribute('aria-pressed', String(changedOnly));
+						changedButton.classList.toggle('is-on', changedOnly);
+						this.view.querySelector('[data-action="undo"]').disabled = !ScreenFilter.canUndo;
+						this.view.querySelector('[data-action="redo"]').disabled = !ScreenFilter.canRedo;
+						for (const p of ScreenFilter.PARAMS) {
+								const row = this.view.querySelector(`.sfRow[data-key="${p.key}"]`);
+								if (row)
+										row.hidden = changedOnly && values[p.key] === p.def;
+						}
+						const rows = Array.from(this.view.querySelectorAll('.sfAdjustColumn .sfRow[data-key]'));
+						this.view.querySelector('[data-changed-empty]').hidden = !changedOnly || rows.some(row => !row.hidden);
+						for (const section of Array.from(this.view.querySelectorAll('.sfAdjustColumn > .sfSection'))) {
+								const parameters = Array.from(section.querySelectorAll('.sfRow[data-key]'));
+								section.hidden = changedOnly && parameters.length > 0 && parameters.every(row => row.hidden);
+								if (changedOnly && section.tagName === 'DETAILS' && !section.hidden)
+										section.open = true;
+						}
+						const builtin = this.view.querySelector('.sfPresetColumn .sfPresets');
+						const presetOrder = ScreenFilter.getPresetList().filter(p => !p.user).map(p => p.id);
+						const orderSignature = JSON.stringify(presetOrder);
+						if (builtin.dataset.order !== orderSignature) {
+								for (const id of presetOrder) {
+										const button = builtin.querySelector(`[data-preset="${id}"]`);
+										if (button)
+												builtin.append(button);
+								}
+								builtin.dataset.order = orderSignature;
+						}
+						const descriptions = props['screenFilter.showDescriptions'] !== false;
+						this.view.classList.toggle('sf-hide-descriptions', !descriptions);
+						const descriptionButton = this.view.querySelector('[data-action="toggle-descriptions"]');
+						descriptionButton.textContent = descriptions ? '説明を非表示' : '説明を表示';
+						descriptionButton.setAttribute('aria-pressed', String(descriptions));
 						ScreenFilter.PARAMS.forEach(p => {
 								const input = this.view.querySelector(`[data-param="${p.key}"]`);
 								if (!input) {
@@ -19101,9 +21572,16 @@ const ScreenFilterPanel = (() => {
 						});
 						const current = ScreenFilter.detectPreset(values);
 						this.view.querySelectorAll('[data-preset]').forEach((button) => {
-								button.classList.toggle('is-current', button.dataset.preset === current);
+								const active = ScreenFilter.isPresetActive(button.dataset.preset || '');
+								button.classList.toggle('is-current', active);
+								button.setAttribute('aria-pressed', String(active));
 						});
-						const preset = ScreenFilter.PRESETS.find(p => p.id === current);
+						let userPresets = [];
+						try {
+								userPresets = ScreenFilter.getUserPresets();
+						}
+						catch { /* Keep the built-in controls usable. */ }
+						const preset = [...ScreenFilter.PRESETS, ...userPresets].find(p => p.id === current);
 						this.view.querySelector('.sfPresetState').textContent = preset ?
 								`いまの設定: ${preset.label}` : 'いまの設定: 手動で調整中（どのプリセットとも違う値）';
 						const autoRow = this.view.querySelector('.sfRow[data-key="autoLevels"] .sfDesc');
@@ -19112,7 +21590,10 @@ const ScreenFilterPanel = (() => {
 								autoRow.dataset.unavailable = ScreenFilter.autoLevelsAvailable ? '' : 'この動画では使えません（配信元が映像の読み取りを許可していないため）';
 						}
 						const splitButton = this.view.querySelector('[data-action="split"]');
-						splitButton && splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
+						if (splitButton) {
+								splitButton.classList.toggle('is-on', ScreenFilter.isSplit);
+								splitButton.setAttribute('aria-pressed', String(ScreenFilter.isSplit));
+						}
 				}
 				_getParentNode() {
 						const fs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -19154,7 +21635,7 @@ const ScreenFilterPanel = (() => {
 								return;
 						}
 						const vw = window.innerWidth, vh = window.innerHeight;
-						const panelW = Math.min(380, vw - 32);
+						const panelW = this.view.getBoundingClientRect().width || Math.min(960, vw - 32);
 						const panelLeft = vw - 16 - panelW;
 						const x = Math.max(0, Math.min(100, ((rect.left + rect.width / 2) - panelLeft) / panelW * 100));
 						const y = rect.top > vh / 2 ? 100 : 0;
@@ -20351,6 +22832,10 @@ class NicoVideoPlayer extends Emitter {
 						this._creditCommentHold = null;
 				}
 				this._commentPlayer.currentTime = videoTime;
+				if (this._videoPlayer._isYouTube && this.isPlaying &&
+						!this._videoPlayer.paused && Number.isFinite(videoTime)) {
+						this.emit('timeupdate');
+				}
 		}
 		_onAspectRatioFix(ratio) {
 				this._commentPlayer.setAspectRatio(ratio);
@@ -20361,15 +22846,6 @@ class NicoVideoPlayer extends Emitter {
 		}
 		_onVideoCanPlay() {
 				this.emit('canPlay');
-				if (this.autoplay && !this.paused) {
-						this._video.play().catch((err) => {
-								if (err instanceof DOMException) {
-										if (err.code === 35 /* NotAllowedError */) {
-												this.dispatchEvent(new CustomEvent('autoplay-rejected'));
-										}
-								}
-						});
-				}
 		}
 		_onPlay() {
 				this._isPlaying = true;
@@ -20392,6 +22868,13 @@ class NicoVideoPlayer extends Emitter {
 				this.emit('pause');
 		}
 		_onEnded() {
+				try {
+						if (this.beforeSupporterCreditEnd?.() === true)
+								return;
+				}
+				catch {
+						console.warn('AB repeat end handler unavailable');
+				}
 				if (this._tryStartSupporterCredit()) {
 						return;
 				}
@@ -20629,7 +23112,7 @@ class NicoVideoPlayer extends Emitter {
 		getVpos() { return Math.floor(this.vpos); }
 		setComment(xmlText, options) { this._commentPlayer.setComment(xmlText, options); }
 		applyHistoryThreads(data, control) { return this._commentPlayer.applyHistoryThreads(data, control); }
-		clearCommentHistory() { this._commentPlayer?.clearCommentHistory(); }
+		clearCommentHistory(options) { this._commentPlayer?.clearCommentHistory(options); }
 		getNonFilteredChatList() { return this._commentPlayer.nonFilteredChatList; }
 		getBufferedRange() { return this._videoPlayer.bufferedRange; }
 		setVideoInfo(v) {
@@ -21097,27 +23580,35 @@ class VideoPlayer extends Emitter {
 						console.log('%c_on-%s:', 'background: cyan;', name, ...args);
 						this.emit(name, ...args);
 				};
+				const fromNative = (handler) => (...args) => {
+						if (this._currentVideo !== this._videoElement ||
+								/(?:youtube\.com|youtu\.be)/.test(this._src || '')) {
+								return;
+						}
+						handler(...args);
+				};
 				util.$(this._video)
-						.on('canplay', this._onCanPlay.bind(this))
-						.on('canplaythrough', eventBridge.bind(this, 'canplaythrough'))
-						.on('loadstart', eventBridge.bind(this, 'loadstart'))
-						.on('loadeddata', eventBridge.bind(this, 'loadeddata'))
-						.on('loadedmetadata', eventBridge.bind(this, 'loadedmetadata'))
-						.on('ended', eventBridge.bind(this, 'ended'))
-						.on('emptied', eventBridge.bind(this, 'emptied'))
-						.on('suspend', eventBridge.bind(this, 'suspend'))
-						.on('waiting', eventBridge.bind(this, 'waiting'))
-						.on('progress', this._onProgress.bind(this))
-						.on('durationchange', this._onDurationChange.bind(this))
-						.on('abort', this._onAbort.bind(this))
-						.on('error', this._onError.bind(this))
-						.on('buffercomplete', eventBridge.bind(this, 'buffercomplete'))
-						.on('pause', this._onPause.bind(this))
-						.on('play', this._onPlay.bind(this))
-						.on('playing', this._onPlaying.bind(this))
-						.on('seeking', this._onSeeking.bind(this))
-						.on('seeked', this._onSeeked.bind(this))
-						.on('volumechange', this._onVolumeChange.bind(this))
+						.on('canplay', fromNative(this._onCanPlay.bind(this)))
+						.on('canplaythrough', fromNative(eventBridge.bind(this, 'canplaythrough')))
+						.on('loadstart', fromNative(eventBridge.bind(this, 'loadstart')))
+						.on('loadeddata', fromNative(eventBridge.bind(this, 'loadeddata')))
+						.on('loadedmetadata', fromNative(eventBridge.bind(this, 'loadedmetadata')))
+						.on('timeupdate', fromNative(() => this.emit('timeupdate')))
+						.on('ended', fromNative(eventBridge.bind(this, 'ended')))
+						.on('emptied', fromNative(eventBridge.bind(this, 'emptied')))
+						.on('suspend', fromNative(eventBridge.bind(this, 'suspend')))
+						.on('waiting', fromNative(eventBridge.bind(this, 'waiting')))
+						.on('progress', fromNative(this._onProgress.bind(this)))
+						.on('durationchange', fromNative(this._onDurationChange.bind(this)))
+						.on('abort', fromNative(this._onAbort.bind(this)))
+						.on('error', fromNative(this._onError.bind(this)))
+						.on('buffercomplete', fromNative(eventBridge.bind(this, 'buffercomplete')))
+						.on('pause', fromNative(this._onPause.bind(this)))
+						.on('play', fromNative(this._onPlay.bind(this)))
+						.on('playing', fromNative(this._onPlaying.bind(this)))
+						.on('seeking', fromNative(this._onSeeking.bind(this)))
+						.on('seeked', fromNative(this._onSeeked.bind(this)))
+						.on('volumechange', fromNative(this._onVolumeChange.bind(this)))
 						.on('contextmenu', eventBridge.bind(this, 'contextmenu'))
 						.on('click', eventBridge.bind(this, 'click'));
 				const touch = util.$(this._touchWrapper.body);
@@ -21171,8 +23662,8 @@ class VideoPlayer extends Emitter {
 						this._videoElement.src === '//') {
 						return;
 				}
-				window.console.error('error src', this._video.src);
-				window.console.error('%c_onError:', 'background: cyan; color: red;', arguments);
+				const mediaCode = e?.target?.error?.code;
+				window.console.error('Media playback failed', Number.isInteger(mediaCode) && mediaCode >= 1 && mediaCode <= 4 ? mediaCode : 0);
 				this.addClass('is-error');
 				this._canPlay = false;
 				this.emit('error', {
@@ -21182,12 +23673,11 @@ class VideoPlayer extends Emitter {
 				});
 		}
 		_onYouTubeError(e) {
-				window.console.error('error src', this._video.src);
-				window.console.error('%c_onError:', 'background: cyan; color: red;', e);
+				const code = Number.isInteger(e?.data) && e.data >= 0 && e.data <= 150 ? e.data : 0;
+				window.console.error('YouTube playback failed', code);
 				this.addClass('is-error');
 				this._canPlay = false;
 				let fallback = false;
-				const code = e.data;
 				const description = (() => {
 						switch (code) {
 								case 2:
@@ -21295,7 +23785,6 @@ class VideoPlayer extends Emitter {
 				return this._video.paused;
 		}
 		set thumbnail(url) {
-				console.log('%csetThumbnail: %s', 'background: cyan;', url);
 				this._thumbnail = url;
 				this._video.poster = url;
 		}
@@ -21303,7 +23792,6 @@ class VideoPlayer extends Emitter {
 				return this._thumbnail;
 		}
 		set src(url) {
-				console.log('%csetSc: %s', 'background: cyan;', url);
 				this._reset();
 				const sourceGeneration = this._sourceGeneration = (this._sourceGeneration || 0) + 1;
 				this._src = url;
@@ -21324,8 +23812,17 @@ class VideoPlayer extends Emitter {
 										return;
 								}
 								this._changePlayer('YouTube');
+						}).catch(() => {
+								if (!isCurrent()) {
+										return;
+								}
+								this.removeClass('is-loading');
+								this._onYouTubeError({ data: 0 });
 						});
 						return;
+				}
+				if (this._videoYouTube && this._currentVideo !== this._videoYouTube) {
+						this._videoYouTube.cancelPendingSource?.();
 				}
 				this._changePlayer('normal');
 				if (url.indexOf('dmc.nico') >= 0 && location.host.indexOf('.nicovideo.jp') >= 0) {
@@ -21350,17 +23847,24 @@ class VideoPlayer extends Emitter {
 				const eventBridge = function (...args) {
 						this.emit(...args);
 				};
-				yt.on('canplay', this._onCanPlay.bind(this));
-				yt.on('loadedmetadata', eventBridge.bind(this, 'loadedmetadata'));
-				yt.on('ended', eventBridge.bind(this, 'ended'));
-				yt.on('stalled', eventBridge.bind(this, 'stalled'));
-				yt.on('pause', this._onPause.bind(this));
-				yt.on('play', this._onPlay.bind(this));
-				yt.on('playing', this._onPlaying.bind(this));
-				yt.on('seeking', this._onSeeking.bind(this));
-				yt.on('seeked', this._onSeeked.bind(this));
-				yt.on('volumechange', this._onVolumeChange.bind(this));
-				yt.on('error', this._onYouTubeError.bind(this));
+				const fromYouTube = (handler, allowPending = false) => (...args) => {
+						if (this._currentVideo !== yt &&
+								!(allowPending && /(?:youtube\.com|youtu\.be)/.test(this._src || ''))) {
+								return;
+						}
+						handler(...args);
+				};
+				yt.on('canplay', fromYouTube(this._onCanPlay.bind(this), true));
+				yt.on('loadedmetadata', fromYouTube(eventBridge.bind(this, 'loadedmetadata'), true));
+				yt.on('ended', fromYouTube(eventBridge.bind(this, 'ended')));
+				yt.on('stalled', fromYouTube(eventBridge.bind(this, 'stalled')));
+				yt.on('pause', fromYouTube(this._onPause.bind(this)));
+				yt.on('play', fromYouTube(this._onPlay.bind(this)));
+				yt.on('playing', fromYouTube(this._onPlaying.bind(this)));
+				yt.on('seeking', fromYouTube(this._onSeeking.bind(this)));
+				yt.on('seeked', fromYouTube(this._onSeeked.bind(this)));
+				yt.on('volumechange', fromYouTube(this._onVolumeChange.bind(this)));
+				yt.on('error', fromYouTube(this._onYouTubeError.bind(this), true));
 				global.debug.youtube = yt;
 				return Promise.resolve(this._videoYouTube);
 		}
@@ -23347,6 +25851,109 @@ const StoryboardWorker = (() => {
 		};
 })();
 class Storyboard extends Emitter {
+		createSavedPreview(host, videoId, time) {
+				let disposed = false, revision = 0, releaseImage = null;
+				host.textContent = '画像なし';
+				host.style.position = 'relative';
+				host.style.overflow = 'hidden';
+				host.setAttribute('role', 'img');
+				host.setAttribute('aria-label', '場面画像を利用できません');
+				if (!Number.isFinite(time) || time < 0 || typeof videoId !== 'string' || !videoId ||
+						this.config?.props?.enableStoryboard === false)
+						return () => { };
+				const infos = this._savedPreviewInfo ??= (new Map());
+				const bytes = this._savedPreviewBytes ??= (new Map());
+				const isCurrent = () => this._currentVideoWatchId === videoId && this.model?.isAvailable === true;
+				let infoLease;
+				const cached = () => {
+						if (infoLease)
+								return infoLease.promise;
+						infoLease = infos.get(videoId);
+						if (!infoLease) {
+								const pending = Promise.resolve().then(async () => {
+										for (const type of ['domand', 'dmc']) {
+												const raw = await StoryboardCacheDb.get(videoId + '_' + type).catch(() => null);
+												if (raw?.watchId === videoId && raw.status === 'ok' && raw.storyboard)
+														return raw;
+										}
+										return null;
+								});
+								infoLease = { refs: 0, promise: pending };
+								infos.set(videoId, infoLease);
+						}
+						infoLease.refs++;
+						return infoLease.promise;
+				};
+				const draw = async () => {
+						const seq = ++revision;
+						releaseImage?.();
+						releaseImage = null;
+						host.textContent = '画像なし';
+						if (this.config?.props?.enableStoryboard === false)
+								return;
+						const live = isCurrent(), raw = live ? this.model.rawData : await cached();
+						if (disposed || seq !== revision || !raw || raw.watchId !== videoId)
+								return;
+						const model = new StoryboardInfoModel(raw);
+						if (!model.isAvailable || model.cellCount <= 0 || time > model.duration)
+								return;
+						const pos = model.getThumbnailPosition(time * 1000), page = raw.storyboard.images[pos.page];
+						let src;
+						if (page?.buffer && Object.prototype.toString.call(page.buffer) === '[object ArrayBuffer]') {
+								const key = page.buffer;
+								let entry = bytes.get(key);
+								if (!entry) {
+										entry = { refs: 0, url: URL.createObjectURL(new Blob([page.buffer])) };
+										bytes.set(key, entry);
+								}
+								entry.refs++;
+								src = entry.url;
+								releaseImage = () => { if (--entry.refs === 0) {
+										URL.revokeObjectURL(entry.url);
+										bytes.delete(key);
+								} };
+						}
+						else {
+								if (!live || typeof page?.url !== 'string' || !/^https?:\/\//.test(page.url))
+										return;
+								src = page.url;
+						}
+						const image = host.ownerDocument.createElement('img');
+						image.alt = '';
+						image.draggable = false;
+						image.crossOrigin = 'anonymous';
+						image.style.cssText = `position:absolute;max-width:none;width:${model.cols * 100}%;height:${model.rows * 100}%;left:${-pos.col * 100}%;top:${-pos.row * 100}%;pointer-events:none;`;
+						image.onload = () => { if (!disposed && seq === revision) {
+								host.setAttribute('aria-label', '保存時刻付近の場面画像');
+						} };
+						image.onerror = () => { if (!disposed && seq === revision) {
+								host.textContent = '画像なし';
+								releaseImage?.();
+								releaseImage = null;
+						} };
+						host.style.aspectRatio = String(model.cellWidth) + ' / ' + String(model.cellHeight);
+						host.replaceChildren(image);
+						image.src = src;
+				};
+				const update = () => { void draw().catch(() => { if (!disposed)
+						host.textContent = '画像なし'; }); };
+				this.on?.('update', update);
+				this.on?.('reset', update);
+				update();
+				return () => {
+						if (disposed)
+								return;
+						disposed = true;
+						revision++;
+						releaseImage?.();
+						releaseImage = null;
+						this.off?.('update', update);
+						this.off?.('reset', update);
+						if (infoLease && --infoLease.refs === 0 && infos.get(videoId) === infoLease)
+								infos.delete(videoId);
+						host.replaceChildren();
+				};
+		}
 		constructor(...args) {
 				super();
 				this.initialize(...args);
@@ -24183,23 +26790,33 @@ const {HistorySession} = modules[5];
 const {createZenzaSeed,toZenzaThreads} = modules[6];
 const {normalizeSettings} = modules[1];
 const MAX_ADDITIONAL=20000;
-const RESET={phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
+const RESET={hidden:false,phase:'idle',goal:0,additionalCount:0,cachedAdditional:0,appliedAdditional:0,appliedTarget:0,cacheAvailable:false,pages:0,reason:null,canContinue:false};
 class CommentHistoryController {
 	#preferences;#render;#clear;#create;#acquire;#notify;#off;#seed;#session;#report;
-	#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
+	#displayLimit;#cachedRequest=0;#displayRevision=0;#restoreTarget=0;#epoch=0;#normalRevision=0;#operation;#promise=Promise.resolve();#listeners=new Set();#disposed=false;
 	#state={enabled:false,videoId:null,normalCount:0,...RESET};
-	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{}}={}){
+	constructor({preferences,render,clearRender,createSession=(c,o)=>new HistorySession(c,o),acquire=fn=>fn(),notify=()=>{},displayLimit=()=>MAX_ADDITIONAL}={}){
 		if(!preferences||[preferences.get,preferences.subscribe,render,clearRender,createSession,acquire,notify].some(f=>typeof f!=='function'))throw new TypeError('Invalid history controller dependencies');
 		this.#preferences=preferences;this.#render=render;this.#clear=clearRender;this.#create=createSession;this.#acquire=acquire;this.#notify=notify;
+		if(typeof displayLimit!=='function')throw new TypeError('Invalid display limit');
+		this.#displayLimit=displayLimit;
 		this.#state.enabled=preferences.get().enabled===true;
 		this.#off=preferences.subscribe(snapshot=>{
 			if(this.#disposed)return;
 			const before=this.#state.enabled;this.#state.enabled=snapshot.enabled===true;
 			if(!this.#state.enabled){this.#cancel(true);this.#emit({...RESET});}
-			else {this.#emit({});if(!before&&this.#seed)void this.start();}
+			else {
+				const limit=this.#limit();
+				const reduced=this.#state.appliedTarget>limit;
+				if(reduced){this.#displayRevision++;this.#restoreTarget=Math.min(this.#restoreTarget,limit);this.#state.appliedTarget=limit;}
+				this.#emit({});
+				if(!before&&this.#seed)void this.start();
+				else if(reduced&&!this.#operation&&!this.#state.hidden&&this.#report)void this.setCachedCount(limit);
+			}
 		});
 	}
 	get state(){return JSON.parse(JSON.stringify(this.#state));}
+	#limit(){try{const n=Number(this.#displayLimit());return Number.isFinite(n)?Math.max(0,Math.min(MAX_ADDITIONAL,Math.floor(n))):0;}catch{return 0;}}
 	subscribe(fn){this.#listeners.add(fn);fn(this.state);return()=>this.#listeners.delete(fn);}
 	#emit(changes){
 		Object.assign(this.#state,changes);
@@ -24207,7 +26824,7 @@ class CommentHistoryController {
 		for(const fn of [...this.#listeners]){try{fn(this.state);}catch{}}
 	}
 	#cancel(clear){
-		this.#epoch++;this.#operation?.abort();this.#operation=null;
+		this.#epoch++;this.#cachedRequest++;this.#displayRevision++;this.#restoreTarget=0;this.#operation?.abort();this.#operation=null;
 		this.#session?.removeHistory();this.#session=null;this.#report=null;
 		if(clear){try{this.#clear();}catch{}}
 	}
@@ -24230,13 +26847,43 @@ class CommentHistoryController {
 		if(this.#state.phase==='queued'){this.#operation?.abort();}
 		else this.#session?.cancel();
 	}
+	setHidden(value){
+		const hidden=!!value;
+		if(this.#disposed||!this.#seed||!this.#state.enabled||hidden===this.#state.hidden)return Promise.resolve(this.state);
+		this.#displayRevision++;
+		this.#cachedRequest++;
+		if(hidden){
+			this.#restoreTarget=this.#state.appliedTarget;
+			this.#clear({retain:true});
+			this.#emit({hidden:true,appliedAdditional:0});
+			return Promise.resolve(this.state);
+		}
+		this.#emit({hidden:false});
+		if(this.#operation)return this.#promise;
+		return this.start({displayOnly:true,target:this.#restoreTarget});
+	}
 	whenIdle(){return this.#promise;}
 	more(){return this.start({more:true});}
 	restart(){return this.start({restart:true});}
+	loadSelectedCount(){
+		let target;try{target=normalizeSettings(this.#preferences.get().settings).maxAdditionalComments;}catch{return this.start();}
+		if(this.#state.phase==='render-error'||(this.#report&&(!this.#report.resumeAvailable||this.#state.cachedAdditional>=target)))return this.setCachedCount(target);
+		return this.start({target,more:!!this.#report?.resumeAvailable});
+	}
+	setCachedCount(value){
+		if(!Number.isInteger(value)||value<0||value>MAX_ADDITIONAL)throw new TypeError('Invalid cached count');
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
+		if(this.#operation){
+			const request=++this.#cachedRequest,seed=this.#seed;
+			return this.#promise=this.#promise.then(()=>request===this.#cachedRequest&&seed===this.#seed?this.setCachedCount(value):this.state);
+		}
+		if(!this.#report||!this.#session)return Promise.resolve(this.state);
+		return this.start({displayOnly:true,target:Math.min(value,this.#limit(),this.#report.counts.additionalCount)});
+	}
 	setAppliedCount(value){
 		const n=typeof value==='number'?value:typeof value==='string'&&value.trim()!==''?Number(value):NaN;
 		if(!Number.isInteger(n)||n<0||n>MAX_ADDITIONAL)throw new TypeError('Invalid applied additional count');
-		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
 		if(this.#operation)return this.#promise;
 		if(!this.#session||!this.#report){
 			if(n===0){this.#emit({appliedTarget:0});return Promise.resolve(this.state);}
@@ -24247,7 +26894,7 @@ class CommentHistoryController {
 		return this.start({displayOnly:true,target:n});
 	}
 	start({more=false,restart=false,target,displayOnly=false}={}){
-		if(this.#disposed||!this.#seed||!this.#state.enabled)return Promise.resolve(this.state);
+		if(this.#disposed||!this.#seed||!this.#state.enabled||this.#state.hidden)return Promise.resolve(this.state);
 		if(this.#operation)return this.#promise;
 		let settings;try{settings=normalizeSettings(this.#preferences.get().settings);}catch{this.#emit({phase:'unavailable',reason:'SETTINGS_INVALID'});return Promise.resolve(this.state);}
 		if(displayOnly&&(!this.#session||!this.#report))return Promise.resolve(this.state);
@@ -24262,7 +26909,7 @@ class CommentHistoryController {
 		const goal=applyOnly?oldGoal:
 			target!==undefined?Math.min(MAX_ADDITIONAL,target):
 			continuing?Math.min(MAX_ADDITIONAL,this.#state.additionalCount<oldGoal?oldGoal:oldGoal+settings.maxAdditionalComments):settings.maxAdditionalComments;
-		const appliedTarget=target!==undefined?target:retryRender?this.#state.appliedTarget:goal;
+		const appliedTarget=Math.min(this.#limit(),target!==undefined?target:retryRender?this.#state.appliedTarget:goal);
 		const epoch=++this.#epoch,operation=new AbortController();this.#operation=operation;
 		const current=()=>!this.#disposed&&this.#epoch===epoch&&!operation.signal.aborted&&this.#state.enabled;
 		const seed=this.#seed;
@@ -24287,17 +26934,23 @@ class CommentHistoryController {
 				const report=this.#report;
 				this.#emit({phase:'applying',additionalCount:report.counts.additionalCount,cacheAvailable:true,pages:report.pages,network:report.network,waitingMs:0});
 				let applied;
-				const limit=Math.min(appliedTarget,report.counts.additionalCount);
-				try{applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:current,signal:operation.signal});}
-				catch{
-					if(current()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');}
-					return;
+				let limit=0;
+				while(current()&&!this.#state.hidden){
+					limit=Math.min(this.#state.appliedTarget,this.#limit(),report.counts.additionalCount);
+					const revision=this.#displayRevision;
+					const displayCurrent=()=>current()&&!this.#state.hidden&&revision===this.#displayRevision;
+					try{
+						applied=await this.#render(toZenzaThreads(seed,this.#session.snapshot({historyOnly:true,historyLimit:limit})),{isCurrent:displayCurrent,signal:operation.signal});
+						if(displayCurrent())break;
+					}catch{
+						if(displayCurrent()){this.#emit({phase:'render-error',reason:'render_failed',canContinue:true});this.#notify('コメント増量：取得済みデータの反映に失敗しました。パネルから再試行できます。');return;}
+					}
 				}
 				if(!current())return;
 				const partial=!['comment_limit','empty_page','no_history_target'].includes(report.reason);
-				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:applied?.additionalCount??limit,
+				this.#emit({phase:partial?'partial':'ready',reason:report.reason,appliedAdditional:this.#state.hidden?0:applied?.additionalCount??limit,
 					canContinue:report.resumeAvailable&&report.counts.additionalCount<MAX_ADDITIONAL});
-				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify('コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
+				if(partial&&report.reason!=='cancelled'&&!displayOnly)this.#notify(this.#state.hidden?'コメント増量：一部取得で終了しました。取得済みのコメントは保持しています。':'コメント増量：一部取得で終了しました。取得済みの正常なコメントを反映しました。');
 			}catch{
 				if(this.#epoch===epoch&&this.#state.enabled){
 					this.#emit({phase:'partial',reason:operation.signal.aborted?'cancelled':'operation_failed',canContinue:!!this.#report?.resumeAvailable});
@@ -24326,8 +26979,10 @@ class CommentHistoryRenderer {
 	removed(chat){this.#deleted.add(identity(chat));this.#history.delete(chat);this.#retained.delete(identity(chat));this.#revision++;}
 	get retainedCount(){return this.#retained.size;}
 	has(chat){return !!chat&&this.#history.has(chat);}
-	clear(){
-		this.#revision++;this.#retained.clear();
+	clear({retain=false}={}){
+		this.#revision++;
+		if(retain){for(const chat of this.#history)this.#retained.set(identity(chat),chat);}
+		else this.#retained.clear();
 		if(!this.#history.size)return;
 		for(const group of this.#groups()){
 			if(!group)continue;
@@ -24611,7 +27266,7 @@ return Object.freeze({HISTORY_PRESETS,APPLIED_PRESETS,HISTORY_PREFERENCE_DEFAULT
 })();
 modules[11] = (() => {
 const {SETTINGS_SCHEMA} = modules[1];
-const {HISTORY_PRESETS,APPLIED_PRESETS,createBrowserHistoryPreferences} = modules[10];
+const {HISTORY_PRESETS,createBrowserHistoryPreferences} = modules[10];
 const {CommentHistoryController} = modules[7];
 const HISTORY_ICON='<svg viewBox="0 0 36 36" aria-hidden="true"><path fill-rule="evenodd" d="M8 7h20a3 3 0 0 1 3 3v13a3 3 0 0 1-3 3H16l-6 5v-5H8a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Zm1 3a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h4v2l2.4-2H27a1 1 0 0 0 1-1V11a1 1 0 0 0-1-1H9Z"/><path d="M16.5 12h3v3.5H23v3h-3.5V22h-3v-3.5H13v-3h3.5Z"/></svg>';
 const CSS=`
@@ -24621,7 +27276,7 @@ const CSS=`
 .commentHistorySwitch.is-active svg{filter:drop-shadow(0 0 3px var(--enabled-button-color,#9cf))}
 .commentHistorySwitch.is-fetching svg{animation:zenzaHistoryPulse 1.6s ease-in-out infinite}
 @keyframes zenzaHistoryPulse{50%{opacity:.48}}
-.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:16px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
+.zenzaCommentHistoryPanel{position:fixed;z-index:6060001;box-sizing:border-box;width:360px;max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;overscroll-behavior:contain;padding:12px;background:rgba(18,29,45,.97);color:#e6eef5;border:1px solid #455468;border-radius:12px;box-shadow:0 8px 36px #0009;font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif;text-align:left;display:none;transform-origin:var(--ch-origin,100% 100%)}
 .zenzaCommentHistoryPanel.is-open{display:block;animation:zenzaHistoryIn .22s cubic-bezier(.2,.9,.3,1.15) both}
 .zenzaCommentHistoryPanel.is-closing{pointer-events:none;animation:zenzaHistoryOut .16s ease-in both}
 @keyframes zenzaHistoryIn{from{opacity:0;transform:translate(12px,18px) scale(.86);filter:blur(2px)}to{opacity:1;transform:none;filter:none}}
@@ -24631,15 +27286,17 @@ const CSS=`
 .zenzaCommentHistoryPanel button,.ch-settings button{cursor:pointer;border:1px solid #496071;border-radius:7px;padding:7px 10px;background:#27384b;color:#edf7ff}
 .zenzaCommentHistoryPanel button:disabled{cursor:default;opacity:.45}
 .zenzaCommentHistoryPanel button:focus-visible,.zenzaCommentHistoryPanel select:focus-visible,.ch-settings input:focus-visible{outline:2px solid #72e4cc;outline-offset:2px}
-.ch-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}.ch-header strong{font-size:16px;flex:1}.ch-header button{padding:1px 8px;font-size:22px;background:none;border:0}
+.ch-header{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}.ch-header strong{font-size:16px;flex:1}
+.ch-visibility{display:flex;align-items:center;justify-content:space-between;gap:8px}.ch-visibility strong{font-size:13px}.zenzaCommentHistoryPanel [data-ch-visibility]{min-width:76px;min-height:32px;padding:5px 8px;font-weight:700;background:#79dfc9;color:#0c2b28;border-color:#79dfc9}
 .ch-enable{display:flex;align-items:center;gap:6px;white-space:nowrap}.ch-enable input{accent-color:#72e4cc}
-.ch-counter{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:#91f2dc}.ch-counter small{font-size:12px;font-weight:400;color:#b4c2d0;margin-left:5px}
-.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:9px 0}
-.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:10px 0 14px}
-.ch-action-row{display:grid;grid-template-columns:124px minmax(0,1fr);gap:10px;align-items:end;margin-top:12px}.ch-action-row label{display:grid;gap:3px;color:#b4c2d0;font-size:11px}
-.zenzaCommentHistoryPanel select{width:100%;height:36px;padding:4px 8px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
-.zenzaCommentHistoryPanel [data-ch-primary]{background:#79dfc9;color:#0c2b28;border-color:#79dfc9;min-height:36px;font-weight:700}
-.ch-details{border-top:1px solid #33475d;margin-top:14px;padding-top:11px}.ch-details summary{cursor:pointer;color:#cedde9}.ch-details>div{margin-top:10px}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin-bottom:9px;font-size:12px}.ch-footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px}.ch-footer button{background:none;font-size:12px;padding:5px 8px}
+.ch-status,.ch-note{color:#b4c2d0;font-size:12px;white-space:normal;overflow-wrap:anywhere}.ch-note{margin:6px 0}.ch-status{margin-top:6px}
+.zenzaCommentHistoryPanel [hidden]{display:none!important}.zenzaCommentHistoryPanel progress{width:100%;height:6px;accent-color:#72e4cc;display:block;margin:8px 0}
+.ch-slider{margin:10px 0 6px}.ch-slider-label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;color:#b4c2d0;font-size:12px}.ch-slider-label output{color:#e6eef5;font-variant-numeric:tabular-nums}.ch-slider input{display:block;width:100%;height:24px;margin:2px 0;accent-color:#72e4cc}.ch-slider input:disabled{opacity:.45}.ch-slider-ticks{display:flex;justify-content:space-between;color:#b4c2d0;font-size:11px}
+.ch-action-row{display:grid;grid-template-columns:112px minmax(0,1fr) 68px;gap:6px;align-items:center;margin-top:8px}.ch-action-row label{color:#b4c2d0;font-size:12px}
+.zenzaCommentHistoryPanel select{width:100%;min-width:0;height:32px;padding:4px 6px;color:#ecf7fa;background:#1c3044;border:1px solid #486175;border-radius:7px}
+.zenzaCommentHistoryPanel [data-ch-primary]{min-height:32px;padding:5px 6px;font-weight:700}
+.ch-bottom{margin-top:12px;padding-top:10px;border-top:1px solid #33475d;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:8px}.ch-details{display:contents}.ch-details:not([open])>div{display:none}.ch-details summary{grid-column:1;grid-row:1;padding:5px 0;cursor:pointer;color:#cedde9}.ch-details>div{grid-column:1/-1}.ch-counts{display:grid;grid-template-columns:1fr auto;gap:5px;margin:8px 0;font-size:12px}.ch-bottom [data-ch-advanced]{grid-column:2;grid-row:1;background:none;font-size:12px;padding:5px 8px;min-height:32px}.zenzaCommentHistoryPanel .ch-setting-error:empty{display:none}
+@media(max-width:360px){.ch-action-row{grid-template-columns:100px minmax(0,1fr) 60px;gap:5px}}
 .ch-advanced[hidden]{display:none}.ch-advanced{margin-top:16px;border-top:1px solid #415568;padding-top:12px}.ch-settings{font:13px/1.5 'Yu Gothic UI','Meiryo',sans-serif}.ch-settings label{display:grid;grid-template-columns:minmax(0,1fr) 100px;align-items:center;gap:10px;margin:10px 0}.ch-settings input[type=number]{width:100px;color:inherit;background:transparent;border:1px solid #60778a;border-radius:5px;padding:5px}.ch-settings input[type=checkbox]{justify-self:end;accent-color:#72e4cc}.ch-settings small{opacity:.75}.ch-setting-error{color:#ffbe94;min-height:1.5em}.ch-settings [aria-invalid=true]{outline:1px solid #ffae86}
 .is-youTube .commentHistorySwitch{display:none}
 `;
@@ -24649,7 +27306,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 function mountHistorySettings(container,{preferences}={}){
 	const doc=container.ownerDocument;style(doc);container.classList.add('ch-settings');
 	container.innerHTML='<strong>コメント増量</strong><p class="ch-note">変更した取得条件は次の取得に使用します。取得済みデータの取り直しは行いません。</p>'+SETTINGS_SCHEMA.map(d=>
-		`<label><span>${esc(d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
+		`<label><span>${esc(d.name==='maxAdditionalComments'?'読み込むコメント数':d.label)}${d.type==='integer'?`<br><small>${d.min.toLocaleString()}～${d.max.toLocaleString()}</small>`:''}</span><input data-history-setting="${d.name}" type="${d.type==='boolean'?'checkbox':'number'}"${d.type==='integer'?` min="${d.min}" max="${d.max}" step="1"`:''}></label>`
 	).join('')+'<p class="ch-setting-error" role="status"></p>';
 	const error=container.querySelector('.ch-setting-error');
 	const refresh=()=>{const s=preferences.get();for(const d of SETTINGS_SCHEMA){const e=container.querySelector(`[data-history-setting="${d.name}"]`);if(doc.activeElement===e)continue;if(d.type==='boolean')e.checked=s.settings[d.name];else e.value=s.settings[d.name];}if(s.valid===false)error.textContent='保存設定が不正です。既存設定は上書きしていません。';};
@@ -24669,24 +27326,56 @@ class CommentHistoryPanel {
 	_init(){
 		if(this.view)return;
 		const el=this.view=this.doc.createElement('section');el.className='zenzaCommentHistoryPanel zen-family';el.setAttribute('role','dialog');el.setAttribute('aria-label','コメント増量');el.setAttribute('aria-modal','false');
-		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> ON</label><button type="button" data-ch-close aria-label="パネルを閉じる">×</button></header><div class="ch-counter"><span data-ch-count>0</span><small data-ch-goal> / 5,000 件</small></div><div class="ch-status" data-ch-status role="status" aria-live="polite"></div><progress value="0" max="5000" aria-label="追加取得の進捗"></progress><div class="ch-action-row"><label>追加する件数<select data-ch-quota aria-label="追加する件数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select></label><button type="button" data-ch-primary>取得開始</button></div><div class="ch-action-row ch-apply-row"><label>適用する件数<select data-ch-applied-target aria-label="適用する件数">${APPLIED_PRESETS.map(n=>`<option value="${n}">${n?fmt(n)+' 件':'0 件（増量前）'}</option>`).join('')}</select></label><span class="ch-note" data-ch-apply-summary></span></div><p class="ch-note">ONは次の動画・再起動後も維持します。全タブが取得対象です。適用する件数を減らしても取得済みの分は保持し、戻すときは再取得しません。</p><details class="ch-details"><summary>取得条件と内訳</summary><div><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>取得済みの追加分（保持中）</span><span data-ch-cached></span><span>適用中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button></div></details><footer class="ch-footer"><span class="ch-note" data-ch-pages></span><button type="button" data-ch-advanced>上級者設定</button></footer><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
+		el.innerHTML=`<header class="ch-header"><strong>コメント増量</strong><label class="ch-enable"><input type="checkbox" data-ch-enabled> 自動で増量</label></header>
+<div class="ch-visibility"><strong data-ch-visibility-status role="status" aria-live="polite"></strong><button type="button" data-ch-visibility aria-pressed="false">非表示</button></div>
+<div class="ch-status" data-ch-status role="status" aria-live="polite" hidden></div><div class="ch-progress" hidden><progress value="0" max="5000" aria-label="読み込みの進捗"></progress></div>
+<div class="ch-slider"><div class="ch-slider-label"><label for="zenza-history-percentage" data-ch-apply-label>追加コメント数</label><output for="zenza-history-percentage" data-ch-apply-summary></output></div><input id="zenza-history-percentage" type="range" min="0" max="100" step="1" value="0" data-ch-applied-target aria-label="追加コメント数"><div class="ch-slider-ticks"><span>0%</span><span>100%</span></div></div>
+<div class="ch-action-row"><label for="zenza-history-quota">読み込むコメント数</label><select id="zenza-history-quota" data-ch-quota aria-label="読み込むコメント数">${HISTORY_PRESETS.map(n=>`<option value="${n}">${fmt(n)} 件</option>`).join('')}</select><button type="button" data-ch-primary>読込</button></div>
+<div class="ch-bottom"><details class="ch-details"><summary>詳細・説明</summary><div><p class="ch-note">非表示は今の動画だけです。再表示では読み込み済みデータを使います。次の動画は「自動で増量」の設定に従います。</p><p class="ch-note">「自動で増量」をOFFにすると通常コメントだけに戻り、読み込み済みデータを破棄します。追加コメント数の100%は、選択した読み込み数と読み込み済み数の小さい方です。</p><div class="ch-counts"><span>通常コメント</span><span data-ch-normal></span><span>読み込み済みの追加分（保持中）</span><span data-ch-cached></span><span>表示中の追加分</span><span data-ch-applied></span><span>表示対象の合計</span><span data-ch-total></span></div><label><input type="checkbox" data-ch-easy> かんたんコメントも追加取得</label><p class="ch-note">取得中の条件は固定です。かんたんコメントの変更は、次の動画か「最初から取得」で使用します。NGはそのまま適用されます。</p><button type="button" data-ch-restart>最初から取得</button><p class="ch-note" data-ch-pages></p></div></details><button type="button" data-ch-advanced>上級者設定</button></div><div class="ch-advanced" hidden></div><div class="ch-setting-error" data-ch-error role="status"></div>`;
 		const safe=fn=>{try{fn();this.view.querySelector('[data-ch-error]').textContent='';}catch{this.refresh(this.controller.state);this.view.querySelector('[data-ch-error]').textContent='設定を保存できませんでした。';}};
-		el.querySelector('[data-ch-close]').onclick=()=>this.close(true);
+		el.querySelector('[data-ch-visibility]').onclick=()=>safe(()=>{void this.controller.setHidden(!this.controller.state.hidden);});
 		el.querySelector('[data-ch-enabled]').onchange=e=>safe(()=>this.controller.setEnabled(e.target.checked));
 		el.querySelector('[data-ch-quota]').onchange=e=>safe(()=>this.preferences.patch({maxAdditionalComments:Number(e.target.value)}));
-		el.querySelector('[data-ch-applied-target]').onchange=e=>safe(()=>{void this.controller.setAppliedCount(Number(e.target.value)).catch?.(()=>{});});
+		const slider=el.querySelector('[data-ch-applied-target]');
+		slider.oninput=()=>{if(slider.disabled)return;this.sliderDraft={key:this._sliderKey(),percent:Number(slider.value)};this._slider(this.controller.state,this.preferences.get());};
+		slider.onchange=()=>safe(()=>{
+			if(slider.disabled)return;
+			const count=Math.round(this._sliderLimit(this.controller.state,this.preferences.get())*Number(slider.value)/100);
+			this.sliderDraft=null;
+			void this.controller.setCachedCount(count).catch(()=>{if(!this.disposed)this.refresh(this.controller.state);});
+		});
 		el.querySelector('[data-ch-easy]').onchange=e=>safe(()=>this.preferences.patch({includeEasy:e.target.checked}));
-		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else if(s.canContinue||s.phase==='render-error')void this.controller.more();else void this.controller.restart();};
+		el.querySelector('[data-ch-primary]').onclick=()=>{const s=this.controller.state;if(['fetching','queued'].includes(s.phase))this.controller.stop();else if(!s.enabled)safe(()=>this.controller.setEnabled(true));else void this.controller.loadSelectedCount();};
 		el.querySelector('[data-ch-restart]').onclick=()=>void this.controller.restart();
 		el.querySelector('[data-ch-advanced]').onclick=()=>{const target=el.querySelector('.ch-advanced');target.hidden=!target.hidden;if(!target.hidden&&!this.advanced)this.advanced=mountHistorySettings(target,{preferences:this.preferences});if(!target.hidden)target.scrollIntoView({block:'nearest'});};
 		for(const name of ['click','dblclick','mousedown','mouseup','pointerdown','wheel','keydown','keyup','contextmenu'])el.addEventListener(name,e=>e.stopPropagation());
 	}
+	_sliderLimit(state,p){return state.cacheAvailable?Math.max(0,Math.min(Number(p.settings.maxAdditionalComments)||0,Number(state.cachedAdditional)||0)):0;}
+	_sliderKey(){const s=this.controller.state,p=this.preferences.get();return JSON.stringify([s.videoId,s.phase,s.hidden,s.enabled,s.appliedTarget,this._sliderLimit(s,p)]);}
+	_slider(state,p){
+		const slider=this.view.querySelector('[data-ch-applied-target]'),limit=this._sliderLimit(state,p);
+		const key=this._sliderKey();if(this.sliderDraft?.key!==key)this.sliderDraft=null;
+		const count=Math.min(limit,Math.max(0,Number(state.appliedTarget)||0));
+		const percent=this.sliderDraft?.percent??(limit?Math.round(count/limit*100):0);
+		const preview=this.sliderDraft?Math.round(limit*percent/100):count;
+		slider.value=String(percent);slider.disabled=!!state.hidden||!state.enabled||['fetching','queued','applying'].includes(state.phase)||!limit||p.valid===false;
+		slider.setAttribute('aria-valuetext',`${fmt(preview)} 件、${percent}%`);
+		this.view.querySelector('[data-ch-apply-summary]').textContent=`${fmt(preview)} / ${fmt(limit)} 件（${percent}%）`;
+		this.view.querySelector('[data-ch-apply-label]').textContent=state.hidden?'追加コメント数（保持）':'追加コメント数';
+	}
 	refresh(state){
 		const a=this.anchor?.();
-		if(a){a.classList.toggle('is-active',state.enabled);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：ON':'：OFF'));}
+		if(a){a.classList.toggle('is-active',state.enabled&&!state.hidden);a.classList.toggle('is-fetching',state.phase==='fetching');a.setAttribute('aria-expanded',String(this.isOpen));a.setAttribute('aria-label','コメント増量'+(state.enabled?'：自動で増量 有効':'：自動で増量 無効'));}
 		if(!this.view)return;
 		const p=this.preferences.get(),v=this.view;const q=s=>v.querySelector(s),running=['fetching','queued','applying'].includes(state.phase);
 		q('[data-ch-enabled]').checked=state.enabled;
+		const visibility=q('[data-ch-visibility]');
+		visibility.textContent=state.hidden?'再表示':'非表示';
+		visibility.setAttribute('aria-label',state.hidden?'増量分を再表示':'増量分を非表示');
+		visibility.setAttribute('aria-pressed',String(!!state.hidden));
+		visibility.disabled=!state.enabled||!state.videoId||p.valid===false||(!running&&!state.hidden&&!state.cachedAdditional);
+		q('.ch-visibility').classList.toggle('is-hidden',!!state.hidden);
+		q('[data-ch-visibility-status]').textContent=state.hidden?'増量分：非表示中':!state.enabled?'自動増量：OFF':state.appliedAdditional>0?'増量分：表示中':running?'増量分：準備中':state.cachedAdditional?'増量分：表示なし':'増量分なし';
 		const quota=q('[data-ch-quota]');
 		quota.querySelector('[data-ch-custom]')?.remove();
 		if(!HISTORY_PRESETS.includes(p.settings.maxAdditionalComments)){
@@ -24694,24 +27383,18 @@ class CommentHistoryPanel {
 			option.value=String(p.settings.maxAdditionalComments);option.textContent=fmt(p.settings.maxAdditionalComments)+' 件';quota.append(option);
 		}
 		quota.value=p.settings.maxAdditionalComments;q('[data-ch-easy]').checked=p.settings.includeEasy;
-		q('[data-ch-count]').textContent=fmt(state.additionalCount);q('[data-ch-goal]').textContent=` / ${fmt(state.goal||p.settings.maxAdditionalComments)} 件`;
+		q('.ch-progress').hidden=!running;
 		q('progress').max=state.goal||p.settings.maxAdditionalComments;q('progress').value=state.additionalCount||0;
-		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'OFF · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
+		const texts={idle:state.enabled?'通常コメントの読込完了を待っています':'自動増量なし · 通常コメントのみ表示',queued:'他のタブの取得終了を待っています',fetching:'取得中 · 追加分は未反映',applying:'取得終了 · 表示を準備しています',ready:'反映済み',partial:'一部取得 · 取得済みの正常分を反映',unavailable:'この動画・コメント形式では増量できません', 'render-error':'取得済みデータの反映に失敗しました'};
 		q('[data-ch-status]').textContent=p.valid===false?'保存設定が不正です。上書きは行っていません。':texts[state.phase]||'待機中';
 		if(['cursor_stalled','same_second_boundary','subsecond_boundary','same_second_boundary_unverified','subsecond_boundary_unverified'].includes(state.reason))q('[data-ch-status]').textContent+='（日時境界で停止）';
-		const appliedSelect=q('[data-ch-applied-target]');appliedSelect.querySelector('[data-ch-custom]')?.remove();
-		const appliedTarget=Number(state.appliedTarget)||0;
-		if(!APPLIED_PRESETS.includes(appliedTarget)){
-			const option=this.doc.createElement('option');option.dataset.chCustom='';option.value=String(appliedTarget);option.textContent=fmt(appliedTarget)+' 件';appliedSelect.append(option);
-		}
-		appliedSelect.value=String(appliedTarget);
-		appliedSelect.disabled=!state.enabled||running||!state.cacheAvailable||p.valid===false;
-		q('[data-ch-apply-summary]').textContent=state.cacheAvailable?`取得済み ${fmt(state.cachedAdditional)} 件 · 適用中 ${fmt(state.appliedAdditional)} 件`:'';
-		if(state.cacheAvailable&&!running&&['ready','partial'].includes(state.phase)&&state.appliedAdditional<state.cachedAdditional)
-			q('[data-ch-status]').textContent+=state.appliedAdditional===0?'（増量前の表示・取得済み分は保持）':'（一部を適用中・取得済み分は保持）';
+		if(state.hidden)q('[data-ch-status]').textContent=running?'増量分は非表示 · 取得済みデータを保持しています':'増量分は非表示 · 再表示できます';
+		q('[data-ch-status]').hidden=!running&&!['partial','unavailable','render-error'].includes(state.phase)&&p.valid!==false;
+		this._slider(state,p);
 		q('[data-ch-normal]').textContent=fmt(state.normalCount);q('[data-ch-cached]').textContent=fmt(state.cachedAdditional);q('[data-ch-applied]').textContent=fmt(state.appliedAdditional);q('[data-ch-total]').textContent=fmt((state.normalCount||0)+(state.appliedAdditional||0));q('[data-ch-pages]').textContent=`${fmt(state.pages)} ページ取得`;
-		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機を中止':state.phase==='fetching'?'中止して反映':state.phase==='applying'?'反映準備中':state.phase==='render-error'?'反映を再試行':state.additionalCount>=20000?'上限に到達':state.canContinue?'さらに取得':state.enabled?'取得し直す':'取得開始';
-		button.disabled=state.phase==='applying'||state.phase==='unavailable'||(state.additionalCount>=20000&&state.phase!=='render-error')||p.valid===false;q('[data-ch-restart]').disabled=running||!state.enabled;
+		const button=q('[data-ch-primary]');button.textContent=state.phase==='queued'?'待機中止':state.phase==='fetching'?'読込中止':state.phase==='applying'?'反映中':state.phase==='render-error'?'再反映':'読込';
+		button.title='選択したコメント数まで読み込みます。読み込み済みの分は再取得しません。';
+		button.disabled=(state.hidden&&!['fetching','queued'].includes(state.phase))||state.phase==='applying'||state.phase==='unavailable'||(state.phase!=='render-error'&&!running&&state.cacheAvailable&&state.appliedTarget>=this._sliderLimit(state,p)&&(state.cachedAdditional>=p.settings.maxAdditionalComments||state.canContinue===false))||p.valid===false;q('[data-ch-restart]').disabled=state.hidden||running||!state.enabled;
 	}
 	_place(){
 		if(!this.view)return;const host=this.doc.fullscreenElement||this.doc.webkitFullscreenElement||this.doc.body;if(this.view.parentNode!==host)host.append(this.view);
@@ -24739,7 +27422,7 @@ class CommentHistoryPanel {
 		}
 	}
 	open(){
-		if(this.disposed)return;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
 	}
 	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
 	toggle(){this.isOpen?this.close(true):this.open();}
@@ -24748,9 +27431,9 @@ class CommentHistoryPanel {
 function createHistoryFeature({dialog,config,window:win=globalThis.window}){
 	const preferences=createBrowserHistoryPreferences({window:win,config});
 	const acquire=(run,signal)=>win.navigator.locks?.request?win.navigator.locks.request('zenza-comment-history-fetch',{mode:'exclusive',signal},async()=>{const result=await run();await new Promise(r=>win.setTimeout(r,1500));return result;}):run();
-	const controller=new CommentHistoryController({preferences,acquire,
+	const controller=new CommentHistoryController({preferences,acquire,displayLimit:()=>preferences.get().settings.maxAdditionalComments,
 		render:(data,control)=>dialog._nicoVideoPlayer.applyHistoryThreads(data,control),
-		clearRender:()=>dialog._nicoVideoPlayer?.clearCommentHistory(),
+		clearRender:options=>dialog._nicoVideoPlayer?.clearCommentHistory(options),
 		notify:text=>dialog.execCommand('notify',text)});
 	const panel=new CommentHistoryPanel({controller,preferences,window:win,anchor:()=>dialog._view?._$view?.[0]?.querySelector('.commentHistorySwitch')||win.document.querySelector('.commentHistorySwitch')});
 	return {controller,preferences,panel,dispose(){panel.dispose();controller.dispose();preferences.dispose();}};
@@ -24863,7 +27546,46 @@ class TimelineGeometry {
 				return clamped === null ? null : clamped * this.localWidth;
 		}
 }
+// already required
 class SceneResumeMarkerPresenter {
+		static projectPoint(time, duration, policy = {}) {
+				if (typeof time !== 'number' || !Number.isFinite(time) ||
+						!Number.isFinite(duration) || duration <= 0)
+						return null;
+				if (!policy.clamp && (time < 0 || time > duration))
+						return null;
+				const ratio = TimelineGeometry.timeToRatio(time, duration);
+				if (ratio === null || (policy.includeStart === false && ratio === 0) ||
+						(policy.includeEnd === false && ratio === 1))
+						return null;
+				return { time: TimelineGeometry.ratioToTime(ratio, duration), ratio, left: `${ratio * 100}%` };
+		}
+		static projectInterval(start, end, duration, policy = {}) {
+				const a = SceneResumeMarkerPresenter.projectPoint(start, duration, policy);
+				const b = SceneResumeMarkerPresenter.projectPoint(end, duration, policy);
+				return { start: a, end: b, band: a && b && b.ratio > a.ratio ?
+								{ left: a.left, width: `${(b.ratio - a.ratio) * 100}%` } : null };
+		}
+		static placePoint(node, point) {
+				node.style.left = point.left;
+		}
+		static placeInterval(node, band) {
+				node.style.left = band.left;
+				node.style.width = band.width;
+		}
+		static createLayer(track, className) {
+				const layer = track.ownerDocument.createElement('div');
+				layer.className = `timelineMarkerLayer ${className}`;
+				track.append(layer);
+				return layer;
+		}
+		static clearNative(pointers) {
+				for (const pointer of pointers || []) {
+						for (const name of ['timeline-ratio', 'duration', 'time', 'text', 'data-param'])
+								pointer.removeAttribute(name);
+						pointer.hidden = true;
+				}
+		}
 		static render(pointers, resumePoints, duration, setProps) {
 				if (!pointers) {
 						return;
@@ -24878,17 +27600,15 @@ class SceneResumeMarkerPresenter {
 						}
 						const resume = points[i];
 						const time = Number(resume?.time);
-						if (!validDuration || !resume || !Number.isFinite(time) ||
-								time <= 0 || time > length || typeof resume.now !== 'string' || !resume.now.trim()) {
-								pointer.hidden = true;
-								pointer.removeAttribute('duration');
-								pointer.removeAttribute('time');
-								pointer.removeAttribute('text');
+						const point = SceneResumeMarkerPresenter.projectPoint(time, length, { includeStart: false });
+						if (!validDuration || !resume || !point || typeof resume.now !== 'string' || !resume.now.trim()) {
+								SceneResumeMarkerPresenter.clearNative([pointer]);
 								continue;
 						}
 						pointer.setAttribute('duration', String(length));
 						pointer.setAttribute('time', String(time));
 						pointer.setAttribute('text', `${resume.now} ここまで見た`);
+						pointer.setAttribute('timeline-ratio', String(point.ratio));
 						pointer.hidden = false;
 						if (resume.now !== '前回') {
 								setProps([pointer, '--pointer-color', 'rgba(128, 128, 255, 0.6)'], [pointer, '--color', '#aef'], [pointer, '--scale-pp', '']);
@@ -25018,7 +27738,9 @@ class VideoControlBar extends Emitter {
 				$view
 						.on('click', this._onClick.bind(this))
 						.on('command', this._onCommandEvent.bind(this));
-				HeatMapWorker.init({ container: this._seekBar }).then((hm) => this._onHeatMapReady(hm));
+				HeatMapWorker.init({ container: this._seekBar })
+						.then((hm) => this._onHeatMapReady(hm))
+						.catch(() => { window.console.warn('HeatMap initialization unavailable'); });
 				const updateHeatMapVisibility = (v) => this._$seekBarContainer.raf.toggleClass('noHeatMap', !v);
 				updateHeatMapVisibility(this._playerConfig.props.enableHeatMap);
 				this._playerConfig.onkey('enableHeatMap', updateHeatMapVisibility);
@@ -25225,6 +27947,7 @@ class VideoControlBar extends Emitter {
 				return ratio === null ? 0 : ratio * 100;
 		}
 		_onPlayerOpen(watchId) {
+				this._clearTimelinePresentation(typeof watchId === 'string' ? watchId : null);
 				this._commentParsedHandler?.cancel?.();
 				this._commentChangeHandler?.cancel?.();
 				this._startTimer();
@@ -25271,6 +27994,7 @@ class VideoControlBar extends Emitter {
 				this._syncCommentHeatMap();
 		}
 		_onPlayerClose() {
+				this._clearTimelinePresentation(null, true);
 				this._cancelStoryboardLongPress();
 				this.storyboard?.reset?.();
 				this._commentParsedHandler?.cancel?.();
@@ -25306,6 +28030,8 @@ class VideoControlBar extends Emitter {
 				this.storyboard.setCurrentTime(sec, true);
 		}
 		_onSeekBarMouseDown(e) {
+				if (e.target?.closest?.('.resumePointer,.manualBookmarkMarker'))
+						return;
 				e.stopPropagation();
 				this._beginMouseDrag(e);
 				if (e.button === 0 && this._seekBar?.contains(e.target)) {
@@ -25417,6 +28143,10 @@ class VideoControlBar extends Emitter {
 				this.storyboard.currentTime = currentTime;
 		}
 		_onLoadVideoInfo(videoInfo) {
+				if (this._timelineVideoId && this._timelineVideoId !== videoInfo.watchId) {
+						this._clearTimelinePresentation(videoInfo.watchId, this._timelineClosed);
+				}
+				this._timelineVideoId = videoInfo.watchId;
 				this.duration = videoInfo.duration;
 				this.storyboard.load(videoInfo.watchId, videoInfo);
 				const [view] = this._$view;
@@ -25439,13 +28169,128 @@ class VideoControlBar extends Emitter {
 				}
 		}
 		refreshAutoResumePointers(videoInfo) {
-				if (!videoInfo)
+				if (!videoInfo || this._timelineClosed)
 						return;
+				for (const pointer of this.$resumePointers || []) {
+						if (this._seekBar && pointer instanceof HTMLElement && pointer.parentElement !== this._seekBar) {
+								this._seekBar.append(pointer);
+						}
+				}
 				SceneResumeMarkerPresenter.render(this.$resumePointers, videoInfo.resumePoints, videoInfo.duration, (...tasks) => cssUtil.setProps(...tasks));
 				for (const pointer of this.$resumePointers || []) {
 						pointer.setAttribute('tabindex', '0');
 						pointer.setAttribute('title', '右クリックまたはDeleteキーで「ここまで見た」を削除');
 				}
+		}
+		_canPresentTimeline(videoId) {
+				return !this._timelineClosed && typeof videoId === 'string' && !!videoId &&
+						this._playerState?.videoInfo?.watchId === videoId &&
+						(!this._timelineVideoId || this._timelineVideoId === videoId);
+		}
+		_clearTimelinePresentation(videoId = null, closed = false) {
+				this._clearABRepeatRange();
+				this._clearManualBookmarkMarkers();
+				if (this.$resumePointers)
+						SceneResumeMarkerPresenter.clearNative(this.$resumePointers);
+				this._timelineVideoId = videoId;
+				this._timelineClosed = closed;
+		}
+		setABRepeatRange(range, duration, videoId) {
+				if (typeof videoId === 'string' && !this._canPresentTimeline(videoId))
+						return;
+				this._clearABRepeatRange();
+				const host = this._seekBar;
+				if (!host || !range || this._timelineClosed || typeof videoId !== 'string' || !videoId ||
+						!Number.isFinite(duration) || duration <= 0)
+						return;
+				let layer = this._abRepeatRangeLayer;
+				if (!layer) {
+						layer = SceneResumeMarkerPresenter.createLayer(host, 'abRepeatRangeLayer');
+						layer.setAttribute('aria-hidden', 'true');
+						this._abRepeatRangeLayer = layer;
+				}
+				const projection = SceneResumeMarkerPresenter.projectInterval(range.a, range.b, duration, { clamp: true });
+				layer.classList.toggle('is-active', !!projection.band && range.active === true);
+				if (projection.band) {
+						const band = host.ownerDocument.createElement('div');
+						band.className = 'timelineInterval abRepeatRangeBand';
+						SceneResumeMarkerPresenter.placeInterval(band, projection.band);
+						layer.append(band);
+				}
+				for (const [name, point] of [['A', projection.start], ['B', projection.end]]) {
+						if (!point)
+								continue;
+						const marker = host.ownerDocument.createElement('span');
+						marker.className = `abRepeatMarker abRepeatMarker${name}`;
+						marker.textContent = name;
+						SceneResumeMarkerPresenter.placePoint(marker, point);
+						layer.append(marker);
+				}
+				this._timelineVideoId = videoId;
+		}
+		_clearABRepeatRange() {
+				this._abRepeatRangeLayer?.replaceChildren();
+				this._abRepeatRangeLayer?.classList.remove('is-active');
+		}
+		setManualBookmarkMarkers(bookmarks, duration, videoId) {
+				if (typeof videoId === 'string' && !this._canPresentTimeline(videoId))
+						return;
+				const host = this._seekBar;
+				if (!host)
+						return;
+				let layer = this._manualBookmarkMarkerLayer;
+				if (!layer) {
+						layer = SceneResumeMarkerPresenter.createLayer(host, 'manualBookmarkMarkerLayer');
+						layer.setAttribute('aria-label', '手動しおり');
+						this._manualBookmarkMarkerLayer = layer;
+				}
+				layer.replaceChildren();
+				if (typeof videoId !== 'string' || !Number.isFinite(duration) || duration <= 0 ||
+						!Array.isArray(bookmarks) || this._playerState?.videoInfo?.watchId !== videoId)
+						return;
+				const fragment = host.ownerDocument.createDocumentFragment();
+				const seen = new Set();
+				for (const bookmark of bookmarks) {
+						if (!bookmark || typeof bookmark.id !== 'string' || seen.has(bookmark.id) ||
+								typeof bookmark.label !== 'string')
+								continue;
+						const point = SceneResumeMarkerPresenter.projectPoint(bookmark.time, duration, { includeEnd: false });
+						if (!point)
+								continue;
+						seen.add(bookmark.id);
+						const interval = SceneResumeMarkerPresenter.projectInterval(bookmark.time, bookmark.endTime, duration);
+						if (interval.band) {
+								const band = host.ownerDocument.createElement('div');
+								band.className = 'timelineInterval manualBookmarkRangeBand';
+								band.setAttribute('aria-hidden', 'true');
+								SceneResumeMarkerPresenter.placeInterval(band, interval.band);
+								fragment.append(band);
+						}
+						const marker = host.ownerDocument.createElement('button');
+						marker.type = 'button';
+						marker.className = 'manualBookmarkMarker';
+						marker.dataset.bookmarkId = bookmark.id;
+						SceneResumeMarkerPresenter.placePoint(marker, point);
+						marker.title = `${bookmark.label}（${Math.floor(bookmark.time)}秒）へ移動`;
+						marker.setAttribute('aria-label', marker.title);
+						const expectedVideo = videoId;
+						const time = bookmark.time;
+						marker.addEventListener('click', (event) => {
+								event.preventDefault();
+								event.stopPropagation();
+								if (this._playerState?.videoInfo?.watchId === expectedVideo) {
+										this.emit('command', 'seekTo', time);
+								}
+						});
+						marker.addEventListener('pointerdown', (event) => event.stopPropagation());
+						marker.addEventListener('mousedown', (event) => event.stopPropagation());
+						fragment.append(marker);
+				}
+				layer.append(fragment);
+				this._timelineVideoId = videoId;
+		}
+		_clearManualBookmarkMarkers() {
+				this._manualBookmarkMarkerLayer?.replaceChildren();
 		}
 		async _onFirstVideoInitialized(watchId) {
 				const [view] = this._$view;
@@ -25988,6 +28833,68 @@ util.addStyle(`
 	.seekBarContainer:hover .tooltip {
 		opacity: 0.8;
 	}
+	/* The native seekBar owns normal/hover/fullscreen height and scaling.
+		Inset percentages follow that exact rectangle, including its transition. */
+	.timelineMarkerLayer {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+	.timelineMarkerLayer * {pointer-events: none;}
+	.timelineInterval {
+		position: absolute;
+		top: 0;
+		height: 100%;
+	}
+	.abRepeatRangeLayer {
+		z-index: 195;
+		color: #fce8a6;
+	}
+	.abRepeatRangeBand {
+		background: rgba(255, 211, 105, 0.22);
+		box-shadow: inset 0 1px rgba(255, 227, 151, 0.55), inset 0 -1px rgba(255, 227, 151, 0.55);
+	}
+	.abRepeatRangeLayer.is-active .abRepeatRangeBand {
+		background: rgba(255, 211, 105, 0.48);
+		box-shadow: inset 0 1px #ffe397, inset 0 -1px #ffe397;
+	}
+	.abRepeatMarker {
+		position: absolute;
+		top: 0;
+		height: 100%;
+		width: 2px;
+		transform: translateX(-1px);
+		background: currentColor;
+		font: bold 9px/10px sans-serif;
+		text-indent: 3px;
+		text-shadow: 0 1px 2px #000, 0 0 2px #000;
+	}
+	.abRepeatMarkerB {text-indent: -10px;}
+	.is-loading .timelineMarkerLayer {display:none;}
+	/* Saved points have narrow hit targets; range bands remain passive. */
+	.manualBookmarkMarkerLayer {z-index: 205;}
+	.manualBookmarkRangeBand {background: rgba(255, 211, 105, 0.12);}
+	.manualBookmarkMarker {
+		position: absolute;
+		top: 0;
+		width: 6px;
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		border: 1px solid #eac66b;
+		border-radius: 3px;
+		background: #ffd86b;
+		transform: translateX(-50%);
+		box-shadow: 0 0 0 1px #171e2a;
+		cursor: pointer;
+		pointer-events: auto;
+	}
+	.manualBookmarkMarker:hover,.manualBookmarkMarker:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: 1px;
+	}
+	.seekBarContainer .seekBar .manualBookmarkMarker,
+	.seekBarContainer .seekBar .resumePointer {pointer-events: auto;}
 	.resumePointer {
 		position: absolute;
 		mix-blend-mode: color-dodge;
@@ -26247,8 +29154,9 @@ util.addStyle(`
 	.playbackPointsSwitch,
 	.notificationHistorySwitch,
 	.commentHistorySwitch { border: 0; padding: 0; background: transparent; }
-	/* Task201: native buttons receive focus on mouse-down. Keep this trigger clickable,
+	/* Native action buttons receive focus on mouse-down. Keep their hit targets active,
 		while preserving focus-within suppression for existing popup-menu containers. */
+	.videoControlBar .playbackPointsSwitch:focus-within,
 	.videoControlBar .notificationHistorySwitch:focus-within,
 	.videoControlBar .commentHistorySwitch:focus-within { pointer-events: auto; }
 	.notificationHistorySwitch:focus-visible,
@@ -27139,16 +30047,20 @@ const HeatMapWorker = (() => {
 				if (!isOffscreenCanvasAvailable) {
 						return createMainThreadHeatMap({ container, width, height });
 				}
-				const activeWorker = worker =
-						worker || workerUtil.createCrossMessageWorker(func, { name: 'HeatMapWorker' });
-				const canvas = container.querySelector('canvas.heatMap');
-				const layer = canvas.transferControlToOffscreen();
+				let activeWorker = null, canvas = null, transferred = false;
 				try {
+						canvas = container.querySelector('canvas.heatMap');
+						if (!canvas)
+								throw new Error('Heatmap canvas missing');
+						activeWorker = worker = worker || workerUtil.createCrossMessageWorker(func, { name: 'HeatMapWorker' });
+						const layer = canvas.transferControlToOffscreen();
+						transferred = true;
 						await activeWorker.post({ command: 'init', params: { canvas: layer } }, { transfer: [layer] });
 				}
 				catch (e) {
 						stopWorker(activeWorker);
-						const replacement = replaceTransferredCanvas(container, canvas);
+						const replacement = !transferred && canvas?.getContext ? canvas :
+								replaceTransferredCanvas(container, canvas);
 						if (!replacement) {
 								window.console.warn('HeatMap worker init failed; fallback canvas unavailable');
 								throw e;
@@ -30691,7 +33603,7 @@ class NicoCommentPlayer extends Emitter {
 				}
 				return this._commentHistoryRenderer.apply(data, control);
 		}
-		clearCommentHistory() { this._commentHistoryRenderer?.clear(); }
+		clearCommentHistory(options) { this._commentHistoryRenderer?.clear(options); }
 		removeChat(nicoChat) {
 				this._commentHistoryRenderer?.removed(nicoChat);
 				this._model.removeChat(nicoChat);
@@ -36624,12 +39536,14 @@ class VideoListItemView {
 						'is-adDecoration-gold': item.adDecoration === 'gold',
 						'is-adDecoration-silver': item.adDecoration === 'silver'
 				});
-				const thumbnailStyle = `background-image: url(${item.thumbnail})`;
+				const thumbnailUrl = typeof item.thumbnail === 'string' && item.thumbnail.length <= 2048 &&
+						/^https?:\/\/[^\s"'();\\<>]+$/i.test(item.thumbnail) ? item.thumbnail : '';
+				const thumbnailStyle = thumbnailUrl ? `background-image: url("${thumbnailUrl}")` : '';
 				const result = html `
 			<div class=${classMap(cmap)} data-index=${index + 1} data-item-id=${itemId} data-watch-id=${watchId}>
 				${item.isLazy ? '' : html `
 					<span class="command playlistRemove" data-command="playlistRemove" data-param=${watchId} title="プレイリストから削除">×</span>
-					<div class="thumbnailContainer" style=${thumbnailStyle} data-watch-id=${watchId} data-src=${item.thumbnail}>
+					<div class="thumbnailContainer" style=${thumbnailStyle} data-watch-id=${watchId} data-src=${thumbnailUrl}>
 						<a class="command" href=${watchUrl} data-command="select" data-param=${itemId}>
 							<span class="duration">${textUtil.secToTime(item.duration)}</span>
 						</a>
@@ -37956,7 +40870,7 @@ class PlayList extends VideoList {
 						loop: this._isLoop
 				};
 		}
-		unserialize(data) {
+		unserialize(data, preparedItems) {
 				if (!data || !Array.isArray(data.items)) {
 						return false;
 				}
@@ -37970,7 +40884,12 @@ class PlayList extends VideoList {
 				const restored = data.items.slice(start, start + 10000);
 				const restoredIndex = oldIndex < 0 ? -1 : oldIndex - start;
 				this.model.maxItems = Math.max(this._retentionLimit || 3000, restored.length);
-				this.model.unserialize(restored);
+				if (preparedItems) {
+						this.model.setItem(preparedItems);
+				}
+				else {
+						this.model.unserialize(restored);
+				}
 				this._isEnable = data.enable;
 				this._isLoop = data.loop;
 				this.emit('update');
@@ -38086,19 +41005,67 @@ class PlayList extends VideoList {
 						window.URL.revokeObjectURL(url);
 				}, 1000);
 		}
+		static prepareImportItems(data) {
+				if (!data || !Array.isArray(data.items) || data.items.length > 10000 ||
+						(data.index != null && !['number', 'string'].includes(typeof data.index)) ||
+						(data.enable != null && typeof data.enable !== 'boolean') ||
+						(data.loop != null && typeof data.loop !== 'boolean')) {
+						return null;
+				}
+				const result = [];
+				try {
+						for (const raw of data.items) {
+								if (!raw || typeof raw !== 'object' || Array.isArray(raw) ||
+										!Object.prototype.hasOwnProperty.call(raw, 'id') ||
+										!((typeof raw.id === 'string' && raw.id.trim().length > 0 && raw.id.length <= 128) ||
+												(typeof raw.id === 'number' && Number.isSafeInteger(raw.id) && raw.id > 0)) ||
+										(raw.title != null && typeof raw.title !== 'string') ||
+										(raw.uniq_id != null && !['string', 'number'].includes(typeof raw.uniq_id)) ||
+										(raw.uniqId != null && !['string', 'number'].includes(typeof raw.uniqId)) ||
+										(raw.first_retrieve != null && !['string', 'number'].includes(typeof raw.first_retrieve))) {
+										return null;
+								}
+								result.push(new VideoListItem({ ...raw }));
+						}
+				}
+				catch (_) {
+						return null;
+				}
+				return result;
+		}
 		_onImportFileCommand(fileData) {
+				const invalid = () => this.emit('command', 'alert', 'ファイルの形式が正しくありません');
 				if (!textUtil.isValidJson(fileData)) {
+						invalid();
 						return;
 				}
-				const data = JSON.parse(fileData);
-				if (!data || !Array.isArray(data.items)) {
+				let data;
+				try {
+						data = JSON.parse(fileData);
+				}
+				catch (_) {
+						invalid();
+						return;
+				}
+				const preparedItems = PlayList.prepareImportItems(data);
+				if (!preparedItems) {
+						invalid();
+						return;
+				}
+				try {
+						if (!this.unserialize(data, preparedItems)) {
+								invalid();
+								return;
+						}
+				}
+				catch (_) {
+						invalid();
 						return;
 				}
 				const importGeneration = this._importCompletionGeneration =
 						(this._importCompletionGeneration || 0) + 1;
 				this.emit('command', 'pause');
 				this.emit('command', 'notify', 'プレイリストを復元');
-				this.unserialize(data);
 				const restoredModel = this.model;
 				const index = PlayList.normalizeRestoredIndex(data.index, restoredModel.length, 0);
 				const item = restoredModel.getItemByIndex(index);
@@ -38436,9 +41403,11 @@ class PlayList extends VideoList {
 				window.console.time(timerLabel);
 				options = options || {};
 				const replaceOwner = this._beginReplaceLoad(options);
+				const additiveOwner = this._beginAdditiveLoad(options);
+				const searchCurrent = () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner);
 				let searchResult = null;
 				const loadItems = async () => {
-						const result = searchResult = await this._nicoSearchApiLoader.searchMore(word, options, limit);
+						const result = searchResult = await this._nicoSearchApiLoader.searchMore(word, options, limit, searchCurrent);
 						const items = (result && result.list) || [];
 						return items
 								.filter(item => {
@@ -38448,13 +41417,17 @@ class PlayList extends VideoList {
 						}).map(item => VideoListItem.createByMylistItem(item));
 				};
 				const network = loadItems();
-				const additiveOwner = this._beginAdditiveLoad(options);
 				return this._waitForAdditiveTurn(network, additiveOwner).then(videoListItems => {
 						if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
 								return { status: 'superseded', message: '' };
 						}
 						if (videoListItems.length < 1) {
 								const notice = PlayList.searchNotice(searchResult);
+								if (searchResult?.status === 'ok' && Array.isArray(searchResult.list)) {
+										const empty = searchResult.count === 0 && searchResult.list.length === 0;
+										return { status: 'ok', message: (empty ?
+														'該当する動画がありませんでした（0件）' : '追加できる動画がありませんでした') + notice };
+								}
 								return notice ? { status: 'ok', message: '追加できる動画がありませんでした' + notice } : Promise.reject({});
 						}
 						if (options.playlistSort) {
@@ -38594,7 +41567,9 @@ class PlayList extends VideoList {
 				const active = Math.max(0, this.model.activeIndex);
 				const candidates = this.model.items
 						.map((item, index) => ({ item, index }))
-						.filter(({ item }) => item.isBlankData && !item.isLazy && !item.state.detailRequested && /^[a-z]{2}\d+$/.test(item.watchId))
+						.filter(({ item }) => item.isBlankData && !item.isLazy && !item.state.detailRequested &&
+						(item.state.detailAttempts || 0) < 3 &&
+						(item.state.detailRetryAt || 0) <= Date.now() && /^[a-z]{2}\d+$/.test(item.watchId))
 						.sort((a, b) => Math.abs(a.index - active) - Math.abs(b.index - active))
 						.slice(0, slots);
 				for (const { item } of candidates) {
@@ -38603,9 +41578,26 @@ class PlayList extends VideoList {
 						Promise.resolve().then(() => loader.load(item.watchId)).then(info => {
 								if (this.model.findByItemId(item.itemId) === item && item.isBlankData) {
 										item.upgradeByThumbInfo(info);
+										item.state.detailFailed = false;
+										item.state.detailAttempts = 0;
+										item.state.detailRetryAt = 0;
 								}
 						}).catch(() => {
+								if (this.model.findByItemId(item.itemId) !== item || !item.isBlankData)
+										return;
+								const attempts = (item.state.detailAttempts || 0) + 1;
+								item.state.detailAttempts = attempts;
 								item.state.detailFailed = true;
+								if (attempts >= 3)
+										return; // Permanently unavailable videos must not retry forever.
+								item.state.detailRequested = false;
+								const delay = Math.min(8000, 1000 * 2 ** (attempts - 1));
+								item.state.detailRetryAt = Date.now() + delay;
+								window.setTimeout(() => {
+										if (this.model.findByItemId(item.itemId) === item && !item.isLazy &&
+												item.isBlankData)
+												this._scheduleDetailFill();
+								}, delay);
 						}).then(() => {
 								this._detailRunning--;
 								this._scheduleDetailFill();
@@ -38635,9 +41627,10 @@ class PlayList extends VideoList {
 						return Promise.resolve();
 				}
 				const model = this.model;
+				const generation = this._additiveListGeneration || 0;
 				const anchor = this._activeItem;
 				const getInsertIndex = () => {
-						if (this.model !== model) {
+						if (this.model !== model || (this._additiveListGeneration || 0) !== generation) {
 								return null;
 						}
 						if (anchor) {
@@ -38712,7 +41705,13 @@ class PlayList extends VideoList {
 						return Promise.resolve();
 				}
 				const model = this.model;
+				const generation = this._additiveListGeneration || 0;
+				const isCurrent = () => this.model === model &&
+						(this._additiveListGeneration || 0) === generation;
 				return this._thumbInfoLoader.load(watchId).then(info => {
+						if (!isCurrent()) {
+								return;
+						}
 						info.id = watchId;
 						const item = VideoListItem.createByThumbInfo(info);
 						model.appendItem(item);
@@ -38720,6 +41719,9 @@ class PlayList extends VideoList {
 						this.emit('update');
 						this.emit('command', 'notifyHtml', `リストの末尾に追加: <img src="${item.thumbnail}" style="width: 96px;">${textUtil.escapeToZenkaku(item.title)}`);
 				}).catch(result => {
+						if (!isCurrent()) {
+								return;
+						}
 						const item = VideoListItem.createBlankInfo(watchId);
 						model.appendItem(item);
 						this._refreshIndex(true);
@@ -38889,7 +41891,8 @@ PlayList.SEARCH_LIMIT_MAX = 5000;
 // already required
 const MediaSessionApi = (() => {
 		const emitter = new Emitter();
-		let init = false;
+		let activeSession = null;
+		const registeredActions = new Set();
 		const setPosition = (nm, duration, playbackRate, currentTime) => {
 				if (typeof duration !== 'number' || !Number.isFinite(duration) || duration <= 0) {
 						return;
@@ -38911,34 +41914,51 @@ const MediaSessionApi = (() => {
 				if (!('mediaSession' in navigator)) {
 						return;
 				}
-				navigator.mediaSession.metadata = new self.MediaMetadata({
-						title,
-						artist,
-						album,
-						artwork: (artwork || []).filter(image => typeof image?.src === 'string' && image.src.trim())
-				});
 				const nm = navigator.mediaSession;
+				if (!nm) {
+						return;
+				}
+				try {
+						nm.metadata = new self.MediaMetadata({
+								title,
+								artist,
+								album,
+								artwork: (artwork || []).filter(image => typeof image?.src === 'string' && image.src.trim())
+						});
+				}
+				catch (_) { /* MediaMetadata may be unavailable even if mediaSession exists. */ }
 				if ('setPositionState' in nm) {
 						setPosition(nm, duration);
 				}
-				if (init) {
-						return;
+				if (activeSession !== nm) {
+						activeSession = nm;
+						registeredActions.clear();
 				}
-				init = true;
-				nm.setActionHandler('play', () => emitter.emit('command', 'play'));
-				nm.setActionHandler('pause', () => emitter.emit('command', 'pause'));
-				nm.setActionHandler('seekbackward', () => emitter.emit('command', 'seekBy', -5));
-				nm.setActionHandler('seekforward', () => emitter.emit('command', 'seekBy', +5));
-				nm.setActionHandler('previoustrack', () => emitter.emit('command', 'playPreviousVideo'));
-				nm.setActionHandler('nexttrack', () => emitter.emit('command', 'playNextVideo'));
-				nm.setActionHandler('stop', () => emitter.emit('command', 'close'));
-				nm.setActionHandler('seekto', e => {
+				const register = (action, handler) => {
+						if (registeredActions.has(action)) {
+								return;
+						}
+						try {
+								nm.setActionHandler(action, handler);
+								registeredActions.add(action);
+						}
+						catch (_) {
+						}
+				};
+				register('play', () => emitter.emit('command', 'play'));
+				register('pause', () => emitter.emit('command', 'pause'));
+				register('seekbackward', () => emitter.emit('command', 'seekBy', -5));
+				register('seekforward', () => emitter.emit('command', 'seekBy', +5));
+				register('previoustrack', () => emitter.emit('command', 'playPreviousVideo'));
+				register('nexttrack', () => emitter.emit('command', 'playNextVideo'));
+				register('stop', () => emitter.emit('command', 'close'));
+				register('seekto', e => {
 						emitter.emit('command', 'seekTo', e.seekTime);
 				});
 		};
 		const updateByVideoInfo = (videoInfo) => {
 				const title = videoInfo.title;
-				const artist = videoInfo.owner.name;
+				const artist = videoInfo.owner?.name || '';
 				const album = '';
 				const artwork = [{ src: videoInfo.thumbnail, sizes: '130x100', type: 'image/jpg' }];
 				if (videoInfo.betterThumbnail) {
@@ -39011,7 +42031,7 @@ const LikeApi = {
 						json = null;
 				}
 				const meta = ((json && json.meta) || {});
-				const status = typeof meta.status === 'number' ? meta.status : res.status;
+				const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
 				if (status < 200 || status >= 300) {
 						const detail = [status, meta.errorCode].filter(Boolean).join(' ');
 						throw Object.assign(new Error(`${label}に失敗しました（${detail}）`), { kind: 'API', status, errorCode: meta.errorCode, response: json });
@@ -45758,8 +48778,6 @@ const NotificationHistoryPanel = (() => {
 				'.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:auto;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
 				'.zenzaNotificationDock[hidden]{display:none!important;}',
 				'.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
-				'.zenzaNotificationDock .znh-close{font:inherit;background:#333;color:#eee;border:1px solid #777;border-radius:4px;cursor:pointer;padding:4px 10px;}',
-				'.zenzaNotificationDock .znh-close:focus-visible{outline:2px solid #9cf;}',
 				'.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;display:block;overflow:auto;overscroll-behavior:contain;}',
 				'.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;}',
 				'.zenzaNotificationHistory *{box-sizing:border-box;}',
@@ -46003,13 +49021,39 @@ const NotificationHistoryPanel = (() => {
 				dock.setAttribute('role', 'dialog');
 				dock.setAttribute('aria-label', '通知・エラー履歴');
 				const header = element('div', 'znh-dock-header');
-				const closeButton = element('button', 'znh-close', '閉じる');
-				closeButton.type = 'button';
-				header.append(element('strong', '', '通知・エラー履歴'), closeButton);
+				header.append(element('strong', '', '通知・エラー履歴'));
 				dock.append(header);
 				container.append(dock);
 				let open = false;
 				let disposed = false;
+				let animation = null;
+				const cancelAnimation = () => {
+						if (animation) {
+								animation.onfinish = null;
+								animation.cancel();
+								animation = null;
+						}
+				};
+				const animate = (opening, done = () => { }) => {
+						cancelAnimation();
+						if (typeof dock.animate !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+								done();
+								return;
+						}
+						const frames = opening ?
+								[{ opacity: 0, transform: 'translate(12px,18px) scale(.86)' }, { opacity: 1, transform: 'none' }] :
+								[{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translate(8px,12px) scale(.92)' }];
+						try {
+								const current = animation = dock.animate(frames, { duration: opening ? 220 : 160, easing: opening ? 'cubic-bezier(.2,.9,.3,1.15)' : 'ease-in', fill: 'both' });
+								current.onfinish = () => { if (animation !== current) {
+										return;
+								} cancelAnimation(); done(); };
+						}
+						catch {
+								cancelAnimation();
+								done();
+						}
+				};
 				let previousFocus = null;
 				let addedContainerTabIndex = false;
 				let refresh = () => { };
@@ -46023,13 +49067,17 @@ const NotificationHistoryPanel = (() => {
 						on: (_event, listener) => { refresh = listener; },
 						off: () => { refresh = () => { }; }
 				}, () => open);
-				const close = () => {
+				const close = (restoreFocus = true) => {
 						if (!open) {
 								return;
 						}
 						open = false;
-						dock.hidden = true;
+						dock.inert = true;
+						animate(false, () => { dock.hidden = true; dock.inert = false; });
 						button.setAttribute('aria-expanded', 'false');
+						if (!restoreFocus) {
+								return;
+						}
 						const canFocus = (target) => {
 								if (!target?.isConnected || target === document.body || target === document.documentElement ||
 										target.closest('[hidden], [inert]') || target.matches(':disabled')) {
@@ -46064,7 +49112,18 @@ const NotificationHistoryPanel = (() => {
 						close();
 				};
 				window.addEventListener('keydown', onKeyDown, true);
-				closeButton.addEventListener('click', close);
+				const onOutside = (event) => {
+						if (!open) {
+								return;
+						}
+						const path = event.composedPath();
+						if (path.includes(dock) || path.includes(button)) {
+								return;
+						}
+						close(false);
+				};
+				document.addEventListener('pointerdown', onOutside, true);
+				document.addEventListener('click', onOutside, true);
 				const stopPlayerEvent = (event) => { event.stopPropagation(); };
 				const localEvents = ['click', 'dblclick', 'keydown', 'keyup', 'wheel'];
 				for (const name of localEvents) {
@@ -46081,11 +49140,14 @@ const NotificationHistoryPanel = (() => {
 										return;
 								}
 								previousFocus = document.activeElement;
+								cancelAnimation();
 								open = true;
+								dock.inert = false;
 								dock.hidden = false;
 								button.setAttribute('aria-expanded', 'true');
 								refresh();
 								dock.querySelector('input')?.focus();
+								animate(true);
 						},
 						close,
 						dispose() {
@@ -46094,8 +49156,10 @@ const NotificationHistoryPanel = (() => {
 								}
 								close();
 								disposed = true;
+								cancelAnimation();
 								window.removeEventListener('keydown', onKeyDown, true);
-								closeButton.removeEventListener('click', close);
+								document.removeEventListener('pointerdown', onOutside, true);
+								document.removeEventListener('click', onOutside, true);
 								for (const name of localEvents) {
 										dock.removeEventListener(name, stopPlayerEvent);
 								}
@@ -46769,14 +49833,32 @@ class NicoVideoPlayerDialogView extends Emitter {
 		}
 		_initializeVideoInfoPanel() {
 				if (this.videoInfoPanel) {
+						if (!this.manualBookmarkDock && this._mountManualBookmarkDock()) {
+								this._applyPendingVideoInfo();
+						}
 						return this.videoInfoPanel;
 				}
 				this._videoInfoPanelMounting = true;
-				this.videoInfoPanel = new VideoInfoPanel({
-						dialog: this,
-						node: this._$playerContainer
-				});
-				this.videoInfoPanel.on('command', this._onCommand.bind(this));
+				try {
+						this.videoInfoPanel = new VideoInfoPanel({
+								dialog: this,
+								node: this._$playerContainer
+						});
+						this.videoInfoPanel.on('command', this._onCommand.bind(this));
+						this._mountManualBookmarkDock();
+				}
+				finally {
+						this._videoInfoPanelMounting = false;
+						this._applyPendingVideoInfo();
+				}
+				return this.videoInfoPanel;
+		}
+		_mountManualBookmarkDock() {
+				if (this.manualBookmarkDock)
+						return true;
+				if (this._manualBookmarkDockMounting)
+						return false;
+				this._manualBookmarkDockMounting = true;
 				let bookmarkSession;
 				try {
 						const container = this._$playerContainer?.[0];
@@ -46797,6 +49879,54 @@ class NicoVideoPlayerDialogView extends Emitter {
 								duration: () => Number(this._state.videoInfo?.duration) || 0,
 								automaticTime: () => this._dialog?._videoInfo?.resumePoints?.[0]?.time ?? null,
 								recordingEnabled: () => this._playerConfig.getValue('resume.recordEnabled') !== false,
+								setRecordingEnabled: (enabled) => this._playerConfig.setValue('resume.recordEnabled', enabled),
+								createScenePreview: (host, videoId, time) => this.videoControlBar?.storyboard?.createSavedPreview?.(host, videoId, time) || (() => { }),
+								loadLibrary: () => this._loadSavedPointLibrary(repository),
+								openLibraryPosition: (videoId, time, endTime) => {
+										if (videoId === this._state.videoInfo?.watchId) {
+												if (endTime !== undefined)
+														this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
+												else
+														this.emit('command', 'seekTo', time);
+												return;
+										}
+										void Promise.resolve(this._dialog.open(videoId, { openNow: true, currentTime: time })).then(() => {
+												if (endTime === undefined || this._dialog._watchId !== videoId)
+														return;
+												this._pendingLibraryRepeat = { requestId: this._dialog._requestId, videoId, a: time, b: endTime };
+												this._trySavedLibraryRepeat();
+										}).catch(() => console.warn('Saved position navigation unavailable'));
+								},
+								editLibraryBookmark: async (videoId, id, changes, duration) => {
+										await repository.update(videoId, id, changes, Date.now(), duration);
+										await bookmarkSession?.refreshIfIdle?.();
+								},
+								deleteLibraryBookmark: async (videoId, id, duration) => {
+										await repository.remove(videoId, id, duration);
+										await bookmarkSession?.refreshIfIdle?.();
+								},
+								editLibraryAutomatic: async (videoId, time, duration) => {
+										if (!Number.isFinite(time) || time < 0 || time >= duration)
+												throw Error('Invalid saved position');
+										if (videoId === this._dialog._watchId) {
+												if (!await this._dialog._editAutomaticResume(time))
+														throw Error('Position update failed');
+										}
+										else
+												await WatchInfoCacheDb.put(videoId, { currentTime: time, explicitResume: true });
+								},
+								deleteLibraryAutomatic: async (videoId) => {
+										if (videoId === this._dialog._watchId) {
+												if (!await this._dialog._deleteAutomaticResume())
+														throw Error('Position delete failed');
+										}
+										else
+												await WatchInfoCacheDb.clearAutomaticResume(videoId, 'deleted');
+								},
+								onRepeatRangeChange: (range) => {
+										const info = this._state.videoInfo;
+										this.videoControlBar?.setABRepeatRange?.(range, Number(info?.duration) || 0, info?.watchId ?? null);
+								},
 								repeatEnabled: () => this._playerConfig.getValue('abRepeat.enabled') !== false,
 								repeatState: (active) => {
 										const media = this._dialog?._nicoVideoPlayer?._videoPlayer;
@@ -46804,7 +49934,12 @@ class NicoVideoPlayerDialogView extends Emitter {
 												media.isLoop = active ? false : !!this._playerConfig.getValue('loop');
 								},
 								editAutomatic: (seconds) => this._dialog._editAutomaticResume(seconds),
-								deleteAutomatic: async () => !!(await this._dialog._deleteAutomaticResume())
+								deleteAutomatic: async () => !!(await this._dialog._deleteAutomaticResume()),
+								onBookmarksChange: (snapshot) => {
+										const info = this._state?.videoInfo;
+										this.videoControlBar?.setManualBookmarkMarkers?.((snapshot.status === 'ready' || snapshot.status === 'error') &&
+												snapshot.videoId === info?.watchId ? snapshot.bookmarks : [], Number(info?.duration) || 0, info?.watchId ?? null);
+								}
 						});
 				}
 				catch {
@@ -46814,9 +49949,85 @@ class NicoVideoPlayerDialogView extends Emitter {
 						catch { }
 						console.warn('Manual bookmark dock unavailable');
 				}
-				this._videoInfoPanelMounting = false;
+				this._manualBookmarkDockMounting = false;
+				return !!this.manualBookmarkDock;
+		}
+		async _loadSavedPointLibrary(repository) {
+				const [manual, history] = await Promise.all([repository.list(), WatchInfoCacheDb.listSavedPoints()]);
+				const byId = new Map();
+				for (const record of history) {
+						if (typeof record.watchId !== 'string' || !record.watchId)
+								continue;
+						byId.set(record.watchId, { videoId: record.watchId, title: record.title || record.watchId,
+								duration: Number.isFinite(record.duration) && record.duration > 0 ? record.duration : Number.MAX_SAFE_INTEGER,
+								updatedAt: record.updatedAt || 0, automaticTime: record.automaticTime, bookmarks: [] });
+				}
+				for (const row of manual) {
+						const entry = byId.get(row.videoId) || { videoId: row.videoId, title: row.videoId,
+								duration: Number.MAX_SAFE_INTEGER, updatedAt: 0, automaticTime: null, bookmarks: [] };
+						entry.bookmarks = row.items;
+						for (const point of row.items)
+								entry.updatedAt = Math.max(entry.updatedAt, point.updatedAt || 0);
+						byId.set(row.videoId, entry);
+				}
+				const current = this._state.videoInfo;
+				const entry = byId.get(current?.watchId);
+				if (entry) {
+						entry.title = current.title || entry.title;
+						entry.duration = current.duration || entry.duration;
+						entry.automaticTime = this._dialog?._videoInfo?.resumePoints?.[0]?.time ?? entry.automaticTime;
+				}
+				return [...byId.values()].filter(row => row.automaticTime !== null || row.bookmarks.length)
+						.sort((a, b) => b.updatedAt - a.updatedAt);
+		}
+		_trySavedLibraryRepeat() {
+				const pending = this._pendingLibraryRepeat;
+				if (!pending || pending.requestId !== this._dialog?._requestId ||
+						pending.videoId !== this._state?.videoInfo?.watchId ||
+						pending.videoId !== this._libraryCanPlayVideo ||
+						this._bookmarkActivation?.requestId !== pending.requestId)
+						return;
+				if (this.manualBookmarkDock?.setRepeatRange?.(pending.a, pending.b, true))
+						this._pendingLibraryRepeat = undefined;
+		}
+		_retryFailedManualBookmarkSession() {
+				if (this.manualBookmarkDock?.bookmarkNeedsReload !== true)
+						return;
+				const pending = this._pendingVideoInfo;
+				const info = this._state?.videoInfo;
+				if (!pending || pending.failed || this._state?.isError ||
+						pending.requestId !== this._dialog?._requestId ||
+						!info || pending.info !== info ||
+						typeof info.watchId !== 'string' || !Number.isFinite(info.duration) ||
+						info.duration <= 0)
+						return;
+				this._bookmarkActivation = undefined;
 				this._applyPendingVideoInfo();
-				return this.videoInfoPanel;
+		}
+		_showManualBookmarkUnavailable() {
+				const host = this._$playerContainer?.[0];
+				const trigger = host?.querySelector('.playbackPointsSwitch');
+				if (!host || !trigger)
+						return;
+				let note = host.querySelector('.zw-points-unavailable');
+				if (!note) {
+						note = host.ownerDocument.createElement('output');
+						note.className = 'zw-points-unavailable';
+						note.setAttribute('role', 'status');
+						note.setAttribute('aria-live', 'polite');
+						Object.assign(note.style, {
+								position: 'absolute', left: '12px', bottom: '72px', zIndex: '150001',
+								maxWidth: 'calc(100% - 24px)', padding: '6px 10px', borderRadius: '6px',
+								background: 'rgba(25,30,40,.95)', color: '#fff',
+								font: '12px/1.5 sans-serif', pointerEvents: 'none'
+						});
+						host.append(note);
+				}
+				note.textContent = 'しおりを開けませんでした。もう一度押すと再試行します。';
+				trigger.setAttribute('aria-expanded', 'false');
+		}
+		_clearManualBookmarkUnavailable() {
+				this._$playerContainer?.[0]?.querySelector('.zw-points-unavailable')?.remove();
 		}
 		_onCommand(command, param) {
 				switch (command) {
@@ -47018,6 +50229,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this._syncActionFeedbackIsolation();
 		}
 		_onVideoCanPlay(watchId, videoInfo, options) {
+				this._libraryCanPlayVideo = watchId;
+				this._trySavedLibraryRepeat();
 				this.emit('canPlay', watchId, videoInfo, options);
 		}
 		_onVideoCount({ comment, view, mylist } = {}) {
@@ -47027,6 +50240,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 				this.emit('error', e);
 		}
 		_onBeforeVideoOpen() {
+				this._pendingLibraryRepeat = undefined;
+				this._libraryCanPlayVideo = undefined;
 				this._pendingVideoInfo = undefined;
 				this._bookmarkActivation = undefined;
 				this.manualBookmarkDock?.deactivate();
@@ -47084,6 +50299,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 								if (result?.status === 'error') {
 										clearFailedActivation();
 								}
+								else
+										this._trySavedLibraryRepeat();
 						}, () => {
 								clearFailedActivation();
 								console.warn('Manual bookmark session unavailable');
@@ -48696,6 +51913,15 @@ class NicoVideoPlayerDialog extends Emitter {
 						volume: Math.max(config.props.volume, 0),
 						loop: config.props.loop,
 				});
+				nicoVideoPlayer.beforeSupporterCreditEnd = () => {
+						const dock = this._view?.manualBookmarkDock;
+						if (!dock?.isRepeating || !this.isOpen)
+								return false;
+						if (!dock.repeatAtEnd())
+								return false;
+						this.play();
+						return true;
+				};
 				AudioAdjuster.initialize(config);
 				nicoVideoPlayer.audioGain = AudioAdjuster.gain;
 				AudioAdjuster.onChange((gain) => { nicoVideoPlayer.audioGain = gain; });
@@ -48865,11 +52091,25 @@ class NicoVideoPlayerDialog extends Emitter {
 										break;
 								case 'toggle-playbackPoints': {
 										const view = this._view;
-										view?._initializeVideoInfoPanel?.();
-										const host = view?._$playerContainer?.[0];
-										const trigger = host?.querySelector('.playbackPointsSwitch');
-										if (host)
-												view.manualBookmarkDock?.toggle(host, trigger);
+										try {
+												view?._initializeVideoInfoPanel?.();
+												const host = view?._$playerContainer?.[0];
+												const trigger = host?.querySelector('.playbackPointsSwitch');
+												if (!host || !view?.manualBookmarkDock) {
+														view?._showManualBookmarkUnavailable?.();
+														break;
+												}
+												view._clearManualBookmarkUnavailable?.();
+												view._retryFailedManualBookmarkSession?.();
+												view.manualBookmarkDock.toggle(host, trigger);
+										}
+										catch {
+												try {
+														view?.manualBookmarkDock?.close?.();
+												}
+												catch { }
+												view?._showManualBookmarkUnavailable?.();
+										}
 										break;
 								}
 								case 'deleteAutomaticResume':
@@ -50353,12 +53593,15 @@ class NicoVideoPlayerDialog extends Emitter {
 		}
 		_onVideoSeeked() {
 				this._state.isSeeking = false;
+				this._view?.manualBookmarkDock?.acknowledgeLoopSeek?.(this._nicoVideoPlayer?.currentTime);
 				MediaSessionApi.updatePositionStateByMedia(this);
 				this.emit('seeked');
 		}
 		_onVideoPause() {
 				this._state.setPausing();
-				this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
+				if (this._videoInfo?.contextWatchId) {
+						this._savePlaybackPosition(this._videoInfo.contextWatchId, this.currentTime);
+				}
 				this.emit('pause');
 		}
 		_onVideoStalled() {
@@ -50447,6 +53690,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				this.emit('aspectRatioFix', ratio);
 		}
 		_onVideoEnded() {
+				if (!this._videoInfo)
+						return;
 				if (this._view?.manualBookmarkDock?.repeatAtEnd()) {
 						this.play();
 						return;
@@ -50673,7 +53918,8 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._view?.manualBookmarkDock?.deactivate();
 				this._keyEmitter?.releaseTemporaryPlaybackRate?.();
 				if (this.isPlaying) {
-						this._saveFinalPlaybackPosition(this._watchId, this.currentTime);
+						const contextWatchId = this._videoInfo?.contextWatchId || this._watchId;
+						this._saveFinalPlaybackPosition(contextWatchId, this.currentTime);
 				}
 				WatchInfoCacheDb.putBestEffort(this._watchId, { currentTime: (this._state.isEnded || this._isAutoResumeSaveSuppressed()) ?
 								0 : this.currentTime });
@@ -53074,10 +56320,16 @@ const CommentSubmitLifetime = (() => {
 						return;
 				}
 				panel._submitPending = true;
+				let draftRevision = 0;
+				const onEdit = () => { draftRevision++; };
+				const editEvents = 'input.zwSubmitLifetime change.zwSubmitLifetime compositionend.zwSubmitLifetime';
+				panel._$commentInput.on?.(editEvents, onEdit);
+				panel._$commandInput.on?.(editEvents, onEdit);
 				panel._$view.addClass('updating');
 				const post = new Promise((resolve, reject) => panel.emit('post', { resolve, reject }, chat, cmd));
 				const settled = post.then(() => {
-						if (panel._$commentInput.val() === originalChat &&
+						if (draftRevision === 0 &&
+								panel._$commentInput.val() === originalChat &&
 								panel._$commandInput.val() === originalCommand) {
 								panel._$commentInput.val('').blur();
 								panel._$commandInput.blur();
@@ -53087,6 +56339,8 @@ const CommentSubmitLifetime = (() => {
 				}, () => false // Keep the failed draft for explicit retry.
 				);
 				panel._submitPromise = settled.finally(() => {
+						panel._$commentInput.off?.(editEvents, onEdit);
+						panel._$commandInput.off?.(editEvents, onEdit);
 						panel._submitPending = false;
 						panel._submitPromise = null;
 						panel._$view.removeClass('updating');
@@ -54089,7 +57343,7 @@ class TagListView extends BaseViewComponent {
 								this._addTag(param);
 								break;
 						case 'removeTag': {
-								let elm = this._elm.videoTags.querySelector(`.tagItem[data-tag-id="${param}"]`);
+								let elm = Array.from(this._elm.videoTags.querySelectorAll('.tagItem[data-tag-id]')).find(node => node.getAttribute('data-tag-id') === String(param));
 								if (!elm) {
 										return;
 								}
@@ -60251,18 +63505,21 @@ class HoverMenu {
 				}
 				const selector = location.host.includes('google') ?
 						'a[href],a[data-href]' :
-						'a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],[data-anchor-href],.UadVideoItem-link';
+						'a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],a[data-href],[data-anchor-href],.UadVideoItem-link';
 				return target.closest(selector);
 		}
 		_getWatchReference(target) {
 				if (!target) {
 						return null;
 				}
+				const href = target.getAttribute?.('href');
+				const nativeHref = typeof href === 'string' && href.trim() &&
+						!href.trim().startsWith('#') ? href : null;
 				const candidates = [
+						nativeHref,
+						nativeHref ? target.href : null,
 						target.getAttribute?.('data-href'),
-						target.getAttribute?.('data-anchor-href'),
-						target.getAttribute?.('href'),
-						target.href
+						target.getAttribute?.('data-anchor-href')
 				];
 				for (const candidate of candidates) {
 						if (typeof candidate !== 'string' || !candidate) {
@@ -60443,6 +63700,10 @@ class HoverMenu {
 						video.pause();
 						return;
 				}
+				const root = document.getElementById('root');
+				if (!root) {
+						return;
+				}
 				new MutationObserver((records, observer) => {
 						for (const record of records) {
 								if (record.addedNodes.length === 0) {
@@ -60456,7 +63717,7 @@ class HoverMenu {
 								video.pause();
 								observer.disconnect();
 						}
-				}).observe(document.getElementById('root'), {
+				}).observe(root, {
 						childList: true,
 						subtree: true,
 				});
@@ -61041,7 +64302,7 @@ CustomElements.initialize = (() => {
 		class SeekbarLabel extends HTMLElement {
 				static get observedAttributes() {
 						return [
-								'time', 'duration', 'text'
+								'time', 'duration', 'text', 'timeline-ratio'
 						];
 				}
 				static template() {
@@ -61119,10 +64380,16 @@ CustomElements.initialize = (() => {
 						this._updatePos();
 				}
 				_updatePos() {
-						const per = this.props.time / Math.max(this.props.duration, 1) * 100;
+						const value = this.getAttribute('timeline-ratio');
+						const ratio = value === null ? null : Number(value);
+						const managed = ratio !== null && Number.isFinite(ratio) && ratio >= 0 && ratio <= 1;
+						const per = managed ? ratio * 100 : this.props.time / Math.max(this.props.duration, 1) * 100;
 						this.hidden = per <= 0;
 						this.setAttribute('data-param', this.props.time);
-						this._root.style.transform = `translate(${per}vw, 0) translateX(-50%) scale(var(--scale-pp, 1.2))`;
+						this.style.left = managed ? `${per}%` : '';
+						this._root.style.transform = managed ?
+								'translateX(-50%) scale(var(--scale-pp, 1.2))' :
+								`translate(${per}vw, 0) translateX(-50%) scale(var(--scale-pp, 1.2))`;
 						this._label.style.transform = `translate(-${per}%, 0)`;
 				}
 				_clear() {
@@ -61136,6 +64403,9 @@ CustomElements.initialize = (() => {
 				}
 				attributeChangedCallback(attr, oldValue, newValue) {
 						switch (attr) {
+								case 'timeline-ratio':
+										this._updatePos();
+										break;
 								case 'time':
 										this._updateTime(parseFloat(newValue));
 										break;
@@ -62037,6 +65307,57 @@ const IndexedDbStorage = (() => {
 				const db = Object.create(null);
 				const initializing = new Map();
 				const schemas = new Map();
+				const pickPublicVideoInfo = (value) => {
+						const data = {};
+						if (!value || typeof value !== 'object' || Array.isArray(value)) {
+								return data;
+						}
+						const source = value;
+						for (const key of ['videoId', 'watchId', 'contextWatchId', 'originalVideoId',
+								'title', 'postedAt', 'thumbnail', 'betterThumbnail', 'duration', 'threadId',
+								'description', 'watchUrl']) {
+								const v = source[key];
+								if (typeof v === 'string' || typeof v === 'boolean' ||
+										(typeof v === 'number' && Number.isFinite(v))) {
+										data[key] = v;
+								}
+						}
+						if (source.count && typeof source.count === 'object' && !Array.isArray(source.count)) {
+								const counts = {};
+								for (const key of ['comment', 'mylist', 'view', 'like']) {
+										const v = source.count[key];
+										if (typeof v === 'number' && Number.isFinite(v)) {
+												counts[key] = v;
+										}
+								}
+								data.count = counts;
+						}
+						if (source.owner && typeof source.owner === 'object' && !Array.isArray(source.owner)) {
+								const owner = {};
+								for (const key of ['type', 'url', 'icon', 'id', 'linkId', 'name']) {
+										const v = source.owner[key];
+										if (typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v))) {
+												owner[key] = v;
+										}
+								}
+								data.owner = owner;
+						}
+						if (source.genre && typeof source.genre === 'object' && !Array.isArray(source.genre)) {
+								data.genre = {
+										key: typeof source.genre.key === 'string' ? source.genre.key : '',
+										label: typeof source.genre.label === 'string' ? source.genre.label : ''
+								};
+						}
+						return data;
+				};
+				const projectWatchHistoryRecord = (name, storeName, row) => {
+						if (name !== 'watch-info' || storeName !== 'cache' ||
+								!row || typeof row !== 'object' || Array.isArray(row) ||
+								row.videoInfo == null) {
+								return row;
+						}
+						return { ...row, videoInfo: pickPublicVideoInfo(row.videoInfo) };
+				};
 				const controller = {
 						async init({ name, ver, stores }) {
 								if (db[name] && (ver === undefined || db[name].version === ver)) {
@@ -62225,7 +65546,10 @@ const IndexedDbStorage = (() => {
 												req.onsuccess = req.onerror = null;
 												callback(result);
 										};
-										req.onsuccess = (event) => finish(resolve, event.target.result);
+										req.onsuccess = (event) => {
+												const row = event.target.result;
+												finish(resolve, projectWatchHistoryRecord(name, storeName, row));
+										};
 										req.onerror = (event) => finish(reject, event);
 										if (timeout) {
 												timer = setTimeout(() => finish(reject, 'IndexedDB get timed out'), timeout);
@@ -62279,12 +65603,160 @@ const IndexedDbStorage = (() => {
 														}
 														const write = store.put(record);
 														write.onerror = fail;
-														write.onsuccess = () => result(record);
+														write.onsuccess = () => result(projectWatchHistoryRecord(name, storeName, record));
 												}
 												catch (error) {
 														fail(error);
 												}
 										};
+								});
+						},
+						async scrubWatchVideoInfo({ name, storeName, data }) {
+								if (name !== 'watch-info' || storeName !== 'cache') {
+										throw new TypeError('Legacy watch-info scrub restricted to cache store');
+								}
+								const afterKey = data?.afterKey ?? null;
+								const maxRecords = data?.maxRecords ?? 64;
+								if ((afterKey !== null && (typeof afterKey !== 'string' || !afterKey)) ||
+										!Number.isSafeInteger(maxRecords) || maxRecords < 1 ||
+										maxRecords > 256) {
+										throw new TypeError('Invalid legacy watch-info scrub cursor');
+								}
+								const same = (old, projected) => {
+										if (!old || typeof old !== 'object' || Array.isArray(old)) {
+												return false;
+										}
+										const fields = old, keys = Object.keys(fields);
+										if (keys.length !== Object.keys(projected).length) {
+												return false;
+										}
+										return keys.every(key => {
+												if (!Object.prototype.hasOwnProperty.call(projected, key)) {
+														return false;
+												}
+												if (!['count', 'owner', 'genre'].includes(key)) {
+														return fields[key] === projected[key];
+												}
+												const nested = fields[key], safe = projected[key];
+												return !!nested && typeof nested === 'object' && !Array.isArray(nested) &&
+														Object.keys(nested).length === Object.keys(safe).length &&
+														Object.keys(safe).every(child => nested[child] === safe[child]);
+										});
+								};
+								return this._write({ name, storeName }, (store, result, fail) => {
+										const range = afterKey === null ? undefined :
+												IDBKeyRange.lowerBound(afterKey, true);
+										const req = store.openCursor(range);
+										let scanned = 0, changed = 0;
+										req.onerror = fail;
+										req.onsuccess = () => {
+												try {
+														const cursor = req.result;
+														if (!cursor) {
+																result({ scanned, changed, nextKey: null });
+																return;
+														}
+														if (typeof cursor.primaryKey !== 'string' || !cursor.primaryKey) {
+																throw new TypeError('Unexpected watch-info cursor key');
+														}
+														const record = cursor.value;
+														if (record && typeof record === 'object' && !Array.isArray(record) &&
+																record.videoInfo != null &&
+																Object.prototype.hasOwnProperty.call(record, 'videoInfo')) {
+																const projected = pickPublicVideoInfo(record.videoInfo);
+																if (!same(record.videoInfo, projected)) {
+																		const request = cursor.update({ ...record, videoInfo: projected });
+																		request.onerror = fail;
+																		changed++;
+																}
+														}
+														scanned++;
+														if (scanned >= maxRecords) {
+																result({ scanned, changed, nextKey: cursor.primaryKey });
+														}
+														else {
+																cursor.continue();
+														}
+												}
+												catch (error) {
+														fail(error);
+												}
+										};
+								});
+						},
+						async listSavedPoints({ name, storeName, data }) {
+								if (name !== 'watch-info' || storeName !== 'cache') {
+										throw new TypeError('Saved points restricted to watch history cache');
+								}
+								const afterKey = data?.afterKey ?? null;
+								const maxRecords = data?.maxRecords ?? 200;
+								if ((afterKey !== null && (typeof afterKey !== 'string' || !afterKey)) ||
+										!Number.isSafeInteger(maxRecords) || maxRecords < 1 || maxRecords > 200) {
+										throw new TypeError('Invalid saved points cursor');
+								}
+								const { store, transaction } = await this.getStore({ name, storeName, mode: 'readonly' });
+								return new Promise((resolve, reject) => {
+										const items = [];
+										let nextKey = null, scanned = 0, settled = false;
+										const cleanup = () => { transaction.oncomplete = transaction.onabort = transaction.onerror = null; };
+										const fail = (error) => {
+												if (settled)
+														return;
+												settled = true;
+												cleanup();
+												const reason = error?.target?.error || transaction.error || error;
+												reject(reason || new Error('Saved points read failed'));
+										};
+										transaction.onabort = transaction.onerror = fail;
+										transaction.oncomplete = () => {
+												if (settled)
+														return;
+												settled = true;
+												cleanup();
+												resolve({ items, nextKey });
+										};
+										try {
+												const range = afterKey === null ? undefined : IDBKeyRange.lowerBound(afterKey, true);
+												const req = store.openCursor(range);
+												req.onerror = fail;
+												req.onsuccess = () => {
+														if (settled)
+																return;
+														try {
+																const cursor = req.result;
+																if (!cursor) {
+																		nextKey = null;
+																		return;
+																}
+																if (typeof cursor.primaryKey !== 'string' || !cursor.primaryKey) {
+																		throw new TypeError('Unexpected saved points cursor key');
+																}
+																const row = cursor.value;
+																if (row && typeof row === 'object' && !Array.isArray(row) && row.watchId === cursor.primaryKey) {
+																		const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+																		const resume = Array.isArray(row.resume) ? row.resume[0]?.time : null;
+																		items.push({
+																				watchId: cursor.primaryKey,
+																				title: typeof row.videoInfo?.title === 'string' ? row.videoInfo.title : cursor.primaryKey,
+																				duration: finite(row.videoInfo?.duration) ? row.videoInfo.duration : 0,
+																				updatedAt: finite(row.updatedAt) ? row.updatedAt : 0,
+																				automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null
+																		});
+																}
+																scanned++;
+																if (scanned >= maxRecords)
+																		nextKey = cursor.primaryKey;
+																else
+																		cursor.continue();
+														}
+														catch (error) {
+																fail(error);
+														}
+												};
+										}
+										catch (error) {
+												fail(error);
+										}
 								});
 						},
 						async updateTime({ name, storeName, data: { key, index } }) {
@@ -62367,7 +65839,8 @@ const IndexedDbStorage = (() => {
 								}
 						}
 						catch (err) {
-								console.warn('command failed: ', { command, params });
+								const diagnosticCommand = typeof command === 'string' && /^(?:init|put|update|scrubWatchVideoInfo|updateTime|get|delete|gc|clear|close)$/.test(command) ? command : 'unknown';
+								console.warn('IndexedDB command failed:', diagnosticCommand);
 								throw err;
 						}
 				};
@@ -62406,6 +65879,8 @@ const IndexedDbStorage = (() => {
 										close: (params) => post('close', params, storeName),
 										put: (record, transfer) => post('put', record, storeName, transfer),
 										update: (data) => post('update', data, storeName),
+										scrubWatchVideoInfo: (data) => post('scrubWatchVideoInfo', data, storeName),
+										listSavedPoints: (data) => post('listSavedPoints', data, storeName),
 										get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
 										updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),
 										delete: ({ key, index, timeout }) => post('delete', { key, index, timeout }, storeName),
@@ -62435,6 +65910,63 @@ const WatchInfoCacheDb = (() => {
 								definition: { keyPath: 'watchId', autoIncrement: false }
 						}
 				]
+		};
+		const snapshotPublicVideoInfo = (value) => {
+				const source = value;
+				const data = {};
+				const scalars = [
+						'videoId', 'watchId', 'contextWatchId', 'originalVideoId',
+						'title', 'postedAt', 'thumbnail', 'betterThumbnail',
+						'duration', 'threadId', 'description', 'watchUrl'
+				];
+				for (const key of scalars) {
+						try {
+								const v = source[key];
+								if (typeof v === 'string' || typeof v === 'boolean' ||
+										(typeof v === 'number' && Number.isFinite(v))) {
+										data[key] = v;
+								}
+						}
+						catch (_) { /* A broken metadata getter is not a reason to fail history. */ }
+				}
+				try {
+						const count = source.count;
+						if (count && typeof count === 'object') {
+								const publicCounts = {};
+								for (const key of ['comment', 'mylist', 'view', 'like']) {
+										if (typeof count[key] === 'number' && Number.isFinite(count[key])) {
+												publicCounts[key] = count[key];
+										}
+								}
+								data.count = publicCounts;
+						}
+				}
+				catch (_) { }
+				try {
+						const owner = source.owner;
+						if (owner && typeof owner === 'object') {
+								const publicOwner = {};
+								for (const key of ['type', 'url', 'icon', 'id', 'linkId', 'name']) {
+										const v = owner[key];
+										if (typeof v === 'string' ||
+												(typeof v === 'number' && Number.isFinite(v))) {
+												publicOwner[key] = v;
+										}
+								}
+								data.owner = publicOwner;
+						}
+				}
+				catch (_) { }
+				try {
+						const genre = source.genre;
+						if (genre && typeof genre === 'object') {
+								const key = typeof genre.key === 'string' ? genre.key : '';
+								const label = typeof genre.label === 'string' ? genre.label : '';
+								data.genre = { key, label };
+						}
+				}
+				catch (_) { }
+				return data;
 		};
 		let db, instance, NicoVideoApi;
 		let dbOpening = null, instanceOpening = null;
@@ -62474,13 +66006,50 @@ const WatchInfoCacheDb = (() => {
 						instanceOpening = null;
 				}
 		};
+		let legacyScrubStarted = false;
+		const scheduleLegacyScrub = (store) => {
+				if (legacyScrubStarted || typeof store.scrubWatchVideoInfo !== 'function') {
+						return;
+				}
+				legacyScrubStarted = true;
+				const scan = async () => {
+						let afterKey = null;
+						while (true) {
+								const page = await store.scrubWatchVideoInfo({
+										afterKey, maxRecords: 64
+								});
+								if (!page || !Number.isSafeInteger(page.scanned) ||
+										!Number.isSafeInteger(page.changed) || page.changed > page.scanned ||
+										(page.nextKey !== null &&
+												(typeof page.nextKey !== 'string' || !page.nextKey ||
+														(afterKey !== null && page.nextKey <= afterKey)))) {
+										throw new Error('Invalid legacy watch-info cleanup cursor');
+								}
+								if (page.nextKey === null) {
+										return;
+								}
+								afterKey = page.nextKey;
+								await new Promise(resolve => setTimeout(resolve, 0));
+						}
+				};
+				const start = () => {
+						void scan().catch(() => {
+								console.warn('Legacy watch history cleanup incomplete; retrying');
+								void new Promise(resolve => setTimeout(resolve, 300))
+										.then(scan).catch(() => { console.warn('Legacy watch history cleanup incomplete'); });
+						});
+				};
+				setTimeout(start, 0);
+		};
 		const createInstance = async () => {
 				await initWorker();
 				const cacheDb = db['cache'];
+				scheduleLegacyScrub(cacheDb);
 				return instance = {
+						listSavedPoints,
 						async put(watchId, options = {}) {
 								const videoInfo = options.videoInfo || null;
-								const videoInfoRawData = (videoInfo && videoInfo.toJSON) ? videoInfo.toJSON() : videoInfo;
+								const videoInfoRawData = videoInfo ? snapshotPublicVideoInfo(videoInfo) : null;
 								const now = Date.now();
 								const patch = { watchId, updatedAt: now };
 								const ownerId = videoInfo?.owner?.linkId || '';
@@ -62556,6 +66125,29 @@ const WatchInfoCacheDb = (() => {
 						gc(expireTime) { return cacheDb.gc(expireTime); }
 				};
 		};
+		const listSavedPoints = async () => {
+				const cache = (await initWorker()).cache;
+				if (!cache || typeof cache.listSavedPoints !== 'function')
+						throw new Error('Saved points enumeration unavailable');
+				const items = [];
+				let afterKey = null;
+				do {
+						const page = await cache.listSavedPoints({ afterKey, maxRecords: 200 });
+						if (!page || !Array.isArray(page.items) ||
+								(page.nextKey !== null && (typeof page.nextKey !== 'string' || !page.nextKey ||
+										(afterKey !== null && page.nextKey <= afterKey)))) {
+								throw new Error('Invalid saved points page');
+						}
+						for (const item of page.items) {
+								if (!item || typeof item.watchId !== 'string' || !item.watchId)
+										continue;
+								items.push({ watchId: item.watchId, title: item.title, duration: item.duration,
+										updatedAt: item.updatedAt, automaticTime: item.automaticTime });
+						}
+						afterKey = page.nextKey;
+				} while (afterKey !== null);
+				return items;
+		};
 		const put = (watchId, options = {}) => open().then(db => db.put(watchId, options));
 		const putBestEffort = (watchId, options = {}) => put(watchId, options)
 				.catch(() => { console.warn('Watch info cache write failed'); });
@@ -62565,7 +66157,7 @@ const WatchInfoCacheDb = (() => {
 		const close = () => open().then(db => db.close());
 		const gc = (expireTime) => open().then(db => db.gc(expireTime));
 		const api = (api) => NicoVideoApi = api;
-		return { initWorker, open, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api };
+		return { initWorker, open, listSavedPoints, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api };
 })();
 function parseThumbInfo(xmlText) {
 		if (typeof xmlText !== 'string' || xmlText.status === 'ok') {
@@ -63603,15 +67195,37 @@ const VideoSessionWorker = (() => {
 										this._dmcInfo.protocols.includes('hls');
 						}
 						_heartBeat() {
-								let url = this.info.heartBeatUrl;
+								if (this._isClosed || this._isDeleted)
+										return;
+								const { heartBeatUrl: url, sessionId } = this.info;
+								const requestSeq = this._heartbeatRequestSeq = (this._heartbeatRequestSeq || 0) + 1;
+								const isCurrent = () => !this._isClosed && !this._isDeleted &&
+										this._heartbeatRequestSeq === requestSeq &&
+										this.info.heartBeatUrl === url && this.info.sessionId === sessionId;
 								util.fetch(url, {
 										method: 'post',
 										dataType: 'text',
 										timeout: 10000,
 										body: JSON.stringify(this._lastResponse)
-								}).then(res => res.json())
-										.then(this._onHeartBeatSuccess)
-										.catch(this._onHeartBeatFail);
+								}).then(res => {
+										if (res.ok === false || (typeof res.status === 'number' && res.status >= 400)) {
+												throw new Error('DMC heartbeat HTTP failure');
+										}
+										return res.json();
+								}).then(json => {
+										if (!isCurrent())
+												return;
+										const session = json?.data?.session;
+										if (Number(json?.meta?.status) !== 200 || !session ||
+												typeof session !== 'object' || Array.isArray(session) ||
+												(session.id != null && sessionId != null && String(session.id) !== String(sessionId))) {
+												throw new Error('DMC heartbeat invalid response');
+										}
+										this._onHeartBeatSuccess(json);
+								}).catch(() => {
+										if (isCurrent())
+												this._onHeartBeatFail();
+								});
 						}
 						_deleteSession() {
 								if (this._isDeleted) {
@@ -64267,6 +67881,18 @@ const ThumbInfoCacheDb = (() => {
 										break;
 								case 'update':
 										result = await db.update(data);
+										break;
+								case 'scrubWatchVideoInfo':
+										if (name !== 'watch-info' || storeName !== 'cache' || !db.scrubWatchVideoInfo) {
+												throw new TypeError('Invalid legacy watch history cleanup target');
+										}
+										result = await db.scrubWatchVideoInfo(data);
+										break;
+								case 'listSavedPoints':
+										if (name !== 'watch-info' || storeName !== 'cache' || !db.listSavedPoints) {
+												throw new TypeError('Invalid saved points target');
+										}
+										result = await db.listSavedPoints(data);
 										break;
 								case 'updateTime':
 										result = await db.updateTime({ key, index, timeout });

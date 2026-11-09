@@ -40,6 +40,8 @@ export interface MylistErrorInit {
 export interface MylistFrontend {
   frontendId?: number;
   frontendVersion?: number;
+  /** Optional playback owner: refuse a DELETE if the originating video changed. */
+  isCurrent?: (() => boolean) | undefined;
 }
 
 /** One list entry. Only `watchId`/`itemId` are read here; the rest is passed through. */
@@ -79,12 +81,15 @@ export interface MylistOk {
 export interface MylistApiLoaderClient {
   setCsrfToken(token: unknown): void;
   _getCsrfToken(): Promise<unknown>;
-  _getDeflistItems(frontendId?: number, frontendVersion?: number): Promise<MylistItemProbe[]>;
-  _getMylistItems(id: string | number, frontendId?: number, frontendVersion?: number): Promise<MylistItemProbe[]>;
+  _getDeflistItems(frontendId?: number, frontendVersion?: number,
+    watchId?: string, isCurrent?: () => boolean): Promise<MylistItemProbe[]>;
+  _getMylistItems(id: string | number, frontendId?: number, frontendVersion?: number,
+    watchId?: string, isCurrent?: () => boolean): Promise<MylistItemProbe[]>;
   /** Resolves `data.mylists` as received (cached 5 minutes). */
   getMylistList(frontend?: MylistFrontend): Promise<unknown>;
-  findDeflistItemByWatchId(watchId: string): Promise<MylistItemProbe>;
-  findMylistItemByWatchId(watchId: string, groupId: string | number): Promise<MylistItemProbe>;
+  findDeflistItemByWatchId(watchId: string, frontend?: MylistFrontend): Promise<MylistItemProbe>;
+  findMylistItemByWatchId(watchId: string, groupId: string | number,
+    frontend?: MylistFrontend): Promise<MylistItemProbe>;
   removeDeflistItem(watchId: string, frontend?: MylistFrontend): Promise<MylistOk>;
   removeMylistItem(watchId: string, groupId: string | number, frontend?: MylistFrontend): Promise<MylistOk>;
   addDeflistItem(watchId: string, description?: string | null, isRetry?: boolean, frontend?: MylistFrontend): Promise<MylistOk>;
@@ -99,8 +104,8 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
   //
   // おかげでソート処理が悲しいことに
   //
-  const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
-  const TOKEN_EXPIRE_TIME = 59 * 60 * 1000;
+  // #261: Authenticated identity cannot be inferred from a URL or a tab's
+  // sessionStorage. Never persist or reuse CSRF credentials across logins.
   const createMylistError = (message: string, {
     status = 'fail',
     result,
@@ -120,10 +125,8 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
 
   if ((window as ZenzaWindow).ZenzaWatch) {
     emitter.on('csrfTokenUpdate', (t: string) => {
+      // Keep the event API for consumers, but not a reusable auth cache.
       token = t;
-      if (cacheStorage) {
-        cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-      }
     });
   }
 
@@ -135,120 +138,112 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
       if (!cacheStorage) {
         cacheStorage = new CacheStorage(sessionStorage);
       }
-      if (!token) {
-        token = cacheStorage.getItem('csrfToken');
-        if (token) {
-          console.log('cached token exists'); // Task 088: トークンの値はログに出さない
-        }
-      }
+      // Drop credentials and private list entries stored by previous versions.
+      cacheStorage.removeItem('csrfToken');
+      cacheStorage.removeItem('mylistList');
     }
     setCsrfToken(t: unknown): void {
+      // Compatibility entry for live token events; not persisted or trusted as
+      // evidence of the viewer when a write operation needs a fresh token.
       token = t;
-      if (cacheStorage) {
-        cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
-      }else{
-        cacheStorage = new CacheStorage(sessionStorage);
-        cacheStorage.setItem('csrfToken', token, TOKEN_EXPIRE_TIME);
+    }
+
+    async _getCsrfToken(): Promise<unknown> {
+      // The CSRF token is tied to the authenticated page, not a fixed key
+      // with a 59-minute TTL. Fetch it anew so switching A -> B cannot reuse A.
+      const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
+      let page: string;
+      try {
+        page = await netUtil.fetch(tokenUrl, {credentials: 'include'})
+          .then((r: Response): Promise<string> => r.text());
+      } catch (_) {
+        token = '';
+        throw createMylistError('マイリストトークン取得失敗');
+      }
+      try {
+        const dom = new DOMParser().parseFromString(page, 'text/html');
+        const element = dom.querySelector('#js-initial-userpage-data');
+        const rawEnvironment = element?.getAttribute('data-environment');
+        if (!rawEnvironment) { throw new Error('missing environment'); }
+        const env: unknown = JSON.parse(rawEnvironment);
+        const csrfToken = (env as {csrfToken?: unknown} | null)?.csrfToken;
+        if (typeof csrfToken !== 'string' || !csrfToken.trim()) {
+          throw new Error('missing CSRF token');
+        }
+        token = csrfToken;
+        return csrfToken;
+      } catch (_) {
+        token = '';
+        throw createMylistError('マイリストトークン取得失敗（認証情報がありません）');
       }
     }
-
-    // どうにもトークンが取れなくなっていたので、専用の関数作成。
-    // 一応、キャッシュもされている(はず)
-    async _getCsrfToken(): Promise<unknown> {
-
-        if (!cacheStorage) {
-            cacheStorage = new CacheStorage(sessionStorage);
-        }
-
-        token = cacheStorage.getItem('csrfToken');
-
-        //キャッシュにあったらそこで返す
-        if (token) {
-            console.log('cached token exists'); // Task 088: トークンの値はログに出さない
-        }else{
-
-            //そもそもemit元からは取れる物がないんだから、
-            //マイリストページからトークン持ってくるしかないでしょ
-            const tokenUrl = 'https://www.nicovideo.jp/my/mylist';
-            const result = await netUtil.fetch( tokenUrl, {
-            credentials: 'include'
-            }).then((r: Response): Promise<string> => r.text()).catch((result: unknown): never => {
-                throw new Error('マイリストトークン取得失敗', {result, status: 'fail'} as ErrorOptions);
-            });
-
-            const dom = new DOMParser().parseFromString(result, 'text/html');
-            const initUserpageDataContena = dom.querySelector('#js-initial-userpage-data') as Element;
-            const env = JSON.parse(initUserpageDataContena.getAttribute('data-environment') as string);
-
-            this.setCsrfToken(env.csrfToken);
-        }
-
-        return token;
-
-    }
-    async _getDeflistItems(frontendId: number = 6, frontendVersion: number = 0): Promise<MylistItemProbe[]> {
-      const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc';
-      const page = new URLSearchParams({ pageSize: 100, page: 1 } as unknown as NumericQuery);
-      let data: MylistPageProbe | undefined;
-
-      do {
-        // nvapi に X-Frontend-Id header が必要
-        const res = await netUtil.fetch(`${url}&${page.toString()}`, {
-          headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
-          credentials: 'include'
+    // A single deletion must never wait for every page in a huge private list.
+    // The same bounded scanner is used for all-page consumers and targeted lookups.
+    private async _scanItems(kind: 'watchLater' | 'mylist', id: string | number | null,
+      frontendId: number, frontendVersion: number, watchId?: string,
+      isCurrent?: () => boolean): Promise<MylistItemProbe[]> {
+      const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+      const url = kind === 'watchLater' ?
+        'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
+        `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
+      const query = new URLSearchParams({pageSize: 100, page: 1} as unknown as NumericQuery);
+      const results: MylistItemProbe[] = [];
+      const fingerprints = new Set<string>();
+      const ensureCurrent = () => {
+        if(!isCurrent)return;
+        let current=false;
+        try{current=isCurrent()===true;}catch{}
+        if(!current)throw createMylistError(label+'取得中止（動画が変更されました）', {code:'STALE'});
+      };
+      // Private lists can be large, but broken hasNext must never create an
+      // unbounded loop. 100 pages x 100 rows is the supported safety cap.
+      const maxPages=100;
+      for(let pageNumber=1;pageNumber<=maxPages;pageNumber++){
+        ensureCurrent();
+        const delimiter=kind==='watchLater'?'&':'?';
+        const res=await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
+          headers:{'X-Frontend-Id':frontendId,'X-Frontend-Version':frontendVersion},
+          credentials:'include'
         }).then((r: Response): Promise<MylistEnvelopeProbe> => r.json())
-          .catch((e: unknown): never => { throw createMylistError('あとで見るの取得失敗(2)', {result: e, cause: e}); });
-        if (res.meta.status !== 200 || !res.data.watchLater) {
-          throw createMylistError('あとで見るの取得失敗(1)', {result: res, code: res?.error?.code});
+          .catch((e: unknown): never => {
+            throw createMylistError(label+'の取得失敗(2)', {cause:e});
+          });
+        ensureCurrent();
+        const pageData=kind==='watchLater'?res?.data?.watchLater:res?.data?.mylist;
+        if(res?.meta?.status!==200||!pageData||!Array.isArray(pageData.items)){
+          throw createMylistError(label+'の取得失敗(1)', {code:res?.error?.code});
         }
-        if (data == null) {
-          data = res.data.watchLater;
-        } else {
-          data.hasInvisibleItems = data.hasInvisibleItems || res.data.watchLater.hasInvisibleItems;
-          data.hasNext = res.data.watchLater.hasNext;
-          data.items = data.items.concat(res.data.watchLater.items);
+        if(watchId!==undefined){
+          const found=pageData.items.find(item=>item?.watchId===watchId);
+          if(found){ensureCurrent();return [found];}
         }
-        page.set('page', String(parseInt(page.get('page') as string) + 1));
-      } while (data && data.hasNext);
-
-      return data.items;
+        results.push(...pageData.items);
+        if(!pageData.hasNext)return results;
+        if(!pageData.items.length){
+          throw createMylistError(label+'の取得失敗（空ページが連続）', {code:'INVALID_PAGE'});
+        }
+        const fingerprint=JSON.stringify(pageData.items.map(item=>[item?.itemId,item?.watchId]));
+        if(fingerprints.has(fingerprint)){
+          throw createMylistError(label+'の取得失敗（ページが重複）', {code:'REPEATED_PAGE'});
+        }
+        fingerprints.add(fingerprint);
+        query.set('page',String(pageNumber+1));
+      }
+      throw createMylistError(label+'の取得失敗（ページ数の安全上限）', {code:'PAGE_LIMIT'});
     }
-    async _getMylistItems(id: string | number, frontendId: number = 6, frontendVersion: number = 0): Promise<MylistItemProbe[]> {
-      const url = `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-      const page = new URLSearchParams({ pageSize: 100, page: 1 } as unknown as NumericQuery);
-      let data: MylistPageProbe | undefined;
-
-      do {
-        // nvapi に X-Frontend-Id header が必要
-        const res = await netUtil.fetch(`${url}?${page.toString()}`, {
-          headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
-          credentials: 'include'
-        }).then((r: Response): Promise<MylistEnvelopeProbe> => r.json())
-          .catch((e: unknown): never => { throw createMylistError('マイリスト取得失敗(2)', {result: e, cause: e}); });
-        if (res.meta.status !== 200 || !res.data.mylist) {
-          throw createMylistError('マイリスト取得失敗(1)', {result: res, code: res?.error?.code});
-        }
-        if (data == null) {
-          data = res.data.mylist;
-        } else {
-          data.hasInvisibleItems = data.hasInvisibleItems || res.data.mylist.hasInvisibleItems;
-          data.hasNext = res.data.mylist.hasNext;
-          data.items = data.items.concat(res.data.mylist.items);
-        }
-        page.set('page', String(parseInt(page.get('page') as string) + 1));
-      } while (data && data.hasNext);
-
-      return data.items;
+    async _getDeflistItems(frontendId:number=6, frontendVersion:number=0,
+      watchId?:string, isCurrent?:()=>boolean):Promise<MylistItemProbe[]>{
+      return this._scanItems('watchLater',null,frontendId,frontendVersion,watchId,isCurrent);
+    }
+    async _getMylistItems(id:string|number, frontendId:number=6,
+      frontendVersion:number=0, watchId?:string,
+      isCurrent?:()=>boolean):Promise<MylistItemProbe[]>{
+      return this._scanItems('mylist',id,frontendId,frontendVersion,watchId,isCurrent);
     }
     async getMylistList({ frontendId = 6, frontendVersion = 0 }: MylistFrontend = {}): Promise<unknown> {
       const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-      const cacheKey = 'mylistList';
-
-      const cacheData = (cacheStorage as MylistCacheStorage).getItem(cacheKey);
-      if (cacheData) {
-        return cacheData;
-      }
-
+      // #238/#261: /users/me/mylists is private; a fixed storage key
+      // would leak the previous account's list after a login change.
       // nvapi に X-Frontend-Id header が必要
       const result = await netUtil.fetch(url, {
         headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
@@ -260,11 +255,11 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
       }
 
       const data = result.data.mylists;
-      (cacheStorage as MylistCacheStorage).setItem(cacheKey, data, CACHE_EXPIRE_TIME);
       return data;
     }
-    async findDeflistItemByWatchId(watchId: string): Promise<MylistItemProbe> {
-      const items = await this._getDeflistItems();
+    async findDeflistItemByWatchId(watchId: string,
+      {frontendId=6,frontendVersion=0,isCurrent}: MylistFrontend={}): Promise<MylistItemProbe> {
+      const items = await this._getDeflistItems(frontendId,frontendVersion,watchId,isCurrent);
 
       for (let item of items) {
         if (item.watchId === watchId) {
@@ -277,8 +272,9 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
         result: {watchId, list: 'watchLater'}
       });
     }
-    async findMylistItemByWatchId(watchId: string, groupId: string | number): Promise<MylistItemProbe> {
-      const items = await this._getMylistItems(groupId);
+    async findMylistItemByWatchId(watchId: string, groupId: string | number,
+      {frontendId=6,frontendVersion=0,isCurrent}: MylistFrontend={}): Promise<MylistItemProbe> {
+      const items = await this._getMylistItems(groupId,frontendId,frontendVersion,watchId,isCurrent);
 
       for (let item of items) {
         if (item.watchId === watchId) {
@@ -293,8 +289,9 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
     }
 
     //nvapiに frontendId と frontendVersion の値が必要
-    async removeDeflistItem(watchId: string, { frontendId = 6, frontendVersion = 0 }: MylistFrontend = {}): Promise<MylistOk> {
-      const item = await this.findDeflistItemByWatchId(watchId);
+    async removeDeflistItem(watchId: string, { frontendId = 6, frontendVersion = 0, isCurrent }: MylistFrontend = {}): Promise<MylistOk> {
+      const item = await this.findDeflistItemByWatchId(watchId,{frontendId,frontendVersion,isCurrent});
+      if(isCurrent&&isCurrent()!==true)throw createMylistError('削除中止（動画が変更されました）',{code:'STALE'});
 
       const body = `itemIds=${item.itemId}`;
       const url = 'https://nvapi.nicovideo.jp/v1/users/me/watch-later?' + body;
@@ -329,8 +326,9 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
     }
 
     //nvapiに frontendId と frontendVersion の値が必要
-    async removeMylistItem(watchId: string, groupId: string | number, { frontendId = 6, frontendVersion = 0 }: MylistFrontend = {}): Promise<MylistOk> {
-      const item = await this.findMylistItemByWatchId(watchId, groupId);
+    async removeMylistItem(watchId: string, groupId: string | number, { frontendId = 6, frontendVersion = 0, isCurrent }: MylistFrontend = {}): Promise<MylistOk> {
+      const item = await this.findMylistItemByWatchId(watchId, groupId,{frontendId,frontendVersion,isCurrent});
+      if(isCurrent&&isCurrent()!==true)throw createMylistError('削除中止（動画が変更されました）',{code:'STALE'});
 
       let body = 'itemIds=' + item.itemId;
       const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists/' + groupId + '/items?' + body;
@@ -397,26 +395,8 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
       }
 
       if (result.meta.status && result.meta.status === 409 && !isRetry) {
-          /**
-           すでに登録されている場合は、いったん削除して再度追加(先頭に移動)
-           例えば、とりマイの300番目に登録済みだった場合に「登録済みです」と言われても探すのがダルいし、
-           他の動画を追加していけば、そのうち押し出されて消えてしまう。
-           なので、重複時にエラーを出すのではなく、「消してから追加」することによって先頭に持ってくる。
-           登録済みの場合、409が返ってくるようになったのでこちらで処理
-           */
-          await this.removeDeflistItem(watchId).catch((err: unknown): never => {
-              throw createMylistError('あとで見る登録失敗(101)', {
-                result: (err as MylistError).result,
-                code: (err as MylistError).code,
-                cause: err
-              });
-            });
-          const added = await this.addDeflistItem(watchId, description, true, {frontendId, frontendVersion});
-          return {
-            status: 'ok',
-            result: added,
-            message: 'あとで見るの先頭に移動'
-          };
+        // No DELETE/POST reorder: partial network failure must not lose a saved entry.
+        return {status: 'ok', result, message: 'あとで見るに登録済み（既存の登録を保持しました）'};
       }
 
       if (!result.meta.status || !result.error) { // result.errorが残っているかは不明
@@ -456,6 +436,7 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
 
       if (result.meta.status && ( result.meta.status === 200 || result.meta.status === 201 )) {
         (cacheStorage as MylistCacheStorage).removeItem(cacheKey);
+        emitter.emitAsync('mylistAdd', watchId, groupId, description);
         // マイリストに登録したらあとで見るから除去(=移動)
         this.removeDeflistItem(watchId).catch(() => {});
         return {status: 'ok', result, message: 'マイリスト登録'};
@@ -468,8 +449,6 @@ const MylistApiLoader: MylistApiLoaderClient = (() => {
       // マイリストの場合は重複があっても「追加して削除」しない。
       // とりまいと違って押し出されることがないし、
       // シリーズ物が勝手に入れ替わっても困るため
-      emitter.emitAsync('mylistAdd', watchId, groupId, description);
-
       throw createMylistError(result.error.description as string, {
           result, code: result.error.code
       });

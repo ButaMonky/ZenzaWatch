@@ -68,8 +68,8 @@
   "SceneResumeMarkerPresenter": {
     "source": "tools/typescript-stage1/nico-src/SceneResumeMarkerPresenter.ts",
     "runtime": "packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter.js",
-    "sourceSha256": "0866e85b2b0a973fbc77ce7aaaa50c918d0c71b70a6643ca581712c5c048e7e7",
-    "runtimeSha256": "b4f01c257acf3dc3a9a87e68df7addc901e6a6d760de3bd767433b58d1dda329"
+    "sourceSha256": "d82e298d9d1e2c88f318c70296d172badf0da354677435e317996cfd06554daa",
+    "runtimeSha256": "5c2cb88d4aefeee6f1aa8909b4d460ab6e78bf5d8686c00ff7796b77ce560f4a"
   },
   "SceneSearchVisibleRectCollector": {
     "source": "tools/typescript-stage1/nico-src/SceneSearchVisibleRectCollector.ts",

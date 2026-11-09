@@ -83,7 +83,7 @@ CustomElements.initialize = (() => {
     class SeekbarLabel extends HTMLElement {
         static get observedAttributes() {
             return [
-                'time', 'duration', 'text'
+                'time', 'duration', 'text', 'timeline-ratio'
             ];
         }
         static template() {
@@ -167,10 +167,18 @@ CustomElements.initialize = (() => {
             this._updatePos();
         }
         _updatePos() {
-            const per = this.props.time / Math.max(this.props.duration, 1) * 100;
+            // Only timeline-owned labels opt into parent-local geometry. Other
+            // consumers retain the original viewport placement and command behavior.
+            const value = this.getAttribute('timeline-ratio');
+            const ratio = value === null ? null : Number(value);
+            const managed = ratio !== null && Number.isFinite(ratio) && ratio >= 0 && ratio <= 1;
+            const per = managed ? ratio * 100 : this.props.time / Math.max(this.props.duration, 1) * 100;
             this.hidden = per <= 0;
             this.setAttribute('data-param', this.props.time);
-            this._root.style.transform = `translate(${per}vw, 0) translateX(-50%) scale(var(--scale-pp, 1.2))`;
+            this.style.left = managed ? `${per}%` : '';
+            this._root.style.transform = managed ?
+                'translateX(-50%) scale(var(--scale-pp, 1.2))' :
+                `translate(${per}vw, 0) translateX(-50%) scale(var(--scale-pp, 1.2))`;
             this._label.style.transform = `translate(-${per}%, 0)`;
         }
         _clear() {
@@ -184,6 +192,9 @@ CustomElements.initialize = (() => {
         }
         attributeChangedCallback(attr, oldValue, newValue) {
             switch (attr) {
+                case 'timeline-ratio':
+                    this._updatePos();
+                    break;
                 case 'time':
                     this._updateTime(parseFloat(newValue));
                     break;

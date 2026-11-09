@@ -28,6 +28,66 @@ const WatchInfoCacheDb = (() => {
             }
         ]
     };
+    // #255: Only public display metadata belongs in persistent watch history.
+    // Never enumerate model getters via toJSON(): that pulls in csrfToken,
+    // watchAuthKey, DMC signatures and Domand access-right keys.
+    const snapshotPublicVideoInfo = (value) => {
+        const source = value;
+        const data = {};
+        const scalars = [
+            'videoId', 'watchId', 'contextWatchId', 'originalVideoId',
+            'title', 'postedAt', 'thumbnail', 'betterThumbnail',
+            'duration', 'threadId', 'description', 'watchUrl'
+        ];
+        for (const key of scalars) {
+            try {
+                const v = source[key];
+                if (typeof v === 'string' || typeof v === 'boolean' ||
+                    (typeof v === 'number' && Number.isFinite(v))) {
+                    data[key] = v;
+                }
+            }
+            catch (_) { /* A broken metadata getter is not a reason to fail history. */ }
+        }
+        try {
+            const count = source.count;
+            if (count && typeof count === 'object') {
+                const publicCounts = {};
+                for (const key of ['comment', 'mylist', 'view', 'like']) {
+                    if (typeof count[key] === 'number' && Number.isFinite(count[key])) {
+                        publicCounts[key] = count[key];
+                    }
+                }
+                data.count = publicCounts;
+            }
+        }
+        catch (_) { }
+        try {
+            const owner = source.owner;
+            if (owner && typeof owner === 'object') {
+                const publicOwner = {};
+                for (const key of ['type', 'url', 'icon', 'id', 'linkId', 'name']) {
+                    const v = owner[key];
+                    if (typeof v === 'string' ||
+                        (typeof v === 'number' && Number.isFinite(v))) {
+                        publicOwner[key] = v;
+                    }
+                }
+                data.owner = publicOwner;
+            }
+        }
+        catch (_) { }
+        try {
+            const genre = source.genre;
+            if (genre && typeof genre === 'object') {
+                const key = typeof genre.key === 'string' ? genre.key : '';
+                const label = typeof genre.label === 'string' ? genre.label : '';
+                data.genre = { key, label };
+            }
+        }
+        catch (_) { }
+        return data;
+    };
     let db, instance, NicoVideoApi;
     // Task647 (WI-OPEN-RACE-001): startup initWorker() and an early put/get used to open
     // the database twice and build two facades. Share the in-flight open (as
@@ -69,14 +129,56 @@ const WatchInfoCacheDb = (() => {
             instanceOpening = null;
         }
     };
+    // #286: Legacy cache rows predate the public videoInfo allowlist. Scrub in
+    // small, transactionally isolated batches without delaying watch playback.
+    // Other row fields (resume, comments, bookmarks and updatedAt) are untouched.
+    let legacyScrubStarted = false;
+    const scheduleLegacyScrub = (store) => {
+        if (legacyScrubStarted || typeof store.scrubWatchVideoInfo !== 'function') {
+            return;
+        }
+        legacyScrubStarted = true;
+        const scan = async () => {
+            let afterKey = null;
+            while (true) {
+                const page = await store.scrubWatchVideoInfo({
+                    afterKey, maxRecords: 64
+                });
+                if (!page || !Number.isSafeInteger(page.scanned) ||
+                    !Number.isSafeInteger(page.changed) || page.changed > page.scanned ||
+                    (page.nextKey !== null &&
+                        (typeof page.nextKey !== 'string' || !page.nextKey ||
+                            (afterKey !== null && page.nextKey <= afterKey)))) {
+                    throw new Error('Invalid legacy watch-info cleanup cursor');
+                }
+                if (page.nextKey === null) {
+                    return;
+                }
+                afterKey = page.nextKey;
+                // Yield so playback/resume and other tabs are not blocked by migration.
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        };
+        const start = () => {
+            void scan().catch(() => {
+                // No saved videoInfo/watchId/token or exception payload may reach logs.
+                console.warn('Legacy watch history cleanup incomplete; retrying');
+                void new Promise(resolve => setTimeout(resolve, 300))
+                    .then(scan).catch(() => { console.warn('Legacy watch history cleanup incomplete'); });
+            });
+        };
+        setTimeout(start, 0);
+    };
     const createInstance = async () => {
         await initWorker();
         const cacheDb = db['cache'];
+        scheduleLegacyScrub(cacheDb);
         return instance = {
+            listSavedPoints,
             async put(watchId, options = {}) {
                 /** @type {VideoInfoModel|null} */
                 const videoInfo = options.videoInfo || null;
-                const videoInfoRawData = (videoInfo && videoInfo.toJSON) ? videoInfo.toJSON() : videoInfo;
+                const videoInfoRawData = videoInfo ? snapshotPublicVideoInfo(videoInfo) : null;
                 const now = Date.now();
                 const patch = { watchId, updatedAt: now };
                 const ownerId = videoInfo?.owner?.linkId || '';
@@ -157,6 +259,31 @@ const WatchInfoCacheDb = (() => {
             gc(expireTime) { return cacheDb.gc(expireTime); }
         };
     };
+    // Use initWorker directly: enumeration must not touch access timestamps or
+    // start the write-only legacy scrub performed by open().
+    const listSavedPoints = async () => {
+        const cache = (await initWorker()).cache;
+        if (!cache || typeof cache.listSavedPoints !== 'function')
+            throw new Error('Saved points enumeration unavailable');
+        const items = [];
+        let afterKey = null;
+        do {
+            const page = await cache.listSavedPoints({ afterKey, maxRecords: 200 });
+            if (!page || !Array.isArray(page.items) ||
+                (page.nextKey !== null && (typeof page.nextKey !== 'string' || !page.nextKey ||
+                    (afterKey !== null && page.nextKey <= afterKey)))) {
+                throw new Error('Invalid saved points page');
+            }
+            for (const item of page.items) {
+                if (!item || typeof item.watchId !== 'string' || !item.watchId)
+                    continue;
+                items.push({ watchId: item.watchId, title: item.title, duration: item.duration,
+                    updatedAt: item.updatedAt, automaticTime: item.automaticTime });
+            }
+            afterKey = page.nextKey;
+        } while (afterKey !== null);
+        return items;
+    };
     const put = (watchId, options = {}) => open().then(db => db.put(watchId, options));
     // Playback callers deliberately keep persistence best effort; explicit put still rejects.
     const putBestEffort = (watchId, options = {}) => put(watchId, options)
@@ -167,7 +294,7 @@ const WatchInfoCacheDb = (() => {
     const close = () => open().then(db => db.close());
     const gc = (expireTime) => open().then(db => db.gc(expireTime));
     const api = (api) => NicoVideoApi = api;
-    return { initWorker, open, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api };
+    return { initWorker, open, listSavedPoints, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api };
 })();
 //===END===
 export {WatchInfoCacheDb};

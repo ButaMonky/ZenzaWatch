@@ -1,3 +1,4 @@
+import type {ZenzaDescriptionGeneration, ZenzaZenTubeTimerGeneration} from './VideoInfoAsyncTypes';
 /**
  * Canonical TypeScript source for src/VideoInfoPanel.js (Task964).
  */
@@ -47,12 +48,12 @@ class VideoInfoPanel extends Emitter {
   declare _$ownerPageLink: Loose;
   declare _$view: Loose;
   declare _activeTabName: Loose;
-  declare _autoZenTubeTimerGeneration: Loose;
+  declare _autoZenTubeTimerGeneration: ZenzaZenTubeTimerGeneration | undefined;
   declare _config: Loose;
   declare _description: Loose;
-  declare _descriptionGeneration: Loose;
+  declare _descriptionGeneration: ZenzaDescriptionGeneration | undefined;
   declare _dialog: Loose;
-  declare _isInitialized: Loose;
+  declare _isInitialized: boolean | undefined;
   declare _likeMessageContainer: Loose;
   declare _pocket: Loose;
   declare _relatedInfoMenu: Loose;
@@ -204,7 +205,7 @@ class VideoInfoPanel extends Emitter {
    */
   async _updateVideoDescription(html?: Loose, series: Loose = null) {
     // Task 090（監査v2 ZW-053）: 更新の世代。await の後で、もっと新しい更新や clear() があったら、この結果は捨てる
-    const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+    const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1 as ZenzaDescriptionGeneration;
     this._description.textContent = '';
     this._zenTubeUrl = null;
     if (series) {
@@ -479,7 +480,7 @@ class VideoInfoPanel extends Emitter {
 
     // A newer canplay/video/description invalidates earlier queued switches.
     const timerGeneration = this._autoZenTubeTimerGeneration =
-      (this._autoZenTubeTimerGeneration || 0) + 1;
+      (this._autoZenTubeTimerGeneration || 0) + 1 as ZenzaZenTubeTimerGeneration;
     if (this._config.props.autoZenTube && this._zenTubeUrl && !options.isAutoZenTubeDisabled) {
       const zenTubeUrl = this._zenTubeUrl;
       const descriptionGeneration = this._descriptionGeneration;
@@ -563,7 +564,7 @@ class VideoInfoPanel extends Emitter {
     this.classList.remove('is-loadFailed');
     this.classList.add('initializing');
     this._$ownerIcon.raf.addClass('is-loading');
-    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1 as ZenzaDescriptionGeneration;
     this._description.textContent = '';
   }
   onLoadFail() {
@@ -571,7 +572,7 @@ class VideoInfoPanel extends Emitter {
     // Hide stale data from the previous video instead of revealing it.
     this._videoInfo = null;
     this._videoHeaderPanel.clear();
-    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+    this._descriptionGeneration = (this._descriptionGeneration || 0) + 1 as ZenzaDescriptionGeneration;
     this._description.textContent = '';
     this.classList.remove('initializing');
     this.classList.add('is-loadFailed');

@@ -31,7 +31,7 @@ const LikeApi = {
         }
         // Any truthy body is probed like the legacy JS (`json.meta`); primitives yield undefined.
         const meta = ((json && json.meta) || {});
-        const status = typeof meta.status === 'number' ? meta.status : res.status;
+        const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
         if (status < 200 || status >= 300) {
             const detail = [status, meta.errorCode].filter(Boolean).join(' ');
             throw Object.assign(new Error(`${label}に失敗しました（${detail}）`), { kind: 'API', status, errorCode: meta.errorCode, response: json });

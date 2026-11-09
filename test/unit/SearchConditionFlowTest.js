@@ -4,13 +4,14 @@
 // capture are sent; anything else (kind) is reported as not applied, never passed through.
 // Network is a mock; items are synthetic.
 const assert = require('assert');
-const {extract, createContext, run} = require('../helpers/extractSource');
+const {extract, createContext, run, loadSearchDependencies} = require('../helpers/extractSource');
 
 function load() {
   const calls = [];
   const c = createContext({console: {log() {}, info() {}, warn() {}},
     textUtil: {dateToString: d => d.toISOString(), convertKansuEi: x => x,
       parseQuery: s => Object.fromEntries(new URLSearchParams(s))}});
+  loadSearchDependencies('packages/lib/src/nico/VideoSearch.js', c);
   run(`const Subject=${extract('packages/lib/src/nico/VideoSearch.js', 'NicoSearchNvapi', 'var')};globalThis.Subject=Subject;
     ${extract('packages/lib/src/nico/NicoQuery.js', 'NicoQuery')};globalThis.Query=NicoQuery;`, c);
   c.window = {console: c.console};

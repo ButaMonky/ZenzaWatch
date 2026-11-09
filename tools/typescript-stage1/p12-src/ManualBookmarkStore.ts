@@ -5,16 +5,17 @@
  * A caller may inject an atomic backend for deterministic tests.
  */
 import {normalizeManualBookmarks,addManualBookmark,
-  renameManualBookmark,removeManualBookmark} from './ManualBookmarkPolicy.ts';
-import type {ManualBookmark,ManualBookmarkDraft} from './ManualBookmarkPolicy.ts';
+  renameManualBookmark,removeManualBookmark,updateManualBookmark} from './ManualBookmarkPolicy.ts';
+import type {ManualBookmark,ManualBookmarkDraft,ManualBookmarkChanges} from './ManualBookmarkPolicy.ts';
 
 export type BookmarkUpdate=(raw:unknown)=>readonly ManualBookmark[];
 export interface BookmarkAtomicBackend {
   read(videoId:string):Promise<unknown>;
+  list?():Promise<BookmarkRow[]>;
   update(videoId:string,change:BookmarkUpdate):Promise<void>;
   close():void;
 }
-type BookmarkRow={videoId:string;items:readonly ManualBookmark[]};
+export type BookmarkRow={videoId:string;items:readonly ManualBookmark[]};
 const databaseName='zenzawatch-manual-bookmarks';
 const storeName='bookmarks';
 const validateVideoId=(value:unknown):value is string=>
@@ -102,6 +103,30 @@ export class IndexedDbManualBookmarkBackend implements BookmarkAtomicBackend {
       req.onsuccess=()=>{value=(req.result as BookmarkRow|undefined)?.items||[];};
     });
   }
+  async list():Promise<BookmarkRow[]>{
+    const db=await this.open();
+    return new Promise((resolve,reject)=>{
+      let transaction:IDBTransaction;
+      try{transaction=db.transaction(storeName,'readonly');}
+      catch(error){reject(error);return;}
+      this.activeTransactions.add(transaction);
+      const rows:BookmarkRow[]=[];
+      transaction.oncomplete=()=>{this.activeTransactions.delete(transaction);resolve(rows);};
+      transaction.onabort=()=>{this.activeTransactions.delete(transaction);
+        reject(transaction.error||new Error('Bookmark list aborted'));};
+      transaction.onerror=()=>{this.activeTransactions.delete(transaction);
+        reject(transaction.error||new Error('Bookmark list failed'));};
+      const request=transaction.objectStore(storeName).openCursor();
+      request.onerror=()=>reject(request.error||new Error('Bookmark list failed'));
+      request.onsuccess=()=>{
+        const cursor=request.result;
+        if(!cursor)return;
+        const row=cursor.value as BookmarkRow|undefined;
+        if(row&&validateVideoId(row.videoId))rows.push({videoId:row.videoId,items:row.items});
+        cursor.continue();
+      };
+    });
+  }
   async update(videoId:string,change:BookmarkUpdate):Promise<void>{
     if(!validateVideoId(videoId))throw new TypeError('Invalid bookmark video ID');
     const db=await this.open();
@@ -169,6 +194,25 @@ export class ManualBookmarkRepository {
   async load(videoId:string,duration:number):Promise<readonly ManualBookmark[]>{
     if(!validateVideoId(videoId))throw new TypeError('Invalid bookmark video ID');
     return this.checked(await this.backend.read(videoId),videoId,duration);
+  }
+  async list():Promise<BookmarkRow[]>{
+    if(!this.backend.list)return [];
+    const rows=await this.backend.list();
+    // Read-only recovery: show valid rows without ever rewriting a corrupt record.
+    return rows.filter(row=>row&&validateVideoId(row.videoId)).map(row=>({
+      videoId:row.videoId,
+      items:normalizeManualBookmarks(row.items,row.videoId,Number.MAX_VALUE)
+    }));
+  }
+  async update(videoId:string,id:string,changes:ManualBookmarkChanges,now:number,duration:number):
+    Promise<readonly ManualBookmark[]>{
+    if(!validateVideoId(videoId))throw new TypeError('Invalid bookmark video ID');
+    let result:readonly ManualBookmark[]=[];
+    await this.backend.update(videoId,raw=>{
+      result=updateManualBookmark(this.checked(raw,videoId,duration),videoId,id,changes,now,duration);
+      return result;
+    });
+    return result;
   }
   async add(draft:ManualBookmarkDraft,duration:number):Promise<readonly ManualBookmark[]>{
     if(!validateVideoId(draft?.videoId))throw new TypeError('Invalid bookmark video ID');

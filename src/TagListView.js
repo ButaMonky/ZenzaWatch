@@ -81,7 +81,7 @@ class TagListView extends BaseViewComponent {
                 this._addTag(param);
                 break;
             case 'removeTag': {
-                let elm = this._elm.videoTags.querySelector(`.tagItem[data-tag-id="${param}"]`);
+                let elm = Array.from(this._elm.videoTags.querySelectorAll('.tagItem[data-tag-id]')).find(node => node.getAttribute('data-tag-id') === String(param));
                 if (!elm) {
                     return;
                 }

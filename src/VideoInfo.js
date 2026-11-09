@@ -241,7 +241,7 @@ class VideoInfoModel extends JSONable {
         this._currentVideoPromise = null;
     }
     update(videoInfoModel) {
-        this._update(videoInfoModel._rawData);
+        this._update(videoInfoModel._rawData, videoInfoModel._cacheData || {});
         return true;
     }
     _update(info, localCacheData = {}) {

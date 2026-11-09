@@ -1,3 +1,4 @@
+import type {ZenzaCommentSortKey, ZenzaCommentReadingModelPort} from './CommentReadTypes';
 /**
  * Canonical TypeScript source for src/CommentPanel.js (Task963).
  */
@@ -25,18 +26,18 @@ declare const throttle: Loose;
 declare const uq: Loose;
 
 
-class CommentListModel extends Emitter {
+class CommentListModel extends Emitter implements ZenzaCommentReadingModelPort {
   declare emitAsync: Loose;
   declare emit: Loose;
-  declare _currentIndex: Loose;
-  declare _currentSortKey: Loose;
-  declare _currentTime: Loose;
-  declare _isDesc: Loose;
+  declare _currentIndex: number;
+  declare _currentSortKey: ZenzaCommentSortKey;
+  declare _currentTime: number;
+  declare _isDesc: boolean;
   declare _isUniq: Loose;
   declare _items: Loose;
-  declare _maxItems: Loose;
-  declare _positions: Loose;
-  declare _readingEpoch: Loose;
+  declare _maxItems: number;
+  declare _positions: number[];
+  declare _readingEpoch: number;
   constructor(params?: Loose) {
     super();
     this._isUniq = params.uniq;
@@ -116,7 +117,7 @@ class CommentListModel extends Emitter {
   _onItemUpdate(item?: Loose, key?: Loose, value?: Loose) {
     this.emit('itemUpdate', item, key, value);
   }
-  sortBy(key?: Loose, isDesc?: Loose) {
+  sortBy(key?: ZenzaCommentSortKey, isDesc?: boolean) {
     const table = {
       vpos: 'vpos',
       date: 'date',
@@ -193,9 +194,9 @@ class CommentListView extends Emitter {
   declare _itemViews: Loose;
   declare _list: Loose;
   declare _maxItems: Loose;
-  declare _model: Loose;
-  declare _modelUpdateVersion: Loose;
-  declare _readingEpoch: Loose;
+  declare _model: ZenzaCommentReadingModelPort & Record<string, Loose>;
+  declare _modelUpdateVersion: number;
+  declare _readingEpoch: number | undefined;
   declare _retryGetIframeCount: Loose;
   declare _scrollTop: Loose;
   declare _selectedItem: Loose;
@@ -371,7 +372,7 @@ class CommentListView extends Emitter {
     const detail = byKey.get(state.detail);
     if (detail) { this.showItemDetail(detail.view._item); } else { this.hideItemDetail(); }
   }
-  async _onModelUpdate(itemList?: Loose, replaceAll?: Loose, revision: Loose = this._modelUpdateVersion) {
+  async _onModelUpdate(itemList?: Loose, replaceAll?: Loose, revision: number = this._modelUpdateVersion) {
     if (!this._isFrameReady) {
       await this.promise('frame-ready');
     }

@@ -206,7 +206,8 @@ declare const _: Loose;
           if (localStorage.hasOwnProperty(storageKey)) {
             try {
               let lastValue = (config as Loose)[key];
-              let newValue = JSON.parse(localStorage.getItem(storageKey));
+              // JSON.parse coerces null to 'null' in legacy JS; make that conversion explicit.
+              let newValue = JSON.parse(String(localStorage.getItem(storageKey)));
               if (lastValue !== newValue) {
                 (config as Loose)[key] = newValue;
                 if (emitChange) {
@@ -1072,7 +1073,8 @@ declare const _: Loose;
         ZenzaWatch.emitter.on('DialogPlayerOpen', () => {
           (util as Loose).emitter.emit('zenzaOpen');
           if (configPanel) {
-            document.querySelector('.zenzaPlayerContainer').append(configPanel.view);
+            // The player container can be absent during a close/open transition.
+            document.querySelector('.zenzaPlayerContainer')?.append(configPanel.view);
           }
         });
 

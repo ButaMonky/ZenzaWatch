@@ -14,12 +14,26 @@ function world(){
   class VideoList{on(){return this;}emit(...a){emitted.push(a.map(x=>typeof x==='object'?'obj':x));}
     _initializeAdDecoration(){}_onDeflistAdd(){}}
   const items=new Map([[1,{itemId:1,watchId:'sm1'}]]);
-  const model={items:[],length:0,maxItems:100,on(){},findByItemId:id=>items.get(id),findByWatchId:()=>null,indexOf:()=>-1,
-    getItemByIndex:()=>null,appendItem:()=>{log.push('append');},removeItem(){},serialize:()=>[]};
+  const model={items:[],length:0,maxItems:100,on(){},findByItemId:id=>items.get(id),
+    findByWatchId:id=>model.items.find(x=>x.watchId===id),indexOf:item=>model.items.indexOf(item),
+    getItemByIndex:i=>model.items[i]||null,_dedupe:(old,items)=>items,
+    setItem(next){model.items=next;model.length=next.length;},
+    unserialize(next){model.setItem(next.map(i=>new VideoListItem(i)));},
+    appendItem(item){log.push('append');model.items.push(item);model.length=model.items.length;},
+    removeItem(){},serialize:()=>[]};
+  class VideoListItem{
+    constructor(raw){if(!raw||typeof raw.id!=='string')throw TypeError('invalid id');
+      this.watchId=raw.id;this.itemId=raw.id;this.title=raw.title||'';}
+    static createBlankInfo(id){return {watchId:id,itemId:id};}
+    static createByThumbInfo(info){return new VideoListItem({...info,id:info.id});}
+  }
+  const textUtil={isValidJson:s=>{try{JSON.parse(s);return true;}catch{return false;}},
+    dateToString:x=>String(x),escapeToZenkaku:x=>x};
   const globals={VideoList,PlayListModel:class{constructor(){return model;}},PlayListSession:{save(){}},
-    PlayListView:class{on(){}scrollToItem(){}scrollTop(){}},VideoListItem:{createBlankInfo:id=>({watchId:id})},
-    global:{api:{},debug:{},emitter:{on(){}}},_:{debounce:f=>f},window:{console:{time:()=>log.push('time'),timeEnd(){},error(){}}},
-    setTimeout:()=>0,Promise,PlaylistApiLoader:{load:()=>Promise.resolve([])},textUtil:{}};
+    PlayListView:class{on(){}scrollToItem(){}scrollTop(){}},VideoListItem,
+    global:{api:{},debug:{},emitter:{on(){}}},_:{debounce:f=>f},window:{console:{time:()=>log.push('time'),timeEnd(){},error(){}},
+      setTimeout:()=>0},
+    setTimeout:()=>0,Promise,PlaylistApiLoader:{load:()=>Promise.resolve([])},textUtil};
   return {emitted,log,globals};
 }
 const make=(k,w)=>{const P=loadLegacy(versions[k],'PlayList',w.globals);const p=new P();p.initialize({container:{}});return p;};
@@ -49,4 +63,41 @@ test('PLAYLIST-APPEND-FAIL-REFRESH-001: a failed append refreshes once, update c
     out[k]=w.emitted.filter(e=>e[0]==='update').length;}
   // old: two refreshes (each setIndex(force) emits update); new: one refresh + explicit update.
   assert.deepEqual([out.old,out.new],[2,2]);
+});
+
+test('#242: invalid imported item never pauses or replaces the active playlist',()=>{
+  const w=world(),p=make('new',w);
+  const preserved={watchId:'smExisting',itemId:'smExisting'};
+  p.model.setItem([preserved]);
+  const invalid=JSON.stringify({items:[{id:{toString:null},title:'bad'}],index:0});
+  p._onImportFileCommand(invalid);
+  assert.deepEqual(p.model.items,[preserved]);
+  assert.equal(w.emitted.some(e=>e[0]==='command'&&e[1]==='pause'),false);
+  assert.equal(w.emitted.some(e=>e[0]==='command'&&e[1]==='alert'),true);
+  p._onImportFileCommand(JSON.stringify({items:[{id:'sm9',title:'Valid'}],index:0}));
+  assert.equal(p.model.items[0].watchId,'sm9');
+  assert.equal(w.emitted.filter(e=>e[0]==='command'&&e[1]==='pause').length,1);
+});
+test('#259: pending append completion cannot restore a cleared playlist',async()=>{
+  const w=world(),p=make('new',w);
+  let finish;
+  p._thumbInfoLoader={load:()=>new Promise(resolve=>{finish=resolve;})};
+  const pending=p.append('smOld');
+  p.unserialize({items:[{id:'smNew',title:'B'}],index:-1});
+  finish({id:'smOld',title:'A'});
+  await pending;
+  assert.deepEqual(p.model.items.map(item=>item.watchId),['smNew']);
+  assert.equal(w.log.includes('append'),false);
+});
+test('#259: pending append failure cannot add a blank item after import',async()=>{
+  const w=world(),p=make('new',w);
+  let reject;
+  p._thumbInfoLoader={load:()=>new Promise((resolve,fail)=>{reject=fail;})};
+  const pending=p.append('smOld');
+  p.unserialize({items:[{id:'smNew',title:'B'}],index:-1});
+  reject(Error('test offline'));
+  await pending;
+  assert.deepEqual(p.model.items.map(item=>item.watchId),['smNew']);
+  assert.equal(w.log.includes('append'),false);
+  assert.equal(w.emitted.some(e=>e[0]==='command'&&e[1]==='alert'),false);
 });

@@ -6,12 +6,13 @@ let Panel;
 before(async()=>{({ManualBookmarkPanel:Panel}=await new Function('u','return import(u)')(pathToFileURL(path.resolve('packages/zenza/src/resume/ManualBookmarkPanel.js')).href));});
 function fixture(){
  const dom=new JSDOM('<main></main>');const root=dom.window.document.querySelector('main');
- let listener,time=12;const calls=[];
+ let listener,time=12,clock=100,seekThrows=false;const calls=[];
  const session={snapshot:{status:'ready',videoId:'sm9',bookmarks:[]},subscribe(fn){listener=fn;fn(this.snapshot);return()=>{};},async add(...args){calls.push(['add',...args]);return {status:'applied'};}};
- const panel=new Panel(root,session,{currentVideoId:()=>session.snapshot.videoId,currentTime:()=>time,timestamp:()=>100,newId:()=> 'B1',seek:t=>calls.push(['seek',t]),duration:()=>120,automaticTime:()=>42,editAutomatic:async t=>{calls.push(['edit',t]);return true;},deleteAutomatic:async()=>true,repeatEnabled:()=>true});
+ const panel=new Panel(root,session,{currentVideoId:()=>session.snapshot.videoId,currentTime:()=>time,timestamp:()=>clock,newId:()=> 'B1',seek:t=>{if(seekThrows)throw Error('seek blocked');calls.push(['seek',t]);},duration:()=>120,automaticTime:()=>42,editAutomatic:async t=>{calls.push(['edit',t]);return true;},deleteAutomatic:async()=>true,repeatEnabled:()=>true});
  const click=a=>root.querySelector('[data-point-action="'+a+'"]').click();
  const field=(name,value)=>{root.querySelector('[data-point-field="'+name+'"]').value=value;};
- return {dom,root,panel,calls,click,field,setTime:t=>time=t,switchVideo:()=>{session.snapshot={status:'ready',videoId:'sm10',bookmarks:[]};listener(session.snapshot);}};
+ return {dom,root,panel,calls,click,field,setTime:t=>time=t,
+  setClock:n=>clock=n,setSeekThrows:v=>seekThrows=v,switchVideo:()=>{session.snapshot={status:'ready',videoId:'sm10',bookmarks:[]};listener(session.snapshot);}};
 }
 describe('Playback point panel',()=>{
  it('parses explicit times and rejects malformed/nonfinite input',()=>{
@@ -39,6 +40,38 @@ describe('Playback point panel',()=>{
   const f=fixture();f.field('automatic','1:05');f.click('save-automatic');await Promise.resolve();
   assert.deepEqual(f.calls,[['edit',65]]);f.panel.dispose();f.dom.window.close();
  });
+ it('retries an ignored B-to-A seek once then stops with an actionable message',()=>{
+  const f=fixture();f.click('set-a');f.setTime(20);f.click('set-b');f.click('repeat');
+  f.calls.length=0;
+  f.panel.tick(20,false,false);assert.deepEqual(f.calls,[['seek',12]]);
+  f.setClock(1000);f.panel.tick(20,false,false);assert.equal(f.calls.length,1);
+  f.setClock(1900);f.panel.tick(20,true,false);assert.equal(f.calls.length,1,'paused seek does not retry');
+  f.panel.tick(20,false,true);assert.equal(f.calls.length,1,'seeking does not retry');
+  f.panel.tick(20,false,false);assert.equal(f.calls.length,2,'one bounded retry');
+  f.setClock(3800);f.panel.tick(20,false,false);
+  assert.equal(f.panel.isRepeating,false,'repeat must fail safe rather than lock');
+  assert.equal(f.calls.length,2,'no infinite seek storm');
+  assert.match(f.root.querySelector('[data-point-status="repeat"]').textContent,/シークできなかった/);
+  f.panel.tick(20,false,false);assert.equal(f.calls.length,2);
+  f.panel.dispose();f.dom.window.close();
+ });
+ it('handles a synchronous seek failure and preserves editable A/B fields',()=>{
+  const f=fixture();f.click('set-a');f.setTime(20);f.click('set-b');f.click('repeat');
+  f.setSeekThrows(true);
+  assert.equal(f.panel.tick(20,false,false),false);
+  assert.equal(f.panel.isRepeating,false);
+  assert.equal(f.root.querySelector('[data-point-field="a"]').value,'0:12');
+  assert.match(f.root.querySelector('[data-point-status="repeat"]').textContent,/シークできなかった/);
+  f.panel.dispose();f.dom.window.close();
+ });
+ it('repeats at exact duration even when no last timeupdate was delivered',()=>{
+  const f=fixture();f.field('a','10');f.field('b','120');f.click('repeat');
+  f.calls.length=0;
+  assert.equal(f.panel.repeatAtEnd(),true);
+  assert.deepEqual(f.calls,[['seek',10]]);
+  f.panel.dispose();f.dom.window.close();
+ });
+
 });
 
 describe('Playback point UI review regressions',()=>{

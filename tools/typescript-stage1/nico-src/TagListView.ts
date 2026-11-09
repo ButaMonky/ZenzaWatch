@@ -115,12 +115,12 @@ class TagListView extends BaseViewComponent {
         this._addTag(param);
         break;
       case 'removeTag': {
-        let elm = this._elm.videoTags.querySelector(`.tagItem[data-tag-id="${param}"]`);
+        let elm = Array.from(this._elm.videoTags.querySelectorAll('.tagItem[data-tag-id]') as NodeListOf<Element>).find(node => node.getAttribute('data-tag-id') === String(param));
         if (!elm) {
           return;
         }
         elm.classList.add('is-Removing');
-        let data = JSON.parse(elm.getAttribute('data-tag'));
+        let data = JSON.parse(elm.getAttribute('data-tag')!);
         this._removeTag(param, data.name);
         break;
       }
@@ -1206,7 +1206,7 @@ class TagItemMenu extends HTMLElement {
   }
   constructor() {
     super();
-    this.hasNicodic = parseInt(this.dataset.hasNicodic) !== 0;
+    this.hasNicodic = parseInt(this.dataset.hasNicodic as string) !== 0;
     this.text = textUtil.escapeToZenkaku(this.dataset.text);
     const shadow = this._shadow = this.attachShadow({mode: 'open'});
     shadow.innerHTML = (this.constructor as Loose).template({text: this.text});

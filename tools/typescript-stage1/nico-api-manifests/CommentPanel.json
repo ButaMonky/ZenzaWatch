@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/CommentPanel.ts",
   "runtime": "src/CommentPanel.js",
-  "sourceSha256": "00e21221fef708a88905006bf5fa090a7dfdc2e034d9a0c25712f8c5f8ff5051",
+  "sourceSha256": "e9805dd8b8b99205937ac2985383fe6186826846b81fb52e6b067ad260ce51dd",
   "runtimeSha256": "f3b8a021635a53167c267f86d6de8f0ddf9f2a8060c2c12651d538b27d8f48c9"
 }

@@ -185,10 +185,20 @@ test('LikeApi: identical URLs, results and classified errors for every response 
       const responseA=make(),responseB=make();
       const a=likeHarness(before,responseA),b=likeHarness(after,responseB);
       const ra=await settle(()=>run(a.api)),rb=await settle(()=>run(b.api));
-      assert.equal(rb.ok,ra.ok,label);
-      assert.deepEqual(snapshot(rb),snapshot(ra),label);
+      // AUD #260 intentionally changes a dangerous legacy success condition:
+      // HTTP 500 is never success even if meta.status happens to be 200.
+      const contradictedHttp=caseName==='meta 2xx overrides http error';
+      if(contradictedHttp){
+        assert.equal(ra.ok,true,label+' legacy accepted contradictory HTTP response');
+        assert.equal(rb.ok,false,label+' fixed runtime must reject HTTP error');
+        assert.equal(rb.error.kind,'API',label);
+        assert.equal(rb.error.status,500,label);
+      }else{
+        assert.equal(rb.ok,ra.ok,label);
+        assert.deepEqual(snapshot(rb),snapshot(ra),label);
+      }
       assert.deepEqual(snapshot(b.calls),snapshot(a.calls),label);
-      if(!ra.ok){
+      if(!ra.ok&&!contradictedHttp){
         assert.deepEqual(Object.keys(rb.error).sort(),Object.keys(ra.error).sort(),label);
         assert.ok(['NETWORK','API'].includes(rb.error.kind),label);
       }

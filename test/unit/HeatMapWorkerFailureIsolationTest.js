@@ -171,3 +171,26 @@ describe('Task263 HeatMap worker failure isolation', () => {
     assert.strictEqual(typeof hm.setData, 'function');
   });
 });
+
+describe('Audit #235: initial HeatMap worker failures recover before transfer',()=>{
+  for(const file of ['packages/zenza/src/heatMap/HeatMapWorker.js','dist/ZenzaWatch-dev.user.js']){
+    it(file+' preserves the original canvas when worker creation throws',async()=>{
+      const h=setup(async()=>({status:'ok'}),file);
+      h.context.workerUtil.createCrossMessageWorker=()=>{throw new Error('synthetic CSP restriction');};
+      const fallback=await h.context.API.HeatMapWorker.init({container:h.container});
+      assert.strictEqual(h.replacements,0);
+      assert.strictEqual(h.terminated,0);
+      assert.strictEqual(fallback.canvas,h.canvas);
+      assert.strictEqual(typeof fallback.setData,'function');
+    });
+    it(file+' stops the worker and reuses intact canvas on transfer failure',async()=>{
+      const h=setup(async()=>({status:'ok'}),file);
+      h.canvas.transferControlToOffscreen=()=>{throw new Error('already has context');};
+      const fallback=await h.context.API.HeatMapWorker.init({container:h.container});
+      assert.strictEqual(h.terminated,1);
+      assert.strictEqual(h.replacements,0);
+      assert.strictEqual(h.posts.length,0);
+      assert.strictEqual(fallback.canvas,h.canvas);
+    });
+  }
+});

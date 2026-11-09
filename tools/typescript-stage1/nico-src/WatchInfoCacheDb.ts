@@ -6,10 +6,17 @@
  * with `WatchInfoCacheDb.api(...)`.
  */
 
+import type {SavedPointProjection,SavedPointsPage} from './IndexedDbStorage';
+
 /** IndexedDbStorage store as used here (packages/lib/src/infra/IndexedDbStorage.js). */
 export interface WatchInfoIdbStore {
+  listSavedPoints?(query:{afterKey?:string|null;maxRecords?:number}):Promise<SavedPointsPage>;
   /** Atomic read-modify-write; resolves the stored record. */
   update(request: WatchInfoUpdateRequest): Promise<unknown>;
+  /** Optional for old mocks/bridges; the modern worker makes this atomic. */
+  scrubWatchVideoInfo?(query: {afterKey?: string | null; maxRecords?: number}): Promise<{
+    scanned: number; changed: number; nextKey: string | null;
+  }>;
   /** Read-only history snapshot, without waiting for a readwrite transaction. */
   get(query: {key: string}): Promise<unknown>;
   /** Touches updatedAt and resolves the stored record (or a falsy value). */
@@ -76,6 +83,7 @@ export interface WatchInfoRecord {
   [key: string]: unknown;
 }
 export interface WatchInfoCache {
+  listSavedPoints():Promise<SavedPointProjection[]>;
   /** Delete only automatic resume state; keep other watch metadata and comments. */
   clearAutomaticResume(watchId:string,reason?:'completed'|'deleted'):Promise<WatchInfoRecord>;
   /** Rejects when the store does not acknowledge the row for `watchId`. */
@@ -86,6 +94,7 @@ export interface WatchInfoCache {
   gc(expireTime?: number): Promise<unknown>;
 }
 export interface WatchInfoCacheDbClient {
+  listSavedPoints():Promise<SavedPointProjection[]>;
   initWorker(): Promise<WatchInfoDb>;
   clearAutomaticResume(watchId:string,reason?:'completed'|'deleted'):Promise<WatchInfoRecord>;
   open(): Promise<WatchInfoCache>;
@@ -119,6 +128,63 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
     ]
   };
 
+  // #255: Only public display metadata belongs in persistent watch history.
+  // Never enumerate model getters via toJSON(): that pulls in csrfToken,
+  // watchAuthKey, DMC signatures and Domand access-right keys.
+  const snapshotPublicVideoInfo = (value: WatchVideoInfoLike): Record<string, unknown> => {
+    const source = value as unknown as Record<string, unknown>;
+    const data: Record<string, unknown> = {};
+    const scalars = [
+      'videoId', 'watchId', 'contextWatchId', 'originalVideoId',
+      'title', 'postedAt', 'thumbnail', 'betterThumbnail',
+      'duration', 'threadId', 'description', 'watchUrl'
+    ] as const;
+    for (const key of scalars) {
+      try {
+        const v = source[key];
+        if (typeof v === 'string' || typeof v === 'boolean' ||
+            (typeof v === 'number' && Number.isFinite(v))) {
+          data[key] = v;
+        }
+      } catch (_) { /* A broken metadata getter is not a reason to fail history. */ }
+    }
+    try {
+      const count = source.count as Record<string, unknown> | null;
+      if (count && typeof count === 'object') {
+        const publicCounts: Record<string, number> = {};
+        for (const key of ['comment', 'mylist', 'view', 'like'] as const) {
+          if (typeof count[key] === 'number' && Number.isFinite(count[key])) {
+            publicCounts[key] = count[key] as number;
+          }
+        }
+        data.count = publicCounts;
+      }
+    } catch (_) {}
+    try {
+      const owner = source.owner as Record<string, unknown> | null;
+      if (owner && typeof owner === 'object') {
+        const publicOwner: Record<string, string | number> = {};
+        for (const key of ['type', 'url', 'icon', 'id', 'linkId', 'name'] as const) {
+          const v = owner[key];
+          if (typeof v === 'string' ||
+              (typeof v === 'number' && Number.isFinite(v))) {
+            publicOwner[key] = v;
+          }
+        }
+        data.owner = publicOwner;
+      }
+    } catch (_) {}
+    try {
+      const genre = source.genre as Record<string, unknown> | null;
+      if (genre && typeof genre === 'object') {
+        const key = typeof genre.key === 'string' ? genre.key : '';
+        const label = typeof genre.label === 'string' ? genre.label : '';
+        data.genre = {key, label};
+      }
+    } catch (_) {}
+    return data;
+  };
+
   let db: WatchInfoDb | undefined, instance: WatchInfoCache | undefined, NicoVideoApi: WatchInfoDbBridge | undefined;
   // Task647 (WI-OPEN-RACE-001): startup initWorker() and an early put/get used to open
   // the database twice and build two facades. Share the in-flight open (as
@@ -145,14 +211,53 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
     try { return await instanceOpening; }
     finally { instanceOpening = null; }
   };
+  // #286: Legacy cache rows predate the public videoInfo allowlist. Scrub in
+  // small, transactionally isolated batches without delaying watch playback.
+  // Other row fields (resume, comments, bookmarks and updatedAt) are untouched.
+  let legacyScrubStarted = false;
+  const scheduleLegacyScrub = (store: WatchInfoIdbStore): void => {
+    if (legacyScrubStarted || typeof store.scrubWatchVideoInfo !== 'function') { return; }
+    legacyScrubStarted = true;
+    const scan = async (): Promise<void> => {
+      let afterKey: string | null = null;
+      while (true) {
+        const page = await (store.scrubWatchVideoInfo as NonNullable<WatchInfoIdbStore['scrubWatchVideoInfo']>)({
+          afterKey, maxRecords: 64
+        });
+        if (!page || !Number.isSafeInteger(page.scanned) ||
+            !Number.isSafeInteger(page.changed) || page.changed > page.scanned ||
+            (page.nextKey !== null &&
+              (typeof page.nextKey !== 'string' || !page.nextKey ||
+               (afterKey !== null && page.nextKey <= afterKey)))) {
+          throw new Error('Invalid legacy watch-info cleanup cursor');
+        }
+        if (page.nextKey === null) { return; }
+        afterKey = page.nextKey;
+        // Yield so playback/resume and other tabs are not blocked by migration.
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+      }
+    };
+    const start = (): void => {
+      void scan().catch(() => {
+        // No saved videoInfo/watchId/token or exception payload may reach logs.
+        console.warn('Legacy watch history cleanup incomplete; retrying');
+        void new Promise<void>(resolve => setTimeout(resolve, 300))
+          .then(scan).catch(() => { console.warn('Legacy watch history cleanup incomplete'); });
+      });
+    };
+    setTimeout(start, 0);
+  };
+
   const createInstance = async (): Promise<WatchInfoCache> => {
     await initWorker();
     const cacheDb = (db as WatchInfoDb)['cache'] as WatchInfoIdbStore;
+    scheduleLegacyScrub(cacheDb);
     return instance = {
+      listSavedPoints,
       async put(watchId: string, options: WatchInfoPutOptions = {}): Promise<WatchInfoRecord> {
         /** @type {VideoInfoModel|null} */
         const videoInfo = options.videoInfo || null;
-        const videoInfoRawData = (videoInfo && videoInfo.toJSON) ? videoInfo.toJSON() : videoInfo;
+        const videoInfoRawData = videoInfo ? snapshotPublicVideoInfo(videoInfo) : null;
         const now = Date.now();
         const patch: Record<string, unknown> = {watchId, updatedAt: now};
         const ownerId = videoInfo?.owner?.linkId || '';
@@ -225,6 +330,29 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
       gc(expireTime?: number): Promise<unknown> { return cacheDb.gc(expireTime); }
     };
   };
+  // Use initWorker directly: enumeration must not touch access timestamps or
+  // start the write-only legacy scrub performed by open().
+  const listSavedPoints=async():Promise<SavedPointProjection[]>=>{
+    const cache=(await initWorker()).cache;
+    if(!cache||typeof cache.listSavedPoints!=='function')throw new Error('Saved points enumeration unavailable');
+    const items:SavedPointProjection[]=[];
+    let afterKey:string|null=null;
+    do{
+      const page:SavedPointsPage=await cache.listSavedPoints({afterKey,maxRecords:200});
+      if(!page||!Array.isArray(page.items)||
+         (page.nextKey!==null&&(typeof page.nextKey!=='string'||!page.nextKey||
+          (afterKey!==null&&page.nextKey<=afterKey)))){
+        throw new Error('Invalid saved points page');
+      }
+      for(const item of page.items){
+        if(!item||typeof item.watchId!=='string'||!item.watchId)continue;
+        items.push({watchId:item.watchId,title:item.title,duration:item.duration,
+          updatedAt:item.updatedAt,automaticTime:item.automaticTime});
+      }
+      afterKey=page.nextKey;
+    }while(afterKey!==null);
+    return items;
+  };
   const put = (watchId: string, options: WatchInfoPutOptions = {}): Promise<WatchInfoRecord> => open().then(db => db.put(watchId, options));
   // Playback callers deliberately keep persistence best effort; explicit put still rejects.
   const putBestEffort = (watchId: string, options: WatchInfoPutOptions = {}): Promise<WatchInfoRecord | void> => put(watchId, options)
@@ -237,7 +365,7 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
   const gc = (expireTime?: number): Promise<unknown> => open().then(db => db.gc(expireTime));
   const api = (api: WatchInfoDbBridge): WatchInfoDbBridge => NicoVideoApi = api;
 
-  return {initWorker, open, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api};
+  return {initWorker, open, listSavedPoints, put, putBestEffort, clearAutomaticResume, get, delete: del, close, gc, api};
 })();
 
 export {WatchInfoCacheDb};

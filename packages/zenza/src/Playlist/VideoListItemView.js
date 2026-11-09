@@ -377,12 +377,15 @@ class VideoListItemView {
             'is-adDecoration-silver': item.adDecoration === 'silver'
         });
         // const className = `videoItem watch${watchId} item${itemId}`;
-        const thumbnailStyle = `background-image: url(${item.thumbnail})`;
+        const thumbnailUrl = typeof item.thumbnail === 'string' && item.thumbnail.length <= 2048 &&
+            /^https?:\/\/[^\s"'();\\<>]+$/i.test(item.thumbnail) ? item.thumbnail : '';
+        // Local playlist JSON is untrusted; a URL may not escape the CSS url() string.
+        const thumbnailStyle = thumbnailUrl ? `background-image: url("${thumbnailUrl}")` : '';
         const result = html `
       <div class=${classMap(cmap)} data-index=${index + 1} data-item-id=${itemId} data-watch-id=${watchId}>
         ${item.isLazy ? '' : html `
           <span class="command playlistRemove" data-command="playlistRemove" data-param=${watchId} title="プレイリストから削除">×</span>
-          <div class="thumbnailContainer" style=${thumbnailStyle} data-watch-id=${watchId} data-src=${item.thumbnail}>
+          <div class="thumbnailContainer" style=${thumbnailStyle} data-watch-id=${watchId} data-src=${thumbnailUrl}>
             <a class="command" href=${watchUrl} data-command="select" data-param=${itemId}>
               <span class="duration">${textUtil.secToTime(item.duration)}</span>
             </a>

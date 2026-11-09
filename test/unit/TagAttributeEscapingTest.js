@@ -82,4 +82,25 @@ describe('Task252 TagListView attribute escaping', () => {
     assert.strictEqual(search.getAttribute('data-param'), name);
     assert.deepStrictEqual(JSON.parse(li.getAttribute('data-tag')).name, name);
   });
+
+  it('resolves literal tag identifiers in removeTag without parsing them as CSS syntax (source and dist)', () => {
+    for (const rel of ['src/TagListView.js', 'dist/ZenzaWatch-dev.user.js']) {
+      const view = makeView(rel);
+      const normal = '通常タグ';
+      const special = 'quote" and] [backslash\\ 日本語';
+      const tag = name => view._createTag({name, isLocked: false, isNicodicArticleExists: false});
+      const host = JSDOM.fragment(tag(normal) + tag(special));
+      view._elm = {videoTags: host};
+      const calls = [];
+      view._removeTag = (id, name) => calls.push([id, name]);
+
+      assert.doesNotThrow(() => view._onCommand('removeTag', special));
+      assert.deepStrictEqual(calls, [[special, special]]);
+      const items = host.querySelectorAll('li.tagItem');
+      assert.strictEqual(items.length, 2);
+      assert.strictEqual(items[0].classList.contains('is-Removing'), false);
+      assert.strictEqual(items[1].classList.contains('is-Removing'), true);
+    }
+  });
+
 });

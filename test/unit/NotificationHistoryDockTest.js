@@ -26,6 +26,40 @@ function setup() {
 }
 
 describe('NotificationHistory dock (canonical TypeScript)', () => {
+  it('skips motion and closes immediately when reduced motion is requested',()=>{
+    const h=setup(), dock=h.container.querySelector('.zenzaNotificationDock');
+    h.dom.window.matchMedia=()=>({matches:true});
+    let animations=0;dock.animate=()=>{animations++;throw new Error('Reduced motion must skip animate');};
+    h.controller.toggle();h.controller.close();assert.equal(animations,0);assert.equal(dock.hidden,true);assert.equal(dock.inert,false);
+    h.controller.dispose();h.dom.window.close();
+  });
+  it('animates closing and cancels an old close when reopened',()=>{
+    const h=setup(), dock=h.container.querySelector('.zenzaNotificationDock'), animations=[];
+    dock.animate=(frames,options)=>{const a={onfinish:null,cancel(){this.cancelled=true;},frames,options};animations.push(a);return a;};
+    h.controller.toggle(); assert.equal(animations[0].options.duration,220);
+    h.controller.close(); assert.equal(h.controller.isOpen,false); assert.equal(dock.hidden,false);assert.equal(dock.inert,true);
+    const closing=animations[1];h.controller.toggle();
+    assert.equal(closing.cancelled,true);assert.equal(dock.inert,false);assert.equal(dock.hidden,false);
+    h.controller.close();animations[3].onfinish();assert.equal(dock.hidden,true);
+    h.controller.toggle();h.controller.dispose();assert.equal(animations[4].cancelled,true);
+    h.dom.window.close();
+  });
+  it('dismisses outside without stealing focus or consuming actions, but ignores its own panel and trigger', () => {
+    const h=setup(), win=h.dom.window;
+    const outside=h.document.createElement('input'); h.document.body.append(outside);
+    const pointer=target=>target.dispatchEvent(new win.MouseEvent('pointerdown',{bubbles:true,cancelable:true}));
+    h.controller.toggle();
+    assert.strictEqual(h.container.querySelector('.znh-close'),null);
+    pointer(h.container.querySelector('input')); pointer(h.button);
+    assert.strictEqual(h.controller.isOpen,true);
+    outside.focus(); assert.strictEqual(pointer(outside),true);
+    assert.strictEqual(h.controller.isOpen,false);
+    assert.strictEqual(h.document.activeElement,outside);
+    h.controller.toggle(); outside.focus(); outside.click();
+    assert.strictEqual(h.controller.isOpen,false);
+    assert.strictEqual(h.document.activeElement,outside);
+    h.controller.dispose(); h.dom.window.close();
+  });
   it('restores shortcut focus with a hidden bell and falls back to the player if the origin disappears', () => {
     const h=setup();
     const origin=h.document.createElement('button'); h.container.append(origin);
@@ -56,7 +90,7 @@ describe('NotificationHistory dock (canonical TypeScript)', () => {
     assert.strictEqual(summary.parentElement.open,true);
     assert.strictEqual(clicks,0);
     const event=new h.dom.window.KeyboardEvent('keydown',{key:' ',bubbles:true,cancelable:true});
-    h.container.querySelector('.znh-close').dispatchEvent(event);
+    h.container.querySelector('input').dispatchEvent(event);
     assert.strictEqual(keys,0);
     assert.strictEqual(event.defaultPrevented,false);
     h.controller.dispose(); h.dom.window.close();
@@ -90,7 +124,7 @@ describe('NotificationHistory dock (canonical TypeScript)', () => {
     assert.strictEqual(playerEscapes,0);
     assert.strictEqual(h.controller.isOpen,false);
     assert.strictEqual(h.document.activeElement,h.button);
-    h.controller.toggle(); h.container.querySelector('.znh-close').click();
+    h.controller.toggle(); h.controller.toggle();
     assert.strictEqual(h.controller.isOpen,false);
     h.controller.dispose();
     h.button.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));

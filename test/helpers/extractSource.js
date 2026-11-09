@@ -103,6 +103,17 @@ function run(code, context) {
   return script.runInContext(context, {timeout: 5000});
 }
 
+// Isolated search probes need the real module-level cancellation closure.
+function loadSearchDependencies(rel, context) {
+  const text = read(rel);
+  const start = text.indexOf('const SEARCH_SUPERSEDED =');
+  const end = text.indexOf('class NicoSearchApiV2Loader', start);
+  if (start < 0 || end <= start) {
+    throw new Error(`${rel}: search cancellation prelude missing`);
+  }
+  run(text.slice(start, end), context);
+}
+
 function loadClass(rel, name, context) {
   // Class extraction skips the runtime dependency directives. Load the
   // production geometry module for the existing seekbar/legacy consumers.
@@ -119,4 +130,4 @@ function loadClass(rel, name, context) {
   return context.__subject;
 }
 
-module.exports = {read, beginSection, extract, createContext, run, loadClass};
+module.exports = {read, beginSection, extract, createContext, run, loadClass, loadSearchDependencies};

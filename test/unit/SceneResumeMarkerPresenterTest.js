@@ -17,9 +17,11 @@ function setup(){
    else pointer.props.set(name,value);
   }
  };
+ const context=createContext();
+ context.TimelineGeometry=loadClass('packages/zenza/src/sceneSearch/TimelineGeometry.js','TimelineGeometry',context);
  const presenter=loadClass(
   'packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter.js',
-  'SceneResumeMarkerPresenter',createContext());
+  'SceneResumeMarkerPresenter',context);
  return {pointers,changes,setProps,render:presenter.render};
 }
 

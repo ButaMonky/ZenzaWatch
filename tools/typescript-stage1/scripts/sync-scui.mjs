@@ -78,6 +78,13 @@ export function sync(mode,only){
    imports=importLine+'\n';
    requires=requireLine+'\n';
   }
+  if(name==='SceneResumeMarkerPresenter'){
+   const exactImport=/^import\s+\{\s*TimelineGeometry\s*\}\s+from\s+['"]\.\/TimelineGeometry['"];?\s*$/gm;
+   if([...normalized.matchAll(exactImport)].length!==1)throw Error('SCUI_TIMELINE_PRESENTER_DEPENDENCY_DRIFT');
+   normalized=normalized.replace(exactImport,'').trimStart();
+   imports="import {TimelineGeometry} from './TimelineGeometry';\n";
+   requires='//@require TimelineGeometry\n';
+  }
   let exportName=name;
   if(name==='SceneSearchLayouts01_02'){
    const legacyRuntime=readNormalized(path.join(root,

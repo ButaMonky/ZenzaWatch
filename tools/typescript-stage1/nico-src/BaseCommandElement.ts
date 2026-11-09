@@ -98,7 +98,7 @@ class BaseCommandElement extends HTMLElement {
     render(tmpl, this.shadowRoot, { isConnected: this._isConnected });
 
     if (!this._root) {
-      const root = this.shadowRoot.querySelector('#root');
+      const root = this.shadowRoot!.querySelector('#root');
       if (!root) {
         return;
       }

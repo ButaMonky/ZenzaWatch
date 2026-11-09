@@ -3,12 +3,13 @@
 // broken total is an error, not a valid empty result. Synthetic responses on a mock network;
 // these failures are artificial and are not claimed to happen in production.
 const assert = require('assert');
-const {extract, createContext, run} = require('../helpers/extractSource');
+const {extract, createContext, run, loadSearchDependencies} = require('../helpers/extractSource');
 
 function load() {
   const calls = [];
   const c = createContext({console: {log() {}, info() {}, warn() {}},
     textUtil: {dateToString: d => d.toISOString(), convertKansuEi: x => x}});
+  loadSearchDependencies('packages/lib/src/nico/VideoSearch.js', c);
   run(`const Subject=${extract('packages/lib/src/nico/VideoSearch.js', 'NicoSearchNvapi', 'var')};globalThis.Subject=Subject;`, c);
   c.window = {console: c.console};
   const reply = f => { c.netUtil = {fetch: async u => {

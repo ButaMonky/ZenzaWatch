@@ -423,6 +423,10 @@ class CrossDomainGate extends Emitter {
           close: (params?: unknown) => post('close', params, storeName),
           put: (record: unknown, transfer?: unknown) => post('put', record, storeName, transfer),
           update: (data: unknown) => post('update', data, storeName),
+          scrubWatchVideoInfo: (data: {afterKey?: string | null; maxRecords?: number}) =>
+            post('scrubWatchVideoInfo', data, storeName),
+          listSavedPoints: (data:{afterKey?:string|null;maxRecords?:number}) =>
+            post('listSavedPoints',data,storeName),
           get: ({key, index, timeout}: Loose) => post('get', {key, index, timeout}, storeName),
           updateTime: ({key, index, timeout}: Loose) => post('updateTime', {key, index, timeout}, storeName),
           delete: ({key, index, timeout}: Loose) => post('delete', {key, index, timeout}, storeName),

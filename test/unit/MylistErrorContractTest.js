@@ -118,31 +118,23 @@ describe('Task264 Mylist/Watch-Later error contract', () => {
     );
   });
 
-  it('preserves cause metadata when 409 reordering fails during removal', async () => {
-    const {loader, netUtil} = loadLoader();
-    const conflict = {
-      meta: {status: 409},
-      error: {description: 'already exists', code: 'CONFLICT'}
-    };
-    netUtil.fetch = async () => response(conflict);
-
-    const removal = Object.assign(new Error('remove unavailable'), {
-      status: 'fail',
-      code: 'REMOVE_FAIL',
-      result: {meta: {status: 503}}
+  for (const file of ['packages/lib/src/nico/MylistApiLoader.js',
+    'dist/ZenzaWatch-dev.user.js', 'dist/MylistPocket.user.js']) {
+    it('audit #240 does not DELETE an already saved watch-later entry ('+file+')', async()=>{
+      const {loader,netUtil,fetches}=loadLoader(file);
+      const conflict={meta:{status:409},error:{description:'exists',code:'CONFLICT'}};
+      let deletes=0;
+      loader.removeDeflistItem=async()=>{deletes++;throw Error('must not delete');};
+      netUtil.fetch=async (...args)=>{fetches.push(args);return response(conflict);};
+      const out=await loader.addDeflistItem('sm1','keep');
+      assert.strictEqual(out.status,'ok');
+      assert.match(out.message,/登録済み/);
+      assert.strictEqual(out.result,conflict);
+      assert.strictEqual(deletes,0);
+      assert.strictEqual(fetches.length,1);
+      assert.strictEqual(fetches[0][1].method,'POST');
     });
-    loader.removeDeflistItem = async () => { throw removal; };
-
-    await assert.rejects(
-      () => loader.addDeflistItem('sm1', ''),
-      err => err &&
-        err.message === 'あとで見る登録失敗(101)' &&
-        err.status === 'fail' &&
-        err.result === removal.result &&
-        err.code === 'REMOVE_FAIL' &&
-        err.cause === removal
-    );
-  });
+  }
 
   it('keeps ordinary watch-later add success unchanged', async () => {
     const {loader, netUtil} = loadLoader();

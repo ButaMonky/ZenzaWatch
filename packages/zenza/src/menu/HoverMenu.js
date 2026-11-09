@@ -59,18 +59,24 @@ class HoverMenu {
         // Google can wrap video destinations in /url redirects.
         const selector = location.host.includes('google') ?
             'a[href],a[data-href]' :
-            'a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],[data-anchor-href],.UadVideoItem-link';
+            'a[href*="watch/"],a[href*="shorts/"],a[href*="nico.ms/"],a[data-href],[data-anchor-href],.UadVideoItem-link';
         return target.closest(selector);
     }
     _getWatchReference(target) {
         if (!target) {
             return null;
         }
+        // An actual anchor navigates to href, not to its dataset attributes. In
+        // particular, a native official-player link may carry a stale data-href
+        // from a surrounding card; do not replace its explicit official route.
+        const href = target.getAttribute?.('href');
+        const nativeHref = typeof href === 'string' && href.trim() &&
+            !href.trim().startsWith('#') ? href : null;
         const candidates = [
+            nativeHref,
+            nativeHref ? target.href : null,
             target.getAttribute?.('data-href'),
-            target.getAttribute?.('data-anchor-href'),
-            target.getAttribute?.('href'),
-            target.href
+            target.getAttribute?.('data-anchor-href')
         ];
         for (const candidate of candidates) {
             if (typeof candidate !== 'string' || !candidate) {

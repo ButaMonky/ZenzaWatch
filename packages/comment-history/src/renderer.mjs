@@ -18,8 +18,10 @@ export class CommentHistoryRenderer {
   get retainedCount(){return this.#retained.size;}
   /** Read-only: whether this display object came from the added history (used for display priority only). */
   has(chat){return !!chat&&this.#history.has(chat);}
-  clear(){
-    this.#revision++;this.#retained.clear();
+  clear({retain=false}={}){
+    this.#revision++;
+    if(retain){for(const chat of this.#history)this.#retained.set(identity(chat),chat);}
+    else this.#retained.clear();
     if(!this.#history.size)return;
     for(const group of this.#groups()){
       if(!group)continue;

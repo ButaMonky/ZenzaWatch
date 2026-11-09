@@ -59,7 +59,7 @@ test('closed-by-default dock mounts only inside information tab, before series',
  const details=h.dock.element;
  assert.equal(details.tagName,'DETAILS');
  assert.equal(details.open,false);
- assert.equal(details.querySelector('summary').textContent,'手動しおり');
+ assert.equal(details.querySelector('summary').textContent,'しおり・ABリピート');
  assert.equal(details.dataset.bookmarkOwner,'manual');
  assert.equal(details.nextElementSibling.className,'seriesList');
  assert.equal(h.native.querySelector('#native-seek'),h.seek);

@@ -36,7 +36,9 @@ function fixture({record}={}){
   _videoInfo:{watchId:'sm1',contextWatchId:'sm1',videoId:'sm1',duration:300,
    msgInfo:{frontendId:6,frontendVersion:0}},
   _state:{isError:false,isPlaying:false,isEnded:false,resetVideoLoadingStatus(){},setPausing(){}},
-  _playerConfig:{props:{},getValue:()=>false},
+  // The suite validates saves and deletion ownership with recording enabled;
+  // getValue(false) incorrectly disabled every normal save.
+  _playerConfig:{props:{},getValue:key=>key==='resume.recordEnabled'?true:false},
   _nicoVideoPlayer:{currentTime:85,close:()=>events.push('player-close')},
   _view:{clearPanel(){},videoControlBar:{refreshAutoResumePointers(){}}},
   _initializePlaylist:()=>pending,
@@ -45,6 +47,14 @@ function fixture({record}={}){
  });
  return {dialog,remote,cache,events,warnings};
 }
+test('recording OFF suppresses ordinary outgoing automatic saves',async()=>{
+ const h=fixture();
+ h.dialog._playerConfig.getValue=key=>key==='resume.recordEnabled'?false:false;
+ h.dialog._savePlaybackPosition('sm1',85);
+ assert.deepEqual(h.remote,[],'disabled automatic recording must not submit');
+ await h.dialog.open('sm2',{openNow:true});
+ assert.deepEqual(h.remote,[],'switch must not submit while recording is disabled');
+});
 for(const target of ['sm2','sm1'])test(`acknowledged automatic deletion survives open(${target}) final outgoing save`,async()=>{
  const h=fixture();
  const outcome=await h.dialog._deleteAutomaticResume();

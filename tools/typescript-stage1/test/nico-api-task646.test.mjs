@@ -63,9 +63,36 @@ test('ThumbInfoCacheDb: open, 90-day GC per open, put/get/delete/close',async()=
 });
 
 const watch=pair('WatchInfoCacheDb');
-// The Watch cache now intentionally separates a readonly history snapshot from
-// the best-effort updatedAt write. Retain full legacy parity for everything
-// except the single, explicitly asserted get/updateTime operation split.
+// The canonical current runtime deliberately clears a manual resume override
+// on positive automatic writes, and retains only the latest resume point.
+// Keep all other legacy request/response and error behavior under comparison.
+async function compareWatchPut(label,run,opt={}){
+  const a=world(opt),b=world(opt);
+  const A=loadLegacy(watch.before,watch.name,a.globals);
+  const B=loadLegacy(watch.after,watch.name,b.globals);
+  const oldResult=snapshot(await settle(()=>run(A,a)));
+  const newResult=snapshot(await settle(()=>run(B,b)));
+  const sameResult=structuredClone(newResult);
+  if(sameResult?.ok && sameResult.value && typeof sameResult.value==='object' &&
+      Object.hasOwn(sameResult.value,'resumeOverride')){
+    assert.equal(sameResult.value.resumeOverride,null,label+' resets stale manual position');
+    delete sameResult.value.resumeOverride;
+  }
+  assert.deepEqual(sameResult,oldResult,label+' legacy record fields');
+  const oldLog=structuredClone(a.log),newLog=structuredClone(b.log);
+  for(const event of newLog){
+    if(event[0]!=='update')continue;
+    const req=event[1];
+    if(req?.patch && Object.hasOwn(req.patch,'resumeOverride')){
+      assert.equal(req.patch.resumeOverride,null,label+' clear override only');
+      delete req.patch.resumeOverride;
+    }
+    assert.equal(req?.limits?.resume,1,label+' retains exactly one automatic point');
+    req.limits.resume=10; // the pre-migration fixture kept ten points.
+  }
+  assert.deepEqual(newLog,oldLog,label+' unchanged non-resume side effects');
+}
+// A read is intentionally split from the best-effort updatedAt write.
 async function compareWatchReadTouch(label,run,opt={}){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(watch.before,watch.name,a.globals);
@@ -94,17 +121,27 @@ async function compareWatchReadTouch(label,run,opt={}){
 const videoInfo=(extra={})=>({videoId:'sm9',threadId:'1173108780',postedAt:'2007-03-06T00:33:00+09:00',owner:{linkId:'user/4'},
   toJSON(){return {raw:true,videoId:'sm9'};},...extra});
 test('WatchInfoCacheDb: update request shape and acknowledgement',async()=>{
-  await compare(watch,'full put',d=>d.put('sm9',{videoInfo:videoInfo(),threadInfo:{t:1},heatMap:[1,2],config:{c:1},
+  await compareWatchPut('full put',d=>d.put('sm9',{videoInfo:videoInfo(),threadInfo:{t:1},heatMap:[1,2],config:{c:1},
     currentTime:12.5,watchCount:1,comment:{text:'x'}}));
-  await compare(watch,'minimal put',d=>d.put('sm9'));
-  await compare(watch,'videoInfo without toJSON/owner',d=>d.put('so1',{videoInfo:{videoId:'',threadId:'x',postedAt:'bad'},currentTime:0,watchCount:2}));
-  await compare(watch,'negative/NaN time, falsy extras',d=>d.put('sm1',{currentTime:NaN,threadInfo:0,heatMap:'',config:null,comment:''}));
+  await compareWatchPut('minimal put',d=>d.put('sm9'));
+  await compareWatchPut('videoInfo without toJSON/owner',d=>d.put('so1',{videoInfo:{videoId:'',threadId:'x',postedAt:'bad'},currentTime:0,watchCount:2}));
+  await compareWatchPut('negative/NaN time, falsy extras',d=>d.put('sm1',{currentTime:NaN,threadInfo:0,heatMap:'',config:null,comment:''}));
   for(const [i,res] of [null,'ok',{watchId:'other'},{}].entries())
-    await compare(watch,'unacknowledged '+i,d=>d.put('sm9',{}),{updateResult:()=>res});
-  await compare(watch,'best effort swallows',d=>d.putBestEffort('sm9',{}),{updateResult:()=>null});
-  await compare(watch,'best effort success',d=>d.putBestEffort('sm9',{watchCount:1}));
+    await compareWatchPut('unacknowledged '+i,d=>d.put('sm9',{}),{updateResult:()=>res});
+  await compareWatchPut('best effort swallows',d=>d.putBestEffort('sm9',{}),{updateResult:()=>null});
+  await compareWatchPut('best effort success',d=>d.putBestEffort('sm9',{watchCount:1}));
 });
 
+test('WatchInfoCacheDb: explicit manual 0s is retained and normal resume remains bounded',async()=>{
+  const w=world();
+  const subject=loadLegacy(watch.after,watch.name,w.globals);
+  const result=await subject.put('sm9',{currentTime:0,explicitResume:true});
+  assert.equal(result.resumeOverride,0,'manual zero should not be mistaken for absent position');
+  const request=w.log.find(entry=>entry[0]==='update')?.[1];
+  assert.equal(request?.patch?.resumeOverride,0);
+  assert.deepEqual(request?.prepend?.resume,[{now:5000,time:0}]);
+  assert.equal(request?.limits?.resume,1,'only one automatic resume position is kept');
+});
 test('WatchInfoCacheDb: open, bridge, get/delete/close/gc',async()=>{
   await compareWatchReadTouch('www ops',async d=>[keys(await d.initWorker()),await d.get('sm9'),await d.delete('sm9'),await d.close(),
     await d.gc(),await d.gc(1000),(await d.open())===(await d.open())],{rows:{sm9:{watchId:'sm9'}}});

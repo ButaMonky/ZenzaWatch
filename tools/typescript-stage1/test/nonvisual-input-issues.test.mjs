@@ -63,6 +63,7 @@ test('#114 closing the real Dialog restores held speed before its closed shortcu
  run(sourceClass('NicoVideoPlayerDialog')+';globalThis.Dialog=NicoVideoPlayerDialog;',c);
  run('globalThis.config=new Emitter();globalThis.external=new Emitter();external.emitResolve("init");globalThis.dialog=new Emitter();',c);
  c.config.props={KEY_SHIFT_RESET:82,KEY_TOGGLE_PLAY:32,playbackRate:1.75};
+ c.config.getValue=key=>c.config.props[key];
  c.config.setValue=(key,value)=>{c.config.props[key]=value;if(key==='playbackRate')rates.push(value);c.config.emit('update',key,value);};
  const d=c.dialog;Object.setPrototypeOf(d,c.Dialog.prototype);let toggles=0;
  Object.assign(d,{_playerConfig:c.config,_state:{isOpen:true,isPlaying:false,isEnded:false,isError:false,setPausing(){}},

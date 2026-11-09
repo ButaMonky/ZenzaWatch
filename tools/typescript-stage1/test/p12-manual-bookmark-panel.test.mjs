@@ -61,7 +61,7 @@ test('explicit Add stores and renders a manual point, separate from automatic ma
  await h.session.activate('sm1',300);
  const label=h.root.querySelector('[data-bookmark-label]');
  assert.equal(label.getAttribute('aria-label'),'しおりの名前');
- assert.equal(h.button('add').textContent,'しおりを追加');
+ assert.equal(h.button('add').textContent,'＋ 現在位置にしおり');
  label.value='Manual 1';
  h.button('add').click();
  await step();

@@ -27,7 +27,14 @@ async function parity(name,videoId,options,settings={}){
   const oldResult=await settle(()=>before.load(videoId,options));
   const newResult=await settle(()=>after.load(videoId,options));
   assert.deepEqual(snapshot(newResult),snapshot(oldResult),name+' result');
-  assert.deepEqual(snapshot(right.calls),snapshot(left.calls),name+' request');
+  // Task994: the loader owns diagnostics; netUtil consumes this local option
+  // before issuing the otherwise unchanged network request.
+  const requests=right.calls.map(([url,{diagnosticActive,...options}])=>{
+    assert.equal(typeof diagnosticActive,'function',name+' diagnostic ownership');
+    assert.equal(diagnosticActive(),false,name+' transport diagnostics disabled');
+    return [url,options];
+  });
+  assert.deepEqual(snapshot(requests),snapshot(left.calls),name+' request');
   if(oldResult.ok)assert.equal(newResult.value,right.body,name+' identity');
   return left.calls;
 }

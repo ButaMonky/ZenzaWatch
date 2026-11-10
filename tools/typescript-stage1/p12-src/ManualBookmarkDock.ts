@@ -23,30 +23,47 @@ export class ManualBookmarkDock {
   private disposed=false;
   private host:HTMLElement|null=null;
   private readonly home:HTMLElement;
-  private readonly launcher:HTMLButtonElement;
-  private readonly launchHandler:(event:MouseEvent)=>void;
   private readonly resizeHandler:()=>void;
   private resizeObserver:ResizeObserver|null=null;
-  private position():void {
-    if(!this.floating||!this.host||!this.trigger)return;
-    const host=this.host.getBoundingClientRect(),trigger=this.trigger.getBoundingClientRect();
-    const scaleX=host.width&&this.host.clientWidth?host.width/this.host.clientWidth:1;
-    const scaleY=host.height&&this.host.clientHeight?host.height/this.host.clientHeight:1;
-    const width=this.host.clientWidth||host.width,height=this.host.clientHeight||host.height;
-    const panelWidth=this.node.offsetWidth||Math.min(this.node.classList.contains('zw-library-wide')?620:400,width-24);
-    this.node.style.left=Math.max(12,Math.min((trigger.left-host.left)/scaleX,width-panelWidth-12))+'px';
-    this.node.style.right='auto';
-    const above=(trigger.top-host.top)/scaleY-20;
-    const top=(trigger.bottom-host.top)/scaleY+8;
-    const below=height-top-12;
-    if(above<Math.min(this.node.offsetHeight||300,240)&&below>above){
-      this.node.style.top=Math.max(12,top)+'px';this.node.style.bottom='auto';
-      this.node.style.maxHeight=Math.max(44,below)+'px';this.node.style.transformOrigin='left top';
-    }else{
-      const bottom=Math.max(12,Math.min(height-56,(host.bottom-trigger.top)/scaleY+8));
-      this.node.style.top='auto';this.node.style.bottom=bottom+'px';
-      this.node.style.maxHeight=Math.max(44,height-bottom-12)+'px';this.node.style.transformOrigin='left bottom';
+  private layoutObserver:MutationObserver|null=null;
+  private bottomReference:HTMLElement|null=null;
+  private readonly scrollHandler:(event:Event)=>void;
+  private readonly transitionHandler:(event:Event)=>void;
+  private observedLayout=new Set<HTMLElement>();
+  private observeLayoutChain(start:HTMLElement|null):void {
+    for(let node=start;node;node=node.parentElement)if(!this.observedLayout.has(node)){
+      this.observedLayout.add(node);this.layoutObserver?.observe(node,{attributes:true,attributeFilter:['class','style','hidden']});
     }
+  }
+  private position():void {
+    if(!this.floating||!this.host)return;
+    const host=this.host.getBoundingClientRect(),trigger=this.trigger?.getBoundingClientRect();
+    const scaleX=host.width&&(this.host.offsetWidth||this.host.clientWidth)?host.width/(this.host.offsetWidth||this.host.clientWidth):1;
+    const scaleY=host.height&&(this.host.offsetHeight||this.host.clientHeight)?host.height/(this.host.offsetHeight||this.host.clientHeight):1;
+    const width=this.host.clientWidth||host.width,height=this.host.clientHeight||host.height;
+    const win=this.node.ownerDocument.defaultView;
+    const viewportHeight=win?.innerHeight||host.bottom;
+    const anchor=this.host.querySelector<HTMLElement>('.commentHistorySwitch')||this.node.ownerDocument.querySelector<HTMLElement>('.commentHistorySwitch');
+    if(anchor!==this.bottomReference){
+      if(this.bottomReference)this.resizeObserver?.unobserve?.(this.bottomReference);
+      this.bottomReference=anchor;
+      if(anchor){this.resizeObserver?.observe(anchor);this.observeLayoutChain(anchor);
+        if(anchor.parentElement)this.layoutObserver?.observe(anchor.parentElement,{attributes:true,childList:true,attributeFilter:['class','style','hidden']});}
+    }
+    const anchorRect=anchor?.getBoundingClientRect();
+    const reference=anchorRect&&anchorRect.width>0&&anchorRect.height>0?anchorRect:undefined;
+    // Same viewport baseline as CommentHistoryPanel; only convert coordinates.
+    const viewportBottom=Math.max(16,Math.min(viewportHeight-120,reference?viewportHeight-reference.top+10:50));
+    const targetBottom=viewportHeight-viewportBottom;
+    const originLeft=host.left+(this.host.clientLeft-this.host.scrollLeft)*scaleX;
+    const originBottom=host.top+(this.host.clientTop+height-this.host.scrollTop)*scaleY;
+    const panelWidth=this.node.offsetWidth||Math.min(this.node.classList.contains('zw-library-wide')?620:400,width-24);
+    this.node.style.left=Math.max(12,Math.min(((trigger?.left??originLeft+12*scaleX)-originLeft)/scaleX,width-panelWidth-12))+'px';
+    this.node.style.right='auto';this.node.style.top='auto';
+    this.node.style.bottom=(originBottom-targetBottom)/scaleY+'px';
+    // Keep natural panel size. Restrict only the space available above its bottom.
+    this.node.style.maxHeight=Math.max(1,Math.min(height-24,(targetBottom-16)/scaleY))+'px';
+    this.node.style.transformOrigin='left bottom';
   }
   private trigger:HTMLElement|null=null;
   private floating=false;
@@ -72,10 +89,11 @@ export class ManualBookmarkDock {
     if(this.disposed)return;
     if(this.floating&&!this.closing){this.close();return;}
     this.cancelAnimation();this.closing=false;this.node.inert=false;
-    this.resizeObserver?.disconnect();
+    this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;
     this.host=host;this.trigger=trigger||null;this.floating=true;
     this.resizeObserver?.observe(this.node);this.resizeObserver?.observe(host);
     if(this.trigger)this.resizeObserver?.observe(this.trigger);
+    this.observeLayoutChain(host);this.observeLayoutChain(this.trigger);
     host.append(this.node);this.node.hidden=false;this.node.classList.add('zw-points-floating');
     this.panel.refreshPreferences();this.node.open=true;this.panel.setVisible(true);this.trigger?.setAttribute('aria-expanded','true');
     this.position();
@@ -94,7 +112,7 @@ export class ManualBookmarkDock {
       this.animate(false,()=>{
         this.node.open=false;this.node.hidden=true;this.node.inert=false;
         this.node.classList.remove('zw-points-floating');this.home.append(this.node);
-        this.floating=false;this.closing=false;this.resizeObserver?.disconnect();
+        this.floating=false;this.closing=false;this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;
       });
     }else{this.node.open=false;}
   }
@@ -124,22 +142,19 @@ export class ManualBookmarkDock {
     this.style=doc.createElement('style');
     this.style.textContent=ManualBookmarkDock.styles;
     node.append(this.style);
-    const launcher=this.launcher=doc.createElement('button');launcher.type='button';
-    launcher.className='zw-points-launcher';launcher.textContent='ここまで見た・しおり・ABリピートを開く';
-    this.launchHandler=event=>{
-      event.preventDefault();event.stopPropagation();
-      const host=target.closest<HTMLElement>('.zenzaPlayerContainer');
-      const button=host?.querySelector<HTMLElement>('.playbackPointsSwitch');
-      const rect=button?.getBoundingClientRect();
-      if(host)this.toggle(host,button&&rect&&rect.width>0&&rect.height>0?button:launcher);
-    };
-    launcher.addEventListener('click',this.launchHandler);
     this.resizeHandler=()=>this.position();
+    this.scrollHandler=event=>{if(event.target instanceof doc.defaultView!.Node&&this.node.contains(event.target as Node))return;this.position();};
+    this.transitionHandler=event=>{if(this.observedLayout.has(event.target as HTMLElement))this.position();};
+    doc.addEventListener('scroll',this.scrollHandler,true);
+    doc.addEventListener('fullscreenchange',this.resizeHandler);
+    doc.addEventListener('webkitfullscreenchange',this.resizeHandler);
+    doc.addEventListener('transitionend',this.transitionHandler,true);
+    const MutationObserver=doc.defaultView?.MutationObserver;
+    if(MutationObserver)this.layoutObserver=new MutationObserver(this.resizeHandler);
     doc.defaultView?.addEventListener('resize',this.resizeHandler);
     const Observer=doc.defaultView?.ResizeObserver;
     if(Observer){this.resizeObserver=new Observer(this.resizeHandler);this.resizeObserver.observe(node);}
     const series=target.querySelector(':scope > .seriesList');
-    target.insertBefore(launcher,series||null);
     target.insertBefore(node,series||null);
     // All keyboard interaction within this dedicated dock belongs to its
     // summary, buttons and text fields, not the video's global shortcuts.
@@ -181,7 +196,7 @@ export class ManualBookmarkDock {
       node.removeEventListener('keydown',this.keyHandler);
       node.removeEventListener('keyup',this.keyHandler);
       node.removeEventListener('click',this.clickHandler);
-      node.remove();launcher.remove();this.resizeObserver?.disconnect();doc.defaultView?.removeEventListener('resize',this.resizeHandler);
+      node.remove();this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;doc.defaultView?.removeEventListener('resize',this.resizeHandler);doc.removeEventListener('scroll',this.scrollHandler,true);doc.removeEventListener('fullscreenchange',this.resizeHandler);doc.removeEventListener('webkitfullscreenchange',this.resizeHandler);doc.removeEventListener('transitionend',this.transitionHandler,true);
       throw error;
     }
   }
@@ -203,11 +218,10 @@ export class ManualBookmarkDock {
     if(this.disposed)return;
     this.cancelAnimation();this.closing=false;this.node.open=false;this.node.hidden=true;this.node.inert=false;
     if(this.floating){this.node.classList.remove('zw-points-floating');this.home.append(this.node);this.floating=false;}
-    this.resizeObserver?.disconnect();this.trigger?.setAttribute('aria-expanded','false');this.panel.setVisible(false);this.session.deactivate();
+    this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;this.trigger?.setAttribute('aria-expanded','false');this.panel.setVisible(false);this.session.deactivate();
   }
   private static readonly styles=`
     .zenzaManualBookmarkDock[hidden]{display:none!important}
-    .zw-points-launcher{color:#f4f7ff;background:#303c51;border:1px solid #53627b;border-radius:6px;padding:6px 10px;cursor:pointer}
     .zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
     .zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
     .zenzaManualBookmarkDock[open]{overflow:auto}
@@ -304,9 +318,12 @@ export class ManualBookmarkDock {
     this.node.ownerDocument.removeEventListener('pointerdown',this.outsideHandler,true);
     this.node.ownerDocument.removeEventListener('click',this.outsideHandler,true);
     this.node.removeEventListener('toggle',this.toggleHandler);
-    this.resizeObserver?.disconnect();
+    this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;
     this.node.ownerDocument.defaultView?.removeEventListener('resize',this.resizeHandler);
-    this.launcher.removeEventListener('click',this.launchHandler);this.launcher.remove();
+    this.node.ownerDocument.removeEventListener('scroll',this.scrollHandler,true);
+    this.node.ownerDocument.removeEventListener('fullscreenchange',this.resizeHandler);
+    this.node.ownerDocument.removeEventListener('webkitfullscreenchange',this.resizeHandler);
+    this.node.ownerDocument.removeEventListener('transitionend',this.transitionHandler,true);
     this.panel.dispose();
     this.session.dispose();
     this.node.remove();

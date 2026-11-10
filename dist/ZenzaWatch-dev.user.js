@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.377-task1001
+// @version        2.7.378-task1002
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 18:05Z 2f456783
+// build: 2026-11-10 18:22Z 739be07e
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.377-task1001';
+    var VER = '2.7.378-task1002';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 18:05Z 2f456783';
+    var BUILD = '2026-11-10 18:22Z 739be07e';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -16023,36 +16023,54 @@ class ManualBookmarkDock {
 		disposed = false;
 		host = null;
 		home;
-		launcher;
-		launchHandler;
 		resizeHandler;
 		resizeObserver = null;
+		layoutObserver = null;
+		bottomReference = null;
+		scrollHandler;
+		transitionHandler;
+		observedLayout = new Set();
+		observeLayoutChain(start) {
+				for (let node = start; node; node = node.parentElement)
+						if (!this.observedLayout.has(node)) {
+								this.observedLayout.add(node);
+								this.layoutObserver?.observe(node, { attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+						}
+		}
 		position() {
-				if (!this.floating || !this.host || !this.trigger)
+				if (!this.floating || !this.host)
 						return;
-				const host = this.host.getBoundingClientRect(), trigger = this.trigger.getBoundingClientRect();
-				const scaleX = host.width && this.host.clientWidth ? host.width / this.host.clientWidth : 1;
-				const scaleY = host.height && this.host.clientHeight ? host.height / this.host.clientHeight : 1;
+				const host = this.host.getBoundingClientRect(), trigger = this.trigger?.getBoundingClientRect();
+				const scaleX = host.width && (this.host.offsetWidth || this.host.clientWidth) ? host.width / (this.host.offsetWidth || this.host.clientWidth) : 1;
+				const scaleY = host.height && (this.host.offsetHeight || this.host.clientHeight) ? host.height / (this.host.offsetHeight || this.host.clientHeight) : 1;
 				const width = this.host.clientWidth || host.width, height = this.host.clientHeight || host.height;
+				const win = this.node.ownerDocument.defaultView;
+				const viewportHeight = win?.innerHeight || host.bottom;
+				const anchor = this.host.querySelector('.commentHistorySwitch') || this.node.ownerDocument.querySelector('.commentHistorySwitch');
+				if (anchor !== this.bottomReference) {
+						if (this.bottomReference)
+								this.resizeObserver?.unobserve?.(this.bottomReference);
+						this.bottomReference = anchor;
+						if (anchor) {
+								this.resizeObserver?.observe(anchor);
+								this.observeLayoutChain(anchor);
+								if (anchor.parentElement)
+										this.layoutObserver?.observe(anchor.parentElement, { attributes: true, childList: true, attributeFilter: ['class', 'style', 'hidden'] });
+						}
+				}
+				const anchorRect = anchor?.getBoundingClientRect();
+				const reference = anchorRect && anchorRect.width > 0 && anchorRect.height > 0 ? anchorRect : undefined;
+				const viewportBottom = Math.max(16, Math.min(viewportHeight - 120, reference ? viewportHeight - reference.top + 10 : 50));
+				const targetBottom = viewportHeight - viewportBottom;
+				const originLeft = host.left + (this.host.clientLeft - this.host.scrollLeft) * scaleX;
+				const originBottom = host.top + (this.host.clientTop + height - this.host.scrollTop) * scaleY;
 				const panelWidth = this.node.offsetWidth || Math.min(this.node.classList.contains('zw-library-wide') ? 620 : 400, width - 24);
-				this.node.style.left = Math.max(12, Math.min((trigger.left - host.left) / scaleX, width - panelWidth - 12)) + 'px';
+				this.node.style.left = Math.max(12, Math.min(((trigger?.left ?? originLeft + 12 * scaleX) - originLeft) / scaleX, width - panelWidth - 12)) + 'px';
 				this.node.style.right = 'auto';
-				const above = (trigger.top - host.top) / scaleY - 20;
-				const top = (trigger.bottom - host.top) / scaleY + 8;
-				const below = height - top - 12;
-				if (above < Math.min(this.node.offsetHeight || 300, 240) && below > above) {
-						this.node.style.top = Math.max(12, top) + 'px';
-						this.node.style.bottom = 'auto';
-						this.node.style.maxHeight = Math.max(44, below) + 'px';
-						this.node.style.transformOrigin = 'left top';
-				}
-				else {
-						const bottom = Math.max(12, Math.min(height - 56, (host.bottom - trigger.top) / scaleY + 8));
-						this.node.style.top = 'auto';
-						this.node.style.bottom = bottom + 'px';
-						this.node.style.maxHeight = Math.max(44, height - bottom - 12) + 'px';
-						this.node.style.transformOrigin = 'left bottom';
-				}
+				this.node.style.top = 'auto';
+				this.node.style.bottom = (originBottom - targetBottom) / scaleY + 'px';
+				this.node.style.maxHeight = Math.max(1, Math.min(height - 24, (targetBottom - 16) / scaleY)) + 'px';
+				this.node.style.transformOrigin = 'left bottom';
 		}
 		trigger = null;
 		floating = false;
@@ -16097,6 +16115,9 @@ class ManualBookmarkDock {
 				this.closing = false;
 				this.node.inert = false;
 				this.resizeObserver?.disconnect();
+				this.layoutObserver?.disconnect();
+				this.observedLayout.clear();
+				this.bottomReference = null;
 				this.host = host;
 				this.trigger = trigger || null;
 				this.floating = true;
@@ -16104,6 +16125,8 @@ class ManualBookmarkDock {
 				this.resizeObserver?.observe(host);
 				if (this.trigger)
 						this.resizeObserver?.observe(this.trigger);
+				this.observeLayoutChain(host);
+				this.observeLayoutChain(this.trigger);
 				host.append(this.node);
 				this.node.hidden = false;
 				this.node.classList.add('zw-points-floating');
@@ -16135,6 +16158,9 @@ class ManualBookmarkDock {
 								this.floating = false;
 								this.closing = false;
 								this.resizeObserver?.disconnect();
+								this.layoutObserver?.disconnect();
+								this.observedLayout.clear();
+								this.bottomReference = null;
 						});
 				}
 				else {
@@ -16168,21 +16194,18 @@ class ManualBookmarkDock {
 				this.style = doc.createElement('style');
 				this.style.textContent = ManualBookmarkDock.styles;
 				node.append(this.style);
-				const launcher = this.launcher = doc.createElement('button');
-				launcher.type = 'button';
-				launcher.className = 'zw-points-launcher';
-				launcher.textContent = 'ここまで見た・しおり・ABリピートを開く';
-				this.launchHandler = event => {
-						event.preventDefault();
-						event.stopPropagation();
-						const host = target.closest('.zenzaPlayerContainer');
-						const button = host?.querySelector('.playbackPointsSwitch');
-						const rect = button?.getBoundingClientRect();
-						if (host)
-								this.toggle(host, button && rect && rect.width > 0 && rect.height > 0 ? button : launcher);
-				};
-				launcher.addEventListener('click', this.launchHandler);
 				this.resizeHandler = () => this.position();
+				this.scrollHandler = event => { if (event.target instanceof doc.defaultView.Node && this.node.contains(event.target))
+						return; this.position(); };
+				this.transitionHandler = event => { if (this.observedLayout.has(event.target))
+						this.position(); };
+				doc.addEventListener('scroll', this.scrollHandler, true);
+				doc.addEventListener('fullscreenchange', this.resizeHandler);
+				doc.addEventListener('webkitfullscreenchange', this.resizeHandler);
+				doc.addEventListener('transitionend', this.transitionHandler, true);
+				const MutationObserver = doc.defaultView?.MutationObserver;
+				if (MutationObserver)
+						this.layoutObserver = new MutationObserver(this.resizeHandler);
 				doc.defaultView?.addEventListener('resize', this.resizeHandler);
 				const Observer = doc.defaultView?.ResizeObserver;
 				if (Observer) {
@@ -16190,7 +16213,6 @@ class ManualBookmarkDock {
 						this.resizeObserver.observe(node);
 				}
 				const series = target.querySelector(':scope > .seriesList');
-				target.insertBefore(launcher, series || null);
 				target.insertBefore(node, series || null);
 				this.keyHandler = event => {
 						event.stopPropagation();
@@ -16232,9 +16254,15 @@ class ManualBookmarkDock {
 						node.removeEventListener('keyup', this.keyHandler);
 						node.removeEventListener('click', this.clickHandler);
 						node.remove();
-						launcher.remove();
 						this.resizeObserver?.disconnect();
+						this.layoutObserver?.disconnect();
+						this.observedLayout.clear();
+						this.bottomReference = null;
 						doc.defaultView?.removeEventListener('resize', this.resizeHandler);
+						doc.removeEventListener('scroll', this.scrollHandler, true);
+						doc.removeEventListener('fullscreenchange', this.resizeHandler);
+						doc.removeEventListener('webkitfullscreenchange', this.resizeHandler);
+						doc.removeEventListener('transitionend', this.transitionHandler, true);
 						throw error;
 				}
 		}
@@ -16267,13 +16295,15 @@ class ManualBookmarkDock {
 						this.floating = false;
 				}
 				this.resizeObserver?.disconnect();
+				this.layoutObserver?.disconnect();
+				this.observedLayout.clear();
+				this.bottomReference = null;
 				this.trigger?.setAttribute('aria-expanded', 'false');
 				this.panel.setVisible(false);
 				this.session.deactivate();
 		}
 		static styles = `
 		.zenzaManualBookmarkDock[hidden]{display:none!important}
-		.zw-points-launcher{color:#f4f7ff;background:#303c51;border:1px solid #53627b;border-radius:6px;padding:6px 10px;cursor:pointer}
 		.zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
 		.zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
 		.zenzaManualBookmarkDock[open]{overflow:auto}
@@ -16372,9 +16402,14 @@ class ManualBookmarkDock {
 				this.node.ownerDocument.removeEventListener('click', this.outsideHandler, true);
 				this.node.removeEventListener('toggle', this.toggleHandler);
 				this.resizeObserver?.disconnect();
+				this.layoutObserver?.disconnect();
+				this.observedLayout.clear();
+				this.bottomReference = null;
 				this.node.ownerDocument.defaultView?.removeEventListener('resize', this.resizeHandler);
-				this.launcher.removeEventListener('click', this.launchHandler);
-				this.launcher.remove();
+				this.node.ownerDocument.removeEventListener('scroll', this.scrollHandler, true);
+				this.node.ownerDocument.removeEventListener('fullscreenchange', this.resizeHandler);
+				this.node.ownerDocument.removeEventListener('webkitfullscreenchange', this.resizeHandler);
+				this.node.ownerDocument.removeEventListener('transitionend', this.transitionHandler, true);
 				this.panel.dispose();
 				this.session.dispose();
 				this.node.remove();
@@ -22233,6 +22268,76 @@ const ScreenFilterPanel = (() => {
 		</div>
 	`;
 		class Panel {
+				_geometryResize = null;
+				_geometryMutation = null;
+				_geometryNodes = [];
+				_onGeometryChange = (event) => {
+						if (!this.isOpen)
+								return;
+						if (event?.type === 'transitionend' && !this._geometryNodes.includes(event.target))
+								return;
+						this._observeGeometry();
+						this._updatePosition();
+						this._updateOrigin();
+				};
+				_updatePosition() {
+						if (!this.view)
+								return;
+						const button = document.querySelector('.commentHistorySwitch');
+						const rect = button?.getBoundingClientRect();
+						const bottom = rect && rect.width > 0 && rect.height > 0 ?
+								Math.max(16, Math.min(window.innerHeight - 120, window.innerHeight - rect.top + 10)) : 50;
+						this.view.style.top = 'auto';
+						this.view.style.bottom = bottom + 'px';
+						this.view.style.maxHeight = Math.max(1, window.innerHeight - bottom - 16) + 'px';
+				}
+				_observeGeometry() {
+						const nodes = [];
+						let node = document.querySelector('.commentHistorySwitch');
+						while (node) {
+								nodes.push(node);
+								if (node === document.body)
+										break;
+								node = node.parentElement;
+						}
+						if (!nodes.length)
+								nodes.push(document.body);
+						if (nodes.length === this._geometryNodes.length && nodes.every((item, index) => item === this._geometryNodes[index]))
+								return;
+						this._geometryResize?.disconnect();
+						this._geometryMutation?.disconnect();
+						this._geometryNodes.forEach(item => item.removeEventListener('transitionend', this._onGeometryChange));
+						this._geometryNodes = nodes;
+						if (window.ResizeObserver)
+								this._geometryResize = new window.ResizeObserver(() => this._onGeometryChange());
+						if (window.MutationObserver)
+								this._geometryMutation = new window.MutationObserver(() => this._onGeometryChange());
+						for (const item of nodes) {
+								this._geometryResize?.observe(item);
+								this._geometryMutation?.observe(item, { attributes: true, attributeFilter: ['class', 'style'], childList: true });
+								item.addEventListener('transitionend', this._onGeometryChange);
+						}
+				}
+				_startGeometry() {
+						window.addEventListener('resize', this._onGeometryChange);
+						window.visualViewport?.addEventListener('resize', this._onGeometryChange);
+						document.addEventListener('fullscreenchange', this._onFullscreenChange);
+						document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
+						this._observeGeometry();
+						this._updatePosition();
+				}
+				_stopGeometry() {
+						window.removeEventListener('resize', this._onGeometryChange);
+						window.visualViewport?.removeEventListener('resize', this._onGeometryChange);
+						document.removeEventListener('fullscreenchange', this._onFullscreenChange);
+						document.removeEventListener('webkitfullscreenchange', this._onFullscreenChange);
+						this._geometryResize?.disconnect();
+						this._geometryResize = null;
+						this._geometryMutation?.disconnect();
+						this._geometryMutation = null;
+						this._geometryNodes.forEach(item => item.removeEventListener('transitionend', this._onGeometryChange));
+						this._geometryNodes = [];
+				}
 				_presetEditing = false;
 				_editingPresetId = '';
 				_pendingPresetAction = null;
@@ -22463,8 +22568,6 @@ const ScreenFilterPanel = (() => {
 								}
 						};
 						ScreenFilter.onChange(this._refresh);
-						document.addEventListener('fullscreenchange', this._onFullscreenChange);
-						document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
 				}
 				_updateValueLabel(key, value, { force = false } = {}) {
 						const row = this.view.querySelector(`.sfRow[data-key="${key}"]`);
@@ -22699,6 +22802,7 @@ const ScreenFilterPanel = (() => {
 						if (this.view.parentNode !== parent) {
 								parent.append(this.view);
 						}
+						this._onGeometryChange();
 				}
 				get isOpen() {
 						return !!(this.view && this.view.classList.contains('is-open') &&
@@ -22716,6 +22820,8 @@ const ScreenFilterPanel = (() => {
 						this.view.classList.remove('is-open');
 						void this.view.offsetWidth;
 						this.view.classList.add('is-open');
+						this._startGeometry();
+						this._updateOrigin();
 						this._refresh();
 						window.addEventListener('pointerdown', this._onOutsidePointerDown, { capture: true });
 				}
@@ -22738,6 +22844,7 @@ const ScreenFilterPanel = (() => {
 								return;
 						}
 						window.removeEventListener('pointerdown', this._onOutsidePointerDown, { capture: true });
+						this._stopGeometry();
 						this.view.classList.add('is-closing');
 						clearTimeout(this._closeTimer);
 						this._closeTimer = setTimeout(() => {
@@ -50393,7 +50500,7 @@ const NotificationHistoryPanel = (() => {
 				'.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
 				'.zenzaNotificationDock[hidden]{display:none!important;}',
 				'.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
-				'.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
+				'.zenzaNotificationDock .zenzaNotificationHistory{max-height:none;min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
 				'.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;overflow:auto;max-height:min(70vh,640px);}',
 				'.zenzaNotificationHistory *{box-sizing:border-box;}',
 				'.zenzaNotificationHistory .znh-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:9px;}',
@@ -50820,6 +50927,51 @@ const NotificationHistoryPanel = (() => {
 				container.append(dock);
 				let open = false;
 				let disposed = false;
+				let layoutPending = false;
+				const updateLayout = () => {
+						layoutPending = false;
+						if (disposed || !open) {
+								return;
+						}
+						const host = container.getBoundingClientRect();
+						const scale = container.offsetHeight > 0 && host.height > 0 ? host.height / container.offsetHeight : 1;
+						const launcher = container.querySelector('.commentHistorySwitch') || document.querySelector('.commentHistorySwitch');
+						const anchor = launcher?.getBoundingClientRect();
+						const viewport = window.innerHeight;
+						const inset = anchor && anchor.width > 0 && anchor.height > 0 ?
+								Math.max(16, Math.min(viewport - 120, viewport - anchor.top + 10)) : 50;
+						const top = Math.max(16, host.top + 16);
+						const bottom = Math.max(top, viewport - inset);
+						const origin = host.top + container.clientTop * scale;
+						dock.style.top = ((top - origin) / scale + container.scrollTop) + 'px';
+						dock.style.bottom = 'auto';
+						dock.style.height = ((bottom - top) / scale) + 'px';
+						dock.style.maxHeight = 'none';
+						dock.style.boxSizing = 'border-box';
+				};
+				const scheduleLayout = () => {
+						if (disposed || !open || layoutPending) {
+								return;
+						}
+						layoutPending = true;
+						void Promise.resolve().then(updateLayout);
+				};
+				const resizeObserver = typeof window.ResizeObserver === 'function' ? new window.ResizeObserver(scheduleLayout) : null;
+				resizeObserver?.observe(container);
+				resizeObserver?.observe(button);
+				const layoutObserver = typeof window.MutationObserver === 'function' ? new window.MutationObserver(scheduleLayout) : null;
+				const observeLayoutChain = (start) => {
+						for (let node = start; node; node = node.parentElement) {
+								layoutObserver?.observe(node, { attributes: true, attributeFilter: ['class', 'style'] });
+						}
+				};
+				observeLayoutChain(container);
+				observeLayoutChain(button);
+				window.addEventListener('resize', scheduleLayout);
+				document.addEventListener('scroll', scheduleLayout, true);
+				document.addEventListener('fullscreenchange', scheduleLayout);
+				document.addEventListener('webkitfullscreenchange', scheduleLayout);
+				container.addEventListener('transitionend', scheduleLayout);
 				let animation = null;
 				const cancelAnimation = () => {
 						if (animation) {
@@ -50938,6 +51090,12 @@ const NotificationHistoryPanel = (() => {
 								open = true;
 								dock.inert = false;
 								dock.hidden = false;
+								updateLayout();
+								const commentButton = container.querySelector('.commentHistorySwitch') || document.querySelector('.commentHistorySwitch');
+								if (commentButton) {
+										resizeObserver?.observe(commentButton);
+										observeLayoutChain(commentButton);
+								}
 								button.setAttribute('aria-expanded', 'true');
 								refresh();
 								dock.querySelector('.znh-detail:not([hidden]) [data-history-back], .znh-toolbar:not([hidden]) input')?.focus();
@@ -50950,6 +51108,13 @@ const NotificationHistoryPanel = (() => {
 								}
 								close();
 								disposed = true;
+								resizeObserver?.disconnect();
+								layoutObserver?.disconnect();
+								window.removeEventListener('resize', scheduleLayout);
+								document.removeEventListener('scroll', scheduleLayout, true);
+								document.removeEventListener('fullscreenchange', scheduleLayout);
+								document.removeEventListener('webkitfullscreenchange', scheduleLayout);
+								container.removeEventListener('transitionend', scheduleLayout);
 								cancelAnimation();
 								window.removeEventListener('keydown', onKeyDown, true);
 								document.removeEventListener('pointerdown', onOutside, true);
@@ -69318,7 +69483,7 @@ class ModernAdvancedSettingsModel {
 												description: '既定ON。動画の再生完了時に自動位置だけを消去します。手動しおりは残ります。自動記録OFF時は消去しません。'
 										}],
 								['bookmark.showToolbarButton', '操作バーに「しおり・ABリピート」を表示', {
-												description: '既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画は必要な画像だけ読み込みます。OFFでも動画情報内の入口から利用できます。'
+												description: '既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画は必要な画像だけ読み込みます。OFFにすると操作バーのボタンを非表示にします。再び使うときはこの設定をONにしてください。'
 										}],
 								['bookmark.showVideoThumbnails', '保存一覧に動画サムネイルを表示', {
 												description: '既定ON。動画を識別する小さな画像を表示します。OFFでは画像の場所も詰め、動画サムネイルを読み込みません。'

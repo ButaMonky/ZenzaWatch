@@ -1805,6 +1805,56 @@ const ScreenFilterPanel = (() => {
   `;
 
   class Panel {
+    private _geometryResize:ResizeObserver|null=null;
+    private _geometryMutation:MutationObserver|null=null;
+    private _geometryNodes:Element[]=[];
+    private readonly _onGeometryChange=(event?:Event):void=>{
+      if(!this.isOpen)return;
+      if(event?.type==='transitionend'&&!this._geometryNodes.includes(event.target as Element))return;
+      this._observeGeometry();this._updatePosition();this._updateOrigin();
+    };
+    private _updatePosition():void {
+      if(!this.view)return;
+      const button=document.querySelector('.commentHistorySwitch');
+      const rect=button?.getBoundingClientRect();
+      const bottom=rect&&rect.width>0&&rect.height>0?
+        Math.max(16,Math.min(window.innerHeight-120,window.innerHeight-rect.top+10)):50;
+      this.view.style.top='auto';this.view.style.bottom=bottom+'px';
+      this.view.style.maxHeight=Math.max(1,window.innerHeight-bottom-16)+'px';
+    }
+    private _observeGeometry():void {
+      const nodes:Element[]=[];
+      let node:Element|null=document.querySelector('.commentHistorySwitch');
+      while(node){nodes.push(node);if(node===document.body)break;node=node.parentElement;}
+      if(!nodes.length)nodes.push(document.body);
+      if(nodes.length===this._geometryNodes.length&&nodes.every((item,index)=>item===this._geometryNodes[index]))return;
+      this._geometryResize?.disconnect();this._geometryMutation?.disconnect();
+      this._geometryNodes.forEach(item=>item.removeEventListener('transitionend',this._onGeometryChange));
+      this._geometryNodes=nodes;
+      if(window.ResizeObserver)this._geometryResize=new window.ResizeObserver(()=>this._onGeometryChange());
+      if(window.MutationObserver)this._geometryMutation=new window.MutationObserver(()=>this._onGeometryChange());
+      for(const item of nodes){
+        this._geometryResize?.observe(item);
+        this._geometryMutation?.observe(item,{attributes:true,attributeFilter:['class','style'],childList:true});
+        item.addEventListener('transitionend',this._onGeometryChange);
+      }
+    }
+    private _startGeometry():void {
+      window.addEventListener('resize',this._onGeometryChange);
+      window.visualViewport?.addEventListener('resize',this._onGeometryChange);
+      document.addEventListener('fullscreenchange',this._onFullscreenChange);
+      document.addEventListener('webkitfullscreenchange',this._onFullscreenChange);
+      this._observeGeometry();this._updatePosition();
+    }
+    private _stopGeometry():void {
+      window.removeEventListener('resize',this._onGeometryChange);
+      window.visualViewport?.removeEventListener('resize',this._onGeometryChange);
+      document.removeEventListener('fullscreenchange',this._onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange',this._onFullscreenChange);
+      this._geometryResize?.disconnect();this._geometryResize=null;
+      this._geometryMutation?.disconnect();this._geometryMutation=null;
+      this._geometryNodes.forEach(item=>item.removeEventListener('transitionend',this._onGeometryChange));this._geometryNodes=[];
+    }
     private _presetEditing=false;
     private _editingPresetId='';
     private _pendingPresetAction:{action:string;id:string}|null=null;
@@ -1972,8 +2022,6 @@ const ScreenFilterPanel = (() => {
       };
 
       ScreenFilter.onChange(this._refresh);
-      document.addEventListener('fullscreenchange', this._onFullscreenChange);
-      document.addEventListener('webkitfullscreenchange', this._onFullscreenChange);
     }
 
     _updateValueLabel(key?: Loose, value?: Loose, {force = false} = {}) {
@@ -2152,6 +2200,7 @@ const ScreenFilterPanel = (() => {
       if (this.view.parentNode !== parent) {
         parent.append(this.view);
       }
+      this._onGeometryChange();
     }
 
     get isOpen() {
@@ -2172,6 +2221,7 @@ const ScreenFilterPanel = (() => {
       this.view.classList.remove('is-open');
       void this.view.offsetWidth;
       this.view.classList.add('is-open');
+      this._startGeometry();this._updateOrigin();
       this._refresh();
       window.addEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
     }
@@ -2195,6 +2245,7 @@ const ScreenFilterPanel = (() => {
     close() {
       if (!this.view || !this.isOpen) { return; }
       window.removeEventListener('pointerdown', this._onOutsidePointerDown, {capture: true});
+      this._stopGeometry();
       this.view.classList.add('is-closing');
       clearTimeout(this._closeTimer);
       this._closeTimer = setTimeout(() => {

@@ -974,7 +974,7 @@ util.addStyle(`
   }
 
   .is-abort   .playControl,
-  .is-error   .playControl,
+  .is-error   .playControl:not(.prevVideo):not(.nextVideo),
   .is-loading .playControl {
     opacity: 0.4 !important;
     pointer-events: none;

@@ -518,10 +518,17 @@ export class ManualBookmarkPanel {
     this.libraryVirtual?.dispose();this.libraryVirtual=null;this.releaseVideoThumbnails();
     // A refresh of the same video must not silently discard an unsaved rename.
     // A changed canonical label (including our own completed rename) wins.
-    const sameVideo=snapshot.videoId!==null&&
-      snapshot.videoId===this.last.videoId;
+    // The library belongs to this panel/session identity, including idle -> idle.
+    // Current-video seeking and edits still require a non-null playback owner.
+    const sameIdentity=snapshot.videoId===this.last.videoId;
+    const sameVideo=snapshot.videoId!==null&&sameIdentity;
+    if(!sameIdentity){
+      this.libraryDrafts.clear();this.libraryGeneration++;this.libraryBusyRequest=null;
+      this.library=false;this.libraryStatus='idle';
+      this.expandedVideos=new Set(snapshot.videoId?[snapshot.videoId]:[]);
+    }
     // A different bookmark's save must not destroy the unsent Add label.
-    if(!sameVideo){this.libraryDrafts.clear();this.libraryGeneration++;this.libraryBusyRequest=null;this.library=false;this.libraryStatus='idle';this.expandedVideos=new Set(snapshot.videoId?[snapshot.videoId]:[]);this.pointGeneration++;this.pointBusyRequest=null;this.automaticDraftDirty=false;this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.pointDrafts={a:'',b:''};}
+    if(!sameVideo){this.pointGeneration++;this.pointBusyRequest=null;this.automaticDraftDirty=false;this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.pointDrafts={a:'',b:''};}
     this.clearPreviews();
     const previousTimes=new Map(this.last.bookmarks.map(item=>[item.id,{time:item.time,endTime:item.endTime}]));
     const timeDrafts=new Map<string,{start:string;end:string}>();
@@ -917,14 +924,15 @@ export class ManualBookmarkPanel {
     if(action==='back'){this.libraryDrafts.clear();this.library=false;this.libraryGeneration++;this.libraryBusyRequest=null;this.render(this.last);return;}
     if(action==='open'){this.libraryBusyRequest=null;this.library=true;this.libraryResetScroll=true;this.expandedVideos.add(this.last.videoId||'');await this.loadLibrary();return;}
     if(action==='retry'){await this.loadLibrary();return;}
-    if(!this.library||!this.ownsVideo())return;
+    // Saved rows carry their own video identity; browsing them requires no playable current video.
+    if(!this.library)return;
     const video=this.libraryRows.find(v=>v.videoId===button.dataset.videoId);
     if(!video)return;
     const item=video.bookmarks.find(row=>row.id===button.dataset.bookmarkId);
     const time=item?.time??video.automaticTime;
     if(action==='seek'||action==='seek-auto'||action==='repeat'){
       if(time===null||time<0||time>=video.duration)return;
-      if(action==='repeat'&&item?.endTime!==undefined&&video.videoId===this.last.videoId){this.setRepeatRange(time,item.endTime);return;}
+      if(action==='repeat'&&item?.endTime!==undefined&&video.videoId===this.last.videoId&&this.ownsVideo()){this.setRepeatRange(time,item.endTime);return;}
       this.libraryDrafts.clear();this.library=false;this.libraryGeneration++;this.render(this.last);
       this.deps.openLibraryPosition?.(video.videoId,time,action==='repeat'?item?.endTime:undefined);return;
     }

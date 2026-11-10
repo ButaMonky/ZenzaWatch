@@ -214,6 +214,11 @@ class VideoWatchOptions {
 
 
 class NicoVideoPlayerDialogView extends Emitter {
+  /** Watch errors may contain plain break tags, never trusted HTML. */
+  static formatErrorMessage(value: unknown): string {
+    return value == null ? '' : String(value).replace(/<br\s*\/?\s*>/gi, '\n');
+  }
+
   declare emitResolve: Loose;
   declare emit: Loose;
   declare static __tpl__: Loose;
@@ -1633,7 +1638,8 @@ class NicoVideoPlayerDialogView extends Emitter {
     }
     if (icon.matches(':disabled, [aria-disabled="true"]') ||
         (icon.classList.contains('playControl') &&
-         host.matches('.is-abort, .is-error, .is-loading'))) { return false; }
+         (host.matches('.is-abort, .is-loading') ||
+          (host.classList.contains('is-error') && !icon.matches('.prevVideo, .nextVideo'))))) { return false; }
     return true;
   }
   _flashActionFeedback(command: string, param?: Loose, enabledOverride?: boolean) {
@@ -1786,7 +1792,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         }
         return;
       case 'errorMessage':
-        return this._$errorMessageContainer[0].textContent = value;
+        return this._$errorMessageContainer[0].textContent = NicoVideoPlayerDialogView.formatErrorMessage(value);
       case 'currentTab':
         return this.selectTab(value);
     }
@@ -2867,17 +2873,30 @@ NicoVideoPlayerDialogView.__css__ = `
   }
 
   .zenzaPlayerContainer.is-error .errorMessageContainer {
-    display: inline-block;
+    display: block;
     position: absolute;
     z-index: 10000;
-    top: 50%;
+    /* The existing recovery actions start at 60%; reserve space above them. */
+    top: 40%;
     left: 50%;
-    padding: 8px 16px;
+    box-sizing: border-box;
+    width: min(680px, calc(100% - 32px));
+    max-height: calc(40% - 32px);
+    padding: 10px 14px;
     transform: translate(-50%, -50%);
-    background: rgba(255, 0, 0, 0.9);
-    font-size: 24px;
-    box-shadow: 8px 8px 4px rgba(128, 0, 0, 0.8);
-    white-space: nowrap;
+    background: #481e29;
+    color: #ffe8e9;
+    border: 1px solid #ad6b79;
+    border-radius: 6px;
+    font-size: clamp(14px, 2vw, 20px);
+    line-height: 1.5;
+    box-shadow: 0 4px 16px #0008;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    overflow: auto;
+    overscroll-behavior: contain;
+    pointer-events: auto;
+    user-select: text;
   }
   .errorMessageContainer:empty {
     display: none !important;
@@ -6081,11 +6100,19 @@ class VideoHoverMenu {
       top: 60%;
       transform: translate(-50%, 0);
       display: none;
-      white-space: nowrap;
+      box-sizing: border-box;
+      width: min(480px, calc(100% - 24px));
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      white-space: normal;
     }
       .is-error .onErrorMenu {
-        display: block !important;
+        display: flex !important;
         opacity: 1 !important;
+      }
+      .zenzaScreenMode_small .zenzaPlayerContainer.is-error .hoverMenuContainer .menuItemContainer.onErrorMenu {
+        transform: translate(calc(-50% + var(--zenzaSmallDragX, 0px)), var(--zenzaSmallDragY, 0px));
       }
 
       .is-youTube .onErrorMenu .for-nicovideo,
@@ -6099,7 +6126,15 @@ class VideoHoverMenu {
       .onErrorMenu .menuButton {
         position: relative;
         display: inline-block !important;
-        margin: 0 16px;
+        margin: 0;
+        box-sizing: border-box;
+        flex: 1 1 84px;
+        min-width: 0;
+        max-width: 160px;
+        min-height: 36px;
+        height: auto;
+        text-align: center;
+        white-space: normal;
         padding: 8px;
         background: #888;
         color: #000;

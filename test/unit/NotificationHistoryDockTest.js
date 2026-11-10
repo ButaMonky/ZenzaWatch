@@ -15,6 +15,7 @@ function setup() {
   const records = [{id:'1', timestamp:1, category:'network', level:'error', message:'<img src=x>通信失敗', details:{statusCode:400}}];
   const context = createContext({document, window:dom.window, NotificationJournal:{
     list:async () => { reads++; return records; },
+    toDiagnosticEntry:entry => entry,
     clear:async () => { records.length=0; return true; },
     subscribe:callback => { subscribers.add(callback); return () => subscribers.delete(callback); }
   }});
@@ -30,6 +31,7 @@ describe('NotificationHistory dock (canonical TypeScript)', () => {
     const h=setup();h.controller.toggle();await flush();
     h.container.querySelector('[data-entry-id]').click();h.controller.close();h.controller.toggle();await flush();
     assert(h.document.activeElement.hasAttribute('data-history-back'));
+    assert(h.container.querySelector('[data-history-action="copy"]'), 'detail rendering completes with the report action');
     h.controller.dispose();h.dom.window.close();
   });
   it('skips motion and closes immediately when reduced motion is requested',()=>{

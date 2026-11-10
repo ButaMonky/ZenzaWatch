@@ -58,8 +58,6 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
         // よくわからん物
         startPosition: -1, // used by stream-controller
         maxBufferHole: 0.5, // used by stream-controller
-        maxSeekHole: 2, // used by stream-controller
-        lowBufferWatchdogPeriod: 0.5, // used by stream-controller
         highBufferWatchdogPeriod: 3, // used by stream-controller
         nudgeOffset: 0.1, // used by stream-controller
         nudgeMaxRetry: 3, // used by stream-controller
@@ -89,39 +87,113 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
     DEFAULT_CONFIG.clone = (() => {
         return Object.assign({}, DEFAULT_CONFIG);
     });
+    // Public controls may change these values only; credentials and loader hooks stay owned here.
+    const editableKeys = new Set(['maxBufferLength', 'maxBufferSize', 'maxMaxBufferLength',
+        'minAutoBitrate', 'startLevel', 'abrEwmaDefaultEstimate', 'autoAbrEwmaDefaultEstimate',
+        'capLevelOnFPSDrop', 'capLevelToPlayerSize', 'show_video_label', 'enable_db_cache', 'debug']);
+    const numericBounds = {
+        maxBufferLength: [0, 300], maxMaxBufferLength: [0, 1200], maxBufferSize: [0, 1e9],
+        minAutoBitrate: [0, 50e6], abrEwmaDefaultEstimate: [0, 50e6], startLevel: [-1, 100],
+        startPosition: [-1, Number.MAX_SAFE_INTEGER], cache_expire_time: [0, 365 * 86400000],
+        abrBandWidthFactor: [0, 1], abrBandWidthUpFactor: [0, 1], fpsDroppedMonitoringThreshold: [0, 1]
+    };
+    const invalid = Symbol('invalid HLS setting');
+    const validate = (key, value) => {
+        if (!Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key))
+            return invalid;
+        const original = DEFAULT_CONFIG[key];
+        if (key === 'use_native_hls' && value === 'force')
+            return value;
+        if (typeof original === 'boolean')
+            return typeof value === 'boolean' ? value : invalid;
+        if (original === undefined && (key === 'liveSyncDuration' || key === 'liveMaxLatencyDuration')) {
+            return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : invalid;
+        }
+        if (typeof original !== 'number')
+            return invalid; // Never deserialize executable hooks or version identity.
+        if (value === Infinity && original === Infinity)
+            return value;
+        if (typeof value !== 'number' || !Number.isFinite(value))
+            return invalid;
+        const [min, max] = numericBounds[key] || [0, Number.MAX_SAFE_INTEGER];
+        const bounded = Math.min(max, Math.max(min, value));
+        return key === 'startLevel' ? Math.round(bounded) : bounded;
+    };
+    const reconcile = (config) => {
+        config.maxMaxBufferLength = Math.max(config.maxBufferLength, config.maxMaxBufferLength);
+    };
     const Config = (() => {
-        const config = {}, emitter = new Emitter();
+        const config = { ...DEFAULT_CONFIG }, emitter = new Emitter();
         Object.keys(DEFAULT_CONFIG).forEach(key => {
-            const storageKey = `ZenzaWatch_video.hls.${key}`;
-            config[key] = DEFAULT_CONFIG[key];
             try {
-                const saved = localStorage[storageKey];
-                if (saved)
-                    config[key] = JSON.parse(saved);
+                const saved = localStorage[`ZenzaWatch_video.hls.${key}`];
+                if (saved) {
+                    const value = validate(key, JSON.parse(saved));
+                    if (value !== invalid)
+                        config[key] = value;
+                }
             }
             catch (_) { /* unavailable/corrupt persistence must not stop the player */ }
         });
+        reconcile(config);
+        const publish = (next) => {
+            const changes = Object.keys(next).filter(key => config[key] !== next[key]);
+            // Publish an internally consistent snapshot before delivering update events.
+            Object.assign(config, next);
+            changes.forEach(key => { emitter.emit(`update-${key}`, config[key]); emitter.emit('update', { key, value: config[key] }); });
+        };
+        const persist = (next) => {
+            const changed = Object.keys(next).filter(key => config[key] !== next[key]);
+            const previous = new Map();
+            try {
+                changed.forEach(key => {
+                    const storageKey = `ZenzaWatch_video.hls.${key}`;
+                    previous.set(storageKey, localStorage[storageKey]);
+                    localStorage[storageKey] = JSON.stringify(next[key]);
+                });
+            }
+            catch (_) {
+                // Roll back only keys touched by this save, never unrelated preferences.
+                previous.forEach((value, key) => { try {
+                    if (value === undefined)
+                        delete localStorage[key];
+                    else
+                        localStorage[key] = value;
+                }
+                catch (_) { } });
+                return false;
+            }
+            publish(next);
+            return true;
+        };
         return {
             raw: config,
-            get: (key) => {
-                return config[key];
-            },
+            get: (key) => config[key],
             set: (key, value) => {
-                if (!DEFAULT_CONFIG.hasOwnProperty(key)) {
+                const checked = validate(key, value);
+                if (checked === invalid)
                     return;
+                const next = { ...config, [key]: checked };
+                reconcile(next);
+                if (!persist(next)) {
+                    publish(next);
+                    console.warn('HLS settings could not be saved');
                 }
-                const storageKey = `ZenzaWatch_video.hls.${key}`;
-                if (config[key] !== value) {
-                    config[key] = value;
-                    try {
-                        localStorage[storageKey] = JSON.stringify(value);
-                    }
-                    catch (_) {
-                        console.warn('HLS settings could not be saved');
-                    }
-                    emitter.emit(`update-${key}`, value);
-                    emitter.emit('update', { key, value });
+            },
+            applySettings: (patch) => {
+                if (!patch || typeof patch !== 'object' || Array.isArray(patch))
+                    return false;
+                const next = { ...config };
+                for (const key of Object.keys(patch)) {
+                    if (!editableKeys.has(key))
+                        continue;
+                    const checked = validate(key, patch[key]);
+                    if (checked === invalid)
+                        return false;
+                    next[key] = checked;
                 }
+                reconcile(next);
+                return persist(next);
             },
             on: (...args) => { emitter.on(...args); },
             off: (...args) => { emitter.off(...args); },
@@ -178,7 +250,7 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
         };
         return result;
     };
-    return { Config, DEFAULT_CONFIG, nativeHlsPreference, debounce, throttle };
+    return { Config, DEFAULT_CONFIG, settingBounds: numericBounds, nativeHlsPreference, debounce, throttle };
 };
 //===END===
 export {createHlsConfig};

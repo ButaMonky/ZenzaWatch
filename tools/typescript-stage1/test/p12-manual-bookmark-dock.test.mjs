@@ -61,9 +61,9 @@ function harness(setup=()=>{}){
 test('closed-by-default dock mounts only inside information tab, before series',()=>{
  const h=harness();
  const details=h.dock.element;
- assert.equal(details.tagName,'DETAILS');
- assert.equal(details.open,false);
- assert.equal(details.querySelector('summary').textContent,'しおり・ABリピート');
+ assert.equal(details.tagName,'SECTION');
+ assert.equal(details.hidden,true);
+ assert.equal(details.querySelector('.zw-points-heading').textContent,'しおり・ABリピート');
  assert.equal(details.dataset.bookmarkOwner,'manual');
  assert.equal(details.nextElementSibling.className,'seriesList');
  assert.equal(h.native.querySelector('#native-seek'),h.seek);
@@ -80,7 +80,7 @@ test('closed-by-default dock mounts only inside information tab, before series',
 test('add, rename, seek and remove use independent manual bookmark storage',async()=>{
  const h=harness();
  await h.dock.activate('sm1',200);
- h.dock.element.open=true;
+ h.dock.toggle(h.doc.querySelector('.zenzaPlayerContainer'));
  h.dock.element.querySelector('[data-bookmark-label]').value='Scene alpha';
  h.click('add').click();await step();
  assert.equal(h.repo.rows.get('sm1')[0].label,'Scene alpha');
@@ -123,7 +123,7 @@ test('bookmark summary and action keyboard events cannot trigger player shortcut
   target.dispatchEvent(evt);
   assert.equal(evt.defaultPrevented,false,'do not block browser default behavior');
  };
- const summary=h.dock.element.querySelector('summary');
+ const summary=h.dock.element.querySelector('.zw-points-heading');
  const add=h.click('add');
  const field=h.dock.element.querySelector('input[data-bookmark-label]');
  for(const target of [summary,add,field]){
@@ -210,7 +210,7 @@ test('toolbar launches one anchored floating panel without a video information l
  Object.defineProperty(host,'clientWidth',{value:900});Object.defineProperty(host,'clientHeight',{value:600});
  assert.equal(h.dock.element.hidden,true);
  assert.equal(h.doc.querySelector('.zw-points-launcher'),null);h.dock.toggle(host,trigger);
- assert.equal(h.dock.element.hidden,false);assert.equal(h.dock.element.open,true);
+ assert.equal(h.dock.element.hidden,false);assert.equal(h.dock.element.querySelector(':scope > summary'),null);
  assert.equal(h.dock.element.parentElement,host);assert.equal(h.dock.element.style.left,'60px');
  assert.equal(h.dock.element.style.bottom,'-18px');
  h.dock.close();assert.equal(h.dock.element.hidden,true);h.close();
@@ -280,4 +280,17 @@ test('Task1002 hidden reference falls back and fullscreen/ancestor transitions r
  top=780;h.doc.documentElement.dispatchEvent(new h.dom.window.Event('transitionend',{bubbles:true}));assert.equal(h.dock.element.style.bottom,'30px');
  top=750;h.doc.dispatchEvent(new h.dom.window.Event('webkitfullscreenchange'));assert.equal(h.dock.element.style.bottom,'60px');
  h.dock.close();top=700;h.doc.documentElement.dispatchEvent(new h.dom.window.Event('transitionend',{bubbles:true}));assert.equal(h.dock.element.style.bottom,'60px');h.close();
+});
+
+test('Task1003 static bookmark heading never collapses the panel; toolbar and Escape still close',async()=>{
+ const h=harness();await h.dock.activate('sm1',200);
+ const host=h.doc.querySelector('.zenzaPlayerContainer'),trigger=h.doc.createElement('button');host.append(trigger);
+ h.dock.toggle(host,trigger);const heading=h.dock.element.querySelector('.zw-points-heading');
+ assert(heading);assert.equal(h.dock.element.tagName,'SECTION');
+ heading.click();heading.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+ heading.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:' ',bubbles:true}));
+ assert.equal(h.dock.element.hidden,false);assert.equal(trigger.getAttribute('aria-expanded'),'true');
+ h.dock.toggle(host,trigger);assert.equal(h.dock.element.hidden,true);
+ h.dock.toggle(host,trigger);heading.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+ assert.equal(h.dock.element.hidden,true);assert.equal(h.doc.activeElement,trigger);h.close();
 });

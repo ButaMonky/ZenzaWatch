@@ -18,7 +18,7 @@ const HlsRuntime = {
       return window[key]=Promise.resolve(window.ZenzaHLS);
     }
     const pending=(async()=>{
-      const {Config,DEFAULT_CONFIG,nativeHlsPreference,debounce,throttle}=createHlsConfig(dependencies.Emitter,HlsLibrary.version);
+      const {Config,DEFAULT_CONFIG,settingBounds,nativeHlsPreference,debounce,throttle}=createHlsConfig(dependencies.Emitter,HlsLibrary.version);
       let primaryVideo:Loose;
       const library=HlsLibrary.load();
       // Register the factory synchronously; player construction waits for the load below.
@@ -36,44 +36,34 @@ const HlsRuntime = {
           }`, {className: 'ZenzaHLS'});
         render(div, container);
       });
-      ZenzaWatch.emitter.promise('videoContextMenu.addonMenuReady.list').then(({container}: Loose) => {
-        const li = html`<li class="command" data-command="toggleHLSDebug">HLS設定</li>`;
-        render(li, container);
-      });
-
       ZenzaWatch.emitter.once('command-toggleHLSDebug', () => {
         defineHlsDebugElements(hlsConfig, {html, render, Storage, HTMLDialogElement: window.HTMLDialogElement || window.HTMLDivElement});
         const d = document.createElement('video-debug-dialog');
         d.className = 'zen-family';
         (d as Loose).hlsConfig = hlsConfig;
-        d.addEventListener('change', e => {
-          if ((e as Loose).detail.name === 'show_video_label') {
-            Config.set((e as Loose).detail.name, (e as Loose).detail.value);
-            if (primaryVideo) {
-              primaryVideo.setAttribute('show-video-label',
-                (e as Loose).detail.value ? 'on' : 'off');
-            }
-          } else if ((e as Loose).detail.name === 'autoAbrEwmaDefaultEstimate') {
-            Config.set((e as Loose).detail.name, (e as Loose).detail.value);
-          }
-        });
+        (d as Loose).defaultConfig = DEFAULT_CONFIG;
+        (d as Loose).settingBounds = settingBounds;
+        (d as Loose).versionInfo = {zenza: ZenzaWatch.version, hls: window.Hls?.version || HlsLibrary.version};
         d.addEventListener('save', e => {
-          const config = (e as Loose).detail.config;
-          Object.keys(config).forEach(key => {
-            if (config[key] !== Config.get(key)) {
-              Config.set(key, config[key]);
+          const dialog = d as Loose;
+          dialog.setSaving?.(true);
+          try {
+            if (!Config.applySettings((e as Loose).detail.config)) {
+              dialog.setStatus?.('設定を保存できませんでした。入力内容とブラウザーの保存領域を確認してください。', 'error');
+              return;
             }
-          });
-          if (primaryVideo) {
-            primaryVideo.hlsConfig = config;
-          }
+            // Full validated snapshot retains credentials, retry policy and decoding defaults.
+            if (primaryVideo) {
+              primaryVideo.hlsConfig = Config.raw;
+              primaryVideo.setAttribute('show-video-label', Config.get('show_video_label') ? 'on' : 'off');
+            }
+            dialog.hlsConfig = {...Config.raw};
+            dialog.setStatus?.('保存しました。バッファ・画質設定は次の動画から反映します。', 'success');
+          } finally {dialog.setSaving?.(false);}
         });
         d.addEventListener('reset', () => {
-          const config = Object.assign({}, DEFAULT_CONFIG);
-          (d as Loose).reset(config);
-          if (primaryVideo) {
-            primaryVideo.hlsConfig = config;
-          }
+          (d as Loose).reset(DEFAULT_CONFIG);
+          (d as Loose).setStatus?.('初期値に戻しました。保存すると反映します。');
         });
         Config.on('update-abrEwmaDefaultEstimate', (value?: Loose) => {
           if (typeof value !== 'number' || isNaN(value)) { return; }
@@ -96,8 +86,11 @@ const HlsRuntime = {
       const hlsConfig = Object.assign({}, Config.raw);
       // Task 079: Config は emit('update', {key, value}) の形で知らせるので、
       // 以前の (key, value) => … では hlsConfig が一度も更新されていなかった。
-      Config.on('update', ({key, value}: Loose = {}) => {
-        if (key) { (hlsConfig as Loose)[key] = value; }
+      Config.on('update', ({key}: Loose = {}) => {
+        if (key) {
+          Object.assign(hlsConfig, Config.raw);
+          if (primaryVideo) primaryVideo.hlsConfig = hlsConfig;
+        }
       });
 
       let lastLevel = -1;

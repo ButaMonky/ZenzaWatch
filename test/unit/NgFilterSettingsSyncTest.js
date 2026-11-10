@@ -37,10 +37,11 @@ describe('Task205 NG master switch settings synchronization', () => {
     const listeners = new Set();
     const config = {
       props: {enableFilter: true},
-      onkey(key, fn) { if (key === 'enableFilter') listeners.add(fn); },
-      offkey(key, fn) { if (key === 'enableFilter') listeners.delete(fn); }
+      on(key, fn) { if (key === 'update') listeners.add(fn); },
+      off(key, fn) { if (key === 'update') listeners.delete(fn); }
     };
     const panel = new Panel();
+    panel._root={querySelectorAll:()=>[{dataset:{settingName:'enableFilter'}}]};
     panel.config = config;
     assert.strictEqual(listeners.size, 0, 'disconnected panel must not retain config listeners');
 
@@ -48,13 +49,13 @@ describe('Task205 NG master switch settings synchronization', () => {
     assert.strictEqual(listeners.size, 1);
     panel.state.isOpen = true;
     const beforeRevision = panel.state.revision;
-    for (const fn of listeners) fn(false);
+    for (const fn of listeners) fn('enableFilter',false);
     assert.strictEqual(panel.state.revision, beforeRevision + 1);
     assert.strictEqual(panel.renderRequests, 1);
 
     await panel.disconnectedCallback();
     assert.strictEqual(listeners.size, 0, 'disconnect must release the config listener');
-    for (const fn of listeners) fn(true);
+    for (const fn of listeners) fn('enableFilter',true);
     assert.strictEqual(panel.renderRequests, 1);
 
     await panel.connectedCallback();

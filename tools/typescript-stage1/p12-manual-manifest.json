@@ -45,9 +45,9 @@
       "name": "ManualBookmarkDock",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkDock.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkDock.js",
-      "sourceSha256": "a45b872c8add4281a6b4fdc49d0930c91fcb9ca45da7df6845c0bcb694bde24f",
-      "emittedSha256": "0ee29a74e9cf1b32cdb43505c471dec8f32ac1b9a50139379fbb2f4961314c84",
-      "runtimeSha256": "97f9a6f95e9f1e106e93c3ba8a6717be456422e4d9f68e026623e051fdaab304"
+      "sourceSha256": "b3e825a1f64650fb00092e0813a8375f807e9599d49261475f21b77bf42faafb",
+      "emittedSha256": "0e6b2fc82ee6824d483b95f49680001bdc6912811aaec11e2f0986d4bb9ff074",
+      "runtimeSha256": "d128cf62ea102362f1098623d9bb99b4755b603fdfe4a4b3c6c90eea53ce3a73"
     }
   ]
 }

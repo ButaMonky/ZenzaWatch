@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/NicodicArticleLoader.ts",
   "runtime": "packages/lib/src/nico/NicodicArticleLoader.js",
-  "sourceSha256": "0b7bb5ceec9f8dfca1712793a7e9a8098dc773f4a52b3351cd1e527a016f6e5b",
-  "runtimeSha256": "8af0d2c0f382ec6f75e99c2e44d6da7cf050d7003d23f8122ede141d45337442"
+  "sourceSha256": "e53b89549e68cfafd52b2dd8d56a5e17f423160a9b825f66c8a332800e2a3901",
+  "runtimeSha256": "005f34db1701f772bb09e4ea04a95fd2f7b3545b76d756bb13cc33d4bdcb1c7d"
 }

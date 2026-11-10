@@ -1,6 +1,8 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {netUtil} from '../infra/netUtil';
 // GENERATED FROM tools/typescript-stage1/nico-src/TagSuggestLoader.ts (Task463). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 /**
  * タグ検索の入力補完（Task 069）。
  *
@@ -31,15 +33,22 @@ const TagSuggestLoader = (() => {
         if (cache.has(w)) {
             return cache.get(w);
         }
-        const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
-        const res = await net.fetch(API_BASE + encodeURIComponent(w), { credentials: 'omit', timeout: 5000 });
-        const json = await res.json();
-        const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter((c) => typeof c === 'string') : [];
-        cache.set(w, candidates);
-        if (cache.size > CACHE_LIMIT) {
-            cache.delete(cache.keys().next().value);
-        }
-        return candidates;
+        let schemaValid = false;
+        const execute = async () => {
+            const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+            const res = await net.fetch(API_BASE + encodeURIComponent(w), { credentials: 'omit', timeout: 5000 });
+            const json = await res.json();
+            schemaValid = !!json && Array.isArray(json.candidates) &&
+                json.candidates.every(c => typeof c === 'string');
+            const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter((c) => typeof c === 'string') : [];
+            cache.set(w, candidates);
+            if (cache.size > CACHE_LIMIT) {
+                cache.delete(cache.keys().next().value);
+            }
+            return candidates;
+        };
+        return typeof RequestDiagnostics === 'undefined' ? execute() :
+            RequestDiagnostics.observe('tag-suggest', w, execute, () => schemaValid, () => true);
     };
     return { load };
 })();

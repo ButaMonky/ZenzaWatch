@@ -1,7 +1,9 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {netUtil} from '../infra/netUtil';
 import {CacheStorage} from '../infra/CacheStorage';
 // GENERATED FROM tools/typescript-stage1/nico-src/PlaylistApiLoader.ts (Task463). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const PlaylistApiLoader = (() => {
     const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
     // #238: These endpoints can return account-private rows. Without a reliable
@@ -16,47 +18,52 @@ const PlaylistApiLoader = (() => {
             }
         }
         async load({ type, id, options, all, maxItems, isCurrent }, { frontendId = 6, frontendVersion = 0 } = {}) {
-            const { url, cacheKey } = ((type) => {
-                switch (type) {
-                    case 'series':
-                        return this._buildSeriesURL(id, options);
-                    case 'user-uploaded':
-                        return this._buildUserUploadedURL(id, options);
-                    case 'mylist':
-                        return this._buildMylistURL(id, options);
-                    case 'watchlater':
-                        return this._buildWatchlaterURL(options);
-                    case 'search':
-                        return this._buildSearchURL(options);
-                    default:
-                        return {};
+            const execute = async () => {
+                const { url, cacheKey } = ((type) => {
+                    switch (type) {
+                        case 'series':
+                            return this._buildSeriesURL(id, options);
+                        case 'user-uploaded':
+                            return this._buildUserUploadedURL(id, options);
+                        case 'mylist':
+                            return this._buildMylistURL(id, options);
+                        case 'watchlater':
+                            return this._buildWatchlaterURL(options);
+                        case 'search':
+                            return this._buildSearchURL(options);
+                        default:
+                            return {};
+                    }
+                })(type);
+                if (url === undefined || cacheKey === undefined) {
+                    throw new Error(`プレイリストの取得失敗(3) ${type}`);
                 }
-            })(type);
-            if (url === undefined || cacheKey === undefined) {
-                throw new Error(`プレイリストの取得失敗(3) ${type}`);
-            }
-            if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
-                return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
-            }
-            // nvapi でソートされた結果をもらうのでそのままキャッシュする
-            const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
-            if (cacheData) {
-                return cacheData;
-            }
-            // nvapi に X-Frontend-Id header が必要
-            const result = await netUtil.fetch(url, {
-                headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                credentials: 'include',
-            }).then((r) => r.json())
-                .catch((e) => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e); });
-            if (result.meta.status !== 200 || !result.data.items) {
-                throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
-            }
-            const data = result.data.items;
-            if (mayUseSharedCache(type)) {
-                cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
-            }
-            return data;
+                if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
+                    return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
+                }
+                // nvapi でソートされた結果をもらうのでそのままキャッシュする
+                const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
+                if (cacheData) {
+                    return cacheData;
+                }
+                // nvapi に X-Frontend-Id header が必要
+                const result = await netUtil.fetch(url, {
+                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+                    credentials: 'include',
+                    ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}),
+                }).then((r) => r.json())
+                    .catch((e) => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e); });
+                if (result.meta.status !== 200 || !result.data.items) {
+                    throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
+                }
+                const data = result.data.items;
+                if (mayUseSharedCache(type)) {
+                    cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+                }
+                return data;
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !isCurrent || isCurrent());
         }
         // Task972: one atomic ordered collection, not the first 500-row page.
         async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
@@ -104,7 +111,8 @@ const PlaylistApiLoader = (() => {
                     try {
                         result = await netUtil.fetch(url.href, {
                             headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                            credentials: 'include', timeout: 15000
+                            credentials: 'include',
+                            ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}), timeout: 15000
                         }).then((r) => r.json());
                     }
                     catch (error) {

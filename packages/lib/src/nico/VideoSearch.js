@@ -1,9 +1,11 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {CrossDomainGate} from '../infra/CrossDomainGate';
 import {WindowMessageEmitter} from '../message/messageUtil';
 import {textUtil} from '../text/textUtil';
 import {sleep} from '../infra/sleep';
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoSearch.ts (Task643). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
     // 参考: http://site.nicovideo.jp/search-api-docs/search.html
     // http://ch.nicovideo.jp/nico-lab/blomaga/ar930955
@@ -542,24 +544,29 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             return data;
         };
         const fetchPage = async (query, page, pageSize, isCurrent) => {
-            ensureCurrent(isCurrent);
-            const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
-            const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
-            const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
-                credentials: 'include',
-                headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }
-            });
-            // HTTP failure must not be hidden by a misleading JSON meta.status=200.
-            if (Number.isInteger(res?.status) && res.status >= 400) {
-                throw Object.assign(new Error('nvapi search HTTP failure'), { status: res.status, kind: 'http' });
-            }
-            const json = await res.json();
-            if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-                throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`), { status: json && json.meta && json.meta.status });
-            }
-            // Task190/Q02 and Task458: verify every page before any result is
-            // displayed. Later malformed pages retain the previous contiguous prefix.
-            return validateSearchPage(json.data);
+            const execute = async () => {
+                ensureCurrent(isCurrent);
+                const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
+                const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+                const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
+                    credentials: 'include',
+                    headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' },
+                    ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+                });
+                // HTTP failure must not be hidden by a misleading JSON meta.status=200.
+                if (Number.isInteger(res?.status) && res.status >= 400) {
+                    throw Object.assign(new Error('nvapi search HTTP failure'), { status: res.status, kind: 'http' });
+                }
+                const json = await res.json();
+                if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+                    throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`), { status: json && json.meta && json.meta.status });
+                }
+                // Task190/Q02 and Task458: verify every page before any result is
+                // displayed. Later malformed pages retain the previous contiguous prefix.
+                return validateSearchPage(json.data);
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('search', JSON.stringify([query, page, pageSize]), execute, () => true, () => !isCurrent || isCurrent());
         };
         /**
          * @return {Promise<{status:'ok', count:number, list:Object[], engine:'nvapi'}>}
@@ -682,59 +689,63 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             return NicoSearchApiV2Loader.searchBySnapshot(word, params);
         }
         static async searchBySnapshot(word, params, isCurrent) {
-            ensureCurrent(isCurrent);
-            initializeCrossDomainGate();
-            const query = new NicoSearchApiV2Query(word, params);
-            const url = API_BASE_URL + '?' + query.toString();
-            const version = this.version.isLatest
-                ? this.version.date.getTime()
-                : await this.version.update().then(date => date.getTime());
-            ensureCurrent(isCurrent);
-            if (!this.cacheStorage) {
-                this.cacheStorage = new CacheStorage(sessionStorage);
-            }
-            const cacheKey = `search: ${[
-                `words:${query.q}`,
-                `targets:${query.targets.join(',')}`,
-                `sort:${query.sort}`,
-                `filters:${query.stringfiedFilters}`,
-                `offset:${query.offset}`,
-            ].join(', ')}`;
-            const cacheData = this.cacheStorage.getItem(cacheKey);
-            if (cacheData && cacheData.version === version) {
-                return cacheData.data;
-            }
-            ensureCurrent(isCurrent);
-            return gate.fetch(url).then(res => res.text()).then(text => {
+            const execute = async () => {
                 ensureCurrent(isCurrent);
-                const result = NicoSearchApiV2Loader.parseResult(text);
-                if (typeof result !== 'number' && result.status === 'ok') {
-                    let data = Object.assign(result, { word, params });
-                    this.cacheStorage.setItem(cacheKey, { data, version }, this.CACHE_EXPIRE_TIME);
-                    return Promise.resolve(data);
+                initializeCrossDomainGate();
+                const query = new NicoSearchApiV2Query(word, params);
+                const url = API_BASE_URL + '?' + query.toString();
+                const version = this.version.isLatest
+                    ? this.version.date.getTime()
+                    : await this.version.update().then(date => date.getTime());
+                ensureCurrent(isCurrent);
+                if (!this.cacheStorage) {
+                    this.cacheStorage = new CacheStorage(sessionStorage);
                 }
-                else {
-                    let description;
-                    switch (result) {
-                        default:
-                            description = 'UNKNOWN ERROR';
-                            break;
-                        case 400:
-                            description = 'INVALID QUERY';
-                            break;
-                        case 500:
-                            description = 'INTERNAL SERVER ERROR';
-                            break;
-                        case 503:
-                            description = 'MAINTENANCE';
-                            break;
+                const cacheKey = `search: ${[
+                    `words:${query.q}`,
+                    `targets:${query.targets.join(',')}`,
+                    `sort:${query.sort}`,
+                    `filters:${query.stringfiedFilters}`,
+                    `offset:${query.offset}`,
+                ].join(', ')}`;
+                const cacheData = this.cacheStorage.getItem(cacheKey);
+                if (cacheData && cacheData.version === version) {
+                    return cacheData.data;
+                }
+                ensureCurrent(isCurrent);
+                return gate.fetch(url).then(res => res.text()).then(text => {
+                    ensureCurrent(isCurrent);
+                    const result = NicoSearchApiV2Loader.parseResult(text);
+                    if (typeof result !== 'number' && result.status === 'ok') {
+                        let data = Object.assign(result, { word, params });
+                        this.cacheStorage.setItem(cacheKey, { data, version }, this.CACHE_EXPIRE_TIME);
+                        return Promise.resolve(data);
                     }
-                    return Promise.reject({
-                        status: 'fail',
-                        description
-                    });
-                }
-            });
+                    else {
+                        let description;
+                        switch (result) {
+                            default:
+                                description = 'UNKNOWN ERROR';
+                                break;
+                            case 400:
+                                description = 'INVALID QUERY';
+                                break;
+                            case 500:
+                                description = 'INTERNAL SERVER ERROR';
+                                break;
+                            case 503:
+                                description = 'MAINTENANCE';
+                                break;
+                        }
+                        return Promise.reject({
+                            status: 'fail',
+                            description
+                        });
+                    }
+                });
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('search', 'snapshot:' + JSON.stringify([word, params]), execute, () => true, () => !isCurrent || isCurrent());
         }
         /**
          * Task 066: 動画IDから投稿者ID(userId)／チャンネルID(channelId)を引く。
@@ -751,34 +762,42 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
          * @return {Promise<Map<string,{userId:number|null,channelId:number|null}>>}
          */
         static async lookupOwnerIds(watchIds) {
-            initializeCrossDomainGate();
-            const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
-            const result = new Map();
-            if (!ids.length) {
-                return result;
-            }
-            const params = [
-                'q=',
-                'targets=title',
-                'fields=contentId,userId,channelId',
-                '_sort=-startTime',
-                '_offset=0',
-                `_limit=${ids.length}`,
-                '_context=ZenzaWatch'
-            ];
-            ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
-            const res = await gate.fetch(API_BASE_URL + '?' + params.join('&'));
-            const json = NicoSearchApiV2Loader._jsonParse(await res.text());
-            if (!json || !json.meta || json.meta.status !== 200 || !Array.isArray(json.data)) {
-                return result;
-            }
-            json.data.forEach(item => {
-                result.set(String(item.contentId), {
-                    userId: item.userId || null,
-                    channelId: item.channelId || null
+            let validation = true;
+            const execute = async () => {
+                initializeCrossDomainGate();
+                const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
+                const result = new Map();
+                if (!ids.length) {
+                    return result;
+                }
+                const params = [
+                    'q=',
+                    'targets=title',
+                    'fields=contentId,userId,channelId',
+                    '_sort=-startTime',
+                    '_offset=0',
+                    `_limit=${ids.length}`,
+                    '_context=ZenzaWatch'
+                ];
+                ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
+                const res = await gate.fetch(API_BASE_URL + '?' + params.join('&'));
+                const json = NicoSearchApiV2Loader._jsonParse(await res.text());
+                const status = res.status >= 400 ? res.status : json?.meta?.status;
+                validation = typeof status === 'number' && status >= 400 ? { status } :
+                    !!json && json.meta?.status === 200 && Array.isArray(json.data);
+                if (!json || !json.meta || json.meta.status !== 200 || !Array.isArray(json.data)) {
+                    return result;
+                }
+                json.data.forEach(item => {
+                    result.set(String(item.contentId), {
+                        userId: item.userId || null,
+                        channelId: item.channelId || null
+                    });
                 });
-            });
-            return result;
+                return result;
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('owner', 'lookup:' + JSON.stringify(watchIds), execute, () => validation, () => true);
         }
         /**
          * 100件以上検索する用
@@ -844,15 +863,20 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             const headers = { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' };
             const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
             const fetchUserPage = async (page) => {
-                ensureCurrent(isCurrent);
-                const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
-                const res = await net.fetch(url, { credentials: 'include', headers });
-                const json = await res.json();
-                ensureCurrent(isCurrent);
-                if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-                    throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
-                }
-                return json.data;
+                const execute = async () => {
+                    ensureCurrent(isCurrent);
+                    const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
+                    const res = await net.fetch(url, { credentials: 'include', headers,
+                        ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}) });
+                    const json = await res.json();
+                    ensureCurrent(isCurrent);
+                    if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+                        throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
+                    }
+                    return json.data;
+                };
+                return typeof RequestDiagnostics === 'undefined' ? execute() :
+                    RequestDiagnostics.observe('owner', JSON.stringify([params.userId, page]), execute, value => Array.isArray(value.items), () => !isCurrent || isCurrent());
             };
             // 1. 投稿動画一覧（1ページ目で総数を知り、残りは4ページずつ並行取得）
             const first = await fetchUserPage(1);

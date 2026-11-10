@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Task466: TypeScript canonical implementation of the Nicodic batch lookup.
  * The server array is unknown until the original runtime guards validate it.
@@ -38,6 +39,8 @@ const NicodicArticleLoader: NicodicArticleLoaderClient = (() => {
   const getCache = (): NicodicCache => cacheStorage || (cacheStorage = new CacheStorage(sessionStorage));
 
   const fetchBatch = async (entries: Array<[string, (result: NicodicLookupResult | null) => void]>): Promise<void> => {
+    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('dictionary', JSON.stringify(entries.map(([name]) => name)), 'response');
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
     let articles: Map<string, NicodicArticle> | null = null;
@@ -45,15 +48,18 @@ const NicodicArticleLoader: NicodicArticleLoaderClient = (() => {
       const query = new URLSearchParams();
       entries.forEach(([name]) => query.append('titles[]', name));
       const res = await fetch(`${API_URL}?${query}`, {credentials: 'omit', signal: controller.signal});
-      if (!res.ok) { throw new Error(`Nicodic HTTP ${res.status}`); }
+      if (!res.ok) { diagnostic?.failure({status: res.status}); throw new Error(`Nicodic HTTP ${res.status}`); }
       const data: unknown = await res.json();
       if (!Array.isArray(data) || data.some((a: unknown) =>
         !a || typeof (a as NicodicArticle).request_title !== 'string' ||
         typeof (a as NicodicArticle).title !== 'string')) {
+        diagnostic?.failure({kind: 'schema'});
         throw new Error('Invalid Nicodic batch response');
       }
+      diagnostic?.success();
       articles = new Map((data as NicodicArticle[]).map(a => [a.request_title, a]));
     } catch (e) {
+      diagnostic?.failure(controller.signal.aborted ? {name: 'TimeoutError'} : e);
       window.console.warn('大百科の記事有無を調べられませんでした', e);
     } finally {
       clearTimeout(timeout);

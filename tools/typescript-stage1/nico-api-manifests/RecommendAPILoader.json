@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/RecommendAPILoader.ts",
   "runtime": "packages/lib/src/nico/RecommendAPILoader.js",
-  "sourceSha256": "cd3d54ca7bacc7bdaed8538e845b369bbc3a44fa11eae3ba7d4a4dcd43e570ed",
-  "runtimeSha256": "d8da9ace914ebde66e819a030e9652821e1a706c43bbd3034175a7b0cba9c4fe"
+  "sourceSha256": "396788145eaaf43d0235e8e742b522f22de9cef24d9ad0a2eb04fb91c475be4c",
+  "runtimeSha256": "8212f1d569d7d231d46fd8346b43e2db51ab25d9b54dc950c0c81077ebb8b522"
 }

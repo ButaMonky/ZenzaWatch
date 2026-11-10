@@ -1,5 +1,7 @@
+import {RequestDiagnostics} from '../../../lib/src/infra/RequestDiagnostics';
 // GENERATED FROM tools/typescript-stage1/nico-src/SupporterCredit.ts (Task962). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 // legacy-to-ts: names provided by other bundled modules
 /*
  * Task 080: 動画の最後に流れる「提供」画面（ニコニ広告・ギフトの支援者クレジット）
@@ -45,9 +47,30 @@ const SupporterCredit = (() => {
     };
     const easeInCubic = (t) => t < 0 ? 0 : t > 1 ? 1 : t * t * t;
     const easeOutCubic = (t) => t < 0 ? 0 : t > 1 ? 1 : 1 - (1 - t) ** 3;
-    const withTimeout = (promise, ms = 10000) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
-    const fetchJson = (url, signal) => withTimeout(fetch(url, { credentials: 'include', signal }).then(r => r.ok ? r.json() : null))
-        .catch(() => null);
+    const withTimeout = (promise, ms = 10000) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), ms))]);
+    const fetchJson = (url, signal) => {
+        const isGift = String(url).includes('/gift/');
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin(isGift ? 'gifts' : 'supporters', String(url), 'response', () => !signal?.aborted);
+        return withTimeout(fetch(url, { credentials: 'include', signal }).then(async (r) => {
+            if (!r.ok) {
+                diagnostic?.failure({ status: r.status });
+                return null;
+            }
+            const body = await r.json();
+            if (typeof body?.meta?.status === 'number' && body.meta.status >= 400) {
+                diagnostic?.failure({ status: body.meta.status });
+            }
+            else if (isGift ? !Array.isArray(body?.data?.effects) :
+                !body?.data?.supporters || typeof body.data.supporters !== 'object') {
+                diagnostic?.failure({ kind: 'schema' });
+            }
+            else {
+                diagnostic?.success();
+            }
+            return body;
+        })).catch((error) => { diagnostic?.failure(error); return null; });
+    };
     const loadImage = (url) => withTimeout(new Promise((resolve, reject) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';

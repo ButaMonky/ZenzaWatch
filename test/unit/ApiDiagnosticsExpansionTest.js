@@ -7,6 +7,22 @@ function world(extra={}) {
  ctx.diag.setSink(e=>events.push(e)); return {ctx,events};
 }
 describe('API diagnostics expansion (offline)',()=>{
+ it('retains even no-sponsor 404 responses once, including HTTP and API code',async()=>{
+  let response={status:404,json:async()=>({meta:{status:404,errorCode:'RESOURCE_NOT_FOUND',errorMessage:'広告期間内のスポンサーが存在しません'}})};
+  const {ctx,events}=world({location:{host:'www.nicovideo.jp'},fetch:async()=>response});
+  run(beginSection('packages/lib/src/infra/netUtil.js'),ctx);
+  run(beginSection('packages/lib/src/nico/UaaLoader.js')+';globalThis.loader=UaaLoader;',ctx);
+  await ctx.loader.load('sm9');assert.equal(events.length,1);assert.equal(events[0].statusCode,404);assert.equal(events[0].errorCode,'RESOURCE_NOT_FOUND');
+  response={status:404,json:async()=>({meta:{status:404,errorCode:'RESOURCE_NOT_FOUND',errorMessage:'route missing'}})};
+  await ctx.loader.load('sm9');assert.equal(events.length,2);assert.equal(events[1].reason,'not-found');
+  response={status:503,json:async()=>({meta:{status:503}})};
+  await ctx.loader.load('sm9');assert.equal(events.length,3);assert.equal(events[2].statusCode,503);
+  response={status:404,json:async()=>({meta:{status:404,errorCode:'RESOURCE_NOT_FOUND',errorMessage:'広告期間内のスポンサーが存在しません'}})};
+  await ctx.loader.load('sm9');assert.equal(events.length,4);assert.equal(events[3].outcome,'failed');
+  response={status:404,json:async()=>{throw new SyntaxError('html');}};
+  await assert.rejects(ctx.loader.load('sm9'));assert.equal(events.at(-1).statusCode,404);assert.equal(events.at(-1).errorCode,'RESPONSE_SCHEMA');
+ });
+
  it('classifies suggestions, nicoad, gifts and dictionary without persisting terms',()=>{
   const {ctx,events}=world();
   for(const [url,operation] of [

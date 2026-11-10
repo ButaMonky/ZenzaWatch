@@ -26,6 +26,12 @@ function setup() {
 }
 
 describe('NotificationHistory dock (canonical TypeScript)', () => {
+  it('reopens the selected detail with focus on its visible back control',async()=>{
+    const h=setup();h.controller.toggle();await flush();
+    h.container.querySelector('[data-entry-id]').click();h.controller.close();h.controller.toggle();await flush();
+    assert(h.document.activeElement.hasAttribute('data-history-back'));
+    h.controller.dispose();h.dom.window.close();
+  });
   it('skips motion and closes immediately when reduced motion is requested',()=>{
     const h=setup(), dock=h.container.querySelector('.zenzaNotificationDock');
     h.dom.window.matchMedia=()=>({matches:true});

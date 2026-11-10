@@ -187,6 +187,7 @@ const {initialize} = (() => {
 
   const initialize = async function (){
     if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
+      NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
       RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
         category: 'network', source: event.operation, message: event.message,
         level: event.outcome === 'recovered' ? 'success' :

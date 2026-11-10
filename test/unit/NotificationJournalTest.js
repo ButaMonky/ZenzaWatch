@@ -14,6 +14,19 @@ function harness(extra = {}) {
 }
 
 describe('NotificationJournal source-only, no network', () => {
+  it('captures occurrence build and separates first/last failure from recovery time', () => {
+    let now=1800000000000;const journal=harness({Date:class extends Date {static now(){return now;}}});
+    journal.configureBuild('2.7.370-task994','2026-11-10 12:00Z abc1234');
+    const first=journal.recordDiagnostic('diag-test',{message:'failed',details:{outcome:'failed',reason:'http'}});
+    now+=1000;const again=journal.recordDiagnostic('diag-test',{message:'failed',details:{outcome:'failed',reason:'http'}});
+    now+=2000;const recovered=journal.recordDiagnostic('diag-test',{message:'recovered',details:{outcome:'recovered'}});
+    assert.equal(first.version,'2.7.370-task994');assert.equal(again.firstOccurredAt,1800000000000);
+    assert.equal(recovered.lastOccurredAt,1800000001000);assert.equal(recovered.recoveredAt,1800000003000);
+    assert.equal(recovered.details.count,2);assert.equal(recovered.build,'2026-11-10 12:00Z abc1234');
+    journal.configureBuild('bad secret','cookie=secret');
+    assert(!JSON.stringify(journal.record({message:'new'})).includes('secret'));
+  });
+
   it('stores entries in session when IndexedDB is unavailable', async () => {
     const journal = harness();
     let updates = 0;

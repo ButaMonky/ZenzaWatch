@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.369-task993
+// @version        2.7.370-task994
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 09:19Z 84ccbe4
+// build: 2026-11-10 13:39Z e58112b
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -131,7 +131,7 @@ const RequestDiagnostics = (() => {
 				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
 				const status = e.statusCode ?? e.status ?? e.httpStatus;
 				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-						'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
+						'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED', 'RESOURCE_NOT_FOUND'];
 				const fields = {
 						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
 						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.369-task993';
+    var VER = '2.7.370-task994';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 09:19Z 84ccbe4';
+    var BUILD = '2026-11-10 13:39Z e58112b';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5823,7 +5823,13 @@ const NotificationJournalPolicy = (() => {
 						message: text(entry.message),
 						videoId: videoId(entry.videoId),
 						source: code(entry.source) || '',
-						details: details(entry.details)
+						details: details(entry.details),
+						...(typeof entry.version === 'string' && /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(entry.version) && entry.version.length <= 64 ? { version: entry.version } : {}),
+						...(typeof entry.build === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}Z [a-f0-9]{7,40}$/i.test(entry.build) ? { build: entry.build } : {}),
+						...Object.fromEntries(['firstOccurredAt', 'lastOccurredAt', 'recoveredAt'].flatMap(key => {
+								const value = entry[key];
+								return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 8640000000000000 ? [[key, value]] : [];
+						}))
 				};
 		};
 		return { normalize };
@@ -5989,6 +5995,8 @@ const NotificationJournal = (() => {
 		const recent = [];
 		const diagnosticGroups = new Map();
 		let sequence = 0;
+		let buildIdentity = {};
+		const configureBuild = (version, build) => { buildIdentity = { version, build }; };
 		const store = NotificationJournalStore.create(typeof indexedDB === 'undefined' ? undefined : indexedDB);
 		const announce = () => {
 				for (const listener of listeners) {
@@ -6003,7 +6011,7 @@ const NotificationJournal = (() => {
 						return null;
 				}
 				const now = Date.now();
-				const entry = NotificationJournalPolicy.normalize(input, {
+				const entry = NotificationJournalPolicy.normalize({ ...input, ...buildIdentity, firstOccurredAt: now, lastOccurredAt: now, recoveredAt: undefined }, {
 						id: now.toString(36) + '-' + (++sequence).toString(36) + '-' +
 								Math.random().toString(36).slice(2, 10),
 						timestamp: now
@@ -6065,9 +6073,14 @@ const NotificationJournal = (() => {
 						return null;
 				}
 				const count = Math.min(1e12, Number(previous?.details.count || 0) + (recovered ? 0 : 1));
-				const data = { ...input, details: { ...(recovered ? previous?.details : {}), ...fields, count,
-								...(recovered && previous?.details.reason ? { reason: previous.details.reason } : {}) } };
 				const now = Date.now();
+				const data = { ...input, ...buildIdentity,
+						version: previous?.version ?? buildIdentity.version, build: previous?.build ?? buildIdentity.build,
+						firstOccurredAt: previous?.firstOccurredAt ?? now,
+						lastOccurredAt: recovered ? previous?.lastOccurredAt : Math.max(now, previous?.lastOccurredAt ?? now),
+						recoveredAt: recovered ? Math.max(now, previous?.lastOccurredAt ?? now) : undefined,
+						details: { ...(recovered ? previous?.details : {}), ...fields, count,
+								...(recovered && previous?.details.reason ? { reason: previous.details.reason } : {}) } };
 				const entry = NotificationJournalPolicy.normalize(data, {
 						id: previous?.id || now.toString(36) + '-' + (++sequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10),
 						timestamp: now
@@ -6114,7 +6127,7 @@ const NotificationJournal = (() => {
 				listeners.add(listener);
 				return () => listeners.delete(listener);
 		};
-		return { record, recordDiagnostic, list, clear, subscribe };
+		return { record, recordDiagnostic, list, clear, subscribe, configureBuild };
 })();
 const PopupMessage = (() => {
 		const __css__ = `
@@ -12886,12 +12899,40 @@ const NicodicArticleLoader = (() => {
 // already required
 const UaaLoader = {
 		load: (videoId, { limit = 50, signal } = {}) => {
-				const execute = async () => {
+				const ticket = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('advertising', videoId, 'response', () => !signal?.aborted);
+				return (async () => {
 						const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
-						return netUtil.fetch(url, { credentials: 'include', signal }).then((res) => res.json());
-				};
-				return typeof RequestDiagnostics === 'undefined' ? execute() :
-						RequestDiagnostics.observe('advertising', videoId, execute, value => !!value && Array.isArray(value.data?.sponsors), () => !signal?.aborted);
+						try {
+								const res = await netUtil.fetch(url, { credentials: 'include', signal, diagnosticActive: () => false });
+								let body;
+								try {
+										body = await res.json();
+								}
+								catch (error) {
+										ticket?.failure({ status: res.status, errorCode: 'RESPONSE_SCHEMA' });
+										throw error;
+								}
+								const meta = body?.meta;
+								if (res.status >= 400) {
+										ticket?.failure({ status: res.status, errorCode: meta?.errorCode });
+								}
+								else if (typeof meta?.status === 'number' && (meta.status < 200 || meta.status >= 300)) {
+										ticket?.failure({ status: meta.status, errorCode: meta.errorCode });
+								}
+								else if (!Array.isArray(body?.data?.sponsors)) {
+										ticket?.failure({ kind: 'schema' });
+								}
+								else {
+										ticket?.success();
+								}
+								return body;
+						}
+						catch (error) {
+								ticket?.failure(error);
+								throw error;
+						}
+				})();
 		}
 };
 // already required
@@ -49250,11 +49291,11 @@ const NotificationHistoryPanel = (() => {
 				network: '通信', player: '再生', system: '内部処理'
 		};
 		const style = [
-				'.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:auto;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
+				'.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
 				'.zenzaNotificationDock[hidden]{display:none!important;}',
 				'.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
-				'.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;display:block;overflow:auto;overscroll-behavior:contain;}',
-				'.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;}',
+				'.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
+				'.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;overflow:auto;max-height:min(70vh,640px);}',
 				'.zenzaNotificationHistory *{box-sizing:border-box;}',
 				'.zenzaNotificationHistory .znh-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:9px;}',
 				'.zenzaNotificationHistory input,.zenzaNotificationHistory select,.zenzaNotificationHistory button{font:inherit;}',
@@ -49265,7 +49306,7 @@ const NotificationHistoryPanel = (() => {
 				'.zenzaNotificationHistory button:hover{background:#555;}',
 				'.zenzaNotificationHistory button:focus-visible,.zenzaNotificationHistory input:focus-visible,.zenzaNotificationHistory select:focus-visible{outline:2px solid #9cf;outline-offset:1px;}',
 				'.zenzaNotificationHistory .znh-status{font-size:12px;color:#bbb;min-height:18px;margin-bottom:6px;}',
-				'.zenzaNotificationHistory .znh-list{overflow:auto;max-height:min(60vh,640px);overscroll-behavior:contain;}',
+				'.zenzaNotificationHistory .znh-list{overflow:visible;}',
 				'.zenzaNotificationHistory .znh-entry{padding:9px 4px;border-bottom:1px solid #555;overflow-wrap:anywhere;}',
 				'.zenzaNotificationHistory .znh-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}',
 				'.zenzaNotificationHistory .znh-tag{font-size:11px;border-radius:3px;background:#444;padding:2px 5px;}',
@@ -49276,6 +49317,13 @@ const NotificationHistoryPanel = (() => {
 				'.zenzaNotificationHistory .znh-message{white-space:pre-wrap;word-break:break-word;margin:6px 0;}',
 				'.zenzaNotificationHistory details{color:#bbb;font-size:11px;}',
 				'.zenzaNotificationHistory details pre{white-space:pre-wrap;word-break:break-word;user-select:text;color:#ddd;}',
+				'.zenzaNotificationHistory [hidden]{display:none!important;}',
+				'.zenzaNotificationHistory .znh-entry-open{display:block;width:100%;text-align:left;border:0;background:transparent;padding:5px 0;overflow-wrap:anywhere;}',
+				'.zenzaNotificationHistory .znh-detail dl{display:grid;grid-template-columns:95px minmax(0,1fr);gap:7px 10px;margin:14px 0;}',
+				'.zenzaNotificationHistory .znh-detail dt{color:#bbb;}.zenzaNotificationHistory .znh-detail dd{margin:0;overflow-wrap:anywhere;}',
+				'.zenzaNotificationHistory .znh-detail h3{font-size:15px;margin:12px 0 6px;}.zenzaNotificationHistory .znh-detail p{white-space:pre-wrap;overflow-wrap:anywhere;}',
+				'.zenzaNotificationHistory .znh-report{width:100%;min-height:150px;background:#292929;color:#eee;white-space:pre-wrap;}',
+				'.zenzaNotificationHistory .znh-management{margin-left:auto;}.zenzaNotificationHistory summary{cursor:pointer;}',
 				'.zenzaNotificationHistory .znh-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:9px;}'
 		].join('\n');
 		const element = (tag, className = '', content) => {
@@ -49287,6 +49335,33 @@ const NotificationHistoryPanel = (() => {
 						node.textContent = String(content);
 				}
 				return node;
+		};
+		const featureLabels = {
+				advertising: 'ニコニ広告', search: '検索', 'tag-suggest': 'タグ候補', tags: 'タグ',
+				'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー', 'video-info': '動画情報',
+				'video-session': '再生セッション', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
+				'ad-decoration': '広告装飾', dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
+		};
+		const formatTime = (value) => typeof value === 'number' && Number.isFinite(value) &&
+				Math.abs(value) <= 8640000000000000 ? new Date(value).toLocaleString('ja-JP') : '記録なし（旧版など）';
+		const stateLabel = (entry) => entry.details?.outcome === 'recovered' ? '復旧済み' :
+				entry.details?.reason === 'not-found' ? '対象なし・要確認' :
+						entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
+		const description = (entry) => {
+				const d = entry.details || {};
+				if (d.outcome === 'recovered')
+						return 'その後の処理成功を確認しました。下の失敗理由・HTTP状態は最後の失敗時の記録です。';
+				if (d.reason === 'not-found' && (entry.source === 'advertising' || d.operation === 'advertising'))
+						return '広告APIが対象なしを返しました。広告なし・対象外・API変更などの可能性があり、この応答だけでは判別できません。調査できるよう記録を残しています。';
+				const explanations = {
+						schema: '受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+						timeout: '制限時間内に処理が完了しませんでした。',
+						permission: 'アクセス権限またはログイン状態の確認が必要な応答です。',
+						'not-found': '要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
+						http: 'サーバーからエラー応答が返りました。HTTP状態を確認できます。',
+						network: '通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。'
+				};
+				return explanations[String(d.reason)] || 'この通知について記録された情報を表示しています。';
 		};
 		const mount = (root, events, isVisible = () => !!root?.classList.contains('activeTab')) => {
 				if (!root || root.querySelector('.zenzaNotificationHistory')) {
@@ -49321,7 +49396,9 @@ const NotificationHistoryPanel = (() => {
 				save.type = 'button';
 				const clear = element('button', '', '全件削除');
 				clear.type = 'button';
-				toolbar.append(query, filter, refresh, save, clear);
+				const management = element('details', 'znh-management');
+				management.append(element('summary', '', '履歴の管理'), refresh, save, clear);
+				toolbar.append(query, filter, management);
 				const status = element('div', 'znh-status');
 				status.setAttribute('role', 'status');
 				const listNode = element('div', 'znh-list');
@@ -49329,9 +49406,97 @@ const NotificationHistoryPanel = (() => {
 				const more = element('button', '', 'さらに表示');
 				more.type = 'button';
 				actions.append(more);
-				view.append(toolbar, status, listNode, actions);
+				const detailNode = element('div', 'znh-detail');
+				detailNode.hidden = true;
+				view.append(toolbar, status, listNode, actions, detailNode);
 				root.append(view);
 				let shown = 100;
+				let selectedId = null;
+				let lastOpenedId = null;
+				let listScroll = 0;
+				let restoreListFocus = false;
+				let detailSignature = '';
+				let currentEntries = [];
+				const returnToList = () => {
+						selectedId = null;
+						detailSignature = '';
+						toolbar.hidden = status.hidden = listNode.hidden = actions.hidden = false;
+						detailNode.hidden = true;
+						restoreListFocus = true;
+						view.scrollTop = listScroll;
+				};
+				const showDetail = (entry) => {
+						const signature = JSON.stringify(entry);
+						toolbar.hidden = status.hidden = listNode.hidden = actions.hidden = true;
+						detailNode.hidden = false;
+						if (signature === detailSignature)
+								return;
+						detailSignature = signature;
+						const wasOpen = !!detailNode.querySelector('details[open]');
+						const focused = document.activeElement && detailNode.contains(document.activeElement) ?
+								document.activeElement.dataset.historyAction : undefined;
+						detailNode.replaceChildren();
+						const back = element('button', '', '‹ 一覧へ戻る');
+						back.type = 'button';
+						back.dataset.historyBack = '';
+						back.dataset.historyAction = 'back';
+						back.addEventListener('click', () => { returnToList(); schedule(); });
+						detailNode.append(back, element('p', 'znh-tag', stateLabel(entry)), element('h3', '', entry.message), element('p', '', description(entry)));
+						const pairs = [
+								['機能', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'],
+								['段階', { transport: '通信', response: '応答の確認', session: '処理' }[String(entry.details?.phase)] || '記録なし'],
+								['発生回数', typeof entry.details?.count === 'number' ? entry.details.count + '回' : '1回'],
+								['発生時の版', entry.version || '記録なし（旧版など）'], ['ビルド', entry.build || '記録なし（旧版など）'],
+								['初回発生', formatTime(entry.firstOccurredAt)], ['最終発生', formatTime(entry.lastOccurredAt)],
+								['復旧時刻', entry.recoveredAt === undefined ? (entry.details?.outcome === 'recovered' ? '記録なし（旧版など）' : '復旧の記録なし') : formatTime(entry.recoveredAt)]
+						];
+						if (entry.firstOccurredAt === undefined)
+								pairs.push(['従来の記録時刻', formatTime(entry.timestamp)]);
+						const grid = element('dl');
+						for (const [name, value] of pairs)
+								grid.append(element('dt', '', name), element('dd', '', value));
+						detailNode.append(grid);
+						if (entry.details?.outcome === 'recovered')
+								detailNode.append(element('p', '', 'この記録について追加の操作は不要です。'));
+						else if (entry.details?.outcome === 'failed' || entry.level === 'error' || entry.level === 'warning')
+								detailNode.append(element('p', '', '問題が続く場合は、下の「この記録をコピー」で発生時の情報を添えて報告できます。'));
+						const technical = element('details');
+						technical.open = wasOpen;
+						technical.append(element('summary', '', '技術的な詳細'), element('pre', '', JSON.stringify({ ...entry.details, source: entry.source }, null, 2)));
+						const copy = element('button', '', 'この記録をコピー');
+						copy.type = 'button';
+						copy.dataset.historyAction = 'copy';
+						const copyStatus = element('p', 'znh-status');
+						copyStatus.setAttribute('role', 'status');
+						const report = [entry.message, description(entry), ...pairs.map(([key, value]) => key + ': ' + value), '診断情報: ' + JSON.stringify({ ...entry.details, source: entry.source })].join('\n');
+						copy.addEventListener('click', async () => {
+								try {
+										if (!window.navigator.clipboard?.writeText)
+												throw new Error('unavailable');
+										await window.navigator.clipboard.writeText(report);
+										if (!disposed && selectedId === entry.id)
+												copyStatus.textContent = 'この記録をコピーしました';
+								}
+								catch {
+										if (disposed || selectedId !== entry.id)
+												return;
+										copyStatus.textContent = '自動コピーできませんでした。下の報告文を選択してコピーできます。';
+										let text = detailNode.querySelector('textarea');
+										if (!text) {
+												text = element('textarea', 'znh-report');
+												text.readOnly = true;
+												text.setAttribute('aria-label', '報告文');
+												detailNode.append(text);
+										}
+										text.value = report;
+										text.focus();
+										text.select();
+								}
+						});
+						detailNode.append(technical, copy, copyStatus);
+						if (focused)
+								detailNode.querySelector('[data-history-action="' + focused + '"]')?.focus({ preventScroll: true });
+				};
 				let revision = 0;
 				let scheduled = false;
 				let dirty = false;
@@ -49361,6 +49526,15 @@ const NotificationHistoryPanel = (() => {
 						if (disposed || !isVisible() || version !== revision) {
 								return;
 						}
+						currentEntries = all;
+						if (selectedId) {
+								const selected = all.find(entry => entry.id === selectedId);
+								if (selected) {
+										showDetail(selected);
+										return;
+								}
+								returnToList();
+						}
 						const entries = all.filter(matches);
 						listNode.replaceChildren();
 						const fragment = document.createDocumentFragment();
@@ -49368,31 +49542,41 @@ const NotificationHistoryPanel = (() => {
 								const item = element('article', 'znh-entry');
 								item.dataset.level = entry.level;
 								const head = element('div', 'znh-head');
-								head.append(element('span', 'znh-tag', labels[entry.category] || '通知'), element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP')));
+								head.append(element('span', 'znh-tag', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'), element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP')));
 								if (entry.videoId) {
 										head.append(element('span', 'znh-date', entry.videoId));
 								}
-								item.append(head, element('div', 'znh-message', entry.message));
+								const entryButton = element('button', 'znh-message znh-entry-open', entry.message + ' ›');
+								entryButton.type = 'button';
+								entryButton.dataset.entryId = entry.id;
+								entryButton.addEventListener('click', () => {
+										listScroll = view.scrollTop;
+										selectedId = lastOpenedId = entry.id;
+										detailSignature = '';
+										showDetail(currentEntries.find(item => item.id === entry.id) || entry);
+										view.scrollTop = 0;
+										detailNode.querySelector('[data-history-back]')?.focus({ preventScroll: true });
+								});
+								item.append(head, entryButton);
 								const meta = entry.details || {};
 								if (typeof meta.count === 'number' && meta.count > 0) {
 										head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
 												(meta.outcome === 'recovered' ? '・復旧済み' : '')));
 								}
-								if (Object.keys(meta).length || entry.source) {
-										const moreDetails = element('details');
-										moreDetails.append(element('summary', '', '診断情報'));
-										const payload = Object.assign({}, meta);
-										if (entry.source) {
-												payload.source = entry.source;
-										}
-										moreDetails.append(element('pre', '', JSON.stringify(payload, null, 2)));
-										item.append(moreDetails);
+								if (meta.outcome !== 'recovered' && (meta.outcome === 'failed' || meta.reason === 'not-found')) {
+										head.append(element('span', 'znh-tag', stateLabel(entry)));
 								}
 								fragment.append(item);
 						}
 						listNode.append(fragment);
 						status.textContent = entries.length + '件表示対象 / 履歴' + all.length + '件';
 						more.hidden = entries.length <= shown;
+						if (restoreListFocus) {
+								restoreListFocus = false;
+								const row = Array.from(listNode.querySelectorAll('[data-entry-id]')).find(node => node.dataset.entryId === lastOpenedId);
+								(row || query).focus({ preventScroll: true });
+								view.scrollTop = listScroll;
+						}
 				};
 				const schedule = () => {
 						if (disposed || !isVisible()) {
@@ -49414,6 +49598,7 @@ const NotificationHistoryPanel = (() => {
 												}
 												catch (_) {
 														if (!disposed && isVisible() && version === revision) {
+																status.hidden = false;
 																status.textContent = '履歴の読み込みに失敗しました';
 														}
 												}
@@ -49471,6 +49656,9 @@ const NotificationHistoryPanel = (() => {
 								return;
 						}
 						const ok = await NotificationJournal.clear();
+						if (disposed || !isVisible())
+								return;
+						returnToList();
 						status.textContent = ok ? '履歴を削除しました' :
 								'セッション履歴を削除しました。保存領域は削除できていない可能性があります';
 						schedule();
@@ -49625,7 +49813,7 @@ const NotificationHistoryPanel = (() => {
 								dock.hidden = false;
 								button.setAttribute('aria-expanded', 'true');
 								refresh();
-								dock.querySelector('input')?.focus();
+								dock.querySelector('.znh-detail:not([hidden]) [data-history-back], .znh-toolbar:not([hidden]) input')?.focus();
 								animate(true);
 						},
 						close,
@@ -64450,6 +64638,7 @@ const replaceRedirectLinks = async () => {
 };
 		const initialize = async function () {
 				if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
+						NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
 						RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
 								category: 'network', source: event.operation, message: event.message,
 								level: event.outcome === 'recovered' ? 'success' :

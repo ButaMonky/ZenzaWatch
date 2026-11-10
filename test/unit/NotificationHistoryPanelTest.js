@@ -27,10 +27,31 @@ function setup(records) {
   const root = dom.window.document.getElementById('root');
   root.classList.add('activeTab');
   context.__panel.mount(root);
-  return {dom, root, journal};
+  return {dom, root, journal, notify:()=>subscribers.forEach(f=>f())};
 }
 
 describe('NotificationHistoryPanel (synthetic DOM)', () => {
+  it('does not invent occurrence metadata for legacy records and offers copy fallback',async()=>{
+    const records=[{id:'old',timestamp:1,category:'network',level:'warning',source:'advertising',message:'old',details:{reason:'not-found',statusCode:404}}];
+    const h=setup(records);await flush();h.root.querySelector('[data-entry-id]').click();
+    const detail=h.root.querySelector('.znh-detail');assert(detail.textContent.includes('記録なし（旧版など）'));assert(detail.textContent.includes('従来の記録時刻'));
+    detail.querySelector('[data-history-action="copy"]').click();await flush();
+    assert(detail.querySelector('textarea').value.includes('HTTP') || detail.querySelector('textarea').value.includes('statusCode'));
+    records.length=0;h.notify();await flush();assert(h.root.querySelector('.znh-detail').hidden);
+    h.dom.window.close();
+  });
+  it('switches to selected detail, updates recovery and returns to filtered list without nested scroll',async()=>{
+    const records=[{id:'x',timestamp:1800000002000,firstOccurredAt:1800000000000,lastOccurredAt:1800000002000,version:'2.7.370-task994',build:'2026-11-10 12:00Z abc1234',category:'network',source:'advertising',level:'warning',message:'広告取得失敗',details:{phase:'response',reason:'http',statusCode:503,count:2,outcome:'failed'}}];
+    const h=setup(records);await flush();h.root.querySelector('[data-entry-id="x"]').click();
+    assert(h.root.querySelector('.znh-list').hidden);assert(h.root.querySelector('.znh-detail').textContent.includes('2.7.370-task994'));
+    assert(h.root.querySelector('.znh-detail').textContent.includes('初回発生'));
+    records[0]={...records[0],recoveredAt:1800000003000,details:{...records[0].details,outcome:'recovered'}};h.notify();await flush();
+    assert(h.root.querySelector('.znh-detail').textContent.includes('復旧済み'));
+    h.root.querySelector('[data-history-back]').click();assert(!h.root.querySelector('.znh-list').hidden);
+    assert(!h.dom.window.document.getElementById('zenzaNotificationHistoryStyle').textContent.includes('.znh-list{overflow:auto'));
+    h.dom.window.close();
+  });
+
   it('shows grouped occurrence count and recovery without opening technical details', async () => {
     const h=setup([{id:'diagnostic',timestamp:Date.now(),category:'network',level:'success',
       message:'動画情報：復旧',details:{count:3,outcome:'recovered'}}]);

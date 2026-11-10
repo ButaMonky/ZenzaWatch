@@ -33,7 +33,7 @@ test('generated five-module graph performs actual separate bookmark writes and s
  let globalKeydown=0,globalKeyup=0;
  doc.body.addEventListener('keydown',()=>globalKeydown++);
  doc.body.addEventListener('keyup',()=>globalKeyup++);
- for(const target of [dock.element.querySelector('summary'),btn('add')]){
+ for(const target of [dock.element.querySelector('.zw-points-heading'),btn('add')]){
   for(const name of ['keydown','keyup']){
    const event=new dom.window.KeyboardEvent(name,{
     bubbles:true,cancelable:true,key:' '

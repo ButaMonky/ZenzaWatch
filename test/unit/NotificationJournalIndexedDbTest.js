@@ -59,12 +59,29 @@ function fakeIndexedDb() {
 }
 function journal(indexedDB) {
   const context = createContext({indexedDB});
+  for (const name of ['NotificationJournalPolicy', 'NotificationJournalStore']) {
+    run('const ' + name + ' = ' + extract('packages/zenza/src/notification/' + name + '.js', name, 'var') + ';', context);
+  }
   run('const NotificationJournal = ' +
     extract('src/NotificationJournal.js', 'NotificationJournal', 'var') +
     ';globalThis.__journal=NotificationJournal;', context);
   return context.__journal;
 }
 describe('NotificationJournal IndexedDB contract (synthetic)', () => {
+  it('keeps a new notification recorded by a clear subscriber, but cancels older queued writes', async () => {
+    const db = fakeIndexedDb();
+    const first = journal(db);
+    first.record({message: 'before clear'});
+    const unsubscribe = first.subscribe(() => {
+      unsubscribe();
+      first.record({message: 'after clear'});
+    });
+    assert.strictEqual(await first.clear(), true);
+    await flush();
+    const rows = await journal(db).list();
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].message, 'after clear');
+  });
   it('persists an event across journal instances without leaking auth metadata', async () => {
     const db = fakeIndexedDb();
     const first = journal(db);

@@ -96,19 +96,22 @@ const NotificationJournalStore = (() => {
       } catch (_) { /* fall back to session memory */ }
       return stored;
     };
-    const clear = async (): Promise<boolean> => {
+    const clear = (): Promise<boolean> => {
       generation++;
-      const db = await open();
-      if (!db) { return false; }
-      try {
-        return await new Promise<boolean>(resolve => {
-          const tx = db.transaction(STORE, 'readwrite');
-          tx.objectStore(STORE).clear();
-          tx.oncomplete = () => resolve(true);
-          tx.onerror = () => resolve(false);
-          tx.onabort = () => resolve(false);
-        });
-      } catch (_) { return false; }
+      // Use the same open promise as append, preserving transaction order even
+      // when the host supplies a Promise from a different realm.
+      return open().then(db => {
+        if (!db) { return false; }
+        try {
+          return new Promise<boolean>(resolve => {
+            const tx = db.transaction(STORE, 'readwrite');
+            tx.objectStore(STORE).clear();
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          });
+        } catch (_) { return false; }
+      });
     };
     return {append, list, clear};
   };

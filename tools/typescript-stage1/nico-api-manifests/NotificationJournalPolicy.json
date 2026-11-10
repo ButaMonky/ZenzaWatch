@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/NotificationJournalPolicy.ts",
+  "runtime": "packages/zenza/src/notification/NotificationJournalPolicy.js",
+  "sourceSha256": "c584a4830bcfd36a66733516a55d87fbc18796431dfcc6268b02c495b0e8fdad",
+  "runtimeSha256": "e7388faf4ee93c27ca8f5cb262719f651d982129a413964d09b5cf5c3ccf96e6"
+}

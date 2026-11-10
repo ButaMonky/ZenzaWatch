@@ -969,12 +969,26 @@ export const NICO_API_MODULES=Object.freeze([
     exportNames:["initCssProps"],
     task:'task901'
   }),
+  api({
+    name:'NotificationJournalPolicy',
+    runtime:'packages/zenza/src/notification/NotificationJournalPolicy.js',
+    originalSha256:'e7388faf4ee93c27ca8f5cb262719f651d982129a413964d09b5cf5c3ccf96e6',
+    preamble:[], shape:'iife', task:'task990'
+  }),
+  api({
+    name:'NotificationJournalStore',
+    runtime:'packages/zenza/src/notification/NotificationJournalStore.js',
+    originalSha256:'dd71f3753751896b4d3cfb2d033d73b7fc0f7ab9d7e6f40d324c09876352e66e',
+    preamble:[], shape:'iife', task:'task990'
+  }),
   // ZW-NOTIFY-JOURNAL-20261023: dedicated TypeScript-canonical notification services.
   api({
     name:'NotificationJournal',
     runtime:'src/NotificationJournal.js',
     originalSha256:'55afae85195ea0a5918633cdd00dd52d88b8f74efd2fd2f47dc793e6891ab05a',
-    preamble:[],
+    preamble:["import {NotificationJournalPolicy} from '../packages/zenza/src/notification/NotificationJournalPolicy';",
+      "import {NotificationJournalStore} from '../packages/zenza/src/notification/NotificationJournalStore';"],
+    beginLines:['//@require NotificationJournalPolicy','//@require NotificationJournalStore'],
     shape:'iife',
     task:'taskNLOG20261023'
   }),

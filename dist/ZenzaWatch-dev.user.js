@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.365-task989
+// @version        2.7.366-task990
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-09 21:18Z 5cc4ce6
+// build: 2026-11-10 05:26Z 05205ef
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.365-task989';
+    var VER = '2.7.366-task990';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-09 21:18Z 5cc4ce6';
+    var BUILD = '2026-11-10 05:26Z 05205ef';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5510,15 +5510,8 @@ const reg = (() => {
 })();
 util.reg = reg;
 // already required
-const NotificationJournal = (() => {
-		const DB_NAME = 'zenza-notification-journal';
-		const STORE = 'entries';
-		const MAX_RECORDS = 2000;
+const NotificationJournalPolicy = (() => {
 		const MAX_TEXT = 1024;
-		const MAX_SESSION = 2000;
-		const listeners = new Set();
-		const session = [];
-		const recent = [];
 		const levels = new Set(['info', 'success', 'warning', 'error']);
 		const categories = new Set(['general', 'comment', 'like', 'network', 'player', 'system']);
 		const safeKeys = new Set([
@@ -5526,11 +5519,6 @@ const NotificationJournal = (() => {
 				'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
 				'operation', 'kind', 'errorName', 'requestId', 'postedNo'
 		]);
-		let opening = null;
-		let connection = null;
-		let sequence = 0;
-		let writes = 0;
-		let generation = 0;
 		const privatePath = (path) => path
 				.replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
 				.replace(/(\/(?:token|secret|authorization|password|csrf|session)\/)[^/]+/gi, '$1[REDACTED]');
@@ -5580,15 +5568,13 @@ const NotificationJournal = (() => {
 				}
 				return result;
 		};
-		const normalize = (entry) => {
+		const normalize = (entry, identity) => {
 				if (!entry || typeof entry !== 'object') {
 						return null;
 				}
-				const now = Date.now();
 				return {
-						id: now.toString(36) + '-' + (++sequence).toString(36) + '-' +
-								Math.random().toString(36).slice(2, 10),
-						timestamp: now,
+						id: identity.id,
+						timestamp: identity.timestamp,
 						level: levels.has(String(entry.level)) ? entry.level : 'info',
 						category: categories.has(String(entry.category)) ? entry.category : 'general',
 						message: text(entry.message),
@@ -5597,6 +5583,169 @@ const NotificationJournal = (() => {
 						details: details(entry.details)
 				};
 		};
+		return { normalize };
+})();
+const NotificationJournalStore = (() => {
+		const create = (indexedDB) => {
+				const DB_NAME = 'zenza-notification-journal';
+				const STORE = 'entries';
+				const MAX_RECORDS = 2000;
+				let opening = null;
+				let connection = null;
+				let writes = 0;
+				let generation = 0;
+				const open = () => {
+						if (connection) {
+								return Promise.resolve(connection);
+						}
+						if (opening) {
+								return opening;
+						}
+						if (typeof indexedDB === 'undefined') {
+								return Promise.resolve(null);
+						}
+						const attempt = new Promise(resolve => {
+								let req;
+								let settled = false;
+								const fail = () => { if (!settled) {
+										settled = true;
+										resolve(null);
+								} };
+								try {
+										req = indexedDB.open(DB_NAME, 1);
+								}
+								catch (_) {
+										fail();
+										return;
+								}
+								req.onupgradeneeded = () => {
+										const db = req.result;
+										if (!db.objectStoreNames.contains(STORE)) {
+												const store = db.createObjectStore(STORE, { keyPath: 'id' });
+												store.createIndex('timestamp', 'timestamp');
+										}
+								};
+								req.onsuccess = () => {
+										const db = req.result;
+										if (settled) {
+												db.close();
+												return;
+										}
+										settled = true;
+										connection = db;
+										const release = () => {
+												if (connection === db) {
+														connection = null;
+														if (opening === attempt) {
+																opening = null;
+														}
+												}
+										};
+										db.onversionchange = () => { db.close(); release(); };
+										db.onclose = release;
+										resolve(db);
+								};
+								req.onerror = fail;
+								req.onblocked = fail;
+						});
+						opening = attempt;
+						void attempt.then(() => { if (opening === attempt) {
+								opening = null;
+						} });
+						return attempt;
+				};
+				const prune = (db) => {
+						try {
+								const tx = db.transaction(STORE, 'readwrite');
+								let kept = 0;
+								const req = tx.objectStore(STORE).index('timestamp').openCursor(null, 'prev');
+								req.onsuccess = () => {
+										const cursor = req.result;
+										if (!cursor) {
+												return;
+										}
+										if (++kept > MAX_RECORDS) {
+												cursor.delete();
+										}
+										cursor.continue();
+								};
+								req.onerror = () => { };
+								tx.onerror = () => { };
+						}
+						catch (_) { /* the journal must not stop playback */ }
+				};
+				const append = (entry, onCommit) => {
+						const expectedGeneration = generation;
+						void open().then(db => {
+								if (!db || expectedGeneration !== generation) {
+										return;
+								}
+								try {
+										const tx = db.transaction(STORE, 'readwrite');
+										tx.objectStore(STORE).put(entry);
+										tx.onerror = () => { };
+										tx.oncomplete = () => {
+												onCommit();
+												if (++writes % 50 === 0) {
+														prune(db);
+												}
+										};
+								}
+								catch (_) { /* still available in session memory */ }
+						}).catch(() => { });
+				};
+				const list = async () => {
+						let stored = [];
+						try {
+								const db = await open();
+								if (db) {
+										stored = await new Promise(resolve => {
+												try {
+														const request = db.transaction(STORE).objectStore(STORE).getAll();
+														request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
+														request.onerror = () => resolve([]);
+												}
+												catch (_) {
+														resolve([]);
+												}
+										});
+								}
+						}
+						catch (_) { /* fall back to session memory */ }
+						return stored;
+				};
+				const clear = () => {
+						generation++;
+						return open().then(db => {
+								if (!db) {
+										return false;
+								}
+								try {
+										return new Promise(resolve => {
+												const tx = db.transaction(STORE, 'readwrite');
+												tx.objectStore(STORE).clear();
+												tx.oncomplete = () => resolve(true);
+												tx.onerror = () => resolve(false);
+												tx.onabort = () => resolve(false);
+										});
+								}
+								catch (_) {
+										return false;
+								}
+						});
+				};
+				return { append, list, clear };
+		};
+		return { create };
+})();
+const NotificationJournal = (() => {
+		const MAX_RECORDS = 2000;
+		const MAX_SESSION = 2000;
+		const listeners = new Set();
+		const session = [];
+		const recent = [];
+		let sequence = 0;
+		const store = NotificationJournalStore.create(typeof indexedDB === 'undefined' ? undefined : indexedDB);
 		const announce = () => {
 				for (const listener of listeners) {
 						try {
@@ -5605,110 +5754,16 @@ const NotificationJournal = (() => {
 						catch (_) { /* listeners may not break logging */ }
 				}
 		};
-		const open = () => {
-				if (connection) {
-						return Promise.resolve(connection);
-				}
-				if (opening) {
-						return opening;
-				}
-				if (typeof indexedDB === 'undefined') {
-						return Promise.resolve(null);
-				}
-				const attempt = new Promise(resolve => {
-						let req;
-						let settled = false;
-						const fail = () => { if (!settled) {
-								settled = true;
-								resolve(null);
-						} };
-						try {
-								req = indexedDB.open(DB_NAME, 1);
-						}
-						catch (_) {
-								fail();
-								return;
-						}
-						req.onupgradeneeded = () => {
-								const db = req.result;
-								if (!db.objectStoreNames.contains(STORE)) {
-										const store = db.createObjectStore(STORE, { keyPath: 'id' });
-										store.createIndex('timestamp', 'timestamp');
-								}
-						};
-						req.onsuccess = () => {
-								const db = req.result;
-								if (settled) {
-										db.close();
-										return;
-								}
-								settled = true;
-								connection = db;
-								const release = () => {
-										if (connection === db) {
-												connection = null;
-												if (opening === attempt) {
-														opening = null;
-												}
-										}
-								};
-								db.onversionchange = () => { db.close(); release(); };
-								db.onclose = release;
-								resolve(db);
-						};
-						req.onerror = fail;
-						req.onblocked = fail;
-				});
-				opening = attempt;
-				void attempt.then(() => { if (opening === attempt) {
-						opening = null;
-				} });
-				return attempt;
-		};
-		const prune = (db) => {
-				try {
-						const tx = db.transaction(STORE, 'readwrite');
-						let kept = 0;
-						const req = tx.objectStore(STORE).index('timestamp').openCursor(null, 'prev');
-						req.onsuccess = () => {
-								const cursor = req.result;
-								if (!cursor) {
-										return;
-								}
-								if (++kept > MAX_RECORDS) {
-										cursor.delete();
-								}
-								cursor.continue();
-						};
-						req.onerror = () => { };
-						tx.onerror = () => { };
-				}
-				catch (_) { /* the journal must not stop playback */ }
-		};
-		const persist = (entry, expectedGeneration) => {
-				void open().then(db => {
-						if (!db || expectedGeneration !== generation) {
-								return;
-						}
-						try {
-								const tx = db.transaction(STORE, 'readwrite');
-								tx.objectStore(STORE).put(entry);
-								tx.onerror = () => { };
-								tx.oncomplete = () => {
-										const index = session.findIndex(item => item.id === entry.id);
-										if (index !== -1) {
-												session.splice(index, 1);
-										}
-										if (++writes % 50 === 0) {
-												prune(db);
-										}
-								};
-						}
-						catch (_) { /* still available in session memory */ }
-				}).catch(() => { });
-		};
 		const record = (input) => {
-				const entry = normalize(input);
+				if (!input || typeof input !== 'object') {
+						return null;
+				}
+				const now = Date.now();
+				const entry = NotificationJournalPolicy.normalize(input, {
+						id: now.toString(36) + '-' + (++sequence).toString(36) + '-' +
+								Math.random().toString(36).slice(2, 10),
+						timestamp: now
+				});
 				if (!entry || !entry.message) {
 						return null;
 				}
@@ -5730,29 +5785,18 @@ const NotificationJournal = (() => {
 				if (recent.length > 8) {
 						recent.length = 8;
 				}
-				persist(entry, generation);
+				store.append(entry, () => {
+						const index = session.findIndex(item => item.id === entry.id);
+						if (index !== -1) {
+								session.splice(index, 1);
+						}
+				});
 				announce();
 				return entry;
 		};
 		const list = async (limit = 300) => {
 				const count = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, MAX_RECORDS)) : 300;
-				let stored = [];
-				try {
-						const db = await open();
-						if (db) {
-								stored = await new Promise(resolve => {
-										try {
-												const request = db.transaction(STORE).objectStore(STORE).getAll();
-												request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
-												request.onerror = () => resolve([]);
-										}
-										catch (_) {
-												resolve([]);
-										}
-								});
-						}
-				}
-				catch (_) { /* fall back to session memory */ }
+				const stored = await store.list();
 				const map = new Map();
 				for (const entry of stored) {
 						if (entry && typeof entry.id === 'string') {
@@ -5766,27 +5810,12 @@ const NotificationJournal = (() => {
 						.sort((a, b) => b.timestamp - a.timestamp || (a.id < b.id ? 1 : -1))
 						.slice(0, count);
 		};
-		const clear = async () => {
-				generation++;
+		const clear = () => {
+				const clearing = store.clear();
 				session.length = 0;
 				recent.length = 0;
 				announce();
-				const db = await open();
-				if (!db) {
-						return false;
-				}
-				try {
-						return await new Promise(resolve => {
-								const tx = db.transaction(STORE, 'readwrite');
-								tx.objectStore(STORE).clear();
-								tx.oncomplete = () => resolve(true);
-								tx.onerror = () => resolve(false);
-								tx.onabort = () => resolve(false);
-						});
-				}
-				catch (_) {
-						return false;
-				}
+				return clearing;
 		};
 		const subscribe = (listener) => {
 				if (typeof listener !== 'function') {

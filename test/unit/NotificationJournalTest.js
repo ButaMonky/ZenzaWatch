@@ -4,6 +4,9 @@ const {createContext, extract, run} = require('../helpers/extractSource');
 
 function harness(extra = {}) {
   const context = createContext(Object.assign({indexedDB: undefined}, extra));
+  for (const name of ['NotificationJournalPolicy', 'NotificationJournalStore']) {
+    run('const ' + name + ' = ' + extract('packages/zenza/src/notification/' + name + '.js', name, 'var') + ';', context);
+  }
   run('const NotificationJournal = ' +
     extract('src/NotificationJournal.js', 'NotificationJournal', 'var') +
     ';globalThis.__journal=NotificationJournal;', context);

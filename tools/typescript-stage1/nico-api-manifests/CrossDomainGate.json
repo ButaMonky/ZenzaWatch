@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/CrossDomainGate.ts",
   "runtime": "packages/lib/src/infra/CrossDomainGate.js",
-  "sourceSha256": "f19341090a4a43df3ed54521f0e3e6dff764ce006689b87e50becbecc3fec8ce",
-  "runtimeSha256": "92f8e5955fd8c353bcfb5723125629dd98e4e95fd0f19fd3c4db3b56bdf5710e"
+  "sourceSha256": "8d8ad10b1efb81d3d287ae0a485a415364eba8698ff05202fa82fdfe600ead34",
+  "runtimeSha256": "00c8e235cade1a05844db56c2c6c7446948f81eb8da7d82f8a714075fc6d610e"
 }

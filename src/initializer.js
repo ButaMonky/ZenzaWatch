@@ -172,6 +172,17 @@ const { initialize } = (() => {
     };
     //@require replaceRedirectLinks
     const initialize = async function () {
+        if (typeof StoryboardCacheDb !== 'undefined' && StoryboardCacheDb.configure) {
+            const configureSceneCache = () => {
+                const capacity = Number(Config.getValue('storyboardCacheMaxMB'));
+                const days = Number(Config.getValue('storyboardCacheDays'));
+                void StoryboardCacheDb.configure({ maxBytes: ([0, 32, 64, 128, 256, 512].includes(capacity) ? capacity : 128) * 1024 * 1024,
+                    maxAgeMs: ([1, 3, 7, 14, 30].includes(days) ? days : 7) * 86400000 }).catch(() => console.warn('Scene cache settings unavailable'));
+            };
+            configureSceneCache();
+            Config.onkey?.('storyboardCacheMaxMB', configureSceneCache);
+            Config.onkey?.('storyboardCacheDays', configureSceneCache);
+        }
         if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
             NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
             RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {

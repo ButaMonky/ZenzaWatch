@@ -443,6 +443,7 @@ class CrossDomainGate extends Emitter {
                     put: (record, transfer) => post('put', record, storeName, transfer),
                     update: (data) => post('update', data, storeName),
                     scrubWatchVideoInfo: (data) => post('scrubWatchVideoInfo', data, storeName),
+                    storyboardCache: (data) => post('storyboardCache', data, storeName),
                     listSavedPoints: (data) => post('listSavedPoints', data, storeName),
                     get: ({ key, index, timeout }) => post('get', { key, index, timeout }, storeName),
                     updateTime: ({ key, index, timeout }) => post('updateTime', { key, index, timeout }, storeName),

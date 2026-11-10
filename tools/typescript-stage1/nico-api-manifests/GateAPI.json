@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/GateAPI.ts",
   "runtime": "packages/lib/src/nico/GateAPI.js",
-  "sourceSha256": "2887101cf370aa9425b4607981b1d83f460ad37d2e347c601acc017433acb88d",
-  "runtimeSha256": "aa65c205ee8596118f6a0d0d58aad5992bb6f8e64d9020572e16ac36b76cb7bd"
+  "sourceSha256": "52d70ce697286b6e3d02ad1fd0220c555d483108ea2ae2bc3f1ca764a7cc0ea8",
+  "runtimeSha256": "ab5860697dac358cf02be5689f4b5cb228c86789408ca3efcde31dff52f526c5"
 }

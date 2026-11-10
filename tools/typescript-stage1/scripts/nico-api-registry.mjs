@@ -936,11 +936,11 @@ export const NICO_API_MODULES=Object.freeze([
     name:"Storyboard",
     runtime:"packages/zenza/src/storyboard/Storyboard.js",
     originalSha256:"d10c5e59db5531afef83c0e8949aaa12588fbc1126735b7324f10f9d645ff3bd",
-    preamble:["import {Emitter} from '../../../lib/src/Emitter';","import {StoryboardInfoLoader} from '../../../lib/src/nico/StoryboardInfoLoader';","import {StoryboardCacheDb} from '../../../lib/src/nico/StoryboardCacheDb';","import {StoryboardView} from './StoryboardView';","import {StoryboardInfoModel} from './StoryboardInfoModel';","import {SeekBarThumbnail} from './SeekBarThumbnail';","import {StoryboardWorker} from './StoryboardWorker';","import {global} from '../../../../src/ZenzaWatchIndex';","import {ClassList} from '../../../lib/src/dom/ClassListWrapper';",""],
-    beginLines:["//@require StoryboardInfoModel","//@require StoryboardView","//@require SeekBarThumbnail","//@require StoryboardWorker"],
+    preamble:["import {VideoInfoLoader} from '../../../lib/src/nico/VideoInfoLoader';","import {VideoSessionWorker} from '../../../lib/src/nico/VideoSessionWorker';","import {netUtil} from '../../../lib/src/infra/netUtil';","import {RequestDiagnostics} from '../../../lib/src/infra/RequestDiagnostics';","import {Emitter} from '../../../lib/src/Emitter';","import {StoryboardInfoLoader} from '../../../lib/src/nico/StoryboardInfoLoader';","import {StoryboardCacheDb} from '../../../lib/src/nico/StoryboardCacheDb';","import {StoryboardView} from './StoryboardView';","import {StoryboardInfoModel} from './StoryboardInfoModel';","import {SeekBarThumbnail} from './SeekBarThumbnail';","import {StoryboardWorker} from './StoryboardWorker';","import {global} from '../../../../src/ZenzaWatchIndex';","import {ClassList} from '../../../lib/src/dom/ClassListWrapper';",""],
+    beginLines:["//@require VideoInfoLoader","//@require netUtil","//@require RequestDiagnostics","//@require StoryboardInfoModel","//@require StoryboardView","//@require SeekBarThumbnail","//@require StoryboardWorker"],
     shape:'declarations',
-    topLevel:["class Storyboard extends Emitter {","}"],
-    exportNames:["Storyboard","SeekBarThumbnail","StoryboardWorker"],
+    topLevel:["class SavedSceneLoader {","}","class Storyboard extends Emitter {","}"],
+    exportNames:["Storyboard","SeekBarThumbnail","StoryboardWorker","SavedSceneLoader"],
     task:'task901'
   }),
   api({

@@ -60,7 +60,9 @@ describe('IndexedDB GC failure preserves the store (ZW-042 bounded)', function()
       // the observable production contract is a warning plus a usable opened cache.
       observe(cleanup.promise);
       const warnings = [];
-      const adapter = adapterFixture(name, {gc: () => cleanup.promise}, {
+      const adapter = adapterFixture(name, {storyboardCache: data => {
+        assert.strictEqual(data.op, 'stats'); return cleanup.promise;
+      }, gc: () => cleanup.promise}, {
         console: Object.assign({}, quiet, {warn: (...args) => warnings.push(args)})
       });
       const opened = observe(adapter.open());

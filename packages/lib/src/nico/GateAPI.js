@@ -208,6 +208,12 @@ const GateAPI = (() => {
                     }
                     result = await db.scrubWatchVideoInfo(data);
                     break;
+                case 'storyboardCache':
+                    if (name !== 'storyboard' || storeName !== 'cache' || !db.storyboardCache) {
+                        throw new TypeError('Invalid storyboard cache target');
+                    }
+                    result = await db.storyboardCache(data);
+                    break;
                 case 'listSavedPoints':
                     if (name !== 'watch-info' || storeName !== 'cache' || !db.listSavedPoints) {
                         throw new TypeError('Invalid saved points target');

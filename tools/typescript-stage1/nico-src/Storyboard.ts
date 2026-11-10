@@ -20,18 +20,142 @@ declare const StoryboardView: new (params: Loose) => Loose;
 declare const StoryboardInfoModel: new (data: Loose) => Loose;
 declare const SeekBarThumbnail: Loose;
 declare const StoryboardWorker: Loose;
-declare const StoryboardCacheDb: {get(key:string):Promise<Loose>};
+declare const StoryboardCacheDb: typeof import('./StoryboardCacheDb').StoryboardCacheDb;
+declare const VideoInfoLoader: typeof import('./VideoInfoLoader').VideoInfoLoader;
+declare const VideoSessionWorker: typeof import('./VideoSessionWorker').VideoSessionWorker;
+declare const netUtil: {fetch(url:string,options:Loose):Promise<Response>};
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 declare const global: {debug: Loose};
 
+interface SavedSceneDependencies {
+  cache:{getPreview?:(id:string,time:number)=>Promise<Loose>;get?:(id:string)=>Promise<Loose>;
+    captureGeneration?:()=>number;put:(id:string,raw:Loose,generation?:number)=>Promise<unknown>};
+  enabled:()=>boolean;
+  loadMetadata:(id:string,signal:AbortSignal)=>Promise<Loose>;
+  fetchImage:(url:string,signal:AbortSignal)=>Promise<ArrayBuffer>;
+}
+/** Passive, reference-counted requests. No ownership of the video player. */
+class SavedSceneLoader {
+  private resources=new Map<string,{refs:number;controller:AbortController;promise:Promise<Loose>}>();
+  private cooldown=new Map<string,number>();
+  private running=0;
+  private queue:Array<()=>void>=[];
+  private deps:SavedSceneDependencies;
+  constructor(deps:SavedSceneDependencies){this.deps=deps;}
+  get activeResources():number{return this.resources.size;}
+  private check(signal:AbortSignal):void {if(signal.aborted)throw new DOMException('Cancelled','AbortError');}
+  private schedule<T>(signal:AbortSignal,task:()=>Promise<T>):Promise<T>{
+    return new Promise((resolve,reject)=>{
+      const cancel=()=>{const i=this.queue.indexOf(start);if(i>=0)this.queue.splice(i,1);reject(new DOMException('Cancelled','AbortError'));};
+      const start=()=>{
+        signal.removeEventListener('abort',cancel);
+        if(signal.aborted){cancel();return;}
+        this.running++;
+        Promise.resolve().then(task).then(resolve,reject).finally(()=>{
+          this.running--;this.queue.shift()?.();
+        });
+      };
+      if(signal.aborted){cancel();return;}
+      if(this.running<2)start();else{this.queue.push(start);signal.addEventListener('abort',cancel,{once:true});}
+    });
+  }
+  private lease(key:string,task:(signal:AbortSignal)=>Promise<Loose>){
+    let entry=this.resources.get(key);
+    if(!entry){
+      const controller=new AbortController();
+      entry={refs:0,controller,promise:Promise.resolve().then(async()=>{this.check(controller.signal);const result=await task(controller.signal);this.check(controller.signal);return result;})};
+      this.resources.set(key,entry);
+    }
+    entry.refs++;let released=false;
+    return {promise:entry.promise,release:()=>{
+      if(released)return;released=true;
+      if(--entry!.refs===0){entry!.controller.abort();if(this.resources.get(key)===entry)this.resources.delete(key);}
+    }};
+  }
+  cancelAll():void {for(const entry of this.resources.values())entry.controller.abort();this.resources.clear();}
+  acquire(videoId:string,time:number):{promise:Promise<Loose>;release:()=>void}{
+    const controller=new AbortController(),signal=controller.signal,leases:Array<{release:()=>void}>=[];
+    const generation=this.deps.cache.captureGeneration?.();
+    const keep=(lease:ReturnType<SavedSceneLoader['lease']>)=>{if(signal.aborted){lease.release();lease.promise.catch(()=>{});this.check(signal);}leases.push(lease);return lease.promise;};
+    const usable=(raw:Loose)=>raw?.watchId===videoId&&new StoryboardInfoModel(raw).isAvailable;
+    const pageAt=(raw:Loose)=>new StoryboardInfoModel(raw).getThumbnailPosition(time*1000).page;
+    const promise=(async()=>{
+      if(!/^(?:sm|so|nm)?\d+$/.test(videoId)||!Number.isFinite(time)||time<0)return null;
+      let raw:Loose=null;
+      for(const type of ['domand','dmc']){
+        raw=await keep(this.lease('cache:'+videoId+':'+type+':'+time,async()=>
+          (this.deps.cache.getPreview?.(videoId+'_'+type,time)||this.deps.cache.get?.(videoId+'_'+type)||Promise.resolve(null)).catch(()=>null)));
+        this.check(signal);
+        if(usable(raw)&&time<=raw.duration&&raw.storyboard.images[pageAt(raw)]?.buffer)return raw;
+      }
+      if(!this.deps.enabled()||(this.cooldown.get(videoId)||0)>Date.now())return null;
+      raw=await keep(this.lease('meta:'+videoId,s=>this.schedule(s,()=>this.deps.loadMetadata(videoId,s))));
+      this.check(signal);if(!this.deps.enabled()||!usable(raw)||time>raw.duration)return null;
+      const page=pageAt(raw),sheet=raw.storyboard.images[page];
+      const buffer=await keep(this.lease('sheet:'+videoId+':'+sheet.url,s=>this.schedule(s,()=>this.deps.fetchImage(sheet.url,s))));
+      this.check(signal);if(!this.deps.enabled())return null;
+      const result={...raw,storyboard:{...raw.storyboard,images:raw.storyboard.images.map((item:Loose,i:number)=>i===page?{...item,buffer}:item)}};
+      await this.deps.cache.put(videoId+'_'+raw.format,result,generation).catch(()=>{});
+      this.check(signal);this.cooldown.delete(videoId);return result;
+    })().catch(error=>{
+      if(!signal.aborted&&error?.name!=='AbortError'){
+        this.cooldown.delete(videoId);this.cooldown.set(videoId,Date.now()+60000);
+        while(this.cooldown.size>128)this.cooldown.delete(this.cooldown.keys().next().value!);
+      }
+      throw error;
+    });
+    return {promise,release:()=>{controller.abort();for(const lease of leases)lease.release();leases.length=0;}};
+  }
+}
 
 class Storyboard extends Emitter {
+  declare _savedScenes:SavedSceneLoader|undefined;
+  declare _savedPreviewDecodedBytes:number|undefined;
+  private savedScenes():SavedSceneLoader {
+    if(this._savedScenes)return this._savedScenes;
+    const timed=async<T>(signal:AbortSignal,task:(signal:AbortSignal)=>Promise<T>):Promise<T>=>{
+      const controller=new AbortController();
+      const abort=()=>controller.abort();signal.addEventListener('abort',abort,{once:true});
+      if(signal.aborted)abort();
+      const timer=setTimeout(abort,15000);
+      try{return await task(controller.signal);}finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
+    };
+    return this._savedScenes=new SavedSceneLoader({
+      cache:StoryboardCacheDb,
+      enabled:()=>this.config?.props?.savedSceneFetch!==false&&this.config?.props?.enableStoryboard!==false,
+      loadMetadata:(videoId,signal)=>timed(signal,async activeSignal=>{
+        const diagnostic=typeof RequestDiagnostics==='undefined'?null:RequestDiagnostics.begin('storyboard',videoId,'response',()=>!signal.aborted);
+        try{
+          const info=await VideoInfoLoader.loadStoryboardInfo(videoId,{signal:activeSignal});
+          const classes=VideoSessionWorker.createStoryboardClasses({fetch:(url,options)=>netUtil.fetch(url,{...options,signal:activeSignal,diagnosticActive:()=>false})});
+          const session=await classes.StoryboardSession.create({videoInfo:info,serverType:'domand'}).create();
+          const loader=classes.StoryboardInfoLoader.create(session);loader.duration=info.duration;await loader.load();
+          const result={...loader.toJSON(),status:'ok',watchId:videoId,storyboard:loader.getStoryboardWithUrls()};
+          diagnostic?.success();return result;
+        }catch(error){diagnostic?.failure(error);throw error;}
+      }),
+      fetchImage:(url,signal)=>timed(signal,async activeSignal=>{
+        const parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol)||parsed.username||parsed.password)throw new TypeError('Invalid scene image');
+        const response=await fetch(url,{credentials:'omit',signal:activeSignal});
+        if(!response.ok)throw Object.assign(new Error('Scene image unavailable'),{status:response.status});
+        const maximum=8*1024*1024;
+        if(Number(response.headers.get('content-length'))>maximum){await response.body?.cancel();throw new RangeError('Scene image too large');}
+        if(!response.body){const data=await response.arrayBuffer();if(data.byteLength>maximum)throw new RangeError('Scene image too large');return data;}
+        const reader=response.body.getReader(),chunks:Uint8Array[]=[];let size=0;
+        try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>maximum){await reader.cancel();throw new RangeError('Scene image too large');}chunks.push(value);}}
+        finally{reader.releaseLock();}
+        const result=new Uint8Array(size);let offset=0;for(const chunk of chunks){result.set(chunk,offset);offset+=chunk.length;}return result.buffer;
+      })
+    });
+  }
   declare _savedPreviewInfo:Map<string,{refs:number;promise:Promise<Loose>}>|undefined;
-  declare _savedPreviewBytes:Map<object,{refs:number;url:string}>|undefined;
+  declare _savedPreviewBytes:Map<object|string,{refs:number;url:string}>|undefined;
   /** Independent passive sprite crop; never moves or seeks the live preview canvas.
    * Historical videos use cached bytes only: opening a library must not start
    * video sessions or fetch every storyboard sheet in the user's history. */
   createSavedPreview(host:HTMLElement,videoId:string,time:number):()=>void {
     let disposed=false,revision=0,releaseImage:(()=>void)|null=null;
+    let sceneLease:{promise:Promise<Loose>;release:()=>void}|null=null;
     host.textContent='画像なし';
     host.style.position='relative';host.style.overflow='hidden';
     host.setAttribute('role','img');host.setAttribute('aria-label','場面画像を利用できません');
@@ -41,41 +165,60 @@ class Storyboard extends Emitter {
     const bytes=this._savedPreviewBytes??=(new Map());
     const isCurrent=()=>this._currentVideoWatchId===videoId&&this.model?.isAvailable===true;
     let infoLease: {refs:number;promise:Promise<Loose>}|undefined;
+    const infoKey=videoId+':'+time;
     const cached=()=>{
       if(infoLease)return infoLease.promise;
-      infoLease=infos.get(videoId);
+      infoLease=infos.get(infoKey);
       if(!infoLease){
         const pending=Promise.resolve().then(async()=>{
           for(const type of ['domand','dmc']){
-            const raw=await StoryboardCacheDb.get(videoId+'_'+type).catch(()=>null);
+            const raw=await (StoryboardCacheDb.getPreview?.(videoId+'_'+type,time)||StoryboardCacheDb.get(videoId+'_'+type)).catch(()=>null) as Loose;
             if(raw?.watchId===videoId&&raw.status==='ok'&&raw.storyboard)return raw;
           }
           return null;
         });
-        infoLease={refs:0,promise:pending};infos.set(videoId,infoLease);
+        infoLease={refs:0,promise:pending};infos.set(infoKey,infoLease);
       }
       infoLease.refs++;return infoLease.promise;
     };
     const draw=async()=>{
       const seq=++revision;
+      sceneLease?.release();sceneLease=null;
       releaseImage?.();releaseImage=null;host.textContent='画像なし';
       if(this.config?.props?.enableStoryboard===false)return;
-      const live=isCurrent(),raw=live?this.model.rawData:await cached();
+      const live=isCurrent();
+      let raw=live?this.model.rawData:await cached();
+      if(!live&&!disposed&&seq===revision&&this.config?.props?.savedSceneFetch!==false){
+        const candidate=raw&&new StoryboardInfoModel(raw);
+        if(!candidate?.isAvailable||!raw.storyboard.images[candidate.getThumbnailPosition(time*1000).page]?.buffer){
+          sceneLease=this.savedScenes().acquire(videoId,time);raw=await sceneLease.promise;
+        }
+      }
       if(disposed||seq!==revision||!raw||raw.watchId!==videoId)return;
       const model=new StoryboardInfoModel(raw);
       if(!model.isAvailable||model.cellCount<=0||time>model.duration)return;
       const pos=model.getThumbnailPosition(time*1000),page=raw.storyboard.images[pos.page];
+      const decoded=model.pageWidth*model.pageHeight*4;
+      if(!Number.isFinite(decoded)||decoded<=0||decoded>32*1024*1024)return;
       let src:string;
       if(page?.buffer&&Object.prototype.toString.call(page.buffer)==='[object ArrayBuffer]'){
         const key=page.buffer as object;
         let entry=bytes.get(key);
-        if(!entry){entry={refs:0,url:URL.createObjectURL(new Blob([page.buffer]))};bytes.set(key,entry);}
+        if(!entry){
+          if(!Number.isFinite(decoded)||decoded<=0||(this._savedPreviewDecodedBytes||0)+decoded>32*1024*1024)return;
+          entry={refs:0,url:URL.createObjectURL(new Blob([page.buffer]))};bytes.set(key,entry);this._savedPreviewDecodedBytes=(this._savedPreviewDecodedBytes||0)+decoded;
+        }
         entry.refs++;src=entry.url;
-        releaseImage=()=>{if(--entry!.refs===0){URL.revokeObjectURL(entry!.url);bytes.delete(key);}};
+        releaseImage=()=>{if(--entry!.refs===0){URL.revokeObjectURL(entry!.url);bytes.delete(key);this._savedPreviewDecodedBytes=Math.max(0,(this._savedPreviewDecodedBytes||0)-decoded);}};
       }else{
         // Only the already-open current video may reuse its live URL.
         if(!live||typeof page?.url!=='string'||!/^https?:\/\//.test(page.url))return;
         src=page.url;
+        let entry=bytes.get(src);
+        if(!entry){if((this._savedPreviewDecodedBytes||0)+decoded>32*1024*1024)return;
+          entry={refs:0,url:src};bytes.set(src,entry);this._savedPreviewDecodedBytes=(this._savedPreviewDecodedBytes||0)+decoded;}
+        entry.refs++;
+        releaseImage=()=>{if(--entry!.refs===0){bytes.delete(src);this._savedPreviewDecodedBytes=Math.max(0,(this._savedPreviewDecodedBytes||0)-decoded);}};
       }
       const image=host.ownerDocument.createElement('img');image.alt='';image.draggable=false;image.crossOrigin='anonymous';
       image.style.cssText=`position:absolute;max-width:none;width:${model.cols*100}%;height:${model.rows*100}%;left:${-pos.col*100}%;top:${-pos.row*100}%;pointer-events:none;`;
@@ -84,11 +227,11 @@ class Storyboard extends Emitter {
       host.style.aspectRatio=String(model.cellWidth)+' / '+String(model.cellHeight);
       host.replaceChildren(image);image.src=src;
     };
-    const update=()=>{void draw().catch(()=>{if(!disposed)host.textContent='画像なし';});};
+    const update=()=>{const pending=draw(),seq=revision;void pending.catch(()=>{if(!disposed&&seq===revision){host.textContent='画像なし';releaseImage?.();releaseImage=null;}});};
     this.on?.('update',update);this.on?.('reset',update);update();
-    return ()=>{if(disposed)return;disposed=true;revision++;releaseImage?.();releaseImage=null;
+    return ()=>{if(disposed)return;disposed=true;revision++;sceneLease?.release();sceneLease=null;releaseImage?.();releaseImage=null;
       (this as Loose).off?.('update',update);(this as Loose).off?.('reset',update);
-      if(infoLease&&--infoLease.refs===0&&infos.get(videoId)===infoLease)infos.delete(videoId);
+      if(infoLease&&--infoLease.refs===0&&infos.get(infoKey)===infoLease)infos.delete(infoKey);
       host.replaceChildren();
     };
   }
@@ -120,6 +263,7 @@ class Storyboard extends Emitter {
     // The switch must work for the current video, even if thumbnails were
     // initially disabled before the player emitted loadVideoInfo/canPlay.
     this.config.onkey?.('enableStoryboard', () => this._onStoryboardMasterChange());
+    this.config.onkey?.('savedSceneFetch',()=>{if(this.config.props.savedSceneFetch===false)this._savedScenes?.cancelAll();});
     global.debug.storyboard = this;
   }
   _initializeStoryboard() {
@@ -157,6 +301,7 @@ class Storyboard extends Emitter {
     // DataStorage publishes asynchronously; always read the latest saved
     // value instead of the event payload to avoid stale notifications.
     if(this.config.props.enableStoryboard!==true){
+      this._savedScenes?.cancelAll();
       // Old async master notifications can arrive repeatedly for one OFF.
       // Do not reset workers or fire a synthetic reset on an already empty
       // storyboard; revoke in-flight owners and loaded geometry just once.
@@ -271,4 +416,4 @@ class Storyboard extends Emitter {
   }
 }
 
-export {Storyboard, SeekBarThumbnail, StoryboardWorker};
+export {Storyboard, SeekBarThumbnail, StoryboardWorker, SavedSceneLoader};

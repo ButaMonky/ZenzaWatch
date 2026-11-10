@@ -160,6 +160,19 @@ class ModernAdvancedSettingsModel {
                 ['enableStoryboardBar', 'シーンサーチバーを表示'],
                 ['menuScale', '操作メニューの拡大率', { type: 'number' }]
             ]),
+            ...group('画面・映像', 'シーンサムネイルのキャッシュ', [
+                ['storyboardCacheMaxMB', '画像キャッシュの保存容量', {
+                        ...select([[0, '永続保存しない'], [32, '32 MB'], [64, '64 MB'], [128, '128 MB'], [256, '256 MB'], [512, '512 MB']]),
+                        description: '再生中と保存位置のシーンサムネイルで共用する、圧縮画像のディスク保存容量です（1 MB = 1,048,576バイト）。画像展開後のメモリ使用量とは異なります。上限を超えた古い画像から整理します。'
+                    }],
+                ['storyboardCacheDays', '使っていない画像の保持期間', {
+                        ...select([[1, '1日'], [3, '3日'], [7, '7日'], [14, '14日'], [30, '30日']]),
+                        description: '最後に使ってからこの日数が過ぎた画像を整理します。しおり・再生履歴は削除しません。'
+                    }],
+                ['savedSceneFetch', '保存位置の足りない画像を取得', {
+                        description: 'しおりや再生履歴で現在表示中の位置に画像がない場合だけ取得します。動画の再生や再生位置は変更しません。OFFでも保存済みの画像は表示します。'
+                    }]
+            ]),
             ...group('画面・映像', 'シーンサーチ', [
                 ['sceneSearch.presentation.normal', '通常表示のシーンサーチ', {
                         ...select([['follow', 'シーク位置に追従'], ['fixed', '位置を固定'], ['legacy', '従来表示']])
@@ -424,7 +437,7 @@ class ModernAdvancedSettingsModel {
         // The left-hand navigation must not move when legacy DOM order changes.
         const order = {
             '再生・音声': ['再生動作', 'しおり・ABリピート', '音量', '読み上げ', '動画の取得', '公式プレイヤー連携', '提供画面'],
-            '画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
+            '画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', 'シーンサムネイルのキャッシュ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
             'コメント表示': ['表示・配置', 'コメント一覧', '文字・装飾', '追加取得'],
             'NG・表示対象': ['NG条件', 'コメント種別', '動画の除外'],
             'プレイリスト・検索': ['プレイリスト', '検索', 'リンク・移動',
@@ -875,7 +888,9 @@ class ModernAdvancedSettingsModel {
             // Screenshot filenames must be valid on Windows as well as other OSes.
             const prefixOk = id !== 'screenshot.prefix' ||
                 (typeof value === 'string' && !/[<>:"/\\|?*\u0000-\u001f]/.test(value));
-            const valid = basic && rangeOk && stepOk && colorOk && prefixOk &&
+            const cacheEnumOk = id === 'storyboardCacheMaxMB' ? [0, 32, 64, 128, 256, 512].includes(value) :
+                id === 'storyboardCacheDays' ? [1, 3, 7, 14, 30].includes(value) : true;
+            const valid = basic && rangeOk && stepOk && colorOk && prefixOk && cacheEnumOk &&
                 (!this.config.options?.validateImport || this.config.options.validateImport(id, value));
             if (!valid) {
                 errs.push({ id, message: prefixOk ?

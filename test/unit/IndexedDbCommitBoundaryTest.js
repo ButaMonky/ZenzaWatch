@@ -118,7 +118,7 @@ describe('IndexedDB persistence waits for transaction completion (ZW-041 bounded
         const write = deferred();
         // Keep original code's fire-and-forget negative case local to this test.
         observe(write.promise);
-        const adapter = adapterFixture(name, {put: () => write.promise, update: data => write.promise.then(() => ({watchId: data.key})),
+        const adapter = adapterFixture(name, {storyboardCache: data => data.op === 'stats' ? Promise.resolve() : write.promise.then(() => data.record), put: () => write.promise, update: data => write.promise.then(() => ({watchId: data.key})),
           updateTime: async () => null, gc: async () => {}});
         const db = await adapter.open();
         const pending = name === 'ThumbInfoCacheDb' ? db.put('<fixture/>', {
@@ -129,8 +129,10 @@ describe('IndexedDB persistence waits for transaction completion (ZW-041 bounded
         const error = new Error('commit failed');
         fail ? write.reject(error) : write.resolve('sm9');
         await ticks();
-        assert.strictEqual(state.status, fail ? 'rejected' : 'resolved');
-        if (fail) { assert.strictEqual(state.error, error); }
+        const bestEffort = name === 'StoryboardCacheDb';
+        assert.strictEqual(state.status, fail && !bestEffort ? 'rejected' : 'resolved');
+        if (fail && bestEffort) { assert.strictEqual(state.value, undefined, 'image cache failure must allow rendering after commit failure'); }
+        else if (fail) { assert.strictEqual(state.error, error); }
         else { assert.strictEqual(state.value.watchId, 'sm9'); }
       });
     });

@@ -668,6 +668,30 @@ const VideoInfoLoader = (function () {
         });
     };
     return {
+        // Passive lookup: never increments playback ownership, publishes video
+        // events, resolves owners, loads lazy metadata, or follows paid-video links.
+        loadStoryboardInfo: async (watchId, options) => {
+            if (!/^(?:sm|so|nm)?\d+$/.test(watchId))
+                throw new TypeError('Invalid video ID');
+            requireActive(options);
+            const response = (await fetchWatchResponse(watchId, options, () => false))?.data?.response;
+            requireActive(options);
+            const data = response?.$watchV4?.data || response;
+            const video = data?.video, client = data?.client;
+            if (!video || client?.watchId !== watchId || typeof video.id !== 'string' ||
+                !Number.isFinite(video.duration) || video.duration <= 0 || typeof client.watchTrackId !== 'string') {
+                throw Object.assign(new Error('Scene metadata unavailable'), { errorCode: 'WATCH_SCHEMA' });
+            }
+            const media = data.media;
+            const domand = response?.$watchV4 ? media?.accessRightKey && media.contents && {
+                accessRightKey: media.accessRightKey, isStoryboardAvailable: media.isStoryboardAvailable
+            } : media?.domand;
+            if (!domand?.isStoryboardAvailable || typeof domand.accessRightKey !== 'string' || !domand.accessRightKey) {
+                throw Object.assign(new Error('Scene images unavailable'), { errorCode: 'STORYBOARD_SCHEMA' });
+            }
+            return { watchId, duration: video.duration, actionTrackId: client.watchTrackId,
+                domandInfo: { videoId: video.id, accessRightKey: domand.accessRightKey, isStoryboardAvailable: true } };
+        },
         load: function (watchId, options) {
             debug.watchApiData = undefined;
             const generation = ++anonymousWatchLoadSerial;

@@ -125,7 +125,7 @@ const createStoryboardClasses = (util) => {
             };
         }
         // Task 070: 画像（1枚 約0.5MB・10x10コマ）は全ページ同時に取得する。認証は不要（credentials omit で取得可）。
-        static async fetchImages(images) {
+        static async fetchImages(images, maxImageBytes = Infinity) {
             // This entry is also used directly by the separate storyboardImages
             // worker command, so validate again even if a caller skipped getInfo().
             validateStoryboardImageList(images);
@@ -133,18 +133,61 @@ const createStoryboardClasses = (util) => {
                 if (image.buffer) {
                     return image;
                 }
+                const controller = Number.isFinite(maxImageBytes) ? new AbortController() : null;
+                const timer = controller ? setTimeout(() => controller.abort(), 15000) : null;
                 try {
-                    const res = await fetch(image.url, { credentials: 'omit' });
+                    const res = await fetch(image.url, { credentials: 'omit', ...(controller ? { signal: controller.signal } : {}) });
                     if (!res.ok) {
                         throw new Error(`HTTP ${res.status}`);
                     }
+                    let buffer;
+                    if (Number(res.headers?.get('content-length')) > maxImageBytes) {
+                        await res.body?.cancel();
+                        throw new RangeError('Scene image too large');
+                    }
+                    if (Number.isFinite(maxImageBytes) && res.body) {
+                        const reader = res.body.getReader(), parts = [];
+                        let length = 0;
+                        try {
+                            for (;;) {
+                                const { done, value } = await reader.read();
+                                if (done)
+                                    break;
+                                length += value.byteLength;
+                                if (length > maxImageBytes) {
+                                    await reader.cancel();
+                                    throw new RangeError('Scene image too large');
+                                }
+                                parts.push(value);
+                            }
+                        }
+                        finally {
+                            reader.releaseLock();
+                        }
+                        const all = new Uint8Array(length);
+                        let offset = 0;
+                        for (const part of parts) {
+                            all.set(part, offset);
+                            offset += part.length;
+                        }
+                        buffer = all.buffer;
+                    }
+                    else {
+                        buffer = await res.arrayBuffer();
+                        if (buffer.byteLength > maxImageBytes)
+                            throw new RangeError('Scene image too large');
+                    }
                     return {
                         ...image,
-                        buffer: await res.arrayBuffer(),
+                        buffer,
                     };
                 }
                 catch (e) {
                     return { ...image, isFail: true };
+                }
+                finally {
+                    if (timer !== null)
+                        clearTimeout(timer);
                 }
             }));
         }
@@ -333,6 +376,9 @@ const createStoryboardClasses = (util) => {
                 return this._toSessionInfo(result.data);
             }
             catch (err) {
+                if (err?.name === 'AbortError') {
+                    throw err;
+                }
                 if (err === 'api_not_exist') {
                     throw 'Domand storyboard api not exist';
                 }
@@ -371,6 +417,9 @@ const createStoryboardClasses = (util) => {
                 return this._toSessionInfo(result.data);
             }
             catch (err) {
+                if (err?.name === 'AbortError') {
+                    throw err;
+                }
                 if (err === 'api_not_exist') {
                     throw 'DMC storyboard api not exist';
                 }
@@ -1016,9 +1065,11 @@ const VideoSessionWorker = (() => {
             }
         };
         // Task 070: URLだけの情報を先に返して表示を始め、画像本体は後からまとめて取得してキャッシュ用に返す
-        const storyboardImages = async ({ sbInfo }) => {
-            const images = await StoryboardInfoLoader.fetchImages(sbInfo.storyboard.images);
-            if (images.some(image => !image.buffer)) {
+        const storyboardImages = async ({ sbInfo, firstPageOnly = false }) => {
+            const selected = firstPageOnly ? sbInfo.storyboard.images.slice(0, 1) : sbInfo.storyboard.images;
+            const loaded = await StoryboardInfoLoader.fetchImages(selected, firstPageOnly ? 8 * 1024 * 1024 : Infinity);
+            const images = firstPageOnly ? [...loaded, ...sbInfo.storyboard.images.slice(1)] : loaded;
+            if (loaded.some(image => !image.buffer)) {
                 return { watchId: sbInfo.watchId, status: 'fail' };
             }
             return {
@@ -1127,7 +1178,7 @@ const VideoSessionWorker = (() => {
     // Task484: old IndexedDB records can report success despite wrong video
     // ownership, missing image buffers or outdated storyboard geometry.
     // Validate before serving a cached preview, not just when rendering it.
-    const isUsableStoryboardCache = (data, watchId, serverType) => {
+    const isUsableStoryboardCache = (data, watchId, serverType, complete = true) => {
         const record = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
         const positiveInt = (value) => Number.isSafeInteger(value) && value > 0;
         if (!record(data) || data.status !== 'ok' || data.watchId !== watchId ||
@@ -1150,7 +1201,7 @@ const VideoSessionWorker = (() => {
         }
         return images.every((image) => {
             if (!record(image) || typeof image.url !== 'string' || image.isFail ||
-                Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]') {
+                (complete && Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]')) {
                 return false;
             }
             try {
@@ -1165,6 +1216,7 @@ const VideoSessionWorker = (() => {
     };
     const storyboard = async ({ type, info }) => {
         const videoInfo = info.toJSON();
+        const cacheGeneration = StoryboardCacheDb.captureGeneration?.();
         const cacheId = `${videoInfo.watchId}_${type}`;
         const cachePromise = withTimeout(StoryboardCacheDb.get(cacheId).catch(() => null), 2000);
         // Start Worker construction in parallel with the IndexedDB lookup, but
@@ -1184,7 +1236,8 @@ const VideoSessionWorker = (() => {
             }
             // Evict only a provably invalid record. Cache maintenance is optional:
             // network recovery must continue even if IndexedDB is unavailable.
-            await withTimeout(Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null), 2000);
+            if (!isUsableStoryboardCache(cache, videoInfo.watchId, type, false))
+                await withTimeout(Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null), 2000);
         }
         if (workerInitError) {
             throw workerInitError;
@@ -1192,13 +1245,18 @@ const VideoSessionWorker = (() => {
         const params = { videoInfo, serverType: type, withImages: false };
         const result = await worker.post({ command: 'storyboard', params });
         if (result && result.status === 'ok') {
-            worker.post({ command: 'storyboardImages', params: { sbInfo: result } })
-                .then((full) => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
+            // Cache the first visible sheet only. Historical/edited points fetch their
+            // own required sheet on demand, not every page of a long video.
+            Promise.resolve(StoryboardCacheDb.stats?.()).then(stats => stats?.maxBytes === 0 ? null :
+                worker.post({ command: 'storyboardImages', params: { sbInfo: result, firstPageOnly: true } }))
+                .then((partial) => isUsableStoryboardCache(partial, videoInfo.watchId, type, false) &&
+                Object.prototype.toString.call(partial.storyboard.images[0]?.buffer) === '[object ArrayBuffer]' &&
+                StoryboardCacheDb.put(cacheId, partial, cacheGeneration))
                 .catch(() => console.warn('storyboard image cache fail'));
         }
         return result;
     };
-    return { initWorker, create, storyboard };
+    return { initWorker, create, storyboard, createStoryboardClasses };
 })();
 //===END===
 export {

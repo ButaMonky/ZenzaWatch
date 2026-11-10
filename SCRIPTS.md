@@ -8,7 +8,7 @@
 | `ZenzaWatch.user.js` | ZenzaWatch本体の旧通常版（2.6.2） | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない。DEV版と同時に有効にしないこと |
 | `ZenzaAdvancedSettings.user.js` | 本体統合に伴う削除案内のみ | 新規インストール不要。本体更新後、旧スクリプトを削除してください。`0.4.0-task993` |
 | `ZenzaHLS.user.js` | HLS / domand動画再生を担当 | 自動画質切り替えも担当。`0.0.43-task981` |
-| `MylistPocket.user.js` | サムネイル上の「とりマイ」「動画情報」「Zenzaプレイリスト追加」など | `0.5.86-task994` |
+| `MylistPocket.user.js` | サムネイル上の「とりマイ」「動画情報」「Zenzaプレイリスト追加」など | `0.5.87-task996` |
 | `ZenzaGamePad.user.js` | ゲームパッドでZenzaWatchを操作 | 任意。`1.5.6-task966` |
 | `HeatSync.user.js` | コメントの少ない部分を自動で早送りする拡張 | 任意。`0.0.24-task966qa` |
 | `MaskedWatch.user.js` | 画面上の文字・顔などを検出してコメント表示を調整 | 任意。`0.3.8-task966` |

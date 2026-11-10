@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/VideoInfoLoader.ts",
   "runtime": "packages/lib/src/nico/VideoInfoLoader.js",
-  "sourceSha256": "a194db8843198baf0a21cd7b87323aaa1809ab7e1a437cf8b70d3c4767700aa3",
-  "runtimeSha256": "6179bff2dc085de599f250e893e89864314f5ac65ff9f7e02d5497564fe67edf"
+  "sourceSha256": "6f33404164a3d1591d5cc0667bd43cdb32396d69192863457b2526d03d836ec3",
+  "runtimeSha256": "03a1b3f0265d81ea45d7d14719f90675057ceafceda47d2e1a14f65f18b37d23"
 }

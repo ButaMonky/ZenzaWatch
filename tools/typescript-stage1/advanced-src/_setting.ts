@@ -14,6 +14,7 @@ import {ModernAdvancedSettingsUI} from './ModernAdvancedSettingsUI';
 import {NgCompositeRuleEditor} from './NgCompositeRuleEditor';
 // CommentDisplayBudget は Config の //@require で同じスコープに入る（ここで重ねてrequireしない）
 import {CommentDisplayBudget} from '../packages/zenza/src/commentLayer/CommentDisplayBudget';
+declare const StoryboardCacheDb: {clear(): Promise<unknown>; stats(): Promise<{bytes: number; entries: number}>};
 export type AdvancedSettingsPanelMode = 'legacy' | 'modern';
 interface LegacyShortcutAction {
   id: string;
@@ -382,6 +383,9 @@ const $: typeof uq = uq;
           relatedOrder:RelatedMenuOrder,
           relatedActions:RelatedMenuActions,
           screenshotFileName:ScreenshotFileName,
+          sceneCache:typeof StoryboardCacheDb==='undefined'?null:{
+            clear:()=>StoryboardCacheDb.clear(),stats:()=>StoryboardCacheDb.stats()
+          },
           playlist:window.ZenzaWatch?.external?.playlist,
           storage:window.localStorage,
           formatKeyCombo,encodeKeyCombo,

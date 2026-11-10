@@ -14,6 +14,12 @@ function world(opt={}){
   const rows=new Map(Object.entries(opt.rows||{}));
   let opens=0;
   const store={
+    storyboardCache:async data=>{
+      if(data.op==='stats')return store.gc(7*24*60*60*1000);
+      if(data.op==='get')return store.updateTime({key:data.key});
+      if(data.op==='put'){await store.put(data.record);return data.record;}
+      throw Error('unexpected storyboard operation');
+    },
     put:async r=>{L('put',r);if(opt.putFails)throw Error('quota');rows.set(r.watchId,r);return 'k';},
     updateTime:async q=>{L('updateTime',q);return rows.has(q.key)?rows.get(q.key):opt.missValue;},
     delete:async q=>{L('delete',q);rows.delete(q.key);return 'deleted';},
@@ -66,19 +72,22 @@ test('payload guard: only status ok objects are stored',async()=>{
     await d.put('a'),await d.put('b',null),await d.put('c','ok'),await d.put('d',{status:'fail'}),
     await d.put('e',{status:'OK'}),await d.put('f',[]),await d.put('g',{status:'ok'})
   ]);
-  await compare('put failure propagates',d=>d.put('sm9',{status:'ok'}),{putFails:true});
+  // Task996: image persistence is best-effort; the attempted transaction still runs.
+  const w=world({putFails:true}),d=loadLegacy(after,'StoryboardCacheDb',w.globals);
+  assert.equal(await d.put('sm9',{status:'ok'}),undefined);
+  assert.equal(w.log.filter(row=>row[0]==='put').length,1);
 });
 
 test('concurrent opens share one connection; failures can be retried',async()=>{
   // Facades/connections hold functions (not comparable across realms): compare their keys.
   await compare('concurrent',d=>all([d.get('x'),d.put('y',{status:'ok'}),d.open().then(f=>Object.keys(f)),
     d.initWorker().then(c=>Object.keys(c))]));
-  await compare('first open fails, retry succeeds',async d=>{
-    const first=await all([d.get('x'),d.get('y')]);
-    const second=await d.get('x');
-    return [first,second];
-  },{openFailsTimes:1});
-  await compare('missing cache store',d=>d.put('sm9',{status:'ok'}),{noCacheStore:true});
+  const w=world({openFailsTimes:1,rows:{x:{sbInfo:{status:'ok'}}}}),d=loadLegacy(after,'StoryboardCacheDb',w.globals);
+  assert.deepEqual(await Promise.all([d.get('x'),d.get('y')]),[null,null]);
+  assert.equal((await d.get('x')).status,'ok');
+  assert.equal(w.log.filter(row=>row[0]==='idb.open').length,2,'failed single-flight must be released');
+  const missing=world({noCacheStore:true});
+  assert.equal(await loadLegacy(after,'StoryboardCacheDb',missing.globals).put('sm9',{status:'ok'}),undefined);
   await compare('initial GC failure only warns',async d=>{await d.open();await tick();return d.get('a');},{gcFails:true});
 });
 
@@ -87,5 +96,6 @@ test('other hosts use the injected bridge',async()=>{
     const r=d.api(w.bridge);
     return [r===w.bridge,await d.put('sm9',{status:'ok'}),await d.get('sm9')];
   },{host:'live.nicovideo.jp'});
-  await compare('bridge not injected',d=>d.get('sm9'),{host:'live.nicovideo.jp'});
+  const unavailable=world({host:'live.nicovideo.jp'});
+  assert.equal(await loadLegacy(after,'StoryboardCacheDb',unavailable.globals).get('sm9'),null);
 });

@@ -107,7 +107,7 @@ class ShortcutKeyEmitter {
             });
         }
         const isInputEvent = (e) => {
-            if (e.defaultPrevented || e.isComposing) {
+            if (e.defaultPrevented || e.isComposing || document.querySelector?.('.zenzaAdvancedSettingPanel.show')) {
                 return true;
             }
             const path = typeof e.composedPath === 'function' ? e.composedPath() : [];

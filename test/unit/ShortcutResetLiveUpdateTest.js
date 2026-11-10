@@ -38,7 +38,7 @@ function resetFixture(sourcePath, actionId, override, defaultValue) {
 }
 
 describe('Task294 reset shortcut publishes the live default', () => {
-  for (const sourcePath of ['src/_setting.js', 'dist/ZenzaAdvancedSettings.user.js']) {
+  for (const sourcePath of ['src/_setting.js', 'dist/ZenzaWatch-dev.user.js']) {
     it('publishes a legacy default before deleting the override: ' + sourcePath, () => {
       assert.deepStrictEqual(resetFixture(sourcePath, 'TOGGLE_PLAY', 88, 32), [
         ['cancel'], ['publish', 'KEY_TOGGLE_PLAY', 32],

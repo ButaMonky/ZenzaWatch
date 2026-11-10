@@ -1,21 +1,6 @@
-// ==UserScript==
-// @name        ZenzaWatch 上級者用設定
-// @namespace   https://github.com/segabito/
-// @description1 ZenzaWatchの上級者向け設定。変更する時だけ有効にすればOK
-// @include     *//www.nicovideo.jp/my*
-// @version     0.3.89-task989
-// @author      segabito macmoto
-// @license     public domain
-// @grant       none
-// @noframes
-// @require     https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
-// ==/UserScript==
-
-import {ZenzaDetector} from '../packages/components/src/util/ZenzaDetector';
 import {uq} from '../packages/lib/src/uQuery';
 import {cssUtil} from '../packages/lib/src/css/css';
 import {DataStorage} from '../packages/lib/src/infra/DataStorage';
-import {Config} from './Config';
 import {Emitter, Handler} from '../packages/lib/src/Emitter';
 import {SHORTCUT_ACTIONS, encodeKeyCombo, formatKeyCombo, groupShortcutActionsByCategory} from '../packages/zenza/src/ShortcutActions';
 import {ScreenFilter} from '../packages/zenza/src/videoPlayer/ScreenFilter';
@@ -55,14 +40,11 @@ declare global {
     ZenzaAdvancedSettings?: {config: unknown; version: string};
   }
 }
-((window) => { const self = window;
-  const PRODUCT = 'ZenzaWatch';
-  const monkey = async (PRODUCT: string) => {
-    const _ = window._ ;
+//===BEGIN===
+const createAdvancedSettingsPanel = (Config: any, lodash = window._) => {
+    const PRODUCT = 'ZenzaWatch';
+    const _ = lodash;
     const Array = window.PureArray || window.Array;
-//@require Emitter
-//@require Config
-await Config.promise('restore');
 //@require uq
 const $: typeof uq = uq;
 //@require cssUtil
@@ -76,52 +58,9 @@ const $: typeof uq = uq;
 //@require ModernAdvancedSettingsModel
 //@require ModernAdvancedSettingsUI
 //@require NgCompositeRuleEditor
-    window.ZenzaAdvancedSettings = {
-      config: Config,
-      version: '0.3.89-task989'
-    };
     const global = {
       PRODUCT
     };
-
-    let panel!: SettingPanel;
-
-    const __tpl__ = (`
-      <button class="openZenzaAdvancedSettingPanel">ZenzaWatch上級者設定</button>
-    `).trim();
-
-    const __css__ = (`
-      .openZenzaAdvancedSettingPanel {
-        font-size: 12px;
-        border-radius: 4px;
-        -webkit-box-pack: justify;
-        -ms-flex-pack: justify;
-        justify-content: space-between;
-        -webkit-box-align: center;
-        -ms-flex-align: center;
-        align-items: center;
-        padding: 0 6px;
-        color: #555;
-        font-weight: 600;
-        text-align: right;
-        letter-spacing: .5px;
-        cursor: pointer;
-      }
-      .openZenzaAdvancedSettingPanel:hover {
-        background: #eee;
-      }
-
-      .openZenzaAdvancedSettingPanel:active {
-        background: #ccc;
-      }
-
-
-      .summer2017Area {
-        display: none !important;
-      }
-    `).trim();
-
-
 
     // Task 059: ショートカットキー設定UI。
     const escapeShortcutHtml = (s: unknown) => String(s).replace(/[&<>"']/g, c => (
@@ -269,6 +208,9 @@ const $: typeof uq = uq;
       declare _historySettings: any;
       declare static __css__: string;
       declare static __tpl__: string;
+      declare _previousFocus: HTMLElement | null;
+      declare _onFullscreenBound: () => void;
+      declare _onConfigUpdateBound: (...args: any[]) => void;
       constructor(...args: [LegacyPanelParams]) {
         this.initialize(...args);
       }
@@ -277,7 +219,12 @@ const $: typeof uq = uq;
         this._$container       = params.$container;
 
         this._update$rawData = _.debounce(this._update$rawData.bind(this), 500);
-        this._playerConfig.on('update', this._onPlayerConfigUpdate.bind(this));
+        this._onConfigUpdateBound = this._onPlayerConfigUpdate.bind(this);
+        this._playerConfig.on('update', this._onConfigUpdateBound);
+        this._onFullscreenBound = () => {
+          if (this._$view?.hasClass('show')) (document.fullscreenElement || document.body).append(this._$view[0]);
+        };
+        document.addEventListener('fullscreenchange', this._onFullscreenBound);
       }
       _initializeDom() {
         if (this._$panel) { return; }
@@ -318,7 +265,7 @@ const $: typeof uq = uq;
         });
 
         this._$playlistData = $panel.find('.zenzaAdvancedSetting-playlistData');
-        this._$playlistData.val(JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2));
+        this._$playlistData.val(JSON.stringify(window.ZenzaWatch?.external?.playlist?.export?.() || [], null, 2));
         this._$playlistData.on('change', () => {
           let val = this._$playlistData.val();
           let data;
@@ -667,7 +614,7 @@ const $: typeof uq = uq;
       _beforeShow() {
         if (this._$playlistData) {
           this._$playlistData.val(
-            JSON.stringify(window.ZenzaWatch.external.playlist.export(), null, 2)
+            JSON.stringify(window.ZenzaWatch?.external?.playlist?.export?.() || [], null, 2)
           );
         }
       }
@@ -687,11 +634,32 @@ const $: typeof uq = uq;
           // Start each opening from the latest committed values.
           this._modernUI.discardChanges();
         }
+        const wasShown = this._$view.hasClass('show');
         this._$view.toggleClass('show', willShow);
         this._modernUI.setModalVisible(willShow);
-        if (willShow) { this._beforeShow(); }
+        if (willShow) {
+          this._beforeShow();
+          if (!wasShown) {
+            this._previousFocus = document.activeElement as HTMLElement;
+            this._$view[0].querySelector('[data-zw-search]')?.focus();
+          }
+        } else if (wasShown && this._previousFocus?.isConnected) { this._previousFocus.focus(); }
+      }
+      dispose() {
+        this._cancelShortcutRecording();
+        this._modernUI?.discardChanges();
+        this._modernUI?.dispose();
+        this._relatedMenuLinks?.dispose();
+        this._historySettings?.dispose?.();
+        this._historyPreferences?.dispose?.();
+        this._playerConfig.off('update', this._onConfigUpdateBound);
+        document.removeEventListener('fullscreenchange', this._onFullscreenBound);
+        (this._update$rawData as (() => void) & {cancel?: () => void}).cancel?.();
+        this._$view?.remove();
       }
       show() {
+        this._initializeDom();
+        (document.fullscreenElement || document.body).append(this._$view[0]);
         this.toggle(true);
       }
       hide() {
@@ -1307,46 +1275,7 @@ const $: typeof uq = uq;
 
 
 
-    const initializePanel = () => {
-      // Config.watch();
-      if (panel == null) {
-        panel = new SettingPanel({
-          playerConfig: Config,
-          $container: $('body')
-        });
-      }
-    };
-
-    const initialize = () => {
-      const $button = $(__tpl__);
-      cssUtil.addStyle(__css__);
-
-      document.querySelector('#js-initial-userpage-data') ?
-        $('.Dropdown-button').before($button) :
-        $('.accountEdit').after($button);
-
-      $button.on('click', (e: LegacyQueryEvent) => {
-        initializePanel();
-        panel.toggle();
-      });
-
-    };
-
-    initialize();
-  };
-
-  const loadGM = () => {
-    const script = document.createElement('script');
-    script.id = 'ZenzaWatchAdvancedSettingsLoader';
-    script.setAttribute('type', 'text/javascript');
-    script.setAttribute('charset', 'UTF-8');
-    script.append(`(${monkey})('${PRODUCT}');`);
-    document.body.append(script);
-  };
-
-
-//@require ZenzaDetector
-ZenzaDetector.detect().then(() => loadGM());
-
-
-})(globalThis ? globalThis.window : window);
+    return new SettingPanel({playerConfig: Config, $container: $('body')});
+};
+//===END===
+export {createAdvancedSettingsPanel};

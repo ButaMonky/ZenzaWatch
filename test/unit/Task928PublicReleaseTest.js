@@ -8,10 +8,10 @@ const manifest=JSON.parse(read('dist-manifest.json'));
 const prefix='https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/';
 const installers='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
 const expected={
- 'ZenzaWatch-dev.user.js':'2.7.368-task992',
+ 'ZenzaWatch-dev.user.js':'2.7.369-task993',
  'ZenzaHLS.user.js':'0.0.43-task981',
  'MylistPocket.user.js':'0.5.85-task992',
- 'ZenzaAdvancedSettings.user.js':'0.3.89-task989',
+ 'ZenzaAdvancedSettings.user.js':'0.4.0-task993',
  'ZenzaBlogPartsButton.user.js':'0.0.5-task928'
 };
 describe('Public promotion: release channel and installer integrity',function(){
@@ -35,14 +35,16 @@ describe('Public promotion: release channel and installer integrity',function(){
  it('the five installation links have current expected versions',()=>{
   const readme=read('README.md');
   for(const [name,version] of Object.entries(expected)){
-   assert(readme.includes('('+installers+name+')'),name+': installer link missing');
+   if(name !== 'ZenzaAdvancedSettings.user.js') assert(readme.includes('('+installers+name+')'),name+': installer link missing');
    assert(read('dist/'+name).includes(version),name+': version mismatch');
    assert(readme.includes(version),name+': update README');
   }
  });
  it('retains alert and notification settings in both runtime bundles',()=>{
   const watch=read('dist/ZenzaWatch-dev.user.js');
-  const settings=read('dist/ZenzaAdvancedSettings.user.js');
+  const settings=watch;
+  assert(read('dist/ZenzaAdvancedSettings.user.js').includes('削除してください'));
+  assert(!read('dist/ZenzaAdvancedSettings.user.js').includes('createAdvancedSettingsPanel'));
   assert(watch.includes('popup.backgroundTransparency'));
   assert(watch.includes('popup.notifyColor'));
   assert(settings.includes('\u901a\u77e5\u80cc\u666f\u306e\u900f\u660e\u5ea6'));

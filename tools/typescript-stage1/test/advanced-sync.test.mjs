@@ -1,4 +1,4 @@
-// Task453/553: offline, disposable Git regression for ten advanced-settings modules.
+// Task453/553: offline, disposable Git regression for eleven advanced-settings modules.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
@@ -44,10 +44,10 @@ function fixture(t){
   git(dir,'commit','-qm','test baseline');
   return dir;
 }
-test('fixed advanced-settings registry includes exactly ten source families',()=>{
+test('fixed advanced-settings registry includes exactly eleven source families',()=>{
   assert.deepEqual(ADVANCED_MODULES.map(s=>s.name),[
     'ModernAdvancedSettingsModel','ModernAdvancedSettingsUI',
-    'UiVisibilityRegistry','Config','_setting','ScreenshotFileName','RelatedMenuOrder',
+    'UiVisibilityRegistry','Config','_setting','AdvancedSettingsController','ScreenshotFileName','RelatedMenuOrder',
     'RelatedMenuSettings','NgCompositeRules','NgCompositeRuleEditor'
   ]);
   for(const spec of ADVANCED_MODULES){
@@ -57,7 +57,7 @@ test('fixed advanced-settings registry includes exactly ten source families',()=
     }
   }
 });
-test('native TS7 output preserves all ten exact JavaScript ASTs and directives',()=>{
+test('native TS7 output preserves all eleven exact JavaScript ASTs and directives',()=>{
   for(const spec of ADVANCED_MODULES){
     const actual=read(repo,spec.runtime);
     const emitted=restoreLegacyRequires(spec,read(repo,spec.emitted));
@@ -69,20 +69,20 @@ test('native TS7 output preserves all ten exact JavaScript ASTs and directives',
   assert(restoreLegacyRequires(setting,read(repo,setting.emitted))
     .includes('//@require uq'));
 });
-test('a ten-module sync updates only manifests when generated JS is equivalent',t=>{
+test('a eleven-module sync updates only manifests when generated JS is equivalent',t=>{
   const dir=fixture(t);
   const before=ADVANCED_MODULES.map(spec=>sha(read(dir,spec.runtime)));
   const results=syncAdvanced('--write',{root:dir});
-  assert.equal(results.length,10);
+  assert.equal(results.length,11);
   assert(results.every(result=>result.code==='UNCHANGED'));
-  assert.equal(syncAdvanced('--check',{root:dir}).length,10);
+  assert.equal(syncAdvanced('--check',{root:dir}).length,11);
   assert.deepEqual(ADVANCED_MODULES.map(spec=>sha(read(dir,spec.runtime))),before);
   for(const spec of ADVANCED_MODULES){
     const m=JSON.parse(read(dir,spec.manifest));
     assert.equal(m.sourceSha256,sha(read(dir,spec.source)));
     assert.equal(m.runtimeSha256,sha(read(dir,spec.runtime)));
   }
-  assert.equal(syncAdvanced('--write',{root:dir}).length,10);
+  assert.equal(syncAdvanced('--write',{root:dir}).length,11);
 });
 test('CLI rejects stale TypeScript source without a fresh compiler stamp',t=>{
   const dir=fixture(t);

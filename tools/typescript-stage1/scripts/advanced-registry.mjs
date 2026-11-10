@@ -5,6 +5,7 @@ export const ADVANCED_MODULES=Object.freeze([
   'UiVisibilityRegistry',
   'Config',
   '_setting',
+  'AdvancedSettingsController',
   'ScreenshotFileName',
   'RelatedMenuOrder',
   'RelatedMenuSettings',

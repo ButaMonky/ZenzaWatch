@@ -50,3 +50,13 @@ DB名・バージョン・最大保存件数・既存の呼び出しAPIは維持
 次に通知UIを変更する際はPanelを中心に進められます。各機能のログを充実させる際は、必要な項目をPolicyの型・許可リストと一緒に追加し、Journalの既存窓口から報告します。
 
 通信・応答の診断は [通信診断の接続範囲](REQUEST_DIAGNOSTICS.md) を参照してください。低レベルの観測処理は保存先を直接参照せず、初期化時に注入する通知先へ報告します。
+
+## 上級者設定（Task993）
+
+- `AdvancedSettingsController.ts`: Config復元待ち、遅延生成、再試行、入口、破棄。
+- `_setting.ts`: 既存の各設定アダプターを組み合わせる画面ファクトリー。本体からConfigを受け取り、新しいConfigや保存キーを作らない。
+- `ModernAdvancedSettingsModel.ts` / `ModernAdvancedSettingsUI.ts`: 編集・検証・保存と画面表示。個別設定機能の境界は維持。
+- `_template.js` / `RootDispatcher.ts`: 本体と設定画面を接続。
+- `_settingsRetired.js`: 旧UserScriptの削除案内のみ。設定データへのアクセスなし。
+
+設定項目の自動生成や全機能の分割は今回の対象外です。内部モジュールを一つの本体配布物へまとめ、個別のUserscriptとしてインストールする必要をなくしました。

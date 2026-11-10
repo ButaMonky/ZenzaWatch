@@ -58,10 +58,15 @@ export function prepareAdvanced(spec,root,mode,allowCodeChange=false){
   const currentSemantic=sha(canonicalJs(actual));
   const compDirectives=directiveList(compiled);
   const currentDirectives=directiveList(actual);
-  if(JSON.stringify(compDirectives)!==JSON.stringify(currentDirectives)){
+  const panelMigration = spec.name === '_setting' && mode === '--write' && allowCodeChange &&
+    currentDirectives.includes('//@require ZenzaDetector') &&
+    JSON.stringify(compDirectives) === JSON.stringify(['//===BEGIN===', ...currentDirectives.filter(x => !['//@require Config','//@require ZenzaDetector','//@require Emitter'].includes(x)), '//===END===']);
+  const emitterMigration = spec.name === '_setting' && mode === '--write' && allowCodeChange &&
+      JSON.stringify(compDirectives) === JSON.stringify(currentDirectives.filter(x => x !== '//@require Emitter'));
+    if(JSON.stringify(compDirectives)!==JSON.stringify(currentDirectives) && !panelMigration && !emitterMigration){
     err('ADVANCED_LEGACY_BUILD_DIRECTIVE_MISMATCH');
   }
-  const differs=desiredSemantic!==currentSemantic;
+  const differs=desiredSemantic!==currentSemantic || JSON.stringify(compDirectives)!==JSON.stringify(currentDirectives);
   if(differs&&!(mode==='--write'&&allowCodeChange)){
     err('ADVANCED_CODE_CHANGE_REQUIRES_EXPLICIT_REVIEW');
   }

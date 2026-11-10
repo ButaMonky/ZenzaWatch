@@ -27,6 +27,12 @@ async function subject(overrides = {}) {
 }
 
 describe('ZW-066 editable shortcut guard', () => {
+  it('suppresses player shortcuts while integrated settings is open, including focus outside it', async () => {
+    const h = await subject(); const panel = h.doc.createElement('div');
+    panel.className = 'zenzaAdvancedSettingPanel show'; h.doc.body.append(panel);
+    h.send(); assert.deepStrictEqual(h.events, []);
+    panel.classList.remove('show'); h.send(); assert.strictEqual(h.events.length, 1);
+  });
   it('keeps ordinary shortcuts while ignoring input, textarea and select', async () => {
     const h = await subject();
     for (const tag of ['input', 'textarea', 'select']) { const node = h.doc.createElement(tag); h.doc.body.append(node); h.send(node); }

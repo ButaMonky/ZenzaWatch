@@ -6,7 +6,7 @@
 |---|---|---|
 | `ZenzaWatch-dev.user.js` | **ZenzaWatch本体**。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供 | 現在の推奨版。`2.7.365-task989`（公開版） |
 | `ZenzaWatch.user.js` | ZenzaWatch本体の旧通常版（2.6.2） | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない。DEV版と同時に有効にしないこと |
-| `ZenzaAdvancedSettings.user.js` | 上級者向け設定パネル | ショートカット、表示・非表示、画面フィルター、NG、通知の色・透明度。`0.3.89-task989` |
+| `ZenzaAdvancedSettings.user.js` | 本体統合に伴う削除案内のみ | 新規インストール不要。本体更新後、旧スクリプトを削除してください。`0.4.0-task993` |
 | `ZenzaHLS.user.js` | HLS / domand動画再生を担当 | 自動画質切り替えも担当。`0.0.43-task981` |
 | `MylistPocket.user.js` | サムネイル上の「とりマイ」「動画情報」「Zenzaプレイリスト追加」など | `0.5.85-task992` |
 | `ZenzaGamePad.user.js` | ゲームパッドでZenzaWatchを操作 | 任意。`1.5.6-task966` |
@@ -31,7 +31,6 @@
 必要に応じて、
 
 - `MylistPocket.user.js`
-- `ZenzaAdvancedSettings.user.js`
 
 を追加してください。
 
@@ -47,7 +46,7 @@
 | dist | src |
 |---|---|
 | `ZenzaWatch-dev.user.js` / `ZenzaWatch.user.js` | `src/_template.js` |
-| `ZenzaAdvancedSettings.user.js` | `src/_setting.js` |
+| `ZenzaAdvancedSettings.user.js` | `src/_settingsRetired.js`（案内のみ） |
 | `ZenzaHLS.user.js` | `src/_hls.js` |
 | `MylistPocket.user.js` | `src/_pocket.js` |
 | `ZenzaGamePad.user.js` | `src/_gamepad.js` |

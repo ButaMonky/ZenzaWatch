@@ -18,7 +18,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.368-task992`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+  - 最新版：`2.7.369-task993`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
   - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
   - Discussion #36：ショートカット操作時の対象ボタンだけの表示とアニメーションを暫定対応。通常クリックではON/OFF文字を追加せず、いいねの演出は最後まで表示します。引き続き検証・改善します。
 
@@ -32,8 +32,8 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 - [MylistPocket をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js)
   - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version `0.5.85-task992`)
 
-- [ZenzaAdvancedSettings をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js)
-  - ショートカット、画面フィルター、NGなどの上級者向け設定。 (version `0.3.89-task989`)
+上級者設定は本体 `2.7.369-task993` に統合しました。プレイヤーの歯車 → プレイヤーの設定 →「上級者設定を開く」、またはマイページ右下から開けます。既存の設定はそのまま引き継ぎます。
+旧 `ZenzaAdvancedSettings` は更新版 `0.4.0-task993` で削除案内のみを表示します。本体を更新後、Tampermonkeyから旧スクリプトを削除してください。本体や保存データの削除は不要です。
 
 - [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
   - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version `0.0.5-task928`)

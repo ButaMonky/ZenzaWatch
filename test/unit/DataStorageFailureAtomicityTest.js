@@ -6,7 +6,7 @@ const paths=[
   ['source','packages/lib/src/infra/DataStorage.js'],
   ['Zenza dist','dist/ZenzaWatch-dev.user.js'],
   ['Pocket dist','dist/MylistPocket.user.js'],
-  ['Advanced Settings dist','dist/ZenzaAdvancedSettings.user.js']
+  ['Advanced Settings dist','dist/ZenzaWatch-dev.user.js']
 ];
 const deferredTick=()=>new Promise(resolve=>setTimeout(resolve,12));
 function subject(path,store,defaults={volume:0.3,mute:false},options={}){

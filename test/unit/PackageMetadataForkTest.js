@@ -28,12 +28,12 @@ describe('Task239 package metadata points to the maintained public fork', () => 
 
     // Installing from this private backup must never turn the updater into
     // a private-GitHub URL (which may fail authentication and never update).
+    assert.ok(!readme.includes('ZenzaAdvancedSettings をインストール'), 'retired settings must not be recommended');
     const installPrefix = 'https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
     for (const script of [
       'ZenzaWatch-dev.user.js',
       'ZenzaHLS.user.js',
       'MylistPocket.user.js',
-      'ZenzaAdvancedSettings.user.js',
       'ZenzaBlogPartsButton.user.js'
     ]) {
       assert.ok(

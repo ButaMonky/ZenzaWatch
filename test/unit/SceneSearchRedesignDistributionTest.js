@@ -9,7 +9,7 @@ describe('Task925 combined notification and scene distribution',()=>{
   assert(dist.includes('toggle-notificationHistory'));assert(dist.includes('sceneSearch.presentation.normal'));
  });
  it('ships scene settings and notification shortcut in standalone settings',()=>{
-  const dist=fs.readFileSync('dist/ZenzaAdvancedSettings.user.js','utf8');
+  const dist=fs.readFileSync('dist/ZenzaWatch-dev.user.js','utf8');
   assert(dist.includes('class SceneSearchPreferences'));
   assert(dist.includes('TOGGLE_NOTIFICATION_HISTORY'));
   assert(dist.includes('sceneSearch.commentListScale'));

@@ -7,7 +7,7 @@ const read = rel => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
 const manifest = JSON.parse(read('dist-manifest.json'));
 const installNames = [
   'ZenzaWatch-dev','ZenzaHLS','MylistPocket',
-  'ZenzaAdvancedSettings','ZenzaBlogPartsButton'
+  'ZenzaBlogPartsButton'
 ];
 const meta = name => {
   const src = read('dist/' + name + '.user.js').slice(0, 8000);
@@ -40,10 +40,10 @@ describe('Task928 private backup with public-only update destinations', () => {
   });
   it('records the reviewed build versions of the five installers', () => {
     const wanted = {
-      'ZenzaWatch-dev':'2.7.368-task992',
+      'ZenzaWatch-dev':'2.7.369-task993',
       'ZenzaHLS':'0.0.43-task981',
       'MylistPocket':'0.5.85-task992',
-      'ZenzaAdvancedSettings':'0.3.89-task989',
+      'ZenzaAdvancedSettings':'0.4.0-task993',
       'ZenzaBlogPartsButton':'0.0.5-task928'
     };
     for (const [name,version] of Object.entries(wanted)) {
@@ -52,13 +52,13 @@ describe('Task928 private backup with public-only update destinations', () => {
   });
   it('preserves the Task927 features in both rebuilt distribution files', () => {
     const watch = read('dist/ZenzaWatch-dev.user.js');
-    const settings = read('dist/ZenzaAdvancedSettings.user.js');
+    const settings = read('dist/ZenzaWatch-dev.user.js');
     assert(watch.includes('popup.backgroundTransparency'));
     assert(watch.includes('popup.notifyColor'));
     assert(watch.includes('popup.alertColor'));
     assert(settings.includes('通知背景の透明度'));
     assert(settings.includes('zw-popup-color-sample'));
     assert(settings.includes('zw-modern-color-editor'));
-    assert(settings.includes("0.3.89-task989"));
+    assert(read('dist/ZenzaAdvancedSettings.user.js').includes('削除してください'));
   });
 });

@@ -84,7 +84,7 @@ describe('Task941 storyboard bar key/settings/button synchronization',function()
  });
  it('the two private installers actually ship the shared repair',()=>{
   const player=read('dist/ZenzaWatch-dev.user.js');
-  const settings=read('dist/ZenzaAdvancedSettings.user.js');
+  const settings=read('dist/ZenzaWatch-dev.user.js');
   assert(player.includes('_onStoryboardBarVisibilityChange'),
     'Storyboard callback not bundled in the player');
   assert(player.includes("onkey?.('enableStoryboardBar'"),
@@ -95,10 +95,10 @@ describe('Task941 storyboard bar key/settings/button synchronization',function()
     'the settings userscript lacks the canonical shortcut registry');
   // Keep Task941's behavior test valid as private distributions advance.
   const playerVersion=read('src/_template.js').match(/^\/\/ @version\s+(\S+)/m)?.[1];
-  const settingsVersion=read('tools/typescript-stage1/advanced-src/_setting.ts')
+  const settingsVersion=read('src/_template.js')
     .match(/^\/\/ @version\s+(\S+)/m)?.[1];
   assert.match(playerVersion||'',/^2\.7\.\d+-task\d+$/);
-  assert.match(settingsVersion||'',/^0\.3\.\d+-task\d+$/);
+  assert.match(settingsVersion||'',/^2\.7\.\d+-task\d+$/);
   assert.strictEqual(player.match(/^\/\/ @version\s+(\S+)/m)?.[1],playerVersion);
   assert.strictEqual(settings.match(/^\/\/ @version\s+(\S+)/m)?.[1],settingsVersion);
  });

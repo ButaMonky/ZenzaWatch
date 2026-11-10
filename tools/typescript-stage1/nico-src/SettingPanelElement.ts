@@ -37,6 +37,7 @@ const {SettingPanelElement} = (() => {
       return html`
         <details class="player-setting">
         <summary>プレイヤーの設定</summary>
+        <button type="button" class="command" data-command="openAdvancedSettings">上級者設定を開く</button>
         <div class="control">
           <label>
             <input type="checkbox" class="checkbox"

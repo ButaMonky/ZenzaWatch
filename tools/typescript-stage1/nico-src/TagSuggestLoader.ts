@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for packages/lib/src/nico/TagSuggestLoader.js (Task463).
  * Candidates are validated (strings only), so the result type is precise.
@@ -43,15 +44,24 @@ const TagSuggestLoader: TagSuggestLoaderClient = (() => {
     if (cache.has(w)) {
       return cache.get(w) as string[];
     }
-    const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u: string, o?: NetFetchOptions) => fetch(u, o as RequestInit | undefined)};
-    const res = await net.fetch(API_BASE + encodeURIComponent(w), {credentials: 'omit', timeout: 5000});
-    const json: unknown = await res.json();
-    const candidates = (json && Array.isArray((json as UnknownPropertyBag).candidates)) ? ((json as UnknownPropertyBag).candidates as unknown[]).filter((c: unknown): c is string => typeof c === 'string') : [];
-    cache.set(w, candidates);
-    if (cache.size > CACHE_LIMIT) {
-      cache.delete(cache.keys().next().value as string);
-    }
-    return candidates;
+
+    let schemaValid = false;
+    const execute = async () => {
+      const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil : {fetch: (u: string, o?: NetFetchOptions) => fetch(u, o as RequestInit | undefined)};
+      const res = await net.fetch(API_BASE + encodeURIComponent(w), {credentials: 'omit', timeout: 5000});
+      const json: unknown = await res.json();
+      schemaValid = !!json && Array.isArray((json as UnknownPropertyBag).candidates) &&
+        ((json as UnknownPropertyBag).candidates as unknown[]).every(c => typeof c === 'string');
+      const candidates = (json && Array.isArray((json as UnknownPropertyBag).candidates)) ? ((json as UnknownPropertyBag).candidates as unknown[]).filter((c: unknown): c is string => typeof c === 'string') : [];
+      cache.set(w, candidates);
+      if (cache.size > CACHE_LIMIT) {
+        cache.delete(cache.keys().next().value as string);
+      }
+      return candidates;
+
+    };
+    return typeof RequestDiagnostics === 'undefined' ? execute() :
+      RequestDiagnostics.observe('tag-suggest', w, execute, () => schemaValid, () => true);
   };
 
   return {load};

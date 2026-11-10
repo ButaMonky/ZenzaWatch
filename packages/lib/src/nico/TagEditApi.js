@@ -1,6 +1,8 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {util} from '../../../../src/util';
 // GENERATED FROM tools/typescript-stage1/nico-src/TagEditApi.ts (Task475). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 /**
  * タグ一覧の取得・追加・削除（nvapi v2）。
  *
@@ -70,36 +72,40 @@ class TagEditApi {
         }
     }
     async _requestOnce({ url, options }, label) {
-        let res, json = null;
-        try {
-            res = await util.fetch(url, options);
-        }
-        catch (e) {
-            throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK', cause: e });
-        }
-        try {
-            json = await res.json();
-        }
-        catch (e) {
-            json = null;
-        }
-        // Any truthy body is probed like the legacy JS (`json.meta`); primitives yield undefined.
-        const meta = ((json && json.meta) || {});
-        const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
-        const errorCode = meta.errorCode || '';
-        // 2026-09-16の実機確認: 不正なキーを送ると 403 {errorCode:"FORBIDDEN"} が返った。
-        // 期限切れのキーが KEY_EXPIRED と FORBIDDEN のどちらになるかは未確認のため、
-        // 両方を「キーを取り直して1回だけ再試行する」対象にする（再試行は1回限りなので、
-        // 本当に権限が無い場合も余計な通信は1往復で済む）。
-        if (errorCode === 'KEY_EXPIRED' || /KEY_EXPIRED/.test(JSON.stringify(meta)) ||
-            (status === 403 && errorCode === 'FORBIDDEN')) {
-            throw Object.assign(new Error(`${label}に失敗しました（タグ編集キーが無効または期限切れ: ${status} ${errorCode}）`), { kind: 'KEY_EXPIRED', status, errorCode });
-        }
-        if (!json || status < 200 || status >= 300 || !json.data) {
-            const detail = [status, errorCode, meta.errorMessage].filter(Boolean).join(' ');
-            throw Object.assign(new Error(`${label}に失敗しました${detail ? `（${detail}）` : ''}`), { kind: 'API', status, errorCode, response: json });
-        }
-        return json.data;
+        const execute = async () => {
+            let res, json = null;
+            try {
+                res = await util.fetch(url, options);
+            }
+            catch (e) {
+                throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK', cause: e });
+            }
+            try {
+                json = await res.json();
+            }
+            catch (e) {
+                json = null;
+            }
+            // Any truthy body is probed like the legacy JS (`json.meta`); primitives yield undefined.
+            const meta = ((json && json.meta) || {});
+            const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
+            const errorCode = meta.errorCode || '';
+            // 2026-09-16の実機確認: 不正なキーを送ると 403 {errorCode:"FORBIDDEN"} が返った。
+            // 期限切れのキーが KEY_EXPIRED と FORBIDDEN のどちらになるかは未確認のため、
+            // 両方を「キーを取り直して1回だけ再試行する」対象にする（再試行は1回限りなので、
+            // 本当に権限が無い場合も余計な通信は1往復で済む）。
+            if (errorCode === 'KEY_EXPIRED' || /KEY_EXPIRED/.test(JSON.stringify(meta)) ||
+                (status === 403 && errorCode === 'FORBIDDEN')) {
+                throw Object.assign(new Error(`${label}に失敗しました（タグ編集キーが無効または期限切れ: ${status} ${errorCode}）`), { kind: 'KEY_EXPIRED', status, errorCode });
+            }
+            if (!json || status < 200 || status >= 300 || !json.data) {
+                const detail = [status, errorCode, meta.errorMessage].filter(Boolean).join(' ');
+                throw Object.assign(new Error(`${label}に失敗しました${detail ? `（${detail}）` : ''}`), { kind: 'API', status, errorCode, response: json });
+            }
+            return json.data;
+        };
+        return typeof RequestDiagnostics === 'undefined' ? execute() :
+            RequestDiagnostics.observe('tags', (options?.method || 'GET') + ':' + url, execute, () => true, () => true);
     }
     _createActionTrackId() {
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -110,28 +116,32 @@ class TagEditApi {
         return `${s}_${Date.now()}`;
     }
     async _refreshEditKey(videoId) {
-        const query = new URLSearchParams({
-            _frontendId: 6,
-            _frontendVersion: 0,
-            actionTrackId: this._createActionTrackId(),
-            noSideEffect: 'true',
-            skips: 'adult',
-            t: Date.now()
-        });
-        const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
-        let json = null;
-        try {
-            const res = await util.fetch(url, { credentials: 'include' });
-            json = await res.json();
-        }
-        catch (e) {
-            throw Object.assign(new Error('タグ編集キーの再取得に失敗しました（通信エラー）'), { kind: 'NETWORK', cause: e });
-        }
-        const editKey = json && json.data && json.data.tag && json.data.tag.edit && json.data.tag.edit.editKey;
-        if (!editKey) {
-            throw Object.assign(new Error('タグ編集キーが返却されませんでした'), { kind: 'NO_KEY', response: json });
-        }
-        return editKey;
+        const execute = async () => {
+            const query = new URLSearchParams({
+                _frontendId: 6,
+                _frontendVersion: 0,
+                actionTrackId: this._createActionTrackId(),
+                noSideEffect: 'true',
+                skips: 'adult',
+                t: Date.now()
+            });
+            const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
+            let json = null;
+            try {
+                const res = await util.fetch(url, { credentials: 'include' });
+                json = await res.json();
+            }
+            catch (e) {
+                throw Object.assign(new Error('タグ編集キーの再取得に失敗しました（通信エラー）'), { kind: 'NETWORK', cause: e });
+            }
+            const editKey = json && json.data && json.data.tag && json.data.tag.edit && json.data.tag.edit.editKey;
+            if (!editKey) {
+                throw Object.assign(new Error('タグ編集キーが返却されませんでした'), { kind: 'NO_KEY', response: json });
+            }
+            return editKey;
+        };
+        return typeof RequestDiagnostics === 'undefined' ? execute() :
+            RequestDiagnostics.observe('tag-key', videoId, execute, value => typeof value === 'string' && value.length > 0, () => true);
     }
     _buildQuery(params) {
         const t = [];

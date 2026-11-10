@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical UaaLoader source (Task470).
  * Preserve the nicoad thanks endpoint, credential mode, default limit and abort forwarding.
@@ -18,8 +19,14 @@ export interface UaaLoaderClient {
 
 const UaaLoader: UaaLoaderClient = {
   load: (videoId: string, {limit = 50, signal}: UaaLoadOptions = {}): Promise<unknown> => {
-    const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
-    return netUtil.fetch(url, {credentials: 'include', signal}).then((res: Response): Promise<unknown> => res.json());
+
+    const execute = async () => {
+      const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
+      return netUtil.fetch(url, {credentials: 'include', signal}).then((res: Response): Promise<unknown> => res.json());
+
+    };
+    return typeof RequestDiagnostics === 'undefined' ? execute() :
+      RequestDiagnostics.observe('advertising', videoId, execute, value => !!value && Array.isArray((value as {data?: {sponsors?: unknown}}).data?.sponsors), () => !signal?.aborted);
   }
 };
 

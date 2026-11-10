@@ -1,9 +1,11 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {netUtil} from '../infra/netUtil';
 import {CacheStorage} from '../infra/CacheStorage';
 import {Emitter} from '../Emitter';
 const emitter = new Emitter();
 // GENERATED FROM tools/typescript-stage1/nico-src/MylistApiLoader.ts (Task471). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const MylistApiLoader = (() => {
     // マイリスト/あとで見るの取得APIには
     // www.nicovideo.jp配下とflapi.nicovideo.jp配下の２種類がある
@@ -86,63 +88,68 @@ const MylistApiLoader = (() => {
         // A single deletion must never wait for every page in a huge private list.
         // The same bounded scanner is used for all-page consumers and targeted lookups.
         async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
-            const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
-            const url = kind === 'watchLater' ?
-                'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
-                `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-            const query = new URLSearchParams({ pageSize: 100, page: 1 });
-            const results = [];
-            const fingerprints = new Set();
-            const ensureCurrent = () => {
-                if (!isCurrent)
-                    return;
-                let current = false;
-                try {
-                    current = isCurrent() === true;
-                }
-                catch { }
-                if (!current)
-                    throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
-            };
-            // Private lists can be large, but broken hasNext must never create an
-            // unbounded loop. 100 pages x 100 rows is the supported safety cap.
-            const maxPages = 100;
-            for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-                ensureCurrent();
-                const delimiter = kind === 'watchLater' ? '&' : '?';
-                const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
-                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                    credentials: 'include'
-                }).then((r) => r.json())
-                    .catch((e) => {
-                    throw createMylistError(label + 'の取得失敗(2)', { cause: e });
-                });
-                ensureCurrent();
-                const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
-                if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
-                    throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
-                }
-                if (watchId !== undefined) {
-                    const found = pageData.items.find(item => item?.watchId === watchId);
-                    if (found) {
-                        ensureCurrent();
-                        return [found];
+            const execute = async () => {
+                const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+                const url = kind === 'watchLater' ?
+                    'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
+                    `https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
+                const query = new URLSearchParams({ pageSize: 100, page: 1 });
+                const results = [];
+                const fingerprints = new Set();
+                const ensureCurrent = () => {
+                    if (!isCurrent)
+                        return;
+                    let current = false;
+                    try {
+                        current = isCurrent() === true;
                     }
+                    catch { }
+                    if (!current)
+                        throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+                };
+                // Private lists can be large, but broken hasNext must never create an
+                // unbounded loop. 100 pages x 100 rows is the supported safety cap.
+                const maxPages = 100;
+                for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+                    ensureCurrent();
+                    const delimiter = kind === 'watchLater' ? '&' : '?';
+                    const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
+                        headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+                        credentials: 'include',
+                        ...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+                    }).then((r) => r.json())
+                        .catch((e) => {
+                        throw createMylistError(label + 'の取得失敗(2)', { cause: e });
+                    });
+                    ensureCurrent();
+                    const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
+                    if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
+                        throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+                    }
+                    if (watchId !== undefined) {
+                        const found = pageData.items.find(item => item?.watchId === watchId);
+                        if (found) {
+                            ensureCurrent();
+                            return [found];
+                        }
+                    }
+                    results.push(...pageData.items);
+                    if (!pageData.hasNext)
+                        return results;
+                    if (!pageData.items.length) {
+                        throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
+                    }
+                    const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
+                    if (fingerprints.has(fingerprint)) {
+                        throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
+                    }
+                    fingerprints.add(fingerprint);
+                    query.set('page', String(pageNumber + 1));
                 }
-                results.push(...pageData.items);
-                if (!pageData.hasNext)
-                    return results;
-                if (!pageData.items.length) {
-                    throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
-                }
-                const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
-                if (fingerprints.has(fingerprint)) {
-                    throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
-                }
-                fingerprints.add(fingerprint);
-                query.set('page', String(pageNumber + 1));
-            }
-            throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
+                throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('mylist', JSON.stringify([kind, id]), execute, Array.isArray, () => !isCurrent || isCurrent());
         }
         async _getDeflistItems(frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
             return this._scanItems('watchLater', null, frontendId, frontendVersion, watchId, isCurrent);
@@ -151,20 +158,24 @@ const MylistApiLoader = (() => {
             return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
         }
         async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
-            const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-            // #238/#261: /users/me/mylists is private; a fixed storage key
-            // would leak the previous account's list after a login change.
-            // nvapi に X-Frontend-Id header が必要
-            const result = await netUtil.fetch(url, {
-                headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-                credentials: 'include'
-            }).then((r) => r.json())
-                .catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
-            if (result.meta.status !== 200 || !result.data.mylists) {
-                throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
-            }
-            const data = result.data.mylists;
-            return data;
+            const execute = async () => {
+                const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
+                // #238/#261: /users/me/mylists is private; a fixed storage key
+                // would leak the previous account's list after a login change.
+                // nvapi に X-Frontend-Id header が必要
+                const result = await netUtil.fetch(url, {
+                    headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+                    credentials: 'include'
+                }).then((r) => r.json())
+                    .catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
+                if (result.meta.status !== 200 || !result.data.mylists) {
+                    throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
+                }
+                const data = result.data.mylists;
+                return data;
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => true);
         }
         async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
             const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);

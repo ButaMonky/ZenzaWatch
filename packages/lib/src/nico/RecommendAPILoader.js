@@ -1,22 +1,28 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {netUtil} from '../infra/netUtil';
 import {textUtil} from '../text/textUtil';
 // GENERATED FROM tools/typescript-stage1/nico-src/RecommendAPILoader.ts (Task461). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const RecommendAPILoader = (() => {
     const load = ({ videoId, recipe }) => {
-        const target = recipe || { id: 'video_playlist_common', videoId };
-        const encoded = textUtil.encodeBase64(JSON.stringify(target));
-        const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
-        return netUtil
-            .fetch(url, { credentials: 'include' })
-            .then((res) => res.json())
-            .then((res) => {
-            if (!res.meta || res.meta.status !== 200) {
-                window.console.warn('load recommend fail', res);
-                throw new Error('load recommend fail');
-            }
-            return res.data;
-        });
+        const execute = async () => {
+            const target = recipe || { id: 'video_playlist_common', videoId };
+            const encoded = textUtil.encodeBase64(JSON.stringify(target));
+            const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
+            return netUtil
+                .fetch(url, { credentials: 'include' })
+                .then((res) => res.json())
+                .then((res) => {
+                if (!res.meta || res.meta.status !== 200) {
+                    window.console.warn('load recommend fail', res);
+                    throw new Error('load recommend fail');
+                }
+                return res.data;
+            });
+        };
+        return typeof RequestDiagnostics === 'undefined' ? execute() :
+            RequestDiagnostics.observe('recommend', JSON.stringify(recipe || { videoId }), execute, value => !!value && typeof value === 'object', () => true);
     };
     return {
         load,

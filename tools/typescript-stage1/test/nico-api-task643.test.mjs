@@ -281,7 +281,7 @@ test('declarations shape: only the allowlisted top-level lines and exports rende
   const {renderNicoLegacy}=await import('../scripts/sync-nico-api.mjs');
   const emitted=read('tools/typescript-stage1/.generated/nico/VideoSearch.js');
   const ok=renderNicoLegacy(spec,emitted);
-  assert.ok(ok.includes('//===BEGIN===\nconst { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {'));
+  assert.ok(ok.includes('//===BEGIN===\n//@require RequestDiagnostics\nconst { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {'));
   assert.ok(ok.endsWith('//===END===\nexport {\n  NicoSearchApiV2Query,\n  NicoSearchApiV2Loader,\n  parseVideoSearchSortValue\n};\n'));
   const exp='\nexport { NicoSearchApiV2Query, NicoSearchApiV2Loader, parseVideoSearchSortValue };';
   const body=emitted.replace(/\r\n/g,'\n').trimEnd().slice(0,-exp.length);

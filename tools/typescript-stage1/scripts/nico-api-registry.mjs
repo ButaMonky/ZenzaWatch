@@ -96,17 +96,18 @@ export const NICO_API_MODULES=Object.freeze([
     name:'LikeApi',
     runtime:'packages/lib/src/nico/LikeApi.js',
     originalSha256:'930e32d3d5a93c2e8e73c2a6af8dc530f2973cf68bd6b992ffcb5762a010d113',
-    preamble:["import {netUtil} from '../infra/netUtil';","import {NVApi} from './NVApi';"],
-    beginLines:['//@require NVApi'],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';","import {NVApi} from './NVApi';"],
+    beginLines:['//@require RequestDiagnostics','//@require NVApi'],
     task:'task457'
   }),
   api({
     name:'RecommendAPILoader',
     runtime:'packages/lib/src/nico/RecommendAPILoader.js',
     originalSha256:'5cbcefcc24773ac9da51c3b22bae219f0220c5fa303eda30b45e3db98b9b3fa5',
-    preamble:["import {netUtil} from '../infra/netUtil';","import {textUtil} from '../text/textUtil';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';","import {textUtil} from '../text/textUtil';"],
     shape:'iife',
     task:'task461'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'NVWatchCaller',
@@ -127,25 +128,28 @@ export const NICO_API_MODULES=Object.freeze([
     name:'TagSuggestLoader',
     runtime:'packages/lib/src/nico/TagSuggestLoader.js',
     originalSha256:'926722cd126ab535b62eacb16755f60ca6a551d9db029d6bc75b16392f0311f4',
-    preamble:["import {netUtil} from '../infra/netUtil';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';"],
     shape:'iife',
     task:'task463'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'PlaylistApiLoader',
     runtime:'packages/lib/src/nico/PlaylistApiLoader.js',
     originalSha256:'3d3412abbc0957add6f0b5e1157b4f29bd4372c86945998a8df3ad5a8778cd93',
-    preamble:["import {netUtil} from '../infra/netUtil';","import {CacheStorage} from '../infra/CacheStorage';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';","import {CacheStorage} from '../infra/CacheStorage';"],
     shape:'iife',
     task:'task463'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'NicodicArticleLoader',
     runtime:'packages/lib/src/nico/NicodicArticleLoader.js',
     originalSha256:'b71cecfe21196b39cf46ef8a107ec07d0f27d1b995281afc194001c6c301fdd2',
-    preamble:["import {CacheStorage} from '../infra/CacheStorage';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {CacheStorage} from '../infra/CacheStorage';"],
     shape:'iife',
     task:'task466'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'ThumbInfoLoader',
@@ -160,27 +164,30 @@ export const NICO_API_MODULES=Object.freeze([
     name:'OwnerSupplement',
     runtime:'packages/lib/src/nico/OwnerSupplement.js',
     originalSha256:'ce43734aa8d2e14b41e010b305a7d53456d5933c6a357179c777a8a138f5d025',
-    preamble:["import {netUtil} from '../infra/netUtil';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';"],
     shape:'iife',
     task:'task467'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'MylistApiLoader',
     runtime:'packages/lib/src/nico/MylistApiLoader.js',
     originalSha256:'2a5c8ad99827df0582bd023995a29f2b2cda7f03678d3564769531df9813419d',
     // The emitter line lives outside //===BEGIN=== in the legacy file and is kept verbatim (Task471).
-    preamble:["import {netUtil} from '../infra/netUtil';","import {CacheStorage} from '../infra/CacheStorage';",
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';","import {CacheStorage} from '../infra/CacheStorage';",
       "import {Emitter} from '../Emitter';","const emitter = new Emitter();"],
     shape:'iife',
     task:'task471'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'TagEditApi',
     runtime:'packages/lib/src/nico/TagEditApi.js',
     originalSha256:'060fc47ddf88b5f5727afb2d3ae652edc7985b5d3af95dc94d432cc8ea006bd6',
-    preamble:["import {util} from '../../../../src/util';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {util} from '../../../../src/util';"],
     shape:'class',
     task:'task475'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'NicoVideoApi',
@@ -202,16 +209,18 @@ export const NICO_API_MODULES=Object.freeze([
     name:'AdDecorationLoader',
     runtime:'packages/lib/src/nico/AdDecorationLoader.js',
     originalSha256:'ae6ccd5d4b51168e4ed1d72fa22be47945117a324340564affa613e230feeea5',
-    preamble:["import {netUtil} from '../infra/netUtil';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';"],
     shape:'iife',
     task:'task468'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'UaaLoader',
     runtime:'packages/lib/src/nico/UaaLoader.js',
     originalSha256:'0050f990d67d1b8141f1a4ce8b50c0ee50011eb659fb3a2eb955d5b8432f18f9',
-    preamble:["import {netUtil} from '../infra/netUtil';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';"],
     task:'task470'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'CommonsTreeLoader',
@@ -311,7 +320,7 @@ export const NICO_API_MODULES=Object.freeze([
     name:'VideoSearch',
     runtime:'packages/lib/src/nico/VideoSearch.js',
     originalSha256:'0231c8eaf1b8cb01ddd13a2d9c948618529a36e9ab74208d2f18e7975576aec9',
-    preamble:["import {CrossDomainGate} from '../infra/CrossDomainGate';",
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {CrossDomainGate} from '../infra/CrossDomainGate';",
       "import {WindowMessageEmitter} from '../message/messageUtil';",
       "import {textUtil} from '../text/textUtil';","import {sleep} from '../infra/sleep';"],
     shape:'declarations',
@@ -319,6 +328,7 @@ export const NICO_API_MODULES=Object.freeze([
       'const parseVideoSearchSortValue = (raw) => {','};'],
     exportNames:['NicoSearchApiV2Query','NicoSearchApiV2Loader','parseVideoSearchSortValue'],
     task:'task643'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     // Task645 takes over the stalled Task493 lane from current develop.
@@ -1104,11 +1114,12 @@ export const NICO_API_MODULES=Object.freeze([
     name:"SupporterCredit",
     runtime:"packages/zenza/src/videoPlayer/SupporterCredit.js",
     originalSha256:"337984deab1563413345ba0e6cc43ce3a706dccac0161df489209c156aaaefcc",
-    preamble:[],
+    preamble:["import {RequestDiagnostics} from '../../../lib/src/infra/RequestDiagnostics';"],
     shape:'declarations',
     topLevel:["/*","const SupporterCredit = (() => {","})();"],
     exportNames:["SupporterCredit"],
     task:'task962'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:"StoryboardWorker",

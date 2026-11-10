@@ -5,7 +5,10 @@ const RequestDiagnostics = (() => {
         'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
         'video-session': '再生セッション', 'session-state': '再生セッションの維持',
         storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
-        like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI'
+        like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
+        'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
+        'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
+        dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
     };
     const activeTickets = new Map();
     const failures = new Map();
@@ -26,7 +29,7 @@ const RequestDiagnostics = (() => {
         const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
         const status = e.statusCode ?? e.status ?? e.httpStatus;
         const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-            'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
+            'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
         const fields = {
             ...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
             ...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
@@ -48,6 +51,9 @@ const RequestDiagnostics = (() => {
         }
         if (e.reason === 'not supported') {
             return { reason: 'unavailable', ...fields };
+        }
+        if (e.kind === 'NO_KEY' || (e.kind === 'API' && typeof status === 'number' && status >= 200 && status < 300)) {
+            return { reason: 'schema', ...fields };
         }
         if (e.kind === 'schema' || e.name === 'SyntaxError' || e.reason === 'watch api' ||
             ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA'].includes(String(e.errorCode))) {
@@ -134,6 +140,30 @@ const RequestDiagnostics = (() => {
                 return null;
             }
             const p = url.pathname;
+            if (url.hostname === 'sug.search.nicovideo.jp') {
+                return 'tag-suggest';
+            }
+            if (url.hostname === 'dic.nicovideo.jp') {
+                return 'dictionary';
+            }
+            if (url.hostname === 'api.nicoad.nicovideo.jp') {
+                if (/pickup_supporters/.test(p)) {
+                    return 'supporters';
+                }
+                if (/\/gift\//.test(p)) {
+                    return 'gifts';
+                }
+                return /\/decoration$/.test(p) ? 'ad-decoration' : 'advertising';
+            }
+            if (/\/recommend$/.test(p)) {
+                return 'recommend';
+            }
+            if (/\/users\/[^/]+\/videos/.test(p)) {
+                return 'owner';
+            }
+            if (/\/watch-later(?:\/|$)/.test(p)) {
+                return 'mylist';
+            }
             if (/\/watch\//.test(p)) {
                 return 'video-info';
             }
@@ -177,8 +207,43 @@ const RequestDiagnostics = (() => {
         const operation = operationFor(url);
         return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
     };
+    // Observe a caller-owned operation without changing its value, error or retry policy.
+    const observe = async (operation, scope, execute, validate = () => true, active = () => true) => {
+        const ticket = begin(operation, scope, 'response', active);
+        let value;
+        try {
+            value = await execute();
+        }
+        catch (error) {
+            ticket.failure(error);
+            throw error;
+        }
+        try {
+            const meta = value && typeof value === 'object' ?
+                value.meta : undefined;
+            if (typeof meta?.status === 'number' && (meta.status < 200 || meta.status >= 300)) {
+                ticket.failure({ status: meta.status, errorCode: meta.errorCode });
+            }
+            else {
+                const checked = validate(value);
+                if (typeof checked === 'object') {
+                    ticket.failure(checked);
+                }
+                else if (!checked) {
+                    ticket.failure({ kind: 'schema' });
+                }
+                else {
+                    ticket.success();
+                }
+            }
+        }
+        catch (_) {
+            ticket.failure({ name: 'AbortError' });
+        }
+        return value;
+    };
     const setSink = (next) => { sink = next; };
-    return { begin, startRequest, setSink };
+    return { begin, startRequest, observe, setSink };
 })();
 //===END===
 export {RequestDiagnostics};

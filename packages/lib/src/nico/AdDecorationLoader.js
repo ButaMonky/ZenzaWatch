@@ -1,6 +1,8 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {netUtil} from '../infra/netUtil';
 // GENERATED FROM tools/typescript-stage1/nico-src/AdDecorationLoader.ts (Task468). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const AdDecorationLoader = (() => {
     const API_BASE = 'https://api.nicoad.nicovideo.jp/v1/contents/video/decoration';
     const MAX_IDS_PER_REQUEST = 100;
@@ -27,14 +29,20 @@ const AdDecorationLoader = (() => {
     };
     class AdDecorationLoader {
         async _fetchChunk(ids) {
-            const url = `${API_BASE}?ids=${ids.join(',')}`;
-            const res = await netUtil.fetch(url, { credentials: 'omit' });
-            if (!res.ok) {
-                throw new Error(`広告装飾の取得に失敗 (${res.status})`);
-            }
-            // No runtime schema normalization: preserve legacy response and failures.
-            const json = await res.json();
-            return (json && json.data && json.data.contents) || [];
+            let schemaValid = false;
+            const execute = async () => {
+                const url = `${API_BASE}?ids=${ids.join(',')}`;
+                const res = await netUtil.fetch(url, { credentials: 'omit' });
+                if (!res.ok) {
+                    throw new Error(`広告装飾の取得に失敗 (${res.status})`);
+                }
+                // No runtime schema normalization: preserve legacy response and failures.
+                const json = await res.json();
+                schemaValid = !!json && Array.isArray(json.data?.contents);
+                return (json && json.data && json.data.contents) || [];
+            };
+            return typeof RequestDiagnostics === 'undefined' ? execute() :
+                RequestDiagnostics.observe('ad-decoration', ids.join(','), execute, () => schemaValid, () => true);
         }
         async _loadChunked(watchIds, onProgress, warnPrefix) {
             const uniqIds = [...new Set((watchIds || []).filter(Boolean).map(String))];

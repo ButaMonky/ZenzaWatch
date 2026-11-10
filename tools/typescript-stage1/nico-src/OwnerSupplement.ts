@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Task467: canonical TypeScript source for the legacy owner fallback.
  * Preserve the original API calls, mutations, and fallback behavior.
@@ -29,20 +30,28 @@ const OwnerSupplement: OwnerSupplementClient = (() => {
   const BLANK_ICON = 'https://secure-dcdn.cdn.nimg.jp/nicoaccount/usericon/defaults/blank.jpg';
 
   const loadFromNicoad = async (videoId: string): Promise<SupplementedOwner | null> => {
-    const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil :
-      {fetch: (u: string, o?: NetFetchOptions) => fetch(u, o as RequestInit | undefined)};
-    const res = await net.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`,
-      {credentials: 'omit', timeout: 5000});
-    if (!res || !res.ok) {
-      return null;
-    }
-    const json: unknown = await res.json();
-    const d = json && (json as UnknownPropertyBag).data;
-    const data = d as UnknownPropertyBag | null | undefined;
-    if (!data || String(data.id) !== String(videoId) || !data.ownerId) {
-      return null;
-    }
-    return {id: String(data.ownerId), name: data.ownerName || '', icon: data.ownerIcon || ''};
+    let schemaValid = true, responseStatus = 200;
+    const execute = async () => {
+      const net: NetUtilFetcher = (typeof netUtil !== 'undefined') ? netUtil :
+        {fetch: (u: string, o?: NetFetchOptions) => fetch(u, o as RequestInit | undefined)};
+      const res = await net.fetch(`https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}`,
+        {credentials: 'omit', timeout: 5000});
+      responseStatus = res?.status || 0;
+      if (!res || !res.ok) {
+        return null;
+      }
+      const json: unknown = await res.json();
+      schemaValid = !!json && !!(json as UnknownPropertyBag).data && typeof (json as UnknownPropertyBag).data === 'object';
+      const d = json && (json as UnknownPropertyBag).data;
+      const data = d as UnknownPropertyBag | null | undefined;
+      if (!data || String(data.id) !== String(videoId) || !data.ownerId) {
+        return null;
+      }
+      return {id: String(data.ownerId), name: data.ownerName || '', icon: data.ownerIcon || ''};
+
+    };
+    return typeof RequestDiagnostics === 'undefined' ? execute() :
+      RequestDiagnostics.observe('owner', videoId, execute, () => responseStatus >= 400 ? {status: responseStatus} : schemaValid, () => true);
   };
 
   /** Mutate the supplied thumbInfo as the original JavaScript did. */

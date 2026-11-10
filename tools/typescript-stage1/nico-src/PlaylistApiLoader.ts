@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for packages/lib/src/nico/PlaylistApiLoader.js (Task463).
  * nvapi /v1/playlist/* with a 5 minute sessionStorage cache keyed by request URL.
@@ -67,53 +68,60 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
     }
 
     async load({ type, id, options, all, maxItems, isCurrent }: PlaylistLoadRequest, { frontendId = 6, frontendVersion = 0 }: PlaylistFrontend = {}): Promise<unknown> {
-      const { url, cacheKey } = ((type: PlaylistType): PlaylistUrl => {
-        switch (type) {
-          case 'series':
-            return this._buildSeriesURL(id, options);
-          case 'user-uploaded':
-            return this._buildUserUploadedURL(id, options);
-          case 'mylist':
-            return this._buildMylistURL(id, options);
-          case 'watchlater':
-            return this._buildWatchlaterURL(options);
-          case 'search':
-            return this._buildSearchURL(options);
-          default:
-            return {};
+
+      const execute = async () => {
+        const { url, cacheKey } = ((type: PlaylistType): PlaylistUrl => {
+          switch (type) {
+            case 'series':
+              return this._buildSeriesURL(id, options);
+            case 'user-uploaded':
+              return this._buildUserUploadedURL(id, options);
+            case 'mylist':
+              return this._buildMylistURL(id, options);
+            case 'watchlater':
+              return this._buildWatchlaterURL(options);
+            case 'search':
+              return this._buildSearchURL(options);
+            default:
+              return {};
+          }
+        })(type);
+
+        if (url === undefined || cacheKey === undefined) {
+          throw new Error(`プレイリストの取得失敗(3) ${type}`);
         }
-      })(type);
 
-      if (url === undefined || cacheKey === undefined) {
-        throw new Error(`プレイリストの取得失敗(3) ${type}`);
-      }
+        if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
+          return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
+        }
 
-      if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
-        return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
-      }
+        // nvapi でソートされた結果をもらうのでそのままキャッシュする
+        const cacheData = mayUseSharedCache(type) ? (cacheStorage as PlaylistCacheStorage).getItem(cacheKey) : null;
+        if (cacheData) {
+          return cacheData;
+        }
 
-      // nvapi でソートされた結果をもらうのでそのままキャッシュする
-      const cacheData = mayUseSharedCache(type) ? (cacheStorage as PlaylistCacheStorage).getItem(cacheKey) : null;
-      if (cacheData) {
-        return cacheData;
-      }
+        // nvapi に X-Frontend-Id header が必要
+        const result = await netUtil.fetch(url, {
+          headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+          credentials: 'include',
+        ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => !isCurrent || isCurrent()} : {}),
+        }).then((r: Response): Promise<PlaylistEnvelopeProbe> => r.json())
+          .catch((e: unknown): never => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e as ErrorOptions | undefined); });
 
-      // nvapi に X-Frontend-Id header が必要
-      const result = await netUtil.fetch(url, {
-        headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-        credentials: 'include',
-      }).then((r: Response): Promise<PlaylistEnvelopeProbe> => r.json())
-        .catch((e: unknown): never => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e as ErrorOptions | undefined); });
+        if (result.meta.status !== 200 || !result.data.items) {
+          throw new Error(`プレイリストの取得失敗(1) ${type}`, result as ErrorOptions);
+        }
 
-      if (result.meta.status !== 200 || !result.data.items) {
-        throw new Error(`プレイリストの取得失敗(1) ${type}`, result as ErrorOptions);
-      }
+        const data = result.data.items;
+        if (mayUseSharedCache(type)) {
+          (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+        }
+        return data;
 
-      const data = result.data.items;
-      if (mayUseSharedCache(type)) {
-        (cacheStorage as PlaylistCacheStorage).setItem(cacheKey, data, CACHE_EXPIRE_TIME);
-      }
-      return data;
+      };
+      return typeof RequestDiagnostics === 'undefined' ? execute() :
+        RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !isCurrent || isCurrent());
     }
 
     // Task972: one atomic ordered collection, not the first 500-row page.
@@ -160,7 +168,8 @@ const PlaylistApiLoader: PlaylistApiLoaderClient = (() => {
           try {
             result = await netUtil.fetch(url.href, {
               headers: {'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion},
-              credentials: 'include', timeout: 15000
+              credentials: 'include',
+        ...(typeof RequestDiagnostics !== 'undefined' ? {diagnosticActive: () => !isCurrent || isCurrent()} : {}), timeout: 15000
             }).then((r: Response): Promise<PlaylistEnvelopeProbe> => r.json());
           } catch (error) {
             const status = (error as {status?: unknown; statusCode?: unknown} | null)?.status ||

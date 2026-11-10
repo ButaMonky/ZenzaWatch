@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for packages/zenza/src/videoPlayer/SupporterCredit.js (Task962).
  */
@@ -56,11 +57,24 @@ const SupporterCredit = (() => {
   const easeOutCubic = (t?: Loose) => t < 0 ? 0 : t > 1 ? 1 : 1 - (1 - t) ** 3;
 
   const withTimeout = (promise?: Loose, ms = 10000) =>
-    Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+    Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), {name: 'TimeoutError'})), ms))]);
 
-  const fetchJson = (url?: Loose, signal?: Loose) =>
-    withTimeout(fetch(url, {credentials: 'include', signal}).then(r => r.ok ? r.json() : null))
-      .catch((): Loose => null);
+  const fetchJson = (url?: Loose, signal?: Loose) => {
+    const isGift = String(url).includes('/gift/');
+    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin(isGift ? 'gifts' : 'supporters', String(url), 'response', () => !signal?.aborted);
+    return withTimeout(fetch(url, {credentials: 'include', signal}).then(async r => {
+      if (!r.ok) { diagnostic?.failure({status: r.status}); return null; }
+      const body = await r.json();
+      if (typeof body?.meta?.status === 'number' && body.meta.status >= 400) {
+        diagnostic?.failure({status: body.meta.status});
+      } else if (isGift ? !Array.isArray(body?.data?.effects) :
+          !body?.data?.supporters || typeof body.data.supporters !== 'object') {
+        diagnostic?.failure({kind: 'schema'});
+      } else { diagnostic?.success(); }
+      return body;
+    })).catch((error: unknown): Loose => { diagnostic?.failure(error); return null; });
+  };
 
   const loadImage = (url?: Loose) => withTimeout(new Promise((resolve, reject) => {
     const img = new Image();

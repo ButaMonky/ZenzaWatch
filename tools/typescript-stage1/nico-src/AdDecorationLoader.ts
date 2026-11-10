@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for AdDecorationLoader.js (Task468).
  * Preserve request batching, up to 3 workers, no cache and retryable failed chunks.
@@ -51,14 +52,21 @@ const AdDecorationLoader: AdDecorationClient = (() => {
 
   class AdDecorationLoader {
     async _fetchChunk(ids: string[]): Promise<AdDecorationEntry[]> {
-      const url = `${API_BASE}?ids=${ids.join(',')}`;
-      const res = await netUtil.fetch(url, {credentials: 'omit'});
-      if (!res.ok) {
-        throw new Error(`広告装飾の取得に失敗 (${res.status})`);
-      }
-      // No runtime schema normalization: preserve legacy response and failures.
-      const json = await res.json() as AdDecorationEnvelope | null;
-      return (json && json.data && json.data.contents) || [];
+      let schemaValid = false;
+      const execute = async () => {
+        const url = `${API_BASE}?ids=${ids.join(',')}`;
+        const res = await netUtil.fetch(url, {credentials: 'omit'});
+        if (!res.ok) {
+          throw new Error(`広告装飾の取得に失敗 (${res.status})`);
+        }
+        // No runtime schema normalization: preserve legacy response and failures.
+        const json = await res.json() as AdDecorationEnvelope | null;
+        schemaValid = !!json && Array.isArray(json.data?.contents);
+        return (json && json.data && json.data.contents) || [];
+
+      };
+      return typeof RequestDiagnostics === 'undefined' ? execute() :
+        RequestDiagnostics.observe('ad-decoration', ids.join(','), execute, () => schemaValid, () => true);
     }
 
     async _loadChunked(

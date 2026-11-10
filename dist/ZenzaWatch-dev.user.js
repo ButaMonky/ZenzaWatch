@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.367-task991
+// @version        2.7.368-task992
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 06:14Z d2d3484
+// build: 2026-11-10 06:40Z ea30f85
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -109,7 +109,10 @@ const RequestDiagnostics = (() => {
 				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
 				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
 				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
-				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI'
+				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI',
+				'tag-suggest': 'タグ候補', 'tag-key': 'タグ編集キー', advertising: 'ニコニ広告',
+				'ad-decoration': '広告装飾', supporters: '広告・ギフトの支援者', gifts: 'ギフト',
+				dictionary: '大百科', recommend: '関連動画・シリーズ', owner: '投稿者情報'
 		};
 		const activeTickets = new Map();
 		const failures = new Map();
@@ -128,7 +131,7 @@ const RequestDiagnostics = (() => {
 				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
 				const status = e.statusCode ?? e.status ?? e.httpStatus;
 				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-						'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
+						'SEARCH_SCHEMA', 'KEY_EXPIRED', 'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
 				const fields = {
 						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
 						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
@@ -150,6 +153,9 @@ const RequestDiagnostics = (() => {
 				}
 				if (e.reason === 'not supported') {
 						return { reason: 'unavailable', ...fields };
+				}
+				if (e.kind === 'NO_KEY' || (e.kind === 'API' && typeof status === 'number' && status >= 200 && status < 300)) {
+						return { reason: 'schema', ...fields };
 				}
 				if (e.kind === 'schema' || e.name === 'SyntaxError' || e.reason === 'watch api' ||
 						['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA'].includes(String(e.errorCode))) {
@@ -236,6 +242,30 @@ const RequestDiagnostics = (() => {
 								return null;
 						}
 						const p = url.pathname;
+						if (url.hostname === 'sug.search.nicovideo.jp') {
+								return 'tag-suggest';
+						}
+						if (url.hostname === 'dic.nicovideo.jp') {
+								return 'dictionary';
+						}
+						if (url.hostname === 'api.nicoad.nicovideo.jp') {
+								if (/pickup_supporters/.test(p)) {
+										return 'supporters';
+								}
+								if (/\/gift\//.test(p)) {
+										return 'gifts';
+								}
+								return /\/decoration$/.test(p) ? 'ad-decoration' : 'advertising';
+						}
+						if (/\/recommend$/.test(p)) {
+								return 'recommend';
+						}
+						if (/\/users\/[^/]+\/videos/.test(p)) {
+								return 'owner';
+						}
+						if (/\/watch-later(?:\/|$)/.test(p)) {
+								return 'mylist';
+						}
 						if (/\/watch\//.test(p)) {
 								return 'video-info';
 						}
@@ -279,8 +309,42 @@ const RequestDiagnostics = (() => {
 				const operation = operationFor(url);
 				return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
 		};
+		const observe = async (operation, scope, execute, validate = () => true, active = () => true) => {
+				const ticket = begin(operation, scope, 'response', active);
+				let value;
+				try {
+						value = await execute();
+				}
+				catch (error) {
+						ticket.failure(error);
+						throw error;
+				}
+				try {
+						const meta = value && typeof value === 'object' ?
+								value.meta : undefined;
+						if (typeof meta?.status === 'number' && (meta.status < 200 || meta.status >= 300)) {
+								ticket.failure({ status: meta.status, errorCode: meta.errorCode });
+						}
+						else {
+								const checked = validate(value);
+								if (typeof checked === 'object') {
+										ticket.failure(checked);
+								}
+								else if (!checked) {
+										ticket.failure({ kind: 'schema' });
+								}
+								else {
+										ticket.success();
+								}
+						}
+				}
+				catch (_) {
+						ticket.failure({ name: 'AbortError' });
+				}
+				return value;
+		};
 		const setSink = (next) => { sink = next; };
-		return { begin, startRequest, setSink };
+		return { begin, startRequest, observe, setSink };
 })();
   const monkey = async (PRODUCT, START_PAGE_QUERY) /*** (｀・ω・´)9m ***/ => {
     const Array = window.PureArray ? window.PureArray : window.Array;
@@ -294,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.367-task991';
+    var VER = '2.7.368-task992';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 06:14Z d2d3484';
+    var BUILD = '2026-11-10 06:40Z ea30f85';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -11634,6 +11698,7 @@ const ThumbInfoLoader = (() => {
 		};
 		return { initGate, load };
 })();
+// already required
 const PlaylistApiLoader = (() => {
 		const CACHE_EXPIRE_TIME = 5 * 60 * 1000;
 		const mayUseSharedCache = (type) => type === 'series' || type === 'user-uploaded';
@@ -11645,45 +11710,50 @@ const PlaylistApiLoader = (() => {
 						}
 				}
 				async load({ type, id, options, all, maxItems, isCurrent }, { frontendId = 6, frontendVersion = 0 } = {}) {
-						const { url, cacheKey } = ((type) => {
-								switch (type) {
-										case 'series':
-												return this._buildSeriesURL(id, options);
-										case 'user-uploaded':
-												return this._buildUserUploadedURL(id, options);
-										case 'mylist':
-												return this._buildMylistURL(id, options);
-										case 'watchlater':
-												return this._buildWatchlaterURL(options);
-										case 'search':
-												return this._buildSearchURL(options);
-										default:
-												return {};
+						const execute = async () => {
+								const { url, cacheKey } = ((type) => {
+										switch (type) {
+												case 'series':
+														return this._buildSeriesURL(id, options);
+												case 'user-uploaded':
+														return this._buildUserUploadedURL(id, options);
+												case 'mylist':
+														return this._buildMylistURL(id, options);
+												case 'watchlater':
+														return this._buildWatchlaterURL(options);
+												case 'search':
+														return this._buildSearchURL(options);
+												default:
+														return {};
+										}
+								})(type);
+								if (url === undefined || cacheKey === undefined) {
+										throw new Error(`プレイリストの取得失敗(3) ${type}`);
 								}
-						})(type);
-						if (url === undefined || cacheKey === undefined) {
-								throw new Error(`プレイリストの取得失敗(3) ${type}`);
-						}
-						if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
-								return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
-						}
-						const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
-						if (cacheData) {
-								return cacheData;
-						}
-						const result = await netUtil.fetch(url, {
-								headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-								credentials: 'include',
-						}).then((r) => r.json())
-								.catch((e) => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e); });
-						if (result.meta.status !== 200 || !result.data.items) {
-								throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
-						}
-						const data = result.data.items;
-						if (mayUseSharedCache(type)) {
-								cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
-						}
-						return data;
+								if (type !== 'search' && all !== false && (all === true || options?.page === undefined)) {
+										return this._loadAll(type, url, maxItems, isCurrent, frontendId, frontendVersion);
+								}
+								const cacheData = mayUseSharedCache(type) ? cacheStorage.getItem(cacheKey) : null;
+								if (cacheData) {
+										return cacheData;
+								}
+								const result = await netUtil.fetch(url, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+										credentials: 'include',
+										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}),
+								}).then((r) => r.json())
+										.catch((e) => { throw new Error(`プレイリストの取得失敗(2) ${type}`, e); });
+								if (result.meta.status !== 200 || !result.data.items) {
+										throw new Error(`プレイリストの取得失敗(1) ${type}`, result);
+								}
+								const data = result.data.items;
+								if (mayUseSharedCache(type)) {
+										cacheStorage.setItem(cacheKey, data, CACHE_EXPIRE_TIME);
+								}
+								return data;
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('playlist', JSON.stringify([type, id, options]), execute, Array.isArray, () => !isCurrent || isCurrent());
 				}
 				async _loadAll(type, initialUrl, requestedMax, isCurrent, frontendId, frontendVersion) {
 						const maxItems = typeof requestedMax === 'number' && Number.isFinite(requestedMax) && requestedMax > 0 ?
@@ -11728,7 +11798,8 @@ const PlaylistApiLoader = (() => {
 										try {
 												result = await netUtil.fetch(url.href, {
 														headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-														credentials: 'include', timeout: 15000
+														credentials: 'include',
+														...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}), timeout: 15000
 												}).then((r) => r.json());
 										}
 										catch (error) {
@@ -11831,6 +11902,7 @@ const PlaylistApiLoader = (() => {
 		}
 		return new PlaylistApiLoader();
 })();
+// already required
 const MylistApiLoader = (() => {
 		const createMylistError = (message, { status = 'fail', result, code, cause } = {}) => {
 				const error = new Error(message);
@@ -11896,61 +11968,66 @@ const MylistApiLoader = (() => {
 						}
 				}
 				async _scanItems(kind, id, frontendId, frontendVersion, watchId, isCurrent) {
-						const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
-						const url = kind === 'watchLater' ?
-								'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
-								`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
-						const query = new URLSearchParams({ pageSize: 100, page: 1 });
-						const results = [];
-						const fingerprints = new Set();
-						const ensureCurrent = () => {
-								if (!isCurrent)
-										return;
-								let current = false;
-								try {
-										current = isCurrent() === true;
-								}
-								catch { }
-								if (!current)
-										throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
-						};
-						const maxPages = 100;
-						for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
-								ensureCurrent();
-								const delimiter = kind === 'watchLater' ? '&' : '?';
-								const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
-										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-										credentials: 'include'
-								}).then((r) => r.json())
-										.catch((e) => {
-										throw createMylistError(label + 'の取得失敗(2)', { cause: e });
-								});
-								ensureCurrent();
-								const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
-								if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
-										throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
-								}
-								if (watchId !== undefined) {
-										const found = pageData.items.find(item => item?.watchId === watchId);
-										if (found) {
-												ensureCurrent();
-												return [found];
+						const execute = async () => {
+								const label = kind === 'watchLater' ? 'あとで見る' : 'マイリスト';
+								const url = kind === 'watchLater' ?
+										'https://nvapi.nicovideo.jp/v1/users/me/watch-later?sortKey=addedAt&sortOrder=desc' :
+										`https://nvapi.nicovideo.jp/v1/users/me/mylists/${id}`;
+								const query = new URLSearchParams({ pageSize: 100, page: 1 });
+								const results = [];
+								const fingerprints = new Set();
+								const ensureCurrent = () => {
+										if (!isCurrent)
+												return;
+										let current = false;
+										try {
+												current = isCurrent() === true;
 										}
+										catch { }
+										if (!current)
+												throw createMylistError(label + '取得中止（動画が変更されました）', { code: 'STALE' });
+								};
+								const maxPages = 100;
+								for (let pageNumber = 1; pageNumber <= maxPages; pageNumber++) {
+										ensureCurrent();
+										const delimiter = kind === 'watchLater' ? '&' : '?';
+										const res = await netUtil.fetch(`${url}${delimiter}${query.toString()}`, {
+												headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+												credentials: 'include',
+												...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+										}).then((r) => r.json())
+												.catch((e) => {
+												throw createMylistError(label + 'の取得失敗(2)', { cause: e });
+										});
+										ensureCurrent();
+										const pageData = kind === 'watchLater' ? res?.data?.watchLater : res?.data?.mylist;
+										if (res?.meta?.status !== 200 || !pageData || !Array.isArray(pageData.items)) {
+												throw createMylistError(label + 'の取得失敗(1)', { code: res?.error?.code });
+										}
+										if (watchId !== undefined) {
+												const found = pageData.items.find(item => item?.watchId === watchId);
+												if (found) {
+														ensureCurrent();
+														return [found];
+												}
+										}
+										results.push(...pageData.items);
+										if (!pageData.hasNext)
+												return results;
+										if (!pageData.items.length) {
+												throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
+										}
+										const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
+										if (fingerprints.has(fingerprint)) {
+												throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
+										}
+										fingerprints.add(fingerprint);
+										query.set('page', String(pageNumber + 1));
 								}
-								results.push(...pageData.items);
-								if (!pageData.hasNext)
-										return results;
-								if (!pageData.items.length) {
-										throw createMylistError(label + 'の取得失敗（空ページが連続）', { code: 'INVALID_PAGE' });
-								}
-								const fingerprint = JSON.stringify(pageData.items.map(item => [item?.itemId, item?.watchId]));
-								if (fingerprints.has(fingerprint)) {
-										throw createMylistError(label + 'の取得失敗（ページが重複）', { code: 'REPEATED_PAGE' });
-								}
-								fingerprints.add(fingerprint);
-								query.set('page', String(pageNumber + 1));
-						}
-						throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
+								throw createMylistError(label + 'の取得失敗（ページ数の安全上限）', { code: 'PAGE_LIMIT' });
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('mylist', JSON.stringify([kind, id]), execute, Array.isArray, () => !isCurrent || isCurrent());
 				}
 				async _getDeflistItems(frontendId = 6, frontendVersion = 0, watchId, isCurrent) {
 						return this._scanItems('watchLater', null, frontendId, frontendVersion, watchId, isCurrent);
@@ -11959,17 +12036,21 @@ const MylistApiLoader = (() => {
 						return this._scanItems('mylist', id, frontendId, frontendVersion, watchId, isCurrent);
 				}
 				async getMylistList({ frontendId = 6, frontendVersion = 0 } = {}) {
-						const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
-						const result = await netUtil.fetch(url, {
-								headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
-								credentials: 'include'
-						}).then((r) => r.json())
-								.catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
-						if (result.meta.status !== 200 || !result.data.mylists) {
-								throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
-						}
-						const data = result.data.mylists;
-						return data;
+						const execute = async () => {
+								const url = 'https://nvapi.nicovideo.jp/v1/users/me/mylists';
+								const result = await netUtil.fetch(url, {
+										headers: { 'X-Frontend-Id': frontendId, 'X-Frontend-Version': frontendVersion },
+										credentials: 'include'
+								}).then((r) => r.json())
+										.catch((e) => { throw createMylistError('マイリスト一覧の取得失敗(2)', { result: e, cause: e }); });
+								if (result.meta.status !== 200 || !result.data.mylists) {
+										throw createMylistError(`マイリスト一覧の取得失敗(1) ${result.status}${result.message}`, { result, code: result?.error?.code });
+								}
+								const data = result.data.mylists;
+								return data;
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('mylist', 'lists', execute, Array.isArray, () => true);
 				}
 				async findDeflistItemByWatchId(watchId, { frontendId = 6, frontendVersion = 0, isCurrent } = {}) {
 						const items = await this._getDeflistItems(frontendId, frontendVersion, watchId, isCurrent);
@@ -12693,6 +12774,7 @@ const CommonsTreeLoader = (() => {
 		};
 		return { load, loadRelatives, scanAll, scanSide, scanMeta, retryAfterMs, WITH_META_DEFAULT, API_MAX_LIMIT, SCAN_PAGE_SIZE, META_PAGE_SIZE };
 })();
+// already required
 const NicodicArticleLoader = (() => {
 		const API_URL = 'https://api.dic.nicovideo.jp/v1/articles/article';
 		const CACHE_PREFIX = 'nicodicBatch: ';
@@ -12704,6 +12786,8 @@ const NicodicArticleLoader = (() => {
 		let scheduled = false;
 		const getCache = () => cacheStorage || (cacheStorage = new CacheStorage(sessionStorage));
 		const fetchBatch = async (entries) => {
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('dictionary', JSON.stringify(entries.map(([name]) => name)), 'response');
 				const controller = new AbortController();
 				const timeout = setTimeout(() => controller.abort(), 10000);
 				let articles = null;
@@ -12712,16 +12796,20 @@ const NicodicArticleLoader = (() => {
 						entries.forEach(([name]) => query.append('titles[]', name));
 						const res = await fetch(`${API_URL}?${query}`, { credentials: 'omit', signal: controller.signal });
 						if (!res.ok) {
+								diagnostic?.failure({ status: res.status });
 								throw new Error(`Nicodic HTTP ${res.status}`);
 						}
 						const data = await res.json();
 						if (!Array.isArray(data) || data.some((a) => !a || typeof a.request_title !== 'string' ||
 								typeof a.title !== 'string')) {
+								diagnostic?.failure({ kind: 'schema' });
 								throw new Error('Invalid Nicodic batch response');
 						}
+						diagnostic?.success();
 						articles = new Map(data.map(a => [a.request_title, a]));
 				}
 				catch (e) {
+						diagnostic?.failure(controller.signal.aborted ? { name: 'TimeoutError' } : e);
 						window.console.warn('大百科の記事有無を調べられませんでした', e);
 				}
 				finally {
@@ -12794,27 +12882,37 @@ const NicodicArticleLoader = (() => {
 		};
 		return { exists, checkAll };
 })();
+// already required
 const UaaLoader = {
 		load: (videoId, { limit = 50, signal } = {}) => {
-				const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
-				return netUtil.fetch(url, { credentials: 'include', signal }).then((res) => res.json());
+				const execute = async () => {
+						const url = `https://api.nicoad.nicovideo.jp/v1/contents/video/${videoId}/thanks?limit=${limit}`;
+						return netUtil.fetch(url, { credentials: 'include', signal }).then((res) => res.json());
+				};
+				return typeof RequestDiagnostics === 'undefined' ? execute() :
+						RequestDiagnostics.observe('advertising', videoId, execute, value => !!value && Array.isArray(value.data?.sponsors), () => !signal?.aborted);
 		}
 };
+// already required
 const RecommendAPILoader = (() => {
 		const load = ({ videoId, recipe }) => {
-				const target = recipe || { id: 'video_playlist_common', videoId };
-				const encoded = textUtil.encodeBase64(JSON.stringify(target));
-				const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
-				return netUtil
-						.fetch(url, { credentials: 'include' })
-						.then((res) => res.json())
-						.then((res) => {
-						if (!res.meta || res.meta.status !== 200) {
-								window.console.warn('load recommend fail', res);
-								throw new Error('load recommend fail');
-						}
-						return res.data;
-				});
+				const execute = async () => {
+						const target = recipe || { id: 'video_playlist_common', videoId };
+						const encoded = textUtil.encodeBase64(JSON.stringify(target));
+						const url = `https://nvapi.nicovideo.jp/v1/recommend?recipe=${encodeURIComponent(encoded)}&site=nicovideo&_frontendId=6&_frontendVersion=0`;
+						return netUtil
+								.fetch(url, { credentials: 'include' })
+								.then((res) => res.json())
+								.then((res) => {
+								if (!res.meta || res.meta.status !== 200) {
+										window.console.warn('load recommend fail', res);
+										throw new Error('load recommend fail');
+								}
+								return res.data;
+						});
+				};
+				return typeof RequestDiagnostics === 'undefined' ? execute() :
+						RequestDiagnostics.observe('recommend', JSON.stringify(recipe || { videoId }), execute, value => !!value && typeof value === 'object', () => true);
 		};
 		return {
 				load,
@@ -16184,6 +16282,7 @@ class VideoInfoModel extends JSONable {
 				return 'dmc';
 		}
 }
+// already required
 const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 		const BASE_URL = 'https://snapshot.search.nicovideo.jp/api/v2/snapshot';
 		const API_BASE_URL = `${BASE_URL}/video/contents/search`;
@@ -16646,21 +16745,26 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						return data;
 				};
 				const fetchPage = async (query, page, pageSize, isCurrent) => {
-						ensureCurrent(isCurrent);
-						const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
-						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
-						const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
-								credentials: 'include',
-								headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' }
-						});
-						if (Number.isInteger(res?.status) && res.status >= 400) {
-								throw Object.assign(new Error('nvapi search HTTP failure'), { status: res.status, kind: 'http' });
-						}
-						const json = await res.json();
-						if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-								throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`), { status: json && json.meta && json.meta.status });
-						}
-						return validateSearchPage(json.data);
+						const execute = async () => {
+								ensureCurrent(isCurrent);
+								const qs = new URLSearchParams(Object.assign({}, query, { pageSize, page }));
+								const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+								const res = await net.fetch(`${API_URL}?${qs.toString()}`, {
+										credentials: 'include',
+										headers: { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' },
+										...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {})
+								});
+								if (Number.isInteger(res?.status) && res.status >= 400) {
+										throw Object.assign(new Error('nvapi search HTTP failure'), { status: res.status, kind: 'http' });
+								}
+								const json = await res.json();
+								if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+										throw Object.assign(new Error(`nvapi search failed (${json && json.meta ? `${json.meta.status} ${json.meta.errorCode || ''}` : res.status})`), { status: json && json.meta && json.meta.status });
+								}
+								return validateSearchPage(json.data);
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('search', JSON.stringify([query, page, pageSize]), execute, () => true, () => !isCurrent || isCurrent());
 				};
 				const search = async (word, params = {}, maxLimit = 100, isCurrent) => {
 						ensureCurrent(isCurrent);
@@ -16765,89 +16869,101 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						return NicoSearchApiV2Loader.searchBySnapshot(word, params);
 				}
 				static async searchBySnapshot(word, params, isCurrent) {
-						ensureCurrent(isCurrent);
-						initializeCrossDomainGate();
-						const query = new NicoSearchApiV2Query(word, params);
-						const url = API_BASE_URL + '?' + query.toString();
-						const version = this.version.isLatest
-								? this.version.date.getTime()
-								: await this.version.update().then(date => date.getTime());
-						ensureCurrent(isCurrent);
-						if (!this.cacheStorage) {
-								this.cacheStorage = new CacheStorage(sessionStorage);
-						}
-						const cacheKey = `search: ${[
-								`words:${query.q}`,
-								`targets:${query.targets.join(',')}`,
-								`sort:${query.sort}`,
-								`filters:${query.stringfiedFilters}`,
-								`offset:${query.offset}`,
-						].join(', ')}`;
-						const cacheData = this.cacheStorage.getItem(cacheKey);
-						if (cacheData && cacheData.version === version) {
-								return cacheData.data;
-						}
-						ensureCurrent(isCurrent);
-						return gate.fetch(url).then(res => res.text()).then(text => {
+						const execute = async () => {
 								ensureCurrent(isCurrent);
-								const result = NicoSearchApiV2Loader.parseResult(text);
-								if (typeof result !== 'number' && result.status === 'ok') {
-										let data = Object.assign(result, { word, params });
-										this.cacheStorage.setItem(cacheKey, { data, version }, this.CACHE_EXPIRE_TIME);
-										return Promise.resolve(data);
+								initializeCrossDomainGate();
+								const query = new NicoSearchApiV2Query(word, params);
+								const url = API_BASE_URL + '?' + query.toString();
+								const version = this.version.isLatest
+										? this.version.date.getTime()
+										: await this.version.update().then(date => date.getTime());
+								ensureCurrent(isCurrent);
+								if (!this.cacheStorage) {
+										this.cacheStorage = new CacheStorage(sessionStorage);
 								}
-								else {
-										let description;
-										switch (result) {
-												default:
-														description = 'UNKNOWN ERROR';
-														break;
-												case 400:
-														description = 'INVALID QUERY';
-														break;
-												case 500:
-														description = 'INTERNAL SERVER ERROR';
-														break;
-												case 503:
-														description = 'MAINTENANCE';
-														break;
+								const cacheKey = `search: ${[
+										`words:${query.q}`,
+										`targets:${query.targets.join(',')}`,
+										`sort:${query.sort}`,
+										`filters:${query.stringfiedFilters}`,
+										`offset:${query.offset}`,
+								].join(', ')}`;
+								const cacheData = this.cacheStorage.getItem(cacheKey);
+								if (cacheData && cacheData.version === version) {
+										return cacheData.data;
+								}
+								ensureCurrent(isCurrent);
+								return gate.fetch(url).then(res => res.text()).then(text => {
+										ensureCurrent(isCurrent);
+										const result = NicoSearchApiV2Loader.parseResult(text);
+										if (typeof result !== 'number' && result.status === 'ok') {
+												let data = Object.assign(result, { word, params });
+												this.cacheStorage.setItem(cacheKey, { data, version }, this.CACHE_EXPIRE_TIME);
+												return Promise.resolve(data);
 										}
-										return Promise.reject({
-												status: 'fail',
-												description
-										});
-								}
-						});
+										else {
+												let description;
+												switch (result) {
+														default:
+																description = 'UNKNOWN ERROR';
+																break;
+														case 400:
+																description = 'INVALID QUERY';
+																break;
+														case 500:
+																description = 'INTERNAL SERVER ERROR';
+																break;
+														case 503:
+																description = 'MAINTENANCE';
+																break;
+												}
+												return Promise.reject({
+														status: 'fail',
+														description
+												});
+										}
+								});
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('search', 'snapshot:' + JSON.stringify([word, params]), execute, () => true, () => !isCurrent || isCurrent());
 				}
 				static async lookupOwnerIds(watchIds) {
-						initializeCrossDomainGate();
-						const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
-						const result = new Map();
-						if (!ids.length) {
-								return result;
-						}
-						const params = [
-								'q=',
-								'targets=title',
-								'fields=contentId,userId,channelId',
-								'_sort=-startTime',
-								'_offset=0',
-								`_limit=${ids.length}`,
-								'_context=ZenzaWatch'
-						];
-						ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
-						const res = await gate.fetch(API_BASE_URL + '?' + params.join('&'));
-						const json = NicoSearchApiV2Loader._jsonParse(await res.text());
-						if (!json || !json.meta || json.meta.status !== 200 || !Array.isArray(json.data)) {
-								return result;
-						}
-						json.data.forEach(item => {
-								result.set(String(item.contentId), {
-										userId: item.userId || null,
-										channelId: item.channelId || null
+						let validation = true;
+						const execute = async () => {
+								initializeCrossDomainGate();
+								const ids = [...new Set((watchIds || []).filter(Boolean).map(String))].slice(0, 50);
+								const result = new Map();
+								if (!ids.length) {
+										return result;
+								}
+								const params = [
+										'q=',
+										'targets=title',
+										'fields=contentId,userId,channelId',
+										'_sort=-startTime',
+										'_offset=0',
+										`_limit=${ids.length}`,
+										'_context=ZenzaWatch'
+								];
+								ids.forEach((id, i) => params.push(`filters[contentId][${i}]=${encodeURIComponent(id)}`));
+								const res = await gate.fetch(API_BASE_URL + '?' + params.join('&'));
+								const json = NicoSearchApiV2Loader._jsonParse(await res.text());
+								const status = res.status >= 400 ? res.status : json?.meta?.status;
+								validation = typeof status === 'number' && status >= 400 ? { status } :
+										!!json && json.meta?.status === 200 && Array.isArray(json.data);
+								if (!json || !json.meta || json.meta.status !== 200 || !Array.isArray(json.data)) {
+										return result;
+								}
+								json.data.forEach(item => {
+										result.set(String(item.contentId), {
+												userId: item.userId || null,
+												channelId: item.channelId || null
+										});
 								});
-						});
-						return result;
+								return result;
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('owner', 'lookup:' + JSON.stringify(watchIds), execute, () => validation, () => true);
 				}
 				static async searchMore(word, params, maxLimit = 300, isCurrent) {
 						ensureCurrent(isCurrent);
@@ -16896,15 +17012,20 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 						const headers = { 'X-Frontend-Id': '6', 'X-Frontend-Version': '0' };
 						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
 						const fetchUserPage = async (page) => {
-								ensureCurrent(isCurrent);
-								const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
-								const res = await net.fetch(url, { credentials: 'include', headers });
-								const json = await res.json();
-								ensureCurrent(isCurrent);
-								if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
-										throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
-								}
-								return json.data;
+								const execute = async () => {
+										ensureCurrent(isCurrent);
+										const url = `https://nvapi.nicovideo.jp/v3/users/${userId}/videos?sortKey=registeredAt&sortOrder=desc&pageSize=100&page=${page}`;
+										const res = await net.fetch(url, { credentials: 'include', headers,
+												...(typeof RequestDiagnostics !== 'undefined' ? { diagnosticActive: () => !isCurrent || isCurrent() } : {}) });
+										const json = await res.json();
+										ensureCurrent(isCurrent);
+										if (!json || !json.meta || json.meta.status !== 200 || !json.data) {
+												throw new Error(`投稿動画一覧の取得に失敗 (${json && json.meta ? json.meta.status : res.status})`);
+										}
+										return json.data;
+								};
+								return typeof RequestDiagnostics === 'undefined' ? execute() :
+										RequestDiagnostics.observe('owner', JSON.stringify([params.userId, page]), execute, value => Array.isArray(value.items), () => !isCurrent || isCurrent());
 						};
 						const first = await fetchUserPage(1);
 						const total = Math.min(first.totalCount || 0, 5000);
@@ -17241,6 +17362,7 @@ const parseVideoSearchSortValue = (raw) => {
 				playlistSort: isPlaylistSort
 		};
 };
+// already required
 const TagSuggestLoader = (() => {
 		const API_BASE = 'https://sug.search.nicovideo.jp/suggestion/expand/';
 		const CACHE_LIMIT = 300;
@@ -17253,18 +17375,26 @@ const TagSuggestLoader = (() => {
 				if (cache.has(w)) {
 						return cache.get(w);
 				}
-				const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
-				const res = await net.fetch(API_BASE + encodeURIComponent(w), { credentials: 'omit', timeout: 5000 });
-				const json = await res.json();
-				const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter((c) => typeof c === 'string') : [];
-				cache.set(w, candidates);
-				if (cache.size > CACHE_LIMIT) {
-						cache.delete(cache.keys().next().value);
-				}
-				return candidates;
+				let schemaValid = false;
+				const execute = async () => {
+						const net = (typeof netUtil !== 'undefined') ? netUtil : { fetch: (u, o) => fetch(u, o) };
+						const res = await net.fetch(API_BASE + encodeURIComponent(w), { credentials: 'omit', timeout: 5000 });
+						const json = await res.json();
+						schemaValid = !!json && Array.isArray(json.candidates) &&
+								json.candidates.every(c => typeof c === 'string');
+						const candidates = (json && Array.isArray(json.candidates)) ? json.candidates.filter((c) => typeof c === 'string') : [];
+						cache.set(w, candidates);
+						if (cache.size > CACHE_LIMIT) {
+								cache.delete(cache.keys().next().value);
+						}
+						return candidates;
+				};
+				return typeof RequestDiagnostics === 'undefined' ? execute() :
+						RequestDiagnostics.observe('tag-suggest', w, execute, () => schemaValid, () => true);
 		};
 		return { load };
 })();
+// already required
 class TagEditApi {
 		_headers(editKey) {
 				return {
@@ -17313,31 +17443,35 @@ class TagEditApi {
 				}
 		}
 		async _requestOnce({ url, options }, label) {
-				let res, json = null;
-				try {
-						res = await util.fetch(url, options);
-				}
-				catch (e) {
-						throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK', cause: e });
-				}
-				try {
-						json = await res.json();
-				}
-				catch (e) {
-						json = null;
-				}
-				const meta = ((json && json.meta) || {});
-				const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
-				const errorCode = meta.errorCode || '';
-				if (errorCode === 'KEY_EXPIRED' || /KEY_EXPIRED/.test(JSON.stringify(meta)) ||
-						(status === 403 && errorCode === 'FORBIDDEN')) {
-						throw Object.assign(new Error(`${label}に失敗しました（タグ編集キーが無効または期限切れ: ${status} ${errorCode}）`), { kind: 'KEY_EXPIRED', status, errorCode });
-				}
-				if (!json || status < 200 || status >= 300 || !json.data) {
-						const detail = [status, errorCode, meta.errorMessage].filter(Boolean).join(' ');
-						throw Object.assign(new Error(`${label}に失敗しました${detail ? `（${detail}）` : ''}`), { kind: 'API', status, errorCode, response: json });
-				}
-				return json.data;
+				const execute = async () => {
+						let res, json = null;
+						try {
+								res = await util.fetch(url, options);
+						}
+						catch (e) {
+								throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK', cause: e });
+						}
+						try {
+								json = await res.json();
+						}
+						catch (e) {
+								json = null;
+						}
+						const meta = ((json && json.meta) || {});
+						const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
+						const errorCode = meta.errorCode || '';
+						if (errorCode === 'KEY_EXPIRED' || /KEY_EXPIRED/.test(JSON.stringify(meta)) ||
+								(status === 403 && errorCode === 'FORBIDDEN')) {
+								throw Object.assign(new Error(`${label}に失敗しました（タグ編集キーが無効または期限切れ: ${status} ${errorCode}）`), { kind: 'KEY_EXPIRED', status, errorCode });
+						}
+						if (!json || status < 200 || status >= 300 || !json.data) {
+								const detail = [status, errorCode, meta.errorMessage].filter(Boolean).join(' ');
+								throw Object.assign(new Error(`${label}に失敗しました${detail ? `（${detail}）` : ''}`), { kind: 'API', status, errorCode, response: json });
+						}
+						return json.data;
+				};
+				return typeof RequestDiagnostics === 'undefined' ? execute() :
+						RequestDiagnostics.observe('tags', (options?.method || 'GET') + ':' + url, execute, () => true, () => true);
 		}
 		_createActionTrackId() {
 				const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -17348,28 +17482,32 @@ class TagEditApi {
 				return `${s}_${Date.now()}`;
 		}
 		async _refreshEditKey(videoId) {
-				const query = new URLSearchParams({
-						_frontendId: 6,
-						_frontendVersion: 0,
-						actionTrackId: this._createActionTrackId(),
-						noSideEffect: 'true',
-						skips: 'adult',
-						t: Date.now()
-				});
-				const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
-				let json = null;
-				try {
-						const res = await util.fetch(url, { credentials: 'include' });
-						json = await res.json();
-				}
-				catch (e) {
-						throw Object.assign(new Error('タグ編集キーの再取得に失敗しました（通信エラー）'), { kind: 'NETWORK', cause: e });
-				}
-				const editKey = json && json.data && json.data.tag && json.data.tag.edit && json.data.tag.edit.editKey;
-				if (!editKey) {
-						throw Object.assign(new Error('タグ編集キーが返却されませんでした'), { kind: 'NO_KEY', response: json });
-				}
-				return editKey;
+				const execute = async () => {
+						const query = new URLSearchParams({
+								_frontendId: 6,
+								_frontendVersion: 0,
+								actionTrackId: this._createActionTrackId(),
+								noSideEffect: 'true',
+								skips: 'adult',
+								t: Date.now()
+						});
+						const url = `https://www.nicovideo.jp/api/watch/v3/${encodeURIComponent(videoId)}?${query.toString()}`;
+						let json = null;
+						try {
+								const res = await util.fetch(url, { credentials: 'include' });
+								json = await res.json();
+						}
+						catch (e) {
+								throw Object.assign(new Error('タグ編集キーの再取得に失敗しました（通信エラー）'), { kind: 'NETWORK', cause: e });
+						}
+						const editKey = json && json.data && json.data.tag && json.data.tag.edit && json.data.tag.edit.editKey;
+						if (!editKey) {
+								throw Object.assign(new Error('タグ編集キーが返却されませんでした'), { kind: 'NO_KEY', response: json });
+						}
+						return editKey;
+				};
+				return typeof RequestDiagnostics === 'undefined' ? execute() :
+						RequestDiagnostics.observe('tag-key', videoId, execute, value => typeof value === 'string' && value.length > 0, () => true);
 		}
 		_buildQuery(params) {
 				const t = [];
@@ -21961,6 +22099,7 @@ const ScreenFilterPanel = (() => {
 		}
 		return Panel;
 })();
+// already required
 /*
 * Task 080: 動画の最後に流れる「提供」画面（ニコニ広告・ギフトの支援者クレジット）
 *
@@ -22004,9 +22143,30 @@ const SupporterCredit = (() => {
 		};
 		const easeInCubic = (t) => t < 0 ? 0 : t > 1 ? 1 : t * t * t;
 		const easeOutCubic = (t) => t < 0 ? 0 : t > 1 ? 1 : 1 - (1 - t) ** 3;
-		const withTimeout = (promise, ms = 10000) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
-		const fetchJson = (url, signal) => withTimeout(fetch(url, { credentials: 'include', signal }).then(r => r.ok ? r.json() : null))
-				.catch(() => null);
+		const withTimeout = (promise, ms = 10000) => Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), ms))]);
+		const fetchJson = (url, signal) => {
+				const isGift = String(url).includes('/gift/');
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin(isGift ? 'gifts' : 'supporters', String(url), 'response', () => !signal?.aborted);
+				return withTimeout(fetch(url, { credentials: 'include', signal }).then(async (r) => {
+						if (!r.ok) {
+								diagnostic?.failure({ status: r.status });
+								return null;
+						}
+						const body = await r.json();
+						if (typeof body?.meta?.status === 'number' && body.meta.status >= 400) {
+								diagnostic?.failure({ status: body.meta.status });
+						}
+						else if (isGift ? !Array.isArray(body?.data?.effects) :
+								!body?.data?.supporters || typeof body.data.supporters !== 'object') {
+								diagnostic?.failure({ kind: 'schema' });
+						}
+						else {
+								diagnostic?.success();
+						}
+						return body;
+				})).catch((error) => { diagnostic?.failure(error); return null; });
+		};
 		const loadImage = (url) => withTimeout(new Promise((resolve, reject) => {
 				const img = new Image();
 				img.crossOrigin = 'anonymous';
@@ -39881,6 +40041,7 @@ class PlayListModel extends VideoListModel {
 				this.isUniq = true;
 		}
 }
+// already required
 const AdDecorationLoader = (() => {
 		const API_BASE = 'https://api.nicoad.nicovideo.jp/v1/contents/video/decoration';
 		const MAX_IDS_PER_REQUEST = 100;
@@ -39907,13 +40068,19 @@ const AdDecorationLoader = (() => {
 		};
 		class AdDecorationLoader {
 				async _fetchChunk(ids) {
-						const url = `${API_BASE}?ids=${ids.join(',')}`;
-						const res = await netUtil.fetch(url, { credentials: 'omit' });
-						if (!res.ok) {
-								throw new Error(`広告装飾の取得に失敗 (${res.status})`);
-						}
-						const json = await res.json();
-						return (json && json.data && json.data.contents) || [];
+						let schemaValid = false;
+						const execute = async () => {
+								const url = `${API_BASE}?ids=${ids.join(',')}`;
+								const res = await netUtil.fetch(url, { credentials: 'omit' });
+								if (!res.ok) {
+										throw new Error(`広告装飾の取得に失敗 (${res.status})`);
+								}
+								const json = await res.json();
+								schemaValid = !!json && Array.isArray(json.data?.contents);
+								return (json && json.data && json.data.contents) || [];
+						};
+						return typeof RequestDiagnostics === 'undefined' ? execute() :
+								RequestDiagnostics.observe('ad-decoration', ids.join(','), execute, () => schemaValid, () => true);
 				}
 				async _loadChunked(watchIds, onProgress, warnPrefix) {
 						const uniqIds = [...new Set((watchIds || []).filter(Boolean).map(String))];
@@ -42293,6 +42460,7 @@ const MediaSessionApi = (() => {
 				updatePositionStateByMedia
 		};
 })();
+// already required
 const NVApi = {
 		FRONT_ID: '6',
 		FRONT_VER: '0',
@@ -42318,27 +42486,31 @@ const NVApi = {
 };
 const LikeApi = {
 		call: async (videoId, method = 'POST') => {
-				const api = 'https://nvapi.nicovideo.jp/v1/users/me/likes/items';
-				const url = `${api}?videoId=${videoId}`;
-				const label = method === 'DELETE' ? 'いいね！の解除' : 'いいね！';
-				const res = await NVApi.call(url, { method });
-				if (!res) {
-						throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK' });
-				}
-				let json = null;
-				try {
-						json = await res.json();
-				}
-				catch (e) {
-						json = null;
-				}
-				const meta = ((json && json.meta) || {});
-				const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
-				if (status < 200 || status >= 300) {
-						const detail = [status, meta.errorCode].filter(Boolean).join(' ');
-						throw Object.assign(new Error(`${label}に失敗しました（${detail}）`), { kind: 'API', status, errorCode: meta.errorCode, response: json });
-				}
-				return json || { meta: { status } };
+				const execute = async () => {
+						const api = 'https://nvapi.nicovideo.jp/v1/users/me/likes/items';
+						const url = `${api}?videoId=${videoId}`;
+						const label = method === 'DELETE' ? 'いいね！の解除' : 'いいね！';
+						const res = await NVApi.call(url, { method });
+						if (!res) {
+								throw Object.assign(new Error(`${label}に失敗しました（通信エラー）`), { kind: 'NETWORK' });
+						}
+						let json = null;
+						try {
+								json = await res.json();
+						}
+						catch (e) {
+								json = null;
+						}
+						const meta = ((json && json.meta) || {});
+						const status = typeof meta.status === 'number' && res.status >= 200 && res.status < 300 ? meta.status : res.status;
+						if (status < 200 || status >= 300) {
+								const detail = [status, meta.errorCode].filter(Boolean).join(' ');
+								throw Object.assign(new Error(`${label}に失敗しました（${detail}）`), { kind: 'API', status, errorCode: meta.errorCode, response: json });
+						}
+						return json || { meta: { status } };
+				};
+				return typeof RequestDiagnostics === 'undefined' ? execute() :
+						RequestDiagnostics.observe('like', method + ':' + videoId, execute, () => true, () => true);
 		},
 		like: (videoId) => LikeApi.call(videoId, 'POST'),
 		unlike: (videoId) => LikeApi.call(videoId, 'DELETE')

@@ -1,6 +1,8 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {CacheStorage} from '../infra/CacheStorage';
 // GENERATED FROM tools/typescript-stage1/nico-src/NicodicArticleLoader.ts (Task466). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const NicodicArticleLoader = (() => {
     const API_URL = 'https://api.dic.nicovideo.jp/v1/articles/article';
     const CACHE_PREFIX = 'nicodicBatch: ';
@@ -12,6 +14,8 @@ const NicodicArticleLoader = (() => {
     let scheduled = false;
     const getCache = () => cacheStorage || (cacheStorage = new CacheStorage(sessionStorage));
     const fetchBatch = async (entries) => {
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('dictionary', JSON.stringify(entries.map(([name]) => name)), 'response');
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         let articles = null;
@@ -20,16 +24,20 @@ const NicodicArticleLoader = (() => {
             entries.forEach(([name]) => query.append('titles[]', name));
             const res = await fetch(`${API_URL}?${query}`, { credentials: 'omit', signal: controller.signal });
             if (!res.ok) {
+                diagnostic?.failure({ status: res.status });
                 throw new Error(`Nicodic HTTP ${res.status}`);
             }
             const data = await res.json();
             if (!Array.isArray(data) || data.some((a) => !a || typeof a.request_title !== 'string' ||
                 typeof a.title !== 'string')) {
+                diagnostic?.failure({ kind: 'schema' });
                 throw new Error('Invalid Nicodic batch response');
             }
+            diagnostic?.success();
             articles = new Map(data.map(a => [a.request_title, a]));
         }
         catch (e) {
+            diagnostic?.failure(controller.signal.aborted ? { name: 'TimeoutError' } : e);
             window.console.warn('大百科の記事有無を調べられませんでした', e);
         }
         finally {

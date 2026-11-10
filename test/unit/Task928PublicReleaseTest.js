@@ -8,9 +8,9 @@ const manifest=JSON.parse(read('dist-manifest.json'));
 const prefix='https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/';
 const installers='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
 const expected={
- 'ZenzaWatch-dev.user.js':'2.7.367-task991',
+ 'ZenzaWatch-dev.user.js':'2.7.368-task992',
  'ZenzaHLS.user.js':'0.0.43-task981',
- 'MylistPocket.user.js':'0.5.84-task991',
+ 'MylistPocket.user.js':'0.5.85-task992',
  'ZenzaAdvancedSettings.user.js':'0.3.89-task989',
  'ZenzaBlogPartsButton.user.js':'0.0.5-task928'
 };

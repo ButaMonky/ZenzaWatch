@@ -55,6 +55,18 @@ test('legacy build directives are preserved in each runtime',()=>{
     const diagnosticPaths = {
       netUtil:'./RequestDiagnostics', VideoInfoLoader:'../infra/RequestDiagnostics',
       ThreadLoader:'../infra/RequestDiagnostics', VideoSessionWorker:'../infra/RequestDiagnostics',
+      TagEditApi:'../infra/RequestDiagnostics',
+      TagSuggestLoader:'../infra/RequestDiagnostics',
+      AdDecorationLoader:'../infra/RequestDiagnostics',
+      UaaLoader:'../infra/RequestDiagnostics',
+      LikeApi:'../infra/RequestDiagnostics',
+      RecommendAPILoader:'../infra/RequestDiagnostics',
+      VideoSearch:'../infra/RequestDiagnostics',
+      PlaylistApiLoader:'../infra/RequestDiagnostics',
+      MylistApiLoader:'../infra/RequestDiagnostics',
+      SupporterCredit:'../../../lib/src/infra/RequestDiagnostics',
+      NicodicArticleLoader:'../infra/RequestDiagnostics',
+      OwnerSupplement:'../infra/RequestDiagnostics',
       initializer:'../packages/lib/src/infra/RequestDiagnostics'
     };
     if (diagnosticPaths[spec.name]) {

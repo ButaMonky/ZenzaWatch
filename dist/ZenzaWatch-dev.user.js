@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.378-task1002
+// @version        2.7.379-task1003
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 18:22Z 739be07e
+// build: 2026-11-10 18:46Z 427e8c39
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.378-task1002';
+    var VER = '2.7.379-task1003';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 18:22Z 739be07e';
+    var BUILD = '2026-11-10 18:46Z 427e8c39';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -9954,7 +9954,6 @@ const { SettingPanelElement } = (() => {
 						return html `
 				<details class="player-setting">
 				<summary>プレイヤーの設定</summary>
-				<button type="button" class="command" data-command="openAdvancedSettings">上級者設定を開く</button>
 				<div class="control">
 					<label>
 						<input type="checkbox" class="checkbox"
@@ -9993,7 +9992,7 @@ const { SettingPanelElement } = (() => {
 							data-setting-name="enableSingleton"
 							?checked=${conf.enableSingleton}>
 							ZenzaWatchを起動してるタブがあればそちらで開く<br>
-							<smal>(singletonモード)</small>
+							<small>(singletonモード)</small>
 					</label>
 				</div>
 				<div class="control">
@@ -10097,22 +10096,13 @@ const { SettingPanelElement } = (() => {
 							＠ジャンプで指定された動画をプレイリストに入れる
 					</label>
 				</div>
-				<div class="enableOnlyRequired control toggle">
-					<label>
-						<input type="checkbox" class="checkbox"
-							data-setting-name="video.hls.enableOnlyRequired"
-							?checked=${conf.video.hls.enableOnlyRequired}
-							data-command="toggle-video.hls.enableOnlyRequired">
-							HLSが必須の動画だけHLSを使用する (※ HLSが重い環境用)
-					</label>
-				</div>
 				<div class="control">
 					<label>
 						<input type="checkbox" class="checkbox" data-setting-name="touch.enable"
 						data-command="toggle-touchEnable"
 						?checked=${conf.touch.enable}>
 							タッチパネルのジェスチャを有効にする
-							<smal>(2本指左右シーク・上下で速度変更/3本指で動画切替)</small>
+							<small>(2本指左右シーク・上下で速度変更/3本指で動画切替)</small>
 					</label>
 				</div>
 				<div class="control">
@@ -10146,7 +10136,7 @@ const { SettingPanelElement } = (() => {
 						<small>※ 一部レイアウトが崩れます</small>
 					</label>
 				</div>
-			</div>
+			</details>
 			`;
 				}
 				static getCommentSettingMenu(html, conf) {
@@ -10199,7 +10189,7 @@ const { SettingPanelElement } = (() => {
 					<label>
 					<span class="info">入力例: 「'游ゴシック', 'メイリオ', '戦国TURB'」</span>
 						<input type="text" class="textInput" value=${conf.baseFontFamily}
-							data-setting-name="baseFontFamily">
+							aria-label="フォント名" data-setting-name="baseFontFamily">
 					</label>
 				</div>
 				<div class="control">
@@ -10208,7 +10198,7 @@ const { SettingPanelElement } = (() => {
 					<span class="info">※ リロード後に反映</span>
 					<input type="text" class="textInput"
 						pattern="(#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|^[a-zA-Z]+$)"
-						data-setting-name="commentLayer.ownerCommentShadowColor"
+						aria-label="投稿者コメントの影の色" data-setting-name="commentLayer.ownerCommentShadowColor"
 						value=${conf.commentLayer.ownerCommentShadowColor}
 						>
 					</label>
@@ -10292,23 +10282,6 @@ const { SettingPanelElement } = (() => {
 			`;
 				}
 				static getScreenFilterSettingMenu(html, conf) {
-						const presets = [
-								['standard', '標準（フィルターなし）'],
-								['dark', '暗い動画を見やすく'],
-								['sharp', 'くっきり'],
-								['vivid', 'ビビッド'],
-								['faded', '色あせ補正'],
-								['cinema', 'シネマ（銀残し風）'],
-								['film', 'フィルム（レトロ）'],
-								['pastel', 'パステル'],
-								['cool', '寒色'],
-								['warm', '暖色'],
-								['eyeCare', '目に優しい（夜）'],
-								['gold', 'ゴールド'],
-								['mono', '白黒'],
-								['monoHigh', '白黒（硬調）'],
-								['invert', '反転（暗転）']
-						];
 						return html `
 				<details class="screen-filter-setting">
 				<summary>画面フィルター（映像の明るさ・色・反転）</summary>
@@ -10317,23 +10290,8 @@ const { SettingPanelElement } = (() => {
 						動画の映像だけに明るさ・コントラスト・ガンマなどの補正を掛けます（コメントやボタンには掛かりません）。
 						設定は全部の動画で共通で、次に開いた時も残ります。
 					</p>
-					<p class="setting-note">
-						細かい調整は、再生画面の下のバーにある「きらめき（✦）」のボタンから、動画を見ながらできます。
-					</p>
-				</div>
-				<div class="control">
-					<p class="setting-note">
-						プリセット「標準」の時がOFF（何も処理しません）で、それ以外を選ぶと自動でONになります。
-					</p>
-				</div>
-				<div class="control">
-					<h3>かんたん設定（プリセット）</h3>
-					<p class="setting-note">迷ったらここから選んでください。押すとすぐに切り替わります。</p>
-					<div class="screen-filter-presets">
-						${presets.map(([id, label]) => html `
-							<button class="screen-filter-preset-button"
-								data-command="screenFilter-preset" data-param=${id}>${label}</button>`)}
-					</div>
+					<button type="button" class="screen-filter-open-button" data-command="toggle-screenFilterPanel">画面フィルターを開く</button>
+					<p class="setting-note">プリセット・マイプリセット・数値調整は専用パネルでまとめて操作できます。適用中のプリセットをもう一度押すと標準に戻ります。</p>
 				</div>
 				<div class="control">
 					<label>
@@ -10431,7 +10389,8 @@ const { SettingPanelElement } = (() => {
 						</label>
 					</div>
 					<div class="control" style="text-align: center;">
-						<h3>表示するコメント</h3>
+						<h3>表示するコメント（投稿区分）</h3>
+						<p class="setting-note">投稿区分と下の配信スレッドの両方がONのコメントを表示します。</p>
 						<label class="short">
 							<input type="checkbox"
 								data-setting-name="filter.fork0"
@@ -10460,7 +10419,8 @@ const { SettingPanelElement } = (() => {
 								value="">
 								AIキャラクターコメント
 						</label>
-						<h4>種類</h4>
+						<h4>配信スレッドの種類</h4>
+						<p class="setting-note">同じ名前でも投稿区分とは別の条件です。通常は両方をONにしてください。</p>
 						<label class="short">
 							<input type="checkbox"
 								data-setting-name="filter.defaultThread"
@@ -10548,21 +10508,21 @@ const { SettingPanelElement } = (() => {
 						<label>
 							<textarea
 								class="filterEdit"
-								data-setting-name="wordFilter" data-type="array"
+								aria-label="NGワード" data-setting-name="wordFilter" data-type="array"
 								>${word}</textarea>
 						</label>
 						<h3>NGコマンド</h3>
 						<label>
 							<textarea
 								class="filterEdit"
-								data-setting-name="commandFilter" data-type="array"
+								aria-label="NGコマンド" data-setting-name="commandFilter" data-type="array"
 								>${command}</textarea>
 						</label>
 						<h3>NGユーザー</h3>
 						<label>
 							<textarea
 								class="filterEdit"
-								data-setting-name="userIdFilter" data-type="array"
+								aria-label="NGユーザー" data-setting-name="userIdFilter" data-type="array"
 								>${userId}</textarea>
 						</label>
 					</div>
@@ -10573,10 +10533,20 @@ const { SettingPanelElement } = (() => {
 						const conf = props.config.props;
 						return html `
 				<style>
+					.dialog.is-open .dialog-background {animation:none;}
+					.dialog-background {border:1px solid #455066;color:#e9edf5;box-shadow:0 8px 30px #0008;}
+					.dialog-inner {background:#171e2af7;color:#e9edf5;border:1px solid #455066;padding:14px;}
+					summary {background:#253346;color:#edf4ff;text-shadow:none;font-size:15px;padding:10px 12px;margin:0 0 6px;border-radius:6px;}
+					details {margin:0 0 8px;}
+					h3,h4 {background:#253346;color:#edf4ff;text-shadow:none;font-size:13px;padding:7px 9px;}
+					button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {outline:2px solid #84dccd;outline-offset:3px;}
+					.settings-navigation {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+					.settings-navigation .setting-note {flex-basis:100%;margin:0;}
+					.settings-navigation button {background:#303c51;color:#edf4ff;border:1px solid #53627b;border-radius:6px;padding:7px 10px;font:inherit;}
 					label {
 						display: block;
-						margin: 8px;
-						padding: 8px;
+						margin: 5px;
+						padding: 5px;
 						cursor: pointer;
 					}
 					label.short {
@@ -10588,15 +10558,15 @@ const { SettingPanelElement } = (() => {
 						background: rgba(80, 80, 80, 0.3);
 					}
 					input[type=checkbox], input[type=radio] {
-						transform: scale(2);
+						accent-color:#84dccd;
 						margin-right: 8px;
 					}
 					input[type=text], input[type=number], select {
 						border-radius: 4px;
 						border: 1px solid currentcolor;
-						font-size: 150%;
-						padding: 8px;
-						background: transparent;
+						font-size: 13px;
+						padding: 6px;
+						background: #202c3d;
 						color: currentcolor;
 					}
 					input[type=range] {
@@ -10609,27 +10579,20 @@ const { SettingPanelElement } = (() => {
 					.setting-note {
 						margin: 4px 8px;
 						font-size: 12px;
-						opacity: 0.8;
+						color:#bdcadb;line-height:1.6;
 					}
-					.screen-filter-open-button,
-					.screen-filter-preset-button {
+					.screen-filter-open-button {
 						margin: 4px;
 						padding: 8px 12px;
 						border-radius: 4px;
 						cursor: pointer;
 						font-size: 14px;
-						color: #000;
-						background: #ccc;
+						color: #edf4ff;
+						background: #303c51;
 						border: 0;
 					}
-					.screen-filter-open-button:hover,
-					.screen-filter-preset-button:hover {
-						background: #eee;
-					}
-					.screen-filter-presets {
-						display: flex;
-						flex-wrap: wrap;
-						margin: 0 4px;
+					.screen-filter-open-button:hover {
+						background: #40516b;
 					}
 					.import-export {
 						padding: 8px;
@@ -10639,19 +10602,9 @@ const { SettingPanelElement } = (() => {
 					.export-config-button {
 						display: inline-block;
 					}
-					.import-config-file-select {
-						position: absolute;
-						text-indent: -9999px;
-						width: 160px;
-						padding: 8px;
-						opacity: 0;
-						cursor: pointer;
-					}
-					.import-config-file-select-label {
-						pointer-events: none;
-						user-select: none;
-					}
-					.import-config-file-select-label,
+					.import-config-file-select {display:block;max-width:100%;margin-top:6px;font:inherit;color:inherit;}
+					.import-config-file-select::file-selector-button {background:#303c51;color:#edf4ff;border:1px solid #53627b;border-radius:4px;padding:7px;cursor:pointer;}
+					.import-config-file-select-label {display:block;text-align:left;}
 					.export-config-button {
 						display: inline-block;
 						width: 160px;
@@ -10659,11 +10612,17 @@ const { SettingPanelElement } = (() => {
 						border-radius: 4px;
 						cursor: pointer;
 						font-size: 14px;
-						color: #000;
-						background: #ccc;
+						color: #edf4ff;
+						background: #303c51;
 						border: 0;
 					}
 				</style>
+				<div class="settings-navigation">
+					<strong>設定</strong>
+					<button type="button" class="command" data-command="openAdvancedSettings">上級者設定を開く</button>
+					<button type="button" class="command" data-command="toggleHLSDebug">HLS設定を開く</button>
+					<p class="setting-note">コメント増量・ここまで見た・しおり・ABリピート・通知履歴などの詳細設定も上級者設定にあります。</p>
+				</div>
 				<div data-revision="${state.revision}">
 					${this.getPlayerSettingMenu(html, conf)}
 					${this.getCommentSettingMenu(html, conf)}
@@ -10672,13 +10631,14 @@ const { SettingPanelElement } = (() => {
 				<details>
 					<summary>設定のインポート・エクスポート</summary>
 					<div class="import-export">
-						<button class="export-config-button" data-command="export-config">ファイルに保存</button>
+						<button type="button" class="export-config-button" data-command="export-config">ファイルに保存</button>
+						<label class="import-config-file-select-label">ファイルから読み込む
 						<input type="file"
 							@change=${events.onImportFileSelect}
 							class="import-config-file-select"
-							accept=".json"
+							accept=".json" aria-label="設定ファイルを読み込む"
 							data-command="nop">
-						<div class="import-config-file-select-label">ファイルから読み込む</div>
+						</label>
 					</div>
 				</details>
 				</div>
@@ -10691,25 +10651,31 @@ const { SettingPanelElement } = (() => {
 								onImportFileSelect: this.onImportFileSelect.bind(this)
 						});
 						this._boundEnableFilterConfig = null;
-						this._onEnableFilterConfigUpdate = () => {
-								this.state.revision++;
-								if (this.isOpen) {
-										this.requestRender();
+						this._onEnableFilterConfigUpdate = (key) => {
+								if (!this.isOpen) {
+										return;
 								}
+								const root = this._root;
+								if (!root || !Array.from(root.querySelectorAll('[data-setting-name]')).some((node) => node.dataset.settingName === key)) {
+										return;
+								}
+								this.state.revision++;
+								this.requestRender();
 						};
 				}
 				_bindEnableFilterConfig(config) {
 						if (this._boundEnableFilterConfig === config) {
 								return;
 						}
-						this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
-						this._boundEnableFilterConfig?.offkey?.('backComment', this._onEnableFilterConfigUpdate);
+						this._boundEnableFilterConfig?.off?.('update', this._onEnableFilterConfigUpdate);
 						this._boundEnableFilterConfig = config || null;
-						this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
-						this._boundEnableFilterConfig?.onkey?.('backComment', this._onEnableFilterConfigUpdate);
+						this._boundEnableFilterConfig?.on?.('update', this._onEnableFilterConfigUpdate);
 				}
 				async connectedCallback() {
 						await super.connectedCallback();
+						const dialog = this._dialog;
+						dialog?.setAttribute('role', 'dialog');
+						dialog?.setAttribute('aria-label', '設定');
 						this._bindEnableFilterConfig(this.config);
 				}
 				async disconnectedCallback() {
@@ -10726,6 +10692,13 @@ const { SettingPanelElement } = (() => {
 								this._bindEnableFilterConfig(v);
 								this.requestRender();
 						}
+				}
+				onCommand(e) {
+						if (['toggle-screenFilterPanel', 'openAdvancedSettings', 'toggleHLSDebug'].includes(e.detail?.command)) {
+								this.close();
+								return; // The original command continues to its existing player/root owner.
+						}
+						super.onCommand(e);
 				}
 				onUIEvent(e) {
 						if (e.target.closest('label, input, select, textarea') || e.target.tagName === 'SUMMARY') {
@@ -10745,8 +10718,30 @@ const { SettingPanelElement } = (() => {
 								value = elm.checked;
 						}
 						else {
-								if (['number', 'boolean', 'json'].includes(type)) {
-										value = JSON.parse(value);
+								if (type === 'number') {
+										elm.setCustomValidity?.('');
+										const parsed = Number(value);
+										if (value.trim() === '' || !Number.isFinite(parsed) ||
+												(elm.min !== '' && elm.min !== undefined && parsed < Number(elm.min)) ||
+												(elm.max !== '' && elm.max !== undefined && parsed > Number(elm.max)) ||
+												(elm.validity && !elm.validity.valid)) {
+												elm.setCustomValidity?.('指定された範囲の数値を入力してください。');
+												elm.reportValidity?.();
+												e.stopPropagation();
+												return;
+										}
+										value = parsed;
+								}
+								else if (['boolean', 'json'].includes(type)) {
+										try {
+												value = JSON.parse(value);
+										}
+										catch {
+												elm.setCustomValidity?.('入力内容を確認してください。');
+												elm.reportValidity?.();
+												e.stopPropagation();
+												return;
+										}
 								}
 								else if (type === 'array') {
 										value = value.split('\n');
@@ -10763,7 +10758,12 @@ const { SettingPanelElement } = (() => {
 						e.preventDefault();
 						e.stopPropagation();
 						const file = e.target.files[0];
-						if (!file || !/\.config\.json$/.test(file.name)) {
+						if (!file) {
+								return;
+						}
+						if (!/\.json$/i.test(file.name)) {
+								alert('JSON形式の設定ファイルを選択してください。');
+								e.target.value = '';
 								return;
 						}
 						if (!confirm(`ファイル "${file.name}" で書き換えますか？`)) {
@@ -16018,7 +16018,6 @@ class ManualBookmarkDock {
 		keyHandler;
 		clickHandler;
 		visibilityHandler;
-		toggleHandler;
 		outsideHandler;
 		disposed = false;
 		host = null;
@@ -16131,12 +16130,11 @@ class ManualBookmarkDock {
 				this.node.hidden = false;
 				this.node.classList.add('zw-points-floating');
 				this.panel.refreshPreferences();
-				this.node.open = true;
 				this.panel.setVisible(true);
 				this.trigger?.setAttribute('aria-expanded', 'true');
 				this.position();
 				void this.session.refreshIfIdle();
-				this.node.querySelector('summary')?.focus();
+				this.node.querySelector('.zw-points-heading')?.focus({ preventScroll: true });
 				this.animate(true);
 		}
 		close(restoreFocus = true) {
@@ -16150,7 +16148,6 @@ class ManualBookmarkDock {
 						if (restoreFocus && this.trigger?.isConnected)
 								this.trigger.focus({ preventScroll: true });
 						this.animate(false, () => {
-								this.node.open = false;
 								this.node.hidden = true;
 								this.node.inert = false;
 								this.node.classList.remove('zw-points-floating');
@@ -16164,7 +16161,7 @@ class ManualBookmarkDock {
 						});
 				}
 				else {
-						this.node.open = false;
+						this.node.hidden = true;
 				}
 		}
 		get bookmarkStatus() { return this.session.snapshot.status; }
@@ -16181,11 +16178,15 @@ class ManualBookmarkDock {
 				this.session = session;
 				this.home = target;
 				const doc = target.ownerDocument;
-				const node = this.node = doc.createElement('details');
+				const node = this.node = doc.createElement('section');
+				node.setAttribute('role', 'dialog');
+				node.setAttribute('aria-label', 'しおり・ABリピート');
 				node.className = 'zenzaManualBookmarkDock';
 				node.hidden = true;
 				node.dataset.bookmarkOwner = 'manual';
-				const summary = doc.createElement('summary');
+				const summary = doc.createElement('h2');
+				summary.className = 'zw-points-heading';
+				summary.tabIndex = -1;
 				summary.textContent = 'しおり・ABリピート';
 				node.append(summary);
 				const root = this.root = doc.createElement('section');
@@ -16226,21 +16227,19 @@ class ManualBookmarkDock {
 				this.clickHandler = event => event.stopPropagation();
 				node.addEventListener('click', this.clickHandler);
 				this.visibilityHandler = () => {
-						if (this.disposed || !this.node.open ||
+						if (this.disposed || this.node.hidden ||
 								doc.visibilityState !== 'visible')
 								return;
 						void this.session.refreshIfIdle();
 				};
 				this.outsideHandler = event => {
-						if (this.disposed || !this.node.open)
+						if (this.disposed || this.node.hidden)
 								return;
 						const path = event.composedPath();
 						if (path.includes(this.node) || (this.trigger && path.includes(this.trigger)))
 								return;
 						this.close(false);
 				};
-				this.toggleHandler = () => this.panel?.setVisible(this.node.open && !this.closing);
-				node.addEventListener('toggle', this.toggleHandler);
 				try {
 						this.panel = new ManualBookmarkPanel(root, session, deps);
 						this.panel.setVisible(false);
@@ -16249,7 +16248,6 @@ class ManualBookmarkDock {
 						doc.addEventListener('click', this.outsideHandler, true);
 				}
 				catch (error) {
-						node.removeEventListener('toggle', this.toggleHandler);
 						node.removeEventListener('keydown', this.keyHandler);
 						node.removeEventListener('keyup', this.keyHandler);
 						node.removeEventListener('click', this.clickHandler);
@@ -16286,7 +16284,6 @@ class ManualBookmarkDock {
 						return;
 				this.cancelAnimation();
 				this.closing = false;
-				this.node.open = false;
 				this.node.hidden = true;
 				this.node.inert = false;
 				if (this.floating) {
@@ -16305,11 +16302,11 @@ class ManualBookmarkDock {
 		static styles = `
 		.zenzaManualBookmarkDock[hidden]{display:none!important}
 		.zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
-		.zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
-		.zenzaManualBookmarkDock[open]{overflow:auto}
+		.zenzaManualBookmarkDock>.zw-points-heading{margin:0;padding:10px 14px;font-size:inherit;font-weight:700;color:#f4f7ff}
+		.zenzaManualBookmarkDock:not([hidden]){overflow:auto}
 		.zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:400px;transition:width .18s ease;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
 		.zenzaManualBookmarkDockContent{padding:0 14px 10px}
-		.zenzaManualBookmarkDock:not(.zw-library-wide)>summary{padding-right:104px}
+		.zenzaManualBookmarkDock:not(.zw-library-wide)>.zw-points-heading{padding-right:104px}
 		.zenzaManualBookmarkDock:not(.zw-library-wide) .zw-library-nav{position:absolute;right:12px;top:5px;margin:0;padding:4px 9px;font-size:12px}
 		.zenzaManualBookmarkDock .zw-point-section[data-point-section="repeat"]{margin-top:0;padding-top:0;border-top:0}
 		.zenzaManualBookmarkDock [data-point-section="repeat"]>h3{display:none}
@@ -16387,7 +16384,7 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock .zw-point-range-inputs button{grid-column:1/-1;width:100%;margin:0;padding:5px 2px;font-size:12px}
 		@keyframes zw-bookmark-reveal{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
 		@media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock.zw-points-floating{transition:none}.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:none}}
-		@media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock:not(.zw-library-wide)>summary{box-sizing:border-box;min-height:54px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
+		@media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock:not(.zw-library-wide)>.zw-points-heading{box-sizing:border-box;min-height:54px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
 		`;
 		dispose() {
 				if (this.disposed)
@@ -16400,7 +16397,6 @@ class ManualBookmarkDock {
 				this.node.ownerDocument.removeEventListener('visibilitychange', this.visibilityHandler);
 				this.node.ownerDocument.removeEventListener('pointerdown', this.outsideHandler, true);
 				this.node.ownerDocument.removeEventListener('click', this.outsideHandler, true);
-				this.node.removeEventListener('toggle', this.toggleHandler);
 				this.resizeObserver?.disconnect();
 				this.layoutObserver?.disconnect();
 				this.observedLayout.clear();
@@ -65416,8 +65412,6 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
 				fragLoadingMaxRetryTimeout: 64000, // used by fragment-loader
 				startPosition: -1, // used by stream-controller
 				maxBufferHole: 0.5, // used by stream-controller
-				maxSeekHole: 2, // used by stream-controller
-				lowBufferWatchdogPeriod: 0.5, // used by stream-controller
 				highBufferWatchdogPeriod: 3, // used by stream-controller
 				nudgeOffset: 0.1, // used by stream-controller
 				nudgeMaxRetry: 3, // used by stream-controller
@@ -65446,39 +65440,110 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
 		DEFAULT_CONFIG.clone = (() => {
 				return Object.assign({}, DEFAULT_CONFIG);
 		});
+		const editableKeys = new Set(['maxBufferLength', 'maxBufferSize', 'maxMaxBufferLength',
+				'minAutoBitrate', 'startLevel', 'abrEwmaDefaultEstimate', 'autoAbrEwmaDefaultEstimate',
+				'capLevelOnFPSDrop', 'capLevelToPlayerSize', 'show_video_label', 'enable_db_cache', 'debug']);
+		const numericBounds = {
+				maxBufferLength: [0, 300], maxMaxBufferLength: [0, 1200], maxBufferSize: [0, 1e9],
+				minAutoBitrate: [0, 50e6], abrEwmaDefaultEstimate: [0, 50e6], startLevel: [-1, 100],
+				startPosition: [-1, Number.MAX_SAFE_INTEGER], cache_expire_time: [0, 365 * 86400000],
+				abrBandWidthFactor: [0, 1], abrBandWidthUpFactor: [0, 1], fpsDroppedMonitoringThreshold: [0, 1]
+		};
+		const invalid = Symbol('invalid HLS setting');
+		const validate = (key, value) => {
+				if (!Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key))
+						return invalid;
+				const original = DEFAULT_CONFIG[key];
+				if (key === 'use_native_hls' && value === 'force')
+						return value;
+				if (typeof original === 'boolean')
+						return typeof value === 'boolean' ? value : invalid;
+				if (original === undefined && (key === 'liveSyncDuration' || key === 'liveMaxLatencyDuration')) {
+						return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : invalid;
+				}
+				if (typeof original !== 'number')
+						return invalid; // Never deserialize executable hooks or version identity.
+				if (value === Infinity && original === Infinity)
+						return value;
+				if (typeof value !== 'number' || !Number.isFinite(value))
+						return invalid;
+				const [min, max] = numericBounds[key] || [0, Number.MAX_SAFE_INTEGER];
+				const bounded = Math.min(max, Math.max(min, value));
+				return key === 'startLevel' ? Math.round(bounded) : bounded;
+		};
+		const reconcile = (config) => {
+				config.maxMaxBufferLength = Math.max(config.maxBufferLength, config.maxMaxBufferLength);
+		};
 		const Config = (() => {
-				const config = {}, emitter = new Emitter();
+				const config = { ...DEFAULT_CONFIG }, emitter = new Emitter();
 				Object.keys(DEFAULT_CONFIG).forEach(key => {
-						const storageKey = `ZenzaWatch_video.hls.${key}`;
-						config[key] = DEFAULT_CONFIG[key];
 						try {
-								const saved = localStorage[storageKey];
-								if (saved)
-										config[key] = JSON.parse(saved);
+								const saved = localStorage[`ZenzaWatch_video.hls.${key}`];
+								if (saved) {
+										const value = validate(key, JSON.parse(saved));
+										if (value !== invalid)
+												config[key] = value;
+								}
 						}
 						catch (_) { /* unavailable/corrupt persistence must not stop the player */ }
 				});
+				reconcile(config);
+				const publish = (next) => {
+						const changes = Object.keys(next).filter(key => config[key] !== next[key]);
+						Object.assign(config, next);
+						changes.forEach(key => { emitter.emit(`update-${key}`, config[key]); emitter.emit('update', { key, value: config[key] }); });
+				};
+				const persist = (next) => {
+						const changed = Object.keys(next).filter(key => config[key] !== next[key]);
+						const previous = new Map();
+						try {
+								changed.forEach(key => {
+										const storageKey = `ZenzaWatch_video.hls.${key}`;
+										previous.set(storageKey, localStorage[storageKey]);
+										localStorage[storageKey] = JSON.stringify(next[key]);
+								});
+						}
+						catch (_) {
+								previous.forEach((value, key) => { try {
+										if (value === undefined)
+												delete localStorage[key];
+										else
+												localStorage[key] = value;
+								}
+								catch (_) { } });
+								return false;
+						}
+						publish(next);
+						return true;
+				};
 				return {
 						raw: config,
-						get: (key) => {
-								return config[key];
-						},
+						get: (key) => config[key],
 						set: (key, value) => {
-								if (!DEFAULT_CONFIG.hasOwnProperty(key)) {
+								const checked = validate(key, value);
+								if (checked === invalid)
 										return;
+								const next = { ...config, [key]: checked };
+								reconcile(next);
+								if (!persist(next)) {
+										publish(next);
+										console.warn('HLS settings could not be saved');
 								}
-								const storageKey = `ZenzaWatch_video.hls.${key}`;
-								if (config[key] !== value) {
-										config[key] = value;
-										try {
-												localStorage[storageKey] = JSON.stringify(value);
-										}
-										catch (_) {
-												console.warn('HLS settings could not be saved');
-										}
-										emitter.emit(`update-${key}`, value);
-										emitter.emit('update', { key, value });
+						},
+						applySettings: (patch) => {
+								if (!patch || typeof patch !== 'object' || Array.isArray(patch))
+										return false;
+								const next = { ...config };
+								for (const key of Object.keys(patch)) {
+										if (!editableKeys.has(key))
+												continue;
+										const checked = validate(key, patch[key]);
+										if (checked === invalid)
+												return false;
+										next[key] = checked;
 								}
+								reconcile(next);
+								return persist(next);
 						},
 						on: (...args) => { emitter.on(...args); },
 						off: (...args) => { emitter.off(...args); },
@@ -65535,7 +65600,7 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
 				};
 				return result;
 		};
-		return { Config, DEFAULT_CONFIG, nativeHlsPreference, debounce, throttle };
+		return { Config, DEFAULT_CONFIG, settingBounds: numericBounds, nativeHlsPreference, debounce, throttle };
 };
 function createHlsStorage(Config, debounce) {
 		const window = globalThis.window;
@@ -66834,15 +66899,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								return this._hlsConfig;
 						}
 						set hlsConfig(config) {
-								this._hlsConfig = config;
-								if (this._hls) {
-										const hls = this._hls;
-										Object.keys(config).forEach(prop => {
-												if (prop in hls.config) {
-														hls.config[prop] = config[prop];
-												}
-										});
-								}
+								this._hlsConfig = Object.assign({}, this._hlsConfig, config);
 						}
 						get hls() {
 								return this._hls;
@@ -66897,7 +66954,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								if (!this._hls) {
 										this._fragmentLoader = createFragmentLoader(Hls);
 										this._hlsConfig.fLoader = this._fragmentLoader;
-										const hls = new Hls(this._hlsConfig);
+										const hls = new Hls(Object.assign({}, this._hlsConfig));
 										this._hls = hls;
 										try {
 												hls.on(Hls.Events.DESTROYING, () => {
@@ -67083,618 +67140,383 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 		})({ Hls: window.Hls, throttle });
 		return ZenzaVideoElement;
 }
-function defineHlsDebugElements(config, { html, render, Storage, HTMLDialogElement }) {
-		const window = globalThis.window;
-		const console = window.console;
-		const Array = window.PureArray || window.Array;
-		const existing = window.customElements?.get('video-debug-dialog');
-		if (existing) {
-				return existing;
-		}
-		if (!HTMLDialogElement || !window.customElements) {
+function defineHlsDebugElements(_config, { Storage, HTMLDialogElement }) {
+		if (!HTMLDialogElement || !window.customElements)
 				return;
-		}
+		const existing = window.customElements.get('video-debug-dialog');
+		if (existing)
+				return existing;
+		const node = (tag, text = '') => {
+				const result = document.createElement(tag);
+				result.textContent = text;
+				return result;
+		};
+		const controlsStyle = `
+		:host{display:block;min-width:0;color:#e7edf4;font:13px/1.45 system-ui,sans-serif}
+		*{box-sizing:border-box}input,button,select{font:inherit;accent-color:#78dcca}
+		input:focus-visible,summary:focus-visible,button:focus-visible{outline:2px solid #8ce6d5;outline-offset:3px}
+		.row{padding:8px 0;border-bottom:1px solid #354052}.heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+		label{cursor:pointer;min-width:0;overflow-wrap:anywhere}.value{display:flex;align-items:center;gap:6px}
+		input[type=number]{width:96px;max-width:100%;color:inherit;background:#111b28;border:1px solid #718397;border-radius:4px;padding:5px 7px}
+		input[type=range]{display:block;width:calc(100% - 6px);margin:9px 3px 4px;min-width:0}
+		input[type=checkbox]{width:17px;height:17px;vertical-align:middle;margin:0 7px 0 0}
+		input:disabled{opacity:.5;cursor:not-allowed}details{font-size:12px;color:#bdcbd8;margin-top:5px}summary{cursor:pointer;width:fit-content}
+		.detailsText{margin-top:5px;white-space:pre-line}.is-changed .labelText::after{content:' •';color:#8ce6d5}
+		[aria-invalid=true]{border-color:#ffb3ad!important}.unit{color:#c4d1dd}.hint{font-size:12px;color:#a9c1cd;margin:3px 0}
+		@media(pointer:coarse){input[type=number]{min-height:44px}summary{min-height:32px}}
+	`;
 		class VideoDebugInput extends HTMLElement {
-				static get observedAttributes() { return ['value']; }
-				static get props() {
-						return [
-								{ name: 'name', type: 'string' },
-								{ name: 'value', type: 'string' },
-						];
+				root;
+				box = null;
+				input = null;
+				number = null;
+				stored = 0;
+				baseline = 0;
+				factor = 1;
+				built = false;
+				isCheckbox = false;
+				constructor() { super(); this.root = this.attachShadow({ mode: 'open' }); }
+				get name() { return this.getAttribute('name') || ''; }
+				get value() { return this.stored; }
+				set value(value) {
+						this.stored = this.isCheckbox ? value === true || value === 'true' : Number(value);
+						this.sync();
 				}
-				constructor() {
-						super();
-						this._props = {};
-						this.constructor.props.forEach(({ name, type }) => {
-								const attr = this.getAttribute(name);
-								switch (type) {
-										case 'boolean':
-												this._props[name] = attr === 'true';
-												break;
-										case 'number':
-												if (!attr) {
-														return;
-												}
-												this._props[name] = parseFloat(attr);
-												break;
-										default:
-												this._props[name] = attr;
-								}
-						});
-						this._shadow = this.attachShadow({ mode: 'open' });
-						render(this.html(this._props), this._shadow);
-						this._input = this._shadow.querySelector('input');
-						this._root = this._shadow.querySelector('.root, input');
-						this._details = this._shadow.querySelector('.details');
-						this._detailsText = this._shadow.querySelector('.detailsText');
-						const details = (this.getAttribute('details') || '').trim();
-						this._details.hidden = !details;
-						if (details) {
-								this._detailsText.innerHTML = details.replace(/\n/g, '<br>');
-						}
-						const text = (this.getAttribute('text') || '').trim();
-						if (text) {
-								this._root.querySelector('.labelText').textContent = text;
-						}
-				}
-				html(props) {
-						return html `
-						<input name="${props.name}" value="${props.value}">
-						`;
-				}
-				set defaultValue(v) {
-						this._defaultValue = v;
-						this.setAttribute('default-value', v);
-						this._root.classList.toggle('is-changed', this.value !== this.defaultValue);
-				}
-				set value(v) {
-						if (this._props.value === v) {
+				get defaultValue() { return this.baseline; }
+				set defaultValue(value) { this.baseline = value; this.sync(); }
+				reset() { this.value = this.baseline; }
+				set disabled(value) { if (this.input)
+						this.input.disabled = value; if (this.number)
+						this.number.disabled = value; }
+				get valid() { return this.isCheckbox || !!this.number && this.number.value !== '' && this.number.checkValidity() && Number.isFinite(this.stored); }
+				sync() {
+						if (!this.input)
 								return;
+						if (this.isCheckbox)
+								this.input.checked = !!this.stored;
+						else {
+								const display = Number(this.stored) / this.factor;
+								this.input.value = Number.isFinite(display) ? String(display) : '';
+								if (this.number)
+										this.number.value = Number.isFinite(display) ? String(display) : '';
 						}
-						this._props.value = v;
-						this._input.value = v;
-						this.setAttribute('value', v);
-						this._input.setAttribute('data-value', v);
-						this._root.classList.toggle('is-changed', this.value !== this.defaultValue);
-						this.dispatchEvent(new Event('change'));
+						this.box?.classList.toggle('is-changed', this.stored !== this.baseline);
+						this.number?.setAttribute('aria-invalid', String(!this.valid));
 				}
-				get name() {
-						return this._props.name || '';
-				}
-				get value() {
-						return this._props.value;
-				}
-				get defaultValue() {
-						return this._defaultValue;
-				}
-				reset() {
-						this.value = this.defaultValue;
-				}
-				attributeChangedCallback(attrName, oldVal, newVal) {
-						if (attrName === 'value' && oldVal !== newVal) {
-								this.value = newVal;
-						}
-				}
-		}
-		class VideoDebugCheckbox extends VideoDebugInput {
-				static get props() {
-						return [
-								{ name: 'name', type: 'string' },
-								{ name: 'value', type: 'boolean' }
-						];
-				}
-				constructor() {
-						super();
-						this._input.checked = this._props.value;
-						this._input.addEventListener('change', () => {
-								this.value = this._input.checked;
-						});
-				}
-				html(props) {
-						return html `
-						<style>
-							.root {
-								display: block;
-								position: relative;
-								white-space: nowrap;
-								padding: 8px 8px 16px;
-							}
-							.labelText {
-								display: inline-block;
-								text-align: right;
-								font-family: monospace;
-								padding: 0 8px;
-							}
-							.is-changed .labelText {
-								font-weight: bolder;
-								color: blue;
-							}
-							input[type=checkbox] {
-								transform: scale(2);
-								margin-right: 8px;
-							}
-							label {
-								min-width: 300px;
-								padding: 8px;
-								cursor: pointer;
-							}
-							label:hover {
-							}
-							.details {
-								padding-left: 16px;
-							}
-							.summary {
-								outline: 0
-							}
-							.detailsText {
-								color: #666;
-							}
-						</style>
-						<div class="root">
-							<label>
-							<input type="checkbox" name="${props.name}">
-								<span class="labelText">${props.name}<content></content></span>
-							</label>
-							<slot></slot>
-							<details class="details">
-								<summary class="summary">詳細</summary>
-								<div class="detailsText"></div>
-							</details>
-						</div>
-						`;
-				}
-				set value(v) {
-						v = typeof v === 'boolean' ? v : (v === 'true');
-						if (this._props.value === v) {
+				connectedCallback() {
+						if (this.built)
 								return;
-						}
-						this._props.value = v;
-						this._input.checked = v;
-						this.setAttribute('value', v);
-						this._root.classList.toggle('is-changed', v !== this.defaultValue);
-						this.dispatchEvent(new Event('change'));
-				}
-				get value() {
-						return this._props.value;
-				}
-		}
-		if (!window.customElements.get('video-debug-checkbox')) {
-				window.customElements.define('video-debug-checkbox', VideoDebugCheckbox);
-		}
-		class VideoDebugSlider extends VideoDebugInput {
-				static get props() {
-						return [
-								{ name: 'name', type: 'string' },
-								{ name: 'value', type: 'number' },
-								{ name: 'min', type: 'number' },
-								{ name: 'max', type: 'number' },
-								{ name: 'step', type: 'number' }
-						];
-				}
-				constructor() {
-						super();
-						this._input.addEventListener('input', () => {
-								this.value = this._input.value;
-						});
-				}
-				html(props) {
-						return html `
-						<style>
-							.root {
-								display: block;
-								position: relative;
-								white-space: nowrap;
-								padding: 0 8px 16px;
-							}
-							.labelText {
-								display: inline-block;
-								text-align: right;
-								font-family: monospace;
-								padding: 0 16px;
-							}
-							.is-changed .labelText {
-								font-weight: bolder;
-								color: blue;
-							}
-							input[type=range] {
-								position: relative;
-								-webkit-appearance: none;
-								min-width: 400px;
-								vertical-align: baseline;
-							}
-							input[type=range]:focus,
-							input[type=range]:active {
-								outline: none;
-							}
-							input[type=range]::after {
-								content: attr(data-value);
-								position: absolute;
-								bottom: 20px;
-								right: 4px;
-								transform: scale(1.2);
-							}
-							input[type=range]::-webkit-slider-thumb {
-								-webkit-appearance: none;
-								appearance: none;
-								pointer-events: none;
-								position: relative;
-								border: none;
-								width: 16px;
-								height: 16px;
-								display: block;
-								background-color: #262626;
-								border-radius: 50%;
-								-webkit-border-radius: 50%;
-							}
-							input[type=range]:active::-webkit-slider-thumb {
-								box-shadow: 0 0 4px #888;
-							}
-							label {
-								display: inline-block;
-								min-width: 300px;
-								cursor: pointer;
-							}
-							label:hover {
-							}
-							.details {
-								padding-left: 16px;
-							}
-							.summary {
-								outline: 0
-							}
-							.detailsText {
-								color: #666;
-							}
-						</style>
-						<div class="root">
-						<label>
-							<input type="range"
-								min="${props.min}"
-								max="${props.max}"
-								step="${props.step}"
-								value="${props.value}"
-							>
-							<span class="labelText">${props.name}<content></content></span>
-						</label>
-						<details class="details">
-							<summary class="summary">詳細</summary>
-							<div class="detailsText"></div>
-						</details>
-						</div>`;
-				}
-				set value(v) {
-						v = parseFloat(v);
-						const diff = Math.abs(this._props.value - v);
-						if (diff <= 0.01) {
-								return;
-						}
-						this._props.value = v;
-						this._input.value = v;
-						this.setAttribute('value', v);
-						this._input.setAttribute('data-value', v.toLocaleString());
-						this._root.classList.toggle('is-changed', this.value !== this.defaultValue);
-						this.dispatchEvent(new Event('change'));
-				}
-				get value() {
-						return this._props.value;
-				}
-		}
-		if (!window.customElements.get('video-debug-slider')) {
-				window.customElements.define('video-debug-slider', VideoDebugSlider);
-		}
-		class VideoDebugDialog extends HTMLElement {
-				static get observedAttributes() {
-						return [
-								'enable_db_cache',
-								'cache_expire_time',
-								'debug',
-								'startLevel',
-								'capLevelOnFPSDrop',
-								'capLevelToPlayerSize',
-								'maxBufferLength',
-								'maxBufferSize',
-								'maxMaxBufferLength',
-								'minAutoBitrate',
-								'abrEwmaFastVoD',
-								'abrEwmaSlowVoD',
-								'abrEwmaDefaultEstimate',
-								'abrBandWidthFactor',
-								'abrBandWidthUpFactor',
-								'abrMaxWithRealBitrate'
-						];
-				}
-				constructor() {
-						super();
-						this._hlsConfig = {};
-						this._elm = {};
-				}
-				set hlsConfig(v) {
-						this._hlsConfig = v;
-						Object.keys(v).forEach(key => {
-								if (this._elm[key]) {
-										this._elm[key].value = v[key];
-								}
-						});
-				}
-				get hlsConfig() {
-						return this._hlsConfig;
-				}
-				reset(config) {
-						if (!this._shadow) {
-								return;
-						}
-						Object.keys(this._elm).forEach(key => {
-								if (config && config[key]) {
-										this._elm[key].defaultValue = config[key];
-								}
-								this._elm[key].reset();
-						});
-				}
-				get isOpen() {
-						if (!this._root) {
-								return;
-						}
-						return !!this._root.open;
-				}
-				open() {
-						if (!this._root) {
-								return;
-						}
-						if (!this._root.open) {
-								this._root.showModal();
-						}
-				}
-				close() {
-						if (!this._root) {
-								return;
-						}
-						if (this._root.open) {
-								this._root.close();
-						}
-				}
-				toggle() {
-						if (!this._root) {
-								return;
-						}
-						if (this.isOpen) {
-								this.close();
+						this.built = true;
+						const style = node('style', controlsStyle);
+						this.root.append(style);
+						this.factor = Number(this.getAttribute('factor')) || 1;
+						const row = this.box = node('div');
+						row.className = 'row';
+						const heading = node('div');
+						heading.className = 'heading';
+						const label = node('label');
+						label.htmlFor = 'value';
+						label.className = 'labelText';
+						const text = this.getAttribute('text') || this.name;
+						this.input = node('input');
+						this.input.type = this.isCheckbox ? 'checkbox' : 'range';
+						if (this.isCheckbox) {
+								this.input.id = 'value';
+								label.append(this.input, document.createTextNode(text));
+								heading.append(label);
 						}
 						else {
-								this.open();
+								label.textContent = text;
+								heading.append(label);
+								const value = node('div');
+								value.className = 'value';
+								this.number = node('input');
+								this.number.type = 'number';
+								this.number.id = 'value';
+								this.number.setAttribute('aria-label', text);
+								this.input.setAttribute('aria-label', text);
+								for (const key of ['min', 'max', 'step']) {
+										const v = this.getAttribute(key);
+										if (v !== null) {
+												this.input.setAttribute(key, v);
+												this.number.setAttribute(key, key === 'step' && this.factor !== 1 ? 'any' : v);
+										}
+								}
+								const unit = node('span', this.getAttribute('unit') || '');
+								unit.className = 'unit';
+								value.append(this.number, unit);
+								heading.append(value);
+								this.number.addEventListener('input', () => {
+										this.stored = this.number.value === '' ? NaN : Number(this.number.value) * this.factor;
+										this.input.value = this.number.value;
+										this.number.setAttribute('aria-invalid', String(!this.valid));
+										this.changed();
+								});
+						}
+						row.append(heading);
+						if (!this.isCheckbox)
+								row.append(this.input);
+						this.input.addEventListener(this.isCheckbox ? 'change' : 'input', () => {
+								this.stored = this.isCheckbox ? this.input.checked : Number(this.input.value) * this.factor;
+								this.sync();
+								this.changed();
+						});
+						const description = this.getAttribute('details');
+						if (description) {
+								const details = node('details'), summary = node('summary', '説明'), body = node('div', description);
+								body.className = 'detailsText';
+								details.append(summary, body);
+								row.append(details);
+						}
+						this.root.append(row);
+						this.sync();
+				}
+				changed() { this.box?.classList.toggle('is-changed', this.stored !== this.baseline); this.dispatchEvent(new Event('change')); }
+		}
+		class VideoDebugCheckbox extends VideoDebugInput {
+				constructor() { super(); this.isCheckbox = true; this.stored = false; this.baseline = false; }
+		}
+		class VideoDebugSlider extends VideoDebugInput {
+		}
+		if (!window.customElements.get('video-debug-checkbox'))
+				window.customElements.define('video-debug-checkbox', VideoDebugCheckbox);
+		if (!window.customElements.get('video-debug-slider'))
+				window.customElements.define('video-debug-slider', VideoDebugSlider);
+		const groups = [
+				{ title: 'バッファ', numbers: [
+								{ name: 'maxBufferLength', label: '先読みする時間', min: 0, max: 300, step: 1, unit: '秒', details: '先読み時間の上限内で、時間の目安と、容量の目安を時間に換算した値の大きい方まで先読みします。' },
+								{ name: 'maxBufferSize', label: '先読みする容量の目安', min: 0, max: 1000, step: .001, factor: 1e6, unit: 'MB', details: '1 MB = 1,000,000 byte。時間の目安と組み合わせて使われます。確保するメモリ量の保証・上限ではありません。' },
+								{ name: 'maxMaxBufferLength', label: '先読み時間の上限', min: 0, max: 1200, step: 1, unit: '秒', details: '「先読みする時間」以上にしてください。ブラウザ側の容量制限で、指定した時間まで蓄えられない場合があります。' }
+						] },
+				{ title: '自動画質', numbers: [
+								{ name: 'minAutoBitrate', label: '自動画質の下限ビットレート', min: 0, max: 50, step: .001, factor: 1e6, unit: 'Mbps', details: '0で制限なし。配信されている画質の範囲で選ばれます。' },
+								{ name: 'startLevel', label: '再生開始時の画質番号', min: -1, max: 100, step: 1, details: '-1で自動。0から画質の低い順に指定します。画質の数は動画によって異なります。' },
+								{ name: 'abrEwmaDefaultEstimate', label: '開始時の推定回線速度', min: 0, max: 50, step: .001, factor: 1e6, unit: 'Mbps', details: '自動画質の開始時に使う推定値です。「回線速度を自動で記録」がオンの間は、記録された値を使います。' }
+						], checks: [
+								['autoAbrEwmaDefaultEstimate', '回線速度を自動で記録', '再生で得た推定回線速度を次回の開始時に使います。手動入力はオフにすると編集できます。'],
+								['capLevelOnFPSDrop', 'コマ落ちしたら画質を下げる'], ['capLevelToPlayerSize', 'プレイヤーの大きさに合わせて画質を制限']
+						] },
+				{ title: 'キャッシュ', checks: [['enable_db_cache', '動画データをキャッシュする（実験的）', 'ブラウザ内のIndexedDBに保存します。画質ごとに別のデータとなります。']] },
+				{ title: '診断', checks: [['show_video_label', '再生情報を動画上に表示'], ['debug', '詳細ログをコンソールに出す', '問題調査のときに使います。通常はオフにしてください。']] }
+		];
+		class VideoDebugDialog extends HTMLElement {
+				root;
+				dialog = null;
+				fields = {};
+				saved = {};
+				defaults = {};
+				info = {};
+				status = null;
+				settingBounds = {};
+				dirty = false;
+				saving = false;
+				clearing = false;
+				headerVersion = null;
+				constructor() { super(); this.root = this.attachShadow({ mode: 'open' }); }
+				set hlsConfig(config) { this.saved = { ...config }; this.dirty = false; for (const [key, field] of Object.entries(this.fields)) {
+						if (Object.prototype.hasOwnProperty.call(config, key))
+								field.value = config[key];
+				} this.syncAutomatic(); }
+				get hlsConfig() { return this.saved; }
+				set defaultConfig(config) { this.defaults = { ...config }; for (const [key, field] of Object.entries(this.fields)) {
+						if (Object.prototype.hasOwnProperty.call(config, key))
+								field.defaultValue = config[key];
+				} }
+				get defaultConfig() { return this.defaults; }
+				set versionInfo(info) { this.info = info; this.updateVersion(); }
+				get versionInfo() { return this.info; }
+				updateVersion() { if (this.headerVersion)
+						this.headerVersion.textContent = ['ZenzaWatch ' + (this.info.zenza || '版情報なし'), 'hls.js ' + (this.info.hls || this.saved.hls_js_ver || '未読込')].join(' · '); }
+				setStatus(message, kind = 'info') { if (this.status) {
+						this.status.textContent = message;
+						this.status.dataset.kind = kind;
+				} }
+				setSaving(value) {
+						this.saving = value;
+						for (const button of this.root.querySelectorAll('[data-command]'))
+								button.disabled = value || (button.dataset.command === 'clear-cache' && this.clearing);
+						for (const field of Object.values(this.fields))
+								field.disabled = value;
+						if (!value)
+								this.syncAutomatic();
+						this.dialog?.setAttribute('aria-busy', String(value));
+				}
+				get isOpen() { return !!this.dialog?.open; }
+				open() { if (this.dialog && !this.dialog.open)
+						this.dialog.showModal(); }
+				close() { if (this.dialog?.open)
+						this.dialog.close(); }
+				toggle() { this.isOpen ? this.close() : this.open(); }
+				setValue(key, value) { if (this.dirty)
+						return; if (this.fields[key])
+						this.fields[key].value = value; this.syncAutomatic(); }
+				getValue(key) { return this.fields[key]?.value; }
+				reset(config) {
+						if (config)
+								this.defaultConfig = config;
+						this.dirty = true;
+						for (const field of Object.values(this.fields))
+								field.reset();
+						this.syncAutomatic();
+						this.setStatus('初期値に戻しました。保存すると反映します。');
+				}
+				syncAutomatic() {
+						const estimate = this.fields.abrEwmaDefaultEstimate;
+						if (estimate)
+								estimate.disabled = this.saving || !!this.fields.autoAbrEwmaDefaultEstimate?.value;
+						const hint = this.root.querySelector('.auto-hint');
+						if (hint)
+								hint.hidden = !this.fields.autoAbrEwmaDefaultEstimate?.value;
+				}
+				addField(parent, name, label, description = '', setting) {
+						const field = document.createElement(setting ? 'video-debug-slider' : 'video-debug-checkbox');
+						field.setAttribute('name', name);
+						field.setAttribute('text', label);
+						if (description)
+								field.setAttribute('details', description);
+						if (setting) {
+								const bounds = this.settingBounds[name], factor = setting.factor || 1;
+								for (const key of ['min', 'max', 'step', 'factor', 'unit']) {
+										const value = bounds && (key === 'min' || key === 'max') ? bounds[key === 'min' ? 0 : 1] / factor : setting[key];
+										if (value !== undefined)
+												field.setAttribute(key, String(value));
+								}
+						}
+						this.fields[name] = field;
+						parent.append(field);
+						field.defaultValue = Object.prototype.hasOwnProperty.call(this.defaults, name) ? this.defaults[name] : this.saved[name];
+						field.value = Object.prototype.hasOwnProperty.call(this.saved, name) ? this.saved[name] : this.defaults[name];
+						field.addEventListener('change', () => { this.dirty = true; this.syncAutomatic(); this.setStatus('未保存の変更があります。'); });
+				}
+				save() {
+						if (this.saving)
+								return;
+						for (const field of Object.values(this.fields))
+								if (!field.valid) {
+										this.setStatus('入力値を確認してください。空欄や範囲外の値は保存できません。', 'error');
+										field.shadowRoot?.querySelector('input')?.focus();
+										return;
+								}
+						if (Number(this.fields.maxMaxBufferLength.value) < Number(this.fields.maxBufferLength.value)) {
+								this.setStatus('先読み時間の上限は、先読みする時間以上にしてください。', 'error');
+								return;
+						}
+						const config = {};
+						for (const [key, field] of Object.entries(this.fields))
+								config[key] = field.value;
+						this.dispatchEvent(new CustomEvent('save', { detail: { config } }));
+				}
+				async clearCache() {
+						if (this.clearing || this.saving)
+								return;
+						this.clearing = true;
+						this.setSaving(this.saving);
+						this.setStatus('キャッシュを削除しています…');
+						try {
+								await Storage.clear();
+								this.setStatus('キャッシュを削除しました。');
+						}
+						catch {
+								this.setStatus('キャッシュの削除に失敗しました。もう一度お試しください。', 'error');
+						}
+						finally {
+								this.clearing = false;
+								this.setSaving(this.saving);
 						}
 				}
 				connectedCallback() {
-						if (!this._shadow) {
-								this._shadow = this.attachShadow({ mode: 'open' });
-								render(this.html(this._hlsConfig), this._shadow);
-								this._root = this._shadow.querySelector('.root');
-								Array.from(this._shadow.querySelectorAll('video-debug-checkbox, video-debug-slider')).forEach((elm) => {
-										this._elm[elm.name] = elm;
-										elm.defaultValue = this.hlsConfig[elm.name];
-										elm.value = this.hlsConfig[elm.name];
-										elm.addEventListener('change', (e) => {
-												this.dispatchEvent(new CustomEvent('change', { detail: { name: e.target.name, value: e.target.value } }));
-										});
-								});
-								this._root.addEventListener('click', this._onClick.bind(this));
-						}
-				}
-				setValue(key, value) {
-						if (this._elm && this._elm[key]) {
-								this._elm[key].value = value;
-						}
-				}
-				getValue(key) {
-						if (this._elm && this._elm[key]) {
-								return this._elm[key].value;
-						}
-				}
-				_onClick(e) {
-						const target = e.target;
-						if (target === this._root) {
-								this.close();
+						if (this.dialog)
 								return;
+						this.root.append(node('style', `
+				:host{color-scheme:dark;font:13px/1.45 system-ui,sans-serif}*{box-sizing:border-box}
+				.root{width:min(580px,calc(100vw - 24px));max-width:none;max-height:calc(100dvh - 32px);padding:0;border:1px solid #586a80;border-radius:9px;background:#171e2a;color:#e7edf4;box-shadow:0 8px 32px #0008;overflow:hidden}
+				.root[open]{display:flex;flex-direction:column}.root::backdrop{background:#0006}
+				header,footer{flex:none;padding:12px 16px;background:#1c2735}header{border-bottom:1px solid #39485a}h1{font-size:17px;margin:0 0 3px}.version{font-size:11px;color:#b8c7d5}.help{font-size:11px;color:#91cddd}.help:focus-visible{outline:2px solid #8ce6d5;outline-offset:3px}
+				.body{overflow:auto;min-height:0;padding:10px 16px;overscroll-behavior:contain}.intro{font-size:12px;color:#b8c7d5;margin:0 0 10px}
+				section{margin-bottom:14px}h2{font-size:14px;color:#8ce6d5;margin:6px 0;border-bottom:1px solid #415364;padding-bottom:5px}
+				footer{border-top:1px solid #39485a}.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}button{font:inherit;cursor:pointer;padding:7px 11px;border:1px solid #718397;border-radius:5px;color:#e7edf4;background:#29384a}
+				button[data-command=save]{background:#7bdecb;color:#102e2b;border-color:#7bdecb}button:hover{filter:brightness(1.14)}button:disabled{opacity:.55;cursor:wait}
+				button:focus-visible{outline:2px solid #8ce6d5;outline-offset:3px}.status{font-size:12px;min-height:18px;margin:0 0 7px;color:#c6d7e4}.status[data-kind=error]{color:#ffb3ad}.auto-hint{font-size:12px;color:#c6d7e4}.auto-hint[hidden]{display:none}
+				@media(max-height:460px){header,footer{padding:7px 12px}.body{padding:6px 12px}.intro{margin-bottom:5px}}
+				@media(pointer:coarse){button{min-height:44px}}
+			`));
+						const dialog = this.dialog = node('dialog');
+						dialog.className = 'root';
+						dialog.setAttribute('aria-labelledby', 'hls-title');
+						const header = node('header'), title = node('h1', 'HLS・再生の設定');
+						title.id = 'hls-title';
+						this.headerVersion = node('div');
+						this.headerVersion.className = 'version';
+						header.append(title, this.headerVersion);
+						const help = node('a', 'hls.js の技術資料');
+						help.href = 'https://github.com/video-dev/hls.js/blob/v1.7.3/docs/API.md#fine-tuning';
+						help.target = '_blank';
+						help.rel = 'noopener noreferrer';
+						help.className = 'help';
+						header.append(help);
+						const body = node('div');
+						body.className = 'body';
+						const intro = node('p', '保存後に反映します。バッファ・画質設定は次の動画から反映します。');
+						intro.className = 'intro';
+						body.append(intro);
+						const footer = node('footer');
+						this.status = node('p', '変更後は「保存」を押してください。');
+						this.status.className = 'status';
+						this.status.setAttribute('role', 'status');
+						this.status.setAttribute('aria-live', 'polite');
+						const actions = node('div');
+						actions.className = 'actions';
+						for (const [command, text] of [['reset', '初期値に戻す'], ['save', '保存']]) {
+								const button = node('button', text);
+								button.type = 'button';
+								button.dataset.command = command;
+								actions.append(button);
 						}
-						const commandElement = target.closest('[data-command]');
-						if (!commandElement) {
-								return;
+						footer.append(this.status, actions);
+						dialog.append(header, body, footer);
+						this.root.append(dialog);
+						for (const group of groups) {
+								const section = node('section');
+								section.append(node('h2', group.title));
+								body.append(section);
+								for (const setting of group.numbers || [])
+										this.addField(section, setting.name, setting.label, setting.details, setting);
+								for (const [key, label, description] of group.checks || [])
+										this.addField(section, key, label, description);
+								if (group.title === '自動画質') {
+										const hint = node('p', '回線速度の自動記録がオンのため、推定回線速度の手動入力は無効です。');
+										hint.className = 'auto-hint';
+										section.append(hint);
+								}
+								if (group.title === 'キャッシュ') {
+										const button = node('button', '保存済みキャッシュを削除');
+										button.type = 'button';
+										button.dataset.command = 'clear-cache';
+										section.append(button);
+								}
 						}
-						const command = commandElement.getAttribute('data-command');
-						switch (command) {
-								case 'toggle':
-										this.toggle();
-										break;
-								case 'save':
-										{
-												const config = {};
-												Object.keys(this._elm).forEach(key => {
-														config[key] = this._elm[key].value;
-												});
-												this.dispatchEvent(new CustomEvent('save', { detail: { config } }));
-										}
-										break;
-								case 'reset':
-										this.dispatchEvent(new CustomEvent('reset'));
-										break;
-								case 'clear-cache':
-										if (target.classList.contains('is-busy')) {
-												break;
-										}
-										target.classList.add('is-busy');
-										Storage.clear().catch(() => console.warn('HLS cache clear failed'));
-										setTimeout(() => target.classList.remove('is-busy'), 5000);
-										break;
-								default:
+						dialog.addEventListener('click', event => {
+								if (event.target === dialog) {
+										const rect = dialog.getBoundingClientRect(), mouse = event;
+										if (mouse.clientX < rect.left || mouse.clientX > rect.right || mouse.clientY < rect.top || mouse.clientY > rect.bottom)
+												this.close();
 										return;
-						}
-						e.preventDefault();
-						e.stopPropagation();
-				}
-				attributeChangedCallback(attrName, oldVal, newVal) {
-						if (this._elm[attrName]) {
-								this._elm[attrName].value = newVal;
-						}
-				}
-				html( /* config */) {
-						return html `
-					<style>
-						.root {
-							position: fixed;
-							width: 640px;
-							max-height: 80vh;
-							/*max-height: calc(100vh - 32px);*/
-							/*top: 100vh;*/
-							z-index: 10000;
-							overflow-x: hidden;
-							overflow-y: auto;
-							/*transform: translate(0, -32px);*/
-							background: rgba(240, 240, 240, 0.95);
-							color: #000;
-							padding: 0;
-							border: 0;
-							border-radius: 4px;
-							transition: 0.2s transform ease, 0.2s box-shadow ease, 0.2s opacity;
-							user-select: none;
-							opacity: 1;
-							box-shadow: 0px 0px 4px rgba(0, 0, 0, 0.8);
-							/* mix-blend-mode: hard-light;*/
-						}
-						.root::backdrop {
-							/*
-							background:
-								linear-gradient(to bottom, rgba(0, 0, 80, 0.5), rgba(0, 0, 0, 0.5));
-								*/
-							background: rgba(0, 0, 0, 0.2);
-						}
-						a {
-							outline: none;
-						}
-						.dialogInner {
-							padding: 0 8px 8px;
-						}
-						.title {
-							padding: 0 8px;
-							text-shadow: 2px 2px 2px #ccc;
-						}
-						.description {
-							padding: 0px 8px 8px;
-						}
-						.buttomContainer {
-							text-align: center;
-						}
-						button[data-command] {
-							width: 100px;
-							margin: 8px;
-							padding: 8px;
-							cursor: pointer;
-							white-space: nowrap;
-						}
-						button[data-command="clear-cache"] {
-							width: auto;
-						}
-						button[data-command="clear-cache"]:active,
-						button[data-command="clear-cache"].is-busy {
-							cursor: wait;
-							opacity: 0.5;
-						}
-						.video-debug-checkbox {
-							display: inline-block;
-						}
-					</style>
-					<dialog class="root">
-						<div class="dialogInner">
-						<h1 class="title">HLS 設定</h1>
-						<p class="description">
-						設定はリロード後に反映されます。
-						詳しいドキュメントは
-						<a href="https://github.com/video-dev/hls.js/blob/master/docs/API.md#fine-tuning" target="_blank">こちら</a>
-						</p>
-						<video-debug-slider
-							name="maxBufferLength"
-							text="最少バッファ量(秒)"
-							details="
-最低限バッファを確保する量 (秒数指定)
-↓と比較して大きいほうが確保される
-					"
-							min="0" max="300" step="5"></video-debug-slider>
-						<video-debug-slider
-							name="maxBufferSize"
-							text="最少バッファ量(byte)"
-							details="
-最低限バッファを確保する量 (バイト数指定)
-↑と比較して大きいほうが確保される
-					"
-							min="0" max="1000000000" step="1000"></video-debug-slider>
-						<video-debug-slider
-							name="maxMaxBufferLength"
-							text="最大バッファ量(秒)"
-							details="
-バッファを確保する量の上限 (秒数指定)。
-あまり大きな値を入れてもブラウザの制限に引っかかるので効果なし。
-"
-							min="0" max="1200" step="5"></video-debug-slider>
-						<video-debug-slider
-							name="minAutoBitrate"
-							text="下限ビットレート"
-							details="
-自動画質選択時のビットレート下限。
-これより低いビットレートは選択されなくなる。
-					"
-							min="0" max="6000000" step="100000"></video-debug-slider>
-						<video-debug-slider
-							name="startLevel"
-							details="
-自動画質再生時に最初に選択される画質。-1 はオート。
-0 からは画質の低い順
-"
-							min="-1" max="4" step="1"></video-debug-slider>
-						<video-debug-slider
-							name="abrEwmaDefaultEstimate"
-							details="
-自動画質再生時に最初に見積もる回線速度。
-大きめの値を入れると最初から高画質が選択されやすくなる。
-					"
-							min="0" max="6000000" step="1000"></video-debug-slider>
-						<video-debug-checkbox
-							name="autoAbrEwmaDefaultEstimate"
-							text="abrEwmaDefaultEstimate の値を自動で調整する"
-						></video-debug-checkbox>
-						<video-debug-checkbox
-							name="capLevelOnFPSDrop"
-							text="フレームレートが落ちたら画質を下げる"
-						></video-debug-checkbox>
-						<video-debug-checkbox
-							name="capLevelToPlayerSize"
-							text="プレイヤーの表示サイズで画質を制限する"
-						></video-debug-checkbox>
-						<video-debug-checkbox
-							name="show_video_label"
-							text="再生中に動画情報を表示"
-						></video-debug-checkbox>
-						<video-debug-checkbox
-							name="enable_db_cache"
-							text="IndexedDBに動画データをキャッシュする(実験中)"
-							details="画質ごとにキャッシュが作られるので、画質設定は「自動」以外を推奨"
-						>
-							<button type="button" data-command="clear-cache">
-								キャッシュのクリア
-							</button>
-						</video-debug-checkbox>
-						<video-debug-checkbox
-							name="debug"
-						></video-debug-checkbox>
-						<div class="buttomContainer">
-							<button type="button" data-command="save">設定の保存</button>
-							<button type="button" data-command="reset">リセット</button>
-							<button type="button" data-command="toggle">閉じる</button>
-						</div>
-						</div>
-					</dialog>`;
+								}
+								const command = event.target.closest('[data-command]')?.dataset.command;
+								if (command === 'save')
+										this.save();
+								if (command === 'reset' && !this.saving)
+										this.dispatchEvent(new CustomEvent('reset'));
+								if (command === 'clear-cache')
+										void this.clearCache();
+						});
+						for (const name of ['keydown', 'keyup'])
+								dialog.addEventListener(name, event => event.stopPropagation());
+						this.updateVersion();
+						this.syncAutomatic();
 				}
 		}
-		if (!window.customElements.get('video-debug-dialog')) {
-				window.customElements.define('video-debug-dialog', VideoDebugDialog);
-		}
+		window.customElements.define('video-debug-dialog', VideoDebugDialog);
 		return VideoDebugDialog;
 }
 const HlsRuntime = {
@@ -67709,7 +67531,7 @@ const HlsRuntime = {
 						return window[key] = Promise.resolve(window.ZenzaHLS);
 				}
 				const pending = (async () => {
-						const { Config, DEFAULT_CONFIG, nativeHlsPreference, debounce, throttle } = createHlsConfig(dependencies.Emitter, HlsLibrary.version);
+						const { Config, DEFAULT_CONFIG, settingBounds, nativeHlsPreference, debounce, throttle } = createHlsConfig(dependencies.Emitter, HlsLibrary.version);
 						let primaryVideo;
 						const library = HlsLibrary.load();
 						const Storage = createHlsStorage(Config, debounce);
@@ -67726,43 +67548,36 @@ const HlsRuntime = {
 					}`, { className: 'ZenzaHLS' });
 										render(div, container);
 								});
-								ZenzaWatch.emitter.promise('videoContextMenu.addonMenuReady.list').then(({ container }) => {
-										const li = html `<li class="command" data-command="toggleHLSDebug">HLS設定</li>`;
-										render(li, container);
-								});
 								ZenzaWatch.emitter.once('command-toggleHLSDebug', () => {
 										defineHlsDebugElements(hlsConfig, { html, render, Storage, HTMLDialogElement: window.HTMLDialogElement || window.HTMLDivElement });
 										const d = document.createElement('video-debug-dialog');
 										d.className = 'zen-family';
 										d.hlsConfig = hlsConfig;
-										d.addEventListener('change', e => {
-												if (e.detail.name === 'show_video_label') {
-														Config.set(e.detail.name, e.detail.value);
-														if (primaryVideo) {
-																primaryVideo.setAttribute('show-video-label', e.detail.value ? 'on' : 'off');
-														}
-												}
-												else if (e.detail.name === 'autoAbrEwmaDefaultEstimate') {
-														Config.set(e.detail.name, e.detail.value);
-												}
-										});
+										d.defaultConfig = DEFAULT_CONFIG;
+										d.settingBounds = settingBounds;
+										d.versionInfo = { zenza: ZenzaWatch.version, hls: window.Hls?.version || HlsLibrary.version };
 										d.addEventListener('save', e => {
-												const config = e.detail.config;
-												Object.keys(config).forEach(key => {
-														if (config[key] !== Config.get(key)) {
-																Config.set(key, config[key]);
+												const dialog = d;
+												dialog.setSaving?.(true);
+												try {
+														if (!Config.applySettings(e.detail.config)) {
+																dialog.setStatus?.('設定を保存できませんでした。入力内容とブラウザーの保存領域を確認してください。', 'error');
+																return;
 														}
-												});
-												if (primaryVideo) {
-														primaryVideo.hlsConfig = config;
+														if (primaryVideo) {
+																primaryVideo.hlsConfig = Config.raw;
+																primaryVideo.setAttribute('show-video-label', Config.get('show_video_label') ? 'on' : 'off');
+														}
+														dialog.hlsConfig = { ...Config.raw };
+														dialog.setStatus?.('保存しました。バッファ・画質設定は次の動画から反映します。', 'success');
+												}
+												finally {
+														dialog.setSaving?.(false);
 												}
 										});
 										d.addEventListener('reset', () => {
-												const config = Object.assign({}, DEFAULT_CONFIG);
-												d.reset(config);
-												if (primaryVideo) {
-														primaryVideo.hlsConfig = config;
-												}
+												d.reset(DEFAULT_CONFIG);
+												d.setStatus?.('初期値に戻しました。保存すると反映します。');
 										});
 										Config.on('update-abrEwmaDefaultEstimate', (value) => {
 												if (typeof value !== 'number' || isNaN(value)) {
@@ -67781,9 +67596,11 @@ const HlsRuntime = {
 						const init = () => {
 								console.info('ZenzaWatch integrated HLS', ZenzaWatch.version);
 								const hlsConfig = Object.assign({}, Config.raw);
-								Config.on('update', ({ key, value } = {}) => {
+								Config.on('update', ({ key } = {}) => {
 										if (key) {
-												hlsConfig[key] = value;
+												Object.assign(hlsConfig, Config.raw);
+												if (primaryVideo)
+														primaryVideo.hlsConfig = hlsConfig;
 										}
 								});
 								let lastLevel = -1;

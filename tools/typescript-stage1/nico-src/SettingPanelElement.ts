@@ -37,7 +37,6 @@ const {SettingPanelElement} = (() => {
       return html`
         <details class="player-setting">
         <summary>プレイヤーの設定</summary>
-        <button type="button" class="command" data-command="openAdvancedSettings">上級者設定を開く</button>
         <div class="control">
           <label>
             <input type="checkbox" class="checkbox"
@@ -80,7 +79,7 @@ const {SettingPanelElement} = (() => {
               data-setting-name="enableSingleton"
               ?checked=${conf.enableSingleton}>
               ZenzaWatchを起動してるタブがあればそちらで開く<br>
-              <smal>(singletonモード)</small>
+              <small>(singletonモード)</small>
           </label>
         </div>
 
@@ -194,23 +193,13 @@ const {SettingPanelElement} = (() => {
           </label>
         </div>
 
-        <div class="enableOnlyRequired control toggle">
-          <label>
-            <input type="checkbox" class="checkbox"
-              data-setting-name="video.hls.enableOnlyRequired"
-              ?checked=${conf.video.hls.enableOnlyRequired}
-              data-command="toggle-video.hls.enableOnlyRequired">
-              HLSが必須の動画だけHLSを使用する (※ HLSが重い環境用)
-          </label>
-        </div>
-
         <div class="control">
           <label>
             <input type="checkbox" class="checkbox" data-setting-name="touch.enable"
             data-command="toggle-touchEnable"
             ?checked=${conf.touch.enable}>
               タッチパネルのジェスチャを有効にする
-              <smal>(2本指左右シーク・上下で速度変更/3本指で動画切替)</small>
+              <small>(2本指左右シーク・上下で速度変更/3本指で動画切替)</small>
           </label>
         </div>
 
@@ -247,7 +236,7 @@ const {SettingPanelElement} = (() => {
             <small>※ 一部レイアウトが崩れます</small>
           </label>
         </div>
-      </div>
+      </details>
       `;
     }
     static getCommentSettingMenu(html?: Loose, conf?: Loose) {
@@ -302,7 +291,7 @@ const {SettingPanelElement} = (() => {
           <label>
           <span class="info">入力例: 「'游ゴシック', 'メイリオ', '戦国TURB'」</span>
             <input type="text" class="textInput" value=${conf.baseFontFamily}
-              data-setting-name="baseFontFamily">
+              aria-label="フォント名" data-setting-name="baseFontFamily">
           </label>
         </div>
         <div class="control">
@@ -311,7 +300,7 @@ const {SettingPanelElement} = (() => {
           <span class="info">※ リロード後に反映</span>
           <input type="text" class="textInput"
             pattern="(#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|^[a-zA-Z]+$)"
-            data-setting-name="commentLayer.ownerCommentShadowColor"
+            aria-label="投稿者コメントの影の色" data-setting-name="commentLayer.ownerCommentShadowColor"
             value=${conf.commentLayer.ownerCommentShadowColor}
             >
           </label>
@@ -404,23 +393,6 @@ const {SettingPanelElement} = (() => {
     // Task 077: 画面フィルター（明るさ・色・反転）。細かい調整は動画を見ながら
     // できる専用パネル（ScreenFilterPanel）で行う。ここではON/OFF・プリセット・反映先だけ。
     static getScreenFilterSettingMenu(html?: Loose, conf?: Loose) {
-      const presets = [
-        ['standard', '標準（フィルターなし）'],
-        ['dark', '暗い動画を見やすく'],
-        ['sharp', 'くっきり'],
-        ['vivid', 'ビビッド'],
-        ['faded', '色あせ補正'],
-        ['cinema', 'シネマ（銀残し風）'],
-        ['film', 'フィルム（レトロ）'],
-        ['pastel', 'パステル'],
-        ['cool', '寒色'],
-        ['warm', '暖色'],
-        ['eyeCare', '目に優しい（夜）'],
-        ['gold', 'ゴールド'],
-        ['mono', '白黒'],
-        ['monoHigh', '白黒（硬調）'],
-        ['invert', '反転（暗転）']
-      ];
       return html`
         <details class="screen-filter-setting">
         <summary>画面フィルター（映像の明るさ・色・反転）</summary>
@@ -429,23 +401,8 @@ const {SettingPanelElement} = (() => {
             動画の映像だけに明るさ・コントラスト・ガンマなどの補正を掛けます（コメントやボタンには掛かりません）。
             設定は全部の動画で共通で、次に開いた時も残ります。
           </p>
-          <p class="setting-note">
-            細かい調整は、再生画面の下のバーにある「きらめき（✦）」のボタンから、動画を見ながらできます。
-          </p>
-        </div>
-        <div class="control">
-          <p class="setting-note">
-            プリセット「標準」の時がOFF（何も処理しません）で、それ以外を選ぶと自動でONになります。
-          </p>
-        </div>
-        <div class="control">
-          <h3>かんたん設定（プリセット）</h3>
-          <p class="setting-note">迷ったらここから選んでください。押すとすぐに切り替わります。</p>
-          <div class="screen-filter-presets">
-            ${presets.map(([id, label]) => html`
-              <button class="screen-filter-preset-button"
-                data-command="screenFilter-preset" data-param=${id}>${label}</button>`)}
-          </div>
+          <button type="button" class="screen-filter-open-button" data-command="toggle-screenFilterPanel">画面フィルターを開く</button>
+          <p class="setting-note">プリセット・マイプリセット・数値調整は専用パネルでまとめて操作できます。適用中のプリセットをもう一度押すと標準に戻ります。</p>
         </div>
         <div class="control">
           <label>
@@ -549,7 +506,8 @@ const {SettingPanelElement} = (() => {
 
 
           <div class="control" style="text-align: center;">
-            <h3>表示するコメント</h3>
+            <h3>表示するコメント（投稿区分）</h3>
+            <p class="setting-note">投稿区分と下の配信スレッドの両方がONのコメントを表示します。</p>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.fork0"
@@ -578,7 +536,8 @@ const {SettingPanelElement} = (() => {
                 value="">
                 AIキャラクターコメント
             </label>
-            <h4>種類</h4>
+            <h4>配信スレッドの種類</h4>
+            <p class="setting-note">同じ名前でも投稿区分とは別の条件です。通常は両方をONにしてください。</p>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.defaultThread"
@@ -666,21 +625,21 @@ const {SettingPanelElement} = (() => {
             <label>
               <textarea
                 class="filterEdit"
-                data-setting-name="wordFilter" data-type="array"
+                aria-label="NGワード" data-setting-name="wordFilter" data-type="array"
                 >${word}</textarea>
             </label>
             <h3>NGコマンド</h3>
             <label>
               <textarea
                 class="filterEdit"
-                data-setting-name="commandFilter" data-type="array"
+                aria-label="NGコマンド" data-setting-name="commandFilter" data-type="array"
                 >${command}</textarea>
             </label>
             <h3>NGユーザー</h3>
             <label>
               <textarea
                 class="filterEdit"
-                data-setting-name="userIdFilter" data-type="array"
+                aria-label="NGユーザー" data-setting-name="userIdFilter" data-type="array"
                 >${userId}</textarea>
             </label>
           </div>
@@ -693,10 +652,20 @@ const {SettingPanelElement} = (() => {
       const conf = (props as Loose).config.props;
       return html`
         <style>
+          .dialog.is-open .dialog-background {animation:none;}
+          .dialog-background {border:1px solid #455066;color:#e9edf5;box-shadow:0 8px 30px #0008;}
+          .dialog-inner {background:#171e2af7;color:#e9edf5;border:1px solid #455066;padding:14px;}
+          summary {background:#253346;color:#edf4ff;text-shadow:none;font-size:15px;padding:10px 12px;margin:0 0 6px;border-radius:6px;}
+          details {margin:0 0 8px;}
+          h3,h4 {background:#253346;color:#edf4ff;text-shadow:none;font-size:13px;padding:7px 9px;}
+          button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible {outline:2px solid #84dccd;outline-offset:3px;}
+          .settings-navigation {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+          .settings-navigation .setting-note {flex-basis:100%;margin:0;}
+          .settings-navigation button {background:#303c51;color:#edf4ff;border:1px solid #53627b;border-radius:6px;padding:7px 10px;font:inherit;}
           label {
             display: block;
-            margin: 8px;
-            padding: 8px;
+            margin: 5px;
+            padding: 5px;
             cursor: pointer;
           }
           label.short {
@@ -708,15 +677,15 @@ const {SettingPanelElement} = (() => {
             background: rgba(80, 80, 80, 0.3);
           }
           input[type=checkbox], input[type=radio] {
-            transform: scale(2);
+            accent-color:#84dccd;
             margin-right: 8px;
           }
           input[type=text], input[type=number], select {
             border-radius: 4px;
             border: 1px solid currentcolor;
-            font-size: 150%;
-            padding: 8px;
-            background: transparent;
+            font-size: 13px;
+            padding: 6px;
+            background: #202c3d;
             color: currentcolor;
           }
           input[type=range] {
@@ -730,29 +699,21 @@ const {SettingPanelElement} = (() => {
           .setting-note {
             margin: 4px 8px;
             font-size: 12px;
-            opacity: 0.8;
+            color:#bdcadb;line-height:1.6;
           }
-          .screen-filter-open-button,
-          .screen-filter-preset-button {
+          .screen-filter-open-button {
             margin: 4px;
             padding: 8px 12px;
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-            color: #000;
-            background: #ccc;
+            color: #edf4ff;
+            background: #303c51;
             border: 0;
           }
-          .screen-filter-open-button:hover,
-          .screen-filter-preset-button:hover {
-            background: #eee;
+          .screen-filter-open-button:hover {
+            background: #40516b;
           }
-          .screen-filter-presets {
-            display: flex;
-            flex-wrap: wrap;
-            margin: 0 4px;
-          }
-
           .import-export {
             padding: 8px;
             text-align: center;
@@ -763,20 +724,9 @@ const {SettingPanelElement} = (() => {
             display: inline-block;
           }
 
-          .import-config-file-select {
-            position: absolute;
-            text-indent: -9999px;
-            width: 160px;
-            padding: 8px;
-            opacity: 0;
-            cursor: pointer;
-          }
-
-          .import-config-file-select-label {
-            pointer-events: none;
-            user-select: none;
-          }
-          .import-config-file-select-label,
+          .import-config-file-select {display:block;max-width:100%;margin-top:6px;font:inherit;color:inherit;}
+          .import-config-file-select::file-selector-button {background:#303c51;color:#edf4ff;border:1px solid #53627b;border-radius:4px;padding:7px;cursor:pointer;}
+          .import-config-file-select-label {display:block;text-align:left;}
           .export-config-button {
             display: inline-block;
             width: 160px;
@@ -784,12 +734,18 @@ const {SettingPanelElement} = (() => {
             border-radius: 4px;
             cursor: pointer;
             font-size: 14px;
-            color: #000;
-            background: #ccc;
+            color: #edf4ff;
+            background: #303c51;
             border: 0;
           }
 
         </style>
+        <div class="settings-navigation">
+          <strong>設定</strong>
+          <button type="button" class="command" data-command="openAdvancedSettings">上級者設定を開く</button>
+          <button type="button" class="command" data-command="toggleHLSDebug">HLS設定を開く</button>
+          <p class="setting-note">コメント増量・ここまで見た・しおり・ABリピート・通知履歴などの詳細設定も上級者設定にあります。</p>
+        </div>
         <div data-revision="${(state as Loose).revision}">
           ${this.getPlayerSettingMenu(html, conf)}
           ${this.getCommentSettingMenu(html, conf)}
@@ -799,13 +755,14 @@ const {SettingPanelElement} = (() => {
         <details>
           <summary>設定のインポート・エクスポート</summary>
           <div class="import-export">
-            <button class="export-config-button" data-command="export-config">ファイルに保存</button>
+            <button type="button" class="export-config-button" data-command="export-config">ファイルに保存</button>
+            <label class="import-config-file-select-label">ファイルから読み込む
             <input type="file"
               @change=${(events as Loose).onImportFileSelect}
               class="import-config-file-select"
-              accept=".json"
+              accept=".json" aria-label="設定ファイルを読み込む"
               data-command="nop">
-            <div class="import-config-file-select-label">ファイルから読み込む</div>
+            </label>
           </div>
         </details>
         </div>
@@ -819,25 +776,27 @@ const {SettingPanelElement} = (() => {
         onImportFileSelect: this.onImportFileSelect.bind(this)
       });
       this._boundEnableFilterConfig = null;
-      this._onEnableFilterConfigUpdate = () => {
+      this._onEnableFilterConfigUpdate = (key: string) => {
+        if (!this.isOpen) { return; }
+        const root = (this as Loose)._root;
+        if (!root || !Array.from(root.querySelectorAll('[data-setting-name]')).some((node: Loose) => node.dataset.settingName === key)) { return; }
         this.state.revision++;
-        if (this.isOpen) { this.requestRender(); }
+        this.requestRender();
       };
     }
 
     _bindEnableFilterConfig(config?: Loose) {
       if (this._boundEnableFilterConfig === config) { return; }
-      this._boundEnableFilterConfig?.offkey?.('enableFilter', this._onEnableFilterConfigUpdate);
-      this._boundEnableFilterConfig?.offkey?.('backComment', this._onEnableFilterConfigUpdate);
+      this._boundEnableFilterConfig?.off?.('update', this._onEnableFilterConfigUpdate);
       this._boundEnableFilterConfig = config || null;
-      this._boundEnableFilterConfig?.onkey?.('enableFilter', this._onEnableFilterConfigUpdate);
-      // The advanced settings and shortcuts share the same Config key.
-      // Re-render the open player setting panel when either changes it.
-      this._boundEnableFilterConfig?.onkey?.('backComment', this._onEnableFilterConfigUpdate);
+      this._boundEnableFilterConfig?.on?.('update', this._onEnableFilterConfigUpdate);
     }
 
     async connectedCallback() {
       await super.connectedCallback();
+      const dialog = (this as Loose)._dialog;
+      dialog?.setAttribute('role', 'dialog');
+      dialog?.setAttribute('aria-label', '設定');
       this._bindEnableFilterConfig(this.config);
     }
 
@@ -856,6 +815,14 @@ const {SettingPanelElement} = (() => {
         this._bindEnableFilterConfig(v);
         this.requestRender();
       }
+    }
+
+    onCommand(e?: Loose) {
+      if (['toggle-screenFilterPanel', 'openAdvancedSettings', 'toggleHLSDebug'].includes(e.detail?.command)) {
+        (this as Loose).close();
+        return; // The original command continues to its existing player/root owner.
+      }
+      super.onCommand(e);
     }
 
     onUIEvent(e?: Loose) {
@@ -880,8 +847,21 @@ const {SettingPanelElement} = (() => {
       if (elm.tagName === 'INPUT' && elm.type === 'checkbox') {
         value = elm.checked;
       } else {
-        if (['number', 'boolean', 'json'].includes(type)) {
-          value = JSON.parse(value);
+        if (type === 'number') {
+          elm.setCustomValidity?.('');
+          const parsed = Number(value);
+          if (value.trim() === '' || !Number.isFinite(parsed) ||
+              (elm.min !== '' && elm.min !== undefined && parsed < Number(elm.min)) ||
+              (elm.max !== '' && elm.max !== undefined && parsed > Number(elm.max)) ||
+              (elm.validity && !elm.validity.valid)) {
+            elm.setCustomValidity?.('指定された範囲の数値を入力してください。');
+            elm.reportValidity?.();e.stopPropagation();return;
+          }
+          value = parsed;
+        } else if (['boolean', 'json'].includes(type)) {
+          try { value = JSON.parse(value); } catch {
+            elm.setCustomValidity?.('入力内容を確認してください。');elm.reportValidity?.();e.stopPropagation();return;
+          }
         } else if (type === 'array') {
           value = value.split('\n');
         }
@@ -901,9 +881,8 @@ const {SettingPanelElement} = (() => {
       e.stopPropagation();
 
       const file = e.target.files[0];
-      if (!file || !/\.config\.json$/.test(file.name)) {
-        return;
-      }
+      if (!file) { return; }
+      if (!/\.json$/i.test(file.name)) { alert('JSON形式の設定ファイルを選択してください。');e.target.value='';return; }
       if (!confirm(`ファイル "${file.name}" で書き換えますか？`)) {
         return;
       }

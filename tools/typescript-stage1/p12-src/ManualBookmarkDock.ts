@@ -1,6 +1,6 @@
 /**
- * An optional, closed-by-default manual-bookmark dock in the existing info tab.
- * It owns only its newly created details element and subscription; native
+ * A closed-by-default floating manual-bookmark panel with a static heading.
+ * Its hidden lifecycle home remains in the existing info tab; native
  * seek range, automatic markers, thumbnails and scene-search remain untouched.
  */
 import {ManualBookmarkPanel} from './ManualBookmarkPanel.ts';
@@ -11,14 +11,13 @@ import type {ManualBookmarkActionResult} from './ManualBookmarkSession.ts';
 const contentSelector=
   '.zenzaWatchVideoInfoPanel .tabs.videoInfoTab .zenzaWatchVideoInfoPanelContent';
 export class ManualBookmarkDock {
-  private readonly node:HTMLDetailsElement;
+  private readonly node:HTMLElement;
   private readonly root:HTMLElement;
   private readonly panel:ManualBookmarkPanel;
   private readonly session:ManualBookmarkSession;
   private readonly keyHandler:(event:KeyboardEvent)=>void;
   private readonly clickHandler:(event:MouseEvent)=>void;
   private readonly visibilityHandler:()=>void;
-  private readonly toggleHandler:()=>void;
   private readonly outsideHandler:(event:Event)=>void;
   private disposed=false;
   private host:HTMLElement|null=null;
@@ -95,11 +94,11 @@ export class ManualBookmarkDock {
     if(this.trigger)this.resizeObserver?.observe(this.trigger);
     this.observeLayoutChain(host);this.observeLayoutChain(this.trigger);
     host.append(this.node);this.node.hidden=false;this.node.classList.add('zw-points-floating');
-    this.panel.refreshPreferences();this.node.open=true;this.panel.setVisible(true);this.trigger?.setAttribute('aria-expanded','true');
+    this.panel.refreshPreferences();this.panel.setVisible(true);this.trigger?.setAttribute('aria-expanded','true');
     this.position();
     // Refresh shared IndexedDB only on explicit reopen, without polling.
     void this.session.refreshIfIdle();
-    this.node.querySelector<HTMLElement>('summary')?.focus();
+    this.node.querySelector<HTMLElement>('.zw-points-heading')?.focus({preventScroll:true});
     this.animate(true);
   }
   close(restoreFocus=true):void {
@@ -110,11 +109,11 @@ export class ManualBookmarkDock {
       this.trigger?.setAttribute('aria-expanded','false');
       if(restoreFocus&&this.trigger?.isConnected)this.trigger.focus({preventScroll:true});
       this.animate(false,()=>{
-        this.node.open=false;this.node.hidden=true;this.node.inert=false;
+        this.node.hidden=true;this.node.inert=false;
         this.node.classList.remove('zw-points-floating');this.home.append(this.node);
         this.floating=false;this.closing=false;this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;
       });
-    }else{this.node.open=false;}
+    }else{this.node.hidden=true;}
   }
   get bookmarkStatus():string{return this.session.snapshot.status;}
   get bookmarkNeedsReload():boolean{return this.session.needsLoadRetry;}
@@ -130,10 +129,11 @@ export class ManualBookmarkDock {
     deps:ManualBookmarkPanelDependencies) {
     this.session=session;this.home=target;
     const doc=target.ownerDocument;
-    const node=this.node=doc.createElement('details');
+    const node=this.node=doc.createElement('section');
+    node.setAttribute('role','dialog');node.setAttribute('aria-label','しおり・ABリピート');
     node.className='zenzaManualBookmarkDock';node.hidden=true;
     node.dataset.bookmarkOwner='manual';
-    const summary=doc.createElement('summary');
+    const summary=doc.createElement('h2');summary.className='zw-points-heading';summary.tabIndex=-1;
     summary.textContent='しおり・ABリピート';
     node.append(summary);
     const root=this.root=doc.createElement('section');
@@ -173,18 +173,16 @@ export class ManualBookmarkDock {
     // When another tab was editing the same video, a visible open Dock
     // checks the latest record. Broadcast no video IDs or bookmark content.
     this.visibilityHandler=()=>{
-      if(this.disposed||!this.node.open||
+      if(this.disposed||this.node.hidden||
          doc.visibilityState!=='visible')return;
       void this.session.refreshIfIdle();
     };
     this.outsideHandler=event=>{
-      if(this.disposed||!this.node.open)return;
+      if(this.disposed||this.node.hidden)return;
       const path=event.composedPath();
       if(path.includes(this.node)||(this.trigger&&path.includes(this.trigger)))return;
       this.close(false);
     };
-    this.toggleHandler=()=>this.panel?.setVisible(this.node.open&&!this.closing);
-    node.addEventListener('toggle',this.toggleHandler);
     try {
       this.panel=new ManualBookmarkPanel(root,session,deps);
       this.panel.setVisible(false);
@@ -192,7 +190,6 @@ export class ManualBookmarkDock {
       doc.addEventListener('pointerdown',this.outsideHandler,true);
       doc.addEventListener('click',this.outsideHandler,true);
     }catch(error){
-      node.removeEventListener('toggle',this.toggleHandler);
       node.removeEventListener('keydown',this.keyHandler);
       node.removeEventListener('keyup',this.keyHandler);
       node.removeEventListener('click',this.clickHandler);
@@ -209,25 +206,25 @@ export class ManualBookmarkDock {
     }
     return new ManualBookmarkDock(target,session,deps);
   }
-  get element():HTMLDetailsElement{return this.node;}
+  get element():HTMLElement{return this.node;}
   activate(videoId:string,duration:number):Promise<ManualBookmarkActionResult>{
     if(this.disposed)throw new Error('Manual bookmark dock disposed');
     return this.session.activate(videoId,duration);
   }
   deactivate():void{
     if(this.disposed)return;
-    this.cancelAnimation();this.closing=false;this.node.open=false;this.node.hidden=true;this.node.inert=false;
+    this.cancelAnimation();this.closing=false;this.node.hidden=true;this.node.inert=false;
     if(this.floating){this.node.classList.remove('zw-points-floating');this.home.append(this.node);this.floating=false;}
     this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;this.trigger?.setAttribute('aria-expanded','false');this.panel.setVisible(false);this.session.deactivate();
   }
   private static readonly styles=`
     .zenzaManualBookmarkDock[hidden]{display:none!important}
     .zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
-    .zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
-    .zenzaManualBookmarkDock[open]{overflow:auto}
+    .zenzaManualBookmarkDock>.zw-points-heading{margin:0;padding:10px 14px;font-size:inherit;font-weight:700;color:#f4f7ff}
+    .zenzaManualBookmarkDock:not([hidden]){overflow:auto}
     .zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:400px;transition:width .18s ease;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
     .zenzaManualBookmarkDockContent{padding:0 14px 10px}
-    .zenzaManualBookmarkDock:not(.zw-library-wide)>summary{padding-right:104px}
+    .zenzaManualBookmarkDock:not(.zw-library-wide)>.zw-points-heading{padding-right:104px}
     .zenzaManualBookmarkDock:not(.zw-library-wide) .zw-library-nav{position:absolute;right:12px;top:5px;margin:0;padding:4px 9px;font-size:12px}
     .zenzaManualBookmarkDock .zw-point-section[data-point-section="repeat"]{margin-top:0;padding-top:0;border-top:0}
     .zenzaManualBookmarkDock [data-point-section="repeat"]>h3{display:none}
@@ -305,7 +302,7 @@ export class ManualBookmarkDock {
     .zenzaManualBookmarkDock .zw-point-range-inputs button{grid-column:1/-1;width:100%;margin:0;padding:5px 2px;font-size:12px}
     @keyframes zw-bookmark-reveal{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
     @media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock.zw-points-floating{transition:none}.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:none}}
-    @media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock:not(.zw-library-wide)>summary{box-sizing:border-box;min-height:54px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
+    @media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock:not(.zw-library-wide)>.zw-points-heading{box-sizing:border-box;min-height:54px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
     `;
   dispose():void {
     if(this.disposed)return;
@@ -317,7 +314,6 @@ export class ManualBookmarkDock {
     this.node.ownerDocument.removeEventListener('visibilitychange',this.visibilityHandler);
     this.node.ownerDocument.removeEventListener('pointerdown',this.outsideHandler,true);
     this.node.ownerDocument.removeEventListener('click',this.outsideHandler,true);
-    this.node.removeEventListener('toggle',this.toggleHandler);
     this.resizeObserver?.disconnect();this.layoutObserver?.disconnect();this.observedLayout.clear();this.bottomReference=null;
     this.node.ownerDocument.defaultView?.removeEventListener('resize',this.resizeHandler);
     this.node.ownerDocument.removeEventListener('scroll',this.scrollHandler,true);

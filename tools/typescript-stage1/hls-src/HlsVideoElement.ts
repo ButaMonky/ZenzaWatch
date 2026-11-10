@@ -854,15 +854,9 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
         }
 
         set hlsConfig(config: Loose) {
-          this._hlsConfig = config;
-          if (this._hls) {
-            const hls = this._hls;
-            Object.keys(config).forEach(prop => {
-              if (prop in hls.config) {
-                hls.config[prop] = config[prop];
-              }
-            });
-          }
+          // Queue a complete snapshot for the next engine. Changing a live hls.config
+          // cannot reliably reconfigure its controllers and must not interrupt playback.
+          this._hlsConfig = Object.assign({}, this._hlsConfig, config);
         }
 
         get hls() {
@@ -914,7 +908,7 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
           if (!this._hls) {
             this._fragmentLoader = createFragmentLoader(Hls);
             this._hlsConfig.fLoader = this._fragmentLoader;
-            const hls: HlsStartupEngine = new Hls(this._hlsConfig);
+            const hls: HlsStartupEngine = new Hls(Object.assign({}, this._hlsConfig));
             this._hls = hls;
 
             try {

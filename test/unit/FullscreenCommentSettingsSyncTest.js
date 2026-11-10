@@ -12,10 +12,11 @@ function bootPlayerPanel(){
     'SettingPanelElement',ctx);
   const listeners=new Map();
   const config={props:{backComment:false},listeners,
-    onkey(key,fn){if(!listeners.has(key)){listeners.set(key,new Set());}listeners.get(key).add(fn);},
-    offkey(key,fn){listeners.get(key)?.delete(fn);}
+    on(key,fn){if(!listeners.has(key)){listeners.set(key,new Set());}listeners.get(key).add(fn);},
+    off(key,fn){listeners.get(key)?.delete(fn);}
   };
   const panel=new Panel();
+  panel._root={querySelectorAll:()=>['backComment','enableFilter'].map(settingName=>({dataset:{settingName}}))};
   panel.config=config;
   return {panel,config,listeners};
 }
@@ -23,8 +24,7 @@ function bootPlayerPanel(){
 describe('Task401 player and advanced full-viewport setting synchronization',()=>{
   it('binds both player toggles to the same Config key and watches external updates',()=>{
     const {panel,config,listeners}=bootPlayerPanel();
-    assert.strictEqual(listeners.get('backComment')?.size,1);
-    assert.strictEqual(listeners.get('enableFilter')?.size,1);
+    assert.strictEqual(listeners.get('update')?.size,1);
     let eventStopped=false;
     panel.onChange({
       target:{dataset:{settingName:'backComment'},tagName:'INPUT',
@@ -35,12 +35,11 @@ describe('Task401 player and advanced full-viewport setting synchronization',()=
     assert.strictEqual(eventStopped,true);
     const count=panel.renders;
     config.props.backComment=false;
-    listeners.get('backComment').forEach(fn=>fn(false));
+    listeners.get('update').forEach(fn=>fn('backComment',false));
     assert.strictEqual(panel.renders,count+1);
     assert.strictEqual(panel.state.revision>0,true);
     panel._bindEnableFilterConfig(null);
-    assert.strictEqual(listeners.get('backComment').size,0);
-    assert.strictEqual(listeners.get('enableFilter').size,0);
+    assert.strictEqual(listeners.get('update').size,0);
   });
   it('uses one persistent key with distinct names and the original shortcut dispatch',()=>{
     const config=read('src/Config.js');

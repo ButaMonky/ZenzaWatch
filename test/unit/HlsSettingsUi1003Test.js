@@ -1,0 +1,26 @@
+const assert=require('assert'),fs=require('fs'),vm=require('vm');
+const {stripTypeScriptTypes}=require('node:module');
+const {JSDOM}=require('jsdom');
+function fixture(clear=async()=>{},bounds={}){
+ const window=new JSDOM('<!doctype html><body>',{url:'https://example.invalid/'}).window;
+ const context=vm.createContext({window,document:window.document,HTMLElement:window.HTMLElement,CustomEvent:window.CustomEvent,Event:window.Event,console,setTimeout,clearTimeout,exports:{}});
+ let code=stripTypeScriptTypes(fs.readFileSync('tools/typescript-stage1/hls-src/HlsDebugElements.ts','utf8')).replace(/^import .*;\s*$/gm,'').replace('export function defineHlsDebugElements','function defineHlsDebugElements');
+ vm.runInContext(code+'\nexports.define=defineHlsDebugElements;',context);
+ const html=(s,...v)=>s.reduce((a,t,i)=>a+t+(v[i]??''),'');context.exports.define({}, {html,render:(s,n)=>n.innerHTML=s,Storage:{clear},HTMLDialogElement:window.HTMLDialogElement});
+ const d=window.document.createElement('video-debug-dialog');d.defaultConfig={maxBufferLength:30,maxBufferSize:60000000,maxMaxBufferLength:600,minAutoBitrate:0,startLevel:-1,abrEwmaDefaultEstimate:500000,autoAbrEwmaDefaultEstimate:false,debug:false};
+ d.settingBounds=bounds;d.hlsConfig={...d.defaultConfig,abrEwmaDefaultEstimate:50000000,debug:true,minAutoBitrate:5000000};window.document.body.append(d);
+ const row=k=>d.shadowRoot.querySelector('[name="'+k+'"]'),input=k=>row(k).shadowRoot.querySelector('input[type=number]');
+ return {window,d,row,input,close:()=>window.close()};
+}
+describe('Task1003 HLS settings drafts and controls',()=>{
+ it('keeps high automatic estimates consistent and edits Mbps in base units',()=>{const h=fixture();try{const n=h.input('abrEwmaDefaultEstimate');assert(n);assert.equal(n.value,'50');assert.equal(h.row('abrEwmaDefaultEstimate').shadowRoot.querySelector('input[type=range]').value,'50');n.value='12.5';n.dispatchEvent(new h.window.Event('input'));assert.equal(h.row('abrEwmaDefaultEstimate').value,12500000);}finally{h.close();}});
+ it('resets false and zero defaults only in the draft',()=>{const h=fixture();try{h.d.reset(h.d.defaultConfig);assert.equal(h.row('debug').value,false);assert.equal(h.row('minAutoBitrate').value,0);assert.equal(h.d.hlsConfig.debug,true);assert.equal(h.row('abrEwmaDefaultEstimate').defaultValue,500000);}finally{h.close();}});
+ it('disables manual estimate while automatic is checked without changing stored data',()=>{const h=fixture();try{const c=h.row('autoAbrEwmaDefaultEstimate').shadowRoot.querySelector('input');c.checked=true;c.dispatchEvent(new h.window.Event('change'));assert(h.input('abrEwmaDefaultEstimate').disabled);assert.equal(h.d.hlsConfig.autoAbrEwmaDefaultEstimate,false);}finally{h.close();}});
+ it('emits validated drafts on Save, rejects invalid numbers and preserves failure inputs',()=>{const h=fixture();try{let saved;h.d.addEventListener('save',e=>saved=e.detail.config);const n=h.input('maxBufferLength');n.value='';n.dispatchEvent(new h.window.Event('input'));h.d.shadowRoot.querySelector('[data-command=save]').click();assert.equal(saved,undefined);n.value='35';n.dispatchEvent(new h.window.Event('input'));h.d.shadowRoot.querySelector('[data-command=save]').click();assert.equal(saved.maxBufferLength,35);h.d.setStatus('保存できませんでした','error');assert.equal(n.value,'35');assert(h.d.shadowRoot.querySelector('[role=status]').textContent.includes('保存できません'));}finally{h.close();}});
+ it('waits for cache clearing and reports failures instead of a fixed delay',async()=>{let reject;const h=fixture(()=>new Promise((_,r)=>reject=r));try{const button=h.d.shadowRoot.querySelector('[data-command=clear-cache]');button.click();assert(button.disabled);reject(Error('offline'));await new Promise(r=>setImmediate(r));assert(!button.disabled);assert(h.d.shadowRoot.querySelector('[role=status]').textContent.includes('失敗'));}finally{h.close();}});
+ it('does not overwrite manual drafts with live bandwidth updates',()=>{const h=fixture();try{const n=h.input('abrEwmaDefaultEstimate');n.value='10';n.dispatchEvent(new h.window.Event('input'));h.d.setValue('abrEwmaDefaultEstimate',40000000);assert.equal(n.value,'10');h.d.hlsConfig={...h.d.hlsConfig,abrEwmaDefaultEstimate:20000000};assert.equal(n.value,'20');}finally{h.close();}});
+ it('uses runtime bounds and keeps numerical zero defaults',()=>{const h=fixture(undefined,{maxBufferLength:[0,200]});try{assert.equal(h.input('maxBufferLength').max,'200');h.d.setSaving(true);assert(h.input('maxBufferLength').disabled);h.d.setSaving(false);assert(!h.input('maxBufferLength').disabled);h.d.reset({...h.d.defaultConfig,abrEwmaDefaultEstimate:0});assert.equal(h.input('abrEwmaDefaultEstimate').value,'0');}finally{h.close();}});
+
+ it('retains an exact measured bandwidth when automatic mode is turned off',()=>{const h=fixture();try{h.d.hlsConfig={...h.d.hlsConfig,abrEwmaDefaultEstimate:12345678,autoAbrEwmaDefaultEstimate:true};const c=h.row('autoAbrEwmaDefaultEstimate').shadowRoot.querySelector('input');c.checked=false;c.dispatchEvent(new h.window.Event('change'));let saved;h.d.addEventListener('save',e=>saved=e.detail.config);h.d.shadowRoot.querySelector('[data-command=save]').click();assert(saved);assert.equal(saved.abrEwmaDefaultEstimate,12345678);}finally{h.close();}});
+
+});

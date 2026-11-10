@@ -136,7 +136,7 @@ describe('P12 real compiled toolbar command to dock integration (#214)',()=>{
     const h=fixture();h.view._initializeVideoInfoPanel();const dock=h.view.manualBookmarkDock.element;
     dock.ownerDocument.defaultView.matchMedia=()=>({matches:true});
     let animations=0;dock.animate=()=>{animations++;throw new Error('Reduced motion must skip animate');};
-    h.click();h.click();assert.equal(animations,0);assert.equal(dock.open,false);assert.equal(dock.inert,false);h.close();
+    h.click();h.click();assert.equal(animations,0);assert.equal(dock.hidden,true);assert.equal(dock.inert,false);h.close();
   });
   it('animates the real dock without letting a stale close hide a reopened panel',()=>{
     const h=fixture();h.view._initializeVideoInfoPanel();
@@ -146,7 +146,7 @@ describe('P12 real compiled toolbar command to dock integration (#214)',()=>{
     h.click();assert.equal(dock.inert,true);assert.equal(h.button.getAttribute('aria-expanded'),'false');
     const closing=animations[1];h.click();assert.equal(closing.cancelled,true);assert.equal(dock.inert,false);
     assert.equal(dock.parentElement,h.container);
-    h.click();animations[3].onfinish();assert.equal(dock.open,false);
+    h.click();animations[3].onfinish();assert.equal(dock.hidden,true);
     assert.equal(dock.classList.contains('zw-points-floating'),false);
     h.click();h.close();assert.equal(animations[4].cancelled,true);
   });
@@ -157,13 +157,13 @@ describe('P12 real compiled toolbar command to dock integration (#214)',()=>{
     const pointer=target=>target.dispatchEvent(new win.MouseEvent('pointerdown',{bubbles:true,cancelable:true}));
     assert.equal(dock.querySelector('[data-points-close]'),null);
     pointer(dock.querySelector('[data-point-tab]')); pointer(h.button.querySelector('span'));
-    assert.equal(dock.open,true);
+    assert.equal(dock.hidden,false);
     outside.focus(); assert.equal(pointer(outside),true);
-    assert.equal(dock.open,false); assert.equal(h.button.getAttribute('aria-expanded'),'false');
+    assert.equal(dock.hidden,true); assert.equal(h.button.getAttribute('aria-expanded'),'false');
     assert.equal(doc.activeElement,outside);
     h.click(); outside.focus(); outside.click();
-    assert.equal(dock.open,false); assert.equal(doc.activeElement,outside);
-    h.click(); pointer(h.button); h.click(); assert.equal(dock.open,false);
+    assert.equal(dock.hidden,true); assert.equal(doc.activeElement,outside);
+    h.click(); pointer(h.button); h.click(); assert.equal(dock.hidden,true);
     h.close();
   });
   it('opens a real bookmark dock, then restores it to the info tab on a second click',()=>{
@@ -172,16 +172,16 @@ describe('P12 real compiled toolbar command to dock integration (#214)',()=>{
     const original=h.container.querySelector('.zenzaWatchVideoInfoPanelContent');
     const mounted=h.container.querySelector('.zenzaManualBookmarkDock');
     assert(mounted,'the production Dock must mount after video info');
-    assert.equal(mounted.open,false);
+    assert.equal(mounted.hidden,true);
     assert.equal(original.contains(mounted),true);
     h.click();
-    assert.equal(mounted.open,true);
+    assert.equal(mounted.hidden,false);
     assert.equal(mounted.classList.contains('zw-points-floating'),true);
     assert.equal(mounted.parentElement,h.container);
     assert.equal(h.button.getAttribute('aria-expanded'),'true');
     assert(mounted.querySelector('[data-point-tab="repeat"]'),'AB tab exists');
     h.click();
-    assert.equal(mounted.open,false);
+    assert.equal(mounted.hidden,true);
     assert.equal(original.contains(mounted),true);
     assert.equal(h.button.getAttribute('aria-expanded'),'false');
     h.close();
@@ -197,11 +197,11 @@ describe('P12 real compiled toolbar command to dock integration (#214)',()=>{
     h.click();
     const dock=h.container.querySelector('.zenzaManualBookmarkDock');
     assert(dock,'the click must reattempt mounting after the late DOM arrives');
-    assert.equal(dock.open,true);
+    assert.equal(dock.hidden,false);
     assert.equal(h.button.getAttribute('aria-expanded'),'true');
     assert.equal(h.container.querySelectorAll('.zenzaManualBookmarkDock').length,1);
     h.click();
-    assert.equal(dock.open,false);
+    assert.equal(dock.hidden,true);
     assert.equal(content.contains(dock),true);
     assert.equal(h.button.getAttribute('aria-expanded'),'false');
     h.close();

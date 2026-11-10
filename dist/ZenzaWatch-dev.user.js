@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 06:05Z fa32f1e
+// build: 2026-11-10 06:14Z d2d3484
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -103,6 +103,185 @@ AntiPrototypeJs();
     if (window.name === 'watchGinza') { window.name = ''; }
     return;
   }
+  // Share one observer between the serialized player and the session client.
+const RequestDiagnostics = (() => {
+		const labels = {
+				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
+				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
+				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
+				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI'
+		};
+		const activeTickets = new Map();
+		const failures = new Map();
+		let sink;
+		const noop = { success() { }, failure() { }, response() { } };
+		const scopeId = (value) => {
+				let a = 2166136261, b = 5381;
+				for (let i = 0; i < value.length; i++) {
+						a = Math.imul(a ^ value.charCodeAt(i), 16777619);
+						b = Math.imul(b, 33) ^ value.charCodeAt(i);
+				}
+				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
+		};
+		const classify = (error) => {
+				const outer = error && typeof error === 'object' ? error : {};
+				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				const status = e.statusCode ?? e.status ?? e.httpStatus;
+				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
+						'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
+				const fields = {
+						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
+						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
+				};
+				if (e.name === 'AbortError' || e.reason === 'cancelled') {
+						return { reason: 'cancelled' };
+				}
+				if (e.reason === 'session-closed') {
+						return { reason: 'session-closed' };
+				}
+				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
+						return { reason: 'timeout', ...fields };
+				}
+				if (status === 404 || e.reason === 'not found') {
+						return { reason: 'not-found', ...fields };
+				}
+				if (status === 401 || status === 403 || ['forbidden', 'need payment', 'premium only', 'member only'].includes(String(e.reason))) {
+						return { reason: 'permission', ...fields };
+				}
+				if (e.reason === 'not supported') {
+						return { reason: 'unavailable', ...fields };
+				}
+				if (e.kind === 'schema' || e.name === 'SyntaxError' || e.reason === 'watch api' ||
+						['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA'].includes(String(e.errorCode))) {
+						return { reason: 'schema', ...fields };
+				}
+				if (fields.statusCode) {
+						return { reason: 'http', ...fields };
+				}
+				return { reason: 'network' };
+		};
+		const begin = (operation, scope, phase, active = () => true) => {
+				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
+						return noop;
+				}
+				const started = Date.now();
+				const key = 'diag-' + operation + '-' + phase + '-' + scopeId(scope);
+				const previous = activeTickets.get(key);
+				if (previous) {
+						previous.superseded = true;
+				}
+				const state = { superseded: false };
+				activeTickets.set(key, state);
+				let finished = false;
+				const emit = (outcome, failure) => {
+						if (finished) {
+								return;
+						}
+						finished = true;
+						if (activeTickets.get(key) === state) {
+								activeTickets.delete(key);
+						}
+						try {
+								if (!active() || state.superseded || failure.reason === 'cancelled') {
+										return;
+								}
+								if (outcome === 'recovered') {
+										const seen = failures.get(key);
+										failures.delete(key);
+										if (seen === undefined || started - seen >= 600000) {
+												return;
+										}
+								}
+								else {
+										failures.delete(key);
+										failures.set(key, Date.now());
+										while (failures.size > 100) {
+												failures.delete(failures.keys().next().value);
+										}
+								}
+								const reasonLabels = {
+										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
+										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
+										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です'
+								};
+								sink?.({ key, operation, phase, outcome, ...failure,
+										message: labels[operation] + '（' + (phase === 'transport' ? '通信' : phase === 'response' ? '応答の確認' : '処理') + '）' +
+												(outcome === 'recovered' ? '：復旧しました' : '：' + reasonLabels[failure.reason]),
+										elapsedMs: Math.max(0, Math.min(86400000, Date.now() - started)) });
+						}
+						catch (_) { /* Diagnostic observers must never change playback. */ }
+				};
+				const failure = (error) => {
+						try {
+								emit('failed', classify(error));
+						}
+						catch (_) { /* untrusted error properties */ }
+				};
+				return {
+						success: () => emit('recovered', { reason: 'recovered' }), failure,
+						response: response => {
+								if (typeof response?.status === 'number' && response.status >= 400) {
+										failure({ status: response.status });
+								}
+								else {
+										emit('recovered', { reason: 'recovered' });
+								}
+						}
+				};
+		};
+		const operationFor = (value) => {
+				try {
+						const url = new URL(String(value), 'https://www.nicovideo.jp');
+						if (!/(^|\.)nicovideo\.jp$/.test(url.hostname)) {
+								return null;
+						}
+						const p = url.pathname;
+						if (/\/watch\//.test(p)) {
+								return 'video-info';
+						}
+						if (/\/comment\/keys\/thread/.test(p)) {
+								return 'comment-key';
+						}
+						if (/\/threads(?:\/|$)/.test(p)) {
+								return 'comment-read';
+						}
+						if (/\/access-rights\//.test(p)) {
+								return 'video-session';
+						}
+						if (/storyboard/.test(p)) {
+								return 'storyboard';
+						}
+						if (/\/search(?:\/|$)/.test(p)) {
+								return 'search';
+						}
+						if (/mylist/.test(p)) {
+								return 'mylist';
+						}
+						if (/playlist/.test(p)) {
+								return 'playlist';
+						}
+						if (/\/likes(?:\/|$)/.test(p)) {
+								return 'like';
+						}
+						if (/\/tags(?:\/|$)/.test(p)) {
+								return 'tags';
+						}
+						if (/\/videos(?:\/|$)/.test(p)) {
+								return 'video-info';
+						}
+						return /^(nvapi|api|public\.api)\./.test(url.hostname) || /(^|\/)api(\/|$)/.test(p) ? 'nico-api' : null;
+				}
+				catch (_) {
+						return null;
+				}
+		};
+		const startRequest = (url, signal, active = () => true) => {
+				const operation = operationFor(url);
+				return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
+		};
+		const setSink = (next) => { sink = next; };
+		return { begin, startRequest, setSink };
+})();
   const monkey = async (PRODUCT, START_PAGE_QUERY) /*** (｀・ω・´)9m ***/ => {
     const Array = window.PureArray ? window.PureArray : window.Array;
     let console = window.console;
@@ -112,13 +291,13 @@ AntiPrototypeJs();
     const NICORU = 'data:image/png;base64,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';
     const dll = {};
     const util = {};
-    let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
+    let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
     var VER = '2.7.367-task991';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 06:05Z fa32f1e';
+    var BUILD = '2026-11-10 06:14Z d2d3484';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -6842,184 +7021,7 @@ const Clipboard = {
 		}
 };
 util.copyToClipBoard = Clipboard.copyText;
-const RequestDiagnostics = (() => {
-		const labels = {
-				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
-				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
-				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
-				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI'
-		};
-		const activeTickets = new Map();
-		const failures = new Map();
-		let sink;
-		const noop = { success() { }, failure() { }, response() { } };
-		const scopeId = (value) => {
-				let a = 2166136261, b = 5381;
-				for (let i = 0; i < value.length; i++) {
-						a = Math.imul(a ^ value.charCodeAt(i), 16777619);
-						b = Math.imul(b, 33) ^ value.charCodeAt(i);
-				}
-				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
-		};
-		const classify = (error) => {
-				const outer = error && typeof error === 'object' ? error : {};
-				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
-				const status = e.statusCode ?? e.status ?? e.httpStatus;
-				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
-						'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
-				const fields = {
-						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
-						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
-				};
-				if (e.name === 'AbortError' || e.reason === 'cancelled') {
-						return { reason: 'cancelled' };
-				}
-				if (e.reason === 'session-closed') {
-						return { reason: 'session-closed' };
-				}
-				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
-						return { reason: 'timeout', ...fields };
-				}
-				if (status === 404 || e.reason === 'not found') {
-						return { reason: 'not-found', ...fields };
-				}
-				if (status === 401 || status === 403 || ['forbidden', 'need payment', 'premium only', 'member only'].includes(String(e.reason))) {
-						return { reason: 'permission', ...fields };
-				}
-				if (e.reason === 'not supported') {
-						return { reason: 'unavailable', ...fields };
-				}
-				if (e.kind === 'schema' || e.name === 'SyntaxError' || e.reason === 'watch api' ||
-						['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA'].includes(String(e.errorCode))) {
-						return { reason: 'schema', ...fields };
-				}
-				if (fields.statusCode) {
-						return { reason: 'http', ...fields };
-				}
-				return { reason: 'network' };
-		};
-		const begin = (operation, scope, phase, active = () => true) => {
-				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
-						return noop;
-				}
-				const started = Date.now();
-				const key = 'diag-' + operation + '-' + phase + '-' + scopeId(scope);
-				const previous = activeTickets.get(key);
-				if (previous) {
-						previous.superseded = true;
-				}
-				const state = { superseded: false };
-				activeTickets.set(key, state);
-				let finished = false;
-				const emit = (outcome, failure) => {
-						if (finished) {
-								return;
-						}
-						finished = true;
-						if (activeTickets.get(key) === state) {
-								activeTickets.delete(key);
-						}
-						try {
-								if (!active() || state.superseded || failure.reason === 'cancelled') {
-										return;
-								}
-								if (outcome === 'recovered') {
-										const seen = failures.get(key);
-										failures.delete(key);
-										if (seen === undefined || started - seen >= 600000) {
-												return;
-										}
-								}
-								else {
-										failures.delete(key);
-										failures.set(key, Date.now());
-										while (failures.size > 100) {
-												failures.delete(failures.keys().next().value);
-										}
-								}
-								const reasonLabels = {
-										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
-										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
-										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です'
-								};
-								sink?.({ key, operation, phase, outcome, ...failure,
-										message: labels[operation] + '（' + (phase === 'transport' ? '通信' : phase === 'response' ? '応答の確認' : '処理') + '）' +
-												(outcome === 'recovered' ? '：復旧しました' : '：' + reasonLabels[failure.reason]),
-										elapsedMs: Math.max(0, Math.min(86400000, Date.now() - started)) });
-						}
-						catch (_) { /* Diagnostic observers must never change playback. */ }
-				};
-				const failure = (error) => {
-						try {
-								emit('failed', classify(error));
-						}
-						catch (_) { /* untrusted error properties */ }
-				};
-				return {
-						success: () => emit('recovered', { reason: 'recovered' }), failure,
-						response: response => {
-								if (typeof response?.status === 'number' && response.status >= 400) {
-										failure({ status: response.status });
-								}
-								else {
-										emit('recovered', { reason: 'recovered' });
-								}
-						}
-				};
-		};
-		const operationFor = (value) => {
-				try {
-						const url = new URL(String(value), 'https://www.nicovideo.jp');
-						if (!/(^|\.)nicovideo\.jp$/.test(url.hostname)) {
-								return null;
-						}
-						const p = url.pathname;
-						if (/\/watch\//.test(p)) {
-								return 'video-info';
-						}
-						if (/\/comment\/keys\/thread/.test(p)) {
-								return 'comment-key';
-						}
-						if (/\/threads(?:\/|$)/.test(p)) {
-								return 'comment-read';
-						}
-						if (/\/access-rights\//.test(p)) {
-								return 'video-session';
-						}
-						if (/storyboard/.test(p)) {
-								return 'storyboard';
-						}
-						if (/\/search(?:\/|$)/.test(p)) {
-								return 'search';
-						}
-						if (/mylist/.test(p)) {
-								return 'mylist';
-						}
-						if (/playlist/.test(p)) {
-								return 'playlist';
-						}
-						if (/\/likes(?:\/|$)/.test(p)) {
-								return 'like';
-						}
-						if (/\/tags(?:\/|$)/.test(p)) {
-								return 'tags';
-						}
-						if (/\/videos(?:\/|$)/.test(p)) {
-								return 'video-info';
-						}
-						return /^(nvapi|api|public\.api)\./.test(url.hostname) || /(^|\/)api(\/|$)/.test(p) ? 'nico-api' : null;
-				}
-				catch (_) {
-						return null;
-				}
-		};
-		const startRequest = (url, signal, active = () => true) => {
-				const operation = operationFor(url);
-				return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
-		};
-		const setSink = (next) => { sink = next; };
-		return { begin, startRequest, setSink };
-})();
+// already required
 const netUtil = {
 		abortableFetch: async (url, params = {}) => {
 				params = params || {};
@@ -67816,7 +67818,7 @@ const VideoSessionWorker = (() => {
     workerUtil, dimport,
     IndexedDbStorage, WatchInfoCacheDb,
     Handler, PromiseHandler, Emitter, EmitterInitFunc,
-    parseThumbInfo, StoryboardCacheDb, VideoSessionWorker
+    parseThumbInfo, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics
   });
 })();
 

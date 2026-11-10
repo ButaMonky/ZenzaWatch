@@ -4,8 +4,8 @@
 
 | 区分 | ファイル | 役割・版 |
 |---|---|---|
-| 本体 | `ZenzaWatch-dev.user.js` | HLS / domand再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定。`2.7.373-task997` |
-| 任意追加 | `MylistPocket.user.js` | サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加。`0.5.87-task996` |
+| 本体 | `ZenzaWatch-dev.user.js` | HLS / domand再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定。`2.7.374-task998` |
+| 任意追加 | `MylistPocket.user.js` | サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加。`0.5.88-task998` |
 | 任意追加 | `ZenzaGamePad.user.js` | ゲームパッド操作。`1.5.6-task966` |
 | 任意追加 | `HeatSync.user.js` | コメントの少ない部分の自動早送り。`0.0.24-task966qa` |
 | 任意追加 | `MaskedWatch.user.js` | 動画上の文字・顔を検出してコメントを透過。`0.3.8-task966` |

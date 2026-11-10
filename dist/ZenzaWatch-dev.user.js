@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.373-task997
+// @version        2.7.374-task998
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 15:37Z 9b0c555b
+// build: 2026-11-10 16:55Z fab7b4c0
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.373-task997';
+    var VER = '2.7.374-task998';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 15:37Z 9b0c555b';
+    var BUILD = '2026-11-10 16:55Z fab7b4c0';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -4200,6 +4200,11 @@ const Config = (() => {
 				'resume.recordEnabled': true,
 				'resume.clearOnComplete': true,
 				'bookmark.showToolbarButton': true,
+				'bookmark.showVideoThumbnails': true,
+				'bookmark.showScenePreviews': true,
+				'bookmark.thumbnailWidth': 80,
+				'bookmark.titleFontSize': 13,
+				'bookmark.titleLines': 1,
 				'abRepeat.enabled': true,
 				loop: false,
 				mute: false,
@@ -14341,6 +14346,7 @@ class ManualBookmarkPanel {
 		disposed = false;
 		last;
 		clickHandler;
+		keyHandler;
 		inputHandler;
 		addDraftRevision = 0;
 		pointDrafts = { a: '', b: '' };
@@ -14380,6 +14386,7 @@ class ManualBookmarkPanel {
 		preview(videoId, time) {
 				const host = this.root.ownerDocument.createElement('div');
 				host.className = 'zw-scene-preview';
+				host.hidden = this.deps.libraryAppearance?.().showScenePreviews === false;
 				host.dataset.sceneVideo = videoId;
 				host.dataset.sceneTime = String(time);
 				host.textContent = '場面画像';
@@ -14393,7 +14400,7 @@ class ManualBookmarkPanel {
 				return !group || group.open;
 		}
 		fillPreviewLeases() {
-				if (!this.visible || this.disposed || !this.deps.createScenePreview)
+				if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false)
 						return;
 				const videos = new Set(Array.from(this.previewLeases.keys(), host => host.dataset.sceneVideo));
 				for (const host of this.previewCandidates) {
@@ -14413,7 +14420,7 @@ class ManualBookmarkPanel {
 		}
 		refreshPreviews() {
 				this.clearPreviews();
-				if (!this.visible || this.disposed || !this.deps.createScenePreview)
+				if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false)
 						return;
 				const hosts = Array.from(this.root.querySelectorAll('[data-scene-video]'))
 						.filter(host => this.previewEligible(host));
@@ -14654,12 +14661,14 @@ class ManualBookmarkPanel {
 						const go = this.pointButton('seek-automatic', '続きへ');
 						go.disabled = time === null || time === undefined;
 						line.append(position, go);
-						const edit = this.root.ownerDocument.createElement('details');
+						const edit = this.root.ownerDocument.createElement('div');
 						edit.className = 'zw-automatic-edit';
-						const summary = this.root.ownerDocument.createElement('summary');
-						summary.textContent = '編集';
-						edit.append(summary, this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置で更新'), this.pointButton('delete-automatic', '削除'));
-						section.append(setting, note, line, edit, status);
+						edit.append(this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置で更新'), this.pointButton('delete-automatic', '削除'));
+						section.append(setting, note, line);
+						const viewed = this.viewedDate(this.deps.automaticViewedAt?.());
+						if (viewed)
+								section.append(viewed);
+						section.append(edit, status);
 				}
 				else {
 						status.dataset.pointStatus = 'repeat';
@@ -14677,6 +14686,7 @@ class ManualBookmarkPanel {
 										preview.dataset.sceneVideo = this.last.videoId;
 										preview.dataset.sceneTime = String(time);
 								}
+								preview.hidden = this.deps.libraryAppearance?.().showScenePreviews === false;
 								preview.textContent = time === null ? '時刻を指定' : '場面画像';
 								column.append(this.pointField(name, name === 'a' ? 'A 開始' : 'B 終了', this.pointDrafts[name] || ''), preview, this.pointButton('set-' + name, '現在位置を' + name.toUpperCase() + 'に'));
 								row.append(column);
@@ -14943,6 +14953,29 @@ class ManualBookmarkPanel {
 								this.root.contains(target))
 								this.addDraftRevision++;
 				};
+				this.keyHandler = event => {
+						if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || event.repeat)
+								return;
+						const field = event.target;
+						if (!field?.matches('input') || !this.root.contains(field))
+								return;
+						let button = null;
+						const edit = field.closest('.zw-bookmark-edit');
+						if (edit)
+								button = edit.querySelector('[data-bookmark-action="rename"],[data-library-action="save"],[data-library-action="save-auto"]');
+						else if (field.dataset.pointField === 'automatic')
+								button = this.root.querySelector('[data-point-action="save-automatic"]');
+						else if (field.dataset.pointField === 'a' || field.dataset.pointField === 'b')
+								button = this.root.querySelector('[data-point-action="save-range"]');
+						else if (field.hasAttribute('data-bookmark-label'))
+								button = this.root.querySelector('[data-bookmark-action="add"]');
+						if (button && !button.disabled) {
+								event.preventDefault();
+								event.stopPropagation();
+								button.click();
+						}
+				};
+				root.addEventListener('keydown', this.keyHandler);
 				root.addEventListener('click', this.clickHandler);
 				root.addEventListener('input', this.inputHandler);
 				root.addEventListener('change', this.changeHandler);
@@ -14994,7 +15027,6 @@ class ManualBookmarkPanel {
 								if (start && end)
 										timeDrafts.set(start.dataset.bookmarkStartId, { start: start.value, end: end.value });
 						}
-				const automaticOpen = sameVideo && !!this.root.querySelector('.zw-automatic-edit')?.open;
 				const previousAutomatic = sameVideo ? this.root.querySelector('[data-point-field="automatic"]') : null;
 				const automaticDraft = this.automaticDraftDirty ? previousAutomatic?.value : undefined;
 				const previousAdd = sameVideo ? this.root.querySelector('input[data-bookmark-label]') : null;
@@ -15135,18 +15167,17 @@ class ManualBookmarkPanel {
 						nav.className = 'zw-library-nav';
 						region.prepend(nav);
 				}
-				const hint = doc.createElement('small');
-				hint.textContent = '画像は近い時刻の代表コマです。';
-				region.append(hint);
+				if (this.deps.libraryAppearance?.().showScenePreviews !== false) {
+						const hint = doc.createElement('small');
+						hint.textContent = '画像は近い時刻の代表コマです。';
+						region.append(hint);
+				}
 				this.root.replaceChildren(region);
 				if (automaticDraft !== undefined) {
 						const field = this.root.querySelector('[data-point-field="automatic"]');
 						if (field)
 								field.value = automaticDraft;
 				}
-				const autoEdit = this.root.querySelector('.zw-automatic-edit');
-				if (autoEdit)
-						autoEdit.open = automaticOpen;
 				this.updateLoopDisplay();
 				this.updatePointBusyControls();
 				if (this.deps.duration)
@@ -15343,6 +15374,11 @@ class ManualBookmarkPanel {
 				this.clearPreviews();
 				groups.replaceChildren();
 				const doc = this.root.ownerDocument;
+				const appearance = this.deps.libraryAppearance?.();
+				const bounded = (value, fallback, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+				groups.style.setProperty('--zw-video-thumb-width', bounded(appearance?.thumbnailWidth, 80, 64, 160) + 'px');
+				groups.style.setProperty('--zw-library-title-size', bounded(appearance?.titleFontSize, 13, 11, 18) + 'px');
+				groups.style.setProperty('--zw-library-title-lines', String(Math.round(bounded(appearance?.titleLines, 1, 1, 3))));
 				const query = this.librarySearch.trim().toLocaleLowerCase(), filter = this.libraryFilter;
 				let count = 0, videoCount = 0;
 				for (const video of [...this.libraryRows].sort((a, b) => b.updatedAt - a.updatedAt)) {
@@ -15357,7 +15393,36 @@ class ManualBookmarkPanel {
 						group.dataset.libraryVideo = video.videoId;
 						group.open = this.expandedVideos.has(video.videoId);
 						const summary = doc.createElement('summary');
-						summary.textContent = video.title + (video.videoId === this.last.videoId ? ' · 再生中' : '') + ' · ' + (bookmarks.length + Number(automatic)) + '件';
+						if (appearance?.showVideoThumbnails !== false && video.thumbnailUrl) {
+								try {
+										const url = new URL(video.thumbnailUrl);
+										if (url.protocol === 'https:' || url.protocol === 'http:') {
+												const image = doc.createElement('img');
+												image.className = 'zw-library-thumbnail';
+												image.alt = '';
+												image.setAttribute('loading', 'lazy');
+												image.decoding = 'async';
+												image.referrerPolicy = 'no-referrer';
+												image.src = url.href;
+												image.addEventListener('error', () => image.remove(), { once: true });
+												summary.append(image);
+										}
+								}
+								catch { /* Malformed old metadata must not disable the library. */ }
+						}
+						const header = doc.createElement('span');
+						header.className = 'zw-library-header';
+						const title = doc.createElement('span');
+						title.className = 'zw-library-title';
+						title.textContent = video.title;
+						header.append(title);
+						const meta = doc.createElement('small');
+						meta.textContent = (video.videoId === this.last.videoId ? '再生中 · ' : '') + (bookmarks.length + Number(automatic)) + '件';
+						header.append(meta);
+						const viewed = this.viewedDate(video.viewedAt);
+						if (viewed)
+								header.append(viewed);
+						summary.append(header);
 						const list = doc.createElement('ul');
 						group.append(summary, list);
 						if (automatic)
@@ -15386,6 +15451,18 @@ class ManualBookmarkPanel {
 						groups.append(empty);
 				}
 				this.refreshPreviews();
+		}
+		viewedDate(value) {
+				if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+						return null;
+				const date = new Date(value);
+				if (!Number.isFinite(date.getTime()))
+						return null;
+				const time = this.root.ownerDocument.createElement('time');
+				time.dataset.viewedAt = '1';
+				time.dateTime = date.toISOString();
+				time.textContent = '視聴 ' + date.toLocaleString('ja-JP');
+				return time;
 		}
 		libraryRow(video, item) {
 				const doc = this.root.ownerDocument, row = doc.createElement('li'), time = item?.time ?? video.automaticTime;
@@ -15531,6 +15608,7 @@ class ManualBookmarkPanel {
 				this.pointGeneration++;
 				this.pointBusyRequest = null;
 				this.unsubscribe();
+				this.root.removeEventListener('keydown', this.keyHandler);
 				this.root.removeEventListener('click', this.clickHandler);
 				this.root.removeEventListener('input', this.inputHandler);
 				this.root.removeEventListener('change', this.changeHandler);
@@ -15554,6 +15632,37 @@ class ManualBookmarkDock {
 		disposed = false;
 		host = null;
 		home;
+		launcher;
+		launchHandler;
+		resizeHandler;
+		resizeObserver = null;
+		position() {
+				if (!this.floating || !this.host || !this.trigger)
+						return;
+				const host = this.host.getBoundingClientRect(), trigger = this.trigger.getBoundingClientRect();
+				const scaleX = host.width && this.host.clientWidth ? host.width / this.host.clientWidth : 1;
+				const scaleY = host.height && this.host.clientHeight ? host.height / this.host.clientHeight : 1;
+				const width = this.host.clientWidth || host.width, height = this.host.clientHeight || host.height;
+				const panelWidth = this.node.offsetWidth || Math.min(this.node.classList.contains('zw-library-wide') ? 620 : 400, width - 24);
+				this.node.style.left = Math.max(12, Math.min((trigger.left - host.left) / scaleX, width - panelWidth - 12)) + 'px';
+				this.node.style.right = 'auto';
+				const above = (trigger.top - host.top) / scaleY - 20;
+				const top = (trigger.bottom - host.top) / scaleY + 8;
+				const below = height - top - 12;
+				if (above < Math.min(this.node.offsetHeight || 300, 240) && below > above) {
+						this.node.style.top = Math.max(12, top) + 'px';
+						this.node.style.bottom = 'auto';
+						this.node.style.maxHeight = Math.max(44, below) + 'px';
+						this.node.style.transformOrigin = 'left top';
+				}
+				else {
+						const bottom = Math.max(12, Math.min(height - 56, (host.bottom - trigger.top) / scaleY + 8));
+						this.node.style.top = 'auto';
+						this.node.style.bottom = bottom + 'px';
+						this.node.style.maxHeight = Math.max(44, height - bottom - 12) + 'px';
+						this.node.style.transformOrigin = 'left bottom';
+				}
+		}
 		trigger = null;
 		floating = false;
 		closing = false;
@@ -15596,15 +15705,22 @@ class ManualBookmarkDock {
 				this.cancelAnimation();
 				this.closing = false;
 				this.node.inert = false;
+				this.resizeObserver?.disconnect();
 				this.host = host;
 				this.trigger = trigger || null;
 				this.floating = true;
+				this.resizeObserver?.observe(this.node);
+				this.resizeObserver?.observe(host);
+				if (this.trigger)
+						this.resizeObserver?.observe(this.trigger);
 				host.append(this.node);
+				this.node.hidden = false;
 				this.node.classList.add('zw-points-floating');
 				this.panel.refreshPreferences();
 				this.node.open = true;
 				this.panel.setVisible(true);
 				this.trigger?.setAttribute('aria-expanded', 'true');
+				this.position();
 				void this.session.refreshIfIdle();
 				this.node.querySelector('summary')?.focus();
 				this.animate(true);
@@ -15621,11 +15737,13 @@ class ManualBookmarkDock {
 								this.trigger.focus({ preventScroll: true });
 						this.animate(false, () => {
 								this.node.open = false;
+								this.node.hidden = true;
 								this.node.inert = false;
 								this.node.classList.remove('zw-points-floating');
 								this.home.append(this.node);
 								this.floating = false;
 								this.closing = false;
+								this.resizeObserver?.disconnect();
 						});
 				}
 				else {
@@ -15648,6 +15766,7 @@ class ManualBookmarkDock {
 				const doc = target.ownerDocument;
 				const node = this.node = doc.createElement('details');
 				node.className = 'zenzaManualBookmarkDock';
+				node.hidden = true;
 				node.dataset.bookmarkOwner = 'manual';
 				const summary = doc.createElement('summary');
 				summary.textContent = 'しおり・ABリピート';
@@ -15658,7 +15777,29 @@ class ManualBookmarkDock {
 				this.style = doc.createElement('style');
 				this.style.textContent = ManualBookmarkDock.styles;
 				node.append(this.style);
+				const launcher = this.launcher = doc.createElement('button');
+				launcher.type = 'button';
+				launcher.className = 'zw-points-launcher';
+				launcher.textContent = 'ここまで見た・しおり・ABリピートを開く';
+				this.launchHandler = event => {
+						event.preventDefault();
+						event.stopPropagation();
+						const host = target.closest('.zenzaPlayerContainer');
+						const button = host?.querySelector('.playbackPointsSwitch');
+						const rect = button?.getBoundingClientRect();
+						if (host)
+								this.toggle(host, button && rect && rect.width > 0 && rect.height > 0 ? button : launcher);
+				};
+				launcher.addEventListener('click', this.launchHandler);
+				this.resizeHandler = () => this.position();
+				doc.defaultView?.addEventListener('resize', this.resizeHandler);
+				const Observer = doc.defaultView?.ResizeObserver;
+				if (Observer) {
+						this.resizeObserver = new Observer(this.resizeHandler);
+						this.resizeObserver.observe(node);
+				}
 				const series = target.querySelector(':scope > .seriesList');
+				target.insertBefore(launcher, series || null);
 				target.insertBefore(node, series || null);
 				this.keyHandler = event => {
 						event.stopPropagation();
@@ -15700,6 +15841,9 @@ class ManualBookmarkDock {
 						node.removeEventListener('keyup', this.keyHandler);
 						node.removeEventListener('click', this.clickHandler);
 						node.remove();
+						launcher.remove();
+						this.resizeObserver?.disconnect();
+						doc.defaultView?.removeEventListener('resize', this.resizeHandler);
 						throw error;
 				}
 		}
@@ -15724,17 +15868,21 @@ class ManualBookmarkDock {
 				this.cancelAnimation();
 				this.closing = false;
 				this.node.open = false;
+				this.node.hidden = true;
 				this.node.inert = false;
 				if (this.floating) {
 						this.node.classList.remove('zw-points-floating');
 						this.home.append(this.node);
 						this.floating = false;
 				}
+				this.resizeObserver?.disconnect();
 				this.trigger?.setAttribute('aria-expanded', 'false');
 				this.panel.setVisible(false);
 				this.session.deactivate();
 		}
 		static styles = `
+		.zenzaManualBookmarkDock[hidden]{display:none!important}
+		.zw-points-launcher{color:#f4f7ff;background:#303c51;border:1px solid #53627b;border-radius:6px;padding:6px 10px;cursor:pointer}
 		.zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
 		.zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
 		.zenzaManualBookmarkDock[open]{overflow:auto}
@@ -15784,7 +15932,19 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock .zw-library-search input{flex:1;min-width:150px}
 		.zenzaManualBookmarkDock select{background:#101722;color:#f4f7ff;border:1px solid #53627b;border-radius:5px;padding:6px;font:inherit}
 		.zenzaManualBookmarkDock .zw-library-group{margin-top:12px}
-		.zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+		.zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;min-width:0}
+		.zenzaManualBookmarkDock .zw-library-group>summary::before{content:'▸';flex:none;color:#aebbd1}
+		.zenzaManualBookmarkDock .zw-library-group[open]>summary::before{content:'▾'}
+		.zenzaManualBookmarkDock .zw-library-group>summary::-webkit-details-marker{display:none}
+		.zenzaManualBookmarkDock .zw-library-thumbnail{width:var(--zw-video-thumb-width,80px);aspect-ratio:16/9;object-fit:cover;border-radius:4px;flex:none;background:#253346}
+		.zenzaManualBookmarkDock .zw-library-header{min-width:0;flex:1}
+		.zenzaManualBookmarkDock .zw-library-title{font-size:var(--zw-library-title-size,13px);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--zw-library-title-lines,1);overflow:hidden;overflow-wrap:anywhere}
+		.zenzaManualBookmarkDock .zw-library-group[open] .zw-library-title{display:block;-webkit-line-clamp:unset;overflow:visible}
+		.zenzaManualBookmarkDock time[data-viewed-at]{display:block;font-size:11px;color:#aebbd1;font-weight:400}
+		.zenzaManualBookmarkDock .zw-scene-loading{position:relative;font-size:0}
+		.zenzaManualBookmarkDock .zw-scene-loading::after{content:'';position:absolute;left:calc(50% - 8px);top:calc(50% - 8px);z-index:1;width:12px;height:12px;border:2px solid #53627b;border-top-color:#8ecbff;border-radius:50%;animation:zw-scene-loading-spin .8s linear infinite}
+		@keyframes zw-scene-loading-spin{to{transform:rotate(360deg)}}
+		@media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock .zw-scene-loading::after{animation:none}}
 		.zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{width:100%;margin:8px 0}
 		.zenzaManualBookmarkDock .zw-point-range-inputs label{display:block}
 		.zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%}
@@ -15805,6 +15965,10 @@ class ManualBookmarkDock {
 				this.node.ownerDocument.removeEventListener('pointerdown', this.outsideHandler, true);
 				this.node.ownerDocument.removeEventListener('click', this.outsideHandler, true);
 				this.node.removeEventListener('toggle', this.toggleHandler);
+				this.resizeObserver?.disconnect();
+				this.node.ownerDocument.defaultView?.removeEventListener('resize', this.resizeHandler);
+				this.launcher.removeEventListener('click', this.launchHandler);
+				this.launcher.remove();
 				this.panel.dispose();
 				this.session.dispose();
 				this.node.remove();
@@ -26595,11 +26759,18 @@ class Storyboard extends Emitter {
 		createSavedPreview(host, videoId, time) {
 				let disposed = false, revision = 0, releaseImage = null;
 				let sceneLease = null;
-				host.textContent = '画像なし';
+				const setState = (state) => {
+						host.classList.toggle('zw-scene-loading', state === 'loading');
+						host.setAttribute('aria-busy', String(state === 'loading'));
+						host.setAttribute('aria-label', state === 'loading' ? '場面画像を読み込み中' :
+								state === 'ready' ? '保存時刻付近の場面画像' : '場面画像を利用できません');
+						if (state !== 'ready')
+								host.textContent = state === 'loading' ? '読み込み中' : '画像なし';
+				};
+				setState('unavailable');
 				host.style.position = 'relative';
 				host.style.overflow = 'hidden';
 				host.setAttribute('role', 'img');
-				host.setAttribute('aria-label', '場面画像を利用できません');
 				if (!Number.isFinite(time) || time < 0 || typeof videoId !== 'string' || !videoId ||
 						this.config?.props?.enableStoryboard === false)
 						return () => { };
@@ -26633,83 +26804,91 @@ class Storyboard extends Emitter {
 						sceneLease = null;
 						releaseImage?.();
 						releaseImage = null;
-						host.textContent = '画像なし';
-						if (this.config?.props?.enableStoryboard === false)
-								return;
-						const live = isCurrent();
-						let raw = live ? this.model.rawData : await cached();
-						if (!live && !disposed && seq === revision && this.config?.props?.savedSceneFetch !== false) {
-								const candidate = raw && new StoryboardInfoModel(raw);
-								if (!candidate?.isAvailable || !raw.storyboard.images[candidate.getThumbnailPosition(time * 1000).page]?.buffer) {
-										sceneLease = this.savedScenes().acquire(videoId, time);
-										raw = await sceneLease.promise;
-								}
-						}
-						if (disposed || seq !== revision || !raw || raw.watchId !== videoId)
-								return;
-						const model = new StoryboardInfoModel(raw);
-						if (!model.isAvailable || model.cellCount <= 0 || time > model.duration)
-								return;
-						const pos = model.getThumbnailPosition(time * 1000), page = raw.storyboard.images[pos.page];
-						const decoded = model.pageWidth * model.pageHeight * 4;
-						if (!Number.isFinite(decoded) || decoded <= 0 || decoded > 32 * 1024 * 1024)
-								return;
-						let src;
-						if (page?.buffer && Object.prototype.toString.call(page.buffer) === '[object ArrayBuffer]') {
-								const key = page.buffer;
-								let entry = bytes.get(key);
-								if (!entry) {
-										if (!Number.isFinite(decoded) || decoded <= 0 || (this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
-												return;
-										entry = { refs: 0, url: URL.createObjectURL(new Blob([page.buffer])) };
-										bytes.set(key, entry);
-										this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
-								}
-								entry.refs++;
-								src = entry.url;
-								releaseImage = () => { if (--entry.refs === 0) {
-										URL.revokeObjectURL(entry.url);
-										bytes.delete(key);
-										this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
-								} };
-						}
-						else {
-								if (!live || typeof page?.url !== 'string' || !/^https?:\/\//.test(page.url))
+						setState('loading');
+						let awaitingImage = false;
+						try {
+								if (this.config?.props?.enableStoryboard === false)
 										return;
-								src = page.url;
-								let entry = bytes.get(src);
-								if (!entry) {
-										if ((this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
-												return;
-										entry = { refs: 0, url: src };
-										bytes.set(src, entry);
-										this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
+								const live = isCurrent();
+								let raw = live ? this.model.rawData : await cached();
+								if (!live && !disposed && seq === revision && this.config?.props?.savedSceneFetch !== false) {
+										const candidate = raw && new StoryboardInfoModel(raw);
+										if (!candidate?.isAvailable || !raw.storyboard.images[candidate.getThumbnailPosition(time * 1000).page]?.buffer) {
+												sceneLease = this.savedScenes().acquire(videoId, time);
+												raw = await sceneLease.promise;
+										}
 								}
-								entry.refs++;
-								releaseImage = () => { if (--entry.refs === 0) {
-										bytes.delete(src);
-										this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
+								if (disposed || seq !== revision || !raw || raw.watchId !== videoId)
+										return;
+								const model = new StoryboardInfoModel(raw);
+								if (!model.isAvailable || model.cellCount <= 0 || time > model.duration)
+										return;
+								const pos = model.getThumbnailPosition(time * 1000), page = raw.storyboard.images[pos.page];
+								const decoded = model.pageWidth * model.pageHeight * 4;
+								if (!Number.isFinite(decoded) || decoded <= 0 || decoded > 32 * 1024 * 1024)
+										return;
+								let src;
+								if (page?.buffer && Object.prototype.toString.call(page.buffer) === '[object ArrayBuffer]') {
+										const key = page.buffer;
+										let entry = bytes.get(key);
+										if (!entry) {
+												if (!Number.isFinite(decoded) || decoded <= 0 || (this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
+														return;
+												entry = { refs: 0, url: URL.createObjectURL(new Blob([page.buffer])) };
+												bytes.set(key, entry);
+												this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
+										}
+										entry.refs++;
+										src = entry.url;
+										releaseImage = () => { if (--entry.refs === 0) {
+												URL.revokeObjectURL(entry.url);
+												bytes.delete(key);
+												this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
+										} };
+								}
+								else {
+										if (!live || typeof page?.url !== 'string' || !/^https?:\/\//.test(page.url))
+												return;
+										src = page.url;
+										let entry = bytes.get(src);
+										if (!entry) {
+												if ((this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
+														return;
+												entry = { refs: 0, url: src };
+												bytes.set(src, entry);
+												this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
+										}
+										entry.refs++;
+										releaseImage = () => { if (--entry.refs === 0) {
+												bytes.delete(src);
+												this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
+										} };
+								}
+								const image = host.ownerDocument.createElement('img');
+								image.alt = '';
+								image.draggable = false;
+								image.crossOrigin = 'anonymous';
+								image.style.cssText = `position:absolute;max-width:none;width:${model.cols * 100}%;height:${model.rows * 100}%;left:${-pos.col * 100}%;top:${-pos.row * 100}%;pointer-events:none;`;
+								image.onload = () => { if (!disposed && seq === revision) {
+										setState('ready');
 								} };
+								image.onerror = () => { if (!disposed && seq === revision) {
+										setState('unavailable');
+										releaseImage?.();
+										releaseImage = null;
+								} };
+								host.style.aspectRatio = String(model.cellWidth) + ' / ' + String(model.cellHeight);
+								host.replaceChildren(image);
+								awaitingImage = true;
+								image.src = src;
 						}
-						const image = host.ownerDocument.createElement('img');
-						image.alt = '';
-						image.draggable = false;
-						image.crossOrigin = 'anonymous';
-						image.style.cssText = `position:absolute;max-width:none;width:${model.cols * 100}%;height:${model.rows * 100}%;left:${-pos.col * 100}%;top:${-pos.row * 100}%;pointer-events:none;`;
-						image.onload = () => { if (!disposed && seq === revision) {
-								host.setAttribute('aria-label', '保存時刻付近の場面画像');
-						} };
-						image.onerror = () => { if (!disposed && seq === revision) {
-								host.textContent = '画像なし';
-								releaseImage?.();
-								releaseImage = null;
-						} };
-						host.style.aspectRatio = String(model.cellWidth) + ' / ' + String(model.cellHeight);
-						host.replaceChildren(image);
-						image.src = src;
+						finally {
+								if (!disposed && seq === revision && !awaitingImage)
+										setState('unavailable');
+						}
 				};
 				const update = () => { const pending = draw(), seq = revision; void pending.catch(() => { if (!disposed && seq === revision) {
-						host.textContent = '画像なし';
+						setState('unavailable');
 						releaseImage?.();
 						releaseImage = null;
 				} }); };
@@ -26729,6 +26908,8 @@ class Storyboard extends Emitter {
 						this.off?.('reset', update);
 						if (infoLease && --infoLease.refs === 0 && infos.get(infoKey) === infoLease)
 								infos.delete(infoKey);
+						host.classList.remove('zw-scene-loading');
+						host.setAttribute('aria-busy', 'false');
 						host.replaceChildren();
 				};
 		}
@@ -50827,20 +51008,16 @@ class NicoVideoPlayerDialogView extends Emitter {
 								createScenePreview: (host, videoId, time) => this.videoControlBar?.storyboard?.createSavedPreview?.(host, videoId, time) || (() => { }),
 								loadLibrary: () => this._loadSavedPointLibrary(repository),
 								openLibraryPosition: (videoId, time, endTime) => {
-										if (videoId === this._state.videoInfo?.watchId) {
-												if (endTime !== undefined)
-														this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
-												else
-														this.emit('command', 'seekTo', time);
-												return;
-										}
-										void Promise.resolve(this._dialog.open(videoId, { openNow: true, currentTime: time })).then(() => {
-												if (endTime === undefined || this._dialog._watchId !== videoId)
-														return;
-												this._pendingLibraryRepeat = { requestId: this._dialog._requestId, videoId, a: time, b: endTime };
-												this._trySavedLibraryRepeat();
-										}).catch(() => console.warn('Saved position navigation unavailable'));
+										void this._openSavedLibraryPosition(videoId, time, endTime);
 								},
+								automaticViewedAt: () => this._dialog?._videoInfo?._cacheData?.viewedAt ?? null,
+								libraryAppearance: () => ({
+										showVideoThumbnails: this._playerConfig.getValue('bookmark.showVideoThumbnails') !== false,
+										showScenePreviews: this._playerConfig.getValue('bookmark.showScenePreviews') !== false,
+										thumbnailWidth: Number(this._playerConfig.getValue('bookmark.thumbnailWidth')) || 80,
+										titleFontSize: Number(this._playerConfig.getValue('bookmark.titleFontSize')) || 13,
+										titleLines: Number(this._playerConfig.getValue('bookmark.titleLines')) || 1
+								}),
 								editLibraryBookmark: async (videoId, id, changes, duration) => {
 										await repository.update(videoId, id, changes, Date.now(), duration);
 										await bookmarkSession?.refreshIfIdle?.();
@@ -50904,7 +51081,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 								continue;
 						byId.set(record.watchId, { videoId: record.watchId, title: record.title || record.watchId,
 								duration: Number.isFinite(record.duration) && record.duration > 0 ? record.duration : Number.MAX_SAFE_INTEGER,
-								updatedAt: record.updatedAt || 0, automaticTime: record.automaticTime, bookmarks: [] });
+								updatedAt: record.updatedAt || 0, viewedAt: record.viewedAt, thumbnailUrl: record.thumbnailUrl, automaticTime: record.automaticTime, bookmarks: [] });
 				}
 				for (const row of manual) {
 						const entry = byId.get(row.videoId) || { videoId: row.videoId, title: row.videoId,
@@ -50923,6 +51100,32 @@ class NicoVideoPlayerDialogView extends Emitter {
 				}
 				return [...byId.values()].filter(row => row.automaticTime !== null || row.bookmarks.length)
 						.sort((a, b) => b.updatedAt - a.updatedAt);
+		}
+		async _openSavedLibraryPosition(videoId, time, endTime) {
+				if (!videoId || !Number.isFinite(time) || time < 0 ||
+						(endTime !== undefined && (!Number.isFinite(endTime) || endTime <= time)))
+						return;
+				this._pendingLibraryRepeat = undefined;
+				if (videoId === this._state.videoInfo?.watchId) {
+						if (endTime !== undefined)
+								this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
+						else
+								this.emit('command', 'seekTo', time);
+						return;
+				}
+				try {
+						const opening = this._dialog.open(videoId, { openNow: true, currentTime: time });
+						const requestId = this._dialog._requestId;
+						await opening;
+						if (endTime === undefined || this._dialog._requestId !== requestId ||
+								this._dialog._watchId !== videoId)
+								return;
+						this._pendingLibraryRepeat = { requestId, videoId, a: time, b: endTime };
+						this._trySavedLibraryRepeat();
+				}
+				catch {
+						console.warn('Saved position navigation unavailable');
+				}
 		}
 		_trySavedLibraryRepeat() {
 				const pending = this._pendingLibraryRepeat;
@@ -53327,7 +53530,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				e.stopPropagation();
 		}
 		_onPlayerConfigUpdate(key, value) {
-				if (['resume.recordEnabled', 'abRepeat.enabled'].includes(key)) {
+				if (['resume.recordEnabled', 'abRepeat.enabled'].includes(key) || (typeof key === 'string' && key.startsWith('bookmark.'))) {
 						this._view?.manualBookmarkDock?.refreshPreferences();
 				}
 				if (key === 'enableCommentPanel') {
@@ -68420,7 +68623,7 @@ class ModernAdvancedSettingsModel {
 								['playbackRate', '再生速度', { type: 'number' }],
 								['enableSingleton', '複数のプレイヤーを同時起動しない']
 						]),
-						...group('再生・音声', 'しおり・ABリピート', [
+						...group('再生・音声', 'ここまで見た・しおり・ABリピート', [
 								['resume.recordEnabled', '再生位置を自動で記録', {
 												description: '既定ON。一時停止・終了時などの再生位置を動画ごとに1件保存します。OFFではZenzaWatchから端末・サーバーへ自動記録しません。保存済みの位置や手動しおりは消えず、位置の編集・削除は利用できます。公式プレイヤー側の記録には影響しません。'
 										}],
@@ -68428,7 +68631,19 @@ class ModernAdvancedSettingsModel {
 												description: '既定ON。動画の再生完了時に自動位置だけを消去します。手動しおりは残ります。自動記録OFF時は消去しません。'
 										}],
 								['bookmark.showToolbarButton', '操作バーに「しおり・ABリピート」を表示', {
-												description: '既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画はキャッシュがある場合に表示します。OFFでも動画情報内から利用できます。'
+												description: '既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画は必要な画像だけ読み込みます。OFFでも動画情報内の入口から利用できます。'
+										}],
+								['bookmark.showVideoThumbnails', '保存一覧に動画サムネイルを表示', {
+												description: '既定ON。動画を識別する小さな画像を表示します。OFFでは画像の場所も詰め、動画サムネイルを読み込みません。'
+										}],
+								['bookmark.showScenePreviews', 'シーンプレビューを表示', {
+												description: '既定ON。保存位置や区間の場面画像を表示します。OFFではこのパネルからの場面画像の読み込みを止めます。シーンサーチには影響しません。'
+										}],
+								['bookmark.thumbnailWidth', '保存一覧の動画サムネイルの幅', { ...slider(64, 160, 8), unit: 'px' }],
+								['bookmark.titleFontSize', '保存一覧の動画タイトルの文字サイズ', { ...slider(11, 18, 1), unit: 'px' }],
+								['bookmark.titleLines', '保存一覧を閉じているときのタイトル行数', {
+												...select([[1, '1行'], [2, '2行'], [3, '3行']]),
+												description: '長いタイトルは省略します。動画の項目を開くと全タイトルを表示します。'
 										}],
 								['abRepeat.enabled', 'ABリピートを利用', {
 												description: '既定ON。A（開始）からB（終了）の区間を繰り返し、再生バーに範囲を表示します。区間はしおりとして保存できます。動画の切替では実行中のリピートを解除しますが、保存した区間は残ります。OFFにすると実行中の区間リピートも停止します。'
@@ -68811,7 +69026,7 @@ class ModernAdvancedSettingsModel {
 		}
 		static subcategoryPriority(category, subcategory) {
 				const order = {
-						'再生・音声': ['再生動作', 'しおり・ABリピート', '音量', '読み上げ', '動画の取得', '公式プレイヤー連携', '提供画面'],
+						'再生・音声': ['再生動作', 'ここまで見た・しおり・ABリピート', '音量', '読み上げ', '動画の取得', '公式プレイヤー連携', '提供画面'],
 						'画面・映像': ['表示モード', '小画面モード', '全画面モード', '動画ヘッダー', 'PiP（小窓再生）', 'プレイヤーの操作表示', 'シーンサーチ', 'シーンサムネイルのキャッシュ', '表示・非表示', '通知・ポップアップ', '画面フィルター', 'スクリーンショット'],
 						'コメント表示': ['表示・配置', 'コメント一覧', '文字・装飾', '追加取得'],
 						'NG・表示対象': ['NG条件', 'コメント種別', '動画の除外'],
@@ -68832,7 +69047,7 @@ class ModernAdvancedSettingsModel {
 						return ['ショートカット', action && action.category || 'シーク'];
 				}
 				if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) {
-						return ['再生・音声', 'しおり・ABリピート'];
+						return ['再生・音声', 'ここまで見た・しおり・ABリピート'];
 				}
 				if (/^supporterCredit\./.test(key)) {
 						return ['再生・音声', '提供画面'];
@@ -69247,7 +69462,8 @@ class ModernAdvancedSettingsModel {
 						const prefixOk = id !== 'screenshot.prefix' ||
 								(typeof value === 'string' && !/[<>:"/\\|?*\u0000-\u001f]/.test(value));
 						const cacheEnumOk = id === 'storyboardCacheMaxMB' ? [0, 32, 64, 128, 256, 512].includes(value) :
-								id === 'storyboardCacheDays' ? [1, 3, 7, 14, 30].includes(value) : true;
+								id === 'storyboardCacheDays' ? [1, 3, 7, 14, 30].includes(value) :
+										id === 'bookmark.titleLines' ? [1, 2, 3].includes(value) : true;
 						const valid = basic && rangeOk && stepOk && colorOk && prefixOk && cacheEnumOk &&
 								(!this.config.options?.validateImport || this.config.options.validateImport(id, value));
 						if (!valid) {
@@ -75455,12 +75671,16 @@ const IndexedDbStorage = (() => {
 																if (row && typeof row === 'object' && !Array.isArray(row) && row.watchId === cursor.primaryKey) {
 																		const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 																		const resume = Array.isArray(row.resume) ? row.resume[0]?.time : null;
+																		const thumbnail = [row.videoInfo?.thumbnail, row.videoInfo?.betterThumbnail]
+																				.find(value => typeof value === 'string' && /^https?:\/\//i.test(value));
 																		items.push({
 																				watchId: cursor.primaryKey,
 																				title: typeof row.videoInfo?.title === 'string' ? row.videoInfo.title : cursor.primaryKey,
 																				duration: finite(row.videoInfo?.duration) ? row.videoInfo.duration : 0,
 																				updatedAt: finite(row.updatedAt) ? row.updatedAt : 0,
-																				automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null
+																				automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null,
+																				...(thumbnail !== undefined ? { thumbnailUrl: thumbnail } : {}),
+																				...(finite(row.viewedAt) && row.viewedAt > 0 ? { viewedAt: row.viewedAt } : {})
 																		});
 																}
 																scanned++;
@@ -75970,6 +76190,9 @@ const WatchInfoCacheDb = (() => {
 										}
 								}
 								const explicit = options.explicitResume === true;
+								if (options.watchCount === 1 || (!explicit && Number.isFinite(options.currentTime) &&
+										options.currentTime >= 0))
+										patch.viewedAt = now;
 								if (explicit && (!Number.isFinite(options.currentTime) || options.currentTime < 0)) {
 										throw new TypeError('Invalid explicit resume time');
 								}
@@ -76047,7 +76270,9 @@ const WatchInfoCacheDb = (() => {
 								if (!item || typeof item.watchId !== 'string' || !item.watchId)
 										continue;
 								items.push({ watchId: item.watchId, title: item.title, duration: item.duration,
-										updatedAt: item.updatedAt, automaticTime: item.automaticTime });
+										updatedAt: item.updatedAt, automaticTime: item.automaticTime,
+										...(item.thumbnailUrl !== undefined ? { thumbnailUrl: item.thumbnailUrl } : {}),
+										...(item.viewedAt !== undefined ? { viewedAt: item.viewedAt } : {}) });
 						}
 						afterKey = page.nextKey;
 				} while (afterKey !== null);

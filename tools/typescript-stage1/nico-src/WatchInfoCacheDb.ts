@@ -267,6 +267,9 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
           if (options[key]) { patch[key] = options[key]; }
         }
         const explicit=options.explicitResume===true;
+        // Viewing time is separate from cache access, edits, comments and metadata.
+        if(options.watchCount===1||(!explicit&&Number.isFinite(options.currentTime)&&
+           (options.currentTime as number)>=0))patch.viewedAt=now;
         if(explicit&&(!Number.isFinite(options.currentTime)||(options.currentTime as number)<0)){
           throw new TypeError('Invalid explicit resume time');
         }
@@ -347,7 +350,9 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
       for(const item of page.items){
         if(!item||typeof item.watchId!=='string'||!item.watchId)continue;
         items.push({watchId:item.watchId,title:item.title,duration:item.duration,
-          updatedAt:item.updatedAt,automaticTime:item.automaticTime});
+          updatedAt:item.updatedAt,automaticTime:item.automaticTime,
+          ...(item.thumbnailUrl!==undefined?{thumbnailUrl:item.thumbnailUrl}:{}),
+          ...(item.viewedAt!==undefined?{viewedAt:item.viewedAt}:{})});
       }
       afterKey=page.nextKey;
     }while(afterKey!==null);

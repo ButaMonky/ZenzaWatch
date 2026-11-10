@@ -122,13 +122,22 @@ class ModernAdvancedSettingsModel {
         ['playbackRate','再生速度',{type:'number'}],
         ['enableSingleton','複数のプレイヤーを同時起動しない']
       ]),
-      ...group('再生・音声','しおり・ABリピート',[
+      ...group('再生・音声','ここまで見た・しおり・ABリピート',[
         ['resume.recordEnabled','再生位置を自動で記録',{
           description:'既定ON。一時停止・終了時などの再生位置を動画ごとに1件保存します。OFFではZenzaWatchから端末・サーバーへ自動記録しません。保存済みの位置や手動しおりは消えず、位置の編集・削除は利用できます。公式プレイヤー側の記録には影響しません。'}],
         ['resume.clearOnComplete','最後まで再生したら「ここまで見た」を削除',{
           description:'既定ON。動画の再生完了時に自動位置だけを消去します。手動しおりは残ります。自動記録OFF時は消去しません。'}],
         ['bookmark.showToolbarButton','操作バーに「しおり・ABリピート」を表示',{
-          description:'既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画はキャッシュがある場合に表示します。OFFでも動画情報内から利用できます。'}],
+          description:'既定ON。「ここまで見た」「しおり」「ABリピート」の3タブを開きます。保存一覧では動画をまたいで位置・区間を検索、編集できます。場面画像はシーンサーチの画像を利用し、過去の動画は必要な画像だけ読み込みます。OFFでも動画情報内の入口から利用できます。'}],
+        ['bookmark.showVideoThumbnails','保存一覧に動画サムネイルを表示',{
+          description:'既定ON。動画を識別する小さな画像を表示します。OFFでは画像の場所も詰め、動画サムネイルを読み込みません。'}],
+        ['bookmark.showScenePreviews','シーンプレビューを表示',{
+          description:'既定ON。保存位置や区間の場面画像を表示します。OFFではこのパネルからの場面画像の読み込みを止めます。シーンサーチには影響しません。'}],
+        ['bookmark.thumbnailWidth','保存一覧の動画サムネイルの幅',{...slider(64,160,8),unit:'px'}],
+        ['bookmark.titleFontSize','保存一覧の動画タイトルの文字サイズ',{...slider(11,18,1),unit:'px'}],
+        ['bookmark.titleLines','保存一覧を閉じているときのタイトル行数',{
+          ...select([[1,'1行'],[2,'2行'],[3,'3行']]),
+          description:'長いタイトルは省略します。動画の項目を開くと全タイトルを表示します。'}],
         ['abRepeat.enabled','ABリピートを利用',{
           description:'既定ON。A（開始）からB（終了）の区間を繰り返し、再生バーに範囲を表示します。区間はしおりとして保存できます。動画の切替では実行中のリピートを解除しますが、保存した区間は残ります。OFFにすると実行中の区間リピートも停止します。'}]
       ]),
@@ -481,7 +490,7 @@ class ModernAdvancedSettingsModel {
   static subcategoryPriority(category: string,subcategory: string): number {
     // The left-hand navigation must not move when legacy DOM order changes.
     const order: Record<string,string[]>={
-      '再生・音声':['再生動作','しおり・ABリピート','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
+      '再生・音声':['再生動作','ここまで見た・しおり・ABリピート','音量','読み上げ','動画の取得','公式プレイヤー連携','提供画面'],
       '画面・映像':['表示モード','小画面モード','全画面モード','動画ヘッダー','PiP（小窓再生）','プレイヤーの操作表示','シーンサーチ','シーンサムネイルのキャッシュ','表示・非表示','通知・ポップアップ','画面フィルター','スクリーンショット'],
       'コメント表示':['表示・配置','コメント一覧','文字・装飾','追加取得'],
       'NG・表示対象':['NG条件','コメント種別','動画の除外'],
@@ -501,7 +510,7 @@ class ModernAdvancedSettingsModel {
     if (/^KEY_/.test(key) || /^PARAM_CUSTOM_SEEK_/.test(key)) {
       return ['ショートカット',action && action.category || 'シーク'];
     }
-    if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) { return ['再生・音声','しおり・ABリピート']; }
+    if (/^(resume\.|bookmark\.|abRepeat\.)/.test(key)) { return ['再生・音声','ここまで見た・しおり・ABリピート']; }
     if (/^supporterCredit\./.test(key)) { return ['再生・音声','提供画面']; }
     if (/^audio\./.test(key) || /^(volume|mute|speakLark)/.test(key)) {
       return ['再生・音声','音量'];
@@ -877,7 +886,8 @@ class ModernAdvancedSettingsModel {
       const prefixOk=id!=='screenshot.prefix' ||
         (typeof value==='string' && !/[<>:"/\\|?*\u0000-\u001f]/.test(value));
       const cacheEnumOk=id==='storyboardCacheMaxMB'?[0,32,64,128,256,512].includes(value as number):
-        id==='storyboardCacheDays'?[1,3,7,14,30].includes(value as number):true;
+        id==='storyboardCacheDays'?[1,3,7,14,30].includes(value as number):
+        id==='bookmark.titleLines'?[1,2,3].includes(value as number):true;
       const valid=basic && rangeOk && stepOk && colorOk && prefixOk && cacheEnumOk &&
         (!this.config.options?.validateImport || this.config.options.validateImport(id,value));
       if (!valid) { errs.push({id,message:prefixOk?

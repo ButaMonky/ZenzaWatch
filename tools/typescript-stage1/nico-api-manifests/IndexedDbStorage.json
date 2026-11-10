@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/IndexedDbStorage.ts",
   "runtime": "packages/lib/src/infra/IndexedDbStorage.js",
-  "sourceSha256": "5064696a6b032574d5c1a2b7af89b52611d71f2aed96f3c3d70c3cda58fc27cc",
-  "runtimeSha256": "d6ae9cf8efc690893e716dea8dde335c8f769475b3178ac4936cd11ce4826e7d"
+  "sourceSha256": "abc467b2025c924937ef7594f4ac80783a07d1bbde577724b50bb727d062bcf3",
+  "runtimeSha256": "c4773f8ae041b2b3d5f2a9f9d599608bc0e00075e6c2d48477449076daaf8791"
 }

@@ -30,7 +30,7 @@ class Repo {
  }
  close(){this.closed++;}
 }
-function harness(){
+function harness(setup=()=>{}){
  const dom=new JSDOM('<!doctype html><html><body>'+
    '<div class="zenzaPlayerContainer"><canvas id="native-canvas"></canvas>'+
    '<div id="native"><input id="native-seek" type="range"/>'+
@@ -40,7 +40,7 @@ function harness(){
    '<div class="publicStatus"></div><div class="seriesList"></div>'+
    '<div class="videoDescription"></div></div></div></div></div>'+
    '</body></html>');
- const doc=dom.window.document;
+ const doc=dom.window.document;setup(dom.window);
  const native=doc.getElementById('native');
  const seek=doc.getElementById('native-seek');
  const marker=native.querySelector('.resumePointer');
@@ -199,4 +199,43 @@ test('floating editor keeps native details and checkbox actions away from player
   assert.equal(h.repo.rows.get('sm1').length,0,'delete remains reachable and functional');
   player.click();assert.equal(playerClicks,1,'outside player controls remain unchanged');
  }finally{h.close();}
+});
+
+test('information tab launches one anchored floating panel with no inline duplicate',async()=>{
+ const h=harness();await h.dock.activate('sm1',100);
+ const host=h.doc.querySelector('.zenzaPlayerContainer');
+ const trigger=h.doc.createElement('button');trigger.className='playbackPointsSwitch';host.append(trigger);
+ host.getBoundingClientRect=()=>({left:100,top:100,width:900,height:600,right:1000,bottom:700});
+ trigger.getBoundingClientRect=()=>({left:160,top:650,width:30,height:30,right:190,bottom:680});
+ Object.defineProperty(host,'clientWidth',{value:900});Object.defineProperty(host,'clientHeight',{value:600});
+ assert.equal(h.dock.element.hidden,true);
+ h.doc.querySelector('.zw-points-launcher').click();
+ assert.equal(h.dock.element.hidden,false);assert.equal(h.dock.element.open,true);
+ assert.equal(h.dock.element.parentElement,host);assert.equal(h.dock.element.style.left,'60px');
+ assert.equal(h.dock.element.style.bottom,'58px');
+ h.dock.close();assert.equal(h.dock.element.hidden,true);h.close();
+});
+
+test('hidden toolbar falls back to visible information launcher and opens below near the top',()=>{
+ const h=harness(),host=h.doc.querySelector('.zenzaPlayerContainer'),launcher=h.doc.querySelector('.zw-points-launcher');
+ const hidden=h.doc.createElement('button');hidden.className='playbackPointsSwitch';hidden.hidden=true;host.append(hidden);
+ host.getBoundingClientRect=()=>({left:100,top:100,width:900,height:600,right:1000,bottom:700});
+ launcher.getBoundingClientRect=()=>({left:160,top:120,width:200,height:30,right:360,bottom:150});
+ Object.defineProperty(host,'clientWidth',{value:900});Object.defineProperty(host,'clientHeight',{value:600});
+ launcher.click();assert.equal(h.dock.element.style.left,'60px');assert.equal(h.dock.element.style.top,'58px');
+ assert.equal(h.dock.element.style.bottom,'auto');assert.equal(launcher.getAttribute('aria-expanded'),'true');h.close();
+});
+
+
+test('floating placement observes host and trigger resizing and releases observation on close',()=>{
+ const observed=new Set();let resize;
+ const h=harness(win=>{win.ResizeObserver=class{constructor(fn){resize=fn;}observe(node){observed.add(node);}disconnect(){observed.clear();}};});
+ const host=h.doc.querySelector('.zenzaPlayerContainer'),trigger=h.doc.createElement('button');host.append(trigger);
+ let width=900;
+ host.getBoundingClientRect=()=>({left:0,top:0,width,height:600,right:width,bottom:600});
+ trigger.getBoundingClientRect=()=>({left:500,top:550,width:30,height:30,right:530,bottom:580});
+ Object.defineProperty(host,'clientWidth',{get:()=>width});Object.defineProperty(host,'clientHeight',{value:600});
+ h.dock.toggle(host,trigger);assert(observed.has(host));assert(observed.has(trigger));assert(observed.has(h.dock.element));
+ assert.equal(h.dock.element.style.left,'488px');width=600;resize();assert.equal(h.dock.element.style.left,'188px');
+ h.dock.close();assert.equal(observed.size,0);h.close();
 });

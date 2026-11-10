@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.87-task996
+// @version     0.5.88-task998
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-10 14:44Z 5aaa8a70
+// build: 2026-11-10 16:55Z fab7b4c0
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -7280,7 +7280,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.87-task996', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.88-task998', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();
@@ -8499,12 +8499,16 @@ const IndexedDbStorage = (() => {
 																if (row && typeof row === 'object' && !Array.isArray(row) && row.watchId === cursor.primaryKey) {
 																		const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
 																		const resume = Array.isArray(row.resume) ? row.resume[0]?.time : null;
+																		const thumbnail = [row.videoInfo?.thumbnail, row.videoInfo?.betterThumbnail]
+																				.find(value => typeof value === 'string' && /^https?:\/\//i.test(value));
 																		items.push({
 																				watchId: cursor.primaryKey,
 																				title: typeof row.videoInfo?.title === 'string' ? row.videoInfo.title : cursor.primaryKey,
 																				duration: finite(row.videoInfo?.duration) ? row.videoInfo.duration : 0,
 																				updatedAt: finite(row.updatedAt) ? row.updatedAt : 0,
-																				automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null
+																				automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null,
+																				...(thumbnail !== undefined ? { thumbnailUrl: thumbnail } : {}),
+																				...(finite(row.viewedAt) && row.viewedAt > 0 ? { viewedAt: row.viewedAt } : {})
 																		});
 																}
 																scanned++;

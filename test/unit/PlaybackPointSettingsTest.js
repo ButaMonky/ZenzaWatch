@@ -17,11 +17,11 @@ describe('Playback point advanced settings',()=>{
   const keys=['resume.recordEnabled','resume.clearOnComplete','bookmark.showToolbarButton','abRepeat.enabled'];
   for(const key of keys){
    assert.equal(cfg.default[key],true);
-   const d=m.descriptor(key);assert(d);assert.equal(d.category,'再生・音声');assert.equal(d.subcategory,'しおり・ABリピート');
+   const d=m.descriptor(key);assert(d);assert.equal(d.category,'再生・音声');assert.equal(d.subcategory,'ここまで見た・しおり・ABリピート');
    assert.equal(m.descriptors.filter(x=>x.id===key).length,1);
    m.set(key,false);assert.equal(saved[key],true,'draft must not affect player');
   }
   m.cancel();for(const key of keys)assert.equal(m.get(key),true);
-  m.set(keys[0],false);m.resetSubcategory('再生・音声','しおり・ABリピート');assert.equal(m.get(keys[0]),true);
+  m.set(keys[0],false);m.resetSubcategory('再生・音声','ここまで見た・しおり・ABリピート');assert.equal(m.get(keys[0]),true);
  });
 });

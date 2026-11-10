@@ -16,6 +16,7 @@ export class ManualBookmarkDock {
   private readonly panel:ManualBookmarkPanel;
   private readonly session:ManualBookmarkSession;
   private readonly keyHandler:(event:KeyboardEvent)=>void;
+  private readonly clickHandler:(event:MouseEvent)=>void;
   private readonly visibilityHandler:()=>void;
   private readonly toggleHandler:()=>void;
   private readonly outsideHandler:(event:Event)=>void;
@@ -105,6 +106,11 @@ export class ManualBookmarkDock {
     };
     node.addEventListener('keydown',this.keyHandler);
     node.addEventListener('keyup',this.keyHandler);
+    // Floating placement makes the player container an ancestor. Its click
+    // handler cancels default actions, including details/summary and checkboxes.
+    // Keep dock clicks here without cancelling their native default actions.
+    this.clickHandler=event=>event.stopPropagation();
+    node.addEventListener('click',this.clickHandler);
     // When another tab was editing the same video, a visible open Dock
     // checks the latest record. Broadcast no video IDs or bookmark content.
     this.visibilityHandler=()=>{
@@ -130,6 +136,7 @@ export class ManualBookmarkDock {
       node.removeEventListener('toggle',this.toggleHandler);
       node.removeEventListener('keydown',this.keyHandler);
       node.removeEventListener('keyup',this.keyHandler);
+      node.removeEventListener('click',this.clickHandler);
       node.remove();
       throw error;
     }
@@ -219,6 +226,7 @@ export class ManualBookmarkDock {
     this.cancelAnimation();
     this.node.removeEventListener('keydown',this.keyHandler);
     this.node.removeEventListener('keyup',this.keyHandler);
+    this.node.removeEventListener('click',this.clickHandler);
     this.node.ownerDocument.removeEventListener('visibilitychange',this.visibilityHandler);
     this.node.ownerDocument.removeEventListener('pointerdown',this.outsideHandler,true);
     this.node.ownerDocument.removeEventListener('click',this.outsideHandler,true);

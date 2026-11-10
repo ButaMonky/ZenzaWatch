@@ -12,6 +12,8 @@ const NotificationJournal = (() => {
     const recent = [];
     const diagnosticGroups = new Map();
     let sequence = 0;
+    let buildIdentity = {};
+    const configureBuild = (version, build) => { buildIdentity = { version, build }; };
     const store = NotificationJournalStore.create(typeof indexedDB === 'undefined' ? undefined : indexedDB);
     const announce = () => {
         for (const listener of listeners) {
@@ -26,7 +28,7 @@ const NotificationJournal = (() => {
             return null;
         }
         const now = Date.now();
-        const entry = NotificationJournalPolicy.normalize(input, {
+        const entry = NotificationJournalPolicy.normalize({ ...input, ...buildIdentity, firstOccurredAt: now, lastOccurredAt: now, recoveredAt: undefined }, {
             id: now.toString(36) + '-' + (++sequence).toString(36) + '-' +
                 Math.random().toString(36).slice(2, 10),
             timestamp: now
@@ -95,9 +97,14 @@ const NotificationJournal = (() => {
             return null;
         }
         const count = Math.min(1e12, Number(previous?.details.count || 0) + (recovered ? 0 : 1));
-        const data = { ...input, details: { ...(recovered ? previous?.details : {}), ...fields, count,
-                ...(recovered && previous?.details.reason ? { reason: previous.details.reason } : {}) } };
         const now = Date.now();
+        const data = { ...input, ...buildIdentity,
+            version: previous?.version ?? buildIdentity.version, build: previous?.build ?? buildIdentity.build,
+            firstOccurredAt: previous?.firstOccurredAt ?? now,
+            lastOccurredAt: recovered ? previous?.lastOccurredAt : Math.max(now, previous?.lastOccurredAt ?? now),
+            recoveredAt: recovered ? Math.max(now, previous?.lastOccurredAt ?? now) : undefined,
+            details: { ...(recovered ? previous?.details : {}), ...fields, count,
+                ...(recovered && previous?.details.reason ? { reason: previous.details.reason } : {}) } };
         const entry = NotificationJournalPolicy.normalize(data, {
             id: previous?.id || now.toString(36) + '-' + (++sequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10),
             timestamp: now
@@ -149,7 +156,7 @@ const NotificationJournal = (() => {
         listeners.add(listener);
         return () => listeners.delete(listener);
     };
-    return { record, recordDiagnostic, list, clear, subscribe };
+    return { record, recordDiagnostic, list, clear, subscribe, configureBuild };
 })();
 //===END===
 export {NotificationJournal};

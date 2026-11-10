@@ -8,6 +8,11 @@ export interface JournalInput {
   videoId?: unknown;
   source?: unknown;
   details?: unknown;
+  version?: unknown;
+  build?: unknown;
+  firstOccurredAt?: unknown;
+  lastOccurredAt?: unknown;
+  recoveredAt?: unknown;
 }
 export interface JournalEntry {
   id: string;
@@ -18,6 +23,11 @@ export interface JournalEntry {
   videoId: string;
   source: string;
   details: JournalDetails;
+  version?: string;
+  build?: string;
+  firstOccurredAt?: number;
+  lastOccurredAt?: number;
+  recoveredAt?: number;
 }
 
 const NotificationJournalPolicy = (() => {
@@ -78,7 +88,13 @@ const NotificationJournalPolicy = (() => {
       message: text(entry.message),
       videoId: videoId(entry.videoId),
       source: code(entry.source) || '',
-      details: details(entry.details)
+      details: details(entry.details),
+      ...(typeof entry.version === 'string' && /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(entry.version) && entry.version.length <= 64 ? {version: entry.version} : {}),
+      ...(typeof entry.build === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}Z [a-f0-9]{7,40}$/i.test(entry.build) ? {build: entry.build} : {}),
+      ...Object.fromEntries(['firstOccurredAt','lastOccurredAt','recoveredAt'].flatMap(key => {
+        const value = entry[key as keyof JournalInput];
+        return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 8640000000000000 ? [[key,value]] : [];
+      }))
     };
   };
   return {normalize};

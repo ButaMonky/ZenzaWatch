@@ -25,13 +25,13 @@ const NotificationHistoryPanel = (() => {
     network: '通信', player: '再生', system: '内部処理'
   };
   const style = [
-    '.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:auto;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
+    '.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
     '.zenzaNotificationDock[hidden]{display:none!important;}',
     '.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
     // Scroll the complete history view on short players: shrinking only the list
     // lets the toolbar consume its entire height and makes stored entries unreadable.
-    '.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;display:block;overflow:auto;overscroll-behavior:contain;}',
-    '.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;}',
+    '.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
+    '.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;overflow:auto;max-height:min(70vh,640px);}',
     '.zenzaNotificationHistory *{box-sizing:border-box;}',
     '.zenzaNotificationHistory .znh-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:9px;}',
     '.zenzaNotificationHistory input,.zenzaNotificationHistory select,.zenzaNotificationHistory button{font:inherit;}',
@@ -42,7 +42,7 @@ const NotificationHistoryPanel = (() => {
     '.zenzaNotificationHistory button:hover{background:#555;}',
     '.zenzaNotificationHistory button:focus-visible,.zenzaNotificationHistory input:focus-visible,.zenzaNotificationHistory select:focus-visible{outline:2px solid #9cf;outline-offset:1px;}',
     '.zenzaNotificationHistory .znh-status{font-size:12px;color:#bbb;min-height:18px;margin-bottom:6px;}',
-    '.zenzaNotificationHistory .znh-list{overflow:auto;max-height:min(60vh,640px);overscroll-behavior:contain;}',
+    '.zenzaNotificationHistory .znh-list{overflow:visible;}',
     '.zenzaNotificationHistory .znh-entry{padding:9px 4px;border-bottom:1px solid #555;overflow-wrap:anywhere;}',
     '.zenzaNotificationHistory .znh-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}',
     '.zenzaNotificationHistory .znh-tag{font-size:11px;border-radius:3px;background:#444;padding:2px 5px;}',
@@ -53,6 +53,13 @@ const NotificationHistoryPanel = (() => {
     '.zenzaNotificationHistory .znh-message{white-space:pre-wrap;word-break:break-word;margin:6px 0;}',
     '.zenzaNotificationHistory details{color:#bbb;font-size:11px;}',
     '.zenzaNotificationHistory details pre{white-space:pre-wrap;word-break:break-word;user-select:text;color:#ddd;}',
+    '.zenzaNotificationHistory [hidden]{display:none!important;}',
+    '.zenzaNotificationHistory .znh-entry-open{display:block;width:100%;text-align:left;border:0;background:transparent;padding:5px 0;overflow-wrap:anywhere;}',
+    '.zenzaNotificationHistory .znh-detail dl{display:grid;grid-template-columns:95px minmax(0,1fr);gap:7px 10px;margin:14px 0;}',
+    '.zenzaNotificationHistory .znh-detail dt{color:#bbb;}.zenzaNotificationHistory .znh-detail dd{margin:0;overflow-wrap:anywhere;}',
+    '.zenzaNotificationHistory .znh-detail h3{font-size:15px;margin:12px 0 6px;}.zenzaNotificationHistory .znh-detail p{white-space:pre-wrap;overflow-wrap:anywhere;}',
+    '.zenzaNotificationHistory .znh-report{width:100%;min-height:150px;background:#292929;color:#eee;white-space:pre-wrap;}',
+    '.zenzaNotificationHistory .znh-management{margin-left:auto;}.zenzaNotificationHistory summary{cursor:pointer;}',
     '.zenzaNotificationHistory .znh-actions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:9px;}'
   ].join('\n');
   const element = <K extends keyof HTMLElementTagNameMap>(tag: K, className = '', content?: unknown): HTMLElementTagNameMap[K] => {
@@ -60,6 +67,32 @@ const NotificationHistoryPanel = (() => {
     if (className) { node.className = className; }
     if (content !== undefined) { node.textContent = String(content); }
     return node;
+  };
+  const featureLabels: Record<string,string> = {
+    advertising:'ニコニ広告',search:'検索','tag-suggest':'タグ候補',tags:'タグ',
+    'comment-read':'コメント取得','comment-key':'コメント取得キー','video-info':'動画情報',
+    'video-session':'再生セッション',supporters:'広告・ギフトの支援者',gifts:'ギフト',
+    'ad-decoration':'広告装飾',dictionary:'大百科',recommend:'関連動画・シリーズ',owner:'投稿者情報'
+  };
+  const formatTime = (value: unknown): string => typeof value === 'number' && Number.isFinite(value) &&
+    Math.abs(value) <= 8640000000000000 ? new Date(value).toLocaleString('ja-JP') : '記録なし（旧版など）';
+  const stateLabel = (entry: JournalEntry): string => entry.details?.outcome === 'recovered' ? '復旧済み' :
+    entry.details?.reason === 'not-found' ? '対象なし・要確認' :
+    entry.details?.outcome === 'failed' ? '復旧未確認' : labels[entry.category] || '通知';
+  const description = (entry: JournalEntry): string => {
+    const d = entry.details || {};
+    if(d.outcome === 'recovered') return 'その後の処理成功を確認しました。下の失敗理由・HTTP状態は最後の失敗時の記録です。';
+    if(d.reason === 'not-found' && (entry.source === 'advertising' || d.operation === 'advertising'))
+      return '広告APIが対象なしを返しました。広告なし・対象外・API変更などの可能性があり、この応答だけでは判別できません。調査できるよう記録を残しています。';
+    const explanations: Record<string,string> = {
+      schema:'受け取った情報を想定した形式で読み取れませんでした。APIの仕様変更と断定はできません。',
+      timeout:'制限時間内に処理が完了しませんでした。',
+      permission:'アクセス権限またはログイン状態の確認が必要な応答です。',
+      'not-found':'要求した対象が見つからないという応答です。対象の状態やAPIの変更などが考えられます。',
+      http:'サーバーからエラー応答が返りました。HTTP状態を確認できます。',
+      network:'通信または処理が完了しませんでした。回線障害など原因の特定まではできていません。'
+    };
+    return explanations[String(d.reason)] || 'この通知について記録された情報を表示しています。';
   };
   const mount = (root: HTMLElement | null, events?: TabEvents,
     isVisible: () => boolean = () => !!root?.classList.contains('activeTab')): (() => void) | void => {
@@ -93,7 +126,9 @@ const NotificationHistoryPanel = (() => {
     save.type = 'button';
     const clear = element('button', '', '全件削除');
     clear.type = 'button';
-    toolbar.append(query, filter, refresh, save, clear);
+    const management = element('details', 'znh-management');
+    management.append(element('summary', '', '履歴の管理'), refresh, save, clear);
+    toolbar.append(query, filter, management);
     const status = element('div', 'znh-status');
     status.setAttribute('role', 'status');
     const listNode = element('div', 'znh-list');
@@ -101,10 +136,71 @@ const NotificationHistoryPanel = (() => {
     const more = element('button', '', 'さらに表示');
     more.type = 'button';
     actions.append(more);
-    view.append(toolbar, status, listNode, actions);
+    const detailNode = element('div', 'znh-detail'); detailNode.hidden = true;
+    view.append(toolbar, status, listNode, actions, detailNode);
     root.append(view);
 
     let shown = 100;
+    let selectedId: string | null = null;
+    let lastOpenedId: string | null = null;
+    let listScroll = 0;
+    let restoreListFocus = false;
+    let detailSignature = '';
+    let currentEntries: JournalEntry[] = [];
+    const returnToList = () => {
+      selectedId = null; detailSignature = '';
+      toolbar.hidden = status.hidden = listNode.hidden = actions.hidden = false;
+      detailNode.hidden = true;
+      restoreListFocus = true; view.scrollTop = listScroll;
+    };
+    const showDetail = (entry: JournalEntry) => {
+      const signature = JSON.stringify(entry);
+      toolbar.hidden = status.hidden = listNode.hidden = actions.hidden = true;
+      detailNode.hidden = false;
+      if(signature === detailSignature) return;
+      detailSignature = signature;
+      const wasOpen = !!detailNode.querySelector('details[open]');
+      const focused = document.activeElement && detailNode.contains(document.activeElement) ?
+        (document.activeElement as HTMLElement).dataset.historyAction : undefined;
+      detailNode.replaceChildren();
+      const back = element('button', '', '‹ 一覧へ戻る'); back.type='button'; back.dataset.historyBack=''; back.dataset.historyAction='back';
+      back.addEventListener('click', () => {returnToList();schedule();});
+      detailNode.append(back, element('p','znh-tag',stateLabel(entry)),element('h3','',entry.message),element('p','',description(entry)));
+      const pairs: [string,string][] = [
+        ['機能', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'],
+        ['段階', ({transport:'通信',response:'応答の確認',session:'処理'} as Record<string,string>)[String(entry.details?.phase)] || '記録なし'],
+        ['発生回数', typeof entry.details?.count === 'number' ? entry.details.count+'回' : '1回'],
+        ['発生時の版', entry.version || '記録なし（旧版など）'],['ビルド',entry.build || '記録なし（旧版など）'],
+        ['初回発生',formatTime(entry.firstOccurredAt)],['最終発生',formatTime(entry.lastOccurredAt)],
+        ['復旧時刻',entry.recoveredAt === undefined ? (entry.details?.outcome === 'recovered' ? '記録なし（旧版など）' : '復旧の記録なし') : formatTime(entry.recoveredAt)]
+      ];
+      if(entry.firstOccurredAt === undefined) pairs.push(['従来の記録時刻',formatTime(entry.timestamp)]);
+      const grid=element('dl');for(const [name,value] of pairs) grid.append(element('dt','',name),element('dd','',value));
+      detailNode.append(grid);
+      if(entry.details?.outcome === 'recovered') detailNode.append(element('p','','この記録について追加の操作は不要です。'));
+      else if(entry.details?.outcome === 'failed' || entry.level === 'error' || entry.level === 'warning')
+        detailNode.append(element('p','','問題が続く場合は、下の「この記録をコピー」で発生時の情報を添えて報告できます。'));
+      const technical=element('details');technical.open=wasOpen;
+      technical.append(element('summary','','技術的な詳細'),element('pre','',JSON.stringify({...entry.details,source:entry.source},null,2)));
+      const copy=element('button','','この記録をコピー');copy.type='button';copy.dataset.historyAction='copy';
+      const copyStatus=element('p','znh-status');copyStatus.setAttribute('role','status');
+      const report=[entry.message,description(entry),...pairs.map(([key,value])=>key+': '+value),'診断情報: '+JSON.stringify({...entry.details,source:entry.source})].join('\n');
+      copy.addEventListener('click',async()=>{
+        try {
+          if(!window.navigator.clipboard?.writeText) throw new Error('unavailable');
+          await window.navigator.clipboard.writeText(report);
+          if(!disposed && selectedId===entry.id) copyStatus.textContent='この記録をコピーしました';
+        } catch {
+          if(disposed || selectedId!==entry.id) return;
+          copyStatus.textContent='自動コピーできませんでした。下の報告文を選択してコピーできます。';
+          let text=detailNode.querySelector<HTMLTextAreaElement>('textarea');
+          if(!text){text=element('textarea','znh-report');text.readOnly=true;text.setAttribute('aria-label','報告文');detailNode.append(text);}
+          text.value=report;text.focus();text.select();
+        }
+      });
+      detailNode.append(technical,copy,copyStatus);
+      if(focused) detailNode.querySelector<HTMLButtonElement>('[data-history-action="'+focused+'"]')?.focus({preventScroll:true});
+    };
     let revision = 0;
     let scheduled = false;
     let dirty = false;
@@ -125,6 +221,12 @@ const NotificationHistoryPanel = (() => {
       if (disposed || !isVisible()) { return; }
       const all = await snapshot();
       if (disposed || !isVisible() || version !== revision) { return; }
+      currentEntries = all;
+      if(selectedId) {
+        const selected = all.find(entry=>entry.id===selectedId);
+        if(selected){showDetail(selected);return;}
+        returnToList();
+      }
       const entries = all.filter(matches);
       listNode.replaceChildren();
       const fragment = document.createDocumentFragment();
@@ -133,29 +235,36 @@ const NotificationHistoryPanel = (() => {
         item.dataset.level = entry.level;
         const head = element('div', 'znh-head');
         head.append(
-          element('span', 'znh-tag', labels[entry.category] || '通知'),
+          element('span', 'znh-tag', featureLabels[String(entry.details?.operation || entry.source)] || labels[entry.category] || '通知'),
           element('span', 'znh-date', new Date(entry.timestamp).toLocaleString('ja-JP'))
         );
         if (entry.videoId) { head.append(element('span', 'znh-date', entry.videoId)); }
-        item.append(head, element('div', 'znh-message', entry.message));
+        const entryButton=element('button','znh-message znh-entry-open',entry.message+' ›');
+        entryButton.type='button';entryButton.dataset.entryId=entry.id;
+        entryButton.addEventListener('click',()=>{
+          listScroll=view.scrollTop;selectedId=lastOpenedId=entry.id;detailSignature='';
+          showDetail(currentEntries.find(item=>item.id===entry.id) || entry);view.scrollTop=0;
+          detailNode.querySelector<HTMLButtonElement>('[data-history-back]')?.focus({preventScroll:true});
+        });
+        item.append(head, entryButton);
         const meta = entry.details || {};
         if (typeof meta.count === 'number' && meta.count > 0) {
           head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
             (meta.outcome === 'recovered' ? '・復旧済み' : '')));
         }
-        if (Object.keys(meta).length || entry.source) {
-          const moreDetails = element('details');
-          moreDetails.append(element('summary', '', '診断情報'));
-          const payload = Object.assign({}, meta);
-          if (entry.source) { payload.source = entry.source; }
-          moreDetails.append(element('pre', '', JSON.stringify(payload, null, 2)));
-          item.append(moreDetails);
+        if(meta.outcome !== 'recovered' && (meta.outcome === 'failed' || meta.reason === 'not-found')) {
+          head.append(element('span','znh-tag',stateLabel(entry)));
         }
         fragment.append(item);
       }
       listNode.append(fragment);
       status.textContent = entries.length + '件表示対象 / 履歴' + all.length + '件';
       more.hidden = entries.length <= shown;
+      if(restoreListFocus){
+        restoreListFocus=false;
+        const row=Array.from(listNode.querySelectorAll<HTMLButtonElement>('[data-entry-id]')).find(node=>node.dataset.entryId===lastOpenedId);
+        (row || query).focus({preventScroll:true});view.scrollTop=listScroll;
+      }
     };
     const schedule = (): void => {
       if (disposed || !isVisible()) { return; }
@@ -170,7 +279,7 @@ const NotificationHistoryPanel = (() => {
             try { await render(version); }
             catch (_) {
               if (!disposed && isVisible() && version === revision) {
-                status.textContent = '履歴の読み込みに失敗しました';
+                status.hidden=false;status.textContent = '履歴の読み込みに失敗しました';
               }
             }
           } while (dirty && !disposed && isVisible());
@@ -206,6 +315,8 @@ const NotificationHistoryPanel = (() => {
       if (disposed || !isVisible()) { return; }
       if (!window.confirm('通知・エラー履歴をすべて削除しますか？')) { return; }
       const ok = await NotificationJournal.clear();
+      if(disposed || !isVisible()) return;
+      returnToList();
       status.textContent = ok ? '履歴を削除しました' :
         'セッション履歴を削除しました。保存領域は削除できていない可能性があります';
       schedule();
@@ -321,7 +432,7 @@ const NotificationHistoryPanel = (() => {
         dock.hidden = false;
         button.setAttribute('aria-expanded', 'true');
         refresh();
-        dock.querySelector<HTMLInputElement>('input')?.focus();
+        dock.querySelector<HTMLElement>('.znh-detail:not([hidden]) [data-history-back], .znh-toolbar:not([hidden]) input')?.focus();
         animate(true);
       },
       close,

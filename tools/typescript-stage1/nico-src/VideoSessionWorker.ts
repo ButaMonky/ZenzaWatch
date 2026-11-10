@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for packages/lib/src/nico/VideoSessionWorker.js (Task651).
  * Video sessions (domand HLS access rights, legacy DMC sessions with heartbeat) and
@@ -1251,6 +1252,16 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
   };
 
   let worker: CrossMessageWorker | undefined;
+  let diagnosticGeneration = 0;
+  const observeSession = async <T>(scope: string, active: () => boolean, operation: () => Promise<T>): Promise<T> => {
+    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('video-session', scope, 'session', active);
+    try {
+      const result = await operation();
+      diagnostic?.success();
+      return result;
+    } catch (error) { diagnostic?.failure(error); throw error; }
+  };
   const initWorker = (): CrossMessageWorker | undefined => {
     if (worker) { return worker; }
     worker = worker || workerUtil.createCrossMessageWorker(func, {
@@ -1267,6 +1278,9 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     return undefined;
   };
   const create = async ({videoInfo, videoQuality, serverType, useHLS}: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean}): Promise<VideoSessionHandle> => {
+    const generation = ++diagnosticGeneration;
+    let closed = false;
+    const active = () => !closed && generation === diagnosticGeneration;
     await initWorker();
     const params = {
       videoInfo: videoInfo.toJSON(),
@@ -1274,12 +1288,24 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
       serverType,
       useHLS
     };
-    const result = await (worker as CrossMessageWorker).post({command: 'create', params});
+    const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
+    const result = await observeSession(scope + '-create', active,
+      () => (worker as CrossMessageWorker).post({command: 'create', params}));
     const sessionId = result.sessionId;
     return Object.assign(result, {
-      connect: () => (worker as CrossMessageWorker).post({command: 'connect', params: {sessionId}}),
-      getState: () => (worker as CrossMessageWorker).post({command: 'getState', params: {sessionId}}),
-      close: () => (worker as CrossMessageWorker).post({command: 'close', params: {sessionId}})
+      connect: () => observeSession(scope + '-connect', active,
+        () => (worker as CrossMessageWorker).post({command: 'connect', params: {sessionId}})),
+      getState: () => {
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+          RequestDiagnostics.begin('session-state', scope, 'session', active);
+        return (worker as CrossMessageWorker).post({command: 'getState', params: {sessionId}}).then(state => {
+          if (state?.isAbnormallyClosed) { diagnostic?.failure({reason: 'session-closed'}); }
+          else if (state?.sessionId && !state.isDeleted) { diagnostic?.success(); }
+          else { diagnostic?.failure({name: 'AbortError'}); }
+          return state;
+        }, error => { diagnostic?.failure(error); throw error; });
+      },
+      close: () => { closed = true; return (worker as CrossMessageWorker).post({command: 'close', params: {sessionId}}); }
     });
   };
 

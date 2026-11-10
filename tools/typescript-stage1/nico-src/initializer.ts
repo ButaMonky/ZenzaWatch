@@ -1,3 +1,5 @@
+declare const NotificationJournal: typeof import('./NotificationJournal').NotificationJournal;
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for src/initializer.js (Task965).
  */
@@ -184,6 +186,17 @@ const {initialize} = (() => {
 //@require replaceRedirectLinks
 
   const initialize = async function (){
+    if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
+      RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
+        category: 'network', source: event.operation, message: event.message,
+        level: event.outcome === 'recovered' ? 'success' :
+          ['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
+        details: {operation: event.operation, phase: event.phase, outcome: event.outcome,
+          reason: event.reason, elapsedMs: event.elapsedMs,
+          ...(event.statusCode === undefined ? {} : {statusCode: event.statusCode}),
+          ...(event.errorCode === undefined ? {} : {errorCode: event.errorCode})}
+      }));
+    }
     window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
 
     domEvent.dispatchCustomEvent(

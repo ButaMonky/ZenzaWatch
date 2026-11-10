@@ -1,3 +1,4 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {PopupMessage} from '../ui/PopupMessage';
 import {sleep} from '../infra/sleep';
 import {netUtil} from '../../../lib/src/infra/netUtil';
@@ -9,6 +10,7 @@ const debug = {};
 
 // GENERATED FROM tools/typescript-stage1/nico-src/ThreadLoader.ts (Task648). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 
 // Task 088（監査v2 ZW-056）: 送信内容・キー・本文・ユーザーID をログに出す時は logSafe.redact を通す
 //@require logSafe
@@ -364,6 +366,8 @@ const { ThreadLoader } = (() => {
             this._threadKeys = {};
         }
         async getThreadKey(videoId, options = {}) {
+            const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+                RequestDiagnostics.begin('comment-key', videoId, 'response', () => !options.signal?.aborted);
             let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
             console.log('getThreadKey request');
             try {
@@ -382,9 +386,11 @@ const { ThreadLoader } = (() => {
                 // A malformed key response must never replace the last known good key.
                 const validData = CommentReadAdapter.threadKey(data);
                 this._threadKeys[videoId] = validData.threadKey;
+                diagnostic?.success();
                 return validData;
             }
             catch (result) {
+                diagnostic?.failure(result);
                 throw { result, message: `ThreadKeyの取得失敗 ${videoId}` };
             }
         }
@@ -467,6 +473,8 @@ const { ThreadLoader } = (() => {
             }
             const url = new URL('/v1/threads', server);
             console.log('load threads request');
+            const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+                RequestDiagnostics.begin('comment-read', String(msgInfo.videoId), 'response', () => !options.signal?.aborted);
             try {
                 const { meta, data } = await readJson(url, {
                     method: 'POST',
@@ -489,9 +497,11 @@ const { ThreadLoader } = (() => {
                 // 発生した場合に msgInfo.language / threadInfo.language を
                 // 実態に合わせて更新できるようにする（Task B-5 追加調査）。
                 validData.__usedLanguage = packet.params.language;
+                diagnostic?.success();
                 return validData;
             }
             catch (result) {
+                diagnostic?.failure(result);
                 checkAbort(options.signal);
                 // Only a bounded event label is logged; the original error is rethrown unchanged.
                 window.console.error('_load threads fail');

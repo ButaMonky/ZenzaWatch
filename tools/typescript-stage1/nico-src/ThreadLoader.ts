@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for packages/lib/src/nico/ThreadLoader.js (Task648).
  * nvComment client: thread-key fetch, thread load with retries and language
@@ -398,6 +399,8 @@ const {ThreadLoader} = (() => {
     }
 
     async getThreadKey(videoId: string, options: LoadOptions = {}): Promise<{threadKey: string; [key: string]: unknown}> {
+      const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+        RequestDiagnostics.begin('comment-key', videoId, 'response', () => !options.signal?.aborted);
       let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
 
       console.log('getThreadKey request');
@@ -417,8 +420,10 @@ const {ThreadLoader} = (() => {
         // A malformed key response must never replace the last known good key.
         const validData = CommentReadAdapter.threadKey(data) as {threadKey: string; [key: string]: unknown};
         this._threadKeys[videoId] = validData.threadKey;
+        diagnostic?.success();
         return validData
       } catch (result) {
+        diagnostic?.failure(result);
         throw { result, message: `ThreadKeyの取得失敗 ${videoId}` }
       }
     }
@@ -512,6 +517,8 @@ const {ThreadLoader} = (() => {
 
       const url = new URL('/v1/threads', server);
       console.log('load threads request');
+      const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+        RequestDiagnostics.begin('comment-read', String(msgInfo.videoId), 'response', () => !options.signal?.aborted);
       try {
         const { meta, data } = await readJson(url, {
           method: 'POST',
@@ -534,8 +541,10 @@ const {ThreadLoader} = (() => {
         // 発生した場合に msgInfo.language / threadInfo.language を
         // 実態に合わせて更新できるようにする（Task B-5 追加調査）。
         validData.__usedLanguage = packet.params.language as string;
+        diagnostic?.success();
         return validData;
       } catch (result) {
+        diagnostic?.failure(result);
         checkAbort(options.signal);
         // Only a bounded event label is logged; the original error is rethrown unchanged.
         window.console.error('_load threads fail');

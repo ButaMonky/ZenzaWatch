@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.366-task990
+// @version        2.7.367-task991
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 05:26Z 05205ef
+// build: 2026-11-10 06:05Z fa32f1e
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -115,10 +115,10 @@ AntiPrototypeJs();
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.366-task990';
+    var VER = '2.7.367-task991';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 05:26Z 05205ef';
+    var BUILD = '2026-11-10 06:05Z fa32f1e';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5517,7 +5517,7 @@ const NotificationJournalPolicy = (() => {
 		const safeKeys = new Set([
 				'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode',
 				'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
-				'operation', 'kind', 'errorName', 'requestId', 'postedNo'
+				'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs'
 		]);
 		const privatePath = (path) => path
 				.replace(/\/[^/]+/g, segment => /%[0-9a-f]{2}|^\/[a-z0-9._~+=-]{24,}$/i.test(segment) ? '/[REDACTED]' : segment)
@@ -5744,6 +5744,7 @@ const NotificationJournal = (() => {
 		const listeners = new Set();
 		const session = [];
 		const recent = [];
+		const diagnosticGroups = new Map();
 		let sequence = 0;
 		const store = NotificationJournalStore.create(typeof indexedDB === 'undefined' ? undefined : indexedDB);
 		const announce = () => {
@@ -5786,7 +5787,7 @@ const NotificationJournal = (() => {
 						recent.length = 8;
 				}
 				store.append(entry, () => {
-						const index = session.findIndex(item => item.id === entry.id);
+						const index = session.indexOf(entry);
 						if (index !== -1) {
 								session.splice(index, 1);
 						}
@@ -5810,10 +5811,56 @@ const NotificationJournal = (() => {
 						.sort((a, b) => b.timestamp - a.timestamp || (a.id < b.id ? 1 : -1))
 						.slice(0, count);
 		};
+		const recordDiagnostic = (key, input) => {
+				if (!/^diag-[a-z0-9-]{1,150}$/.test(key)) {
+						return null;
+				}
+				const previous = diagnosticGroups.get(key);
+				const fields = input.details && typeof input.details === 'object' ? input.details : {};
+				const recovered = fields.outcome === 'recovered';
+				if (recovered && !previous) {
+						return null;
+				}
+				const count = Math.min(1e12, Number(previous?.details.count || 0) + (recovered ? 0 : 1));
+				const data = { ...input, details: { ...(recovered ? previous?.details : {}), ...fields, count,
+								...(recovered && previous?.details.reason ? { reason: previous.details.reason } : {}) } };
+				const now = Date.now();
+				const entry = NotificationJournalPolicy.normalize(data, {
+						id: previous?.id || now.toString(36) + '-' + (++sequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10),
+						timestamp: now
+				});
+				if (!entry || !entry.message) {
+						return null;
+				}
+				diagnosticGroups.delete(key);
+				if (!recovered) {
+						diagnosticGroups.set(key, entry);
+				}
+				while (diagnosticGroups.size > 100) {
+						diagnosticGroups.delete(diagnosticGroups.keys().next().value);
+				}
+				const old = session.findIndex(item => item.id === entry.id);
+				if (old !== -1) {
+						session.splice(old, 1);
+				}
+				session.unshift(entry);
+				if (session.length > MAX_SESSION) {
+						session.length = MAX_SESSION;
+				}
+				store.append(entry, () => {
+						const index = session.indexOf(entry);
+						if (index !== -1) {
+								session.splice(index, 1);
+						}
+				});
+				announce();
+				return entry;
+		};
 		const clear = () => {
 				const clearing = store.clear();
 				session.length = 0;
 				recent.length = 0;
+				diagnosticGroups.clear();
 				announce();
 				return clearing;
 		};
@@ -5824,7 +5871,7 @@ const NotificationJournal = (() => {
 				listeners.add(listener);
 				return () => listeners.delete(listener);
 		};
-		return { record, list, clear, subscribe };
+		return { record, recordDiagnostic, list, clear, subscribe };
 })();
 const PopupMessage = (() => {
 		const __css__ = `
@@ -6795,11 +6842,191 @@ const Clipboard = {
 		}
 };
 util.copyToClipBoard = Clipboard.copyText;
+const RequestDiagnostics = (() => {
+		const labels = {
+				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
+				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
+				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
+				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI'
+		};
+		const activeTickets = new Map();
+		const failures = new Map();
+		let sink;
+		const noop = { success() { }, failure() { }, response() { } };
+		const scopeId = (value) => {
+				let a = 2166136261, b = 5381;
+				for (let i = 0; i < value.length; i++) {
+						a = Math.imul(a ^ value.charCodeAt(i), 16777619);
+						b = Math.imul(b, 33) ^ value.charCodeAt(i);
+				}
+				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
+		};
+		const classify = (error) => {
+				const outer = error && typeof error === 'object' ? error : {};
+				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				const status = e.statusCode ?? e.status ?? e.httpStatus;
+				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
+						'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
+				const fields = {
+						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
+						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
+				};
+				if (e.name === 'AbortError' || e.reason === 'cancelled') {
+						return { reason: 'cancelled' };
+				}
+				if (e.reason === 'session-closed') {
+						return { reason: 'session-closed' };
+				}
+				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
+						return { reason: 'timeout', ...fields };
+				}
+				if (status === 404 || e.reason === 'not found') {
+						return { reason: 'not-found', ...fields };
+				}
+				if (status === 401 || status === 403 || ['forbidden', 'need payment', 'premium only', 'member only'].includes(String(e.reason))) {
+						return { reason: 'permission', ...fields };
+				}
+				if (e.reason === 'not supported') {
+						return { reason: 'unavailable', ...fields };
+				}
+				if (e.kind === 'schema' || e.name === 'SyntaxError' || e.reason === 'watch api' ||
+						['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA'].includes(String(e.errorCode))) {
+						return { reason: 'schema', ...fields };
+				}
+				if (fields.statusCode) {
+						return { reason: 'http', ...fields };
+				}
+				return { reason: 'network' };
+		};
+		const begin = (operation, scope, phase, active = () => true) => {
+				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
+						return noop;
+				}
+				const started = Date.now();
+				const key = 'diag-' + operation + '-' + phase + '-' + scopeId(scope);
+				const previous = activeTickets.get(key);
+				if (previous) {
+						previous.superseded = true;
+				}
+				const state = { superseded: false };
+				activeTickets.set(key, state);
+				let finished = false;
+				const emit = (outcome, failure) => {
+						if (finished) {
+								return;
+						}
+						finished = true;
+						if (activeTickets.get(key) === state) {
+								activeTickets.delete(key);
+						}
+						try {
+								if (!active() || state.superseded || failure.reason === 'cancelled') {
+										return;
+								}
+								if (outcome === 'recovered') {
+										const seen = failures.get(key);
+										failures.delete(key);
+										if (seen === undefined || started - seen >= 600000) {
+												return;
+										}
+								}
+								else {
+										failures.delete(key);
+										failures.set(key, Date.now());
+										while (failures.size > 100) {
+												failures.delete(failures.keys().next().value);
+										}
+								}
+								const reasonLabels = {
+										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
+										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
+										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です'
+								};
+								sink?.({ key, operation, phase, outcome, ...failure,
+										message: labels[operation] + '（' + (phase === 'transport' ? '通信' : phase === 'response' ? '応答の確認' : '処理') + '）' +
+												(outcome === 'recovered' ? '：復旧しました' : '：' + reasonLabels[failure.reason]),
+										elapsedMs: Math.max(0, Math.min(86400000, Date.now() - started)) });
+						}
+						catch (_) { /* Diagnostic observers must never change playback. */ }
+				};
+				const failure = (error) => {
+						try {
+								emit('failed', classify(error));
+						}
+						catch (_) { /* untrusted error properties */ }
+				};
+				return {
+						success: () => emit('recovered', { reason: 'recovered' }), failure,
+						response: response => {
+								if (typeof response?.status === 'number' && response.status >= 400) {
+										failure({ status: response.status });
+								}
+								else {
+										emit('recovered', { reason: 'recovered' });
+								}
+						}
+				};
+		};
+		const operationFor = (value) => {
+				try {
+						const url = new URL(String(value), 'https://www.nicovideo.jp');
+						if (!/(^|\.)nicovideo\.jp$/.test(url.hostname)) {
+								return null;
+						}
+						const p = url.pathname;
+						if (/\/watch\//.test(p)) {
+								return 'video-info';
+						}
+						if (/\/comment\/keys\/thread/.test(p)) {
+								return 'comment-key';
+						}
+						if (/\/threads(?:\/|$)/.test(p)) {
+								return 'comment-read';
+						}
+						if (/\/access-rights\//.test(p)) {
+								return 'video-session';
+						}
+						if (/storyboard/.test(p)) {
+								return 'storyboard';
+						}
+						if (/\/search(?:\/|$)/.test(p)) {
+								return 'search';
+						}
+						if (/mylist/.test(p)) {
+								return 'mylist';
+						}
+						if (/playlist/.test(p)) {
+								return 'playlist';
+						}
+						if (/\/likes(?:\/|$)/.test(p)) {
+								return 'like';
+						}
+						if (/\/tags(?:\/|$)/.test(p)) {
+								return 'tags';
+						}
+						if (/\/videos(?:\/|$)/.test(p)) {
+								return 'video-info';
+						}
+						return /^(nvapi|api|public\.api)\./.test(url.hostname) || /(^|\/)api(\/|$)/.test(p) ? 'nico-api' : null;
+				}
+				catch (_) {
+						return null;
+				}
+		};
+		const startRequest = (url, signal, active = () => true) => {
+				const operation = operationFor(url);
+				return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
+		};
+		const setSink = (next) => { sink = next; };
+		return { begin, startRequest, setSink };
+})();
 const netUtil = {
 		abortableFetch: async (url, params = {}) => {
 				params = params || {};
 				const options = { ...params };
 				const callerSignal = options.signal;
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, callerSignal, options.diagnosticActive);
+				delete options.diagnosticActive;
 				const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 				const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
 						Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
@@ -6838,7 +7065,13 @@ const netUtil = {
 								}));
 						}
 						racers.push(fetch(url, options));
-						return await Promise.race(racers);
+						const response = await Promise.race(racers);
+						diagnostic?.response(response);
+						return response;
+				}
+				catch (error) {
+						diagnostic?.failure(error);
+						throw error;
 				}
 				finally {
 						if (timer !== undefined) {
@@ -6851,7 +7084,21 @@ const netUtil = {
 		},
 		fetch(url, params) {
 				if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {
-						return NicoVideoApi.fetch(url, params);
+						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, params?.signal, params?.diagnosticActive);
+						const gateOptions = params?.diagnosticActive ? { ...params } : params;
+						if (gateOptions?.diagnosticActive) {
+								delete gateOptions.diagnosticActive;
+						}
+						try {
+								return NicoVideoApi.fetch(url, gateOptions).then(response => {
+										diagnostic?.response(response);
+										return response;
+								}, error => { diagnostic?.failure(error); throw error; });
+						}
+						catch (error) {
+								diagnostic?.failure(error);
+								throw error;
+						}
 				}
 				return this.abortableFetch(url, params);
 		},
@@ -6908,8 +7155,12 @@ const netUtil = {
 						if (!funcName) {
 								funcName = getFuncName();
 						}
+						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url);
 						url = `${url}${url.includes('?') ? '&' : '?'}callback=${funcName}`;
-						return createFunc(url, funcName);
+						return createFunc(url, funcName).then(result => {
+								diagnostic?.success();
+								return result;
+						}, error => { diagnostic?.failure(error); throw error; });
 				};
 		})()
 };
@@ -10733,6 +10984,7 @@ const CacheStorage = (() => {
 		}
 		return CacheStorage;
 })();
+// already required
 const CommentPostTarget = {
 		select(threads, commentMetadataIssues) {
 				const defaultThread = threads.find(t => t.isDefaultPostTarget) || null;
@@ -11046,7 +11298,7 @@ const VideoInfoLoader = (function () {
 				emitter.emitAsync('csrfTokenUpdate', csrfToken);
 				return result;
 		};
-		const loadLinkedChannelVideoInfo = (originalData) => {
+		const loadLinkedChannelVideoInfo = (originalData, isCurrent = () => true) => {
 				const linkedChannelVideo = originalData.linkedChannelVideo;
 				const originalVideoId = originalData.watchApiData.videoDetail.id;
 				const videoId = linkedChannelVideo.linkedVideoId;
@@ -11057,7 +11309,7 @@ const VideoInfoLoader = (function () {
 				window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan');
 				return new Promise(r => {
 						setTimeout(r, 1000);
-				}).then(() => fetchWatchResponse(videoId, {}))
+				}).then(() => fetchWatchResponse(videoId, {}, isCurrent))
 						.then(async (json) => {
 						const data = await parseWatchApiData(json, videoId);
 						originalData.dmcInfo = data.dmcInfo;
@@ -11159,7 +11411,7 @@ const VideoInfoLoader = (function () {
 								data.linkedChannelVideo = null;
 						}
 						if (data.linkedChannelVideo != null) {
-								return await loadLinkedChannelVideoInfo(data);
+								return await loadLinkedChannelVideoInfo(data, isCurrent);
 						}
 				}
 				const error = (({ isMemberFree, isNeedPayment, isPremiumFree }) => {
@@ -11229,10 +11481,13 @@ const VideoInfoLoader = (function () {
 						message: '公式動画ページの情報形式を読み取れませんでした'
 				};
 		};
-		const fetchWatchResponse = async (watchId, options) => {
+		const fetchWatchResponse = async (watchId, options, isCurrent = () => true) => {
 				requireActive(options);
 				const fetchOptions = options.signal ?
 						{ credentials: 'include', signal: options.signal } : { credentials: 'include' };
+				if (typeof RequestDiagnostics !== 'undefined') {
+						fetchOptions.diagnosticActive = isCurrent;
+				}
 				const pageUrl = `https://www.nicovideo.jp/watch/${encodeURIComponent(watchId)}` +
 						(options.economy === true ? '?eco=1' : '');
 				const pageResponse = await netUtil.fetch(pageUrl, fetchOptions);
@@ -11270,13 +11525,20 @@ const VideoInfoLoader = (function () {
 				if (isCancelled(options)) {
 						return Promise.reject(cancelledError());
 				}
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('video-info', watchId, 'response', () => isCurrent() && !isCancelled(options));
 				console.log('loadFromWatchApiData');
-				return fetchWatchResponse(watchId, options)
-						.catch(err => Promise.reject(isCancelled(options) ? cancelledError() :
-						err && typeof err === 'object' && err.reason ? err :
-								{ reason: 'network', message: '通信エラー(network)' }))
+				return fetchWatchResponse(watchId, options, isCurrent)
+						.catch(err => {
+						diagnostic?.failure(err);
+						return Promise.reject(isCancelled(options) ? cancelledError() :
+								err && typeof err === 'object' && err.reason ? err :
+										{ reason: 'network', message: '通信エラー(network)' });
+				})
 						.then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
+						.then(result => { diagnostic?.success(); return result; })
 						.catch((err) => {
+						diagnostic?.failure(err);
 						if (isCancelled(options)) {
 								return Promise.reject(cancelledError());
 						}
@@ -17355,6 +17617,7 @@ const StoryboardInfoLoader = {
 // ZenzaWatch.api.DmcStoryboardInfoLoader = DmcStoryboardInfoLoader;
 ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 
+// already required
 const logSafe = (() => {
 		const SECRET_KEY = /(token|key$|keys$|cookie|authorization|password|passwd|secret|csrf|credential|signature|session)/i;
 		const PERSONAL_KEY = /^(body|text|content|comment|comments|mail|email|userid|user_id|nickname|username|user_name)$/i;
@@ -17993,6 +18256,8 @@ const { ThreadLoader } = (() => {
 						this._threadKeys = {};
 				}
 				async getThreadKey(videoId, options = {}) {
+						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+								RequestDiagnostics.begin('comment-key', videoId, 'response', () => !options.signal?.aborted);
 						let url = `https://nvapi.nicovideo.jp/v1/comment/keys/thread?videoId=${videoId}`;
 						console.log('getThreadKey request');
 						try {
@@ -18010,9 +18275,11 @@ const { ThreadLoader } = (() => {
 								checkAbort(options.signal);
 								const validData = CommentReadAdapter.threadKey(data);
 								this._threadKeys[videoId] = validData.threadKey;
+								diagnostic?.success();
 								return validData;
 						}
 						catch (result) {
+								diagnostic?.failure(result);
 								throw { result, message: `ThreadKeyの取得失敗 ${videoId}` };
 						}
 				}
@@ -18082,6 +18349,8 @@ const { ThreadLoader } = (() => {
 						}
 						const url = new URL('/v1/threads', server);
 						console.log('load threads request');
+						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+								RequestDiagnostics.begin('comment-read', String(msgInfo.videoId), 'response', () => !options.signal?.aborted);
 						try {
 								const { meta, data } = await readJson(url, {
 										method: 'POST',
@@ -18099,9 +18368,11 @@ const { ThreadLoader } = (() => {
 								checkAbort(options.signal);
 								const validData = CommentReadAdapter.threads(data, msgInfo);
 								validData.__usedLanguage = packet.params.language;
+								diagnostic?.success();
 								return validData;
 						}
 						catch (result) {
+								diagnostic?.failure(result);
 								checkAbort(options.signal);
 								window.console.error('_load threads fail');
 								throw {
@@ -48928,6 +49199,10 @@ const NotificationHistoryPanel = (() => {
 								}
 								item.append(head, element('div', 'znh-message', entry.message));
 								const meta = entry.details || {};
+								if (typeof meta.count === 'number' && meta.count > 0) {
+										head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
+												(meta.outcome === 'recovered' ? '・復旧済み' : '')));
+								}
 								if (Object.keys(meta).length || entry.source) {
 										const moreDetails = element('details');
 										moreDetails.append(element('summary', '', '診断情報'));
@@ -63353,6 +63628,8 @@ const initializeGinzaSlayer = (dialog, query) => {
 	dialog.open(watchId, options);
 };
 
+// already required
+// already required
 const { initialize } = (() => {
 class PagePreviewGuard {
 		constructor(player, doc = document) {
@@ -63994,6 +64271,17 @@ const replaceRedirectLinks = async () => {
 		}
 };
 		const initialize = async function () {
+				if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
+						RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
+								category: 'network', source: event.operation, message: event.message,
+								level: event.outcome === 'recovered' ? 'success' :
+										['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
+								details: { operation: event.operation, phase: event.phase, outcome: event.outcome,
+										reason: event.reason, elapsedMs: event.elapsedMs,
+										...(event.statusCode === undefined ? {} : { statusCode: event.statusCode }),
+										...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }) }
+						}));
+				}
 				window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
 				domEvent.dispatchCustomEvent(document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, { bubbles: true, composed: true });
 				cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });
@@ -66377,6 +66665,7 @@ const StoryboardCacheDb = (() => {
 		const api = (api) => NicoVideoApi = api;
 		return { initWorker, open, put, get, delete: del, close, gc, db, api };
 })();
+// already required
 const createStoryboardClasses = (util) => {
 		const MAX_STORYBOARD_PAGES = 512;
 		const storyboardSchemaError = () => Object.assign(new Error('storyboard response schema unsupported'), { kind: 'schema', errorCode: 'STORYBOARD_SCHEMA' });
@@ -67388,6 +67677,20 @@ const VideoSessionWorker = (() => {
 				};
 		};
 		let worker;
+		let diagnosticGeneration = 0;
+		const observeSession = async (scope, active, operation) => {
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+						RequestDiagnostics.begin('video-session', scope, 'session', active);
+				try {
+						const result = await operation();
+						diagnostic?.success();
+						return result;
+				}
+				catch (error) {
+						diagnostic?.failure(error);
+						throw error;
+				}
+		};
 		const initWorker = () => {
 				if (worker) {
 						return worker;
@@ -67399,6 +67702,9 @@ const VideoSessionWorker = (() => {
 				return undefined;
 		};
 		const create = async ({ videoInfo, videoQuality, serverType, useHLS }) => {
+				const generation = ++diagnosticGeneration;
+				let closed = false;
+				const active = () => !closed && generation === diagnosticGeneration;
 				await initWorker();
 				const params = {
 						videoInfo: videoInfo.toJSON(),
@@ -67406,12 +67712,28 @@ const VideoSessionWorker = (() => {
 						serverType,
 						useHLS
 				};
-				const result = await worker.post({ command: 'create', params });
+				const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
+				const result = await observeSession(scope + '-create', active, () => worker.post({ command: 'create', params }));
 				const sessionId = result.sessionId;
 				return Object.assign(result, {
-						connect: () => worker.post({ command: 'connect', params: { sessionId } }),
-						getState: () => worker.post({ command: 'getState', params: { sessionId } }),
-						close: () => worker.post({ command: 'close', params: { sessionId } })
+						connect: () => observeSession(scope + '-connect', active, () => worker.post({ command: 'connect', params: { sessionId } })),
+						getState: () => {
+								const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+										RequestDiagnostics.begin('session-state', scope, 'session', active);
+								return worker.post({ command: 'getState', params: { sessionId } }).then(state => {
+										if (state?.isAbnormallyClosed) {
+												diagnostic?.failure({ reason: 'session-closed' });
+										}
+										else if (state?.sessionId && !state.isDeleted) {
+												diagnostic?.success();
+										}
+										else {
+												diagnostic?.failure({ name: 'AbortError' });
+										}
+										return state;
+								}, error => { diagnostic?.failure(error); throw error; });
+						},
+						close: () => { closed = true; return worker.post({ command: 'close', params: { sessionId } }); }
 				});
 		};
 		const withTimeout = (promise, ms) => {

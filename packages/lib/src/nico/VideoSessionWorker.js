@@ -1,16 +1,9 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {workerUtil} from '../infra/workerUtil';
 import {StoryboardCacheDb} from './StoryboardCacheDb';
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoSessionWorker.ts (Task651). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
-/**
- * Canonical TypeScript source for packages/lib/src/nico/VideoSessionWorker.js (Task651).
- * Video sessions (domand HLS access rights, legacy DMC sessions with heartbeat) and
- * storyboards (session, loader, image fetch, IndexedDB cache) run in a cross-message
- * Worker. Takes over the stalled storyboard lane.
- *
- * Both `createStoryboardClasses` and the Worker body `func` are stringified and run
- * inside the Worker, so they must stay self-contained (no module-level helpers).
- */
+//@require RequestDiagnostics
 // createStoryboardClasses(util) is the single source of truth for the
 // storyboard session/loader classes. It is used two ways:
 //   1. Here in the module's normal scope, so tests (and any other
@@ -1052,6 +1045,20 @@ const VideoSessionWorker = (() => {
         };
     };
     let worker;
+    let diagnosticGeneration = 0;
+    const observeSession = async (scope, active, operation) => {
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('video-session', scope, 'session', active);
+        try {
+            const result = await operation();
+            diagnostic?.success();
+            return result;
+        }
+        catch (error) {
+            diagnostic?.failure(error);
+            throw error;
+        }
+    };
     const initWorker = () => {
         if (worker) {
             return worker;
@@ -1070,6 +1077,9 @@ const VideoSessionWorker = (() => {
         return undefined;
     };
     const create = async ({ videoInfo, videoQuality, serverType, useHLS }) => {
+        const generation = ++diagnosticGeneration;
+        let closed = false;
+        const active = () => !closed && generation === diagnosticGeneration;
         await initWorker();
         const params = {
             videoInfo: videoInfo.toJSON(),
@@ -1077,12 +1087,28 @@ const VideoSessionWorker = (() => {
             serverType,
             useHLS
         };
-        const result = await worker.post({ command: 'create', params });
+        const scope = String(params.videoInfo.watchId || params.videoInfo.videoId || 'session');
+        const result = await observeSession(scope + '-create', active, () => worker.post({ command: 'create', params }));
         const sessionId = result.sessionId;
         return Object.assign(result, {
-            connect: () => worker.post({ command: 'connect', params: { sessionId } }),
-            getState: () => worker.post({ command: 'getState', params: { sessionId } }),
-            close: () => worker.post({ command: 'close', params: { sessionId } })
+            connect: () => observeSession(scope + '-connect', active, () => worker.post({ command: 'connect', params: { sessionId } })),
+            getState: () => {
+                const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+                    RequestDiagnostics.begin('session-state', scope, 'session', active);
+                return worker.post({ command: 'getState', params: { sessionId } }).then(state => {
+                    if (state?.isAbnormallyClosed) {
+                        diagnostic?.failure({ reason: 'session-closed' });
+                    }
+                    else if (state?.sessionId && !state.isDeleted) {
+                        diagnostic?.success();
+                    }
+                    else {
+                        diagnostic?.failure({ name: 'AbortError' });
+                    }
+                    return state;
+                }, error => { diagnostic?.failure(error); throw error; });
+            },
+            close: () => { closed = true; return worker.post({ command: 'close', params: { sessionId } }); }
         });
     };
     const withTimeout = (promise, ms) => {

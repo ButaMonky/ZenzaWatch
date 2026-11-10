@@ -27,7 +27,7 @@ const NotificationJournalPolicy = (() => {
   const safeKeys = new Set([
     'phase', 'event', 'reason', 'outcome', 'errorCode', 'statusCode',
     'httpStatus', 'threadId', 'attempt', 'retryScheduled', 'retryAfterMs',
-    'operation', 'kind', 'errorName', 'requestId', 'postedNo'
+    'operation', 'kind', 'errorName', 'requestId', 'postedNo', 'count', 'elapsedMs'
   ]);
   const privatePath = (path: string): string => path
     .replace(/\/[^/]+/g, segment =>

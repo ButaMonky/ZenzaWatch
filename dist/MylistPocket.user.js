@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.83-task989
+// @version     0.5.84-task991
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-09 21:18Z 5cc4ce6
+// build: 2026-11-10 06:05Z fa32f1e
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -3014,11 +3014,191 @@ const nicoUtil = {
 		getMypageVer: () => document.querySelector('#js-initial-userpage-data') ? 'spa' : 'legacy'
 };
 Object.assign(util, nicoUtil);
+const RequestDiagnostics = (() => {
+		const labels = {
+				'video-info': '動画情報', 'comment-read': 'コメント取得', 'comment-key': 'コメント取得キー',
+				'video-session': '再生セッション', 'session-state': '再生セッションの維持',
+				storyboard: '場面画像の情報', search: '検索', mylist: 'マイリスト', playlist: 'プレイリスト',
+				like: 'いいね', tags: 'タグ', 'nico-api': 'ニコニコAPI'
+		};
+		const activeTickets = new Map();
+		const failures = new Map();
+		let sink;
+		const noop = { success() { }, failure() { }, response() { } };
+		const scopeId = (value) => {
+				let a = 2166136261, b = 5381;
+				for (let i = 0; i < value.length; i++) {
+						a = Math.imul(a ^ value.charCodeAt(i), 16777619);
+						b = Math.imul(b, 33) ^ value.charCodeAt(i);
+				}
+				return (a >>> 0).toString(36) + '-' + (b >>> 0).toString(36);
+		};
+		const classify = (error) => {
+				const outer = error && typeof error === 'object' ? error : {};
+				const e = outer.result && typeof outer.result === 'object' ? outer.result : outer;
+				const status = e.statusCode ?? e.status ?? e.httpStatus;
+				const codes = ['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA',
+						'BAD_REQUEST', 'INVALID_PARAMETER', 'EXPIRED_TOKEN', 'FORBIDDEN', 'NOT_FOUND', 'TOO_MANY_REQUESTS', 'INTERNAL_SERVER_ERROR', 'UNAUTHORIZED'];
+				const fields = {
+						...(typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599 ? { statusCode: status } : {}),
+						...(typeof e.errorCode === 'string' ? { errorCode: codes.includes(e.errorCode) ? e.errorCode : 'OTHER' } : {})
+				};
+				if (e.name === 'AbortError' || e.reason === 'cancelled') {
+						return { reason: 'cancelled' };
+				}
+				if (e.reason === 'session-closed') {
+						return { reason: 'session-closed' };
+				}
+				if (e.name === 'timeout' || e.name === 'TimeoutError' || e.kind === 'timeout') {
+						return { reason: 'timeout', ...fields };
+				}
+				if (status === 404 || e.reason === 'not found') {
+						return { reason: 'not-found', ...fields };
+				}
+				if (status === 401 || status === 403 || ['forbidden', 'need payment', 'premium only', 'member only'].includes(String(e.reason))) {
+						return { reason: 'permission', ...fields };
+				}
+				if (e.reason === 'not supported') {
+						return { reason: 'unavailable', ...fields };
+				}
+				if (e.kind === 'schema' || e.name === 'SyntaxError' || e.reason === 'watch api' ||
+						['WATCH_SCHEMA', 'WATCH_PAGE_SCHEMA', 'WATCH_PAGE_META_MISSING', 'RESPONSE_SCHEMA', 'STORYBOARD_SCHEMA'].includes(String(e.errorCode))) {
+						return { reason: 'schema', ...fields };
+				}
+				if (fields.statusCode) {
+						return { reason: 'http', ...fields };
+				}
+				return { reason: 'network' };
+		};
+		const begin = (operation, scope, phase, active = () => true) => {
+				if (!Object.prototype.hasOwnProperty.call(labels, operation) || !['transport', 'response', 'session'].includes(phase)) {
+						return noop;
+				}
+				const started = Date.now();
+				const key = 'diag-' + operation + '-' + phase + '-' + scopeId(scope);
+				const previous = activeTickets.get(key);
+				if (previous) {
+						previous.superseded = true;
+				}
+				const state = { superseded: false };
+				activeTickets.set(key, state);
+				let finished = false;
+				const emit = (outcome, failure) => {
+						if (finished) {
+								return;
+						}
+						finished = true;
+						if (activeTickets.get(key) === state) {
+								activeTickets.delete(key);
+						}
+						try {
+								if (!active() || state.superseded || failure.reason === 'cancelled') {
+										return;
+								}
+								if (outcome === 'recovered') {
+										const seen = failures.get(key);
+										failures.delete(key);
+										if (seen === undefined || started - seen >= 600000) {
+												return;
+										}
+								}
+								else {
+										failures.delete(key);
+										failures.set(key, Date.now());
+										while (failures.size > 100) {
+												failures.delete(failures.keys().next().value);
+										}
+								}
+								const reasonLabels = {
+										timeout: '時間切れ', 'not-found': '対象が見つかりません', permission: '権限・ログイン状態を要確認',
+										schema: '応答の形式を読み取れません', http: 'サーバーからエラー応答', network: '処理に失敗しました',
+										'session-closed': 'セッションが異常終了しました', unavailable: 'この動画の再生方式には未対応です'
+								};
+								sink?.({ key, operation, phase, outcome, ...failure,
+										message: labels[operation] + '（' + (phase === 'transport' ? '通信' : phase === 'response' ? '応答の確認' : '処理') + '）' +
+												(outcome === 'recovered' ? '：復旧しました' : '：' + reasonLabels[failure.reason]),
+										elapsedMs: Math.max(0, Math.min(86400000, Date.now() - started)) });
+						}
+						catch (_) { /* Diagnostic observers must never change playback. */ }
+				};
+				const failure = (error) => {
+						try {
+								emit('failed', classify(error));
+						}
+						catch (_) { /* untrusted error properties */ }
+				};
+				return {
+						success: () => emit('recovered', { reason: 'recovered' }), failure,
+						response: response => {
+								if (typeof response?.status === 'number' && response.status >= 400) {
+										failure({ status: response.status });
+								}
+								else {
+										emit('recovered', { reason: 'recovered' });
+								}
+						}
+				};
+		};
+		const operationFor = (value) => {
+				try {
+						const url = new URL(String(value), 'https://www.nicovideo.jp');
+						if (!/(^|\.)nicovideo\.jp$/.test(url.hostname)) {
+								return null;
+						}
+						const p = url.pathname;
+						if (/\/watch\//.test(p)) {
+								return 'video-info';
+						}
+						if (/\/comment\/keys\/thread/.test(p)) {
+								return 'comment-key';
+						}
+						if (/\/threads(?:\/|$)/.test(p)) {
+								return 'comment-read';
+						}
+						if (/\/access-rights\//.test(p)) {
+								return 'video-session';
+						}
+						if (/storyboard/.test(p)) {
+								return 'storyboard';
+						}
+						if (/\/search(?:\/|$)/.test(p)) {
+								return 'search';
+						}
+						if (/mylist/.test(p)) {
+								return 'mylist';
+						}
+						if (/playlist/.test(p)) {
+								return 'playlist';
+						}
+						if (/\/likes(?:\/|$)/.test(p)) {
+								return 'like';
+						}
+						if (/\/tags(?:\/|$)/.test(p)) {
+								return 'tags';
+						}
+						if (/\/videos(?:\/|$)/.test(p)) {
+								return 'video-info';
+						}
+						return /^(nvapi|api|public\.api)\./.test(url.hostname) || /(^|\/)api(\/|$)/.test(p) ? 'nico-api' : null;
+				}
+				catch (_) {
+						return null;
+				}
+		};
+		const startRequest = (url, signal, active = () => true) => {
+				const operation = operationFor(url);
+				return operation ? begin(operation, String(url), 'transport', () => !signal?.aborted && active()) : noop;
+		};
+		const setSink = (next) => { sink = next; };
+		return { begin, startRequest, setSink };
+})();
 const netUtil = {
 		abortableFetch: async (url, params = {}) => {
 				params = params || {};
 				const options = { ...params };
 				const callerSignal = options.signal;
+				const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, callerSignal, options.diagnosticActive);
+				delete options.diagnosticActive;
 				const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
 				const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
 						Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
@@ -3057,7 +3237,13 @@ const netUtil = {
 								}));
 						}
 						racers.push(fetch(url, options));
-						return await Promise.race(racers);
+						const response = await Promise.race(racers);
+						diagnostic?.response(response);
+						return response;
+				}
+				catch (error) {
+						diagnostic?.failure(error);
+						throw error;
 				}
 				finally {
 						if (timer !== undefined) {
@@ -3070,7 +3256,21 @@ const netUtil = {
 		},
 		fetch(url, params) {
 				if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {
-						return NicoVideoApi.fetch(url, params);
+						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, params?.signal, params?.diagnosticActive);
+						const gateOptions = params?.diagnosticActive ? { ...params } : params;
+						if (gateOptions?.diagnosticActive) {
+								delete gateOptions.diagnosticActive;
+						}
+						try {
+								return NicoVideoApi.fetch(url, gateOptions).then(response => {
+										diagnostic?.response(response);
+										return response;
+								}, error => { diagnostic?.failure(error); throw error; });
+						}
+						catch (error) {
+								diagnostic?.failure(error);
+								throw error;
+						}
 				}
 				return this.abortableFetch(url, params);
 		},
@@ -3127,8 +3327,12 @@ const netUtil = {
 						if (!funcName) {
 								funcName = getFuncName();
 						}
+						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url);
 						url = `${url}${url.includes('?') ? '&' : '?'}callback=${funcName}`;
-						return createFunc(url, funcName);
+						return createFunc(url, funcName).then(result => {
+								diagnostic?.success();
+								return result;
+						}, error => { diagnostic?.failure(error); throw error; });
 				};
 		})()
 };
@@ -6986,7 +7190,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.83-task989', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.84-task991', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

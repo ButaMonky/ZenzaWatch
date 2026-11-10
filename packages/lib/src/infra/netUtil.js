@@ -1,10 +1,14 @@
+import {RequestDiagnostics} from './RequestDiagnostics';
 // GENERATED FROM tools/typescript-stage1/nico-src/netUtil.ts (Task640). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 const netUtil = {
     abortableFetch: async (url, params = {}) => {
         params = params || {};
         const options = { ...params };
         const callerSignal = options.signal;
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, callerSignal, options.diagnosticActive);
+        delete options.diagnosticActive;
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const abortReason = () => callerSignal.reason !== undefined ? callerSignal.reason :
             Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
@@ -44,7 +48,13 @@ const netUtil = {
             }
             // `timeout` and numeric header values are passed through as before.
             racers.push(fetch(url, options));
-            return await Promise.race(racers);
+            const response = await Promise.race(racers);
+            diagnostic?.response(response);
+            return response;
+        }
+        catch (error) {
+            diagnostic?.failure(error);
+            throw error;
         }
         finally {
             if (timer !== undefined) {
@@ -60,7 +70,21 @@ const netUtil = {
         // so off www it threw a ReferenceError. Without the gate, fetch directly
         // (works where the API allows the page origin, fails normally elsewhere).
         if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {
-            return NicoVideoApi.fetch(url, params);
+            const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, params?.signal, params?.diagnosticActive);
+            const gateOptions = params?.diagnosticActive ? { ...params } : params;
+            if (gateOptions?.diagnosticActive) {
+                delete gateOptions.diagnosticActive;
+            }
+            try {
+                return NicoVideoApi.fetch(url, gateOptions).then(response => {
+                    diagnostic?.response(response);
+                    return response;
+                }, error => { diagnostic?.failure(error); throw error; });
+            }
+            catch (error) {
+                diagnostic?.failure(error);
+                throw error;
+            }
         }
         return this.abortableFetch(url, params);
     },
@@ -117,8 +141,12 @@ const netUtil = {
             if (!funcName) {
                 funcName = getFuncName();
             }
+            const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url);
             url = `${url}${url.includes('?') ? '&' : '?'}callback=${funcName}`;
-            return createFunc(url, funcName);
+            return createFunc(url, funcName).then(result => {
+                diagnostic?.success();
+                return result;
+            }, error => { diagnostic?.failure(error); throw error; });
         };
     })()
 };

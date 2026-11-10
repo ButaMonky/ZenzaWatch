@@ -1,6 +1,6 @@
 /** Notification facade: session fallback, duplicate suppression and subscriptions. */
 import type {JournalInput, JournalEntry} from './NotificationJournalPolicy';
-export type {JournalLevel, JournalCategory, JournalDetails, JournalInput, JournalEntry} from './NotificationJournalPolicy';
+export type {JournalLevel, JournalCategory, JournalDetails, JournalInput, JournalEntry, JournalActivity} from './NotificationJournalPolicy';
 declare const NotificationJournalPolicy: typeof import('./NotificationJournalPolicy').NotificationJournalPolicy;
 declare const NotificationJournalStore: typeof import('./NotificationJournalStore').NotificationJournalStore;
 
@@ -120,6 +120,7 @@ const NotificationJournal = (() => {
     listeners.add(listener);
     return () => listeners.delete(listener);
   };
-  return {record, recordDiagnostic, list, clear, subscribe, configureBuild};
+  const toDiagnosticEntry=(entry:JournalEntry):JournalEntry=>NotificationJournalPolicy.toDiagnosticEntry(entry);
+  return {record, recordDiagnostic, list, clear, subscribe, configureBuild, toDiagnosticEntry};
 })();
 export { NotificationJournal };

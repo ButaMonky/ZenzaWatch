@@ -29,17 +29,17 @@
       "name": "ManualBookmarkPanel",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkPanel.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkPanel.js",
-      "sourceSha256": "5568c060102dcd41c86ca40d0f5a1f9834924766f9d2c2be625fa6b269b94c44",
-      "emittedSha256": "c94878ead4a7ff41789fef2b7f7a9f6d6e2eccd794e69a59926bd77a1e0a6aac",
-      "runtimeSha256": "2ed01b5d5912a9fc407f675496e9794fd254c6ee4dd177a58b1b004dfef6bedd"
+      "sourceSha256": "7e25f93b494bf4417f8b710aa2090f11ad2c4c4f063be4e8330291ee8f3d0d7e",
+      "emittedSha256": "15f89d7ad1d75c9354958914c856791dcdacafac12e8065b8edb0f0d9fdba48f",
+      "runtimeSha256": "678042f21c56fe65caeac2b9cc17a8d709307e1e2d4c166f6b738204071716d5"
     },
     {
       "name": "ManualBookmarkDock",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkDock.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkDock.js",
-      "sourceSha256": "d2c7bf40b2b7522733d7a1ebcbc979037d3a216cd9da758eccabaa5bf1466d77",
-      "emittedSha256": "edff0512cadbc35cfba7841d7215895301dfd4f677c039369191d5007eae349e",
-      "runtimeSha256": "c62af0dd51a52cc5cd87666bb6947f074a6eb4b3c200e90b2ea6ff5a3df751ea"
+      "sourceSha256": "5605208c18fd59af0726b8f9d808347a07e7c7af86e5604e335d8199dbef0af3",
+      "emittedSha256": "686915553485f51686780b5e0c062338aa4c3133a500e991715d903838926cdc",
+      "runtimeSha256": "69dfeb4116c27682ceaffd128418b0364c19cbda74942de181abfd93b7980c01"
     }
   ]
 }

@@ -5592,6 +5592,11 @@ class NicoVideoPlayerDialog extends Emitter {
     }
     Object.assign(options, {isMine: true, isUpdating: true, thread: threadId});
     vpos = (!isNaN(vpos) && typeof vpos === 'number') ? vpos : this._nicoVideoPlayer.vpos;
+    const submittedActivity = {
+      kind: 'comment-post', text,
+      videoTitle: this._videoInfo?.title,
+      positionMs: Math.floor((vpos || 0) * 10)
+    };
     const nicoChat = this._nicoVideoPlayer.addChat(text, cmd, vpos, options);
 
     this._state.isCommentPosting = true;
@@ -5610,6 +5615,7 @@ class NicoVideoPlayerDialog extends Emitter {
       this._recordDiagnostic({
         category: 'comment', level: 'success', message: 'コメント投稿成功',
         videoId: watchId, source: 'comment',
+        activity: submittedActivity,
         details: {threadId, postedNo: result.no, outcome: 'accepted'}
       });
       if (isCurrent()) {

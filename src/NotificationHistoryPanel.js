@@ -37,6 +37,9 @@ const NotificationHistoryPanel = (() => {
         '.zenzaNotificationHistory .znh-entry[data-level="success"] .znh-tag{background:#245b40;color:#fff;}',
         '.zenzaNotificationHistory .znh-date{font-size:11px;color:#aaa;}',
         '.zenzaNotificationHistory .znh-message{white-space:pre-wrap;word-break:break-word;margin:6px 0;}',
+        '.zenzaNotificationHistory .znh-activity-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:pre-wrap;margin:3px 0;color:#ddd;font-size:12px;}',
+        '.zenzaNotificationHistory .znh-activity-text{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;border-left:2px solid #6ba58b;padding-left:10px;}',
+        '.zenzaNotificationHistory .znh-activity a{color:#9cf;overflow-wrap:anywhere;}.zenzaNotificationHistory .znh-private-note{font-size:11px;color:#bbb;}',
         '.zenzaNotificationHistory details{color:#bbb;font-size:11px;}',
         '.zenzaNotificationHistory details pre{white-space:pre-wrap;word-break:break-word;user-select:text;color:#ddd;}',
         '.zenzaNotificationHistory [hidden]{display:none!important;}',
@@ -116,6 +119,7 @@ const NotificationHistoryPanel = (() => {
         refresh.type = 'button';
         const save = element('button', '', 'JSON保存');
         save.type = 'button';
+        save.title = '診断情報だけを保存します。投稿コメント本文・動画タイトルは含みません。';
         const clear = element('button', '', '全件削除');
         clear.type = 'button';
         const management = element('details', 'znh-management');
@@ -178,6 +182,27 @@ const NotificationHistoryPanel = (() => {
             for (const [name, value] of pairs)
                 grid.append(element('dt', '', name), element('dd', '', value));
             detailNode.append(grid);
+            if (entry.activity?.kind === 'comment-post') {
+                const activity = element('section', 'znh-activity');
+                activity.append(element('h3', '', '投稿したコメント'), element('p', 'znh-activity-text', entry.activity.text));
+                if (/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/i.test(entry.videoId)) {
+                    const link = element('a', '', entry.activity.videoTitle ? entry.activity.videoTitle + ' (' + entry.videoId + ')' : entry.videoId);
+                    link.href = 'https://www.nicovideo.jp/watch/' + entry.videoId;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    activity.append(link);
+                }
+                else if (entry.activity.videoTitle)
+                    activity.append(element('p', '', entry.activity.videoTitle));
+                activity.append(element('p', '', '投稿日時: ' + formatTime(entry.timestamp)));
+                const ms = entry.activity.positionMs;
+                if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) {
+                    const seconds = Math.floor(ms / 1000);
+                    activity.append(element('p', '', '動画内の位置: ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')));
+                }
+                activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
+                detailNode.append(activity);
+            }
             if (entry.details?.outcome === 'recovered')
                 detailNode.append(element('p', '', 'この記録について追加の操作は不要です。'));
             else if (entry.details?.outcome === 'failed' || entry.level === 'error' || entry.level === 'warning')
@@ -190,7 +215,8 @@ const NotificationHistoryPanel = (() => {
             copy.dataset.historyAction = 'copy';
             const copyStatus = element('p', 'znh-status');
             copyStatus.setAttribute('role', 'status');
-            const report = [entry.message, description(entry), ...pairs.map(([key, value]) => key + ': ' + value), '診断情報: ' + JSON.stringify({ ...entry.details, source: entry.source })].join('\n');
+            const diagnostic = NotificationJournal.toDiagnosticEntry(entry);
+            const report = [diagnostic.message, description(diagnostic), ...pairs.map(([key, value]) => key + ': ' + value), '診断情報: ' + JSON.stringify({ ...diagnostic.details, source: diagnostic.source })].join('\n');
             copy.addEventListener('click', async () => {
                 try {
                     if (!window.navigator.clipboard?.writeText)
@@ -237,7 +263,7 @@ const NotificationHistoryPanel = (() => {
             if (!needle) {
                 return true;
             }
-            return [entry.message, entry.videoId, entry.source, entry.category,
+            return [entry.message, entry.videoId, entry.source, entry.category, entry.activity?.text, entry.activity?.videoTitle,
                 JSON.stringify(entry.details || {})].join(' ').toLocaleLowerCase().includes(needle);
         };
         const render = async (version) => {
@@ -280,6 +306,8 @@ const NotificationHistoryPanel = (() => {
                     detailNode.querySelector('[data-history-back]')?.focus({ preventScroll: true });
                 });
                 item.append(head, entryButton);
+                if (entry.activity?.kind === 'comment-post')
+                    entryButton.append(element('span', 'znh-activity-preview', entry.activity.text));
                 const meta = entry.details || {};
                 if (typeof meta.count === 'number' && meta.count > 0) {
                     head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
@@ -345,7 +373,7 @@ const NotificationHistoryPanel = (() => {
                 if (disposed || !isVisible()) {
                     return;
                 }
-                const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+                const blob = new Blob([JSON.stringify(entries.map(entry => NotificationJournal.toDiagnosticEntry(entry)), null, 2)], { type: 'application/json' });
                 url = URL.createObjectURL(blob);
                 const link = element('a');
                 link.href = url;

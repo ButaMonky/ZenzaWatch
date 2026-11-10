@@ -57,6 +57,35 @@ function connect(s, responses) {
 const token = code => ({error: {result: {status: 403, errorCode: code}}});
 
 describe('ZW-023/024 posting contract', function() {
+  it('Task1000 keeps accepted comment activity attached to the submitted video after switching', async function() {
+    const s = posting();
+    s.d._videoInfo.title = 'Original title';
+    const records = [];
+    s.d._recordDiagnostic = entry => records.push(entry);
+    connect(s, [() => {
+      s.d._requestId = 'rB';
+      s.d._watchId = 'smB';
+      s.d._videoInfo = {title: 'Other title'};
+      return {no: 42};
+    }]);
+    await s.d.addChat('Own comment\nsecond line', '', 123);
+    const record = records.find(entry => entry.level === 'success');
+    assert.strictEqual(record.videoId, 'smA');
+    assert.deepEqual(record.activity, {kind: 'comment-post', text: 'Own comment\nsecond line', videoTitle: 'Original title', positionMs: 1230});
+  });
+
+  it('Task1000 never adds private activity for rejected or uncertain submissions', async function() {
+    for (const response of [{error: {result: {status: 400}}}, {id: 'incomplete'}]) {
+      const s = posting();
+      const records = [];
+      s.d._recordDiagnostic = entry => records.push(entry);
+      connect(s, [response]);
+      await assert.rejects(s.d.addChat('Private unsuccessful text', '', 12));
+      assert(records.length > 0);
+      assert(records.every(entry => !entry.activity));
+      assert(!JSON.stringify(records).includes('Private unsuccessful text'));
+    }
+  });
   it('Task215 dialog precheck reports an already-running post before network work starts', async function() {
     const s = posting();
     const warnings = [];

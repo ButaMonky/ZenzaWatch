@@ -10,6 +10,7 @@ function setup(records) {
   });
   const subscribers = new Set();
   const journal = {
+    toDiagnosticEntry: entry => ({...entry, activity: undefined}),
     list: async () => records,
     clear: async () => { records.length = 0; return true; },
     subscribe: callback => {

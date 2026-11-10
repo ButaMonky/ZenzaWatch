@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/NotificationHistoryPanel.ts",
   "runtime": "src/NotificationHistoryPanel.js",
-  "sourceSha256": "fde4a8e1f70e1330d86532514d841d59f20903d76008e14de83b3710dd67f631",
-  "runtimeSha256": "22ecf1d8fef0a76c188b68274c1a760773164ca3274ba4a857f8db4cad35d073"
+  "sourceSha256": "1318448c25ba228191eceb9361dc5c938b37dc913c4d08ff3df69a012d38ecf9",
+  "runtimeSha256": "9124175ef739142c163cfc262e698f74f88bfcfe2fd4d2a53a9db04846692060"
 }

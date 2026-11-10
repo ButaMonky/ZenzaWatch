@@ -33,14 +33,19 @@ class ManualBookmarkPanel {
     activeTab = 'automatic';
     visible = true;
     previewLeases = new Map();
+    previewLeaseKeys = new Map();
     previewCandidates = new Set();
     previewObserver = null;
+    previewObserved = new Set();
     library = false;
     libraryGeneration = 0;
     libraryRows = [];
     libraryStatus = 'idle';
     librarySearch = '';
     libraryFilter = 'all';
+    libraryPage = 0;
+    libraryRowPages = new Map();
+    libraryDrafts = new Map();
     expandedVideos = new Set();
     changeHandler;
     setVisible(visible) { this.visible = visible; this.refreshPreviews(); }
@@ -48,6 +53,7 @@ class ManualBookmarkPanel {
         this.previewObserver?.disconnect();
         this.previewObserver = null;
         this.previewCandidates.clear();
+        this.previewObserved.clear();
         for (const cleanup of this.previewLeases.values()) {
             try {
                 cleanup();
@@ -55,6 +61,7 @@ class ManualBookmarkPanel {
             catch { /* optional preview */ }
         }
         this.previewLeases.clear();
+        this.previewLeaseKeys.clear();
     }
     preview(videoId, time) {
         const host = this.root.ownerDocument.createElement('div');
@@ -86,48 +93,73 @@ class ManualBookmarkPanel {
                 continue;
             try {
                 this.previewLeases.set(host, this.deps.createScenePreview(host, videoId, Number(host.dataset.sceneTime)));
+                this.previewLeaseKeys.set(host, videoId + '|' + host.dataset.sceneTime);
                 videos.add(videoId);
             }
             catch { /* Missing previews never disable text actions. */ }
         }
     }
     refreshPreviews() {
-        this.clearPreviews();
-        if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false)
+        if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false) {
+            this.clearPreviews();
             return;
+        }
         const hosts = Array.from(this.root.querySelectorAll('[data-scene-video]'))
             .filter(host => this.previewEligible(host));
+        const eligible = new Set(hosts);
+        for (const host of this.previewObserved)
+            if (!eligible.has(host)) {
+                this.previewObserver?.unobserve?.(host);
+                this.previewObserved.delete(host);
+                this.previewCandidates.delete(host);
+            }
+        for (const [host, cleanup] of this.previewLeases)
+            if (!eligible.has(host) || this.previewLeaseKeys.get(host) !== host.dataset.sceneVideo + '|' + host.dataset.sceneTime) {
+                this.previewLeases.delete(host);
+                this.previewLeaseKeys.delete(host);
+                try {
+                    cleanup();
+                }
+                catch { /* optional preview */ }
+            }
         const Observer = this.root.ownerDocument.defaultView?.IntersectionObserver;
         if (Observer) {
-            const observer = new Observer(entries => {
-                if (this.previewObserver !== observer || !this.visible || this.disposed)
-                    return;
-                for (const entry of entries) {
-                    const host = entry.target;
-                    if (entry.isIntersecting && this.previewEligible(host))
-                        this.previewCandidates.add(host);
-                    else {
-                        this.previewCandidates.delete(host);
-                        const cleanup = this.previewLeases.get(host);
-                        if (cleanup) {
-                            this.previewLeases.delete(host);
-                            try {
-                                cleanup();
+            let observer = this.previewObserver;
+            if (!observer) {
+                observer = new Observer(entries => {
+                    if (this.previewObserver !== observer || !this.visible || this.disposed)
+                        return;
+                    for (const entry of entries) {
+                        const host = entry.target;
+                        if (entry.isIntersecting && this.previewEligible(host))
+                            this.previewCandidates.add(host);
+                        else {
+                            this.previewCandidates.delete(host);
+                            const cleanup = this.previewLeases.get(host);
+                            if (cleanup) {
+                                this.previewLeases.delete(host);
+                                this.previewLeaseKeys.delete(host);
+                                try {
+                                    cleanup();
+                                }
+                                catch { /* optional preview */ }
                             }
-                            catch { /* optional preview */ }
                         }
                     }
-                }
-                this.fillPreviewLeases();
-            }, { root: this.root.closest('.zenzaManualBookmarkDock'), rootMargin: '100px' });
-            this.previewObserver = observer;
+                    this.fillPreviewLeases();
+                }, { root: this.root.closest('.zenzaManualBookmarkDock'), rootMargin: '100px' });
+                this.previewObserver = observer;
+            }
             for (const host of hosts)
-                observer.observe(host);
+                if (!this.previewObserved.has(host)) {
+                    this.previewObserved.add(host);
+                    observer.observe(host);
+                }
+            this.fillPreviewLeases();
         }
         else {
             // Older engines lack visibility notifications; never load the entire library.
-            for (const host of hosts.slice(0, 12))
-                this.previewCandidates.add(host);
+            this.previewCandidates = new Set(hosts.slice(0, 12));
             this.fillPreviewLeases();
         }
     }
@@ -140,6 +172,7 @@ class ManualBookmarkPanel {
         this.loop = activate ? { a, b } : null;
         this.loopFailureNotice = null;
         this.resetLoopSeek();
+        this.libraryDrafts.clear();
         this.library = false;
         this.activeTab = 'repeat';
         this.render(this.last);
@@ -605,6 +638,8 @@ class ManualBookmarkPanel {
             }
             if (target?.matches('[data-library-filter]')) {
                 this.libraryFilter = target.value;
+                this.libraryPage = 0;
+                this.libraryRowPages.clear();
                 this.renderLibraryGroups();
             }
         };
@@ -612,6 +647,8 @@ class ManualBookmarkPanel {
             const target = event.target;
             if (target?.matches?.('[data-library-search]')) {
                 this.librarySearch = target.value;
+                this.libraryPage = 0;
+                this.libraryRowPages.clear();
                 this.renderLibraryGroups();
                 return;
             }
@@ -682,12 +719,15 @@ class ManualBookmarkPanel {
     render(snapshot) {
         if (this.disposed)
             return;
+        if (this.library)
+            this.captureLibraryDrafts();
         // A refresh of the same video must not silently discard an unsaved rename.
         // A changed canonical label (including our own completed rename) wins.
         const sameVideo = snapshot.videoId !== null &&
             snapshot.videoId === this.last.videoId;
         // A different bookmark's save must not destroy the unsent Add label.
         if (!sameVideo) {
+            this.libraryDrafts.clear();
             this.libraryGeneration++;
             this.libraryBusyRequest = null;
             this.library = false;
@@ -981,6 +1021,26 @@ class ManualBookmarkPanel {
             }, () => { });
         }
     }
+    captureLibraryDrafts(container = this.root) {
+        for (const row of container.querySelectorAll('[data-library-draft-key]')) {
+            const key = row.dataset.libraryDraftKey;
+            if (row.dataset.libraryDraftCommitted === 'true') {
+                this.libraryDrafts.delete(key);
+                continue;
+            }
+            const fields = Array.from(row.querySelectorAll('input[data-library-start],input[data-library-end],input[data-library-name]'));
+            if (!fields.some(field => field.value !== field.defaultValue)) {
+                this.libraryDrafts.delete(key);
+                continue;
+            }
+            const values = {};
+            for (const field of fields) {
+                const name = field.hasAttribute('data-library-name') ? 'name' : field.hasAttribute('data-library-end') ? 'end' : 'start';
+                values[name] = field.value;
+            }
+            this.libraryDrafts.set(key, { values, open: row.querySelector('.zw-bookmark-edit')?.open === true });
+        }
+    }
     libraryButton(action, label, videoId, id) {
         const button = this.root.ownerDocument.createElement('button');
         button.type = 'button';
@@ -1000,7 +1060,7 @@ class ManualBookmarkPanel {
             const rows = await this.deps.loadLibrary?.() || [];
             if (this.disposed || generation !== this.libraryGeneration || videoId !== this.last.videoId || !this.library)
                 return;
-            this.libraryRows = rows;
+            this.libraryRows = [...rows].sort((a, b) => b.updatedAt - a.updatedAt);
             this.libraryStatus = 'ready';
         }
         catch {
@@ -1058,6 +1118,7 @@ class ManualBookmarkPanel {
         const groups = this.root.querySelector('[data-library-groups]');
         if (!groups || this.disposed)
             return;
+        this.captureLibraryDrafts();
         this.clearPreviews();
         groups.replaceChildren();
         const doc = this.root.ownerDocument;
@@ -1067,14 +1128,16 @@ class ManualBookmarkPanel {
         groups.style.setProperty('--zw-library-title-size', bounded(appearance?.titleFontSize, 13, 11, 18) + 'px');
         groups.style.setProperty('--zw-library-title-lines', String(Math.round(bounded(appearance?.titleLines, 1, 1, 3))));
         const query = this.librarySearch.trim().toLocaleLowerCase(), filter = this.libraryFilter;
-        let count = 0, videoCount = 0;
-        for (const video of [...this.libraryRows].sort((a, b) => b.updatedAt - a.updatedAt)) {
+        const matching = this.libraryRows.map(video => {
             const matches = video.title.toLocaleLowerCase().includes(query);
             const automatic = video.automaticTime !== null && (filter === 'all' || filter === 'resume') && (matches || 'ここまで見た'.includes(query));
             const bookmarks = video.bookmarks.filter(item => (filter === 'all' || filter === (item.endTime === undefined ? 'point' : 'range')) &&
-                (matches || item.label.toLocaleLowerCase().includes(query))).sort((a, b) => a.time - b.time);
-            if (!automatic && !bookmarks.length)
-                continue;
+                (matches || item.label.toLocaleLowerCase().includes(query)));
+            return { video, automatic, bookmarks };
+        }).filter(item => item.automatic || item.bookmarks.length);
+        const videoCount = matching.length, count = matching.reduce((sum, item) => sum + item.bookmarks.length + Number(item.automatic), 0);
+        this.libraryPage = Math.min(this.libraryPage, Math.max(0, Math.ceil(videoCount / 50) - 1));
+        for (const { video, automatic, bookmarks } of matching.slice(this.libraryPage * 50, (this.libraryPage + 1) * 50)) {
             const group = doc.createElement('details');
             group.className = 'zw-library-group';
             group.dataset.libraryVideo = video.videoId;
@@ -1110,24 +1173,71 @@ class ManualBookmarkPanel {
             if (viewed)
                 header.append(viewed);
             summary.append(header);
-            const list = doc.createElement('ul');
-            group.append(summary, list);
-            if (automatic)
-                list.append(this.libraryRow(video, null));
-            for (const item of bookmarks)
-                list.append(this.libraryRow(video, item));
+            group.append(summary);
+            // Closed videos have no point rows, editors or scene-image hosts in the DOM.
+            const body = doc.createElement('div');
+            let materialized = false;
+            const renderBody = () => {
+                const ordered = [...(automatic ? [null] : []), ...bookmarks.slice().sort((a, b) => a.time - b.time)];
+                const page = Math.min(this.libraryRowPages.get(video.videoId) || 0, Math.max(0, Math.ceil(ordered.length / 50) - 1));
+                this.libraryRowPages.set(video.videoId, page);
+                this.captureLibraryDrafts(body);
+                body.replaceChildren();
+                const list = doc.createElement('ul');
+                body.append(list);
+                for (const item of ordered.slice(page * 50, (page + 1) * 50))
+                    list.append(this.libraryRow(video, item));
+                if (ordered.length > 50) {
+                    const pager = doc.createElement('div');
+                    pager.className = 'zw-library-pagination';
+                    for (const [direction, label, offset] of [['prev', '前へ', -1], ['next', '次へ', 1]]) {
+                        const button = doc.createElement('button');
+                        button.type = 'button';
+                        button.textContent = label;
+                        button.dataset.libraryRowPage = direction;
+                        button.disabled = offset < 0 ? page === 0 : (page + 1) * 50 >= ordered.length;
+                        button.addEventListener('click', event => { event.stopPropagation(); this.libraryRowPages.set(video.videoId, page + offset); renderBody(); this.refreshPreviews(); });
+                        pager.append(button);
+                    }
+                    const status = doc.createElement('span');
+                    status.textContent = (page * 50 + 1) + '–' + Math.min((page + 1) * 50, ordered.length) + ' / ' + ordered.length + ' 件';
+                    pager.append(status);
+                    body.append(pager);
+                }
+                materialized = true;
+            };
+            if (group.open) {
+                renderBody();
+                group.append(body);
+            }
             group.addEventListener('toggle', () => {
                 if (this.disposed || !group.isConnected)
                     return;
-                if (group.open)
+                if (group.open) {
                     this.expandedVideos.add(video.videoId);
-                else
+                    if (!materialized)
+                        renderBody();
+                    group.append(body);
+                }
+                else {
                     this.expandedVideos.delete(video.videoId);
+                    this.captureLibraryDrafts(body);
+                    body.remove();
+                }
                 this.refreshPreviews();
             });
             groups.append(group);
-            count += bookmarks.length + Number(automatic);
-            videoCount++;
+        }
+        if (videoCount > 50) {
+            const pager = doc.createElement('div');
+            pager.className = 'zw-library-pagination';
+            const previous = this.libraryButton('page-prev', '前の50動画'), next = this.libraryButton('page-next', '次の50動画');
+            previous.disabled = this.libraryPage === 0;
+            next.disabled = (this.libraryPage + 1) * 50 >= videoCount;
+            const label = doc.createElement('span');
+            label.textContent = (this.libraryPage * 50 + 1) + '–' + Math.min((this.libraryPage + 1) * 50, videoCount) + ' / ' + videoCount + ' 動画';
+            pager.append(previous, label, next);
+            groups.append(pager);
         }
         const status = this.root.querySelector('[data-library-status]');
         if (status)
@@ -1154,6 +1264,7 @@ class ManualBookmarkPanel {
     libraryRow(video, item) {
         const doc = this.root.ownerDocument, row = doc.createElement('li'), time = item?.time ?? video.automaticTime;
         row.dataset.libraryRow = '1';
+        row.dataset.libraryDraftKey = JSON.stringify([video.videoId, item?.id ?? null]);
         const description = doc.createElement('span');
         description.textContent = (item?.label || 'ここまで見た') + ' · ' + displayTime(time) +
             (item?.endTime === undefined ? '' : ' – ' + displayTime(item.endTime));
@@ -1193,6 +1304,15 @@ class ManualBookmarkPanel {
         remove.disabled = item ? !this.deps.deleteLibraryBookmark : !this.deps.deleteLibraryAutomatic;
         edit.append(save, remove);
         row.append(edit);
+        const draft = this.libraryDrafts.get(row.dataset.libraryDraftKey);
+        for (const field of row.querySelectorAll('input')) {
+            field.defaultValue = field.value;
+            const name = field.hasAttribute('data-library-name') ? 'name' : field.hasAttribute('data-library-end') ? 'end' : 'start';
+            if (draft?.values[name] !== undefined)
+                field.value = draft.values[name];
+        }
+        if (draft)
+            edit.open = draft.open;
         return row;
     }
     libraryBusyRequest = null;
@@ -1201,6 +1321,7 @@ class ManualBookmarkPanel {
             return;
         const action = button.dataset.libraryAction;
         if (action === 'back') {
+            this.libraryDrafts.clear();
             this.library = false;
             this.libraryGeneration++;
             this.libraryBusyRequest = null;
@@ -1210,12 +1331,18 @@ class ManualBookmarkPanel {
         if (action === 'open') {
             this.libraryBusyRequest = null;
             this.library = true;
+            this.libraryPage = 0;
             this.expandedVideos.add(this.last.videoId || '');
             await this.loadLibrary();
             return;
         }
         if (action === 'retry') {
             await this.loadLibrary();
+            return;
+        }
+        if (action === 'page-prev' || action === 'page-next') {
+            this.libraryPage += action === 'page-next' ? 1 : -1;
+            this.renderLibraryGroups();
             return;
         }
         if (!this.library || !this.ownsVideo())
@@ -1232,6 +1359,7 @@ class ManualBookmarkPanel {
                 this.setRepeatRange(time, item.endTime);
                 return;
             }
+            this.libraryDrafts.clear();
             this.library = false;
             this.libraryGeneration++;
             this.render(this.last);
@@ -1270,6 +1398,8 @@ class ManualBookmarkPanel {
                 return;
             if (this.disposed || generation !== this.libraryGeneration || owner !== this.last.videoId || !this.library)
                 return;
+            row.dataset.libraryDraftCommitted = 'true';
+            this.libraryDrafts.delete(row.dataset.libraryDraftKey);
             await this.loadLibrary();
         }
         catch {
@@ -1290,6 +1420,7 @@ class ManualBookmarkPanel {
         this.deps.repeatState?.(false);
         this.deps.onRepeatRangeChange?.(null);
         this.clearPreviews();
+        this.libraryDrafts.clear();
         this.libraryGeneration++;
         this.disposed = true;
         this.pointGeneration++;

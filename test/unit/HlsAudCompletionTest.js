@@ -6,16 +6,22 @@ const {stripTypeScriptTypes} = require('node:module');
 const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const {createContext, run} = require('../helpers/extractSource');
-const source = stripTypeScriptTypes(fs.readFileSync(path.join(__dirname,
-  '../../tools/typescript-stage1/nico-src/HlsEntry.ts'), 'utf8'),
-  {mode: 'strip', disableExperimentalWarning: true});
+// Index each canonical owner separately; only the storage lifecycle fixture
+// slices its owner to inject a deterministic worker transport.
+const sources = ['HlsConfig','HlsStorage','HlsVideoElement'].map(name =>
+  stripTypeScriptTypes(fs.readFileSync(path.join(__dirname,
+    '../../tools/typescript-stage1/hls-src/'+name+'.ts'), 'utf8'),
+    {mode:'strip',disableExperimentalWarning:true}));
+const source = sources[1];
 const nodes = {};
-traverse(parser.parse(source, {sourceType:'module'}), {noScope: true,
-  ClassDeclaration(p) { nodes[p.node.id.name] = source.slice(p.node.start, p.node.end); },
-  VariableDeclarator(p) { if (p.node.id.name && p.node.init) {
-    nodes[p.node.id.name] = source.slice(p.node.init.start, p.node.init.end);
-  }}
-});
+for (const owner of sources) {
+  traverse(parser.parse(owner, {sourceType:'module'}), {noScope: true,
+    ClassDeclaration(p) { nodes[p.node.id.name] = owner.slice(p.node.start,p.node.end); },
+    VariableDeclarator(p) { if (p.node.id.name && p.node.init) {
+      nodes[p.node.id.name] = owner.slice(p.node.init.start,p.node.init.end);
+    }}
+  });
+}
 const quiet = {log() {}, info() {}, warn() {}, error() {}, time() {}, timeEnd() {}};
 const tick = async () => { for (let i=0;i<10;i++) { await Promise.resolve(); } };
 const fragment = () => ({url:'https://media.invalid/nicovideo-sm9_a/0/ts/1.ts', level:0,sn:1});
@@ -120,7 +126,7 @@ function storageRuntime(holdReplacementConfig=false) {
         queueMicrotask(()=>handlers.message({data:{id:message.id,result:'ok'}}));}}
     };workers.push(worker);return worker;}});
   const start=source.indexOf('const Storage = {',source.indexOf('const createWebWorker'));
-  const end=source.indexOf('const ZenzaVideoElement',start);
+  const end=source.indexOf('return Storage;',start);
   run(source.slice(start,end)+';globalThis.subject=Storage;',c);
   return {c,workers,timers,listeners,config};
 }

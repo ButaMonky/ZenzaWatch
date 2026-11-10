@@ -102,7 +102,7 @@ describe('Issue86 (AUD-45) video row update timer ownership (canonical TS)', () 
 });
 
 function cacheClass(extra = {}) {
-  return canonical('tools/typescript-stage1/nico-src/HlsEntry.ts', 'IndexDBStorage', {
+  return canonical('tools/typescript-stage1/hls-src/HlsStorage.ts', 'IndexDBStorage', {
     Config: {cache_expire_time: 1000},
     console: {warn() {}, error() {}, time() {}, timeEnd() {}},
     IDBKeyRange: {upperBound: value => ({upper: value}), only: value => ({only: value})},

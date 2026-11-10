@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.nico.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": ".generated/hls",
+    "strictNullChecks": false,
+    "strictPropertyInitialization": false,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false,
+    "useUnknownInCatchVariables": false,
+    "declaration": false
+  },
+  "include": ["hls-src/**/*.ts"],
+  "exclude": []
+}

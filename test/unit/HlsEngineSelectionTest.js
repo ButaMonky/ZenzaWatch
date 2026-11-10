@@ -8,8 +8,8 @@ const {extract, createContext, run} = require('../helpers/extractSource');
 
 function player({nativeCapable = 'maybe', preference = 'yes', jsSupported = true} = {}) {
   const context = createContext({HTMLElement: class {}, Hls: {isSupported: () => jsSupported}});
-  run(`const PLAYER_MODE = ${extract('src/_hls.js', 'PLAYER_MODE', 'var')};
-    ${extract('src/_hls.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
+  run(`const PLAYER_MODE = ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'PLAYER_MODE', 'var')};
+    ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
   const p = Object.create(context.Subject.prototype);
   const nativeSrcs = [], jsSrcs = [];
   let removed = 0;
@@ -96,10 +96,10 @@ describe('Task173 HLS engine selection keeps one engine per delivery session', (
   });
 
   it('maps the saved setting to the element preference without changing direct MP4 playback', () => {
-    const text = require('fs').readFileSync(require('path').join(__dirname, '../../src/_hls.js'), 'utf-8');
+    const text = require('fs').readFileSync(require('path').join(__dirname, '../../packages/zenza/src/hls/HlsRuntime.js'), 'utf-8');
     assert(/setAttribute\('use-native-hls', nativeHlsPreference\(Config\.get\('use_native_hls'\)\)\)/.test(text));
     const context = createContext({});
-    const map = run(`(${extract('src/_hls.js', 'nativeHlsPreference', 'var')})`, context);
+    const map = run(`(${extract('packages/zenza/src/hls/HlsConfig.js', 'nativeHlsPreference', 'var')})`, context);
     assert.strictEqual(map(true), 'yes');
     assert.strictEqual(map('force'), 'force');
     assert.strictEqual(map(false), 'no');

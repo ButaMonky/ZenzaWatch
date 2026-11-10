@@ -4,8 +4,8 @@ const {extract, createContext, run} = require('../helpers/extractSource');
 describe('native HLS preference selects the requested engine (ZW-049)', function() {
   function player(supported, preference) {
     const context = createContext({HTMLElement: class {}});
-    run(`const PLAYER_MODE = ${extract('src/_hls.js', 'PLAYER_MODE', 'var')};
-      ${extract('src/_hls.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
+    run(`const PLAYER_MODE = ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'PLAYER_MODE', 'var')};
+      ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
     const p = Object.create(context.Subject.prototype);
     let attr = preference;
     let jsStarts = 0;

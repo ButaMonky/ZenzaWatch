@@ -8,10 +8,10 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const read=p=>JSON.parse(fs.readFileSync(path.join(root,p),'utf8'));
 const strict=read('tsconfig.nico.json'),legacy=read('tsconfig.nico-legacy.json');
 const promoted=['BaseCommandElement','CommentInputPanel','TagListView',
-  'SettingPanelElement','VideoControlBar','HeatSyncEntry','UQueryEntry','initializer'];
+  'SettingPanelElement','VideoControlBar','HeatSyncEntry','UQueryEntry','initializer','HlsEntry'];
 test('#212 promoted modules remain strictly checked with canonical generator provenance',()=>{
-  assert.equal(strict.exclude.length,11);
-  assert.equal(legacy.files.length,11);
+  assert.equal(strict.exclude.length,10);
+  assert.equal(legacy.files.length,10);
   for(const n of promoted){
     assert(!strict.exclude.includes('nico-src/'+n+'.ts'),'still excluded '+n);
     assert(!legacy.files.includes('nico-src/'+n+'.ts'),'still relaxed '+n);

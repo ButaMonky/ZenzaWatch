@@ -7,6 +7,7 @@ import {NICO_API_BY_NAME} from '../scripts/nico-api-registry.mjs';
 import {renderNicoLegacy,splitEntry,codeLines,entryDirectives} from '../scripts/sync-nico-api.mjs';
 import {emitNico,read} from './nico-api-harness.mjs';
 
+emitNico(); // HlsEntry retirement notice is in the strict lane.
 emitNico('tsconfig.nico-legacy.json');
 const ENTRIES={UQueryEntry:'src/_uquery.js',CapTubeEntry:'src/_captube.js',MaskedWatchEntry:'src/_shape.js',
   HeatSyncEntry:'src/_heatsync.js',GamePadEntry:'src/_gamepad.js',HlsEntry:'src/_hls.js'};
@@ -33,6 +34,18 @@ for(const [name,runtime] of Object.entries(ENTRIES)){
     const emitted=read(`tools/typescript-stage1/.generated/nico/${name}.js`);
     assert.equal(renderNicoLegacy(spec,emitted,actual).replace(/\r\n/g,'\n'),actual.replace(/\r\n/g,'\n'));
     const fixture=read(spec.fixture);
+    if(name==='HlsEntry'){
+      // Task997 is an explicit retirement: preserve userscript identity and scope,
+      // while removing imports/library requirements and replacing the entire body.
+      const identity=t=>t.split('\n').filter(l=>/^\/\/ @(?:name|namespace|match|exclude|grant|author|noframes|run-at)\b/.test(l));
+      assert.deepEqual(identity(actual),identity(fixture));
+      assert.deepEqual(spec.directives,[]);
+      assert.deepEqual(entryDirectives(actual),[]);
+      assert.doesNotMatch(actual,/^import\s|^\/\/ @require\b/m);
+      assert.match(actual,/zenza-hls-retired-notice/);
+      assert.doesNotMatch(actual,/new Worker|createFragmentLoader|class ZenzaVideoElement/);
+      return;
+    }
     // header + imports are unchanged except the bumped @version
     const strip=t=>splitEntry(t).preamble.filter(l=>!/^\/\/ @version/.test(l)).join('\n');
     assert.equal(strip(actual),strip(fixture));

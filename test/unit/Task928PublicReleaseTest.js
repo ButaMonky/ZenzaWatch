@@ -8,8 +8,8 @@ const manifest=JSON.parse(read('dist-manifest.json'));
 const prefix='https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/';
 const installers='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
 const expected={
- 'ZenzaWatch-dev.user.js':'2.7.372-task996',
- 'ZenzaHLS.user.js':'0.0.43-task981',
+ 'ZenzaWatch-dev.user.js':'2.7.373-task997',
+ 'ZenzaHLS.user.js':'0.1.0-task997',
  'MylistPocket.user.js':'0.5.87-task996',
  'ZenzaAdvancedSettings.user.js':'0.4.0-task993',
  'ZenzaBlogPartsButton.user.js':'0.0.5-task928'
@@ -32,7 +32,7 @@ describe('Public promotion: release channel and installer integrity',function(){
    }
   }
  });
- it('the five installation links have current expected versions',()=>{
+ it('installation and retirement links have current expected versions',()=>{
   const readme=read('README.md');
   for(const [name,version] of Object.entries(expected)){
    if(name !== 'ZenzaAdvancedSettings.user.js') assert(readme.includes('('+installers+name+')'),name+': installer link missing');

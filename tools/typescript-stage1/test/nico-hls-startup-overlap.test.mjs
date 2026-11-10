@@ -5,13 +5,15 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 // Exercise the canonical class before any compiler emission or userscript build.
-const source=fs.readFileSync(new URL('../nico-src/HlsEntry.ts',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../hls-src/HlsVideoElement.ts',import.meta.url),'utf8');
 const js=stripTypeScriptTypes(source,{mode:'strip'});
 const begin=js.indexOf('class ZenzaVideoElement extends HTMLElement');
-const code=js.slice(begin,js.indexOf('\n      if (window.customElements)',begin));
+const end=js.indexOf('\n      if (window.customElements',begin);
+assert(begin>=0 && end>begin,'canonical video element class boundaries');
+const code=js.slice(begin,end);
 const A='https://delivery.invalid/a/master.m3u8',B='https://delivery.invalid/b/master.m3u8';
 const eventNames=['MANIFEST_PARSED','LEVEL_LOADED','LEVEL_SWITCHED','ERROR','FRAG_LOADED','BUFFER_EOS','MEDIA_ATTACHED','DESTROYING'];
-function fixture({onInit,onLoad,onAttach,onStop,onDestroy}={}){
+function fixture({onInit,onLoad,onAttach,onStop,onDestroy,missingLibrary=false,loadLibrary}={}){
  const engines=[],events=[],calls=[];
  class Hls {
   static isSupported(){return true;}
@@ -25,7 +27,7 @@ function fixture({onInit,onLoad,onAttach,onStop,onDestroy}={}){
   detachMedia(){calls.push(['detach',this]);}
   destroy(){calls.push(['destroy',this]);this.emit('DESTROYING');this.destroyed=true;this.handlers.clear();onDestroy?.(h,this);}
  }
- const context=vm.createContext({HTMLElement:class{setAttribute(){}},Hls,createFragmentLoader:()=>class FragmentLoader{},
+ const context=vm.createContext({HTMLElement:class{setAttribute(){}},Hls:missingLibrary?undefined:Hls,loadLibrary:()=>loadLibrary(Hls),ErrorEvent:class{constructor(type){this.type=type;}},overrideTarget:e=>e,HLS_ERROR_CODE:{NETWORK:2},createFragmentLoader:()=>class FragmentLoader{},
   CustomEvent:class{constructor(type,options={}){this.type=type;this.detail=options.detail;}},
   PLAYER_MODE:{HLS_JS:'HLS-JS',DEFAULT:'DEFAULT'},console,performance});
  vm.runInContext(code+';globalThis.Subject=ZenzaVideoElement;',context);
@@ -169,4 +171,37 @@ test('clearing src cannot clear native media or mode installed by a teardown rep
  assert.equal(h.player.src,B);assert.equal(h.player.playerMode,'HLS-JS');
  assert.equal(h.player._video.src,'native sentinel','outer clear must not write to the newer media');
  assert.deepEqual(h.player.hls.loaded,[B]);assert.equal(h.engines[0].destroyed,true);
+});
+
+const flushLibrary=async()=>{for(let i=0;i<15;i++)await Promise.resolve();};
+test('missing library retries for the current src without synchronous failure',async()=>{
+ let resolve,library,loads=0;
+ const h=fixture({missingLibrary:true,loadLibrary(Hls){loads++;library=Hls;return new Promise(r=>resolve=r);}});
+ assert.doesNotThrow(()=>{h.player.src=A;});await flushLibrary();
+ assert.equal(loads,1);assert.equal(h.engines.length,0);
+ resolve(library);await flushLibrary();assert.deepEqual(h.engines[0].loaded,[A]);
+ assert.deepEqual(h.engines[0].attached,[h.player._video]);
+});
+for(const replacement of [B,'','https://delivery.invalid/plain.mp4','disconnect'])test('pending library cannot mount stale src after '+replacement,async()=>{
+ let resolve,library;
+ const pending=new Promise(r=>resolve=r);
+ const h=fixture({missingLibrary:true,loadLibrary(Hls){library=Hls;return pending;}});
+ h.player.src=A;await flushLibrary();
+ if(replacement==='disconnect')h.player.disconnectedCallback();else h.player.src=replacement;
+ await flushLibrary();resolve(library);await flushLibrary();
+ assert.equal(h.engines.length,replacement===B?1:0);
+ if(replacement===B)assert.deepEqual(h.engines[0].loaded,[B]);
+ assert.equal(h.events.filter(e=>e.type==='error').length,0);
+});
+test('library rejection emits one generic video error and later source retries',async()=>{
+ let loads=0;
+ const h=fixture({missingLibrary:true,loadLibrary(Hls){loads++;return loads===1?Promise.reject(Error('https://private.invalid/TOKEN')):Promise.resolve(Hls);}});
+ h.player.src=A;await flushLibrary();assert.equal(h.events.filter(e=>e.type==='error').length,1);
+ assert.equal(h.player.error.code,2);assert(!JSON.stringify(h.player.error).includes('TOKEN'));
+ h.player.src=B;await flushLibrary();assert.equal(loads,2);assert.deepEqual(h.engines[0].loaded,[B]);
+});
+test('stale library failure is silent',async()=>{
+ let reject;const h=fixture({missingLibrary:true,loadLibrary(){return new Promise((_,r)=>reject=r);}});
+ h.player.src=A;await flushLibrary();h.player.src='';reject(Error('private'));await flushLibrary();
+ assert.equal(h.events.filter(e=>e.type==='error').length,0);
 });

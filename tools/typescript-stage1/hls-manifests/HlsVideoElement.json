@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/hls-src/HlsVideoElement.ts",
+  "runtime": "packages/zenza/src/hls/HlsVideoElement.js",
+  "sourceSha256": "24ded6aa831134f4ba2deb5e4d9ee0c7300d921c2762440743bfdc095328c6ca",
+  "runtimeSha256": "73860ef97bf7b5534646917b3b5250c10176e0e56f6d2d239957ca4114c9a612"
+}

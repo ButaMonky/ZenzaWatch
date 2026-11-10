@@ -1,53 +1,41 @@
 # 同梱スクリプト一覧
 
-`dist` フォルダに含まれる各Userscriptの役割をまとめています。
+`dist` フォルダに含まれる各Userscriptの役割です。インストール・更新は[公開版](https://github.com/ButaMonky/ZenzaWatch/tree/develop/dist)を使用してください。
 
-| ファイル | 役割 | 備考 |
+| 区分 | ファイル | 役割・版 |
 |---|---|---|
-| `ZenzaWatch-dev.user.js` | **ZenzaWatch本体**。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供 | 現在の推奨版。`2.7.365-task989`（公開版） |
-| `ZenzaWatch.user.js` | ZenzaWatch本体の旧通常版（2.6.2） | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない。DEV版と同時に有効にしないこと |
-| `ZenzaAdvancedSettings.user.js` | 本体統合に伴う削除案内のみ | 新規インストール不要。本体更新後、旧スクリプトを削除してください。`0.4.0-task993` |
-| `ZenzaHLS.user.js` | HLS / domand動画再生を担当 | 自動画質切り替えも担当。`0.0.43-task981` |
-| `MylistPocket.user.js` | サムネイル上の「とりマイ」「動画情報」「Zenzaプレイリスト追加」など | `0.5.87-task996` |
-| `ZenzaGamePad.user.js` | ゲームパッドでZenzaWatchを操作 | 任意。`1.5.6-task966` |
-| `HeatSync.user.js` | コメントの少ない部分を自動で早送りする拡張 | 任意。`0.0.24-task966qa` |
-| `MaskedWatch.user.js` | 画面上の文字・顔などを検出してコメント表示を調整 | 任意。`0.3.8-task966` |
-| `ZenzaBlogPartsButton.user.js` | 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加 | 任意。`0.0.5-task928` |
-| `CapTube.user.js` | YouTubeでSキーによるスクリーンショット撮影 | YouTubeの撮影とZenzaWatchの動画キャプチャ連携。`0.0.24-task966qa` |
-| `uQuery.user.js` | 開発者向けのコンソール補助 | 通常利用では不要。`0.0.7-task966` |
-| `MylistFilter.user.js` | マイリストの視聴不可動画を一括削除 | **旧版（凍結）**。元の作者のリポジトリのままで、作り直さない |
-| `WatchDump.user.js` | 動画データをコンソールへ出力するデバッグ用 | **旧版（凍結）**。`http://` のページにしか反応せず、現在は動かない |
+| 本体 | `ZenzaWatch-dev.user.js` | HLS / domand再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定。`2.7.373-task997` |
+| 任意追加 | `MylistPocket.user.js` | サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加。`0.5.87-task996` |
+| 任意追加 | `ZenzaGamePad.user.js` | ゲームパッド操作。`1.5.6-task966` |
+| 任意追加 | `HeatSync.user.js` | コメントの少ない部分の自動早送り。`0.0.24-task966qa` |
+| 任意追加 | `MaskedWatch.user.js` | 動画上の文字・顔を検出してコメントを透過。`0.3.8-task966` |
+| 任意追加 | `ZenzaBlogPartsButton.user.js` | 外部サイトの動画ブログパーツに起動ボタンを追加。`0.0.5-task928` |
+| 任意追加 | `CapTube.user.js` | YouTubeのスクリーンショット撮影とZenzaWatchのキャプチャ連携。`0.0.24-task966qa` |
+| 任意追加（開発者向け） | `uQuery.user.js` | コンソールのデバッグ補助。通常利用では不要。`0.0.7-task966` |
+| 廃止案内 | `ZenzaHLS.user.js` | HLS本体統合に伴う削除案内のみ。新規インストール不要。`0.1.0-task997` |
+| 廃止案内 | `ZenzaAdvancedSettings.user.js` | 上級者設定の本体統合に伴う削除案内のみ。新規インストール不要。`0.4.0-task993` |
+| 凍結旧版 | `ZenzaWatch.user.js` | 旧通常版2.6.2。本体と同時に有効にしない |
+| 凍結旧版 | `MylistFilter.user.js` | 旧マイリスト整理ツール。視聴不可動画の一括削除用 |
+| 凍結旧版 | `WatchDump.user.js` | 旧デバッグ用出力。HTTPページ限定で、現在のHTTPSページには対応しない |
 
-
-「旧版（凍結）」の3つは、[dist-manifest.json](./dist-manifest.json) の `legacyFrozen` に元のリポジトリと SHA-256 を記録しています。それ以外の10個は `npm run build` でソースから作る配布物（`active`）です。
+「凍結旧版」の3つは、[dist-manifest.json](./dist-manifest.json) の `legacyFrozen` に元のリポジトリとSHA-256を記録し、作り直しません。それ以外の10個は `npm run build` でソースから作る配布物（`active`）です。`active` には廃止案内用の2本も含み、利用時に追加が必要という意味ではありません。
 
 ## 通常の利用で必要なもの
 
-基本的には以下を使用します。
+通常の動画再生に必要なのは **`ZenzaWatch-dev.user.js` の1本だけ**です。HLS / domand再生も本体が担当します。`MylistPocket.user.js` などの任意追加は必要な機能だけ選んでください。
 
-- `ZenzaWatch-dev.user.js`
-- `ZenzaHLS.user.js`
-
-必要に応じて、
-
-- `MylistPocket.user.js`
-
-を追加してください。
+旧「ZenzaWatch HLS Support」は、先に本体を2.7.373以降へ更新してから、Tampermonkeyなどの管理画面で削除してください。旧 `ZenzaAdvancedSettings` も本体更新後に削除できます。本体や保存データの削除・コピーは不要です。
 
 > [!IMPORTANT]
-> `ZenzaWatch.user.js` と `ZenzaWatch-dev.user.js` を同時に有効にすると、
-> 二重に動作する可能性があります。
-> 現在は `ZenzaWatch-dev.user.js` の利用を推奨します。
+> `ZenzaWatch.user.js` と `ZenzaWatch-dev.user.js` を同時に有効にすると、二重に動作する可能性があります。現在は `ZenzaWatch-dev.user.js` を使用してください。
 
 ## ソースコード
 
-各スクリプトの主なビルド元は以下です。
-
-| dist | src |
+| dist | 主なビルド元 |
 |---|---|
-| `ZenzaWatch-dev.user.js` / `ZenzaWatch.user.js` | `src/_template.js` |
-| `ZenzaAdvancedSettings.user.js` | `src/_settingsRetired.js`（案内のみ） |
-| `ZenzaHLS.user.js` | `src/_hls.js` |
+| `ZenzaWatch-dev.user.js` | `src/_template.js`（HLSを含む本体） |
+| `ZenzaAdvancedSettings.user.js` | `src/_settingsRetired.js`（削除案内のみ） |
+| `ZenzaHLS.user.js` | `src/_hls.js`（削除案内のみ） |
 | `MylistPocket.user.js` | `src/_pocket.js` |
 | `ZenzaGamePad.user.js` | `src/_gamepad.js` |
 | `HeatSync.user.js` | `src/_heatsync.js` |
@@ -55,3 +43,7 @@
 | `ZenzaBlogPartsButton.user.js` | `src/_blog.js` |
 | `CapTube.user.js` | `src/_captube.js` |
 | `uQuery.user.js` | `src/_uquery.js` |
+
+HLSの正本は `tools/typescript-stage1/hls-src` です。設定、キャッシュWorker、動画要素、デバッグ画面、ライブラリ読込、初期化を内部モジュールに分離し、本体に同梱します。設定は `ZenzaWatch_video.hls.*`、HLSキャッシュは `zenza_hls` v5 / `ts-data` を継続使用します。シーン画像キャッシュとは別の保存領域です。
+
+上級者設定の画面は本体内の `src/_setting.js`、ライフサイクルは `src/AdvancedSettingsController.js`、編集状態と表示は既存の `ModernAdvancedSettingsModel/UI` が担当します。これらは `tools/typescript-stage1/advanced-src` のTypeScriptが正本です。本体と同じConfig・保存キーを使い、移行用コピーは行いません。

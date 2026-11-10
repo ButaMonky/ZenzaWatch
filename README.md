@@ -18,14 +18,12 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.372-task996`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
-  - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
-  - Discussion #36：ショートカット操作時の対象ボタンだけの表示とアニメーションを暫定対応。通常クリックではON/OFF文字を追加せず、いいねの演出は最後まで表示します。引き続き検証・改善します。
+  - 配布版：`2.7.373-task997`。HLS / domandを含む動画再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定を提供します。
 
-- **[ZenzaHLS をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)**
-  - HLS / domand動画の再生や自動画質切り替えを担当します。 (version `0.0.43-task981`)
+**通常の動画再生は本体1本で利用できます。** HLSサポートを本体に統合しました。
 
-基本的には上の2つをインストールしてください。
+旧「ZenzaWatch HLS Support」を使っている場合は、**先に本体を2.7.373以降へ更新してから、Tampermonkeyなどの管理画面で旧HLSスクリプトを削除してください。**
+[旧ZenzaHLSの更新ファイル](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)（`0.1.0-task997`）は削除案内のみです。新規インストールは不要です。本体、既存のHLS設定、保存済みのHLSキャッシュを削除する必要はありません。
 
 #### オプション
 
@@ -49,6 +47,27 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 
 各スクリプトの詳しい役割については
 [SCRIPTS.md](/SCRIPTS.md) を参照してください。
+
+### dist内のスクリプトの役割
+
+| 区分 | ファイル | 役割 |
+|---|---|---|
+| 本体 | `ZenzaWatch-dev.user.js` | HLS / domand再生、コメント、プレイリスト、検索、上級者設定 |
+| 任意追加 | `MylistPocket.user.js` | サムネイル上の動画情報、とりマイ、プレイリスト追加 |
+| 任意追加 | `ZenzaGamePad.user.js` | ゲームパッド操作 |
+| 任意追加 | `HeatSync.user.js` | コメントの少ない部分の自動早送り |
+| 任意追加 | `MaskedWatch.user.js` | 動画上の文字・顔を検出してコメントを透過 |
+| 任意追加 | `ZenzaBlogPartsButton.user.js` | 外部サイトの動画ブログパーツに起動ボタンを追加 |
+| 任意追加 | `CapTube.user.js` | YouTubeのスクリーンショット撮影とZenzaWatchのキャプチャ連携 |
+| 任意追加（開発者向け） | `uQuery.user.js` | コンソールのデバッグ補助。通常利用では不要 |
+| 廃止案内 | `ZenzaHLS.user.js` | HLS本体統合に伴う削除案内のみ |
+| 廃止案内 | `ZenzaAdvancedSettings.user.js` | 上級者設定の本体統合に伴う削除案内のみ |
+| 凍結旧版 | `ZenzaWatch.user.js` | 旧2.6.2。本体と同時に有効にしない |
+| 凍結旧版 | `MylistFilter.user.js` | 旧マイリスト整理ツール。視聴不可動画の一括削除用 |
+| 凍結旧版 | `WatchDump.user.js` | 旧デバッグ用出力。HTTPページ限定で、現在のHTTPSページには対応しない |
+
+任意追加のスクリプトは必要な機能だけ選んでください。廃止案内と凍結旧版の新規インストールは不要です。
+各スクリプトの版とビルド元は [SCRIPTS.md](./SCRIPTS.md) を参照してください。
 
 ## 本家からの変更点
 

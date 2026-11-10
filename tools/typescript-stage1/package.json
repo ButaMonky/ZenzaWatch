@@ -17,8 +17,8 @@
     "nico:types": "tsc --project tsconfig.nico.contract.json && tsc --project tsconfig.nico-legacy.json --noEmit",
     "nico:sync": "npm run nico:emit && node scripts/sync-nico-api.mjs --write && npm run scui:sync",
     "nico:verify": "npm run nico:emit && npm run nico:types && node scripts/sync-nico-api.mjs --check && npm run scui:verify",
-    "generate:legacy": "npm run build && node scripts/sync-all.mjs --write && npm run advanced:sync && npm run nico:sync",
-    "verify:legacy": "node scripts/sync-all.mjs --check && npm run advanced:verify && npm run nico:verify",
+    "generate:legacy": "npm run build && node scripts/sync-all.mjs --write && npm run advanced:sync && npm run nico:sync && npm run hls:sync",
+    "verify:legacy": "node scripts/sync-all.mjs --check && npm run advanced:verify && npm run nico:verify && npm run hls:verify",
     "test": "npm run check && npm run verify:legacy && npm run pocket:metadata:verify && node --test --test-concurrency=1 test/*.test.mjs test/seek-geometry*.test.ts",
     "test:seek-geometry": "node --test --test-concurrency=1 test/seek-geometry*.test.ts",
     "test:seek-geometry:browser": "node test/seek-geometry-browser.ts",
@@ -37,7 +37,10 @@
     "pocket:metadata:emit": "tsc --project tsconfig.pocket-metadata.json",
     "pocket:metadata:verify": "npm run pocket:metadata:emit && tsc --project tsconfig.pocket-metadata-contract.json && node --test test/pocket-card-metadata-parity.test.mjs && node scripts/sync-pocket-metadata.mjs --check",
     "audit:relaxed": "node scripts/audit-relaxed-types.mjs",
-    "pocket:metadata:sync": "npm run pocket:metadata:emit && node scripts/sync-pocket-metadata.mjs --write"
+    "pocket:metadata:sync": "npm run pocket:metadata:emit && node scripts/sync-pocket-metadata.mjs --write",
+    "hls:emit": "tsc --project tsconfig.hls.json",
+    "hls:sync": "npm run hls:emit && node scripts/sync-hls.mjs --write",
+    "hls:verify": "npm run hls:emit && node scripts/sync-hls.mjs --check"
   },
   "devDependencies": {
     "jsdom": "30.0.1",

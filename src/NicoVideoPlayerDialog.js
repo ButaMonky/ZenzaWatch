@@ -948,20 +948,16 @@ class NicoVideoPlayerDialogView extends Emitter {
                 createScenePreview: (host, videoId, time) => this.videoControlBar?.storyboard?.createSavedPreview?.(host, videoId, time) || (() => { }),
                 loadLibrary: () => this._loadSavedPointLibrary(repository),
                 openLibraryPosition: (videoId, time, endTime) => {
-                    if (videoId === this._state.videoInfo?.watchId) {
-                        if (endTime !== undefined)
-                            this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
-                        else
-                            this.emit('command', 'seekTo', time);
-                        return;
-                    }
-                    void Promise.resolve(this._dialog.open(videoId, { openNow: true, currentTime: time })).then(() => {
-                        if (endTime === undefined || this._dialog._watchId !== videoId)
-                            return;
-                        this._pendingLibraryRepeat = { requestId: this._dialog._requestId, videoId, a: time, b: endTime };
-                        this._trySavedLibraryRepeat();
-                    }).catch(() => console.warn('Saved position navigation unavailable'));
+                    void this._openSavedLibraryPosition(videoId, time, endTime);
                 },
+                automaticViewedAt: () => this._dialog?._videoInfo?._cacheData?.viewedAt ?? null,
+                libraryAppearance: () => ({
+                    showVideoThumbnails: this._playerConfig.getValue('bookmark.showVideoThumbnails') !== false,
+                    showScenePreviews: this._playerConfig.getValue('bookmark.showScenePreviews') !== false,
+                    thumbnailWidth: Number(this._playerConfig.getValue('bookmark.thumbnailWidth')) || 80,
+                    titleFontSize: Number(this._playerConfig.getValue('bookmark.titleFontSize')) || 13,
+                    titleLines: Number(this._playerConfig.getValue('bookmark.titleLines')) || 1
+                }),
                 editLibraryBookmark: async (videoId, id, changes, duration) => {
                     await repository.update(videoId, id, changes, Date.now(), duration);
                     await bookmarkSession?.refreshIfIdle?.();
@@ -1026,7 +1022,7 @@ class NicoVideoPlayerDialogView extends Emitter {
                 continue;
             byId.set(record.watchId, { videoId: record.watchId, title: record.title || record.watchId,
                 duration: Number.isFinite(record.duration) && record.duration > 0 ? record.duration : Number.MAX_SAFE_INTEGER,
-                updatedAt: record.updatedAt || 0, automaticTime: record.automaticTime, bookmarks: [] });
+                updatedAt: record.updatedAt || 0, viewedAt: record.viewedAt, thumbnailUrl: record.thumbnailUrl, automaticTime: record.automaticTime, bookmarks: [] });
         }
         for (const row of manual) {
             const entry = byId.get(row.videoId) || { videoId: row.videoId, title: row.videoId,
@@ -1045,6 +1041,34 @@ class NicoVideoPlayerDialogView extends Emitter {
         }
         return [...byId.values()].filter(row => row.automaticTime !== null || row.bookmarks.length)
             .sort((a, b) => b.updatedAt - a.updatedAt);
+    }
+    async _openSavedLibraryPosition(videoId, time, endTime) {
+        if (!videoId || !Number.isFinite(time) || time < 0 ||
+            (endTime !== undefined && (!Number.isFinite(endTime) || endTime <= time)))
+            return;
+        this._pendingLibraryRepeat = undefined;
+        if (videoId === this._state.videoInfo?.watchId) {
+            if (endTime !== undefined)
+                this.manualBookmarkDock?.setRepeatRange?.(time, endTime, true);
+            else
+                this.emit('command', 'seekTo', time);
+            return;
+        }
+        try {
+            const opening = this._dialog.open(videoId, { openNow: true, currentTime: time });
+            // open rotates the request synchronously. Never adopt a newer request
+            // after this promise resolves (even when it opens the same video again).
+            const requestId = this._dialog._requestId;
+            await opening;
+            if (endTime === undefined || this._dialog._requestId !== requestId ||
+                this._dialog._watchId !== videoId)
+                return;
+            this._pendingLibraryRepeat = { requestId, videoId, a: time, b: endTime };
+            this._trySavedLibraryRepeat();
+        }
+        catch {
+            console.warn('Saved position navigation unavailable');
+        }
     }
     _trySavedLibraryRepeat() {
         const pending = this._pendingLibraryRepeat;
@@ -3638,7 +3662,7 @@ class NicoVideoPlayerDialog extends Emitter {
         e.stopPropagation();
     }
     _onPlayerConfigUpdate(key, value) {
-        if (['resume.recordEnabled', 'abRepeat.enabled'].includes(key)) {
+        if (['resume.recordEnabled', 'abRepeat.enabled'].includes(key) || (typeof key === 'string' && key.startsWith('bookmark.'))) {
             this._view?.manualBookmarkDock?.refreshPreferences();
         }
         // Task 063: enableCommentPanel(コメントパネル表示ON/OFF)は動画プレイヤー

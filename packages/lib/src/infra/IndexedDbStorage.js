@@ -456,12 +456,16 @@ const IndexedDbStorage = (() => {
                                 if (row && typeof row === 'object' && !Array.isArray(row) && row.watchId === cursor.primaryKey) {
                                     const finite = (value) => typeof value === 'number' && Number.isFinite(value) && value >= 0;
                                     const resume = Array.isArray(row.resume) ? row.resume[0]?.time : null;
+                                    const thumbnail = [row.videoInfo?.thumbnail, row.videoInfo?.betterThumbnail]
+                                        .find(value => typeof value === 'string' && /^https?:\/\//i.test(value));
                                     items.push({
                                         watchId: cursor.primaryKey,
                                         title: typeof row.videoInfo?.title === 'string' ? row.videoInfo.title : cursor.primaryKey,
                                         duration: finite(row.videoInfo?.duration) ? row.videoInfo.duration : 0,
                                         updatedAt: finite(row.updatedAt) ? row.updatedAt : 0,
-                                        automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null
+                                        automaticTime: finite(row.resumeOverride) ? row.resumeOverride : finite(resume) ? resume : null,
+                                        ...(thumbnail !== undefined ? { thumbnailUrl: thumbnail } : {}),
+                                        ...(finite(row.viewedAt) && row.viewedAt > 0 ? { viewedAt: row.viewedAt } : {})
                                     });
                                 }
                                 scanned++;

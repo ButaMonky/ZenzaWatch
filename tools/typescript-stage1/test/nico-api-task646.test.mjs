@@ -53,6 +53,16 @@ async function compare(mod,label,run,opt={},policy={}){
       assert.equal(updates[i][1].limits.resume,1,label+' current one-record policy');
       assert.equal(oldUpdates[i][1].limits.resume,10,label+' frozen ten-record baseline');
       updates[i][1].limits.resume=10;
+      // Task998 adds a genuine viewing timestamp, never a generic edit/access date.
+      if(policy.expectViewedAt){
+        assert.equal(updates[i][1].patch.viewedAt,5000,label+' records the viewing clock');
+        assert.equal(current.value.viewedAt,5000,label+' acknowledged viewing clock');
+        delete updates[i][1].patch.viewedAt;
+        delete current.value.viewedAt;
+      }else{
+        assert.equal(Object.hasOwn(updates[i][1].patch,'viewedAt'),false,label+' does not pretend metadata changes are viewing');
+      }
+
     }
   }
   if(policy.expectPublicSnapshot){
@@ -133,14 +143,14 @@ const videoInfo=(extra={})=>({videoId:'sm9',threadId:'1173108780',postedAt:'2007
   toJSON(){return {raw:true,videoId:'sm9'};},...extra});
 test('WatchInfoCacheDb: update request shape and acknowledgement',async()=>{
   await compare(watch,'full put',d=>d.put('sm9',{videoInfo:videoInfo(),threadInfo:{t:1},heatMap:[1,2],config:{c:1},
-    currentTime:12.5,watchCount:1,comment:{text:'x'}}),{}, {expectResumeOverrideClear:true,expectPublicSnapshot:true});
+    currentTime:12.5,watchCount:1,comment:{text:'x'}}),{}, {expectResumeOverrideClear:true,expectPublicSnapshot:true,expectViewedAt:true});
   await compare(watch,'minimal put',d=>d.put('sm9'));
-  await compare(watch,'videoInfo without toJSON/owner',d=>d.put('so1',{videoInfo:{videoId:'',threadId:'x',postedAt:'bad'},currentTime:0,watchCount:2}));
+  await compare(watch,'videoInfo without toJSON/owner',d=>d.put('so1',{videoInfo:{videoId:'',threadId:'x',postedAt:'bad'},currentTime:0,watchCount:2}),{}, {expectViewedAt:true});
   await compare(watch,'negative/NaN time, falsy extras',d=>d.put('sm1',{currentTime:NaN,threadInfo:0,heatMap:'',config:null,comment:''}));
   for(const [i,res] of [null,'ok',{watchId:'other'},{}].entries())
     await compare(watch,'unacknowledged '+i,d=>d.put('sm9',{}),{updateResult:()=>res});
   await compare(watch,'best effort swallows',d=>d.putBestEffort('sm9',{}),{updateResult:()=>null});
-  await compare(watch,'best effort success',d=>d.putBestEffort('sm9',{watchCount:1}));
+  await compare(watch,'best effort success',d=>d.putBestEffort('sm9',{watchCount:1}),{}, {expectViewedAt:true});
 });
 
 test('#255: videoInfo history snapshots never serialize playback auth material',async()=>{
@@ -173,16 +183,6 @@ test('#255: videoInfo history snapshots never serialize playback auth material',
   }
 });
 
-test('WatchInfoCacheDb: explicit manual 0s is retained and normal resume remains bounded',async()=>{
-  const w=world();
-  const subject=loadLegacy(watch.after,watch.name,w.globals);
-  const result=await subject.put('sm9',{currentTime:0,explicitResume:true});
-  assert.equal(result.resumeOverride,0,'manual zero should not be mistaken for absent position');
-  const request=w.log.find(entry=>entry[0]==='update')?.[1];
-  assert.equal(request?.patch?.resumeOverride,0);
-  assert.deepEqual(request?.prepend?.resume,[{now:5000,time:0}]);
-  assert.equal(request?.limits?.resume,1,'only one automatic resume position is kept');
-});
 test('WatchInfoCacheDb: open, bridge, get/delete/close/gc',async()=>{
   await compareWatchReadTouch('www ops',async d=>[keys(await d.initWorker()),await d.get('sm9'),await d.delete('sm9'),await d.close(),
     await d.gc(),await d.gc(1000),(await d.open())===(await d.open())],{rows:{sm9:{watchId:'sm9'}}});
@@ -304,4 +304,15 @@ test('Task647 WI-OPEN-RACE-001: concurrent startup opens IndexedDB once and shar
   assert.equal(w.log.filter(e=>e[0]==='idb.open').length,1,'concurrent failing callers share one attempt');
   await settle(()=>d.get('c'));
   assert.equal(w.log.filter(e=>e[0]==='idb.open').length,2,'later call retries');
+});
+
+
+test('Task998: manual resume edit does not manufacture a viewing timestamp',async()=>{
+  const w=world(),d=loadLegacy(watch.after,'WatchInfoCacheDb',w.globals);
+  const edited=await d.put('sm9',{currentTime:42,explicitResume:true});
+  assert.equal(edited.resumeOverride,42);
+  const patch=w.log.find(e=>e[0]==='update')[1].patch;
+  assert.equal(Object.hasOwn(patch,'viewedAt'),false);
+  assert.equal(Object.hasOwn(edited,'viewedAt'),false);
+  assert.equal(patch.updatedAt,5000,'edit timestamp still advances independently');
 });

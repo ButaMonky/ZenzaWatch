@@ -210,3 +210,49 @@ test('observer limits distinct videos to three and releases a video before admit
  assert.equal(h.cleanups.length,1);assert.equal(h.previews.length,4);
  assert.deepEqual(h.previews.at(-1),['sm4',3]);h.close();
 });
+
+test('resume editor is directly available and Enter saves without submitting IME composition',async()=>{
+ const saved=[];const h=harness({editAutomatic:async time=>{saved.push(time);return true;}});
+ const field=h.root.querySelector('[data-point-field="automatic"]');
+ assert.equal(field.closest('details'),null);field.value='0:45';
+ field.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true}));
+ await step();assert.deepEqual(saved,[]);
+ field.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));
+ await step();assert.deepEqual(saved,[45]);h.close();
+});
+test('library uses video thumbnails and actual viewed dates, with independent image visibility preferences',async()=>{
+ let appearance={showVideoThumbnails:true,showScenePreviews:false,thumbnailWidth:96,titleFontSize:14,titleLines:2};
+ const h=harness({libraryAppearance:()=>appearance,loadLibrary:async()=>[
+ {videoId:'sm2',title:'a very long title',duration:100,updatedAt:99,viewedAt:1700000000000,thumbnailUrl:'https://example.com/video.jpg',automaticTime:5,bookmarks:[]},
+ {videoId:'sm3',title:'legacy',duration:100,updatedAt:99,automaticTime:6,bookmarks:[]}]});
+ assert.equal(h.previews.length,0);h.click('[data-library-action="open"]');await step();
+ assert.equal(h.root.querySelectorAll('.zw-library-thumbnail').length,1);
+ assert.equal(h.root.querySelector('.zw-library-thumbnail').getAttribute('loading'),'lazy');
+ assert.equal(h.root.querySelectorAll('time[data-viewed-at]').length,1);
+ assert.equal(h.root.querySelector('.zw-library-title').textContent,'a very long title');
+ appearance={...appearance,showVideoThumbnails:false};h.panel.refreshPreferences();
+ assert.equal(h.root.querySelectorAll('.zw-library-thumbnail').length,0);
+ assert.equal(h.previews.length,0);h.close();
+});
+
+test('Enter saves bookmark edits and AB range drafts without changing repeat state',async()=>{
+ const h=harness();h.click('[data-point-tab="manual"]');
+ const start=h.root.querySelector('[data-bookmark-start-id]');start.value='11';
+ start.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await step();
+ assert.deepEqual(h.calls.at(-1),['update','b1',{time:11,endTime:20,label:'range'},99]);
+ h.panel.setRepeatRange(32,44,false);
+ h.root.querySelector('[data-point-field="b"]').dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await step();
+ assert.deepEqual(h.calls.at(-1),['add','new',32,99,'区間 0:32',44]);assert.equal(h.panel.isRepeating,false);h.close();
+});
+test('Enter saves a historical library edit and hidden scenes release current leases',async()=>{
+ let show=true;const saved=[];
+ const h=harness({libraryAppearance:()=>({showScenePreviews:show,showVideoThumbnails:false,thumbnailWidth:80,titleFontSize:13,titleLines:1}),
+ loadLibrary:async()=>[{videoId:'sm2',title:'history',duration:100,updatedAt:1,automaticTime:12,bookmarks:[]}],
+ editLibraryAutomatic:async(...args)=>saved.push(args)});
+ assert.equal(h.previews.length,1);show=false;h.panel.refreshPreferences();
+ assert.equal(h.cleanups.length,1);assert.equal(h.previews.length,1);
+ h.click('[data-library-action="open"]');await step();
+ const field=h.root.querySelector('[data-library-start]');field.value='24';
+ field.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await step();
+ assert.deepEqual(saved,[['sm2',24,100]]);h.close();
+});

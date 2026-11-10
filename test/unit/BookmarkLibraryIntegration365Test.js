@@ -10,6 +10,26 @@ function fixture(history=[]){
  const view=Object.create(ctx.View.prototype);view._state={videoInfo:{watchId:'sm1',title:'Current',duration:100}};view._dialog={_requestId:7,_videoInfo:{resumePoints:[{time:12}]}};return view;
 }
 describe('Saved point library integration',()=>{
+ it('retains actual viewing date and video thumbnail independently of edits',async()=>{
+  const view=fixture([{watchId:'sm2',title:'Saved',duration:100,updatedAt:90,viewedAt:12,thumbnailUrl:'https://example.com/video.jpg',automaticTime:3}]);
+  const list=await view._loadSavedPointLibrary({list:async()=>[]});
+  assert.equal(list[0].viewedAt,12);assert.equal(list[0].thumbnailUrl,'https://example.com/video.jpg');
+ });
+ it('captures navigation ownership before a delayed open resolves',async()=>{
+  const v=fixture();let resolve;const calls=[];
+  v._dialog.open=()=>{v._dialog._requestId=8;v._dialog._watchId='sm2';return new Promise(r=>{resolve=r;});};
+  v._trySavedLibraryRepeat=()=>calls.push(v._pendingLibraryRepeat);
+  const pending=v._openSavedLibraryPosition('sm2',20,30);
+  v._dialog._requestId=9;v._dialog._watchId='sm2';resolve();await pending;
+  assert.equal(calls.length,0);assert.equal(v._pendingLibraryRepeat,undefined);
+ });
+ it('navigates to the saved video and arms repeat for that request',async()=>{
+  const v=fixture();const calls=[];
+  v._dialog.open=(id,options)=>{calls.push([id,options.currentTime]);v._dialog._requestId=8;v._dialog._watchId=id;};
+  v._trySavedLibraryRepeat=()=>{};
+  await v._openSavedLibraryPosition('sm2',20,30);
+  assert.deepStrictEqual(calls,[['sm2',20]]);assert.equal(v._pendingLibraryRepeat.requestId,8);assert.equal(v._pendingLibraryRepeat.b,30);
+ });
  it('combines readonly metadata with manual-only records without losing cached-less bookmarks',async()=>{
   const view=fixture([{watchId:'sm1',title:'Old title',duration:100,updatedAt:5,automaticTime:3},{watchId:'sm2',title:'Empty',duration:50,updatedAt:4,automaticTime:null}]);
   const list=await view._loadSavedPointLibrary({list:async()=>[{videoId:'sm3',items:[{id:'b',time:20,endTime:30,label:'range',updatedAt:8}]}]});

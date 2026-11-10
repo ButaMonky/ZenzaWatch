@@ -81,12 +81,12 @@ describe('Saved points facade',()=>{
    async listSavedPoints(query){
     calls.push(query);
     return query.afterKey===null?
-     {items:[{watchId:'sm1',title:'One',duration:90,updatedAt:4,automaticTime:0,comment:'private'}],nextKey:'sm1'}:
+     {items:[{watchId:'sm1',title:'One',duration:90,updatedAt:4,automaticTime:0,viewedAt:3,thumbnailUrl:'https://example.test/thumb.jpg',comment:'private'}],nextKey:'sm1'}:
      {items:[{watchId:'sm2',title:'Two',duration:60,updatedAt:2,automaticTime:null}],nextKey:null};
    }};
   const rows=await historyFacade(cache).listSavedPoints();
   assert.deepStrictEqual(JSON.parse(JSON.stringify(rows)),[
-   {watchId:'sm1',title:'One',duration:90,updatedAt:4,automaticTime:0},
+   {watchId:'sm1',title:'One',duration:90,updatedAt:4,automaticTime:0,viewedAt:3,thumbnailUrl:'https://example.test/thumb.jpg'},
    {watchId:'sm2',title:'Two',duration:60,updatedAt:2,automaticTime:null}]);
   assert.deepStrictEqual(JSON.parse(JSON.stringify(calls)),[{afterKey:null,maxRecords:200},{afterKey:'sm1',maxRecords:200}]);
  });
@@ -113,5 +113,33 @@ describe('Saved points bridge routing',()=>{
   await assert.rejects(ctx.send({command:'listSavedPoints',params:{name:'other',storeName:'cache',data:{}}}),/Invalid saved points target/);
   await assert.rejects(ctx.send({command:'listSavedPoints',params:{name:'watch-info',storeName:'other',data:{}}}),/Invalid saved points target/);
   assert.equal(calls.length,1);
+ });
+});
+
+
+describe('Task998 saved library metadata',()=>{
+ it('projects video thumbnail and true viewing date without deriving it from edits',async()=>{
+  const c=await fixture(),tx={},req={};
+  c.getStore=async()=>({store:{openCursor:()=>req},transaction:tx});
+  const pending=c.listSavedPoints({name:'watch-info',storeName:'cache',data:{}});
+  await new Promise(setImmediate);
+  for(const row of [
+   {watchId:'sm1',viewedAt:123,updatedAt:999,videoInfo:{thumbnail:'https://nicovideo.cdn.example/1.jpg'}},
+   {watchId:'sm2',updatedAt:999,resume:[{now:999,time:3}],videoInfo:{thumbnail:'javascript:alert(1)'}}
+  ]){req.result={primaryKey:row.watchId,value:row,continue(){}};req.onsuccess();}
+  req.result=null;req.onsuccess();tx.oncomplete();
+  const {items}=await pending;
+  assert.equal(items[0].viewedAt,123);assert.equal(items[0].thumbnailUrl,'https://nicovideo.cdn.example/1.jpg');
+  assert.equal(items[1].viewedAt,undefined);assert.equal(items[1].thumbnailUrl,undefined);
+ });
+ it('records viewing events but preserves their date during explicit edits and metadata writes',async()=>{
+  let row={watchId:'sm1'};
+  const db=historyFacade({update:async({patch})=>(row={...row,...patch})});
+  await db.put('sm1',{currentTime:15});const at=row.viewedAt;assert(at>0);
+  await db.put('sm1',{currentTime:20,explicitResume:true});assert.equal(row.viewedAt,at);
+  await db.put('sm1',{comment:'hello'});assert.equal(row.viewedAt,at);
+  delete row.viewedAt;
+  await db.put('sm1',{currentTime:20,explicitResume:true});assert.equal(row.viewedAt,undefined);
+  await db.put('sm1',{watchCount:1});assert(row.viewedAt>0);
  });
 });

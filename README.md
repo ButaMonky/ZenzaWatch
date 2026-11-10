@@ -15,23 +15,14 @@ TampermonkeyなどのUserscriptマネージャー上で動作します。
 TampermonkeyなどのUserscriptマネージャーをインストールした状態で、
 以下のリンクをクリックしてください。
 
-#### 基本
+| スクリプト | インストール・用途 |
+|---|---|
+| **ZenzaWatch 本体** | **[インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)** · `2.7.374-task998`。通常の動画再生は本体1本で利用できます。 |
+| MylistPocket | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js) · `0.5.88-task998`。サムネイル上の動画情報、とりマイ、プレイリスト追加など。任意。 |
+| ~~ZenzaAdvancedSettings~~ | **本体に統合済み・追加インストール不要。** 本体を更新後、導入済みの旧スクリプトを削除してください。保存済みの設定は引き継ぎます。[旧版の削除案内](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js) · `0.4.0-task993`。 |
+| ~~ZenzaHLS（HLSサポート）~~ | **本体に統合済み・追加インストール不要。** 先に本体を2.7.373以降へ更新してから、導入済みの旧HLSスクリプトを削除してください。[旧版の削除案内](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js) · `0.1.0-task997`。 |
 
-- **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 配布版：`2.7.373-task997`。HLS / domandを含む動画再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定を提供します。
-
-**通常の動画再生は本体1本で利用できます。** HLSサポートを本体に統合しました。
-
-旧「ZenzaWatch HLS Support」を使っている場合は、**先に本体を2.7.373以降へ更新してから、Tampermonkeyなどの管理画面で旧HLSスクリプトを削除してください。**
-[旧ZenzaHLSの更新ファイル](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js)（`0.1.0-task997`）は削除案内のみです。新規インストールは不要です。本体、既存のHLS設定、保存済みのHLSキャッシュを削除する必要はありません。
-
-#### オプション
-
-- [MylistPocket をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js)
-  - サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加など。 (version `0.5.87-task996`)
-
-上級者設定は本体 `2.7.372-task996` に統合しました。プレイヤーの歯車 → プレイヤーの設定 →「上級者設定を開く」、またはマイページ右下から開けます。既存の設定はそのまま引き継ぎます。
-旧 `ZenzaAdvancedSettings` は更新版 `0.4.0-task993` で削除案内のみを表示します。本体を更新後、Tampermonkeyから旧スクリプトを削除してください。本体や保存データの削除は不要です。
+旧スクリプトの削除はTampermonkeyなどの管理画面から行ってください。本体や保存データを削除する必要はありません。
 
 - [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
   - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version `0.0.5-task928`)
@@ -77,17 +68,6 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 詳しくは
 [本家ZenzaWatchからの変更点](./CHANGES_FROM_UPSTREAM.md)
 を参照してください。
-
-## しおり・ABリピート
-
-操作バーの「しおり・ABリピート」を押すと、3つのタブを開けます。
-
-- **しおり**：「＋ 現在位置にしおり」で保存します。名前は省略でき、一覧の「ここから再生」で移動、「編集」で名前の変更・削除ができます。
-- **ここまで見た**：自動更新される1件です。時刻を入力して保存、または削除できます。手動編集はこの端末に保存され、次の自動記録で置き換わります。
-- **ABリピート**：「現在位置をAに」「現在位置をBに」で区間を指定し、「リピートを開始」を押します。時刻の直接入力にも対応し、動画を切り替えると解除します。
-
-上級者設定の **再生・音声 → しおり・ABリピート** から、自動記録・完走時の削除・操作ボタン表示・ABリピートを切り替えられます。変更は「保存」で反映し、「キャンセル」「初期値に戻す」も使えます。
-手動しおりはこのブラウザの端末内に保存され、ニコニコの他端末とは同期しません。
 
 ## 上級者設定の表示整理
 

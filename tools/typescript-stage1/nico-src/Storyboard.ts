@@ -156,9 +156,16 @@ class Storyboard extends Emitter {
   createSavedPreview(host:HTMLElement,videoId:string,time:number):()=>void {
     let disposed=false,revision=0,releaseImage:(()=>void)|null=null;
     let sceneLease:{promise:Promise<Loose>;release:()=>void}|null=null;
-    host.textContent='画像なし';
+    const setState=(state:'loading'|'ready'|'unavailable')=>{
+      host.classList.toggle('zw-scene-loading',state==='loading');
+      host.setAttribute('aria-busy',String(state==='loading'));
+      host.setAttribute('aria-label',state==='loading'?'場面画像を読み込み中':
+        state==='ready'?'保存時刻付近の場面画像':'場面画像を利用できません');
+      if(state!=='ready')host.textContent=state==='loading'?'読み込み中':'画像なし';
+    };
+    setState('unavailable');
     host.style.position='relative';host.style.overflow='hidden';
-    host.setAttribute('role','img');host.setAttribute('aria-label','場面画像を利用できません');
+    host.setAttribute('role','img');
     if(!Number.isFinite(time)||time<0||typeof videoId!=='string'||!videoId||
        this.config?.props?.enableStoryboard===false)return ()=>{};
     const infos=this._savedPreviewInfo??=(new Map());
@@ -184,7 +191,9 @@ class Storyboard extends Emitter {
     const draw=async()=>{
       const seq=++revision;
       sceneLease?.release();sceneLease=null;
-      releaseImage?.();releaseImage=null;host.textContent='画像なし';
+      releaseImage?.();releaseImage=null;setState('loading');
+      let awaitingImage=false;
+      try{
       if(this.config?.props?.enableStoryboard===false)return;
       const live=isCurrent();
       let raw=live?this.model.rawData:await cached();
@@ -222,16 +231,22 @@ class Storyboard extends Emitter {
       }
       const image=host.ownerDocument.createElement('img');image.alt='';image.draggable=false;image.crossOrigin='anonymous';
       image.style.cssText=`position:absolute;max-width:none;width:${model.cols*100}%;height:${model.rows*100}%;left:${-pos.col*100}%;top:${-pos.row*100}%;pointer-events:none;`;
-      image.onload=()=>{if(!disposed&&seq===revision){host.setAttribute('aria-label','保存時刻付近の場面画像');}};
-      image.onerror=()=>{if(!disposed&&seq===revision){host.textContent='画像なし';releaseImage?.();releaseImage=null;}};
+      image.onload=()=>{if(!disposed&&seq===revision){setState('ready');}};
+      image.onerror=()=>{if(!disposed&&seq===revision){setState('unavailable');releaseImage?.();releaseImage=null;}};
       host.style.aspectRatio=String(model.cellWidth)+' / '+String(model.cellHeight);
-      host.replaceChildren(image);image.src=src;
+      host.replaceChildren(image);awaitingImage=true;image.src=src;
+      }finally{
+        // Missing metadata, disabled previews and budget refusals must settle too.
+        // Once attached, the image's own load/error event owns the loading state.
+        if(!disposed&&seq===revision&&!awaitingImage)setState('unavailable');
+      }
     };
-    const update=()=>{const pending=draw(),seq=revision;void pending.catch(()=>{if(!disposed&&seq===revision){host.textContent='画像なし';releaseImage?.();releaseImage=null;}});};
+    const update=()=>{const pending=draw(),seq=revision;void pending.catch(()=>{if(!disposed&&seq===revision){setState('unavailable');releaseImage?.();releaseImage=null;}});};
     this.on?.('update',update);this.on?.('reset',update);update();
     return ()=>{if(disposed)return;disposed=true;revision++;sceneLease?.release();sceneLease=null;releaseImage?.();releaseImage=null;
       (this as Loose).off?.('update',update);(this as Loose).off?.('reset',update);
       if(infoLease&&--infoLease.refs===0&&infos.get(infoKey)===infoLease)infos.delete(infoKey);
+      host.classList.remove('zw-scene-loading');host.setAttribute('aria-busy','false');
       host.replaceChildren();
     };
   }

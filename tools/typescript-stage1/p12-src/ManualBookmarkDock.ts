@@ -23,6 +23,31 @@ export class ManualBookmarkDock {
   private disposed=false;
   private host:HTMLElement|null=null;
   private readonly home:HTMLElement;
+  private readonly launcher:HTMLButtonElement;
+  private readonly launchHandler:(event:MouseEvent)=>void;
+  private readonly resizeHandler:()=>void;
+  private resizeObserver:ResizeObserver|null=null;
+  private position():void {
+    if(!this.floating||!this.host||!this.trigger)return;
+    const host=this.host.getBoundingClientRect(),trigger=this.trigger.getBoundingClientRect();
+    const scaleX=host.width&&this.host.clientWidth?host.width/this.host.clientWidth:1;
+    const scaleY=host.height&&this.host.clientHeight?host.height/this.host.clientHeight:1;
+    const width=this.host.clientWidth||host.width,height=this.host.clientHeight||host.height;
+    const panelWidth=this.node.offsetWidth||Math.min(this.node.classList.contains('zw-library-wide')?620:400,width-24);
+    this.node.style.left=Math.max(12,Math.min((trigger.left-host.left)/scaleX,width-panelWidth-12))+'px';
+    this.node.style.right='auto';
+    const above=(trigger.top-host.top)/scaleY-20;
+    const top=(trigger.bottom-host.top)/scaleY+8;
+    const below=height-top-12;
+    if(above<Math.min(this.node.offsetHeight||300,240)&&below>above){
+      this.node.style.top=Math.max(12,top)+'px';this.node.style.bottom='auto';
+      this.node.style.maxHeight=Math.max(44,below)+'px';this.node.style.transformOrigin='left top';
+    }else{
+      const bottom=Math.max(12,Math.min(height-56,(host.bottom-trigger.top)/scaleY+8));
+      this.node.style.top='auto';this.node.style.bottom=bottom+'px';
+      this.node.style.maxHeight=Math.max(44,height-bottom-12)+'px';this.node.style.transformOrigin='left bottom';
+    }
+  }
   private trigger:HTMLElement|null=null;
   private floating=false;
   private closing=false;
@@ -47,9 +72,13 @@ export class ManualBookmarkDock {
     if(this.disposed)return;
     if(this.floating&&!this.closing){this.close();return;}
     this.cancelAnimation();this.closing=false;this.node.inert=false;
+    this.resizeObserver?.disconnect();
     this.host=host;this.trigger=trigger||null;this.floating=true;
-    host.append(this.node);this.node.classList.add('zw-points-floating');
+    this.resizeObserver?.observe(this.node);this.resizeObserver?.observe(host);
+    if(this.trigger)this.resizeObserver?.observe(this.trigger);
+    host.append(this.node);this.node.hidden=false;this.node.classList.add('zw-points-floating');
     this.panel.refreshPreferences();this.node.open=true;this.panel.setVisible(true);this.trigger?.setAttribute('aria-expanded','true');
+    this.position();
     // Refresh shared IndexedDB only on explicit reopen, without polling.
     void this.session.refreshIfIdle();
     this.node.querySelector<HTMLElement>('summary')?.focus();
@@ -63,9 +92,9 @@ export class ManualBookmarkDock {
       this.trigger?.setAttribute('aria-expanded','false');
       if(restoreFocus&&this.trigger?.isConnected)this.trigger.focus({preventScroll:true});
       this.animate(false,()=>{
-        this.node.open=false;this.node.inert=false;
+        this.node.open=false;this.node.hidden=true;this.node.inert=false;
         this.node.classList.remove('zw-points-floating');this.home.append(this.node);
-        this.floating=false;this.closing=false;
+        this.floating=false;this.closing=false;this.resizeObserver?.disconnect();
       });
     }else{this.node.open=false;}
   }
@@ -84,7 +113,7 @@ export class ManualBookmarkDock {
     this.session=session;this.home=target;
     const doc=target.ownerDocument;
     const node=this.node=doc.createElement('details');
-    node.className='zenzaManualBookmarkDock';
+    node.className='zenzaManualBookmarkDock';node.hidden=true;
     node.dataset.bookmarkOwner='manual';
     const summary=doc.createElement('summary');
     summary.textContent='しおり・ABリピート';
@@ -95,7 +124,22 @@ export class ManualBookmarkDock {
     this.style=doc.createElement('style');
     this.style.textContent=ManualBookmarkDock.styles;
     node.append(this.style);
+    const launcher=this.launcher=doc.createElement('button');launcher.type='button';
+    launcher.className='zw-points-launcher';launcher.textContent='ここまで見た・しおり・ABリピートを開く';
+    this.launchHandler=event=>{
+      event.preventDefault();event.stopPropagation();
+      const host=target.closest<HTMLElement>('.zenzaPlayerContainer');
+      const button=host?.querySelector<HTMLElement>('.playbackPointsSwitch');
+      const rect=button?.getBoundingClientRect();
+      if(host)this.toggle(host,button&&rect&&rect.width>0&&rect.height>0?button:launcher);
+    };
+    launcher.addEventListener('click',this.launchHandler);
+    this.resizeHandler=()=>this.position();
+    doc.defaultView?.addEventListener('resize',this.resizeHandler);
+    const Observer=doc.defaultView?.ResizeObserver;
+    if(Observer){this.resizeObserver=new Observer(this.resizeHandler);this.resizeObserver.observe(node);}
     const series=target.querySelector(':scope > .seriesList');
+    target.insertBefore(launcher,series||null);
     target.insertBefore(node,series||null);
     // All keyboard interaction within this dedicated dock belongs to its
     // summary, buttons and text fields, not the video's global shortcuts.
@@ -137,7 +181,7 @@ export class ManualBookmarkDock {
       node.removeEventListener('keydown',this.keyHandler);
       node.removeEventListener('keyup',this.keyHandler);
       node.removeEventListener('click',this.clickHandler);
-      node.remove();
+      node.remove();launcher.remove();this.resizeObserver?.disconnect();doc.defaultView?.removeEventListener('resize',this.resizeHandler);
       throw error;
     }
   }
@@ -157,11 +201,13 @@ export class ManualBookmarkDock {
   }
   deactivate():void{
     if(this.disposed)return;
-    this.cancelAnimation();this.closing=false;this.node.open=false;this.node.inert=false;
+    this.cancelAnimation();this.closing=false;this.node.open=false;this.node.hidden=true;this.node.inert=false;
     if(this.floating){this.node.classList.remove('zw-points-floating');this.home.append(this.node);this.floating=false;}
-    this.trigger?.setAttribute('aria-expanded','false');this.panel.setVisible(false);this.session.deactivate();
+    this.resizeObserver?.disconnect();this.trigger?.setAttribute('aria-expanded','false');this.panel.setVisible(false);this.session.deactivate();
   }
   private static readonly styles=`
+    .zenzaManualBookmarkDock[hidden]{display:none!important}
+    .zw-points-launcher{color:#f4f7ff;background:#303c51;border:1px solid #53627b;border-radius:6px;padding:6px 10px;cursor:pointer}
     .zenzaManualBookmarkDock{position:relative;color-scheme:dark;box-sizing:border-box;color:#e9edf5;background:#171e2a;border:1px solid #455066;border-radius:12px;font:13px/1.6 system-ui,sans-serif;text-align:left;overflow:hidden;isolation:isolate}
     .zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
     .zenzaManualBookmarkDock[open]{overflow:auto}
@@ -211,7 +257,19 @@ export class ManualBookmarkDock {
     .zenzaManualBookmarkDock .zw-library-search input{flex:1;min-width:150px}
     .zenzaManualBookmarkDock select{background:#101722;color:#f4f7ff;border:1px solid #53627b;border-radius:5px;padding:6px;font:inherit}
     .zenzaManualBookmarkDock .zw-library-group{margin-top:12px}
-    .zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;overflow-wrap:anywhere}
+    .zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;min-width:0}
+    .zenzaManualBookmarkDock .zw-library-group>summary::before{content:'▸';flex:none;color:#aebbd1}
+    .zenzaManualBookmarkDock .zw-library-group[open]>summary::before{content:'▾'}
+    .zenzaManualBookmarkDock .zw-library-group>summary::-webkit-details-marker{display:none}
+    .zenzaManualBookmarkDock .zw-library-thumbnail{width:var(--zw-video-thumb-width,80px);aspect-ratio:16/9;object-fit:cover;border-radius:4px;flex:none;background:#253346}
+    .zenzaManualBookmarkDock .zw-library-header{min-width:0;flex:1}
+    .zenzaManualBookmarkDock .zw-library-title{font-size:var(--zw-library-title-size,13px);display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:var(--zw-library-title-lines,1);overflow:hidden;overflow-wrap:anywhere}
+    .zenzaManualBookmarkDock .zw-library-group[open] .zw-library-title{display:block;-webkit-line-clamp:unset;overflow:visible}
+    .zenzaManualBookmarkDock time[data-viewed-at]{display:block;font-size:11px;color:#aebbd1;font-weight:400}
+    .zenzaManualBookmarkDock .zw-scene-loading{position:relative;font-size:0}
+    .zenzaManualBookmarkDock .zw-scene-loading::after{content:'';position:absolute;left:calc(50% - 8px);top:calc(50% - 8px);z-index:1;width:12px;height:12px;border:2px solid #53627b;border-top-color:#8ecbff;border-radius:50%;animation:zw-scene-loading-spin .8s linear infinite}
+    @keyframes zw-scene-loading-spin{to{transform:rotate(360deg)}}
+    @media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock .zw-scene-loading::after{animation:none}}
     .zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{width:100%;margin:8px 0}
     .zenzaManualBookmarkDock .zw-point-range-inputs label{display:block}
     .zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%}
@@ -231,6 +289,9 @@ export class ManualBookmarkDock {
     this.node.ownerDocument.removeEventListener('pointerdown',this.outsideHandler,true);
     this.node.ownerDocument.removeEventListener('click',this.outsideHandler,true);
     this.node.removeEventListener('toggle',this.toggleHandler);
+    this.resizeObserver?.disconnect();
+    this.node.ownerDocument.defaultView?.removeEventListener('resize',this.resizeHandler);
+    this.launcher.removeEventListener('click',this.launchHandler);this.launcher.remove();
     this.panel.dispose();
     this.session.dispose();
     this.node.remove();

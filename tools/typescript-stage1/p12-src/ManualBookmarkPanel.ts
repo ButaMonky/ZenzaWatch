@@ -9,8 +9,11 @@ import type {ManualBookmark} from './ManualBookmarkPolicy.ts';
 export interface ManualBookmarkLibraryEntry {
   videoId:string;title:string;duration:number;updatedAt:number;
   automaticTime:number|null;bookmarks:readonly ManualBookmark[];
+  thumbnailUrl?:string;viewedAt?:number;
 }
 export interface ManualBookmarkPanelDependencies {
+  libraryAppearance?:()=>{showVideoThumbnails:boolean;showScenePreviews:boolean;thumbnailWidth:number;titleFontSize:number;titleLines:number};
+  automaticViewedAt?:()=>number|null;
   setRecordingEnabled?:(enabled:boolean)=>void;
   createScenePreview?:(host:HTMLElement,videoId:string,time:number)=>()=>void;
   loadLibrary?:()=>Promise<readonly ManualBookmarkLibraryEntry[]>;
@@ -51,6 +54,7 @@ export class ManualBookmarkPanel {
   private disposed=false;
   private last:ManualBookmarkPanelSnapshot;
   private readonly clickHandler:(event:MouseEvent)=>void;
+  private readonly keyHandler:(event:KeyboardEvent)=>void;
   private readonly inputHandler:(event:Event)=>void;
   private addDraftRevision=0;
   private pointDrafts:Record<string,string>={a:'',b:''};
@@ -83,6 +87,7 @@ export class ManualBookmarkPanel {
   }
   private preview(videoId:string,time:number):HTMLElement {
     const host=this.root.ownerDocument.createElement('div');host.className='zw-scene-preview';
+    host.hidden=this.deps.libraryAppearance?.().showScenePreviews===false;
     host.dataset.sceneVideo=videoId;host.dataset.sceneTime=String(time);
     host.textContent='場面画像';host.setAttribute('aria-label',displayTime(time)+' 付近の場面画像');
     return host;
@@ -93,7 +98,7 @@ export class ManualBookmarkPanel {
     return !group||group.open;
   }
   private fillPreviewLeases():void {
-    if(!this.visible||this.disposed||!this.deps.createScenePreview)return;
+    if(!this.visible||this.disposed||!this.deps.createScenePreview||this.deps.libraryAppearance?.().showScenePreviews===false)return;
     const videos=new Set(Array.from(this.previewLeases.keys(),host=>host.dataset.sceneVideo!));
     for(const host of this.previewCandidates){
       if(this.previewLeases.size>=12)break;
@@ -108,7 +113,7 @@ export class ManualBookmarkPanel {
   }
   private refreshPreviews():void {
     this.clearPreviews();
-    if(!this.visible||this.disposed||!this.deps.createScenePreview)return;
+    if(!this.visible||this.disposed||!this.deps.createScenePreview||this.deps.libraryAppearance?.().showScenePreviews===false)return;
     const hosts=Array.from(this.root.querySelectorAll<HTMLElement>('[data-scene-video]'))
       .filter(host=>this.previewEligible(host));
     const Observer=this.root.ownerDocument.defaultView?.IntersectionObserver;
@@ -277,14 +282,15 @@ export class ManualBookmarkPanel {
       position.textContent=time===null||time===undefined?'未記録':displayTime(time);
       const go=this.pointButton('seek-automatic','続きへ');go.disabled=time===null||time===undefined;
       line.append(position,go);
-      const edit=this.root.ownerDocument.createElement('details');edit.className='zw-automatic-edit';
-      const summary=this.root.ownerDocument.createElement('summary');summary.textContent='編集';
-      edit.append(summary,this.pointField('automatic','保存位置',
+      const edit=this.root.ownerDocument.createElement('div');edit.className='zw-automatic-edit';
+      edit.append(this.pointField('automatic','保存位置',
         time===null||time===undefined?'':ManualBookmarkPanel.formatTime(time)),
         this.pointButton('save-automatic','位置を保存'),
         this.pointButton('current-automatic','現在位置で更新'),
         this.pointButton('delete-automatic','削除'));
-      section.append(setting,note,line,edit,status);
+      section.append(setting,note,line);
+      const viewed=this.viewedDate(this.deps.automaticViewedAt?.());if(viewed)section.append(viewed);
+      section.append(edit,status);
     }else{
       status.dataset.pointStatus='repeat';
       status.textContent=this.loop?'区間リピート中':
@@ -295,6 +301,7 @@ export class ManualBookmarkPanel {
         const time=ManualBookmarkPanel.parseTime(this.pointDrafts[name]||'');
         const preview=this.root.ownerDocument.createElement('div');preview.className='zw-scene-preview';preview.dataset.endpointPreview=name;
         if(time!==null){preview.dataset.sceneVideo=this.last.videoId!;preview.dataset.sceneTime=String(time);}
+        preview.hidden=this.deps.libraryAppearance?.().showScenePreviews===false;
         preview.textContent=time===null?'時刻を指定':'場面画像';
         column.append(this.pointField(name,name==='a'?'A 開始':'B 終了',this.pointDrafts[name]||''),preview,
           this.pointButton('set-'+name,'現在位置を'+name.toUpperCase()+'に'));
@@ -456,6 +463,19 @@ export class ManualBookmarkPanel {
       if(target?.matches?.('input[data-bookmark-label]')&&
          this.root.contains(target))this.addDraftRevision++;
     };
+    this.keyHandler=event=>{
+      if(event.key!=='Enter'||event.isComposing||event.keyCode===229||event.repeat)return;
+      const field=event.target as HTMLInputElement|null;
+      if(!field?.matches('input')||!this.root.contains(field))return;
+      let button:HTMLButtonElement|null=null;
+      const edit=field.closest('.zw-bookmark-edit');
+      if(edit)button=edit.querySelector('[data-bookmark-action="rename"],[data-library-action="save"],[data-library-action="save-auto"]');
+      else if(field.dataset.pointField==='automatic')button=this.root.querySelector('[data-point-action="save-automatic"]');
+      else if(field.dataset.pointField==='a'||field.dataset.pointField==='b')button=this.root.querySelector('[data-point-action="save-range"]');
+      else if(field.hasAttribute('data-bookmark-label'))button=this.root.querySelector('[data-bookmark-action="add"]');
+      if(button&&!button.disabled){event.preventDefault();event.stopPropagation();button.click();}
+    };
+    root.addEventListener('keydown',this.keyHandler);
     root.addEventListener('click',this.clickHandler);
     root.addEventListener('input',this.inputHandler);
     root.addEventListener('change',this.changeHandler);
@@ -491,7 +511,6 @@ export class ManualBookmarkPanel {
       const end=edit.querySelector<HTMLInputElement>('[data-bookmark-end-id]');
       if(start&&end)timeDrafts.set(start.dataset.bookmarkStartId!,{start:start.value,end:end.value});
     }
-    const automaticOpen=sameVideo&&!!this.root.querySelector<HTMLDetailsElement>('.zw-automatic-edit')?.open;
     const previousAutomatic=sameVideo?this.root.querySelector<HTMLInputElement>('[data-point-field="automatic"]'):null;
     const automaticDraft=this.automaticDraftDirty?previousAutomatic?.value:undefined;
     const previousAdd=sameVideo?this.root.querySelector<HTMLInputElement>(
@@ -604,14 +623,13 @@ export class ManualBookmarkPanel {
       region.prepend(nav);
     }
     if(this.deps.loadLibrary){const nav=this.libraryButton('open','保存一覧');nav.className='zw-library-nav';region.prepend(nav);}
-    const hint=doc.createElement('small');hint.textContent='画像は近い時刻の代表コマです。';region.append(hint);
+    if(this.deps.libraryAppearance?.().showScenePreviews!==false){const hint=doc.createElement('small');hint.textContent='画像は近い時刻の代表コマです。';region.append(hint);}
     // Only this dedicated container is mutated, not native marker DOM.
     this.root.replaceChildren(region);
     if(automaticDraft!==undefined){
       const field=this.root.querySelector<HTMLInputElement>('[data-point-field="automatic"]');
       if(field)field.value=automaticDraft;
     }
-    const autoEdit=this.root.querySelector<HTMLDetailsElement>('.zw-automatic-edit');if(autoEdit)autoEdit.open=automaticOpen;
     this.updateLoopDisplay();
     this.updatePointBusyControls();
     if(this.deps.duration)this.selectTab(this.activeTab);
@@ -744,6 +762,11 @@ export class ManualBookmarkPanel {
   private renderLibraryGroups():void {
     const groups=this.root.querySelector<HTMLElement>('[data-library-groups]');if(!groups||this.disposed)return;
     this.clearPreviews();groups.replaceChildren();const doc=this.root.ownerDocument;
+    const appearance=this.deps.libraryAppearance?.();
+    const bounded=(value:number|undefined,fallback:number,min:number,max:number)=>Number.isFinite(value)?Math.min(max,Math.max(min,value!)):fallback;
+    groups.style.setProperty('--zw-video-thumb-width',bounded(appearance?.thumbnailWidth,80,64,160)+'px');
+    groups.style.setProperty('--zw-library-title-size',bounded(appearance?.titleFontSize,13,11,18)+'px');
+    groups.style.setProperty('--zw-library-title-lines',String(Math.round(bounded(appearance?.titleLines,1,1,3))));
     const query=this.librarySearch.trim().toLocaleLowerCase(),filter=this.libraryFilter;
     let count=0,videoCount=0;
     for(const video of [...this.libraryRows].sort((a,b)=>b.updatedAt-a.updatedAt)){
@@ -754,7 +777,22 @@ export class ManualBookmarkPanel {
       if(!automatic&&!bookmarks.length)continue;
       const group=doc.createElement('details');group.className='zw-library-group';group.dataset.libraryVideo=video.videoId;
       group.open=this.expandedVideos.has(video.videoId);
-      const summary=doc.createElement('summary');summary.textContent=video.title+(video.videoId===this.last.videoId?' · 再生中':'')+' · '+(bookmarks.length+Number(automatic))+'件';
+      const summary=doc.createElement('summary');
+      if(appearance?.showVideoThumbnails!==false&&video.thumbnailUrl){
+        try{
+          const url=new URL(video.thumbnailUrl);
+          if(url.protocol==='https:'||url.protocol==='http:'){
+            const image=doc.createElement('img');image.className='zw-library-thumbnail';image.alt='';
+            image.setAttribute('loading','lazy');image.decoding='async';image.referrerPolicy='no-referrer';image.src=url.href;
+            image.addEventListener('error',()=>image.remove(),{once:true});summary.append(image);
+          }
+        }catch{/* Malformed old metadata must not disable the library. */}
+      }
+      const header=doc.createElement('span');header.className='zw-library-header';
+      const title=doc.createElement('span');title.className='zw-library-title';title.textContent=video.title;header.append(title);
+      const meta=doc.createElement('small');meta.textContent=(video.videoId===this.last.videoId?'再生中 · ':'')+(bookmarks.length+Number(automatic))+'件';header.append(meta);
+      const viewed=this.viewedDate(video.viewedAt);if(viewed)header.append(viewed);
+      summary.append(header);
       const list=doc.createElement('ul');group.append(summary,list);
       if(automatic)list.append(this.libraryRow(video,null));
       for(const item of bookmarks)list.append(this.libraryRow(video,item));
@@ -768,6 +806,12 @@ export class ManualBookmarkPanel {
     if(status)status.textContent=videoCount+' 動画 · '+count+' 件 · 更新が新しい順';
     if(!count){const empty=doc.createElement('p');empty.textContent='該当する保存情報はありません';groups.append(empty);}
     this.refreshPreviews();
+  }
+  private viewedDate(value:number|null|undefined):HTMLTimeElement|null {
+    if(typeof value!=='number'||!Number.isFinite(value)||value<=0)return null;
+    const date=new Date(value);if(!Number.isFinite(date.getTime()))return null;
+    const time=this.root.ownerDocument.createElement('time');time.dataset.viewedAt='1';
+    time.dateTime=date.toISOString();time.textContent='視聴 '+date.toLocaleString('ja-JP');return time;
   }
   private libraryRow(video:ManualBookmarkLibraryEntry,item:ManualBookmark|null):HTMLElement {
     const doc=this.root.ownerDocument,row=doc.createElement('li'),time=item?.time??video.automaticTime!;
@@ -844,6 +888,7 @@ export class ManualBookmarkPanel {
     if(this.disposed)return;
     this.loop=null;this.deps.repeatState?.(false);this.deps.onRepeatRangeChange?.(null);this.clearPreviews();this.libraryGeneration++;
     this.disposed=true;this.pointGeneration++;this.pointBusyRequest=null;this.unsubscribe();
+    this.root.removeEventListener('keydown',this.keyHandler);
     this.root.removeEventListener('click',this.clickHandler);
     this.root.removeEventListener('input',this.inputHandler);
     this.root.removeEventListener('change',this.changeHandler);

@@ -223,11 +223,18 @@ class Storyboard extends Emitter {
     createSavedPreview(host, videoId, time) {
         let disposed = false, revision = 0, releaseImage = null;
         let sceneLease = null;
-        host.textContent = '画像なし';
+        const setState = (state) => {
+            host.classList.toggle('zw-scene-loading', state === 'loading');
+            host.setAttribute('aria-busy', String(state === 'loading'));
+            host.setAttribute('aria-label', state === 'loading' ? '場面画像を読み込み中' :
+                state === 'ready' ? '保存時刻付近の場面画像' : '場面画像を利用できません');
+            if (state !== 'ready')
+                host.textContent = state === 'loading' ? '読み込み中' : '画像なし';
+        };
+        setState('unavailable');
         host.style.position = 'relative';
         host.style.overflow = 'hidden';
         host.setAttribute('role', 'img');
-        host.setAttribute('aria-label', '場面画像を利用できません');
         if (!Number.isFinite(time) || time < 0 || typeof videoId !== 'string' || !videoId ||
             this.config?.props?.enableStoryboard === false)
             return () => { };
@@ -261,84 +268,94 @@ class Storyboard extends Emitter {
             sceneLease = null;
             releaseImage?.();
             releaseImage = null;
-            host.textContent = '画像なし';
-            if (this.config?.props?.enableStoryboard === false)
-                return;
-            const live = isCurrent();
-            let raw = live ? this.model.rawData : await cached();
-            if (!live && !disposed && seq === revision && this.config?.props?.savedSceneFetch !== false) {
-                const candidate = raw && new StoryboardInfoModel(raw);
-                if (!candidate?.isAvailable || !raw.storyboard.images[candidate.getThumbnailPosition(time * 1000).page]?.buffer) {
-                    sceneLease = this.savedScenes().acquire(videoId, time);
-                    raw = await sceneLease.promise;
-                }
-            }
-            if (disposed || seq !== revision || !raw || raw.watchId !== videoId)
-                return;
-            const model = new StoryboardInfoModel(raw);
-            if (!model.isAvailable || model.cellCount <= 0 || time > model.duration)
-                return;
-            const pos = model.getThumbnailPosition(time * 1000), page = raw.storyboard.images[pos.page];
-            const decoded = model.pageWidth * model.pageHeight * 4;
-            if (!Number.isFinite(decoded) || decoded <= 0 || decoded > 32 * 1024 * 1024)
-                return;
-            let src;
-            if (page?.buffer && Object.prototype.toString.call(page.buffer) === '[object ArrayBuffer]') {
-                const key = page.buffer;
-                let entry = bytes.get(key);
-                if (!entry) {
-                    if (!Number.isFinite(decoded) || decoded <= 0 || (this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
-                        return;
-                    entry = { refs: 0, url: URL.createObjectURL(new Blob([page.buffer])) };
-                    bytes.set(key, entry);
-                    this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
-                }
-                entry.refs++;
-                src = entry.url;
-                releaseImage = () => { if (--entry.refs === 0) {
-                    URL.revokeObjectURL(entry.url);
-                    bytes.delete(key);
-                    this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
-                } };
-            }
-            else {
-                // Only the already-open current video may reuse its live URL.
-                if (!live || typeof page?.url !== 'string' || !/^https?:\/\//.test(page.url))
+            setState('loading');
+            let awaitingImage = false;
+            try {
+                if (this.config?.props?.enableStoryboard === false)
                     return;
-                src = page.url;
-                let entry = bytes.get(src);
-                if (!entry) {
-                    if ((this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
-                        return;
-                    entry = { refs: 0, url: src };
-                    bytes.set(src, entry);
-                    this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
+                const live = isCurrent();
+                let raw = live ? this.model.rawData : await cached();
+                if (!live && !disposed && seq === revision && this.config?.props?.savedSceneFetch !== false) {
+                    const candidate = raw && new StoryboardInfoModel(raw);
+                    if (!candidate?.isAvailable || !raw.storyboard.images[candidate.getThumbnailPosition(time * 1000).page]?.buffer) {
+                        sceneLease = this.savedScenes().acquire(videoId, time);
+                        raw = await sceneLease.promise;
+                    }
                 }
-                entry.refs++;
-                releaseImage = () => { if (--entry.refs === 0) {
-                    bytes.delete(src);
-                    this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
+                if (disposed || seq !== revision || !raw || raw.watchId !== videoId)
+                    return;
+                const model = new StoryboardInfoModel(raw);
+                if (!model.isAvailable || model.cellCount <= 0 || time > model.duration)
+                    return;
+                const pos = model.getThumbnailPosition(time * 1000), page = raw.storyboard.images[pos.page];
+                const decoded = model.pageWidth * model.pageHeight * 4;
+                if (!Number.isFinite(decoded) || decoded <= 0 || decoded > 32 * 1024 * 1024)
+                    return;
+                let src;
+                if (page?.buffer && Object.prototype.toString.call(page.buffer) === '[object ArrayBuffer]') {
+                    const key = page.buffer;
+                    let entry = bytes.get(key);
+                    if (!entry) {
+                        if (!Number.isFinite(decoded) || decoded <= 0 || (this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
+                            return;
+                        entry = { refs: 0, url: URL.createObjectURL(new Blob([page.buffer])) };
+                        bytes.set(key, entry);
+                        this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
+                    }
+                    entry.refs++;
+                    src = entry.url;
+                    releaseImage = () => { if (--entry.refs === 0) {
+                        URL.revokeObjectURL(entry.url);
+                        bytes.delete(key);
+                        this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
+                    } };
+                }
+                else {
+                    // Only the already-open current video may reuse its live URL.
+                    if (!live || typeof page?.url !== 'string' || !/^https?:\/\//.test(page.url))
+                        return;
+                    src = page.url;
+                    let entry = bytes.get(src);
+                    if (!entry) {
+                        if ((this._savedPreviewDecodedBytes || 0) + decoded > 32 * 1024 * 1024)
+                            return;
+                        entry = { refs: 0, url: src };
+                        bytes.set(src, entry);
+                        this._savedPreviewDecodedBytes = (this._savedPreviewDecodedBytes || 0) + decoded;
+                    }
+                    entry.refs++;
+                    releaseImage = () => { if (--entry.refs === 0) {
+                        bytes.delete(src);
+                        this._savedPreviewDecodedBytes = Math.max(0, (this._savedPreviewDecodedBytes || 0) - decoded);
+                    } };
+                }
+                const image = host.ownerDocument.createElement('img');
+                image.alt = '';
+                image.draggable = false;
+                image.crossOrigin = 'anonymous';
+                image.style.cssText = `position:absolute;max-width:none;width:${model.cols * 100}%;height:${model.rows * 100}%;left:${-pos.col * 100}%;top:${-pos.row * 100}%;pointer-events:none;`;
+                image.onload = () => { if (!disposed && seq === revision) {
+                    setState('ready');
                 } };
+                image.onerror = () => { if (!disposed && seq === revision) {
+                    setState('unavailable');
+                    releaseImage?.();
+                    releaseImage = null;
+                } };
+                host.style.aspectRatio = String(model.cellWidth) + ' / ' + String(model.cellHeight);
+                host.replaceChildren(image);
+                awaitingImage = true;
+                image.src = src;
             }
-            const image = host.ownerDocument.createElement('img');
-            image.alt = '';
-            image.draggable = false;
-            image.crossOrigin = 'anonymous';
-            image.style.cssText = `position:absolute;max-width:none;width:${model.cols * 100}%;height:${model.rows * 100}%;left:${-pos.col * 100}%;top:${-pos.row * 100}%;pointer-events:none;`;
-            image.onload = () => { if (!disposed && seq === revision) {
-                host.setAttribute('aria-label', '保存時刻付近の場面画像');
-            } };
-            image.onerror = () => { if (!disposed && seq === revision) {
-                host.textContent = '画像なし';
-                releaseImage?.();
-                releaseImage = null;
-            } };
-            host.style.aspectRatio = String(model.cellWidth) + ' / ' + String(model.cellHeight);
-            host.replaceChildren(image);
-            image.src = src;
+            finally {
+                // Missing metadata, disabled previews and budget refusals must settle too.
+                // Once attached, the image's own load/error event owns the loading state.
+                if (!disposed && seq === revision && !awaitingImage)
+                    setState('unavailable');
+            }
         };
         const update = () => { const pending = draw(), seq = revision; void pending.catch(() => { if (!disposed && seq === revision) {
-            host.textContent = '画像なし';
+            setState('unavailable');
             releaseImage?.();
             releaseImage = null;
         } }); };
@@ -358,6 +375,8 @@ class Storyboard extends Emitter {
             this.off?.('reset', update);
             if (infoLease && --infoLease.refs === 0 && infos.get(infoKey) === infoLease)
                 infos.delete(infoKey);
+            host.classList.remove('zw-scene-loading');
+            host.setAttribute('aria-busy', 'false');
             host.replaceChildren();
         };
     }

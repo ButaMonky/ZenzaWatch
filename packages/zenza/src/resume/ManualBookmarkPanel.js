@@ -18,6 +18,7 @@ class ManualBookmarkPanel {
     disposed = false;
     last;
     clickHandler;
+    keyHandler;
     inputHandler;
     addDraftRevision = 0;
     pointDrafts = { a: '', b: '' };
@@ -58,6 +59,7 @@ class ManualBookmarkPanel {
     preview(videoId, time) {
         const host = this.root.ownerDocument.createElement('div');
         host.className = 'zw-scene-preview';
+        host.hidden = this.deps.libraryAppearance?.().showScenePreviews === false;
         host.dataset.sceneVideo = videoId;
         host.dataset.sceneTime = String(time);
         host.textContent = '場面画像';
@@ -71,7 +73,7 @@ class ManualBookmarkPanel {
         return !group || group.open;
     }
     fillPreviewLeases() {
-        if (!this.visible || this.disposed || !this.deps.createScenePreview)
+        if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false)
             return;
         const videos = new Set(Array.from(this.previewLeases.keys(), host => host.dataset.sceneVideo));
         for (const host of this.previewCandidates) {
@@ -91,7 +93,7 @@ class ManualBookmarkPanel {
     }
     refreshPreviews() {
         this.clearPreviews();
-        if (!this.visible || this.disposed || !this.deps.createScenePreview)
+        if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false)
             return;
         const hosts = Array.from(this.root.querySelectorAll('[data-scene-video]'))
             .filter(host => this.previewEligible(host));
@@ -340,12 +342,14 @@ class ManualBookmarkPanel {
             const go = this.pointButton('seek-automatic', '続きへ');
             go.disabled = time === null || time === undefined;
             line.append(position, go);
-            const edit = this.root.ownerDocument.createElement('details');
+            const edit = this.root.ownerDocument.createElement('div');
             edit.className = 'zw-automatic-edit';
-            const summary = this.root.ownerDocument.createElement('summary');
-            summary.textContent = '編集';
-            edit.append(summary, this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置で更新'), this.pointButton('delete-automatic', '削除'));
-            section.append(setting, note, line, edit, status);
+            edit.append(this.pointField('automatic', '保存位置', time === null || time === undefined ? '' : ManualBookmarkPanel.formatTime(time)), this.pointButton('save-automatic', '位置を保存'), this.pointButton('current-automatic', '現在位置で更新'), this.pointButton('delete-automatic', '削除'));
+            section.append(setting, note, line);
+            const viewed = this.viewedDate(this.deps.automaticViewedAt?.());
+            if (viewed)
+                section.append(viewed);
+            section.append(edit, status);
         }
         else {
             status.dataset.pointStatus = 'repeat';
@@ -363,6 +367,7 @@ class ManualBookmarkPanel {
                     preview.dataset.sceneVideo = this.last.videoId;
                     preview.dataset.sceneTime = String(time);
                 }
+                preview.hidden = this.deps.libraryAppearance?.().showScenePreviews === false;
                 preview.textContent = time === null ? '時刻を指定' : '場面画像';
                 column.append(this.pointField(name, name === 'a' ? 'A 開始' : 'B 終了', this.pointDrafts[name] || ''), preview, this.pointButton('set-' + name, '現在位置を' + name.toUpperCase() + 'に'));
                 row.append(column);
@@ -629,6 +634,29 @@ class ManualBookmarkPanel {
                 this.root.contains(target))
                 this.addDraftRevision++;
         };
+        this.keyHandler = event => {
+            if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229 || event.repeat)
+                return;
+            const field = event.target;
+            if (!field?.matches('input') || !this.root.contains(field))
+                return;
+            let button = null;
+            const edit = field.closest('.zw-bookmark-edit');
+            if (edit)
+                button = edit.querySelector('[data-bookmark-action="rename"],[data-library-action="save"],[data-library-action="save-auto"]');
+            else if (field.dataset.pointField === 'automatic')
+                button = this.root.querySelector('[data-point-action="save-automatic"]');
+            else if (field.dataset.pointField === 'a' || field.dataset.pointField === 'b')
+                button = this.root.querySelector('[data-point-action="save-range"]');
+            else if (field.hasAttribute('data-bookmark-label'))
+                button = this.root.querySelector('[data-bookmark-action="add"]');
+            if (button && !button.disabled) {
+                event.preventDefault();
+                event.stopPropagation();
+                button.click();
+            }
+        };
+        root.addEventListener('keydown', this.keyHandler);
         root.addEventListener('click', this.clickHandler);
         root.addEventListener('input', this.inputHandler);
         root.addEventListener('change', this.changeHandler);
@@ -683,7 +711,6 @@ class ManualBookmarkPanel {
                 if (start && end)
                     timeDrafts.set(start.dataset.bookmarkStartId, { start: start.value, end: end.value });
             }
-        const automaticOpen = sameVideo && !!this.root.querySelector('.zw-automatic-edit')?.open;
         const previousAutomatic = sameVideo ? this.root.querySelector('[data-point-field="automatic"]') : null;
         const automaticDraft = this.automaticDraftDirty ? previousAutomatic?.value : undefined;
         const previousAdd = sameVideo ? this.root.querySelector('input[data-bookmark-label]') : null;
@@ -824,9 +851,11 @@ class ManualBookmarkPanel {
             nav.className = 'zw-library-nav';
             region.prepend(nav);
         }
-        const hint = doc.createElement('small');
-        hint.textContent = '画像は近い時刻の代表コマです。';
-        region.append(hint);
+        if (this.deps.libraryAppearance?.().showScenePreviews !== false) {
+            const hint = doc.createElement('small');
+            hint.textContent = '画像は近い時刻の代表コマです。';
+            region.append(hint);
+        }
         // Only this dedicated container is mutated, not native marker DOM.
         this.root.replaceChildren(region);
         if (automaticDraft !== undefined) {
@@ -834,9 +863,6 @@ class ManualBookmarkPanel {
             if (field)
                 field.value = automaticDraft;
         }
-        const autoEdit = this.root.querySelector('.zw-automatic-edit');
-        if (autoEdit)
-            autoEdit.open = automaticOpen;
         this.updateLoopDisplay();
         this.updatePointBusyControls();
         if (this.deps.duration)
@@ -1035,6 +1061,11 @@ class ManualBookmarkPanel {
         this.clearPreviews();
         groups.replaceChildren();
         const doc = this.root.ownerDocument;
+        const appearance = this.deps.libraryAppearance?.();
+        const bounded = (value, fallback, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+        groups.style.setProperty('--zw-video-thumb-width', bounded(appearance?.thumbnailWidth, 80, 64, 160) + 'px');
+        groups.style.setProperty('--zw-library-title-size', bounded(appearance?.titleFontSize, 13, 11, 18) + 'px');
+        groups.style.setProperty('--zw-library-title-lines', String(Math.round(bounded(appearance?.titleLines, 1, 1, 3))));
         const query = this.librarySearch.trim().toLocaleLowerCase(), filter = this.libraryFilter;
         let count = 0, videoCount = 0;
         for (const video of [...this.libraryRows].sort((a, b) => b.updatedAt - a.updatedAt)) {
@@ -1049,7 +1080,36 @@ class ManualBookmarkPanel {
             group.dataset.libraryVideo = video.videoId;
             group.open = this.expandedVideos.has(video.videoId);
             const summary = doc.createElement('summary');
-            summary.textContent = video.title + (video.videoId === this.last.videoId ? ' · 再生中' : '') + ' · ' + (bookmarks.length + Number(automatic)) + '件';
+            if (appearance?.showVideoThumbnails !== false && video.thumbnailUrl) {
+                try {
+                    const url = new URL(video.thumbnailUrl);
+                    if (url.protocol === 'https:' || url.protocol === 'http:') {
+                        const image = doc.createElement('img');
+                        image.className = 'zw-library-thumbnail';
+                        image.alt = '';
+                        image.setAttribute('loading', 'lazy');
+                        image.decoding = 'async';
+                        image.referrerPolicy = 'no-referrer';
+                        image.src = url.href;
+                        image.addEventListener('error', () => image.remove(), { once: true });
+                        summary.append(image);
+                    }
+                }
+                catch { /* Malformed old metadata must not disable the library. */ }
+            }
+            const header = doc.createElement('span');
+            header.className = 'zw-library-header';
+            const title = doc.createElement('span');
+            title.className = 'zw-library-title';
+            title.textContent = video.title;
+            header.append(title);
+            const meta = doc.createElement('small');
+            meta.textContent = (video.videoId === this.last.videoId ? '再生中 · ' : '') + (bookmarks.length + Number(automatic)) + '件';
+            header.append(meta);
+            const viewed = this.viewedDate(video.viewedAt);
+            if (viewed)
+                header.append(viewed);
+            summary.append(header);
             const list = doc.createElement('ul');
             group.append(summary, list);
             if (automatic)
@@ -1078,6 +1138,18 @@ class ManualBookmarkPanel {
             groups.append(empty);
         }
         this.refreshPreviews();
+    }
+    viewedDate(value) {
+        if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+            return null;
+        const date = new Date(value);
+        if (!Number.isFinite(date.getTime()))
+            return null;
+        const time = this.root.ownerDocument.createElement('time');
+        time.dataset.viewedAt = '1';
+        time.dateTime = date.toISOString();
+        time.textContent = '視聴 ' + date.toLocaleString('ja-JP');
+        return time;
     }
     libraryRow(video, item) {
         const doc = this.root.ownerDocument, row = doc.createElement('li'), time = item?.time ?? video.automaticTime;
@@ -1223,6 +1295,7 @@ class ManualBookmarkPanel {
         this.pointGeneration++;
         this.pointBusyRequest = null;
         this.unsubscribe();
+        this.root.removeEventListener('keydown', this.keyHandler);
         this.root.removeEventListener('click', this.clickHandler);
         this.root.removeEventListener('input', this.inputHandler);
         this.root.removeEventListener('change', this.changeHandler);

@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert');
 const {JSDOM}=require('jsdom');
-const {createContext,beginSection,read,run}=require('../helpers/extractSource');
+const {createContext,extract,read,run}=require('../helpers/extractSource');
 
 function fixture(file){
   const dom=new JSDOM('<!doctype html><title>Search page</title><p>Results</p>',{
@@ -31,8 +31,32 @@ function fixture(file){
   return {dom,history,originalUrl,events,dialog,timers,service:ctx.Subject,close:()=>dom.window.close()};
 }
 const info=id=>({watchId:id,title:id,owner:{name:'fixture'}});
+function modelInfo(id){
+  const context=createContext();
+  run(extract('src/VideoInfo.js','JSONable')+';'+extract('src/VideoInfo.js','VideoInfoModel')+
+    ';globalThis.Model=VideoInfoModel;',context);
+  return new context.Model({watchApiData:{videoDetail:{id,v:id,title:'model title'},uploaderInfo:{name:'model owner'}}});
+}
 describe('Audit #257/#258 history state and debounced event ownership',()=>{
   for(const file of ['packages/zenza/src/init/WatchPageHistory.js','dist/ZenzaWatch-dev.user.js']){
+    it(file+' reads the real VideoInfoModel prototype getters when recording a watch URL',()=>{
+      const h=fixture(file),model=modelInfo('sm123');
+      assert.equal(Object.hasOwn(model,'watchId'),false,'watchId is a prototype getter');
+      h.events.open();h.events.loadVideoInfo(model);h.timers[1].flush();
+      assert.equal(h.dom.window.location.pathname,'/watch/sm123');
+      assert.equal(h.dom.window.document.title,'📺model title by model owner - ZenzaWatch');
+      assert.equal(h.history.state.scroll,42);h.timers[0].flush();
+      assert.equal(h.dom.window.location.href,h.originalUrl);h.close();
+    });
+    it(file+' snapshots metadata at the event boundary without reading unrelated properties',()=>{
+      const h=fixture(file),model=modelInfo('sm123');
+      Object.defineProperty(model,'unrelated',{enumerable:true,get(){throw Error('do not copy private model fields');}});
+      h.events.open();assert.doesNotThrow(()=>h.events.loadVideoInfo(model));
+      model._videoDetail.v='sm456';model._videoDetail.title='changed later';
+      model._watchApiData.uploaderInfo.name='changed owner';h.timers[1].flush();
+      assert.equal(h.dom.window.location.pathname,'/watch/sm123');
+      assert.equal(h.dom.window.document.title,'📺model title by model owner - ZenzaWatch');h.close();
+    });
     it(file+' accepts video metadata without an owner',()=>{
       for(const owner of [undefined,null,{}]){
         const h=fixture(file);h.events.open();

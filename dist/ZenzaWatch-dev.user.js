@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.374-task998
+// @version        2.7.375-task999
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 16:55Z fab7b4c0
+// build: 2026-11-10 17:14Z c09553ff
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.374-task998';
+    var VER = '2.7.375-task999';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 16:55Z fab7b4c0';
+    var BUILD = '2026-11-10 17:14Z c09553ff';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -7009,7 +7009,9 @@ const WatchPageHistory = (() => {
 				}
 		});
 		const onDialogVideoInfoLoad = (info) => {
-				onVideoInfoLoad({ ...info, generation: navigationGeneration, requestId: dialog?._requestId });
+				const { watchId, title, owner } = info;
+				onVideoInfoLoad({ watchId, title, owner: { name: owner?.name },
+						generation: navigationGeneration, requestId: dialog?._requestId });
 		};
 		const onDialogOpen = () => {
 				navigationGeneration++;

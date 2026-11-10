@@ -53,7 +53,18 @@ async function compare(label,run,opt={}){
   const ra=await settle(()=>run(load(before,a))),rb=await settle(()=>run(load(after,b)));
   await new Promise(r=>setTimeout(r,20));
   assert.deepEqual(snapshot(rb),snapshot(ra),label+' result');
-  assert.deepEqual(b.log,a.log,label+' side effects');
+  let expected=a.log;
+  if(opt.firstSheetOnly){
+    // Task996 intentionally prefetches one sheet and bounds its download time.
+    const start=expected.findIndex(x=>x[0]==='post'&&x[1]==='storyboardImages');
+    if(start>=0){
+      const tail=expected.slice(start+1),images=tail.filter(x=>x[0]==='fetch');
+      assert(images.length>0,label+' old fixture must exercise image download');
+      expected=[...expected.slice(0,start+1),['w.setTimeout',15000],...tail.filter(x=>x[0]!=='fetch'||x===images[0])];
+      assert.equal(b.log.slice(start+1).filter(x=>x[0]==='fetch').length,1,label+' must fetch only first sheet');
+    }
+  }
+  assert.deepEqual(b.log,expected,label+' side effects');
   return ra;
 }
 const domandSb={meta:{status:200},data:{contentUrl:'https://sb.example/v1/storyboard.json'}};
@@ -64,19 +75,20 @@ const info=(extra={})=>({toJSON:()=>({watchId:'sm9',duration:100,actionTrackId:'
 const sbRoutes={'access-rights/storyboard':json(200,domandSb),'storyboard.json':json(200,domandJson),'sb1.jpg':json(200,{}),'sb2.jpg':json(200,{})};
 
 test('storyboard via worker: domand, cache hit/invalid, worker failure',async()=>{
-  await compare('domand storyboard (no cache)',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{routes:sbRoutes});
+  const compareStoryboard=(label,run,opt={})=>compare(label,run,{...opt,firstSheetOnly:true});
+  await compareStoryboard('domand storyboard (no cache)',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{routes:sbRoutes});
   const cached={status:'ok',watchId:'sm9',format:'domand',duration:100,storyboard:{rows:10,columns:10,interval:2000,count:50,
     thumbnail:{width:160,height:90},images:[{url:'https://c/1.jpg',buffer:new ArrayBuffer(2)}]}};
-  await compare('valid cache',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{routes:sbRoutes,cache:{sm9_domand:cached}});
-  await compare('invalid cache evicted',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),
+  await compareStoryboard('valid cache',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{routes:sbRoutes,cache:{sm9_domand:cached}});
+  await compareStoryboard('invalid cache evicted',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),
     {routes:sbRoutes,cache:{sm9_domand:{...cached,watchId:'other'}}});
-  await compare('worker fails, no cache',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{workerFails:true});
-  await compare('worker fails, cache ok',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{workerFails:true,cache:{sm9_domand:cached}});
-  await compare('domand api error',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),
+  await compareStoryboard('worker fails, no cache',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{workerFails:true});
+  await compareStoryboard('worker fails, cache ok',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),{workerFails:true,cache:{sm9_domand:cached}});
+  await compareStoryboard('domand api error',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),
     {routes:{...sbRoutes,'access-rights/storyboard':json(200,{meta:{status:403}})}});
-  await compare('bad geometry -> fail',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),
+  await compareStoryboard('bad geometry -> fail',s=>s.VideoSessionWorker.storyboard({type:'domand',info:info()}),
     {routes:{...sbRoutes,'storyboard.json':json(200,{...domandJson,rows:0})}});
-  await compare('dmc storyboard',s=>s.VideoSessionWorker.storyboard({type:'dmc',info:info()}),
+  await compareStoryboard('dmc storyboard',s=>s.VideoSessionWorker.storyboard({type:'dmc',info:info()}),
     {routes:{'dmc.example/sb':json(200,{meta:{status:201},data:{session:{content_uri:'https://dmc.example/sb.json'}}}),
       'sb.json':json(200,{meta:{status:200},data:{version:2,storyboards:[{quality:1,thumbnail_width:80,thumbnail_height:45,columns:5,rows:5,interval:1000,images:[{timestamp:0,uri:'https://dmc.example/i1'}]},
         {quality:2,thumbnail_width:160,thumbnail_height:90,columns:10,rows:10,interval:1000,images:[{timestamp:0,uri:'https://dmc.example/i2'}]}]}}),

@@ -1,3 +1,6 @@
+declare const HlsRuntime: {install(zenza:Loose,dependencies:{Emitter:Loose;dimport:Loose}):Promise<unknown>};
+declare const Emitter: Loose;
+declare const dimport: Loose;
 declare const NotificationJournal: typeof import('./NotificationJournal').NotificationJournal;
 declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
@@ -208,6 +211,7 @@ const {initialize} = (() => {
           ...(event.errorCode === undefined ? {} : {errorCode: event.errorCode})}
       }));
     }
+    await HlsRuntime.install(ZenzaWatch, {Emitter, dimport});
     window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
 
     domEvent.dispatchCustomEvent(

@@ -16,7 +16,7 @@ function makeWorker(file) {
 }
 
 describe('Task292 HLS storage config payload', () => {
-  for (const file of ['src/_hls.js', 'dist/ZenzaHLS.user.js']) {
+  for (const file of ['packages/zenza/src/hls/HlsStorage.js', 'dist/ZenzaWatch-dev.user.js']) {
     it(file + ': applies nested payload without envelope fields', async () => {
       const {scope, replies} = makeWorker(file);
       await scope.onmessage({data: {

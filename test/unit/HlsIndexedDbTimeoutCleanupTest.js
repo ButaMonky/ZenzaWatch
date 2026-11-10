@@ -3,7 +3,7 @@
 const assert = require('assert');
 const {loadClass, createContext} = require('../helpers/extractSource');
 
-function harness(file = 'src/_hls.js') {
+function harness(file = 'packages/zenza/src/hls/HlsStorage.js') {
   let nextId = 0;
   const pending = new Map();
   const context = createContext({
@@ -86,10 +86,12 @@ describe('AUD-13 HLS IndexedDB read timer ownership', () => {
   }
 });
 
-describe('AUD-13 generated HLS userscript timer parity', () => {
+describe('AUD-13 generated main userscript HLS timer parity', function() {
+  // Cold Babel indexing now parses the complete main bundle, not the former HLS-only script.
+  this.timeout(10000);
   for (const method of ['getRecord', 'getCount']) {
     it(method + ': generated success clears its timer', async () => {
-      const {pending, start} = harness('dist/ZenzaHLS.user.js');
+      const {pending, start} = harness('dist/ZenzaWatch-dev.user.js');
       const {request, promise} = start(method);
       assert.strictEqual(pending.size, 1);
       request.result = 7;
@@ -99,7 +101,7 @@ describe('AUD-13 generated HLS userscript timer parity', () => {
     });
 
     it(method + ': generated error clears its timer', async () => {
-      const {pending, start} = harness('dist/ZenzaHLS.user.js');
+      const {pending, start} = harness('dist/ZenzaWatch-dev.user.js');
       const {request, promise} = start(method);
       const error = new Error('IDB failure');
       request.onerror(error);

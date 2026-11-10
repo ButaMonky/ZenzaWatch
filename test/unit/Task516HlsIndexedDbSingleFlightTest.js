@@ -5,8 +5,8 @@
 const assert=require('assert');
 const {loadClass,createContext}=require('../helpers/extractSource');
 const VARIANTS=[
-  ['source','src/_hls.js'],
-  ['dev-dist','dist/ZenzaHLS.user.js']
+  ['source','packages/zenza/src/hls/HlsStorage.js'],
+  ['dev-dist','dist/ZenzaWatch-dev.user.js']
 ];
 function harness(file){
   const pending=[],opened=[],closed=[];

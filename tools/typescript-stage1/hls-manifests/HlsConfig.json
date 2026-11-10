@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/hls-src/HlsConfig.ts",
+  "runtime": "packages/zenza/src/hls/HlsConfig.js",
+  "sourceSha256": "18be7e7ceacaeea896e0bb06f637c3ba33221515f6480b3704dd7452fb8abd3c",
+  "runtimeSha256": "95db38b5942449cbb15d570d35617aa3e3e280de456c0cb1c215b48b5422d72e"
+}

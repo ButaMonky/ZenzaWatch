@@ -10,8 +10,8 @@ function element() {
   const events = [], infos = [];
   const context = createContext({HTMLElement: class {}, Hls: {isSupported: () => true}, Event, CustomEvent,
     console: {info: (...a) => infos.push(a.join(' ')), log() {}, warn() {}, error() {}}});
-  run(`const PLAYER_MODE = ${extract('src/_hls.js', 'PLAYER_MODE', 'var')};
-    ${extract('src/_hls.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
+  run(`const PLAYER_MODE = ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'PLAYER_MODE', 'var')};
+    ${extract('packages/zenza/src/hls/HlsVideoElement.js', 'ZenzaVideoElement')}; globalThis.Subject = ZenzaVideoElement;`, context);
   const p = Object.create(context.Subject.prototype);
   const video = {readyState: 0, buffered: {length: 0}, currentTime: 0, paused: true, seeking: false, videoWidth: 0};
   Object.assign(p, {_video: video, _throttledCurrentTime: {cancel() {}}, dispatchEvent: e => events.push(e)});

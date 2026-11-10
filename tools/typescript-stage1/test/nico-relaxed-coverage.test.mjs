@@ -11,7 +11,7 @@ const read = name => JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
 const strict = read('tsconfig.nico.json');
 const relaxed = read('tsconfig.nico-legacy.json');
 const expected = [
-  'CapTubeEntry', 'CommentPanel', 'GamePadEntry', 'HlsEntry',
+  'CapTubeEntry', 'CommentPanel', 'GamePadEntry',
   'MaskedWatchEntry', 'NicoVideoPlayer', 'NicoVideoPlayerDialog',
   'ScreenFilter', 'StoryboardWorker', 'SupporterCredit', 'VideoInfoPanel'
 ].map(name => 'nico-src/' + name + '.ts');
@@ -24,11 +24,11 @@ describe('TS-P0-01 legacy TypeScript strict boundary baseline', () => {
     assert.equal(strict.compilerOptions.exactOptionalPropertyTypes, true);
     assert.deepEqual(sort(strict.exclude), sort(expected));
     assert.deepEqual(sort(relaxed.files), sort(expected));
-    assert.equal(new Set(relaxed.files).size, 11);
+    assert.equal(new Set(relaxed.files).size, 10);
     assert.equal(relaxed.compilerOptions.strictNullChecks, false);
     assert.equal(relaxed.compilerOptions.noUncheckedIndexedAccess, false);
   });
-  it('keeps the 11 remaining relaxed TypeScript sources mapped to tracked runtime manifests', () => {
+  it('keeps the 10 remaining relaxed TypeScript sources mapped to tracked runtime manifests', () => {
     for (const rel of expected) {
       const name = path.basename(rel, '.ts');
       const manifest = read('nico-api-manifests/' + name + '.json');

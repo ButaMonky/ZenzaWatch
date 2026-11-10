@@ -78,6 +78,16 @@ test('legacy build directives are preserved in each runtime',()=>{
         ...(spec.name === 'initializer' ? ['//@require NotificationJournal'] : []));
     }
 
+    if (spec.name === 'initializer') {
+      expected.unshift("import {HlsRuntime} from '../packages/zenza/src/hls/HlsRuntime';");
+      expected.splice(expected.indexOf('//===BEGIN===') + 1,0,'//@require HlsRuntime');
+    }
+    if (spec.name === 'HlsEntry') {
+      // Task997 retirement has no imports or build-time dependencies.
+      assert.deepEqual(directives(after),[]);
+      continue;
+    }
+
     if (spec.name === 'Storyboard') {
       expected.splice(expected.indexOf("import {StoryboardInfoLoader} from '../../../lib/src/nico/StoryboardInfoLoader';") + 1, 0,
         "import {StoryboardCacheDb} from '../../../lib/src/nico/StoryboardCacheDb';");

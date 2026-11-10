@@ -6,7 +6,7 @@ const {REPO_ROOT} = require('../helpers/buildSandbox');
 const read = rel => fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
 const manifest = JSON.parse(read('dist-manifest.json'));
 const installNames = [
-  'ZenzaWatch-dev','ZenzaHLS','MylistPocket',
+  'ZenzaWatch-dev','MylistPocket',
   'ZenzaBlogPartsButton'
 ];
 const meta = name => {
@@ -28,6 +28,23 @@ describe('Task928 private backup with public-only update destinations', () => {
     assert(readme.includes('自動更新先は、常に公開版'));
     assert(!readme.includes('ZenzaWatch-Back-up/raw/develop/dist/'));
   });
+  it('documents all distribution roles and the HLS retirement update path', () => {
+    const readme = read('README.md'), scripts = read('SCRIPTS.md');
+    for (const item of [...manifest.active.files, ...manifest.legacyFrozen.files]) {
+      const file = path.basename(item.file);
+      assert(readme.includes('`' + file + '`'), 'README role: ' + file);
+      assert(scripts.includes('`' + file + '`'), 'SCRIPTS role: ' + file);
+    }
+    for (const role of ['本体', '任意追加', '廃止案内', '凍結旧版']) assert(readme.includes(role));
+    assert(readme.includes('通常の動画再生は本体1本'));
+    assert(!readme.includes('上の2つをインストール'));
+    assert(readme.includes('先に本体を2.7.373以降へ更新してから'));
+    assert(readme.includes('旧HLSスクリプトを削除'));
+    assert(readme.includes('](' + installBase + 'ZenzaHLS.user.js)'));
+    assert(readme.includes('`' + meta('ZenzaHLS').version + '`'));
+    assert(scripts.includes('ZenzaWatch_video.hls.*'));
+    assert(scripts.includes('`zenza_hls` v5 / `ts-data`'));
+  });
   it('pins both download and update URLs to the public repository for all active scripts', () => {
     for (const {file} of manifest.active.files) {
       const name = path.basename(file).replace(/\.user\.js$/, '');
@@ -40,8 +57,8 @@ describe('Task928 private backup with public-only update destinations', () => {
   });
   it('records the reviewed build versions of the five installers', () => {
     const wanted = {
-      'ZenzaWatch-dev':'2.7.372-task996',
-      'ZenzaHLS':'0.0.43-task981',
+      'ZenzaWatch-dev':'2.7.373-task997',
+      'ZenzaHLS':'0.1.0-task997',
       'MylistPocket':'0.5.87-task996',
       'ZenzaAdvancedSettings':'0.4.0-task993',
       'ZenzaBlogPartsButton':'0.0.5-task928'

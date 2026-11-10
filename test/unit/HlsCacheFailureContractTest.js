@@ -2,9 +2,9 @@
 const assert = require('assert');
 const {read, extract, createContext, run} = require('../helpers/extractSource');
 function storage() {
-  const source = read('src/_hls.js');
+  const source = read('packages/zenza/src/hls/HlsStorage.js');
   const start = source.indexOf('    const Storage = {', source.indexOf('    const createWebWorker'));
-  // Task966: _hls.js is generated from TypeScript (4-space indentation); match any indent.
+  // The storage owner is generated from TypeScript; match any indent.
   const tail = /\n[ \t]+try \{\n[ \t]+Storage\.worker =/g;
   tail.lastIndex = start;
   const found = tail.exec(source);
@@ -59,7 +59,7 @@ function loader(cacheLoad) {
     Storage: {load: cacheLoad, touch: async () => true, save: () => Promise.resolve(), gc() {}},
     Config: {get: key => key === 'enable_db_cache'}, XMLHttpRequest: class {},
     performance: {now: () => 10000}});
-  run(`let FragmentLoaderClass; globalThis.Loader = (${extract('src/_hls.js', 'createFragmentLoader', 'var')})(Hls);`, c);
+  run(`let FragmentLoaderClass; globalThis.Loader = (${extract('packages/zenza/src/hls/HlsVideoElement.js', 'createFragmentLoader', 'var')})(Hls);`, c);
   return {instance: new c.Loader({fragLoadingMaxRetry: 3}), loads};
 }
 const context = () => ({url: 'https://example.invalid/nicovideo-sm9_a/0/ts/1.ts',
@@ -87,16 +87,16 @@ describe('Task301 HLS cache failure network fallback', () => {
   });
   it('propagates database initialization failure from getStore', async () => {
     const c = createContext();
-    run(extract('src/_hls.js', 'IndexDBStorage') + ';globalThis.Subject = IndexDBStorage;', c);
+    run(extract('packages/zenza/src/hls/HlsStorage.js', 'IndexDBStorage') + ';globalThis.Subject = IndexDBStorage;', c);
     c.Subject.init = async () => { throw new Error('open failed'); };
     await rejection(new c.Subject().getStore());
   });
 });
 describe('Task301 HLS optional worker startup', () => {
   it('falls back to network when Worker construction is denied', async () => {
-    const source = read('src/_hls.js');
+    const source = read('packages/zenza/src/hls/HlsStorage.js');
     const start = source.indexOf('    const Storage = {', source.indexOf('    const createWebWorker'));
-    const end = source.indexOf('    const ZenzaVideoElement', start);
+    const end = source.indexOf('    return Storage;', start);
     const c = createContext({createWebWorker() { throw new Error('Worker denied'); }, StorageWorker() {},
       Config: {get: () => false, on() {}}, debounce: fn => fn, console: {warn() {}}});
     run(source.slice(start, end) + ';globalThis.subject = Storage;', c);
@@ -108,7 +108,7 @@ describe('Task301 HLS optional worker startup', () => {
     const revoked = [];
     const c = createContext({Blob: class {}, Worker: class {constructor() { throw new Error('denied'); }},
       URL: {createObjectURL: () => 'blob:worker', revokeObjectURL: url => revoked.push(url)}});
-    run(`globalThis.create = ${extract('src/_hls.js', 'createWebWorker', 'var')}`, c);
+    run(`globalThis.create = ${extract('packages/zenza/src/hls/HlsStorage.js', 'createWebWorker', 'var')}`, c);
     assert.throws(() => c.create(function() {}), /denied/);
     assert.deepStrictEqual(revoked, ['blob:worker']);
   });
@@ -122,7 +122,7 @@ describe('Task301 HLS prefetch cache metadata', () => {
       AbortController: class {constructor() { this.signal = {}; } abort() {}},
       Request: class {}, fetch: async () => ({ok: true, status: 200, arrayBuffer: async () => bytes}),
       debounce: () => { const fn = () => {}; fn.cancel = () => {}; return fn; }});
-    run(`let FragmentLoaderClass; globalThis.Loader = (${extract('src/_hls.js', 'createFragmentLoader', 'var')})(Hls);`, c);
+    run(`let FragmentLoaderClass; globalThis.Loader = (${extract('packages/zenza/src/hls/HlsVideoElement.js', 'createFragmentLoader', 'var')})(Hls);`, c);
     const frag = context().frag;
     assert.strictEqual(await c.Loader.preloadFragment(frag, frag.url), true);
     assert.strictEqual(saved.length, 1);

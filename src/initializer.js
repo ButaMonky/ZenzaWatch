@@ -1,3 +1,4 @@
+import {HlsRuntime} from '../packages/zenza/src/hls/HlsRuntime';
 import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
 import {NotificationJournal} from './NotificationJournal';
 import {ZenzaWatch, global} from './ZenzaWatchIndex';
@@ -34,6 +35,7 @@ const START_PAGE_QUERY = 'hoge=fuga';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/initializer.ts (Task965). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require HlsRuntime
 //@require RequestDiagnostics
 //@require NotificationJournal
 const { initialize } = (() => {
@@ -195,6 +197,7 @@ const { initialize } = (() => {
                     ...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }) }
             }));
         }
+        await HlsRuntime.install(ZenzaWatch, { Emitter, dimport });
         window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
         domEvent.dispatchCustomEvent(document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, { bubbles: true, composed: true });
         cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });

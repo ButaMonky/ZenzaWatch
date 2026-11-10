@@ -33,7 +33,7 @@ const NotificationJournalPolicy = (() => {
             .slice(0, MAX_TEXT);
     };
     const code = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value) ? value : undefined;
-    const videoId = (value) => typeof value === 'string' && /^(?:sm|nm|so|ss)\d{1,16}$/i.test(value) ? value : '';
+    const videoId = (value) => typeof value === 'string' && /^(?:sm|nm|so|ss)?\d{1,16}$/i.test(value) ? value : '';
     const details = (data) => {
         const result = {};
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -58,10 +58,23 @@ const NotificationJournalPolicy = (() => {
         }
         return result;
     };
+    const activity = (entry) => {
+        if (entry.level !== 'success' || entry.category !== 'comment' ||
+            details(entry.details).outcome !== 'accepted' || !entry.activity || typeof entry.activity !== 'object')
+            return;
+        const value = entry.activity;
+        if (value.kind !== 'comment-post' || typeof value.text !== 'string' || !value.text)
+            return;
+        return { kind: 'comment-post', text: value.text.slice(0, 4096),
+            ...(typeof value.videoTitle === 'string' ? { videoTitle: value.videoTitle.slice(0, 512) } : {}),
+            ...(typeof value.positionMs === 'number' && Number.isSafeInteger(value.positionMs) && value.positionMs >= 0 && value.positionMs <= 1e12 ?
+                { positionMs: value.positionMs } : {}) };
+    };
     const normalize = (entry, identity) => {
         if (!entry || typeof entry !== 'object') {
             return null;
         }
+        const localActivity = activity(entry);
         return {
             id: identity.id,
             timestamp: identity.timestamp,
@@ -71,6 +84,7 @@ const NotificationJournalPolicy = (() => {
             videoId: videoId(entry.videoId),
             source: code(entry.source) || '',
             details: details(entry.details),
+            ...(localActivity ? { activity: localActivity } : {}),
             ...(typeof entry.version === 'string' && /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(entry.version) && entry.version.length <= 64 ? { version: entry.version } : {}),
             ...(typeof entry.build === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}Z [a-f0-9]{7,40}$/i.test(entry.build) ? { build: entry.build } : {}),
             ...Object.fromEntries(['firstOccurredAt', 'lastOccurredAt', 'recoveredAt'].flatMap(key => {
@@ -79,7 +93,10 @@ const NotificationJournalPolicy = (() => {
             }))
         };
     };
-    return { normalize };
+    // Re-normalize an allowlisted diagnostic projection rather than serializing
+    // arbitrary persisted fields. This also protects reports from future fields.
+    const toDiagnosticEntry = (entry) => normalize({ ...entry, activity: undefined }, { id: entry.id, timestamp: entry.timestamp });
+    return { normalize, toDiagnosticEntry };
 })();
 //===END===
 export {NotificationJournalPolicy};

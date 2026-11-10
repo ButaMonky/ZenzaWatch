@@ -212,7 +212,16 @@ export class ManualBookmarkDock {
     .zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
     .zenzaManualBookmarkDock[open]{overflow:auto}
     .zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:400px;transition:width .18s ease;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
-    .zenzaManualBookmarkDockContent{padding:0 14px 14px}
+    .zenzaManualBookmarkDockContent{padding:0 14px 10px}
+    .zenzaManualBookmarkDock:not(.zw-library-wide)>summary{padding-right:104px}
+    .zenzaManualBookmarkDock:not(.zw-library-wide) .zw-library-nav{position:absolute;right:12px;top:5px;margin:0;padding:4px 9px;font-size:12px}
+    .zenzaManualBookmarkDock .zw-point-section[data-point-section="repeat"]{margin-top:0;padding-top:0;border-top:0}
+    .zenzaManualBookmarkDock [data-point-section="repeat"]>h3{display:none}
+    .zenzaManualBookmarkDock [data-point-section="repeat"]>[data-point-status]{margin:3px 0 8px}
+    .zenzaManualBookmarkDock [data-point-section="repeat"]>button{width:calc((100% - 12px)/3);margin:6px 4px 3px 0;padding:5px 3px;font-size:12px;vertical-align:top}
+    .zenzaManualBookmarkDock [data-point-section="repeat"]>.zw-point-range{margin:8px 0}
+    .zenzaManualBookmarkDock .zw-library-pagination{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:8px 0}
+    .zenzaManualBookmarkDock .zw-library-pagination>span{color:#aebbd1;font-size:12px}
     .zenzaManualBookmarkDock h3{font-size:13px;margin:12px 0 8px;color:#f4f7ff;letter-spacing:.02em}
     .zenzaManualBookmarkDock p{margin:5px 0 10px;color:#aebbd1;font-size:12px}
     .zenzaManualBookmarkDock button,.zenzaManualBookmarkDock input{box-sizing:border-box;font:inherit;line-height:1.4;border-radius:6px;min-height:32px;margin:3px 5px 3px 0}
@@ -270,13 +279,15 @@ export class ManualBookmarkDock {
     .zenzaManualBookmarkDock .zw-scene-loading::after{content:'';position:absolute;left:calc(50% - 8px);top:calc(50% - 8px);z-index:1;width:12px;height:12px;border:2px solid #53627b;border-top-color:#8ecbff;border-radius:50%;animation:zw-scene-loading-spin .8s linear infinite}
     @keyframes zw-scene-loading-spin{to{transform:rotate(360deg)}}
     @media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock .zw-scene-loading::after{animation:none}}
-    .zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{width:100%;margin:8px 0}
-    .zenzaManualBookmarkDock .zw-point-range-inputs label{display:block}
-    .zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%}
-    .zenzaManualBookmarkDock .zw-point-range-inputs button{width:100%;padding:5px 2px;font-size:12px}
+    .zenzaManualBookmarkDock .zw-point-range-inputs>div{display:grid;grid-template-columns:minmax(0,1fr) 80px;gap:5px 8px;min-width:0;align-items:end}
+    .zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{grid-column:2;grid-row:1;width:80px;height:45px;margin:0}
+    .zenzaManualBookmarkDock .zw-point-range-inputs label{display:block;grid-column:1;grid-row:1;min-width:0}
+    .zenzaManualBookmarkDock .zw-point-range-inputs>div:has(.zw-scene-preview[hidden]) label{grid-column:1/-1}
+    .zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%;margin:0}
+    .zenzaManualBookmarkDock .zw-point-range-inputs button{grid-column:1/-1;width:100%;margin:0;padding:5px 2px;font-size:12px}
     @keyframes zw-bookmark-reveal{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
     @media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock.zw-points-floating{transition:none}.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:none}}
-    @media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
+    @media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock:not(.zw-library-wide)>summary{box-sizing:border-box;min-height:54px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
     `;
   dispose():void {
     if(this.disposed)return;

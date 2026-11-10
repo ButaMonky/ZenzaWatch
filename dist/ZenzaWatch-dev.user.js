@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.375-task999
+// @version        2.7.376-task1000
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 17:14Z c09553ff
+// build: 2026-11-10 17:32Z ae079f1e
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.375-task999';
+    var VER = '2.7.376-task1000';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 17:14Z c09553ff';
+    var BUILD = '2026-11-10 17:32Z ae079f1e';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -1314,9 +1314,9 @@ const SHORTCUT_ACTIONS = [
 				defaultKey: 0, command: 'reload' },
 		{ id: 'SEEK_TO_RESUME_POINT', category: 'シーク', label: '前回の再生位置へシーク',
 				defaultKey: 0, command: 'seekToResumePoint' },
-		{ id: 'OPEN_GINZA', category: 'プレイヤー全般', label: 'Ginza(公式プレイヤー)で開く',
+		{ id: 'OPEN_GINZA', category: 'プレイヤー全般', label: '公式プレイヤーで開く',
 				defaultKey: 0, command: 'openGinza' },
-		{ id: 'SAVE_MYMEMORY', category: 'その他', label: '再生位置を「おもいで」に保存',
+		{ id: 'SAVE_MYMEMORY', category: 'その他', label: 'コメントをHTMLファイルに保存',
 				defaultKey: 0, command: 'saveMymemory' },
 		{ id: 'TOGGLE_BACK_COMMENT', category: 'コメント', label: 'コメントを画面全体に流す ON/OFF',
 				defaultKey: 0, command: 'toggle-backComment' },
@@ -1396,25 +1396,25 @@ const SHORTCUT_ACTIONS = [
 				defaultKey: 0, command: 'copy-video-watch-url' },
 		{ id: 'RESET_SMALLMODE_POSITION', category: '画面', label: '「小」モードの位置とサイズを初期状態に戻す',
 				defaultKey: 0, command: 'resetSmallModePosition' },
-		{ id: 'CUSTOM_SEEK_1', category: 'シーク', label: 'カスタムシーク1(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_1', category: 'シーク', label: 'カスタムシーク1（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 1 },
-		{ id: 'CUSTOM_SEEK_2', category: 'シーク', label: 'カスタムシーク2(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_2', category: 'シーク', label: 'カスタムシーク2（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 2 },
-		{ id: 'CUSTOM_SEEK_3', category: 'シーク', label: 'カスタムシーク3(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_3', category: 'シーク', label: 'カスタムシーク3（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 3 },
-		{ id: 'CUSTOM_SEEK_4', category: 'シーク', label: 'カスタムシーク4(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_4', category: 'シーク', label: 'カスタムシーク4（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 4 },
-		{ id: 'CUSTOM_SEEK_5', category: 'シーク', label: 'カスタムシーク5(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_5', category: 'シーク', label: 'カスタムシーク5（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 5 },
-		{ id: 'CUSTOM_SEEK_6', category: 'シーク', label: 'カスタムシーク6(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_6', category: 'シーク', label: 'カスタムシーク6（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 6 },
-		{ id: 'CUSTOM_SEEK_7', category: 'シーク', label: 'カスタムシーク7(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_7', category: 'シーク', label: 'カスタムシーク7（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 7 },
-		{ id: 'CUSTOM_SEEK_8', category: 'シーク', label: 'カスタムシーク8(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_8', category: 'シーク', label: 'カスタムシーク8（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 8 },
-		{ id: 'CUSTOM_SEEK_9', category: 'シーク', label: 'カスタムシーク9(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_9', category: 'シーク', label: 'カスタムシーク9（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 9 },
-		{ id: 'CUSTOM_SEEK_10', category: 'シーク', label: 'カスタムシーク10(秒数は自由入力・マイナスで戻る)',
+		{ id: 'CUSTOM_SEEK_10', category: 'シーク', label: 'カスタムシーク10（秒数を指定）',
 				defaultKey: 0, command: 'seekBy', customSeekSlot: 10 },
 		{ id: 'PICTURE_IN_PICTURE', category: 'その他', label: 'ピクチャーインピクチャー',
 				defaultKey: 0, command: 'picture-in-picture' },
@@ -5803,7 +5803,7 @@ const NotificationJournalPolicy = (() => {
 						.slice(0, MAX_TEXT);
 		};
 		const code = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,80}$/i.test(value) ? value : undefined;
-		const videoId = (value) => typeof value === 'string' && /^(?:sm|nm|so|ss)\d{1,16}$/i.test(value) ? value : '';
+		const videoId = (value) => typeof value === 'string' && /^(?:sm|nm|so|ss)?\d{1,16}$/i.test(value) ? value : '';
 		const details = (data) => {
 				const result = {};
 				if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -5828,10 +5828,23 @@ const NotificationJournalPolicy = (() => {
 				}
 				return result;
 		};
+		const activity = (entry) => {
+				if (entry.level !== 'success' || entry.category !== 'comment' ||
+						details(entry.details).outcome !== 'accepted' || !entry.activity || typeof entry.activity !== 'object')
+						return;
+				const value = entry.activity;
+				if (value.kind !== 'comment-post' || typeof value.text !== 'string' || !value.text)
+						return;
+				return { kind: 'comment-post', text: value.text.slice(0, 4096),
+						...(typeof value.videoTitle === 'string' ? { videoTitle: value.videoTitle.slice(0, 512) } : {}),
+						...(typeof value.positionMs === 'number' && Number.isSafeInteger(value.positionMs) && value.positionMs >= 0 && value.positionMs <= 1e12 ?
+								{ positionMs: value.positionMs } : {}) };
+		};
 		const normalize = (entry, identity) => {
 				if (!entry || typeof entry !== 'object') {
 						return null;
 				}
+				const localActivity = activity(entry);
 				return {
 						id: identity.id,
 						timestamp: identity.timestamp,
@@ -5841,6 +5854,7 @@ const NotificationJournalPolicy = (() => {
 						videoId: videoId(entry.videoId),
 						source: code(entry.source) || '',
 						details: details(entry.details),
+						...(localActivity ? { activity: localActivity } : {}),
 						...(typeof entry.version === 'string' && /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(entry.version) && entry.version.length <= 64 ? { version: entry.version } : {}),
 						...(typeof entry.build === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}Z [a-f0-9]{7,40}$/i.test(entry.build) ? { build: entry.build } : {}),
 						...Object.fromEntries(['firstOccurredAt', 'lastOccurredAt', 'recoveredAt'].flatMap(key => {
@@ -5849,7 +5863,8 @@ const NotificationJournalPolicy = (() => {
 						}))
 				};
 		};
-		return { normalize };
+		const toDiagnosticEntry = (entry) => normalize({ ...entry, activity: undefined }, { id: entry.id, timestamp: entry.timestamp });
+		return { normalize, toDiagnosticEntry };
 })();
 const NotificationJournalStore = (() => {
 		const create = (indexedDB) => {
@@ -6144,7 +6159,8 @@ const NotificationJournal = (() => {
 				listeners.add(listener);
 				return () => listeners.delete(listener);
 		};
-		return { record, recordDiagnostic, list, clear, subscribe, configureBuild };
+		const toDiagnosticEntry = (entry) => NotificationJournalPolicy.toDiagnosticEntry(entry);
+		return { record, recordDiagnostic, list, clear, subscribe, configureBuild, toDiagnosticEntry };
 })();
 const PopupMessage = (() => {
 		const __css__ = `
@@ -14362,14 +14378,19 @@ class ManualBookmarkPanel {
 		activeTab = 'automatic';
 		visible = true;
 		previewLeases = new Map();
+		previewLeaseKeys = new Map();
 		previewCandidates = new Set();
 		previewObserver = null;
+		previewObserved = new Set();
 		library = false;
 		libraryGeneration = 0;
 		libraryRows = [];
 		libraryStatus = 'idle';
 		librarySearch = '';
 		libraryFilter = 'all';
+		libraryPage = 0;
+		libraryRowPages = new Map();
+		libraryDrafts = new Map();
 		expandedVideos = new Set();
 		changeHandler;
 		setVisible(visible) { this.visible = visible; this.refreshPreviews(); }
@@ -14377,6 +14398,7 @@ class ManualBookmarkPanel {
 				this.previewObserver?.disconnect();
 				this.previewObserver = null;
 				this.previewCandidates.clear();
+				this.previewObserved.clear();
 				for (const cleanup of this.previewLeases.values()) {
 						try {
 								cleanup();
@@ -14384,6 +14406,7 @@ class ManualBookmarkPanel {
 						catch { /* optional preview */ }
 				}
 				this.previewLeases.clear();
+				this.previewLeaseKeys.clear();
 		}
 		preview(videoId, time) {
 				const host = this.root.ownerDocument.createElement('div');
@@ -14415,47 +14438,72 @@ class ManualBookmarkPanel {
 								continue;
 						try {
 								this.previewLeases.set(host, this.deps.createScenePreview(host, videoId, Number(host.dataset.sceneTime)));
+								this.previewLeaseKeys.set(host, videoId + '|' + host.dataset.sceneTime);
 								videos.add(videoId);
 						}
 						catch { /* Missing previews never disable text actions. */ }
 				}
 		}
 		refreshPreviews() {
-				this.clearPreviews();
-				if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false)
+				if (!this.visible || this.disposed || !this.deps.createScenePreview || this.deps.libraryAppearance?.().showScenePreviews === false) {
+						this.clearPreviews();
 						return;
+				}
 				const hosts = Array.from(this.root.querySelectorAll('[data-scene-video]'))
 						.filter(host => this.previewEligible(host));
+				const eligible = new Set(hosts);
+				for (const host of this.previewObserved)
+						if (!eligible.has(host)) {
+								this.previewObserver?.unobserve?.(host);
+								this.previewObserved.delete(host);
+								this.previewCandidates.delete(host);
+						}
+				for (const [host, cleanup] of this.previewLeases)
+						if (!eligible.has(host) || this.previewLeaseKeys.get(host) !== host.dataset.sceneVideo + '|' + host.dataset.sceneTime) {
+								this.previewLeases.delete(host);
+								this.previewLeaseKeys.delete(host);
+								try {
+										cleanup();
+								}
+								catch { /* optional preview */ }
+						}
 				const Observer = this.root.ownerDocument.defaultView?.IntersectionObserver;
 				if (Observer) {
-						const observer = new Observer(entries => {
-								if (this.previewObserver !== observer || !this.visible || this.disposed)
-										return;
-								for (const entry of entries) {
-										const host = entry.target;
-										if (entry.isIntersecting && this.previewEligible(host))
-												this.previewCandidates.add(host);
-										else {
-												this.previewCandidates.delete(host);
-												const cleanup = this.previewLeases.get(host);
-												if (cleanup) {
-														this.previewLeases.delete(host);
-														try {
-																cleanup();
+						let observer = this.previewObserver;
+						if (!observer) {
+								observer = new Observer(entries => {
+										if (this.previewObserver !== observer || !this.visible || this.disposed)
+												return;
+										for (const entry of entries) {
+												const host = entry.target;
+												if (entry.isIntersecting && this.previewEligible(host))
+														this.previewCandidates.add(host);
+												else {
+														this.previewCandidates.delete(host);
+														const cleanup = this.previewLeases.get(host);
+														if (cleanup) {
+																this.previewLeases.delete(host);
+																this.previewLeaseKeys.delete(host);
+																try {
+																		cleanup();
+																}
+																catch { /* optional preview */ }
 														}
-														catch { /* optional preview */ }
 												}
 										}
-								}
-								this.fillPreviewLeases();
-						}, { root: this.root.closest('.zenzaManualBookmarkDock'), rootMargin: '100px' });
-						this.previewObserver = observer;
+										this.fillPreviewLeases();
+								}, { root: this.root.closest('.zenzaManualBookmarkDock'), rootMargin: '100px' });
+								this.previewObserver = observer;
+						}
 						for (const host of hosts)
-								observer.observe(host);
+								if (!this.previewObserved.has(host)) {
+										this.previewObserved.add(host);
+										observer.observe(host);
+								}
+						this.fillPreviewLeases();
 				}
 				else {
-						for (const host of hosts.slice(0, 12))
-								this.previewCandidates.add(host);
+						this.previewCandidates = new Set(hosts.slice(0, 12));
 						this.fillPreviewLeases();
 				}
 		}
@@ -14468,6 +14516,7 @@ class ManualBookmarkPanel {
 				this.loop = activate ? { a, b } : null;
 				this.loopFailureNotice = null;
 				this.resetLoopSeek();
+				this.libraryDrafts.clear();
 				this.library = false;
 				this.activeTab = 'repeat';
 				this.render(this.last);
@@ -14926,6 +14975,8 @@ class ManualBookmarkPanel {
 						}
 						if (target?.matches('[data-library-filter]')) {
 								this.libraryFilter = target.value;
+								this.libraryPage = 0;
+								this.libraryRowPages.clear();
 								this.renderLibraryGroups();
 						}
 				};
@@ -14933,6 +14984,8 @@ class ManualBookmarkPanel {
 						const target = event.target;
 						if (target?.matches?.('[data-library-search]')) {
 								this.librarySearch = target.value;
+								this.libraryPage = 0;
+								this.libraryRowPages.clear();
 								this.renderLibraryGroups();
 								return;
 						}
@@ -15003,9 +15056,12 @@ class ManualBookmarkPanel {
 		render(snapshot) {
 				if (this.disposed)
 						return;
+				if (this.library)
+						this.captureLibraryDrafts();
 				const sameVideo = snapshot.videoId !== null &&
 						snapshot.videoId === this.last.videoId;
 				if (!sameVideo) {
+						this.libraryDrafts.clear();
 						this.libraryGeneration++;
 						this.libraryBusyRequest = null;
 						this.library = false;
@@ -15296,6 +15352,26 @@ class ManualBookmarkPanel {
 						}, () => { });
 				}
 		}
+		captureLibraryDrafts(container = this.root) {
+				for (const row of container.querySelectorAll('[data-library-draft-key]')) {
+						const key = row.dataset.libraryDraftKey;
+						if (row.dataset.libraryDraftCommitted === 'true') {
+								this.libraryDrafts.delete(key);
+								continue;
+						}
+						const fields = Array.from(row.querySelectorAll('input[data-library-start],input[data-library-end],input[data-library-name]'));
+						if (!fields.some(field => field.value !== field.defaultValue)) {
+								this.libraryDrafts.delete(key);
+								continue;
+						}
+						const values = {};
+						for (const field of fields) {
+								const name = field.hasAttribute('data-library-name') ? 'name' : field.hasAttribute('data-library-end') ? 'end' : 'start';
+								values[name] = field.value;
+						}
+						this.libraryDrafts.set(key, { values, open: row.querySelector('.zw-bookmark-edit')?.open === true });
+				}
+		}
 		libraryButton(action, label, videoId, id) {
 				const button = this.root.ownerDocument.createElement('button');
 				button.type = 'button';
@@ -15315,7 +15391,7 @@ class ManualBookmarkPanel {
 						const rows = await this.deps.loadLibrary?.() || [];
 						if (this.disposed || generation !== this.libraryGeneration || videoId !== this.last.videoId || !this.library)
 								return;
-						this.libraryRows = rows;
+						this.libraryRows = [...rows].sort((a, b) => b.updatedAt - a.updatedAt);
 						this.libraryStatus = 'ready';
 				}
 				catch {
@@ -15373,6 +15449,7 @@ class ManualBookmarkPanel {
 				const groups = this.root.querySelector('[data-library-groups]');
 				if (!groups || this.disposed)
 						return;
+				this.captureLibraryDrafts();
 				this.clearPreviews();
 				groups.replaceChildren();
 				const doc = this.root.ownerDocument;
@@ -15382,14 +15459,16 @@ class ManualBookmarkPanel {
 				groups.style.setProperty('--zw-library-title-size', bounded(appearance?.titleFontSize, 13, 11, 18) + 'px');
 				groups.style.setProperty('--zw-library-title-lines', String(Math.round(bounded(appearance?.titleLines, 1, 1, 3))));
 				const query = this.librarySearch.trim().toLocaleLowerCase(), filter = this.libraryFilter;
-				let count = 0, videoCount = 0;
-				for (const video of [...this.libraryRows].sort((a, b) => b.updatedAt - a.updatedAt)) {
+				const matching = this.libraryRows.map(video => {
 						const matches = video.title.toLocaleLowerCase().includes(query);
 						const automatic = video.automaticTime !== null && (filter === 'all' || filter === 'resume') && (matches || 'ここまで見た'.includes(query));
 						const bookmarks = video.bookmarks.filter(item => (filter === 'all' || filter === (item.endTime === undefined ? 'point' : 'range')) &&
-								(matches || item.label.toLocaleLowerCase().includes(query))).sort((a, b) => a.time - b.time);
-						if (!automatic && !bookmarks.length)
-								continue;
+								(matches || item.label.toLocaleLowerCase().includes(query)));
+						return { video, automatic, bookmarks };
+				}).filter(item => item.automatic || item.bookmarks.length);
+				const videoCount = matching.length, count = matching.reduce((sum, item) => sum + item.bookmarks.length + Number(item.automatic), 0);
+				this.libraryPage = Math.min(this.libraryPage, Math.max(0, Math.ceil(videoCount / 50) - 1));
+				for (const { video, automatic, bookmarks } of matching.slice(this.libraryPage * 50, (this.libraryPage + 1) * 50)) {
 						const group = doc.createElement('details');
 						group.className = 'zw-library-group';
 						group.dataset.libraryVideo = video.videoId;
@@ -15425,24 +15504,70 @@ class ManualBookmarkPanel {
 						if (viewed)
 								header.append(viewed);
 						summary.append(header);
-						const list = doc.createElement('ul');
-						group.append(summary, list);
-						if (automatic)
-								list.append(this.libraryRow(video, null));
-						for (const item of bookmarks)
-								list.append(this.libraryRow(video, item));
+						group.append(summary);
+						const body = doc.createElement('div');
+						let materialized = false;
+						const renderBody = () => {
+								const ordered = [...(automatic ? [null] : []), ...bookmarks.slice().sort((a, b) => a.time - b.time)];
+								const page = Math.min(this.libraryRowPages.get(video.videoId) || 0, Math.max(0, Math.ceil(ordered.length / 50) - 1));
+								this.libraryRowPages.set(video.videoId, page);
+								this.captureLibraryDrafts(body);
+								body.replaceChildren();
+								const list = doc.createElement('ul');
+								body.append(list);
+								for (const item of ordered.slice(page * 50, (page + 1) * 50))
+										list.append(this.libraryRow(video, item));
+								if (ordered.length > 50) {
+										const pager = doc.createElement('div');
+										pager.className = 'zw-library-pagination';
+										for (const [direction, label, offset] of [['prev', '前へ', -1], ['next', '次へ', 1]]) {
+												const button = doc.createElement('button');
+												button.type = 'button';
+												button.textContent = label;
+												button.dataset.libraryRowPage = direction;
+												button.disabled = offset < 0 ? page === 0 : (page + 1) * 50 >= ordered.length;
+												button.addEventListener('click', event => { event.stopPropagation(); this.libraryRowPages.set(video.videoId, page + offset); renderBody(); this.refreshPreviews(); });
+												pager.append(button);
+										}
+										const status = doc.createElement('span');
+										status.textContent = (page * 50 + 1) + '–' + Math.min((page + 1) * 50, ordered.length) + ' / ' + ordered.length + ' 件';
+										pager.append(status);
+										body.append(pager);
+								}
+								materialized = true;
+						};
+						if (group.open) {
+								renderBody();
+								group.append(body);
+						}
 						group.addEventListener('toggle', () => {
 								if (this.disposed || !group.isConnected)
 										return;
-								if (group.open)
+								if (group.open) {
 										this.expandedVideos.add(video.videoId);
-								else
+										if (!materialized)
+												renderBody();
+										group.append(body);
+								}
+								else {
 										this.expandedVideos.delete(video.videoId);
+										this.captureLibraryDrafts(body);
+										body.remove();
+								}
 								this.refreshPreviews();
 						});
 						groups.append(group);
-						count += bookmarks.length + Number(automatic);
-						videoCount++;
+				}
+				if (videoCount > 50) {
+						const pager = doc.createElement('div');
+						pager.className = 'zw-library-pagination';
+						const previous = this.libraryButton('page-prev', '前の50動画'), next = this.libraryButton('page-next', '次の50動画');
+						previous.disabled = this.libraryPage === 0;
+						next.disabled = (this.libraryPage + 1) * 50 >= videoCount;
+						const label = doc.createElement('span');
+						label.textContent = (this.libraryPage * 50 + 1) + '–' + Math.min((this.libraryPage + 1) * 50, videoCount) + ' / ' + videoCount + ' 動画';
+						pager.append(previous, label, next);
+						groups.append(pager);
 				}
 				const status = this.root.querySelector('[data-library-status]');
 				if (status)
@@ -15469,6 +15594,7 @@ class ManualBookmarkPanel {
 		libraryRow(video, item) {
 				const doc = this.root.ownerDocument, row = doc.createElement('li'), time = item?.time ?? video.automaticTime;
 				row.dataset.libraryRow = '1';
+				row.dataset.libraryDraftKey = JSON.stringify([video.videoId, item?.id ?? null]);
 				const description = doc.createElement('span');
 				description.textContent = (item?.label || 'ここまで見た') + ' · ' + displayTime(time) +
 						(item?.endTime === undefined ? '' : ' – ' + displayTime(item.endTime));
@@ -15508,6 +15634,15 @@ class ManualBookmarkPanel {
 				remove.disabled = item ? !this.deps.deleteLibraryBookmark : !this.deps.deleteLibraryAutomatic;
 				edit.append(save, remove);
 				row.append(edit);
+				const draft = this.libraryDrafts.get(row.dataset.libraryDraftKey);
+				for (const field of row.querySelectorAll('input')) {
+						field.defaultValue = field.value;
+						const name = field.hasAttribute('data-library-name') ? 'name' : field.hasAttribute('data-library-end') ? 'end' : 'start';
+						if (draft?.values[name] !== undefined)
+								field.value = draft.values[name];
+				}
+				if (draft)
+						edit.open = draft.open;
 				return row;
 		}
 		libraryBusyRequest = null;
@@ -15516,6 +15651,7 @@ class ManualBookmarkPanel {
 						return;
 				const action = button.dataset.libraryAction;
 				if (action === 'back') {
+						this.libraryDrafts.clear();
 						this.library = false;
 						this.libraryGeneration++;
 						this.libraryBusyRequest = null;
@@ -15525,12 +15661,18 @@ class ManualBookmarkPanel {
 				if (action === 'open') {
 						this.libraryBusyRequest = null;
 						this.library = true;
+						this.libraryPage = 0;
 						this.expandedVideos.add(this.last.videoId || '');
 						await this.loadLibrary();
 						return;
 				}
 				if (action === 'retry') {
 						await this.loadLibrary();
+						return;
+				}
+				if (action === 'page-prev' || action === 'page-next') {
+						this.libraryPage += action === 'page-next' ? 1 : -1;
+						this.renderLibraryGroups();
 						return;
 				}
 				if (!this.library || !this.ownsVideo())
@@ -15547,6 +15689,7 @@ class ManualBookmarkPanel {
 								this.setRepeatRange(time, item.endTime);
 								return;
 						}
+						this.libraryDrafts.clear();
 						this.library = false;
 						this.libraryGeneration++;
 						this.render(this.last);
@@ -15585,6 +15728,8 @@ class ManualBookmarkPanel {
 								return;
 						if (this.disposed || generation !== this.libraryGeneration || owner !== this.last.videoId || !this.library)
 								return;
+						row.dataset.libraryDraftCommitted = 'true';
+						this.libraryDrafts.delete(row.dataset.libraryDraftKey);
 						await this.loadLibrary();
 				}
 				catch {
@@ -15605,6 +15750,7 @@ class ManualBookmarkPanel {
 				this.deps.repeatState?.(false);
 				this.deps.onRepeatRangeChange?.(null);
 				this.clearPreviews();
+				this.libraryDrafts.clear();
 				this.libraryGeneration++;
 				this.disposed = true;
 				this.pointGeneration++;
@@ -15889,7 +16035,16 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock>summary{padding:10px 14px;cursor:pointer;font-weight:700;color:#f4f7ff}
 		.zenzaManualBookmarkDock[open]{overflow:auto}
 		.zenzaManualBookmarkDock.zw-points-floating{position:absolute;z-index:150000;right:12px;bottom:64px;width:400px;transition:width .18s ease;max-width:calc(100% - 24px);max-height:calc(100% - 88px);box-shadow:0 12px 48px #000a;overscroll-behavior:contain}
-		.zenzaManualBookmarkDockContent{padding:0 14px 14px}
+		.zenzaManualBookmarkDockContent{padding:0 14px 10px}
+		.zenzaManualBookmarkDock:not(.zw-library-wide)>summary{padding-right:104px}
+		.zenzaManualBookmarkDock:not(.zw-library-wide) .zw-library-nav{position:absolute;right:12px;top:5px;margin:0;padding:4px 9px;font-size:12px}
+		.zenzaManualBookmarkDock .zw-point-section[data-point-section="repeat"]{margin-top:0;padding-top:0;border-top:0}
+		.zenzaManualBookmarkDock [data-point-section="repeat"]>h3{display:none}
+		.zenzaManualBookmarkDock [data-point-section="repeat"]>[data-point-status]{margin:3px 0 8px}
+		.zenzaManualBookmarkDock [data-point-section="repeat"]>button{width:calc((100% - 12px)/3);margin:6px 4px 3px 0;padding:5px 3px;font-size:12px;vertical-align:top}
+		.zenzaManualBookmarkDock [data-point-section="repeat"]>.zw-point-range{margin:8px 0}
+		.zenzaManualBookmarkDock .zw-library-pagination{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin:8px 0}
+		.zenzaManualBookmarkDock .zw-library-pagination>span{color:#aebbd1;font-size:12px}
 		.zenzaManualBookmarkDock h3{font-size:13px;margin:12px 0 8px;color:#f4f7ff;letter-spacing:.02em}
 		.zenzaManualBookmarkDock p{margin:5px 0 10px;color:#aebbd1;font-size:12px}
 		.zenzaManualBookmarkDock button,.zenzaManualBookmarkDock input{box-sizing:border-box;font:inherit;line-height:1.4;border-radius:6px;min-height:32px;margin:3px 5px 3px 0}
@@ -15947,13 +16102,15 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock .zw-scene-loading::after{content:'';position:absolute;left:calc(50% - 8px);top:calc(50% - 8px);z-index:1;width:12px;height:12px;border:2px solid #53627b;border-top-color:#8ecbff;border-radius:50%;animation:zw-scene-loading-spin .8s linear infinite}
 		@keyframes zw-scene-loading-spin{to{transform:rotate(360deg)}}
 		@media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock .zw-scene-loading::after{animation:none}}
-		.zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{width:100%;margin:8px 0}
-		.zenzaManualBookmarkDock .zw-point-range-inputs label{display:block}
-		.zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%}
-		.zenzaManualBookmarkDock .zw-point-range-inputs button{width:100%;padding:5px 2px;font-size:12px}
+		.zenzaManualBookmarkDock .zw-point-range-inputs>div{display:grid;grid-template-columns:minmax(0,1fr) 80px;gap:5px 8px;min-width:0;align-items:end}
+		.zenzaManualBookmarkDock .zw-point-range-inputs .zw-scene-preview{grid-column:2;grid-row:1;width:80px;height:45px;margin:0}
+		.zenzaManualBookmarkDock .zw-point-range-inputs label{display:block;grid-column:1;grid-row:1;min-width:0}
+		.zenzaManualBookmarkDock .zw-point-range-inputs>div:has(.zw-scene-preview[hidden]) label{grid-column:1/-1}
+		.zenzaManualBookmarkDock .zw-point-range-inputs input{display:block;width:100%;margin:0}
+		.zenzaManualBookmarkDock .zw-point-range-inputs button{grid-column:1/-1;width:100%;margin:0;padding:5px 2px;font-size:12px}
 		@keyframes zw-bookmark-reveal{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
 		@media(prefers-reduced-motion:reduce){.zenzaManualBookmarkDock.zw-points-floating{transition:none}.zenzaManualBookmarkDock .zw-bookmark-edit[open],.zenzaManualBookmarkDock .zw-automatic-edit[open]{animation:none}}
-		@media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
+		@media(pointer:coarse){.zenzaManualBookmarkDock button{min-height:44px}.zenzaManualBookmarkDock:not(.zw-library-wide)>summary{box-sizing:border-box;min-height:54px}.zenzaManualBookmarkDock input:not([type=checkbox]),.zenzaManualBookmarkDock select{font-size:16px}}
 		`;
 		dispose() {
 				if (this.disposed)
@@ -49775,6 +49932,9 @@ const NotificationHistoryPanel = (() => {
 				'.zenzaNotificationHistory .znh-entry[data-level="success"] .znh-tag{background:#245b40;color:#fff;}',
 				'.zenzaNotificationHistory .znh-date{font-size:11px;color:#aaa;}',
 				'.zenzaNotificationHistory .znh-message{white-space:pre-wrap;word-break:break-word;margin:6px 0;}',
+				'.zenzaNotificationHistory .znh-activity-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;white-space:pre-wrap;margin:3px 0;color:#ddd;font-size:12px;}',
+				'.zenzaNotificationHistory .znh-activity-text{white-space:pre-wrap;overflow-wrap:anywhere;user-select:text;border-left:2px solid #6ba58b;padding-left:10px;}',
+				'.zenzaNotificationHistory .znh-activity a{color:#9cf;overflow-wrap:anywhere;}.zenzaNotificationHistory .znh-private-note{font-size:11px;color:#bbb;}',
 				'.zenzaNotificationHistory details{color:#bbb;font-size:11px;}',
 				'.zenzaNotificationHistory details pre{white-space:pre-wrap;word-break:break-word;user-select:text;color:#ddd;}',
 				'.zenzaNotificationHistory [hidden]{display:none!important;}',
@@ -49854,6 +50014,7 @@ const NotificationHistoryPanel = (() => {
 				refresh.type = 'button';
 				const save = element('button', '', 'JSON保存');
 				save.type = 'button';
+				save.title = '診断情報だけを保存します。投稿コメント本文・動画タイトルは含みません。';
 				const clear = element('button', '', '全件削除');
 				clear.type = 'button';
 				const management = element('details', 'znh-management');
@@ -49916,6 +50077,27 @@ const NotificationHistoryPanel = (() => {
 						for (const [name, value] of pairs)
 								grid.append(element('dt', '', name), element('dd', '', value));
 						detailNode.append(grid);
+						if (entry.activity?.kind === 'comment-post') {
+								const activity = element('section', 'znh-activity');
+								activity.append(element('h3', '', '投稿したコメント'), element('p', 'znh-activity-text', entry.activity.text));
+								if (/^(?:(?:sm|nm|so|ss)\d{1,16}|\d{1,16})$/i.test(entry.videoId)) {
+										const link = element('a', '', entry.activity.videoTitle ? entry.activity.videoTitle + ' (' + entry.videoId + ')' : entry.videoId);
+										link.href = 'https://www.nicovideo.jp/watch/' + entry.videoId;
+										link.target = '_blank';
+										link.rel = 'noopener noreferrer';
+										activity.append(link);
+								}
+								else if (entry.activity.videoTitle)
+										activity.append(element('p', '', entry.activity.videoTitle));
+								activity.append(element('p', '', '投稿日時: ' + formatTime(entry.timestamp)));
+								const ms = entry.activity.positionMs;
+								if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) {
+										const seconds = Math.floor(ms / 1000);
+										activity.append(element('p', '', '動画内の位置: ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')));
+								}
+								activity.append(element('p', 'znh-private-note', '自分用の履歴です。コメント本文と動画タイトルは、診断情報のコピー・JSON保存には含みません。'));
+								detailNode.append(activity);
+						}
 						if (entry.details?.outcome === 'recovered')
 								detailNode.append(element('p', '', 'この記録について追加の操作は不要です。'));
 						else if (entry.details?.outcome === 'failed' || entry.level === 'error' || entry.level === 'warning')
@@ -49928,7 +50110,8 @@ const NotificationHistoryPanel = (() => {
 						copy.dataset.historyAction = 'copy';
 						const copyStatus = element('p', 'znh-status');
 						copyStatus.setAttribute('role', 'status');
-						const report = [entry.message, description(entry), ...pairs.map(([key, value]) => key + ': ' + value), '診断情報: ' + JSON.stringify({ ...entry.details, source: entry.source })].join('\n');
+						const diagnostic = NotificationJournal.toDiagnosticEntry(entry);
+						const report = [diagnostic.message, description(diagnostic), ...pairs.map(([key, value]) => key + ': ' + value), '診断情報: ' + JSON.stringify({ ...diagnostic.details, source: diagnostic.source })].join('\n');
 						copy.addEventListener('click', async () => {
 								try {
 										if (!window.navigator.clipboard?.writeText)
@@ -49975,7 +50158,7 @@ const NotificationHistoryPanel = (() => {
 						if (!needle) {
 								return true;
 						}
-						return [entry.message, entry.videoId, entry.source, entry.category,
+						return [entry.message, entry.videoId, entry.source, entry.category, entry.activity?.text, entry.activity?.videoTitle,
 								JSON.stringify(entry.details || {})].join(' ').toLocaleLowerCase().includes(needle);
 				};
 				const render = async (version) => {
@@ -50018,6 +50201,8 @@ const NotificationHistoryPanel = (() => {
 										detailNode.querySelector('[data-history-back]')?.focus({ preventScroll: true });
 								});
 								item.append(head, entryButton);
+								if (entry.activity?.kind === 'comment-post')
+										entryButton.append(element('span', 'znh-activity-preview', entry.activity.text));
 								const meta = entry.details || {};
 								if (typeof meta.count === 'number' && meta.count > 0) {
 										head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
@@ -50083,7 +50268,7 @@ const NotificationHistoryPanel = (() => {
 								if (disposed || !isVisible()) {
 										return;
 								}
-								const blob = new Blob([JSON.stringify(entries, null, 2)], { type: 'application/json' });
+								const blob = new Blob([JSON.stringify(entries.map(entry => NotificationJournal.toDiagnosticEntry(entry)), null, 2)], { type: 'application/json' });
 								url = URL.createObjectURL(blob);
 								const link = element('a');
 								link.href = url;
@@ -55266,6 +55451,11 @@ class NicoVideoPlayerDialog extends Emitter {
 				}
 				Object.assign(options, { isMine: true, isUpdating: true, thread: threadId });
 				vpos = (!isNaN(vpos) && typeof vpos === 'number') ? vpos : this._nicoVideoPlayer.vpos;
+				const submittedActivity = {
+						kind: 'comment-post', text,
+						videoTitle: this._videoInfo?.title,
+						positionMs: Math.floor((vpos || 0) * 10)
+				};
 				const nicoChat = this._nicoVideoPlayer.addChat(text, cmd, vpos, options);
 				this._state.isCommentPosting = true;
 				window.console.time('コメント投稿');
@@ -55280,6 +55470,7 @@ class NicoVideoPlayerDialog extends Emitter {
 						this._recordDiagnostic({
 								category: 'comment', level: 'success', message: 'コメント投稿成功',
 								videoId: watchId, source: 'comment',
+								activity: submittedActivity,
 								details: { threadId, postedNo: result.no, outcome: 'accepted' }
 						});
 						if (isCurrent()) {
@@ -74101,6 +74292,49 @@ class AdvancedSettingsController {
 		pending;
 		disposed = false;
 		entry;
+		entryHost;
+		entryAnchor;
+		entryBefore = false;
+		entryObserver;
+		relocateEntry = () => {
+				const doc = this.options.document, host = this.entryHost;
+				if (this.disposed || !host || !doc.body) {
+						return;
+				}
+				host.hidden = !/^\/my(?:\/|$)/.test(doc.location.pathname);
+				if (host.hidden) {
+						return;
+				}
+				const anchor = this.entryAnchor;
+				if (anchor?.isConnected && host.isConnected && host.parentElement === anchor.parentElement &&
+						(this.entryBefore ? host.nextElementSibling === anchor : anchor.nextElementSibling === host)) {
+						return;
+				}
+				const find = (selector) => Array.from(doc.querySelectorAll(selector)).find(node => !node.closest('.zw-modern-root,.zenzaPlayerContainer,[data-zw-advanced-host]'));
+				const account = find('.accountEdit');
+				const dropdown = doc.querySelector('#js-initial-userpage-data') ? find('.Dropdown-button') : undefined;
+				let target = account || dropdown;
+				let before = !account;
+				if (target) {
+						const list = target.closest('ul,ol');
+						if (list) {
+								target = list;
+								before = false;
+						}
+				}
+				else {
+						target = find('[aria-label="nicovideo-content"]') || find('main,[role="main"]');
+						before = true;
+				}
+				this.entryAnchor = target;
+				this.entryBefore = before;
+				if (target?.parentElement) {
+						target.parentElement.insertBefore(host, before ? target : target.nextSibling);
+				}
+				else if (host.parentElement !== doc.body) {
+						doc.body.append(host);
+				}
+		};
 		requestOpen;
 		constructor(options) {
 				this.options = options;
@@ -74135,17 +74369,43 @@ class AdvancedSettingsController {
 		}
 		close() { this.panel?.hide(); }
 		mountEntry() {
-				if (this.disposed || this.entry) {
+				if (this.disposed) {
 						return;
 				}
-				const button = this.options.document.createElement('button');
+				if (this.entry) {
+						this.relocateEntry();
+						return;
+				}
+				const doc = this.options.document;
+				if (!doc.body) {
+						return;
+				}
+				const host = doc.createElement('div');
+				host.dataset.zwAdvancedHost = 'true';
+				const button = doc.createElement('button');
 				button.type = 'button';
 				button.dataset.zwAdvancedEntry = 'true';
 				button.textContent = 'ZenzaWatch 上級者設定';
-				button.style.cssText = 'position:fixed;right:18px;bottom:18px;z-index:2147483000;padding:10px 14px;border:1px solid #64748b;border-radius:6px;background:#17212d;color:#eee;cursor:pointer';
+				const style = doc.createElement('style');
+				style.textContent = `
+			[data-zw-advanced-host]{position:static;display:flex;justify-content:flex-end;box-sizing:border-box;margin:8px 0;padding:0 12px}
+			[data-zw-advanced-host][hidden]{display:none!important}
+			button[data-zw-advanced-entry]{appearance:none;position:static;box-sizing:border-box;font:12px/1.5 system-ui,sans-serif;padding:8px 12px;border:1px solid #8294ae;border-radius:6px;background:#17212d;color:#f4f7ff;cursor:pointer;box-shadow:0 1px 3px #0003}
+			button[data-zw-advanced-entry]:hover{background:#303c51;border-color:#a8bed8}
+			button[data-zw-advanced-entry]:focus-visible{outline:2px solid #8ecbff;outline-offset:3px}
+			@media(forced-colors:active){button[data-zw-advanced-entry]{background:ButtonFace;color:ButtonText;border-color:ButtonText}}
+		`;
 				button.addEventListener('click', this.requestOpen);
-				this.options.document.body.append(button);
+				host.append(button, style);
 				this.entry = button;
+				this.entryHost = host;
+				this.relocateEntry();
+				const Observer = doc.defaultView?.MutationObserver;
+				if (Observer) {
+						this.entryObserver = new Observer(this.relocateEntry);
+						this.entryObserver.observe(doc.body, { childList: true, subtree: true });
+				}
+				doc.defaultView?.addEventListener('popstate', this.relocateEntry);
 		}
 		dispose() {
 				if (this.disposed) {
@@ -74153,8 +74413,13 @@ class AdvancedSettingsController {
 				}
 				this.disposed = true;
 				this.options.document.removeEventListener('zenza-open-advanced-settings', this.requestOpen);
+				this.entryObserver?.disconnect();
+				this.entryObserver = undefined;
+				this.options.document.defaultView?.removeEventListener('popstate', this.relocateEntry);
 				this.entry?.removeEventListener('click', this.requestOpen);
-				this.entry?.remove();
+				this.entryHost?.remove();
+				this.entryHost = undefined;
+				this.entryAnchor = undefined;
 				this.entry = undefined;
 				this.panel?.dispose();
 				this.panel = undefined;

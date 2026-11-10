@@ -156,7 +156,8 @@ const NotificationJournal = (() => {
         listeners.add(listener);
         return () => listeners.delete(listener);
     };
-    return { record, recordDiagnostic, list, clear, subscribe, configureBuild };
+    const toDiagnosticEntry = (entry) => NotificationJournalPolicy.toDiagnosticEntry(entry);
+    return { record, recordDiagnostic, list, clear, subscribe, configureBuild, toDiagnosticEntry };
 })();
 //===END===
 export {NotificationJournal};

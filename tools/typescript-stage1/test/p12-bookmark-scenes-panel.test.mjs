@@ -84,8 +84,10 @@ test('library search filters names and kinds; failed edit preserves input and re
  h.click('[data-library-action="open"]');await step();
  const search=h.root.querySelector('[data-library-search]');search.value='chorus';
  search.dispatchEvent(new h.dom.window.Event('input',{bubbles:true}));
+ assert.equal(h.root.querySelectorAll('[data-library-row]').length,0);
+ const group=h.root.querySelector('[data-library-video]');assert.equal(group.open,false);
+ group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
  assert.equal(h.root.querySelectorAll('[data-library-row]').length,1);
- assert.equal(h.root.querySelector('[data-library-video]').open,false);
  const start=h.root.querySelector('[data-library-start]');start.value='6';
  h.click('[data-library-action="save"]');await step();
  assert.equal(h.root.querySelector('[data-library-start]').value,'6');assert(!h.root.textContent.includes('secret'));
@@ -96,7 +98,9 @@ test('library cross-video range action carries both endpoints and current range 
  const opens=[];const h=harness({openLibraryPosition:(...args)=>opens.push(args),loadLibrary:async()=>[
  {videoId:'sm2',title:'history',duration:100,updatedAt:1,automaticTime:null,
  bookmarks:[{id:'r',videoId:'sm2',time:4,endTime:9,label:'chorus',createdAt:1,updatedAt:1}]}]});
- h.click('[data-library-action="open"]');await step();h.click('[data-library-action="repeat"]');
+ h.click('[data-library-action="open"]');await step();
+ const group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ h.click('[data-library-action="repeat"]');
  assert.deepEqual(opens,[['sm2',4,9]]);assert.equal(h.root.querySelector('[data-library-groups]'),null);h.close();
 });
 test('editing endpoints updates repeat preview and allows B at exact duration',()=>{
@@ -252,7 +256,70 @@ test('Enter saves a historical library edit and hidden scenes release current le
  assert.equal(h.previews.length,1);show=false;h.panel.refreshPreferences();
  assert.equal(h.cleanups.length,1);assert.equal(h.previews.length,1);
  h.click('[data-library-action="open"]');await step();
+ const group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
  const field=h.root.querySelector('[data-library-start]');field.value='24';
  field.dispatchEvent(new h.dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await step();
  assert.deepEqual(saved,[['sm2',24,100]]);h.close();
+});
+
+
+test('Task1000 large library bounds groups and creates rows only when opened',async()=>{
+ const rows=Array.from({length:1000},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:100,updatedAt:1000-i,automaticTime:2,
+ bookmarks:Array.from({length:i===0?120:3},(_,j)=>({id:'b'+j,time:j/2,label:'scene '+j,createdAt:1,updatedAt:1}))}));
+ const h=harness({loadLibrary:async()=>rows});h.click('[data-library-action="open"]');await step();
+ assert.equal(h.root.querySelectorAll('[data-library-video]').length,50);
+ assert.equal(h.root.querySelectorAll('[data-library-row]').length,0);
+ assert(h.root.querySelectorAll('*').length<500);
+ const group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ assert.equal(group.querySelectorAll('[data-library-row]').length,50);
+ group.querySelector('[data-library-row-page="next"]').click();
+ assert.equal(group.querySelectorAll('[data-library-row]').length,50);
+ assert(group.textContent.includes('scene 49'));
+ h.click('[data-library-action="page-next"]');assert.equal(h.root.querySelector('[data-library-video]').dataset.libraryVideo,'old50');
+ const search=h.root.querySelector('[data-library-search]');search.value='Video 999';search.dispatchEvent(new h.dom.window.Event('input',{bubbles:true}));
+ assert.equal(h.root.querySelectorAll('[data-library-video]').length,1);
+ assert.equal(h.root.querySelector('[data-library-video]').dataset.libraryVideo,'old999');h.close();
+});
+test('Task1000 opening a second group does not restart the first scene lease',async()=>{
+ const h=harness({loadLibrary:async()=>[1,2].map(i=>({videoId:'sm'+i,title:'video',duration:100,updatedAt:1,automaticTime:2,bookmarks:[]}))});
+ h.click('[data-library-action="open"]');await step();const before=h.previews.length,cleanups=h.cleanups.length;
+ const group=h.root.querySelector('[data-library-video="sm2"]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ assert.equal(h.previews.length,before+1);assert.equal(h.cleanups.length,cleanups);
+ group.open=false;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ assert.equal(group.querySelectorAll('[data-library-row]').length,0);assert.equal(h.cleanups.length,cleanups+1);h.close();
+});
+
+test('Task1000 paged deletion clamps the last page and collapsed drafts survive reopen',async()=>{
+ let rows=Array.from({length:51},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:100,updatedAt:51-i,automaticTime:null,
+ bookmarks:[{id:'b',time:4,label:'scene',createdAt:1,updatedAt:1}]}));
+ const h=harness({loadLibrary:async()=>rows,deleteLibraryBookmark:async videoId=>{rows=rows.filter(row=>row.videoId!==videoId);},editLibraryBookmark:async()=>{}});
+ h.click('[data-library-action="open"]');await step();h.click('[data-library-action="page-next"]');
+ const group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ const field=group.querySelector('[data-library-start]');field.value='8';
+ group.open=false;group.dispatchEvent(new h.dom.window.Event('toggle'));assert.equal(group.querySelector('[data-library-start]'),null);
+ group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));assert.equal(group.querySelector('[data-library-start]').value,'8');
+ h.click('[data-library-action="delete"]');await step();
+ assert.equal(h.root.querySelectorAll('[data-library-video]').length,50);
+ assert.equal(h.root.querySelector('[data-library-video]').dataset.libraryVideo,'old0');
+ assert.equal(h.root.querySelector('[data-library-action="page-next"]'),null);h.close();
+});
+
+test('Task1000 video and row pagination retain dirty scalar edits, successful save clears them',async()=>{
+ const rows=Array.from({length:51},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:200,updatedAt:51-i,automaticTime:null,
+ bookmarks:Array.from({length:i===0?55:1},(_,j)=>({id:'b'+j,time:j,label:'scene '+j,createdAt:1,updatedAt:1}))}));
+ const h=harness({loadLibrary:async()=>rows,editLibraryBookmark:async(videoId,id,changes)=>{Object.assign(rows.find(v=>v.videoId===videoId).bookmarks.find(b=>b.id===id),changes);}});
+ h.click('[data-library-action="open"]');await step();
+ let group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ let field=group.querySelector('[data-library-start]');field.value='24';
+ group.querySelector('.zw-bookmark-edit').open=true;
+ group.querySelector('[data-library-row-page="next"]').click();group.querySelector('[data-library-row-page="prev"]').click();
+ assert.equal(group.querySelector('[data-library-start]').value,'24');assert.equal(group.querySelector('.zw-bookmark-edit').open,true);
+ group.open=false;group.dispatchEvent(new h.dom.window.Event('toggle'));
+ h.click('[data-library-action="page-next"]');h.click('[data-library-action="page-prev"]');
+ group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));assert.equal(group.querySelector('[data-library-start]').value,'24');
+ h.click('[data-library-action="save"]');await step();assert.equal(rows[0].bookmarks[0].time,24);
+ // Successful save removes the old draft. A subsequent canonical change wins.
+ rows[0].bookmarks[0].time=25;h.click('[data-library-action="back"]');h.click('[data-library-action="open"]');await step();
+ group=h.root.querySelector('[data-library-video]');assert.equal(group.querySelector('[data-library-action="save"][data-bookmark-id="b0"]').closest('[data-library-row]').querySelector('[data-library-start]').value,'0:25');
+ h.close();
 });

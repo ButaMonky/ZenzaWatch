@@ -69,21 +69,26 @@ export class ManualBookmarkPanel {
   private activeTab='automatic';
   private visible=true;
   private previewLeases=new Map<HTMLElement,()=>void>();
+  private previewLeaseKeys=new Map<HTMLElement,string>();
   private previewCandidates=new Set<HTMLElement>();
   private previewObserver:IntersectionObserver|null=null;
+  private previewObserved=new Set<HTMLElement>();
   private library=false;
   private libraryGeneration=0;
   private libraryRows:readonly ManualBookmarkLibraryEntry[]=[];
   private libraryStatus:'idle'|'loading'|'ready'|'error'='idle';
   private librarySearch='';
   private libraryFilter='all';
+  private libraryPage=0;
+  private libraryRowPages=new Map<string,number>();
+  private libraryDrafts=new Map<string,{values:Record<string,string>;open:boolean}>();
   private expandedVideos=new Set<string>();
   private readonly changeHandler:(event:Event)=>void;
   setVisible(visible:boolean):void {this.visible=visible;this.refreshPreviews();}
   private clearPreviews():void {
-    this.previewObserver?.disconnect();this.previewObserver=null;this.previewCandidates.clear();
+    this.previewObserver?.disconnect();this.previewObserver=null;this.previewCandidates.clear();this.previewObserved.clear();
     for(const cleanup of this.previewLeases.values()){try{cleanup();}catch{/* optional preview */}}
-    this.previewLeases.clear();
+    this.previewLeases.clear();this.previewLeaseKeys.clear();
   }
   private preview(videoId:string,time:number):HTMLElement {
     const host=this.root.ownerDocument.createElement('div');host.className='zw-scene-preview';
@@ -107,18 +112,26 @@ export class ManualBookmarkPanel {
       if(!videos.has(videoId)&&videos.size>=3)continue;
       try{
         this.previewLeases.set(host,this.deps.createScenePreview(host,videoId,Number(host.dataset.sceneTime)));
+        this.previewLeaseKeys.set(host,videoId+'|'+host.dataset.sceneTime);
         videos.add(videoId);
       }catch{/* Missing previews never disable text actions. */}
     }
   }
   private refreshPreviews():void {
-    this.clearPreviews();
-    if(!this.visible||this.disposed||!this.deps.createScenePreview||this.deps.libraryAppearance?.().showScenePreviews===false)return;
+    if(!this.visible||this.disposed||!this.deps.createScenePreview||this.deps.libraryAppearance?.().showScenePreviews===false){this.clearPreviews();return;}
     const hosts=Array.from(this.root.querySelectorAll<HTMLElement>('[data-scene-video]'))
       .filter(host=>this.previewEligible(host));
+    const eligible=new Set(hosts);
+    for(const host of this.previewObserved)if(!eligible.has(host)){
+      this.previewObserver?.unobserve?.(host);this.previewObserved.delete(host);this.previewCandidates.delete(host);
+    }
+    for(const [host,cleanup] of this.previewLeases)if(!eligible.has(host)||this.previewLeaseKeys.get(host)!==host.dataset.sceneVideo+'|'+host.dataset.sceneTime){
+      this.previewLeases.delete(host);this.previewLeaseKeys.delete(host);try{cleanup();}catch{/* optional preview */}
+    }
     const Observer=this.root.ownerDocument.defaultView?.IntersectionObserver;
     if(Observer){
-      const observer=new Observer(entries=>{
+      let observer=this.previewObserver;
+      if(!observer){observer=new Observer(entries=>{
         if(this.previewObserver!==observer||!this.visible||this.disposed)return;
         for(const entry of entries){
           const host=entry.target as HTMLElement;
@@ -126,16 +139,17 @@ export class ManualBookmarkPanel {
           else{
             this.previewCandidates.delete(host);
             const cleanup=this.previewLeases.get(host);
-            if(cleanup){this.previewLeases.delete(host);try{cleanup();}catch{/* optional preview */}}
+            if(cleanup){this.previewLeases.delete(host);this.previewLeaseKeys.delete(host);try{cleanup();}catch{/* optional preview */}}
           }
         }
         this.fillPreviewLeases();
       },{root:this.root.closest('.zenzaManualBookmarkDock'),rootMargin:'100px'});
-      this.previewObserver=observer;
-      for(const host of hosts)observer.observe(host);
+      this.previewObserver=observer;}
+      for(const host of hosts)if(!this.previewObserved.has(host)){this.previewObserved.add(host);observer.observe(host);}
+      this.fillPreviewLeases();
     }else{
       // Older engines lack visibility notifications; never load the entire library.
-      for(const host of hosts.slice(0,12))this.previewCandidates.add(host);
+      this.previewCandidates=new Set(hosts.slice(0,12));
       this.fillPreviewLeases();
     }
   }
@@ -145,7 +159,7 @@ export class ManualBookmarkPanel {
        (activate&&this.deps.repeatEnabled?.()===false))return false;
     this.pointDrafts={a:ManualBookmarkPanel.formatTime(a),b:ManualBookmarkPanel.formatTime(b)};
     this.loop=activate?{a,b}:null;this.loopFailureNotice=null;this.resetLoopSeek();
-    this.library=false;this.activeTab='repeat';this.render(this.last);
+    this.libraryDrafts.clear();this.library=false;this.activeTab='repeat';this.render(this.last);
     if(activate){try{this.deps.seek(a);}catch{this.stopLoopAfterSeekFailure();}}
     return true;
   }
@@ -446,11 +460,11 @@ export class ManualBookmarkPanel {
       if(target?.matches('[data-recording-enabled]')&&this.ownsVideo()){
         this.deps.setRecordingEnabled?.(target.checked);this.pointMessage('automatic',target.checked?'自動記録をONにしました。':'自動記録をOFFにしました。保存済みの位置は残ります。');
       }
-      if(target?.matches('[data-library-filter]')){this.libraryFilter=target.value;this.renderLibraryGroups();}
+      if(target?.matches('[data-library-filter]')){this.libraryFilter=target.value;this.libraryPage=0;this.libraryRowPages.clear();this.renderLibraryGroups();}
     };
     this.inputHandler=event=>{
       const target=event.target as Element|null;
-      if(target?.matches?.('[data-library-search]')){this.librarySearch=(target as HTMLInputElement).value;this.renderLibraryGroups();return;}
+      if(target?.matches?.('[data-library-search]')){this.librarySearch=(target as HTMLInputElement).value;this.libraryPage=0;this.libraryRowPages.clear();this.renderLibraryGroups();return;}
       if(target?.matches?.('input[data-point-field]')){
         const field=target as HTMLInputElement;
         if(field.dataset.pointField==='automatic'){this.automaticDraftDirty=true;this.automaticDraftRevision++;}
@@ -497,12 +511,13 @@ export class ManualBookmarkPanel {
   }
   private render(snapshot:ManualBookmarkPanelSnapshot):void{
     if(this.disposed)return;
+    if(this.library)this.captureLibraryDrafts();
     // A refresh of the same video must not silently discard an unsaved rename.
     // A changed canonical label (including our own completed rename) wins.
     const sameVideo=snapshot.videoId!==null&&
       snapshot.videoId===this.last.videoId;
     // A different bookmark's save must not destroy the unsent Add label.
-    if(!sameVideo){this.libraryGeneration++;this.libraryBusyRequest=null;this.library=false;this.libraryStatus='idle';this.expandedVideos=new Set(snapshot.videoId?[snapshot.videoId]:[]);this.pointGeneration++;this.pointBusyRequest=null;this.automaticDraftDirty=false;this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.pointDrafts={a:'',b:''};}
+    if(!sameVideo){this.libraryDrafts.clear();this.libraryGeneration++;this.libraryBusyRequest=null;this.library=false;this.libraryStatus='idle';this.expandedVideos=new Set(snapshot.videoId?[snapshot.videoId]:[]);this.pointGeneration++;this.pointBusyRequest=null;this.automaticDraftDirty=false;this.loop=null;this.loopFailureNotice=null;this.resetLoopSeek();this.pointDrafts={a:'',b:''};}
     this.clearPreviews();
     const previousTimes=new Map(this.last.bookmarks.map(item=>[item.id,{time:item.time,endTime:item.endTime}]));
     const timeDrafts=new Map<string,{start:string;end:string}>();
@@ -722,6 +737,17 @@ export class ManualBookmarkPanel {
     }
   }
 
+  private captureLibraryDrafts(container:HTMLElement=this.root):void {
+    for(const row of container.querySelectorAll<HTMLElement>('[data-library-draft-key]')){
+      const key=row.dataset.libraryDraftKey!;
+      if(row.dataset.libraryDraftCommitted==='true'){this.libraryDrafts.delete(key);continue;}
+      const fields=Array.from(row.querySelectorAll<HTMLInputElement>('input[data-library-start],input[data-library-end],input[data-library-name]'));
+      if(!fields.some(field=>field.value!==field.defaultValue)){this.libraryDrafts.delete(key);continue;}
+      const values:Record<string,string>={};
+      for(const field of fields){const name=field.hasAttribute('data-library-name')?'name':field.hasAttribute('data-library-end')?'end':'start';values[name]=field.value;}
+      this.libraryDrafts.set(key,{values,open:row.querySelector<HTMLDetailsElement>('.zw-bookmark-edit')?.open===true});
+    }
+  }
   private libraryButton(action:string,label:string,videoId?:string,id?:string):HTMLButtonElement {
     const button=this.root.ownerDocument.createElement('button');button.type='button';
     button.dataset.libraryAction=action;button.textContent=label;
@@ -733,7 +759,7 @@ export class ManualBookmarkPanel {
     try{
       const rows=await this.deps.loadLibrary?.()||[];
       if(this.disposed||generation!==this.libraryGeneration||videoId!==this.last.videoId||!this.library)return;
-      this.libraryRows=rows;this.libraryStatus='ready';
+      this.libraryRows=[...rows].sort((a,b)=>b.updatedAt-a.updatedAt);this.libraryStatus='ready';
     }catch{
       if(this.disposed||generation!==this.libraryGeneration||videoId!==this.last.videoId||!this.library)return;
       this.libraryStatus='error';
@@ -761,20 +787,23 @@ export class ManualBookmarkPanel {
   }
   private renderLibraryGroups():void {
     const groups=this.root.querySelector<HTMLElement>('[data-library-groups]');if(!groups||this.disposed)return;
-    this.clearPreviews();groups.replaceChildren();const doc=this.root.ownerDocument;
+    this.captureLibraryDrafts();this.clearPreviews();groups.replaceChildren();const doc=this.root.ownerDocument;
     const appearance=this.deps.libraryAppearance?.();
     const bounded=(value:number|undefined,fallback:number,min:number,max:number)=>Number.isFinite(value)?Math.min(max,Math.max(min,value!)):fallback;
     groups.style.setProperty('--zw-video-thumb-width',bounded(appearance?.thumbnailWidth,80,64,160)+'px');
     groups.style.setProperty('--zw-library-title-size',bounded(appearance?.titleFontSize,13,11,18)+'px');
     groups.style.setProperty('--zw-library-title-lines',String(Math.round(bounded(appearance?.titleLines,1,1,3))));
     const query=this.librarySearch.trim().toLocaleLowerCase(),filter=this.libraryFilter;
-    let count=0,videoCount=0;
-    for(const video of [...this.libraryRows].sort((a,b)=>b.updatedAt-a.updatedAt)){
+    const matching=this.libraryRows.map(video=>{
       const matches=video.title.toLocaleLowerCase().includes(query);
       const automatic=video.automaticTime!==null&&(filter==='all'||filter==='resume')&&(matches||'ここまで見た'.includes(query));
       const bookmarks=video.bookmarks.filter(item=>(filter==='all'||filter===(item.endTime===undefined?'point':'range'))&&
-        (matches||item.label.toLocaleLowerCase().includes(query))).sort((a,b)=>a.time-b.time);
-      if(!automatic&&!bookmarks.length)continue;
+        (matches||item.label.toLocaleLowerCase().includes(query)));
+      return {video,automatic,bookmarks};
+    }).filter(item=>item.automatic||item.bookmarks.length);
+    const videoCount=matching.length,count=matching.reduce((sum,item)=>sum+item.bookmarks.length+Number(item.automatic),0);
+    this.libraryPage=Math.min(this.libraryPage,Math.max(0,Math.ceil(videoCount/50)-1));
+    for(const {video,automatic,bookmarks} of matching.slice(this.libraryPage*50,(this.libraryPage+1)*50)){
       const group=doc.createElement('details');group.className='zw-library-group';group.dataset.libraryVideo=video.videoId;
       group.open=this.expandedVideos.has(video.videoId);
       const summary=doc.createElement('summary');
@@ -793,14 +822,41 @@ export class ManualBookmarkPanel {
       const meta=doc.createElement('small');meta.textContent=(video.videoId===this.last.videoId?'再生中 · ':'')+(bookmarks.length+Number(automatic))+'件';header.append(meta);
       const viewed=this.viewedDate(video.viewedAt);if(viewed)header.append(viewed);
       summary.append(header);
-      const list=doc.createElement('ul');group.append(summary,list);
-      if(automatic)list.append(this.libraryRow(video,null));
-      for(const item of bookmarks)list.append(this.libraryRow(video,item));
+      group.append(summary);
+      // Closed videos have no point rows, editors or scene-image hosts in the DOM.
+      const body=doc.createElement('div');let materialized=false;
+      const renderBody=()=>{
+        const ordered=[...(automatic?[null]:[]),...bookmarks.slice().sort((a,b)=>a.time-b.time)];
+        const page=Math.min(this.libraryRowPages.get(video.videoId)||0,Math.max(0,Math.ceil(ordered.length/50)-1));
+        this.libraryRowPages.set(video.videoId,page);this.captureLibraryDrafts(body);body.replaceChildren();
+        const list=doc.createElement('ul');body.append(list);
+        for(const item of ordered.slice(page*50,(page+1)*50))list.append(this.libraryRow(video,item));
+        if(ordered.length>50){
+          const pager=doc.createElement('div');pager.className='zw-library-pagination';
+          for(const [direction,label,offset] of [['prev','前へ',-1],['next','次へ',1]] as const){
+            const button=doc.createElement('button');button.type='button';button.textContent=label;button.dataset.libraryRowPage=direction;
+            button.disabled=offset<0?page===0:(page+1)*50>=ordered.length;
+            button.addEventListener('click',event=>{event.stopPropagation();this.libraryRowPages.set(video.videoId,page+offset);renderBody();this.refreshPreviews();});
+            pager.append(button);
+          }
+          const status=doc.createElement('span');status.textContent=(page*50+1)+'–'+Math.min((page+1)*50,ordered.length)+' / '+ordered.length+' 件';pager.append(status);body.append(pager);
+        }
+        materialized=true;
+      };
+      if(group.open){renderBody();group.append(body);}
       group.addEventListener('toggle',()=>{
         if(this.disposed||!group.isConnected)return;
-        if(group.open)this.expandedVideos.add(video.videoId);else this.expandedVideos.delete(video.videoId);
+        if(group.open){this.expandedVideos.add(video.videoId);if(!materialized)renderBody();group.append(body);}
+        else{this.expandedVideos.delete(video.videoId);this.captureLibraryDrafts(body);body.remove();}
         this.refreshPreviews();
-      });groups.append(group);count+=bookmarks.length+Number(automatic);videoCount++;
+      });groups.append(group);
+    }
+    if(videoCount>50){
+      const pager=doc.createElement('div');pager.className='zw-library-pagination';
+      const previous=this.libraryButton('page-prev','前の50動画'),next=this.libraryButton('page-next','次の50動画');
+      previous.disabled=this.libraryPage===0;next.disabled=(this.libraryPage+1)*50>=videoCount;
+      const label=doc.createElement('span');label.textContent=(this.libraryPage*50+1)+'–'+Math.min((this.libraryPage+1)*50,videoCount)+' / '+videoCount+' 動画';
+      pager.append(previous,label,next);groups.append(pager);
     }
     const status=this.root.querySelector<HTMLElement>('[data-library-status]');
     if(status)status.textContent=videoCount+' 動画 · '+count+' 件 · 更新が新しい順';
@@ -815,7 +871,7 @@ export class ManualBookmarkPanel {
   }
   private libraryRow(video:ManualBookmarkLibraryEntry,item:ManualBookmark|null):HTMLElement {
     const doc=this.root.ownerDocument,row=doc.createElement('li'),time=item?.time??video.automaticTime!;
-    row.dataset.libraryRow='1';
+    row.dataset.libraryRow='1';row.dataset.libraryDraftKey=JSON.stringify([video.videoId,item?.id??null]);
     const description=doc.createElement('span');description.textContent=(item?.label||'ここまで見た')+' · '+displayTime(time)+
       (item?.endTime===undefined?'':' – '+displayTime(item.endTime));
     const seek=this.libraryButton(item?'seek':'seek-auto',item?'ここから再生':'続きへ',video.videoId,item?.id);
@@ -833,15 +889,24 @@ export class ManualBookmarkPanel {
     const remove=this.libraryButton(item?'delete':'delete-auto','削除',video.videoId,item?.id);
     save.disabled=item?!this.deps.editLibraryBookmark:!this.deps.editLibraryAutomatic;
     remove.disabled=item?!this.deps.deleteLibraryBookmark:!this.deps.deleteLibraryAutomatic;
-    edit.append(save,remove);row.append(edit);return row;
+    edit.append(save,remove);row.append(edit);
+    const draft=this.libraryDrafts.get(row.dataset.libraryDraftKey!);
+    for(const field of row.querySelectorAll<HTMLInputElement>('input')){
+      field.defaultValue=field.value;
+      const name=field.hasAttribute('data-library-name')?'name':field.hasAttribute('data-library-end')?'end':'start';
+      if(draft?.values[name]!==undefined)field.value=draft.values[name]!;
+    }
+    if(draft)edit.open=draft.open;
+    return row;
   }
   private libraryBusyRequest:{generation:number}|null=null;
   private async libraryAction(button:HTMLButtonElement):Promise<void> {
     if(this.disposed||button.disabled)return;
     const action=button.dataset.libraryAction;
-    if(action==='back'){this.library=false;this.libraryGeneration++;this.libraryBusyRequest=null;this.render(this.last);return;}
-    if(action==='open'){this.libraryBusyRequest=null;this.library=true;this.expandedVideos.add(this.last.videoId||'');await this.loadLibrary();return;}
+    if(action==='back'){this.libraryDrafts.clear();this.library=false;this.libraryGeneration++;this.libraryBusyRequest=null;this.render(this.last);return;}
+    if(action==='open'){this.libraryBusyRequest=null;this.library=true;this.libraryPage=0;this.expandedVideos.add(this.last.videoId||'');await this.loadLibrary();return;}
     if(action==='retry'){await this.loadLibrary();return;}
+    if(action==='page-prev'||action==='page-next'){this.libraryPage+=action==='page-next'?1:-1;this.renderLibraryGroups();return;}
     if(!this.library||!this.ownsVideo())return;
     const video=this.libraryRows.find(v=>v.videoId===button.dataset.videoId);
     if(!video)return;
@@ -850,7 +915,7 @@ export class ManualBookmarkPanel {
     if(action==='seek'||action==='seek-auto'||action==='repeat'){
       if(time===null||time<0||time>=video.duration)return;
       if(action==='repeat'&&item?.endTime!==undefined&&video.videoId===this.last.videoId){this.setRepeatRange(time,item.endTime);return;}
-      this.library=false;this.libraryGeneration++;this.render(this.last);
+      this.libraryDrafts.clear();this.library=false;this.libraryGeneration++;this.render(this.last);
       this.deps.openLibraryPosition?.(video.videoId,time,action==='repeat'?item?.endTime:undefined);return;
     }
     if(this.libraryBusyRequest)return;
@@ -874,6 +939,7 @@ export class ManualBookmarkPanel {
       else if(action==='delete-auto')await this.deps.deleteLibraryAutomatic?.(video.videoId);
       else return;
       if(this.disposed||generation!==this.libraryGeneration||owner!==this.last.videoId||!this.library)return;
+      row.dataset.libraryDraftCommitted='true';this.libraryDrafts.delete(row.dataset.libraryDraftKey!);
       await this.loadLibrary();
     }catch{
       if(!this.disposed&&generation===this.libraryGeneration&&owner===this.last.videoId&&status?.isConnected)
@@ -886,7 +952,7 @@ export class ManualBookmarkPanel {
 
   dispose():void{
     if(this.disposed)return;
-    this.loop=null;this.deps.repeatState?.(false);this.deps.onRepeatRangeChange?.(null);this.clearPreviews();this.libraryGeneration++;
+    this.loop=null;this.deps.repeatState?.(false);this.deps.onRepeatRangeChange?.(null);this.clearPreviews();this.libraryDrafts.clear();this.libraryGeneration++;
     this.disposed=true;this.pointGeneration++;this.pointBusyRequest=null;this.unsubscribe();
     this.root.removeEventListener('keydown',this.keyHandler);
     this.root.removeEventListener('click',this.clickHandler);

@@ -8,6 +8,9 @@ const valid: JournalInput = {
 };
 const result: JournalEntry | null = NotificationJournal.record(valid);
 const history: Promise<JournalEntry[]> = NotificationJournal.list(100);
+if(result){const diagnostic:JournalEntry=NotificationJournal.toDiagnosticEntry(result);void diagnostic;}
+NotificationJournal.record({level:'success',category:'comment',message:'コメント投稿成功',details:{outcome:'accepted'},
+  activity:{kind:'comment-post',text:'自分のコメント',videoTitle:'動画',positionMs:1000}});
 const category: JournalCategory = result?.category ?? 'general';
 const level: JournalLevel = result?.level ?? 'info';
 const unsubscribe: () => void = NotificationJournal.subscribe(() => {});

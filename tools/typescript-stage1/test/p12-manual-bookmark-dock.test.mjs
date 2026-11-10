@@ -201,7 +201,7 @@ test('floating editor keeps native details and checkbox actions away from player
  }finally{h.close();}
 });
 
-test('information tab launches one anchored floating panel with no inline duplicate',async()=>{
+test('toolbar launches one anchored floating panel without a video information launcher',async()=>{
  const h=harness();await h.dock.activate('sm1',100);
  const host=h.doc.querySelector('.zenzaPlayerContainer');
  const trigger=h.doc.createElement('button');trigger.className='playbackPointsSwitch';host.append(trigger);
@@ -209,23 +209,20 @@ test('information tab launches one anchored floating panel with no inline duplic
  trigger.getBoundingClientRect=()=>({left:160,top:650,width:30,height:30,right:190,bottom:680});
  Object.defineProperty(host,'clientWidth',{value:900});Object.defineProperty(host,'clientHeight',{value:600});
  assert.equal(h.dock.element.hidden,true);
- h.doc.querySelector('.zw-points-launcher').click();
+ assert.equal(h.doc.querySelector('.zw-points-launcher'),null);h.dock.toggle(host,trigger);
  assert.equal(h.dock.element.hidden,false);assert.equal(h.dock.element.open,true);
  assert.equal(h.dock.element.parentElement,host);assert.equal(h.dock.element.style.left,'60px');
- assert.equal(h.dock.element.style.bottom,'58px');
+ assert.equal(h.dock.element.style.bottom,'-18px');
  h.dock.close();assert.equal(h.dock.element.hidden,true);h.close();
 });
 
-test('hidden toolbar falls back to visible information launcher and opens below near the top',()=>{
- const h=harness(),host=h.doc.querySelector('.zenzaPlayerContainer'),launcher=h.doc.querySelector('.zw-points-launcher');
- const hidden=h.doc.createElement('button');hidden.className='playbackPointsSwitch';hidden.hidden=true;host.append(hidden);
+test('toolbar-only dock can open without a trigger using safe fallback placement',()=>{
+ const h=harness(),host=h.doc.querySelector('.zenzaPlayerContainer');
  host.getBoundingClientRect=()=>({left:100,top:100,width:900,height:600,right:1000,bottom:700});
- launcher.getBoundingClientRect=()=>({left:160,top:120,width:200,height:30,right:360,bottom:150});
  Object.defineProperty(host,'clientWidth',{value:900});Object.defineProperty(host,'clientHeight',{value:600});
- launcher.click();assert.equal(h.dock.element.style.left,'60px');assert.equal(h.dock.element.style.top,'58px');
- assert.equal(h.dock.element.style.bottom,'auto');assert.equal(launcher.getAttribute('aria-expanded'),'true');h.close();
+ h.dock.toggle(host);assert.equal(h.dock.element.style.left,'12px');assert.equal(h.dock.element.style.top,'auto');
+ assert.equal(h.dock.element.style.bottom,'-18px');assert.equal(h.doc.querySelector('.zw-points-launcher'),null);h.close();
 });
-
 
 test('floating placement observes host and trigger resizing and releases observation on close',()=>{
  const observed=new Set();let resize;
@@ -238,4 +235,49 @@ test('floating placement observes host and trigger resizing and releases observa
  h.dock.toggle(host,trigger);assert(observed.has(host));assert(observed.has(trigger));assert(observed.has(h.dock.element));
  assert.equal(h.dock.element.style.left,'488px');width=600;resize();assert.equal(h.dock.element.style.left,'188px');
  h.dock.close();assert.equal(observed.size,0);h.close();
+});
+
+test('Task1002 panel bottom matches comment increase anchor without changing width',()=>{
+ const observed=new Set();let resize;
+ const h=harness(win=>{Object.defineProperty(win,'innerHeight',{value:900});win.ResizeObserver=class{constructor(fn){resize=fn;}observe(node){observed.add(node);}unobserve(node){observed.delete(node);}disconnect(){observed.clear();}};});
+ const host=h.doc.querySelector('.zenzaPlayerContainer'),trigger=h.doc.createElement('button'),anchor=h.doc.createElement('button');anchor.className='commentHistorySwitch';host.append(trigger,anchor);
+ host.getBoundingClientRect=()=>({left:0,top:100,width:1000,height:700,right:1000,bottom:800});
+ Object.defineProperty(host,'clientWidth',{value:1000});Object.defineProperty(host,'clientHeight',{value:700});
+ trigger.getBoundingClientRect=()=>({left:100,top:750,width:30,height:30,right:130,bottom:780});
+ let anchorTop=820;anchor.getBoundingClientRect=()=>({left:500,top:anchorTop,width:30,height:30,right:530,bottom:anchorTop+30});
+ h.dock.toggle(host,trigger);assert.equal(800-parseFloat(h.dock.element.style.bottom),810);assert(observed.has(anchor));
+ assert.equal(h.dock.element.style.width,'');assert.equal(h.dock.element.style.height,'');assert.equal(h.dock.element.style.top,'auto');
+ anchorTop=790;resize();assert.equal(800-parseFloat(h.dock.element.style.bottom),780);h.close();
+});
+test('Task1002 converts viewport bottom through a scaled bordered host',()=>{
+ const h=harness(win=>Object.defineProperty(win,'innerHeight',{value:900}));
+ const host=h.doc.querySelector('.zenzaPlayerContainer'),trigger=h.doc.createElement('button'),anchor=h.doc.createElement('button');anchor.className='commentHistorySwitch';host.append(trigger,anchor);
+ host.getBoundingClientRect=()=>({left:20,top:40,width:1206,height:906,right:1226,bottom:946});
+ for(const [name,value] of Object.entries({clientWidth:800,clientHeight:600,offsetWidth:804,offsetHeight:604,clientLeft:2,clientTop:2}))Object.defineProperty(host,name,{value});
+ trigger.getBoundingClientRect=()=>({left:200,top:800,width:45,height:45,right:245,bottom:845});
+ anchor.getBoundingClientRect=()=>({left:500,top:850,width:45,height:45,right:545,bottom:895});
+ h.dock.toggle(host,trigger);assert(Math.abs(40+(2+600-parseFloat(h.dock.element.style.bottom))*1.5-840)<.001);
+ assert(Math.abs(parseFloat(h.dock.element.style.left)-(200-23)/1.5)<.001);h.close();
+});
+test('Task1002 missing comment anchor uses 50px fallback and tiny viewport remains bounded',()=>{
+ const h=harness(win=>Object.defineProperty(win,'innerHeight',{value:50}));
+ const host=h.doc.querySelector('.zenzaPlayerContainer'),trigger=h.doc.createElement('button');host.append(trigger);
+ host.getBoundingClientRect=()=>({left:0,top:0,width:300,height:50,right:300,bottom:50});
+ Object.defineProperty(host,'clientWidth',{value:300});Object.defineProperty(host,'clientHeight',{value:50});
+ trigger.getBoundingClientRect=()=>({left:20,top:40,width:20,height:10,right:40,bottom:50});
+ h.dock.toggle(host,trigger);assert.equal(h.dock.element.style.bottom,'16px');assert(parseFloat(h.dock.element.style.maxHeight)<=18);h.close();
+});
+
+test('Task1002 hidden reference falls back and fullscreen/ancestor transitions reposition',()=>{
+ const h=harness(win=>Object.defineProperty(win,'innerHeight',{value:900}));
+ const host=h.doc.querySelector('.zenzaPlayerContainer'),trigger=h.doc.createElement('button'),anchor=h.doc.createElement('button');anchor.className='commentHistorySwitch';host.append(trigger,anchor);
+ host.getBoundingClientRect=()=>({left:0,top:100,width:1000,height:700,right:1000,bottom:800});
+ Object.defineProperty(host,'clientWidth',{value:1000});Object.defineProperty(host,'clientHeight',{value:700});
+ trigger.getBoundingClientRect=()=>({left:100,top:750,width:30,height:30,right:130,bottom:780});
+ let top=820,visible=false;anchor.getBoundingClientRect=()=>({left:500,top,width:visible?30:0,height:visible?30:0,right:530,bottom:top+30});
+ h.dock.toggle(host,trigger);assert.equal(h.dock.element.style.bottom,'-50px','hidden anchor uses viewport bottom50');
+ visible=true;h.doc.dispatchEvent(new h.dom.window.Event('fullscreenchange'));assert.equal(h.dock.element.style.bottom,'-10px');
+ top=780;h.doc.documentElement.dispatchEvent(new h.dom.window.Event('transitionend',{bubbles:true}));assert.equal(h.dock.element.style.bottom,'30px');
+ top=750;h.doc.dispatchEvent(new h.dom.window.Event('webkitfullscreenchange'));assert.equal(h.dock.element.style.bottom,'60px');
+ h.dock.close();top=700;h.doc.documentElement.dispatchEvent(new h.dom.window.Event('transitionend',{bubbles:true}));assert.equal(h.dock.element.style.bottom,'60px');h.close();
 });

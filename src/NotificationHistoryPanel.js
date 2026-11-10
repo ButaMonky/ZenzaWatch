@@ -16,7 +16,7 @@ const NotificationHistoryPanel = (() => {
         '.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
         // Scroll the complete history view on short players: shrinking only the list
         // lets the toolbar consume its entire height and makes stored entries unreadable.
-        '.zenzaNotificationDock .zenzaNotificationHistory{min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
+        '.zenzaNotificationDock .zenzaNotificationHistory{max-height:none;min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
         '.zenzaNotificationHistory{box-sizing:border-box;padding:12px;color:inherit;font-size:13px;overflow:auto;max-height:min(70vh,640px);}',
         '.zenzaNotificationHistory *{box-sizing:border-box;}',
         '.zenzaNotificationHistory .znh-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:9px;}',
@@ -443,6 +443,52 @@ const NotificationHistoryPanel = (() => {
         container.append(dock);
         let open = false;
         let disposed = false;
+        let layoutPending = false;
+        const updateLayout = () => {
+            layoutPending = false;
+            if (disposed || !open) {
+                return;
+            }
+            const host = container.getBoundingClientRect();
+            const scale = container.offsetHeight > 0 && host.height > 0 ? host.height / container.offsetHeight : 1;
+            const launcher = container.querySelector('.commentHistorySwitch') || document.querySelector('.commentHistorySwitch');
+            const anchor = launcher?.getBoundingClientRect();
+            const viewport = window.innerHeight;
+            const inset = anchor && anchor.width > 0 && anchor.height > 0 ?
+                Math.max(16, Math.min(viewport - 120, viewport - anchor.top + 10)) : 50;
+            const top = Math.max(16, host.top + 16);
+            const bottom = Math.max(top, viewport - inset);
+            // Absolute coordinates are in the host's unscaled padding box, not viewport pixels.
+            const origin = host.top + container.clientTop * scale;
+            dock.style.top = ((top - origin) / scale + container.scrollTop) + 'px';
+            dock.style.bottom = 'auto';
+            dock.style.height = ((bottom - top) / scale) + 'px';
+            dock.style.maxHeight = 'none';
+            dock.style.boxSizing = 'border-box';
+        };
+        const scheduleLayout = () => {
+            if (disposed || !open || layoutPending) {
+                return;
+            }
+            layoutPending = true;
+            void Promise.resolve().then(updateLayout);
+        };
+        const resizeObserver = typeof window.ResizeObserver === 'function' ? new window.ResizeObserver(scheduleLayout) : null;
+        resizeObserver?.observe(container);
+        resizeObserver?.observe(button);
+        const layoutObserver = typeof window.MutationObserver === 'function' ? new window.MutationObserver(scheduleLayout) : null;
+        const observeLayoutChain = (start) => {
+            for (let node = start; node; node = node.parentElement) {
+                layoutObserver?.observe(node, { attributes: true, attributeFilter: ['class', 'style'] });
+            }
+        };
+        observeLayoutChain(container);
+        observeLayoutChain(button);
+        window.addEventListener('resize', scheduleLayout);
+        document.addEventListener('scroll', scheduleLayout, true);
+        document.addEventListener('fullscreenchange', scheduleLayout);
+        document.addEventListener('webkitfullscreenchange', scheduleLayout);
+        container.addEventListener('transitionend', scheduleLayout);
         let animation = null;
         const cancelAnimation = () => {
             if (animation) {
@@ -564,6 +610,12 @@ const NotificationHistoryPanel = (() => {
                 open = true;
                 dock.inert = false;
                 dock.hidden = false;
+                updateLayout();
+                const commentButton = container.querySelector('.commentHistorySwitch') || document.querySelector('.commentHistorySwitch');
+                if (commentButton) {
+                    resizeObserver?.observe(commentButton);
+                    observeLayoutChain(commentButton);
+                }
                 button.setAttribute('aria-expanded', 'true');
                 refresh();
                 dock.querySelector('.znh-detail:not([hidden]) [data-history-back], .znh-toolbar:not([hidden]) input')?.focus();
@@ -576,6 +628,13 @@ const NotificationHistoryPanel = (() => {
                 }
                 close();
                 disposed = true;
+                resizeObserver?.disconnect();
+                layoutObserver?.disconnect();
+                window.removeEventListener('resize', scheduleLayout);
+                document.removeEventListener('scroll', scheduleLayout, true);
+                document.removeEventListener('fullscreenchange', scheduleLayout);
+                document.removeEventListener('webkitfullscreenchange', scheduleLayout);
+                container.removeEventListener('transitionend', scheduleLayout);
                 cancelAnimation();
                 window.removeEventListener('keydown', onKeyDown, true);
                 document.removeEventListener('pointerdown', onOutside, true);

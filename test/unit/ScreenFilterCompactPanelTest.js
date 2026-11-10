@@ -70,6 +70,37 @@ describe('Screen filter shared scroll and compact controls',()=>{
    ScreenFilter.setSplit(true);q('[data-action="reset"]').click();assert.equal(ScreenFilter.isSplit,false);
   }finally{ScreenFilter._reset();panel.close();panel.view.remove();global.requestAnimationFrame=raf;global.cancelAnimationFrame=caf;}
  });
+ it('aligns natural and tall content above the comment-increase button with a viewport cap',()=>{
+  const config={props:{},on(){}};ScreenFilter.initialize(config);
+  const anchor=document.createElement('button');anchor.className='commentHistorySwitch';document.body.append(anchor);
+  let top=window.innerHeight-90;anchor.getBoundingClientRect=()=>({top,left:100,width:32,height:32});
+  const panel=new ScreenFilterPanel({config});panel.open();
+  try{
+   assert.equal(panel.view.style.bottom,'100px');assert.equal(panel.view.style.top,'auto');
+   assert.equal(panel.view.style.maxHeight,(window.innerHeight-116)+'px');
+   panel.view.querySelector('[data-action="toggle-adjustments"]').click();assert.equal(panel.view.style.bottom,'100px');
+   top=window.innerHeight-140;window.dispatchEvent(new window.Event('resize'));assert.equal(panel.view.style.bottom,'150px');
+   anchor.remove();window.dispatchEvent(new window.Event('resize'));assert.equal(panel.view.style.bottom,'50px');
+  }finally{panel.close();panel.view.remove();anchor.remove();}
+ });
+ it('updates toolbar scale and fullscreen changes only while open and releases geometry observers',async()=>{
+  const oldResize=window.ResizeObserver,oldFullscreen=Object.getOwnPropertyDescriptor(document,'fullscreenElement');
+  const observed=[],instances=[];
+  window.ResizeObserver=class{constructor(callback){this.callback=callback;instances.push(this);}observe(node){observed.push(node);}disconnect(){this.closed=true;}};
+  const bar=document.createElement('div'),anchor=document.createElement('button');anchor.className='commentHistorySwitch';bar.append(anchor);document.body.append(bar);
+  let top=window.innerHeight-70;anchor.getBoundingClientRect=()=>({top,left:100,width:32,height:32});
+  const config={props:{},on(){}};ScreenFilter.initialize(config);const panel=new ScreenFilterPanel({config});panel.open();
+  try{
+   assert(observed.includes(anchor));assert(observed.includes(bar));
+   top=window.innerHeight-110;bar.style.transform='scale(1.5)';await new Promise(r=>setImmediate(r));assert.equal(panel.view.style.bottom,'120px');
+   Object.defineProperty(document,'fullscreenElement',{configurable:true,value:bar});document.dispatchEvent(new window.Event('fullscreenchange'));
+   assert.strictEqual(panel.view.parentNode,bar);assert.equal(panel.view.style.bottom,'120px');
+   panel.close();assert(instances.every(observer=>observer.closed));
+   top=window.innerHeight-160;window.dispatchEvent(new window.Event('resize'));assert.equal(panel.view.style.bottom,'120px');
+   panel.open();assert.equal(panel.view.style.bottom,'170px');
+  }finally{panel.close();panel.view.remove();bar.remove();window.ResizeObserver=oldResize;
+   if(oldFullscreen)Object.defineProperty(document,'fullscreenElement',oldFullscreen);else delete document.fullscreenElement;}
+ });
  it('exposes explicit normal/light quality without saving it into presets',()=>{
   const config={props:{},on(){}};ScreenFilter.initialize(config);const panel=new ScreenFilterPanel({config});panel.open();
   try{

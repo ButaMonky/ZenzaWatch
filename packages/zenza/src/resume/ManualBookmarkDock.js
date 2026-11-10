@@ -340,6 +340,10 @@ class ManualBookmarkDock {
     .zenzaManualBookmarkDock .zw-library-search{display:flex;gap:8px;flex-wrap:wrap}
     .zenzaManualBookmarkDock .zw-library-search input{flex:1;min-width:150px}
     .zenzaManualBookmarkDock select{background:#101722;color:#f4f7ff;border:1px solid #53627b;border-radius:5px;padding:6px;font:inherit}
+    .zenzaManualBookmarkDock .zw-library-sticky-header{position:sticky;top:0;z-index:3;background:#171e2a;padding:4px 0;border-bottom:1px solid #354056}
+    .zenzaManualBookmarkDock .zw-library-virtual-item{display:flow-root}
+    .zenzaManualBookmarkDock .zw-library-thumbnail-host{flex:none;width:var(--zw-video-thumb-width,80px);aspect-ratio:16/9;overflow:hidden;display:flex;align-items:center;justify-content:center;border-radius:4px;background:#253346;color:#b9c9d9;font-size:12px;line-height:1.4}
+    .zenzaManualBookmarkDock .zw-library-thumbnail-host .zw-library-thumbnail-image{display:block;width:100%;height:100%;object-fit:cover}
     .zenzaManualBookmarkDock .zw-library-group{margin-top:12px}
     .zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;min-width:0}
     .zenzaManualBookmarkDock .zw-library-group>summary::before{content:'▸';flex:none;color:#aebbd1}

@@ -21,6 +21,7 @@ import {AutoResumeClearCoordinator} from '../packages/zenza/src/resume/AutoResum
 import {IndexedDbManualBookmarkBackend, ManualBookmarkRepository} from '../packages/zenza/src/resume/ManualBookmarkStore';
 import {ManualBookmarkSession} from '../packages/zenza/src/resume/ManualBookmarkSession';
 import {ManualBookmarkDock} from '../packages/zenza/src/resume/ManualBookmarkDock';
+import {SavedVideoThumbnail} from '../packages/zenza/src/resume/SavedVideoThumbnail';
 import {VideoInfoPanel} from './VideoInfoPanel';
 import {PlayList, PlayListSession} from '../packages/zenza/src/Playlist/PlayList';
 import {Emitter} from './baselib';
@@ -57,6 +58,7 @@ import {ZenzaCommentHistoryCore} from '../packages/comment-history/src/generated
 //@require ManualBookmarkRepository
 //@require ManualBookmarkSession
 //@require ManualBookmarkDock
+//@require SavedVideoThumbnail
 //@require NotificationHistoryPanel
 class PlayerConfig {
     static getInstance(config) {
@@ -925,11 +927,20 @@ class NicoVideoPlayerDialogView extends Emitter {
             return false;
         this._manualBookmarkDockMounting = true;
         let bookmarkSession;
+        let videoThumbnails;
         try {
             const container = this._$playerContainer?.[0];
             const backend = new IndexedDbManualBookmarkBackend(window.indexedDB);
             const repository = new ManualBookmarkRepository(backend);
             bookmarkSession = new ManualBookmarkSession(repository);
+            videoThumbnails = SavedVideoThumbnail.create({
+                load: async (videoId) => {
+                    const info = await ThumbInfoLoader.load(videoId);
+                    return info.thumbnail;
+                }, maxConcurrent: 2, maxEntries: 128
+            });
+            const disposeSession = bookmarkSession.dispose.bind(bookmarkSession);
+            bookmarkSession.dispose = () => { videoThumbnails?.dispose(); disposeSession(); };
             this.manualBookmarkDock = ManualBookmarkDock.mount(container, bookmarkSession, {
                 currentVideoId: () => this._state.videoInfo?.watchId ?? null,
                 currentTime: () => Number(this._currentTimeGetter()) || 0,
@@ -947,6 +958,7 @@ class NicoVideoPlayerDialogView extends Emitter {
                 setRecordingEnabled: (enabled) => this._playerConfig.setValue('resume.recordEnabled', enabled),
                 createScenePreview: (host, videoId, time) => this.videoControlBar?.storyboard?.createSavedPreview?.(host, videoId, time) || (() => { }),
                 loadLibrary: () => this._loadSavedPointLibrary(repository),
+                createVideoThumbnail: (host, video) => videoThumbnails.attach(host, video.videoId, video.thumbnailUrl),
                 openLibraryPosition: (videoId, time, endTime) => {
                     void this._openSavedLibraryPosition(videoId, time, endTime);
                 },
@@ -1005,6 +1017,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         }
         catch {
             // A failed optional mount must not strand an IndexedDB subscription.
+            videoThumbnails?.dispose();
             try {
                 bookmarkSession?.dispose();
             }
@@ -1037,6 +1050,7 @@ class NicoVideoPlayerDialogView extends Emitter {
         if (entry) {
             entry.title = current.title || entry.title;
             entry.duration = current.duration || entry.duration;
+            entry.thumbnailUrl = current.thumbnail || current.betterThumbnail || entry.thumbnailUrl;
             entry.automaticTime = this._dialog?._videoInfo?.resumePoints?.[0]?.time ?? entry.automaticTime;
         }
         return [...byId.values()].filter(row => row.automaticTime !== null || row.bookmarks.length)

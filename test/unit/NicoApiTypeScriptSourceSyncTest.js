@@ -34,6 +34,8 @@ describe('Task457 TypeScript NicoNico API source-of-truth',()=>{
       // Unrelated paths still require the historical narrow allowlist.
       if (name === 'NotificationJournal.json' || name === 'NotificationHistoryPanel.json') {
         assert.strictEqual(data.runtime, 'src/' + name.replace(/\.json$/, '.js'));
+      } else if (name === 'SavedVideoThumbnail.json') {
+        assert.strictEqual(data.runtime, 'packages/zenza/src/resume/SavedVideoThumbnail.js');
       } else if (['NotificationJournalPolicy.json', 'NotificationJournalStore.json'].includes(name)) {
         assert.strictEqual(data.runtime, 'packages/zenza/src/notification/' + name.replace(/\.json$/, '.js'));
       } else {

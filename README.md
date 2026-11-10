@@ -17,15 +17,11 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 
 | スクリプト | インストール・用途 |
 |---|---|
-| **ZenzaWatch 本体** | **[インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)** · `2.7.376-task1000`。通常の動画再生は本体1本で利用できます。 |
-| MylistPocket | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js) · `0.5.88-task998`。サムネイル上の動画情報、とりマイ、プレイリスト追加など。任意。 |
-| ~~ZenzaAdvancedSettings~~ | **本体に統合済み・追加インストール不要。** 本体を更新後、導入済みの旧スクリプトを削除してください。保存済みの設定は引き継ぎます。[旧版の削除案内](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaAdvancedSettings.user.js) · `0.4.0-task993`。 |
-| ~~ZenzaHLS（HLSサポート）~~ | **本体に統合済み・追加インストール不要。** 先に本体を2.7.373以降へ更新してから、導入済みの旧HLSスクリプトを削除してください。[旧版の削除案内](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaHLS.user.js) · `0.1.0-task997`。 |
-
-旧スクリプトの削除はTampermonkeyなどの管理画面から行ってください。本体や保存データを削除する必要はありません。
-
-- [ZenzaBlogPartsButton をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js)
-  - 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 (version `0.0.5-task928`)
+| **ZenzaWatch 本体** | [**インストール**](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js) — 動画をZenzaWatchで再生します。 |
+| MylistPocket | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js) — サムネイルから動画情報の確認やマイリスト追加ができます。 |
+| ZenzaBlogPartsButton | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js) — 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 |
+| ~~ZenzaAdvancedSettings~~ | 本体に統合済み。インストール不要。 |
+| ~~ZenzaHLS（HLSサポート）~~ | 本体に統合済み。インストール不要。 |
 
 > [!IMPORTANT]
 > 現在の改良内容は `ZenzaWatch-dev.user.js` に反映されています。

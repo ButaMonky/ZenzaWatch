@@ -17,6 +17,7 @@ function fixture({onMount,onActivate,mountError=false}={}){
   deactivate:()=>calls.push(['deactivate']),dispose(){}};
  const context=vm.createContext({Emitter:class{},console,
   window:{indexedDB:{},crypto:{}},
+  SavedVideoThumbnail:{create:()=>({attach:()=>()=>{},dispose(){}})},
   VideoInfoPanel:class{on(){} update(info){calls.push(['update',info?.watchId]);}
    onLoadFail(){calls.push(['fail']);}},
   IndexedDbManualBookmarkBackend:class{},ManualBookmarkRepository:class{},

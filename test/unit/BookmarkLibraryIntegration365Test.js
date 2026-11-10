@@ -10,6 +10,13 @@ function fixture(history=[]){
  const view=Object.create(ctx.View.prototype);view._state={videoInfo:{watchId:'sm1',title:'Current',duration:100}};view._dialog={_requestId:7,_videoInfo:{resumePoints:[{time:12}]}};return view;
 }
 describe('Saved point library integration',()=>{
+ it('uses the current video thumbnail without changing saved timestamps or ordering',async()=>{
+  const view=fixture([{watchId:'sm1',title:'Old',duration:100,updatedAt:5,viewedAt:3,automaticTime:2}]);
+  view._state.videoInfo.thumbnail='https://example.com/current.jpg';
+  const list=await view._loadSavedPointLibrary({list:async()=>[]});
+  assert.equal(list[0].thumbnailUrl,'https://example.com/current.jpg');
+  assert.equal(list[0].updatedAt,5);assert.equal(list[0].viewedAt,3);
+ });
  it('retains actual viewing date and video thumbnail independently of edits',async()=>{
   const view=fixture([{watchId:'sm2',title:'Saved',duration:100,updatedAt:90,viewedAt:12,thumbnailUrl:'https://example.com/video.jpg',automaticTime:3}]);
   const list=await view._loadSavedPointLibrary({list:async()=>[]});

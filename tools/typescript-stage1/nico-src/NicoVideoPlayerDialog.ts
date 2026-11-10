@@ -40,6 +40,7 @@ declare const IndexedDbManualBookmarkBackend: Loose;
 declare const ManualBookmarkRepository: Loose;
 declare const ManualBookmarkSession: Loose;
 declare const ManualBookmarkDock: Loose;
+declare const SavedVideoThumbnail: Loose;
 type AutoResumeDeleted = Readonly<{videoId:string;local:'cleared';remote:'acknowledged'|'unavailable'|'failed'|'stale-video';fullyAcknowledged:boolean;retryRemote:boolean}>;
 type AutoResumeClearAgent={delete(videoId:string):Promise<AutoResumeDeleted>};
 declare const AutoResumeClearCoordinator:new(deps:{
@@ -1008,11 +1009,20 @@ class NicoVideoPlayerDialogView extends Emitter {
     if(this._manualBookmarkDockMounting)return false;
     this._manualBookmarkDockMounting=true;
     let bookmarkSession:{dispose():void}|undefined;
+    let videoThumbnails:{attach(host:HTMLElement,videoId:string,url?:string):()=>void;dispose():void}|undefined;
     try{
       const container=this._$playerContainer?.[0];
       const backend=new IndexedDbManualBookmarkBackend(window.indexedDB);
       const repository=new ManualBookmarkRepository(backend);
       bookmarkSession=new ManualBookmarkSession(repository);
+      videoThumbnails=SavedVideoThumbnail.create({
+        load:async(videoId:string)=>{
+          const info=await ThumbInfoLoader.load(videoId);
+          return info.thumbnail;
+        },maxConcurrent:2,maxEntries:128
+      });
+      const disposeSession=bookmarkSession!.dispose.bind(bookmarkSession);
+      bookmarkSession!.dispose=()=>{videoThumbnails?.dispose();disposeSession();};
       this.manualBookmarkDock=ManualBookmarkDock.mount(container,bookmarkSession,{
         currentVideoId:()=>this._state.videoInfo?.watchId??null,
         currentTime:()=>Number(this._currentTimeGetter())||0,
@@ -1031,6 +1041,8 @@ class NicoVideoPlayerDialogView extends Emitter {
         createScenePreview:(host:HTMLElement,videoId:string,time:number)=>
           this.videoControlBar?.storyboard?.createSavedPreview?.(host,videoId,time)||(()=>{}),
         loadLibrary:()=>this._loadSavedPointLibrary(repository),
+        createVideoThumbnail:(host:HTMLElement,video:Loose)=>
+          videoThumbnails!.attach(host,video.videoId,video.thumbnailUrl),
         openLibraryPosition:(videoId:string,time:number,endTime?:number)=>{
           void this._openSavedLibraryPosition(videoId,time,endTime);
         },
@@ -1082,6 +1094,7 @@ class NicoVideoPlayerDialogView extends Emitter {
       });
     }catch{
       // A failed optional mount must not strand an IndexedDB subscription.
+      videoThumbnails?.dispose();
       try{bookmarkSession?.dispose();}catch{}
       console.warn('Manual bookmark dock unavailable');
     }
@@ -1108,6 +1121,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     const current=this._state.videoInfo;
     const entry=byId.get(current?.watchId);
     if(entry){entry.title=current.title||entry.title;entry.duration=current.duration||entry.duration;
+      entry.thumbnailUrl=current.thumbnail||current.betterThumbnail||entry.thumbnailUrl;
       entry.automaticTime=this._dialog?._videoInfo?.resumePoints?.[0]?.time??entry.automaticTime;}
     return [...byId.values()].filter(row=>row.automaticTime!==null||row.bookmarks.length)
       .sort((a,b)=>b.updatedAt-a.updatedAt);

@@ -17,13 +17,11 @@ const meta = name => {
 const publicBase = 'https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/';
 const installBase = 'https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
 describe('Task928 private backup with public-only update destinations', () => {
-  it('keeps public installer links and documents each build version', () => {
+  it('keeps beginner installer links pointed at the public distribution', () => {
     const readme = read('README.md');
     for (const name of installNames) {
-      const version = meta(name).version;
       const url = installBase + name + '.user.js';
       assert(readme.includes('](' + url + ')'), 'README install link: ' + name);
-      assert(readme.includes('`' + version + '`'), 'README version: ' + name);
     }
     assert(readme.includes('自動更新先は、常に公開版'));
     assert(!readme.includes('ZenzaWatch-Back-up/raw/develop/dist/'));
@@ -36,12 +34,9 @@ describe('Task928 private backup with public-only update destinations', () => {
       assert(scripts.includes('`' + file + '`'), 'SCRIPTS role: ' + file);
     }
     for (const role of ['本体', '任意追加', '廃止案内', '凍結旧版']) assert(readme.includes(role));
-    assert(readme.includes('通常の動画再生は本体1本'));
     assert(!readme.includes('上の2つをインストール'));
-    assert(readme.includes('先に本体を2.7.373以降へ更新してから'));
-    assert(readme.includes('旧HLSスクリプトを削除'));
-    assert(readme.includes('](' + installBase + 'ZenzaHLS.user.js)'));
-    assert(readme.includes('`' + meta('ZenzaHLS').version + '`'));
+    assert(readme.includes('| ~~ZenzaAdvancedSettings~~ | 本体に統合済み。インストール不要。 |'));
+    assert(readme.includes('| ~~ZenzaHLS（HLSサポート）~~ | 本体に統合済み。インストール不要。 |'));
     assert(scripts.includes('ZenzaWatch_video.hls.*'));
     assert(scripts.includes('`zenza_hls` v5 / `ts-data`'));
   });
@@ -57,7 +52,7 @@ describe('Task928 private backup with public-only update destinations', () => {
   });
   it('records the reviewed build versions of the five installers', () => {
     const wanted = {
-      'ZenzaWatch-dev':'2.7.376-task1000',
+      'ZenzaWatch-dev':'2.7.377-task1001',
       'ZenzaHLS':'0.1.0-task997',
       'MylistPocket':'0.5.88-task998',
       'ZenzaAdvancedSettings':'0.4.0-task993',

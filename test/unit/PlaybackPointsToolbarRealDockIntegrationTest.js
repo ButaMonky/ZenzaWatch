@@ -81,6 +81,7 @@ function fixture({infoContent=true,firstBookmarkLoadFails=false}={}){
     ...domClasses,console:consoleStub,window:dom.window,document:doc,
     customElements:dom.window.customElements,CSS:dom.window.CSS,
     requestAnimationFrame:f=>setTimeout(f,0),cancelAnimationFrame:clearTimeout,
+    queueMicrotask:dom.window.queueMicrotask.bind(dom.window),
     IndexedDbManualBookmarkBackend:class{},
     ManualBookmarkRepository:class{},
     ManualBookmarkSession:FakeSession,
@@ -89,6 +90,9 @@ function fixture({infoContent=true,firstBookmarkLoadFails=false}={}){
     util:{dispatchCommand:(target,command,param)=>target.dispatchEvent(
       new dom.window.CustomEvent('command',{bubbles:true,detail:{command,param}}))}
   });
+  // The dialog owns a thumbnail controller even before the library is opened.
+  // Exercise the real production factory rather than hiding mount errors with a stub.
+  run(beginSection('packages/zenza/src/resume/SavedVideoThumbnail.js'),ctx);
   run(beginSection('packages/zenza/src/sceneSearch/TimelineGeometry.js'),ctx);
   run(beginSection('packages/zenza/src/sceneSearch/SceneResumeMarkerPresenter.js'),ctx);
   run(beginSection('packages/lib/src/Emitter.js'),ctx);

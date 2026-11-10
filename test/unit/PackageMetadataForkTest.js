@@ -32,7 +32,6 @@ describe('Task239 package metadata points to the maintained public fork', () => 
     const installPrefix = 'https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
     for (const script of [
       'ZenzaWatch-dev.user.js',
-      'ZenzaHLS.user.js',
       'MylistPocket.user.js',
       'ZenzaBlogPartsButton.user.js'
     ]) {

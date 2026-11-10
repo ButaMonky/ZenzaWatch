@@ -8,7 +8,7 @@ const distBase = base + '/raw/develop/dist/';
 const installBase = 'https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/';
 const manifest = JSON.parse(fs.readFileSync(path.join(REPO_ROOT,'dist-manifest.json'),'utf8'));
 const active = manifest.active.files.map(({file})=>path.basename(file));
-const installNames = ['ZenzaWatch-dev','ZenzaHLS','MylistPocket','ZenzaBlogPartsButton'];
+const installNames = ['ZenzaWatch-dev','MylistPocket','ZenzaBlogPartsButton'];
 
 function headers(root) {
   return active.map(name=>{

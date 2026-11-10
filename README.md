@@ -18,7 +18,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 #### 基本
 
 - **[ZenzaWatch 本体をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)**
-  - 最新版：`2.7.365-task989`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
+  - 最新版：`2.7.366-task990`。動画再生、コメント、プレイリスト、検索、画面フィルターなどを提供します。
   - Issue #3：全画面の動画終端付近でシークバーがクリックできない問題を修復(PR #38)。
   - Discussion #36：ショートカット操作時の対象ボタンだけの表示とアニメーションを暫定対応。通常クリックではON/OFF文字を追加せず、いいねの演出は最後まで表示します。引き続き検証・改善します。
 
@@ -154,3 +154,5 @@ Task376で一度実装された部分はTask378で撤去しました。**明示�
 ## NicoNico API research (Task969)
 
 The public [offline API lookup and source index](docs/research/README.md) documents 44 research entries. It is not part of the player runtime.
+
+開発時の機能の分け方は [モジュールの境界](docs/MODULE_BOUNDARIES.md) を参照してください。

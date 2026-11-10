@@ -1,10 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {loadSource,flush} from './nonvisual-audit-source-harness.mjs';
+function loadJournal(extra={}) {
+ const NotificationJournalPolicy=loadSource('nico-src/NotificationJournalPolicy.ts','NotificationJournalPolicy');
+ const NotificationJournalStore=loadSource('nico-src/NotificationJournalStore.ts','NotificationJournalStore');
+ return loadSource('nico-src/NotificationJournal.ts','NotificationJournal',{NotificationJournalPolicy,NotificationJournalStore,...extra});
+}
 function fixture(){
  const requests=[];let throwNext=false;
  const indexedDB={open(){if(throwNext){throwNext=false;throw Error('synthetic open failure');}const request={};requests.push(request);return request;}};
- const journal=loadSource('nico-src/NotificationJournal.ts','NotificationJournal',{indexedDB});
+ const journal=loadJournal({indexedDB});
  const database=()=>({closed:0,close(){this.closed++;},transaction(){return {objectStore(){return {getAll(){const request={result:[]};queueMicrotask(()=>request.onsuccess?.());return request;}};}};}});
  const succeed=(request=requests.at(-1),db=database())=>{request.result=db;request.onsuccess();return db;};
  return {journal,requests,succeed,database,throwNext(){throwNext=true;}};
@@ -33,7 +38,7 @@ test('AUD68 versionchange closes only its connection and permits reopen',async()
 
 const secrets=[24,32,43,47,48].map(length=>'S'.repeat(length));
 for(const token of secrets)test('AUD69 masks opaque URL path length '+token.length,async()=>{
- const journal=loadSource('nico-src/NotificationJournal.ts','NotificationJournal');
+ const journal=loadJournal();
  const row=journal.record({message:'failed https://example.invalid/access/'+token+'?token=hidden#fragment'});
  assert(!row.message.includes(token));assert(!row.message.includes('hidden'));assert(!JSON.stringify(await journal.list()).includes(token));
 });
@@ -41,23 +46,23 @@ for(const input of ['wss://example.invalid/path/'+secrets[0],'/access/'+secrets[
  'https://example.invalid/'+secrets[0].split('').map(c=>'%'+c.charCodeAt(0).toString(16)).join(''),
  '/access/'+secrets[0].slice(0,12)+'%2F'+secrets[0].slice(12),
  '{"access_token":"short-secret-value"}'])test('AUD69 masks encoded/relative/socket/JSON credentials '+input.slice(0,16),()=>{
- const journal=loadSource('nico-src/NotificationJournal.ts','NotificationJournal');const row=journal.record({message:input});
+ const journal=loadJournal();const row=journal.record({message:input});
  assert(!row.message.includes('short-secret-value'));assert(!row.message.includes(secrets[0]));assert(!row.message.includes('%53'));assert(!row.message.includes('%2F'));
 });
 test('AUD69 retains public watch IDs and ordinary diagnostic labels',async()=>{
- const journal=loadSource('nico-src/NotificationJournal.ts','NotificationJournal');
+ const journal=loadJournal();
  const row=journal.record({message:'HTTP400 https://www.nicovideo.jp/watch/sm9',videoId:'sm9',details:{errorCode:'BAD_REQUEST',statusCode:400}});
  assert(row.message.includes('/watch/sm9'));assert.equal(row.videoId,'sm9');assert.equal(row.details.errorCode,'BAD_REQUEST');await flush();
 });
 
 for(const separator of ['+','.','~','='])for(const absolute of [true,false])test('AUD69 masks URL path punctuation '+separator+' '+absolute,()=>{
  const token='S'.repeat(12)+separator+'S'.repeat(11);
- const journal=loadSource('nico-src/NotificationJournal.ts','NotificationJournal');
+ const journal=loadJournal();
  const row=journal.record({message:(absolute?'https://example.invalid':'')+'/access/'+token});
  assert(!row.message.includes(token));
 });
 test('AUD69 masks the whole JSON credential including escaped quotes',()=>{
- const journal=loadSource('nico-src/NotificationJournal.ts','NotificationJournal');
+ const journal=loadJournal();
  const row=journal.record({message:JSON.stringify({token:'synthetic"credential-tail'})});
  assert(!row.message.includes('credential-tail'));
 });

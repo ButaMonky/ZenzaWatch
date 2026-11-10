@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 17:56Z eafc33e5
+// build: 2026-11-10 18:05Z 2f456783
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -361,7 +361,7 @@ const RequestDiagnostics = (() => {
     var VER = '2.7.377-task1001';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 17:56Z eafc33e5';
+    var BUILD = '2026-11-10 18:05Z 2f456783';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -50320,7 +50320,7 @@ const SavedVideoThumbnail = (() => {
 						}
 				};
 				const scheduleFallback = () => { if (disposed || fallbackQueued)
-						return; fallbackQueued = true; queueMicrotask(checkFallback); };
+						return; fallbackQueued = true; void Promise.resolve().then(checkFallback); };
 				const attach = (host, videoId, initialUrl) => {
 						if (disposed)
 								return () => { };

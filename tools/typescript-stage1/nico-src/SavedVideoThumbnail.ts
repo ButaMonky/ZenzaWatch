@@ -106,7 +106,7 @@ const SavedVideoThumbnail = (() => {
         setVisible(lease,lease.host.isConnected&&rect.width>0&&rect.height>0&&rect.bottom>top&&rect.top<bottom&&rect.right>left&&rect.left<right);
       }
     };
-    const scheduleFallback=()=>{if(disposed||fallbackQueued)return;fallbackQueued=true;queueMicrotask(checkFallback);};
+    const scheduleFallback=()=>{if(disposed||fallbackQueued)return;fallbackQueued=true;void Promise.resolve().then(checkFallback);};
     const attach=(host:HTMLElement,videoId:string,initialUrl?:string):()=>void=>{
       if(disposed)return ()=>{};
       leases.get(host)?.release();

@@ -176,7 +176,7 @@ const SavedVideoThumbnail = (() => {
             }
         };
         const scheduleFallback = () => { if (disposed || fallbackQueued)
-            return; fallbackQueued = true; queueMicrotask(checkFallback); };
+            return; fallbackQueued = true; void Promise.resolve().then(checkFallback); };
         const attach = (host, videoId, initialUrl) => {
             if (disposed)
                 return () => { };

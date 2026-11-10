@@ -11,7 +11,7 @@ const PUBLISH_RAW_BASE = `${PUBLISH_REPO}/raw/develop/`;
 // ビルド識別子（Task 039）。
 // 当初は「@versionは手で上げない運用」だったが、2026-09-12にユーザーから
 // 「更新のたびにバージョン表記もちゃんと変更してほしい」との明確な指示を受け、
-// 以後は@version（_template.js/_setting.jsのUserScriptヘッダ）もタスクごとに
+// 以後は@version（_template.js/_settingsRetired.jsのUserScriptヘッダ）もタスクごとに
 // 手で上げる運用に変更した（Task 055）。このBUILD_IDは、@versionの更新漏れが
 // あっても「今どのビルドが入っているか」を必ず見分けられるようにするための
 // 保険として引き続き付与する。ビルド日時（UTC・分まで）と、可能ならgitの
@@ -44,7 +44,7 @@ var templates = [
   { src: '_uquery.js',   dist: 'dist/uQuery.user.js',                dev: false },
   { src: '_pocket.js',   dist: 'dist/MylistPocket.user.js',          dev: false },
   { src: '_shape.js',    dist: 'dist/MaskedWatch.user.js',           dev: false },
-  { src: '_setting.js',  dist: 'dist/ZenzaAdvancedSettings.user.js', dev: false },
+  { src: '_settingsRetired.js',  dist: 'dist/ZenzaAdvancedSettings.user.js', dev: false },
   { src: '_hls.js',      dist: 'dist/ZenzaHLS.user.js',              dev: false },
   { src: '_gamepad.js',  dist: 'dist/ZenzaGamePad.user.js',          dev: false },
   { src: '_blog.js',     dist: 'dist/ZenzaBlogPartsButton.user.js',  dev: false },
@@ -67,7 +67,7 @@ const DEV_HEADER = {
   '_yomi.js': {},
   '_vc.js': {},
   '_shape.js': {},
-  '_setting.js': {},
+  '_settingsRetired.js': {},
   '_hls.js': {},
   '_gamepad.js': {},
   '_blog.js': {},

@@ -10,7 +10,7 @@ const generate=require('@babel/generator').default;
 
 const root=path.resolve(__dirname,'../..');
 const names=['ModernAdvancedSettingsModel','ModernAdvancedSettingsUI',
-  'UiVisibilityRegistry','Config','_setting','ScreenshotFileName','RelatedMenuOrder',
+  'UiVisibilityRegistry','Config','_setting','AdvancedSettingsController','ScreenshotFileName','RelatedMenuOrder',
   'RelatedMenuSettings','NgCompositeRules','NgCompositeRuleEditor'];
 const read=rel=>fs.readFileSync(path.join(root,rel),'utf8');
 const digest=value=>crypto.createHash('sha256')
@@ -49,7 +49,7 @@ describe('Task453: TypeScript advanced-settings source integrity',()=>{
       assert(source.includes('//===END==='),name+' END');
     }
     const setting=read('src/_setting.js');
-    for(const directive of ['//@require Emitter','//@require Config',
+    for(const directive of [
       '//@require uq','//@require ModernAdvancedSettingsModel',
       '//@require ModernAdvancedSettingsUI']){
       assert(setting.includes(directive),'legacy setting directive '+directive);

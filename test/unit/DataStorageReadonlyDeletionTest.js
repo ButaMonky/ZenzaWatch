@@ -3,7 +3,7 @@ const assert=require('assert');
 const {createContext,beginSection,loadClass,run}=require('../helpers/extractSource');
 const artifacts=[['source','packages/lib/src/infra/DataStorage.js'],
   ['Zenza','dist/ZenzaWatch-dev.user.js'],['Pocket','dist/MylistPocket.user.js'],
-  ['Advanced','dist/ZenzaAdvancedSettings.user.js']];
+  ['Advanced','dist/ZenzaWatch-dev.user.js']];
 function subject(file,readonly,initial={CFG_volume:'0.9',CFG_mute:'true',CFG_debug:'true'},extra={}) {
   const disk={...initial}, operations=[];
   let denied=false;

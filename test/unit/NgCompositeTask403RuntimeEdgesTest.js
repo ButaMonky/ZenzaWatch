@@ -77,7 +77,7 @@ for(const kind of (process.env.TASK403_DIST==='1'?['source','dist']:['source']))
   const {beginSection,extract,createContext,run}=require('../helpers/extractSource');
   const c=createContext({NgCompositeRules:load(kind).NgCompositeRules});
   run((kind==='source'?beginSection('src/NgCompositeRuleEditor.js'):
-   extract('dist/ZenzaAdvancedSettings.user.js','NgCompositeRuleEditor'))+'\nglobalThis.Editor=NgCompositeRuleEditor;',c);
+   extract('dist/ZenzaWatch-dev.user.js','NgCompositeRuleEditor'))+'\nglobalThis.Editor=NgCompositeRuleEditor;',c);
   const saved=[rule()];assert.deepStrictEqual(JSON.parse(JSON.stringify(c.Editor.prepareDraft(saved))),saved);
   for(const children of [{},'unexpected',[],[node('text','EXTRA')]]){
    const r=rule();r.conditions.nodes[0].nodes=children;

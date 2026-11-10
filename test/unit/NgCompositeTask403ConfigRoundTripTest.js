@@ -9,7 +9,7 @@ const parser=require('@babel/parser'),traverse=require('@babel/traverse').defaul
 const KEY='ngComposite.rules';
 const variants=process.env.TASK403_ORIGINAL==='1'?['original']:
  process.env.TASK403_DIST==='1'?['source','watch-dist','advanced-dist']:['source'];
-const dist=k=>k==='watch-dist'?'dist/ZenzaWatch-dev.user.js':'dist/ZenzaAdvancedSettings.user.js';
+const dist=k=>k==='watch-dist'?'dist/ZenzaWatch-dev.user.js':'dist/ZenzaWatch-dev.user.js';
 const originals=new Map();
 function code(kind,relative,name,type='class'){
  if(kind!=='original')return extract(kind==='source'?relative:dist(kind),name,type);

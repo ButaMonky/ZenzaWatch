@@ -129,6 +129,6 @@ describe('Task974 large-budget distribution guards',function(){
   run('const PlaylistApiLoader='+extract('dist/ZenzaWatch-dev.user.js','PlaylistApiLoader','var')+';this.api=PlaylistApiLoader;',c);
   const list=await c.api.load({type:'series',id:1});assert.strictEqual(list.length,10000);assert.strictEqual(calls,20);assert.strictEqual(list.playlistLoadInfo.limited,true);
   assert(read('dist/ZenzaWatch-dev.user.js').includes("'playlist.maxItems': 3000"));
-  assert(read('dist/ZenzaAdvancedSettings.user.js').includes("presentation: 'dropdown'"));
+  assert(read('dist/ZenzaWatch-dev.user.js').includes("presentation: 'dropdown'"));
  });
 });

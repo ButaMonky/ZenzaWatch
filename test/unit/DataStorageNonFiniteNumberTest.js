@@ -6,7 +6,7 @@ const artifacts = [
   ['source', 'packages/lib/src/infra/DataStorage.js'],
   ['Zenza dist', 'dist/ZenzaWatch-dev.user.js'],
   ['Pocket dist', 'dist/MylistPocket.user.js'],
-  ['Advanced Settings dist', 'dist/ZenzaAdvancedSettings.user.js']
+  ['Advanced Settings dist', 'dist/ZenzaWatch-dev.user.js']
 ];
 
 function makeStorage(path, readonly = false) {

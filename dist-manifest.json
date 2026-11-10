@@ -8,7 +8,7 @@
       {"file": "dist/uQuery.user.js", "source": "src/_uquery.js"},
       {"file": "dist/MylistPocket.user.js", "source": "src/_pocket.js"},
       {"file": "dist/MaskedWatch.user.js", "source": "src/_shape.js"},
-      {"file": "dist/ZenzaAdvancedSettings.user.js", "source": "src/_setting.js"},
+      {"file": "dist/ZenzaAdvancedSettings.user.js", "source": "src/_settingsRetired.js"},
       {"file": "dist/ZenzaHLS.user.js", "source": "src/_hls.js"},
       {"file": "dist/ZenzaGamePad.user.js", "source": "src/_gamepad.js"},
       {"file": "dist/ZenzaBlogPartsButton.user.js", "source": "src/_blog.js"},

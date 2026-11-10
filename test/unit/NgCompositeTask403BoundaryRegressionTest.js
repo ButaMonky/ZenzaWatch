@@ -13,7 +13,7 @@ function engine(kind){
   run(text.split('//===BEGIN===')[1].split('//===END===')[0],c);
  }else if(kind==='source')run(beginSection('src/NgCompositeRules.js'),c);
  else{
-  const file=kind==='watch-dist'?'dist/ZenzaWatch-dev.user.js':'dist/ZenzaAdvancedSettings.user.js';
+  const file=kind==='watch-dist'?'dist/ZenzaWatch-dev.user.js':'dist/ZenzaWatch-dev.user.js';
   run('const NG_COLOR_HEX='+extract(file,'NG_COLOR_HEX','var')+';',c);
   run(extract(file,'NgCompositeRules'),c);
  }

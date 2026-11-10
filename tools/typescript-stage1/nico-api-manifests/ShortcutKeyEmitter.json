@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/ShortcutKeyEmitter.ts",
   "runtime": "packages/zenza/src/ShortcutKeyEmitter.js",
-  "sourceSha256": "a35526bef1adff3d1d6bd2c5f304ef2d540acee3fceca1f98a2ba9449fc2412f",
-  "runtimeSha256": "2a9b48ed67615f162aa5fb78e6e263270da5f3cde64844c7306c9d90a6e4081e"
+  "sourceSha256": "80c896de17806d5bfda05dfb716d4b0c8c1c996124412aff74880d50756c450f",
+  "runtimeSha256": "c326e8b765c339d588e5906ed297b39098f6c1aa23c349f715a0de8b0deca915"
 }

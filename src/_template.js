@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.368-task992
+// @version        2.7.369-task993
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // ==/UserScript==
@@ -103,6 +103,8 @@ import {MediaTimeline} from '../packages/lib/src/dom/MediaTimeline';
 import {cssUtil} from '../packages/lib/src/css/css';
 import {ClassList} from '../packages/lib/src/dom/ClassListWrapper';
 import {domUtil} from '../packages/lib/src/dom/domUtil';
+import {createAdvancedSettingsPanel} from './_setting';
+import {AdvancedSettingsController} from './AdvancedSettingsController';
 //@require AntiPrototypeJs
 AntiPrototypeJs();
 (() => {
@@ -325,6 +327,8 @@ ZenzaWatch.api.StoryboardInfoLoader = StoryboardInfoLoader;
 
 //@require initialize
 //@require initializeExternalSite
+//@require createAdvancedSettingsPanel
+//@require AdvancedSettingsController
 
 //@require CustomElements
 
@@ -336,6 +340,15 @@ ZenzaWatch.modules.TextLabel = TextLabel;
     }
 
     if (location.host === 'www.nicovideo.jp') {
+      const advancedSettings = new AdvancedSettingsController({
+        config: Config, createPanel: config => createAdvancedSettingsPanel(config, _), document,
+        onError: () => PopupMessage.alert('上級者設定を開けませんでした。もう一度お試しください。')
+      });
+      ZenzaWatch.api.openAdvancedSettings = () => advancedSettings.open();
+      ZenzaWatch.api.closeAdvancedSettings = () => advancedSettings.close();
+      uq.ready().then(() => {
+        if (/^\/my(?:\/|$)/.test(location.pathname)) { advancedSettings.mountEntry(); }
+      });
       return initialize();
     }
 

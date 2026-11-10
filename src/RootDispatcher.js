@@ -87,6 +87,9 @@ const RootDispatcher = (() => {
         static execCommand(command, params) {
             let result = { status: 'ok' };
             switch (command) {
+                case 'openAdvancedSettings':
+                    ZenzaWatch.api.openAdvancedSettings().catch(() => PopupMessage.alert('上級者設定を開けませんでした。'));
+                    return;
                 case 'notifyHtml':
                     PopupMessage.notify(params, true);
                     break;

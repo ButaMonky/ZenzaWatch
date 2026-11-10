@@ -94,6 +94,9 @@ const RootDispatcher = (() => {
     static execCommand(command?: Loose, params?: Loose) {
       let result = {status: 'ok'};
       switch(command) {
+        case 'openAdvancedSettings':
+          ZenzaWatch.api.openAdvancedSettings().catch(() => PopupMessage.alert('上級者設定を開けませんでした。'));
+          return;
         case 'notifyHtml':
           PopupMessage.notify(params, true);
           break;
@@ -292,6 +295,7 @@ const RootDispatcher = (() => {
 
     static onConfigUpdate(key?: Loose, value?: Loose) {
       switch (key) {
+
         case 'enableFilter':
           playerState.isEnableFilter = value;
           break;

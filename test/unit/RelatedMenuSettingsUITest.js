@@ -162,7 +162,7 @@ describe('Task314 related-menu custom links settings UI', function(){
     h.cleanup();
   });
   it('does not throw or duplicate malformed saved rows, keeping valid neighbors and stored data',()=>{
-    for (const file of ['src/RelatedMenuSettings.js', 'dist/ZenzaAdvancedSettings.user.js']) {
+    for (const file of ['src/RelatedMenuSettings.js', 'dist/ZenzaWatch-dev.user.js']) {
       for (const malformed of [null, 42, [], 'invalid']) {
         const h=boot([sample('one'),malformed],file);
         const errors=[];

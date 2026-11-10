@@ -11,7 +11,7 @@ for(const kind of (process.env.TASK403_DIST==='1'?['source','dist']:['source']))
   if(kind==='source'){
    run(beginSection('src/NgCompositeRules.js'),c);run(beginSection('src/NgCompositeRuleEditor.js'),c);
   }else{
-   const d='dist/ZenzaAdvancedSettings.user.js';
+   const d='dist/ZenzaWatch-dev.user.js';
    run('const NG_COLOR_HEX='+extract(d,'NG_COLOR_HEX','var')+';',c);
    run(extract(d,'NgCompositeRules'),c);run(extract(d,'NgCompositeRuleEditor'),c);
   }

@@ -150,15 +150,15 @@ describe('Task939 actual shortcut tooltips and volume controls',function(){
   });
   it('ships the shared source and actual volume tooltip in the private installers',()=>{
     const player=read('dist/ZenzaWatch-dev.user.js');
-    const settings=read('dist/ZenzaAdvancedSettings.user.js');
+    const settings=read('dist/ZenzaWatch-dev.user.js');
     const source=read('src/_template.js');
     const current=source.match(/^\/\/ @version\s+(\S+)/m)?.[1];
     // Task941: preserve Task939 feature checks for future release versions.
     assert.match(current||'',/^2\.7\.\d+-task\d+$/);
     assert(player.includes('// @version        '+current));
-    const settingVersion=read('tools/typescript-stage1/advanced-src/_setting.ts')
+    const settingVersion=read('src/_template.js')
       .match(/^\/\/ @version\s+(\S+)/m)?.[1];
-    assert.match(settingVersion||'',/^0\.3\.\d+-task\d+$/);
+    assert.match(settingVersion||'',/^2\.7\.\d+-task\d+$/);
     assert.strictEqual(settings.match(/^\/\/ @version\s+(\S+)/m)?.[1],settingVersion);
     for(const value of ['multiHints','KEY_VOL_UP','KEY_VOL_DOWN',
       'data-shortcut-hint="volume"','class="tooltip">再生・一時停止',

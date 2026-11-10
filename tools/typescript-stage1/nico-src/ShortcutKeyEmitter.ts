@@ -120,7 +120,7 @@ class ShortcutKeyEmitter {
     }
 
     const isInputEvent = (e: Loose) => {
-      if (e.defaultPrevented || e.isComposing) { return true; }
+      if (e.defaultPrevented || e.isComposing || document.querySelector?.('.zenzaAdvancedSettingPanel.show')) { return true; }
       const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
       const nodes = path.length ? path : [e.target];
       return nodes.some((node: Loose) => {

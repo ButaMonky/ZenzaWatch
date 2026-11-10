@@ -5,7 +5,7 @@ const {createContext,beginSection,loadClass,run,read}=require('../helpers/extrac
 const marker='S411_PRIVATE_FIXTURE_CONTENT';
 const artifacts=[['source','packages/lib/src/infra/DataStorage.js'],
   ['Zenza','dist/ZenzaWatch-dev.user.js'],['Pocket','dist/MylistPocket.user.js'],
-  ['Advanced','dist/ZenzaAdvancedSettings.user.js']];
+  ['Advanced','dist/ZenzaWatch-dev.user.js']];
 function subject(file,raw,options={}) {
   const disk={CFG_value:raw,CFG_flag:'true'},logs=[];
   const logger={log:(...args)=>logs.push({level:'log',args}),

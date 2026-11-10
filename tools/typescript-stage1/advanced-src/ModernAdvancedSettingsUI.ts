@@ -63,6 +63,7 @@ export interface AdvancedSettingsUiDependencies {
   screenshotFileName?: {PRESETS?: Array<{value: string; name: string}>; TOKENS?: string[]; format(params: object): string} | null;
   playlist?: UiPlaylistPort | null;
   reload?: (() => void) | null;
+  sceneCache?: {clear(): Promise<unknown>; stats(): Promise<{bytes: number; entries: number}>} | null;
 }
 type UiDescriptor = NonNullable<ReturnType<ModernAdvancedSettingsModel['descriptor']>> & {
   icon?: string; sharedWith?: string;
@@ -190,6 +191,7 @@ declare panel: HTMLElement;
   declare screenshotFileName: {PRESETS?: Array<{value: string; name: string}>; TOKENS?: string[]; format(params: object): string} | null;
   declare playlist: UiPlaylistPort | null;
   declare reload: () => void;
+  declare sceneCache: AdvancedSettingsUiDependencies['sceneCache'];
   declare doc: Document;
   declare win: Window & typeof globalThis;
   declare storage: Storage;
@@ -493,7 +495,7 @@ declare panel: HTMLElement;
     ].join('\n');
     doc.head.append(style);
   }
-  constructor({panel,legacyRoot,model,storage,onClose,confirm,formatKeyCombo,encodeKeyCombo,relatedEditor=null,relatedOrder=null,relatedActions=null,screenshotFileName=null,playlist=null,reload=null}: AdvancedSettingsUiDependencies) {
+  constructor({panel,legacyRoot,model,storage,onClose,confirm,formatKeyCombo,encodeKeyCombo,relatedEditor=null,relatedOrder=null,relatedActions=null,screenshotFileName=null,playlist=null,reload=null,sceneCache=null}: AdvancedSettingsUiDependencies) {
     if(!panel || !model) { throw new TypeError('Panel and model are required'); }
     this.panel=panel;
     this.legacyRoot=legacyRoot;
@@ -509,6 +511,7 @@ declare panel: HTMLElement;
     this._expandedRelatedOptions=new Set();
     this._touchOrder=null;
     this.playlist=playlist;
+    this.sceneCache=sceneCache;
     this.reload=reload || (()=>this.win.location.reload());
     if (relatedEditor) {
       relatedEditor.getDraftShortcutValue=id=>this.model.get(id);
@@ -1897,6 +1900,33 @@ declare panel: HTMLElement;
       sample.style.backgroundColor='rgba('+r+', '+g+', '+b+', '+(1-transparency/100)+')';
     }
   }
+  _createSceneCacheActions(): HTMLElement {
+    const box=this.doc.createElement('section');box.className='zw-modern-card';
+    const usage=this.doc.createElement('p');usage.dataset.zwSceneCacheUsage='';
+    const status=this.doc.createElement('p');status.setAttribute('role','status');
+    const button=this.doc.createElement('button');button.type='button';
+    button.className='zw-modern-plainbtn';button.dataset.zwClearSceneCache='';
+    button.textContent='保存済みのシーン画像を削除';
+    const note=this.doc.createElement('p');
+    note.textContent='画像だけをすぐに削除します。しおり・再生履歴・保存位置は残ります。表示中の画像は表示を続け、必要になった画像は再取得されます。';
+    const cache=this.sceneCache;
+    const refresh=async()=>{
+      if(!cache){usage.textContent='画像キャッシュを利用できません。';return;}
+      try{
+        const stats=await cache.stats();
+        usage.textContent='保存容量：'+(stats.bytes/1048576).toFixed(1)+' MB（'+stats.entries+'件）';
+      }catch(_error){usage.textContent='保存容量を取得できませんでした。';}
+    };
+    button.disabled=!cache;
+    button.addEventListener('click',async()=>{
+      if(!cache || button.disabled)return;
+      button.disabled=true;status.textContent='画像を削除しています…';
+      try{await cache.clear();status.textContent='保存済みのシーン画像を削除しました。';await refresh();}
+      catch(_error){status.textContent='画像を削除できませんでした。もう一度お試しください。';}
+      finally{button.disabled=false;}
+    });
+    box.append(usage,button,note,status);void refresh();return box;
+  }
   _renderCards() {
     this._clearTouchOrder();
     this._ngCompositeEditor?.dispose();
@@ -1966,6 +1996,8 @@ declare panel: HTMLElement;
       rows.push(this._createCard(d));
     }
     if(sceneSection){rows.splice(0,rows.length,this._createSceneSettingsPanel(rows));}
+    if(!this.searchTerm && this.selected.category==='画面・映像' &&
+      this.selected.subcategory==='シーンサムネイルのキャッシュ'){rows.push(this._createSceneCacheActions());}
     if(!this.searchTerm && this.selected.category==='プレイリスト・検索' &&
       this.selected.subcategory==='検索') {
       const guide=this.doc.createElement('section');

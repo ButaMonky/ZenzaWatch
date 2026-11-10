@@ -25,6 +25,7 @@ export interface SavedPointProjection {
 }
 export interface SavedPointsPage {items:SavedPointProjection[];nextKey:string|null}
 export interface StoreApi {
+  storyboardCache?(data: unknown): Promise<unknown>;
   listSavedPoints?(data:{afterKey?:string|null;maxRecords?:number}):Promise<SavedPointsPage>;
   close(params?: unknown): Promise<unknown>;
   put(record: unknown, transfer?: Transferable[]): Promise<unknown>;
@@ -408,6 +409,145 @@ const IndexedDbStorage = (() => {
           }catch(error){fail(error);}
         });
       },
+      // The scan, legacy sizing, touch/merge, and eviction share ONE readwrite
+      // transaction, serialized by IndexedDB across workers, iframes and tabs.
+      async storyboardCache({name, storeName, data = {}}: Loose) {
+        if (name !== 'storyboard' || storeName !== 'cache') {
+          throw new TypeError('Storyboard cache operation restricted to image cache');
+        }
+        const {op} = data;
+        if (!['get', 'put', 'configure', 'clear', 'stats'].includes(op)) {
+          throw new TypeError('Invalid storyboard cache operation');
+        }
+        const metaKey = '__zenza_storyboard_policy__', day = 86400000;
+        return this._write({name, storeName}, (store: Loose, result: (value: unknown) => void, fail: Fail) => {
+          const request = store.get(metaKey);
+          request.onerror = fail;
+          request.onsuccess = () => {
+            try {
+              const now = Date.now();
+              const policy = {...(request.result || {watchId: metaKey, maxBytes: 128 * 1024 * 1024, maxAgeMs: 7 * day, clearedAt: 0})};
+              if (op === 'configure') {
+                if (Number.isFinite(data.maxBytes)) { policy.maxBytes = Math.max(0, Math.min(512 * 1024 * 1024, Math.floor(data.maxBytes))); }
+                if (Number.isFinite(data.maxAgeMs)) { policy.maxAgeMs = Math.max(day, Math.min(30 * day, Math.floor(data.maxAgeMs))); }
+              }
+              if (op === 'clear' || (op === 'configure' && policy.maxBytes === 0)) {
+                policy.clearedAt = Math.max(now, (policy.clearedAt || 0) + 1);
+                store.clear().onerror = fail;
+              }
+              store.put(policy).onerror = fail;
+              let returned: Loose | null = null;
+              const size = (row: Loose) => {
+                // Written only by this bounded cache operation; replacements omit it.
+                if (Number.isSafeInteger(row.byteSize) && row.byteSize >= 0) { return row.byteSize; }
+                let bytes = 0;
+                const json = JSON.stringify(row.sbInfo, (_key, value) => {
+                  if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+                    bytes += value.byteLength; return null;
+                  }
+                  if (typeof Blob !== 'undefined' && value instanceof Blob) { bytes += value.size; return null; }
+                  return value;
+                });
+                return bytes + (json || '').length * 2 + String(row.watchId).length * 2;
+              };
+              const scan = () => {
+                const rows: Array<{key: IDBValidKey; bytes: number; at: number}> = [];
+                let bytes = 0;
+                const cursorRequest = store.openCursor();
+                cursorRequest.onerror = fail;
+                cursorRequest.onsuccess = () => {
+                  try {
+                    const cursor = cursorRequest.result;
+                    if (cursor) {
+                      if (cursor.primaryKey !== metaKey) {
+                        const row = cursor.value, at = Number(row.updatedAt) || 0;
+                        const length = size(row);
+                        if (!policy.maxBytes || at <= now - policy.maxAgeMs || !Number.isSafeInteger(length) || length > policy.maxBytes) {
+                          cursor.delete().onerror = fail;
+                          if (returned && returned.watchId === cursor.primaryKey) { returned = null; }
+                        } else {
+                          bytes += length;
+                          rows.push({key: cursor.primaryKey, bytes: length, at});
+                          if (row.byteSize !== length) { cursor.update({...row, byteSize: length}).onerror = fail; }
+                        }
+                      }
+                      cursor.continue(); return;
+                    }
+                    rows.sort((a, b) => a.at - b.at || String(a.key).localeCompare(String(b.key)));
+                    let removed = 0;
+                    for (const row of rows) {
+                      if (bytes <= policy.maxBytes) { break; }
+                      store.delete(row.key).onerror = fail;
+                      bytes -= row.bytes; removed++;
+                      if (returned && returned.watchId === row.key) { returned = null; }
+                    }
+                    // A partial put must not clone every previously cached sheet back to the page.
+                    if (op === 'put' && returned) { returned = {...returned, sbInfo: data.record.sbInfo}; }
+                    result(op === 'get' || op === 'put' ? returned :
+                      {bytes, entries: rows.length - removed, maxBytes: policy.maxBytes, maxAgeMs: policy.maxAgeMs, clearedAt: policy.clearedAt});
+                  } catch (error) { fail(error); }
+                };
+              };
+              const key = op === 'put' ? data.record?.watchId : data.key;
+              if (!['get', 'put'].includes(op)) { scan(); return; }
+              if (typeof key !== 'string' || !key || key === metaKey) { throw new TypeError('Invalid storyboard cache key'); }
+              if (!policy.maxBytes || (op === 'put' && Number.isFinite(data.expectedGeneration) && data.expectedGeneration <= policy.clearedAt)) {
+                if (op === 'get') { result(null); } else { scan(); }
+                return;
+              }
+              const read = store.get(key);
+              read.onerror = fail;
+              read.onsuccess = () => {
+                try {
+                  const previous = read.result;
+                  const valid = previous && Number(previous.updatedAt) > now - policy.maxAgeMs;
+                  if (op === 'get') {
+                    // Reads never add image bytes. Enforce expiry for this key only;
+                    // put/configure/stats perform global migration and eviction.
+                    if (valid) { returned = {...previous, updatedAt: now}; store.put(returned).onerror = fail; }
+                    else if (previous) { store.delete(key).onerror = fail; }
+                    if (op === 'get' && returned && Number.isFinite(data.previewTime)) {
+                      const info = returned.sbInfo, board = info?.storyboard;
+                      if (board && Array.isArray(board.images)) {
+                        const index = board.interval > 0 ? Math.floor(Math.max(0, data.previewTime) * 1000 / board.interval) :
+                          Math.floor(Math.floor(Math.max(0, data.previewTime)) * board.count / Math.max(1, info.duration));
+                        const page = Math.floor(Math.min(Math.max(0, board.count - 1), index) / (board.rows * board.columns));
+                        returned = {...returned, sbInfo: {...info, storyboard: {...board,
+                          images: board.images.map((image: Loose, i: number) => {
+                            const {buffer, ...meta} = image;
+                            return i === page ? image : meta;
+                          })}}};
+                      }
+                    }
+                    result(returned); return;
+                  } else {
+                    let sbInfo = data.record.sbInfo;
+                    if (!sbInfo || sbInfo.status !== 'ok') { scan(); return; }
+                    const before = valid && previous.sbInfo;
+                    const signature = (info: Loose) => {
+                      const board = info?.storyboard;
+                      return board && Array.isArray(board.images) ? JSON.stringify([
+                        info.format, info.duration, board.thumbnail, board.rows, board.columns,
+                        board.interval, board.count, board.version,
+                        board.images.map((image: Loose) => [image.url, image.timestamp])
+                      ]) : null;
+                    };
+                    const identity = signature(sbInfo);
+                    if (identity && before && signature(before) === identity) {
+                      sbInfo = {...sbInfo, storyboard: {...sbInfo.storyboard,
+                        images: sbInfo.storyboard.images.map((image: Loose, i: number) =>
+                          image.buffer?.byteLength ? image : {...image, buffer: before.storyboard.images[i].buffer})}};
+                    }
+                    returned = {watchId: key, updatedAt: now, sbInfo};
+                    store.put(returned).onerror = fail;
+                  }
+                  scan();
+                } catch (error) { fail(error); }
+              };
+            } catch (error) { fail(error); }
+          };
+        });
+      },
       async updateTime({name, storeName, data: {key, index}}: Loose) {
         return this.update({name, storeName, data: {key, index, onlyExisting: true, patch: {updatedAt: Date.now()}}});
       },
@@ -526,6 +666,7 @@ const IndexedDbStorage = (() => {
           update: (data: unknown) => post('update', data, storeName),
           scrubWatchVideoInfo: (data: {afterKey?: string | null; maxRecords?: number}) =>
             post('scrubWatchVideoInfo', data, storeName) as Promise<{scanned: number; changed: number; nextKey: string | null}>,
+          storyboardCache: (data: unknown) => post('storyboardCache', data, storeName),
           listSavedPoints: (data:{afterKey?:string|null;maxRecords?:number}) =>
             post('listSavedPoints',data,storeName) as Promise<SavedPointsPage>,
           get: ({key, index, timeout}: StoreQuery) => post('get', {key, index, timeout}, storeName),

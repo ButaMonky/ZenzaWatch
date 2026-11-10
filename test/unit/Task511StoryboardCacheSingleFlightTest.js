@@ -16,6 +16,12 @@ function fixture({host='www.nicovideo.jp',delay=false,failFirst=false,source=SOU
   const calls={opens:0,bridges:0,gc:[],gets:[],writes:[],deletes:[],warn:[]};
   const pending=[];
   const store={
+    async storyboardCache(data) {
+      if(data.op==='stats')return this.gc(7*24*60*60*1000);
+      if(data.op==='get')return this.updateTime({key:data.key});
+      if(data.op==='put')return this.put(data.record);
+      throw Error('unexpected cache operation');
+    },
     async updateTime({key}) {calls.gets.push(key);return {sbInfo:good()};},
     async put(record) {calls.writes.push(record);return record;},
     async delete({key}) {calls.deletes.push(key);return undefined;},
@@ -94,7 +100,7 @@ describe('Task511 storyboard IndexedDB cache single-flight / '+variant,()=>{
   });
   it('retries after the first connection open rejects instead of poisoning future calls',async()=>{
     const h=f({failFirst:true});
-    await assert.rejects(h.db.get('sm9'),/synthetic db temporarily unavailable/);
+    assert.strictEqual(await h.db.get('sm9'),null,'storage unavailable is a cache miss, not a playback failure');
     assert.equal(h.calls.opens,1);
     const result=await h.db.get('sm9');
     assert.equal(result.status,'ok');

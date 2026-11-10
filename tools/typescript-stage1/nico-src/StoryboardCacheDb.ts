@@ -3,12 +3,13 @@
  * IndexedDB cache of storyboard (seek thumbnail) info keyed by watch/cache id.
  * On www.nicovideo.jp it opens IndexedDB directly; elsewhere it goes through the
  * NicoVideoApi IndexedDB bridge injected with `StoryboardCacheDb.api(...)`.
- * Only status:'ok' payloads are stored; entries older than 7 days are collected
- * once when the facade is first opened.
+ * Only status:'ok' payloads are stored. Worker transactions enforce a shared
+ * byte budget and idle retention, including legacy records and partial sheets.
  */
 
 /** IndexedDbStorage store as used here (packages/lib/src/infra/IndexedDbStorage.js). */
 export interface StoryboardIdbStore {
+  storyboardCache(data: unknown): Promise<unknown>;
   put(record: StoryboardCacheRecord): Promise<unknown>;
   /** Touches updatedAt and resolves the stored record (or a falsy value). */
   updateTime(query: {key: string}): Promise<unknown>;
@@ -44,9 +45,11 @@ export interface StoryboardCacheRecord {
   sbInfo: StoryboardInfoLike;
 }
 
+export interface StoryboardCachePolicy {maxBytes?: number; maxAgeMs?: number}
+export interface StoryboardCacheStats {bytes: number; entries: number; maxBytes: number; maxAgeMs: number; clearedAt: number}
 export interface StoryboardCacheFacade {
   /** Stores only `status === 'ok'` objects; anything else is rejected with a warning (resolves undefined). */
-  put(watchId: string, sbInfo?: unknown): Promise<StoryboardCacheRecord | undefined>;
+  put(watchId: string, sbInfo?: unknown, expectedGeneration?: number): Promise<StoryboardCacheRecord | undefined>;
   /** Resolves the cached sbInfo or null on a miss. */
   get(watchId: string): Promise<unknown>;
   delete(watchId: string): Promise<unknown>;
@@ -55,9 +58,14 @@ export interface StoryboardCacheFacade {
 }
 
 export interface StoryboardCacheDbClient {
+  configure(policy: StoryboardCachePolicy): Promise<unknown>;
+  clear(): Promise<unknown>;
+  stats(): Promise<StoryboardCacheStats>;
+  captureGeneration(): number;
+  getPreview(watchId: string, time: number): Promise<unknown>;
   initWorker(): Promise<StoryboardDb>;
   open(): Promise<StoryboardCacheFacade>;
-  put(watchId: string, sbInfo?: unknown): Promise<StoryboardCacheRecord | undefined>;
+  put(watchId: string, sbInfo?: unknown, expectedGeneration?: number): Promise<StoryboardCacheRecord | undefined>;
   get(watchId: string): Promise<unknown>;
   delete(watchId: string): Promise<unknown>;
   close(): Promise<unknown>;
@@ -84,6 +92,24 @@ const StoryboardCacheDb: StoryboardCacheDbClient = (() => {
 
   let db: StoryboardDb | undefined, instance: StoryboardCacheFacade | undefined, NicoVideoApi: StoryboardDbBridge | undefined;
   let dbOpening: Promise<StoryboardDb> | null | undefined, instanceOpening: Promise<StoryboardCacheFacade> | null | undefined;
+  let generationFloor = 0;
+  const captureGeneration = (): number => Math.max(Date.now(), generationFloor);
+  const operation = async (data: unknown): Promise<unknown> => {
+    const connection = await initWorker();
+    return (connection.cache as StoryboardIdbStore).storyboardCache(data);
+  };
+  const configure = (policy: StoryboardCachePolicy): Promise<unknown> => operation({op: 'configure', ...policy});
+  const clear = async (): Promise<unknown> => {
+    generationFloor = Math.max(Date.now(), generationFloor) + 1;
+    const result = await operation({op: 'clear'}) as StoryboardCacheStats;
+    generationFloor = Math.max(generationFloor, result.clearedAt + 1);
+    return result;
+  };
+  const stats = (): Promise<StoryboardCacheStats> => operation({op: 'stats'}) as Promise<StoryboardCacheStats>;
+  const getPreview = async (watchId: string, time: number): Promise<unknown> => {
+    try { const row = await operation({op: 'get', key: watchId, previewTime: time}) as StoryboardCacheRecord | null; return row?.sbInfo || null; }
+    catch (_) { return null; }
+  };
   const initWorker = async (): Promise<StoryboardDb> => {
     if (db) { return db; }
     if (dbOpening) { return dbOpening; }
@@ -108,7 +134,7 @@ const StoryboardCacheDb: StoryboardCacheDbClient = (() => {
       await initWorker();
       const cacheDb = (db as StoryboardDb)['cache'] as StoryboardIdbStore;
       const facade: StoryboardCacheFacade = instance = {
-        async put(watchId: string, sbInfo: unknown = {}): Promise<StoryboardCacheRecord | undefined> {
+        async put(watchId: string, sbInfo: unknown = {}, expectedGeneration?: number): Promise<StoryboardCacheRecord | undefined> {
           if (!sbInfo || typeof sbInfo !== 'object' || (sbInfo as StoryboardInfoLike).status !== 'ok') {
             console.warn('Storyboard cache rejected non-ok payload');
             return;
@@ -118,11 +144,15 @@ const StoryboardCacheDb: StoryboardCacheDbClient = (() => {
             updatedAt: Date.now(),
             sbInfo: sbInfo as StoryboardInfoLike
           };
-          await cacheDb.put(record);
-          return record;
+          if (expectedGeneration !== undefined && expectedGeneration < generationFloor) { return; }
+          try {
+            return await cacheDb.storyboardCache({op: 'put', record, expectedGeneration}) as StoryboardCacheRecord || undefined;
+          } catch (_) { return; } // Storage/quota failure must not prevent image rendering.
         },
         async get(watchId: string): Promise<unknown> {
-          const record = await cacheDb.updateTime({key: watchId});
+          let record;
+          try { record = await cacheDb.storyboardCache({op: 'get', key: watchId}); }
+          catch (_) { return null; }
           if (!record) { return null; }
           return (record as {sbInfo?: unknown}).sbInfo;
         },
@@ -130,20 +160,20 @@ const StoryboardCacheDb: StoryboardCacheDbClient = (() => {
         close(): Promise<unknown> { return cacheDb.close(); },
         gc(expireTime: number): Promise<unknown> { return cacheDb.gc(expireTime); }
       };
-      facade.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
+      operation({op: 'stats'}).catch(() => console.warn('Storyboard cache cleanup failed'));
       return facade;
     })();
     try { return await instanceOpening; }
     finally { instanceOpening = null; }
   };
-  const put = (watchId: string, sbInfo: unknown = {}): Promise<StoryboardCacheRecord | undefined> => open().then(db => db.put(watchId, sbInfo));
-  const get = (watchId: string): Promise<unknown> => open().then(db => db.get(watchId));
+  const put = (watchId: string, sbInfo: unknown = {}, expectedGeneration: number = captureGeneration()): Promise<StoryboardCacheRecord | undefined> => open().then(db => db.put(watchId, sbInfo, expectedGeneration)).catch(() => undefined);
+  const get = (watchId: string): Promise<unknown> => open().then(db => db.get(watchId)).catch(() => null);
   const del = (watchId: string): Promise<unknown> => open().then(db => db.delete(watchId));
   const close = (): Promise<unknown> => open().then(db => db.close());
   const gc = (expireTime: number = 24 * 60 * 60 * 1000): Promise<unknown> => open().then(db => db.gc(expireTime));
   const api = (api: StoryboardDbBridge): StoryboardDbBridge => NicoVideoApi = api;
 
-  return {initWorker, open, put, get, delete: del, close, gc, db, api};
+  return {initWorker, open, put, get, getPreview, configure, clear, stats, captureGeneration, delete: del, close, gc, db, api};
 })();
 
 export {StoryboardCacheDb};

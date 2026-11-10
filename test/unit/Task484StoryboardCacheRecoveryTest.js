@@ -94,7 +94,6 @@ describe('Task484 StoryboardCacheDb validation and automatic recovery', () => {
       d => {d.storyboard.images = [];},
       d => {d.storyboard.images[0] = null;},
       d => {d.storyboard.images[0].url = 'javascript:alert(1)';},
-      d => {d.storyboard.images[0].buffer = null;},
       d => {d.storyboard.thumbnail.width = 0;},
       d => {d.storyboard.rows = -1;},
       d => {d.storyboard.interval = -1;},
@@ -168,4 +167,11 @@ describe('Task484 asynchronous cache write boundary', () => {
     assert.strictEqual(h.puts[0].key, 'sm9_domand');
     assert.strictEqual(h.puts[0].value, data);
   });
+});
+
+it('Task996 preserves valid partial sheets while refreshing live metadata',async()=>{
+ const data=validCache();delete data.storyboard.images[1].buffer;
+ const h=fixture(data);const result=await h.load();await flush();
+ assert.equal(result.fromCache,undefined);assert.equal(h.deletes.length,0);
+ assert.equal(h.posts[0].command,'storyboard');assert.equal(h.posts[1].params.firstPageOnly,true);
 });

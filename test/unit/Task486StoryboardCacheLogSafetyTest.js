@@ -7,6 +7,12 @@ const {beginSection, createContext, run} = require('../helpers/extractSource');
 function fixture() {
   const warnings = [], records = [], deletes = [], lookups = [];
   const store = {
+    storyboardCache: async data => {
+      if (data.op === 'stats') return store.gc();
+      if (data.op === 'get') return store.updateTime({key: data.key});
+      if (data.op === 'put') return store.put(data.record);
+      throw new Error('unexpected image cache operation');
+    },
     put: async record => {records.push(record);return record;},
     updateTime: async ({key}) => {lookups.push(key);return null;},
     delete: async ({key}) => {deletes.push(key);},

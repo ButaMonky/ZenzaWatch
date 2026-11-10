@@ -320,6 +320,9 @@ const createAdvancedSettingsPanel = (Config, lodash = window._) => {
                 relatedOrder: RelatedMenuOrder,
                 relatedActions: RelatedMenuActions,
                 screenshotFileName: ScreenshotFileName,
+                sceneCache: typeof StoryboardCacheDb === 'undefined' ? null : {
+                    clear: () => StoryboardCacheDb.clear(), stats: () => StoryboardCacheDb.stats()
+                },
                 playlist: window.ZenzaWatch?.external?.playlist,
                 storage: window.localStorage,
                 formatKeyCombo, encodeKeyCombo,

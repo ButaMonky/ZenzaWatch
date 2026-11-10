@@ -21,10 +21,10 @@ function fixture(cache){
 const info=()=>({status:'ok',watchId:'sm9',duration:30,format:'domand',storyboard:{thumbnail:{width:160,height:90},rows:2,columns:3,interval:5000,count:6,images:[{url:'https://example.invalid/sheet',buffer:new ArrayBuffer(8)}]}});
 const flush=async()=>{for(let i=0;i<15;i++)await Promise.resolve();};
 describe('Saved bookmark scene preview leases',()=>{
- it('coalesces historical cache reads and shares one sheet object URL',async()=>{
+ it('reads only each requested time and shares one sheet object URL',async()=>{
   const h=fixture(info()),a=h.doc.getElementById('one'),b=h.doc.getElementById('two');
   const offA=h.board.createSavedPreview(a,'sm9',7),offB=h.board.createSavedPreview(b,'sm9',17);await flush();
-  assert.deepStrictEqual(h.calls.gets,['sm9_domand']);assert.equal(h.calls.urls,1);
+  assert.deepStrictEqual(h.calls.gets,['sm9_domand','sm9_domand']);assert.equal(h.calls.urls,1);
   assert.equal(a.querySelector('img').style.left,'-100%');assert.equal(b.querySelector('img').style.top,'-100%');
   offA();assert.equal(h.calls.revokes.length,0);offB();assert.equal(h.calls.revokes.length,1);
  });
@@ -45,4 +45,14 @@ describe('Saved bookmark scene preview leases',()=>{
   const release=h.board.createSavedPreview(host,'sm9',29);await flush();assert.equal(h.calls.gets.length,0);assert.equal(host.querySelector('img').style.left,'-200%');release();
   h.board.config.props.enableStoryboard=false;h.board.createSavedPreview(host,'sm9',29);await flush();assert.equal(host.querySelector('img'),null);assert.equal(h.calls.gets.length,0);
  });
+ it('an old rejected request cannot erase a newer live preview',async()=>{
+  const h=fixture(null),host=h.doc.getElementById('one');let rejectOld;const events={};
+  h.board.on=(name,fn)=>{events[name]=fn;};
+  h.board.savedScenes=()=>({acquire:()=>({promise:new Promise((_,reject)=>{rejectOld=reject;}),release(){}})});
+  const off=h.board.createSavedPreview(host,'sm9',7);await flush();assert.equal(typeof rejectOld,'function');
+  h.board._currentVideoWatchId='sm9';h.board.model={isAvailable:true,rawData:info()};events.update();await flush();
+  assert(host.querySelector('img'));rejectOld(new Error('cancelled old request'));await flush();
+  assert(host.querySelector('img'),'new image must survive stale rejection');off();assert.equal(h.calls.revokes.length,1);
+ });
+
 });

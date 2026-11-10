@@ -46,6 +46,7 @@ export interface VideoSessionHandle {
   close(): Promise<unknown>;
 }
 export interface VideoSessionWorkerClient {
+  createStoryboardClasses: typeof createStoryboardClasses;
   initWorker(): CrossMessageWorker | undefined;
   create(params: {videoInfo: VideoInfoLike; videoQuality?: string; serverType: string; useHLS?: boolean}): Promise<VideoSessionHandle>;
   storyboard(params: {type: string; info: VideoInfoLike}): Promise<any>;
@@ -179,7 +180,7 @@ const createStoryboardClasses = (util: StoryboardFetchUtil) => {
     }
 
     // Task 070: 画像（1枚 約0.5MB・10x10コマ）は全ページ同時に取得する。認証は不要（credentials omit で取得可）。
-    static async fetchImages(images: unknown): Promise<Loose[]> {
+    static async fetchImages(images: unknown, maxImageBytes=Infinity): Promise<Loose[]> {
       // This entry is also used directly by the separate storyboardImages
       // worker command, so validate again even if a caller skipped getInfo().
       validateStoryboardImageList(images);
@@ -187,18 +188,28 @@ const createStoryboardClasses = (util: StoryboardFetchUtil) => {
         if (image.buffer) {
           return image;
         }
+        const controller=Number.isFinite(maxImageBytes)?new AbortController():null;
+        const timer=controller?setTimeout(()=>controller.abort(),15000):null;
         try {
-          const res = await fetch(image.url, {credentials: 'omit'});
+          const res = await fetch(image.url, {credentials: 'omit',...(controller?{signal:controller.signal}:{})});
           if (!res.ok) {
             throw new Error(`HTTP ${res.status}`);
           }
+          let buffer:ArrayBuffer;
+          if(Number(res.headers?.get('content-length'))>maxImageBytes){await res.body?.cancel();throw new RangeError('Scene image too large');}
+          if(Number.isFinite(maxImageBytes)&&res.body){
+            const reader=res.body.getReader(),parts:Uint8Array[]=[];let length=0;
+            try{for(;;){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;if(length>maxImageBytes){await reader.cancel();throw new RangeError('Scene image too large');}parts.push(value);}}
+            finally{reader.releaseLock();}
+            const all=new Uint8Array(length);let offset=0;for(const part of parts){all.set(part,offset);offset+=part.length;}buffer=all.buffer;
+          }else{buffer=await res.arrayBuffer();if(buffer.byteLength>maxImageBytes)throw new RangeError('Scene image too large');}
           return {
             ...image,
-            buffer: await res.arrayBuffer(),
+            buffer,
           };
         } catch (e) {
           return {...image, isFail: true};
-        }
+        }finally{if(timer!==null)clearTimeout(timer);}
       }));
     }
 
@@ -422,6 +433,7 @@ const createStoryboardClasses = (util: StoryboardFetchUtil) => {
         }
         return this._toSessionInfo(result.data);
       } catch (err) {
+        if ((err as {name?: string})?.name === 'AbortError') { throw err; }
         if (err === 'api_not_exist') {
           throw 'Domand storyboard api not exist';
         }
@@ -465,6 +477,7 @@ const createStoryboardClasses = (util: StoryboardFetchUtil) => {
         }
         return this._toSessionInfo(result.data);
       } catch (err) {
+        if ((err as {name?: string})?.name === 'AbortError') { throw err; }
         if (err === 'api_not_exist') {
           throw 'DMC storyboard api not exist';
         }
@@ -1221,9 +1234,11 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     };
 
     // Task 070: URLだけの情報を先に返して表示を始め、画像本体は後からまとめて取得してキャッシュ用に返す
-    const storyboardImages = async ({sbInfo}: Loose): Promise<Loose> => {
-      const images = await StoryboardInfoLoader.fetchImages(sbInfo.storyboard.images);
-      if (images.some(image => !image.buffer)) {
+    const storyboardImages = async ({sbInfo, firstPageOnly = false}: Loose): Promise<Loose> => {
+      const selected=firstPageOnly?sbInfo.storyboard.images.slice(0,1):sbInfo.storyboard.images;
+      const loaded = await StoryboardInfoLoader.fetchImages(selected,firstPageOnly?8*1024*1024:Infinity);
+      const images = firstPageOnly?[...loaded,...sbInfo.storyboard.images.slice(1)]:loaded;
+      if (loaded.some(image => !image.buffer)) {
         return {watchId: sbInfo.watchId, status: 'fail'};
       }
       return {
@@ -1326,7 +1341,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
   // Task484: old IndexedDB records can report success despite wrong video
   // ownership, missing image buffers or outdated storyboard geometry.
   // Validate before serving a cached preview, not just when rendering it.
-  const isUsableStoryboardCache = (data: unknown, watchId: string, serverType: string): boolean => {
+  const isUsableStoryboardCache = (data: unknown, watchId: string, serverType: string, complete=true): boolean => {
     const record = (value: unknown): value is Loose => !!value && typeof value === 'object' && !Array.isArray(value);
     const positiveInt = (value: unknown): boolean => Number.isSafeInteger(value) && (value as number) > 0;
     if (!record(data) || data.status !== 'ok' || data.watchId !== watchId ||
@@ -1345,7 +1360,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
         count > rows * columns * images.length) { return false; }
     return images.every((image: unknown) => {
       if (!record(image) || typeof image.url !== 'string' || image.isFail ||
-          Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]') {
+          (complete && Object.prototype.toString.call(image.buffer) !== '[object ArrayBuffer]')) {
         return false;
       }
       try {
@@ -1358,6 +1373,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
 
   const storyboard = async ({type, info}: {type: string; info: VideoInfoLike}): Promise<any> => {
     const videoInfo = info.toJSON();
+    const cacheGeneration=StoryboardCacheDb.captureGeneration?.();
     const cacheId = `${videoInfo.watchId}_${type}`;
     const cachePromise = withTimeout(
       StoryboardCacheDb.get(cacheId).catch(() => null), 2000);
@@ -1373,7 +1389,7 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
       }
       // Evict only a provably invalid record. Cache maintenance is optional:
       // network recovery must continue even if IndexedDB is unavailable.
-      await withTimeout(
+      if(!isUsableStoryboardCache(cache,videoInfo.watchId,type,false))await withTimeout(
         Promise.resolve().then(() => StoryboardCacheDb.delete(cacheId)).catch(() => null),
         2000
       );
@@ -1382,14 +1398,19 @@ const VideoSessionWorker: VideoSessionWorkerClient = (() => {
     const params = {videoInfo, serverType: type, withImages: false};
     const result = await (worker as CrossMessageWorker).post({command: 'storyboard', params});
     if (result && result.status === 'ok') {
-      (worker as CrossMessageWorker).post({command: 'storyboardImages', params: {sbInfo: result}})
-        .then((full): unknown => isUsableStoryboardCache(full, videoInfo.watchId, type) && StoryboardCacheDb.put(cacheId, full))
+      // Cache the first visible sheet only. Historical/edited points fetch their
+      // own required sheet on demand, not every page of a long video.
+      Promise.resolve(StoryboardCacheDb.stats?.()).then(stats=>stats?.maxBytes===0?null:
+        (worker as CrossMessageWorker).post({command: 'storyboardImages', params: {sbInfo: result,firstPageOnly:true}}))
+        .then((partial): unknown => isUsableStoryboardCache(partial, videoInfo.watchId, type,false) &&
+          Object.prototype.toString.call(partial.storyboard.images[0]?.buffer)==='[object ArrayBuffer]' &&
+          StoryboardCacheDb.put(cacheId, partial,cacheGeneration))
         .catch(() => console.warn('storyboard image cache fail'));
     }
     return result;
   };
 
-  return {initWorker, create, storyboard};
+  return {initWorker, create, storyboard, createStoryboardClasses};
 })();
 
 export {VideoSessionWorker, createStoryboardClasses};

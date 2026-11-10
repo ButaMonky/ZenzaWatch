@@ -7,8 +7,8 @@ import {NicoVideoApi} from './loader';
  * IndexedDB cache of storyboard (seek thumbnail) info keyed by watch/cache id.
  * On www.nicovideo.jp it opens IndexedDB directly; elsewhere it goes through the
  * NicoVideoApi IndexedDB bridge injected with `StoryboardCacheDb.api(...)`.
- * Only status:'ok' payloads are stored; entries older than 7 days are collected
- * once when the facade is first opened.
+ * Only status:'ok' payloads are stored. Worker transactions enforce a shared
+ * byte budget and idle retention, including legacy records and partial sheets.
  */
 const StoryboardCacheDb = (() => {
     const WATCH_INFO = {
@@ -26,6 +26,29 @@ const StoryboardCacheDb = (() => {
     };
     let db, instance, NicoVideoApi;
     let dbOpening, instanceOpening;
+    let generationFloor = 0;
+    const captureGeneration = () => Math.max(Date.now(), generationFloor);
+    const operation = async (data) => {
+        const connection = await initWorker();
+        return connection.cache.storyboardCache(data);
+    };
+    const configure = (policy) => operation({ op: 'configure', ...policy });
+    const clear = async () => {
+        generationFloor = Math.max(Date.now(), generationFloor) + 1;
+        const result = await operation({ op: 'clear' });
+        generationFloor = Math.max(generationFloor, result.clearedAt + 1);
+        return result;
+    };
+    const stats = () => operation({ op: 'stats' });
+    const getPreview = async (watchId, time) => {
+        try {
+            const row = await operation({ op: 'get', key: watchId, previewTime: time });
+            return row?.sbInfo || null;
+        }
+        catch (_) {
+            return null;
+        }
+    };
     const initWorker = async () => {
         if (db) {
             return db;
@@ -61,7 +84,7 @@ const StoryboardCacheDb = (() => {
             await initWorker();
             const cacheDb = db['cache'];
             const facade = instance = {
-                async put(watchId, sbInfo = {}) {
+                async put(watchId, sbInfo = {}, expectedGeneration) {
                     if (!sbInfo || typeof sbInfo !== 'object' || sbInfo.status !== 'ok') {
                         console.warn('Storyboard cache rejected non-ok payload');
                         return;
@@ -71,11 +94,24 @@ const StoryboardCacheDb = (() => {
                         updatedAt: Date.now(),
                         sbInfo: sbInfo
                     };
-                    await cacheDb.put(record);
-                    return record;
+                    if (expectedGeneration !== undefined && expectedGeneration < generationFloor) {
+                        return;
+                    }
+                    try {
+                        return await cacheDb.storyboardCache({ op: 'put', record, expectedGeneration }) || undefined;
+                    }
+                    catch (_) {
+                        return;
+                    } // Storage/quota failure must not prevent image rendering.
                 },
                 async get(watchId) {
-                    const record = await cacheDb.updateTime({ key: watchId });
+                    let record;
+                    try {
+                        record = await cacheDb.storyboardCache({ op: 'get', key: watchId });
+                    }
+                    catch (_) {
+                        return null;
+                    }
                     if (!record) {
                         return null;
                     }
@@ -85,7 +121,7 @@ const StoryboardCacheDb = (() => {
                 close() { return cacheDb.close(); },
                 gc(expireTime) { return cacheDb.gc(expireTime); }
             };
-            facade.gc(7 * 24 * 60 * 60 * 1000).catch(() => console.warn('Storyboard cache cleanup failed'));
+            operation({ op: 'stats' }).catch(() => console.warn('Storyboard cache cleanup failed'));
             return facade;
         })();
         try {
@@ -95,13 +131,13 @@ const StoryboardCacheDb = (() => {
             instanceOpening = null;
         }
     };
-    const put = (watchId, sbInfo = {}) => open().then(db => db.put(watchId, sbInfo));
-    const get = (watchId) => open().then(db => db.get(watchId));
+    const put = (watchId, sbInfo = {}, expectedGeneration = captureGeneration()) => open().then(db => db.put(watchId, sbInfo, expectedGeneration)).catch(() => undefined);
+    const get = (watchId) => open().then(db => db.get(watchId)).catch(() => null);
     const del = (watchId) => open().then(db => db.delete(watchId));
     const close = () => open().then(db => db.close());
     const gc = (expireTime = 24 * 60 * 60 * 1000) => open().then(db => db.gc(expireTime));
     const api = (api) => NicoVideoApi = api;
-    return { initWorker, open, put, get, delete: del, close, gc, db, api };
+    return { initWorker, open, put, get, getPreview, configure, clear, stats, captureGeneration, delete: del, close, gc, db, api };
 })();
 //===END===
 export {StoryboardCacheDb};

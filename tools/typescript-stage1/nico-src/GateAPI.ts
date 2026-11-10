@@ -72,6 +72,7 @@ interface ThumbCacheDb {
 declare const ThumbInfoCacheDb: {open(): Promise<ThumbCacheDb>};
 
 interface IdbStore {
+  storyboardCache?(data: unknown): Promise<unknown>;
   listSavedPoints?(data:{afterKey?:string|null;maxRecords?:number}):Promise<unknown>;
   close(): Promise<unknown>;
   put(data: unknown, transfer?: unknown): Promise<unknown>;
@@ -317,6 +318,12 @@ const GateAPI: GateAPIClient = (() => {
             throw new TypeError('Invalid legacy watch history cleanup target');
           }
           result = await db.scrubWatchVideoInfo(data as {afterKey?: string | null; maxRecords?: number});
+          break;
+        case 'storyboardCache':
+          if (name !== 'storyboard' || storeName !== 'cache' || !db.storyboardCache) {
+            throw new TypeError('Invalid storyboard cache target');
+          }
+          result = await db.storyboardCache(data);
           break;
         case 'listSavedPoints':
           if(name!=='watch-info'||storeName!=='cache'||!db.listSavedPoints){

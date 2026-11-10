@@ -128,11 +128,21 @@ test('legacy build directives are preserved in each runtime',()=>{
       expected.splice(expected.indexOf('//@require UiVisibilityRegistry') + 1, 0,
         '//@require TimelineGeometry', '//@require SceneResumeMarkerPresenter');
     }
+    if (spec.name === 'Storyboard') {
+      expected.unshift(
+        "import {VideoInfoLoader} from '../../../lib/src/nico/VideoInfoLoader';",
+        "import {VideoSessionWorker} from '../../../lib/src/nico/VideoSessionWorker';",
+        "import {netUtil} from '../../../lib/src/infra/netUtil';",
+        "import {RequestDiagnostics} from '../../../lib/src/infra/RequestDiagnostics';");
+      expected.splice(expected.indexOf('//===BEGIN===')+1,0,
+        '//@require VideoInfoLoader','//@require netUtil','//@require RequestDiagnostics');
+      // VideoSessionWorker is provided by the shared ZenzaLib scope, not redeclared.
+    }
     assert.deepEqual(directives(after), expected, spec.name);
     // Task475: compare exported names, since legacy exports may span lines.
     const exported=t=>[...t.matchAll(/^export\s*\{([^}]*)\}/gm)]
       .flatMap(m=>m[1].split(',').map(s=>s.trim()).filter(Boolean)).sort();
-    assert.deepEqual(exported(after),exported(before),spec.name+' exports');
+    assert.deepEqual(exported(after),spec.name==='Storyboard'?[...exported(before),'SavedSceneLoader'].sort():exported(before),spec.name+' exports');
   }
 });
 

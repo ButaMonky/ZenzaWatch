@@ -67,6 +67,9 @@ const Config = (() => {
         smallModeHeight: 0, // 画面モード「小」の高さ(px)。0 = 既定値(SIDE_PLAYER_HEIGHT)を使用
         smallModeAspectLock: false, // 画面モード「小」のリサイズ時にアスペクト比を固定するか
         enableFullScreenOnDoubleClick: true,
+        storyboardCacheMaxMB: 128, // Compressed disk cache MiB; not decoded RAM.
+        storyboardCacheDays: 7, // Idle retention days.
+        savedSceneFetch: true, // Fetch only visible missing saved-scene images.
         enableStoryboard: true, // シークバーサムネイル関連
         enableStoryboardBar: false, // シーンサーチ
         // Task926: Original PopupMessage hues (#0c0 / #c00), stored as six-digit HEX.
@@ -403,6 +406,15 @@ const Config = (() => {
             return value;
         },
         validateImport: (key, value) => {
+            if (key === 'storyboardCacheMaxMB') {
+                return [0, 32, 64, 128, 256, 512].includes(value);
+            }
+            if (key === 'storyboardCacheDays') {
+                return [1, 3, 7, 14, 30].includes(value);
+            }
+            if (key === 'savedSceneFetch') {
+                return typeof value === 'boolean';
+            }
             // Reject non-finite, non-integral and unknown enum values before
             // DataStorage writes any part of a settings import.
             if (key === 'sceneSearch.presentation.normal' || key === 'sceneSearch.presentation.fullscreen') {

@@ -110,7 +110,11 @@ const WatchPageHistory = (() => {
         }
     });
     const onDialogVideoInfoLoad = (info) => {
-        onVideoInfoLoad({ ...info, generation: navigationGeneration, requestId: dialog?._requestId });
+        // VideoInfoModel exposes these as prototype getters: object spread loses them.
+        // Snapshot only the public values now, before debounce or model mutation.
+        const { watchId, title, owner } = info;
+        onVideoInfoLoad({ watchId, title, owner: { name: owner?.name },
+            generation: navigationGeneration, requestId: dialog?._requestId });
     };
     const onDialogOpen = () => {
         navigationGeneration++;

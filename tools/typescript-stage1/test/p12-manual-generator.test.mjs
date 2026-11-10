@@ -6,7 +6,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 const project=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../..');
 const names=['ManualBookmarkPolicy','ManualBookmarkStore','ManualBookmarkSession',
- 'ManualBookmarkPanel','ManualBookmarkDock'];
+ 'ManualBookmarkVirtualList','ManualBookmarkPanel','ManualBookmarkDock'];
 const manifest='tools/typescript-stage1/p12-manual-manifest.json';
 const generator='tools/typescript-stage1/scripts/sync-p12-manual.mjs';
 const source=n=>'tools/typescript-stage1/p12-src/'+n+'.ts';
@@ -29,10 +29,10 @@ async function fixture(prepare,action){
   await action({sync,at,put});
  }finally{fs.rmSync(root,{recursive:true,force:true,maxRetries:3});}
 }
-test('five canonical typed manual bookmark modules are synced without mutation',async()=>{
+test('six canonical typed manual bookmark modules are synced without mutation',async()=>{
  await fixture(null,({sync,at})=>{
   const before=names.map(n=>fs.readFileSync(at(runtime(n))));
-  assert.equal(sync('--check').modules,5);
+  assert.equal(sync('--check').modules,6);
   const after=names.map(n=>fs.readFileSync(at(runtime(n))));
   before.forEach((x,i)=>assert.deepEqual(x,after[i]));
  });
@@ -55,7 +55,7 @@ test('legacy userscript sees fixed BEGIN/END, require order and scoped private h
   assert(dock.includes('//@require ManualBookmarkPanel'));
  });
 });
-test('fresh runtime adoption creates only its five fixed paths and manifest',async()=>{
+test('fresh runtime adoption creates only its six fixed paths and manifest',async()=>{
  await fixture(({at})=>{
   fs.unlinkSync(at(manifest));
   names.forEach(n=>fs.unlinkSync(at(runtime(n))));
@@ -121,4 +121,17 @@ test('invalid CLI-style modes cannot select user-controlled output paths',async(
    assert.throws(()=>sync(value),/BAD_MODE/);
   }
  });
+});
+
+
+test('Task1001 upgrades only the known five-module manifest, preserving existing hash guards',async()=>{
+ await fixture(({at,put})=>{
+  const old=JSON.parse(fs.readFileSync(at(manifest),'utf8'));old.modules=old.modules.filter(item=>item.name!=='ManualBookmarkVirtualList');
+  put(manifest,JSON.stringify(old,null,2)+'\n');fs.unlinkSync(at(runtime('ManualBookmarkVirtualList')));
+ },({sync})=>{assert.equal(sync('--write').modules,6);assert.equal(sync('--check').status,'PASS');});
+ await fixture(({at,put})=>{
+  const old=JSON.parse(fs.readFileSync(at(manifest),'utf8'));old.modules=old.modules.filter(item=>item.name!=='ManualBookmarkVirtualList');
+  put(manifest,JSON.stringify(old,null,2)+'\n');fs.unlinkSync(at(runtime('ManualBookmarkVirtualList')));
+  put(runtime('ManualBookmarkPanel'),'// foreign');
+ },({sync})=>assert.throws(()=>sync('--write'),/FOREIGN_RUNTIME_EDIT_ManualBookmarkPanel/));
 });

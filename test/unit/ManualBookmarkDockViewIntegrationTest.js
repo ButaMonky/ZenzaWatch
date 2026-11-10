@@ -25,6 +25,10 @@ function setup({mountError=false}={}){
   deactivate(){calls.push(['deactivate']);},dispose(){calls.push(['dispose']);}};
  const ctx=createContext({
   Emitter:class{},window:dom.window,
+  SavedVideoThumbnail:{create:options=>{calls.push(['thumbnailCreate',options]);return {
+   attach:(...args)=>{calls.push(['thumbnailAttach',...args]);return ()=>{};},
+   dispose:()=>calls.push(['thumbnailDispose'])};}},
+  ThumbInfoLoader:{load:async()=>({thumbnail:'https://example.com/video.jpg'})},
   ManualBookmarkDock:{mount:(...a)=>{calls.push(['mount',...a]);
     if(mountError)throw Error('private mount failure details');
     return dock;}},
@@ -49,11 +53,23 @@ function setup({mountError=false}={}){
  return {ctx,view,dom,calls,container,nativeSeek,marker,close};
 }
 describe('P12 compiled DialogView manual-bookmark isolated mount ownership',()=>{
+ it('owns thumbnail lookup and releases it with the bookmark session',async()=>{
+  const h=setup();h.view._initializeVideoInfoPanel();
+  const created=h.calls.find(x=>x[0]==='thumbnailCreate');
+  assert(created);assert.equal(created[1].maxConcurrent,2);assert.equal(created[1].maxEntries,128);
+  assert.equal(await created[1].load('sm1'),'https://example.com/video.jpg');
+  const mount=h.calls.find(x=>x[0]==='mount');
+  const host=h.dom.window.document.createElement('div');
+  mount[3].createVideoThumbnail(host,{videoId:'sm1',thumbnailUrl:'https://example.com/existing.jpg'});
+  assert.deepStrictEqual(h.calls.find(x=>x[0]==='thumbnailAttach').slice(1),[host,'sm1','https://example.com/existing.jpg']);
+  mount[2].dispose();assert(h.calls.some(x=>x[0]==='thumbnailDispose'));assert(h.calls.some(x=>x[0]==='sessionDispose'));h.close();
+ });
  it('failed optional dock mount releases its session without breaking the player info panel',()=>{
   const h=setup({mountError:true});
   assert(h.view._initializeVideoInfoPanel());
   assert.equal(h.calls.filter(x=>x[0]==='mount').length,1);
   assert.equal(h.calls.filter(x=>x[0]==='sessionDispose').length,1);
+  assert(h.calls.some(x=>x[0]==='thumbnailDispose'));
   assert.equal(h.view.manualBookmarkDock,undefined);
   assert.strictEqual(h.container.querySelector('.nativeSeek'),h.nativeSeek);
   assert.strictEqual(h.container.querySelector('.resumePointer'),h.marker);

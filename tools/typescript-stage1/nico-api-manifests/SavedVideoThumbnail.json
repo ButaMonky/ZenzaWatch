@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "source": "tools/typescript-stage1/nico-src/SavedVideoThumbnail.ts",
+  "runtime": "packages/zenza/src/resume/SavedVideoThumbnail.js",
+  "sourceSha256": "7d69aeb0070c2c601dd1cd6a97971caca89c0ee6589b12368295af2c36774402",
+  "runtimeSha256": "daba95d2ccecfcce21194366bd14a8c1adb6a47a7db903d89ecea94296b564e9"
+}

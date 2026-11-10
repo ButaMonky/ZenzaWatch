@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.376-task1000
+// @version        2.7.377-task1001
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 17:32Z ae079f1e
+// build: 2026-11-10 17:56Z eafc33e5
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.376-task1000';
+    var VER = '2.7.377-task1001';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 17:32Z ae079f1e';
+    var BUILD = '2026-11-10 17:56Z eafc33e5';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -14347,6 +14347,230 @@ class ManualBookmarkSession {
 }
 return {ManualBookmarkSession};
 })();
+const {ManualBookmarkVirtualList} = (() => {
+class ManualBookmarkVirtualList {
+		items = [];
+		heights = new Map();
+		offsets = [0];
+		mounted = new Map();
+		spacers = new Map();
+		observer = null;
+		frame = null;
+		disposed = false;
+		active = true;
+		pausedScroll = 0;
+		placeholder = null;
+		scroll;
+		win;
+		container;
+		scroller;
+		options;
+		constructor(container, scroller, options) {
+				this.container = container;
+				this.scroller = scroller;
+				this.options = options;
+				this.win = container.ownerDocument.defaultView;
+				this.scroll = () => this.schedule();
+				scroller.addEventListener('scroll', this.scroll, { passive: true });
+				this.win?.addEventListener('resize', this.scroll);
+				container.addEventListener('focusout', this.scroll);
+				container.style.overflowAnchor = 'none';
+				const Observer = this.win?.ResizeObserver;
+				if (Observer) {
+						this.observer = new Observer(() => this.schedule());
+						this.observer.observe(scroller);
+				}
+		}
+		rebuild() {
+				this.offsets = [0];
+				for (const item of this.items) {
+						const size = this.heights.get(this.options.key(item)) || this.options.estimate(item);
+						this.offsets.push(this.offsets[this.offsets.length - 1] + Math.max(1, size));
+				}
+		}
+		viewport() {
+				const outer = this.scroller.getBoundingClientRect(), inner = this.container.getBoundingClientRect();
+				const scale = outer.height && this.scroller.clientHeight ? outer.height / (this.scroller.offsetHeight || this.scroller.clientHeight) : 1;
+				const inset = this.options.inset?.() || 0;
+				const top = outer.height ? (outer.top - inner.top) / scale + this.scroller.clientTop + inset :
+						this.scroller.scrollTop - this.container.offsetTop + inset;
+				return { top, height: Math.max(1, (this.scroller.clientHeight || 600) - inset) };
+		}
+		indexAt(offset) {
+				let low = 0, high = this.items.length;
+				while (low < high) {
+						const mid = (low + high) >> 1;
+						if (this.offsets[mid + 1] <= offset)
+								low = mid + 1;
+						else
+								high = mid;
+				}
+				return Math.min(low, Math.max(0, this.items.length - 1));
+		}
+		setItems(items, reset = false) {
+				const view = this.viewport(), index = this.indexAt(Math.max(0, view.top));
+				const key = this.items[index] === undefined ? null : this.options.key(this.items[index]);
+				const within = Math.max(0, view.top) - this.offsets[index];
+				this.releaseAll();
+				this.items = items;
+				this.rebuild();
+				if (reset)
+						this.scroller.scrollTop = 0;
+				else if (key) {
+						const next = items.findIndex(item => this.options.key(item) === key);
+						if (next >= 0)
+								this.scroller.scrollTop += this.offsets[next] + within - Math.max(0, view.top);
+				}
+				this.refresh();
+		}
+		setActive(active) {
+				if (this.active === active)
+						return;
+				this.active = active;
+				if (!active) {
+						this.pausedScroll = this.scroller.scrollTop;
+						this.cancel();
+						this.releaseAll(true);
+				}
+				else {
+						this.scroller.scrollTop = this.pausedScroll;
+						this.refresh();
+						this.scroller.scrollTop = this.pausedScroll;
+				}
+		}
+		cancel() {
+				if (this.frame !== null) {
+						if (this.win?.cancelAnimationFrame)
+								this.win.cancelAnimationFrame(this.frame);
+						else
+								clearTimeout(this.frame);
+						this.frame = null;
+				}
+		}
+		schedule() {
+				if (this.disposed || !this.active || this.frame !== null)
+						return;
+				const run = () => { this.frame = null; this.refresh(); };
+				this.frame = this.win?.requestAnimationFrame ? this.win.requestAnimationFrame(run) : setTimeout(run, 0);
+		}
+		releaseAll(keepRange = false) {
+				const placeholder = keepRange ? this.container.ownerDocument.createElement('div') : null;
+				if (placeholder) {
+						placeholder.style.height = (this.offsets[this.items.length] || 0) + 'px';
+						placeholder.setAttribute('aria-hidden', 'true');
+						this.container.append(placeholder);
+				}
+				for (const node of this.mounted.values()) {
+						this.observer?.unobserve(node);
+						this.options.release(node);
+						node.remove();
+				}
+				this.mounted.clear();
+				this.spacers.clear();
+				this.container.replaceChildren(...(placeholder ? [placeholder] : []));
+				this.placeholder = placeholder;
+		}
+		refresh() {
+				if (this.disposed || !this.active)
+						return;
+				const view = this.viewport(), anchor = this.indexAt(Math.max(0, view.top));
+				const previousAnchor = this.offsets[anchor] || 0;
+				let measured = false;
+				const outer = this.scroller.getBoundingClientRect();
+				const scale = outer.height && this.scroller.clientHeight ? outer.height / (this.scroller.offsetHeight || this.scroller.clientHeight) : 1;
+				for (const [index, node] of this.mounted) {
+						const height = node.getBoundingClientRect().height / scale || node.offsetHeight;
+						const key = this.options.key(this.items[index]);
+						if (height > 0 && Math.abs((this.heights.get(key) || this.options.estimate(this.items[index])) - height) > .5) {
+								this.heights.set(key, height);
+								measured = true;
+						}
+				}
+				if (measured) {
+						this.rebuild();
+						const shift = this.offsets[anchor] - previousAnchor;
+						if (view.top >= 0 && shift)
+								this.scroller.scrollTop += shift;
+				}
+				const current = this.viewport(), wanted = new Set();
+				if (this.items.length) {
+						const first = this.indexAt(Math.max(0, current.top - 600));
+						const last = this.indexAt(Math.max(0, current.top + current.height + 600));
+						for (let i = first; i <= last; i++)
+								wanted.add(i);
+				}
+				for (const [index, node] of this.mounted)
+						if (this.options.pinned?.(node) || node.contains(this.container.ownerDocument.activeElement))
+								wanted.add(index);
+				for (const [index, node] of this.mounted)
+						if (!wanted.has(index)) {
+								this.observer?.unobserve(node);
+								this.options.release(node);
+								node.remove();
+								this.mounted.delete(index);
+						}
+				const nodes = [], usedSpacers = new Set();
+				let end = 0;
+				const gap = (start, finish) => {
+						if (finish <= start)
+								return;
+						const key = start + ':' + finish;
+						usedSpacers.add(key);
+						let node = this.spacers.get(key);
+						if (!node) {
+								node = this.container.ownerDocument.createElement('div');
+								node.setAttribute('aria-hidden', 'true');
+								node.dataset.librarySpacer = '1';
+								this.spacers.set(key, node);
+						}
+						node.style.height = (finish - start) + 'px';
+						nodes.push(node);
+				};
+				for (const index of [...wanted].sort((a, b) => a - b)) {
+						gap(end, this.offsets[index]);
+						let node = this.mounted.get(index);
+						if (!node) {
+								node = this.container.ownerDocument.createElement('div');
+								node.className = 'zw-library-virtual-item';
+								node.style.display = 'flow-root';
+								node.dataset.libraryVirtualKey = this.options.key(this.items[index]);
+								node.append(this.options.render(this.items[index]));
+								this.mounted.set(index, node);
+								this.observer?.observe(node);
+						}
+						nodes.push(node);
+						end = this.offsets[index + 1];
+				}
+				gap(end, this.offsets[this.items.length] || 0);
+				for (const [key, node] of this.spacers)
+						if (!usedSpacers.has(key)) {
+								node.remove();
+								this.spacers.delete(key);
+						}
+				let cursor = this.container.firstChild;
+				for (const node of nodes) {
+						if (node !== cursor)
+								this.container.insertBefore(node, cursor);
+						cursor = node.nextSibling;
+				}
+				this.placeholder?.remove();
+				this.placeholder = null;
+				this.options.changed?.();
+		}
+		dispose() {
+				if (this.disposed)
+						return;
+				this.disposed = true;
+				this.cancel();
+				this.observer?.disconnect();
+				this.scroller.removeEventListener('scroll', this.scroll);
+				this.win?.removeEventListener('resize', this.scroll);
+				this.container.removeEventListener('focusout', this.scroll);
+				this.releaseAll();
+		}
+}
+return {ManualBookmarkVirtualList};
+})();
 const {ManualBookmarkPanel} = (() => {
 const displayTime = (time) => {
 		const seconds = Math.max(0, Math.floor(time));
@@ -14388,12 +14612,14 @@ class ManualBookmarkPanel {
 		libraryStatus = 'idle';
 		librarySearch = '';
 		libraryFilter = 'all';
-		libraryPage = 0;
-		libraryRowPages = new Map();
+		libraryVirtual = null;
+		videoThumbnailLeases = new Map();
+		libraryResetScroll = false;
 		libraryDrafts = new Map();
 		expandedVideos = new Set();
 		changeHandler;
-		setVisible(visible) { this.visible = visible; this.refreshPreviews(); }
+		setVisible(visible) { this.visible = visible; this.libraryVirtual?.setActive(visible); if (!visible)
+				this.releaseVideoThumbnails(); this.refreshPreviews(); }
 		clearPreviews() {
 				this.previewObserver?.disconnect();
 				this.previewObserver = null;
@@ -14975,8 +15201,7 @@ class ManualBookmarkPanel {
 						}
 						if (target?.matches('[data-library-filter]')) {
 								this.libraryFilter = target.value;
-								this.libraryPage = 0;
-								this.libraryRowPages.clear();
+								this.libraryResetScroll = true;
 								this.renderLibraryGroups();
 						}
 				};
@@ -14984,8 +15209,7 @@ class ManualBookmarkPanel {
 						const target = event.target;
 						if (target?.matches?.('[data-library-search]')) {
 								this.librarySearch = target.value;
-								this.libraryPage = 0;
-								this.libraryRowPages.clear();
+								this.libraryResetScroll = true;
 								this.renderLibraryGroups();
 								return;
 						}
@@ -15058,6 +15282,9 @@ class ManualBookmarkPanel {
 						return;
 				if (this.library)
 						this.captureLibraryDrafts();
+				this.libraryVirtual?.dispose();
+				this.libraryVirtual = null;
+				this.releaseVideoThumbnails();
 				const sameVideo = snapshot.videoId !== null &&
 						snapshot.videoId === this.last.videoId;
 				if (!sameVideo) {
@@ -15404,7 +15631,10 @@ class ManualBookmarkPanel {
 		renderLibrary() {
 				const doc = this.root.ownerDocument, region = doc.createElement('section');
 				this.root.closest('.zenzaManualBookmarkDock')?.classList.add('zw-library-wide');
-				region.append(this.libraryButton('back', '← 今の動画へ'));
+				const sticky = doc.createElement('div');
+				sticky.className = 'zw-library-sticky-header';
+				sticky.append(this.libraryButton('back', '← 今の動画へ'));
+				region.append(sticky);
 				const title = doc.createElement('h3');
 				title.textContent = '保存一覧';
 				region.append(title);
@@ -15451,7 +15681,6 @@ class ManualBookmarkPanel {
 						return;
 				this.captureLibraryDrafts();
 				this.clearPreviews();
-				groups.replaceChildren();
 				const doc = this.root.ownerDocument;
 				const appearance = this.deps.libraryAppearance?.();
 				const bounded = (value, fallback, min, max) => Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -15467,14 +15696,65 @@ class ManualBookmarkPanel {
 						return { video, automatic, bookmarks };
 				}).filter(item => item.automatic || item.bookmarks.length);
 				const videoCount = matching.length, count = matching.reduce((sum, item) => sum + item.bookmarks.length + Number(item.automatic), 0);
-				this.libraryPage = Math.min(this.libraryPage, Math.max(0, Math.ceil(videoCount / 50) - 1));
-				for (const { video, automatic, bookmarks } of matching.slice(this.libraryPage * 50, (this.libraryPage + 1) * 50)) {
-						const group = doc.createElement('details');
-						group.className = 'zw-library-group';
-						group.dataset.libraryVideo = video.videoId;
-						group.open = this.expandedVideos.has(video.videoId);
-						const summary = doc.createElement('summary');
-						if (appearance?.showVideoThumbnails !== false && video.thumbnailUrl) {
+				if (!this.libraryVirtual) {
+						const scroller = this.root.closest('.zenzaManualBookmarkDock') || this.root;
+						this.libraryVirtual = new ManualBookmarkVirtualList(groups, scroller, {
+								key: entry => entry.video.videoId,
+								estimate: entry => {
+										const thumb = appearance?.showVideoThumbnails === false ? 0 : bounded(appearance?.thumbnailWidth, 80, 64, 160) * 9 / 16;
+										const text = bounded(appearance?.titleFontSize, 13, 11, 18) * 1.6 * bounded(appearance?.titleLines, 1, 1, 3) + 18 + (entry.video.viewedAt ? 18 : 0);
+										return Math.max(thumb, text) + 12 + (this.expandedVideos.has(entry.video.videoId) ? (entry.bookmarks.length + Number(entry.automatic)) * 90 : 0);
+								},
+								render: entry => this.renderLibraryGroup(entry.video, entry.automatic, entry.bookmarks),
+								release: node => { if (this.library)
+										this.captureLibraryDrafts(node); this.releaseVideoThumbnails(node); },
+								pinned: node => !!node.querySelector('[data-library-saving="true"]'),
+								changed: () => this.refreshPreviews(),
+								inset: () => this.root.querySelector('.zw-library-sticky-header')?.offsetHeight || 0
+						});
+				}
+				this.libraryVirtual.setActive(this.visible);
+				this.libraryVirtual.setItems(matching, this.libraryResetScroll);
+				this.libraryResetScroll = false;
+				const status = this.root.querySelector('[data-library-status]');
+				if (status)
+						status.textContent = videoCount + ' 動画 · ' + count + ' 件 · 更新が新しい順';
+				if (!count) {
+						const empty = doc.createElement('p');
+						empty.textContent = '該当する保存情報はありません';
+						groups.append(empty);
+				}
+		}
+		releaseVideoThumbnails(container) {
+				for (const [host, release] of this.videoThumbnailLeases)
+						if (!container || container.contains(host)) {
+								this.videoThumbnailLeases.delete(host);
+								try {
+										release();
+								}
+								catch { /* optional thumbnail */ }
+						}
+		}
+		renderLibraryGroup(video, automatic, bookmarks) {
+				const doc = this.root.ownerDocument, appearance = this.deps.libraryAppearance?.();
+				const group = doc.createElement('details');
+				group.className = 'zw-library-group';
+				group.dataset.libraryVideo = video.videoId;
+				group.open = this.expandedVideos.has(video.videoId);
+				const summary = doc.createElement('summary');
+				if (appearance?.showVideoThumbnails !== false) {
+						const host = doc.createElement('div');
+						host.className = 'zw-library-thumbnail-host';
+						summary.append(host);
+						if (this.deps.createVideoThumbnail) {
+								try {
+										this.videoThumbnailLeases.set(host, this.deps.createVideoThumbnail(host, video));
+								}
+								catch {
+										host.textContent = '画像なし';
+								}
+						}
+						else if (video.thumbnailUrl) {
 								try {
 										const url = new URL(video.thumbnailUrl);
 										if (url.protocol === 'https:' || url.protocol === 'http:') {
@@ -15485,99 +15765,60 @@ class ManualBookmarkPanel {
 												image.decoding = 'async';
 												image.referrerPolicy = 'no-referrer';
 												image.src = url.href;
-												image.addEventListener('error', () => image.remove(), { once: true });
-												summary.append(image);
+												image.addEventListener('error', () => { image.remove(); host.textContent = '画像なし'; }, { once: true });
+												host.append(image);
 										}
 								}
-								catch { /* Malformed old metadata must not disable the library. */ }
+								catch { /* invalid old URL */ }
 						}
-						const header = doc.createElement('span');
-						header.className = 'zw-library-header';
-						const title = doc.createElement('span');
-						title.className = 'zw-library-title';
-						title.textContent = video.title;
-						header.append(title);
-						const meta = doc.createElement('small');
-						meta.textContent = (video.videoId === this.last.videoId ? '再生中 · ' : '') + (bookmarks.length + Number(automatic)) + '件';
-						header.append(meta);
-						const viewed = this.viewedDate(video.viewedAt);
-						if (viewed)
-								header.append(viewed);
-						summary.append(header);
-						group.append(summary);
-						const body = doc.createElement('div');
-						let materialized = false;
-						const renderBody = () => {
-								const ordered = [...(automatic ? [null] : []), ...bookmarks.slice().sort((a, b) => a.time - b.time)];
-								const page = Math.min(this.libraryRowPages.get(video.videoId) || 0, Math.max(0, Math.ceil(ordered.length / 50) - 1));
-								this.libraryRowPages.set(video.videoId, page);
-								this.captureLibraryDrafts(body);
-								body.replaceChildren();
-								const list = doc.createElement('ul');
-								body.append(list);
-								for (const item of ordered.slice(page * 50, (page + 1) * 50))
-										list.append(this.libraryRow(video, item));
-								if (ordered.length > 50) {
-										const pager = doc.createElement('div');
-										pager.className = 'zw-library-pagination';
-										for (const [direction, label, offset] of [['prev', '前へ', -1], ['next', '次へ', 1]]) {
-												const button = doc.createElement('button');
-												button.type = 'button';
-												button.textContent = label;
-												button.dataset.libraryRowPage = direction;
-												button.disabled = offset < 0 ? page === 0 : (page + 1) * 50 >= ordered.length;
-												button.addEventListener('click', event => { event.stopPropagation(); this.libraryRowPages.set(video.videoId, page + offset); renderBody(); this.refreshPreviews(); });
-												pager.append(button);
-										}
-										const status = doc.createElement('span');
-										status.textContent = (page * 50 + 1) + '–' + Math.min((page + 1) * 50, ordered.length) + ' / ' + ordered.length + ' 件';
-										pager.append(status);
-										body.append(pager);
-								}
-								materialized = true;
-						};
+				}
+				const header = doc.createElement('span');
+				header.className = 'zw-library-header';
+				const title = doc.createElement('span');
+				title.className = 'zw-library-title';
+				title.textContent = video.title;
+				header.append(title);
+				const meta = doc.createElement('small');
+				meta.textContent = (video.videoId === this.last.videoId ? '再生中 · ' : '') + (bookmarks.length + Number(automatic)) + '件';
+				header.append(meta);
+				const viewed = this.viewedDate(video.viewedAt);
+				if (viewed)
+						header.append(viewed);
+				summary.append(header);
+				group.append(summary);
+				const body = doc.createElement('div');
+				let materialized = false;
+				const renderBody = () => {
+						const list = doc.createElement('ul');
+						body.append(list);
+						if (automatic)
+								list.append(this.libraryRow(video, null));
+						for (const item of bookmarks.slice().sort((a, b) => a.time - b.time))
+								list.append(this.libraryRow(video, item));
+						materialized = true;
+				};
+				if (group.open) {
+						renderBody();
+						group.append(body);
+				}
+				group.addEventListener('toggle', () => {
+						if (this.disposed || !group.isConnected)
+								return;
 						if (group.open) {
-								renderBody();
+								this.expandedVideos.add(video.videoId);
+								if (!materialized)
+										renderBody();
 								group.append(body);
 						}
-						group.addEventListener('toggle', () => {
-								if (this.disposed || !group.isConnected)
-										return;
-								if (group.open) {
-										this.expandedVideos.add(video.videoId);
-										if (!materialized)
-												renderBody();
-										group.append(body);
-								}
-								else {
-										this.expandedVideos.delete(video.videoId);
-										this.captureLibraryDrafts(body);
-										body.remove();
-								}
-								this.refreshPreviews();
-						});
-						groups.append(group);
-				}
-				if (videoCount > 50) {
-						const pager = doc.createElement('div');
-						pager.className = 'zw-library-pagination';
-						const previous = this.libraryButton('page-prev', '前の50動画'), next = this.libraryButton('page-next', '次の50動画');
-						previous.disabled = this.libraryPage === 0;
-						next.disabled = (this.libraryPage + 1) * 50 >= videoCount;
-						const label = doc.createElement('span');
-						label.textContent = (this.libraryPage * 50 + 1) + '–' + Math.min((this.libraryPage + 1) * 50, videoCount) + ' / ' + videoCount + ' 動画';
-						pager.append(previous, label, next);
-						groups.append(pager);
-				}
-				const status = this.root.querySelector('[data-library-status]');
-				if (status)
-						status.textContent = videoCount + ' 動画 · ' + count + ' 件 · 更新が新しい順';
-				if (!count) {
-						const empty = doc.createElement('p');
-						empty.textContent = '該当する保存情報はありません';
-						groups.append(empty);
-				}
-				this.refreshPreviews();
+						else {
+								this.expandedVideos.delete(video.videoId);
+								this.captureLibraryDrafts(body);
+								body.remove();
+						}
+						this.libraryVirtual?.refresh();
+						this.refreshPreviews();
+				});
+				return group;
 		}
 		viewedDate(value) {
 				if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
@@ -15661,18 +15902,13 @@ class ManualBookmarkPanel {
 				if (action === 'open') {
 						this.libraryBusyRequest = null;
 						this.library = true;
-						this.libraryPage = 0;
+						this.libraryResetScroll = true;
 						this.expandedVideos.add(this.last.videoId || '');
 						await this.loadLibrary();
 						return;
 				}
 				if (action === 'retry') {
 						await this.loadLibrary();
-						return;
-				}
-				if (action === 'page-prev' || action === 'page-next') {
-						this.libraryPage += action === 'page-next' ? 1 : -1;
-						this.renderLibraryGroups();
 						return;
 				}
 				if (!this.library || !this.ownsVideo())
@@ -15713,6 +15949,7 @@ class ManualBookmarkPanel {
 				const generation = this.libraryGeneration, owner = this.last.videoId;
 				const request = { generation };
 				this.libraryBusyRequest = request;
+				row.dataset.librarySaving = 'true';
 				const controls = Array.from(row.querySelectorAll('button'));
 				controls.forEach(control => control.disabled = true);
 				try {
@@ -15737,8 +15974,10 @@ class ManualBookmarkPanel {
 								status.textContent = '保存できませんでした。入力は残っています。再度お試しください。';
 				}
 				finally {
+						delete row.dataset.librarySaving;
 						if (this.libraryBusyRequest === request)
 								this.libraryBusyRequest = null;
+						this.libraryVirtual?.refresh();
 						if (row.isConnected)
 								controls.forEach(control => control.disabled = false);
 				}
@@ -15752,6 +15991,10 @@ class ManualBookmarkPanel {
 				this.clearPreviews();
 				this.libraryDrafts.clear();
 				this.libraryGeneration++;
+				this.libraryVirtual?.dispose();
+				this.libraryVirtual = null;
+				this.releaseVideoThumbnails();
+				this.libraryDrafts.clear();
 				this.disposed = true;
 				this.pointGeneration++;
 				this.pointBusyRequest = null;
@@ -16088,6 +16331,10 @@ class ManualBookmarkDock {
 		.zenzaManualBookmarkDock .zw-library-search{display:flex;gap:8px;flex-wrap:wrap}
 		.zenzaManualBookmarkDock .zw-library-search input{flex:1;min-width:150px}
 		.zenzaManualBookmarkDock select{background:#101722;color:#f4f7ff;border:1px solid #53627b;border-radius:5px;padding:6px;font:inherit}
+		.zenzaManualBookmarkDock .zw-library-sticky-header{position:sticky;top:0;z-index:3;background:#171e2a;padding:4px 0;border-bottom:1px solid #354056}
+		.zenzaManualBookmarkDock .zw-library-virtual-item{display:flow-root}
+		.zenzaManualBookmarkDock .zw-library-thumbnail-host{flex:none;width:var(--zw-video-thumb-width,80px);aspect-ratio:16/9;overflow:hidden;display:flex;align-items:center;justify-content:center;border-radius:4px;background:#253346;color:#b9c9d9;font-size:12px;line-height:1.4}
+		.zenzaManualBookmarkDock .zw-library-thumbnail-host .zw-library-thumbnail-image{display:block;width:100%;height:100%;object-fit:cover}
 		.zenzaManualBookmarkDock .zw-library-group{margin-top:12px}
 		.zenzaManualBookmarkDock .zw-library-group>summary{font-weight:600;cursor:pointer;display:flex;align-items:center;gap:10px;min-width:0}
 		.zenzaManualBookmarkDock .zw-library-group>summary::before{content:'▸';flex:none;color:#aebbd1}
@@ -49898,6 +50145,241 @@ class SceneSearchPlayerBinding {
 // already required
 // already required
 // already required
+const SavedVideoThumbnail = (() => {
+		const safeUrl = (value) => {
+				if (typeof value !== 'string' || value.length > 4096)
+						return;
+				try {
+						const url = new URL(value);
+						if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password)
+								return url.href;
+				}
+				catch { }
+				return;
+		};
+		const create = ({ load, maxConcurrent = 2, maxEntries = 128 }) => {
+				const capacity = Number.isFinite(maxEntries) ? Math.max(1, Math.min(512, Math.floor(maxEntries))) : 128;
+				const concurrency = Number.isFinite(maxConcurrent) ? Math.max(1, Math.min(4, Math.floor(maxConcurrent))) : 2;
+				const cache = new Map(), jobs = new Map(), queue = [], leases = new Map();
+				let active = 0, disposed = false, observer = null;
+				let fallbackDocument = null, fallbackWindow = null, fallbackQueued = false;
+				const remember = (id, url) => {
+						cache.delete(id);
+						cache.set(id, { url, expires: Date.now() + (url ? 86400000 : 60000) });
+						while (cache.size > capacity)
+								cache.delete(cache.keys().next().value);
+				};
+				const cached = (id) => {
+						const result = cache.get(id);
+						if (!result)
+								return;
+						cache.delete(id);
+						if (result.expires <= Date.now())
+								return;
+						cache.set(id, result);
+						return result;
+				};
+				const state = (lease, loading, text = '画像なし') => {
+						lease.host.classList.toggle('zw-scene-loading', loading);
+						lease.host.setAttribute('aria-busy', String(loading));
+						lease.host.setAttribute('aria-label', loading ? '動画サムネイルを読み込み中' : text);
+						lease.host.textContent = loading ? '読み込み中' : text;
+				};
+				const detach = (lease) => {
+						const job = lease.job;
+						lease.job = null;
+						if (!job)
+								return;
+						job.listeners.delete(lease);
+						if (!job.started && !job.listeners.size) {
+								jobs.delete(job.id);
+								const index = queue.indexOf(job);
+								if (index >= 0)
+										queue.splice(index, 1);
+						}
+				};
+				const current = (lease, generation) => !disposed && !lease.released && lease.visible && lease.generation === generation;
+				const show = (lease, url, refreshOnError) => {
+						const generation = lease.generation;
+						state(lease, true);
+						const image = lease.host.ownerDocument.createElement('img');
+						image.alt = '';
+						image.decoding = 'async';
+						image.referrerPolicy = 'no-referrer';
+						image.className = 'zw-library-thumbnail-image';
+						image.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+						image.onload = () => {
+								if (!current(lease, generation))
+										return;
+								lease.host.classList.remove('zw-scene-loading');
+								lease.host.setAttribute('aria-busy', 'false');
+								lease.host.setAttribute('aria-label', '動画サムネイル');
+								remember(lease.id, url);
+						};
+						image.onerror = () => {
+								if (!current(lease, generation))
+										return;
+								lease.failedUrl = url;
+								if (refreshOnError)
+										request(lease, true);
+								else {
+										remember(lease.id, undefined);
+										state(lease, false);
+								}
+						};
+						lease.host.replaceChildren(image);
+						image.src = url;
+				};
+				const pump = () => {
+						while (!disposed && active < concurrency && queue.length) {
+								const job = queue.shift();
+								if (!job.listeners.size) {
+										jobs.delete(job.id);
+										continue;
+								}
+								job.started = true;
+								active++;
+								void Promise.resolve().then(() => load(job.id)).then(safeUrl, () => undefined).then(url => {
+										if (disposed)
+												return;
+										remember(job.id, url && (!job.listeners.size || [...job.listeners].some(lease => lease.failedUrl !== url)) ? url : undefined);
+										for (const lease of job.listeners) {
+												if (lease.job !== job || !current(lease, lease.generation))
+														continue;
+												lease.job = null;
+												if (url && url !== lease.failedUrl)
+														show(lease, url, false);
+												else
+														state(lease, false);
+										}
+								}).finally(() => { active--; if (jobs.get(job.id) === job)
+										jobs.delete(job.id); job.listeners.clear(); pump(); });
+						}
+				};
+				const request = (lease, force = false) => {
+						lease.generation++;
+						detach(lease);
+						state(lease, true);
+						const hit = cached(lease.id);
+						if (hit && (!force || !hit.url)) {
+								if (hit.url && hit.url !== lease.failedUrl)
+										show(lease, hit.url, true);
+								else
+										state(lease, false);
+								return;
+						}
+						let job = jobs.get(lease.id);
+						if (!job) {
+								if (jobs.size >= capacity) {
+										state(lease, false);
+										return;
+								}
+								job = { id: lease.id, listeners: new Set(), started: false };
+								jobs.set(lease.id, job);
+								queue.push(job);
+						}
+						job.listeners.add(lease);
+						lease.job = job;
+						pump();
+				};
+				const setVisible = (lease, visible) => {
+						if (disposed || lease.released || lease.visible === visible)
+								return;
+						lease.visible = visible;
+						lease.generation++;
+						detach(lease);
+						if (!visible) {
+								state(lease, false, '動画サムネイル');
+								return;
+						}
+						if (!/^(?:sm|nm|so|ss)?\d{1,16}$/i.test(lease.id)) {
+								state(lease, false);
+								return;
+						}
+						const hit = cached(lease.id);
+						if (hit) {
+								if (hit.url && hit.url !== lease.failedUrl)
+										show(lease, hit.url, true);
+								else
+										state(lease, false);
+						}
+						else if (lease.initial && lease.initial !== lease.failedUrl)
+								show(lease, lease.initial, true);
+						else
+								request(lease);
+				};
+				const checkFallback = () => {
+						fallbackQueued = false;
+						if (disposed)
+								return;
+						for (const lease of leases.values()) {
+								const rect = lease.host.getBoundingClientRect(), dock = lease.host.closest('.zenzaManualBookmarkDock')?.getBoundingClientRect(), win = lease.host.ownerDocument.defaultView;
+								const top = Math.max(0, dock?.top || 0), left = Math.max(0, dock?.left || 0);
+								const bottom = Math.min(win?.innerHeight || 0, dock?.bottom ?? Infinity), right = Math.min(win?.innerWidth || 0, dock?.right ?? Infinity);
+								setVisible(lease, lease.host.isConnected && rect.width > 0 && rect.height > 0 && rect.bottom > top && rect.top < bottom && rect.right > left && rect.left < right);
+						}
+				};
+				const scheduleFallback = () => { if (disposed || fallbackQueued)
+						return; fallbackQueued = true; queueMicrotask(checkFallback); };
+				const attach = (host, videoId, initialUrl) => {
+						if (disposed)
+								return () => { };
+						leases.get(host)?.release();
+						const lease = { host, id: videoId, initial: safeUrl(initialUrl), visible: false, released: false, generation: 0, failedUrl: undefined, job: null, release: () => { } };
+						lease.release = () => {
+								if (lease.released)
+										return;
+								lease.released = true;
+								lease.generation++;
+								detach(lease);
+								observer?.unobserve(host);
+								leases.delete(host);
+								host.classList.remove('zw-scene-loading');
+								host.setAttribute('aria-busy', 'false');
+								host.replaceChildren();
+						};
+						leases.set(host, lease);
+						host.setAttribute('role', 'img');
+						state(lease, false, '動画サムネイル');
+						const Observer = host.ownerDocument.defaultView?.IntersectionObserver;
+						if (Observer) {
+								if (!observer)
+										observer = new Observer(entries => { for (const entry of entries) {
+												const item = leases.get(entry.target);
+												if (item)
+														setVisible(item, entry.isIntersecting);
+										} }, { root: host.closest('.zenzaManualBookmarkDock'), rootMargin: '0px' });
+								observer.observe(host);
+						}
+						else {
+								if (!fallbackDocument) {
+										fallbackDocument = host.ownerDocument;
+										fallbackWindow = fallbackDocument.defaultView;
+										fallbackDocument.addEventListener('scroll', scheduleFallback, { capture: true, passive: true });
+										fallbackWindow?.addEventListener('resize', scheduleFallback, { passive: true });
+								}
+								scheduleFallback();
+						}
+						return lease.release;
+				};
+				const dispose = () => {
+						if (disposed)
+								return;
+						disposed = true;
+						observer?.disconnect();
+						observer = null;
+						fallbackDocument?.removeEventListener('scroll', scheduleFallback, true);
+						fallbackWindow?.removeEventListener('resize', scheduleFallback);
+						for (const lease of [...leases.values()])
+								lease.release();
+						queue.length = 0;
+						jobs.clear();
+						cache.clear();
+				};
+				return { attach, dispose };
+		};
+		return { create };
+})();
 // already required
 const NotificationHistoryPanel = (() => {
 		const STYLE_ID = 'zenzaNotificationHistoryStyle';
@@ -51172,11 +51654,20 @@ class NicoVideoPlayerDialogView extends Emitter {
 						return false;
 				this._manualBookmarkDockMounting = true;
 				let bookmarkSession;
+				let videoThumbnails;
 				try {
 						const container = this._$playerContainer?.[0];
 						const backend = new IndexedDbManualBookmarkBackend(window.indexedDB);
 						const repository = new ManualBookmarkRepository(backend);
 						bookmarkSession = new ManualBookmarkSession(repository);
+						videoThumbnails = SavedVideoThumbnail.create({
+								load: async (videoId) => {
+										const info = await ThumbInfoLoader.load(videoId);
+										return info.thumbnail;
+								}, maxConcurrent: 2, maxEntries: 128
+						});
+						const disposeSession = bookmarkSession.dispose.bind(bookmarkSession);
+						bookmarkSession.dispose = () => { videoThumbnails?.dispose(); disposeSession(); };
 						this.manualBookmarkDock = ManualBookmarkDock.mount(container, bookmarkSession, {
 								currentVideoId: () => this._state.videoInfo?.watchId ?? null,
 								currentTime: () => Number(this._currentTimeGetter()) || 0,
@@ -51194,6 +51685,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 								setRecordingEnabled: (enabled) => this._playerConfig.setValue('resume.recordEnabled', enabled),
 								createScenePreview: (host, videoId, time) => this.videoControlBar?.storyboard?.createSavedPreview?.(host, videoId, time) || (() => { }),
 								loadLibrary: () => this._loadSavedPointLibrary(repository),
+								createVideoThumbnail: (host, video) => videoThumbnails.attach(host, video.videoId, video.thumbnailUrl),
 								openLibraryPosition: (videoId, time, endTime) => {
 										void this._openSavedLibraryPosition(videoId, time, endTime);
 								},
@@ -51251,6 +51743,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 						});
 				}
 				catch {
+						videoThumbnails?.dispose();
 						try {
 								bookmarkSession?.dispose();
 						}
@@ -51283,6 +51776,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 				if (entry) {
 						entry.title = current.title || entry.title;
 						entry.duration = current.duration || entry.duration;
+						entry.thumbnailUrl = current.thumbnail || current.betterThumbnail || entry.thumbnailUrl;
 						entry.automaticTime = this._dialog?._videoInfo?.resumePoints?.[0]?.time ?? entry.automaticTime;
 				}
 				return [...byId.values()].filter(row => row.automaticTime !== null || row.bookmarks.length)

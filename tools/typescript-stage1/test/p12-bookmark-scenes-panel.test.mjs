@@ -263,24 +263,24 @@ test('Enter saves a historical library edit and hidden scenes release current le
 });
 
 
-test('Task1000 large library bounds groups and creates rows only when opened',async()=>{
+
+test('Task1001 continuous library reaches all 1000 videos with bounded DOM and no pagers',async()=>{
  const rows=Array.from({length:1000},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:100,updatedAt:1000-i,automaticTime:2,
- bookmarks:Array.from({length:i===0?120:3},(_,j)=>({id:'b'+j,time:j/2,label:'scene '+j,createdAt:1,updatedAt:1}))}));
+ bookmarks:Array.from({length:i===0?100:3},(_,j)=>({id:'b'+j,time:j/2,label:'scene '+j,createdAt:1,updatedAt:1}))}));
  const h=harness({loadLibrary:async()=>rows});h.click('[data-library-action="open"]');await step();
- assert.equal(h.root.querySelectorAll('[data-library-video]').length,50);
- assert.equal(h.root.querySelectorAll('[data-library-row]').length,0);
- assert(h.root.querySelectorAll('*').length<500);
+ assert(h.root.querySelectorAll('[data-library-video]').length<40);
+ assert.equal(h.root.querySelectorAll('[data-library-row]').length,0);assert(h.root.querySelectorAll('*').length<500);
+ assert.equal(h.root.querySelector('[data-library-action="page-next"],[data-library-row-page]'),null);
  const group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
- assert.equal(group.querySelectorAll('[data-library-row]').length,50);
- group.querySelector('[data-library-row-page="next"]').click();
- assert.equal(group.querySelectorAll('[data-library-row]').length,50);
- assert(group.textContent.includes('scene 49'));
- h.click('[data-library-action="page-next"]');assert.equal(h.root.querySelector('[data-library-video]').dataset.libraryVideo,'old50');
+ assert.equal(group.querySelectorAll('[data-library-row]').length,101,'all allowed positions in expanded video');
+ h.root.scrollTop=1e6;h.panel.libraryVirtual.refresh();assert(h.root.querySelector('[data-library-video="old999"]'));
+ assert(h.root.querySelectorAll('[data-library-video]').length<40);
+ h.root.scrollTop=0;h.panel.libraryVirtual.refresh();assert(h.root.querySelector('[data-library-video="old0"]'));
  const search=h.root.querySelector('[data-library-search]');search.value='Video 999';search.dispatchEvent(new h.dom.window.Event('input',{bubbles:true}));
- assert.equal(h.root.querySelectorAll('[data-library-video]').length,1);
+ assert.equal(h.root.scrollTop,0);assert.equal(h.root.querySelectorAll('[data-library-video]').length,1);
  assert.equal(h.root.querySelector('[data-library-video]').dataset.libraryVideo,'old999');h.close();
 });
-test('Task1000 opening a second group does not restart the first scene lease',async()=>{
+test('Task1001 opening a second group preserves first preview and close detaches its rows',async()=>{
  const h=harness({loadLibrary:async()=>[1,2].map(i=>({videoId:'sm'+i,title:'video',duration:100,updatedAt:1,automaticTime:2,bookmarks:[]}))});
  h.click('[data-library-action="open"]');await step();const before=h.previews.length,cleanups=h.cleanups.length;
  const group=h.root.querySelector('[data-library-video="sm2"]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
@@ -288,38 +288,29 @@ test('Task1000 opening a second group does not restart the first scene lease',as
  group.open=false;group.dispatchEvent(new h.dom.window.Event('toggle'));
  assert.equal(group.querySelectorAll('[data-library-row]').length,0);assert.equal(h.cleanups.length,cleanups+1);h.close();
 });
-
-test('Task1000 paged deletion clamps the last page and collapsed drafts survive reopen',async()=>{
- let rows=Array.from({length:51},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:100,updatedAt:51-i,automaticTime:null,
+test('Task1001 focused edits pin a group; scalar drafts survive eviction and success clears them',async()=>{
+ const rows=Array.from({length:1000},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:200,updatedAt:1000-i,automaticTime:null,
  bookmarks:[{id:'b',time:4,label:'scene',createdAt:1,updatedAt:1}]}));
- const h=harness({loadLibrary:async()=>rows,deleteLibraryBookmark:async videoId=>{rows=rows.filter(row=>row.videoId!==videoId);},editLibraryBookmark:async()=>{}});
- h.click('[data-library-action="open"]');await step();h.click('[data-library-action="page-next"]');
- const group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
- const field=group.querySelector('[data-library-start]');field.value='8';
- group.open=false;group.dispatchEvent(new h.dom.window.Event('toggle'));assert.equal(group.querySelector('[data-library-start]'),null);
- group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));assert.equal(group.querySelector('[data-library-start]').value,'8');
- h.click('[data-library-action="delete"]');await step();
- assert.equal(h.root.querySelectorAll('[data-library-video]').length,50);
- assert.equal(h.root.querySelector('[data-library-video]').dataset.libraryVideo,'old0');
- assert.equal(h.root.querySelector('[data-library-action="page-next"]'),null);h.close();
-});
-
-test('Task1000 video and row pagination retain dirty scalar edits, successful save clears them',async()=>{
- const rows=Array.from({length:51},(_,i)=>({videoId:'old'+i,title:'Video '+i,duration:200,updatedAt:51-i,automaticTime:null,
- bookmarks:Array.from({length:i===0?55:1},(_,j)=>({id:'b'+j,time:j,label:'scene '+j,createdAt:1,updatedAt:1}))}));
- const h=harness({loadLibrary:async()=>rows,editLibraryBookmark:async(videoId,id,changes)=>{Object.assign(rows.find(v=>v.videoId===videoId).bookmarks.find(b=>b.id===id),changes);}});
+ const h=harness({loadLibrary:async()=>rows,editLibraryBookmark:async(videoId,id,changes)=>Object.assign(rows.find(v=>v.videoId===videoId).bookmarks[0],changes)});
  h.click('[data-library-action="open"]');await step();
  let group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));
- let field=group.querySelector('[data-library-start]');field.value='24';
- group.querySelector('.zw-bookmark-edit').open=true;
- group.querySelector('[data-library-row-page="next"]').click();group.querySelector('[data-library-row-page="prev"]').click();
+ let field=group.querySelector('[data-library-start]');field.value='24';field.focus();group.querySelector('.zw-bookmark-edit').open=true;
+ h.root.scrollTop=1e6;h.panel.libraryVirtual.refresh();assert.equal(h.dom.window.document.activeElement,field);assert(h.root.contains(field));
+ field.blur();h.panel.libraryVirtual.refresh();assert(!h.root.contains(field));
+ h.root.scrollTop=0;h.panel.libraryVirtual.refresh();group=h.root.querySelector('[data-library-video]');
  assert.equal(group.querySelector('[data-library-start]').value,'24');assert.equal(group.querySelector('.zw-bookmark-edit').open,true);
- group.open=false;group.dispatchEvent(new h.dom.window.Event('toggle'));
- h.click('[data-library-action="page-next"]');h.click('[data-library-action="page-prev"]');
- group=h.root.querySelector('[data-library-video]');group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));assert.equal(group.querySelector('[data-library-start]').value,'24');
  h.click('[data-library-action="save"]');await step();assert.equal(rows[0].bookmarks[0].time,24);
- // Successful save removes the old draft. A subsequent canonical change wins.
  rows[0].bookmarks[0].time=25;h.click('[data-library-action="back"]');h.click('[data-library-action="open"]');await step();
- group=h.root.querySelector('[data-library-video]');assert.equal(group.querySelector('[data-library-action="save"][data-bookmark-id="b0"]').closest('[data-library-row]').querySelector('[data-library-start]').value,'0:25');
- h.close();
+ group=h.root.querySelector('[data-library-video]');assert.equal(group.querySelector('[data-library-start]').value,'0:25');h.close();
+});
+test('Task1001 mounted video thumbnails resolve missing metadata and release on hide/eviction',async()=>{
+ const acquired=[],released=[];
+ const h=harness({loadLibrary:async()=>Array.from({length:1000},(_,i)=>({videoId:'old'+i,title:'video',duration:100,updatedAt:1000-i,automaticTime:2,bookmarks:[]})),
+ createVideoThumbnail:(host,video)=>{acquired.push(video.videoId);return()=>released.push(video.videoId);}});
+ h.click('[data-library-action="open"]');await step();assert(acquired.length>0&&acquired.length<40);
+ assert(h.root.querySelector('.zw-library-thumbnail-host'));const first=acquired.length;
+ h.panel.setVisible(false);assert.equal(released.length,first);assert.equal(h.root.querySelector('[data-library-video]'),null);
+ h.panel.setVisible(true);assert.equal(acquired.length,first*2);
+ h.root.scrollTop=1e6;h.panel.libraryVirtual.refresh();assert(acquired.includes('old999'));assert(released.length>=first*2);
+ h.close();assert.equal(released.length,acquired.length);
 });

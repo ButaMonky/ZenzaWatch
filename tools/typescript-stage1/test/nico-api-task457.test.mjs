@@ -24,6 +24,8 @@ test('registry is fixed and every pre-migration fixture matches its recorded has
     // Preserve the existing restricted allowlist for every other module.
     if (spec.name === 'NotificationJournal' || spec.name === 'NotificationHistoryPanel') {
       assert.equal(spec.runtime, 'src/' + spec.name + '.js');
+    } else if (spec.name === 'SavedVideoThumbnail') {
+      assert.equal(spec.runtime, 'packages/zenza/src/resume/SavedVideoThumbnail.js');
     } else if (['NotificationJournalPolicy','NotificationJournalStore'].includes(spec.name)) {
       assert.equal(spec.runtime, 'packages/zenza/src/notification/' + spec.name + '.js');
     } else {
@@ -124,10 +126,11 @@ test('legacy build directives are preserved in each runtime',()=>{
         "import {AutoResumeClearCoordinator} from '../packages/zenza/src/resume/AutoResumeClearCoordinator';",
         "import {IndexedDbManualBookmarkBackend, ManualBookmarkRepository} from '../packages/zenza/src/resume/ManualBookmarkStore';",
         "import {ManualBookmarkSession} from '../packages/zenza/src/resume/ManualBookmarkSession';",
-        "import {ManualBookmarkDock} from '../packages/zenza/src/resume/ManualBookmarkDock';");
+        "import {ManualBookmarkDock} from '../packages/zenza/src/resume/ManualBookmarkDock';",
+        "import {SavedVideoThumbnail} from '../packages/zenza/src/resume/SavedVideoThumbnail';");
       expected.splice(expected.indexOf('//@require NotificationHistoryPanel'),0,
         '//@require AutoResumeClearCoordinator','//@require ManualBookmarkRepository',
-        '//@require ManualBookmarkSession','//@require ManualBookmarkDock');
+        '//@require ManualBookmarkSession','//@require ManualBookmarkDock','//@require SavedVideoThumbnail');
     }
     if (spec.name === 'VideoControlBar') {
       // Preserve the exact order of both added native seek dependencies.

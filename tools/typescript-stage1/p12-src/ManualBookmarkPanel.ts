@@ -1,3 +1,4 @@
+import {ManualBookmarkVirtualList} from './ManualBookmarkVirtualList.ts';
 /**
  * P12-03 optional standalone manual bookmark panel.
  * Never takes ownership of the native seekbar or automatic resume markers.
@@ -15,6 +16,7 @@ export interface ManualBookmarkPanelDependencies {
   libraryAppearance?:()=>{showVideoThumbnails:boolean;showScenePreviews:boolean;thumbnailWidth:number;titleFontSize:number;titleLines:number};
   automaticViewedAt?:()=>number|null;
   setRecordingEnabled?:(enabled:boolean)=>void;
+  createVideoThumbnail?:(host:HTMLElement,video:ManualBookmarkLibraryEntry)=>()=>void;
   createScenePreview?:(host:HTMLElement,videoId:string,time:number)=>()=>void;
   loadLibrary?:()=>Promise<readonly ManualBookmarkLibraryEntry[]>;
   openLibraryPosition?:(videoId:string,time:number,endTime?:number)=>void;
@@ -79,12 +81,13 @@ export class ManualBookmarkPanel {
   private libraryStatus:'idle'|'loading'|'ready'|'error'='idle';
   private librarySearch='';
   private libraryFilter='all';
-  private libraryPage=0;
-  private libraryRowPages=new Map<string,number>();
+  private libraryVirtual:ManualBookmarkVirtualList<{video:ManualBookmarkLibraryEntry;automatic:boolean;bookmarks:readonly ManualBookmark[]}>|null=null;
+  private videoThumbnailLeases=new Map<HTMLElement,()=>void>();
+  private libraryResetScroll=false;
   private libraryDrafts=new Map<string,{values:Record<string,string>;open:boolean}>();
   private expandedVideos=new Set<string>();
   private readonly changeHandler:(event:Event)=>void;
-  setVisible(visible:boolean):void {this.visible=visible;this.refreshPreviews();}
+  setVisible(visible:boolean):void {this.visible=visible;this.libraryVirtual?.setActive(visible);if(!visible)this.releaseVideoThumbnails();this.refreshPreviews();}
   private clearPreviews():void {
     this.previewObserver?.disconnect();this.previewObserver=null;this.previewCandidates.clear();this.previewObserved.clear();
     for(const cleanup of this.previewLeases.values()){try{cleanup();}catch{/* optional preview */}}
@@ -460,11 +463,11 @@ export class ManualBookmarkPanel {
       if(target?.matches('[data-recording-enabled]')&&this.ownsVideo()){
         this.deps.setRecordingEnabled?.(target.checked);this.pointMessage('automatic',target.checked?'自動記録をONにしました。':'自動記録をOFFにしました。保存済みの位置は残ります。');
       }
-      if(target?.matches('[data-library-filter]')){this.libraryFilter=target.value;this.libraryPage=0;this.libraryRowPages.clear();this.renderLibraryGroups();}
+      if(target?.matches('[data-library-filter]')){this.libraryFilter=target.value;this.libraryResetScroll=true;this.renderLibraryGroups();}
     };
     this.inputHandler=event=>{
       const target=event.target as Element|null;
-      if(target?.matches?.('[data-library-search]')){this.librarySearch=(target as HTMLInputElement).value;this.libraryPage=0;this.libraryRowPages.clear();this.renderLibraryGroups();return;}
+      if(target?.matches?.('[data-library-search]')){this.librarySearch=(target as HTMLInputElement).value;this.libraryResetScroll=true;this.renderLibraryGroups();return;}
       if(target?.matches?.('input[data-point-field]')){
         const field=target as HTMLInputElement;
         if(field.dataset.pointField==='automatic'){this.automaticDraftDirty=true;this.automaticDraftRevision++;}
@@ -512,6 +515,7 @@ export class ManualBookmarkPanel {
   private render(snapshot:ManualBookmarkPanelSnapshot):void{
     if(this.disposed)return;
     if(this.library)this.captureLibraryDrafts();
+    this.libraryVirtual?.dispose();this.libraryVirtual=null;this.releaseVideoThumbnails();
     // A refresh of the same video must not silently discard an unsaved rename.
     // A changed canonical label (including our own completed rename) wins.
     const sameVideo=snapshot.videoId!==null&&
@@ -769,7 +773,7 @@ export class ManualBookmarkPanel {
   private renderLibrary():void {
     const doc=this.root.ownerDocument,region=doc.createElement('section');
     this.root.closest('.zenzaManualBookmarkDock')?.classList.add('zw-library-wide');
-    region.append(this.libraryButton('back','← 今の動画へ'));
+    const sticky=doc.createElement('div');sticky.className='zw-library-sticky-header';sticky.append(this.libraryButton('back','← 今の動画へ'));region.append(sticky);
     const title=doc.createElement('h3');title.textContent='保存一覧';region.append(title);
     const search=doc.createElement('input');search.type='search';search.dataset.librarySearch='1';
     search.placeholder='動画名・しおり名で検索';search.setAttribute('aria-label',search.placeholder);search.value=this.librarySearch;
@@ -787,7 +791,7 @@ export class ManualBookmarkPanel {
   }
   private renderLibraryGroups():void {
     const groups=this.root.querySelector<HTMLElement>('[data-library-groups]');if(!groups||this.disposed)return;
-    this.captureLibraryDrafts();this.clearPreviews();groups.replaceChildren();const doc=this.root.ownerDocument;
+    this.captureLibraryDrafts();this.clearPreviews();const doc=this.root.ownerDocument;
     const appearance=this.deps.libraryAppearance?.();
     const bounded=(value:number|undefined,fallback:number,min:number,max:number)=>Number.isFinite(value)?Math.min(max,Math.max(min,value!)):fallback;
     groups.style.setProperty('--zw-video-thumb-width',bounded(appearance?.thumbnailWidth,80,64,160)+'px');
@@ -802,20 +806,49 @@ export class ManualBookmarkPanel {
       return {video,automatic,bookmarks};
     }).filter(item=>item.automatic||item.bookmarks.length);
     const videoCount=matching.length,count=matching.reduce((sum,item)=>sum+item.bookmarks.length+Number(item.automatic),0);
-    this.libraryPage=Math.min(this.libraryPage,Math.max(0,Math.ceil(videoCount/50)-1));
-    for(const {video,automatic,bookmarks} of matching.slice(this.libraryPage*50,(this.libraryPage+1)*50)){
+    if(!this.libraryVirtual){
+      const scroller=this.root.closest<HTMLElement>('.zenzaManualBookmarkDock')||this.root;
+      this.libraryVirtual=new ManualBookmarkVirtualList(groups,scroller,{
+        key:entry=>entry.video.videoId,
+        estimate:entry=>{
+          const thumb=appearance?.showVideoThumbnails===false?0:bounded(appearance?.thumbnailWidth,80,64,160)*9/16;
+          const text=bounded(appearance?.titleFontSize,13,11,18)*1.6*bounded(appearance?.titleLines,1,1,3)+18+(entry.video.viewedAt?18:0);
+          return Math.max(thumb,text)+12+(this.expandedVideos.has(entry.video.videoId)?(entry.bookmarks.length+Number(entry.automatic))*90:0);
+        },
+        render:entry=>this.renderLibraryGroup(entry.video,entry.automatic,entry.bookmarks),
+        release:node=>{if(this.library)this.captureLibraryDrafts(node);this.releaseVideoThumbnails(node);},
+        pinned:node=>!!node.querySelector('[data-library-saving="true"]'),
+        changed:()=>this.refreshPreviews(),
+        inset:()=>this.root.querySelector<HTMLElement>('.zw-library-sticky-header')?.offsetHeight||0
+      });
+    }
+    this.libraryVirtual.setActive(this.visible);
+    this.libraryVirtual.setItems(matching,this.libraryResetScroll);this.libraryResetScroll=false;
+    const status=this.root.querySelector<HTMLElement>('[data-library-status]');
+    if(status)status.textContent=videoCount+' 動画 · '+count+' 件 · 更新が新しい順';
+    if(!count){const empty=doc.createElement('p');empty.textContent='該当する保存情報はありません';groups.append(empty);}
+  }
+  private releaseVideoThumbnails(container?:HTMLElement):void {
+    for(const [host,release] of this.videoThumbnailLeases)if(!container||container.contains(host)){
+      this.videoThumbnailLeases.delete(host);try{release();}catch{/* optional thumbnail */}
+    }
+  }
+  private renderLibraryGroup(video:ManualBookmarkLibraryEntry,automatic:boolean,bookmarks:readonly ManualBookmark[]):HTMLElement {
+      const doc=this.root.ownerDocument,appearance=this.deps.libraryAppearance?.();
       const group=doc.createElement('details');group.className='zw-library-group';group.dataset.libraryVideo=video.videoId;
       group.open=this.expandedVideos.has(video.videoId);
       const summary=doc.createElement('summary');
-      if(appearance?.showVideoThumbnails!==false&&video.thumbnailUrl){
-        try{
+      if(appearance?.showVideoThumbnails!==false){
+        const host=doc.createElement('div');host.className='zw-library-thumbnail-host';summary.append(host);
+        if(this.deps.createVideoThumbnail){try{this.videoThumbnailLeases.set(host,this.deps.createVideoThumbnail(host,video));}catch{host.textContent='画像なし';}}
+        else if(video.thumbnailUrl){try{
           const url=new URL(video.thumbnailUrl);
           if(url.protocol==='https:'||url.protocol==='http:'){
             const image=doc.createElement('img');image.className='zw-library-thumbnail';image.alt='';
             image.setAttribute('loading','lazy');image.decoding='async';image.referrerPolicy='no-referrer';image.src=url.href;
-            image.addEventListener('error',()=>image.remove(),{once:true});summary.append(image);
+            image.addEventListener('error',()=>{image.remove();host.textContent='画像なし';},{once:true});host.append(image);
           }
-        }catch{/* Malformed old metadata must not disable the library. */}
+        }catch{/* invalid old URL */}}
       }
       const header=doc.createElement('span');header.className='zw-library-header';
       const title=doc.createElement('span');title.className='zw-library-title';title.textContent=video.title;header.append(title);
@@ -823,24 +856,13 @@ export class ManualBookmarkPanel {
       const viewed=this.viewedDate(video.viewedAt);if(viewed)header.append(viewed);
       summary.append(header);
       group.append(summary);
-      // Closed videos have no point rows, editors or scene-image hosts in the DOM.
+      // A video's stored manual points are bounded to 100 by ManualBookmarkPolicy.
+      // Keep one native details group and one outer scrollbar, without row pages.
       const body=doc.createElement('div');let materialized=false;
       const renderBody=()=>{
-        const ordered=[...(automatic?[null]:[]),...bookmarks.slice().sort((a,b)=>a.time-b.time)];
-        const page=Math.min(this.libraryRowPages.get(video.videoId)||0,Math.max(0,Math.ceil(ordered.length/50)-1));
-        this.libraryRowPages.set(video.videoId,page);this.captureLibraryDrafts(body);body.replaceChildren();
         const list=doc.createElement('ul');body.append(list);
-        for(const item of ordered.slice(page*50,(page+1)*50))list.append(this.libraryRow(video,item));
-        if(ordered.length>50){
-          const pager=doc.createElement('div');pager.className='zw-library-pagination';
-          for(const [direction,label,offset] of [['prev','前へ',-1],['next','次へ',1]] as const){
-            const button=doc.createElement('button');button.type='button';button.textContent=label;button.dataset.libraryRowPage=direction;
-            button.disabled=offset<0?page===0:(page+1)*50>=ordered.length;
-            button.addEventListener('click',event=>{event.stopPropagation();this.libraryRowPages.set(video.videoId,page+offset);renderBody();this.refreshPreviews();});
-            pager.append(button);
-          }
-          const status=doc.createElement('span');status.textContent=(page*50+1)+'–'+Math.min((page+1)*50,ordered.length)+' / '+ordered.length+' 件';pager.append(status);body.append(pager);
-        }
+        if(automatic)list.append(this.libraryRow(video,null));
+        for(const item of bookmarks.slice().sort((a,b)=>a.time-b.time))list.append(this.libraryRow(video,item));
         materialized=true;
       };
       if(group.open){renderBody();group.append(body);}
@@ -848,20 +870,9 @@ export class ManualBookmarkPanel {
         if(this.disposed||!group.isConnected)return;
         if(group.open){this.expandedVideos.add(video.videoId);if(!materialized)renderBody();group.append(body);}
         else{this.expandedVideos.delete(video.videoId);this.captureLibraryDrafts(body);body.remove();}
-        this.refreshPreviews();
-      });groups.append(group);
-    }
-    if(videoCount>50){
-      const pager=doc.createElement('div');pager.className='zw-library-pagination';
-      const previous=this.libraryButton('page-prev','前の50動画'),next=this.libraryButton('page-next','次の50動画');
-      previous.disabled=this.libraryPage===0;next.disabled=(this.libraryPage+1)*50>=videoCount;
-      const label=doc.createElement('span');label.textContent=(this.libraryPage*50+1)+'–'+Math.min((this.libraryPage+1)*50,videoCount)+' / '+videoCount+' 動画';
-      pager.append(previous,label,next);groups.append(pager);
-    }
-    const status=this.root.querySelector<HTMLElement>('[data-library-status]');
-    if(status)status.textContent=videoCount+' 動画 · '+count+' 件 · 更新が新しい順';
-    if(!count){const empty=doc.createElement('p');empty.textContent='該当する保存情報はありません';groups.append(empty);}
-    this.refreshPreviews();
+        this.libraryVirtual?.refresh();this.refreshPreviews();
+      });
+      return group;
   }
   private viewedDate(value:number|null|undefined):HTMLTimeElement|null {
     if(typeof value!=='number'||!Number.isFinite(value)||value<=0)return null;
@@ -904,9 +915,8 @@ export class ManualBookmarkPanel {
     if(this.disposed||button.disabled)return;
     const action=button.dataset.libraryAction;
     if(action==='back'){this.libraryDrafts.clear();this.library=false;this.libraryGeneration++;this.libraryBusyRequest=null;this.render(this.last);return;}
-    if(action==='open'){this.libraryBusyRequest=null;this.library=true;this.libraryPage=0;this.expandedVideos.add(this.last.videoId||'');await this.loadLibrary();return;}
+    if(action==='open'){this.libraryBusyRequest=null;this.library=true;this.libraryResetScroll=true;this.expandedVideos.add(this.last.videoId||'');await this.loadLibrary();return;}
     if(action==='retry'){await this.loadLibrary();return;}
-    if(action==='page-prev'||action==='page-next'){this.libraryPage+=action==='page-next'?1:-1;this.renderLibraryGroups();return;}
     if(!this.library||!this.ownsVideo())return;
     const video=this.libraryRows.find(v=>v.videoId===button.dataset.videoId);
     if(!video)return;
@@ -928,7 +938,7 @@ export class ManualBookmarkPanel {
       if(status)status.textContent='動画の長さ以内の時刻を入力してください。終了は開始より後にします。';return;
     }
     const generation=this.libraryGeneration,owner=this.last.videoId;
-    const request={generation};this.libraryBusyRequest=request;
+    const request={generation};this.libraryBusyRequest=request;row.dataset.librarySaving='true';
     const controls=Array.from(row.querySelectorAll<HTMLButtonElement>('button'));
     controls.forEach(control=>control.disabled=true);
     try{
@@ -945,7 +955,9 @@ export class ManualBookmarkPanel {
       if(!this.disposed&&generation===this.libraryGeneration&&owner===this.last.videoId&&status?.isConnected)
         status.textContent='保存できませんでした。入力は残っています。再度お試しください。';
     }finally{
+      delete row.dataset.librarySaving;
       if(this.libraryBusyRequest===request)this.libraryBusyRequest=null;
+      this.libraryVirtual?.refresh();
       if(row.isConnected)controls.forEach(control=>control.disabled=false);
     }
   }
@@ -953,6 +965,7 @@ export class ManualBookmarkPanel {
   dispose():void{
     if(this.disposed)return;
     this.loop=null;this.deps.repeatState?.(false);this.deps.onRepeatRangeChange?.(null);this.clearPreviews();this.libraryDrafts.clear();this.libraryGeneration++;
+    this.libraryVirtual?.dispose();this.libraryVirtual=null;this.releaseVideoThumbnails();this.libraryDrafts.clear();
     this.disposed=true;this.pointGeneration++;this.pointBusyRequest=null;this.unsubscribe();
     this.root.removeEventListener('keydown',this.keyHandler);
     this.root.removeEventListener('click',this.clickHandler);

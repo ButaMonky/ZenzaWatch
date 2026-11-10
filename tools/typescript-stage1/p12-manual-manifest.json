@@ -26,20 +26,28 @@
       "runtimeSha256": "925cd49f0c07d3f2d838318fa6fabaa7c45a9c35a3ed59d0d7a122193023a51f"
     },
     {
+      "name": "ManualBookmarkVirtualList",
+      "source": "tools/typescript-stage1/p12-src/ManualBookmarkVirtualList.ts",
+      "runtime": "packages/zenza/src/resume/ManualBookmarkVirtualList.js",
+      "sourceSha256": "6e7de444baf4125c1a1e58cd08b737ec3a6d656580634051c43f2fe530225133",
+      "emittedSha256": "f825a7af096691f3897ab26a8ddb68636d42932b658471a365b2a1c8cff3c7c1",
+      "runtimeSha256": "b0fc15f3f419997bae33d794da3dfda00de9e444af965a6c114e6260cde96537"
+    },
+    {
       "name": "ManualBookmarkPanel",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkPanel.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkPanel.js",
-      "sourceSha256": "7e25f93b494bf4417f8b710aa2090f11ad2c4c4f063be4e8330291ee8f3d0d7e",
-      "emittedSha256": "15f89d7ad1d75c9354958914c856791dcdacafac12e8065b8edb0f0d9fdba48f",
-      "runtimeSha256": "678042f21c56fe65caeac2b9cc17a8d709307e1e2d4c166f6b738204071716d5"
+      "sourceSha256": "87d92b57cd2624adb0a5f85c8eebbcf12096a66351eb742baafed7ca02d9c1a0",
+      "emittedSha256": "90ec08ed95a28f36f22e4bbe23b569da45dae03f14512a9d2d6f47749de34da9",
+      "runtimeSha256": "a4716ca16584c9e2a8a2af74a04613538aa7b0264e9ad7f41ce5e25059b39d1e"
     },
     {
       "name": "ManualBookmarkDock",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkDock.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkDock.js",
-      "sourceSha256": "5605208c18fd59af0726b8f9d808347a07e7c7af86e5604e335d8199dbef0af3",
-      "emittedSha256": "686915553485f51686780b5e0c062338aa4c3133a500e991715d903838926cdc",
-      "runtimeSha256": "69dfeb4116c27682ceaffd128418b0364c19cbda74942de181abfd93b7980c01"
+      "sourceSha256": "e82a6f17f53a8a7d2d206fcaa998fbe21e747c77222357bb510d8abfe2f8fea0",
+      "emittedSha256": "fbf43a15b8f71a285b5334612b6c0edc97bed52868868a2c6b290640df363c99",
+      "runtimeSha256": "2fe9bbb20d5562139d33236f058bea5185596aa09d23b90c66e4daddd2cc8dba"
     }
   ]
 }

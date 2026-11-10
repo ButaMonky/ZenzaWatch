@@ -37,9 +37,9 @@
       "name": "ManualBookmarkPanel",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkPanel.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkPanel.js",
-      "sourceSha256": "87d92b57cd2624adb0a5f85c8eebbcf12096a66351eb742baafed7ca02d9c1a0",
-      "emittedSha256": "90ec08ed95a28f36f22e4bbe23b569da45dae03f14512a9d2d6f47749de34da9",
-      "runtimeSha256": "a4716ca16584c9e2a8a2af74a04613538aa7b0264e9ad7f41ce5e25059b39d1e"
+      "sourceSha256": "efacf07fd75beed9bc6cc9171faee3b7d7a6ea0265bcfc49880691d37741eefe",
+      "emittedSha256": "97001d40a6173fde5a5a40bc422b28e009fcf124f30653d430bcb1b49fea4daa",
+      "runtimeSha256": "01128d94f66b4bab96e6e434996b527c469298e26adfa9a8e64dcb850fed7a99"
     },
     {
       "name": "ManualBookmarkDock",

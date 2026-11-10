@@ -728,16 +728,20 @@ class ManualBookmarkPanel {
         this.releaseVideoThumbnails();
         // A refresh of the same video must not silently discard an unsaved rename.
         // A changed canonical label (including our own completed rename) wins.
-        const sameVideo = snapshot.videoId !== null &&
-            snapshot.videoId === this.last.videoId;
-        // A different bookmark's save must not destroy the unsent Add label.
-        if (!sameVideo) {
+        // The library belongs to this panel/session identity, including idle -> idle.
+        // Current-video seeking and edits still require a non-null playback owner.
+        const sameIdentity = snapshot.videoId === this.last.videoId;
+        const sameVideo = snapshot.videoId !== null && sameIdentity;
+        if (!sameIdentity) {
             this.libraryDrafts.clear();
             this.libraryGeneration++;
             this.libraryBusyRequest = null;
             this.library = false;
             this.libraryStatus = 'idle';
             this.expandedVideos = new Set(snapshot.videoId ? [snapshot.videoId] : []);
+        }
+        // A different bookmark's save must not destroy the unsent Add label.
+        if (!sameVideo) {
             this.pointGeneration++;
             this.pointBusyRequest = null;
             this.automaticDraftDirty = false;
@@ -1360,7 +1364,8 @@ class ManualBookmarkPanel {
             await this.loadLibrary();
             return;
         }
-        if (!this.library || !this.ownsVideo())
+        // Saved rows carry their own video identity; browsing them requires no playable current video.
+        if (!this.library)
             return;
         const video = this.libraryRows.find(v => v.videoId === button.dataset.videoId);
         if (!video)
@@ -1370,7 +1375,7 @@ class ManualBookmarkPanel {
         if (action === 'seek' || action === 'seek-auto' || action === 'repeat') {
             if (time === null || time < 0 || time >= video.duration)
                 return;
-            if (action === 'repeat' && item?.endTime !== undefined && video.videoId === this.last.videoId) {
+            if (action === 'repeat' && item?.endTime !== undefined && video.videoId === this.last.videoId && this.ownsVideo()) {
                 this.setRepeatRange(time, item.endTime);
                 return;
             }

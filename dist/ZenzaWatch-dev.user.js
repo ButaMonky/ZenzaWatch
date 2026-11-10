@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.379-task1003
+// @version        2.7.380-task1004
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 18:46Z 427e8c39
+// build: 2026-11-10 19:06Z f523a867
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.379-task1003';
+    var VER = '2.7.380-task1004';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 18:46Z 427e8c39';
+    var BUILD = '2026-11-10 19:06Z f523a867';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -15285,15 +15285,17 @@ class ManualBookmarkPanel {
 				this.libraryVirtual?.dispose();
 				this.libraryVirtual = null;
 				this.releaseVideoThumbnails();
-				const sameVideo = snapshot.videoId !== null &&
-						snapshot.videoId === this.last.videoId;
-				if (!sameVideo) {
+				const sameIdentity = snapshot.videoId === this.last.videoId;
+				const sameVideo = snapshot.videoId !== null && sameIdentity;
+				if (!sameIdentity) {
 						this.libraryDrafts.clear();
 						this.libraryGeneration++;
 						this.libraryBusyRequest = null;
 						this.library = false;
 						this.libraryStatus = 'idle';
 						this.expandedVideos = new Set(snapshot.videoId ? [snapshot.videoId] : []);
+				}
+				if (!sameVideo) {
 						this.pointGeneration++;
 						this.pointBusyRequest = null;
 						this.automaticDraftDirty = false;
@@ -15911,7 +15913,7 @@ class ManualBookmarkPanel {
 						await this.loadLibrary();
 						return;
 				}
-				if (!this.library || !this.ownsVideo())
+				if (!this.library)
 						return;
 				const video = this.libraryRows.find(v => v.videoId === button.dataset.videoId);
 				if (!video)
@@ -15921,7 +15923,7 @@ class ManualBookmarkPanel {
 				if (action === 'seek' || action === 'seek-auto' || action === 'repeat') {
 						if (time === null || time < 0 || time >= video.duration)
 								return;
-						if (action === 'repeat' && item?.endTime !== undefined && video.videoId === this.last.videoId) {
+						if (action === 'repeat' && item?.endTime !== undefined && video.videoId === this.last.videoId && this.ownsVideo()) {
 								this.setRepeatRange(time, item.endTime);
 								return;
 						}
@@ -29997,7 +29999,7 @@ util.addStyle(`
 		.prevVideo.is-feedback-pressed .controlButtonInner { transform: scaleX(-1) !important; }
 	}
 	.is-abort   .playControl,
-	.is-error   .playControl,
+	.is-error   .playControl:not(.prevVideo):not(.nextVideo),
 	.is-loading .playControl {
 		opacity: 0.4 !important;
 		pointer-events: none;
@@ -50493,7 +50495,7 @@ const NotificationHistoryPanel = (() => {
 				network: '通信', player: '再生', system: '内部処理'
 		};
 		const style = [
-				'.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
+				'.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:150000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
 				'.zenzaNotificationDock[hidden]{display:none!important;}',
 				'.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
 				'.zenzaNotificationDock .zenzaNotificationHistory{max-height:none;min-height:0;flex:1 1 auto;display:block;overflow:auto;overscroll-behavior:contain;}',
@@ -51279,6 +51281,9 @@ class VideoWatchOptions {
 		}
 }
 class NicoVideoPlayerDialogView extends Emitter {
+		static formatErrorMessage(value) {
+				return value == null ? '' : String(value).replace(/<br\s*\/?\s*>/gi, '\n');
+		}
 		constructor(...args) {
 				super();
 				this.initialize(...args);
@@ -52478,7 +52483,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 				}
 				if (icon.matches(':disabled, [aria-disabled="true"]') ||
 						(icon.classList.contains('playControl') &&
-								host.matches('.is-abort, .is-error, .is-loading'))) {
+								(host.matches('.is-abort, .is-loading') ||
+										(host.classList.contains('is-error') && !icon.matches('.prevVideo, .nextVideo'))))) {
 						return false;
 				}
 				return true;
@@ -52633,7 +52639,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 								}
 								return;
 						case 'errorMessage':
-								return this._$errorMessageContainer[0].textContent = value;
+								return this._$errorMessageContainer[0].textContent = NicoVideoPlayerDialogView.formatErrorMessage(value);
 						case 'currentTab':
 								return this.selectTab(value);
 				}
@@ -53627,17 +53633,30 @@ NicoVideoPlayerDialogView.__css__ = `
 		user-select: none;
 	}
 	.zenzaPlayerContainer.is-error .errorMessageContainer {
-		display: inline-block;
+		display: block;
 		position: absolute;
 		z-index: 10000;
-		top: 50%;
+		/* The existing recovery actions start at 60%; reserve space above them. */
+		top: 40%;
 		left: 50%;
-		padding: 8px 16px;
+		box-sizing: border-box;
+		width: min(680px, calc(100% - 32px));
+		max-height: calc(40% - 32px);
+		padding: 10px 14px;
 		transform: translate(-50%, -50%);
-		background: rgba(255, 0, 0, 0.9);
-		font-size: 24px;
-		box-shadow: 8px 8px 4px rgba(128, 0, 0, 0.8);
-		white-space: nowrap;
+		background: #481e29;
+		color: #ffe8e9;
+		border: 1px solid #ad6b79;
+		border-radius: 6px;
+		font-size: clamp(14px, 2vw, 20px);
+		line-height: 1.5;
+		box-shadow: 0 4px 16px #0008;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		overflow: auto;
+		overscroll-behavior: contain;
+		pointer-events: auto;
+		user-select: text;
 	}
 	.errorMessageContainer:empty {
 		display: none !important;
@@ -56536,11 +56555,19 @@ util.addStyle(`
 			top: 60%;
 			transform: translate(-50%, 0);
 			display: none;
-			white-space: nowrap;
+			box-sizing: border-box;
+			width: min(480px, calc(100% - 24px));
+			gap: 8px;
+			flex-wrap: wrap;
+			justify-content: center;
+			white-space: normal;
 		}
 			.is-error .onErrorMenu {
-				display: block !important;
+				display: flex !important;
 				opacity: 1 !important;
+			}
+			.zenzaScreenMode_small .zenzaPlayerContainer.is-error .hoverMenuContainer .menuItemContainer.onErrorMenu {
+				transform: translate(calc(-50% + var(--zenzaSmallDragX, 0px)), var(--zenzaSmallDragY, 0px));
 			}
 			.is-youTube .onErrorMenu .for-nicovideo,
 									.onErrorMenu .for-ZenTube {
@@ -56552,7 +56579,15 @@ util.addStyle(`
 			.onErrorMenu .menuButton {
 				position: relative;
 				display: inline-block !important;
-				margin: 0 16px;
+				margin: 0;
+				box-sizing: border-box;
+				flex: 1 1 84px;
+				min-width: 0;
+				max-width: 160px;
+				min-height: 36px;
+				height: auto;
+				text-align: center;
+				white-space: normal;
 				padding: 8px;
 				background: #888;
 				color: #000;
@@ -60769,6 +60804,10 @@ class VideoInfoPanel extends Emitter {
 				this.classList.remove('initializing');
 				this.classList.add('is-loadFailed');
 				this._$ownerIcon.raf.removeClass('is-loading');
+				const root = this._view || this._$view?.[0];
+				if (root?.querySelector('.tabSelect.playlist')) {
+						this.selectTab('playlist');
+				}
 		}
 		_syncTabAccessibility() {
 				const root = (this._view || this._$view?.[0]);
@@ -60877,6 +60916,9 @@ class VideoInfoPanel extends Emitter {
 				}
 				$view.find('.tabSelectContainer').append($select);
 				$view.append($body);
+				if (tabName === 'playlist' && this.classList.contains('is-loadFailed')) {
+						this.selectTab('playlist');
+				}
 				if (this._activeTabName === tabName) {
 						$select.addClass('activeTab');
 						$body.addClass('activeTab');
@@ -60971,8 +61013,15 @@ css.addStyle(`
 		color: #333;
 		transition: none;
 	}
-	.zenzaWatchVideoInfoPanel.is-loadFailed>* {
+	/* A failed video's metadata must stay hidden, but the saved playlist is
+		independent of that video and remains a route to another item. */
+	.zenzaWatchVideoInfoPanel.is-loadFailed>:not(.tabSelectContainer):not(.playlist),
+	.zenzaWatchVideoInfoPanel.is-loadFailed .tabSelect:not(.playlist) {
 		display: none !important;
+	}
+	.zenzaWatchVideoInfoPanel.is-loadFailed>.tabSelectContainer,
+	.zenzaWatchVideoInfoPanel.is-loadFailed>.playlist {
+		pointer-events: auto;
 	}
 	.zenzaWatchVideoInfoPanel {
 		position: absolute;

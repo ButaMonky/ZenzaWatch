@@ -10,8 +10,9 @@ const NotificationHistoryPanel = (() => {
         general: '通知', comment: 'コメント', like: 'いいね',
         network: '通信', player: '再生', system: '内部処理'
     };
+    // Share the floating-panel layer with bookmarks, above the video corner controls.
     const style = [
-        '.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:10000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
+        '.zenzaNotificationDock{position:absolute;left:8px;bottom:48px;z-index:150000;width:min(460px,calc(100% - 16px));max-height:calc(100% - 56px);display:flex;flex-direction:column;overflow:hidden;background:#202020;color:#eee;border:1px solid #777;border-radius:6px;box-shadow:0 4px 20px #0009;text-align:left;user-select:text;}',
         '.zenzaNotificationDock[hidden]{display:none!important;}',
         '.zenzaNotificationDock .znh-dock-header{display:flex;flex-shrink:0;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-bottom:1px solid #555;}',
         // Scroll the complete history view on short players: shrinking only the list

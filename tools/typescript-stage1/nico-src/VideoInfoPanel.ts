@@ -577,6 +577,8 @@ class VideoInfoPanel extends Emitter {
     this.classList.remove('initializing');
     this.classList.add('is-loadFailed');
     this._$ownerIcon.raf.removeClass('is-loading');
+    const root = this._view || this._$view?.[0];
+    if (root?.querySelector('.tabSelect.playlist')) { this.selectTab('playlist'); }
   }
   _syncTabAccessibility() {
     const root = (this._view || this._$view?.[0]) as HTMLElement;
@@ -668,6 +670,9 @@ class VideoInfoPanel extends Emitter {
     $view.find('.tabSelectContainer').append($select);
     $view.append($body);
 
+    if (tabName === 'playlist' && this.classList.contains('is-loadFailed')) {
+      this.selectTab('playlist');
+    }
     if (this._activeTabName === tabName) {
       $select.addClass('activeTab');
       $body.addClass('activeTab');
@@ -776,8 +781,15 @@ css.addStyle(`
     transition: none;
   }
 
-  .zenzaWatchVideoInfoPanel.is-loadFailed>* {
+  /* A failed video's metadata must stay hidden, but the saved playlist is
+     independent of that video and remains a route to another item. */
+  .zenzaWatchVideoInfoPanel.is-loadFailed>:not(.tabSelectContainer):not(.playlist),
+  .zenzaWatchVideoInfoPanel.is-loadFailed .tabSelect:not(.playlist) {
     display: none !important;
+  }
+  .zenzaWatchVideoInfoPanel.is-loadFailed>.tabSelectContainer,
+  .zenzaWatchVideoInfoPanel.is-loadFailed>.playlist {
+    pointer-events: auto;
   }
 
   .zenzaWatchVideoInfoPanel {

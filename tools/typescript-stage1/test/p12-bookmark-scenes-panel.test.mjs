@@ -20,6 +20,7 @@ function harness(extra={},setup=()=>{}){
  createScenePreview:(host,id,time)=>{previews.push([id,time]);return ()=>cleanups.push([id,time]);},...extra});
  return {root,dom,panel,session,calls,ranges,previews,cleanups,
  click:s=>{assert(root.querySelector(s),s);root.querySelector(s).click();},
+ setSnapshot(videoId,status='ready',bookmarks=[]){active=videoId;session.snapshot={videoId,status,bookmarks};listener(session.snapshot);},
  switchVideo(){active='sm2';session.snapshot={videoId:'sm2',status:'ready',bookmarks:[]};listener(session.snapshot);},
  close(){panel.dispose();dom.window.close();}};
 }
@@ -313,4 +314,38 @@ test('Task1001 mounted video thumbnails resolve missing metadata and release on 
  h.panel.setVisible(true);assert.equal(acquired.length,first*2);
  h.root.scrollTop=1e6;h.panel.libraryVirtual.refresh();assert(acquired.includes('old999'));assert(released.length>=first*2);
  h.close();assert.equal(released.length,acquired.length);
+});
+
+const unavailableLibraryRows=()=>[{videoId:'sm2',title:'saved video',duration:100,updatedAt:2,automaticTime:30,bookmarks:[{id:'saved',videoId:'sm2',time:10,endTime:20,label:'range',createdAt:1,updatedAt:1}]}];
+function expandUnavailableGroup(h){const group=h.root.querySelector('[data-library-video="sm2"]');assert(group);group.open=true;group.dispatchEvent(new h.dom.window.Event('toggle'));}
+test('idle/error saved library loads and opens another video at a point or repeat range',async()=>{
+ for(const action of ['seek-auto','repeat']){
+  const opened=[],h=harness({loadLibrary:async()=>unavailableLibraryRows(),openLibraryPosition:(...args)=>opened.push(args)});
+  h.setSnapshot(null,'idle');h.click('[data-library-action="open"]');await step();expandUnavailableGroup(h);
+  assert.equal(h.panel.setRepeatRange(10,20),false);h.click(`[data-library-action="${action}"]`);
+  assert.deepEqual(opened,[action==='repeat'?['sm2',10,20]:['sm2',30,undefined]]);assert.equal(h.panel.isRepeating,false);h.close();
+ }
+});
+test('normal to unavailable to restored video invalidates old library work without erasing idle list',async()=>{
+ const requests=[],h=harness({loadLibrary:()=>new Promise(resolve=>requests.push(resolve))});
+ h.click('[data-library-action="open"]');h.setSnapshot(null,'idle');h.click('[data-library-action="open"]');
+ requests[0](unavailableLibraryRows());await step();assert.equal(h.root.querySelector('[data-library-video]'),null);
+ requests[1](unavailableLibraryRows());await step();assert(h.root.querySelector('[data-library-video="sm2"]'));
+ h.setSnapshot(null,'idle');assert(h.root.querySelector('[data-library-video="sm2"]'));
+ h.setSnapshot('sm3');assert.equal(h.root.querySelector('[data-library-video]'),null);assert(h.root.querySelector('[data-point-tab]'));
+ assert.equal(h.panel.setRepeatRange(10,20,false),true);h.close();
+});
+test('idle library edits remain addressed to saved video and late completion cannot reopen after recovery',async()=>{
+ let finish;const edited=[],h=harness({loadLibrary:async()=>unavailableLibraryRows(),editLibraryBookmark:(...args)=>{edited.push(args);return new Promise(resolve=>finish=resolve);}});
+ h.setSnapshot(null,'idle');h.click('[data-library-action="open"]');await step();expandUnavailableGroup(h);
+ h.root.querySelector('[data-library-start]').value='12';h.click('[data-library-action="save"]');assert.equal(edited[0][0],'sm2');
+ h.setSnapshot('sm3');finish();await step();assert.equal(h.root.querySelector('[data-library-video]'),null);assert(h.root.querySelector('[data-point-tab]'));h.close();
+});
+
+test('unavailable video library read failure can retry without a current playback owner',async()=>{
+ let attempts=0;const h=harness({loadLibrary:async()=>{if(++attempts===1)throw Error('private database details');return unavailableLibraryRows();}});
+ h.setSnapshot(null,'idle');h.click('[data-library-action="open"]');await step();
+ assert(h.root.querySelector('[data-library-action="retry"]'));assert(!h.root.textContent.includes('private database'));
+ h.click('[data-library-action="retry"]');await step();assert(h.root.querySelector('[data-library-video="sm2"]'));
+ h.click('[data-library-action="back"]');assert.equal(h.root.querySelector('[data-bookmark-action="add"]'),null);assert.equal(h.panel.setRepeatRange(10,20),false);assert.deepEqual(h.calls,[]);h.close();
 });

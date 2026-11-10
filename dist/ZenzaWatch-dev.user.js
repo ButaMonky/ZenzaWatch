@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.370-task994
+// @version        2.7.371-task995
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 13:39Z e58112b
+// build: 2026-11-10 14:00Z 8357dfe
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.370-task994';
+    var VER = '2.7.371-task995';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 13:39Z e58112b';
+    var BUILD = '2026-11-10 14:00Z 8357dfe';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -15512,6 +15512,7 @@ class ManualBookmarkDock {
 		panel;
 		session;
 		keyHandler;
+		clickHandler;
 		visibilityHandler;
 		toggleHandler;
 		outsideHandler;
@@ -15633,6 +15634,8 @@ class ManualBookmarkDock {
 				};
 				node.addEventListener('keydown', this.keyHandler);
 				node.addEventListener('keyup', this.keyHandler);
+				this.clickHandler = event => event.stopPropagation();
+				node.addEventListener('click', this.clickHandler);
 				this.visibilityHandler = () => {
 						if (this.disposed || !this.node.open ||
 								doc.visibilityState !== 'visible')
@@ -15660,6 +15663,7 @@ class ManualBookmarkDock {
 						node.removeEventListener('toggle', this.toggleHandler);
 						node.removeEventListener('keydown', this.keyHandler);
 						node.removeEventListener('keyup', this.keyHandler);
+						node.removeEventListener('click', this.clickHandler);
 						node.remove();
 						throw error;
 				}
@@ -15761,6 +15765,7 @@ class ManualBookmarkDock {
 				this.cancelAnimation();
 				this.node.removeEventListener('keydown', this.keyHandler);
 				this.node.removeEventListener('keyup', this.keyHandler);
+				this.node.removeEventListener('click', this.clickHandler);
 				this.node.ownerDocument.removeEventListener('visibilitychange', this.visibilityHandler);
 				this.node.ownerDocument.removeEventListener('pointerdown', this.outsideHandler, true);
 				this.node.ownerDocument.removeEventListener('click', this.outsideHandler, true);

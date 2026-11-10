@@ -178,3 +178,25 @@ test('missing info tab rejects before adding any UI or taking an owner',()=>{
  assert.equal(dom.window.document.querySelector('input').type,'range');
  session.dispose();dom.window.close();
 });
+
+test('floating editor keeps native details and checkbox actions away from player click cancellation',async()=>{
+ const h=harness();
+ try{
+  await h.dock.activate('sm1',200);
+  h.click('add').click();await step();
+  const player=h.doc.querySelector('.zenzaPlayerContainer');
+  let playerClicks=0;
+  // NicoVideoPlayerDialogView cancels bubbled clicks on the video container.
+  player.addEventListener('click',event=>{playerClicks++;event.preventDefault();});
+  h.dock.toggle(player);await step();
+  const editor=h.dock.element.querySelector('.zw-bookmark-edit');
+  editor.querySelector('summary').click();
+  assert.equal(editor.open,true,'native editor disclosure must open inside the player');
+  assert.equal(playerClicks,0,'dock clicks belong to the dock');
+  const checkbox=h.doc.createElement('input');checkbox.type='checkbox';h.dock.element.append(checkbox);
+  checkbox.click();assert.equal(checkbox.checked,true,'native checkbox default must survive');
+  h.click('remove').click();await step();
+  assert.equal(h.repo.rows.get('sm1').length,0,'delete remains reachable and functional');
+  player.click();assert.equal(playerClicks,1,'outside player controls remain unchanged');
+ }finally{h.close();}
+});

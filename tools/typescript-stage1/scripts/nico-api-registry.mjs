@@ -287,14 +287,17 @@ export const NICO_API_MODULES=Object.freeze([
     shape:'iife',
     task:'task481'
   }),
+  api({name:'RequestDiagnostics', runtime:'packages/lib/src/infra/RequestDiagnostics.js', originalSha256:'7ed2e5f94b027bfcb8e5678ccc54aff73cbd1390a075e09d5dc8786d9777050d',
+    preamble:[], shape:'iife', task:'task991'}),
   api({
     // Task640: the shared transport lives in infra/, not nico/ (only allowed exception).
     name:'netUtil',
     runtime:'packages/lib/src/infra/netUtil.js',
     originalSha256:'23f7d1bd280ca3fa219eb1e2feb0121833422e120af1bfb4f449173dcebc2112',
     // Task641: ajax and its jQuery/NicoVideoApi stub preamble removed (NETUTIL-AJAX-001).
-    preamble:[],
+    preamble:["import {RequestDiagnostics} from './RequestDiagnostics';",],
     task:'task640'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   api({
     name:'StoryboardCacheDb',
@@ -376,11 +379,11 @@ export const NICO_API_MODULES=Object.freeze([
     name:'ThreadLoader',
     runtime:'packages/lib/src/nico/ThreadLoader.js',
     originalSha256:'28b3f664440864f303f60bf2d88afc0d251ab6c9593bc822113dd4b0e01e2e34',
-    preamble:["import {PopupMessage} from '../ui/PopupMessage';","import {sleep} from '../infra/sleep';",
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {PopupMessage} from '../ui/PopupMessage';","import {sleep} from '../infra/sleep';",
       "import {netUtil} from '../../../lib/src/infra/netUtil';","import {logSafe} from '../infra/logSafe';",
       "import {CommentPostWire} from './CommentPostWire';","import {CommentReadAdapter} from './CommentReadAdapter';",
       "","const debug = {};",""],
-    beginLines:["","// Task 088（監査v2 ZW-056）: 送信内容・キー・本文・ユーザーID をログに出す時は logSafe.redact を通す",
+    beginLines:['//@require RequestDiagnostics',"","// Task 088（監査v2 ZW-056）: 送信内容・キー・本文・ユーザーID をログに出す時は logSafe.redact を通す",
       "//@require logSafe","//@require CommentPostWire","//@require CommentReadAdapter",""],
     shape:'declarations',
     topLevel:['const { ThreadLoader } = (() => {','})();'],
@@ -393,11 +396,11 @@ export const NICO_API_MODULES=Object.freeze([
     name:'VideoInfoLoader',
     runtime:'packages/lib/src/nico/VideoInfoLoader.js',
     originalSha256:'44448848976cbbe144aff37392b17cc9462a3a67e0fff7ca40bda2458cef21d5',
-    preamble:["import {netUtil} from '../infra/netUtil';","import {textUtil} from '../text/textUtil';",
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {netUtil} from '../infra/netUtil';","import {textUtil} from '../text/textUtil';",
       "import {nicoUtil} from '../nico/nicoUtil';","import {Emitter} from '../Emitter';",
       "import {CacheStorage} from '../infra/CacheStorage';","import {CommentPostTarget} from './CommentPostTarget';","",
       "const Config = {","  getValue: () => {}","};","","const emitter = new Emitter();","const debug = {};",""],
-    beginLines:['//@require CommentPostTarget'],
+    beginLines:['//@require RequestDiagnostics','//@require CommentPostTarget'],
     shape:'declarations',
     topLevel:['const VideoInfoLoader = (function () {','})();'],
     exportNames:['VideoInfoLoader'],
@@ -409,11 +412,12 @@ export const NICO_API_MODULES=Object.freeze([
     name:'VideoSessionWorker',
     runtime:'packages/lib/src/nico/VideoSessionWorker.js',
     originalSha256:'7c9b4492546baad66b9d48d555bf1ffba7ca90e1635813bf67f3393602ef0274',
-    preamble:["import {workerUtil} from '../infra/workerUtil';","import {StoryboardCacheDb} from './StoryboardCacheDb';"],
+    preamble:["import {RequestDiagnostics} from '../infra/RequestDiagnostics';","import {workerUtil} from '../infra/workerUtil';","import {StoryboardCacheDb} from './StoryboardCacheDb';"],
     shape:'declarations',
     topLevel:['const createStoryboardClasses = (util) => {','};','const VideoSessionWorker = (() => {','})();'],
     exportNames:['VideoSessionWorker','createStoryboardClasses'],
     task:'task651'
+    ,beginLines:['//@require RequestDiagnostics']
   }),
   // Task726: infra helpers (precedent: Task640 netUtil) share this generator.
   api({
@@ -1279,11 +1283,12 @@ export const NICO_API_MODULES=Object.freeze([
     name:"initializer",
     runtime:"src/initializer.js",
     originalSha256:"286e0b76e918bd2e2380301cd0688b4228e2a0bc6a4e00f2c5671deba709e353",
-    preamble:["import {ZenzaWatch, global} from './ZenzaWatchIndex';","import {","  Config,","  PlayerSession,","  util,","  WatchPageHistory","} from './util';","import {PlaylistSession} from '../packages/zenza/src/Playlist/PlayListSession';","import {NicoComment} from './CommentPlayer';","import {NicoVideoPlayerDialog, PlayerConfig, PlayerState} from './NicoVideoPlayerDialog';","import {initializeGinzaSlayer} from './GinzaSlayer';","import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';","import {CONSTANT} from './constant';","import {CustomElements} from '../packages/zenza/src/parts/CustomElements';","import {RootDispatcher} from './RootDispatcher';","import {BroadcastEmitter} from '../packages/lib/src/message/messageUtil';","import {HoverMenu} from '../packages/zenza/src/menu/HoverMenu';","import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';","import {replaceRedirectLinks} from '../packages/zenza/src/init/replaceRedirectLinks';","import {cssUtil} from '../packages/lib/src/css/css';","import {ThumbInfoLoader} from '../packages/lib/src/nico/ThumbInfoLoader';","import {StoryboardWorker} from '../packages/zenza/src/storyboard/StoryboardWorker';","import {VideoSessionWorker} from '../packages/lib/src/nico/VideoSessionWorker';","import {StoryboardCacheDb} from '../packages/lib/src/nico/StoryboardCacheDb';","import {CommentLayoutWorker} from '../packages/zenza/src/commentLayer/CommentLayoutWorker';","import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';","import {domEvent} from '../packages/lib/src/dom/domEvent';","import {uq} from '../packages/lib/src/uQuery';","// import {domUtil} from '../packages/lib/src/dom/domUtil';","import {textUtil} from '../packages/lib/src/text/textUtil';","const START_PAGE_QUERY = 'hoge=fuga';",""],
+    preamble:["import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';", "import {NotificationJournal} from './NotificationJournal';","import {ZenzaWatch, global} from './ZenzaWatchIndex';","import {","  Config,","  PlayerSession,","  util,","  WatchPageHistory","} from './util';","import {PlaylistSession} from '../packages/zenza/src/Playlist/PlayListSession';","import {NicoComment} from './CommentPlayer';","import {NicoVideoPlayerDialog, PlayerConfig, PlayerState} from './NicoVideoPlayerDialog';","import {initializeGinzaSlayer} from './GinzaSlayer';","import {OfficialPlayerRoute} from '../packages/zenza/src/menu/OfficialPlayerRoute';","import {CONSTANT} from './constant';","import {CustomElements} from '../packages/zenza/src/parts/CustomElements';","import {RootDispatcher} from './RootDispatcher';","import {BroadcastEmitter} from '../packages/lib/src/message/messageUtil';","import {HoverMenu} from '../packages/zenza/src/menu/HoverMenu';","import {nicoUtil} from '../packages/lib/src/nico/nicoUtil';","import {replaceRedirectLinks} from '../packages/zenza/src/init/replaceRedirectLinks';","import {cssUtil} from '../packages/lib/src/css/css';","import {ThumbInfoLoader} from '../packages/lib/src/nico/ThumbInfoLoader';","import {StoryboardWorker} from '../packages/zenza/src/storyboard/StoryboardWorker';","import {VideoSessionWorker} from '../packages/lib/src/nico/VideoSessionWorker';","import {StoryboardCacheDb} from '../packages/lib/src/nico/StoryboardCacheDb';","import {CommentLayoutWorker} from '../packages/zenza/src/commentLayer/CommentLayoutWorker';","import {WatchInfoCacheDb} from '../packages/lib/src/nico/WatchInfoCacheDb';","import {domEvent} from '../packages/lib/src/dom/domEvent';","import {uq} from '../packages/lib/src/uQuery';","// import {domUtil} from '../packages/lib/src/dom/domUtil';","import {textUtil} from '../packages/lib/src/text/textUtil';","const START_PAGE_QUERY = 'hoge=fuga';",""],
     shape:'declarations',
     topLevel:["const { initialize } = (() => {","})();"],
     exportNames:["initialize"],
     task:'task965'
+    ,beginLines:['//@require RequestDiagnostics','//@require NotificationJournal']
   }),
   api({
     name:"State",

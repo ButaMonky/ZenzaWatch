@@ -27,7 +27,7 @@ test('registry is fixed and every pre-migration fixture matches its recorded has
     } else if (['NotificationJournalPolicy','NotificationJournalStore'].includes(spec.name)) {
       assert.equal(spec.runtime, 'packages/zenza/src/notification/' + spec.name + '.js');
     } else {
-      assert.match(spec.runtime,/^(?:packages\/(?:lib\/src\/(?:nico\/[A-Za-z]+|infra\/(?:netUtil|sleep|env|dimport|speech|StorageWriter|CacheStorage|MediaSessionApi|bounce|AntiPrototype-js|logSafe|objUtil|Observable|workerUtil|IndexedDbStorage|CrossDomainGate)|dom\/(?:ClassListWrapper|Clipboard|domEvent|domUtil|watchResize|Fullscreen|MediaTimeline|VideoCaptureUtil)|text\/(?:reg|textUtil)|ui\/(?:PopupMessage|TextLabel)|css\/css|message\/(?:gate|messageUtil)|Emitter|uQuery)|zenza\/src\/(?:videoPlayer\/(?:createVideoElement|YouTubeWrapper|SupporterCredit|ScreenFilter|PipPageThumbnail)|Playlist\/(?:PlayListModel|RelatedVideoList|PlayListSession|VideoListModel|VideoList|VideoListItem|PlayList|VideoListItemView|VideoListView|PlayListView)|storyboard\/(?:Storyboard|StoryboardInfoModel|SeekBarThumbnail|StoryboardView|StoryboardWorker)|heatMap\/HeatMapWorker|audio\/AudioAdjuster|init\/(?:MylistPocketDetector|externalStartup|PlayerSession|PagePreviewGuard|inintCssProps|WatchPageHistory|replaceRedirectLinks)|parts\/(?:saveMymemory|FrameLayer|BaseViewComponent|CustomElements)|ShortcutKeyEmitter|ShortcutActions|menu\/HoverMenu)|components\/src\/element\/(?:BaseCommandElement|SettingPanelElement|VideoItemElement|DialogElement))|src\/(?:VideoInfo|TagListView|CommentInputPanel|CommentPanel|NicoVideoPlayer|VideoControlBar|VideoInfoPanel|NicoVideoPlayerDialog|RootDispatcher|initializer|State|CommentPlayer|_uquery|_captube|_shape|_heatsync|_gamepad|_hls))\.js$/);
+      assert.match(spec.runtime,/^(?:packages\/(?:lib\/src\/(?:nico\/[A-Za-z]+|infra\/(?:RequestDiagnostics|netUtil|sleep|env|dimport|speech|StorageWriter|CacheStorage|MediaSessionApi|bounce|AntiPrototype-js|logSafe|objUtil|Observable|workerUtil|IndexedDbStorage|CrossDomainGate)|dom\/(?:ClassListWrapper|Clipboard|domEvent|domUtil|watchResize|Fullscreen|MediaTimeline|VideoCaptureUtil)|text\/(?:reg|textUtil)|ui\/(?:PopupMessage|TextLabel)|css\/css|message\/(?:gate|messageUtil)|Emitter|uQuery)|zenza\/src\/(?:videoPlayer\/(?:createVideoElement|YouTubeWrapper|SupporterCredit|ScreenFilter|PipPageThumbnail)|Playlist\/(?:PlayListModel|RelatedVideoList|PlayListSession|VideoListModel|VideoList|VideoListItem|PlayList|VideoListItemView|VideoListView|PlayListView)|storyboard\/(?:Storyboard|StoryboardInfoModel|SeekBarThumbnail|StoryboardView|StoryboardWorker)|heatMap\/HeatMapWorker|audio\/AudioAdjuster|init\/(?:MylistPocketDetector|externalStartup|PlayerSession|PagePreviewGuard|inintCssProps|WatchPageHistory|replaceRedirectLinks)|parts\/(?:saveMymemory|FrameLayer|BaseViewComponent|CustomElements)|ShortcutKeyEmitter|ShortcutActions|menu\/HoverMenu)|components\/src\/element\/(?:BaseCommandElement|SettingPanelElement|VideoItemElement|DialogElement))|src\/(?:VideoInfo|TagListView|CommentInputPanel|CommentPanel|NicoVideoPlayer|VideoControlBar|VideoInfoPanel|NicoVideoPlayerDialog|RootDispatcher|initializer|State|CommentPlayer|_uquery|_captube|_shape|_heatsync|_gamepad|_hls))\.js$/);
     }
   }
 });
@@ -52,6 +52,20 @@ test('legacy build directives are preserved in each runtime',()=>{
       });
     };
     const expected = directives(before);
+    const diagnosticPaths = {
+      netUtil:'./RequestDiagnostics', VideoInfoLoader:'../infra/RequestDiagnostics',
+      ThreadLoader:'../infra/RequestDiagnostics', VideoSessionWorker:'../infra/RequestDiagnostics',
+      initializer:'../packages/lib/src/infra/RequestDiagnostics'
+    };
+    if (diagnosticPaths[spec.name]) {
+      expected.unshift("import {RequestDiagnostics} from '" + diagnosticPaths[spec.name] + "';");
+      if (spec.name === 'initializer') {
+        expected.splice(1,0,"import {NotificationJournal} from './NotificationJournal';");
+      }
+      expected.splice(expected.indexOf('//===BEGIN===') + 1,0,'//@require RequestDiagnostics',
+        ...(spec.name === 'initializer' ? ['//@require NotificationJournal'] : []));
+    }
+
     if (spec.name === 'Storyboard') {
       expected.splice(expected.indexOf("import {StoryboardInfoLoader} from '../../../lib/src/nico/StoryboardInfoLoader';") + 1, 0,
         "import {StoryboardCacheDb} from '../../../lib/src/nico/StoryboardCacheDb';");

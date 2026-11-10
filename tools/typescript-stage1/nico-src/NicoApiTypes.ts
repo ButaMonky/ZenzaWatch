@@ -20,6 +20,8 @@ export interface NetFetchOptions {
   headers?: Record<string, string | number>;
   /** `undefined` is accepted because callers forward optional signals as-is (Task461). */
   signal?: AbortSignal | null | undefined;
+  /** Local diagnostic ownership only; netUtil strips this before fetch/gate serialization. */
+  diagnosticActive?: (() => boolean) | undefined;
   body?: BodyInit | null;
 }
 

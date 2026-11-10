@@ -3,8 +3,9 @@ const assert = require('assert');
 const {createContext, extract, run} = require('../helpers/extractSource');
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function fakeIndexedDb() {
+function fakeIndexedDb({failWrite = 0} = {}) {
   const records = new Map();
+  let writes = 0;
   let initialized = false;
   const db = {
     objectStoreNames: {contains: () => initialized},
@@ -17,7 +18,11 @@ function fakeIndexedDb() {
       const ready = callback => Promise.resolve().then(callback);
       const store = {
         put(value) {
-          ready(() => { records.set(value.id, value); tx.oncomplete?.(); });
+          const number = ++writes;
+          ready(() => {
+            if (number === failWrite) { tx.onerror?.(); return; }
+            records.set(value.id, value); tx.oncomplete?.();
+          });
           return {};
         },
         getAll() {
@@ -68,6 +73,45 @@ function journal(indexedDB) {
   return context.__journal;
 }
 describe('NotificationJournal IndexedDB contract (synthetic)', () => {
+  it('keeps a failed newer grouped write in memory after an older commit', async () => {
+    const db=fakeIndexedDb({failWrite:2}), first=journal(db);
+    const input={message:'failure',details:{outcome:'failed'}};
+    first.recordDiagnostic('diag-write-1',input);
+    first.recordDiagnostic('diag-write-1',input);
+    await flush();
+    assert.strictEqual((await first.list())[0].details.count,2);
+    assert.strictEqual((await journal(db).list())[0].details.count,1);
+  });
+  it('does not resurrect diagnostic groups cleared by a subscriber', async () => {
+    const db=fakeIndexedDb(), first=journal(db);let clearing;
+    const unsubscribe=first.subscribe(()=>{unsubscribe();clearing=first.clear();});
+    first.recordDiagnostic('diag-clear-1',{message:'failure',details:{outcome:'failed'}});
+    await clearing;
+    first.recordDiagnostic('diag-clear-1',{message:'recovery',details:{outcome:'recovered'}});
+    await flush();assert.strictEqual((await journal(db).list()).length,0);
+  });
+  it('groups a nested diagnostic report before notifying subscribers', async () => {
+    const db=fakeIndexedDb(), first=journal(db);
+    const input={message:'failure',details:{outcome:'failed'}};
+    const unsubscribe=first.subscribe(()=>{unsubscribe();first.recordDiagnostic('diag-nested-1',input);});
+    first.recordDiagnostic('diag-nested-1',input);
+    await flush();const rows=await journal(db).list();
+    assert.strictEqual(rows.length,1);assert.strictEqual(rows[0].details.count,2);
+  });
+  it('groups repeated request failures, marks recovery in place, and resets on clear', async () => {
+    const db = fakeIndexedDb(), first = journal(db);
+    const failed = {category:'network', message:'動画情報：失敗', details:{outcome:'failed', operation:'video-info'}};
+    const initial = first.recordDiagnostic('diag-video-1', failed);
+    first.recordDiagnostic('diag-video-1', failed);
+    first.recordDiagnostic('diag-video-1', {category:'network', level:'success', message:'動画情報：復旧', details:{outcome:'recovered'}});
+    await flush();
+    const rows = await journal(db).list();
+    assert.strictEqual(rows.length,1);assert.strictEqual(rows[0].id,initial.id);
+    assert.strictEqual(rows[0].details.count,2);assert.strictEqual(rows[0].details.outcome,'recovered');
+    first.recordDiagnostic('diag-video-2',failed);await first.clear();
+    first.recordDiagnostic('diag-video-2',{message:'復旧',details:{outcome:'recovered'}});
+    await flush();assert.strictEqual((await first.list()).length,0);
+  });
   it('keeps a new notification recorded by a clear subscriber, but cancels older queued writes', async () => {
     const db = fakeIndexedDb();
     const first = journal(db);

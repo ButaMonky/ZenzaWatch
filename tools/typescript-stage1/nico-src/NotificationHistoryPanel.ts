@@ -139,6 +139,10 @@ const NotificationHistoryPanel = (() => {
         if (entry.videoId) { head.append(element('span', 'znh-date', entry.videoId)); }
         item.append(head, element('div', 'znh-message', entry.message));
         const meta = entry.details || {};
+        if (typeof meta.count === 'number' && meta.count > 0) {
+          head.append(element('span', 'znh-tag', '発生 ' + meta.count + '回' +
+            (meta.outcome === 'recovered' ? '・復旧済み' : '')));
+        }
         if (Object.keys(meta).length || entry.source) {
           const moreDetails = element('details');
           moreDetails.append(element('summary', '', '診断情報'));

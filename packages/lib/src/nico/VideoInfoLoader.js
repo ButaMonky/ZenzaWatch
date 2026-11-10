@@ -1,3 +1,4 @@
+import {RequestDiagnostics} from '../infra/RequestDiagnostics';
 import {netUtil} from '../infra/netUtil';
 import {textUtil} from '../text/textUtil';
 import {nicoUtil} from '../nico/nicoUtil';
@@ -14,6 +15,7 @@ const debug = {};
 
 // GENERATED FROM tools/typescript-stage1/nico-src/VideoInfoLoader.ts (Task649). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
 //@require CommentPostTarget
 const VideoInfoLoader = (function () {
     // Release data left by older builds; full watch responses contain credentials.
@@ -346,7 +348,7 @@ const VideoInfoLoader = (function () {
         emitter.emitAsync('csrfTokenUpdate', csrfToken);
         return result;
     };
-    const loadLinkedChannelVideoInfo = (originalData) => {
+    const loadLinkedChannelVideoInfo = (originalData, isCurrent = () => true) => {
         const linkedChannelVideo = originalData.linkedChannelVideo;
         const originalVideoId = originalData.watchApiData.videoDetail.id;
         const videoId = linkedChannelVideo.linkedVideoId;
@@ -358,7 +360,7 @@ const VideoInfoLoader = (function () {
         window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan');
         return new Promise(r => {
             setTimeout(r, 1000);
-        }).then(() => fetchWatchResponse(videoId, {}))
+        }).then(() => fetchWatchResponse(videoId, {}, isCurrent))
             .then(async (json) => {
             const data = await parseWatchApiData(json, videoId);
             //window.console.info('linkedChannelData', data);
@@ -481,7 +483,7 @@ const VideoInfoLoader = (function () {
                 data.linkedChannelVideo = null;
             }
             if (data.linkedChannelVideo != null) {
-                return await loadLinkedChannelVideoInfo(data);
+                return await loadLinkedChannelVideoInfo(data, isCurrent);
             }
         }
         const error = (({ isMemberFree, isNeedPayment, isPremiumFree }) => {
@@ -556,12 +558,15 @@ const VideoInfoLoader = (function () {
             message: '公式動画ページの情報形式を読み取れませんでした'
         };
     };
-    const fetchWatchResponse = async (watchId, options) => {
+    const fetchWatchResponse = async (watchId, options, isCurrent = () => true) => {
         requireActive(options);
         // Existing callers keep the identical options shape when no signal exists.
         // CrossDomainGate strips the signal from its serializable transport payload.
         const fetchOptions = options.signal ?
             { credentials: 'include', signal: options.signal } : { credentials: 'include' };
+        if (typeof RequestDiagnostics !== 'undefined') {
+            fetchOptions.diagnosticActive = isCurrent;
+        }
         const pageUrl = `https://www.nicovideo.jp/watch/${encodeURIComponent(watchId)}` +
             (options.economy === true ? '?eco=1' : '');
         const pageResponse = await netUtil.fetch(pageUrl, fetchOptions);
@@ -602,13 +607,20 @@ const VideoInfoLoader = (function () {
         if (isCancelled(options)) {
             return Promise.reject(cancelledError());
         }
+        const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+            RequestDiagnostics.begin('video-info', watchId, 'response', () => isCurrent() && !isCancelled(options));
         console.log('loadFromWatchApiData');
-        return fetchWatchResponse(watchId, options)
-            .catch(err => Promise.reject(isCancelled(options) ? cancelledError() :
-            err && typeof err === 'object' && err.reason ? err :
-                { reason: 'network', message: '通信エラー(network)' }))
+        return fetchWatchResponse(watchId, options, isCurrent)
+            .catch(err => {
+            diagnostic?.failure(err);
+            return Promise.reject(isCancelled(options) ? cancelledError() :
+                err && typeof err === 'object' && err.reason ? err :
+                    { reason: 'network', message: '通信エラー(network)' });
+        })
             .then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
+            .then(result => { diagnostic?.success(); return result; })
             .catch((err) => {
+            diagnostic?.failure(err);
             if (isCancelled(options)) {
                 return Promise.reject(cancelledError());
             }

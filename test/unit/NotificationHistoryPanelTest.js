@@ -31,6 +31,13 @@ function setup(records) {
 }
 
 describe('NotificationHistoryPanel (synthetic DOM)', () => {
+  it('shows grouped occurrence count and recovery without opening technical details', async () => {
+    const h=setup([{id:'diagnostic',timestamp:Date.now(),category:'network',level:'success',
+      message:'動画情報：復旧',details:{count:3,outcome:'recovered'}}]);
+    await flush();
+    assert(h.root.querySelector('.znh-head').textContent.includes('発生 3回・復旧済み'));
+    h.dom.window.close();
+  });
   it('renders entries as text and never interprets notification HTML', async () => {
     const records = [{
       id: 'example', timestamp: Date.now(), category: 'network', level: 'error',

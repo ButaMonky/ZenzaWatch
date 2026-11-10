@@ -1,3 +1,4 @@
+declare const RequestDiagnostics: typeof import('./RequestDiagnostics').RequestDiagnostics;
 /**
  * Canonical TypeScript source for packages/lib/src/nico/VideoInfoLoader.js (Task649).
  * Loads the official watch page's server-response metadata first (Task904),
@@ -477,7 +478,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
   };
 
 
-  const loadLinkedChannelVideoInfo = (originalData: Loose): Promise<Loose> => {
+  const loadLinkedChannelVideoInfo = (originalData: Loose, isCurrent: () => boolean = () => true): Promise<Loose> => {
     const linkedChannelVideo = originalData.linkedChannelVideo;
     const originalVideoId = originalData.watchApiData.videoDetail.id;
     const videoId = linkedChannelVideo.linkedVideoId;
@@ -491,7 +492,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     window.console.info('%cloadLinkedChannelVideoInfo', 'background: cyan');
     return new Promise(r => {
       setTimeout(r, 1000);
-    }).then(() => fetchWatchResponse(videoId, {}))
+    }).then(() => fetchWatchResponse(videoId, {}, isCurrent))
       .then(async json => {
         const data = await parseWatchApiData(json, videoId) as Loose;
         //window.console.info('linkedChannelData', data);
@@ -620,7 +621,7 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
         data.linkedChannelVideo = null;
       }
       if (data.linkedChannelVideo != null) {
-        return await loadLinkedChannelVideoInfo(data);
+        return await loadLinkedChannelVideoInfo(data, isCurrent);
       }
     }
 
@@ -698,12 +699,13 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
     };
   };
 
-  const fetchWatchResponse = async (watchId: string, options: LoadOptions): Promise<Loose> => {
+  const fetchWatchResponse = async (watchId: string, options: LoadOptions, isCurrent: () => boolean = () => true): Promise<Loose> => {
     requireActive(options);
     // Existing callers keep the identical options shape when no signal exists.
     // CrossDomainGate strips the signal from its serializable transport payload.
-    const fetchOptions: {credentials: 'include'; signal?: AbortSignal} = options.signal ?
+    const fetchOptions: Pick<NetFetchOptions, 'credentials' | 'signal' | 'diagnosticActive'> = options.signal ?
       {credentials: 'include', signal: options.signal} : {credentials: 'include'};
+    if (typeof RequestDiagnostics !== 'undefined') { fetchOptions.diagnosticActive = isCurrent; }
     const pageUrl = `https://www.nicovideo.jp/watch/${encodeURIComponent(watchId)}` +
       (options.economy === true ? '?eco=1' : '');
     const pageResponse = await netUtil.fetch(pageUrl, fetchOptions);
@@ -741,14 +743,20 @@ const VideoInfoLoader: VideoInfoLoaderClient = (function () {
 
   const loadPromise = function (this: unknown, watchId: string, options: LoadOptions, isRetry = false, isCurrent: () => boolean = () => true): Promise<Loose> {
     if (isCancelled(options)) { return Promise.reject(cancelledError()); }
+    const diagnostic = typeof RequestDiagnostics === 'undefined' ? null :
+      RequestDiagnostics.begin('video-info', watchId, 'response', () => isCurrent() && !isCancelled(options));
     console.log('loadFromWatchApiData');
-    return fetchWatchResponse(watchId, options)
-      .catch(err => Promise.reject(
-        isCancelled(options) ? cancelledError() :
+    return fetchWatchResponse(watchId, options, isCurrent)
+      .catch(err => {
+        diagnostic?.failure(err);
+        return Promise.reject(isCancelled(options) ? cancelledError() :
           err && typeof err === 'object' && err.reason ? err :
-            {reason: 'network', message: '通信エラー(network)'}))
+            {reason: 'network', message: '通信エラー(network)'});
+      })
       .then(onLoadPromise.bind(this, watchId, options, isRetry, isCurrent))
+      .then(result => { diagnostic?.success(); return result; })
       .catch((err: Loose): Promise<Loose> => {
+        diagnostic?.failure(err);
         if (isCancelled(options)) { return Promise.reject(cancelledError()); }
         window.console.error('watch api error', {err: safeLoadError(err), isRetry});
         if (isRetry) {

@@ -1,3 +1,5 @@
+import {RequestDiagnostics} from '../packages/lib/src/infra/RequestDiagnostics';
+import {NotificationJournal} from './NotificationJournal';
 import {ZenzaWatch, global} from './ZenzaWatchIndex';
 import {
   Config,
@@ -32,6 +34,8 @@ const START_PAGE_QUERY = 'hoge=fuga';
 
 // GENERATED FROM tools/typescript-stage1/nico-src/initializer.ts (Task965). Edit the .ts and run npm run nico:sync.
 //===BEGIN===
+//@require RequestDiagnostics
+//@require NotificationJournal
 const { initialize } = (() => {
     //@require HoverMenu
     //@require OfficialPlayerRoute
@@ -168,6 +172,17 @@ const { initialize } = (() => {
     };
     //@require replaceRedirectLinks
     const initialize = async function () {
+        if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
+            RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
+                category: 'network', source: event.operation, message: event.message,
+                level: event.outcome === 'recovered' ? 'success' :
+                    ['not-found', 'permission', 'unavailable'].includes(event.reason) ? 'info' : 'warning',
+                details: { operation: event.operation, phase: event.phase, outcome: event.outcome,
+                    reason: event.reason, elapsedMs: event.elapsedMs,
+                    ...(event.statusCode === undefined ? {} : { statusCode: event.statusCode }),
+                    ...(event.errorCode === undefined ? {} : { errorCode: event.errorCode }) }
+            }));
+        }
         window.console.log('%cinitialize ZenzaWatch...', 'background: lightgreen; ');
         domEvent.dispatchCustomEvent(document.body, 'BeforeZenzaWatchInitialize', window.ZenzaWatch, { bubbles: true, composed: true });
         cssUtil.addStyle(CONSTANT.COMMON_CSS, { className: 'common' });

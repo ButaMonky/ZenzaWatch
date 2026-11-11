@@ -19,7 +19,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.8',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+    emit({version:'external-direct.9',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
       supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }

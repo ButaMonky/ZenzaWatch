@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const root=path.resolve(__dirname,'../..');
 const base=fs.readFileSync(path.join(root,'dist/ZenzaWatch-dev.user.js'),'utf8').replace(/\r\n/g,'\n');
 const sourceHash=crypto.createHash('sha256').update(base).digest('hex');
-if(!base.includes('// @version        2.7.384-task1009'))throw Error('Review runtime changes before rebasing this trial');
+if(!base.includes('// @version        2.7.385-task1010'))throw Error('Review runtime changes before rebasing this trial');
 // Derive stored preference names from the shared default declarations, rather
 // than maintaining a second UI or a presentation-only list.
 const configStart=base.indexOf('const Config = (() => {');
@@ -74,10 +74,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.384-task1009';","var VER = '2.7.384-external-direct.8';");
+ body=once(body,"var VER = '2.7.385-task1010';","var VER = '2.7.385-external-direct.9';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.8 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.9 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -139,7 +139,7 @@ const uiDiagnostics=fs.readFileSync(path.join(__dirname,'ui-diagnostics.cjs'),'u
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.8.0-external-direct8
+// @version      0.9.0-external-direct9
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end

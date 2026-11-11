@@ -76,6 +76,10 @@ for(const [label,source] of targets){
         h.config.props.baseFontFamily='Test Sans';
         h.handlers.get('baseFontFamily')();
         assert.match(layer.optionCss,/Test Sans/);
+        h.config.props.cssFontWeight='900';
+        assert.strictEqual(typeof h.handlers.get('cssFontWeight'),'function');
+        h.handlers.get('cssFontWeight')();
+        assert.match(layer.optionCss,/font-weight: 900/);
         assert.strictEqual(layer.optionCss,h.layer.optionCss);
       }finally{h.dom.window.close();}
     });

@@ -114,8 +114,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.8.0-external-direct8'));
- assert.ok(code.includes("var VER = '2.7.384-external-direct.8'"));
+ assert.ok(header.includes('0.9.0-external-direct9'));
+ assert.ok(code.includes("var VER = '2.7.385-external-direct.9'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

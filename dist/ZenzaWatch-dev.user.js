@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.384-task1009
+// @version        2.7.385-task1010
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-11 18:06Z 8cbd185
+// build: 2026-11-11 18:11Z 4eff0b4
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.384-task1009';
+    var VER = '2.7.385-task1010';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-11 18:06Z 8cbd185';
+    var BUILD = '2026-11-11 18:11Z 4eff0b4';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -10328,7 +10328,7 @@ const { SettingPanelElement } = (() => {
 						<label>
 							<input type="checkbox" class="checkbox"
 								data-setting-name="autoCommentSpeedRate"
-								?checked=${conf.autoCommentSpeedRate}>
+								.checked=${conf.autoCommentSpeedRate}>
 								倍速再生でもコメントは速くしない
 								<small>※ コメントのレイアウトが一部崩れます</small>
 						</label>
@@ -10337,7 +10337,7 @@ const { SettingPanelElement } = (() => {
 						<label>
 							<input type="checkbox" class="checkbox"
 								data-setting-name="backComment"
-								?checked=${conf.backComment}>
+								.checked=${conf.backComment}>
 								コメントを画面全体に流す
 								<small>※ 全画面・ワイド表示時、映像を縮小せず画面の端までコメントを重ねます</small>
 						</label>
@@ -10346,7 +10346,7 @@ const { SettingPanelElement } = (() => {
 						<label>
 							<input type="checkbox" class="checkbox"
 								data-setting-name="baseFontBolder"
-								?checked=${conf.baseFontBolder}>
+								.checked=${conf.baseFontBolder}>
 								フォントを太くする
 						</label>
 					</div>
@@ -10354,12 +10354,12 @@ const { SettingPanelElement } = (() => {
 					<label>
 						<select class="commentSpeedRate"
 							data-setting-name="commentSpeedRate" data-type="number">
-								<option value="0.5" ?selected=${conf.commentSpeedRate == 0.5}>0.5倍</option>
-								<option value="0.8" ?selected=${conf.commentSpeedRate == 0.8}>0.8倍</option>
-								<option value="1"   ?selected=${conf.commentSpeedRate == 1}>標準</option>
-								<option value="1.2" ?selected=${conf.commentSpeedRate == 1.2}>1.2倍</option>
-								<option value="1.5" ?selected=${conf.commentSpeedRate == 1.5}>1.5倍</option>
-								<option value="2.0" ?selected=${conf.commentSpeedRate == 2.0}>2倍</option>
+								<option value="0.5" .selected=${conf.commentSpeedRate == 0.5}>0.5倍</option>
+								<option value="0.8" .selected=${conf.commentSpeedRate == 0.8}>0.8倍</option>
+								<option value="1"   .selected=${conf.commentSpeedRate == 1}>標準</option>
+								<option value="1.2" .selected=${conf.commentSpeedRate == 1.2}>1.2倍</option>
+								<option value="1.5" .selected=${conf.commentSpeedRate == 1.5}>1.5倍</option>
+								<option value="2.0" .selected=${conf.commentSpeedRate == 2.0}>2倍</option>
 						</select>
 						コメントの速度(倍率)
 							<small>※ コメントのレイアウトが一部崩れます</small>
@@ -10369,7 +10369,7 @@ const { SettingPanelElement } = (() => {
 					<h3>フォント名</h3>
 					<label>
 					<span class="info">入力例: 「'游ゴシック', 'メイリオ', '戦国TURB'」</span>
-						<input type="text" class="textInput" value=${conf.baseFontFamily}
+						<input type="text" class="textInput" .value=${conf.baseFontFamily}
 							aria-label="フォント名" data-setting-name="baseFontFamily">
 					</label>
 				</div>
@@ -10380,14 +10380,14 @@ const { SettingPanelElement } = (() => {
 					<input type="text" class="textInput"
 						pattern="(#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|^[a-zA-Z]+$)"
 						aria-label="投稿者コメントの影の色" data-setting-name="commentLayer.ownerCommentShadowColor"
-						value=${conf.commentLayer.ownerCommentShadowColor}
+						.value=${conf.commentLayer.ownerCommentShadowColor}
 						>
 					</label>
 				</div>
 				<div class="control">
 					<label>
 						フォントサイズ(倍率)
-						<input type="number" value=${conf.baseChatScale}
+						<input type="number" .value=${conf.baseChatScale}
 							min="0.5" max="2.0" step="0.1"
 							data-setting-name="baseChatScale" data-type="number"
 						>
@@ -10396,21 +10396,21 @@ const { SettingPanelElement } = (() => {
 				<div class="control">
 					<label>
 						コメントの透明度
-						<input type="range" value=${conf.commentLayerOpacity}
+						<input type="range" .value=${conf.commentLayerOpacity}
 							min="0.1" max="1.0" step="0.1"
 							data-setting-name="commentLayerOpacity" data-type="number"
 						>
 					</label>
 					<label>
 						かんたんコメント
-						<input type="range" value=${conf.commentLayer.easyCommentOpacity}
+						<input type="range" .value=${conf.commentLayer.easyCommentOpacity}
 							min="0.1" max="1.0" step="0.1"
 							data-setting-name="commentLayer.easyCommentOpacity" data-type="number"
 						>
 					</label>
 					<label>
 						AIキャラクターコメント
-						<input type="range" value=${conf.commentLayer.aiCommentOpacity}
+						<input type="range" .value=${conf.commentLayer.aiCommentOpacity}
 							min="0.1" max="1.0" step="0.1"
 							data-setting-name="commentLayer.aiCommentOpacity" data-type="number"
 						>
@@ -10422,7 +10422,7 @@ const { SettingPanelElement } = (() => {
 						<input type="radio"
 							name="textShadowType"
 							data-setting-name="commentLayer.textShadowType"
-							?checked=${conf.commentLayer.textShadowType == ''}
+							.checked=${conf.commentLayer.textShadowType == ''}
 							value="">
 							標準 (軽い)
 					</label>
@@ -10430,7 +10430,7 @@ const { SettingPanelElement } = (() => {
 						<input type="radio"
 							name="textShadowType"
 							data-setting-name="commentLayer.textShadowType"
-							?checked=${conf.commentLayer.textShadowType == 'shadow-type2'}
+							.checked=${conf.commentLayer.textShadowType == 'shadow-type2'}
 							value="shadow-type2">
 							縁取り
 					</label>
@@ -10438,7 +10438,7 @@ const { SettingPanelElement } = (() => {
 						<input type="radio"
 							name="textShadowType"
 							data-setting-name="commentLayer.textShadowType"
-							?checked=${conf.commentLayer.textShadowType == 'shadow-type3'}
+							.checked=${conf.commentLayer.textShadowType == 'shadow-type3'}
 							value="shadow-type3">
 						ぼかし (重い)
 					</label>
@@ -10446,7 +10446,7 @@ const { SettingPanelElement } = (() => {
 						<input type="radio"
 							name="textShadowType"
 							data-setting-name="commentLayer.textShadowType"
-							?checked=${conf.commentLayer.textShadowType == 'shadow-stroke'}
+							.checked=${conf.commentLayer.textShadowType == 'shadow-stroke'}
 							value="shadow-stroke">
 							縁取り2 (対応ブラウザのみ。やや重い)
 					</label>
@@ -10454,44 +10454,12 @@ const { SettingPanelElement } = (() => {
 						<input type="radio"
 							name="textShadowType"
 							data-setting-name="commentLayer.textShadowType"
-							?checked=${conf.commentLayer.textShadowType == 'shadow-dokaben'}
+							.checked=${conf.commentLayer.textShadowType == 'shadow-dokaben'}
 							value="shadow-dokaben">
 							ドカベン <s>(飽きたら消します)</s>
 					</label>
 				</div>
 			</details>
-			`;
-				}
-				static getScreenFilterSettingMenu(html, conf) {
-						return html `
-				<details class="screen-filter-setting">
-				<summary>画面フィルター（映像の明るさ・色・反転）</summary>
-				<div class="control">
-					<p class="setting-note">
-						動画の映像だけに明るさ・コントラスト・ガンマなどの補正を掛けます（コメントやボタンには掛かりません）。
-						設定は全部の動画で共通で、次に開いた時も残ります。
-					</p>
-					<button type="button" class="screen-filter-open-button" data-command="toggle-screenFilterPanel">画面フィルターを開く</button>
-					<p class="setting-note">プリセット・マイプリセット・数値調整は専用パネルでまとめて操作できます。適用中のプリセットをもう一度押すと標準に戻ります。</p>
-				</div>
-				<div class="control">
-					<label>
-						<input type="checkbox" class="checkbox"
-							data-setting-name="screenFilter.applyToScreenshot"
-							?checked=${conf['screenFilter.applyToScreenshot']}>
-							スクリーンショットにも画面フィルターを反映する
-					</label>
-					<label>
-						<input type="checkbox" class="checkbox"
-							data-setting-name="screenFilter.applyToCommentPip"
-							?checked=${conf['screenFilter.applyToCommentPip']}>
-							P in P(コメント付き) にも画面フィルターを反映する
-					</label>
-					<p class="setting-note">
-						通常の P in P は、ブラウザが動画をそのまま小窓に出す仕組みのため、フィルターは反映されません。
-					</p>
-				</div>
-				</details>
 			`;
 				}
 				static getFilterSettingMenu(html, conf) {
@@ -10765,19 +10733,6 @@ const { SettingPanelElement } = (() => {
 						font-size: 12px;
 						color:#bdcadb;line-height:1.6;
 					}
-					.screen-filter-open-button {
-						margin: 4px;
-						padding: 8px 12px;
-						border-radius: 4px;
-						cursor: pointer;
-						font-size: 14px;
-						color: #edf4ff;
-						background: #303c51;
-						border: 0;
-					}
-					.screen-filter-open-button:hover {
-						background: #40516b;
-					}
 					.import-export {
 						padding: 8px;
 						text-align: center;
@@ -10810,7 +10765,6 @@ const { SettingPanelElement } = (() => {
 				<div data-revision="${state.revision}">
 					${this.getPlayerSettingMenu(html, conf)}
 					${this.getCommentSettingMenu(html, conf)}
-					${this.getScreenFilterSettingMenu(html, conf)}
 					${this.getFilterSettingMenu(html, conf)}
 				<details>
 					<summary>設定のインポート・エクスポート</summary>
@@ -35754,6 +35708,7 @@ const OffscreenLayer = config => {
 		update();
 		config.onkey('baseFontFamily', update);
 		config.onkey('baseFontBolder', update);
+		config.onkey('cssFontWeight', update);
 	};
 	const initialize = () => {
 		if (offScreenFrame) {

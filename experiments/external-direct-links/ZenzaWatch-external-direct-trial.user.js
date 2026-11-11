@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.13.0-external-direct13
+// @version      0.14.0-external-direct14
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -182,7 +182,7 @@ function mountLauncher(w, {open}) {
       parseDirectLink(a.getAttribute('href'),d.baseURI);
     const old=entries.get(a);
     if (!id) {if(old){old.remove();entries.delete(a);}return;}
-    if (old?.isConnected) return;
+    if (old?.isConnected) {if(a.nextElementSibling!==old)a.insertAdjacentElement('afterend',old);return;}
     const button=d.createElement('button');button.type='button';button.textContent='Zen';
     button.setAttribute('data-zenza-direct-button','');button.title='このページ上でZenzaWatchを開く';
     button.setAttribute('aria-label','この動画をZenzaWatchで開く');button.style.cssText=buttonStyle;
@@ -209,19 +209,19 @@ function mountLauncher(w, {open}) {
     timer=null;if(disposed)return;
     let count=0;
     for(const a of queued){queued.delete(a);refresh(a);if(++count>=80)break;}
-    for(const [a,b] of entries)if(!a.isConnected){b.remove();entries.delete(a);}
     if(queued.size)timer=w.setTimeout(flush,0);
   }
-  function queue(node) {
+  function queue(node, removed=false) {
     if(node.nodeType!==1)return;
-    if(node.matches('a[href]'))queued.add(node);
-    for(const a of node.querySelectorAll('a[href]'))queued.add(a);
-    if(timer===null)timer=w.setTimeout(flush,0);
+    const add=a=>{if(!removed||entries.has(a))queued.add(a);};
+    if(node.matches('a[href]'))add(node);
+    for(const a of node.querySelectorAll('a[href]'))add(a);
+    if(queued.size&&timer===null)timer=w.setTimeout(flush,0);
   }
   const observer=new w.MutationObserver(records=>{
     for(const r of records){
       if(r.type==='attributes') {queued.add(r.target);if(timer===null)timer=w.setTimeout(flush,0);}
-      else {for(const n of r.addedNodes)queue(n);if(r.removedNodes.length&&timer===null)timer=w.setTimeout(flush,0);}
+      else {for(const n of r.addedNodes)queue(n);for(const n of r.removedNodes)queue(n,true);}
     }
   });
   observer.observe(d.body,{subtree:true,childList:true,attributes:true,attributeFilter:['href']});queue(d.body);
@@ -561,6 +561,8 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
 // One bounded sample. No target labels, input text, URLs, user IDs or payloads.
 function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_DIAG',JSON.stringify(report))) {
   let started=false,finished=false,raf,tick,stopTimer,begin,lastFrame,nextTick;
+  const inputCounts={}, inputTypes=['pointerdown','click','keydown','wheel','scroll'];
+  const countInput=e=>{if(started&&!finished&&e.isTrusted)inputCounts[e.type]=(inputCounts[e.type]||0)+1;};
   const observers=[],events={},timing={frames:0,slowFrames:0,maxFrameGapMs:0,timerSamples:0,maxTimerDelayMs:0,longTasks:0,totalLongTaskMs:0,maxLongTaskMs:0};
   const round=n=>Math.round(n*10)/10;
   function entries(list){for(const entry of list){
@@ -577,9 +579,10 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     w.cancelAnimationFrame?.(raf);w.clearTimeout(tick);w.clearTimeout(stopTimer);
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
+    for(const type of inputTypes)w.removeEventListener(type,countInput,true);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.13',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
-      supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
+    emit({version:'external-direct.14',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+      inputCounts:{...inputCounts},supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }
   let hiddenDuringSample=false;
@@ -592,6 +595,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
       const observer=new w.PerformanceObserver(list=>entries(list.getEntries()));observer._diagnosticType=type;
       observer.observe(type==='event'?{type,durationThreshold:16}:{type});observers.push(observer);
     }catch(_){}}
+    for(const type of inputTypes)w.addEventListener(type,countInput,{capture:true,passive:true});
     raf=w.requestAnimationFrame?.(frame);tick=w.setTimeout(timer,250);stopTimer=w.setTimeout(finish,15000);
   }
   function arm(event){if(event.isTrusted)start();}
@@ -933,10 +937,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.13';
+    var VER = '2.7.388-external-direct.14';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.13 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.14 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,

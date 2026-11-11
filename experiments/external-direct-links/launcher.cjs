@@ -54,7 +54,7 @@ function mountLauncher(w, {open}) {
       parseDirectLink(a.getAttribute('href'),d.baseURI);
     const old=entries.get(a);
     if (!id) {if(old){old.remove();entries.delete(a);}return;}
-    if (old?.isConnected) return;
+    if (old?.isConnected) {if(a.nextElementSibling!==old)a.insertAdjacentElement('afterend',old);return;}
     const button=d.createElement('button');button.type='button';button.textContent='Zen';
     button.setAttribute('data-zenza-direct-button','');button.title='このページ上でZenzaWatchを開く';
     button.setAttribute('aria-label','この動画をZenzaWatchで開く');button.style.cssText=buttonStyle;
@@ -81,19 +81,19 @@ function mountLauncher(w, {open}) {
     timer=null;if(disposed)return;
     let count=0;
     for(const a of queued){queued.delete(a);refresh(a);if(++count>=80)break;}
-    for(const [a,b] of entries)if(!a.isConnected){b.remove();entries.delete(a);}
     if(queued.size)timer=w.setTimeout(flush,0);
   }
-  function queue(node) {
+  function queue(node, removed=false) {
     if(node.nodeType!==1)return;
-    if(node.matches('a[href]'))queued.add(node);
-    for(const a of node.querySelectorAll('a[href]'))queued.add(a);
-    if(timer===null)timer=w.setTimeout(flush,0);
+    const add=a=>{if(!removed||entries.has(a))queued.add(a);};
+    if(node.matches('a[href]'))add(node);
+    for(const a of node.querySelectorAll('a[href]'))add(a);
+    if(queued.size&&timer===null)timer=w.setTimeout(flush,0);
   }
   const observer=new w.MutationObserver(records=>{
     for(const r of records){
       if(r.type==='attributes') {queued.add(r.target);if(timer===null)timer=w.setTimeout(flush,0);}
-      else {for(const n of r.addedNodes)queue(n);if(r.removedNodes.length&&timer===null)timer=w.setTimeout(flush,0);}
+      else {for(const n of r.addedNodes)queue(n);for(const n of r.removedNodes)queue(n,true);}
     }
   });
   observer.observe(d.body,{subtree:true,childList:true,attributes:true,attributeFilter:['href']});queue(d.body);

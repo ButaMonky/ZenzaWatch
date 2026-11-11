@@ -2,6 +2,8 @@
 // One bounded sample. No target labels, input text, URLs, user IDs or payloads.
 function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_DIAG',JSON.stringify(report))) {
   let started=false,finished=false,raf,tick,stopTimer,begin,lastFrame,nextTick;
+  const inputCounts={}, inputTypes=['pointerdown','click','keydown','wheel','scroll'];
+  const countInput=e=>{if(started&&!finished&&e.isTrusted)inputCounts[e.type]=(inputCounts[e.type]||0)+1;};
   const observers=[],events={},timing={frames:0,slowFrames:0,maxFrameGapMs:0,timerSamples:0,maxTimerDelayMs:0,longTasks:0,totalLongTaskMs:0,maxLongTaskMs:0};
   const round=n=>Math.round(n*10)/10;
   function entries(list){for(const entry of list){
@@ -18,9 +20,10 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     w.cancelAnimationFrame?.(raf);w.clearTimeout(tick);w.clearTimeout(stopTimer);
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
+    for(const type of inputTypes)w.removeEventListener(type,countInput,true);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.13',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
-      supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
+    emit({version:'external-direct.14',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+      inputCounts:{...inputCounts},supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }
   let hiddenDuringSample=false;
@@ -33,6 +36,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
       const observer=new w.PerformanceObserver(list=>entries(list.getEntries()));observer._diagnosticType=type;
       observer.observe(type==='event'?{type,durationThreshold:16}:{type});observers.push(observer);
     }catch(_){}}
+    for(const type of inputTypes)w.addEventListener(type,countInput,{capture:true,passive:true});
     raf=w.requestAnimationFrame?.(frame);tick=w.setTimeout(timer,250);stopTimer=w.setTimeout(finish,15000);
   }
   function arm(event){if(event.isTrusted)start();}

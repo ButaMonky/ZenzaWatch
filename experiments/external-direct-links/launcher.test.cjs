@@ -70,3 +70,38 @@ test('failed start gives safe retry UI, never raw authentication errors',async()
  assert.ok(!w.document.body.textContent.includes('secret cookie'));assert.ok(w.document.querySelector('a[href="https://account.nicovideo.jp/login"]'));
  api.dispose();w.close();
 });
+
+
+test('unrelated host updates do not rescan registered links or schedule work',async()=>{
+ const w=new JSDOM('<main>'+Array.from({length:160},(_,i)=>`<a href="https://www.nicovideo.jp/watch/sm${i+1}">video</a>`).join('')+'</main><section></section>',{url:'https://example.org/'}).window;
+ const api=mountLauncher(w,{open:async()=>{}});
+ try {
+  for(let i=0;i<100 && w.document.querySelectorAll('[data-zenza-direct-button]').length<160;i++)await new Promise(r=>setTimeout(r,10));
+  assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,160);
+  await new Promise(r=>setTimeout(r,30));
+  let checks=0,timers=0;
+  const connected=Object.getOwnPropertyDescriptor(w.Node.prototype,'isConnected').get;
+  for(const a of w.document.querySelectorAll('a'))Object.defineProperty(a,'isConnected',{get(){checks++;return connected.call(this);}});
+  const timeout=w.setTimeout.bind(w);w.setTimeout=(...args)=>{timers++;return timeout(...args);};
+  for(let i=0;i<3;i++){
+   const span=w.document.createElement('span');span.textContent='unrelated';w.document.querySelector('section').replaceChildren(span);
+   await new Promise(r=>setTimeout(r,10));
+  }
+  assert.equal(checks,0);assert.equal(timers,0);
+ } finally {api.dispose();w.close();}
+});
+
+test('removed links release buttons and moved links keep a single working button',async()=>{
+ const w=new JSDOM('<main><div><a href="https://www.nicovideo.jp/watch/sm9">video</a></div></main><section></section>',{url:'https://example.org/'}).window;
+ const api=mountLauncher(w,{open:async()=>{}});
+ try {
+  await new Promise(r=>setTimeout(r,30));
+  const a=w.document.querySelector('a');
+  w.document.querySelector('section').append(a);
+  await new Promise(r=>setTimeout(r,30));
+  assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,1);
+  assert.equal(a.nextElementSibling?.textContent,'Zen');
+  a.remove();await new Promise(r=>setTimeout(r,30));
+  assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,0);
+ } finally {api.dispose();w.close();}
+});

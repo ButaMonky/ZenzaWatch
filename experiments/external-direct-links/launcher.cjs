@@ -66,12 +66,13 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版3：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版3：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版3：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版3：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版3：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
-        message(text,true);
+          error?.message==='LOGIN_REQUIRED' ? '検証版4：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版4：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版4：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版4：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版4：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+        const stage={BOOT:'本体の準備',SETTINGS:'設定の接続',AUTH:'認証確認',UI:'画面の準備',VIDEO:'動画を開く処理'}[error?.stage];
+        message(text+(stage?' 停止した段階：'+stage+'。':''),true);
       } finally {opening=false;button.disabled=false;}
     });
     a.insertAdjacentElement('afterend',button);entries.set(a,button);
@@ -101,10 +102,15 @@ function mountLauncher(w, {open}) {
 
 function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
   let runtime, loading, initializing, ready=false;
+  let listener=()=>{},stage='BOOT';
+  const progress=value=>{stage=value;listener(value);};
   return {
     configure(value) {runtime=value;},
+    setStageListener(value) {listener=value;},
     async open(id,event) {
+      try {
       await enable(event);
+      progress('BOOT');
       if(!loading) {
         if(hasExistingRuntime())throw Error('EXISTING_RUNTIME');
         // A failed bootstrap is not rerun over a partially initialized runtime.
@@ -112,14 +118,16 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
       }
       await loading;
       if(!runtime)throw Error('RUNTIME_NOT_READY');
-      await runtime.connect();
-      await verifyLogin(runtime.api);
+      progress('SETTINGS');await runtime.connect();
+      progress('AUTH');await verifyLogin(runtime.api);
       runtime.setLogin();
       if(!ready) {
+        progress('UI');
         initializing=initializing||Promise.resolve().then(runtime.initialize);
         await initializing;ready=true;
       }
-      await runtime.open(id);
+      progress('VIDEO');await runtime.open(id);progress('OPEN');
+      } catch(error) {throw Object.assign(error instanceof Error?error:Error('PLAYER_START_FAILED'),{stage});}
     }
   };
 }

@@ -9,6 +9,7 @@ function once(source,from,to) {
 }
 function transform(source) {
  let body=source.slice(source.indexOf('// ==/UserScript==')+'// ==/UserScript=='.length);
+ body=once(body,"if (window.top === window) {\n      window.ZenzaLib = { _ };", "if (true) {\n      window.ZenzaLib = { _ };");
  body=once(body,'return gate = {};','/* Trial player always creates the GM-backed gate. */');
  body=once(body,'if (url.startsWith(location.origin)) {','if (false) {');
  body=once(body,"if (location.host === 'www.nicovideo.jp') {\n      const advancedSettings", "if (false) {\n      const advancedSettings");
@@ -46,10 +47,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.3';");
+ body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.4';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.3 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.4 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -101,7 +102,7 @@ const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replac
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.3.0-external-direct3
+// @version      0.4.0-external-direct4
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end

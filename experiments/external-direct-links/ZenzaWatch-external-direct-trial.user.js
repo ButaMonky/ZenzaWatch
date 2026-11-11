@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.3.0-external-direct3
+// @version      0.4.0-external-direct4
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -97,12 +97,13 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版3：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版3：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版3：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版3：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版3：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
-        message(text,true);
+          error?.message==='LOGIN_REQUIRED' ? '検証版4：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版4：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版4：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版4：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版4：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+        const stage={BOOT:'本体の準備',SETTINGS:'設定の接続',AUTH:'認証確認',UI:'画面の準備',VIDEO:'動画を開く処理'}[error?.stage];
+        message(text+(stage?' 停止した段階：'+stage+'。':''),true);
       } finally {opening=false;button.disabled=false;}
     });
     a.insertAdjacentElement('afterend',button);entries.set(a,button);
@@ -132,10 +133,15 @@ function mountLauncher(w, {open}) {
 
 function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
   let runtime, loading, initializing, ready=false;
+  let listener=()=>{},stage='BOOT';
+  const progress=value=>{stage=value;listener(value);};
   return {
     configure(value) {runtime=value;},
+    setStageListener(value) {listener=value;},
     async open(id,event) {
+      try {
       await enable(event);
+      progress('BOOT');
       if(!loading) {
         if(hasExistingRuntime())throw Error('EXISTING_RUNTIME');
         // A failed bootstrap is not rerun over a partially initialized runtime.
@@ -143,14 +149,16 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
       }
       await loading;
       if(!runtime)throw Error('RUNTIME_NOT_READY');
-      await runtime.connect();
-      await verifyLogin(runtime.api);
+      progress('SETTINGS');await runtime.connect();
+      progress('AUTH');await verifyLogin(runtime.api);
       runtime.setLogin();
       if(!ready) {
+        progress('UI');
         initializing=initializing||Promise.resolve().then(runtime.initialize);
         await initializing;ready=true;
       }
-      await runtime.open(id);
+      progress('VIDEO');await runtime.open(id);progress('OPEN');
+      } catch(error) {throw Object.assign(error instanceof Error?error:Error('PLAYER_START_FAILED'),{stage});}
     }
   };
 }
@@ -382,6 +390,7 @@ function createPlayerHost(w,gm,transport,session) {
         else if(data?.requestId===sequence && data.type==='opened')pending?.resolve();
         else if(data?.requestId===sequence && data.type==='error'){
           const error=Error(['LOGIN_REQUIRED','AUTH_FORBIDDEN','AUTH_TIMEOUT','GM_NETWORK_ERROR'].includes(data.code)?data.code:'PLAYER_START_FAILED');
+          error.stage=['BOOT','SETTINGS','AUTH','UI','VIDEO'].includes(data.stage)?data.stage:'BOOT';
           stop(error);
         }
       });
@@ -401,12 +410,16 @@ function createPlayerHost(w,gm,transport,session) {
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
     w.document.body.style.cssText='margin:0;background:#111;';
+    const status=w.document.createElement('div');status.style.cssText='position:fixed;top:24px;left:24px;z-index:2147483647;color:#eee;background:#17212d;padding:16px;font:16px sans-serif';
+    const labels={BOOT:'本体を準備しています',SETTINGS:'設定を接続しています',AUTH:'ログイン状態を確認しています',UI:'画面を準備しています',VIDEO:'動画を開いています'};
+    status.textContent=labels.BOOT;w.document.body.append(status);
+    session.setStageListener?.(stage=>{if(stage==='OPEN')status.remove();else status.textContent=labels[stage]||labels.BOOT;});
     let busy=false,last=0;
     port.addEventListener('message',async e=>{
       const m=e.data;if(m?.type!=='open'||busy||!Number.isSafeInteger(m.requestId)||m.requestId<=last||!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(m.id))return;
       busy=true;last=m.requestId;
       try{await session.open(m.id,{isTrusted:true});port.postMessage({type:'opened',requestId:m.requestId});}
-      catch(error){port.postMessage({type:'error',requestId:m.requestId,code:error.message});}
+      catch(error){w.console?.warn('[Zenza external trial] startup failed',error.stage||'BOOT',error.name||'Error');port.postMessage({type:'error',requestId:m.requestId,code:error.message,stage:error.stage});}
       finally{busy=false;}
     });
     port.postMessage({type:'ready'});
@@ -469,7 +482,7 @@ const AntiPrototypeJs = function () {
 AntiPrototypeJs();
 (() => {
   try {
-    if (window.top === window) {
+    if (true) {
       window.ZenzaLib = { _ };
       console.log('@require', JSON.stringify({lodash: _.VERSION}));
     }
@@ -749,10 +762,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.3';
+    var VER = '2.7.383-external-direct.4';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.3 GM transport base ba8366f7c710';
+    var BUILD = 'external-direct.4 GM transport base ba8366f7c710';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,

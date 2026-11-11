@@ -25,6 +25,7 @@ function createPlayerHost(w,gm,transport,session) {
         else if(data?.requestId===sequence && data.type==='opened')pending?.resolve();
         else if(data?.requestId===sequence && data.type==='error'){
           const error=Error(['LOGIN_REQUIRED','AUTH_FORBIDDEN','AUTH_TIMEOUT','GM_NETWORK_ERROR'].includes(data.code)?data.code:'PLAYER_START_FAILED');
+          error.stage=['BOOT','SETTINGS','AUTH','UI','VIDEO'].includes(data.stage)?data.stage:'BOOT';
           stop(error);
         }
       });
@@ -44,12 +45,16 @@ function createPlayerHost(w,gm,transport,session) {
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
     w.document.body.style.cssText='margin:0;background:#111;';
+    const status=w.document.createElement('div');status.style.cssText='position:fixed;top:24px;left:24px;z-index:2147483647;color:#eee;background:#17212d;padding:16px;font:16px sans-serif';
+    const labels={BOOT:'本体を準備しています',SETTINGS:'設定を接続しています',AUTH:'ログイン状態を確認しています',UI:'画面を準備しています',VIDEO:'動画を開いています'};
+    status.textContent=labels.BOOT;w.document.body.append(status);
+    session.setStageListener?.(stage=>{if(stage==='OPEN')status.remove();else status.textContent=labels[stage]||labels.BOOT;});
     let busy=false,last=0;
     port.addEventListener('message',async e=>{
       const m=e.data;if(m?.type!=='open'||busy||!Number.isSafeInteger(m.requestId)||m.requestId<=last||!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(m.id))return;
       busy=true;last=m.requestId;
       try{await session.open(m.id,{isTrusted:true});port.postMessage({type:'opened',requestId:m.requestId});}
-      catch(error){port.postMessage({type:'error',requestId:m.requestId,code:error.message});}
+      catch(error){w.console?.warn('[Zenza external trial] startup failed',error.stage||'BOOT',error.name||'Error');port.postMessage({type:'error',requestId:m.requestId,code:error.message,stage:error.stage});}
       finally{busy=false;}
     });
     port.postMessage({type:'ready'});

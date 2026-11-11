@@ -2,6 +2,19 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {JSDOM}=require('jsdom');
 const code=fs.readFileSync(path.join(__dirname,'ZenzaWatch-external-direct-trial.user.js'),'utf8');
 
+test('actual child frame receives userscript lexical dependencies before bootstrap',async()=>{
+ const parent=new JSDOM('',{url:'https://example.org/',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:new (require('jsdom').VirtualConsole)()}).window;
+ const frame=parent.document.createElement('iframe');frame.src='https://www.nicovideo.jp/robots.txt';parent.document.body.append(frame);
+ const w=frame.contentWindow;w.name='ZenzaWatchExternalTrialPlayer';w.document.open();w.document.write('<html><head></head><body></body></html>');w.document.close();
+ assert.notEqual(w,w.top);w.__dependency=require('lodash');
+ w.GM_getValue=()=>undefined;w.GM_setValue=()=>{};w.GM_deleteValue=()=>{};w.GM_addValueChangeListener=()=>1;w.GM_removeValueChangeListener=()=>{};
+ w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
+ let instrumented=code.replace('Object.assign(externalTrial,privateTransport);','Object.assign(externalTrial,privateTransport);window.__start=startRuntime;externalTrial.configure=value=>{window.__configured=value;};');
+ instrumented=instrumented.replaceAll("new Function('u', 'return import(u)')","(() => Promise.resolve({}))");
+ try{w.eval('const _=window.__dependency;'+instrumented);await w.__start();assert.equal(typeof w.__configured?.initialize,'function');}
+ finally{parent.close();}
+});
+
 for(const origin of ['https://example.org/','https://www.nicovideo.jp/robots.txt']) {
 test('shared runtime and GM gate work at '+origin,async()=>{
  const {VirtualConsole}=require('jsdom');
@@ -74,8 +87,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.3.0-external-direct3'));
- assert.ok(code.includes("var VER = '2.7.383-external-direct.3'"));
+ assert.ok(header.includes('0.4.0-external-direct4'));
+ assert.ok(code.includes("var VER = '2.7.383-external-direct.4'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

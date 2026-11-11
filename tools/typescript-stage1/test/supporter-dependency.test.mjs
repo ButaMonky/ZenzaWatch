@@ -23,7 +23,7 @@ test('advertising and credit switches disable descendants without losing checked
  const html=(parts,...values)=>parts.reduce((s,p,i)=>s+p+(values[i]??''),'');
  for(const ads of [false,true])for(const credit of [false,true]){
   const conf={audio:{},'uaa.enable':ads,'supporterCredit.enable':credit,'supporterCredit.voice':true};
-  const dom=new JSDOM(Panel.getPlayerSettingMenu(html,new Proxy(conf,{get:(t,k)=>t[k]??{}})).replace(/\?disabled=(true|false)/g,(_,v)=>v==='true'?'disabled':'').replace(/\?checked=(true|false)/g,(_,v)=>v==='true'?'checked':''));
+  const dom=new JSDOM(Panel.getPlayerSettingMenu(html,new Proxy(conf,{get:(t,k)=>t[k]??{}})).replace(/\?disabled=(true|false)/g,(_,v)=>v==='true'?'disabled':'').replace(/[?.]checked=(true|false)/g,(_,v)=>v==='true'?'checked':''));
   const doc=dom.window.document,enabled=doc.querySelector('[data-setting-name="supporterCredit.enable"]'),voice=doc.querySelector('[data-setting-name="supporterCredit.voice"]');
   assert.equal(enabled.matches(':disabled'),!ads);
   assert.equal(voice.matches(':disabled'),!ads||!credit);

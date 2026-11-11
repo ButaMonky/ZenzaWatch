@@ -42,7 +42,7 @@ HAR はローカルで構造の確認にだけ利用し、このフォルダー�
 [検証版をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/experiment/external-direct1008/experiments/external-direct-links/ZenzaWatch-external-direct-trial.user.js)
 
 `ZenzaWatch-external-direct-trial.user.js` を Tampermonkey に別スクリプトとして追加してください。
-通常の ZenzaWatch は削除・置換しません。検証版名は「ZenzaWatch 外部直接リンク検証版」、版は `0.9.0-external-direct9` です。旧検証版へ上書き更新してください。
+通常の ZenzaWatch は削除・置換しません。検証版名は「ZenzaWatch 外部直接リンク検証版」、版は `0.10.0-external-direct10` です。旧検証版へ上書き更新してください。
 Tampermonkeyの接続先権限はニコニコ関連の3ドメインに限定しています。サイト別Cookie許可は追加しません。Tampermonkeyから権限確認が出る場合は、この通信機能のための確認です。
 対象サイト上のリンクを探すため HTTPS サイトへのアクセス権限を使用します。ページを開いただけでは本体の起動・認証通信は行いません。
 元に戻すときは検証版だけ無効にし、ニコチャートを再読み込みしてください。
@@ -117,3 +117,6 @@ Event Timing のdurationは丸めや閾値の影響があり、処理終了後�
 
 ## 検証版9
 通常設定で編集したフォント名・サイズ・チェック欄が、後から共有設定を変更しても古い表示のまま残る問題を修正しました。上級者設定の文字の太さの変更もコメント描画へ反映します。通常設定の画面フィルター項目を削除しました。反映先を含む操作は専用パネルから行えます。操作の重さは別途調査中です。
+
+## 検証版10・設定連携の点検
+通常設定のチェック・選択欄・NG入力欄の表示同期を修正し、設定変更時に不必要なUI倍率の再設定を減らしました。[総点検結果と未解決事項](SETTINGS-AUDIT.md)。通常用とページ別設定の保存先衝突、履歴設定OFFが効かない問題は未修正です。重さの解決版ではありません。

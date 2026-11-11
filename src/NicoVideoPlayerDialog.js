@@ -6775,7 +6775,7 @@ class VariablesMapper {
         const { menuScale, commentLayerOpacity, fullscreenControlBarMode } = nextState;
         this.state = nextState;
         Object.assign(this.element.dataset, { fullscreenControlBarMode });
-        if (state.scale !== menuScale) {
+        if (state.menuScale !== menuScale) {
             this.setVar('--zenza-ui-scale', menuScale);
             this.setVar('--zenza-control-bar-height', css.px(this.videoControlBarHeight));
         }

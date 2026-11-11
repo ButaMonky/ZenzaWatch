@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/SettingPanelElement.ts",
   "runtime": "packages/components/src/element/SettingPanelElement.js",
-  "sourceSha256": "0c6b7896d0798eb817529f899935a036e4669b81444a0c14684e29517812534e",
-  "runtimeSha256": "f39ab0c7cf336b2652c3f88905a7bfb121ebee3205f38d9236e4c4c040dde8d1"
+  "sourceSha256": "109cb06b5b37c11492ff9c7b6d97ce888f5839fb4445e884ff35aa335bc03d89",
+  "runtimeSha256": "2bf7ca0261a88bf118f53a10db1a2fa770f7e17c27e8a477805761e322d308e9"
 }

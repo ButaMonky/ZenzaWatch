@@ -16,6 +16,14 @@ test('edited font controls follow subsequent shared configuration updates',async
  conf.baseFontFamily='sans-serif';conf.baseChatScale=1.5;conf.baseFontBolder=true;draw();
  assert.equal(font.value,'sans-serif');assert.equal(size.value,'1.5');
  bold.checked=false;conf.baseFontBolder=false;draw();conf.baseFontBolder=true;draw();assert.equal(bold.checked,true);
+ const player={audio:{},touch:{},autoPlay:false};
+ const drawPlayer=()=>render(Panel.getPlayerSettingMenu(html,player),root);
+ drawPlayer();const auto=root.querySelector('[data-setting-name="autoPlay"]');
+ auto.checked=true;player.autoPlay=true;drawPlayer();player.autoPlay=false;drawPlayer();assert.equal(auto.checked,false);
+ const filter={filter:{},wordFilter:['old'],commandFilter:[],userIdFilter:[]};
+ const drawFilter=()=>render(Panel.getFilterSettingMenu(html,filter),root);
+ drawFilter();const words=root.querySelector('[data-setting-name="wordFilter"]');
+ words.value='local';filter.wordFilter=['from advanced'];drawFilter();assert.equal(words.value,'from advanced');
  dom.window.close();
 });
 

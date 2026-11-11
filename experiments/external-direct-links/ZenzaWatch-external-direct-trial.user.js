@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.4.0-external-direct4
+// @version      0.5.0-external-direct5
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -27,7 +27,52 @@
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
- if (official && !loader && !playerFrame) return;
+ 'use strict';
+// Only presentation preferences cross the storage partition. No history,
+// account identifiers, custom links, scripts, or authentication material.
+function createDisplaySettings(w, gm) {
+  const slot='display-settings-v1';
+  const names=new Set(['screenMode','screenMode:ginza','screenMode:others','menuScale',
+    'smallModeOffsetX','smallModeOffsetY','smallModeWidth','smallModeHeight','smallModeAspectLock',
+    'fullscreenControlBarMode','videoInfoPanelTab','showComment','backComment','enableHeatMap',
+    'enableStoryboard','enableStoryboardBar','enableCommentPanel','enableCommentPanelAutoScroll',
+    'baseFontFamily','baseChatScale','baseFontBolder','cssFontWeight','commentLayerOpacity','commentSpeedRate']);
+  const allowed=k=>names.has(k)||/^(?:ui\.|controlBar\.|popup\.|bookmark\.(?:show|thumbnail|title))/.test(k);
+  const valid=v=>typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v)||typeof v==='string'&&v.length<=512;
+  function publish() {
+    if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
+    const values={};
+    try {
+      for(let i=0;i<w.localStorage.length;i++){
+        const key=w.localStorage.key(i);if(!key.startsWith('ZenzaWatch_'))continue;
+        const name=key.slice(11);if(!allowed(name))continue;
+        try{const value=JSON.parse(w.localStorage.getItem(key));if(valid(value))values[name]=value;}catch(_){}
+      }
+      gm.set(slot,{version:1,values});
+    } catch(_) { /* Storage may be unavailable; keep the last valid snapshot. */ }
+  }
+  function apply() {
+    const snapshot=gm.get(slot);if(snapshot?.version!==1||!snapshot.values)return false;
+    const values=Object.fromEntries(Object.entries(snapshot.values).filter(([key,value])=>allowed(key)&&valid(value)));
+    const stamp=JSON.stringify(Object.entries(values).sort(([a],[b])=>a.localeCompare(b)));
+    const marker='ZenzaWatchExternalTrial_displaySnapshot';
+    if(w.localStorage.getItem(marker)===stamp)return true;
+    const prefix='ZenzaWatchExternalTrial_';
+    for(const key of Object.keys(w.localStorage))if(key.startsWith(prefix)&&allowed(key.slice(prefix.length)))w.localStorage.removeItem(key);
+    for(const [key,value] of Object.entries(values))w.localStorage.setItem(prefix+key,JSON.stringify(value));
+    w.localStorage.setItem(marker,stamp);
+    return true;
+  }
+  return {publish,apply};
+}
+
+
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)});
+ if (official && !loader && !playerFrame) {
+   displaySettings.publish();
+   window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
+   return;
+ }
  if (!loader && !playerFrame && window !== window.top) return;
  'use strict';
 
@@ -97,11 +142,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版4：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版4：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版4：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版4：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版4：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版5：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版5：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版5：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版5：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版5：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         const stage={BOOT:'本体の準備',SETTINGS:'設定の接続',AUTH:'認証確認',UI:'画面の準備',VIDEO:'動画を開く処理'}[error?.stage];
         message(text+(stage?' 停止した段階：'+stage+'。':''),true);
       } finally {opening=false;button.disabled=false;}
@@ -444,6 +489,7 @@ function createPlayerHost(w,gm,transport,session) {
  Object.assign(externalTrial,privateTransport);
  externalTrial.gm=createGmNetwork(options=>GM_xmlhttpRequest(options));
  async function startRuntime(){
+ if(playerFrame)displaySettings.apply();
 
 // build: 2026-11-10 21:21Z 2ab5eeff
 /* eslint-disable */
@@ -762,10 +808,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.4';
+    var VER = '2.7.383-external-direct.5';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.4 GM transport base ba8366f7c710';
+    var BUILD = 'external-direct.5 GM transport base ba8366f7c710';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -76073,7 +76119,9 @@ ZenzaWatch.modules.TextLabel = TextLabel;
 
     externalTrial.configure({
       api: NicoVideoApi,
-      connect: () => NicoVideoApi.configBridge(Config),
+      // The isolated player already owns its local settings. Do not relay every
+      // panel setting through GM storage and a second same-origin frame.
+      connect: async () => {},
       setLogin: () => { nicoUtil.isLogin = util.isLogin = () => true; },
       initialize: async () => { await initialize(); },
       open: id => ZenzaWatch.external.open(id, {autoCloseFullScreen: false})

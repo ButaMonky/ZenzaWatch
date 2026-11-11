@@ -7,11 +7,14 @@ test('actual child frame receives userscript lexical dependencies before bootstr
  const frame=parent.document.createElement('iframe');frame.src='https://www.nicovideo.jp/robots.txt';parent.document.body.append(frame);
  const w=frame.contentWindow;w.name='ZenzaWatchExternalTrialPlayer';w.document.open();w.document.write('<html><head></head><body></body></html>');w.document.close();
  assert.notEqual(w,w.top);w.__dependency=require('lodash');
- w.GM_getValue=()=>undefined;w.GM_setValue=()=>{};w.GM_deleteValue=()=>{};w.GM_addValueChangeListener=()=>1;w.GM_removeValueChangeListener=()=>{};
+ w.GM_getValue=key=>key==='display-settings-v1'?{version:1,values:{screenMode:'big',menuScale:1.2}}:undefined;w.GM_setValue=()=>{};w.GM_deleteValue=()=>{};w.GM_addValueChangeListener=()=>1;w.GM_removeValueChangeListener=()=>{};
  w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
  let instrumented=code.replace('Object.assign(externalTrial,privateTransport);','Object.assign(externalTrial,privateTransport);window.__start=startRuntime;externalTrial.configure=value=>{window.__configured=value;};');
  instrumented=instrumented.replaceAll("new Function('u', 'return import(u)')","(() => Promise.resolve({}))");
- try{w.eval('const _=window.__dependency;'+instrumented);await w.__start();assert.equal(typeof w.__configured?.initialize,'function');}
+ instrumented=instrumented.replace('api: NicoVideoApi,','api: NicoVideoApi, testConfig: Config,');
+ try{w.eval('const _=window.__dependency;'+instrumented);await w.__start();assert.equal(typeof w.__configured?.initialize,'function');
+   assert.equal(w.__configured.testConfig.props.screenMode,'big');assert.equal(w.__configured.testConfig.props.menuScale,1.2);
+   w.__configured.api.configBridge=()=>{throw Error('redundant bridge');};await w.__configured.connect();}
  finally{parent.close();}
 });
 
@@ -25,7 +28,7 @@ test('shared runtime and GM gate work at '+origin,async()=>{
  let requests=0;w.fetch=()=>{requests++;throw Error('Unexpected traffic');};
  let instrumented=code.replace('Object.assign(externalTrial,privateTransport);',
   'Object.assign(externalTrial,privateTransport);window.__start=startRuntime;externalTrial.configure=value=>{window.__configured=value;};');
- instrumented=instrumented.replace('if (official && !loader && !playerFrame) return;', '/* test bootstrap */').replace('api: NicoVideoApi,','api: NicoVideoApi, testLogin: () => util.isLogin(),');
+ instrumented=instrumented.replace('if (official && !loader && !playerFrame) {', 'if (false) {').replace('api: NicoVideoApi,','api: NicoVideoApi, testLogin: () => util.isLogin(),');
  // The DOM emulator has no dynamic browser imports. Keep this dependency
  // stub explicit: this is bootstrap coverage, not a playback success claim.
  instrumented=instrumented.replaceAll("new Function('u', 'return import(u)')","(() => Promise.resolve({}))");
@@ -65,6 +68,12 @@ test('official pages are untouched by the trial entry',()=>{
  const w=new JSDOM('<a href="https://www.nicovideo.jp/watch/sm9">video</a>',{url:'https://www.nicovideo.jp/my',runScripts:'outside-only'}).window;
  w.eval(code);assert.equal(w.document.querySelector('button'),null);assert.equal(w.ZenzaWatch,undefined);w.close();
 });
+test('official entry publishes only display settings without starting a player',()=>{
+ const w=new JSDOM('',{url:'https://www.nicovideo.jp/my',runScripts:'outside-only'}).window;
+ let snapshot;w.GM_setValue=(key,value)=>{assert.equal(key,'display-settings-v1');snapshot=value;};
+ w.localStorage.setItem('ZenzaWatch_screenMode','"big"');w.localStorage.setItem('ZenzaWatch_lastWatchId','"sm9"');
+ w.eval(code);assert.equal(snapshot.values.screenMode,'big');assert.equal(snapshot.values.lastWatchId,undefined);assert.equal(w.ZenzaWatch,undefined);w.close();
+});
 test('trial keeps the destination whitelist and confines extra source permission to enabled HTTPS origins',async()=>{
  const begin=code.indexOf('const gate = () => {'),end=code.indexOf('return { post, parseUrl, isNicoServiceHost, isWhiteHost, uFetch, xFetch, init };',begin);
  assert.ok(begin>0&&end>begin);
@@ -87,8 +96,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.4.0-external-direct4'));
- assert.ok(code.includes("var VER = '2.7.383-external-direct.4'"));
+ assert.ok(header.includes('0.5.0-external-direct5'));
+ assert.ok(code.includes("var VER = '2.7.383-external-direct.5'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

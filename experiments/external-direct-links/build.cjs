@@ -47,17 +47,19 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.4';");
+ body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.5';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.4 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.5 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
  if(begin<0||end<begin)throw Error('External initialization anchor missing');
  body=body.slice(0,begin)+`    externalTrial.configure({
       api: NicoVideoApi,
-      connect: () => NicoVideoApi.configBridge(Config),
+      // The isolated player already owns its local settings. Do not relay every
+      // panel setting through GM storage and a second same-origin frame.
+      connect: async () => {},
       setLogin: () => { nicoUtil.isLogin = util.isLogin = () => true; },
       initialize: async () => { await initialize(); },
       open: id => ZenzaWatch.external.open(id, {autoCloseFullScreen: false})
@@ -99,10 +101,11 @@ const launcher=fs.readFileSync(path.join(__dirname,'launcher.cjs'),'utf8').repla
 const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const network=fs.readFileSync(path.join(__dirname,'gm-network.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
+const display=fs.readFileSync(path.join(__dirname,'display-settings.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.4.0-external-direct4
+// @version      0.5.0-external-direct5
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -129,7 +132,13 @@ const entry=`
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
- if (official && !loader && !playerFrame) return;
+ ${display}
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)});
+ if (official && !loader && !playerFrame) {
+   displaySettings.publish();
+   window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
+   return;
+ }
  if (!loader && !playerFrame && window !== window.top) return;
  ${launcher}
  ${transport}
@@ -149,6 +158,7 @@ const entry=`
  Object.assign(externalTrial,privateTransport);
  externalTrial.gm=createGmNetwork(options=>GM_xmlhttpRequest(options));
  async function startRuntime(){
+ if(playerFrame)displaySettings.apply();
 ${runtime}
  }
  const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);

@@ -17,6 +17,19 @@ test('shared runtime reaches configuration in isolated realm without loading the
  try {w.eval(instrumented);await w.__start();await new Promise(r=>w.setTimeout(r,40));
   assert.equal(typeof w.__configured?.api?.fetch,'function');assert.equal(typeof w.__configured?.initialize,'function');
   assert.equal(requests,0);assert.equal(w.document.querySelector('.zenzaPlayerContainer'),null);
+  // Exercise the actual generated gate used by API calls and worker forwarding.
+  Object.assign(w,{Headers,Request,Response,TextDecoder,TextEncoder});
+  const gmCalls=[];
+  w.GM_xmlhttpRequest=options=>{gmCalls.push(options);queueMicrotask(()=>options.onload({status:200,response:new TextEncoder().encode('{"ok":true}').buffer,responseHeaders:'Content-Type: application/json',finalUrl:options.url}));return {abort(){}};};
+  for(const endpoint of ['https://nvapi.nicovideo.jp/v1/test','https://public.nvcomment.nicovideo.jp/v1/test']){
+    const response=await w.__configured.api.fetch(endpoint,{method:'POST',body:'{}',headers:{'Content-Type':'application/json'}});
+    assert.deepEqual(await response.json(),{ok:true});
+  }
+  const wire=await w.__configured.api.fetch('https://nvapi.nicovideo.jp/v1/test',{_format:'arraybuffer'});
+  assert.ok(wire.buffer.byteLength>0);assert.equal(gmCalls.length,3);assert.equal(requests,0);
+  w.GM_xmlhttpRequest=options=>{queueMicrotask(()=>options.onload({status:204,response:new ArrayBuffer(0),finalUrl:options.url,responseHeaders:''}));return {abort(){}};};
+  const empty=await w.__configured.api.fetch('https://nvapi.nicovideo.jp/v1/test',{method:'DELETE'});
+  assert.equal(empty.status,204);assert.equal(await empty.text(),'');
  } finally {w.close();}
 });
 
@@ -58,6 +71,11 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.1.0-external-direct1'));
- assert.ok(code.includes("var VER = '2.7.383-external-direct.1'"));
+ assert.ok(header.includes('0.2.0-external-direct2'));
+ assert.ok(code.includes("var VER = '2.7.383-external-direct.2'"));
+ assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
+ assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
+ assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));
+ assert.ok(header.includes('@grant        GM_xmlhttpRequest'));
+ assert.ok(!header.includes('@connect      *'));
 });

@@ -16,11 +16,13 @@ async function verifyLogin(api) {
       credentials: 'include', cache: 'no-store', timeout: 15000,
       headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
     });
-    if (response.status === 401 || response.status === 403) throw new Error('LOGIN_REQUIRED');
+    if (response.status === 401) throw new Error('LOGIN_REQUIRED');
+    if (response.status === 403) throw new Error('AUTH_FORBIDDEN');
     if (response.status !== 200) throw new Error('AUTH_CHECK_FAILED');
     body = await response.json();
   } catch (error) {
-    throw new Error(error?.message === 'LOGIN_REQUIRED' ? 'LOGIN_REQUIRED' : 'AUTH_CHECK_FAILED');
+    const known=['LOGIN_REQUIRED','AUTH_FORBIDDEN','GM_NETWORK_ERROR','GM_DESTINATION_DENIED'];
+    throw new Error(known.includes(error?.message) ? error.message : error?.name==='TimeoutError'?'AUTH_TIMEOUT':'AUTH_CHECK_FAILED');
   }
   if (body?.meta?.status !== 200 || !Array.isArray(body?.data?.mylists))
     throw new Error('AUTH_CHECK_FAILED');
@@ -64,8 +66,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? 'ログイン状態を確認できません。公式ページでログイン後、もう一度 Zen を押してください。' :
-          '起動または認証の確認ができませんでした。公式ページのログインと、第三者Cookie・埋め込み通信の設定を確認し、再試行してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版2：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版2：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版2：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版2：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版2：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         message(text,true);
       } finally {opening=false;button.disabled=false;}
     });

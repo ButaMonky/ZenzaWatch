@@ -9,6 +9,23 @@ function once(source,from,to) {
 }
 function transform(source) {
  let body=source.slice(source.indexOf('// ==/UserScript==')+'// ==/UserScript=='.length);
+ const fetchBegin=body.indexOf('_fetch(url, options = {}) {');
+ const fetchEnd=body.indexOf('async fetch(resource, options = {}) {',fetchBegin);
+ if(fetchBegin<0||fetchEnd<0)throw Error('Gate fetch anchor missing');
+ body=body.slice(0,fetchBegin)+`async _fetch(url, options = {}) {
+   const response=await externalTrial.gm.fetch(url,options);
+   return {buffer:await response.arrayBuffer(),init:{status:response.status,statusText:response.statusText},headers:[...response.headers]};
+ }
+ `+body.slice(fetchEnd);
+ if(body.split('return new Response(buffer, _init);').length!==3)throw Error('Response adapters changed');
+ body=body.replaceAll('return new Response(buffer, _init);',
+   'return new Response([204,205,304].includes(_init.status) ? null : buffer, _init);');
+ body=once(body,'const hls = new Hls(Object.assign({}, this._hlsConfig));',
+   'const hls = new Hls(Object.assign({}, this._hlsConfig, {loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader}));');
+ body=once(body,"video.setAttribute('use-native-hls', nativeHlsPreference(Config.get('use_native_hls')));",
+   "video.setAttribute('use-native-hls', 'no');");
+ body=once(body,'const res = await fetch(request, params).catch(() => null);',
+   'const res = await externalTrial.gm.fetch(request, params).catch(() => null);');
  const commentStart=body.indexOf('class CommentInputPanel extends Emitter {');
  const commentEnd=body.indexOf('CommentInputPanel.CommandPicker =',commentStart);
  if(commentStart<0||commentEnd<0)throw Error('Comment input integration changed');
@@ -19,10 +36,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.1';");
+ body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.2';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.1 base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.2 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -69,10 +86,11 @@ function transform(source) {
 const runtime=transform(base);
 const launcher=fs.readFileSync(path.join(__dirname,'launcher.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
+const network=fs.readFileSync(path.join(__dirname,'gm-network.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.1.0-external-direct1
+// @version      0.2.0-external-direct2
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -81,8 +99,13 @@ const header=`// ==UserScript==
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
 // @grant        GM_removeValueChangeListener
+// @grant        GM_xmlhttpRequest
+// @connect      nicovideo.jp
+// @connect      nimg.jp
+// @connect      dmc.nico
 // @sandbox      DOM
 // @require      https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
+// @require      https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // ==/UserScript==
 // Shared runtime SHA256: ${sourceHash}
 `;
@@ -97,6 +120,7 @@ const entry=`
  if (!loader && window !== window.top) return;
  ${launcher}
  ${transport}
+ ${network}
  const privateTransport=createPrivateTransport(window,{
    get:(key)=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:(key)=>GM_deleteValue(key),
    listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:(id)=>GM_removeValueChangeListener(id)
@@ -109,6 +133,7 @@ const entry=`
    }
  });
  Object.assign(externalTrial,privateTransport);
+ externalTrial.gm=createGmNetwork(options=>GM_xmlhttpRequest(options));
  async function startRuntime(){
 ${runtime}
  }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.1.0-external-direct1
+// @version      0.2.0-external-direct2
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -10,8 +10,13 @@
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
 // @grant        GM_removeValueChangeListener
+// @grant        GM_xmlhttpRequest
+// @connect      nicovideo.jp
+// @connect      nimg.jp
+// @connect      dmc.nico
 // @sandbox      DOM
 // @require      https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
+// @require      https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // ==/UserScript==
 // Shared runtime SHA256: ba8366f7c7109f56105a67fdfba7e2835f836064348193bace258542871ce05f
 
@@ -41,11 +46,13 @@ async function verifyLogin(api) {
       credentials: 'include', cache: 'no-store', timeout: 15000,
       headers: {'X-Frontend-Id': '6', 'X-Frontend-Version': '0'}
     });
-    if (response.status === 401 || response.status === 403) throw new Error('LOGIN_REQUIRED');
+    if (response.status === 401) throw new Error('LOGIN_REQUIRED');
+    if (response.status === 403) throw new Error('AUTH_FORBIDDEN');
     if (response.status !== 200) throw new Error('AUTH_CHECK_FAILED');
     body = await response.json();
   } catch (error) {
-    throw new Error(error?.message === 'LOGIN_REQUIRED' ? 'LOGIN_REQUIRED' : 'AUTH_CHECK_FAILED');
+    const known=['LOGIN_REQUIRED','AUTH_FORBIDDEN','GM_NETWORK_ERROR','GM_DESTINATION_DENIED'];
+    throw new Error(known.includes(error?.message) ? error.message : error?.name==='TimeoutError'?'AUTH_TIMEOUT':'AUTH_CHECK_FAILED');
   }
   if (body?.meta?.status !== 200 || !Array.isArray(body?.data?.mylists))
     throw new Error('AUTH_CHECK_FAILED');
@@ -89,8 +96,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? 'ログイン状態を確認できません。公式ページでログイン後、もう一度 Zen を押してください。' :
-          '起動または認証の確認ができませんでした。公式ページのログインと、第三者Cookie・埋め込み通信の設定を確認し、再試行してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版2：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版2：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版2：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版2：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版2：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         message(text,true);
       } finally {opening=false;button.disabled=false;}
     });
@@ -260,6 +270,91 @@ function createPrivateTransport(w, gm) {
 }
 
 
+ 'use strict';
+
+function createGmNetwork(request) {
+  function permitted(value) {
+    const u=new URL(value);
+    if(u.protocol!=='https:'||u.username||u.password||u.port||
+      /^(?:account|point)\.nicovideo\.jp$/.test(u.hostname)||
+      !['nicovideo.jp','nimg.jp','dmc.nico'].some(h=>u.hostname===h||u.hostname.endsWith('.'+h)))
+      throw Error('GM_DESTINATION_DENIED');
+    return u.href;
+  }
+  async function gmFetch(resource, options={}) {
+    const isRequest=typeof Request!=='undefined' && resource instanceof Request;
+    const url=permitted(isRequest?resource.url:String(resource));
+    const method=options.method||(isRequest?resource.method:'GET');
+    const signal=options.signal||(isRequest?resource.signal:undefined);
+    const headers=Object.fromEntries(new Headers(options.headers||(isRequest?resource.headers:undefined)));
+    for(const key of Object.keys(headers))if(/^(cookie|host|authorization|proxy-authorization)$/i.test(key))throw Error('GM_HEADER_DENIED');
+    let data=options.body;
+    if(data===undefined && isRequest && !/^(GET|HEAD)$/i.test(method))data=await resource.clone().arrayBuffer();
+    return new Promise((resolve,reject)=>{
+      let handle,done=false,timer;
+      const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);error?reject(error):resolve(value);};
+      const abort=()=>{finish(signal?.reason||new DOMException('Aborted','AbortError'));handle?.abort();};
+      const timeout=()=>{finish(new DOMException('GM request timed out','TimeoutError'));handle?.abort();};
+      if(signal?.aborted){abort();return;}
+      signal?.addEventListener('abort',abort,{once:true});
+      const ms=options.timeout===0?0:(options.timeout||30000);
+      if(ms>0)timer=setTimeout(timeout,ms);
+      try {
+        handle=request({url,method,headers,data,responseType:'arraybuffer',
+          anonymous:options.credentials==='omit',redirect:'error',nocache:options.cache==='no-store',
+          onload:r=>{
+            if(done)return;
+            try {
+              permitted(r.finalUrl||url);
+              if(r.status<200||r.status>599||r.status>=300&&r.status<400)throw Error('GM_INVALID_RESPONSE');
+              const h=new Headers();
+              for(const line of (r.responseHeaders||'').split(/\r?\n/)){
+                const i=line.indexOf(':');if(i>0 && !/^set-cookie2?$/i.test(line.slice(0,i)))h.append(line.slice(0,i),line.slice(i+1).trim());
+              }
+              const res=new Response([204,205,304].includes(r.status)||method==='HEAD'?null:r.response,{status:r.status,statusText:r.statusText||'',headers:h});
+              Object.defineProperty(res,'url',{value:r.finalUrl||url});finish(null,res);
+            } catch(e){finish(e);}
+          },onerror:()=>finish(Error('GM_NETWORK_ERROR')),ontimeout:timeout,
+          onabort:()=>finish(new DOMException('Aborted','AbortError'))});
+      } catch(e){finish(e);}
+    });
+  }
+  class Loader {
+    constructor(){this.context=null;this.controller=null;this.stats=this.newStats();}
+    newStats(){return {aborted:false,loaded:0,total:0,retry:0,chunkCount:0,bwEstimate:0,loading:{start:0,first:0,end:0},parsing:{start:0,end:0},buffering:{start:0,first:0,end:0}};}
+    load(context,config,callbacks){
+      this.abort();this.context=context;this.callbacks=callbacks;
+      const stats=this.stats;Object.assign(stats,this.newStats());
+      const controller=this.controller=new AbortController();stats.loading.start=performance.now();
+      // GM arraybuffer delivery is buffered. Use total elapsed time for a
+      // conservative throughput estimate rather than reporting zero transfer time.
+      stats.loading.first=stats.loading.start;
+      const headers={...context.headers};if(Number.isFinite(context.rangeEnd)&&context.rangeEnd>(context.rangeStart||0))headers.Range=`bytes=${context.rangeStart||0}-${context.rangeEnd-1}`;
+      const timeout=config.timeout||config.loadPolicy?.maxLoadTimeMs||30000;
+      gmFetch(context.url,{headers,signal:controller.signal,timeout,credentials:'include'}).then(async response=>{
+        if(this.controller!==controller||stats.aborted)return;
+        if(!response.ok){this.controller=null;callbacks.onError({code:response.status,text:'HLS HTTP '+response.status},context,null,stats);return;}
+        const bytes=await response.arrayBuffer();if(this.controller!==controller||stats.aborted)return;
+        const now=performance.now();stats.loading.end=now;stats.loaded=stats.total=bytes.byteLength;stats.chunkCount=1;
+        const data=context.responseType==='arraybuffer'?bytes:new TextDecoder().decode(bytes);
+        this.controller=null;
+        callbacks.onSuccess({url:response.url,data,code:response.status},stats,context,null);
+      }).catch(error=>{
+        if(this.controller!==controller||stats.aborted)return;
+        this.controller=null;
+        if(error.name==='TimeoutError')callbacks.onTimeout(stats,context,null);
+        else callbacks.onError({code:0,text:'HLS GM transport failed'},context,null,stats);
+      });
+    }
+    abort(){if(this.controller){const controller=this.controller;this.controller=null;this.stats.aborted=true;controller.abort();this.callbacks?.onAbort?.(this.stats,this.context,null);}}
+    destroy(){this.abort();this.context=null;this.callbacks=null;}
+    getCacheAge(){return null;}
+    getResponseHeader(){return null;}
+  }
+  return {fetch:gmFetch,Loader};
+}
+
+
  const privateTransport=createPrivateTransport(window,{
    get:(key)=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:(key)=>GM_deleteValue(key),
    listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:(id)=>GM_removeValueChangeListener(id)
@@ -272,6 +367,7 @@ function createPrivateTransport(w, gm) {
    }
  });
  Object.assign(externalTrial,privateTransport);
+ externalTrial.gm=createGmNetwork(options=>GM_xmlhttpRequest(options));
  async function startRuntime(){
 
 // build: 2026-11-10 21:21Z 2ab5eeff
@@ -591,10 +687,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.1';
+    var VER = '2.7.383-external-direct.2';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.1 base ba8366f7c710';
+    var BUILD = 'external-direct.2 GM transport base ba8366f7c710';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -13758,11 +13854,11 @@ class CrossDomainGate extends Emitter {
 				return this._postMessage({ command: 'videoCapture', params: { src, sec } })
 						.then(result => Promise.resolve(result.dataUrl));
 		}
-		_fetch(url, options = {}) {
-				const { signal, ...transferOptions } = options;
-				return this._postMessage({ command: 'fetch', params: { url, options: transferOptions } }, true, '', { signal, timeout: options.timeout });
-		}
-		async fetch(resource, options = {}) {
+		async _fetch(url, options = {}) {
+   const response=await externalTrial.gm.fetch(url,options);
+   return {buffer:await response.arrayBuffer(),init:{status:response.status,statusText:response.statusText},headers:[...response.headers]};
+ }
+ async fetch(resource, options = {}) {
 				options = { ...options };
 				let url = resource;
 				if (resource instanceof URL) {
@@ -13791,7 +13887,7 @@ class CrossDomainGate extends Emitter {
 				if (options._format === 'arraybuffer') {
 						return { buffer, init, headers };
 				}
-				return new Response(buffer, _init);
+				return new Response([204,205,304].includes(_init.status) ? null : buffer, _init);
 		}
 		async configBridge(config) {
 				const keys = config.getKeys();
@@ -66826,7 +66922,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 										const params = { method: 'GET', credentials: 'include', cache: 'force-cache', signal: abc.signal };
 										const request = new Request(url, params);
 										while ((fragment.failed || 0) < 3) {
-												const res = await fetch(request, params).catch(() => null);
+												const res = await externalTrial.gm.fetch(request, params).catch(() => null);
 												if (res && res.ok && res.status !== 206) {
 														const buffer = await res.arrayBuffer();
 														const saved = await Storage.save({ ...key, meta: {
@@ -67543,7 +67639,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								if (!this._hls) {
 										this._fragmentLoader = createFragmentLoader(Hls);
 										this._hlsConfig.fLoader = this._fragmentLoader;
-										const hls = new Hls(Object.assign({}, this._hlsConfig));
+										const hls = new Hls(Object.assign({}, this._hlsConfig, {loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader}));
 										this._hls = hls;
 										let lifetime = { phase: 'active', engine: hls };
 										const owned = (listener) => (...args) => {
@@ -68278,7 +68374,7 @@ const HlsRuntime = {
 												});
 												primaryVideo = video;
 										}
-										video.setAttribute('use-native-hls', nativeHlsPreference(Config.get('use_native_hls')));
+										video.setAttribute('use-native-hls', 'no');
 										return video;
 								};
 								window.ZenzaHLS = {
@@ -76346,7 +76442,7 @@ const workerUtil = (() => {
 								statusText: init.statusText || '',
 								headers: _headers
 						};
-						return new Response(buffer, _init);
+						return new Response([204,205,304].includes(_init.status) ? null : buffer, _init);
 				};
 		};
 		const workerUtil = {

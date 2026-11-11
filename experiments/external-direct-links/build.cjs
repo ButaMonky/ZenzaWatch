@@ -3,6 +3,19 @@ const root=path.resolve(__dirname,'../..');
 const base=fs.readFileSync(path.join(root,'dist/ZenzaWatch-dev.user.js'),'utf8').replace(/\r\n/g,'\n');
 const sourceHash=crypto.createHash('sha256').update(base).digest('hex');
 if(!base.includes('// @version        2.7.383-task1007'))throw Error('Review runtime changes before rebasing this trial');
+// Derive stored preference names from the shared default declarations, rather
+// than maintaining a second UI or a presentation-only list.
+const configStart=base.indexOf('const Config = (() => {');
+const defaultsEnd=base.indexOf('const config = DataStorage.create(DEFAULT_CONFIG',configStart);
+const defaultsAst=require('@babel/parser').parse(base.slice(configStart,defaultsEnd)+'return {};})();');
+const preferenceNames=new Set();
+function collectDefaults(node){
+ if(!node||typeof node!=='object')return;
+ if(node.type==='ObjectProperty'&&!node.computed){const name=node.key.name??node.key.value;if(typeof name==='string')preferenceNames.add(name);}
+ for(const value of Object.values(node)){if(Array.isArray(value))value.forEach(collectDefaults);else if(value&&typeof value==='object')collectDefaults(value);}
+}
+collectDefaults(defaultsAst);
+for(const key of ['debug','message','lastPlayerId','lastWatchId','videoSearch.word'])preferenceNames.delete(key);
 function once(source,from,to) {
  if(source.split(from).length!==2)throw Error('Trial integration anchor changed: '+from.slice(0,70));
  return source.replace(from,to);
@@ -12,7 +25,18 @@ function transform(source) {
  body=once(body,"if (window.top === window) {\n      window.ZenzaLib = { _ };", "if (true) {\n      window.ZenzaLib = { _ };");
  body=once(body,'return gate = {};','/* Trial player always creates the GM-backed gate. */');
  body=once(body,'if (url.startsWith(location.origin)) {','if (false) {');
- body=once(body,"if (location.host === 'www.nicovideo.jp') {\n      const advancedSettings", "if (false) {\n      const advancedSettings");
+ // Custom element registries survive clearing a document. Isolate the shared
+ // implementations from definitions installed by another userscript/version.
+ for(const tag of ['zenza-video','zenza-setting-panel','video-debug-dialog','video-debug-checkbox','video-debug-slider']){
+   body=body.replace(new RegExp('\\b'+tag+'\\b(?!-)','g'),'zw-trial-'+tag);
+ }
+ body=body.replaceAll('ZenzaWatch.integratedHls','ZenzaWatchExternalTrial.integratedHls');
+ const advancedBegin=body.indexOf("    if (location.host === 'www.nicovideo.jp') {\n      const advancedSettings");
+ const advancedEnd=body.indexOf('    uq.ready().then(() => initializeExternalSite',advancedBegin);
+ if(advancedBegin<0||advancedEnd<0)throw Error('Advanced settings lifecycle anchor missing');
+ let advanced=body.slice(advancedBegin,advancedEnd);
+ advanced=once(advanced,'      return initialize();','      /* Session starts playback after authenticated initialization. */');
+ body=body.slice(0,advancedBegin)+advanced+body.slice(advancedEnd);
  body=once(body,"if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {", "if (typeof NicoVideoApi !== 'undefined') {");
  const workerRoute=body.indexOf("if (!location.origin.endsWith('.nicovideo.jp')");
  const workerRouteEnd=body.indexOf('{',workerRoute);
@@ -33,6 +57,9 @@ function transform(source) {
    'return new Response([204,205,304].includes(_init.status) ? null : buffer, _init);');
  body=once(body,'const hls = new Hls(Object.assign({}, this._hlsConfig));',
    'const hls = new Hls(Object.assign({}, this._hlsConfig, {loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader}));');
+ body=body.replaceAll('ZenzaWatch_video.hls.','ZenzaWatchExternalTrial_video.hls.');
+ body=once(body,"changes.forEach(key => { emitter.emit(`update-${key}`, config[key]); emitter.emit('update', { key, value: config[key] }); });",
+   "changes.forEach(key => { emitter.emit(`update-${key}`, config[key]); emitter.emit('update', { key, value: config[key] }); });\n displaySettings.scheduleSave();");
  body=once(body,"video.setAttribute('use-native-hls', nativeHlsPreference(Config.get('use_native_hls')));",
    "video.setAttribute('use-native-hls', 'no');");
  body=once(body,'const res = await fetch(request, params).catch(() => null);',
@@ -47,10 +74,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.5';");
+ body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.6';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.5 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.6 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -64,11 +91,15 @@ function transform(source) {
       initialize: async () => { await initialize(); },
       open: id => ZenzaWatch.external.open(id, {autoCloseFullScreen: false})
     });
+    Config.on('update', () => displaySettings.scheduleSave());
 `+body.slice(end+endMarker.length);
  body=once(body,'  boot(monkey, PRODUCT, START_PAGE_QUERY);',`  if (window.top !== window && window.name !== 'ZenzaWatchExternalTrialPlayer') return boot(monkey, PRODUCT, START_PAGE_QUERY);
   return monkey(PRODUCT, encodeURIComponent(''));`);
  body=once(body,'const hoverMenu = global.debug.hoverMenu = new HoverMenu({ playerConfig: Config });',
    'const hoverMenu = {setPlayer() {}};');
+ if(body.split('new this.win.MutationObserver(()=>this._listen())').length!==3)throw Error('Comment panel observer count changed');
+ body=body.replaceAll('new this.win.MutationObserver(()=>this._listen())',
+   'new this.win.MutationObserver(records=>{if(frameTopologyChanged(records))this._listen();})');
  body=once(body,"replaceRedirectLinks().catch(() => console.warn('Legacy redirect-link enhancement unavailable'));",'/* Direct-link trial does not rewrite page links. */');
  body=once(body,'initializeLastSession(dialog);','PlayerSession.init(sessionStorage);');
  for(const event of ['BeforeZenzaWatchInitialize','ZenzaWatchInitialize'])
@@ -102,10 +133,11 @@ const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').
 const network=fs.readFileSync(path.join(__dirname,'gm-network.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const display=fs.readFileSync(path.join(__dirname,'display-settings.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
+const panelObserver=fs.readFileSync(path.join(__dirname,'panel-observer.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.5.0-external-direct5
+// @version      0.6.0-external-direct6
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -133,7 +165,8 @@ const entry=`
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
  ${display}
- const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)});
+ ${panelObserver}
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},${JSON.stringify([...preferenceNames])});
  if (official && !loader && !playerFrame) {
    displaySettings.publish();
    window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
@@ -162,7 +195,7 @@ const entry=`
 ${runtime}
  }
  const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
- externalTrial.closeOverlay=playerHost.close;
+ externalTrial.closeOverlay=()=>{displaySettings.save();playerHost.close();};
  if(playerFrame){playerHost.accept();}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));

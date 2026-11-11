@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.5.0-external-direct5
+// @version      0.6.0-external-direct6
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -28,46 +28,85 @@
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
  'use strict';
-// Only presentation preferences cross the storage partition. No history,
-// account identifiers, custom links, scripts, or authentication material.
-function createDisplaySettings(w, gm) {
-  const slot='display-settings-v1';
-  const names=new Set(['screenMode','screenMode:ginza','screenMode:others','menuScale',
-    'smallModeOffsetX','smallModeOffsetY','smallModeWidth','smallModeHeight','smallModeAspectLock',
-    'fullscreenControlBarMode','videoInfoPanelTab','showComment','backComment','enableHeatMap',
-    'enableStoryboard','enableStoryboardBar','enableCommentPanel','enableCommentPanelAutoScroll',
-    'baseFontFamily','baseChatScale','baseFontBolder','cssFontWeight','commentLayerOpacity','commentSpeedRate']);
-  const allowed=k=>names.has(k)||/^(?:ui\.|controlBar\.|popup\.|bookmark\.(?:show|thumbnail|title))/.test(k);
-  const valid=v=>typeof v==='boolean'||typeof v==='number'&&Number.isFinite(v)||typeof v==='string'&&v.length<=512;
-  function publish() {
-    if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
-    const values={};
-    try {
-      for(let i=0;i<w.localStorage.length;i++){
-        const key=w.localStorage.key(i);if(!key.startsWith('ZenzaWatch_'))continue;
-        const name=key.slice(11);if(!allowed(name))continue;
-        try{const value=JSON.parse(w.localStorage.getItem(key));if(valid(value))values[name]=value;}catch(_){}
-      }
-      gm.set(slot,{version:1,values});
-    } catch(_) { /* Storage may be unavailable; keep the last valid snapshot. */ }
+// Only registered preferences cross partitions; never arbitrary storage/history.
+function createDisplaySettings(w, gm, registered=[]) {
+  const slot='settings-v2',savedSlot='trial-settings-v2',prefix='ZenzaWatchExternalTrial_';
+  const names=new Set([...registered,'screenMode','menuScale','videoHeader.position']);
+  const excluded=new Set(['debug','message','lastPlayerId','lastWatchId','videoSearch.word']);
+  const allowed=k=>!excluded.has(k)&&(names.has(k)||/^(?:ui\.|KEY_|PARAM_CUSTOM_SEEK_\d+$|commentHistory\.|video\.hls\.)/.test(k));
+  function valid(value,depth=0){
+    if(depth>12)return false;
+    if(value===null||typeof value==='boolean')return true;
+    if(typeof value==='number')return Number.isFinite(value);
+    if(typeof value==='string')return value.length<=32768;
+    if(Array.isArray(value))return value.length<=2000&&value.every(v=>valid(v,depth+1));
+    if(value&&typeof value==='object')return Object.keys(value).length<=2000&&Object.entries(value).every(([k,v])=>!['__proto__','constructor','prototype'].includes(k)&&valid(v,depth+1));
+    return false;
   }
-  function apply() {
-    const snapshot=gm.get(slot);if(snapshot?.version!==1||!snapshot.values)return false;
-    const values=Object.fromEntries(Object.entries(snapshot.values).filter(([key,value])=>allowed(key)&&valid(value)));
-    const stamp=JSON.stringify(Object.entries(values).sort(([a],[b])=>a.localeCompare(b)));
-    const marker='ZenzaWatchExternalTrial_displaySnapshot';
-    if(w.localStorage.getItem(marker)===stamp)return true;
-    const prefix='ZenzaWatchExternalTrial_';
+  const clean=values=>Object.fromEntries(Object.entries(values||{}).filter(([k,v])=>allowed(k)&&valid(v)&&JSON.stringify(v).length<=131072));
+  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  function read(storagePrefix){
+    const values={};
+    for(let i=0;i<w.localStorage.length;i++){
+      const key=w.localStorage.key(i);if(!key.startsWith(storagePrefix))continue;
+      const name=key.slice(storagePrefix.length);if(!allowed(name))continue;
+      try{values[name]=JSON.parse(w.localStorage.getItem(key));}catch(_){}
+    }
+    return clean(values);
+  }
+  function publish(){
+    if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
+    try{gm.set(slot,{version:2,values:read('ZenzaWatch_')});}catch(_){}
+  }
+  let official={},baseline={},publishOfficial=false,active=false,timer=null;
+  function apply(){
+    const snapshot=gm.get(slot),saved=gm.get(savedSlot);
+    official=clean(snapshot?.version===2?snapshot.values:saved?.official);
+    let values=saved?.version===2?clean(saved.values):read(prefix);
+    const previous=clean(saved?.official);
+    baseline=clean(saved?.values);publishOfficial=snapshot?.version===2;
+    // Unrelated official changes must not reset trial HLS/panel adjustments.
+    for(const key of new Set([...Object.keys(previous),...Object.keys(official)])){
+      if(!saved||!equal(previous[key],official[key])){
+        if(Object.hasOwn(official,key))values[key]=official[key];else delete values[key];
+      }
+    }
     for(const key of Object.keys(w.localStorage))if(key.startsWith(prefix)&&allowed(key.slice(prefix.length)))w.localStorage.removeItem(key);
     for(const [key,value] of Object.entries(values))w.localStorage.setItem(prefix+key,JSON.stringify(value));
-    w.localStorage.setItem(marker,stamp);
-    return true;
+    active=true;save();return snapshot?.version===2;
   }
-  return {publish,apply};
+  function save(){
+    if(!active)return;
+    if(timer!==null){w.clearTimeout(timer);timer=null;}
+    const latest=gm.get(savedSlot),values=clean(latest?.values),local=read(prefix);
+    // Another external page may have saved since this player opened. Merge
+    // only local changes; closing a stale player must not revert them.
+    for(const key of new Set([...Object.keys(baseline),...Object.keys(local)])){
+      if(!equal(baseline[key],local[key])){
+        if(Object.hasOwn(local,key))values[key]=local[key];else delete values[key];
+      }
+    }
+    gm.set(savedSlot,{version:2,official:publishOfficial?official:clean(latest?.official),values});
+    baseline=local;publishOfficial=false;
+  }
+  function scheduleSave(){
+    if(!active||timer!==null)return;
+    timer=w.setTimeout(()=>{timer=null;save();},250);
+  }
+  // Explicit player close also flushes: removed frames may skip pagehide.
+  w.addEventListener('pagehide',save);
+  return {publish,apply,save,scheduleSave};
 }
 
 
- const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)});
+ 'use strict';
+function frameTopologyChanged(records){
+  return records.some(record=>[...record.addedNodes,...record.removedNodes].some(node=>
+    node.nodeType===1&&(node.localName==='iframe'||!!node.querySelector('iframe'))));
+}
+
+
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
  if (official && !loader && !playerFrame) {
    displaySettings.publish();
    window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
@@ -142,11 +181,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版5：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版5：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版5：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版5：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版5：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版6：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版6：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版6：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版6：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版6：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         const stage={BOOT:'本体の準備',SETTINGS:'設定の接続',AUTH:'認証確認',UI:'画面の準備',VIDEO:'動画を開く処理'}[error?.stage];
         message(text+(stage?' 停止した段階：'+stage+'。':''),true);
       } finally {opening=false;button.disabled=false;}
@@ -808,10 +847,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.5';
+    var VER = '2.7.383-external-direct.6';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.5 GM transport base ba8366f7c710';
+    var BUILD = 'external-direct.6 GM transport base ba8366f7c710';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -3181,7 +3220,7 @@ class CommentHistoryPanel {
 		}
 	}
 	open(){
-		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(records=>{if(frameTopologyChanged(records))this._listen();});this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
 	}
 	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
 	toggle(){this.isOpen?this.close(true):this.open();}
@@ -11414,7 +11453,7 @@ const { SettingPanelElement } = (() => {
 				}
 		}
 		if (window.customElements) {
-				customElements.get('zenza-setting-panel') || customElements.define('zenza-setting-panel', SettingPanelElement);
+				customElements.get('zw-trial-zenza-setting-panel') || customElements.define('zw-trial-zenza-setting-panel', SettingPanelElement);
 		}
 		return { SettingPanelElement };
 })();
@@ -11422,7 +11461,7 @@ const components = (() => {
 	if (self.customElements) {
 		customElements.get('zenza-video-item') || customElements.define('zenza-video-item', VideoItemElement);
 		customElements.get('zenza-dialog') || customElements.define('zenza-dialog', DialogElement);
-		customElements.get('zenza-setting-panel') || customElements.define('zenza-setting-panel', SettingPanelElement);
+		customElements.get('zw-trial-zenza-setting-panel') || customElements.define('zw-trial-zenza-setting-panel', SettingPanelElement);
 	}
 	return {
 		BaseCommandElement,
@@ -29571,7 +29610,7 @@ class CommentHistoryPanel {
 		}
 	}
 	open(){
-		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(()=>this._listen());this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
+		if(this.disposed)return;this.sliderDraft=null;this._init();this.win.clearTimeout(this.closeTimer);this.view.classList.remove('is-closing','is-open');this._place();this.view.querySelector('details').open=false;this.view.querySelector('.ch-advanced').hidden=true;void this.view.offsetWidth;this.view.classList.add('is-open');this.view.setAttribute('aria-hidden','false');this._listen();this.win.addEventListener('resize',this.onResize);this.doc.addEventListener('fullscreenchange',this.onResize);if(this.win.MutationObserver){this.observer?.disconnect();this.observer=new this.win.MutationObserver(records=>{if(frameTopologyChanged(records))this._listen();});this.observer.observe(this.doc.body,{childList:true,subtree:true});}this.refresh(this.controller.state);
 	}
 	close(focus=false){if(!this.isOpen)return;this._unlisten();this.view.classList.add('is-closing');this.view.setAttribute('aria-hidden','true');this.win.clearTimeout(this.closeTimer);this.closeTimer=this.win.setTimeout(()=>this.view?.classList.remove('is-open','is-closing'),170);if(focus)this.anchor?.()?.focus?.();this.refresh(this.controller.state);}
 	toggle(){this.isOpen?this.close(true):this.open();}
@@ -53453,7 +53492,7 @@ class NicoVideoPlayerDialogView extends Emitter {
 		}
 		toggleSettingPanel() {
 				if (!this.settingPanel) {
-						this.settingPanel = document.createElement('zenza-setting-panel');
+						this.settingPanel = document.createElement('zw-trial-zenza-setting-panel');
 						this.settingPanel.config = this._playerConfig;
 						this._$playerContainer.append(this.settingPanel);
 				}
@@ -66285,7 +66324,7 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
 				const config = { ...DEFAULT_CONFIG }, emitter = new Emitter();
 				Object.keys(DEFAULT_CONFIG).forEach(key => {
 						try {
-								const saved = localStorage[`ZenzaWatch_video.hls.${key}`];
+								const saved = localStorage[`ZenzaWatchExternalTrial_video.hls.${key}`];
 								if (saved) {
 										const value = validate(key, JSON.parse(saved));
 										if (value !== invalid)
@@ -66299,13 +66338,14 @@ const createHlsConfig = (Emitter, HLS_JS_VERSION) => {
 						const changes = Object.keys(next).filter(key => config[key] !== next[key]);
 						Object.assign(config, next);
 						changes.forEach(key => { emitter.emit(`update-${key}`, config[key]); emitter.emit('update', { key, value: config[key] }); });
+ displaySettings.scheduleSave();
 				};
 				const persist = (next) => {
 						const changed = Object.keys(next).filter(key => config[key] !== next[key]);
 						const previous = new Map();
 						try {
 								changed.forEach(key => {
-										const storageKey = `ZenzaWatch_video.hls.${key}`;
+										const storageKey = `ZenzaWatchExternalTrial_video.hls.${key}`;
 										previous.set(storageKey, localStorage[storageKey]);
 										localStorage[storageKey] = JSON.stringify(next[key]);
 								});
@@ -66979,7 +67019,7 @@ function createHlsStorage(Config, debounce) {
 function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL, loadLibrary }) {
 		const window = globalThis.window;
 		const console = window.console;
-		const existing = window.customElements?.get('zenza-video');
+		const existing = window.customElements?.get('zw-trial-zenza-video');
 		if (existing) {
 				return existing;
 		}
@@ -67963,8 +68003,8 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								}));
 						}
 				}
-				if (window.customElements && !window.customElements.get('zenza-video')) {
-						window.customElements.define('zenza-video', ZenzaVideoElement);
+				if (window.customElements && !window.customElements.get('zw-trial-zenza-video')) {
+						window.customElements.define('zw-trial-zenza-video', ZenzaVideoElement);
 				}
 				if (!Hls) {
 						loadLibrary().then(library => { Hls = library; })
@@ -67980,7 +68020,7 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 function defineHlsDebugElements(_config, { Storage, HTMLDialogElement }) {
 		if (!HTMLDialogElement || !window.customElements)
 				return;
-		const existing = window.customElements.get('video-debug-dialog');
+		const existing = window.customElements.get('zw-trial-video-debug-dialog');
 		if (existing)
 				return existing;
 		const node = (tag, text = '') => {
@@ -68115,10 +68155,10 @@ function defineHlsDebugElements(_config, { Storage, HTMLDialogElement }) {
 		}
 		class VideoDebugSlider extends VideoDebugInput {
 		}
-		if (!window.customElements.get('video-debug-checkbox'))
-				window.customElements.define('video-debug-checkbox', VideoDebugCheckbox);
-		if (!window.customElements.get('video-debug-slider'))
-				window.customElements.define('video-debug-slider', VideoDebugSlider);
+		if (!window.customElements.get('zw-trial-video-debug-checkbox'))
+				window.customElements.define('zw-trial-video-debug-checkbox', VideoDebugCheckbox);
+		if (!window.customElements.get('zw-trial-video-debug-slider'))
+				window.customElements.define('zw-trial-video-debug-slider', VideoDebugSlider);
 		const groups = [
 				{ title: 'バッファ', numbers: [
 								{ name: 'maxBufferLength', label: '先読みする時間', min: 0, max: 300, step: 1, unit: '秒', details: '先読み時間の上限内で、時間の目安と、容量の目安を時間に換算した値の大きい方まで先読みします。' },
@@ -68206,7 +68246,7 @@ function defineHlsDebugElements(_config, { Storage, HTMLDialogElement }) {
 								hint.hidden = !this.fields.autoAbrEwmaDefaultEstimate?.value;
 				}
 				addField(parent, name, label, description = '', setting) {
-						const field = document.createElement(setting ? 'video-debug-slider' : 'video-debug-checkbox');
+						const field = document.createElement(setting ? 'zw-trial-video-debug-slider' : 'zw-trial-video-debug-checkbox');
 						field.setAttribute('name', name);
 						field.setAttribute('text', label);
 						if (description)
@@ -68353,16 +68393,16 @@ function defineHlsDebugElements(_config, { Storage, HTMLDialogElement }) {
 						this.syncAutomatic();
 				}
 		}
-		window.customElements.define('video-debug-dialog', VideoDebugDialog);
+		window.customElements.define('zw-trial-video-debug-dialog', VideoDebugDialog);
 		return VideoDebugDialog;
 }
 const HlsRuntime = {
 		install(ZenzaWatch, dependencies) {
 				const window = globalThis.window, console = window.console;
-				const key = Symbol.for('ZenzaWatch.integratedHls');
+				const key = Symbol.for('ZenzaWatchExternalTrial.integratedHls');
 				if (window[key])
 						return window[key];
-				if (window.ZenzaHLS?.createVideoElement && window.customElements?.get('zenza-video')) {
+				if (window.ZenzaHLS?.createVideoElement && window.customElements?.get('zw-trial-zenza-video')) {
 						ZenzaWatch.debug.createVideoElement = window.ZenzaHLS.createVideoElement;
 						ZenzaWatch.debug.isHLSSupported = true;
 						return window[key] = Promise.resolve(window.ZenzaHLS);
@@ -68387,7 +68427,7 @@ const HlsRuntime = {
 								});
 								ZenzaWatch.emitter.once('command-toggleHLSDebug', () => {
 										defineHlsDebugElements(hlsConfig, { html, render, Storage, HTMLDialogElement: window.HTMLDialogElement || window.HTMLDivElement });
-										const d = document.createElement('video-debug-dialog');
+										const d = document.createElement('zw-trial-video-debug-dialog');
 										d.className = 'zen-family';
 										d.hlsConfig = hlsConfig;
 										d.defaultConfig = DEFAULT_CONFIG;
@@ -68451,7 +68491,7 @@ const HlsRuntime = {
 										Config.set('abrEwmaDefaultEstimate', Math.round(Math.min(bandwidth, 50 * 1000 * 1000)));
 								};
 								try {
-										const RESET_KEY = 'ZenzaWatch_video.hls._task079EstimateReset';
+										const RESET_KEY = 'ZenzaWatchExternalTrial_video.hls._task079EstimateReset';
 										if (!localStorage[RESET_KEY]) {
 												localStorage[RESET_KEY] = '1';
 												if (Config.get('abrEwmaDefaultEstimate') < 5 * 1000 * 1000) {
@@ -68466,7 +68506,7 @@ const HlsRuntime = {
 										if (!window.customElements) {
 												return document.createElement('video');
 										}
-										const video = document.createElement('zenza-video');
+										const video = document.createElement('zw-trial-zenza-video');
 										if (usecase === 'capture') {
 												video.setAttribute('data-usecase', 'capture');
 												video.hlsConfig = Object.assign({}, hlsConfig, {
@@ -76104,7 +76144,7 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       return;
     }
 
-    if (false) {
+    if (location.host === 'www.nicovideo.jp') {
       const advancedSettings = new AdvancedSettingsController({
         config: Config, createPanel: config => createAdvancedSettingsPanel(config, _), document,
         onError: () => PopupMessage.alert('上級者設定を開けませんでした。もう一度お試しください。')
@@ -76114,7 +76154,7 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       uq.ready().then(() => {
         if (/^\/my(?:\/|$)/.test(location.pathname)) { advancedSettings.mountEntry(); }
       });
-      return initialize();
+      /* Session starts playback after authenticated initialization. */
     }
 
     externalTrial.configure({
@@ -76126,6 +76166,7 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       initialize: async () => { await initialize(); },
       open: id => ZenzaWatch.external.open(id, {autoCloseFullScreen: false})
     });
+    Config.on('update', () => displaySettings.scheduleSave());
 
 
 
@@ -80121,7 +80162,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 
  }
  const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
- externalTrial.closeOverlay=playerHost.close;
+ externalTrial.closeOverlay=()=>{displaySettings.save();playerHost.close();};
  if(playerFrame){playerHost.accept();}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));

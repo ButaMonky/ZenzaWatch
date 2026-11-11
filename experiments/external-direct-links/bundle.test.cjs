@@ -114,11 +114,21 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.15.0-external-direct15'));
- assert.ok(code.includes("var VER = '2.7.388-external-direct.15'"));
+ assert.ok(header.includes('0.16.0-external-direct16'));
+ assert.ok(code.includes("var VER = '2.7.388-external-direct.16'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));
  assert.ok(header.includes('@grant        GM_xmlhttpRequest'));
  assert.ok(!header.includes('@connect      *'));
+});
+
+
+test('release trial waits for final save and excludes automatic performance probes',()=>{
+ assert.ok(code.includes('dialog._playbackPositionSaves?.values()'));
+ assert.ok(code.includes('finishPlayerClose(pendingSaves'));
+ assert.ok(!code.includes('ZENZA_HOST_DIAG'));
+ assert.ok(!code.includes('ZENZA_RETURN_DIAG'));
+ assert.ok(!code.includes('ZENZA_UI_DIAG'));
+ assert.ok(!code.includes('installUiDiagnostics'));
 });

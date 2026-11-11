@@ -1,10 +1,12 @@
 'use strict';
+const {finishPlayerClose}=require('./generated/player-close.js');
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
 function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
-  let frame,port,ticketKey,pending,sequence=0;
+  let frame,port,ticketKey,pending,sequence=0,closing=false,closeTimer,closingTask;
   const stop=(error=Error('PLAYER_CLOSED'))=>{
     const closingPort=port,closingFrame=frame,closingTicket=ticketKey,request=pending;
-    port=null;frame=null;ticketKey=null;pending=null;
+    port=null;frame=null;ticketKey=null;pending=null;closing=false;
+    clearTimeout(closeTimer);
     request?.reject(error);closingPort?.close();closingFrame?.remove();
     if(closingTicket)gm.remove(closingTicket);
     if(closingFrame)onStopped();
@@ -12,7 +14,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
   async function open(id,event) {
     if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
     if(!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(id))throw Error('INVALID_VIDEO_ID');
-    if(pending)throw Error('PLAYER_BUSY');
+    if(pending||closing)throw Error('PLAYER_BUSY');
     if(frame&&!frame.isConnected)stop();
     return new Promise((resolve,reject)=>{
       const requestId=++sequence;
@@ -27,6 +29,10 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
       port.addEventListener('message',e=>{
         const data=e.data;
         if(data?.type==='ready'){gm.remove(ticketKey);send();}
+        else if(data?.type==='closing' && frame){
+          closing=true;frame.style.setProperty('display','none','important');
+          clearTimeout(closeTimer);closeTimer=setTimeout(()=>stop(),4000);
+        }
         else if(data?.type==='closed')stop();
         else if(data?.requestId===sequence && data.type==='opened')pending?.resolve();
         else if(data?.requestId===sequence && data.type==='error'){
@@ -67,10 +73,16 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     return true;
   }
   w.addEventListener('pagehide',stop,{once:true});
-  return {open,accept,close:async()=>{
-    if(!port)return;const closing=port;
-    transport.dispose?.(closing);
-    try{await closing.postMessage({type:'closed'});}finally{stop();}
+  return {open,accept,close:(pendingSaves=[])=>{
+    if(closingTask)return closingTask;
+    if(!port)return Promise.resolve();
+    const closingPort=port;
+    closingTask=finishPlayerClose(pendingSaves,{
+      hide:()=>closingPort.postMessage({type:'closing'}),
+      dispose:()=>transport.dispose?.(closingPort),
+      finish:async()=>{try{await closingPort.postMessage({type:'closed'});}finally{stop();}}
+    });
+    return closingTask;
   }};
 }
 module.exports={createPlayerHost};

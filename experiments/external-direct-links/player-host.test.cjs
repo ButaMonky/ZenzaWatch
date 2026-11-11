@@ -14,7 +14,9 @@ test('player lives in a separate Nico document; private messages open and close 
  const worker=createPlayerHost(child,gm,transport,{open:async value=>{id=value;}});
  assert.equal(worker.accept(),true);await opened;assert.equal(id,'sm9');assert.equal(child.document.querySelector('pre'),null);
  assert.equal(child.document.querySelector('style'),null);assert.equal(worker.accept(),false);
- worker.close();await new Promise(r=>setImmediate(r));assert.equal(parent.document.querySelector('iframe'),null);
+ let saved;const saving=new Promise(r=>saved=r);const closing=worker.close([saving]);
+ await new Promise(r=>setImmediate(r));assert.equal(frame.style.display,'none');assert(frame.isConnected);
+ saved();await closing;await new Promise(r=>setImmediate(r));assert.equal(parent.document.querySelector('iframe'),null);
  parent.close();childDom.window.close();
 });
 
@@ -47,4 +49,27 @@ test('transport termination removes the host even if the semantic closed message
  assert(parent.document.querySelector('iframe'));
  assert.equal(typeof remoteClose,'function','termination must be wired to host teardown');remoteClose();
  assert.equal(parent.document.querySelector('iframe'),null);assert.equal(closed,1);parent.close();
+});
+
+
+test('closing hides host immediately but preserves transport until pending save settles',async()=>{
+ const w=new JSDOM('',{url:'https://www.nicovideo.jp/robots.txt#test',referrer:'https://example.org/'}).window;
+ let resolveSave,disposed=0,closed=0;const messages=[];
+ const transport={port(){return {addEventListener(){},postMessage:async m=>messages.push(m.type),close(){closed++;}};},dispose(){disposed++;}};
+ const child={document:w.document,location:w.location,name:'ZenzaWatchExternalTrialPlayer',top:{},addEventListener(){}};
+ const gm={get:()=>({channel:'test',origin:'https://example.org',expires:Date.now()+60000}),set(){},remove(){}};
+ const host=createPlayerHost(child,gm,transport,{});assert(host.accept());
+ const pending=new Promise(r=>resolveSave=r),closing=host.close([pending]);
+ await new Promise(r=>setImmediate(r));assert(messages.includes('closing'));assert.equal(disposed,0);assert.equal(closed,0);
+ resolveSave();await closing;assert.equal(disposed,1);assert.equal(closed,1);assert(messages.includes('closed'));w.close();
+});
+
+test('failed or stalled save cannot retain player transport indefinitely',async()=>{
+ for(const pending of [Promise.reject(Error('save failed')),new Promise(()=>{})]){
+  const w=new JSDOM('',{url:'https://www.nicovideo.jp/robots.txt#test',referrer:'https://example.org/'}).window;
+  let disposed=0;const transport={port(){return {addEventListener(){},postMessage:async()=>{},close(){}};},dispose(){disposed++;}};
+  const child={document:w.document,location:w.location,name:'ZenzaWatchExternalTrialPlayer',top:{},addEventListener(){}};
+  const gm={get:()=>({channel:'test',origin:'https://example.org',expires:Date.now()+60000}),set(){},remove(){}};
+  const host=createPlayerHost(child,gm,transport,{});assert(host.accept());await host.close([pending]);assert.equal(disposed,1);w.close();
+ }
 });

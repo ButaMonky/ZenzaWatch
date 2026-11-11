@@ -1,5 +1,6 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const root=path.resolve(__dirname,'../..');
+require('node:child_process').execFileSync(process.execPath,[path.join(root,'tools/typescript-stage1/node_modules/typescript/bin/tsc'),'--project',path.join(__dirname,'tsconfig.json')],{stdio:'inherit'});
 const base=fs.readFileSync(path.join(root,'dist/ZenzaWatch-dev.user.js'),'utf8').replace(/\r\n/g,'\n');
 const sourceHash=crypto.createHash('sha256').update(base).digest('hex');
 if(!base.includes('// @version        2.7.388-task1013'))throw Error('Review runtime changes before rebasing this trial');
@@ -43,7 +44,7 @@ function transform(source) {
  if(workerRoute<0||workerRouteEnd<0)throw Error('Worker route missing');
  body=body.slice(0,workerRoute)+'if (true) '+body.slice(workerRouteEnd);
  body=once(body,'document.body.append($dialog[0]);','installInteractionGuard(window, container);\n        document.body.append($dialog[0]);');
- body=once(body,'hoverMenu.setPlayer(dialog);',"hoverMenu.setPlayer(dialog);\n dialog.on('close', () => externalTrial.closeOverlay?.());");
+ body=once(body,'hoverMenu.setPlayer(dialog);',"hoverMenu.setPlayer(dialog);\n dialog.on('close', () => externalTrial.closeOverlay?.([...dialog._playbackPositionSaves?.values() || []]));");
  const fetchBegin=body.indexOf('_fetch(url, options = {}) {');
  const fetchEnd=body.indexOf('async fetch(resource, options = {}) {',fetchBegin);
  if(fetchBegin<0||fetchEnd<0)throw Error('Gate fetch anchor missing');
@@ -74,10 +75,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.15';");
+ body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.16';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.15 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.16 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -132,14 +133,15 @@ const runtime=transform(base);
 const launcher=fs.readFileSync(path.join(__dirname,'launcher.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const network=fs.readFileSync(path.join(__dirname,'gm-network.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
-const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
+const closeModule=fs.readFileSync(path.join(__dirname,'generated/player-close.js'),'utf8');
+const closeRuntime='const {finishPlayerClose}=(()=>{const exports={};'+closeModule+';return exports;})();';
+const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace("const {finishPlayerClose}=require('./generated/player-close.js');",'').replace(/^module\.exports=.*;$/m,'');
 const display=fs.readFileSync(path.join(__dirname,'display-settings.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const panelObserver=fs.readFileSync(path.join(__dirname,'panel-observer.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
-const uiDiagnostics=fs.readFileSync(path.join(__dirname,'ui-diagnostics.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.15.0-external-direct15
+// @version      0.16.0-external-direct16
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -178,8 +180,8 @@ const entry=`
  ${launcher}
  ${transport}
  ${network}
+ ${closeRuntime}
  ${host}
- ${uiDiagnostics}
  const privateTransport=createPrivateTransport(window,{
    get:(key)=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:(key)=>GM_deleteValue(key),
    listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:(id)=>GM_removeValueChangeListener(id)
@@ -197,21 +199,15 @@ const entry=`
  if(playerFrame)displaySettings.apply();
 ${runtime}
  }
- let hostProbe,returnProbe;
- const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial,()=>{
-   hostProbe?.finish();returnProbe?.finish();
-   hostProbe=installUiDiagnostics(window,()=>({phase:'after-close',remainingPlayerFrames:document.querySelectorAll('[data-zenza-player-host]').length}),report=>console.info('ZENZA_HOST_DIAG',JSON.stringify(report)));
-   hostProbe.start();
-   returnProbe=installReturnDiagnostics(window,()=>({remainingPlayerFrames:document.querySelectorAll('[data-zenza-player-host]').length}),report=>console.info('ZENZA_RETURN_DIAG',JSON.stringify(report)));
- });
- externalTrial.closeOverlay=()=>{
-   try{displaySettings.save();}finally{externalTrial.gm.dispose();void playerHost.close();}
+ const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
+ externalTrial.closeOverlay=(pendingSaves)=>{
+   try{displaySettings.save();}finally{void playerHost.close(pendingSaves);}
  };
- if(playerFrame){if(playerHost.accept())installUiDiagnostics(window,()=>externalTrial.diagnostics());}
+ if(playerFrame){playerHost.accept();}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
-   mountLauncher(window,{open:(id,event)=>{hostProbe?.finish();returnProbe?.finish();return playerHost.open(id,event);}});
+   mountLauncher(window,{open:(id,event)=>playerHost.open(id,event)});
  }
 })();
 `;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.15.0-external-direct15
+// @version      0.16.0-external-direct16
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -480,13 +480,39 @@ function createGmNetwork(request) {
 }
 
 
+ const {finishPlayerClose}=(()=>{const exports={};"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.finishPlayerClose = finishPlayerClose;
+/** Give already-requested saves a bounded opportunity to finish before disposal. */
+async function finishPlayerClose(pendingSaves, actions, timeoutMs = 2000) {
+    const saved = Promise.allSettled(pendingSaves);
+    let timeout;
+    try {
+        await actions.hide();
+        await Promise.race([saved, new Promise(resolve => {
+                timeout = setTimeout(resolve, timeoutMs);
+            })]);
+    }
+    finally {
+        clearTimeout(timeout);
+        try {
+            actions.dispose();
+        }
+        finally {
+            await actions.finish();
+        }
+    }
+}
+;return exports;})();
  'use strict';
+
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
 function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
-  let frame,port,ticketKey,pending,sequence=0;
+  let frame,port,ticketKey,pending,sequence=0,closing=false,closeTimer,closingTask;
   const stop=(error=Error('PLAYER_CLOSED'))=>{
     const closingPort=port,closingFrame=frame,closingTicket=ticketKey,request=pending;
-    port=null;frame=null;ticketKey=null;pending=null;
+    port=null;frame=null;ticketKey=null;pending=null;closing=false;
+    clearTimeout(closeTimer);
     request?.reject(error);closingPort?.close();closingFrame?.remove();
     if(closingTicket)gm.remove(closingTicket);
     if(closingFrame)onStopped();
@@ -494,7 +520,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
   async function open(id,event) {
     if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
     if(!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(id))throw Error('INVALID_VIDEO_ID');
-    if(pending)throw Error('PLAYER_BUSY');
+    if(pending||closing)throw Error('PLAYER_BUSY');
     if(frame&&!frame.isConnected)stop();
     return new Promise((resolve,reject)=>{
       const requestId=++sequence;
@@ -509,6 +535,10 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
       port.addEventListener('message',e=>{
         const data=e.data;
         if(data?.type==='ready'){gm.remove(ticketKey);send();}
+        else if(data?.type==='closing' && frame){
+          closing=true;frame.style.setProperty('display','none','important');
+          clearTimeout(closeTimer);closeTimer=setTimeout(()=>stop(),4000);
+        }
         else if(data?.type==='closed')stop();
         else if(data?.requestId===sequence && data.type==='opened')pending?.resolve();
         else if(data?.requestId===sequence && data.type==='error'){
@@ -549,77 +579,17 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     return true;
   }
   w.addEventListener('pagehide',stop,{once:true});
-  return {open,accept,close:async()=>{
-    if(!port)return;const closing=port;
-    transport.dispose?.(closing);
-    try{await closing.postMessage({type:'closed'});}finally{stop();}
+  return {open,accept,close:(pendingSaves=[])=>{
+    if(closingTask)return closingTask;
+    if(!port)return Promise.resolve();
+    const closingPort=port;
+    closingTask=finishPlayerClose(pendingSaves,{
+      hide:()=>closingPort.postMessage({type:'closing'}),
+      dispose:()=>transport.dispose?.(closingPort),
+      finish:async()=>{try{await closingPort.postMessage({type:'closed'});}finally{stop();}}
+    });
+    return closingTask;
   }};
-}
-
-
- 'use strict';
-// One bounded sample. No target labels, input text, URLs, user IDs or payloads.
-function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_DIAG',JSON.stringify(report))) {
-  let started=false,finished=false,raf,tick,stopTimer,begin,lastFrame,nextTick;
-  const inputCounts={}, inputTypes=['pointerdown','click','keydown','wheel','scroll'];
-  const countInput=e=>{if(started&&!finished&&e.isTrusted)inputCounts[e.type]=(inputCounts[e.type]||0)+1;};
-  const observers=[],events={},timing={frames:0,slowFrames:0,maxFrameGapMs:0,timerSamples:0,maxTimerDelayMs:0,longTasks:0,totalLongTaskMs:0,maxLongTaskMs:0};
-  const round=n=>Math.round(n*10)/10;
-  function entries(list){for(const entry of list){
-    if(entry.entryType==='longtask'){timing.longTasks++;timing.totalLongTaskMs+=entry.duration;timing.maxLongTaskMs=Math.max(timing.maxLongTaskMs,entry.duration);}
-    else if(['click','pointerdown','pointerup','keydown'].includes(entry.name)){
-      const row=events[entry.name]||(events[entry.name]={count:0,maxInputDelayMs:0,maxHandlerMs:0,maxAfterHandlerMs:0});row.count++;
-      row.maxInputDelayMs=Math.max(row.maxInputDelayMs,Math.max(0,entry.processingStart-entry.startTime));
-      row.maxHandlerMs=Math.max(row.maxHandlerMs,Math.max(0,entry.processingEnd-entry.processingStart));
-      row.maxAfterHandlerMs=Math.max(row.maxAfterHandlerMs,Math.max(0,entry.startTime+entry.duration-entry.processingEnd));
-    }
-  }}
-  function finish(){
-    if(!started||finished)return;finished=true;
-    w.cancelAnimationFrame?.(raf);w.clearTimeout(tick);w.clearTimeout(stopTimer);
-    for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
-    w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
-    for(const type of inputTypes)w.removeEventListener(type,countInput,true);
-    let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.15',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
-      inputCounts:{...inputCounts},supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
-      events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
-  }
-  let hiddenDuringSample=false;
-  function frame(now){if(finished)return;if(w.document.hidden)hiddenDuringSample=true;else if(lastFrame!==undefined){const gap=now-lastFrame;timing.frames++;if(gap>50)timing.slowFrames++;timing.maxFrameGapMs=Math.max(timing.maxFrameGapMs,gap);}lastFrame=now;raf=w.requestAnimationFrame(frame);}
-  function timer(){if(finished)return;const now=w.performance.now();if(w.document.hidden)hiddenDuringSample=true;else{timing.timerSamples++;timing.maxTimerDelayMs=Math.max(timing.maxTimerDelayMs,Math.max(0,now-nextTick));}nextTick=now+250;tick=w.setTimeout(timer,250);}
-  function start(){
-    if(started)return;started=true;w.removeEventListener('pointerdown',arm,true);begin=w.performance.now();nextTick=begin+250;
-    for(const type of ['event','longtask']){try{
-      if(!w.PerformanceObserver?.supportedEntryTypes?.includes(type))continue;
-      const observer=new w.PerformanceObserver(list=>entries(list.getEntries()));observer._diagnosticType=type;
-      observer.observe(type==='event'?{type,durationThreshold:16}:{type});observers.push(observer);
-    }catch(_){}}
-    for(const type of inputTypes)w.addEventListener(type,countInput,{capture:true,passive:true});
-    raf=w.requestAnimationFrame?.(frame);tick=w.setTimeout(timer,250);stopTimer=w.setTimeout(finish,15000);
-  }
-  function arm(event){if(event.isTrusted)start();}
-  w.addEventListener('pointerdown',arm,true);w.addEventListener('pagehide',finish);
-  return {start,finish};
-}
-// Wait for one app/tab return, without animation frames or periodic timers while away.
-function installReturnDiagnostics(w,metadata,emit,factory=installUiDiagnostics) {
-  let awayAt=null,stopped=false,sample;
-  const deadline=w.performance.now()+300000;
-  function detach(){w.clearTimeout(expiry);w.removeEventListener('blur',leave);w.removeEventListener('focus',resume);w.document.removeEventListener('visibilitychange',visibility);w.removeEventListener('pagehide',finish);}
-  function finish(){if(stopped){sample?.finish();return;}stopped=true;detach();sample?.finish();}
-  function leave(){if(!stopped&&awayAt===null)awayAt=w.performance.now();}
-  function resume(){
-    if(stopped||awayAt===null||w.document.hidden)return;
-    if(w.performance.now()>deadline){finish();return;}
-    const awayMs=Math.round(w.performance.now()-awayAt);stopped=true;detach();
-    sample=factory(w,()=>({...metadata(),phase:'after-return',awayMs}),emit);sample.start();
-  }
-  function visibility(){if(w.document.hidden)leave();else resume();}
-  const expiry=w.setTimeout(finish,300000);
-  w.addEventListener('blur',leave);w.addEventListener('focus',resume);
-  w.document.addEventListener('visibilitychange',visibility);w.addEventListener('pagehide',finish);
-  return {finish};
 }
 
 
@@ -956,10 +926,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.15';
+    var VER = '2.7.388-external-direct.16';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.15 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.16 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -69357,7 +69327,7 @@ const replaceRedirectLinks = async () => {
 				document.body.classList.toggle('is-watch', isWatch);
 				const dialog = initializeDialogPlayer(Config);
 				hoverMenu.setPlayer(dialog);
- dialog.on('close', () => externalTrial.closeOverlay?.());
+ dialog.on('close', () => externalTrial.closeOverlay?.([...dialog._playbackPositionSaves?.values() || []]));
 				if (isWatch) {
 						await overrideGinza(dialog, query);
 				}
@@ -80292,20 +80262,14 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 })(globalThis ? globalThis.window : window);
 
  }
- let hostProbe,returnProbe;
- const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial,()=>{
-   hostProbe?.finish();returnProbe?.finish();
-   hostProbe=installUiDiagnostics(window,()=>({phase:'after-close',remainingPlayerFrames:document.querySelectorAll('[data-zenza-player-host]').length}),report=>console.info('ZENZA_HOST_DIAG',JSON.stringify(report)));
-   hostProbe.start();
-   returnProbe=installReturnDiagnostics(window,()=>({remainingPlayerFrames:document.querySelectorAll('[data-zenza-player-host]').length}),report=>console.info('ZENZA_RETURN_DIAG',JSON.stringify(report)));
- });
- externalTrial.closeOverlay=()=>{
-   try{displaySettings.save();}finally{externalTrial.gm.dispose();void playerHost.close();}
+ const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
+ externalTrial.closeOverlay=(pendingSaves)=>{
+   try{displaySettings.save();}finally{void playerHost.close(pendingSaves);}
  };
- if(playerFrame){if(playerHost.accept())installUiDiagnostics(window,()=>externalTrial.diagnostics());}
+ if(playerFrame){playerHost.accept();}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
-   mountLauncher(window,{open:(id,event)=>{hostProbe?.finish();returnProbe?.finish();return playerHost.open(id,event);}});
+   mountLauncher(window,{open:(id,event)=>playerHost.open(id,event)});
  }
 })();

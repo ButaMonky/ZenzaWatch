@@ -2,20 +2,22 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {JSDOM}=require('jsdom');
 const code=fs.readFileSync(path.join(__dirname,'ZenzaWatch-external-direct-trial.user.js'),'utf8');
 
-test('shared runtime reaches configuration in isolated realm without loading the player or issuing account traffic',async()=>{
+for(const origin of ['https://example.org/','https://www.nicovideo.jp/robots.txt']) {
+test('shared runtime and GM gate work at '+origin,async()=>{
  const {VirtualConsole}=require('jsdom');
- const w=new JSDOM('',{url:'https://example.org/',runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:new VirtualConsole()}).window;
+ const w=new JSDOM('',{url:origin,runScripts:'outside-only',pretendToBeVisual:true,virtualConsole:new VirtualConsole()}).window;
  w._=require('lodash');w.GM_getValue=()=>undefined;w.GM_setValue=()=>{};w.GM_deleteValue=()=>{};
  w.GM_addValueChangeListener=()=>1;w.GM_removeValueChangeListener=()=>{};
  w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=()=>{};
  let requests=0;w.fetch=()=>{requests++;throw Error('Unexpected traffic');};
  let instrumented=code.replace('Object.assign(externalTrial,privateTransport);',
   'Object.assign(externalTrial,privateTransport);window.__start=startRuntime;externalTrial.configure=value=>{window.__configured=value;};');
+ instrumented=instrumented.replace('if (official && !loader && !playerFrame) return;', '/* test bootstrap */').replace('api: NicoVideoApi,','api: NicoVideoApi, testLogin: () => util.isLogin(),');
  // The DOM emulator has no dynamic browser imports. Keep this dependency
  // stub explicit: this is bootstrap coverage, not a playback success claim.
  instrumented=instrumented.replaceAll("new Function('u', 'return import(u)')","(() => Promise.resolve({}))");
  try {w.eval(instrumented);await w.__start();await new Promise(r=>w.setTimeout(r,40));
-  assert.equal(typeof w.__configured?.api?.fetch,'function');assert.equal(typeof w.__configured?.initialize,'function');
+  assert.equal(typeof w.__configured?.api?.fetch,'function');w.__configured.setLogin();assert.equal(w.__configured.testLogin(),true);assert.equal(typeof w.__configured?.initialize,'function');
   assert.equal(requests,0);assert.equal(w.document.querySelector('.zenzaPlayerContainer'),null);
   // Exercise the actual generated gate used by API calls and worker forwarding.
   Object.assign(w,{Headers,Request,Response,TextDecoder,TextEncoder});
@@ -33,6 +35,7 @@ test('shared runtime reaches configuration in isolated realm without loading the
  } finally {w.close();}
 });
 
+}
 test('installing the bundle only mounts buttons: no network, workers, or player',async()=>{
  const w=new JSDOM('<a href="https://www.nicovideo.jp/watch/sm9">video</a><a href="/watch/sm9">local</a>',
   {url:'https://example.org/',runScripts:'outside-only'}).window;
@@ -71,8 +74,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.2.0-external-direct2'));
- assert.ok(code.includes("var VER = '2.7.383-external-direct.2'"));
+ assert.ok(header.includes('0.3.0-external-direct3'));
+ assert.ok(code.includes("var VER = '2.7.383-external-direct.3'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

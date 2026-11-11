@@ -9,6 +9,16 @@ function once(source,from,to) {
 }
 function transform(source) {
  let body=source.slice(source.indexOf('// ==/UserScript==')+'// ==/UserScript=='.length);
+ body=once(body,'return gate = {};','/* Trial player always creates the GM-backed gate. */');
+ body=once(body,'if (url.startsWith(location.origin)) {','if (false) {');
+ body=once(body,"if (location.host === 'www.nicovideo.jp') {\n      const advancedSettings", "if (false) {\n      const advancedSettings");
+ body=once(body,"if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {", "if (typeof NicoVideoApi !== 'undefined') {");
+ const workerRoute=body.indexOf("if (!location.origin.endsWith('.nicovideo.jp')");
+ const workerRouteEnd=body.indexOf('{',workerRoute);
+ if(workerRoute<0||workerRouteEnd<0)throw Error('Worker route missing');
+ body=body.slice(0,workerRoute)+'if (true) '+body.slice(workerRouteEnd);
+ body=once(body,'document.body.append($dialog[0]);','installInteractionGuard(window, container);\n        document.body.append($dialog[0]);');
+ body=once(body,'hoverMenu.setPlayer(dialog);',"hoverMenu.setPlayer(dialog);\n dialog.on('close', () => externalTrial.closeOverlay?.());");
  const fetchBegin=body.indexOf('_fetch(url, options = {}) {');
  const fetchEnd=body.indexOf('async fetch(resource, options = {}) {',fetchBegin);
  if(fetchBegin<0||fetchEnd<0)throw Error('Gate fetch anchor missing');
@@ -36,10 +46,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.2';");
+ body=once(body,"var VER = '2.7.383-task1007';","var VER = '2.7.383-external-direct.3';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.2 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.3 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -47,12 +57,12 @@ function transform(source) {
  body=body.slice(0,begin)+`    externalTrial.configure({
       api: NicoVideoApi,
       connect: () => NicoVideoApi.configBridge(Config),
-      setLogin: () => { nicoUtil.isLogin = () => true; },
-      initialize: async () => { await initialize(); installInteractionGuard(window); },
+      setLogin: () => { nicoUtil.isLogin = util.isLogin = () => true; },
+      initialize: async () => { await initialize(); },
       open: id => ZenzaWatch.external.open(id, {autoCloseFullScreen: false})
     });
 `+body.slice(end+endMarker.length);
- body=once(body,'  boot(monkey, PRODUCT, START_PAGE_QUERY);',`  if (window.top !== window) return boot(monkey, PRODUCT, START_PAGE_QUERY);
+ body=once(body,'  boot(monkey, PRODUCT, START_PAGE_QUERY);',`  if (window.top !== window && window.name !== 'ZenzaWatchExternalTrialPlayer') return boot(monkey, PRODUCT, START_PAGE_QUERY);
   return monkey(PRODUCT, encodeURIComponent(''));`);
  body=once(body,'const hoverMenu = global.debug.hoverMenu = new HoverMenu({ playerConfig: Config });',
    'const hoverMenu = {setPlayer() {}};');
@@ -87,10 +97,11 @@ const runtime=transform(base);
 const launcher=fs.readFileSync(path.join(__dirname,'launcher.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const network=fs.readFileSync(path.join(__dirname,'gm-network.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
+const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.2.0-external-direct2
+// @version      0.3.0-external-direct3
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -112,15 +123,17 @@ const header=`// ==UserScript==
 const entry=`
 (() => {
  const official = /(^|\\.)nicovideo\\.jp$/.test(location.hostname);
+ const playerFrame=window!==window.top && window.name==='ZenzaWatchExternalTrialPlayer' && location.hostname==='www.nicovideo.jp' && location.pathname==='/robots.txt';
  const loader = window !== window.top &&
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
- if (official && !loader) return;
- if (!loader && window !== window.top) return;
+ if (official && !loader && !playerFrame) return;
+ if (!loader && !playerFrame && window !== window.top) return;
  ${launcher}
  ${transport}
  ${network}
+ ${host}
  const privateTransport=createPrivateTransport(window,{
    get:(key)=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:(key)=>GM_deleteValue(key),
    listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:(id)=>GM_removeValueChangeListener(id)
@@ -137,10 +150,13 @@ const entry=`
  async function startRuntime(){
 ${runtime}
  }
- if(loader){
+ const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
+ externalTrial.closeOverlay=playerHost.close;
+ if(playerFrame){playerHost.accept();}
+ else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
-   mountLauncher(window,{open:(id,event)=>externalTrial.open(id,event)});
+   mountLauncher(window,{open:(id,event)=>playerHost.open(id,event)});
  }
 })();
 `;

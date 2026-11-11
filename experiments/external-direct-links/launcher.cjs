@@ -66,11 +66,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版2：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版2：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版2：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版2：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版2：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版3：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版3：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版3：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版3：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版3：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         message(text,true);
       } finally {opening=false;button.disabled=false;}
     });
@@ -124,9 +124,8 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
   };
 }
 
-function installInteractionGuard(w) {
+function installInteractionGuard(w, root=w.document.querySelector('.zenzaPlayerContainer')) {
   let trustedEvent;
-  const root=w.document.querySelector('.zenzaPlayerContainer');
   const input=e=>{
     const inPlayer=root && e.composedPath().includes(root);
     const shortcut=/^key/.test(e.type) && (e.target===w.document.body||e.target===w.document);

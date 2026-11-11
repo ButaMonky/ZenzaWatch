@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.2.0-external-direct2
+// @version      0.3.0-external-direct3
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -22,12 +22,13 @@
 
 (() => {
  const official = /(^|\.)nicovideo\.jp$/.test(location.hostname);
+ const playerFrame=window!==window.top && window.name==='ZenzaWatchExternalTrialPlayer' && location.hostname==='www.nicovideo.jp' && location.pathname==='/robots.txt';
  const loader = window !== window.top &&
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
- if (official && !loader) return;
- if (!loader && window !== window.top) return;
+ if (official && !loader && !playerFrame) return;
+ if (!loader && !playerFrame && window !== window.top) return;
  'use strict';
 
 function parseDirectLink(href, base) {
@@ -96,11 +97,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版2：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版2：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版2：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版2：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版2：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版3：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版3：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版3：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版3：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版3：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         message(text,true);
       } finally {opening=false;button.disabled=false;}
     });
@@ -154,9 +155,8 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
   };
 }
 
-function installInteractionGuard(w) {
+function installInteractionGuard(w, root=w.document.querySelector('.zenzaPlayerContainer')) {
   let trustedEvent;
-  const root=w.document.querySelector('.zenzaPlayerContainer');
   const input=e=>{
     const inPlayer=root && e.composedPath().includes(root);
     const shortcut=/^key/.test(e.type) && (e.target===w.document.body||e.target===w.document);
@@ -352,6 +352,68 @@ function createGmNetwork(request) {
     getResponseHeader(){return null;}
   }
   return {fetch:gmFetch,Loader};
+}
+
+
+ 'use strict';
+// A cross-origin document is the CSS boundary. Account capabilities stay there.
+function createPlayerHost(w,gm,transport,session) {
+  let frame,port,ticketKey,pending,sequence=0;
+  const stop=(error=Error('PLAYER_CLOSED'))=>{pending?.reject(error);pending=null;port?.close();port=null;frame?.remove();frame=null;if(ticketKey)gm.remove(ticketKey);};
+  async function open(id,event) {
+    if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
+    if(!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(id))throw Error('INVALID_VIDEO_ID');
+    if(pending)throw Error('PLAYER_BUSY');
+    if(frame&&!frame.isConnected)stop();
+    return new Promise((resolve,reject)=>{
+      const requestId=++sequence;
+      const timer=w.setTimeout(()=>{stop(Error('PLAYER_TIMEOUT'));},60000);
+      pending={resolve:()=>{w.clearTimeout(timer);pending=null;resolve();},reject:e=>{w.clearTimeout(timer);pending=null;reject(e);}};
+      const send=()=>port.postMessage({type:'open',id,requestId});
+      if(frame){send();return;}
+      const token=w.crypto.randomUUID();ticketKey='player:'+token;
+      const channel='zw-player:'+w.crypto.randomUUID();
+      gm.set(ticketKey,{channel,origin:w.location.origin,expires:Date.now()+60000});
+      port=transport.port(channel,'parent');
+      port.addEventListener('message',e=>{
+        const data=e.data;
+        if(data?.type==='ready'){gm.remove(ticketKey);send();}
+        else if(data?.type==='closed')stop();
+        else if(data?.requestId===sequence && data.type==='opened')pending?.resolve();
+        else if(data?.requestId===sequence && data.type==='error'){
+          const error=Error(['LOGIN_REQUIRED','AUTH_FORBIDDEN','AUTH_TIMEOUT','GM_NETWORK_ERROR'].includes(data.code)?data.code:'PLAYER_START_FAILED');
+          stop(error);
+        }
+      });
+      frame=w.document.createElement('iframe');frame.name='ZenzaWatchExternalTrialPlayer';
+      frame.setAttribute('data-zenza-player-host','');frame.title='ZenzaWatch';frame.allow='autoplay; fullscreen';frame.referrerPolicy='origin';
+      frame.src='https://www.nicovideo.jp/robots.txt#'+token;
+      for(const [key,value] of Object.entries({all:'initial',position:'fixed',inset:'0',width:'100vw',height:'100vh',border:'0',margin:'0',padding:'0',display:'block',background:'#111','z-index':'2147483646'}))frame.style.setProperty(key,value,'important');
+      w.document.body.append(frame);
+    });
+  }
+  function accept() {
+    if(w===w.top||w.name!=='ZenzaWatchExternalTrialPlayer'||w.location.origin!=='https://www.nicovideo.jp'||w.location.pathname!=='/robots.txt')return false;
+    const key='player:'+w.location.hash.slice(1),ticket=gm.get(key);
+    let origin;try{origin=new URL(w.document.referrer).origin;}catch(_){return false;}
+    if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.origin!==origin)return false;
+    gm.set(key,{...ticket,claimed:true});port=transport.port(ticket.channel,'frame');
+    w.document.head.replaceChildren();w.document.body.replaceChildren();
+    w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
+    w.document.body.style.cssText='margin:0;background:#111;';
+    let busy=false,last=0;
+    port.addEventListener('message',async e=>{
+      const m=e.data;if(m?.type!=='open'||busy||!Number.isSafeInteger(m.requestId)||m.requestId<=last||!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(m.id))return;
+      busy=true;last=m.requestId;
+      try{await session.open(m.id,{isTrusted:true});port.postMessage({type:'opened',requestId:m.requestId});}
+      catch(error){port.postMessage({type:'error',requestId:m.requestId,code:error.message});}
+      finally{busy=false;}
+    });
+    port.postMessage({type:'ready'});
+    return true;
+  }
+  w.addEventListener('pagehide',stop,{once:true});
+  return {open,accept,close:()=>port?.postMessage({type:'closed'})};
 }
 
 
@@ -687,10 +749,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.2';
+    var VER = '2.7.383-external-direct.3';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.2 GM transport base ba8366f7c710';
+    var BUILD = 'external-direct.3 GM transport base ba8366f7c710';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -7705,7 +7767,7 @@ const netUtil = {
 				}
 		},
 		fetch(url, params) {
-				if (location.host !== 'www.nicovideo.jp' && typeof NicoVideoApi !== 'undefined') {
+				if (typeof NicoVideoApi !== 'undefined') {
 						const diagnostic = typeof RequestDiagnostics === 'undefined' ? null : RequestDiagnostics.startRequest(url, params?.signal, params?.diagnosticActive);
 						const gateOptions = params?.diagnosticActive ? { ...params } : params;
 						if (gateOptions?.diagnosticActive) {
@@ -14029,7 +14091,7 @@ const NicoVideoApi = (() => {
 						return gate;
 				}
 				if (location.host === 'www.nicovideo.jp') {
-						return gate = {};
+						/* Trial player always creates the GM-backed gate. */
 				}
 				class NVGate extends CrossDomainGate {
 						_onCommand({ command, status, params, value }, sessionId = null) {
@@ -52008,7 +52070,8 @@ class NicoVideoPlayerDialogView extends Emitter {
 				global.emitter.on('showMenu', () => this.addClass('menuOpen'));
 				global.emitter.on('hideMenu', () => this.removeClass('menuOpen'));
 				global.emitter.on('fullscreenStatusChange', () => this._applyScreenMode(true));
-				document.body.append($dialog[0]);
+				installInteractionGuard(window, container);
+        document.body.append($dialog[0]);
 				this.emitResolve('dom-ready');
 		}
 		_initializeSmallModeDrag($container) {
@@ -69091,6 +69154,7 @@ const replaceRedirectLinks = async () => {
 				document.body.classList.toggle('is-watch', isWatch);
 				const dialog = initializeDialogPlayer(Config);
 				hoverMenu.setPlayer(dialog);
+ dialog.on('close', () => externalTrial.closeOverlay?.());
 				if (isWatch) {
 						await overrideGinza(dialog, query);
 				}
@@ -75981,7 +76045,7 @@ ZenzaWatch.modules.TextLabel = TextLabel;
       return;
     }
 
-    if (location.host === 'www.nicovideo.jp') {
+    if (false) {
       const advancedSettings = new AdvancedSettingsController({
         config: Config, createPanel: config => createAdvancedSettingsPanel(config, _), document,
         onError: () => PopupMessage.alert('上級者設定を開けませんでした。もう一度お試しください。')
@@ -75997,8 +76061,8 @@ ZenzaWatch.modules.TextLabel = TextLabel;
     externalTrial.configure({
       api: NicoVideoApi,
       connect: () => NicoVideoApi.configBridge(Config),
-      setLogin: () => { nicoUtil.isLogin = () => true; },
-      initialize: async () => { await initialize(); installInteractionGuard(window); },
+      setLogin: () => { nicoUtil.isLogin = util.isLogin = () => true; },
+      initialize: async () => { await initialize(); },
       open: id => ZenzaWatch.external.open(id, {autoCloseFullScreen: false})
     });
 
@@ -76430,7 +76494,7 @@ const workerUtil = (() => {
 				bindFunc(self);
 				self.xFetch = async (url, options = {}) => {
 						options = { ...options, ...{ signal: null } }; // remove AbortController
-						if (url.startsWith(location.origin)) {
+						if (false) {
 								return fetch(url, options);
 						}
 						const result = await self.post({ command: 'fetch', params: { url, options } });
@@ -78498,7 +78562,7 @@ const VideoSessionWorker = (() => {
 				};
 				const util = {
 						async fetch(url, params = {}) {
-								if (!location.origin.endsWith('.nicovideo.jp') && !new RegExp('^blob:https?://[a-z0-9]+\\.nicovideo\\.jp/').test(location.href)) {
+								if (true) {
 										return self.xFetch(url, params);
 								}
 								const options = { ...params };
@@ -79989,15 +80053,18 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 })();
 	}
 };
-  if (window.top !== window) return boot(monkey, PRODUCT, START_PAGE_QUERY);
+  if (window.top !== window && window.name !== 'ZenzaWatchExternalTrialPlayer') return boot(monkey, PRODUCT, START_PAGE_QUERY);
   return monkey(PRODUCT, encodeURIComponent(''));
 
 })(globalThis ? globalThis.window : window);
 
  }
- if(loader){
+ const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
+ externalTrial.closeOverlay=playerHost.close;
+ if(playerFrame){playerHost.accept();}
+ else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
-   mountLauncher(window,{open:(id,event)=>externalTrial.open(id,event)});
+   mountLauncher(window,{open:(id,event)=>playerHost.open(id,event)});
  }
 })();

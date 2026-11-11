@@ -21,3 +21,26 @@ test('bounded diagnostic aggregates timings only and releases observers/timers',
  assert.equal(report.events.click.maxInputDelayMs,80);assert.equal(report.events.click.maxHandlerMs,30);assert.equal(report.timing.longTasks,1);
  assert.equal(JSON.stringify(report).includes('SECRET'),false);assert.equal(JSON.stringify(report).includes('secret input'),false);w.close();
 });
+
+
+test('return probe waits without polling, samples once on return and cleans listeners',()=>{
+ const w=new JSDOM('',{pretendToBeVisual:true}).window;let now=0,id=0,starts=0,finishes=0,meta;
+ const timers=new Map();w.performance.now=()=>now;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,ms});return id;};w.clearTimeout=k=>timers.delete(k);
+ const factory=(_w,metadata)=>{meta=metadata();return {start(){starts++;},finish(){finishes++;}};};
+ const probe=require('./ui-diagnostics.cjs').installReturnDiagnostics(w,()=>({remainingPlayerFrames:0}),()=>{},factory);
+ assert.equal(timers.size,1);assert.equal(starts,0);
+ w.dispatchEvent(new w.Event('focus'));assert.equal(starts,0);
+ now=100;w.dispatchEvent(new w.Event('blur'));now=3100;w.dispatchEvent(new w.Event('focus'));
+ assert.equal(starts,1);assert.equal(meta.awayMs,3000);assert.equal(meta.phase,'after-return');assert.equal(timers.size,0);
+ w.dispatchEvent(new w.Event('blur'));w.dispatchEvent(new w.Event('focus'));assert.equal(starts,1);
+ probe.finish();assert.equal(finishes,1);w.close();
+});
+
+test('return probe expires and cancelled probes never restart',()=>{
+ const w=new JSDOM('',{pretendToBeVisual:true}).window;let callback,starts=0;
+ w.setTimeout=fn=>{callback=fn;return 1;};w.clearTimeout=()=>{};
+ const factory=()=>({start(){starts++;},finish(){}});
+ const make=()=>require('./ui-diagnostics.cjs').installReturnDiagnostics(w,()=>({}),()=>{},factory);
+ const probe=make();callback();w.dispatchEvent(new w.Event('blur'));w.dispatchEvent(new w.Event('focus'));assert.equal(starts,0);
+ const other=make();other.finish();w.dispatchEvent(new w.Event('blur'));w.dispatchEvent(new w.Event('focus'));assert.equal(starts,0);w.close();
+});

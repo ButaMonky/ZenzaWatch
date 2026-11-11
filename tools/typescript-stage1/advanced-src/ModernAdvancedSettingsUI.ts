@@ -596,7 +596,7 @@ declare panel: HTMLElement;
     this.panel.appendChild(this.root);
     // Share committed values with the normal panel while preserving unrelated drafts.
     this._configSubscriptions=[];
-    const config=this.model.config as typeof this.model.config & {onkey?: (key: string, listener: () => void) => void};
+    const config=this.model.config as typeof this.model.config & {onkey?: (key: string, listener: () => void) => void; onStoredKey?: (key: string, listener: () => void) => void};
     for(const descriptor of this.model.descriptors) {
       const id=descriptor.id;
       const listener=()=>{
@@ -614,7 +614,7 @@ declare panel: HTMLElement;
         this._refreshCards();
         this._refreshFooter();
       };
-      config.onkey?.(id,listener);
+      (config.onStoredKey || config.onkey)?.call(config,id,listener);
       this._configSubscriptions.push({key:id,listener});
     }
     this._unwatchRelatedActions=this.relatedActions?.onChange?.(()=>
@@ -2710,8 +2710,8 @@ declare panel: HTMLElement;
     this.root.removeEventListener('pointerup',this._onTouchOrderUpBound);
     this.root.removeEventListener('pointercancel',this._onTouchOrderCancelBound);
     this._unwatchRelatedActions?.();
-    const config=this.model.config as typeof this.model.config & {offkey?: (key:string,handler:()=>void)=>void};
-    this._configSubscriptions.forEach(({key,listener})=>config.offkey?.(key,listener));
+    const config=this.model.config as typeof this.model.config & {offkey?: (key:string,handler:()=>void)=>void; offStoredKey?: (key:string,handler:()=>void)=>void};
+    this._configSubscriptions.forEach(({key,listener})=>(config.offStoredKey || config.offkey)?.call(config,key,listener));
     this._configSubscriptions=[];
     this.root.removeEventListener('click',this._onRelatedClickBound);
     this.root.removeEventListener('change',this._onRelatedChangeBound);

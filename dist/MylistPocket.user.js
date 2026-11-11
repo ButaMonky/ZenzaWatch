@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.88-task998
+// @version     0.5.89-task1013
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-10 21:21Z 2ab5eeff
+// build: 2026-11-11 18:53Z 392faf4
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -4182,6 +4182,7 @@ class DataStorage {
 		const changed = this._changed;
 		this.emit('change', changed);
 		for (const [key, val] of changed) {
+			this.emitAsync(`stored-${this.getNativeKey(key)}`, val);
 			this.emitAsync('update', key, val);
 			this.emitAsync(`update-${key}`, val);
 		}
@@ -4229,6 +4230,10 @@ class DataStorage {
 		}
 		return this._data[key];
 	}
+	getStoredValue(key) { return this._data[key]; }
+	setStoredValue(key, value) { return this.setValue(key, value, true); }
+	onStoredKey(key, callback) { this.on(`stored-${key}`, callback); }
+	offStoredKey(key, callback) { this.off(`stored-${key}`, callback); }
 	getValue(key) {
 		key = this.getNativeKey(key);
 		return this._data[key];
@@ -4239,9 +4244,9 @@ class DataStorage {
 		if (!this.readonly) { this.storage.removeItem(storageKey); }
 		this._data[key] = this.default[key];
 	}
-	setValue(key, value) {
+	setValue(key, value, stored = false) {
 		const _key = key;
-		key = this.getNativeKey(key);
+		key = stored ? key : this.getNativeKey(key);
 		if (this._data[key] === value || value === undefined) {
 			return;
 		}
@@ -4264,7 +4269,13 @@ class DataStorage {
 		}
 		this._data[key] = value;
 		if (!this.silently) {
-			this._changed.set(_key, value);
+			this.emitAsync(`stored-${key}`, value);
+			const keys = new Set([key, _key]);
+			const base = key.split(':')[0];
+			if (this.getNativeKey(base) === key) keys.add(base);
+			for (const candidate of keys) {
+				if (this.getNativeKey(candidate) === key) this._changed.set(candidate, value);
+			}
 			this._onChange();
 		}
 	}
@@ -4279,7 +4290,7 @@ class DataStorage {
 		const _default = this.default;
 		Object.keys(this.props)
 			.filter(key => isAll || (_default[key] !== this._data[key]))
-			.forEach(key => result[key] = this.getValue(key));
+			.forEach(key => result[key] = this.getStoredValue(key));
 		return result;
 	}
 	exportJson() {
@@ -7280,7 +7291,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.88-task998', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.89-task1013', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

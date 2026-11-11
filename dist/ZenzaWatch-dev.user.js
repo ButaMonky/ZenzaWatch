@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.387-task1012
+// @version        2.7.388-task1013
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-11 18:37Z 6cb8417
+// build: 2026-11-11 18:53Z 392faf4
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.387-task1012';
+    var VER = '2.7.388-task1013';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-11 18:37Z 6cb8417';
+    var BUILD = '2026-11-11 18:53Z 392faf4';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -936,6 +936,7 @@ class DataStorage {
 		const changed = this._changed;
 		this.emit('change', changed);
 		for (const [key, val] of changed) {
+			this.emitAsync(`stored-${this.getNativeKey(key)}`, val);
 			this.emitAsync('update', key, val);
 			this.emitAsync(`update-${key}`, val);
 		}
@@ -983,6 +984,10 @@ class DataStorage {
 		}
 		return this._data[key];
 	}
+	getStoredValue(key) { return this._data[key]; }
+	setStoredValue(key, value) { return this.setValue(key, value, true); }
+	onStoredKey(key, callback) { this.on(`stored-${key}`, callback); }
+	offStoredKey(key, callback) { this.off(`stored-${key}`, callback); }
 	getValue(key) {
 		key = this.getNativeKey(key);
 		return this._data[key];
@@ -993,9 +998,9 @@ class DataStorage {
 		if (!this.readonly) { this.storage.removeItem(storageKey); }
 		this._data[key] = this.default[key];
 	}
-	setValue(key, value) {
+	setValue(key, value, stored = false) {
 		const _key = key;
-		key = this.getNativeKey(key);
+		key = stored ? key : this.getNativeKey(key);
 		if (this._data[key] === value || value === undefined) {
 			return;
 		}
@@ -1018,7 +1023,13 @@ class DataStorage {
 		}
 		this._data[key] = value;
 		if (!this.silently) {
-			this._changed.set(_key, value);
+			this.emitAsync(`stored-${key}`, value);
+			const keys = new Set([key, _key]);
+			const base = key.split(':')[0];
+			if (this.getNativeKey(base) === key) keys.add(base);
+			for (const candidate of keys) {
+				if (this.getNativeKey(candidate) === key) this._changed.set(candidate, value);
+			}
 			this._onChange();
 		}
 	}
@@ -1033,7 +1044,7 @@ class DataStorage {
 		const _default = this.default;
 		Object.keys(this.props)
 			.filter(key => isAll || (_default[key] !== this._data[key]))
-			.forEach(key => result[key] = this.getValue(key));
+			.forEach(key => result[key] = this.getStoredValue(key));
 		return result;
 	}
 	exportJson() {
@@ -7170,6 +7181,10 @@ const WatchPageHistory = (() => {
 		};
 		const bouncedRestore = _.debounce(restore, RESTORE_DELAY);
 		const pushHistory = (path, title) => {
+				if (dialog?._playerConfig?.getValue('enablePushState') === false) {
+						restore();
+						return;
+				}
 				if (!isPushed)
 						updateOriginal();
 				history.replaceState(history.state, null, path);
@@ -7189,7 +7204,7 @@ const WatchPageHistory = (() => {
 				originalTitle = window && window.document && window.document.title;
 		};
 		const onVideoInfoLoad = _.debounce(({ watchId, title, owner, generation, requestId }) => {
-				if (!watchId || !isOpen || generation !== navigationGeneration ||
+				if (dialog?._playerConfig?.getValue('enablePushState') === false || !watchId || !isOpen || generation !== navigationGeneration ||
 						requestId !== dialog?._requestId) {
 						return;
 				}
@@ -7230,6 +7245,13 @@ const WatchPageHistory = (() => {
 						return;
 				}
 				dialog = _dialog;
+				dialog?._playerConfig?.onkey?.('enablePushState', (enabled) => {
+						if (!enabled) {
+								navigationGeneration++;
+								onVideoInfoLoad.cancel();
+								restore();
+						}
+				});
 				if (location.host === 'www.nicovideo.jp') {
 						dialog.on('close', onDialogClose);
 				}
@@ -7249,6 +7271,8 @@ const WatchPageHistory = (() => {
 				}, { passive: true });
 		};
 		const pushHistoryAgency = async (path, title) => {
+				if (dialog?._playerConfig?.getValue('enablePushState') === false)
+						return;
 				if (!navigator || !navigator.locks) {
 						pushHistory(path, title);
 						bouncedRestore.cancel();
@@ -7258,7 +7282,7 @@ const WatchPageHistory = (() => {
 				let lastTitle = document.title;
 				let lastUrl = location.href;
 				await navigator.locks.request('pushHistoryAgency', { ifAvailable: true }, async (lock) => {
-						if (!lock) {
+						if (!lock || dialog?._playerConfig?.getValue('enablePushState') === false) {
 								return;
 						}
 						history.replaceState(history.state, title, path);
@@ -52904,10 +52928,11 @@ class NicoVideoPlayerDialogView extends Emitter {
 		}
 		_applyScreenMode(force = false) {
 				const screenMode = this._state.isOpen ? `zenzaScreenMode_${this._state.screenMode}` : '';
-				if (!force && this._lastScreenMode === screenMode) {
+				const modeKey = screenMode + ':' + util.fullscreen.now();
+				if (!force && this._lastScreenMode === modeKey) {
 						return;
 				}
-				this._lastScreenMode = '';
+				this._lastScreenMode = modeKey;
 				const modes = this._getScreenModeClassNameTable();
 				const isFull = util.fullscreen.now();
 				Object.assign(document.body.dataset, {
@@ -70417,7 +70442,7 @@ class ModernAdvancedSettingsModel {
 										return scene.miniVisible;
 						}
 				}
-				const v = typeof this.config.getValue === 'function' ?
+				const v = this.config.getStoredValue ? this.config.getStoredValue(id) : typeof this.config.getValue === 'function' ?
 						this.config.getValue(id) : this.config.props?.[id];
 				if (id === 'playlist.maxItems' && typeof v === 'number' && Number.isFinite(v) && v > 10000) {
 						return 10000;
@@ -70552,7 +70577,7 @@ class ModernAdvancedSettingsModel {
 				const snapshots = new Map();
 				if (storage && typeof this.config.getStorageKey === 'function') {
 						for (const { id } of changes) {
-								const native = this.config.getNativeKey?.(id) ?? id;
+								const native = this.config.getStoredValue ? id : (this.config.getNativeKey?.(id) ?? id);
 								const storageKey = this.config.getStorageKey(native);
 								snapshots.set(id, { storageKey, raw: storage[storageKey] });
 						}
@@ -70565,10 +70590,10 @@ class ModernAdvancedSettingsModel {
 										this.config.persistSceneSearchSelection({ [id]: ModernAdvancedSettingsModel._clone(value) });
 								}
 								else {
-										this.config.setValue(id, ModernAdvancedSettingsModel._clone(value));
+										(this.config.setStoredValue || this.config.setValue).call(this.config, id, ModernAdvancedSettingsModel._clone(value));
 								}
 								if (this.config.storage && typeof this.config.getStorageKey === 'function') {
-										const native = typeof this.config.getNativeKey === 'function' ?
+										const native = !this.config.getStoredValue && typeof this.config.getNativeKey === 'function' ?
 												this.config.getNativeKey(id) : id;
 										const storageKey = this.config.getStorageKey(native);
 										if (this.config.storage[storageKey] !== JSON.stringify(value)) {
@@ -70581,7 +70606,7 @@ class ModernAdvancedSettingsModel {
 						const rollbackErrors = [];
 						for (const id of attempted.reverse()) {
 								try {
-										this.config.setValue(id, ModernAdvancedSettingsModel._clone(this.saved[id]));
+										(this.config.setStoredValue || this.config.setValue).call(this.config, id, ModernAdvancedSettingsModel._clone(this.saved[id]));
 								}
 								catch (restoreError) {
 										rollbackErrors.push(restoreError);
@@ -71177,7 +71202,7 @@ class ModernAdvancedSettingsUI {
 								this._refreshCards();
 								this._refreshFooter();
 						};
-						config.onkey?.(id, listener);
+						(config.onStoredKey || config.onkey)?.call(config, id, listener);
 						this._configSubscriptions.push({ key: id, listener });
 				}
 				this._unwatchRelatedActions = this.relatedActions?.onChange?.(() => this._refreshRelatedOrderList()) || null;
@@ -73702,7 +73727,7 @@ class ModernAdvancedSettingsUI {
 				this.root.removeEventListener('pointercancel', this._onTouchOrderCancelBound);
 				this._unwatchRelatedActions?.();
 				const config = this.model.config;
-				this._configSubscriptions.forEach(({ key, listener }) => config.offkey?.(key, listener));
+				this._configSubscriptions.forEach(({ key, listener }) => (config.offStoredKey || config.offkey)?.call(config, key, listener));
 				this._configSubscriptions = [];
 				this.root.removeEventListener('click', this._onRelatedClickBound);
 				this.root.removeEventListener('change', this._onRelatedChangeBound);

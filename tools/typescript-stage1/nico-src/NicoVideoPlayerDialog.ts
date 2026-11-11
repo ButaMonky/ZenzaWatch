@@ -1827,8 +1827,9 @@ class NicoVideoPlayerDialogView extends Emitter {
   }
   _applyScreenMode(force: Loose = false) {
     const screenMode = this._state.isOpen ? `zenzaScreenMode_${this._state.screenMode}` : '';
-    if (!force && this._lastScreenMode === screenMode) { return; }
-    this._lastScreenMode = '';
+    const modeKey = screenMode + ':' + util.fullscreen.now();
+    if (!force && this._lastScreenMode === modeKey) { return; }
+    this._lastScreenMode = modeKey;
     const modes = this._getScreenModeClassNameTable();
     const isFull = util.fullscreen.now();
     Object.assign(document.body.dataset, {

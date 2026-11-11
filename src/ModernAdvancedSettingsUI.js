@@ -538,7 +538,7 @@ class ModernAdvancedSettingsUI {
                 this._refreshCards();
                 this._refreshFooter();
             };
-            config.onkey?.(id, listener);
+            (config.onStoredKey || config.onkey)?.call(config, id, listener);
             this._configSubscriptions.push({ key: id, listener });
         }
         this._unwatchRelatedActions = this.relatedActions?.onChange?.(() => this._refreshRelatedOrderList()) || null;
@@ -3083,7 +3083,7 @@ class ModernAdvancedSettingsUI {
         this.root.removeEventListener('pointercancel', this._onTouchOrderCancelBound);
         this._unwatchRelatedActions?.();
         const config = this.model.config;
-        this._configSubscriptions.forEach(({ key, listener }) => config.offkey?.(key, listener));
+        this._configSubscriptions.forEach(({ key, listener }) => (config.offStoredKey || config.offkey)?.call(config, key, listener));
         this._configSubscriptions = [];
         this.root.removeEventListener('click', this._onRelatedClickBound);
         this.root.removeEventListener('change', this._onRelatedChangeBound);

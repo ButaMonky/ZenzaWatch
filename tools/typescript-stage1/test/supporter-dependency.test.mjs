@@ -31,6 +31,3 @@ test('advertising and credit switches disable descendants without losing checked
   dom.window.close();
  }
 });
-
-
-

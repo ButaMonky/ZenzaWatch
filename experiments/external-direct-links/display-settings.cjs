@@ -27,7 +27,7 @@ function createDisplaySettings(w, gm, registered=[]) {
   }
   function publish(){
     if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
-    try{gm.set(slot,{version:2,values:read('ZenzaWatch_')});}catch(_){}
+    try{gm.set(slot,{version:2,publishedAt:Date.now(),values:read('ZenzaWatch_')});}catch(_){}
   }
   let official={},baseline={},publishOfficial=false,active=false,timer=null;
   function apply(){
@@ -66,6 +66,15 @@ function createDisplaySettings(w, gm, registered=[]) {
   }
   // Explicit player close also flushes: removed frames may skip pagehide.
   w.addEventListener('pagehide',save);
-  return {publish,apply,save,scheduleSave};
+  function diagnostics(config){
+    const snapshot=gm.get(slot),values=read(prefix),runtimeMismatch=[];
+    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getValue(key)))runtimeMismatch.push(key);
+    return {sourceAvailable:snapshot?.version===2,sourceSettingCount:Object.keys(clean(snapshot?.values)).length,
+      sourceAgeSeconds:typeof snapshot?.publishedAt==='number'?Math.round((Date.now()-snapshot.publishedAt)/1000):null,
+      localSettingCount:Object.keys(values).length,runtimeMismatch,
+      officialDifferent:Object.keys(official).filter(key=>!equal(official[key],values[key])),
+      playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
+  }
+  return {publish,apply,save,scheduleSave,diagnostics};
 }
 module.exports={createDisplaySettings};

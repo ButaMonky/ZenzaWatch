@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.6.0-external-direct6
+// @version      0.7.0-external-direct7
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -56,7 +56,7 @@ function createDisplaySettings(w, gm, registered=[]) {
   }
   function publish(){
     if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
-    try{gm.set(slot,{version:2,values:read('ZenzaWatch_')});}catch(_){}
+    try{gm.set(slot,{version:2,publishedAt:Date.now(),values:read('ZenzaWatch_')});}catch(_){}
   }
   let official={},baseline={},publishOfficial=false,active=false,timer=null;
   function apply(){
@@ -95,7 +95,16 @@ function createDisplaySettings(w, gm, registered=[]) {
   }
   // Explicit player close also flushes: removed frames may skip pagehide.
   w.addEventListener('pagehide',save);
-  return {publish,apply,save,scheduleSave};
+  function diagnostics(config){
+    const snapshot=gm.get(slot),values=read(prefix),runtimeMismatch=[];
+    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getValue(key)))runtimeMismatch.push(key);
+    return {sourceAvailable:snapshot?.version===2,sourceSettingCount:Object.keys(clean(snapshot?.values)).length,
+      sourceAgeSeconds:typeof snapshot?.publishedAt==='number'?Math.round((Date.now()-snapshot.publishedAt)/1000):null,
+      localSettingCount:Object.keys(values).length,runtimeMismatch,
+      officialDifferent:Object.keys(official).filter(key=>!equal(official[key],values[key])),
+      playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
+  }
+  return {publish,apply,save,scheduleSave,diagnostics};
 }
 
 
@@ -181,11 +190,11 @@ function mountLauncher(w, {open}) {
       try {await open(current,e);status?.remove();status=null;}
       catch(error) {
         const text=error?.message==='EXISTING_RUNTIME' ? 'このページでは通常版のZenzaWatchが動いています。検証版の二重起動を止めました。' :
-          error?.message==='LOGIN_REQUIRED' ? '検証版6：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
-          error?.message==='AUTH_FORBIDDEN' ? '検証版6：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
-          error?.message==='GM_NETWORK_ERROR' ? '検証版6：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
-          error?.message==='AUTH_TIMEOUT' ? '検証版6：Tampermonkey経由の認証確認が時間切れになりました。' :
-          '検証版6：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
+          error?.message==='LOGIN_REQUIRED' ? '検証版7：Tampermonkey経由の認証確認が401を返しました。公式でログイン済みの場合は、この表示を報告してください。' :
+          error?.message==='AUTH_FORBIDDEN' ? '検証版7：Tampermonkey経由の認証確認が403（アクセス拒否）を返しました。未ログインとは限りません。この表示を報告してください。' :
+          error?.message==='GM_NETWORK_ERROR' ? '検証版7：Tampermonkey経由の通信に失敗しました。Tampermonkeyに接続先の許可が出ていないか確認してください。' :
+          error?.message==='AUTH_TIMEOUT' ? '検証版7：Tampermonkey経由の認証確認が時間切れになりました。' :
+          '検証版7：起動または認証確認に失敗しました。サイト別Cookieの許可は変更せず、この表示とConsoleのエラーを報告してください。';
         const stage={BOOT:'本体の準備',SETTINGS:'設定の接続',AUTH:'認証確認',UI:'画面の準備',VIDEO:'動画を開く処理'}[error?.stage];
         message(text+(stage?' 停止した段階：'+stage+'。':''),true);
       } finally {opening=false;button.disabled=false;}
@@ -222,6 +231,7 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
   return {
     configure(value) {runtime=value;},
     setStageListener(value) {listener=value;},
+    diagnostics() {return runtime?.diagnostics?.()||{runtimeReady:false};},
     async open(id,event) {
       try {
       await enable(event);
@@ -511,6 +521,49 @@ function createPlayerHost(w,gm,transport,session) {
   }
   w.addEventListener('pagehide',stop,{once:true});
   return {open,accept,close:()=>port?.postMessage({type:'closed'})};
+}
+
+
+ 'use strict';
+// One bounded sample. No target labels, input text, URLs, user IDs or payloads.
+function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_DIAG',JSON.stringify(report))) {
+  let started=false,finished=false,raf,tick,stopTimer,begin,lastFrame,nextTick;
+  const observers=[],events={},timing={frames:0,slowFrames:0,maxFrameGapMs:0,timerSamples:0,maxTimerDelayMs:0,longTasks:0,totalLongTaskMs:0,maxLongTaskMs:0};
+  const round=n=>Math.round(n*10)/10;
+  function entries(list){for(const entry of list){
+    if(entry.entryType==='longtask'){timing.longTasks++;timing.totalLongTaskMs+=entry.duration;timing.maxLongTaskMs=Math.max(timing.maxLongTaskMs,entry.duration);}
+    else if(['click','pointerdown','pointerup','keydown'].includes(entry.name)){
+      const row=events[entry.name]||(events[entry.name]={count:0,maxInputDelayMs:0,maxHandlerMs:0,maxAfterHandlerMs:0});row.count++;
+      row.maxInputDelayMs=Math.max(row.maxInputDelayMs,Math.max(0,entry.processingStart-entry.startTime));
+      row.maxHandlerMs=Math.max(row.maxHandlerMs,Math.max(0,entry.processingEnd-entry.processingStart));
+      row.maxAfterHandlerMs=Math.max(row.maxAfterHandlerMs,Math.max(0,entry.startTime+entry.duration-entry.processingEnd));
+    }
+  }}
+  function finish(){
+    if(!started||finished)return;finished=true;
+    w.cancelAnimationFrame?.(raf);w.clearTimeout(tick);w.clearTimeout(stopTimer);
+    for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
+    w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
+    let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
+    emit({version:'external-direct.7',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+      supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
+      events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
+  }
+  let hiddenDuringSample=false;
+  function frame(now){if(finished)return;if(w.document.hidden)hiddenDuringSample=true;else if(lastFrame!==undefined){const gap=now-lastFrame;timing.frames++;if(gap>50)timing.slowFrames++;timing.maxFrameGapMs=Math.max(timing.maxFrameGapMs,gap);}lastFrame=now;raf=w.requestAnimationFrame(frame);}
+  function timer(){if(finished)return;const now=w.performance.now();if(w.document.hidden)hiddenDuringSample=true;else{timing.timerSamples++;timing.maxTimerDelayMs=Math.max(timing.maxTimerDelayMs,Math.max(0,now-nextTick));}nextTick=now+250;tick=w.setTimeout(timer,250);}
+  function start(){
+    if(started)return;started=true;w.removeEventListener('pointerdown',arm,true);begin=w.performance.now();nextTick=begin+250;
+    for(const type of ['event','longtask']){try{
+      if(!w.PerformanceObserver?.supportedEntryTypes?.includes(type))continue;
+      const observer=new w.PerformanceObserver(list=>entries(list.getEntries()));observer._diagnosticType=type;
+      observer.observe(type==='event'?{type,durationThreshold:16}:{type});observers.push(observer);
+    }catch(_){}}
+    raf=w.requestAnimationFrame?.(frame);tick=w.setTimeout(timer,250);stopTimer=w.setTimeout(finish,15000);
+  }
+  function arm(event){if(event.isTrusted)start();}
+  w.addEventListener('pointerdown',arm,true);w.addEventListener('pagehide',finish);
+  return {start,finish};
 }
 
 
@@ -847,10 +900,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.6';
+    var VER = '2.7.383-external-direct.7';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.6 GM transport base ba8366f7c710';
+    var BUILD = 'external-direct.7 GM transport base ba8366f7c710';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -76159,6 +76212,7 @@ ZenzaWatch.modules.TextLabel = TextLabel;
 
     externalTrial.configure({
       api: NicoVideoApi,
+      diagnostics: () => displaySettings.diagnostics(Config),
       // The isolated player already owns its local settings. Do not relay every
       // panel setting through GM storage and a second same-origin frame.
       connect: async () => {},
@@ -80163,7 +80217,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
  }
  const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
  externalTrial.closeOverlay=()=>{displaySettings.save();playerHost.close();};
- if(playerFrame){playerHost.accept();}
+ if(playerFrame){if(playerHost.accept())installUiDiagnostics(window,()=>externalTrial.diagnostics());}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {

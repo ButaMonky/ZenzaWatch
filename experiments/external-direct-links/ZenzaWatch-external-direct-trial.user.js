@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.12.0-external-direct12
+// @version      0.13.0-external-direct13
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -482,9 +482,15 @@ function createGmNetwork(request) {
 
  'use strict';
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
-function createPlayerHost(w,gm,transport,session) {
+function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
   let frame,port,ticketKey,pending,sequence=0;
-  const stop=(error=Error('PLAYER_CLOSED'))=>{pending?.reject(error);pending=null;port?.close();port=null;frame?.remove();frame=null;if(ticketKey)gm.remove(ticketKey);};
+  const stop=(error=Error('PLAYER_CLOSED'))=>{
+    const closingPort=port,closingFrame=frame,closingTicket=ticketKey,request=pending;
+    port=null;frame=null;ticketKey=null;pending=null;
+    request?.reject(error);closingPort?.close();closingFrame?.remove();
+    if(closingTicket)gm.remove(closingTicket);
+    if(closingFrame)onStopped();
+  };
   async function open(id,event) {
     if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
     if(!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(id))throw Error('INVALID_VIDEO_ID');
@@ -499,7 +505,7 @@ function createPlayerHost(w,gm,transport,session) {
       const token=w.crypto.randomUUID();ticketKey='player:'+token;
       const channel='zw-player:'+w.crypto.randomUUID();
       gm.set(ticketKey,{channel,origin:w.location.origin,expires:Date.now()+60000});
-      port=transport.port(channel,'parent');
+      port=transport.port(channel,'parent',()=>stop());
       port.addEventListener('message',e=>{
         const data=e.data;
         if(data?.type==='ready'){gm.remove(ticketKey);send();}
@@ -572,7 +578,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.12',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+    emit({version:'external-direct.13',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
       supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }
@@ -927,10 +933,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.12';
+    var VER = '2.7.388-external-direct.13';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.12 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.13 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -80263,7 +80269,12 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 })(globalThis ? globalThis.window : window);
 
  }
- const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
+ let hostProbe;
+ const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial,()=>{
+   hostProbe?.finish();
+   hostProbe=installUiDiagnostics(window,()=>({phase:'after-close',remainingPlayerFrames:document.querySelectorAll('[data-zenza-player-host]').length}),report=>console.info('ZENZA_HOST_DIAG',JSON.stringify(report)));
+   hostProbe.start();
+ });
  externalTrial.closeOverlay=()=>{
    try{displaySettings.save();}finally{externalTrial.gm.dispose();void playerHost.close();}
  };
@@ -80271,6 +80282,6 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
-   mountLauncher(window,{open:(id,event)=>playerHost.open(id,event)});
+   mountLauncher(window,{open:(id,event)=>{hostProbe?.finish();return playerHost.open(id,event);}});
  }
 })();

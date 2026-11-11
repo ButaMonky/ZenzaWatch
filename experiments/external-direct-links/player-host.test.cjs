@@ -36,3 +36,15 @@ test('repeated real private-channel closes leave no retained listener and allow 
  }
  transport.dispose();parent.close();
 });
+
+test('transport termination removes the host even if the semantic closed message is lost',async()=>{
+ const parent=new JSDOM('',{url:'https://example.org/'}).window;
+ let remoteClose,listener,closed=0;
+ const gm={set(){},remove(){}};
+ const transport={port(_channel,_side,onClose){remoteClose=onClose;return {addEventListener(_name,fn){listener=fn;},postMessage(){},close(){closed++;}};}};
+ const host=createPlayerHost(parent,gm,transport,{});
+ const pending=host.open('sm9',{isTrusted:true});listener({data:{type:'opened',requestId:1}});await pending;
+ assert(parent.document.querySelector('iframe'));
+ assert.equal(typeof remoteClose,'function','termination must be wired to host teardown');remoteClose();
+ assert.equal(parent.document.querySelector('iframe'),null);assert.equal(closed,1);parent.close();
+});

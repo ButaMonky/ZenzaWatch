@@ -1,8 +1,14 @@
 'use strict';
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
-function createPlayerHost(w,gm,transport,session) {
+function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
   let frame,port,ticketKey,pending,sequence=0;
-  const stop=(error=Error('PLAYER_CLOSED'))=>{pending?.reject(error);pending=null;port?.close();port=null;frame?.remove();frame=null;if(ticketKey)gm.remove(ticketKey);};
+  const stop=(error=Error('PLAYER_CLOSED'))=>{
+    const closingPort=port,closingFrame=frame,closingTicket=ticketKey,request=pending;
+    port=null;frame=null;ticketKey=null;pending=null;
+    request?.reject(error);closingPort?.close();closingFrame?.remove();
+    if(closingTicket)gm.remove(closingTicket);
+    if(closingFrame)onStopped();
+  };
   async function open(id,event) {
     if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
     if(!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(id))throw Error('INVALID_VIDEO_ID');
@@ -17,7 +23,7 @@ function createPlayerHost(w,gm,transport,session) {
       const token=w.crypto.randomUUID();ticketKey='player:'+token;
       const channel='zw-player:'+w.crypto.randomUUID();
       gm.set(ticketKey,{channel,origin:w.location.origin,expires:Date.now()+60000});
-      port=transport.port(channel,'parent');
+      port=transport.port(channel,'parent',()=>stop());
       port.addEventListener('message',e=>{
         const data=e.data;
         if(data?.type==='ready'){gm.remove(ticketKey);send();}

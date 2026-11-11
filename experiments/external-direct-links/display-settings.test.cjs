@@ -43,3 +43,14 @@ test('two open external pages merge only changed keys, including stale close',()
  assert.equal(data.get('trial-settings-v2').values.volume,.6);assert.equal(data.get('trial-settings-v2').values.menuScale,1.5);
  a.close();b.close();
 });
+
+test('diagnostics time storage work without exposing values or confusing contextual aliases',()=>{
+ const w=new JSDOM('',{url:'https://www.nicovideo.jp/robots.txt'}).window;let now=0;
+ w.performance.now=()=>now;
+ const bridge=createDisplaySettings(w,{get:()=>undefined,set:()=>{now+=12;}},['screenMode']);
+ bridge.apply();w.localStorage.setItem('ZenzaWatchExternalTrial_screenMode','"normal"');bridge.save();
+ const report=bridge.diagnostics({getKeys:()=>['screenMode'],getValue:()=> 'big',getStoredValue:()=> 'normal'});
+ assert.deepEqual(report.runtimeMismatch,[]);assert.equal(report.storageTiming.saveCount,2);
+ assert.equal(report.storageTiming.maxSaveMs,12);assert.equal(report.storageTiming.totalSaveMs,24);
+ assert(!JSON.stringify(report).includes('normal'));w.close();
+});

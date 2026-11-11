@@ -46,8 +46,10 @@ function createDisplaySettings(w, gm, registered=[]) {
     for(const [key,value] of Object.entries(values))w.localStorage.setItem(prefix+key,JSON.stringify(value));
     active=true;save();return snapshot?.version===2;
   }
+  const storageTiming={saveCount:0,totalSaveMs:0,maxSaveMs:0};
   function save(){
     if(!active)return;
+    const started=w.performance.now();
     if(timer!==null){w.clearTimeout(timer);timer=null;}
     const latest=gm.get(savedSlot),values=clean(latest?.values),local=read(prefix);
     // Another external page may have saved since this player opened. Merge
@@ -59,6 +61,7 @@ function createDisplaySettings(w, gm, registered=[]) {
     }
     gm.set(savedSlot,{version:2,official:publishOfficial?official:clean(latest?.official),values});
     baseline=local;publishOfficial=false;
+    const duration=w.performance.now()-started;storageTiming.saveCount++;storageTiming.totalSaveMs+=duration;storageTiming.maxSaveMs=Math.max(storageTiming.maxSaveMs,duration);
   }
   function scheduleSave(){
     if(!active||timer!==null)return;
@@ -68,11 +71,12 @@ function createDisplaySettings(w, gm, registered=[]) {
   w.addEventListener('pagehide',save);
   function diagnostics(config){
     const snapshot=gm.get(slot),values=read(prefix),runtimeMismatch=[];
-    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getValue(key)))runtimeMismatch.push(key);
+    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getStoredValue?config.getStoredValue(key):config.getValue(key)))runtimeMismatch.push(key);
     return {sourceAvailable:snapshot?.version===2,sourceSettingCount:Object.keys(clean(snapshot?.values)).length,
       sourceAgeSeconds:typeof snapshot?.publishedAt==='number'?Math.round((Date.now()-snapshot.publishedAt)/1000):null,
       localSettingCount:Object.keys(values).length,runtimeMismatch,
       officialDifferent:Object.keys(official).filter(key=>!equal(official[key],values[key])),
+      storageTiming:Object.fromEntries(Object.entries(storageTiming).map(([key,value])=>[key,Math.round(value*10)/10])),
       playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
   }
   return {publish,apply,save,scheduleSave,diagnostics};

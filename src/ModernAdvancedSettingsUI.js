@@ -513,18 +513,34 @@ class ModernAdvancedSettingsUI {
         this.root.addEventListener('input', this._onRelatedInputBound = e => this._onRelatedBubble(e));
         this.doc.addEventListener('keydown', this._onKeyDownBound = e => this._onDocumentKeyDown(e), true);
         this.panel.appendChild(this.root);
-        // Keep the fullscreen-comment switch in sync with the player setting
-        // panel and keyboard shortcut without committing other pending edits.
-        this._onBackCommentConfigUpdate = () => {
-            if (!this.model.syncLiveValue('backComment')) {
-                return;
-            }
-            const checked = !!this.model.get('backComment');
-            this.cards.querySelectorAll('input[data-setting-name="backComment"]')
-                .forEach(input => { input.checked = checked; });
-            this._refreshCards();
-        };
-        this.model.config.onkey?.('backComment', this._onBackCommentConfigUpdate);
+        // Share committed values with the normal panel while preserving unrelated drafts.
+        this._configSubscriptions = [];
+        const config = this.model.config;
+        for (const descriptor of this.model.descriptors) {
+            const id = descriptor.id;
+            const listener = () => {
+                if (this._savingConfig || !this.model.syncLiveValue(id)) {
+                    return;
+                }
+                const value = this.model.get(id);
+                this.cards.querySelectorAll('[data-setting-name]')
+                    .forEach(input => {
+                    if (input.dataset.settingName !== id) {
+                        return;
+                    }
+                    if (input instanceof this.doc.defaultView.HTMLInputElement && input.type === 'checkbox') {
+                        input.checked = !!value;
+                    }
+                    else {
+                        input.value = Array.isArray(value) ? value.join('\n') : String(value ?? '');
+                    }
+                });
+                this._refreshCards();
+                this._refreshFooter();
+            };
+            (config.onStoredKey || config.onkey)?.call(config, id, listener);
+            this._configSubscriptions.push({ key: id, listener });
+        }
         this._unwatchRelatedActions = this.relatedActions?.onChange?.(() => this._refreshRelatedOrderList()) || null;
         this._renderNavigation();
         this._renderCards();
@@ -2939,7 +2955,13 @@ class ModernAdvancedSettingsUI {
                 this._syncRelatedDraft();
                 const changedKeys = this.model.changes().map(change => change.id);
                 const historyKeys = changedKeys.filter(key => key.startsWith('commentHistory.'));
-                this.model.save();
+                this._savingConfig = true;
+                try {
+                    this.model.save();
+                }
+                finally {
+                    this._savingConfig = false;
+                }
                 // Another Zenza instance in this document must see settings saved by
                 // the separate advanced-settings userscript without a page reload.
                 // Other tabs receive native storage events from the same writes.
@@ -3060,7 +3082,9 @@ class ModernAdvancedSettingsUI {
         this.root.removeEventListener('pointerup', this._onTouchOrderUpBound);
         this.root.removeEventListener('pointercancel', this._onTouchOrderCancelBound);
         this._unwatchRelatedActions?.();
-        this.model.config.offkey?.('backComment', this._onBackCommentConfigUpdate);
+        const config = this.model.config;
+        this._configSubscriptions.forEach(({ key, listener }) => (config.offStoredKey || config.offkey)?.call(config, key, listener));
+        this._configSubscriptions = [];
         this.root.removeEventListener('click', this._onRelatedClickBound);
         this.root.removeEventListener('change', this._onRelatedChangeBound);
         this.root.removeEventListener('input', this._onRelatedInputBound);

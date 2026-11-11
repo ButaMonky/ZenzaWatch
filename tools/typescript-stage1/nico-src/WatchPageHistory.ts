@@ -69,6 +69,7 @@ const WatchPageHistory = (() => {
   const bouncedRestore = _.debounce(restore, RESTORE_DELAY);
 
   const pushHistory = (path: string, title: string) => {
+    if (dialog?._playerConfig?.getValue('enablePushState') === false) { restore(); return; }
     if (!isPushed) updateOriginal();
     // Retain the current route state, including changes made by other scripts.
     history.replaceState(history.state, null as unknown as string, path);
@@ -108,7 +109,7 @@ const WatchPageHistory = (() => {
   };
 
   const onVideoInfoLoad = _.debounce(({watchId, title, owner, generation, requestId}: {watchId?: string; title: string; owner?: {name?: string}|null; generation: number; requestId: Loose}): Loose => {
-    if (!watchId || !isOpen || generation !== navigationGeneration ||
+    if (dialog?._playerConfig?.getValue('enablePushState') === false || !watchId || !isOpen || generation !== navigationGeneration ||
         requestId !== dialog?._requestId) {
       return;
     }
@@ -153,6 +154,9 @@ const WatchPageHistory = (() => {
       return;
     }
     dialog = _dialog;
+    dialog?._playerConfig?.onkey?.('enablePushState', (enabled: boolean) => {
+      if (!enabled) { navigationGeneration++; onVideoInfoLoad.cancel(); restore(); }
+    });
 
     if (location.host === 'www.nicovideo.jp') {
       dialog.on('close', onDialogClose);
@@ -175,6 +179,7 @@ const WatchPageHistory = (() => {
   // www.nicovideo.jp 以外で開いた時、
   // www.nicovideo.jp 配下のタブがあったら代わりに既読リンクの色を変える
   const pushHistoryAgency = async (path: string, title: string) => {
+    if (dialog?._playerConfig?.getValue('enablePushState') === false) return;
     if (!navigator || !navigator.locks) {
       pushHistory(path, title);
       bouncedRestore.cancel();
@@ -185,7 +190,7 @@ const WatchPageHistory = (() => {
     let lastUrl = location.href;
     // どれかひとつのタブで動けばいい
     await navigator.locks.request('pushHistoryAgency', {ifAvailable: true}, async lock => {
-      if (!lock) {
+      if (!lock || dialog?._playerConfig?.getValue('enablePushState') === false) {
         return;
       }
       history.replaceState(history.state, title, path);

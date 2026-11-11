@@ -97,6 +97,7 @@ class DataStorage {
     const changed = this._changed;
     this.emit('change', changed);
     for (const [key, val] of changed) {
+      this.emitAsync(`stored-${this.getNativeKey(key)}`, val);
       this.emitAsync('update', key, val);
       this.emitAsync(`update-${key}`, val);
     }
@@ -151,6 +152,13 @@ class DataStorage {
     return this._data[key];
   }
 
+  getStoredValue(key) { return this._data[key]; }
+
+  setStoredValue(key, value) { return this.setValue(key, value, true); }
+
+  onStoredKey(key, callback) { this.on(`stored-${key}`, callback); }
+  offStoredKey(key, callback) { this.off(`stored-${key}`, callback); }
+
   getValue(key) {
     key = this.getNativeKey(key);
     return this._data[key];
@@ -163,9 +171,9 @@ class DataStorage {
     this._data[key] = this.default[key];
   }
 
-  setValue(key, value) {
+  setValue(key, value, stored = false) {
     const _key = key;
-    key = this.getNativeKey(key);
+    key = stored ? key : this.getNativeKey(key);
     if (this._data[key] === value || value === undefined) {
       return;
     }
@@ -194,7 +202,14 @@ class DataStorage {
 
     // console.log('%cupdate "%s" = "%s"', 'background: cyan', _key, value);
     if (!this.silently) {
-      this._changed.set(_key, value);
+      this.emitAsync(`stored-${key}`, value);
+      // Publish the runtime aliases only when this value belongs to that context.
+      const keys = new Set([key, _key]);
+      const base = key.split(':')[0];
+      if (this.getNativeKey(base) === key) keys.add(base);
+      for (const candidate of keys) {
+        if (this.getNativeKey(candidate) === key) this._changed.set(candidate, value);
+      }
       this._onChange();
     }
   }
@@ -212,7 +227,7 @@ class DataStorage {
 
     Object.keys(this.props)
       .filter(key => isAll || (_default[key] !== this._data[key]))
-      .forEach(key => result[key] = this.getValue(key));
+      .forEach(key => result[key] = this.getStoredValue(key));
     return result;
   }
 

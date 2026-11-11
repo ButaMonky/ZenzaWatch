@@ -1,3 +1,11 @@
+## Trial 11 follow-up
+
+The contextual storage collision and history preference findings below are now repaired in public/private 2.7.388 and included in this trial. Advanced settings uses explicit stored-key access while playback retains contextual aliases; regression tests verify distinct writes and appropriate runtime notifications. Normal/advanced live synchronization is included. Duplicate screen-mode updates are skipped, with fullscreen/forced/reopen updates retained.
+
+Remaining latency is not resolved. Added lifetime aggregate save count/time to distinguish synchronous preference persistence from event handling/presentation delays. Launcher observation is in the host document, while the player is in a separate iframe; host observation does not traverse player DOM. Input guard handlers contain no storage/network work. No new measured live-browser latency result is available.
+
+---
+
 # Settings integration and input-latency audit — 2026-11-12
 
 ## Scope and limits

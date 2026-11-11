@@ -56,6 +56,10 @@ const WatchPageHistory = (() => {
     };
     const bouncedRestore = _.debounce(restore, RESTORE_DELAY);
     const pushHistory = (path, title) => {
+        if (dialog?._playerConfig?.getValue('enablePushState') === false) {
+            restore();
+            return;
+        }
         if (!isPushed)
             updateOriginal();
         // Retain the current route state, including changes made by other scripts.
@@ -95,7 +99,7 @@ const WatchPageHistory = (() => {
         originalTitle = window && window.document && window.document.title;
     };
     const onVideoInfoLoad = _.debounce(({ watchId, title, owner, generation, requestId }) => {
-        if (!watchId || !isOpen || generation !== navigationGeneration ||
+        if (dialog?._playerConfig?.getValue('enablePushState') === false || !watchId || !isOpen || generation !== navigationGeneration ||
             requestId !== dialog?._requestId) {
             return;
         }
@@ -138,6 +142,13 @@ const WatchPageHistory = (() => {
             return;
         }
         dialog = _dialog;
+        dialog?._playerConfig?.onkey?.('enablePushState', (enabled) => {
+            if (!enabled) {
+                navigationGeneration++;
+                onVideoInfoLoad.cancel();
+                restore();
+            }
+        });
         if (location.host === 'www.nicovideo.jp') {
             dialog.on('close', onDialogClose);
         }
@@ -162,6 +173,8 @@ const WatchPageHistory = (() => {
     // www.nicovideo.jp 以外で開いた時、
     // www.nicovideo.jp 配下のタブがあったら代わりに既読リンクの色を変える
     const pushHistoryAgency = async (path, title) => {
+        if (dialog?._playerConfig?.getValue('enablePushState') === false)
+            return;
         if (!navigator || !navigator.locks) {
             pushHistory(path, title);
             bouncedRestore.cancel();
@@ -172,7 +185,7 @@ const WatchPageHistory = (() => {
         let lastUrl = location.href;
         // どれかひとつのタブで動けばいい
         await navigator.locks.request('pushHistoryAgency', { ifAvailable: true }, async (lock) => {
-            if (!lock) {
+            if (!lock || dialog?._playerConfig?.getValue('enablePushState') === false) {
                 return;
             }
             history.replaceState(history.state, title, path);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.10.0-external-direct10
+// @version      0.11.0-external-direct11
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -18,7 +18,7 @@
 // @require      https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @require      https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // ==/UserScript==
-// Shared runtime SHA256: a1414af14b9ab7e21e6cbd6c4d82ba81d54bed4d7bdef76034e3e87585c5201d
+// Shared runtime SHA256: f278c0762d5654de8863678d2cf7ae5a0a315cd7d96deb6e9574d7f91242433d
 
 (() => {
  const official = /(^|\.)nicovideo\.jp$/.test(location.hostname);
@@ -75,8 +75,10 @@ function createDisplaySettings(w, gm, registered=[]) {
     for(const [key,value] of Object.entries(values))w.localStorage.setItem(prefix+key,JSON.stringify(value));
     active=true;save();return snapshot?.version===2;
   }
+  const storageTiming={saveCount:0,totalSaveMs:0,maxSaveMs:0};
   function save(){
     if(!active)return;
+    const started=w.performance.now();
     if(timer!==null){w.clearTimeout(timer);timer=null;}
     const latest=gm.get(savedSlot),values=clean(latest?.values),local=read(prefix);
     // Another external page may have saved since this player opened. Merge
@@ -88,6 +90,7 @@ function createDisplaySettings(w, gm, registered=[]) {
     }
     gm.set(savedSlot,{version:2,official:publishOfficial?official:clean(latest?.official),values});
     baseline=local;publishOfficial=false;
+    const duration=w.performance.now()-started;storageTiming.saveCount++;storageTiming.totalSaveMs+=duration;storageTiming.maxSaveMs=Math.max(storageTiming.maxSaveMs,duration);
   }
   function scheduleSave(){
     if(!active||timer!==null)return;
@@ -97,11 +100,12 @@ function createDisplaySettings(w, gm, registered=[]) {
   w.addEventListener('pagehide',save);
   function diagnostics(config){
     const snapshot=gm.get(slot),values=read(prefix),runtimeMismatch=[];
-    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getValue(key)))runtimeMismatch.push(key);
+    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getStoredValue?config.getStoredValue(key):config.getValue(key)))runtimeMismatch.push(key);
     return {sourceAvailable:snapshot?.version===2,sourceSettingCount:Object.keys(clean(snapshot?.values)).length,
       sourceAgeSeconds:typeof snapshot?.publishedAt==='number'?Math.round((Date.now()-snapshot.publishedAt)/1000):null,
       localSettingCount:Object.keys(values).length,runtimeMismatch,
       officialDifferent:Object.keys(official).filter(key=>!equal(official[key],values[key])),
+      storageTiming:Object.fromEntries(Object.entries(storageTiming).map(([key,value])=>[key,Math.round(value*10)/10])),
       playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
   }
   return {publish,apply,save,scheduleSave,diagnostics};
@@ -545,7 +549,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.10',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+    emit({version:'external-direct.11',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
       supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }
@@ -583,7 +587,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
  async function startRuntime(){
  if(playerFrame)displaySettings.apply();
 
-// build: 2026-11-11 18:17Z 0babddf
+// build: 2026-11-11 18:53Z 392faf4
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -900,10 +904,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.386-external-direct.10';
+    var VER = '2.7.388-external-direct.11';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.10 GM transport base a1414af14b9a';
+    var BUILD = 'external-direct.11 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -1478,6 +1482,7 @@ class DataStorage {
 		const changed = this._changed;
 		this.emit('change', changed);
 		for (const [key, val] of changed) {
+			this.emitAsync(`stored-${this.getNativeKey(key)}`, val);
 			this.emitAsync('update', key, val);
 			this.emitAsync(`update-${key}`, val);
 		}
@@ -1525,6 +1530,10 @@ class DataStorage {
 		}
 		return this._data[key];
 	}
+	getStoredValue(key) { return this._data[key]; }
+	setStoredValue(key, value) { return this.setValue(key, value, true); }
+	onStoredKey(key, callback) { this.on(`stored-${key}`, callback); }
+	offStoredKey(key, callback) { this.off(`stored-${key}`, callback); }
 	getValue(key) {
 		key = this.getNativeKey(key);
 		return this._data[key];
@@ -1535,9 +1544,9 @@ class DataStorage {
 		if (!this.readonly) { this.storage.removeItem(storageKey); }
 		this._data[key] = this.default[key];
 	}
-	setValue(key, value) {
+	setValue(key, value, stored = false) {
 		const _key = key;
-		key = this.getNativeKey(key);
+		key = stored ? key : this.getNativeKey(key);
 		if (this._data[key] === value || value === undefined) {
 			return;
 		}
@@ -1560,7 +1569,13 @@ class DataStorage {
 		}
 		this._data[key] = value;
 		if (!this.silently) {
-			this._changed.set(_key, value);
+			this.emitAsync(`stored-${key}`, value);
+			const keys = new Set([key, _key]);
+			const base = key.split(':')[0];
+			if (this.getNativeKey(base) === key) keys.add(base);
+			for (const candidate of keys) {
+				if (this.getNativeKey(candidate) === key) this._changed.set(candidate, value);
+			}
 			this._onChange();
 		}
 	}
@@ -1575,7 +1590,7 @@ class DataStorage {
 		const _default = this.default;
 		Object.keys(this.props)
 			.filter(key => isAll || (_default[key] !== this._data[key]))
-			.forEach(key => result[key] = this.getValue(key));
+			.forEach(key => result[key] = this.getStoredValue(key));
 		return result;
 	}
 	exportJson() {
@@ -7712,6 +7727,10 @@ const WatchPageHistory = (() => {
 		};
 		const bouncedRestore = _.debounce(restore, RESTORE_DELAY);
 		const pushHistory = (path, title) => {
+				if (dialog?._playerConfig?.getValue('enablePushState') === false) {
+						restore();
+						return;
+				}
 				if (!isPushed)
 						updateOriginal();
 				history.replaceState(history.state, null, path);
@@ -7731,7 +7750,7 @@ const WatchPageHistory = (() => {
 				originalTitle = window && window.document && window.document.title;
 		};
 		const onVideoInfoLoad = _.debounce(({ watchId, title, owner, generation, requestId }) => {
-				if (!watchId || !isOpen || generation !== navigationGeneration ||
+				if (dialog?._playerConfig?.getValue('enablePushState') === false || !watchId || !isOpen || generation !== navigationGeneration ||
 						requestId !== dialog?._requestId) {
 						return;
 				}
@@ -7772,6 +7791,13 @@ const WatchPageHistory = (() => {
 						return;
 				}
 				dialog = _dialog;
+				dialog?._playerConfig?.onkey?.('enablePushState', (enabled) => {
+						if (!enabled) {
+								navigationGeneration++;
+								onVideoInfoLoad.cancel();
+								restore();
+						}
+				});
 				if (location.host === 'www.nicovideo.jp') {
 						dialog.on('close', onDialogClose);
 				}
@@ -7791,6 +7817,8 @@ const WatchPageHistory = (() => {
 				}, { passive: true });
 		};
 		const pushHistoryAgency = async (path, title) => {
+				if (dialog?._playerConfig?.getValue('enablePushState') === false)
+						return;
 				if (!navigator || !navigator.locks) {
 						pushHistory(path, title);
 						bouncedRestore.cancel();
@@ -7800,7 +7828,7 @@ const WatchPageHistory = (() => {
 				let lastTitle = document.title;
 				let lastUrl = location.href;
 				await navigator.locks.request('pushHistoryAgency', { ifAvailable: true }, async (lock) => {
-						if (!lock) {
+						if (!lock || dialog?._playerConfig?.getValue('enablePushState') === false) {
 								return;
 						}
 						history.replaceState(history.state, title, path);
@@ -53418,10 +53446,11 @@ class NicoVideoPlayerDialogView extends Emitter {
 		}
 		_applyScreenMode(force = false) {
 				const screenMode = this._state.isOpen ? `zenzaScreenMode_${this._state.screenMode}` : '';
-				if (!force && this._lastScreenMode === screenMode) {
+				const modeKey = screenMode + ':' + util.fullscreen.now();
+				if (!force && this._lastScreenMode === modeKey) {
 						return;
 				}
-				this._lastScreenMode = '';
+				this._lastScreenMode = modeKey;
 				const modes = this._getScreenModeClassNameTable();
 				const isFull = util.fullscreen.now();
 				Object.assign(document.body.dataset, {
@@ -70935,7 +70964,7 @@ class ModernAdvancedSettingsModel {
 										return scene.miniVisible;
 						}
 				}
-				const v = typeof this.config.getValue === 'function' ?
+				const v = this.config.getStoredValue ? this.config.getStoredValue(id) : typeof this.config.getValue === 'function' ?
 						this.config.getValue(id) : this.config.props?.[id];
 				if (id === 'playlist.maxItems' && typeof v === 'number' && Number.isFinite(v) && v > 10000) {
 						return 10000;
@@ -71070,7 +71099,7 @@ class ModernAdvancedSettingsModel {
 				const snapshots = new Map();
 				if (storage && typeof this.config.getStorageKey === 'function') {
 						for (const { id } of changes) {
-								const native = this.config.getNativeKey?.(id) ?? id;
+								const native = this.config.getStoredValue ? id : (this.config.getNativeKey?.(id) ?? id);
 								const storageKey = this.config.getStorageKey(native);
 								snapshots.set(id, { storageKey, raw: storage[storageKey] });
 						}
@@ -71083,10 +71112,10 @@ class ModernAdvancedSettingsModel {
 										this.config.persistSceneSearchSelection({ [id]: ModernAdvancedSettingsModel._clone(value) });
 								}
 								else {
-										this.config.setValue(id, ModernAdvancedSettingsModel._clone(value));
+										(this.config.setStoredValue || this.config.setValue).call(this.config, id, ModernAdvancedSettingsModel._clone(value));
 								}
 								if (this.config.storage && typeof this.config.getStorageKey === 'function') {
-										const native = typeof this.config.getNativeKey === 'function' ?
+										const native = !this.config.getStoredValue && typeof this.config.getNativeKey === 'function' ?
 												this.config.getNativeKey(id) : id;
 										const storageKey = this.config.getStorageKey(native);
 										if (this.config.storage[storageKey] !== JSON.stringify(value)) {
@@ -71099,7 +71128,7 @@ class ModernAdvancedSettingsModel {
 						const rollbackErrors = [];
 						for (const id of attempted.reverse()) {
 								try {
-										this.config.setValue(id, ModernAdvancedSettingsModel._clone(this.saved[id]));
+										(this.config.setStoredValue || this.config.setValue).call(this.config, id, ModernAdvancedSettingsModel._clone(this.saved[id]));
 								}
 								catch (restoreError) {
 										rollbackErrors.push(restoreError);
@@ -71671,16 +71700,33 @@ class ModernAdvancedSettingsUI {
 				this.root.addEventListener('input', this._onRelatedInputBound = e => this._onRelatedBubble(e));
 				this.doc.addEventListener('keydown', this._onKeyDownBound = e => this._onDocumentKeyDown(e), true);
 				this.panel.appendChild(this.root);
-				this._onBackCommentConfigUpdate = () => {
-						if (!this.model.syncLiveValue('backComment')) {
-								return;
-						}
-						const checked = !!this.model.get('backComment');
-						this.cards.querySelectorAll('input[data-setting-name="backComment"]')
-								.forEach(input => { input.checked = checked; });
-						this._refreshCards();
-				};
-				this.model.config.onkey?.('backComment', this._onBackCommentConfigUpdate);
+				this._configSubscriptions = [];
+				const config = this.model.config;
+				for (const descriptor of this.model.descriptors) {
+						const id = descriptor.id;
+						const listener = () => {
+								if (this._savingConfig || !this.model.syncLiveValue(id)) {
+										return;
+								}
+								const value = this.model.get(id);
+								this.cards.querySelectorAll('[data-setting-name]')
+										.forEach(input => {
+										if (input.dataset.settingName !== id) {
+												return;
+										}
+										if (input instanceof this.doc.defaultView.HTMLInputElement && input.type === 'checkbox') {
+												input.checked = !!value;
+										}
+										else {
+												input.value = Array.isArray(value) ? value.join('\n') : String(value ?? '');
+										}
+								});
+								this._refreshCards();
+								this._refreshFooter();
+						};
+						(config.onStoredKey || config.onkey)?.call(config, id, listener);
+						this._configSubscriptions.push({ key: id, listener });
+				}
 				this._unwatchRelatedActions = this.relatedActions?.onChange?.(() => this._refreshRelatedOrderList()) || null;
 				this._renderNavigation();
 				this._renderCards();
@@ -74078,7 +74124,13 @@ class ModernAdvancedSettingsUI {
 								this._syncRelatedDraft();
 								const changedKeys = this.model.changes().map(change => change.id);
 								const historyKeys = changedKeys.filter(key => key.startsWith('commentHistory.'));
-								this.model.save();
+								this._savingConfig = true;
+								try {
+										this.model.save();
+								}
+								finally {
+										this._savingConfig = false;
+								}
 								if (changedKeys.length && this.win.CustomEvent) {
 										this.win.dispatchEvent(new this.win.CustomEvent('ZenzaWatch-advanced-settings-saved', { detail: { keys: changedKeys } }));
 								}
@@ -74196,7 +74248,9 @@ class ModernAdvancedSettingsUI {
 				this.root.removeEventListener('pointerup', this._onTouchOrderUpBound);
 				this.root.removeEventListener('pointercancel', this._onTouchOrderCancelBound);
 				this._unwatchRelatedActions?.();
-				this.model.config.offkey?.('backComment', this._onBackCommentConfigUpdate);
+				const config = this.model.config;
+				this._configSubscriptions.forEach(({ key, listener }) => (config.offStoredKey || config.offkey)?.call(config, key, listener));
+				this._configSubscriptions = [];
 				this.root.removeEventListener('click', this._onRelatedClickBound);
 				this.root.removeEventListener('change', this._onRelatedChangeBound);
 				this.root.removeEventListener('input', this._onRelatedInputBound);

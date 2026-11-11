@@ -798,7 +798,7 @@ class ModernAdvancedSettingsModel {
                     return scene.miniVisible;
             }
         }
-        const v = typeof this.config.getValue === 'function' ?
+        const v = this.config.getStoredValue ? this.config.getStoredValue(id) : typeof this.config.getValue === 'function' ?
             this.config.getValue(id) : this.config.props?.[id];
         if (id === 'playlist.maxItems' && typeof v === 'number' && Number.isFinite(v) && v > 10000) {
             // Previously persisted 30k is now a bounded 10k choice, not an invalid extra option.
@@ -939,7 +939,7 @@ class ModernAdvancedSettingsModel {
         const snapshots = new Map();
         if (storage && typeof this.config.getStorageKey === 'function') {
             for (const { id } of changes) {
-                const native = this.config.getNativeKey?.(id) ?? id;
+                const native = this.config.getStoredValue ? id : (this.config.getNativeKey?.(id) ?? id);
                 const storageKey = this.config.getStorageKey(native);
                 snapshots.set(id, { storageKey, raw: storage[storageKey] });
             }
@@ -952,13 +952,13 @@ class ModernAdvancedSettingsModel {
                     this.config.persistSceneSearchSelection({ [id]: ModernAdvancedSettingsModel._clone(value) });
                 }
                 else {
-                    this.config.setValue(id, ModernAdvancedSettingsModel._clone(value));
+                    (this.config.setStoredValue || this.config.setValue).call(this.config, id, ModernAdvancedSettingsModel._clone(value));
                 }
                 // DataStorage.setValue catches localStorage exceptions and can update
                 // memory even when the disk write fails. Never report success unless
                 // the persisted value matches the requested change.
                 if (this.config.storage && typeof this.config.getStorageKey === 'function') {
-                    const native = typeof this.config.getNativeKey === 'function' ?
+                    const native = !this.config.getStoredValue && typeof this.config.getNativeKey === 'function' ?
                         this.config.getNativeKey(id) : id;
                     const storageKey = this.config.getStorageKey(native);
                     if (this.config.storage[storageKey] !== JSON.stringify(value)) {
@@ -971,7 +971,7 @@ class ModernAdvancedSettingsModel {
             const rollbackErrors = [];
             for (const id of attempted.reverse()) {
                 try {
-                    this.config.setValue(id, ModernAdvancedSettingsModel._clone(this.saved[id]));
+                    (this.config.setStoredValue || this.config.setValue).call(this.config, id, ModernAdvancedSettingsModel._clone(this.saved[id]));
                 }
                 catch (restoreError) {
                     rollbackErrors.push(restoreError);

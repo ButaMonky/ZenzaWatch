@@ -26,4 +26,3 @@ test('edited font controls follow subsequent shared configuration updates',async
  words.value='local';filter.wordFilter=['from advanced'];drawFilter();assert.equal(words.value,'from advanced');
  dom.window.close();
 });
-

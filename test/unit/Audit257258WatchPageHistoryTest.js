@@ -18,7 +18,9 @@ function fixture(file){
     call.flush=()=>{const args=pending;pending=null;if(args)fn(...args);};
     timers.push(call);return call;
   };
-  const events={},dialog={_requestId:'A',_watchId:'smA',on(name,callback){events[name]=callback;}};
+  let enabled=true; const settingListeners={};
+  const config={getValue:()=>enabled,onkey:(key,fn)=>{settingListeners[key]=fn;}};
+  const events={},dialog={_playerConfig:config,_requestId:'A',_watchId:'smA',on(name,callback){events[name]=callback;}};
   const ctx=createContext({window:dom.window,document,location:dom.window.location,
     history,navigator:{locks:null},PRODUCT:'ZenzaWatch',NicoVideoApi:{},
     _:{debounce},setTimeout:callback=>callback()});
@@ -28,7 +30,7 @@ function fixture(file){
   assert(start>=0&&end>start,'real history runtime exists');
   run(source.slice(start,end+'\n})();'.length)+';globalThis.Subject=WatchPageHistory;',ctx);
   ctx.Subject.initialize(dialog);
-  return {dom,history,originalUrl,events,dialog,timers,service:ctx.Subject,close:()=>dom.window.close()};
+  return {setEnabled(value){enabled=value;settingListeners.enablePushState?.(value);},dom,history,originalUrl,events,dialog,timers,service:ctx.Subject,close:()=>dom.window.close()};
 }
 const info=id=>({watchId:id,title:id,owner:{name:'fixture'}});
 function modelInfo(id){
@@ -39,6 +41,14 @@ function modelInfo(id){
 }
 describe('Audit #257/#258 history state and debounced event ownership',()=>{
   for(const file of ['packages/zenza/src/init/WatchPageHistory.js','dist/ZenzaWatch-dev.user.js']){
+    it(file+' honors disabled history before and during pending playback',()=>{
+      const h=fixture(file); h.setEnabled(false); h.events.open();h.events.loadVideoInfo(info('smA'));h.timers[1].flush();
+      assert.equal(h.dom.window.location.href,h.originalUrl);
+      h.service.pushHistory('/watch/smB','B');assert.equal(h.dom.window.location.href,h.originalUrl);
+      h.setEnabled(true);h.events.loadVideoInfo(info('smC'));h.timers[1].flush();
+      assert.equal(h.dom.window.location.pathname,'/watch/smC');
+      h.setEnabled(false);assert.equal(h.dom.window.location.href,h.originalUrl);h.close();
+    });
     it(file+' reads the real VideoInfoModel prototype getters when recording a watch URL',()=>{
       const h=fixture(file),model=modelInfo('sm123');
       assert.equal(Object.hasOwn(model,'watchId'),false,'watchId is a prototype getter');

@@ -67,6 +67,7 @@ const OffscreenLayer = config => {
     update();
     config.onkey('baseFontFamily', update);
     config.onkey('baseFontBolder', update);
+    config.onkey('cssFontWeight', update);
   };
 
   const initialize = () => {

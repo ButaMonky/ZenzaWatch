@@ -168,10 +168,15 @@ class NicoVideoPlayer extends Emitter {
         };
         this._creditData = null;
         this._creditAbort = null;
-        this._playerConfig.onkey('supporterCredit.enable', (v) => {
-            if (!v) {
+        const updateCreditEnabled = () => {
+            if (!this._playerConfig.props['uaa.enable'] || !this._playerConfig.props['supporterCredit.enable']) {
                 const finishEnded = this.isSupporterCreditActive || !!this._creditWaiting;
                 this._cancelSupporterCredit();
+                this._creditAbort?.abort();
+                this._creditAbort = null;
+                this._creditRequest = null;
+                this._creditData = null;
+                this._creditLoading = null;
                 if (finishEnded) {
                     this._emitEnded();
                 }
@@ -179,7 +184,9 @@ class NicoVideoPlayer extends Emitter {
             else if (this.videoInfo && !this._creditData) {
                 this._loadSupporterCredit(this.videoInfo);
             }
-        });
+        };
+        this._playerConfig.onkey('supporterCredit.enable', updateCreditEnabled);
+        this._playerConfig.onkey('uaa.enable', updateCreditEnabled);
     }
     /*
      * Task 081: 読み込みは動画を開いた時ではなく「残りが CREDIT_PRELOAD_SEC 秒になった時」に始める。
@@ -194,7 +201,7 @@ class NicoVideoPlayer extends Emitter {
         this._creditLoading = null;
         this._creditRequest = null;
         const props = this._playerConfig.props;
-        if (!videoInfo || !props['supporterCredit.enable']) {
+        if (!videoInfo || !props['uaa.enable'] || !props['supporterCredit.enable']) {
             return;
         }
         const videoId = videoInfo.videoId;
@@ -207,6 +214,9 @@ class NicoVideoPlayer extends Emitter {
     }
     /** 提供画面の情報・絵・音声を読み始める（1本の動画につき1回）。読み込み中の Promise を返す */
     _kickSupporterCreditLoad() {
+        if (!this._playerConfig.props['uaa.enable'] || !this._playerConfig.props['supporterCredit.enable']) {
+            return null;
+        }
         if (this._creditLoading) {
             return this._creditLoading;
         }
@@ -257,7 +267,7 @@ class NicoVideoPlayer extends Emitter {
         const credit = this._supporterCredit;
         const props = this._playerConfig.props;
         if (!credit || credit.isActive || !this._creditData || !credit.isReady ||
-            !props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
+            !props['uaa.enable'] || !props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
             return false;
         }
         if (props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) {
@@ -473,7 +483,7 @@ class NicoVideoPlayer extends Emitter {
         }
         // Task 081: 最後へ一気にシークした時などで読み込みが間に合っていなければ、少しだけ待つ
         const props = this._playerConfig.props;
-        const loading = props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
+        const loading = props['uaa.enable'] && props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
             !(props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) &&
             this._kickSupporterCreditLoad();
         if (loading) {

@@ -27,11 +27,11 @@ test('renamed JSON backups reach validated importer and invalid suffix explains 
  await panel.onImportFileSelect(event('renamed.JSON'));assert.deepEqual(imports,['{}']);assert(reader);
  await panel.onImportFileSelect(event('backup.txt'));assert.equal(notices.length,1);assert.equal(imports.length,1);
 });
-test('normal UI has one filter entry, visible advanced entry, labeled fields and no legacy HLS toggle',()=>{
+test('normal UI has no duplicate filter entry, visible advanced entry, labeled fields and no legacy HLS toggle',()=>{
  const Panel=api();const deep=new Proxy({}, {get:(_,key)=>key===Symbol.toPrimitive?()=>'' : deep});
  const html=(strings,...values)=>strings.reduce((s,part,i)=>s+part+(typeof values[i]==='string'?values[i]:''),'');
  const text=Panel.getContentsTemplate(html,{}, {config:{props:deep}},{});const dom=new JSDOM(text);const doc=dom.window.document;
- assert.equal(doc.querySelectorAll('[data-command="toggle-screenFilterPanel"]').length,1);assert.equal(doc.querySelectorAll('[data-command="screenFilter-preset"]').length,0);
+ assert.equal(doc.querySelectorAll('[data-command="toggle-screenFilterPanel"]').length,0);assert.equal(doc.querySelectorAll('[data-command="screenFilter-preset"]').length,0);
  assert.equal(doc.querySelector('[data-command="openAdvancedSettings"]').closest('details'),null);
  assert.equal(doc.querySelector('[data-setting-name="video.hls.enableOnlyRequired"]'),null);
  assert(doc.querySelector('[data-setting-name="wordFilter"]').getAttribute('aria-label'));assert(doc.querySelector('input[type=file]').getAttribute('aria-label'));

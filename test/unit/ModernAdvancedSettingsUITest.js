@@ -1765,3 +1765,22 @@ describe('Task974 playlist retention and search controls',()=>{
   }finally{h.destroy();}
  });
 });
+
+
+describe('shared setting live synchronization',()=>{
+  it('updates ordinary toggles in an open advanced editor and preserves unrelated drafts',()=>{
+    const h=boot({showComment:false});
+    try {
+      h.ui.searchTerm=''; h.ui.selected={category:h.model.descriptor('showComment').category,subcategory:h.model.descriptor('showComment').subcategory}; h.ui._renderCards();
+      const input=h.q('[data-zw-id="showComment"] input[type=checkbox]'); assert(input);
+      h.model.set('supporterCredit.voice',false);
+      h.config.setValue('showComment',true);
+      assert.strictEqual(input.checked,true);
+      assert.strictEqual(h.model.get('showComment'),true);
+      h.config.setValue('showComment',false);
+      assert.strictEqual(input.checked,false);
+      assert.deepStrictEqual(Array.from(h.model.changes(),c=>c.id),['supporterCredit.voice']);
+    } finally { h.destroy(); }
+    assert([...h.config.listeners.values()].every(listeners=>listeners.size===0));
+  });
+});

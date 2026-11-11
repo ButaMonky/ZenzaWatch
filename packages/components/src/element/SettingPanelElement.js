@@ -22,7 +22,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="autoPlay"
-              ?checked=${conf.autoPlay}>
+              .checked=${conf.autoPlay}>
               自動で再生する
           </label>
         </div>
@@ -31,7 +31,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="enableResume"
-              ?checked=${conf.enableResume}>
+              .checked=${conf.enableResume}>
               続きから再生する
           </label>
         </div>
@@ -40,7 +40,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
             data-setting-name="enableTogglePlayOnClick"
-              ?checked=${conf.enableTogglePlayOnClick}>
+              .checked=${conf.enableTogglePlayOnClick}>
               画面クリックで再生/一時停止
           </label>
         </div>
@@ -49,7 +49,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="autoFullScreen"
-              ?checked=${conf.autoFullScreen}>
+              .checked=${conf.autoFullScreen}>
               自動でフルスクリーンにする
           </label>
         </div>
@@ -58,7 +58,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="enableSingleton"
-              ?checked=${conf.enableSingleton}>
+              .checked=${conf.enableSingleton}>
               ZenzaWatchを起動してるタブがあればそちらで開く<br>
               <small>(singletonモード)</small>
           </label>
@@ -68,7 +68,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="enableHeatMap"
-              ?checked=${conf.enableHeatMap}>
+              .checked=${conf.enableHeatMap}>
               コメントの盛り上がりをシークバーに表示
           </label>
         </div>
@@ -76,7 +76,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="overrideGinza"
-              ?checked=${conf.overrideGinza}>
+              .checked=${conf.overrideGinza}>
               動画視聴ページでも公式プレイヤーの代わりに起動する
           </label>
         </div>
@@ -85,7 +85,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="overrideWatchLink"
-              ?checked=${conf.overrideWatchLink}>
+              .checked=${conf.overrideWatchLink}>
               [Zen]ボタンなしでZenzaWatchを開く(リロード後に反映)
           </label>
         </div>
@@ -94,7 +94,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="enableStoryboard"
-              ?checked=${conf.enableStoryboard}>
+              .checked=${conf.enableStoryboard}>
               シークバーにサムネイルを表示
           </label>
         </div>
@@ -103,7 +103,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="audio.autoAdjust"
-              ?checked=${conf.audio.autoAdjust}
+              .checked=${conf.audio.autoAdjust}
               data-command="toggle-audio.autoAdjust">
               音声の自動調整 (動画ごとの音量差を小さくする)
           </label>
@@ -113,43 +113,45 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="uaa.enable"
-              ?checked=${conf['uaa.enable']}>
+              .checked=${conf['uaa.enable']}>
               ニコニ広告の情報を取得する(対応ブラウザのみ)
           </label>
         </div>
 
-        <div class="control">
+        <fieldset class="control setting-children" ?disabled=${!conf['uaa.enable']} aria-label="広告情報を利用する設定">
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="supporterCredit.enable"
-              ?checked=${conf['supporterCredit.enable']}>
+              .checked=${conf['supporterCredit.enable']}>
               動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
           </label>
+          <fieldset class="setting-children" ?disabled=${!conf['supporterCredit.enable']} aria-label="提供画面の設定">
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="supporterCredit.voice"
-              ?checked=${conf['supporterCredit.voice']}>
+              .checked=${conf['supporterCredit.voice']}>
               提供画面の音声（提供読み上げ）を鳴らす
           </label>
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="supporterCredit.gift"
-              ?checked=${conf['supporterCredit.gift']}>
+              .checked=${conf['supporterCredit.gift']}>
               提供画面でギフトが落ちてくる演出を表示する
           </label>
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="supporterCredit.skipInPlaylist"
-              ?checked=${conf['supporterCredit.skipInPlaylist']}>
+              .checked=${conf['supporterCredit.skipInPlaylist']}>
               連続再生中は提供画面を表示しない
           </label>
-        </div>
+          </fieldset>
+        </fieldset>
 
         <div class="control">
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="enableAutoMylistComment"
-              ?checked=${conf.enableAutoMylistComment}>
+              .checked=${conf.enableAutoMylistComment}>
               マイリストコメントに投稿者名を入れる
           </label>
         </div>
@@ -158,7 +160,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="autoDisableNew"
-              ?checked=${conf.autoDisableNew}>
+              .checked=${conf.autoDisableNew}>
               旧システムのほうが画質が良さそうな時は旧システムを使う<br>
               <small>たまに誤爆することがあります (回転情報の含まれる動画など)</small>
           </label>
@@ -168,7 +170,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="enableNicosJumpVideo"
-              ?checked=${conf.enableNicosJumpVideo}
+              .checked=${conf.enableNicosJumpVideo}
               data-command="toggle-enableNicosJumpVideo">
               ＠ジャンプで指定された動画をプレイリストに入れる
           </label>
@@ -178,7 +180,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox" data-setting-name="touch.enable"
             data-command="toggle-touchEnable"
-            ?checked=${conf.touch.enable}>
+            .checked=${conf.touch.enable}>
               タッチパネルのジェスチャを有効にする
               <small>(2本指左右シーク・上下で速度変更/3本指で動画切替)</small>
           </label>
@@ -188,7 +190,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="bestZenTube"
-              ?checked=${conf.bestZenTube}
+              .checked=${conf.bestZenTube}
               disabled>
               ZenTubeの画質指定は非対応です（YouTube側で選択してください）
           </label>
@@ -198,7 +200,7 @@ const { SettingPanelElement } = (() => {
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="loadLinkedChannelVideo"
-              ?checked=${conf.loadLinkedChannelVideo}>
+              .checked=${conf.loadLinkedChannelVideo}>
               無料期間の切れた動画はdアニメの映像を流す<br>
               <small>(当然ながらdアニメニコニコチャンネル加入が必要)</small>
           </label>
@@ -207,11 +209,11 @@ const { SettingPanelElement } = (() => {
         <div class="control">
           <label>
             <select class="menuScale" data-setting-name="menuScale" data-type="number">
-              <option value="0.8" ?selected=${conf.menuScale == 0.8}>0.8倍</option>
-              <option value="1"   ?selected=${conf.menuScale == 1}>標準</option>
-              <option value="1.2" ?selected=${conf.menuScale == 1.2}>1.2倍</option>
-              <option value="1.5" ?selected=${conf.menuScale == 1.5}>1.5倍</option>
-              <option value="2.0" ?selected=${conf.menuScale == 2}>2倍</option>
+              <option value="0.8" .selected=${conf.menuScale == 0.8}>0.8倍</option>
+              <option value="1"   .selected=${conf.menuScale == 1}>標準</option>
+              <option value="1.2" .selected=${conf.menuScale == 1.2}>1.2倍</option>
+              <option value="1.5" .selected=${conf.menuScale == 1.5}>1.5倍</option>
+              <option value="2.0" .selected=${conf.menuScale == 2}>2倍</option>
             </select>
             ボタンの大きさ(倍率)
             <small>※ 一部レイアウトが崩れます</small>
@@ -228,7 +230,7 @@ const { SettingPanelElement } = (() => {
             <label>
               <input type="checkbox" class="checkbox"
                 data-setting-name="autoCommentSpeedRate"
-                ?checked=${conf.autoCommentSpeedRate}>
+                .checked=${conf.autoCommentSpeedRate}>
                 倍速再生でもコメントは速くしない
                 <small>※ コメントのレイアウトが一部崩れます</small>
             </label>
@@ -237,7 +239,7 @@ const { SettingPanelElement } = (() => {
             <label>
               <input type="checkbox" class="checkbox"
                 data-setting-name="backComment"
-                ?checked=${conf.backComment}>
+                .checked=${conf.backComment}>
                 コメントを画面全体に流す
                 <small>※ 全画面・ワイド表示時、映像を縮小せず画面の端までコメントを重ねます</small>
             </label>
@@ -246,7 +248,7 @@ const { SettingPanelElement } = (() => {
             <label>
               <input type="checkbox" class="checkbox"
                 data-setting-name="baseFontBolder"
-                ?checked=${conf.baseFontBolder}>
+                .checked=${conf.baseFontBolder}>
                 フォントを太くする
             </label>
           </div>
@@ -255,12 +257,12 @@ const { SettingPanelElement } = (() => {
           <label>
             <select class="commentSpeedRate"
               data-setting-name="commentSpeedRate" data-type="number">
-                <option value="0.5" ?selected=${conf.commentSpeedRate == 0.5}>0.5倍</option>
-                <option value="0.8" ?selected=${conf.commentSpeedRate == 0.8}>0.8倍</option>
-                <option value="1"   ?selected=${conf.commentSpeedRate == 1}>標準</option>
-                <option value="1.2" ?selected=${conf.commentSpeedRate == 1.2}>1.2倍</option>
-                <option value="1.5" ?selected=${conf.commentSpeedRate == 1.5}>1.5倍</option>
-                <option value="2.0" ?selected=${conf.commentSpeedRate == 2.0}>2倍</option>
+                <option value="0.5" .selected=${conf.commentSpeedRate == 0.5}>0.5倍</option>
+                <option value="0.8" .selected=${conf.commentSpeedRate == 0.8}>0.8倍</option>
+                <option value="1"   .selected=${conf.commentSpeedRate == 1}>標準</option>
+                <option value="1.2" .selected=${conf.commentSpeedRate == 1.2}>1.2倍</option>
+                <option value="1.5" .selected=${conf.commentSpeedRate == 1.5}>1.5倍</option>
+                <option value="2.0" .selected=${conf.commentSpeedRate == 2.0}>2倍</option>
             </select>
             コメントの速度(倍率)
               <small>※ コメントのレイアウトが一部崩れます</small>
@@ -271,7 +273,7 @@ const { SettingPanelElement } = (() => {
           <h3>フォント名</h3>
           <label>
           <span class="info">入力例: 「'游ゴシック', 'メイリオ', '戦国TURB'」</span>
-            <input type="text" class="textInput" value=${conf.baseFontFamily}
+            <input type="text" class="textInput" .value=${conf.baseFontFamily}
               aria-label="フォント名" data-setting-name="baseFontFamily">
           </label>
         </div>
@@ -282,7 +284,7 @@ const { SettingPanelElement } = (() => {
           <input type="text" class="textInput"
             pattern="(#[0-9A-Fa-f]{3}|#[0-9A-Fa-f]{6}|^[a-zA-Z]+$)"
             aria-label="投稿者コメントの影の色" data-setting-name="commentLayer.ownerCommentShadowColor"
-            value=${conf.commentLayer.ownerCommentShadowColor}
+            .value=${conf.commentLayer.ownerCommentShadowColor}
             >
           </label>
         </div>
@@ -290,7 +292,7 @@ const { SettingPanelElement } = (() => {
         <div class="control">
           <label>
             フォントサイズ(倍率)
-            <input type="number" value=${conf.baseChatScale}
+            <input type="number" .value=${conf.baseChatScale}
               min="0.5" max="2.0" step="0.1"
               data-setting-name="baseChatScale" data-type="number"
             >
@@ -300,21 +302,21 @@ const { SettingPanelElement } = (() => {
         <div class="control">
           <label>
             コメントの透明度
-            <input type="range" value=${conf.commentLayerOpacity}
+            <input type="range" .value=${conf.commentLayerOpacity}
               min="0.1" max="1.0" step="0.1"
               data-setting-name="commentLayerOpacity" data-type="number"
             >
           </label>
           <label>
             かんたんコメント
-            <input type="range" value=${conf.commentLayer.easyCommentOpacity}
+            <input type="range" .value=${conf.commentLayer.easyCommentOpacity}
               min="0.1" max="1.0" step="0.1"
               data-setting-name="commentLayer.easyCommentOpacity" data-type="number"
             >
           </label>
           <label>
             AIキャラクターコメント
-            <input type="range" value=${conf.commentLayer.aiCommentOpacity}
+            <input type="range" .value=${conf.commentLayer.aiCommentOpacity}
               min="0.1" max="1.0" step="0.1"
               data-setting-name="commentLayer.aiCommentOpacity" data-type="number"
             >
@@ -327,7 +329,7 @@ const { SettingPanelElement } = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType == ''}
+              .checked=${conf.commentLayer.textShadowType == ''}
               value="">
               標準 (軽い)
           </label>
@@ -336,7 +338,7 @@ const { SettingPanelElement } = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType == 'shadow-type2'}
+              .checked=${conf.commentLayer.textShadowType == 'shadow-type2'}
               value="shadow-type2">
               縁取り
           </label>
@@ -345,7 +347,7 @@ const { SettingPanelElement } = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType == 'shadow-type3'}
+              .checked=${conf.commentLayer.textShadowType == 'shadow-type3'}
               value="shadow-type3">
             ぼかし (重い)
           </label>
@@ -354,7 +356,7 @@ const { SettingPanelElement } = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType == 'shadow-stroke'}
+              .checked=${conf.commentLayer.textShadowType == 'shadow-stroke'}
               value="shadow-stroke">
               縁取り2 (対応ブラウザのみ。やや重い)
           </label>
@@ -363,46 +365,12 @@ const { SettingPanelElement } = (() => {
             <input type="radio"
               name="textShadowType"
               data-setting-name="commentLayer.textShadowType"
-              ?checked=${conf.commentLayer.textShadowType == 'shadow-dokaben'}
+              .checked=${conf.commentLayer.textShadowType == 'shadow-dokaben'}
               value="shadow-dokaben">
               ドカベン <s>(飽きたら消します)</s>
           </label>
         </div>
       </details>
-      `;
-        }
-        // Task 077: 画面フィルター（明るさ・色・反転）。細かい調整は動画を見ながら
-        // できる専用パネル（ScreenFilterPanel）で行う。ここではON/OFF・プリセット・反映先だけ。
-        static getScreenFilterSettingMenu(html, conf) {
-            return html `
-        <details class="screen-filter-setting">
-        <summary>画面フィルター（映像の明るさ・色・反転）</summary>
-        <div class="control">
-          <p class="setting-note">
-            動画の映像だけに明るさ・コントラスト・ガンマなどの補正を掛けます（コメントやボタンには掛かりません）。
-            設定は全部の動画で共通で、次に開いた時も残ります。
-          </p>
-          <button type="button" class="screen-filter-open-button" data-command="toggle-screenFilterPanel">画面フィルターを開く</button>
-          <p class="setting-note">プリセット・マイプリセット・数値調整は専用パネルでまとめて操作できます。適用中のプリセットをもう一度押すと標準に戻ります。</p>
-        </div>
-        <div class="control">
-          <label>
-            <input type="checkbox" class="checkbox"
-              data-setting-name="screenFilter.applyToScreenshot"
-              ?checked=${conf['screenFilter.applyToScreenshot']}>
-              スクリーンショットにも画面フィルターを反映する
-          </label>
-          <label>
-            <input type="checkbox" class="checkbox"
-              data-setting-name="screenFilter.applyToCommentPip"
-              ?checked=${conf['screenFilter.applyToCommentPip']}>
-              P in P(コメント付き) にも画面フィルターを反映する
-          </label>
-          <p class="setting-note">
-            通常の P in P は、ブラウザが動画をそのまま小窓に出す仕組みのため、フィルターは反映されません。
-          </p>
-        </div>
-        </details>
       `;
         }
         static getFilterSettingMenu(html, conf) {
@@ -425,7 +393,7 @@ const { SettingPanelElement } = (() => {
             <label>
               <input type="checkbox" class="checkbox"
                 data-setting-name="enableFilter"
-                ?checked=${conf.enableFilter}>
+                .checked=${conf.enableFilter}>
                 NGを有効にする
             </label>
           </div>
@@ -434,7 +402,7 @@ const { SettingPanelElement } = (() => {
             <label>
               <input type="checkbox" class="checkbox"
                 data-setting-name="removeNgMatchedUser"
-                ?checked=${conf.removeNgMatchedUser}>
+                .checked=${conf.removeNgMatchedUser}>
                 コメントがNGにマッチしたら、その発言者のコメントを全て消す
             </label>
           </div>
@@ -445,7 +413,7 @@ const { SettingPanelElement } = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel == 'NONE'}
+                .checked=${conf.sharedNgLevel == 'NONE'}
                 value="NONE">
                 OFF
             </label>
@@ -453,7 +421,7 @@ const { SettingPanelElement } = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel == 'LOW'}
+                .checked=${conf.sharedNgLevel == 'LOW'}
                 value="LOW">
                 弱
             </label>
@@ -461,7 +429,7 @@ const { SettingPanelElement } = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel == 'MID'}
+                .checked=${conf.sharedNgLevel == 'MID'}
                 value="MID">
                 中
             </label>
@@ -469,7 +437,7 @@ const { SettingPanelElement } = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel == 'HIGH'}
+                .checked=${conf.sharedNgLevel == 'HIGH'}
                 value="HIGH">
                 強
             </label>
@@ -477,7 +445,7 @@ const { SettingPanelElement } = (() => {
               <input type="radio"
                 name="sharedNgLevel"
                 data-setting-name="sharedNgLevel"
-                ?checked=${conf.sharedNgLevel == 'MAX'}
+                .checked=${conf.sharedNgLevel == 'MAX'}
                 value="MAX">
                 MAX
             </label>
@@ -491,28 +459,28 @@ const { SettingPanelElement } = (() => {
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.fork0"
-                ?checked=${conf.filter.fork0}
+                .checked=${conf.filter.fork0}
                 value="">
                 通常コメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.fork1"
-                ?checked=${conf.filter.fork1}
+                .checked=${conf.filter.fork1}
                 value="">
                 投稿者コメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.fork2"
-                ?checked=${conf.filter.fork2}
+                .checked=${conf.filter.fork2}
                 value="">
                 かんたんコメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.fork3"
-                ?checked=${conf.filter.fork3}
+                .checked=${conf.filter.fork3}
                 value="">
                 AIキャラクターコメント
             </label>
@@ -521,42 +489,42 @@ const { SettingPanelElement } = (() => {
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.defaultThread"
-                ?checked=${conf.filter.defaultThread}
+                .checked=${conf.filter.defaultThread}
                 value="">
                 通常コメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.ownerThread"
-                ?checked=${conf.filter.ownerThread}
+                .checked=${conf.filter.ownerThread}
                 value="">
                 投稿者コメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.communityThread"
-                ?checked=${conf.filter.communityThread}
+                .checked=${conf.filter.communityThread}
                 value="">
                 チャンネルコメント / コミュニティコメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.nicosThread"
-                ?checked=${conf.filter.nicosThread}
+                .checked=${conf.filter.nicosThread}
                 value="">
                 ニコスクリプトコメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.easyThread"
-                ?checked=${conf.filter.easyThread}
+                .checked=${conf.filter.easyThread}
                 value="">
                 かんたんコメント
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.aiThread"
-                ?checked=${conf.filter.aiThread}
+                .checked=${conf.filter.aiThread}
                 value="">
                 AIキャラクターコメント
             </label>
@@ -564,14 +532,14 @@ const { SettingPanelElement } = (() => {
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.extraDefaultThread"
-                ?checked=${conf.filter.extraDefaultThread}
+                .checked=${conf.filter.extraDefaultThread}
                 value="">
                 ***extra-default
             </label>
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.extraOwnerThread"
-                ?checked=${conf.filter.extraOwnerThread}
+                .checked=${conf.filter.extraOwnerThread}
                 value="">
                 ***extra-owner
             </label>
@@ -579,7 +547,7 @@ const { SettingPanelElement } = (() => {
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.extraCommunityThread"
-                ?checked=${conf.filter.extraCommunityThread}
+                .checked=${conf.filter.extraCommunityThread}
                 value="">
                 引用コメント
             </label>
@@ -587,7 +555,7 @@ const { SettingPanelElement } = (() => {
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.extraNicosThread"
-                ?checked=${conf.filter.extraNicosThread}
+                .checked=${conf.filter.extraNicosThread}
                 value="">
                 ***extra-nicos
             </label>
@@ -595,7 +563,7 @@ const { SettingPanelElement } = (() => {
             <label class="short">
               <input type="checkbox"
                 data-setting-name="filter.extraEasyThread"
-                ?checked=${conf.filter.extraEasyThread}
+                .checked=${conf.filter.extraEasyThread}
                 value="">
                 引用かんたんコメント
             </label>
@@ -606,21 +574,21 @@ const { SettingPanelElement } = (() => {
               <textarea
                 class="filterEdit"
                 aria-label="NGワード" data-setting-name="wordFilter" data-type="array"
-                >${word}</textarea>
+                .value=${word}></textarea>
             </label>
             <h3>NGコマンド</h3>
             <label>
               <textarea
                 class="filterEdit"
                 aria-label="NGコマンド" data-setting-name="commandFilter" data-type="array"
-                >${command}</textarea>
+                .value=${command}></textarea>
             </label>
             <h3>NGユーザー</h3>
             <label>
               <textarea
                 class="filterEdit"
                 aria-label="NGユーザー" data-setting-name="userIdFilter" data-type="array"
-                >${userId}</textarea>
+                .value=${userId}></textarea>
             </label>
           </div>
 
@@ -675,23 +643,13 @@ const { SettingPanelElement } = (() => {
             border: 1px solid currentcolor;
           }
 
+          .setting-children {min-width:0;border:0;border-left:2px solid #53627b;margin:4px 0 10px 12px;padding:0 0 0 12px;}
+          .setting-children:disabled {color:#939baa;}
+          .setting-children input:disabled {opacity:.45;cursor:not-allowed;}
           .setting-note {
             margin: 4px 8px;
             font-size: 12px;
             color:#bdcadb;line-height:1.6;
-          }
-          .screen-filter-open-button {
-            margin: 4px;
-            padding: 8px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            color: #edf4ff;
-            background: #303c51;
-            border: 0;
-          }
-          .screen-filter-open-button:hover {
-            background: #40516b;
           }
           .import-export {
             padding: 8px;
@@ -728,7 +686,6 @@ const { SettingPanelElement } = (() => {
         <div data-revision="${state.revision}">
           ${this.getPlayerSettingMenu(html, conf)}
           ${this.getCommentSettingMenu(html, conf)}
-          ${this.getScreenFilterSettingMenu(html, conf)}
           ${this.getFilterSettingMenu(html, conf)}
 
         <details>

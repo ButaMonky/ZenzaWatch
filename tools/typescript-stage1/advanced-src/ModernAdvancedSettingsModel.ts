@@ -555,6 +555,7 @@ class ModernAdvancedSettingsModel {
       'wordRegFilterFlags','userIdFilter','commandFilter','sharedNgLevel',
       'removeNgMatchedUser','ngComposite.rules'].includes(key)) { return 'enableFilter'; }
     const direct: Record<string,string>={
+      'supporterCredit.enable':'uaa.enable',
       'sceneSearch.commentPreviewVisible':'sceneSearch.enabled',
       'sceneSearch.miniCommentVisible':'sceneSearch.commentPreviewVisible',
       'sceneSearch.commentListVisible':'sceneSearch.commentPreviewVisible',

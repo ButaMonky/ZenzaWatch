@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.383-task1007
+// @version        2.7.384-task1009
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 21:21Z 2ab5eeff
+// build: 2026-11-11 18:06Z 8cbd185
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-task1007';
+    var VER = '2.7.384-task1009';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 21:21Z 2ab5eeff';
+    var BUILD = '2026-11-11 18:06Z 8cbd185';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -10223,13 +10223,14 @@ const { SettingPanelElement } = (() => {
 							ニコニ広告の情報を取得する(対応ブラウザのみ)
 					</label>
 				</div>
-				<div class="control">
+				<fieldset class="control setting-children" ?disabled=${!conf['uaa.enable']} aria-label="広告情報を利用する設定">
 					<label>
 						<input type="checkbox" class="checkbox"
 							data-setting-name="supporterCredit.enable"
 							?checked=${conf['supporterCredit.enable']}>
 							動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
 					</label>
+					<fieldset class="setting-children" ?disabled=${!conf['supporterCredit.enable']} aria-label="提供画面の設定">
 					<label>
 						<input type="checkbox" class="checkbox"
 							data-setting-name="supporterCredit.voice"
@@ -10248,7 +10249,8 @@ const { SettingPanelElement } = (() => {
 							?checked=${conf['supporterCredit.skipInPlaylist']}>
 							連続再生中は提供画面を表示しない
 					</label>
-				</div>
+					</fieldset>
+				</fieldset>
 				<div class="control">
 					<label>
 						<input type="checkbox" class="checkbox"
@@ -10755,6 +10757,9 @@ const { SettingPanelElement } = (() => {
 						border-radius: 4px;
 						border: 1px solid currentcolor;
 					}
+					.setting-children {min-width:0;border:0;border-left:2px solid #53627b;margin:4px 0 10px 12px;padding:0 0 0 12px;}
+					.setting-children:disabled {color:#939baa;}
+					.setting-children input:disabled {opacity:.45;cursor:not-allowed;}
 					.setting-note {
 						margin: 4px 8px;
 						font-size: 12px;
@@ -24065,10 +24070,15 @@ class NicoVideoPlayer extends Emitter {
 				};
 				this._creditData = null;
 				this._creditAbort = null;
-				this._playerConfig.onkey('supporterCredit.enable', (v) => {
-						if (!v) {
+				const updateCreditEnabled = () => {
+						if (!this._playerConfig.props['uaa.enable'] || !this._playerConfig.props['supporterCredit.enable']) {
 								const finishEnded = this.isSupporterCreditActive || !!this._creditWaiting;
 								this._cancelSupporterCredit();
+								this._creditAbort?.abort();
+								this._creditAbort = null;
+								this._creditRequest = null;
+								this._creditData = null;
+								this._creditLoading = null;
 								if (finishEnded) {
 										this._emitEnded();
 								}
@@ -24076,7 +24086,9 @@ class NicoVideoPlayer extends Emitter {
 						else if (this.videoInfo && !this._creditData) {
 								this._loadSupporterCredit(this.videoInfo);
 						}
-				});
+				};
+				this._playerConfig.onkey('supporterCredit.enable', updateCreditEnabled);
+				this._playerConfig.onkey('uaa.enable', updateCreditEnabled);
 		}
 		/*
 		* Task 081: 読み込みは動画を開いた時ではなく「残りが CREDIT_PRELOAD_SEC 秒になった時」に始める。
@@ -24091,7 +24103,7 @@ class NicoVideoPlayer extends Emitter {
 				this._creditLoading = null;
 				this._creditRequest = null;
 				const props = this._playerConfig.props;
-				if (!videoInfo || !props['supporterCredit.enable']) {
+				if (!videoInfo || !props['uaa.enable'] || !props['supporterCredit.enable']) {
 						return;
 				}
 				const videoId = videoInfo.videoId;
@@ -24103,6 +24115,9 @@ class NicoVideoPlayer extends Emitter {
 				this._creditRequest = { videoId, tags };
 		}
 		_kickSupporterCreditLoad() {
+				if (!this._playerConfig.props['uaa.enable'] || !this._playerConfig.props['supporterCredit.enable']) {
+						return null;
+				}
 				if (this._creditLoading) {
 						return this._creditLoading;
 				}
@@ -24151,7 +24166,7 @@ class NicoVideoPlayer extends Emitter {
 				const credit = this._supporterCredit;
 				const props = this._playerConfig.props;
 				if (!credit || credit.isActive || !this._creditData || !credit.isReady ||
-						!props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
+						!props['uaa.enable'] || !props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
 						return false;
 				}
 				if (props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) {
@@ -24350,7 +24365,7 @@ class NicoVideoPlayer extends Emitter {
 						return;
 				}
 				const props = this._playerConfig.props;
-				const loading = props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
+				const loading = props['uaa.enable'] && props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
 						!(props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) &&
 						this._kickSupporterCreditLoad();
 				if (loading) {
@@ -55760,7 +55775,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				let options = {
 						replacement: this._videoInfo.replacementWords,
 						duration: this._videoInfo.duration,
-						creditDuration: this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
+						creditDuration: this._playerConfig.props['uaa.enable'] && this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
 						mainThreadId: result.threadInfo.threadId,
 						watchId: this._watchId,
 						format: result.format
@@ -70192,6 +70207,7 @@ class ModernAdvancedSettingsModel {
 						return 'enableFilter';
 				}
 				const direct = {
+						'supporterCredit.enable': 'uaa.enable',
 						'sceneSearch.commentPreviewVisible': 'sceneSearch.enabled',
 						'sceneSearch.miniCommentVisible': 'sceneSearch.commentPreviewVisible',
 						'sceneSearch.commentListVisible': 'sceneSearch.commentPreviewVisible',

@@ -118,13 +118,14 @@ const { SettingPanelElement } = (() => {
           </label>
         </div>
 
-        <div class="control">
+        <fieldset class="control setting-children" ?disabled=${!conf['uaa.enable']} aria-label="広告情報を利用する設定">
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="supporterCredit.enable"
               ?checked=${conf['supporterCredit.enable']}>
               動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
           </label>
+          <fieldset class="setting-children" ?disabled=${!conf['supporterCredit.enable']} aria-label="提供画面の設定">
           <label>
             <input type="checkbox" class="checkbox"
               data-setting-name="supporterCredit.voice"
@@ -143,7 +144,8 @@ const { SettingPanelElement } = (() => {
               ?checked=${conf['supporterCredit.skipInPlaylist']}>
               連続再生中は提供画面を表示しない
           </label>
-        </div>
+          </fieldset>
+        </fieldset>
 
         <div class="control">
           <label>
@@ -675,6 +677,9 @@ const { SettingPanelElement } = (() => {
             border: 1px solid currentcolor;
           }
 
+          .setting-children {min-width:0;border:0;border-left:2px solid #53627b;margin:4px 0 10px 12px;padding:0 0 0 12px;}
+          .setting-children:disabled {color:#939baa;}
+          .setting-children input:disabled {opacity:.45;cursor:not-allowed;}
           .setting-note {
             margin: 4px 8px;
             font-size: 12px;

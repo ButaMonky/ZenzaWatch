@@ -532,6 +532,7 @@ class ModernAdvancedSettingsModel {
             return 'enableFilter';
         }
         const direct = {
+            'supporterCredit.enable': 'uaa.enable',
             'sceneSearch.commentPreviewVisible': 'sceneSearch.enabled',
             'sceneSearch.miniCommentVisible': 'sceneSearch.commentPreviewVisible',
             'sceneSearch.commentListVisible': 'sceneSearch.commentPreviewVisible',

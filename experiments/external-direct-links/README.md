@@ -42,7 +42,7 @@ HAR はローカルで構造の確認にだけ利用し、このフォルダー�
 [検証版をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/experiment/external-direct1008/experiments/external-direct-links/ZenzaWatch-external-direct-trial.user.js)
 
 `ZenzaWatch-external-direct-trial.user.js` を Tampermonkey に別スクリプトとして追加してください。
-通常の ZenzaWatch は削除・置換しません。検証版名は「ZenzaWatch 外部直接リンク検証版」、版は `0.7.0-external-direct7` です。旧検証版へ上書き更新してください。
+通常の ZenzaWatch は削除・置換しません。検証版名は「ZenzaWatch 外部直接リンク検証版」、版は `0.8.0-external-direct8` です。旧検証版へ上書き更新してください。
 Tampermonkeyの接続先権限はニコニコ関連の3ドメインに限定しています。サイト別Cookie許可は追加しません。Tampermonkeyから権限確認が出る場合は、この通信機能のための確認です。
 対象サイト上のリンクを探すため HTTPS サイトへのアクセス権限を使用します。ページを開いただけでは本体の起動・認証通信は行いません。
 元に戻すときは検証版だけ無効にし、ニコチャートを再読み込みしてください。
@@ -111,3 +111,6 @@ Tampermonkeyの接続先権限はニコニコ関連の3ドメインに限定し�
 記録内容：固定されたイベント種別ごとの最大入力待ち時間・処理時間・処理終了後の遅延、長い処理の集計、フレーム間隔、タイマー遅れ、設定取得件数・本体との不一致項目名。設定値・コメント本文・URL・動画ID・Cookie・通信内容は記録しない。結果はConsoleだけに出し、通信や永続保存はしない。
 
 Event Timing のdurationは丸めや閾値の影響があり、処理終了後の値を純粋な描画時間と断定しない。iframeやブラウザによる計測制限もある。hiddenDuringSampleがtrueの記録は非表示タブによる抑制を含む可能性がある。計測は一度のみで、終了時に監視とタイマーを解除する。再計測はプレイヤーを閉じて開き直す。
+
+## 検証版8
+広告情報の取得 → 提供画面 → 音声・ギフト・連続再生中の扱いを親子設定にしました。親がOFFでも子の保存値は保持します。取得中・表示中にOFFにした場合も停止します。[他の依存設定の点検](SETTINGS-DEPENDENCIES.md)。操作の重さは未解決です。

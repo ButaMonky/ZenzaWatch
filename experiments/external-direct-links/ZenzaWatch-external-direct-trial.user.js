@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.7.0-external-direct7
+// @version      0.8.0-external-direct8
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -18,7 +18,7 @@
 // @require      https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @require      https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // ==/UserScript==
-// Shared runtime SHA256: ba8366f7c7109f56105a67fdfba7e2835f836064348193bace258542871ce05f
+// Shared runtime SHA256: 3c6802182da8725035366e896f9422013090013be30f8f2c7493587be880d4ed
 
 (() => {
  const official = /(^|\.)nicovideo\.jp$/.test(location.hostname);
@@ -545,7 +545,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.7',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+    emit({version:'external-direct.8',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
       supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }
@@ -583,7 +583,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
  async function startRuntime(){
  if(playerFrame)displaySettings.apply();
 
-// build: 2026-11-10 21:21Z 2ab5eeff
+// build: 2026-11-11 18:06Z 8cbd185
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -900,10 +900,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.383-external-direct.7';
+    var VER = '2.7.384-external-direct.8';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.7 GM transport base ba8366f7c710';
+    var BUILD = 'external-direct.8 GM transport base 3c6802182da8';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -10765,13 +10765,14 @@ const { SettingPanelElement } = (() => {
 							ニコニ広告の情報を取得する(対応ブラウザのみ)
 					</label>
 				</div>
-				<div class="control">
+				<fieldset class="control setting-children" ?disabled=${!conf['uaa.enable']} aria-label="広告情報を利用する設定">
 					<label>
 						<input type="checkbox" class="checkbox"
 							data-setting-name="supporterCredit.enable"
 							?checked=${conf['supporterCredit.enable']}>
 							動画の最後に「提供」画面（ニコニ広告・ギフトの支援者）を表示する
 					</label>
+					<fieldset class="setting-children" ?disabled=${!conf['supporterCredit.enable']} aria-label="提供画面の設定">
 					<label>
 						<input type="checkbox" class="checkbox"
 							data-setting-name="supporterCredit.voice"
@@ -10790,7 +10791,8 @@ const { SettingPanelElement } = (() => {
 							?checked=${conf['supporterCredit.skipInPlaylist']}>
 							連続再生中は提供画面を表示しない
 					</label>
-				</div>
+					</fieldset>
+				</fieldset>
 				<div class="control">
 					<label>
 						<input type="checkbox" class="checkbox"
@@ -11297,6 +11299,9 @@ const { SettingPanelElement } = (() => {
 						border-radius: 4px;
 						border: 1px solid currentcolor;
 					}
+					.setting-children {min-width:0;border:0;border-left:2px solid #53627b;margin:4px 0 10px 12px;padding:0 0 0 12px;}
+					.setting-children:disabled {color:#939baa;}
+					.setting-children input:disabled {opacity:.45;cursor:not-allowed;}
 					.setting-note {
 						margin: 4px 8px;
 						font-size: 12px;
@@ -24578,10 +24583,15 @@ class NicoVideoPlayer extends Emitter {
 				};
 				this._creditData = null;
 				this._creditAbort = null;
-				this._playerConfig.onkey('supporterCredit.enable', (v) => {
-						if (!v) {
+				const updateCreditEnabled = () => {
+						if (!this._playerConfig.props['uaa.enable'] || !this._playerConfig.props['supporterCredit.enable']) {
 								const finishEnded = this.isSupporterCreditActive || !!this._creditWaiting;
 								this._cancelSupporterCredit();
+								this._creditAbort?.abort();
+								this._creditAbort = null;
+								this._creditRequest = null;
+								this._creditData = null;
+								this._creditLoading = null;
 								if (finishEnded) {
 										this._emitEnded();
 								}
@@ -24589,7 +24599,9 @@ class NicoVideoPlayer extends Emitter {
 						else if (this.videoInfo && !this._creditData) {
 								this._loadSupporterCredit(this.videoInfo);
 						}
-				});
+				};
+				this._playerConfig.onkey('supporterCredit.enable', updateCreditEnabled);
+				this._playerConfig.onkey('uaa.enable', updateCreditEnabled);
 		}
 		/*
 		* Task 081: 読み込みは動画を開いた時ではなく「残りが CREDIT_PRELOAD_SEC 秒になった時」に始める。
@@ -24604,7 +24616,7 @@ class NicoVideoPlayer extends Emitter {
 				this._creditLoading = null;
 				this._creditRequest = null;
 				const props = this._playerConfig.props;
-				if (!videoInfo || !props['supporterCredit.enable']) {
+				if (!videoInfo || !props['uaa.enable'] || !props['supporterCredit.enable']) {
 						return;
 				}
 				const videoId = videoInfo.videoId;
@@ -24616,6 +24628,9 @@ class NicoVideoPlayer extends Emitter {
 				this._creditRequest = { videoId, tags };
 		}
 		_kickSupporterCreditLoad() {
+				if (!this._playerConfig.props['uaa.enable'] || !this._playerConfig.props['supporterCredit.enable']) {
+						return null;
+				}
 				if (this._creditLoading) {
 						return this._creditLoading;
 				}
@@ -24664,7 +24679,7 @@ class NicoVideoPlayer extends Emitter {
 				const credit = this._supporterCredit;
 				const props = this._playerConfig.props;
 				if (!credit || credit.isActive || !this._creditData || !credit.isReady ||
-						!props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
+						!props['uaa.enable'] || !props['supporterCredit.enable'] || this._videoPlayer._isYouTube) {
 						return false;
 				}
 				if (props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) {
@@ -24863,7 +24878,7 @@ class NicoVideoPlayer extends Emitter {
 						return;
 				}
 				const props = this._playerConfig.props;
-				const loading = props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
+				const loading = props['uaa.enable'] && props['supporterCredit.enable'] && !this._videoPlayer._isYouTube &&
 						!(props['supporterCredit.skipInPlaylist'] && this._state.isPlaylistEnable) &&
 						this._kickSupporterCreditLoad();
 				if (loading) {
@@ -56274,7 +56289,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				let options = {
 						replacement: this._videoInfo.replacementWords,
 						duration: this._videoInfo.duration,
-						creditDuration: this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
+						creditDuration: this._playerConfig.props['uaa.enable'] && this._playerConfig.props['supporterCredit.enable'] ? 30 : 0,
 						mainThreadId: result.threadInfo.threadId,
 						watchId: this._watchId,
 						format: result.format
@@ -70710,6 +70725,7 @@ class ModernAdvancedSettingsModel {
 						return 'enableFilter';
 				}
 				const direct = {
+						'supporterCredit.enable': 'uaa.enable',
 						'sceneSearch.commentPreviewVisible': 'sceneSearch.enabled',
 						'sceneSearch.miniCommentVisible': 'sceneSearch.commentPreviewVisible',
 						'sceneSearch.commentListVisible': 'sceneSearch.commentPreviewVisible',

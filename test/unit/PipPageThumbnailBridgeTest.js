@@ -24,5 +24,10 @@ describe('Task638: comment PiP teardown bridge', () => {
     assert.strictEqual(typeof params.onEnd, 'function');
     params.onEnd();
     assert.strictEqual(stopCount, 1);
+    ctx.Dispatcher.initialize({_nicoVideoPlayer:{},on(){},execCommand(){throw Error('stale callback reached new owner');}});
+    assert.strictEqual(params.getVideo(),null);
+    assert.strictEqual(params.getViewModel(),null);
+    params.onPlay();params.onPause();params.onEnd();
+    assert.strictEqual(stopCount,1,'old teardown must not stop the replacement overlay');
   });
 });

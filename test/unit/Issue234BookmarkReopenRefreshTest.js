@@ -64,6 +64,61 @@ function dockFixture(storage){
     destroy(){dock.dispose();dom.window.close();}};
 }
 describe('#234 shared manual bookmark refresh on Dock reopen',()=>{
+  it('publishes a committed library edit to another open tab',async()=>{
+    const before=global.window,peers=[];
+    class Channel{
+      constructor(){peers.push(this);}
+      postMessage(data){for(const peer of peers)if(peer!==this)peer.onmessage?.({data});}
+      close(){}
+    }
+    global.window={BroadcastChannel:Channel};let a,b;
+    try{
+      const storage=shared();a=new Session(storage.factory());b=new Session(storage.factory());
+      await a.activate('sm9',120);await b.activate('sm9',120);
+      await storage.factory().remove('sm9','B1');
+      a.notifyCommittedChange();await step();
+      assert.equal(a.snapshot.bookmarks.length,0);assert.equal(b.snapshot.bookmarks.length,0);
+    }finally{a?.dispose();b?.dispose();if(before===undefined)delete global.window;else global.window=before;}
+  });
+  it('retains a peer invalidation received during a local write',async()=>{
+    const before=global.window,peers=[];
+    class Channel{
+      constructor(){peers.push(this);}
+      postMessage(data){for(const peer of peers)if(peer!==this)peer.onmessage?.({data});}
+      close(){}
+    }
+    global.window={BroadcastChannel:Channel};
+    let b;
+    try{
+      const s=shared(),repository=s.factory();
+      let release;
+      repository.add=()=>new Promise(resolve=>{release=()=>resolve([bookmark('B1'),bookmark('B2')]);});
+      b=new Session(repository);await b.activate('sm9',120);
+      const write=b.add('B2',40,200);
+      s.rows.set('sm9',[bookmark('B1'),bookmark('B2'),bookmark('B3','peer')]);
+      peers[0].onmessage({data:{kind:'changed'}});
+      release();await write;await step();
+      assert.equal(b.snapshot.bookmarks.length,3,'pending peer update must be reread after local commit');
+    }finally{b?.dispose();if(before===undefined)delete global.window;else global.window=before;}
+  });
+  it('rereads after an invalidation arrives while an earlier read is pending',async()=>{
+    const before=global.window,peers=[];
+    class Channel{constructor(){peers.push(this);}postMessage(){}close(){}}
+    global.window={BroadcastChannel:Channel};
+    let b;
+    try{
+      const s=shared(),repository=s.factory();
+      b=new Session(repository);await b.activate('sm9',120);
+      const original=repository.load;let release,reads=0;
+      repository.load=id=>++reads===1?new Promise(resolve=>{release=()=>resolve([bookmark('B1')]);}):original(id);
+      const refresh=b.refreshIfIdle();
+      s.rows.set('sm9',[bookmark('B1'),bookmark('B2')]);
+      peers[0].onmessage({data:{kind:'changed'}});
+      release();await refresh;await step();
+      assert.equal(b.snapshot.bookmarks.length,2,'second invalidation cannot be coalesced into stale read');
+      assert.equal(reads,2);
+    }finally{b?.dispose();if(before===undefined)delete global.window;else global.window=before;}
+  });
   it('reloads cross-tab additions on explicit reopen and updates the list',async()=>{
     const s=shared(),a=new Session(s.factory()),b=dockFixture(s);
     await a.activate('sm9',120);await b.dock.activate('sm9',120);

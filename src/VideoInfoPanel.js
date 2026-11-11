@@ -143,9 +143,27 @@ class VideoInfoPanel extends Emitter {
     /**
      * 説明文中のurlの自動リンク等の処理
      */
-    async _updateVideoDescription(html, series = null) {
+    static _readDescriptionSeries(value) {
+        if (!value || typeof value !== 'object')
+            return null;
+        const raw = value;
+        if (!raw.video || typeof raw.video !== 'object' || typeof raw.title !== 'string')
+            return null;
+        const videos = raw.video;
+        const read = (item) => {
+            if (!item || typeof item !== 'object')
+                return null;
+            const id = item.id;
+            return typeof id === 'string' && /^(?:(?:sm|nm|so|ss)\d+|\d+)$/.test(id) ? { id } : null;
+        };
+        return { title: raw.title, video: { prev: read(videos.prev), next: read(videos.next) } };
+    }
+    async _updateVideoDescription(input, rawSeries = null) {
+        let html = typeof input === 'string' ? input : '';
+        const series = VideoInfoPanel._readDescriptionSeries(rawSeries);
         // Task 090（監査v2 ZW-053）: 更新の世代。await の後で、もっと新しい更新や clear() があったら、この結果は捨てる
         const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+        const owner = { descriptionGeneration: generation, videoInfo: this._videoInfo };
         this._description.textContent = '';
         this._zenTubeUrl = null;
         if (series) {
@@ -287,7 +305,7 @@ class VideoInfoPanel extends Emitter {
             link.parentNode.insertBefore(btn, link);
         };
         await sleep.promise();
-        if (generation !== this._descriptionGeneration) {
+        if (owner.descriptionGeneration !== this._descriptionGeneration || owner.videoInfo !== this._videoInfo) {
             return;
         }
         const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);

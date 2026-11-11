@@ -36,7 +36,7 @@ async function build(){
   Object.defineProperty(dialog,'isOpen',{value:true,configurable:true});
   await dialog._initializeNicoVideoPlayer();
   assert(created,'dialog must create NicoVideoPlayer');
-  const ctx2=createContext({Emitter:class{},console:{warn(){}}});
+  const ctx2=createContext({Emitter:class{},performance:{now:()=>100},console:{warn(){}}});
   run(compiled('NicoVideoPlayer','NicoVideoPlayer')+
       ';globalThis.__nico=NicoVideoPlayer;',ctx2);
   const nico=Object.create(ctx2.__nico.prototype);

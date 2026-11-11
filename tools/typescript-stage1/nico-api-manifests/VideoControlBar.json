@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/VideoControlBar.ts",
   "runtime": "src/VideoControlBar.js",
-  "sourceSha256": "b47ca7ad7971b69e6e096715c3dadc326c76ef73ab0f0d249e6a20822956c7ff",
+  "sourceSha256": "c89fb00000c5824cf4c4476ee46a2141b7cdba182dc83899692d1c3923a88d9d",
   "runtimeSha256": "5d4a7c893626299eec047ed02d3601ad237700c75bc12d7819ea4415fb6179f0"
 }

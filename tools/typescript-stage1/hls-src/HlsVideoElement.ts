@@ -1,4 +1,4 @@
-import type {ZenzaHlsEngine, ZenzaHlsReadinessStage, ZenzaHlsReadinessRecord} from '../nico-src/HlsLifecycleTypes';
+import type {ZenzaHlsEngine, ZenzaHlsReadinessStage, ZenzaHlsReadinessRecord, ZenzaHlsLifetime, ZenzaHlsErrorData} from '../nico-src/HlsLifecycleTypes';
 import type {HlsConfigAccess, HlsStorageClient, HlsDebounce} from './HlsStorage';
 /** Extracted HLS implementation (Task997); preserve legacy playback/cache behavior. */
 // Internal browser/hls.js compatibility records remain loose during extraction.
@@ -910,27 +910,33 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
             this._hlsConfig.fLoader = this._fragmentLoader;
             const hls: HlsStartupEngine = new Hls(Object.assign({}, this._hlsConfig));
             this._hls = hls;
+            let lifetime:ZenzaHlsLifetime={phase:'active',engine:hls};
+            const owned=(listener:(...args:unknown[])=>void)=>(...args:unknown[]):void=>{
+              if(lifetime.phase!=='active'||this._hls!==lifetime.engine||this._videoCount!==videoCount)return;
+              listener(...args);
+            };
 
             try {
               // The public init hook also exposes destroy() directly.
               hls.on(Hls.Events.DESTROYING, () => {
+                lifetime={phase:'disposed',engine:null};
                 if (this._hls !== hls) { return; }
                 this._hls = null;
                 delete this._hlsConfig.fLoader;
                 delete this._fragmentLoader;
               });
               hls.on(Hls.Events.MANIFEST_PARSED,
-                this._onHLSJSManifestParsed.bind(this));
+                owned(this._onHLSJSManifestParsed.bind(this)));
               hls.on(Hls.Events.LEVEL_LOADED,
-                this._onHLSJSLevelLoaded.bind(this));
+                owned(this._onHLSJSLevelLoaded.bind(this)));
               hls.on(Hls.Events.LEVEL_SWITCHED,
-                this._onHLSJSLevelSwitched.bind(this));
+                owned(this._onHLSJSLevelSwitched.bind(this)));
               hls.on(Hls.Events.ERROR,
-                this._onHLSJSError.bind(this));
+                owned(this._onHLSJSError.bind(this)));
               hls.on(Hls.Events.FRAG_LOADED,
-                this._onHLSJSFragLoaded.bind(this));
+                owned(this._onHLSJSFragLoaded.bind(this)));
               hls.on(Hls.Events.BUFFER_EOS,
-                this._onHLSJSBufferEOS.bind(this));
+                owned(this._onHLSJSBufferEOS.bind(this)));
               this.dispatchEvent(new CustomEvent('init-hls-js', {detail: {hls}}));
               if (this._hls !== hls) { return this._hls; }
 
@@ -948,7 +954,10 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
           return this._hls;
         }
 
-        _onHLSJSManifestParsed(eventName?: Loose, data?: Loose) {
+        _onHLSJSManifestParsed(eventName?: unknown, raw?: unknown) {
+          if(!raw||typeof raw!=='object')return;
+          const data=raw as Record<string,unknown>;
+          if(!Array.isArray(data.levels))return;
           //console.log('%cHls.Events.MANIFEST_PARSED', 'background: cyan;', this._src);
           this._manifest = data;
           this._levelData = [];
@@ -963,14 +972,21 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
           this.dispatchEvent(new CustomEvent('canplay', {detail}));
         }
 
-        _onHLSJSLevelLoaded(eventName?: Loose, data?: Loose) {
+        _onHLSJSLevelLoaded(eventName?: unknown, raw?: unknown) {
+          if(!raw||typeof raw!=='object')return;
+          const data=raw as Record<string,unknown>;
+          if(typeof data.level!=='number'||!Number.isSafeInteger(data.level)||data.level<0||
+             !data.details||typeof data.details!=='object')return;
+          const details=data.details as Record<string,unknown>;
+          if(typeof details.endSN!=='number'||!Number.isSafeInteger(details.endSN)||details.endSN<0||details.endSN>0xffffffff)return;
           //console.log('%cHls.Events.LEVEL_LOADED', 'background: cyan;', this._src);//, data);
           this._levelData[data.level] = data.details;
-          this._bufferStats.length = data.details.endSN || 0;
+          this._bufferStats.length = details.endSN;
         }
 
         _onHLSJSLevelSwitched()  {
           const hls = this._hls;
+          if(!hls)return;
           const level = hls.levels[hls.currentLevel];
 
           const labelText = `${this.playerMode}: ${this._video.videoWidth}x${this._video.videoHeight}`;
@@ -1012,14 +1028,14 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
         }
 
         // @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#fifth-step-error-handling
-        _onHLSJSError(e?: Loose, data?: Loose) {
-          let errorUrl = (data.context && data.context.url) ? data.context.url : '';
-          errorUrl = (!errorUrl && data.frag && data.frag.url) ? data.frag.url : '';
-          // 時間差で前の動画のエラーが飛んできたら無視
-          //if (errorUrl && !compareHash(errorUrl, this.src)) {
-          //  //return;
-          //}
-
+        _onHLSJSError(e?: unknown, raw?: unknown) {
+          if(!raw||typeof raw!=='object')return;
+          const value=raw as Record<string,unknown>;
+          if(typeof value.fatal!=='boolean'||typeof value.type!=='string'||typeof value.details!=='string')return;
+          const response=value.response&&typeof value.response==='object'?
+            value.response as Record<string,unknown>:null;
+          const data:ZenzaHlsErrorData={fatal:value.fatal,type:value.type,details:value.details,
+            ...(response&&typeof response.code==='number'?{response:{code:response.code}}:{})};
           if (data.fatal) {
             return this._onHLSJSFatalError(e, data);
           }
@@ -1071,7 +1087,7 @@ export function createHlsVideoElement({Config, Storage, debounce, throttle, HLS_
           return;
         }
 
-        _onHLSJSFatalError(e?: Loose, data?: Loose) {
+        _onHLSJSFatalError(e: unknown, data: ZenzaHlsErrorData) {
           console.error('HLS fatal error');
           let code;
           // サンプルコードではここで自動リカバーしているが、

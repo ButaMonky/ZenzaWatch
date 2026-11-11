@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/RootDispatcher.ts",
   "runtime": "src/RootDispatcher.js",
-  "sourceSha256": "1bb40cd2c05e7002a49f613c219a37549e4382768a24975603505cbde423f3d8",
-  "runtimeSha256": "b2e0586db7633818a30efa680f862ed20efa480424bbe15544ebdb4a5fe68de0"
+  "sourceSha256": "1eb4049ad562b2576bc6124df4a982ebc64456946c833bc4fef35a6fd8784b9a",
+  "runtimeSha256": "2172ec4f0e2ff78ffa4317964bcb974f142932f34d22d9c5887edd28630a324d"
 }

@@ -49,6 +49,7 @@ export class ManualBookmarkSession {
   /** A background read must never overwrite an unfinished local edit. */
   private inFlightWrites=0;
   private refreshing:Promise<ManualBookmarkActionResult>|null=null;
+  private peerRefreshPending=false;
   private disposed=false;
   private failedLoad=false;
   private state:ManualBookmarkPanelSnapshot=makeState('idle',null,empty);
@@ -60,15 +61,31 @@ export class ManualBookmarkSession {
         channel=new window.BroadcastChannel('zenza-manual-bookmarks-v1');
         channel.onmessage=event=>{
           if(event?.data?.kind!=='changed')return;
-          void this.refreshIfIdle();
+          this.peerRefreshPending=true;
+          this.drainPeerRefresh();
         };
       }
     }catch{/* Unsupported sandbox/origin: Dock focus/reopen remains the fallback. */}
     this.changeChannel=channel;
   }
+  /** Coalesce peer invalidations, but never lose one behind an older read/write. */
+  private drainPeerRefresh():void{
+    if(!this.peerRefreshPending||this.disposed||!this.current||
+       this.state.status!=='ready'||this.inFlightWrites!==0||
+       this.activating!==null||this.refreshing!==null)return;
+    this.peerRefreshPending=false;
+    void this.refreshIfIdle();
+  }
   private notifyOtherTabs():void{
     try{this.changeChannel?.postMessage({kind:'changed'});}
     catch{/* Never turn a successful bookmark write into a notification error. */}
+  }
+  /** Library writes share this invalidation path only after storage commits. */
+  notifyCommittedChange():void{
+    if(this.disposed)return;
+    this.notifyOtherTabs();
+    this.peerRefreshPending=true;
+    this.drainPeerRefresh();
   }
   get snapshot():ManualBookmarkPanelSnapshot{return this.state;}
   /** Only initial load failures may be retried on Dock open; write failures keep drafts. */
@@ -113,8 +130,8 @@ export class ManualBookmarkSession {
     this.activating=activating;
     this.publishState('loading',videoId,empty);
     void activating.then(
-      ()=>{if(this.activating===activating)this.activating=null;},
-      ()=>{if(this.activating===activating)this.activating=null;}
+      ()=>{if(this.activating===activating)this.activating=null;this.drainPeerRefresh();},
+      ()=>{if(this.activating===activating)this.activating=null;this.drainPeerRefresh();}
     );
     return activating;
   }
@@ -189,6 +206,7 @@ export class ManualBookmarkSession {
       return Object.freeze({status:'error',snapshot});
     }finally{
       this.inFlightWrites--;
+      this.drainPeerRefresh();
     }
   }
   /**
@@ -234,8 +252,8 @@ export class ManualBookmarkSession {
     })();
     this.refreshing=pending;
     void pending.then(
-      ()=>{if(this.refreshing===pending)this.refreshing=null;},
-      ()=>{if(this.refreshing===pending)this.refreshing=null;}
+      ()=>{if(this.refreshing===pending)this.refreshing=null;this.drainPeerRefresh();},
+      ()=>{if(this.refreshing===pending)this.refreshing=null;this.drainPeerRefresh();}
     );
     return pending;
   }
@@ -260,6 +278,7 @@ export class ManualBookmarkSession {
   deactivate():void{
     if(this.disposed)return;
     this.generation++;this.latestAction=0;this.current=null;
+    this.peerRefreshPending=false;
     this.failedAction=null;this.failedLoad=false;this.readbackRevision++;
     this.publishState('idle',null,empty);
   }

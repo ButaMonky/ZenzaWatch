@@ -5,6 +5,7 @@ const flush=async()=>{for(let i=0;i<6;i++)await Promise.resolve();};
 
 function fixture(mode='pending'){
   const activated=[],stopped=[],alerts=[];
+  const listeners=new Map();
   let requestCount=0,stoppedComments=0, resolve, reject;
   const future=new Promise((a,b)=>{resolve=a;reject=b;});
   const wrongVideo={requestPictureInPicture(){throw Error('wrong video');}};
@@ -18,7 +19,7 @@ function fixture(mode='pending'){
   const document={pictureInPictureElement:null,querySelector(){return wrongVideo;}};
   const config={props:{},on(){},getValue(){}};
   const player={_nicoVideoPlayer:{_videoPlayer:{videoElement:video}},
-    on(){},execCommand(){}};
+    on(event,callback){listeners.set(event,callback);},execCommand(){}};
   const c=createContext({
     document,console:{warn(){}},
     ZenzaWatch:{state:{player:{}}},
@@ -34,6 +35,7 @@ function fixture(mode='pending'){
     'RootDispatcher','var')+';this.root=RootDispatcher;',c);
   c.root.initialize(player);
   return {c,video,document,activated,stopped,alerts,resolve,reject,
+    listeners,
     get requested(){return requestCount;},
     get commentStops(){return stoppedComments;}};
 }
@@ -58,6 +60,29 @@ describe('Task711 native PiP starts page thumbnail after confirmation',()=>{
     h.resolve({});
     await flush();
     assert.strictEqual(h.activated.length,0);
+  });
+  it('does not activate a pending native request after dispatcher replacement',async()=>{
+    const h=fixture();
+    h.c.root.execCommand('picture-in-picture');
+    h.c.root.initialize({_nicoVideoPlayer:{_videoPlayer:{videoElement:null}},on(){},execCommand(){}});
+    h.document.pictureInPictureElement=h.video;
+    h.resolve({});await flush();
+    assert.strictEqual(h.activated.length,0);
+  });
+  it('does not activate a pending native request after its dialog closes',async()=>{
+    const h=fixture();
+    h.c.root.execCommand('picture-in-picture');
+    h.listeners.get('close')();
+    h.document.pictureInPictureElement=h.video;
+    h.resolve({});await flush();
+    assert.strictEqual(h.activated.length,0);
+  });
+  it('ignores commands from a replaced dialog',()=>{
+    const h=fixture();
+    h.c.root.initialize({_nicoVideoPlayer:{_videoPlayer:{videoElement:null}},on(){},execCommand(){}});
+    h.listeners.get('command')('picture-in-picture');
+    assert.strictEqual(h.requested,0);
+    assert.strictEqual(h.alerts.length,0);
   });
   it('does not show a thumbnail if the native PiP request rejects',async()=>{
     const h=fixture();

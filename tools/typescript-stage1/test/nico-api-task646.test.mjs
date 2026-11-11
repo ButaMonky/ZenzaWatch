@@ -114,7 +114,7 @@ const watch=pair('WatchInfoCacheDb');
 // The Watch cache now intentionally separates a readonly history snapshot from
 // the best-effort updatedAt write. Retain full legacy parity for everything
 // except the single, explicitly asserted get/updateTime operation split.
-async function compareWatchReadTouch(label,run,opt={}){
+async function compareWatchReadTouch(label,run,opt={},expectReopen=false){
   const a=world(opt),b=world(opt);
   const A=loadLegacy(watch.before,watch.name,a.globals);
   const B=loadLegacy(watch.after,watch.name,b.globals);
@@ -122,7 +122,18 @@ async function compareWatchReadTouch(label,run,opt={}){
   await tick();
   assert.deepEqual(snapshot(rb),snapshot(ra),label+' public result');
   const other=log=>log.filter(entry=>entry[0]!=='get'&&entry[0]!=='updateTime');
-  assert.deepEqual(other(b.log),other(a.log),label+' unchanged side effects');
+  const currentOther=other(b.log);
+  if(expectReopen){
+    // Closing now releases the facade and maintenance owner. The next operation
+    // must reopen exactly once, with the same schema, before running GC.
+    const opens=currentOther.filter(entry=>entry[0]==='idb.open');
+    assert.equal(opens.length,2,label+' opens a fresh connection after close');
+    assert.deepEqual(opens[1],opens[0],label+' preserves database schema');
+    const close=currentOther.findIndex(entry=>entry[0]==='close');
+    assert.equal(currentOther[close+1],opens[1],label+' reopens before next operation');
+    currentOther.splice(close+1,1);
+  }
+  assert.deepEqual(currentOther,other(a.log),label+' unchanged side effects');
   const previous=a.log.filter(entry=>entry[0]==='updateTime');
   const reads=b.log.filter(entry=>entry[0]==='get');
   const touches=b.log.filter(entry=>entry[0]==='updateTime');
@@ -185,7 +196,7 @@ test('#255: videoInfo history snapshots never serialize playback auth material',
 
 test('WatchInfoCacheDb: open, bridge, get/delete/close/gc',async()=>{
   await compareWatchReadTouch('www ops',async d=>[keys(await d.initWorker()),await d.get('sm9'),await d.delete('sm9'),await d.close(),
-    await d.gc(),await d.gc(1000),(await d.open())===(await d.open())],{rows:{sm9:{watchId:'sm9'}}});
+    await d.gc(),await d.gc(1000),(await d.open())===(await d.open())],{rows:{sm9:{watchId:'sm9'}}},true);
   await compareWatchReadTouch('bridge',async(d,w)=>{const r=d.api(w.bridge);return [r===w.bridge,await d.get('sm9')];},{host:'live.nicovideo.jp'});
   await compare(watch,'bridge missing',d=>d.get('sm9'),{host:'live.nicovideo.jp'});
   await compare(watch,'open fails',d=>d.get('sm9'),{openFails:true});

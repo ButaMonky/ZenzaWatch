@@ -9,5 +9,6 @@ export interface ZenzaCommentReadingModelPort {
 }
 export type ZenzaCommentReadIdentity = Readonly<{
   epoch: number;
-  videoInfo: unknown;
+  model: ZenzaCommentReadingModelPort;
+  revision: number;
 }>;

@@ -25,6 +25,7 @@ describe('Task188 comment list state TypeScript ownership',()=>{
       source.indexOf('class CommentListItem'));
     assert(view.includes('declare _modelUpdateVersion: number;'));
     assert(view.includes('declare _readingEpoch: number | undefined;'));
-    assert(source.includes("import type {ZenzaCommentSortKey, ZenzaCommentReadingModelPort} from './CommentReadTypes';"));
+    assert(source.includes("import type {ZenzaCommentSortKey, ZenzaCommentReadingModelPort, ZenzaCommentReadIdentity} from './CommentReadTypes';"));
+    assert(view.includes('_isReadCurrent(owner: ZenzaCommentReadIdentity): boolean'));
   });
 });

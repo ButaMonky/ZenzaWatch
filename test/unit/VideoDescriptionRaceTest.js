@@ -40,7 +40,7 @@ function subject() {
     classList: {add() {}, remove() {}},
     _$ownerIcon: {raf: {addClass() {}}}
   };
-  const update = html => VideoInfoPanel.prototype._updateVideoDescription.call(panel, html);
+  const update = (html,series) => VideoInfoPanel.prototype._updateVideoDescription.call(panel, html,series);
   const clear = () => VideoInfoPanel.prototype.clear.call(panel);
   const flush = () => new Promise(r => setTimeout(r, 0));
   return {w, panel, update, clear, ctl, flush, text: () => panel._description.textContent, close: () => w.close()};
@@ -48,6 +48,17 @@ function subject() {
 
 describe('説明文の非同期の更新で、前後の動画の説明文が混ざらない（ZW-053）', function() {
   this.timeout(20000);
+  it('ignores malformed description/series responses without stringifying objects',async function(){
+    const s=subject();
+    const result=s.update({privateValue:'TEST_ONLY'}, {video:null});
+    await s.flush();if(s.ctl.count())s.ctl.wake(0);
+    await result;assert.equal(s.text(),'');s.close();
+  });
+  it('discards a pending response when its video object is replaced',async function(){
+    const s=subject();s.panel._videoInfo={id:'sm1'};
+    const result=s.update('old description');s.panel._videoInfo={id:'sm2'};
+    s.ctl.wake(0);await result;assert.equal(s.text(),'');s.close();
+  });
 
   it('HTML-02: A・B を続けて更新すると、B だけが表示される（A が先に終わる場合）', async function() {
     const s = subject();

@@ -172,6 +172,7 @@ class ManualBookmarkDock {
     get isRepeating() { return this.panel.isRepeating; }
     setRepeatRange(a, b, activate = true) { return this.panel.setRepeatRange(a, b, activate); }
     repeatAtEnd() { return this.panel.repeatAtEnd(); }
+    stopUnresponsiveRepeat() { this.panel.stopUnresponsiveRepeat(); }
     acknowledgeLoopSeek(time) { this.panel.acknowledgeLoopSeek(time); }
     refreshPreferences() { this.panel.refreshPreferences(); }
     tick(time, paused, seeking) {

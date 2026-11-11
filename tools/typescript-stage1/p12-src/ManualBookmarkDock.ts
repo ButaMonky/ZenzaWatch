@@ -120,6 +120,7 @@ export class ManualBookmarkDock {
   get isRepeating():boolean{return this.panel.isRepeating;}
   setRepeatRange(a:number,b:number,activate=true):boolean {return this.panel.setRepeatRange(a,b,activate);}
   repeatAtEnd():boolean {return this.panel.repeatAtEnd();}
+  stopUnresponsiveRepeat():void {this.panel.stopUnresponsiveRepeat();}
   acknowledgeLoopSeek(time:number):void {this.panel.acknowledgeLoopSeek(time);}
   refreshPreferences():void {this.panel.refreshPreferences();}
   tick(time:number,paused:boolean,seeking:boolean):boolean {

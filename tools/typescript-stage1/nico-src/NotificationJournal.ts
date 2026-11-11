@@ -11,6 +11,10 @@ const NotificationJournal = (() => {
   const session: JournalEntry[] = [];
   const recent: JournalEntry[] = [];
   const diagnosticGroups = new Map<string, JournalEntry>();
+  const confirmedGroups = new Map<string, JournalEntry>();
+  const confirmedRecent: JournalEntry[] = [];
+  const epochs = new WeakMap<JournalEntry, number|null>();
+  let knownEpoch: number|null = null;
   let sequence = 0;
   let buildIdentity: {version?: unknown; build?: unknown} = {};
   const configureBuild = (version: unknown, build: unknown): void => { buildIdentity = {version, build}; };
@@ -20,6 +24,32 @@ const NotificationJournal = (() => {
       try { listener(); } catch (_) { /* listeners may not break logging */ }
     }
   };
+  const removeSession = (entry:JournalEntry):void => {
+    const index=session.indexOf(entry);if(index!==-1){session.splice(index,1);}
+  };
+  const acceptEpoch = (epoch:number|null):void => {
+    if(epoch===null||knownEpoch!==null&&epoch<=knownEpoch)return;
+    knownEpoch=epoch;
+    const old=(entry:JournalEntry)=>{const owned=epochs.get(entry);return typeof owned==='number'&&owned<epoch;};
+    const before=session.length;
+    for(let i=session.length-1;i>=0;i--)if(old(session[i]!))session.splice(i,1);
+    for(let i=recent.length-1;i>=0;i--)if(old(recent[i]!))recent.splice(i,1);
+    for(const [key,entry]of diagnosticGroups)if(old(entry))diagnosticGroups.delete(key);
+    confirmedGroups.clear();confirmedRecent.length=0;
+    if(before!==session.length)announce();
+  };
+  let channel:BroadcastChannel|null=null;
+  try{
+    if(typeof BroadcastChannel!=='undefined'){
+      channel=new BroadcastChannel('zenza-notification-journal-clear');
+      channel.onmessage=event=>{const epoch=event.data?.clearEpoch;
+        if(Number.isSafeInteger(epoch)&&epoch>=0)acceptEpoch(epoch);};
+    }
+  }catch{/* durable list checks remain available */}
+  const isDuplicate=(entry:JournalEntry,items:readonly JournalEntry[]):boolean=>entry.category==='general'&&items.some(previous=>
+    previous.category!=='general'&&previous.message===entry.message&&
+    (previous.videoId===entry.videoId||(entry.source==='popup'&&entry.videoId===''))&&
+    entry.timestamp-previous.timestamp<=2000);
   const record = (input: JournalInput | null | undefined): JournalEntry | null => {
     if (!input || typeof input !== 'object') { return null; }
     const now = Date.now();
@@ -31,34 +61,28 @@ const NotificationJournal = (() => {
     if (!entry || !entry.message) { return null; }
     // An explicitly classified event is emitted just before its generic popup.
     // Save only the richer event; do not lose two legitimate repeated notifications.
-    if (entry.category === 'general') {
-      const duplicate = recent.some(previous =>
-        previous.category !== 'general' &&
-        previous.message === entry.message &&
-        // PopupMessage has no video ownership at this low-level boundary.
-        // A classified event immediately preceding the same popup already
-        // carries the original video ID; suppress only that generic echo.
-        // Do not suppress unrelated unclassified entries without a video ID.
-        (previous.videoId === entry.videoId ||
-          (entry.source === 'popup' && entry.videoId === '')) &&
-        entry.timestamp - previous.timestamp <= 2000);
-      if (duplicate) { return null; }
+    const duplicate=isDuplicate(entry,recent);
+    if(!duplicate){
+      session.unshift(entry);if(session.length>MAX_SESSION)session.length=MAX_SESSION;
+      recent.unshift(entry);if(recent.length>8)recent.length=8;
     }
-    session.unshift(entry);
-    if (session.length > MAX_SESSION) { session.length = MAX_SESSION; }
-    recent.unshift(entry);
-    if (recent.length > 8) { recent.length = 8; }
-    store.append(entry, () => {
-      // Retain fallback data only until commit, so a different tab can clear it.
-      const index = session.indexOf(entry);
-      if (index !== -1) { session.splice(index, 1); }
-    });
-    announce();
-    return entry;
+    // Even a provisional duplicate remains an operation: a delayed peer clear
+    // can invalidate the classified event that caused the synchronous verdict.
+    store.append(epoch=>{
+      acceptEpoch(epoch);epochs.set(entry,epoch);
+      if(isDuplicate(entry,confirmedRecent)){removeSession(entry);return null;}
+      confirmedRecent.unshift(entry);if(confirmedRecent.length>8)confirmedRecent.length=8;
+      if(duplicate){session.unshift(entry);if(session.length>MAX_SESSION)session.length=MAX_SESSION;announce();}
+      return entry;
+    },()=>removeSession(entry));
+    if(!duplicate)announce();
+    return duplicate?null:entry;
   };
   const list = async (limit = 300): Promise<JournalEntry[]> => {
     const count = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, MAX_RECORDS)) : 300;
-    const stored = await store.list();
+    const snapshot=await store.snapshot();
+    acceptEpoch(snapshot.epoch);
+    const stored=knownEpoch!==null&&snapshot.epoch!==null&&snapshot.epoch<knownEpoch?[]:snapshot.entries;
     const map = new Map<string, JournalEntry>();
     for (const entry of stored) {
       if (entry && typeof entry.id === 'string') { map.set(entry.id, entry); }
@@ -76,6 +100,9 @@ const NotificationJournal = (() => {
     if (recovered && !previous) { return null; }
     const count = Math.min(1e12, Number(previous?.details.count || 0) + (recovered ? 0 : 1));
     const now = Date.now();
+    const freshId=now.toString(36)+'-'+(++sequence).toString(36)+'-'+Math.random().toString(36).slice(2,10);
+    const fresh=NotificationJournalPolicy.normalize({...input,...buildIdentity},{id:freshId,timestamp:now});
+    if(!fresh||!fresh.message)return null;
     const data = {...input, ...buildIdentity,
       version: previous?.version ?? buildIdentity.version, build: previous?.build ?? buildIdentity.build,
       firstOccurredAt: previous?.firstOccurredAt ?? now,
@@ -84,7 +111,7 @@ const NotificationJournal = (() => {
       details: {...(recovered ? previous?.details : {}), ...fields, count,
       ...(recovered && previous?.details.reason ? {reason: previous.details.reason} : {})}};
     const entry = NotificationJournalPolicy.normalize(data, {
-      id: previous?.id || now.toString(36) + '-' + (++sequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10),
+      id: previous?.id || freshId,
       timestamp: now
     });
     if (!entry || !entry.message) { return null; }
@@ -97,21 +124,47 @@ const NotificationJournal = (() => {
     if (old !== -1) { session.splice(old, 1); }
     session.unshift(entry);
     if (session.length > MAX_SESSION) { session.length = MAX_SESSION; }
-    store.append(entry, () => {
-      // An older transaction must not discard a newer pending update.
-      const index = session.indexOf(entry);
-      if (index !== -1) { session.splice(index, 1); }
-    });
+    store.append(epoch=>{
+      acceptEpoch(epoch);epochs.set(entry,epoch);
+      const prior=confirmedGroups.get(key);
+      if(recovered&&!prior){
+        removeSession(entry);if(diagnosticGroups.get(key)===entry)diagnosticGroups.delete(key);
+        announce();return null;
+      }
+      const normalized=NotificationJournalPolicy.normalize({...fresh,
+        version:prior?.version??fresh.version,build:prior?.build??fresh.build,
+        firstOccurredAt:prior?.firstOccurredAt??now,
+        lastOccurredAt:recovered?prior?.lastOccurredAt:Math.max(now,prior?.lastOccurredAt??now),
+        recoveredAt:recovered?Math.max(now,prior?.lastOccurredAt??now):undefined,
+        details:{...(recovered?prior?.details:{}),...fresh.details,
+          count:Math.min(1e12,Number(prior?.details.count||0)+(recovered?0:1)),
+          ...(recovered&&prior?.details.reason?{reason:prior.details.reason}:{})}},
+        {id:prior?.id||freshId,timestamp:now});
+      if(!normalized){removeSession(entry);return null;}
+      const changed=JSON.stringify(entry)!==JSON.stringify(normalized);
+      Object.assign(entry,normalized);
+      if(normalized.recoveredAt===undefined)delete entry.recoveredAt;
+      // Replace the provisional same-group fallback while retaining a newer
+      // queued revision. A commit later removes only this exact object.
+      for(let i=session.length-1;i>=0;i--)if(session[i]!==entry&&session[i]===prior)session.splice(i,1);
+      confirmedGroups.delete(key);if(!recovered)confirmedGroups.set(key,entry);
+      while(confirmedGroups.size>100)confirmedGroups.delete(confirmedGroups.keys().next().value!);
+      if(changed)announce();return entry;
+    },()=>removeSession(entry));
     announce();
     return entry;
   };
   const clear = (): Promise<boolean> => {
     // Queue deletion before announcing: subscribers may record new events,
     // which belong after this clear and must survive it.
-    const clearing = store.clear();
+    const clearing = store.clear(epoch=>{
+      acceptEpoch(epoch);
+      try{channel?.postMessage({clearEpoch:epoch});}catch{}
+    });
     session.length = 0;
     recent.length = 0;
     diagnosticGroups.clear();
+    confirmedGroups.clear();confirmedRecent.length=0;
     announce();
     return clearing;
   };

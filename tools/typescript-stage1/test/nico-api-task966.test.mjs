@@ -37,7 +37,7 @@ for(const [name,runtime] of Object.entries(ENTRIES)){
     if(name==='HlsEntry'){
       // Task997 is an explicit retirement: preserve userscript identity and scope,
       // while removing imports/library requirements and replacing the entire body.
-      const identity=t=>t.split('\n').filter(l=>/^\/\/ @(?:name|namespace|match|exclude|grant|author|noframes|run-at)\b/.test(l));
+      const identity=t=>t.split(/\r?\n/).filter(l=>/^\/\/ @(?:name|namespace|match|exclude|grant|author|noframes|run-at)\b/.test(l));
       assert.deepEqual(identity(actual),identity(fixture));
       assert.deepEqual(spec.directives,[]);
       assert.deepEqual(entryDirectives(actual),[]);

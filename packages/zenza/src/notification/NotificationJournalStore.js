@@ -4,11 +4,23 @@ const NotificationJournalStore = (() => {
     const create = (indexedDB) => {
         const DB_NAME = 'zenza-notification-journal';
         const STORE = 'entries';
+        const META = 'control';
         const MAX_RECORDS = 2000;
         let opening = null;
         let connection = null;
         let writes = 0;
         let generation = 0;
+        const reserve = (operation) => {
+            try {
+                const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+                // Reserve during the public call, before awaiting open(). A slow old
+                // append must not overtake a later clear in another tab.
+                return locks ? locks.request('zenza-notification-journal-operations', operation) : operation();
+            }
+            catch (error) {
+                return Promise.reject(error);
+            }
+        };
         const open = () => {
             if (connection) {
                 return Promise.resolve(connection);
@@ -27,7 +39,7 @@ const NotificationJournalStore = (() => {
                     resolve(null);
                 } };
                 try {
-                    req = indexedDB.open(DB_NAME, 1);
+                    req = indexedDB.open(DB_NAME, 2);
                 }
                 catch (_) {
                     fail();
@@ -38,6 +50,9 @@ const NotificationJournalStore = (() => {
                     if (!db.objectStoreNames.contains(STORE)) {
                         const store = db.createObjectStore(STORE, { keyPath: 'id' });
                         store.createIndex('timestamp', 'timestamp');
+                    }
+                    if (!db.objectStoreNames.contains(META)) {
+                        db.createObjectStore(META, { keyPath: 'id' });
                     }
                 };
                 req.onsuccess = () => {
@@ -90,59 +105,129 @@ const NotificationJournalStore = (() => {
             }
             catch (_) { /* the journal must not stop playback */ }
         };
-        const append = (entry, onCommit) => {
+        const epochOf = (value) => {
+            if (value === undefined) {
+                return 0;
+            }
+            const epoch = value && typeof value === 'object' ? value.value : undefined;
+            return typeof epoch === 'number' && Number.isSafeInteger(epoch) && epoch >= 0 ? epoch : null;
+        };
+        const readEpoch = (db) => new Promise(resolve => {
+            try {
+                const tx = db.transaction(META), request = tx.objectStore(META).get('clear');
+                let epoch = null;
+                request.onsuccess = () => { epoch = epochOf(request.result); };
+                tx.oncomplete = () => resolve(epoch);
+                tx.onerror = tx.onabort = () => resolve(null);
+            }
+            catch (_) {
+                resolve(null);
+            }
+        });
+        const append = (input, onCommit) => {
             const expectedGeneration = generation;
-            void open().then(db => {
-                if (!db || expectedGeneration !== generation) {
+            void reserve(async () => {
+                const db = await open();
+                if (expectedGeneration !== generation) {
                     return;
                 }
-                try {
-                    const tx = db.transaction(STORE, 'readwrite');
-                    tx.objectStore(STORE).put(entry);
-                    tx.onerror = () => { };
-                    tx.oncomplete = () => {
-                        onCommit();
-                        if (++writes % 50 === 0) {
-                            prune(db);
-                        }
-                    };
+                const epoch = db ? await readEpoch(db) : null;
+                if (expectedGeneration !== generation) {
+                    return;
                 }
-                catch (_) { /* still available in session memory */ }
+                const entry = typeof input === 'function' ? input(epoch) : input;
+                // An unknown epoch is session-only. Never promote it later into a newer
+                // epoch, which would resurrect a possibly pre-clear notification.
+                if (!db || epoch === null || !entry) {
+                    return;
+                }
+                await new Promise(resolve => {
+                    try {
+                        const tx = db.transaction([META, STORE], 'readwrite');
+                        const request = tx.objectStore(META).get('clear');
+                        let written = false;
+                        request.onsuccess = () => {
+                            if (epochOf(request.result) !== epoch || expectedGeneration !== generation) {
+                                return;
+                            }
+                            tx.objectStore(STORE).put({ ...entry, clearEpoch: epoch });
+                            written = true;
+                        };
+                        tx.onerror = tx.onabort = () => resolve();
+                        tx.oncomplete = () => {
+                            if (written) {
+                                try {
+                                    onCommit();
+                                }
+                                catch (_) { /* observers cannot retain the shared lock */ }
+                                if (++writes % 50 === 0) {
+                                    prune(db);
+                                }
+                            }
+                            resolve();
+                        };
+                    }
+                    catch (_) {
+                        resolve();
+                    }
+                });
             }).catch(() => { });
         };
-        const list = async () => {
-            let stored = [];
-            try {
-                const db = await open();
-                if (db) {
-                    stored = await new Promise(resolve => {
-                        try {
-                            const request = db.transaction(STORE).objectStore(STORE).getAll();
-                            request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
-                            request.onerror = () => resolve([]);
-                        }
-                        catch (_) {
-                            resolve([]);
-                        }
-                    });
-                }
+        const snapshot = () => reserve(async () => {
+            const db = await open();
+            if (!db) {
+                return { epoch: null, entries: [] };
             }
-            catch (_) { /* fall back to session memory */ }
-            return stored;
-        };
-        const clear = () => {
+            return new Promise(resolve => {
+                try {
+                    const tx = db.transaction([META, STORE]);
+                    let epoch = null, entries = [];
+                    const control = tx.objectStore(META).get('clear'), request = tx.objectStore(STORE).getAll();
+                    control.onsuccess = () => { epoch = epochOf(control.result); };
+                    request.onsuccess = () => { entries = Array.isArray(request.result) ? request.result : []; };
+                    tx.oncomplete = () => resolve({ epoch, entries: epoch === null ? [] : entries.filter(entry => (entry.clearEpoch ?? 0) === epoch) });
+                    tx.onerror = tx.onabort = () => resolve({ epoch: null, entries: [] });
+                }
+                catch (_) {
+                    resolve({ epoch: null, entries: [] });
+                }
+            });
+        }).catch(() => ({ epoch: null, entries: [] }));
+        const list = async () => (await snapshot()).entries;
+        const clear = (onEpoch) => {
             generation++;
-            // Use the same open promise as append, preserving transaction order even
-            // when the host supplies a Promise from a different realm.
-            return open().then(db => {
+            return reserve(async () => {
+                const db = await open();
                 if (!db) {
                     return false;
                 }
                 try {
                     return new Promise(resolve => {
-                        const tx = db.transaction(STORE, 'readwrite');
-                        tx.objectStore(STORE).clear();
-                        tx.oncomplete = () => resolve(true);
+                        const tx = db.transaction([META, STORE], 'readwrite');
+                        const control = tx.objectStore(META), request = control.get('clear');
+                        let next = null;
+                        request.onsuccess = () => {
+                            const epoch = epochOf(request.result);
+                            if (epoch === null || epoch >= Number.MAX_SAFE_INTEGER) {
+                                tx.abort();
+                                return;
+                            }
+                            next = epoch + 1;
+                            control.put({ id: 'clear', value: next });
+                            tx.objectStore(STORE).clear();
+                        };
+                        tx.oncomplete = () => {
+                            if (next !== null) {
+                                try {
+                                    onEpoch?.(next);
+                                }
+                                catch (_) { /* committed deletion remains successful */ }
+                                resolve(true);
+                            }
+                            else {
+                                resolve(false);
+                            }
+                        };
                         tx.onerror = () => resolve(false);
                         tx.onabort = () => resolve(false);
                     });
@@ -150,9 +235,9 @@ const NotificationJournalStore = (() => {
                 catch (_) {
                     return false;
                 }
-            });
+            }).catch(() => false);
         };
-        return { append, list, clear };
+        return { append, list, snapshot, clear };
     };
     return { create };
 })();

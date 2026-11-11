@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.380-task1004
+// @version        2.7.383-task1007
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-10 19:06Z f523a867
+// build: 2026-11-10 21:21Z 2ab5eeff
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.380-task1004';
+    var VER = '2.7.383-task1007';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-10 19:06Z f523a867';
+    var BUILD = '2026-11-10 21:21Z 2ab5eeff';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5870,11 +5870,21 @@ const NotificationJournalStore = (() => {
 		const create = (indexedDB) => {
 				const DB_NAME = 'zenza-notification-journal';
 				const STORE = 'entries';
+				const META = 'control';
 				const MAX_RECORDS = 2000;
 				let opening = null;
 				let connection = null;
 				let writes = 0;
 				let generation = 0;
+				const reserve = (operation) => {
+						try {
+								const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+								return locks ? locks.request('zenza-notification-journal-operations', operation) : operation();
+						}
+						catch (error) {
+								return Promise.reject(error);
+						}
+				};
 				const open = () => {
 						if (connection) {
 								return Promise.resolve(connection);
@@ -5893,7 +5903,7 @@ const NotificationJournalStore = (() => {
 										resolve(null);
 								} };
 								try {
-										req = indexedDB.open(DB_NAME, 1);
+										req = indexedDB.open(DB_NAME, 2);
 								}
 								catch (_) {
 										fail();
@@ -5904,6 +5914,9 @@ const NotificationJournalStore = (() => {
 										if (!db.objectStoreNames.contains(STORE)) {
 												const store = db.createObjectStore(STORE, { keyPath: 'id' });
 												store.createIndex('timestamp', 'timestamp');
+										}
+										if (!db.objectStoreNames.contains(META)) {
+												db.createObjectStore(META, { keyPath: 'id' });
 										}
 								};
 								req.onsuccess = () => {
@@ -5955,57 +5968,127 @@ const NotificationJournalStore = (() => {
 						}
 						catch (_) { /* the journal must not stop playback */ }
 				};
-				const append = (entry, onCommit) => {
+				const epochOf = (value) => {
+						if (value === undefined) {
+								return 0;
+						}
+						const epoch = value && typeof value === 'object' ? value.value : undefined;
+						return typeof epoch === 'number' && Number.isSafeInteger(epoch) && epoch >= 0 ? epoch : null;
+				};
+				const readEpoch = (db) => new Promise(resolve => {
+						try {
+								const tx = db.transaction(META), request = tx.objectStore(META).get('clear');
+								let epoch = null;
+								request.onsuccess = () => { epoch = epochOf(request.result); };
+								tx.oncomplete = () => resolve(epoch);
+								tx.onerror = tx.onabort = () => resolve(null);
+						}
+						catch (_) {
+								resolve(null);
+						}
+				});
+				const append = (input, onCommit) => {
 						const expectedGeneration = generation;
-						void open().then(db => {
-								if (!db || expectedGeneration !== generation) {
+						void reserve(async () => {
+								const db = await open();
+								if (expectedGeneration !== generation) {
 										return;
 								}
-								try {
-										const tx = db.transaction(STORE, 'readwrite');
-										tx.objectStore(STORE).put(entry);
-										tx.onerror = () => { };
-										tx.oncomplete = () => {
-												onCommit();
-												if (++writes % 50 === 0) {
-														prune(db);
-												}
-										};
+								const epoch = db ? await readEpoch(db) : null;
+								if (expectedGeneration !== generation) {
+										return;
 								}
-								catch (_) { /* still available in session memory */ }
+								const entry = typeof input === 'function' ? input(epoch) : input;
+								if (!db || epoch === null || !entry) {
+										return;
+								}
+								await new Promise(resolve => {
+										try {
+												const tx = db.transaction([META, STORE], 'readwrite');
+												const request = tx.objectStore(META).get('clear');
+												let written = false;
+												request.onsuccess = () => {
+														if (epochOf(request.result) !== epoch || expectedGeneration !== generation) {
+																return;
+														}
+														tx.objectStore(STORE).put({ ...entry, clearEpoch: epoch });
+														written = true;
+												};
+												tx.onerror = tx.onabort = () => resolve();
+												tx.oncomplete = () => {
+														if (written) {
+																try {
+																		onCommit();
+																}
+																catch (_) { /* observers cannot retain the shared lock */ }
+																if (++writes % 50 === 0) {
+																		prune(db);
+																}
+														}
+														resolve();
+												};
+										}
+										catch (_) {
+												resolve();
+										}
+								});
 						}).catch(() => { });
 				};
-				const list = async () => {
-						let stored = [];
-						try {
-								const db = await open();
-								if (db) {
-										stored = await new Promise(resolve => {
-												try {
-														const request = db.transaction(STORE).objectStore(STORE).getAll();
-														request.onsuccess = () => resolve(Array.isArray(request.result) ? request.result : []);
-														request.onerror = () => resolve([]);
-												}
-												catch (_) {
-														resolve([]);
-												}
-										});
-								}
+				const snapshot = () => reserve(async () => {
+						const db = await open();
+						if (!db) {
+								return { epoch: null, entries: [] };
 						}
-						catch (_) { /* fall back to session memory */ }
-						return stored;
-				};
-				const clear = () => {
+						return new Promise(resolve => {
+								try {
+										const tx = db.transaction([META, STORE]);
+										let epoch = null, entries = [];
+										const control = tx.objectStore(META).get('clear'), request = tx.objectStore(STORE).getAll();
+										control.onsuccess = () => { epoch = epochOf(control.result); };
+										request.onsuccess = () => { entries = Array.isArray(request.result) ? request.result : []; };
+										tx.oncomplete = () => resolve({ epoch, entries: epoch === null ? [] : entries.filter(entry => (entry.clearEpoch ?? 0) === epoch) });
+										tx.onerror = tx.onabort = () => resolve({ epoch: null, entries: [] });
+								}
+								catch (_) {
+										resolve({ epoch: null, entries: [] });
+								}
+						});
+				}).catch(() => ({ epoch: null, entries: [] }));
+				const list = async () => (await snapshot()).entries;
+				const clear = (onEpoch) => {
 						generation++;
-						return open().then(db => {
+						return reserve(async () => {
+								const db = await open();
 								if (!db) {
 										return false;
 								}
 								try {
 										return new Promise(resolve => {
-												const tx = db.transaction(STORE, 'readwrite');
-												tx.objectStore(STORE).clear();
-												tx.oncomplete = () => resolve(true);
+												const tx = db.transaction([META, STORE], 'readwrite');
+												const control = tx.objectStore(META), request = control.get('clear');
+												let next = null;
+												request.onsuccess = () => {
+														const epoch = epochOf(request.result);
+														if (epoch === null || epoch >= Number.MAX_SAFE_INTEGER) {
+																tx.abort();
+																return;
+														}
+														next = epoch + 1;
+														control.put({ id: 'clear', value: next });
+														tx.objectStore(STORE).clear();
+												};
+												tx.oncomplete = () => {
+														if (next !== null) {
+																try {
+																		onEpoch?.(next);
+																}
+																catch (_) { /* committed deletion remains successful */ }
+																resolve(true);
+														}
+														else {
+																resolve(false);
+														}
+												};
 												tx.onerror = () => resolve(false);
 												tx.onabort = () => resolve(false);
 										});
@@ -6013,9 +6096,9 @@ const NotificationJournalStore = (() => {
 								catch (_) {
 										return false;
 								}
-						});
+						}).catch(() => false);
 				};
-				return { append, list, clear };
+				return { append, list, snapshot, clear };
 		};
 		return { create };
 })();
@@ -6026,6 +6109,10 @@ const NotificationJournal = (() => {
 		const session = [];
 		const recent = [];
 		const diagnosticGroups = new Map();
+		const confirmedGroups = new Map();
+		const confirmedRecent = [];
+		const epochs = new WeakMap();
+		let knownEpoch = null;
 		let sequence = 0;
 		let buildIdentity = {};
 		const configureBuild = (version, build) => { buildIdentity = { version, build }; };
@@ -6038,6 +6125,47 @@ const NotificationJournal = (() => {
 						catch (_) { /* listeners may not break logging */ }
 				}
 		};
+		const removeSession = (entry) => {
+				const index = session.indexOf(entry);
+				if (index !== -1) {
+						session.splice(index, 1);
+				}
+		};
+		const acceptEpoch = (epoch) => {
+				if (epoch === null || knownEpoch !== null && epoch <= knownEpoch)
+						return;
+				knownEpoch = epoch;
+				const old = (entry) => { const owned = epochs.get(entry); return typeof owned === 'number' && owned < epoch; };
+				const before = session.length;
+				for (let i = session.length - 1; i >= 0; i--)
+						if (old(session[i]))
+								session.splice(i, 1);
+				for (let i = recent.length - 1; i >= 0; i--)
+						if (old(recent[i]))
+								recent.splice(i, 1);
+				for (const [key, entry] of diagnosticGroups)
+						if (old(entry))
+								diagnosticGroups.delete(key);
+				confirmedGroups.clear();
+				confirmedRecent.length = 0;
+				if (before !== session.length)
+						announce();
+		};
+		let channel = null;
+		try {
+				if (typeof BroadcastChannel !== 'undefined') {
+						channel = new BroadcastChannel('zenza-notification-journal-clear');
+						channel.onmessage = event => {
+								const epoch = event.data?.clearEpoch;
+								if (Number.isSafeInteger(epoch) && epoch >= 0)
+										acceptEpoch(epoch);
+						};
+				}
+		}
+		catch { /* durable list checks remain available */ }
+		const isDuplicate = (entry, items) => entry.category === 'general' && items.some(previous => previous.category !== 'general' && previous.message === entry.message &&
+				(previous.videoId === entry.videoId || (entry.source === 'popup' && entry.videoId === '')) &&
+				entry.timestamp - previous.timestamp <= 2000);
 		const record = (input) => {
 				if (!input || typeof input !== 'object') {
 						return null;
@@ -6051,36 +6179,42 @@ const NotificationJournal = (() => {
 				if (!entry || !entry.message) {
 						return null;
 				}
-				if (entry.category === 'general') {
-						const duplicate = recent.some(previous => previous.category !== 'general' &&
-								previous.message === entry.message &&
-								(previous.videoId === entry.videoId ||
-										(entry.source === 'popup' && entry.videoId === '')) &&
-								entry.timestamp - previous.timestamp <= 2000);
-						if (duplicate) {
+				const duplicate = isDuplicate(entry, recent);
+				if (!duplicate) {
+						session.unshift(entry);
+						if (session.length > MAX_SESSION)
+								session.length = MAX_SESSION;
+						recent.unshift(entry);
+						if (recent.length > 8)
+								recent.length = 8;
+				}
+				store.append(epoch => {
+						acceptEpoch(epoch);
+						epochs.set(entry, epoch);
+						if (isDuplicate(entry, confirmedRecent)) {
+								removeSession(entry);
 								return null;
 						}
-				}
-				session.unshift(entry);
-				if (session.length > MAX_SESSION) {
-						session.length = MAX_SESSION;
-				}
-				recent.unshift(entry);
-				if (recent.length > 8) {
-						recent.length = 8;
-				}
-				store.append(entry, () => {
-						const index = session.indexOf(entry);
-						if (index !== -1) {
-								session.splice(index, 1);
+						confirmedRecent.unshift(entry);
+						if (confirmedRecent.length > 8)
+								confirmedRecent.length = 8;
+						if (duplicate) {
+								session.unshift(entry);
+								if (session.length > MAX_SESSION)
+										session.length = MAX_SESSION;
+								announce();
 						}
-				});
-				announce();
-				return entry;
+						return entry;
+				}, () => removeSession(entry));
+				if (!duplicate)
+						announce();
+				return duplicate ? null : entry;
 		};
 		const list = async (limit = 300) => {
 				const count = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, MAX_RECORDS)) : 300;
-				const stored = await store.list();
+				const snapshot = await store.snapshot();
+				acceptEpoch(snapshot.epoch);
+				const stored = knownEpoch !== null && snapshot.epoch !== null && snapshot.epoch < knownEpoch ? [] : snapshot.entries;
 				const map = new Map();
 				for (const entry of stored) {
 						if (entry && typeof entry.id === 'string') {
@@ -6106,6 +6240,10 @@ const NotificationJournal = (() => {
 				}
 				const count = Math.min(1e12, Number(previous?.details.count || 0) + (recovered ? 0 : 1));
 				const now = Date.now();
+				const freshId = now.toString(36) + '-' + (++sequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+				const fresh = NotificationJournalPolicy.normalize({ ...input, ...buildIdentity }, { id: freshId, timestamp: now });
+				if (!fresh || !fresh.message)
+						return null;
 				const data = { ...input, ...buildIdentity,
 						version: previous?.version ?? buildIdentity.version, build: previous?.build ?? buildIdentity.build,
 						firstOccurredAt: previous?.firstOccurredAt ?? now,
@@ -6114,7 +6252,7 @@ const NotificationJournal = (() => {
 						details: { ...(recovered ? previous?.details : {}), ...fields, count,
 								...(recovered && previous?.details.reason ? { reason: previous.details.reason } : {}) } };
 				const entry = NotificationJournalPolicy.normalize(data, {
-						id: previous?.id || now.toString(36) + '-' + (++sequence).toString(36) + '-' + Math.random().toString(36).slice(2, 10),
+						id: previous?.id || freshId,
 						timestamp: now
 				});
 				if (!entry || !entry.message) {
@@ -6135,20 +6273,61 @@ const NotificationJournal = (() => {
 				if (session.length > MAX_SESSION) {
 						session.length = MAX_SESSION;
 				}
-				store.append(entry, () => {
-						const index = session.indexOf(entry);
-						if (index !== -1) {
-								session.splice(index, 1);
+				store.append(epoch => {
+						acceptEpoch(epoch);
+						epochs.set(entry, epoch);
+						const prior = confirmedGroups.get(key);
+						if (recovered && !prior) {
+								removeSession(entry);
+								if (diagnosticGroups.get(key) === entry)
+										diagnosticGroups.delete(key);
+								announce();
+								return null;
 						}
-				});
+						const normalized = NotificationJournalPolicy.normalize({ ...fresh,
+								version: prior?.version ?? fresh.version, build: prior?.build ?? fresh.build,
+								firstOccurredAt: prior?.firstOccurredAt ?? now,
+								lastOccurredAt: recovered ? prior?.lastOccurredAt : Math.max(now, prior?.lastOccurredAt ?? now),
+								recoveredAt: recovered ? Math.max(now, prior?.lastOccurredAt ?? now) : undefined,
+								details: { ...(recovered ? prior?.details : {}), ...fresh.details,
+										count: Math.min(1e12, Number(prior?.details.count || 0) + (recovered ? 0 : 1)),
+										...(recovered && prior?.details.reason ? { reason: prior.details.reason } : {}) } }, { id: prior?.id || freshId, timestamp: now });
+						if (!normalized) {
+								removeSession(entry);
+								return null;
+						}
+						const changed = JSON.stringify(entry) !== JSON.stringify(normalized);
+						Object.assign(entry, normalized);
+						if (normalized.recoveredAt === undefined)
+								delete entry.recoveredAt;
+						for (let i = session.length - 1; i >= 0; i--)
+								if (session[i] !== entry && session[i] === prior)
+										session.splice(i, 1);
+						confirmedGroups.delete(key);
+						if (!recovered)
+								confirmedGroups.set(key, entry);
+						while (confirmedGroups.size > 100)
+								confirmedGroups.delete(confirmedGroups.keys().next().value);
+						if (changed)
+								announce();
+						return entry;
+				}, () => removeSession(entry));
 				announce();
 				return entry;
 		};
 		const clear = () => {
-				const clearing = store.clear();
+				const clearing = store.clear(epoch => {
+						acceptEpoch(epoch);
+						try {
+								channel?.postMessage({ clearEpoch: epoch });
+						}
+						catch { }
+				});
 				session.length = 0;
 				recent.length = 0;
 				diagnosticGroups.clear();
+				confirmedGroups.clear();
+				confirmedRecent.length = 0;
 				announce();
 				return clearing;
 		};
@@ -14114,6 +14293,7 @@ class ManualBookmarkSession {
 		readbackRevision = 0;
 		inFlightWrites = 0;
 		refreshing = null;
+		peerRefreshPending = false;
 		disposed = false;
 		failedLoad = false;
 		state = makeState('idle', null, empty);
@@ -14126,18 +14306,34 @@ class ManualBookmarkSession {
 								channel.onmessage = event => {
 										if (event?.data?.kind !== 'changed')
 												return;
-										void this.refreshIfIdle();
+										this.peerRefreshPending = true;
+										this.drainPeerRefresh();
 								};
 						}
 				}
 				catch { /* Unsupported sandbox/origin: Dock focus/reopen remains the fallback. */ }
 				this.changeChannel = channel;
 		}
+		drainPeerRefresh() {
+				if (!this.peerRefreshPending || this.disposed || !this.current ||
+						this.state.status !== 'ready' || this.inFlightWrites !== 0 ||
+						this.activating !== null || this.refreshing !== null)
+						return;
+				this.peerRefreshPending = false;
+				void this.refreshIfIdle();
+		}
 		notifyOtherTabs() {
 				try {
 						this.changeChannel?.postMessage({ kind: 'changed' });
 				}
 				catch { /* Never turn a successful bookmark write into a notification error. */ }
+		}
+		notifyCommittedChange() {
+				if (this.disposed)
+						return;
+				this.notifyOtherTabs();
+				this.peerRefreshPending = true;
+				this.drainPeerRefresh();
 		}
 		get snapshot() { return this.state; }
 		get needsLoadRetry() { return !this.disposed && this.failedLoad && this.state.status === 'error'; }
@@ -14184,8 +14380,8 @@ class ManualBookmarkSession {
 				this.activating = activating;
 				this.publishState('loading', videoId, empty);
 				void activating.then(() => { if (this.activating === activating)
-						this.activating = null; }, () => { if (this.activating === activating)
-						this.activating = null; });
+						this.activating = null; this.drainPeerRefresh(); }, () => { if (this.activating === activating)
+						this.activating = null; this.drainPeerRefresh(); });
 				return activating;
 		}
 		async loadActivated(generation, videoId, duration) {
@@ -14259,6 +14455,7 @@ class ManualBookmarkSession {
 				}
 				finally {
 						this.inFlightWrites--;
+						this.drainPeerRefresh();
 				}
 		}
 		refreshIfIdle() {
@@ -14299,8 +14496,8 @@ class ManualBookmarkSession {
 				})();
 				this.refreshing = pending;
 				void pending.then(() => { if (this.refreshing === pending)
-						this.refreshing = null; }, () => { if (this.refreshing === pending)
-						this.refreshing = null; });
+						this.refreshing = null; this.drainPeerRefresh(); }, () => { if (this.refreshing === pending)
+						this.refreshing = null; this.drainPeerRefresh(); });
 				return pending;
 		}
 		add(id, time, now, label = '', endTime) {
@@ -14327,6 +14524,7 @@ class ManualBookmarkSession {
 				this.generation++;
 				this.latestAction = 0;
 				this.current = null;
+				this.peerRefreshPending = false;
 				this.failedAction = null;
 				this.failedLoad = false;
 				this.readbackRevision++;
@@ -14807,6 +15005,10 @@ class ManualBookmarkPanel {
 				this.updateLoopDisplay();
 				this.loopFailureNotice = 'シークできなかったため、区間リピートを停止しました。A・Bを確認して再開してください。';
 				this.pointMessage('repeat', this.loopFailureNotice);
+		}
+		stopUnresponsiveRepeat() {
+				if (!this.disposed && this.ownsVideo() && this.loop)
+						this.stopLoopAfterSeekFailure();
 		}
 		issueLoopSeek(loop) {
 				this.awaitingLoopSeek = true;
@@ -16171,6 +16373,7 @@ class ManualBookmarkDock {
 		get isRepeating() { return this.panel.isRepeating; }
 		setRepeatRange(a, b, activate = true) { return this.panel.setRepeatRange(a, b, activate); }
 		repeatAtEnd() { return this.panel.repeatAtEnd(); }
+		stopUnresponsiveRepeat() { this.panel.stopUnresponsiveRepeat(); }
 		acknowledgeLoopSeek(time) { this.panel.acknowledgeLoopSeek(time); }
 		refreshPreferences() { this.panel.refreshPreferences(); }
 		tick(time, paused, seeking) {
@@ -24035,6 +24238,7 @@ class NicoVideoPlayer extends Emitter {
 				this._videoPlayer.volume = v * r;
 		}
 		_onTimer() {
+				this._pollTerminalRepeat();
 				this._checkSupporterCreditPreload();
 				const credit = this._supporterCredit;
 				if (credit && credit.isActive) {
@@ -24079,21 +24283,69 @@ class NicoVideoPlayer extends Emitter {
 				this.emit('seeking');
 		}
 		_onSeeked() {
+				const media = this._videoPlayer?._video;
+				if (this._terminalRepeat && Number.isFinite(media?.currentTime) &&
+						Number.isFinite(media?.duration) && media.duration > 0 &&
+						!media.seeking && !media._isSeeking && media.currentTime < media.duration - 0.05) {
+						this._terminalRepeat = null;
+				}
 				this._isSeeking = false;
 				this.emit('seeked');
 		}
 		_onPause() {
+				if (this._terminalRepeat && this._videoPlayer?._video?.ended !== true) {
+						this._terminalRepeat = null;
+				}
 				this._isPlaying = false;
 				this.emit('pause');
 		}
 		_onEnded() {
 				try {
-						if (this.beforeSupporterCreditEnd?.() === true)
+						if (this.beforeSupporterCreditEnd?.() === true) {
+								if (!this._terminalRepeat) {
+										const now = performance.now();
+										this._terminalRepeat = { generation: this._setVideoGeneration, started: now, next: now + 1800 };
+								}
 								return;
+						}
 				}
 				catch {
 						console.warn('AB repeat end handler unavailable');
 				}
+				this._terminalRepeat = null;
+				this._finishNaturalEnd();
+		}
+		_pollTerminalRepeat() {
+				const owner = this._terminalRepeat;
+				if (!owner)
+						return;
+				if (owner.generation !== this._setVideoGeneration) {
+						this._terminalRepeat = null;
+						return;
+				}
+				const media = this._videoPlayer?._video;
+				const waiting = !!(this._isSeeking || media?.seeking || media?._isSeeking ||
+						(this._videoPlayer?._isYouTube && media?.playerState === 3));
+				const time = media?.currentTime, duration = media?.duration;
+				if (!waiting && Number.isFinite(time) && Number.isFinite(duration) && duration > 0 && time < duration - 0.05) {
+						this._terminalRepeat = null;
+						return;
+				}
+				const now = performance.now();
+				if (now - owner.started >= 30000) {
+						this._terminalRepeat = null;
+						this.onRepeatEndTimeout?.();
+						if (!waiting && Number.isFinite(time) && Number.isFinite(duration) && duration > 0 && time >= duration) {
+								this._finishNaturalEnd();
+						}
+						return;
+				}
+				if (waiting || now < owner.next)
+						return;
+				owner.next = now + 1800;
+				this._onEnded();
+		}
+		_finishNaturalEnd() {
 				if (this._tryStartSupporterCredit()) {
 						return;
 				}
@@ -24140,6 +24392,7 @@ class NicoVideoPlayer extends Emitter {
 				}
 		}
 		setVideo(url) {
+				this._terminalRepeat = null;
 				const generation = this._setVideoGeneration = (this._setVideoGeneration || 0) + 1;
 				this._cancelSupporterCredit();
 				const e = { src: url, url: null, promise: null };
@@ -24170,6 +24423,7 @@ class NicoVideoPlayer extends Emitter {
 				return this._videoPlayer.play();
 		}
 		pause() {
+				this._terminalRepeat = null;
 				if (this.isSupporterCreditActive) {
 						this._supporterCredit.pause();
 						this._isPlaying = false;
@@ -24230,6 +24484,7 @@ class NicoVideoPlayer extends Emitter {
 				this._commentPlayer.appendTo(node);
 		}
 		close() {
+				this._terminalRepeat = null;
 				this._setVideoGeneration = (this._setVideoGeneration || 0) + 1;
 				this._cancelSupporterCredit();
 				this._creditAbort && this._creditAbort.abort();
@@ -38235,11 +38490,17 @@ class CommentListView extends Emitter {
 						this.hideItemDetail();
 				}
 		}
+		_isReadCurrent(owner) {
+				return owner.model === this._model && owner.epoch === (this._model?._readingEpoch ?? 0) &&
+						owner.revision === this._modelUpdateVersion;
+		}
 		async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
+				const owner = { model: this._model,
+						epoch: this._model?._readingEpoch ?? 0, revision };
 				if (!this._isFrameReady) {
 						await this.promise('frame-ready');
 				}
-				if (revision !== this._modelUpdateVersion) {
+				if (!this._isReadCurrent(owner)) {
 						return;
 				}
 				this._isFrameReady = true;
@@ -38252,7 +38513,7 @@ class CommentListView extends Emitter {
 				const itemViews = itemList.map((item, i) => new this._ItemView({ item: item, index: i, height: CommentListView.ITEM_HEIGHT }));
 				await cssUtil.setProps([this.body, '--list-height',
 						Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
-				if (revision !== this._modelUpdateVersion || !this._list) {
+				if (!this._isReadCurrent(owner) || !this._list) {
 						return;
 				}
 				const readingState = this._captureReadingState();
@@ -38268,7 +38529,7 @@ class CommentListView extends Emitter {
 				this._restoreReadingState(readingState);
 				this._refreshInviewElements();
 				window.setTimeout(() => {
-						if (revision !== this._modelUpdateVersion) {
+						if (!this._isReadCurrent(owner)) {
 								return;
 						}
 						this.removeClass('updating');
@@ -51865,11 +52126,13 @@ class NicoVideoPlayerDialogView extends Emitter {
 								}),
 								editLibraryBookmark: async (videoId, id, changes, duration) => {
 										await repository.update(videoId, id, changes, Date.now(), duration);
-										await bookmarkSession?.refreshIfIdle?.();
+										bookmarkSession.notifyCommittedChange();
+										await bookmarkSession.refreshIfIdle();
 								},
 								deleteLibraryBookmark: async (videoId, id, duration) => {
 										await repository.remove(videoId, id, duration);
-										await bookmarkSession?.refreshIfIdle?.();
+										bookmarkSession.notifyCommittedChange();
+										await bookmarkSession.refreshIfIdle();
 								},
 								editLibraryAutomatic: async (videoId, time, duration) => {
 										if (!Number.isFinite(time) || time < 0 || time >= duration)
@@ -53930,6 +54193,9 @@ class NicoVideoPlayerDialog extends Emitter {
 						this.play();
 						return true;
 				};
+				nicoVideoPlayer.onRepeatEndTimeout = () => {
+						this._view?.manualBookmarkDock?.stopUnresponsiveRepeat();
+				};
 				AudioAdjuster.initialize(config);
 				nicoVideoPlayer.audioGain = AudioAdjuster.gain;
 				AudioAdjuster.onChange((gain) => { nicoVideoPlayer.audioGain = gain; });
@@ -54471,31 +54737,50 @@ class NicoVideoPlayerDialog extends Emitter {
 						this._requestId === owner.requestId &&
 						this._playlist === owner.playlist;
 		}
+		_acceptPlaylistLoadResult(owner, result) {
+				if (!this._isCurrentPlaylistLoadOwner(owner))
+						return false;
+				if (result && typeof result === 'object' && 'status' in result) {
+						if (result.status === 'superseded')
+								return false;
+						if (result.status === 'ok' && 'message' in result && typeof result.message === 'string')
+								return true;
+				}
+				this._reportPlaylistLoadFailure(owner, result, 'プレイリストの読込結果を確認できませんでした');
+				return false;
+		}
+		_reportPlaylistLoadFailure(owner, error, fallback) {
+				if (!this._isCurrentPlaylistLoadOwner(owner))
+						return;
+				const message = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' && error.message ?
+						error.message : fallback;
+				this.execCommand('alert', message);
+		}
 		_onPlaylistSetMylist(id) {
 				const owner = this._capturePlaylistLoadOwner();
 				let option = { watchId: this._watchId };
 				option.insert = this._playlist.isEnable;
 				owner.playlist.load({ type: 'mylist', id }, option, owner.videoInfo.msgInfo, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
-						if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) {
+						if (!this._acceptPlaylistLoadResult(owner, result)) {
 								return;
 						}
 						this.execCommand('notify', result.message);
 						this._state.currentTab = 'playlist';
 						owner.playlist.insertCurrentVideo(owner.videoInfo);
-				}, () => this.execCommand('alert', 'マイリストのロード失敗'));
+				}, (err) => this._reportPlaylistLoadFailure(owner, err, 'マイリストのロード失敗'));
 		}
 		_onPlaylistSetUploadedVideo(id) {
 				const owner = this._capturePlaylistLoadOwner();
 				let option = { watchId: this._watchId };
 				option.insert = this._playlist.isEnable;
 				owner.playlist.load({ type: 'user-uploaded', id }, option, owner.videoInfo.msgInfo, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
-						if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) {
+						if (!this._acceptPlaylistLoadResult(owner, result)) {
 								return;
 						}
 						this.execCommand('notify', result.message);
 						this._state.currentTab = 'playlist';
 						owner.playlist.insertCurrentVideo(owner.videoInfo);
-				}, (err) => this.execCommand('alert', err.message || '投稿動画一覧のロード失敗'));
+				}, (err) => this._reportPlaylistLoadFailure(owner, err, '投稿動画一覧のロード失敗'));
 		}
 		_onPlaylistSetSearchVideo(params) {
 				const owner = this._capturePlaylistLoadOwner();
@@ -54525,7 +54810,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				this._state.currentTab = 'playlist';
 				const searchLimit = this._playerConfig.props['search.limit'];
 				owner.playlist.loadSearchVideo(word, option, searchLimit, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
-						if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) {
+						if (!this._acceptPlaylistLoadResult(owner, result)) {
 								return;
 						}
 						this.execCommand('notify', result.message);
@@ -54537,7 +54822,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								}
 						}, 1000);
 				}, (err) => {
-						this.execCommand('alert', err.message || '検索失敗または該当無し: 「' + word + '」');
+						this._reportPlaylistLoadFailure(owner, err, '検索失敗または該当無し: 「' + word + '」');
 				});
 		}
 		_onPlaylistSetSeriesVideo(id) {
@@ -54546,7 +54831,7 @@ class NicoVideoPlayerDialog extends Emitter {
 				option.insert = this._playlist.isEnable;
 				this._state.currentTab = 'playlist';
 				owner.playlist.load({ type: 'series', id }, option, owner.videoInfo.msgInfo, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
-						if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) {
+						if (!this._acceptPlaylistLoadResult(owner, result)) {
 								return;
 						}
 						this.execCommand('notify', result.message);
@@ -54556,7 +54841,7 @@ class NicoVideoPlayerDialog extends Emitter {
 										owner.playlist.scrollToActiveItem();
 								}
 						}, 1000);
-				}, (err) => this.execCommand('alert', err.message || `シリーズリストの取得に失敗: series/${id}`));
+				}, (err) => this._reportPlaylistLoadFailure(owner, err, `シリーズリストの取得に失敗: series/${id}`));
 		}
 		async _onPlaylistSetCommonsTree() {
 				const videoId = this._videoInfo ? this._videoInfo.videoId : null;
@@ -58047,9 +58332,11 @@ const RootDispatcher = (() => {
 		let config;
 		let player;
 		let playerState;
+		let lifetime = 0;
 		class RootDispatcher {
 				static initialize(dialog) {
 						player = dialog;
+						lifetime++;
 						playerState = ZenzaWatch.state.player;
 						config = PlayerConfig.getInstance(config);
 						config.on('update', RootDispatcher.onConfigUpdate);
@@ -58057,11 +58344,20 @@ const RootDispatcher = (() => {
 								document,
 								config,
 								state: playerState,
-								getContainer: () => player?._nicoVideoPlayer?._videoPlayer?._body,
-								getVideo: () => player?._nicoVideoPlayer?._videoPlayer?.videoElement
+								getContainer: () => dialog._nicoVideoPlayer?._videoPlayer?._body,
+								getVideo: () => dialog._nicoVideoPlayer?._videoPlayer?.videoElement
 						});
-						player.on('command', RootDispatcher.execCommand);
+						player.on('command', (command, params) => {
+								if (player === dialog) {
+										return RootDispatcher.execCommand(command, params);
+								}
+								return undefined;
+						});
 						player.on('close', () => {
+								if (player !== dialog) {
+										return;
+								}
+								lifetime++;
 								const active = document.pictureInPictureElement;
 								const ownVideo = player?._nicoVideoPlayer?._videoPlayer?.videoElement;
 								const closeNative = !!active && active === ownVideo &&
@@ -58082,6 +58378,8 @@ const RootDispatcher = (() => {
 						});
 				}
 				static toggleCommentPictureInPicture() {
+						const owner = player;
+						const ownerLifetime = lifetime;
 						const nicoVideoPlayer = player && player._nicoVideoPlayer;
 						if (!nicoVideoPlayer) {
 								return;
@@ -58092,12 +58390,21 @@ const RootDispatcher = (() => {
 						}
 						CommentPictureInPicture.toggle({
 								config,
-								getVideo: () => player._nicoVideoPlayer && player._nicoVideoPlayer.drawableVideoElement,
-								getViewModel: () => player._nicoVideoPlayer && player._nicoVideoPlayer.commentViewModel,
-								onPlay: () => player.execCommand('play'),
-								onPause: () => player.execCommand('pause'),
-								onEnd: () => PipPageThumbnail.stop()
+								getVideo: () => player === owner && lifetime === ownerLifetime ? nicoVideoPlayer.drawableVideoElement : null,
+								getViewModel: () => player === owner && lifetime === ownerLifetime ? nicoVideoPlayer.commentViewModel : null,
+								onPlay: () => { if (player === owner && lifetime === ownerLifetime) {
+										owner.execCommand('play');
+								} },
+								onPause: () => { if (player === owner && lifetime === ownerLifetime) {
+										owner.execCommand('pause');
+								} },
+								onEnd: () => { if (player === owner && lifetime === ownerLifetime) {
+										PipPageThumbnail.stop();
+								} }
 						}).catch((err) => {
+								if (player !== owner || lifetime !== ownerLifetime) {
+										return;
+								}
 								console.warn('comment picture-in-picture fail', err);
 								PopupMessage.alert(`コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
 						});
@@ -58216,6 +58523,8 @@ const RootDispatcher = (() => {
 										break;
 								}
 								case 'picture-in-picture': {
+										const owner = player;
+										const ownerLifetime = lifetime;
 										CommentPictureInPicture.stop();
 										const video = player?._nicoVideoPlayer?._videoPlayer?.videoElement ||
 												document.querySelector('.zenzaWatchVideoElement');
@@ -58225,10 +58534,13 @@ const RootDispatcher = (() => {
 										}
 										try {
 												Promise.resolve(video.requestPictureInPicture()).then(() => {
-														if (document.pictureInPictureElement === video) {
+														if (player === owner && lifetime === ownerLifetime && document.pictureInPictureElement === video) {
 																PipPageThumbnail.activate(video);
 														}
 												}, error => {
+														if (player !== owner || lifetime !== ownerLifetime) {
+																return;
+														}
 														PipPageThumbnail.stopFor(video);
 														console.warn('picture-in-picture start failed', error);
 												});
@@ -58329,9 +58641,13 @@ const RootDispatcher = (() => {
 										PopupMessage.notify('debug: ' + (value ? 'ON' : 'OFF'));
 										break;
 								case 'sharedNgLevel':
+										playerState.sharedNgLevel = value;
+										break;
 								case 'screenMode':
+										playerState.screenMode = value;
+										break;
 								case 'playbackRate':
-										playerState[key] = value;
+										playerState.playbackRate = value;
 										break;
 						}
 				}
@@ -60443,8 +60759,26 @@ class VideoInfoPanel extends Emitter {
 				this._uaaView.update(videoInfo);
 				this._relatedInfoMenu.update(videoInfo);
 		}
-		async _updateVideoDescription(html, series = null) {
+		static _readDescriptionSeries(value) {
+				if (!value || typeof value !== 'object')
+						return null;
+				const raw = value;
+				if (!raw.video || typeof raw.video !== 'object' || typeof raw.title !== 'string')
+						return null;
+				const videos = raw.video;
+				const read = (item) => {
+						if (!item || typeof item !== 'object')
+								return null;
+						const id = item.id;
+						return typeof id === 'string' && /^(?:(?:sm|nm|so|ss)\d+|\d+)$/.test(id) ? { id } : null;
+				};
+				return { title: raw.title, video: { prev: read(videos.prev), next: read(videos.next) } };
+		}
+		async _updateVideoDescription(input, rawSeries = null) {
+				let html = typeof input === 'string' ? input : '';
+				const series = VideoInfoPanel._readDescriptionSeries(rawSeries);
 				const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1;
+				const owner = { descriptionGeneration: generation, videoInfo: this._videoInfo };
 				this._description.textContent = '';
 				this._zenTubeUrl = null;
 				if (series) {
@@ -60586,7 +60920,7 @@ class VideoInfoPanel extends Emitter {
 						link.parentNode.insertBefore(btn, link);
 				};
 				await sleep.promise();
-				if (generation !== this._descriptionGeneration) {
+				if (owner.descriptionGeneration !== this._descriptionGeneration || owner.videoInfo !== this._videoInfo) {
 						return;
 				}
 				const $description = uq(`<zenza-video-description>${html}</zenza-video-description>`);
@@ -67005,8 +67339,15 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 										this._hlsConfig.fLoader = this._fragmentLoader;
 										const hls = new Hls(Object.assign({}, this._hlsConfig));
 										this._hls = hls;
+										let lifetime = { phase: 'active', engine: hls };
+										const owned = (listener) => (...args) => {
+												if (lifetime.phase !== 'active' || this._hls !== lifetime.engine || this._videoCount !== videoCount)
+														return;
+												listener(...args);
+										};
 										try {
 												hls.on(Hls.Events.DESTROYING, () => {
+														lifetime = { phase: 'disposed', engine: null };
 														if (this._hls !== hls) {
 																return;
 														}
@@ -67014,12 +67355,12 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 														delete this._hlsConfig.fLoader;
 														delete this._fragmentLoader;
 												});
-												hls.on(Hls.Events.MANIFEST_PARSED, this._onHLSJSManifestParsed.bind(this));
-												hls.on(Hls.Events.LEVEL_LOADED, this._onHLSJSLevelLoaded.bind(this));
-												hls.on(Hls.Events.LEVEL_SWITCHED, this._onHLSJSLevelSwitched.bind(this));
-												hls.on(Hls.Events.ERROR, this._onHLSJSError.bind(this));
-												hls.on(Hls.Events.FRAG_LOADED, this._onHLSJSFragLoaded.bind(this));
-												hls.on(Hls.Events.BUFFER_EOS, this._onHLSJSBufferEOS.bind(this));
+												hls.on(Hls.Events.MANIFEST_PARSED, owned(this._onHLSJSManifestParsed.bind(this)));
+												hls.on(Hls.Events.LEVEL_LOADED, owned(this._onHLSJSLevelLoaded.bind(this)));
+												hls.on(Hls.Events.LEVEL_SWITCHED, owned(this._onHLSJSLevelSwitched.bind(this)));
+												hls.on(Hls.Events.ERROR, owned(this._onHLSJSError.bind(this)));
+												hls.on(Hls.Events.FRAG_LOADED, owned(this._onHLSJSFragLoaded.bind(this)));
+												hls.on(Hls.Events.BUFFER_EOS, owned(this._onHLSJSBufferEOS.bind(this)));
 												this.dispatchEvent(new CustomEvent('init-hls-js', { detail: { hls } }));
 												if (this._hls !== hls) {
 														return this._hls;
@@ -67041,7 +67382,12 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								}
 								return this._hls;
 						}
-						_onHLSJSManifestParsed(eventName, data) {
+						_onHLSJSManifestParsed(eventName, raw) {
+								if (!raw || typeof raw !== 'object')
+										return;
+								const data = raw;
+								if (!Array.isArray(data.levels))
+										return;
 								this._manifest = data;
 								this._levelData = [];
 								if (this._fragmentLoader) {
@@ -67052,12 +67398,23 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								this.dispatchEvent(new CustomEvent('loadedmetadata', { detail }));
 								this.dispatchEvent(new CustomEvent('canplay', { detail }));
 						}
-						_onHLSJSLevelLoaded(eventName, data) {
+						_onHLSJSLevelLoaded(eventName, raw) {
+								if (!raw || typeof raw !== 'object')
+										return;
+								const data = raw;
+								if (typeof data.level !== 'number' || !Number.isSafeInteger(data.level) || data.level < 0 ||
+										!data.details || typeof data.details !== 'object')
+										return;
+								const details = data.details;
+								if (typeof details.endSN !== 'number' || !Number.isSafeInteger(details.endSN) || details.endSN < 0 || details.endSN > 0xffffffff)
+										return;
 								this._levelData[data.level] = data.details;
-								this._bufferStats.length = data.details.endSN || 0;
+								this._bufferStats.length = details.endSN;
 						}
 						_onHLSJSLevelSwitched() {
 								const hls = this._hls;
+								if (!hls)
+										return;
 								const level = hls.levels[hls.currentLevel];
 								const labelText = `${this.playerMode}: ${this._video.videoWidth}x${this._video.videoHeight}`;
 								if (this.label !== labelText) {
@@ -67087,9 +67444,16 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
 								setTimeout(() => { this._label.classList.remove('blink'); }, 1000);
 						}
 						// @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#fifth-step-error-handling
-						_onHLSJSError(e, data) {
-								let errorUrl = (data.context && data.context.url) ? data.context.url : '';
-								errorUrl = (!errorUrl && data.frag && data.frag.url) ? data.frag.url : '';
+						_onHLSJSError(e, raw) {
+								if (!raw || typeof raw !== 'object')
+										return;
+								const value = raw;
+								if (typeof value.fatal !== 'boolean' || typeof value.type !== 'string' || typeof value.details !== 'string')
+										return;
+								const response = value.response && typeof value.response === 'object' ?
+										value.response : null;
+								const data = { fatal: value.fatal, type: value.type, details: value.details,
+										...(response && typeof response.code === 'number' ? { response: { code: response.code } } : {}) };
 								if (data.fatal) {
 										return this._onHLSJSFatalError(e, data);
 								}
@@ -76887,7 +77251,11 @@ const WatchInfoCacheDb = (() => {
 		};
 		let db, instance, NicoVideoApi;
 		let dbOpening = null, instanceOpening = null;
+		let dbClosing = null;
 		const initWorker = async () => {
+				if (dbClosing) {
+						await dbClosing;
+				}
 				if (db) {
 						return db;
 				}
@@ -76909,6 +77277,9 @@ const WatchInfoCacheDb = (() => {
 				}
 		};
 		const open = async () => {
+				if (dbClosing) {
+						await dbClosing;
+				}
 				if (instance) {
 						return instance;
 				}
@@ -76924,17 +77295,35 @@ const WatchInfoCacheDb = (() => {
 				}
 		};
 		let legacyScrubStarted = false;
+		let legacyScrubGeneration = 0;
+		let legacyScrubTimer = null;
+		const stopLegacyScrub = () => {
+				legacyScrubGeneration++;
+				legacyScrubStarted = false;
+				if (legacyScrubTimer !== null) {
+						clearTimeout(legacyScrubTimer);
+						legacyScrubTimer = null;
+				}
+		};
 		const scheduleLegacyScrub = (store) => {
 				if (legacyScrubStarted || typeof store.scrubWatchVideoInfo !== 'function') {
 						return;
 				}
 				legacyScrubStarted = true;
+				const generation = ++legacyScrubGeneration;
+				let retryDelay = 300;
 				const scan = async () => {
 						let afterKey = null;
 						while (true) {
+								if (generation !== legacyScrubGeneration) {
+										return;
+								}
 								const page = await store.scrubWatchVideoInfo({
 										afterKey, maxRecords: 64
 								});
+								if (generation !== legacyScrubGeneration) {
+										return;
+								}
 								if (!page || !Number.isSafeInteger(page.scanned) ||
 										!Number.isSafeInteger(page.changed) || page.changed > page.scanned ||
 										(page.nextKey !== null &&
@@ -76949,20 +77338,38 @@ const WatchInfoCacheDb = (() => {
 								await new Promise(resolve => setTimeout(resolve, 0));
 						}
 				};
+				const schedule = (delay) => {
+						if (generation !== legacyScrubGeneration) {
+								return;
+						}
+						legacyScrubTimer = setTimeout(start, delay);
+						const timer = legacyScrubTimer;
+						timer?.unref?.();
+				};
 				const start = () => {
-						void scan().catch(() => {
+						legacyScrubTimer = null;
+						if (generation !== legacyScrubGeneration) {
+								return;
+						}
+						void scan().then(() => {
+								retryDelay = 300;
+								schedule(300000);
+						}).catch(() => {
+								if (generation !== legacyScrubGeneration) {
+										return;
+								}
 								console.warn('Legacy watch history cleanup incomplete; retrying');
-								void new Promise(resolve => setTimeout(resolve, 300))
-										.then(scan).catch(() => { console.warn('Legacy watch history cleanup incomplete'); });
+								schedule(retryDelay);
+								retryDelay = Math.min(300000, retryDelay * 4);
 						});
 				};
-				setTimeout(start, 0);
+				schedule(0);
 		};
 		const createInstance = async () => {
 				await initWorker();
 				const cacheDb = db['cache'];
 				scheduleLegacyScrub(cacheDb);
-				return instance = {
+				const facade = {
 						listSavedPoints,
 						async put(watchId, options = {}) {
 								const videoInfo = options.videoInfo || null;
@@ -77041,9 +77448,24 @@ const WatchInfoCacheDb = (() => {
 								return record;
 						},
 						delete(watchId) { return cacheDb.delete({ key: watchId }); },
-						close() { return cacheDb.close(); },
+						close() {
+								if (instance !== facade) {
+										return dbClosing || Promise.resolve();
+								}
+								stopLegacyScrub();
+								instance = undefined;
+								db = undefined;
+								const closing = dbClosing = Promise.resolve().then(() => cacheDb.close());
+								void closing.then(() => { if (dbClosing === closing) {
+										dbClosing = null;
+								} }, () => { if (dbClosing === closing) {
+										dbClosing = null;
+								} });
+								return closing;
+						},
 						gc(expireTime) { return cacheDb.gc(expireTime); }
 				};
+				return instance = facade;
 		};
 		const listSavedPoints = async () => {
 				const cache = (await initWorker()).cache;

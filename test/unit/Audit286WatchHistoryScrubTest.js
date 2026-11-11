@@ -75,6 +75,38 @@ async function harness() {
 }
 
 describe('AUD #286 old watch history privacy migration (synthetic only)', function() {
+  it('recovers after repeated failures, rescans old-writer reinsertion, and stops on close',async function(){
+    const timers=new Map(),warnings=[];let id=0,calls=0,secret=true,closed=false;
+    const cache={update:async()=>({}),get:async()=>null,updateTime:async()=>null,
+      delete:async()=>null,gc:async()=>null,close:async()=>{closed=true;},
+      scrubWatchVideoInfo:async()=>{
+        calls++;if(calls<=3)throw Error('TEST_ONLY_SECRET');
+        const changed=secret?1:0;secret=false;return {scanned:1,changed,nextKey:null};
+      }};
+    const api=adapterFixture('WatchInfoCacheDb',cache,{
+      setTimeout:(fn,ms)=>{timers.set(++id,{fn,ms});return id;},
+      clearTimeout:key=>timers.delete(key),console:{...quiet,warn:message=>warnings.push(message)}
+    });
+    const facade=await api.open();
+    const next=async()=>{const item=timers.entries().next().value;assert(item,'cleanup must remain scheduled');timers.delete(item[0]);item[1].fn();await ticks();return item[1].ms;};
+    await next();await next();await next();await next();
+    assert.equal(calls,4);assert.equal(secret,false);
+    secret=true;const delay=await next();
+    assert(delay>=60000,'successful scans must not continuously churn storage');
+    assert.equal(secret,false,'an older writer is cleaned on the next sweep');
+    assert(!JSON.stringify(warnings).includes('TEST_ONLY_SECRET'));
+    await facade.close();assert(closed);assert.equal(timers.size,0);
+    const reopened=await api.open();assert.equal(timers.size,1,'reopening restarts maintenance');
+    secret=true;await next();assert.equal(secret,false);
+    let release,opened=false;
+    cache.close=()=>new Promise(resolve=>{release=resolve;});
+    const closing=reopened.close(),opening=api.open().then(value=>{opened=true;return value;});
+    await ticks();assert.equal(opened,false,'reopen waits for pending close');
+    assert.equal(timers.size,0);
+    release();await closing;await opening;
+    assert.equal(timers.size,1);
+    await facade.close();assert.equal(timers.size,1,'stale facade cannot stop the new owner');
+  });
   it('preserves watch state while removing legacy videoInfo authentication fields', async function() {
     const h=await harness();
     const original=h.records.get('sm101');

@@ -1,4 +1,9 @@
 import type {ZenzaHlsEngine, ZenzaHlsLifetime} from '../nico-src/HlsLifecycleTypes';
+import type {ZenzaHlsErrorData} from '../nico-src/HlsLifecycleTypes';
+// @ts-expect-error only a validated boolean may select the fatal-error path
+const invalidFatal: ZenzaHlsErrorData = {fatal:'true',type:'networkError',details:'failure'};
+// @ts-expect-error an unvalidated response object cannot cross the error boundary
+const invalidResponse: ZenzaHlsErrorData = {fatal:false,type:'networkError',details:'failure',response:{code:'403'}};
 /** Negative checks for HLS ownership and teardown (Task187).
  * Compile via tsconfig.nico.contract.json. No live network or runtime export.
  */

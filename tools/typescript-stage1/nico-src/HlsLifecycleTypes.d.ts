@@ -18,6 +18,12 @@ export interface ZenzaHlsEngine {
 export type ZenzaHlsLifetime =
   | Readonly<{phase: 'active'; engine: ZenzaHlsEngine}>
   | Readonly<{phase: 'disposed'; engine: null}>;
+export type ZenzaHlsErrorData = Readonly<{
+  fatal: boolean;
+  type: string;
+  details: string;
+  response?: Readonly<{code: number}>;
+}>;
 
 /** Playback readiness stages are not interchangeable with hls.js event names. */
 export type ZenzaHlsReadinessStage =

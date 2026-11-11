@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-10 16:55Z fab7b4c0
+// build: 2026-11-10 21:21Z 2ab5eeff
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {

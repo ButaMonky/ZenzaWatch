@@ -1,3 +1,4 @@
+import type {ZenzaPlaylistLoadResult} from './PlayerLifetimeTypes';
 /**
  * Canonical TypeScript source for packages/zenza/src/Playlist/PlayList.js (Task870).
  */
@@ -588,7 +589,7 @@ class PlayList extends VideoList {
       this._isStaleAdditiveLoad(additiveOwner) ||
       (typeof isCurrent === 'function' && !isCurrent());
   }
-  load(playlist?: Loose, options?: Loose, msgInfo?: Loose, isCurrent?: Loose) {
+  load(playlist?: Loose, options?: Loose, msgInfo?: Loose, isCurrent?: () => boolean): Promise<ZenzaPlaylistLoadResult> {
     this._initializeView();
     options = options || {};
     const replaceOwner = this._beginReplaceLoad(options);
@@ -605,7 +606,7 @@ class PlayList extends VideoList {
       maxItems: 10000,
       isCurrent: () => !this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)
     }, msgInfo);
-    return this._waitForAdditiveTurn(network, additiveOwner).then(items => {
+    return this._waitForAdditiveTurn(network, additiveOwner).then<ZenzaPlaylistLoadResult, ZenzaPlaylistLoadResult>(items => {
         if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
           return {status: 'superseded', message: ''};
         }
@@ -701,7 +702,7 @@ class PlayList extends VideoList {
     }
     return notice;
   }
-  loadSearchVideo(word?: Loose, options?: Loose, limit: Loose = PlayList.SEARCH_LIMIT_DEFAULT, isCurrent?: Loose) {
+  loadSearchVideo(word?: Loose, options?: Loose, limit: Loose = PlayList.SEARCH_LIMIT_DEFAULT, isCurrent?: () => boolean): Promise<ZenzaPlaylistLoadResult> {
     this._initializeView();
     limit = PlayList.normalizeSearchLimit(limit);
 
@@ -734,7 +735,7 @@ class PlayList extends VideoList {
     };
 
     const network = loadItems();
-    return this._waitForAdditiveTurn(network, additiveOwner).then(videoListItems => {
+    return this._waitForAdditiveTurn(network, additiveOwner).then<ZenzaPlaylistLoadResult, ZenzaPlaylistLoadResult>(videoListItems => {
         if (this._isStalePlaylistLoad(replaceOwner, isCurrent, additiveOwner)) {
           return {status: 'superseded', message: ''};
         }

@@ -21,9 +21,9 @@
       "name": "ManualBookmarkSession",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkSession.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkSession.js",
-      "sourceSha256": "076b2cf4086cd0e4a6cee2062a008f43c0da610a46d02ff17ebf1729fc531515",
-      "emittedSha256": "fe19b9854ec761409fb1a5129e51ac241c67f55f8e6e4fca258cc8dcad60d0df",
-      "runtimeSha256": "925cd49f0c07d3f2d838318fa6fabaa7c45a9c35a3ed59d0d7a122193023a51f"
+      "sourceSha256": "c35284ce2fe634f5625a7985f42e0348250ea0ea2ccf4da409d0c1e273fb6283",
+      "emittedSha256": "9d5db4c0ad1befa3e020f3cfef4e7db0546d1a4b60b4e4b23db3499669b0c401",
+      "runtimeSha256": "b397ddfcca62f8005bf5187f5606da69ba278361ce8f896f1901c84ef3436fd8"
     },
     {
       "name": "ManualBookmarkVirtualList",
@@ -37,17 +37,17 @@
       "name": "ManualBookmarkPanel",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkPanel.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkPanel.js",
-      "sourceSha256": "efacf07fd75beed9bc6cc9171faee3b7d7a6ea0265bcfc49880691d37741eefe",
-      "emittedSha256": "97001d40a6173fde5a5a40bc422b28e009fcf124f30653d430bcb1b49fea4daa",
-      "runtimeSha256": "01128d94f66b4bab96e6e434996b527c469298e26adfa9a8e64dcb850fed7a99"
+      "sourceSha256": "12c7688124bdf5db3dd487747ed097283d8e351ae44ec8d7a3924900db05bf34",
+      "emittedSha256": "a56f6e04b848bdc61215458b390f1f049acc68889a441a031e3dfec30a2e83f7",
+      "runtimeSha256": "0f33299e5935e14d5d9f37778493e89ac0ee2397df70d95aa423d444af72390b"
     },
     {
       "name": "ManualBookmarkDock",
       "source": "tools/typescript-stage1/p12-src/ManualBookmarkDock.ts",
       "runtime": "packages/zenza/src/resume/ManualBookmarkDock.js",
-      "sourceSha256": "b3e825a1f64650fb00092e0813a8375f807e9599d49261475f21b77bf42faafb",
-      "emittedSha256": "0e6b2fc82ee6824d483b95f49680001bdc6912811aaec11e2f0986d4bb9ff074",
-      "runtimeSha256": "d128cf62ea102362f1098623d9bb99b4755b603fdfe4a4b3c6c90eea53ce3a73"
+      "sourceSha256": "fa6069f1a243d80d842c1ce1573167577b704a64e3c06310ec8e5a4fdcabb4f5",
+      "emittedSha256": "3691376a8626e6feb9f7b7303de5f0eb9d0c8737ba419d3dc558e1c69012d315",
+      "runtimeSha256": "dd3c09b234f1f086e216113fa0951169b2e3b2f5eeb401e2d63ec32c40ac4554"
     }
   ]
 }

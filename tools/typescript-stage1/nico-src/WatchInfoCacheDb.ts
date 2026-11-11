@@ -190,7 +190,9 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
   // the database twice and build two facades. Share the in-flight open (as
   // StoryboardCacheDb does) and clear it on failure so a later call can retry.
   let dbOpening: Promise<WatchInfoDb> | null = null, instanceOpening: Promise<WatchInfoCache> | null = null;
+  let dbClosing: Promise<unknown> | null = null;
   const initWorker = async (): Promise<WatchInfoDb> => {
+    if (dbClosing) { await dbClosing; }
     if (db) { return db; }
     if (dbOpening) { return dbOpening; }
     dbOpening = (async (): Promise<WatchInfoDb> => {
@@ -205,6 +207,7 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
   };
 
   const open = async (): Promise<WatchInfoCache> => {
+    if (dbClosing) { await dbClosing; }
     if (instance) { return instance; }
     if (instanceOpening) { return instanceOpening; }
     instanceOpening = createInstance();
@@ -215,15 +218,26 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
   // small, transactionally isolated batches without delaying watch playback.
   // Other row fields (resume, comments, bookmarks and updatedAt) are untouched.
   let legacyScrubStarted = false;
+  let legacyScrubGeneration = 0;
+  let legacyScrubTimer: ReturnType<typeof setTimeout> | null = null;
+  const stopLegacyScrub = (): void => {
+    legacyScrubGeneration++;
+    legacyScrubStarted = false;
+    if (legacyScrubTimer !== null) { clearTimeout(legacyScrubTimer); legacyScrubTimer = null; }
+  };
   const scheduleLegacyScrub = (store: WatchInfoIdbStore): void => {
     if (legacyScrubStarted || typeof store.scrubWatchVideoInfo !== 'function') { return; }
     legacyScrubStarted = true;
+    const generation = ++legacyScrubGeneration;
+    let retryDelay = 300;
     const scan = async (): Promise<void> => {
       let afterKey: string | null = null;
       while (true) {
+        if (generation !== legacyScrubGeneration) { return; }
         const page = await (store.scrubWatchVideoInfo as NonNullable<WatchInfoIdbStore['scrubWatchVideoInfo']>)({
           afterKey, maxRecords: 64
         });
+        if (generation !== legacyScrubGeneration) { return; }
         if (!page || !Number.isSafeInteger(page.scanned) ||
             !Number.isSafeInteger(page.changed) || page.changed > page.scanned ||
             (page.nextKey !== null &&
@@ -237,22 +251,37 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
         await new Promise<void>(resolve => setTimeout(resolve, 0));
       }
     };
+    const schedule = (delay: number): void => {
+      if (generation !== legacyScrubGeneration) { return; }
+      legacyScrubTimer = setTimeout(start, delay);
+      // Node-based offline fixtures should not be kept alive by maintenance.
+      const timer = legacyScrubTimer as unknown as {unref?: () => void};
+      timer?.unref?.();
+    };
     const start = (): void => {
-      void scan().catch(() => {
+      legacyScrubTimer = null;
+      if (generation !== legacyScrubGeneration) { return; }
+      void scan().then(() => {
+        retryDelay = 300;
+        // Old tabs can write old schemas after an earlier successful sweep.
+        // A low-frequency sweep repairs those rows while a current tab lives.
+        schedule(300000);
+      }).catch(() => {
+        if (generation !== legacyScrubGeneration) { return; }
         // No saved videoInfo/watchId/token or exception payload may reach logs.
         console.warn('Legacy watch history cleanup incomplete; retrying');
-        void new Promise<void>(resolve => setTimeout(resolve, 300))
-          .then(scan).catch(() => { console.warn('Legacy watch history cleanup incomplete'); });
+        schedule(retryDelay);
+        retryDelay = Math.min(300000, retryDelay * 4);
       });
     };
-    setTimeout(start, 0);
+    schedule(0);
   };
 
   const createInstance = async (): Promise<WatchInfoCache> => {
     await initWorker();
     const cacheDb = (db as WatchInfoDb)['cache'] as WatchInfoIdbStore;
     scheduleLegacyScrub(cacheDb);
-    return instance = {
+    const facade: WatchInfoCache = {
       listSavedPoints,
       async put(watchId: string, options: WatchInfoPutOptions = {}): Promise<WatchInfoRecord> {
         /** @type {VideoInfoModel|null} */
@@ -329,9 +358,19 @@ const WatchInfoCacheDb: WatchInfoCacheDbClient = (() => {
         return record;
       },
       delete(watchId: string): Promise<unknown> { return cacheDb.delete({key: watchId}); },
-      close(): Promise<unknown> { return cacheDb.close(); },
+      close(): Promise<unknown> {
+        if (instance !== facade) { return dbClosing || Promise.resolve(); }
+        stopLegacyScrub();
+        instance = undefined;
+        db = undefined;
+        const closing = dbClosing = Promise.resolve().then(() => cacheDb.close());
+        void closing.then(() => { if (dbClosing === closing) { dbClosing = null; } },
+          () => { if (dbClosing === closing) { dbClosing = null; } });
+        return closing;
+      },
       gc(expireTime?: number): Promise<unknown> { return cacheDb.gc(expireTime); }
     };
+    return instance = facade;
   };
   // Use initWorker directly: enumeration must not touch access timestamps or
   // start the write-only legacy scrub performed by open().

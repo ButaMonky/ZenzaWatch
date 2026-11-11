@@ -852,9 +852,16 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                     this._hlsConfig.fLoader = this._fragmentLoader;
                     const hls = new Hls(Object.assign({}, this._hlsConfig));
                     this._hls = hls;
+                    let lifetime = { phase: 'active', engine: hls };
+                    const owned = (listener) => (...args) => {
+                        if (lifetime.phase !== 'active' || this._hls !== lifetime.engine || this._videoCount !== videoCount)
+                            return;
+                        listener(...args);
+                    };
                     try {
                         // The public init hook also exposes destroy() directly.
                         hls.on(Hls.Events.DESTROYING, () => {
+                            lifetime = { phase: 'disposed', engine: null };
                             if (this._hls !== hls) {
                                 return;
                             }
@@ -862,12 +869,12 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                             delete this._hlsConfig.fLoader;
                             delete this._fragmentLoader;
                         });
-                        hls.on(Hls.Events.MANIFEST_PARSED, this._onHLSJSManifestParsed.bind(this));
-                        hls.on(Hls.Events.LEVEL_LOADED, this._onHLSJSLevelLoaded.bind(this));
-                        hls.on(Hls.Events.LEVEL_SWITCHED, this._onHLSJSLevelSwitched.bind(this));
-                        hls.on(Hls.Events.ERROR, this._onHLSJSError.bind(this));
-                        hls.on(Hls.Events.FRAG_LOADED, this._onHLSJSFragLoaded.bind(this));
-                        hls.on(Hls.Events.BUFFER_EOS, this._onHLSJSBufferEOS.bind(this));
+                        hls.on(Hls.Events.MANIFEST_PARSED, owned(this._onHLSJSManifestParsed.bind(this)));
+                        hls.on(Hls.Events.LEVEL_LOADED, owned(this._onHLSJSLevelLoaded.bind(this)));
+                        hls.on(Hls.Events.LEVEL_SWITCHED, owned(this._onHLSJSLevelSwitched.bind(this)));
+                        hls.on(Hls.Events.ERROR, owned(this._onHLSJSError.bind(this)));
+                        hls.on(Hls.Events.FRAG_LOADED, owned(this._onHLSJSFragLoaded.bind(this)));
+                        hls.on(Hls.Events.BUFFER_EOS, owned(this._onHLSJSBufferEOS.bind(this)));
                         this.dispatchEvent(new CustomEvent('init-hls-js', { detail: { hls } }));
                         if (this._hls !== hls) {
                             return this._hls;
@@ -891,7 +898,12 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                 }
                 return this._hls;
             }
-            _onHLSJSManifestParsed(eventName, data) {
+            _onHLSJSManifestParsed(eventName, raw) {
+                if (!raw || typeof raw !== 'object')
+                    return;
+                const data = raw;
+                if (!Array.isArray(data.levels))
+                    return;
                 //console.log('%cHls.Events.MANIFEST_PARSED', 'background: cyan;', this._src);
                 this._manifest = data;
                 this._levelData = [];
@@ -905,13 +917,24 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                 this.dispatchEvent(new CustomEvent('loadedmetadata', { detail }));
                 this.dispatchEvent(new CustomEvent('canplay', { detail }));
             }
-            _onHLSJSLevelLoaded(eventName, data) {
+            _onHLSJSLevelLoaded(eventName, raw) {
+                if (!raw || typeof raw !== 'object')
+                    return;
+                const data = raw;
+                if (typeof data.level !== 'number' || !Number.isSafeInteger(data.level) || data.level < 0 ||
+                    !data.details || typeof data.details !== 'object')
+                    return;
+                const details = data.details;
+                if (typeof details.endSN !== 'number' || !Number.isSafeInteger(details.endSN) || details.endSN < 0 || details.endSN > 0xffffffff)
+                    return;
                 //console.log('%cHls.Events.LEVEL_LOADED', 'background: cyan;', this._src);//, data);
                 this._levelData[data.level] = data.details;
-                this._bufferStats.length = data.details.endSN || 0;
+                this._bufferStats.length = details.endSN;
             }
             _onHLSJSLevelSwitched() {
                 const hls = this._hls;
+                if (!hls)
+                    return;
                 const level = hls.levels[hls.currentLevel];
                 const labelText = `${this.playerMode}: ${this._video.videoWidth}x${this._video.videoHeight}`;
                 if (this.label !== labelText) {
@@ -948,13 +971,16 @@ function createHlsVideoElement({ Config, Storage, debounce, throttle, HLS_JS_URL
                 setTimeout(() => { this._label.classList.remove('blink'); }, 1000);
             }
             // @see https://github.com/video-dev/hls.js/blob/master/docs/API.md#fifth-step-error-handling
-            _onHLSJSError(e, data) {
-                let errorUrl = (data.context && data.context.url) ? data.context.url : '';
-                errorUrl = (!errorUrl && data.frag && data.frag.url) ? data.frag.url : '';
-                // 時間差で前の動画のエラーが飛んできたら無視
-                //if (errorUrl && !compareHash(errorUrl, this.src)) {
-                //  //return;
-                //}
+            _onHLSJSError(e, raw) {
+                if (!raw || typeof raw !== 'object')
+                    return;
+                const value = raw;
+                if (typeof value.fatal !== 'boolean' || typeof value.type !== 'string' || typeof value.details !== 'string')
+                    return;
+                const response = value.response && typeof value.response === 'object' ?
+                    value.response : null;
+                const data = { fatal: value.fatal, type: value.type, details: value.details,
+                    ...(response && typeof response.code === 'number' ? { response: { code: response.code } } : {}) };
                 if (data.fatal) {
                     return this._onHLSJSFatalError(e, data);
                 }

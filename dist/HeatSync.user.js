@@ -25,7 +25,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/HeatSync.user.js
 // ==/UserScript==
-// build: 2026-11-09 21:18Z 5cc4ce6
+// build: 2026-11-10 21:21Z 2ab5eeff
 /* eslint-disable */
 
 // GENERATED FROM tools/typescript-stage1/nico-src/HeatSyncEntry.ts (Task966). Edit the .ts and run npm run nico:sync.

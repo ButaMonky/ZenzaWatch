@@ -13,7 +13,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaAdvancedSettings.user.js
 // ==/UserScript==
-// build: 2026-11-10 09:19Z 84ccbe4
+// build: 2026-11-10 21:21Z 2ab5eeff
 /* eslint-disable */
 (() => {
   const show = () => {

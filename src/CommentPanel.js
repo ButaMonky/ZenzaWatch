@@ -314,11 +314,17 @@ class CommentListView extends Emitter {
             this.hideItemDetail();
         }
     }
+    _isReadCurrent(owner) {
+        return owner.model === this._model && owner.epoch === (this._model?._readingEpoch ?? 0) &&
+            owner.revision === this._modelUpdateVersion;
+    }
     async _onModelUpdate(itemList, replaceAll, revision = this._modelUpdateVersion) {
+        const owner = { model: this._model,
+            epoch: this._model?._readingEpoch ?? 0, revision };
         if (!this._isFrameReady) {
             await this.promise('frame-ready');
         }
-        if (revision !== this._modelUpdateVersion) {
+        if (!this._isReadCurrent(owner)) {
             return;
         }
         this._isFrameReady = true;
@@ -332,7 +338,7 @@ class CommentListView extends Emitter {
         const itemViews = itemList.map((item, i) => new this._ItemView({ item: item, index: i, height: CommentListView.ITEM_HEIGHT }));
         await cssUtil.setProps([this.body, '--list-height',
             Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
-        if (revision !== this._modelUpdateVersion || !this._list) {
+        if (!this._isReadCurrent(owner) || !this._list) {
             return;
         }
         const readingState = this._captureReadingState();
@@ -348,7 +354,7 @@ class CommentListView extends Emitter {
         this._restoreReadingState(readingState);
         this._refreshInviewElements();
         window.setTimeout(() => {
-            if (revision !== this._modelUpdateVersion) {
+            if (!this._isReadCurrent(owner)) {
                 return;
             }
             this.removeClass('updating');

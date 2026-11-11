@@ -244,6 +244,10 @@ class ManualBookmarkPanel {
         this.loopFailureNotice = 'シークできなかったため、区間リピートを停止しました。A・Bを確認して再開してください。';
         this.pointMessage('repeat', this.loopFailureNotice);
     }
+    stopUnresponsiveRepeat() {
+        if (!this.disposed && this.ownsVideo() && this.loop)
+            this.stopLoopAfterSeekFailure();
+    }
     issueLoopSeek(loop) {
         this.awaitingLoopSeek = true;
         const now = this.deps.timestamp();

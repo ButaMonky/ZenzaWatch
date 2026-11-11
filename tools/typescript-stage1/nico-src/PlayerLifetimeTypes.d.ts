@@ -19,10 +19,10 @@ export type ZenzaDialogRequestId = string & {
   readonly [zenzaDialogRequestIdBrand]: 'dialog-request';
 };
 
-export type ZenzaPlaylistLoadResult = Readonly<{
-  status?: string;
-  message?: string;
-}>;
+export type ZenzaPlaylistLoadResult =
+  | Readonly<{status: 'ok'; message: string}>
+  | Readonly<{status: 'fail'; message: string}>
+  | Readonly<{status: 'superseded'; message: string}>;
 
 /** The only playlist methods an in-flight dialog callback is permitted to use. */
 export interface ZenzaPlaylistLoadPort {
@@ -30,11 +30,11 @@ export interface ZenzaPlaylistLoadPort {
   load(
     query: unknown, options: unknown, msgInfo: unknown,
     isCurrent: () => boolean
-  ): Promise<any>; // Legacy JS loader result; narrowed in a later stage.
+  ): Promise<ZenzaPlaylistLoadResult>;
   loadSearchVideo(
     searchWord: string, options: unknown, limit: number,
     isCurrent: () => boolean
-  ): Promise<any>; // Legacy JS loader result; narrowed in a later stage.
+  ): Promise<ZenzaPlaylistLoadResult>;
   insertCurrentVideo(videoInfo: unknown): unknown;
   scrollToActiveItem(): void;
 }
@@ -46,3 +46,38 @@ export type ZenzaPlaylistLoadOwner = Readonly<{
   requestId: ZenzaDialogRequestId | null | undefined;
   playlist: ZenzaPlaylistLoadPort;
 }>;
+
+/** Only the player capabilities used by global command routing. */
+export interface ZenzaRootPlayerPort {
+  readonly currentTime: number;
+  readonly _nicoVideoPlayer?: {
+    readonly _videoPlayer?: {
+      readonly _body?: HTMLElement | null;
+      readonly videoElement?: HTMLVideoElement | null;
+    };
+    readonly drawableVideoElement?: HTMLVideoElement | null;
+    readonly commentViewModel?: unknown;
+  };
+  on(event: 'command', callback: (command: string, params?: unknown) => unknown): unknown;
+  on(event: 'close', callback: () => void): unknown;
+  execCommand(command: string, params?: unknown): unknown;
+}
+export interface ZenzaRootPlayerState {
+  videoInfo?: {
+    readonly videoId: string;
+    readonly watchId?: string;
+    readonly watchUrl?: string;
+    readonly title?: string;
+    readonly isCommunityVideo?: boolean;
+    readonly isMymemory?: boolean;
+  } | null;
+  isEnableFilter: boolean;
+  isBackComment: boolean;
+  isShowComment: boolean;
+  isLoop: boolean;
+  isMute: boolean;
+  isDebug: boolean;
+  sharedNgLevel: string | number;
+  screenMode: string;
+  playbackRate: number;
+}

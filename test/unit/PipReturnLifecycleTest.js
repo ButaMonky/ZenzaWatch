@@ -123,6 +123,14 @@ describe('Task712: PiP returns to original page even when leave event is lost',(
   });
 });
 describe('Task712: closing ZenzaWatch closes its own PiP window',()=>{
+  it('ignores a close callback from a replaced dispatcher owner',()=>{
+    const f=dispatcherFixture('native');
+    f.c.dispatcher.initialize({_nicoVideoPlayer:{_videoPlayer:{videoElement:f.other}},on(){},execCommand(){}});
+    f.close();
+    assert.strictEqual(f.calls.commentStops,0);
+    assert.strictEqual(f.calls.overlayStops,0);
+    assert.strictEqual(f.calls.nativeExits,0);
+  });
   it('closes an owned native PiP when the video dialog closes',async()=>{
     const f=dispatcherFixture('native');
     f.close();

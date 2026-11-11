@@ -10,7 +10,7 @@ import {dirname,join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {MODULES,MODULE_BY_ID} from '../scripts/module-registry.mjs';
 import {
-  syncModules,prepareModule,applyPlans,renderLegacy,sha,safeDiagnostic
+  syncModules,prepareModule,applyPlans,renderLegacy,sha,safeDiagnostic,lf
 } from '../scripts/generator-core.mjs';
 
 const sourceRepo=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
@@ -60,10 +60,10 @@ test('registry is fixed, unique and contains only expected product modules',()=>
     assert.ok(!spec.source.includes('..')&&!spec.manifest.includes('..'));
   }
 });
-test('shared renderer preserves canonical legacy runtime bytes',()=>{
+test('shared renderer preserves canonical legacy runtime text across checkout line endings',()=>{
   for(const spec of MODULES){
     assert.equal(renderLegacy(spec,read(sourceRepo,spec.emitted)),
-      read(sourceRepo,spec.runtime));
+      lf(read(sourceRepo,spec.runtime)));
   }
 });
 test('single transaction migrates all modules and verifies their manifests',t=>{

@@ -3701,6 +3701,9 @@ util.addStyle(`
     }
   }
 
+/** Type-only view of the production constructor for compiler regression tests. */
+export type NativeSeekPointerParams = ConstructorParameters<typeof SmoothSeekBarPointer>[0];
+
 export {
   VideoControlBar,
   HeatMapWorker,

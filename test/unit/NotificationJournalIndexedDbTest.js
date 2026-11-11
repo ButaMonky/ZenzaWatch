@@ -1,69 +1,17 @@
 'use strict';
 const assert = require('assert');
 const {createContext, extract, run} = require('../helpers/extractSource');
+const {sharedStorage} = require('../helpers/notificationSharedStorage');
 
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function fakeIndexedDb({failWrite = 0} = {}) {
-  const records = new Map();
-  let writes = 0;
-  let initialized = false;
-  const db = {
-    objectStoreNames: {contains: () => initialized},
-    createObjectStore() {
-      initialized = true;
-      return {createIndex() {}};
-    },
-    transaction() {
-      const tx = {oncomplete: null, onerror: null, onabort: null};
-      const ready = callback => Promise.resolve().then(callback);
-      const store = {
-        put(value) {
-          const number = ++writes;
-          ready(() => {
-            if (number === failWrite) { tx.onerror?.(); return; }
-            records.set(value.id, value); tx.oncomplete?.();
-          });
-          return {};
-        },
-        getAll() {
-          const request = {};
-          ready(() => {
-            request.result = Array.from(records.values());
-            request.onsuccess?.();
-          });
-          return request;
-        },
-        clear() {
-          ready(() => { records.clear(); tx.oncomplete?.(); });
-          return {};
-        },
-        index() {
-          return {openCursor() {
-            const request = {};
-            ready(() => { request.result = null; request.onsuccess?.(); });
-            return request;
-          }};
-        }
-      };
-      tx.objectStore = () => store;
-      return tx;
-    },
-    close() {}
-  };
-  return {
-    open() {
-      const request = {result: db};
-      Promise.resolve().then(() => {
-        if (!initialized) { request.onupgradeneeded?.(); }
-        request.onsuccess?.();
-      });
-      return request;
-    },
-    records
-  };
+  const world=sharedStorage(),db=world.factory({failWrite});
+  db.locks=world.locks;
+  Object.defineProperty(db,'records',{get:()=>world.stores.get('entries')||new Map()});
+  return db;
 }
 function journal(indexedDB) {
-  const context = createContext({indexedDB});
+  const context = createContext({indexedDB,navigator:{locks:indexedDB.locks}});
   for (const name of ['NotificationJournalPolicy', 'NotificationJournalStore']) {
     run('const ' + name + ' = ' + extract('packages/zenza/src/notification/' + name + '.js', name, 'var') + ';', context);
   }

@@ -8,7 +8,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 // legacy-to-ts: names provided by other bundled modules
-declare const CommentSubmitLifetime: Loose;
+import type {CommentSubmitControl} from './CommentSubmitLifetime';
+declare const CommentSubmitLifetime: typeof import('./CommentSubmitLifetime').CommentSubmitLifetime;
 declare const Emitter: Loose;
 declare const UiVisibilityRegistry: Loose;
 declare const _: Loose;
@@ -123,7 +124,13 @@ const CommandPicker = (() => {
 class CommentInputPanel extends Emitter {
   declare static CommandPicker: Loose;
   declare static POPOVER_EDGE_MARGIN: Loose;
-  declare emit: Loose;
+  declare emit: {
+    (event: 'post', control: CommentSubmitControl, chat: string, command: string): void;
+    (event: 'esc'): void;
+    (event: 'focus' | 'blur', autoPause: boolean): void;
+  };
+  declare _submitPending?: boolean;
+  declare _submitPromise?: Promise<boolean> | null;
   declare static __tpl__: Loose;
   declare static __css__: Loose;
   declare _$autoPause: Loose;

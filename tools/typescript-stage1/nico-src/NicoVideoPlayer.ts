@@ -63,6 +63,8 @@ class NicoVideoPlayer extends Emitter {
   declare _videoWatchTimer: Loose;
   /** Synchronous AB repeat takeover before native ended enters SupporterCredit. */
   declare beforeSupporterCreditEnd:(()=>boolean)|undefined;
+  declare onRepeatEndTimeout:(()=>void)|undefined;
+  declare _terminalRepeat: {generation: ZenzaVideoSetGeneration | undefined; started: number; next: number} | null | undefined;
   constructor(params?: Loose) {
     super();
     this.initialize(params);
@@ -374,6 +376,7 @@ class NicoVideoPlayer extends Emitter {
     this._videoPlayer.volume =  v * r;
   }
   _onTimer() {
+    this._pollTerminalRepeat();
     this._checkSupporterCreditPreload();
     // Task 080: 提供画面の間も、動画の続きの時刻としてコメントを流し続ける
     const credit = this._supporterCredit;
@@ -426,18 +429,65 @@ class NicoVideoPlayer extends Emitter {
     this.emit('seeking');
   }
   _onSeeked() {
+    const media=this._videoPlayer?._video;
+    if(this._terminalRepeat&&Number.isFinite(media?.currentTime)&&
+       Number.isFinite(media?.duration)&&media.duration>0&&
+       !media.seeking&&!media._isSeeking&&media.currentTime<media.duration-0.05){
+      this._terminalRepeat=null;
+    }
     this._isSeeking = false;
     this.emit('seeked');
   }
   _onPause() {
+    // Native end may queue pause before ended; subsequent provider/user pause
+    // must not be undone by the terminal-recovery clock.
+    if(this._terminalRepeat&&this._videoPlayer?._video?.ended!==true){
+      this._terminalRepeat=null;
+    }
     this._isPlaying = false;
     this.emit('pause');
   }
   _onEnded() {
     // B=duration must return to A before credit preload/credit playback.
     // The Dialog owns the active AB range; non-AB videos retain old behavior.
-    try{if(this.beforeSupporterCreditEnd?.()===true)return;}
+    try{if(this.beforeSupporterCreditEnd?.()===true){
+      if(!this._terminalRepeat){
+        const now=performance.now();
+        this._terminalRepeat={generation:this._setVideoGeneration,started:now,next:now+1800};
+      }
+      return;
+    }}
     catch{console.warn('AB repeat end handler unavailable');}
+    this._terminalRepeat=null;
+    this._finishNaturalEnd();
+  }
+  /** Reuse the existing clock: ignored terminal seeks may emit no more events. */
+  _pollTerminalRepeat() {
+    const owner=this._terminalRepeat;
+    if(!owner)return;
+    if(owner.generation!==this._setVideoGeneration){this._terminalRepeat=null;return;}
+    const media=this._videoPlayer?._video;
+    const waiting=!!(this._isSeeking||media?.seeking||media?._isSeeking||
+      (this._videoPlayer?._isYouTube&&media?.playerState===3));
+    const time=media?.currentTime,duration=media?.duration;
+    if(!waiting&&Number.isFinite(time)&&Number.isFinite(duration)&&duration>0&&time<duration-0.05){
+      this._terminalRepeat=null;return;
+    }
+    const now=performance.now();
+    if(now-owner.started>=30000){
+      this._terminalRepeat=null;
+      this.onRepeatEndTimeout?.();
+      // A stalled seek is not permission to start another video or force play.
+      if(!waiting&&Number.isFinite(time)&&Number.isFinite(duration)&&duration>0&&time>=duration){
+        this._finishNaturalEnd();
+      }
+      return;
+    }
+    if(waiting||now<owner.next)return;
+    owner.next=now+1800;
+    this._onEnded();
+  }
+  _finishNaturalEnd() {
     // Task 080: 提供画面を出す時は、終わってから ended を出す
     if (this._tryStartSupporterCredit()) {
       return;
@@ -482,6 +532,7 @@ class NicoVideoPlayer extends Emitter {
     }
   }
   setVideo(url?: Loose) {
+    this._terminalRepeat=null;
     const generation = this._setVideoGeneration = (this._setVideoGeneration || 0) + 1 as ZenzaVideoSetGeneration;
     this._cancelSupporterCredit();
     const e = {src: url, url: (null as Loose), promise: (null as Loose)};
@@ -510,6 +561,7 @@ class NicoVideoPlayer extends Emitter {
     return this._videoPlayer.play();
   }
   pause() {
+    this._terminalRepeat=null;
     if (this.isSupporterCreditActive) {
       this._supporterCredit.pause();
       this._isPlaying = false;
@@ -577,6 +629,7 @@ class NicoVideoPlayer extends Emitter {
     this._commentPlayer.appendTo(node);
   }
   close() {
+    this._terminalRepeat=null;
     this._setVideoGeneration = (this._setVideoGeneration || 0) + 1 as ZenzaVideoSetGeneration;
     this._cancelSupporterCredit();
     this._creditAbort && this._creditAbort.abort();

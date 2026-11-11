@@ -1,4 +1,4 @@
-import type {ZenzaDescriptionGeneration, ZenzaZenTubeTimerGeneration} from './VideoInfoAsyncTypes';
+import type {ZenzaDescriptionGeneration, ZenzaZenTubeTimerGeneration, ZenzaVideoInfoAsyncOwner, ZenzaDescriptionSeries} from './VideoInfoAsyncTypes';
 /**
  * Canonical TypeScript source for src/VideoInfoPanel.js (Task964).
  */
@@ -203,9 +203,24 @@ class VideoInfoPanel extends Emitter {
   /**
    * 説明文中のurlの自動リンク等の処理
    */
-  async _updateVideoDescription(html?: Loose, series: Loose = null) {
+  static _readDescriptionSeries(value: unknown): ZenzaDescriptionSeries | null {
+    if(!value||typeof value!=='object')return null;
+    const raw=value as Record<string,unknown>;
+    if(!raw.video||typeof raw.video!=='object'||typeof raw.title!=='string')return null;
+    const videos=raw.video as Record<string,unknown>;
+    const read=(item:unknown):Readonly<{id:string}>|null=>{
+      if(!item||typeof item!=='object')return null;
+      const id=(item as Record<string,unknown>).id;
+      return typeof id==='string'&&/^(?:(?:sm|nm|so|ss)\d+|\d+)$/.test(id)?{id}:null;
+    };
+    return {title:raw.title,video:{prev:read(videos.prev),next:read(videos.next)}};
+  }
+  async _updateVideoDescription(input?: unknown, rawSeries: unknown = null) {
+    let html=typeof input==='string'?input:'';
+    const series=VideoInfoPanel._readDescriptionSeries(rawSeries);
     // Task 090（監査v2 ZW-053）: 更新の世代。await の後で、もっと新しい更新や clear() があったら、この結果は捨てる
     const generation = this._descriptionGeneration = (this._descriptionGeneration || 0) + 1 as ZenzaDescriptionGeneration;
+    const owner: ZenzaVideoInfoAsyncOwner = {descriptionGeneration:generation,videoInfo:this._videoInfo};
     this._description.textContent = '';
     this._zenTubeUrl = null;
     if (series) {
@@ -350,7 +365,7 @@ class VideoInfoPanel extends Emitter {
     };
 
     await sleep.promise();
-    if (generation !== this._descriptionGeneration) {
+    if (owner.descriptionGeneration !== this._descriptionGeneration || owner.videoInfo !== this._videoInfo) {
       return;
     }
 

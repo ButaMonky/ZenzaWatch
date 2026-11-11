@@ -10,7 +10,14 @@ function fixture(){
  const requests=[];let throwNext=false;
  const indexedDB={open(){if(throwNext){throwNext=false;throw Error('synthetic open failure');}const request={};requests.push(request);return request;}};
  const journal=loadJournal({indexedDB});
- const database=()=>({closed:0,close(){this.closed++;},transaction(){return {objectStore(){return {getAll(){const request={result:[]};queueMicrotask(()=>request.onsuccess?.());return request;}};}};}});
+ const database=()=>({closed:0,close(){this.closed++;},transaction(){
+  let pending=0;const tx={objectStore(){
+   const read=result=>{pending++;const request={result};queueMicrotask(()=>{
+    request.onsuccess?.();if(--pending===0)queueMicrotask(()=>tx.oncomplete?.());
+   });return request;};
+   return {get:()=>read(undefined),getAll:()=>read([])};
+  }};return tx;
+ }});
  const succeed=(request=requests.at(-1),db=database())=>{request.result=db;request.onsuccess();return db;};
  return {journal,requests,succeed,database,throwNext(){throwNext=true;}};
 }

@@ -38,3 +38,31 @@ const missingPlaylist: ZenzaPlaylistLoadOwner = {
 const missingLoader: ZenzaPlaylistLoadPort = {isEnable: true};
 // @ts-expect-error isCurrent must return a boolean
 snapshot.playlist.load({}, {}, {}, () => 'yes');
+
+import type {ZenzaPlaylistLoadResult} from '../nico-src/PlayerLifetimeTypes';
+// @ts-expect-error undocumented arbitrary statuses are not owned load outcomes
+const arbitraryResult: ZenzaPlaylistLoadResult = {status:'whatever'};
+// @ts-expect-error a success must supply its display message
+const incompleteSuccess: ZenzaPlaylistLoadResult = {status:'ok'};
+async function resultCannotBeAny(port:ZenzaPlaylistLoadPort) {
+  const result=await port.load({}, {}, {}, () => true);
+  // @ts-expect-error result must not silently become any at the actual port
+  result.notAResultMethod();
+}
+void resultCannotBeAny;
+
+import type {ZenzaRootPlayerPort, ZenzaRootPlayerState} from '../nico-src/PlayerLifetimeTypes';
+import {RootDispatcher} from '../nico-src/RootDispatcher';
+declare const rootPlayer: ZenzaRootPlayerPort;
+declare const rootState: ZenzaRootPlayerState;
+RootDispatcher.initialize(rootPlayer);
+// @ts-expect-error global routing cannot accept an arbitrary object as its player
+RootDispatcher.initialize({});
+// @ts-expect-error the entry point requires an owning player
+RootDispatcher.initialize();
+// @ts-expect-error current time is read from the player, not replaced by routing
+rootPlayer.currentTime = 10;
+// @ts-expect-error the active media endpoint must be a real video element
+const wrongMedia: NonNullable<ZenzaRootPlayerPort['_nicoVideoPlayer']> = {_videoPlayer:{videoElement:document.createElement('div')}};
+// @ts-expect-error configuration state is not an arbitrary property bag
+rootState.playbackRate = 'fast';

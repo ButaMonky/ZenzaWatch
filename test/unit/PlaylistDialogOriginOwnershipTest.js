@@ -64,6 +64,18 @@ function fixture(path, {enabled = false} = {}) {
 for(const path of ['src/NicoVideoPlayerDialog.js','dist/ZenzaWatch-dev.user.js']) {
   describe('Task385 AUD-41 originating-video dialog load ownership '+path,()=>{
     for(const [name,start] of modes){
+      it('ignores a rejected old-video load: '+name,async()=>{
+        const f=fixture(path);start(f.dialog);f.switchToB();
+        f.requests[0].reject({message:'old failure'});await flush();
+        assert.deepStrictEqual(f.messages(),[]);
+      });
+      for(const payload of [{status:'fail',message:'failed'},{status:'unknown',message:'bad'},{}]){
+        it('does not insert metadata for a non-success result '+JSON.stringify(payload)+': '+name,async()=>{
+          const f=fixture(path);start(f.dialog);await f.result(0,payload);
+          assert.deepStrictEqual(f.inserts,[]);assert.deepStrictEqual(f.searches,[]);
+          assert.equal(f.messages().length,1);assert.equal(f.messages()[0][0],'alert');
+        });
+      }
       it('does not attach video B to A playlist after A->B: '+name,async()=>{
         const f=fixture(path);start(f.dialog);
         assert.strictEqual(f.requests.length,1);

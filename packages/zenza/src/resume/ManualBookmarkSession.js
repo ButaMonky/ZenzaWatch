@@ -21,6 +21,7 @@ class ManualBookmarkSession {
     /** A background read must never overwrite an unfinished local edit. */
     inFlightWrites = 0;
     refreshing = null;
+    peerRefreshPending = false;
     disposed = false;
     failedLoad = false;
     state = makeState('idle', null, empty);
@@ -33,18 +34,36 @@ class ManualBookmarkSession {
                 channel.onmessage = event => {
                     if (event?.data?.kind !== 'changed')
                         return;
-                    void this.refreshIfIdle();
+                    this.peerRefreshPending = true;
+                    this.drainPeerRefresh();
                 };
             }
         }
         catch { /* Unsupported sandbox/origin: Dock focus/reopen remains the fallback. */ }
         this.changeChannel = channel;
     }
+    /** Coalesce peer invalidations, but never lose one behind an older read/write. */
+    drainPeerRefresh() {
+        if (!this.peerRefreshPending || this.disposed || !this.current ||
+            this.state.status !== 'ready' || this.inFlightWrites !== 0 ||
+            this.activating !== null || this.refreshing !== null)
+            return;
+        this.peerRefreshPending = false;
+        void this.refreshIfIdle();
+    }
     notifyOtherTabs() {
         try {
             this.changeChannel?.postMessage({ kind: 'changed' });
         }
         catch { /* Never turn a successful bookmark write into a notification error. */ }
+    }
+    /** Library writes share this invalidation path only after storage commits. */
+    notifyCommittedChange() {
+        if (this.disposed)
+            return;
+        this.notifyOtherTabs();
+        this.peerRefreshPending = true;
+        this.drainPeerRefresh();
     }
     get snapshot() { return this.state; }
     /** Only initial load failures may be retried on Dock open; write failures keep drafts. */
@@ -96,8 +115,8 @@ class ManualBookmarkSession {
         this.activating = activating;
         this.publishState('loading', videoId, empty);
         void activating.then(() => { if (this.activating === activating)
-            this.activating = null; }, () => { if (this.activating === activating)
-            this.activating = null; });
+            this.activating = null; this.drainPeerRefresh(); }, () => { if (this.activating === activating)
+            this.activating = null; this.drainPeerRefresh(); });
         return activating;
     }
     async loadActivated(generation, videoId, duration) {
@@ -177,6 +196,7 @@ class ManualBookmarkSession {
         }
         finally {
             this.inFlightWrites--;
+            this.drainPeerRefresh();
         }
     }
     /**
@@ -224,8 +244,8 @@ class ManualBookmarkSession {
         })();
         this.refreshing = pending;
         void pending.then(() => { if (this.refreshing === pending)
-            this.refreshing = null; }, () => { if (this.refreshing === pending)
-            this.refreshing = null; });
+            this.refreshing = null; this.drainPeerRefresh(); }, () => { if (this.refreshing === pending)
+            this.refreshing = null; this.drainPeerRefresh(); });
         return pending;
     }
     add(id, time, now, label = '', endTime) {
@@ -252,6 +272,7 @@ class ManualBookmarkSession {
         this.generation++;
         this.latestAction = 0;
         this.current = null;
+        this.peerRefreshPending = false;
         this.failedAction = null;
         this.failedLoad = false;
         this.readbackRevision++;

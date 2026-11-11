@@ -1,4 +1,4 @@
-import type {ZenzaCommentSortKey, ZenzaCommentReadingModelPort} from './CommentReadTypes';
+import type {ZenzaCommentSortKey, ZenzaCommentReadingModelPort, ZenzaCommentReadIdentity} from './CommentReadTypes';
 /**
  * Canonical TypeScript source for src/CommentPanel.js (Task963).
  */
@@ -372,11 +372,17 @@ class CommentListView extends Emitter {
     const detail = byKey.get(state.detail);
     if (detail) { this.showItemDetail(detail.view._item); } else { this.hideItemDetail(); }
   }
+  _isReadCurrent(owner: ZenzaCommentReadIdentity): boolean {
+    return owner.model === this._model && owner.epoch === (this._model?._readingEpoch ?? 0) &&
+      owner.revision === this._modelUpdateVersion;
+  }
   async _onModelUpdate(itemList?: Loose, replaceAll?: Loose, revision: number = this._modelUpdateVersion) {
+    const owner: ZenzaCommentReadIdentity = {model:this._model,
+      epoch:this._model?._readingEpoch ?? 0,revision};
     if (!this._isFrameReady) {
       await this.promise('frame-ready');
     }
-    if (revision !== this._modelUpdateVersion) { return; }
+    if (!this._isReadCurrent(owner)) { return; }
     this._isFrameReady = true;
 
     window.console.time('update commentlistView');
@@ -395,7 +401,7 @@ class CommentListView extends Emitter {
     await cssUtil.setProps([this.body, '--list-height',
       Math.max(CommentListView.ITEM_HEIGHT * itemViews.length, this._innerHeight) + 100]);
 
-    if (revision !== this._modelUpdateVersion || !this._list) { return; }
+    if (!this._isReadCurrent(owner) || !this._list) { return; }
     const readingState = this._captureReadingState();
     this._readingEpoch = this._model?._readingEpoch;
     this._itemViews = itemViews;
@@ -410,7 +416,7 @@ class CommentListView extends Emitter {
     this._refreshInviewElements();
 
     window.setTimeout(() => {
-      if (revision !== this._modelUpdateVersion) { return; }
+      if (!this._isReadCurrent(owner)) { return; }
       this.removeClass('updating');
       this.emit('update');
     }, 100);

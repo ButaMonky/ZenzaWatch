@@ -33,6 +33,19 @@ async function fixture(){
    switchVideo:()=>{active='sm1000';},dispose:()=>{dock.dispose();dom.window.close();}};
 }
 describe('Issue #222 AB end deduplication and seek acknowledgement',()=>{
+ it('real Dock retry budget releases the player end without subsequent media events',async()=>{
+  const h=await fixture();try{
+   h.start(10,120);let now=100,ended=0;
+   const C=loadClass('src/NicoVideoPlayer.js','NicoVideoPlayer',createContext({Emitter:class{},performance:{now:()=>now}}));
+   const player=Object.create(C.prototype);
+   Object.assign(player,{_videoPlayer:{_video:{currentTime:120,duration:120,seeking:false}},
+    _commentPlayer:{},_playerConfig:{props:{}},_checkSupporterCreditPreload(){},_tryStartSupporterCredit:()=>false,
+    _emitEnded:()=>ended++,beforeSupporterCreditEnd:()=>h.dock.repeatAtEnd()});
+   player._onEnded();
+   for(const clock of [1000,1900,2000,3700,4000]){now=clock;h.setClock(clock);player._onTimer();}
+   assert.equal(h.dock.isRepeating,false);assert.deepEqual(h.seeks,[10,10]);assert.equal(ended,1);
+  }finally{h.dispose();}
+ });
  it('optimistic YouTube seek ticks cannot reset the bounded retry budget',async()=>{
   const h=await fixture();try{h.start(10,20);
    const ctx=createContext({Emitter:class{},STATE_PLAYING:1,performance:{now:()=>0},_:{debounce:f=>Object.assign(f,{cancel(){}})}});

@@ -1,4 +1,4 @@
-import type {ZenzaDialogRequestId, ZenzaPlaylistLoadOwner} from './PlayerLifetimeTypes';
+import type {ZenzaDialogRequestId, ZenzaPlaylistLoadOwner, ZenzaPlaylistLoadResult} from './PlayerLifetimeTypes';
 /**
  * Canonical TypeScript source for src/NicoVideoPlayerDialog.js (Task964).
  */
@@ -1013,7 +1013,7 @@ class NicoVideoPlayerDialogView extends Emitter {
     // Prevent re-entrant listeners from opening parallel DB owners.
     if(this._manualBookmarkDockMounting)return false;
     this._manualBookmarkDockMounting=true;
-    let bookmarkSession:{dispose():void}|undefined;
+    let bookmarkSession:{dispose():void;notifyCommittedChange():void;refreshIfIdle():Promise<unknown>}|undefined;
     let videoThumbnails:{attach(host:HTMLElement,videoId:string,url?:string):()=>void;dispose():void}|undefined;
     try{
       const container=this._$playerContainer?.[0];
@@ -1061,11 +1061,13 @@ class NicoVideoPlayerDialogView extends Emitter {
         }),
         editLibraryBookmark:async(videoId:string,id:string,changes:Loose,duration:number)=>{
           await repository.update(videoId,id,changes,Date.now(),duration);
-          await (bookmarkSession as Loose)?.refreshIfIdle?.();
+          bookmarkSession!.notifyCommittedChange();
+          await bookmarkSession!.refreshIfIdle();
         },
         deleteLibraryBookmark:async(videoId:string,id:string,duration:number)=>{
           await repository.remove(videoId,id,duration);
-          await (bookmarkSession as Loose)?.refreshIfIdle?.();
+          bookmarkSession!.notifyCommittedChange();
+          await bookmarkSession!.refreshIfIdle();
         },
         editLibraryAutomatic:async(videoId:string,time:number,duration:number)=>{
           if(!Number.isFinite(time)||time<0||time>=duration)throw Error('Invalid saved position');
@@ -3253,6 +3255,9 @@ class NicoVideoPlayerDialog extends Emitter {
       this.play();
       return true;
     };
+    nicoVideoPlayer.onRepeatEndTimeout=()=>{
+      this._view?.manualBookmarkDock?.stopUnresponsiveRepeat();
+    };
 
     // Task 074: 音声の自動調整（倍率が変わるたびにプレイヤーへ反映する）
     AudioAdjuster.initialize(config);
@@ -3817,6 +3822,21 @@ class NicoVideoPlayerDialog extends Emitter {
       this._requestId === owner.requestId &&
       this._playlist === owner.playlist;
   }
+  _acceptPlaylistLoadResult(owner: ZenzaPlaylistLoadOwner, result: unknown): result is Extract<ZenzaPlaylistLoadResult, {status:'ok'}> {
+    if(!this._isCurrentPlaylistLoadOwner(owner))return false;
+    if(result&&typeof result==='object'&&'status' in result){
+      if(result.status==='superseded')return false;
+      if(result.status==='ok'&&'message' in result&&typeof result.message==='string')return true;
+    }
+    this._reportPlaylistLoadFailure(owner,result,'プレイリストの読込結果を確認できませんでした');
+    return false;
+  }
+  _reportPlaylistLoadFailure(owner: ZenzaPlaylistLoadOwner, error: unknown, fallback: string): void {
+    if(!this._isCurrentPlaylistLoadOwner(owner))return;
+    const message=error&&typeof error==='object'&&'message' in error&&typeof error.message==='string'&&error.message?
+      error.message:fallback;
+    this.execCommand('alert',message);
+  }
   _onPlaylistSetMylist(id?: Loose) {
     const owner = this._capturePlaylistLoadOwner();
 
@@ -3826,14 +3846,14 @@ class NicoVideoPlayerDialog extends Emitter {
     (option as Loose).insert = this._playlist.isEnable;
 
     owner.playlist.load({ type: 'mylist', id }, option, owner.videoInfo.msgInfo,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result) => {
         // A stale response must never insert the new video's metadata into the old list.
-        if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
+        if (!this._acceptPlaylistLoadResult(owner, result)) { return; }
         this.execCommand('notify', result.message);
         this._state.currentTab = 'playlist';
         owner.playlist.insertCurrentVideo(owner.videoInfo);
       },
-      () => this.execCommand('alert', 'マイリストのロード失敗'));
+      (err: unknown) => this._reportPlaylistLoadFailure(owner, err, 'マイリストのロード失敗'));
   }
   _onPlaylistSetUploadedVideo(id?: Loose) {
     const owner = this._capturePlaylistLoadOwner();
@@ -3843,13 +3863,13 @@ class NicoVideoPlayerDialog extends Emitter {
     (option as Loose).insert = this._playlist.isEnable;
 
     owner.playlist.load({ type: 'user-uploaded', id }, option, owner.videoInfo.msgInfo,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
-        if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result) => {
+        if (!this._acceptPlaylistLoadResult(owner, result)) { return; }
         this.execCommand('notify', result.message);
         this._state.currentTab = 'playlist';
         owner.playlist.insertCurrentVideo(owner.videoInfo);
       },
-      (err?: Loose) => this.execCommand('alert', err.message || '投稿動画一覧のロード失敗'));
+      (err: unknown) => this._reportPlaylistLoadFailure(owner, err, '投稿動画一覧のロード失敗'));
   }
   _onPlaylistSetSearchVideo(params?: Loose) {
     const owner = this._capturePlaylistLoadOwner();
@@ -3888,8 +3908,8 @@ class NicoVideoPlayerDialog extends Emitter {
     // 設定（search.limit、上級者向け設定で変更可）の件数を渡す。範囲外の値はPlayList側で丸める。
     const searchLimit = this._playerConfig.props['search.limit'];
     owner.playlist.loadSearchVideo(word, option, searchLimit,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
-        if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result) => {
+        if (!this._acceptPlaylistLoadResult(owner, result)) { return; }
         this.execCommand('notify', result.message);
         owner.playlist.insertCurrentVideo(owner.videoInfo);
         global.emitter.emitAsync('searchVideo', {word, option});
@@ -3899,8 +3919,8 @@ class NicoVideoPlayerDialog extends Emitter {
           }
         }, 1000);
       },
-      (err?: Loose) => {
-        this.execCommand('alert', err.message || '検索失敗または該当無し: 「' + word + '」');
+      (err: unknown) => {
+        this._reportPlaylistLoadFailure(owner, err, '検索失敗または該当無し: 「' + word + '」');
       });
   }
   _onPlaylistSetSeriesVideo(id?: Loose) {
@@ -3910,8 +3930,8 @@ class NicoVideoPlayerDialog extends Emitter {
     (option as Loose).insert = this._playlist.isEnable;
     this._state.currentTab = 'playlist';
     owner.playlist.load({ type: 'series', id }, option, owner.videoInfo.msgInfo,
-      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result?: Loose) => {
-      if (result?.status === 'superseded' || !this._isCurrentPlaylistLoadOwner(owner)) { return; }
+      () => this._isCurrentPlaylistLoadOwner(owner)).then<unknown, unknown>((result) => {
+      if (!this._acceptPlaylistLoadResult(owner, result)) { return; }
       this.execCommand('notify', result.message);
       owner.playlist.insertCurrentVideo(owner.videoInfo);
       window.setTimeout(() => {
@@ -3920,7 +3940,7 @@ class NicoVideoPlayerDialog extends Emitter {
         }
       }, 1000);
     },
-    (err?: Loose) => this.execCommand('alert', err.message || `シリーズリストの取得に失敗: series/${id}`));
+    (err: unknown) => this._reportPlaylistLoadFailure(owner, err, `シリーズリストの取得に失敗: series/${id}`));
   }
   /**
    * ニコニ・コモンズのコンテンツツリー（親作品・子作品）のうち、

@@ -18,9 +18,11 @@ const RootDispatcher = (() => {
     let config;
     let player;
     let playerState;
+    let lifetime = 0;
     class RootDispatcher {
         static initialize(dialog) {
             player = dialog;
+            lifetime++;
             playerState = ZenzaWatch.state.player;
             config = PlayerConfig.getInstance(config);
             config.on('update', RootDispatcher.onConfigUpdate);
@@ -28,11 +30,20 @@ const RootDispatcher = (() => {
                 document,
                 config,
                 state: playerState,
-                getContainer: () => player?._nicoVideoPlayer?._videoPlayer?._body,
-                getVideo: () => player?._nicoVideoPlayer?._videoPlayer?.videoElement
+                getContainer: () => dialog._nicoVideoPlayer?._videoPlayer?._body,
+                getVideo: () => dialog._nicoVideoPlayer?._videoPlayer?.videoElement
             });
-            player.on('command', RootDispatcher.execCommand);
+            player.on('command', (command, params) => {
+                if (player === dialog) {
+                    return RootDispatcher.execCommand(command, params);
+                }
+                return undefined;
+            });
             player.on('close', () => {
+                if (player !== dialog) {
+                    return;
+                }
+                lifetime++;
                 // Task712: the video dialog is gone, so its *native* PiP must also
                 // close. Stopping the comment-PiP session alone does not close it.
                 // Capture ownership first: never dismiss another site's PiP window.
@@ -56,6 +67,8 @@ const RootDispatcher = (() => {
             });
         }
         static toggleCommentPictureInPicture() {
+            const owner = player;
+            const ownerLifetime = lifetime;
             const nicoVideoPlayer = player && player._nicoVideoPlayer;
             if (!nicoVideoPlayer) {
                 return;
@@ -66,13 +79,22 @@ const RootDispatcher = (() => {
             }
             CommentPictureInPicture.toggle({
                 config,
-                getVideo: () => player._nicoVideoPlayer && player._nicoVideoPlayer.drawableVideoElement,
-                getViewModel: () => player._nicoVideoPlayer && player._nicoVideoPlayer.commentViewModel,
-                onPlay: () => player.execCommand('play'),
-                onPause: () => player.execCommand('pause'),
+                getVideo: () => player === owner && lifetime === ownerLifetime ? nicoVideoPlayer.drawableVideoElement : null,
+                getViewModel: () => player === owner && lifetime === ownerLifetime ? nicoVideoPlayer.commentViewModel : null,
+                onPlay: () => { if (player === owner && lifetime === ownerLifetime) {
+                    owner.execCommand('play');
+                } },
+                onPause: () => { if (player === owner && lifetime === ownerLifetime) {
+                    owner.execCommand('pause');
+                } },
                 // Comment PiP removes its auxiliary video before the browser may emit leave.
-                onEnd: () => PipPageThumbnail.stop()
+                onEnd: () => { if (player === owner && lifetime === ownerLifetime) {
+                    PipPageThumbnail.stop();
+                } }
             }).catch((err) => {
+                if (player !== owner || lifetime !== ownerLifetime) {
+                    return;
+                }
                 console.warn('comment picture-in-picture fail', err);
                 PopupMessage.alert(`コメント付きピクチャーインピクチャーを開始できませんでした: ${err && err.message || err}`);
             });
@@ -206,6 +228,8 @@ const RootDispatcher = (() => {
                     break;
                 }
                 case 'picture-in-picture': {
+                    const owner = player;
+                    const ownerLifetime = lifetime;
                     CommentPictureInPicture.stop();
                     const video = player?._nicoVideoPlayer?._videoPlayer?.videoElement ||
                         document.querySelector('.zenzaWatchVideoElement');
@@ -218,10 +242,13 @@ const RootDispatcher = (() => {
                     // to document. Also activate the page thumbnail on confirmed success.
                     try {
                         Promise.resolve(video.requestPictureInPicture()).then(() => {
-                            if (document.pictureInPictureElement === video) {
+                            if (player === owner && lifetime === ownerLifetime && document.pictureInPictureElement === video) {
                                 PipPageThumbnail.activate(video);
                             }
                         }, error => {
+                            if (player !== owner || lifetime !== ownerLifetime) {
+                                return;
+                            }
                             PipPageThumbnail.stopFor(video);
                             console.warn('picture-in-picture start failed', error);
                         });
@@ -329,9 +356,13 @@ const RootDispatcher = (() => {
                     PopupMessage.notify('debug: ' + (value ? 'ON' : 'OFF'));
                     break;
                 case 'sharedNgLevel':
+                    playerState.sharedNgLevel = value;
+                    break;
                 case 'screenMode':
+                    playerState.screenMode = value;
+                    break;
                 case 'playbackRate':
-                    playerState[key] = value;
+                    playerState.playbackRate = value;
                     break;
             }
         }

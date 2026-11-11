@@ -43,6 +43,14 @@ async function subject(queuedRaf=false){
 }
 describe('コメント一覧の描画と時刻の同期（H-03 / Task110）',function(){
   let h;afterEach(()=>h&&h.close());
+  it('rejects a pending render after model identity changes without a revision event',async function(){
+    h=await subject();h.hold();
+    h.model.removeItemByIndex(0);await h.tick(500);
+    const oldViews=h.view._itemViews;
+    h.view._model={_readingEpoch:h.model._readingEpoch,_positions:[],_currentTime:0};
+    h.pending[0]();await flush();
+    assert.strictEqual(h.view._itemViews,oldViews);
+  });
   it('一時停止中に過去の行を消しても再描画後の現在行へ追従する',async function(){
     h=await subject();assert.equal(h.view._container.scrollTop,120);
     h.model.removeItemByIndex(0);await h.tick(600);

@@ -13,3 +13,7 @@ export type ZenzaVideoInfoAsyncOwner = Readonly<{
   descriptionGeneration: ZenzaDescriptionGeneration;
   videoInfo: unknown;
 }>;
+export type ZenzaDescriptionSeries = Readonly<{
+  title: string;
+  video: Readonly<{prev: Readonly<{id: string}> | null; next: Readonly<{id: string}> | null}>;
+}>;

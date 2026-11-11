@@ -42,3 +42,12 @@ test('HLS abort settles the consumer through onAbort exactly once',()=>{
  l.load({url:'https://delivery.domand.nicovideo.jp/a'},{timeout:5000},{onAbort:s=>{calls++;assert.equal(s.aborted,true);}});
  l.abort();l.destroy();assert.equal(calls,1);
 });
+
+test('disposing network cancels active requests and refuses subsequent work',async()=>{
+ let aborted=0,started=0;
+ const network=createGmNetwork(()=>{started++;return {abort(){aborted++;}};});
+ const pending=network.fetch('https://www.nicovideo.jp/api/test',{timeout:0});
+ const rejected=assert.rejects(pending,{name:'AbortError'});
+ network.dispose();await rejected;network.dispose();assert.equal(aborted,1);
+ await assert.rejects(network.fetch('https://www.nicovideo.jp/api/test'),{name:'AbortError'});assert.equal(started,1);
+});

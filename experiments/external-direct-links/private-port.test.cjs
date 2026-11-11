@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {JSDOM}=require('jsdom');const {createPrivateTransport}=require('./private-port.cjs');
 function store(){const values=new Map(),listeners=new Map();let seq=0;
- return {values,get:k=>values.get(k),set(k,v){const old=values.get(k);values.set(k,structuredClone(v));
+ return {values,listeners,get:k=>values.get(k),set(k,v){const old=values.get(k);values.set(k,structuredClone(v));
    for(const [key,fn] of [...listeners.values()])if(key===k)queueMicrotask(()=>fn(k,old,structuredClone(v),true));},
  remove(k){values.delete(k);},listen(k,fn){listeners.set(++seq,[k,fn]);return seq;},unlisten:id=>listeners.delete(id)};
 }
@@ -40,4 +40,21 @@ test('one private ticket bootstraps the existing gate without a DOM message or t
  const got=[];fp.addEventListener('message',e=>got.push(e.data));active.postMessage({body:{command:'fetch'}});await tick();
  assert.equal(got[0].body.command,'fetch');assert.equal(gm.values.size,0);
  active.close();fp.close();gate._frameObserver.disconnect();w.close();
+});
+
+test('disposing a player releases GM listeners and cancels queued packets without pagehide',async()=>{
+ const gm=store(),w=new JSDOM('',{url:'https://example.org/'}).window;
+ const t=createPrivateTransport(w,gm),p=t.port('closing','parent'),f=t.port('closing','frame');
+ p.postMessage({large:[1,2,3]});t.dispose();await tick();
+ assert.equal(gm.listeners.size,0);assert.equal(gm.values.size,0);
+ t.dispose();w.close();
+});
+
+test('peer close releases detached loader listeners without waiting for pagehide',async()=>{
+ const gm=store(),w=new JSDOM('',{url:'https://example.org/'}).window;
+ const parent=createPrivateTransport(w,gm),child=createPrivateTransport(w,gm);
+ const p=parent.port('peer-close','parent');child.port('peer-close','frame');
+ assert.equal(gm.listeners.size,2);p.close();await tick();
+ assert.equal(gm.listeners.size,0);assert.equal(gm.values.size,0);
+ parent.dispose();child.dispose();w.close();
 });

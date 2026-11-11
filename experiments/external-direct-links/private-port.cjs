@@ -2,7 +2,14 @@
 
 // Private userscript storage carries messages. No ports, API responses or
 // authentication capabilities are sent through window.postMessage / DOM events.
-function createPrivateTransport(w, gm) {
+function createPrivateTransport(w, gm, onDispose=()=>{}) {
+  const ports=new Set();let disposed=false;
+  function dispose(keep){
+    if(disposed)return;disposed=true;
+    for(const p of [...ports])if(p!==keep)p.close();
+    onDispose();
+  }
+  w.addEventListener('pagehide',()=>dispose(),{once:true});
   let frameTicket=null,framePort=null;
   async function pack(value) {
     if(value instanceof w.ArrayBuffer) return {zwType:'buffer',bytes:Array.from(new w.Uint8Array(value))};
@@ -24,23 +31,31 @@ function createPrivateTransport(w, gm) {
     throw Error('INVALID_PRIVATE_PACKET');
   }
   function port(channel,side,onClose=()=>{}) {
+    if(disposed)throw Error('TRANSPORT_CLOSED');
     const incoming=channel+(side==='parent'?':f':':p'),outgoing=channel+(side==='parent'?':p':':f');
     const listeners={message:new Set(),messageerror:new Set()};let closed=false,queue=Promise.resolve(),seq=0,last=0;
     const emit=(kind,event)=>{for(const fn of [...listeners[kind]]){fn(event);if(event.stopped)break;}};
     const listener=gm.listen(incoming,(_key,_old,packet)=>{
       if(closed||!packet||!Number.isSafeInteger(packet.seq)||packet.seq<=last)return;
       last=packet.seq;
+      if(packet.closed){api.close(false);return;}
       try {emit('message',{data:unpack(packet.data),stopImmediatePropagation(){this.stopped=true;}});}
       catch(_){emit('messageerror',{});}
       finally {if(gm.get(incoming)?.seq===packet.seq)gm.remove(incoming);}
     });
-    return {
-      postMessage(data){queue=queue.then(async()=>{const encoded=await pack(data);if(!closed)gm.set(outgoing,{seq:++seq,data:encoded});})
-        .catch(()=>{if(!closed)emit('messageerror',{});});},
+    const api={
+      postMessage(data){queue=queue.then(async()=>{if(closed)return;const encoded=await pack(data);if(!closed)gm.set(outgoing,{seq:++seq,data:encoded});})
+        .catch(()=>{if(!closed)emit('messageerror',{});});return queue;},
       addEventListener(kind,fn){listeners[kind]?.add(fn);},
       removeEventListener(kind,fn){listeners[kind]?.delete(fn);},start(){},
-      close(){if(closed)return;closed=true;gm.unlisten(listener);gm.remove(incoming);gm.remove(outgoing);onClose();}
+      close(notify=true){
+        if(closed)return;closed=true;gm.unlisten(listener);ports.delete(api);
+        listeners.message.clear();listeners.messageerror.clear();
+        if(notify)gm.set(outgoing,{seq:++seq,closed:true});
+        gm.remove(incoming);gm.remove(outgoing);onClose();
+      }
     };
+    ports.add(api);return api;
   }
   const origin=value=>{try{return new URL(value).origin;}catch(_){return null;}};
   function acceptFrame() {
@@ -51,7 +66,7 @@ function createPrivateTransport(w, gm) {
     if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.type!==type||
       ticket.frameOrigin!==w.location.origin||ticket.origin!==origin(w.document.referrer||match[2]))return false;
     gm.set(key,{...ticket,claimed:true});frameTicket=ticket;
-    framePort=port(ticket.channel,'frame');
+    framePort=port(ticket.channel,'frame',()=>dispose());
     w.addEventListener('pagehide',()=>framePort.close(),{once:true});
     return true;
   }
@@ -84,7 +99,7 @@ function createPrivateTransport(w, gm) {
     if(!posted){message.body={command:'initialized',params:body};posted=true;}
     framePort.postMessage(message);return framePort;
   }
-  return {acceptFrame,connectGate,postGate,
+  return {acceptFrame,connectGate,postGate,dispose,
     isEnabledOrigin:value=>!!frameTicket&&origin(value)===frameTicket.origin,
     // Tests use this constructor with isolated mock GM stores, not page globals.
     port};

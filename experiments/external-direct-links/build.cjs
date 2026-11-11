@@ -74,10 +74,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.11';");
+ body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.12';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.11 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.12 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -139,7 +139,7 @@ const uiDiagnostics=fs.readFileSync(path.join(__dirname,'ui-diagnostics.cjs'),'u
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.11.0-external-direct11
+// @version      0.12.0-external-direct12
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -183,7 +183,7 @@ const entry=`
  const privateTransport=createPrivateTransport(window,{
    get:(key)=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:(key)=>GM_deleteValue(key),
    listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:(id)=>GM_removeValueChangeListener(id)
- });
+ },()=>externalTrial.gm?.dispose());
  const externalTrial=createRuntimeSession({
    startRuntime,
    hasExistingRuntime:()=>!!window.ZenzaWatch || !!document.querySelector('.zenzaPlayerContainer, #ZenzaWatchLoader'),
@@ -198,7 +198,9 @@ const entry=`
 ${runtime}
  }
  const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
- externalTrial.closeOverlay=()=>{displaySettings.save();playerHost.close();};
+ externalTrial.closeOverlay=()=>{
+   try{displaySettings.save();}finally{externalTrial.gm.dispose();void playerHost.close();}
+ };
  if(playerFrame){if(playerHost.accept())installUiDiagnostics(window,()=>externalTrial.diagnostics());}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));

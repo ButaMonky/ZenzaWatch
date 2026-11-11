@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.11.0-external-direct11
+// @version      0.12.0-external-direct12
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -287,7 +287,14 @@ function installInteractionGuard(w, root=w.document.querySelector('.zenzaPlayerC
 
 // Private userscript storage carries messages. No ports, API responses or
 // authentication capabilities are sent through window.postMessage / DOM events.
-function createPrivateTransport(w, gm) {
+function createPrivateTransport(w, gm, onDispose=()=>{}) {
+  const ports=new Set();let disposed=false;
+  function dispose(keep){
+    if(disposed)return;disposed=true;
+    for(const p of [...ports])if(p!==keep)p.close();
+    onDispose();
+  }
+  w.addEventListener('pagehide',()=>dispose(),{once:true});
   let frameTicket=null,framePort=null;
   async function pack(value) {
     if(value instanceof w.ArrayBuffer) return {zwType:'buffer',bytes:Array.from(new w.Uint8Array(value))};
@@ -309,23 +316,31 @@ function createPrivateTransport(w, gm) {
     throw Error('INVALID_PRIVATE_PACKET');
   }
   function port(channel,side,onClose=()=>{}) {
+    if(disposed)throw Error('TRANSPORT_CLOSED');
     const incoming=channel+(side==='parent'?':f':':p'),outgoing=channel+(side==='parent'?':p':':f');
     const listeners={message:new Set(),messageerror:new Set()};let closed=false,queue=Promise.resolve(),seq=0,last=0;
     const emit=(kind,event)=>{for(const fn of [...listeners[kind]]){fn(event);if(event.stopped)break;}};
     const listener=gm.listen(incoming,(_key,_old,packet)=>{
       if(closed||!packet||!Number.isSafeInteger(packet.seq)||packet.seq<=last)return;
       last=packet.seq;
+      if(packet.closed){api.close(false);return;}
       try {emit('message',{data:unpack(packet.data),stopImmediatePropagation(){this.stopped=true;}});}
       catch(_){emit('messageerror',{});}
       finally {if(gm.get(incoming)?.seq===packet.seq)gm.remove(incoming);}
     });
-    return {
-      postMessage(data){queue=queue.then(async()=>{const encoded=await pack(data);if(!closed)gm.set(outgoing,{seq:++seq,data:encoded});})
-        .catch(()=>{if(!closed)emit('messageerror',{});});},
+    const api={
+      postMessage(data){queue=queue.then(async()=>{if(closed)return;const encoded=await pack(data);if(!closed)gm.set(outgoing,{seq:++seq,data:encoded});})
+        .catch(()=>{if(!closed)emit('messageerror',{});});return queue;},
       addEventListener(kind,fn){listeners[kind]?.add(fn);},
       removeEventListener(kind,fn){listeners[kind]?.delete(fn);},start(){},
-      close(){if(closed)return;closed=true;gm.unlisten(listener);gm.remove(incoming);gm.remove(outgoing);onClose();}
+      close(notify=true){
+        if(closed)return;closed=true;gm.unlisten(listener);ports.delete(api);
+        listeners.message.clear();listeners.messageerror.clear();
+        if(notify)gm.set(outgoing,{seq:++seq,closed:true});
+        gm.remove(incoming);gm.remove(outgoing);onClose();
+      }
     };
+    ports.add(api);return api;
   }
   const origin=value=>{try{return new URL(value).origin;}catch(_){return null;}};
   function acceptFrame() {
@@ -336,7 +351,7 @@ function createPrivateTransport(w, gm) {
     if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.type!==type||
       ticket.frameOrigin!==w.location.origin||ticket.origin!==origin(w.document.referrer||match[2]))return false;
     gm.set(key,{...ticket,claimed:true});frameTicket=ticket;
-    framePort=port(ticket.channel,'frame');
+    framePort=port(ticket.channel,'frame',()=>dispose());
     w.addEventListener('pagehide',()=>framePort.close(),{once:true});
     return true;
   }
@@ -369,7 +384,7 @@ function createPrivateTransport(w, gm) {
     if(!posted){message.body={command:'initialized',params:body};posted=true;}
     framePort.postMessage(message);return framePort;
   }
-  return {acceptFrame,connectGate,postGate,
+  return {acceptFrame,connectGate,postGate,dispose,
     isEnabledOrigin:value=>!!frameTicket&&origin(value)===frameTicket.origin,
     // Tests use this constructor with isolated mock GM stores, not page globals.
     port};
@@ -379,6 +394,7 @@ function createPrivateTransport(w, gm) {
  'use strict';
 
 function createGmNetwork(request) {
+  let disposed=false;const active=new Set();
   function permitted(value) {
     const u=new URL(value);
     if(u.protocol!=='https:'||u.username||u.password||u.port||
@@ -388,6 +404,7 @@ function createGmNetwork(request) {
     return u.href;
   }
   async function gmFetch(resource, options={}) {
+    if(disposed)throw new DOMException('Closed','AbortError');
     const isRequest=typeof Request!=='undefined' && resource instanceof Request;
     const url=permitted(isRequest?resource.url:String(resource));
     const method=options.method||(isRequest?resource.method:'GET');
@@ -398,10 +415,12 @@ function createGmNetwork(request) {
     if(data===undefined && isRequest && !/^(GET|HEAD)$/i.test(method))data=await resource.clone().arrayBuffer();
     return new Promise((resolve,reject)=>{
       let handle,done=false,timer;
-      const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);error?reject(error):resolve(value);};
+      if(disposed){reject(new DOMException('Closed','AbortError'));return;}
+      const finish=(error,value)=>{if(done)return;done=true;active.delete(abort);clearTimeout(timer);signal?.removeEventListener('abort',abort);error?reject(error):resolve(value);};
       const abort=()=>{finish(signal?.reason||new DOMException('Aborted','AbortError'));handle?.abort();};
       const timeout=()=>{finish(new DOMException('GM request timed out','TimeoutError'));handle?.abort();};
       if(signal?.aborted){abort();return;}
+      active.add(abort);
       signal?.addEventListener('abort',abort,{once:true});
       const ms=options.timeout===0?0:(options.timeout||30000);
       if(ms>0)timer=setTimeout(timeout,ms);
@@ -457,7 +476,7 @@ function createGmNetwork(request) {
     getCacheAge(){return null;}
     getResponseHeader(){return null;}
   }
-  return {fetch:gmFetch,Loader};
+  return {fetch:gmFetch,Loader,dispose(){if(disposed)return;disposed=true;for(const abort of [...active])abort();}};
 }
 
 
@@ -504,7 +523,7 @@ function createPlayerHost(w,gm,transport,session) {
     const key='player:'+w.location.hash.slice(1),ticket=gm.get(key);
     let origin;try{origin=new URL(w.document.referrer).origin;}catch(_){return false;}
     if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.origin!==origin)return false;
-    gm.set(key,{...ticket,claimed:true});port=transport.port(ticket.channel,'frame');
+    gm.set(key,{...ticket,claimed:true});port=transport.port(ticket.channel,'frame',()=>transport.dispose?.());
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
     w.document.body.style.cssText='margin:0;background:#111;';
@@ -524,7 +543,11 @@ function createPlayerHost(w,gm,transport,session) {
     return true;
   }
   w.addEventListener('pagehide',stop,{once:true});
-  return {open,accept,close:()=>port?.postMessage({type:'closed'})};
+  return {open,accept,close:async()=>{
+    if(!port)return;const closing=port;
+    transport.dispose?.(closing);
+    try{await closing.postMessage({type:'closed'});}finally{stop();}
+  }};
 }
 
 
@@ -549,7 +572,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
     for(const observer of observers){entries(observer.takeRecords());observer.disconnect();}
     w.removeEventListener('pointerdown',arm,true);w.removeEventListener('pagehide',finish);
     let info;try{info=metadata();}catch(_){info={diagnosticUnavailable:true};}
-    emit({version:'external-direct.11',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
+    emit({version:'external-direct.12',elapsedMs:round(w.performance.now()-begin),hiddenDuringSample,
       supported:observers.map(o=>o._diagnosticType),timing:Object.fromEntries(Object.entries(timing).map(([k,v])=>[k,round(v)])),
       events:Object.fromEntries(Object.entries(events).map(([k,v])=>[k,Object.fromEntries(Object.entries(v).map(([n,x])=>[n,round(x)]))])),settings:info});
   }
@@ -574,7 +597,7 @@ function installUiDiagnostics(w,metadata,emit=report=>w.console.info('ZENZA_UI_D
  const privateTransport=createPrivateTransport(window,{
    get:(key)=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:(key)=>GM_deleteValue(key),
    listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:(id)=>GM_removeValueChangeListener(id)
- });
+ },()=>externalTrial.gm?.dispose());
  const externalTrial=createRuntimeSession({
    startRuntime,
    hasExistingRuntime:()=>!!window.ZenzaWatch || !!document.querySelector('.zenzaPlayerContainer, #ZenzaWatchLoader'),
@@ -904,10 +927,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.11';
+    var VER = '2.7.388-external-direct.12';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.11 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.12 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -80241,7 +80264,9 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
 
  }
  const playerHost=createPlayerHost(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),remove:key=>GM_deleteValue(key)},privateTransport,externalTrial);
- externalTrial.closeOverlay=()=>{displaySettings.save();playerHost.close();};
+ externalTrial.closeOverlay=()=>{
+   try{displaySettings.save();}finally{externalTrial.gm.dispose();void playerHost.close();}
+ };
  if(playerFrame){if(playerHost.accept())installUiDiagnostics(window,()=>externalTrial.diagnostics());}
  else if(loader){
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));

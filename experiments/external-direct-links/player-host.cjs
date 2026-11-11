@@ -41,7 +41,7 @@ function createPlayerHost(w,gm,transport,session) {
     const key='player:'+w.location.hash.slice(1),ticket=gm.get(key);
     let origin;try{origin=new URL(w.document.referrer).origin;}catch(_){return false;}
     if(!ticket||ticket.claimed||ticket.expires<Date.now()||ticket.origin!==origin)return false;
-    gm.set(key,{...ticket,claimed:true});port=transport.port(ticket.channel,'frame');
+    gm.set(key,{...ticket,claimed:true});port=transport.port(ticket.channel,'frame',()=>transport.dispose?.());
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
     w.document.body.style.cssText='margin:0;background:#111;';
@@ -61,6 +61,10 @@ function createPlayerHost(w,gm,transport,session) {
     return true;
   }
   w.addEventListener('pagehide',stop,{once:true});
-  return {open,accept,close:()=>port?.postMessage({type:'closed'})};
+  return {open,accept,close:async()=>{
+    if(!port)return;const closing=port;
+    transport.dispose?.(closing);
+    try{await closing.postMessage({type:'closed'});}finally{stop();}
+  }};
 }
 module.exports={createPlayerHost};

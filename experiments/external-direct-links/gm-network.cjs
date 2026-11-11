@@ -1,6 +1,7 @@
 'use strict';
 
 function createGmNetwork(request) {
+  let disposed=false;const active=new Set();
   function permitted(value) {
     const u=new URL(value);
     if(u.protocol!=='https:'||u.username||u.password||u.port||
@@ -10,6 +11,7 @@ function createGmNetwork(request) {
     return u.href;
   }
   async function gmFetch(resource, options={}) {
+    if(disposed)throw new DOMException('Closed','AbortError');
     const isRequest=typeof Request!=='undefined' && resource instanceof Request;
     const url=permitted(isRequest?resource.url:String(resource));
     const method=options.method||(isRequest?resource.method:'GET');
@@ -20,10 +22,12 @@ function createGmNetwork(request) {
     if(data===undefined && isRequest && !/^(GET|HEAD)$/i.test(method))data=await resource.clone().arrayBuffer();
     return new Promise((resolve,reject)=>{
       let handle,done=false,timer;
-      const finish=(error,value)=>{if(done)return;done=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);error?reject(error):resolve(value);};
+      if(disposed){reject(new DOMException('Closed','AbortError'));return;}
+      const finish=(error,value)=>{if(done)return;done=true;active.delete(abort);clearTimeout(timer);signal?.removeEventListener('abort',abort);error?reject(error):resolve(value);};
       const abort=()=>{finish(signal?.reason||new DOMException('Aborted','AbortError'));handle?.abort();};
       const timeout=()=>{finish(new DOMException('GM request timed out','TimeoutError'));handle?.abort();};
       if(signal?.aborted){abort();return;}
+      active.add(abort);
       signal?.addEventListener('abort',abort,{once:true});
       const ms=options.timeout===0?0:(options.timeout||30000);
       if(ms>0)timer=setTimeout(timeout,ms);
@@ -79,6 +83,6 @@ function createGmNetwork(request) {
     getCacheAge(){return null;}
     getResponseHeader(){return null;}
   }
-  return {fetch:gmFetch,Loader};
+  return {fetch:gmFetch,Loader,dispose(){if(disposed)return;disposed=true;for(const abort of [...active])abort();}};
 }
 module.exports={createGmNetwork};

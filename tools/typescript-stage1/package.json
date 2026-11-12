@@ -11,8 +11,8 @@
     "advanced:sync": "npm run advanced:emit && node scripts/sync-advanced.mjs --write",
     "advanced:verify": "npm run advanced:emit && npm run advanced:types && node scripts/sync-advanced.mjs --check",
     "pocket:emit": "tsc --project tsconfig.pocket.json",
-    "pocket:sync": "npm run pocket:emit && node scripts/sync-pocket-thumbnail.mjs --write",
-    "pocket:verify": "npm run pocket:emit && node scripts/sync-pocket-thumbnail.mjs --check",
+    "pocket:sync": "npm run pocket:emit && node scripts/sync-pocket-thumbnail.mjs --write && node scripts/sync-pocket-hover.mjs --write",
+    "pocket:verify": "npm run pocket:emit && node scripts/sync-pocket-thumbnail.mjs --check && node scripts/sync-pocket-hover.mjs --check",
     "nico:emit": "tsc --project tsconfig.nico.json && tsc --project tsconfig.nico-legacy.json",
     "nico:types": "tsc --project tsconfig.nico.contract.json && tsc --project tsconfig.nico-legacy.json --noEmit",
     "nico:sync": "npm run nico:emit && node scripts/sync-nico-api.mjs --write && npm run scui:sync",
@@ -40,7 +40,8 @@
     "pocket:metadata:sync": "npm run pocket:metadata:emit && node scripts/sync-pocket-metadata.mjs --write",
     "hls:emit": "tsc --project tsconfig.hls.json",
     "hls:sync": "npm run hls:emit && node scripts/sync-hls.mjs --write",
-    "hls:verify": "npm run hls:emit && node scripts/sync-hls.mjs --check"
+    "hls:verify": "npm run hls:emit && node scripts/sync-hls.mjs --check",
+    "pocket:hover:verify": "npm run pocket:emit && node scripts/sync-pocket-hover.mjs --check"
   },
   "devDependencies": {
     "jsdom": "30.0.1",

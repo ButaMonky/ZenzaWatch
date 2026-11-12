@@ -17,3 +17,14 @@ Acceptance:
 Known limitation: generic click propagation/third-party viewed marking is not solved in this trial. Existing double-navigation suppression remains enabled by default.
 
 Rollback: install https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js over this trial; confirm downgrade in Tampermonkey. Settings are retained.
+
+
+## MylistPocket companion trial 0.5.89-hover1015.1
+
+`MylistPocket-hover-trial.user.js` updates the existing MylistPocket identity. The controls keep the hovered link as their DOM parent; positioning uses a typed PocketHoverSurface helper. Info / queue / add actions remain owned by the control and do not bubble to the anchor. No service mutations were used in testing.
+
+After installing, reload the Nico page. In the follow dropdown hover the video then each Pocket control; the dropdown should remain open. Open information with `?`, scroll and repeat. Test add/queue only on a video you actually want to add. Real-site acceptance remains pending.
+
+Rollback: https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js
+
+Validation: 122 related unit tests, native Chrome hover/action test, typed helper emit and parity check passed. The broader existing pocket:verify command reports POCKET_TS_SOURCE_RUNTIME_MISMATCH for the unrelated PocketThumbnail generator; its write command refuses the existing runtime as POCKET_TS_UNOWNED_RUNTIME. That runtime was not changed.

@@ -8,7 +8,7 @@ let code=fs.readFileSync(filename,'utf8');
 const marker='try {\n  run();';
 code=code.replace(/\r\n/g,'\n');
 if(!code.includes(marker))throw Error('Build entry changed');
-code=code.replace(marker,`templates = [{src:'_template.js',dist:${JSON.stringify(output)},dev:true}];\n${marker}`);
+code=code.replace(marker,`templates = [{src:'_template.js',dist:${JSON.stringify(output)},dev:true},{src:'_pocket.js',dist:'experiments/click-intent/MylistPocket-hover-trial.user.js',dev:false}];\n${marker}`);
 process.argv=['node',filename,'--dev'];
 const compiled=new Module(filename,module);compiled.filename=filename;compiled.paths=Module._nodeModulePaths(root);compiled._compile(code,filename);
 if(process.exitCode)throw Error('Production build failed');
@@ -17,3 +17,9 @@ const url='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-inte
 result=result.replace(/^\/\/ @(downloadURL|updateURL)\s+.*$/mg,(_,key)=>'// @'+key+'    '+url);
 fs.writeFileSync(output,result);
 console.log('TRIAL_READY '+output);
+
+const pocket='experiments/click-intent/MylistPocket-hover-trial.user.js';
+let pocketResult=fs.readFileSync(pocket,'utf8').replace(/^\/\/ @version\s+.*$/m,'// @version        0.5.89-hover1015.1');
+const pocketUrl='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-intent1015/'+pocket;
+pocketResult=pocketResult.replace(/^\/\/ @(downloadURL|updateURL)\s+.*$/mg,(_,key)=>'// @'+key+'    '+pocketUrl);
+fs.writeFileSync(pocket,pocketResult);

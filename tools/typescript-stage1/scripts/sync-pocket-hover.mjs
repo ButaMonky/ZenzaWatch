@@ -1,0 +1,12 @@
+import {readFileSync,writeFileSync} from 'node:fs';
+import {fileURLToPath} from 'node:url';
+import {resolve,dirname} from 'node:path';
+const root=resolve(dirname(fileURLToPath(import.meta.url)),'../../..');
+const emitted=readFileSync(resolve(root,'tools/typescript-stage1/.generated/pocket/PocketHoverSurface.js'),'utf8').replace(/\r\n/g,'\n');
+const body=emitted.replace(/export \{ PocketHoverSurface \};\s*$/,'').trim();
+if(!body.includes('const PocketHoverSurface =') || body.includes('export '))throw Error('Unexpected emit');
+const result='// GENERATED FROM PocketHoverSurface.ts. Do not edit.\n//===BEGIN===\n'+body+'\n//===END===\nexport {PocketHoverSurface};\n';
+const target=resolve(root,'packages/zenza/src/pocket/PocketHoverSurface.js');
+if(process.argv[2]==='--write')writeFileSync(target,result);
+else if(process.argv[2]!=='--check'||readFileSync(target,'utf8').replace(/\r\n/g,'\n')!==result)throw Error('Pocket hover surface generation mismatch');
+console.log('Pocket hover surface generation PASS');

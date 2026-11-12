@@ -50,6 +50,7 @@ import {parseThumbInfo} from '../packages/lib/src/nico/parseThumbInfo';
 import {OwnerSupplement} from '../packages/lib/src/nico/OwnerSupplement';
 import {ThumbInfoCacheDb} from '../packages/lib/src/nico/ThumbInfoCacheDb';
 import {ThumbnailSourcePolicy} from '../packages/lib/src/nico/ThumbnailSourcePolicy';
+import {PocketHoverSurface} from '../packages/zenza/src/pocket/PocketHoverSurface';
 import {PocketThumbnail} from '../packages/zenza/src/pocket/PocketThumbnail';
 import {PocketDescriptionCard} from '../packages/zenza/src/pocket/PocketDescriptionCard';
 import {PocketCardMetadataLoader} from '../packages/zenza/src/pocket/PocketCardMetadataLoader';
@@ -65,6 +66,7 @@ AntiPrototypeJs().then(() => {
     // The monkey function is stringified and injected into the page world.
     // Its dependencies must live inside this function, not the outer userscript.
 //@require ThumbnailSourcePolicy
+//@require PocketHoverSurface
 //@require PocketThumbnail
 //@require PocketDescriptionCard
 //@require PocketCardMetadataLoader
@@ -2509,6 +2511,13 @@ const emitter = util.emitter;
         this._view = document.querySelector('.mylistPocketHoverMenu');
 
         this._view.addEventListener(location.host.includes('google') ? 'mouseup' : 'click', this._onClick.bind(this));
+        // The menu now belongs to the link; cancel Google's follow-up click too.
+        if (location.host.includes('google')) {
+          this._view.addEventListener('click', this._onClick.bind(this));
+        }
+        document.addEventListener('scroll', () => this.hide(), true);
+        window.addEventListener('resize', () => this.hide());
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') { this.hide(); } });
         this._view.addEventListener('mousedown', this._onMousedown.bind(this));
         this._view.addEventListener('contextmenu', this._onContextMenu.bind(this));
 
@@ -2551,6 +2560,8 @@ const emitter = util.emitter;
       removeClass(className) { this.toggleClass(className, false); }
 
       hide() {
+        this._hoverElement = null;
+        PocketHoverSurface.hide(this._view);
         this.removeClass('is-show');
       }
 
@@ -2577,8 +2588,8 @@ const emitter = util.emitter;
 
       _onMousedown(e) {
         const watchId = this._watchId;
-        const target = e.target.classList.contains('command') ?
-          e.target : e.target.closest('.command');
+        const target = e.target?.closest?.('.command');
+        if (!target || !this._view.contains(target)) { return; }
         const command = target.getAttribute('data-command');
         e.preventDefault();
         e.stopPropagation();
@@ -2610,6 +2621,7 @@ const emitter = util.emitter;
       }
 
       _onHover(e) {
+        if (this._view.contains(e.target)) { return; }
         const target = this._isTargetElement(e);
         if (!target) { return; }
 
@@ -2625,25 +2637,22 @@ const emitter = util.emitter;
         if (!ref) { return; }
         const watchId = target.dataset.nicoVideoId || ref.watchId;
         const offset = target.getBoundingClientRect();
-        //const bodyOffset = document.body.getBoundingClientRect();
-        const scrollTop  = document.documentElement.scrollTop  || document.body.scrollTop  || 0;
-        const scrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft || 0;
-        const left = offset.left + scrollLeft;
-        const top  = offset.top  + scrollTop;
-
         if (target.classList.contains('noHoverMenu')) { return; }
         if (!watchId || !watchId.match(/^[a-z0-9]+$/)) { return; }
         if (watchId.indexOf('lv') === 0) { return; }
 
         this._watchId = watchId;
         this.show();
+        PocketHoverSurface.attach(this._view, target);
+        const bounds = this._view.getBoundingClientRect();
         this.moveTo(
-          left + target.offsetWidth  - this._view.offsetWidth / 2,
-          top  + target.offsetHeight / 2 - this._view.offsetHeight / 2
+          Math.max(0, offset.right - bounds.width - 2),
+          Math.max(0, offset.top + offset.height / 2 - bounds.height / 2)
         );
       }
 
       _onMouseout(e) {
+        if (this._hoverElement?.contains(e.relatedTarget)) { return; }
         const target = this._isTargetElement(e);
         if (!target) { return; }
 

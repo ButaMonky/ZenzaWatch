@@ -71,18 +71,18 @@ class ModernAdvancedSettingsModel {
                 ['volume', '動画の音量', slider(0, 1)],
                 ['mute', '動画をミュート']
             ]),
-            ...group('再生・音声', '読み上げ', [
-                ['speakLark', 'コメント読み上げ（現在は未対応）', {
+            ...group('再生・音声', '旧設定・互換性', [
+                ['speakLark', 'コメント読み上げ（現在は未対応）', { availability: 'unsupported', disabledReason: '現在のプレイヤーでは未対応です。保存値は互換性のため保持します。',
                         description: '旧設定ですが、現在のZenzaWatchには再生コメントを音声化する処理が接続されていません。ONにしても読み上げません。保存値は互換性のため保持します。'
                     }],
-                ['speakLarkVolume', '読み上げ音量（現在は未対応）', {
+                ['speakLarkVolume', '読み上げ音量（現在は未対応）', { availability: 'unsupported', disabledReason: '読み上げ機能が未対応のため変更できません。保存値は保持します。',
                         ...slider(0, 1),
                         description: 'コメント読み上げ機能が未実装のため、この音量値も現在の再生には作用しません。'
                     }]
             ]),
             ...group('再生・音声', '動画の取得', [
                 ['forceEconomy', 'エコノミー画質で取得'],
-                ['autoDisableNew', '旧配信方式の画質を優先'],
+                ['autoDisableNew', '旧配信方式の画質を優先', { description: '旧配信方式を利用できる動画で、画質が良いと判定された場合に優先します。新配信方式のみの動画には作用しません。' }],
                 ['dmcVideoQuality', '旧配信方式の優先画質', select([
                         ['auto', '自動'], ['veryhigh', '最高'], ['high', '高'],
                         ['mid', '中'], ['low', '低']
@@ -543,6 +543,7 @@ class ModernAdvancedSettingsModel {
             'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
             'enableCommentPanelAutoScroll': 'enableCommentPanel',
             'pipPageThumbnailSource': 'pipPageThumbnail',
+            'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',
             'speakLarkVolume': 'speakLark'
         };
         return direct[key] || null;
@@ -613,7 +614,7 @@ class ModernAdvancedSettingsModel {
             if (!this.categories.includes(descriptor.category)) {
                 throw new Error('未定義のカテゴリ: ' + descriptor.category);
             }
-            const entry = { ...descriptor, dependsOn: ModernAdvancedSettingsModel.dependencyFor(descriptor.id) };
+            const entry = { ...descriptor, dependsOn: descriptor.dependsOn === undefined ? ModernAdvancedSettingsModel.dependencyFor(descriptor.id) : descriptor.dependsOn };
             if (entry.id === 'commentHistory.enabled') {
                 entry.sortIndex = 0;
                 entry.label = '自動で増量';
@@ -841,6 +842,9 @@ class ModernAdvancedSettingsModel {
         if (!d) {
             throw new Error('不明な設定: ' + id);
         }
+        if (d.availability === 'unsupported') {
+            return this;
+        }
         if (typeof this.config.default[id] === 'number' && typeof value === 'string' &&
             value.trim() !== '' && Number.isFinite(Number(value))) {
             value = Number(value);
@@ -858,16 +862,43 @@ class ModernAdvancedSettingsModel {
             .forEach(d => this.resetItem(d.id));
         return this;
     }
-    isEnabled(id) {
-        // A linked fullscreen layout is preserved in the draft, but cannot be edited
-        // while the normal layout is the active source of truth.
+    isEnabled(id) { return !this.disabledReason(id); }
+    disabledReason(id, visited = new Set()) {
+        const d = this.descriptor(id);
+        if (!d) {
+            return '';
+        }
+        if (visited.has(id)) {
+            return '依存する設定を確認できません。';
+        }
+        visited.add(id);
+        if (d.availability === 'unsupported') {
+            return d.disabledReason || '現在は未対応です。保存値は保持します。';
+        }
         if (['sceneSearch.layout.fullscreen', 'sceneSearch.presentation.fullscreen'].includes(id) &&
             this.get('sceneSearch.layout.linkFullscreen') === true) {
-            return false;
+            return '通常表示と連動中です。個別に変更するには連動をOFFにしてください。';
         }
-        const d = this.descriptor(id);
-        return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
-            (!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
+        if (!d.dependsOn) {
+            return '';
+        }
+        const parent = this.descriptor(d.dependsOn);
+        // Partial/legacy catalogs may omit optional parents; retain their existing editability.
+        if (!parent) {
+            return '';
+        }
+        const matched = Object.prototype.hasOwnProperty.call(d, 'dependsOnValue') ?
+            ModernAdvancedSettingsModel._same(this.draft[d.dependsOn], d.dependsOnValue) : !!this.draft[d.dependsOn];
+        const parentReason = this.disabledReason(d.dependsOn, visited);
+        if (parentReason) {
+            return parentReason;
+        }
+        if (!matched) {
+            const choice = parent.options?.find(option => ModernAdvancedSettingsModel._same(option.value, d.dependsOnValue));
+            return d.disabledReason || ('「' + parent.label + '」を' + (Object.prototype.hasOwnProperty.call(d, 'dependsOnValue') ?
+                '「' + (choice?.label ?? String(d.dependsOnValue)) + '」に変更' : 'ONに') + 'すると利用できます。値は保持しています。');
+        }
+        return '';
     }
     isDifferentFromDefault(id) {
         return this._byId.has(id) && !ModernAdvancedSettingsModel._same(this.draft[id], this.config.default[id]);

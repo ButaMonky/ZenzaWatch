@@ -74,6 +74,26 @@ async function evaluate(expression) {
     assert.deepStrictEqual(initial, {panels:1,modern:true,visible:true});
     await evaluate('document.body.dispatchEvent(new KeyboardEvent("keydown",{keyCode:32,bubbles:true}));');
     assert.deepStrictEqual(await evaluate('__keyEvents'),[], 'modal isolates player shortcuts even outside its focus');
+    // Task1014: shipped settings retain disabled drafts and explain dependencies.
+    await evaluate(`(()=>{const search=document.querySelector('[data-zw-search]');search.value='保存一覧';search.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await wait(500);
+    const thumbnailState=await evaluate(`(()=>{
+      const parent=document.querySelector('[data-zw-cards] [data-setting-name="bookmark.showVideoThumbnails"]');
+      const width=document.querySelector('[data-zw-cards] [data-setting-name="bookmark.thumbnailWidth"]');
+      if(!parent||!width)throw Error('thumbnail controls missing');
+      const before=width.value,original=parent.checked;
+      parent.checked=false;parent.dispatchEvent(new Event('change',{bubbles:true}));
+      const disabled=width.disabled;
+      const reason=document.querySelector('[data-zw-id="bookmark.thumbnailWidth"]').textContent;
+      parent.checked=true;parent.dispatchEvent(new Event('change',{bubbles:true}));
+      const enabled=!width.disabled,preserved=width.value===before;
+      parent.checked=original;parent.dispatchEvent(new Event('change',{bubbles:true}));
+      return {disabled,enabled,preserved,reason:reason.includes('ON')};
+    })()`);
+    assert.deepStrictEqual(thumbnailState,{disabled:true,enabled:true,preserved:true,reason:true});
+    await evaluate(`(()=>{const search=document.querySelector('[data-zw-search]');search.value='コメント読み上げ';search.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await wait(500);
+    assert.strictEqual(await evaluate(`document.querySelector('[data-zw-cards] [data-setting-name="speakLark"]').disabled`),true);
     // Search an existing scalar setting and edit it through the actual UI.
     const state = await evaluate(`(()=>{
       const search=document.querySelector('[data-zw-search]'); search.value='通知背景の透明度'; search.dispatchEvent(new Event('input',{bubbles:true}));
@@ -106,7 +126,7 @@ async function evaluate(expression) {
     await evaluate('__controller.dispose()');
     assert.strictEqual(await evaluate('document.querySelectorAll(".zenzaAdvancedSettingPanel").length'),0);
     assert.deepStrictEqual(await evaluate('__fixtureErrors'),[]);
-    console.log('TASK993_CHROME_PASS lazy open, shared Config, save, cancel, reopen, retirement, dispose');
+    console.log('TASK993_CHROME_PASS lazy open, shared Config, save, cancel, reopen, retirement, dispose, dependency preservation, unsupported controls');
   } catch (error) {console.error(error.stack); process.exitCode=1;}
   finally {
     if (chrome) {

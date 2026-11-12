@@ -122,7 +122,7 @@ describe('Config import validation',()=>{
  it('accepts every existing default setting',()=>{const {options,default:d}=configSchema();for(const k of Object.keys(d))assert.strictEqual(options.validateImport(k,d[k]),true,k);});
  it('validates and round-trips custom related-menu links without executing code',()=>{
   const {options,default:d}=configSchema(),key='relatedMenu.customLinks';
-  assert.deepStrictEqual(Array.from(d[key]),[]);
+  assert.strictEqual(d[key][0].url,'https://www.nicochart.jp/watch/{videoId}');
   const good=[{id:'stat',label:'統計',url:'https://example.com/video/{videoId}',enabled:true,openInNewTab:false}];
   assert.strictEqual(options.validateImport(key,good),true);
   for(const bad of [null,'javascript:alert(1)',[{id:'script',label:'no',url:'javascript:alert(1)'}],
@@ -149,5 +149,56 @@ describe('Config legacy search range roundtrip',()=>{
  it('still rejects malformed numeric strings before writing',()=>{
   const s=setup(),schema=configSchema();s.default=schema.default;s.options=schema.options;const before=JSON.stringify(s.storage);
   assert.throws(()=>s.import({'videoSearch.f_range':'not-a-number'}));assert.strictEqual(JSON.stringify(s.storage),before);
+ });
+});
+
+describe('Nicochart editable related-menu default',()=>{
+ const key='relatedMenu.customLinks';
+ function storageWithDefaults(){
+  const s=setup(),schema=configSchema();
+  s.default=schema.default;s.options=schema.options;
+  s._data={...s.default};s.props=Object.fromEntries(Object.keys(s.default).map(k=>[k,null]));
+  return s;
+ }
+ it('offers a valid ordinary custom link on an unconfigured installation',async()=>{
+  const s=storageWithDefaults();await s.restore();
+  const rows=s.getValue(key);
+  assert.strictEqual(rows.length,1);
+  assert.strictEqual(rows[0].label,'ニコチャートで開く');
+  assert.strictEqual(rows[0].url,'https://www.nicochart.jp/watch/{videoId}');
+  assert.strictEqual(rows[0].openInNewTab,true);
+  assert.strictEqual(s.options.validateImport(key,rows),true);
+ });
+ it('keeps saved custom links unchanged without inserting or duplicating the example',async()=>{
+  const s=storageWithDefaults();
+  const rows=[{id:'link-1',label:'My chart',url:'https://www.nicochart.jp/watch/{videoId}',enabled:true,openInNewTab:false}];
+  s.storage['CFG_'+key]=JSON.stringify(rows);await s.restore();
+  assert.strictEqual(JSON.stringify(s.getValue(key)),JSON.stringify(rows));
+ });
+ it('preserves deletion across reload and export/import',async()=>{
+  const s=storageWithDefaults();
+  s.setValueSilently(key,[]);
+  assert.strictEqual(s.storage['CFG_'+key],'[]');
+  await s.restore();
+  assert.strictEqual(s.getValue(key).length,0);
+  const json=s.exportJson();
+  assert.deepStrictEqual(JSON.parse(json)[key],[]);
+  s.importJson(json);
+  assert.strictEqual(s.getValue(key).length,0);
+  assert.strictEqual(s.default[key].length,1,'deletion must not mutate the default');
+ });
+});
+
+describe('External preference registry for nested custom-link defaults',()=>{
+ it('registers the setting without treating its link fields as preference keys',()=>{
+  const fs=require('fs'),path=require('path');
+  for(const file of ['ZenzaWatch-dev.user.js','ZenzaBlogPartsButton.user.js']){
+   const source=fs.readFileSync(path.join(__dirname,'../../dist',file),'utf8');
+   const match=source.match(/createDisplaySettings\(window,gm,(\[[^\n]+\])\);/);
+   assert(match,file);
+   const keys=JSON.parse(match[1]);
+   assert(keys.includes('relatedMenu.customLinks'),file);
+   for(const key of ['id','label','url','enabled','openInNewTab'])assert(!keys.includes(key),file+': '+key);
+  }
  });
 });

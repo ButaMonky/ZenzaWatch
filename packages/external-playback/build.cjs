@@ -19,7 +19,7 @@ const defaultsAst=require('@babel/parser').parse(base.slice(configStart,defaults
 const preferenceNames=new Set();
 function collectDefaults(node){
  if(!node||typeof node!=='object')return;
- if(node.type==='ObjectProperty'&&!node.computed){const name=node.key.name??node.key.value;if(typeof name==='string')preferenceNames.add(name);}
+ if(node.type==='ObjectProperty'&&!node.computed){const name=node.key.name??node.key.value;if(typeof name==='string')preferenceNames.add(name);return; /* A setting's nested fields are not independent preferences. */}
  for(const value of Object.values(node)){if(Array.isArray(value))value.forEach(collectDefaults);else if(value&&typeof value==='object')collectDefaults(value);}
 }
 collectDefaults(defaultsAst);

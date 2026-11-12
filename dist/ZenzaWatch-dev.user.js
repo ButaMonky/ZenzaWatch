@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.396-task1022
+// @version        2.7.397-task1023
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 17:44Z d190f1a
+// build: 2026-11-12 17:59Z 7b41dc7
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.396-task1022';
+    var VER = '2.7.397-task1023';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 17:44Z d190f1a';
+    var BUILD = '2026-11-12 17:59Z 7b41dc7';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5781,7 +5781,13 @@ const Config = (() => {
 				'controlBar.showOnPause.fullscreen': false,
 				'controlBar.hideAfterSeconds.small': 3,
 				'controlBar.hideAfterSeconds.fullscreen': 0.4,
-				'relatedMenu.customLinks': [], // Ordered URL templates; advanced settings owns the editor
+				'relatedMenu.customLinks': [{
+								id: 'example-nicochart',
+								label: 'ニコチャートで開く',
+								url: 'https://www.nicochart.jp/watch/{videoId}',
+								enabled: true,
+								openInNewTab: true
+						}],
 				'relatedMenu.order': [], // Empty = original seven items, then links and registered actions
 				'relatedMenu.hiddenItems': [], // Per-row display visibility, without deleting actions
 				'relatedMenu.builtinOptions': {}, // Optional labels/open modes/copy format for standard items

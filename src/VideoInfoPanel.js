@@ -2355,6 +2355,19 @@ class VideoSearchForm extends Emitter {
         if (parentNode) {
             parentNode.appendChild(view);
         }
+        // Keep one viewport-bounded scroll container, including the filters.
+        const fitSearch = () => this._updateFocus();
+        this._view.addEventListener('focusin', fitSearch);
+        this._view.addEventListener('mouseenter', fitSearch);
+        window.addEventListener('resize', fitSearch);
+        window.visualViewport?.addEventListener('resize', fitSearch);
+        if (parentNode) {
+            parentNode.addEventListener('transitionend', fitSearch);
+            if (typeof ResizeObserver !== 'undefined') {
+                const observer = new ResizeObserver(fitSearch);
+                observer.observe(parentNode);
+            }
+        }
         global.debug.searchForm = this;
     }
     /*
@@ -3319,6 +3332,17 @@ class VideoSearchForm extends Emitter {
         return !!document.activeElement.closest('#zenzaVideoSearchPanel');
     }
     _updateFocus() {
+        const panel = this._view;
+        if (!panel?.isConnected || !panel.matches(':focus-within, :hover')) {
+            return;
+        }
+        const rect = panel.getBoundingClientRect();
+        // Account for player/menu scaling; viewport coordinates are physical CSS pixels.
+        const scale = panel.offsetHeight > 0 ? rect.height / panel.offsetHeight : 1;
+        const viewport = window.visualViewport;
+        const bottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+        const available = Math.max(0, bottom - rect.top - 8) / (scale || 1);
+        panel.style.setProperty('--search-available-height', available + 'px');
     }
     get word() {
         return (this._word.value || '').trim();
@@ -3430,6 +3454,11 @@ VideoSearchForm.__css__ = (`
       max-width: calc(100% - 16px);
       box-sizing: border-box;
       z-index: 1000;
+      max-height: var(--search-available-height, calc(100dvh - 80px));
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
     }
 
     .zenzaScreenMode_normal .zenzaWatchVideoHeaderPanel.is-onscreen .zenzaVideoSearchPanel {
@@ -3447,37 +3476,42 @@ VideoSearchForm.__css__ = (`
       width: 560px;
     }
 
+    .zenzaVideoSearchPanel:hover,
     .zenzaVideoSearchPanel:focus-within {
       background: rgba(50, 50, 50, 0.8);
     }
 
-    .zenzaVideoSearchPanel:not(:focus-within) .focusOnly {
+    .zenzaVideoSearchPanel:not(:focus-within):not(:hover) .focusOnly {
       opacity: 0;
     }
 
     .zenzaVideoSearchPanel .searchInputHead {
       display: none;
-      padding: 4px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      padding: 4px 0;
+      font-size: 14px;
     }
     .zenzaVideoSearchPanel:focus-within .searchInputHead,
-    .zenzaVideoSearchPanel .searchInputHead:hover {
-      display: block;
+    .zenzaVideoSearchPanel:hover .searchInputHead {
+      display: flex;
     }
     .zenzaVideoSearchPanel .searchModeRow {
       display: flex;
       align-items: center;
-      gap: 4px;
-      margin-bottom: 6px;
+      gap: 0;
+      min-width: 0;
     }
-    .zenzaVideoSearchPanel .searchModeCaption {
-      color: #ccc;
-      font-size: 12px;
-      flex: 0 0 4em;
+    .zenzaVideoSearchPanel .searchContentRow {
+      margin-left: auto;
+      padding-left: 6px;
+      border-left: 1px solid #666;
     }
     .zenzaVideoSearchPanel .searchModeRow .searchModeLabel {
-      flex: 1;
-      min-width: 0;
+      flex: 0 0 auto;
       text-align: center;
+      white-space: nowrap;
     }
     .zenzaVideoSearchPanel .searchModeLabel input:focus-visible + span {
       outline: 2px solid #8acbff;
@@ -3495,7 +3529,7 @@ VideoSearchForm.__css__ = (`
 
      .zenzaVideoSearchPanel .searchModeLabel span {
         display: inline-block;
-        padding: 4px 8px;
+        padding: 4px 5px;
         line-height: 1;
         color: #bbb;
         cursor: pointer;
@@ -3539,6 +3573,7 @@ VideoSearchForm.__css__ = (`
         max-width: 100%;
         box-sizing: border-box;
       }
+      .zenzaVideoSearchPanel:hover .searchVideoIdResult.is-open,
       .zenzaVideoSearchPanel:focus-within .searchVideoIdResult.is-open {
         grid-template-rows: 1fr;
         opacity: 1;
@@ -3590,8 +3625,8 @@ VideoSearchForm.__css__ = (`
         border-radius: 8px;
         background: rgba(30, 30, 30, 0.95);
         border: 1px solid #555;
-        max-height: 34vh;
-        overflow-y: auto;
+        max-height: none;
+        overflow: visible;
         overscroll-behavior: contain;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-bare.has-tags .searchVideoIdResult-tags {
@@ -3637,17 +3672,18 @@ VideoSearchForm.__css__ = (`
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare .searchVideoIdResult-body {
         flex-direction: row;
+        flex-wrap: wrap;
         align-items: flex-start;
         gap: 8px;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare .searchVideoIdResult-wordCol {
-        flex: 0 0 250px;
+        flex: 1 1 250px;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare .searchVideoIdResult-cardCol {
-        flex: 1 1 auto;
+        flex: 1 1 240px;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare .searchVideoIdResult-tags {
-        max-height: 60vh;
+        max-height: none;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side:not(.is-bare) {
         width: 280px;
@@ -3666,7 +3702,7 @@ VideoSearchForm.__css__ = (`
         flex: 1 1 auto;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare.is-word .searchVideoIdResult-tags {
-        max-height: 34vh;
+        max-height: none;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult-tag .searchVideoIdResult-tagText {
         min-width: 0;
@@ -3802,8 +3838,8 @@ VideoSearchForm.__css__ = (`
         display: flex;
         flex-direction: column;
         gap: 6px;
-        max-height: 60vh;
-        overflow-y: auto;
+        max-height: none;
+        overflow: visible;
         overscroll-behavior: contain;
         padding-bottom: 2px;
       }
@@ -4179,24 +4215,16 @@ VideoSearchForm.__css__ = (`
 
 
     .zenzaVideoSearchPanel .searchInputFoot {
+      display: none;
       white-space: normal;
-      position: absolute;
-      left: 8px;
-      right: 8px;
+      position: static;
       box-sizing: border-box;
-      opacity: 0;
       padding: 4px;
-      pointer-events: none;
-      transition: transform 0.2s ease, opacity 0.2s ease;
-      transform: translate3d(0, -100%, 0);
     }
-
-    .zenzaVideoSearchPanel .searchInputFoot:hover,
+    .zenzaVideoSearchPanel:hover .searchInputFoot,
     .zenzaVideoSearchPanel:focus-within .searchInputFoot {
-      pointer-events: auto;
+      display: block;
       opacity: 1;
-      background: rgba(50, 50, 50, 0.8);
-      transform: translate3d(0, 0, 0);
     }
 
       .zenzaVideoSearchPanel .searchSortSelect,
@@ -4241,23 +4269,13 @@ VideoSearchForm.__tpl__ = (`
       <form action="javascript: void(0);">
 
         <div class="searchInputHead">
-          <div class="searchModeRow" role="group" aria-label="検索対象">
-            <span class="searchModeCaption">検索対象</span>
+          <div class="searchModeRow" role="group" aria-label="検索方法">
+            <label class="searchModeLabel"><input type="radio" name="mode" class="searchMode" value="keyword"><span>キーワード</span></label>
+            <label class="searchModeLabel"><input type="radio" name="mode" class="searchMode" value="tag" id="zenzaVideoSearch-tag" checked><span>タグ</span></label>
+          </div>
+          <div class="searchModeRow searchContentRow" role="group" aria-label="検索対象">
             <label class="searchModeLabel"><input type="radio" name="selectContentType" class="searchContentType" value="long" checked><span>動画</span></label>
             <label class="searchModeLabel"><input type="radio" name="selectContentType" class="searchContentType" value="short"><span>ショート</span></label>
-          </div>
-          <div class="searchModeRow" role="group" aria-label="検索方法">
-          <span class="searchModeCaption">検索方法</span>
-          <label class="searchModeLabel">
-            <input type="radio" name="mode" class="searchMode" value="keyword">
-            <span>キーワード</span>
-          </label>
-
-          <label class="searchModeLabel">
-            <input type="radio" name="mode" class="searchMode" value="tag"
-              id="zenzaVideoSearch-tag" checked="checked">
-              <span>タグ</span>
-          </label>
           </div>
         </div>
 

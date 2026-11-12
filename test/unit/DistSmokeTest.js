@@ -29,7 +29,7 @@ const DISTS = {
 // 古い globals パッケージの一覧に無い、現在のブラウザの組み込み
 const MODERN_BROWSER_GLOBALS = [
   'globalThis', 'AbortController', 'Atomics', 'OffscreenCanvas', 'CSSStyleValue', 'CSSKeywordValue',
-  'AggregateError', 'arguments', 'GM_addValueChangeListener', 'GM_removeValueChangeListener'
+  'AggregateError', 'arguments', 'GM_addElement', 'GM_addValueChangeListener', 'GM_removeValueChangeListener'
 ];
 // Worker に文字列として渡すコードへ workerUtil が差し込む名前（Worker 側では定義される）
 const WORKER_INJECTED = ['PID', 'bcast', 'portMap', 'EmitterInitFunc'];
@@ -102,6 +102,17 @@ async function startupErrors(src, url, {hasLodash}) {
   w.unsafeWindow = w;
   w.GM_info = {script: {version: '0'}};
   for (const g of ['GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_addValueChangeListener', 'GM_removeValueChangeListener', 'GM_registerMenuCommand', 'GM_xmlhttpRequest', 'GM_addStyle']) { w[g] = () => undefined; }
+  w.GM_getResourceText = name => {
+    if (name !== 'zenzaLodash') throw Error('Unknown resource ' + name);
+    return fs.readFileSync(require.resolve('lodash/lodash.min.js'), 'utf-8');
+  };
+  w.GM_addElement = (parent, tag, attributes) => {
+    const element = w.document.createElement(tag);
+    Object.assign(element, attributes);
+    parent.append(element);
+    if (tag === 'script' && attributes.textContent) w.eval(attributes.textContent);
+    return element;
+  };
   if (hasLodash) {
     // 配布物は CDN の lodash を @require で読む。ここでは npm の lodash で代用する（版の違いは監査 ZW-010）
     w.eval(fs.readFileSync(require.resolve('lodash/lodash.min.js'), 'utf-8'));
@@ -122,6 +133,7 @@ async function startupErrors(src, url, {hasLodash}) {
   } finally {
     process.removeListener('uncaughtException', onUncaught);
     saved.forEach(l => process.on('uncaughtException', l));
+    w.dispatchEvent(new w.Event('pagehide'));
     w.close();
   }
   return errors;

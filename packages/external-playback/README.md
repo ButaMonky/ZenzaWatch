@@ -1,27 +1,32 @@
 # External playback package
 
-This package is distributed through ZenzaBlogPartsButton. It does not depend on an installed trial script. Future main integration can reuse the same module entry points.
+Main ZenzaWatch owns playback. ZenzaBlogPartsButton detects links, displays Zen controls, optionally checks public metadata and requests playback. Install/update both scripts. No separate trial is required.
 
 ## Boundaries
 
-- `src/settings.ts`: canonical preference defaults and descriptors. `sync-preferences.cjs` generates main Config/model sections; normal build rejects drift. Regenerate TypeScript after changing preferences.
-- `src/targets.ts`, `site-rules.ts`: pure URL/ID and target-site rules, no network.
-- `src/inline-buttons.ts`, `overlay.ts`, `settings-panel.ts`: owned UI, explicit disposal.
-- `src/preflight.ts`: optional bounded metadata requests.
-- `src/official-settings.ts`: whitelisted public-preference bridge on Nico pages.
-- `src/blog-clicks.ts`: nonce correlation across blog iframe, with a short-lived trusted-click proof only in userscript GM storage. No account data in DOM messages.
-- `src/coexistence.ts`: detect old trial controls and suspend new launcher.
-- `src/player-close.ts`, `player-background.ts`: player lifecycle and small-mode surface.
-- Existing tested CommonJS adapters `gm-network`, `private-port`, `player-host`, `launcher`, `display-settings`, `panel-observer` retain their interfaces; these are not duplicated implementations of main playback/UI.
-- `build.cjs`: guarded compilation adapter deriving isolated player from this build's main output. Changed anchors fail the build instead of silently shipping an old player. Internal `ExternalTrial` storage/frame identifiers are retained for compatibility; they do not require the trial script.
-- `src/_blog.js` at repository root remains the legacy embed entry; final userscript header preserves its name/namespace and updates from the existing public URL.
+- `src/settings.ts`, `targets.ts`, `site-rules.ts`: common settings and pure link/site rules.
+- `inline-buttons.ts`, `overlay.ts`, `settings-panel.ts`, `preflight.ts`: launcher UI, explicit disposal and optional bounded metadata checks.
+- `official-settings.ts`: allowlisted launch preferences shared with the main settings UI.
+- `blog-clicks.ts`, `coexistence.ts`: trusted blog clicks and old-trial coexistence.
+- `main-player-bridge.ts`: typed local launch protocol **inside the Nico-origin player frame**, with exact source/origin, video ID, sequence and lifecycle validation. No API method, account response or authentication capability is exposed to the external parent.
+- `player-host.cjs`: companion-owned outer iframe and private GM trusted-click ticket. Main never accepts the external parent's window messages as launch proof.
+- `launcher.cjs`, `gm-network.cjs`, `private-port.cjs`: main-owned player session, authenticated transport and private loader-frame RPC. The launcher also uses the network utility only for optional availability checks.
+- `display-settings.cjs`: main-owned player preferences; sanitized migration from the old companion snapshot, subsequent local-change merging.
+- `src/player-close.ts`, `player-background.ts`: bounded final save and small-mode transparent surface.
+- `runtime-adapter.cjs`: checked build-time hooks around **one** canonical main runtime, selecting external capabilities only inside the isolated host. It does not contain a second player/UI implementation.
+- `build-shells.cjs`: separate main/launcher entries. Main remains scoped to Nico and its existing supported hosts; it does not run directly on every external site. Main uses a DOM sandbox; ordinary Nico playback is injected into the page realm with only lexical lodash and no GM APIs. External playback runs in the main userscript realm.
+- `build.cjs`: compiles TypeScript, validates settings/source anchors and emits both products atomically. Internal ExternalTrial storage/frame identifiers are retained for compatibility.
 
-## Build and checks
+## Checks
 
-`node build.js --dev` builds main and companion atomically. `npm run test:external` tests package + actual distribution. `npm run test:external:browser` verifies small/normal backgrounds in an offline Chrome fixture. `node packages/external-playback/sync-preferences.cjs --write` updates main preference declarations after package settings compilation; follow with advanced:emit and sync-advanced.
+`node build.js --dev`, `npm run test:external`, `node packages/external-playback/main-bridge-browser.cjs`, `npm run test:external:browser`, and `node tools/check_regeneration.js .`.
 
-## Migration and rollback
+Ownership tests use distinct GM stores and script closures; browser fixtures use distinct Chrome isolated worlds and real same-frame postMessage. API transport is mocked: these checks do not claim live account/playback verification.
 
-With trial22 enabled, visit Nico once to mirror public external preferences. Disable the old trial, update main + companion, then reload Nico once to import preferences and publish normal player settings. Reload external pages. Existing old storage is not deleted. To roll back, disable companion and re-enable the retained trial; avoid both active at once. A companion-only installation uses defaults until a Nico page supplies main settings.
+## Upgrade and rollback
 
-Source provenance: external trial22 (`9c68bec`) promoted to current main source. No captured account pages or private HAR data are included. Live Nico validation is left to the user; tests use offline fixtures and mocks, never post real comments/likes.
+Update main and companion together, reload Nico once to publish the current player preferences, then reload external pages. Existing companion preferences migrate on the first successful handoff; no old data is deleted. External launch options continue to synchronize in both directions.
+
+A new companion with an old/missing main reports that the main needs updating/enabling. A new main with the previous companion leaves the previous companion's host alone until both are updated.
+
+Rollback: reinstall main and companion from public commit `0e7ecf1cba07137a004807732301848705539c03`, then reload pages. Keep existing stored settings. Do not run the old trial and the new companion simultaneously.

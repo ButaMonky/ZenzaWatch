@@ -63,7 +63,7 @@ export function mountOverlay(w:BrowserWindow,s:ExternalSettings,open:(id:string,
   const ids=resolveTarget();if(ids.length!==1){hide();return;}
   e.preventDefault();e.stopPropagation();busy=true;button.disabled=true;status.hidden=false;status.textContent='起動しています…';
   try{await open(ids[0],e);busy=false;hide();}
-  catch(error){status.textContent=error instanceof Error&&error.message==='VIDEO_UNAVAILABLE'?'動画情報では削除・非公開などにより利用できない状態です。':'起動できませんでした。ニコニコのログイン状態と通信を確認してください。';}
+  catch(error){status.textContent=error instanceof Error&&error.message==='MAIN_PLAYER_UNAVAILABLE'?'ZenzaWatch本体を最新版に更新して有効にし、このページを再読み込みしてください。':error instanceof Error&&error.message==='VIDEO_UNAVAILABLE'?'動画情報では削除・非公開などにより利用できない状態です。':'起動できませんでした。ニコニコのログイン状態と通信を確認してください。';}
   finally{busy=false;button.disabled=false;}
  });
  d.addEventListener('pointerover',target,true);d.addEventListener('focusin',target,true);d.addEventListener('selectionchange',selection);

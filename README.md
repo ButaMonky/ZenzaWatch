@@ -19,7 +19,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 |---|---|
 | **ZenzaWatch 本体** | [**インストール**](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js) — 動画をZenzaWatchで再生します。 |
 | MylistPocket | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js) — サムネイルから動画情報の確認やマイリスト追加ができます。 |
-| ZenzaBlogPartsButton | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js) — ブログパーツや外部サイトの動画リンクから、そのページ上でZenzaWatchを開けます。 |
+| ZenzaBlogPartsButton | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js) — ブログパーツや外部サイトの動画リンクから、そのページ上でZenzaWatchを開けます。本体も必要です。 |
 | ~~ZenzaAdvancedSettings~~ | 本体に統合済み。インストール不要。 |
 | ~~ZenzaHLS（HLSサポート）~~ | 本体に統合済み。インストール不要。 |
 

@@ -35,6 +35,7 @@ function createRuntimeSession({startRuntime, enable, hasExistingRuntime}) {
   let listener=()=>{},stage='BOOT';
   const progress=value=>{stage=value;listener(value);};
   return {
+    reportStage:progress,
     configure(value) {runtime=value;},
     close() {closed=true;if(ready){runtime?.close?.();return true;}return false;},
     setStageListener(value) {listener=value;},

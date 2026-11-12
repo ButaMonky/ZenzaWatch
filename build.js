@@ -474,7 +474,8 @@ function build(params) {
       const main=outputs.find(x=>/ZenzaWatch(?:-dev)?\.user\.js$/.test(x.outFile));
       const blog=outputs.find(x=>x.outFile.endsWith('/ZenzaBlogPartsButton.user.js'));
       for(const key of Object.keys(require.cache))if(key.startsWith(path.resolve('packages/external-playback')+path.sep))delete require.cache[key];
-      blog.content=require('./packages/external-playback/build.cjs')(main.content,blog.content);
+      const external=require('./packages/external-playback/build.cjs')(main.content,blog.content);
+      main.content=external.main;blog.content=external.blog;
     } catch(error) { errors.push('External playback: '+error.message); }
     errors.push(...checkSyntax(outputs));
   }
@@ -583,5 +584,4 @@ try {
   notify('error', `${e.message || e}`);
   process.exitCode = 1; // 例外でも「成功」で終わらせない（Task 084 / ZW-002）
 }
-
 

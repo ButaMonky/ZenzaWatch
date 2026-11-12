@@ -143,7 +143,7 @@ function mountOverlay(w, s, open, check) {
             hide();
         }
         catch (error) {
-            status.textContent = error instanceof Error && error.message === 'VIDEO_UNAVAILABLE' ? '動画情報では削除・非公開などにより利用できない状態です。' : '起動できませんでした。ニコニコのログイン状態と通信を確認してください。';
+            status.textContent = error instanceof Error && error.message === 'MAIN_PLAYER_UNAVAILABLE' ? 'ZenzaWatch本体を最新版に更新して有効にし、このページを再読み込みしてください。' : error instanceof Error && error.message === 'VIDEO_UNAVAILABLE' ? '動画情報では削除・非公開などにより利用できない状態です。' : '起動できませんでした。ニコニコのログイン状態と通信を確認してください。';
         }
         finally {
             busy = false;

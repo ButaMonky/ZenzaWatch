@@ -38,7 +38,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
         else if(data?.type==='closed')stop();
         else if(!closing && data?.requestId===sequence && data.type==='opened')pending?.resolve();
         else if(!closing && data?.requestId===sequence && data.type==='error'){
-          const error=Error(['LOGIN_REQUIRED','AUTH_FORBIDDEN','AUTH_TIMEOUT','GM_NETWORK_ERROR'].includes(data.code)?data.code:'PLAYER_START_FAILED');
+          const error=Error(['LOGIN_REQUIRED','AUTH_FORBIDDEN','AUTH_TIMEOUT','GM_NETWORK_ERROR','MAIN_PLAYER_UNAVAILABLE'].includes(data.code)?data.code:'PLAYER_START_FAILED');
           error.stage=['BOOT','SETTINGS','AUTH','UI','VIDEO'].includes(data.stage)?data.stage:'BOOT';
           stop(error);
         }

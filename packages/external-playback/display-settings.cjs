@@ -79,6 +79,13 @@ function createDisplaySettings(w, gm, registered=[]) {
       storageTiming:Object.fromEntries(Object.entries(storageTiming).map(([key,value])=>[key,Math.round(value*10)/10])),
       playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
   }
-  return {publish,apply,save,scheduleSave,diagnostics};
+  function migrate(snapshot) {
+    if(!snapshot||typeof snapshot!=='object')return;
+    if(!gm.get(slot)&&snapshot.official?.version===2)
+      gm.set(slot,{version:2,publishedAt:Date.now(),values:clean(snapshot.official.values)});
+    if(!gm.get(savedSlot)&&snapshot.saved?.version===2)
+      gm.set(savedSlot,{version:2,official:clean(snapshot.saved.official),values:clean(snapshot.saved.values)});
+  }
+  return {publish,apply,save,scheduleSave,diagnostics,migrate};
 }
 module.exports={createDisplaySettings};

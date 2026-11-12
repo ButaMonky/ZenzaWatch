@@ -17,6 +17,7 @@ function fixture(path) {
   const tasks = [], posts = [], toggles = [], styles = new Set();
   const ctx = createContext({
     Emitter: class {},
+    externalTrial: null, // normal mode of the shared bundled class
     setTimeout: fn => { tasks.push(fn); return tasks.length; }
   });
   // Evaluate exactly the bundled helper alongside the real class in both paths.

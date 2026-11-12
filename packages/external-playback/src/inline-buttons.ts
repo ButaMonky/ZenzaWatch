@@ -27,7 +27,7 @@ export function mountInlineButtons(w:Window & typeof globalThis,s:ExternalSettin
   button.addEventListener('click',async e=>{
    if(!e.isTrusted||busy||disposed)return;const current=ids(a);if(current.length!==1){update(a);return;}
    e.preventDefault();e.stopPropagation();busy=true;button.disabled=true;status.hidden=false;status.textContent='起動中…';
-   try{await open(current[0],e);status.hidden=true;}catch(error){status.textContent=error instanceof Error&&error.message==='VIDEO_UNAVAILABLE'?'動画情報では削除・非公開などにより利用できない状態です。':'起動できませんでした。ログイン状態と通信を確認してください。';}
+   try{await open(current[0],e);status.hidden=true;}catch(error){status.textContent=error instanceof Error&&error.message==='MAIN_PLAYER_UNAVAILABLE'?'ZenzaWatch本体を最新版に更新して有効にし、このページを再読み込みしてください。':error instanceof Error&&error.message==='VIDEO_UNAVAILABLE'?'動画情報では削除・非公開などにより利用できない状態です。':'起動できませんでした。ログイン状態と通信を確認してください。';}
    finally{busy=false;button.disabled=false;}
   });
   root.append(style,button,status);a.after(host);owned.set(a,host);

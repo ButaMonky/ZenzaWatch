@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.390-click1015.1
+// @version        2.7.390-click1015.2
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-intent1015/experiments/click-intent/ZenzaWatch-click-trial-dev.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-intent1015/experiments/click-intent/ZenzaWatch-click-trial-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 11:36Z 001718e
+// build: 2026-11-12 11:50Z 1bed783
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.390-click1015.1';
+    var VER = '2.7.390-click1015.2';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 11:36Z 001718e';
+    var BUILD = '2026-11-12 11:50Z 1bed783';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -68383,11 +68383,15 @@ class HoverMenu {
 						view.setAttribute('popover', 'manual');
 						Object.assign(view.style, { position: 'fixed', inset: 'auto', margin: '0',
 								padding: '0', border: '0', background: 'transparent', overflow: 'visible',
-								transform: 'none' });
+								transform: 'translate(-50%, -50%)', textAlign: 'center', textIndent: '0' });
+						const inner = view.querySelector('.ZenButtonInner');
+						if (inner) {
+								Object.assign(inner.style, { textAlign: 'center', textIndent: '0' });
+						}
 				}
 				this._$view.css({
-						top: cssUtil.px(offset.top + (view ? 2 : window.pageYOffset)),
-						left: cssUtil.px(offset.left + (view ? 2 : window.pageXOffset))
+						top: cssUtil.px(offset.top + (view ? 0 : window.pageYOffset)),
+						left: cssUtil.px(offset.left + (view ? 0 : window.pageXOffset))
 				}).addClass('show');
 				if (view?.isConnected && !view.matches(':popover-open')) {
 						view.showPopover?.();

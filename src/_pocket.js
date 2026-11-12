@@ -2646,8 +2646,8 @@ const emitter = util.emitter;
         PocketHoverSurface.attach(this._view, target);
         const bounds = this._view.getBoundingClientRect();
         this.moveTo(
-          Math.max(0, offset.right - bounds.width - 2),
-          Math.max(0, offset.top + offset.height / 2 - bounds.height / 2)
+          offset.right - bounds.width / 2,
+          offset.top + offset.height / 2 - bounds.height / 2
         );
       }
 

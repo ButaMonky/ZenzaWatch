@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/HoverMenu.ts",
   "runtime": "packages/zenza/src/menu/HoverMenu.js",
-  "sourceSha256": "edc982cbdb534b68b15703c6988fb2e5c82dfa422ea63911303c838e18f0b6d9",
-  "runtimeSha256": "1d6ceec40dc9865f5d6fedb90210894a7b1f71c2ca55b869ede63bc381c021ec"
+  "sourceSha256": "42c83f06b28bc2fc0ee1fe14295efcc8d59d4f32e08f82d734c3656cefa29de8",
+  "runtimeSha256": "6e4c982569cba6a9ad55d6dba5cf996bda5a7eb1c9dd32876f4d3334c10bd07b"
 }

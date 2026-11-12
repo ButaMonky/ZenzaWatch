@@ -28,3 +28,8 @@ After installing, reload the Nico page. In the follow dropdown hover the video t
 Rollback: https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js
 
 Validation: 122 related unit tests, native Chrome hover/action test, typed helper emit and parity check passed. The broader existing pocket:verify command reports POCKET_TS_SOURCE_RUNTIME_MISMATCH for the unrelated PocketThumbnail generator; its write command refuses the existing runtime as POCKET_TS_UNOWNED_RUNTIME. That runtime was not changed.
+
+
+## Position / alignment follow-up (.2)
+
+ZenzaWatch 2.7.390-click1015.2 and MylistPocket 0.5.89-hover1015.2 restore the original anchors: Zen centered on the link top-left corner, Pocket centered on its right edge. Link ancestry and top-layer display remain intact. Control text explicitly uses centered alignment and zero indentation to avoid inherited link styles. Native Chrome tests now verify both anchor positions and text styles with conflicting ancestor-page CSS, including entering the part outside the link rectangle.

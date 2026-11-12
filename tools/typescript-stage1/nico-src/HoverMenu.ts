@@ -183,11 +183,13 @@ class HoverMenu {
       view.setAttribute('popover', 'manual');
       Object.assign(view.style, {position: 'fixed', inset: 'auto', margin: '0',
         padding: '0', border: '0', background: 'transparent', overflow: 'visible',
-        transform: 'none'});
+        transform: 'translate(-50%, -50%)', textAlign: 'center', textIndent: '0'});
+      const inner = view.querySelector<HTMLElement>('.ZenButtonInner');
+      if (inner) { Object.assign(inner.style, {textAlign: 'center', textIndent: '0'}); }
     }
     this._$view.css({
-      top: cssUtil.px(offset.top + (view ? 2 : window.pageYOffset)),
-      left: cssUtil.px(offset.left + (view ? 2 : window.pageXOffset))
+      top: cssUtil.px(offset.top + (view ? 0 : window.pageYOffset)),
+      left: cssUtil.px(offset.left + (view ? 0 : window.pageXOffset))
     }).addClass('show');
     if (view?.isConnected && !view.matches(':popover-open')) { view.showPopover?.(); }
   }

@@ -14,7 +14,10 @@ const PocketHoverSurface = {
         }
         view.setAttribute('popover', 'manual');
         Object.assign(view.style, { position: 'fixed', inset: 'auto', margin: '0', border: '0',
-            padding: '0', background: 'transparent', overflow: 'visible' });
+            padding: '0', background: 'transparent', overflow: 'visible', textAlign: 'center', textIndent: '0' });
+        view.querySelectorAll('.mylistPocketButton').forEach(button => {
+            Object.assign(button.style, { textAlign: 'center', textIndent: '0' });
+        });
         if (view.isConnected && !view.matches(':popover-open')) {
             view.showPopover?.();
         }

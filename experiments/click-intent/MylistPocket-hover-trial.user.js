@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version        0.5.89-hover1015.1
+// @version        0.5.89-hover1015.2
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-intent1015/experiments/click-intent/MylistPocket-hover-trial.user.js
 // @updateURL    https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-intent1015/experiments/click-intent/MylistPocket-hover-trial.user.js
 // ==/UserScript==
-// build: 2026-11-12 11:43Z b0dc276
+// build: 2026-11-12 11:50Z 1bed783
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -121,7 +121,10 @@ const PocketHoverSurface = {
 				}
 				view.setAttribute('popover', 'manual');
 				Object.assign(view.style, { position: 'fixed', inset: 'auto', margin: '0', border: '0',
-						padding: '0', background: 'transparent', overflow: 'visible' });
+						padding: '0', background: 'transparent', overflow: 'visible', textAlign: 'center', textIndent: '0' });
+				view.querySelectorAll('.mylistPocketButton').forEach(button => {
+						Object.assign(button.style, { textAlign: 'center', textIndent: '0' });
+				});
 				if (view.isConnected && !view.matches(':popover-open')) {
 						view.showPopover?.();
 				}
@@ -5777,8 +5780,8 @@ const MylistApiLoader = (() => {
         PocketHoverSurface.attach(this._view, target);
         const bounds = this._view.getBoundingClientRect();
         this.moveTo(
-          Math.max(0, offset.right - bounds.width - 2),
-          Math.max(0, offset.top + offset.height / 2 - bounds.height / 2)
+          offset.right - bounds.width / 2,
+          offset.top + offset.height / 2 - bounds.height / 2
         );
       }
 

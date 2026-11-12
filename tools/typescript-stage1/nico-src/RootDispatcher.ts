@@ -114,6 +114,9 @@ const RootDispatcher = (() => {
         case 'notify':
           PopupMessage.notify(params);
           break;
+        case 'warning':
+          PopupMessage.warning(params);
+          break;
         case 'alert':
           PopupMessage.alert(params);
           break;

@@ -2,6 +2,6 @@
   "schemaVersion": 1,
   "source": "tools/typescript-stage1/nico-src/NotificationJournal.ts",
   "runtime": "src/NotificationJournal.js",
-  "sourceSha256": "d7bb37ba34654c2cfb90aa6f57ebe43bcc1925e4a4d972c28db6486c0e97ffb8",
-  "runtimeSha256": "cb5922e2b18f4e371be1477a64e25da18942ca7929a8299ecb248d268a8bbc47"
+  "sourceSha256": "c911e149bcf1f382fcd6f40b07334a5ffe683f89cd8632b4b6c20ab5b0988306",
+  "runtimeSha256": "c479c2653b84935e068f08eea850e572040f979ff0f6f23a5afbfc1d915cbc1f"
 }

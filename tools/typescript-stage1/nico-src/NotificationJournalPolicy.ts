@@ -122,6 +122,19 @@ const NotificationJournalPolicy = (() => {
   // arbitrary persisted fields. This also protects reports from future fields.
   const toDiagnosticEntry=(entry:JournalEntry):JournalEntry=>normalize(
     {...entry,activity:undefined},{id:entry.id,timestamp:entry.timestamp})!;
-  return {normalize,toDiagnosticEntry};
+  // Classify by structured operation/category, never by translated message text.
+  const recordingGroup = (entry: JournalEntry): string => {
+    const operation = String(entry.details.operation || entry.source);
+    const groups: Record<string, string> = {
+      advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
+      'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
+      'comment-read': 'comment', 'comment-key': 'comment',
+      like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
+      tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
+      recommend: 'related', owner: 'related', dictionary: 'related'
+    };
+    return groups[operation] || entry.category;
+  };
+  return {normalize,toDiagnosticEntry,recordingGroup};
 })();
 export { NotificationJournalPolicy };

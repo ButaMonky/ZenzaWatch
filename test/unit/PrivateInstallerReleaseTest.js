@@ -52,7 +52,7 @@ describe('Task928 private backup with public-only update destinations', () => {
   });
   it('records the reviewed build versions of the five installers', () => {
     const wanted = {
-      'ZenzaWatch-dev':'2.7.395-task1021',
+      'ZenzaWatch-dev':'2.7.396-task1022',
       'ZenzaHLS':'0.1.0-task997',
       'MylistPocket':'0.5.90-task1015',
       'ZenzaAdvancedSettings':'0.4.0-task993',

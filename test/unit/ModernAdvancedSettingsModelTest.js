@@ -76,7 +76,7 @@ describe('Task318 advanced settings descriptor and draft model',()=>{
   });
   it('has exactly eight stable major categories, unique IDs, and documented related-menu entry',()=>{
     const {model,dom}=setup();
-    assert.strictEqual(model.categories.length,8);
+    assert.strictEqual(model.categories.length,9);
     assert.strictEqual(new Set(model.descriptors.map(x=>x.id)).size,model.descriptors.length);
     assert(model.descriptors.some(x=>x.id==='relatedMenu.customLinks' &&
       x.category==='プレイリスト・検索' && x.subcategory.includes('カスタムリンク')));

@@ -35,8 +35,28 @@ function boot(saved={},storageValues={}) {
     'sceneSearch.layout.normal':'01','sceneSearch.layout.fullscreen':'01',
     'sceneSearch.layout.linkFullscreen':false,
     enableAdDecoration:true,
-    'popup.notifyColor':'#00cc00','popup.alertColor':'#cc0000',
+    'popup.notifyColor':'#00cc00','popup.alertColor':'#cc0000','popup.warningColor':'#cc6600',
     'popup.backgroundTransparency':0,
+    'notificationHistory.enabled': true,
+    'notificationHistory.commentText': true,
+    'notificationHistory.level.info': true,
+    'notificationHistory.level.success': true,
+    'notificationHistory.level.warning': true,
+    'notificationHistory.level.error': true,
+    'notificationHistory.record.general': true,
+    'notificationHistory.record.player': true,
+    'notificationHistory.record.comment': true,
+    'notificationHistory.record.like': true,
+    'notificationHistory.record.mylist': true,
+    'notificationHistory.record.playlist': true,
+    'notificationHistory.record.search': true,
+    'notificationHistory.record.storyboard': true,
+    'notificationHistory.record.tags': true,
+    'notificationHistory.record.advertising': false,
+    'notificationHistory.record.related': true,
+    'notificationHistory.record.network': true,
+    'notificationHistory.record.system': true,
+
     smallModeAspectLock:false,autoFullScreen:false,fullscreenControlBarMode:'auto',
     pipPageThumbnail:true,pipPageThumbnailSource:'smart',
     'controlBar.showOnPause.small':false,'controlBar.showOnPause.fullscreen':false,
@@ -292,9 +312,9 @@ describe('Task318 full-viewport advanced-settings shell',()=>{
       assert(h.confirms()>=1);
     }finally{h.destroy();}
   });
-  it('renders eight major groups, sidebar width and persistent bottom actions',()=>{
+  it('renders nine major groups, sidebar width and persistent bottom actions',()=>{
     const h=boot();assert(h.q('.zw-modern-root'));
-    assert.strictEqual(h.all('[data-zw-major]').length,8);
+    assert.strictEqual(h.all('[data-zw-major]').length,9);
     assert(h.q('.zw-modern-root').getAttribute('style').includes('290px'));
     assert(h.q('[data-zw-save]'));assert(h.q('[data-zw-cancel]'));
     assert(h.panel.classList.contains('zw-modern-active'));
@@ -879,7 +899,7 @@ describe('Task318 comment history navigation migration',()=>{
     assert.strictEqual(h.ui.selected.category,'コメント表示');
     assert.strictEqual(h.ui.selected.subcategory,'追加取得');
     assert(h.ui.expanded.has('コメント表示'));
-    assert.strictEqual(h.all('[data-zw-major]').length,8);
+    assert.strictEqual(h.all('[data-zw-major]').length,9);
     assert(h.q('[data-zw-id="commentHistory.enabled"]'));
     assert.strictEqual(h.config.writes.length,0);
     h.destroy();
@@ -1572,9 +1592,11 @@ describe('Task926 reusable popup color editor',function(){
       open(h);
       assert.strictEqual(h.model.get('popup.notifyColor'),'#00cc00');
       assert.strictEqual(h.model.get('popup.alertColor'),'#cc0000');
-      assert.strictEqual(h.all('[data-zw-color-picker]').length,2);
-      assert.strictEqual(h.all('[data-zw-color-code]').length,2);
-      assert.strictEqual(h.all('[data-zw-popup-color-sample]').length,2);
+      assert.strictEqual(h.model.get('popup.warningColor'),'#cc6600');
+      assert.strictEqual(h.q('[data-zw-popup-color-sample="popup.warningColor"]').style.backgroundColor,'rgb(204, 102, 0)');
+      assert.strictEqual(h.all('[data-zw-color-picker]').length,3);
+      assert.strictEqual(h.all('[data-zw-color-code]').length,3);
+      assert.strictEqual(h.all('[data-zw-popup-color-sample]').length,3);
       assert(h.q('[data-zw-popup-color-sample="popup.notifyColor"]').textContent.includes('保存しました'));
       h.click('[data-zw-sub="画面・映像|表示・非表示"]');
       assert(h.q('[data-zw-id="ui.bar.notificationHistory"]'));
@@ -1782,5 +1804,33 @@ describe('shared setting live synchronization',()=>{
       assert.deepStrictEqual(Array.from(h.model.changes(),c=>c.id),['supporterCredit.voice']);
     } finally { h.destroy(); }
     assert([...h.config.listeners.values()].every(listeners=>listeners.size===0));
+  });
+});
+
+describe('Notification history settings',()=>{
+  it('has its own top-level section and defaults advertising recording to off',()=>{
+    const h=boot();try{
+      h.click('[data-zw-major="通知履歴"]');
+      h.click('[data-zw-sub="通知履歴|記録する機能"]');
+      assert.strictEqual(h.model.get('notificationHistory.record.advertising'),false);
+      assert(h.q('[data-zw-id="notificationHistory.record.advertising"]').textContent.includes('広告ブロック'));
+      assert(h.q('[data-zw-id="notificationHistory.record.comment"]'));
+      assert(h.q('[data-zw-id="notificationHistory.record.player"]'));
+      h.model.set('notificationHistory.enabled',false);
+      assert(h.model.disabledReason('notificationHistory.record.advertising'));
+      assert(h.model.disabledReason('notificationHistory.commentText'));
+    }finally{h.destroy();}
+  });
+  it('previews warning colors as a draft and persists on save',()=>{
+    const h=boot();try{
+      h.click('[data-zw-major="画面・映像"]');
+      h.click('[data-zw-sub="画面・映像|通知・ポップアップ"]');
+      const input=h.q('[data-zw-color-code="popup.warningColor"]');
+      input.value='#aa5500';input.dispatchEvent(new h.dom.window.Event('input',{bubbles:true}));
+      assert.strictEqual(h.q('[data-zw-popup-color-sample="popup.warningColor"]').style.backgroundColor,'rgb(170, 85, 0)');
+      assert.strictEqual(h.config.values['popup.warningColor'],'#cc6600');
+      h.model.save();
+      assert.strictEqual(h.config.values['popup.warningColor'],'#aa5500');
+    }finally{h.destroy();}
   });
 });

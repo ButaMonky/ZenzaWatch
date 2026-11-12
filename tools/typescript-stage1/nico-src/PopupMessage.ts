@@ -14,6 +14,7 @@ const PopupMessage = (() => {
     .zenzaPopupMessage {
       --notify-color: #0c0;
       --alert-color: #c00;
+      --warning-color: #c60;
       --shadow-color: #ccc;
 
       z-index: 100000;
@@ -43,6 +44,12 @@ const PopupMessage = (() => {
 
     .zenzaPopupMessage.alert {
       background: var(--alert-color, #0c0);
+    }
+
+    .zenzaPopupMessage.warning {
+      background: var(--warning-color, #c60);
+      white-space: pre-line;
+      overflow-wrap: anywhere;
     }
 
     .zenzaPopupMessage.debug {
@@ -94,13 +101,14 @@ const PopupMessage = (() => {
     const d = document.createElement('div');
     d.className = `zenzaPopupMessage ${className}`;
     const key = className === 'notify' ? 'popup.notifyColor' :
-      className === 'alert' ? 'popup.alertColor' : null;
+      className === 'alert' ? 'popup.alertColor' :
+      className === 'warning' ? 'popup.warningColor' : null;
     if (key) {
       const configured = storedColor(key);
       const percent = storedTransparency();
       if (configured || percent > 0) {
-        const fallback = className === 'notify' ? '#0c0' : '#c00';
-        d.style.setProperty(className === 'notify' ? '--notify-color' : '--alert-color',
+        const fallback = className === 'notify' ? '#0c0' : className === 'warning' ? '#c60' : '#c00';
+        d.style.setProperty(className === 'notify' ? '--notify-color' : className === 'warning' ? '--warning-color' : '--alert-color',
           percent > 0 ? transparentColor(configured || fallback, percent) : configured!);
       }
     }
@@ -126,7 +134,7 @@ const PopupMessage = (() => {
     try {
       NotificationJournal.record({
         category: 'general',
-        level: type === 'alert' ? 'error' : 'info',
+        level: type === 'alert' ? 'error' : type === 'warning' ? 'warning' : 'info',
         message: allowHtml ? msg.replace(/<[^>]*>/g, ' ') : msg,
         source: 'popup'
       });
@@ -141,10 +149,13 @@ const PopupMessage = (() => {
   const alert = (msg?: string, allowHtml = false) =>
     nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
 
+  const warning = (msg?: string, allowHtml = false) =>
+    nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;');
+
   const debug = (msg?: string, allowHtml = false) =>
     nt(msg, allowHtml, 'debug', 'background: #333; color: #fff; padding: 8px;');
 
-  return {notify, alert, debug};
+  return {notify, alert, warning, debug};
 })();
 
 export { PopupMessage };

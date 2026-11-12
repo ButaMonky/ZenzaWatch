@@ -42,7 +42,7 @@ describe('SCUI-20 Discussion #6 stored timeout and settings descriptor',()=>{
    assert.deepStrictEqual([d.min,d.max,d.step],[0,30,0.5]);
    assert.strictEqual(model.descriptors.filter(x=>x.id==='sceneSearch.idleHideSeconds').length,1);
    assert(model.sectionDescriptors('画面・映像','シーンサーチ').some(x=>x.id===d.id));
-   assert.strictEqual(model.categories.length,8);
+   assert.strictEqual(model.categories.length,9);
    assert(d.description.includes('0秒'));
  });
 });

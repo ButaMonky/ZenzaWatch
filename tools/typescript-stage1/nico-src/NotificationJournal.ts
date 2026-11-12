@@ -5,6 +5,27 @@ declare const NotificationJournalPolicy: typeof import('./NotificationJournalPol
 declare const NotificationJournalStore: typeof import('./NotificationJournalStore').NotificationJournalStore;
 
 const NotificationJournal = (() => {
+  let recordingPreference: ((key: string) => unknown) | undefined;
+  const configureRecording = (read: (key: string) => unknown): void => { recordingPreference = read; };
+  const enabled = (key: string, fallback = true): boolean => {
+    try {
+      const value = recordingPreference?.('notificationHistory.' + key);
+      return typeof value === 'boolean' ? value : fallback;
+    } catch (_) { return fallback; }
+  };
+  const shouldRecord = (entry: JournalEntry): boolean => {
+    const group = NotificationJournalPolicy.recordingGroup(entry);
+    return enabled('enabled') && enabled('level.' + entry.level) &&
+      enabled('record.' + group, group !== 'advertising');
+  };
+  // A disabled classified event must not return as an unclassified popup.
+  // This bounded, short-lived list is not persisted or exposed as history.
+  const suppressed: Array<{message:string;timestamp:number}> = [];
+  const rememberSuppressed = (entry: JournalEntry): void => {
+    if (entry.category === 'general') { return; }
+    suppressed.unshift({message:entry.message,timestamp:entry.timestamp});
+    if (suppressed.length > 8) { suppressed.length = 8; }
+  };
   const MAX_RECORDS = 2000;
   const MAX_SESSION = 2000;
   const listeners = new Set<() => void>();
@@ -59,6 +80,10 @@ const NotificationJournal = (() => {
       timestamp: now
     });
     if (!entry || !entry.message) { return null; }
+    if (!shouldRecord(entry)) { rememberSuppressed(entry); return null; }
+    if (entry.category === 'general' && entry.source === 'popup' &&
+        suppressed.some(item => item.message === entry.message && now - item.timestamp <= 2000)) { return null; }
+    if (!enabled('commentText')) { delete entry.activity; }
     // An explicitly classified event is emitted just before its generic popup.
     // Save only the richer event; do not lose two legitimate repeated notifications.
     const duplicate=isDuplicate(entry,recent);
@@ -103,6 +128,10 @@ const NotificationJournal = (() => {
     const freshId=now.toString(36)+'-'+(++sequence).toString(36)+'-'+Math.random().toString(36).slice(2,10);
     const fresh=NotificationJournalPolicy.normalize({...input,...buildIdentity},{id:freshId,timestamp:now});
     if(!fresh||!fresh.message)return null;
+    if(!shouldRecord(fresh)){
+      diagnosticGroups.delete(key);confirmedGroups.delete(key);
+      rememberSuppressed(fresh);return null;
+    }
     const data = {...input, ...buildIdentity,
       version: previous?.version ?? buildIdentity.version, build: previous?.build ?? buildIdentity.build,
       firstOccurredAt: previous?.firstOccurredAt ?? now,
@@ -163,6 +192,7 @@ const NotificationJournal = (() => {
     });
     session.length = 0;
     recent.length = 0;
+    suppressed.length = 0;
     diagnosticGroups.clear();
     confirmedGroups.clear();confirmedRecent.length=0;
     announce();
@@ -174,6 +204,6 @@ const NotificationJournal = (() => {
     return () => listeners.delete(listener);
   };
   const toDiagnosticEntry=(entry:JournalEntry):JournalEntry=>NotificationJournalPolicy.toDiagnosticEntry(entry);
-  return {record, recordDiagnostic, list, clear, subscribe, configureBuild, toDiagnosticEntry};
+  return {record, recordDiagnostic, list, clear, subscribe, configureBuild, configureRecording, toDiagnosticEntry};
 })();
 export { NotificationJournal };

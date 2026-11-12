@@ -2100,6 +2100,7 @@ class ModernAdvancedSettingsUI {
         preview.append(title, note);
         for (const [key, label, example] of [
             ['popup.notifyColor', '通常・成功通知', '✓ 保存しました'],
+            ['popup.warningColor', '警告通知', '⚠ NGフィルターがOFFのため、現在は適用されません'],
             ['popup.alertColor', 'エラー通知', '! コメントの取得に失敗しました']
         ]) {
             const labelNode = this.doc.createElement('p');

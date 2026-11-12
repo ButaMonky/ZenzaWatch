@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.395-task1021
+// @version        2.7.396-task1022
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 17:06Z e95fe30
+// build: 2026-11-12 17:44Z d190f1a
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1222,7 +1222,7 @@ function createDisplaySettings(w, gm, registered=[]) {
   return {publish,apply,save,scheduleSave,diagnostics,migrate};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.395-task1021';
+    var VER = '2.7.396-task1022';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 17:06Z e95fe30';
+    var BUILD = '2026-11-12 17:44Z d190f1a';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5754,6 +5754,26 @@ const Config = (() => {
 				enableStoryboardBar: false, // シーンサーチ
 				'popup.notifyColor': '#00cc00',
 				'popup.alertColor': '#cc0000',
+				'popup.warningColor': '#cc6600',
+				'notificationHistory.enabled': true,
+				'notificationHistory.commentText': true,
+				'notificationHistory.level.info': true,
+				'notificationHistory.level.success': true,
+				'notificationHistory.level.warning': true,
+				'notificationHistory.level.error': true,
+				'notificationHistory.record.general': true,
+				'notificationHistory.record.player': true,
+				'notificationHistory.record.comment': true,
+				'notificationHistory.record.like': true,
+				'notificationHistory.record.mylist': true,
+				'notificationHistory.record.playlist': true,
+				'notificationHistory.record.search': true,
+				'notificationHistory.record.storyboard': true,
+				'notificationHistory.record.tags': true,
+				'notificationHistory.record.advertising': false,
+				'notificationHistory.record.related': true,
+				'notificationHistory.record.network': true,
+				'notificationHistory.record.system': true,
 				'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
 				videoInfoPanelTab: 'videoInfoTab',
 				fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
@@ -5820,7 +5840,7 @@ const Config = (() => {
 				'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
 				'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
 				'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
-				overrideGinza: false, // 動画視聴ページでもGinzaの代わりに起動する
+				overrideGinza: false, // Retired compatibility storage; never triggers automatic launch.
 				enableGinzaSlayer: false, // まだ実験中
 				lastPlayerId: '',
 				playbackRate: 1.0,
@@ -7379,7 +7399,19 @@ const NotificationJournalPolicy = (() => {
 				};
 		};
 		const toDiagnosticEntry = (entry) => normalize({ ...entry, activity: undefined }, { id: entry.id, timestamp: entry.timestamp });
-		return { normalize, toDiagnosticEntry };
+		const recordingGroup = (entry) => {
+				const operation = String(entry.details.operation || entry.source);
+				const groups = {
+						advertising: 'advertising', 'ad-decoration': 'advertising', supporters: 'advertising', gifts: 'advertising',
+						'video-info': 'player', videoInfo: 'player', 'video-session': 'player', 'session-state': 'player',
+						'comment-read': 'comment', 'comment-key': 'comment',
+						like: 'like', mylist: 'mylist', playlist: 'playlist', search: 'search', storyboard: 'storyboard',
+						tags: 'tags', 'tag-suggest': 'tags', 'tag-key': 'tags',
+						recommend: 'related', owner: 'related', dictionary: 'related'
+				};
+				return groups[operation] || entry.category;
+		};
+		return { normalize, toDiagnosticEntry, recordingGroup };
 })();
 const NotificationJournalStore = (() => {
 		const create = (indexedDB) => {
@@ -7618,6 +7650,32 @@ const NotificationJournalStore = (() => {
 		return { create };
 })();
 const NotificationJournal = (() => {
+		let recordingPreference;
+		const configureRecording = (read) => { recordingPreference = read; };
+		const enabled = (key, fallback = true) => {
+				try {
+						const value = recordingPreference?.('notificationHistory.' + key);
+						return typeof value === 'boolean' ? value : fallback;
+				}
+				catch (_) {
+						return fallback;
+				}
+		};
+		const shouldRecord = (entry) => {
+				const group = NotificationJournalPolicy.recordingGroup(entry);
+				return enabled('enabled') && enabled('level.' + entry.level) &&
+						enabled('record.' + group, group !== 'advertising');
+		};
+		const suppressed = [];
+		const rememberSuppressed = (entry) => {
+				if (entry.category === 'general') {
+						return;
+				}
+				suppressed.unshift({ message: entry.message, timestamp: entry.timestamp });
+				if (suppressed.length > 8) {
+						suppressed.length = 8;
+				}
+		};
 		const MAX_RECORDS = 2000;
 		const MAX_SESSION = 2000;
 		const listeners = new Set();
@@ -7694,6 +7752,17 @@ const NotificationJournal = (() => {
 				if (!entry || !entry.message) {
 						return null;
 				}
+				if (!shouldRecord(entry)) {
+						rememberSuppressed(entry);
+						return null;
+				}
+				if (entry.category === 'general' && entry.source === 'popup' &&
+						suppressed.some(item => item.message === entry.message && now - item.timestamp <= 2000)) {
+						return null;
+				}
+				if (!enabled('commentText')) {
+						delete entry.activity;
+				}
 				const duplicate = isDuplicate(entry, recent);
 				if (!duplicate) {
 						session.unshift(entry);
@@ -7759,6 +7828,12 @@ const NotificationJournal = (() => {
 				const fresh = NotificationJournalPolicy.normalize({ ...input, ...buildIdentity }, { id: freshId, timestamp: now });
 				if (!fresh || !fresh.message)
 						return null;
+				if (!shouldRecord(fresh)) {
+						diagnosticGroups.delete(key);
+						confirmedGroups.delete(key);
+						rememberSuppressed(fresh);
+						return null;
+				}
 				const data = { ...input, ...buildIdentity,
 						version: previous?.version ?? buildIdentity.version, build: previous?.build ?? buildIdentity.build,
 						firstOccurredAt: previous?.firstOccurredAt ?? now,
@@ -7840,6 +7915,7 @@ const NotificationJournal = (() => {
 				});
 				session.length = 0;
 				recent.length = 0;
+				suppressed.length = 0;
 				diagnosticGroups.clear();
 				confirmedGroups.clear();
 				confirmedRecent.length = 0;
@@ -7854,13 +7930,14 @@ const NotificationJournal = (() => {
 				return () => listeners.delete(listener);
 		};
 		const toDiagnosticEntry = (entry) => NotificationJournalPolicy.toDiagnosticEntry(entry);
-		return { record, recordDiagnostic, list, clear, subscribe, configureBuild, toDiagnosticEntry };
+		return { record, recordDiagnostic, list, clear, subscribe, configureBuild, configureRecording, toDiagnosticEntry };
 })();
 const PopupMessage = (() => {
 		const __css__ = `
 		.zenzaPopupMessage {
 			--notify-color: #0c0;
 			--alert-color: #c00;
+			--warning-color: #c60;
 			--shadow-color: #ccc;
 			z-index: 100000;
 			opacity: 0;
@@ -7885,6 +7962,11 @@ const PopupMessage = (() => {
 		}
 		.zenzaPopupMessage.alert {
 			background: var(--alert-color, #0c0);
+		}
+		.zenzaPopupMessage.warning {
+			background: var(--warning-color, #c60);
+			white-space: pre-line;
+			overflow-wrap: anywhere;
 		}
 		.zenzaPopupMessage.debug {
 			background: #333;
@@ -7941,13 +8023,14 @@ const PopupMessage = (() => {
 				const d = document.createElement('div');
 				d.className = `zenzaPopupMessage ${className}`;
 				const key = className === 'notify' ? 'popup.notifyColor' :
-						className === 'alert' ? 'popup.alertColor' : null;
+						className === 'alert' ? 'popup.alertColor' :
+								className === 'warning' ? 'popup.warningColor' : null;
 				if (key) {
 						const configured = storedColor(key);
 						const percent = storedTransparency();
 						if (configured || percent > 0) {
-								const fallback = className === 'notify' ? '#0c0' : '#c00';
-								d.style.setProperty(className === 'notify' ? '--notify-color' : '--alert-color', percent > 0 ? transparentColor(configured || fallback, percent) : configured);
+								const fallback = className === 'notify' ? '#0c0' : className === 'warning' ? '#c60' : '#c00';
+								d.style.setProperty(className === 'notify' ? '--notify-color' : className === 'warning' ? '--warning-color' : '--alert-color', percent > 0 ? transparentColor(configured || fallback, percent) : configured);
 						}
 				}
 				allowHtml ? (d.innerHTML = msg) : (d.textContent = msg);
@@ -7968,7 +8051,7 @@ const PopupMessage = (() => {
 				try {
 						NotificationJournal.record({
 								category: 'general',
-								level: type === 'alert' ? 'error' : 'info',
+								level: type === 'alert' ? 'error' : type === 'warning' ? 'warning' : 'info',
 								message: allowHtml ? msg.replace(/<[^>]*>/g, ' ') : msg,
 								source: 'popup'
 						});
@@ -7979,8 +8062,9 @@ const PopupMessage = (() => {
 		};
 		const notify = (msg, allowHtml = false) => nt(msg, allowHtml, 'notify', 'background: #080; color: #fff; padding: 8px;');
 		const alert = (msg, allowHtml = false) => nt(msg, allowHtml, 'alert', 'background: #800; color: #fff; padding: 8px;');
+		const warning = (msg, allowHtml = false) => nt(msg, allowHtml, 'warning', 'background: #c60; color: #fff; padding: 8px;');
 		const debug = (msg, allowHtml = false) => nt(msg, allowHtml, 'debug', 'background: #333; color: #fff; padding: 8px;');
-		return { notify, alert, debug };
+		return { notify, alert, warning, debug };
 })();
 const AsyncEmitter = (() => {
 	const emitter = function () {
@@ -55756,6 +55840,19 @@ class NicoVideoPlayerDialog extends Emitter {
 				}
 				this._playerConfig.setValue('playbackRate', next);
 		}
+		_registerCommentNg(command, value, label) {
+				if (typeof value !== 'string' || !value.trim()) {
+						return;
+				}
+				const filter = this._nicoVideoPlayer.filter;
+				const listKey = command === 'addWordFilter' ? 'wordFilterList' :
+						command === 'addUserIdFilter' ? 'userIdFilterList' : 'commandFilterList';
+				const exists = filter[listKey].includes(value);
+				filter[command](value);
+				const message = exists ? label + 'は登録済みです。' : label + 'に登録しました。';
+				this.execCommand(filter.isEnable ? 'notify' : 'warning', filter.isEnable ? message :
+						message + '\nNGフィルターがOFFのため、現在は適用されません。');
+		}
 		_onCommand(command, param, request) {
 				const outer = !this._actionFeedbackCommandDepth;
 				this._actionFeedbackCommandDepth = (this._actionFeedbackCommandDepth || 0) + 1;
@@ -55886,7 +55983,7 @@ class NicoVideoPlayerDialog extends Emitter {
 								case 'deleteAutomaticResume':
 										return this._deleteAutomaticResume();
 								case 'addWordFilter':
-										this._nicoVideoPlayer.filter.addWordFilter(param);
+										this._registerCommentNg('addWordFilter', param, 'NGワード');
 										break;
 								case 'setWordRegFilter':
 										this._nicoVideoPlayer.filter.setWordRegFilter(param, this._nicoVideoPlayer.filter.wordRegFilterFlags);
@@ -55895,10 +55992,10 @@ class NicoVideoPlayerDialog extends Emitter {
 										this._nicoVideoPlayer.filter.setWordRegFilter(this._nicoVideoPlayer.filter.wordRegFilterSource, param);
 										break;
 								case 'addUserIdFilter':
-										this._nicoVideoPlayer.filter.addUserIdFilter(param);
+										this._registerCommentNg('addUserIdFilter', param, 'ユーザーNG');
 										break;
 								case 'addCommandFilter':
-										this._nicoVideoPlayer.filter.addCommandFilter(param);
+										this._registerCommentNg('addCommandFilter', param, 'NGコマンド');
 										break;
 								case 'setWordFilterList':
 										this._nicoVideoPlayer.filter.wordFilterList = param;
@@ -59924,6 +60021,9 @@ const RootDispatcher = (() => {
 										break;
 								case 'notify':
 										PopupMessage.notify(params);
+										break;
+								case 'warning':
+										PopupMessage.warning(params);
 										break;
 								case 'alert':
 										PopupMessage.alert(params);
@@ -70397,6 +70497,9 @@ const replaceRedirectLinks = async () => {
 						Config.onkey?.('storyboardCacheMaxMB', configureSceneCache);
 						Config.onkey?.('storyboardCacheDays', configureSceneCache);
 				}
+				if (typeof NotificationJournal !== 'undefined') {
+						NotificationJournal.configureRecording?.(key => Config.getValue(key));
+				}
 				if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
 						NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
 						RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {
@@ -71319,7 +71422,7 @@ class ModernAdvancedSettingsModel {
 		static get CATEGORIES() {
 				return [
 						'再生・音声', '画面・映像', 'コメント表示',
-						'NG・表示対象', 'プレイリスト・検索', 'ショートカット', 'マウス・タッチ', '外部サイトからの再生'
+						'NG・表示対象', 'プレイリスト・検索', 'ショートカット', 'マウス・タッチ', '通知履歴', '外部サイトからの再生'
 				];
 		}
 		static _clone(value) {
@@ -71492,6 +71595,33 @@ class ModernAdvancedSettingsModel {
 						['HIGH', '強'], ['MAX', '最大']]);
 				return [
 						...this.externalLinkSettings(),
+						...group('通知履歴', '基本設定', [
+								['notificationHistory.enabled', '通知履歴を記録する', { type: 'boolean',
+												description: 'これから発生する通知やエラーを履歴に残します。OFFでも画面の通知は表示され、保存済みの履歴は消えません。過去の記録を消す場合は通知履歴パネルの削除操作を使ってください。設定は「変更を保存」の後に反映されます。' }],
+								['notificationHistory.commentText', '投稿したコメント本文を残す', { type: 'boolean', dependsOn: 'notificationHistory.record.comment',
+												description: '投稿成功の記録に、自分が投稿した本文・動画タイトル・再生位置を保存します。OFFでは投稿の結果だけを記録します。すでに保存された本文は消えません。ニコニコ側のコメントや視聴履歴には影響しません。' }]
+						]),
+						...group('通知履歴', '通知の種類', [
+								['notificationHistory.level.info', '通常の通知', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '通常の操作案内などを記録します。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。' }],
+								['notificationHistory.level.success', '成功の記録', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'コメント投稿やいいねなど、成功として分類された結果を記録します。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。' }],
+								['notificationHistory.level.warning', '警告の記録', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '設定がOFFで適用されない場合など、注意が必要な通知を記録します。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。' }],
+								['notificationHistory.level.error', 'エラーの記録', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '失敗として分類された通知を記録します。通信の問題は警告などに分類される場合もあります。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。' }],
+						]),
+						...group('通知履歴', '記録する機能', [
+								['notificationHistory.record.general', '通常の操作通知', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'NG登録、コピー、プレイリストの読み込み完了など、画面に表示する一般的な通知を履歴に残します。詳しい種類が判明している通知には、その種類の設定が優先されます。' }],
+								['notificationHistory.record.player', '動画情報・再生', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '動画情報の取得、動画の読み込み、再生開始、再生セッションの維持などに関する記録です。再生できない原因を確認するときに役立ちます。' }],
+								['notificationHistory.record.comment', 'コメントの取得・投稿・削除', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'コメントの取得や投稿・削除の結果を記録します。投稿本文を保存するかは「投稿したコメント本文を残す」で別に選べます。コメント増量やNGフィルター自体の動作は変わりません。' }],
+								['notificationHistory.record.like', 'いいね', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'いいねの操作結果と、いいね関連の通信の問題を記録します。OFFでもいいねの操作は通常どおり行えます。' }],
+								['notificationHistory.record.mylist', 'マイリスト・あとで見る', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'マイリストや「あとで見る」に関する通信の問題と復旧を記録します。リストの内容や保存動作には影響しません。' }],
+								['notificationHistory.record.playlist', 'プレイリストの通信', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'プレイリスト取得時の通信の問題と復旧を記録します。画面に出る一般的な読み込み完了通知は「通常の操作通知」で設定します。' }],
+								['notificationHistory.record.search', '動画検索', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '検索時の通信の問題と復旧を記録します。検索結果や検索条件そのものを保存する設定ではありません。' }],
+								['notificationHistory.record.storyboard', '場面画像・シーンサーチ', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'シークバーやシーンサーチで使う場面画像の情報取得に関する問題と復旧を記録します。画像キャッシュや表示設定には影響しません。' }],
+								['notificationHistory.record.tags', 'タグ・タグ候補', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'タグ情報、検索時のタグ候補、タグ編集キーなどの取得に関する問題と復旧を記録します。' }],
+								['notificationHistory.record.advertising', 'ニコニ広告・ギフト・提供情報', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '初期状態はOFFです。広告ブロックなどで繰り返される取得エラーを履歴に残しません。ニコニ広告、広告の装飾、ギフト、提供画面の支援者情報が対象です。調査が必要なときだけONにしてください。広告情報の取得や提供画面の表示自体を止める設定ではありません。' }],
+								['notificationHistory.record.related', '関連動画・投稿者情報・大百科', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '関連動画やシリーズ、投稿者情報、大百科の取得に関する問題と復旧を記録します。' }],
+								['notificationHistory.record.network', 'その他の通信', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: '上の種類に分類できない通信の問題と復旧を記録します。この項目をOFFにしても、上でONにした種類の通信記録は残ります。' }],
+								['notificationHistory.record.system', 'システム通知', { type: 'boolean', dependsOn: 'notificationHistory.enabled', description: 'システムとして分類された内部処理の通知を記録します。ブラウザのConsoleに出るすべてのログを取り込む機能ではありません。' }],
+						]),
 						...group('再生・音声', '再生動作', [
 								['autoPlay', '動画を自動再生'],
 								['autoPlay:ginza', '公式の動画ページで自動再生'],
@@ -71729,13 +71859,17 @@ class ModernAdvancedSettingsModel {
 												type: 'color', hexOnly: true,
 												description: '一時的な緑色の通知の背景色です。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'
 										}],
+								['popup.warningColor', '警告通知の背景色', {
+												type: 'color', hexOnly: true,
+												description: '注意が必要なときに表示する通知の背景色です。初期色はオレンジです。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'
+										}],
 								['popup.alertColor', 'エラー通知の背景色', {
 												type: 'color', hexOnly: true,
 												description: '一時的な赤色のエラー通知の背景色です。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'
 										}],
 								['popup.backgroundTransparency', '通知背景の透明度', {
 												...slider(0, 100, 1), unit: '%',
-												description: '通常通知とエラー通知に共通の背景透明度です。0%は不透明（従来と同じ）、100%は背景が完全に透明です。文字や影、通知の表示時間には影響しません。'
+												description: '通常・警告・エラー通知に共通の背景透明度です。0%は不透明（従来と同じ）、100%は背景が完全に透明です。文字や影、通知の表示時間には影響しません。'
 										}]
 						]),
 						...group('画面・映像', 'スクリーンショット', [
@@ -74587,6 +74721,7 @@ class ModernAdvancedSettingsUI {
 				preview.append(title, note);
 				for (const [key, label, example] of [
 						['popup.notifyColor', '通常・成功通知', '✓ 保存しました'],
+						['popup.warningColor', '警告通知', '⚠ NGフィルターがOFFのため、現在は適用されません'],
 						['popup.alertColor', 'エラー通知', '! コメントの取得に失敗しました']
 				]) {
 						const labelNode = this.doc.createElement('p');

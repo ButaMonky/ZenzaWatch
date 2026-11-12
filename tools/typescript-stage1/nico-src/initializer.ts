@@ -156,6 +156,9 @@ const {initialize} = (() => {
       configureSceneCache();
       Config.onkey?.('storyboardCacheMaxMB',configureSceneCache);Config.onkey?.('storyboardCacheDays',configureSceneCache);
     }
+    if (typeof NotificationJournal !== 'undefined') {
+      NotificationJournal.configureRecording?.(key => Config.getValue(key));
+    }
     if (typeof RequestDiagnostics !== 'undefined' && typeof NotificationJournal !== 'undefined') {
       NotificationJournal.configureBuild?.(ZenzaWatch.version, ZenzaWatch.build);
       RequestDiagnostics.setSink(event => NotificationJournal.recordDiagnostic(event.key, {

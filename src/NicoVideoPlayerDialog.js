@@ -3289,6 +3289,19 @@ class NicoVideoPlayerDialog extends Emitter {
         }
         this._playerConfig.setValue('playbackRate', next);
     }
+    _registerCommentNg(command, value, label) {
+        if (typeof value !== 'string' || !value.trim()) {
+            return;
+        }
+        const filter = this._nicoVideoPlayer.filter;
+        const listKey = command === 'addWordFilter' ? 'wordFilterList' :
+            command === 'addUserIdFilter' ? 'userIdFilterList' : 'commandFilterList';
+        const exists = filter[listKey].includes(value);
+        filter[command](value);
+        const message = exists ? label + 'は登録済みです。' : label + 'に登録しました。';
+        this.execCommand(filter.isEnable ? 'notify' : 'warning', filter.isEnable ? message :
+            message + '\nNGフィルターがOFFのため、現在は適用されません。');
+    }
     _onCommand(command, param, request) {
         const outer = !this._actionFeedbackCommandDepth;
         this._actionFeedbackCommandDepth = (this._actionFeedbackCommandDepth || 0) + 1;
@@ -3420,7 +3433,7 @@ class NicoVideoPlayerDialog extends Emitter {
                 case 'deleteAutomaticResume':
                     return this._deleteAutomaticResume();
                 case 'addWordFilter':
-                    this._nicoVideoPlayer.filter.addWordFilter(param);
+                    this._registerCommentNg('addWordFilter', param, 'NGワード');
                     break;
                 case 'setWordRegFilter':
                     this._nicoVideoPlayer.filter.setWordRegFilter(param, this._nicoVideoPlayer.filter.wordRegFilterFlags);
@@ -3429,10 +3442,10 @@ class NicoVideoPlayerDialog extends Emitter {
                     this._nicoVideoPlayer.filter.setWordRegFilter(this._nicoVideoPlayer.filter.wordRegFilterSource, param);
                     break;
                 case 'addUserIdFilter':
-                    this._nicoVideoPlayer.filter.addUserIdFilter(param);
+                    this._registerCommentNg('addUserIdFilter', param, 'ユーザーNG');
                     break;
                 case 'addCommandFilter':
-                    this._nicoVideoPlayer.filter.addCommandFilter(param);
+                    this._registerCommentNg('addCommandFilter', param, 'NGコマンド');
                     break;
                 case 'setWordFilterList':
                     this._nicoVideoPlayer.filter.wordFilterList = param;

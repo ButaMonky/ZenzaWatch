@@ -103,6 +103,6 @@ describe('SCUI-09 advanced scene-search descriptors and shared settings',()=>{
    assert.strictEqual(descriptions.filter(x=>x.id==='ui.scene.pin').length,1);
    assert(model.descriptor('ui.scene.commentSearch'));
    assert(model.descriptor('sceneSearch.idleHideSeconds').description.includes('0秒'));
-   assert.strictEqual(model.categories.length,8);
+   assert.strictEqual(model.categories.length,9);
  });
 });

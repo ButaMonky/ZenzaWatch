@@ -97,7 +97,7 @@ class ModernAdvancedSettingsModel {
   static get CATEGORIES() {
     return [
       '再生・音声','画面・映像','コメント表示',
-      'NG・表示対象','プレイリスト・検索','ショートカット','マウス・タッチ','外部サイトからの再生'
+      'NG・表示対象','プレイリスト・検索','ショートカット','マウス・タッチ','通知履歴','外部サイトからの再生'
     ];
   }
   static _clone<T>(value: T): T {
@@ -275,6 +275,34 @@ class ModernAdvancedSettingsModel {
       ['HIGH','強'],['MAX','最大']]);
     return [
       ...this.externalLinkSettings(),
+      ...group('通知履歴','基本設定',[
+        ['notificationHistory.enabled','通知履歴を記録する',{type:'boolean',
+          description:'これから発生する通知やエラーを履歴に残します。OFFでも画面の通知は表示され、保存済みの履歴は消えません。過去の記録を消す場合は通知履歴パネルの削除操作を使ってください。設定は「変更を保存」の後に反映されます。'}],
+        ['notificationHistory.commentText','投稿したコメント本文を残す',{type:'boolean',dependsOn:'notificationHistory.record.comment',
+          description:'投稿成功の記録に、自分が投稿した本文・動画タイトル・再生位置を保存します。OFFでは投稿の結果だけを記録します。すでに保存された本文は消えません。ニコニコ側のコメントや視聴履歴には影響しません。'}]
+      ]),
+      ...group('通知履歴','通知の種類',[
+        ['notificationHistory.level.info','通常の通知',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'通常の操作案内などを記録します。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。'}],
+        ['notificationHistory.level.success','成功の記録',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'コメント投稿やいいねなど、成功として分類された結果を記録します。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。'}],
+        ['notificationHistory.level.warning','警告の記録',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'設定がOFFで適用されない場合など、注意が必要な通知を記録します。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。'}],
+        ['notificationHistory.level.error','エラーの記録',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'失敗として分類された通知を記録します。通信の問題は警告などに分類される場合もあります。 対象の機能もONのときに履歴へ残ります。画面の通知表示は変わりません。'}],
+      ]),
+      ...group('通知履歴','記録する機能',[
+        ['notificationHistory.record.general','通常の操作通知',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'NG登録、コピー、プレイリストの読み込み完了など、画面に表示する一般的な通知を履歴に残します。詳しい種類が判明している通知には、その種類の設定が優先されます。'}],
+        ['notificationHistory.record.player','動画情報・再生',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'動画情報の取得、動画の読み込み、再生開始、再生セッションの維持などに関する記録です。再生できない原因を確認するときに役立ちます。'}],
+        ['notificationHistory.record.comment','コメントの取得・投稿・削除',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'コメントの取得や投稿・削除の結果を記録します。投稿本文を保存するかは「投稿したコメント本文を残す」で別に選べます。コメント増量やNGフィルター自体の動作は変わりません。'}],
+        ['notificationHistory.record.like','いいね',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'いいねの操作結果と、いいね関連の通信の問題を記録します。OFFでもいいねの操作は通常どおり行えます。'}],
+        ['notificationHistory.record.mylist','マイリスト・あとで見る',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'マイリストや「あとで見る」に関する通信の問題と復旧を記録します。リストの内容や保存動作には影響しません。'}],
+        ['notificationHistory.record.playlist','プレイリストの通信',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'プレイリスト取得時の通信の問題と復旧を記録します。画面に出る一般的な読み込み完了通知は「通常の操作通知」で設定します。'}],
+        ['notificationHistory.record.search','動画検索',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'検索時の通信の問題と復旧を記録します。検索結果や検索条件そのものを保存する設定ではありません。'}],
+        ['notificationHistory.record.storyboard','場面画像・シーンサーチ',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'シークバーやシーンサーチで使う場面画像の情報取得に関する問題と復旧を記録します。画像キャッシュや表示設定には影響しません。'}],
+        ['notificationHistory.record.tags','タグ・タグ候補',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'タグ情報、検索時のタグ候補、タグ編集キーなどの取得に関する問題と復旧を記録します。'}],
+        ['notificationHistory.record.advertising','ニコニ広告・ギフト・提供情報',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'初期状態はOFFです。広告ブロックなどで繰り返される取得エラーを履歴に残しません。ニコニ広告、広告の装飾、ギフト、提供画面の支援者情報が対象です。調査が必要なときだけONにしてください。広告情報の取得や提供画面の表示自体を止める設定ではありません。'}],
+        ['notificationHistory.record.related','関連動画・投稿者情報・大百科',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'関連動画やシリーズ、投稿者情報、大百科の取得に関する問題と復旧を記録します。'}],
+        ['notificationHistory.record.network','その他の通信',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'上の種類に分類できない通信の問題と復旧を記録します。この項目をOFFにしても、上でONにした種類の通信記録は残ります。'}],
+        ['notificationHistory.record.system','システム通知',{type:'boolean',dependsOn:'notificationHistory.enabled',description:'システムとして分類された内部処理の通知を記録します。ブラウザのConsoleに出るすべてのログを取り込む機能ではありません。'}],
+      ]),
+
       ...group('再生・音声','再生動作',[
         ['autoPlay','動画を自動再生'],
         ['autoPlay:ginza','公式の動画ページで自動再生'],
@@ -480,12 +508,15 @@ class ModernAdvancedSettingsModel {
         ['popup.notifyColor','通常・成功通知の背景色',{
           type:'color',hexOnly:true,
           description:'一時的な緑色の通知の背景色です。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'}],
+        ['popup.warningColor','警告通知の背景色',{
+          type:'color',hexOnly:true,
+          description:'注意が必要なときに表示する通知の背景色です。初期色はオレンジです。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'}],
         ['popup.alertColor','エラー通知の背景色',{
           type:'color',hexOnly:true,
           description:'一時的な赤色のエラー通知の背景色です。#RRGGBB または #RGB で指定できます。保存するまでプレイヤーには反映されません。'}],
         ['popup.backgroundTransparency','通知背景の透明度',{
           ...slider(0,100,1),unit:'%',
-          description:'通常通知とエラー通知に共通の背景透明度です。0%は不透明（従来と同じ）、100%は背景が完全に透明です。文字や影、通知の表示時間には影響しません。'}]
+          description:'通常・警告・エラー通知に共通の背景透明度です。0%は不透明（従来と同じ）、100%は背景が完全に透明です。文字や影、通知の表示時間には影響しません。'}]
       ]),
       ...group('画面・映像','スクリーンショット',[
         ['screenshot.prefix','保存ファイル名の先頭に追加する文字',{type:'text',

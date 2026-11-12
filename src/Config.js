@@ -81,6 +81,26 @@ const Config = (() => {
         // Task926: Original PopupMessage hues (#0c0 / #c00), stored as six-digit HEX.
         'popup.notifyColor': '#00cc00',
         'popup.alertColor': '#cc0000',
+        'popup.warningColor': '#cc6600',
+        'notificationHistory.enabled': true,
+        'notificationHistory.commentText': true,
+        'notificationHistory.level.info': true,
+        'notificationHistory.level.success': true,
+        'notificationHistory.level.warning': true,
+        'notificationHistory.level.error': true,
+        'notificationHistory.record.general': true,
+        'notificationHistory.record.player': true,
+        'notificationHistory.record.comment': true,
+        'notificationHistory.record.like': true,
+        'notificationHistory.record.mylist': true,
+        'notificationHistory.record.playlist': true,
+        'notificationHistory.record.search': true,
+        'notificationHistory.record.storyboard': true,
+        'notificationHistory.record.tags': true,
+        'notificationHistory.record.advertising': false,
+        'notificationHistory.record.related': true,
+        'notificationHistory.record.network': true,
+        'notificationHistory.record.system': true,
         'popup.backgroundTransparency': 0, // Shared background transparency: 0% opaque, 100% clear.
         videoInfoPanelTab: 'videoInfoTab',
         fullscreenControlBarMode: 'auto', // 'always-show' 'always-hide'
@@ -164,7 +184,7 @@ const Config = (() => {
         'commentLayer.ownerCommentShadowColor': '#008800', // 投稿者コメントの影の色
         'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
         'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
-        overrideGinza: false, // 動画視聴ページでもGinzaの代わりに起動する
+        overrideGinza: false, // Retired compatibility storage; never triggers automatic launch.
         enableGinzaSlayer: false, // まだ実験中
         lastPlayerId: '',
         playbackRate: 1.0,

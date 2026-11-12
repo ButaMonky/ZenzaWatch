@@ -128,3 +128,25 @@ describe('Task927 PopupMessage transparent backgrounds',()=>{
     }finally{h.dom.window.close();}
   });
 });
+
+describe('Warning notification appearance',()=>{
+  it('uses orange by default and records a warning once',()=>{
+    const h=boot();try {
+      h.Popup.warning('NGフィルターがOFFです');
+      assert(h.root.querySelector('.warning'));
+      assert(h.styles[0].includes('--warning-color: #c60'));
+      assert.deepStrictEqual(h.journal.map(e=>e.level),['warning']);
+    }finally{h.dom.window.close();}
+  });
+  it('applies saved warning color and common transparency with safe text',()=>{
+    const h=boot();try {
+      h.values['popup.warningColor']='#c60';
+      h.values['popup.backgroundTransparency']=40;
+      h.Popup.warning('<b>test</b>');
+      const toast=h.root.querySelector('.warning');
+      assert.strictEqual(toast.style.getPropertyValue('--warning-color'),'rgba(204, 102, 0, 0.6)');
+      assert.strictEqual(toast.textContent,'<b>test</b>');
+      assert.strictEqual(toast.children.length,0);
+    }finally{h.dom.window.close();}
+  });
+});

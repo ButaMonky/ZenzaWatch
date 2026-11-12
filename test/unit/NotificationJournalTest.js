@@ -145,3 +145,45 @@ describe('NotificationJournal source-only, no network', () => {
     assert.strictEqual((await journal.list()).length, 0);
   });
 });
+
+describe('Notification recording preferences',()=>{
+  it('does not record advertising, decoration, supporters or gifts by default',async()=>{
+    const j=harness();
+    for(const operation of ['advertising','ad-decoration','supporters','gifts']){
+      assert.strictEqual(j.recordDiagnostic('diag-'+operation,{category:'network',level:'warning',source:operation,message:'ad failed',details:{operation,outcome:'failed'}}),null);
+    }
+    assert.strictEqual((await j.list()).length,0);
+  });
+  it('applies settings to future events without deleting previous history',async()=>{
+    const values={};
+    const j=harness();j.configureRecording(key=>values[key]);
+    j.record({category:'player',level:'error',message:'before'});
+    values['notificationHistory.record.player']=false;
+    assert.strictEqual(j.record({category:'player',level:'error',message:'after'}),null);
+    assert.strictEqual(j.recordDiagnostic('diag-video',{category:'network',level:'warning',message:'video',details:{operation:'video-info'}}),null);
+    assert.strictEqual((await j.list()).length,1);
+    values['notificationHistory.enabled']=false;
+    assert.strictEqual(j.record({message:'general'}),null);
+    assert.strictEqual((await j.list()).length,1);
+  });
+  it('does not let a generic popup reintroduce an excluded classified event',async()=>{
+    const j=harness();j.configureRecording(key=>key==='notificationHistory.record.like'?false:undefined);
+    j.record({category:'like',level:'success',source:'like',message:'liked'});
+    j.record({category:'general',level:'info',source:'popup',message:'liked'});
+    assert.strictEqual((await j.list()).length,0);
+  });
+  it('allows advertising opt-in and independently filters levels',async()=>{
+    const values={'notificationHistory.record.advertising':true};
+    const j=harness();j.configureRecording(key=>values[key]);
+    assert(j.recordDiagnostic('diag-ad',{category:'network',level:'warning',source:'advertising',message:'ad',details:{operation:'advertising',outcome:'failed'}}));
+    values['notificationHistory.level.warning']=false;
+    assert.strictEqual(j.record({category:'general',level:'warning',message:'warn'}),null);
+    assert(j.record({category:'general',level:'error',message:'error'}));
+  });
+  it('can omit posted comment text while retaining the result',async()=>{
+    const j=harness();j.configureRecording(key=>key==='notificationHistory.commentText'?false:undefined);
+    const e=j.record({category:'comment',level:'success',message:'posted',details:{outcome:'accepted'},activity:{kind:'comment-post',text:'private text'}});
+    assert(e);assert.strictEqual(e.activity,undefined);
+    assert(!JSON.stringify(await j.list()).includes('private text'));
+  });
+});

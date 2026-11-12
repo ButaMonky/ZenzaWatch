@@ -169,3 +169,49 @@ Navigation APIのキャンセルも同じ時間・動画範囲に限定。次の
 Chromeで通常リンクとwindow.openとlocation.assignの二重遷移を抑止し、bodyに元イベントが届くことを確認。一方、pushStateキャンセル後のDOM副作用は依然として残る。この方式が実サイトの新着を完全に保護するとの結論はまだ出せない。保存されたopen関数・別フレーム・遅延タイマーにも対応を広げていない。
 
 実行時にはクリック到達点と抑止回数だけをZENZA_CLICK_TRIALとして出す。data属性は名前だけを記録し、動画名・URL・ID・Cookie・値は収集しない。body到達を第三者スクリプトの保存成功と混同しない。実サイト結果を受けて採否を決め、通常版には未統合。
+
+
+## フォロー新着 HAR で確認した遷移元（2026-11-12）
+
+利用者提供の「フォロー新着.har」（484リクエスト）をオフライン解析。保存された実装だけでなく、watch取得のinitiator async stackにも以下の連鎖が記録されていた。
+
+1. CommonHeader 3.13.4: ヘッダー外枠のonClickが `fo()` のハンドラーを呼ぶ。対象からaを探索し、`Sn.emit("commonHeader:linkClick", {href, preventDefault, nativeEvent})` を同期実行する。
+2. `Layout-BxKlN5K9.js`: mount時に `r.on("commonHeader:linkClick", callback)` を登録。callbackはauxclick・Ctrl・Meta・target=_blankを判定するが、defaultPreventedは判定しない。通常クリックでは `nativeEvent.preventDefault()` → `r.closePanel()` → `o(e.href)` を呼ぶ。
+3. Layoutの `o=ee()` は `Panel-QWHtNi15.js` のexport `s`、すなわち遷移hook `H`。watchは同一originのSPA対応ルートとしてルーターへ渡る。
+4. 公式ルーターがwatch loaderを起動して画面を更新する。これはアンカーのブラウザ既定遷移ではない。
+
+HAR entry 210のwatch fetchには `CommonHeader.emit` → `Layout` (line 1 / column 5978、CDPのlineは0-based) → `Panel` → `react`のルーター → `bridge`のfetchというasync initiator stackが保存されている。entry 195のwatch fetchは別経路で、Zenzaの`ClickNavigationTrial.begin` → `_open` → `fetchWatchResponse`に由来する。ページ全体の新しいdocument取得と混同しない。動画ID・認証情報・HAR本文は公開しない。
+
+### なぜ2つの検証版が失敗したか
+
+- preventDefaultのみ: 公式Layoutのcallbackがキャンセル済み状態を確認せずルーターを起動するため。
+- window.open一時抑止: この経路はwindow.openを使用しない。
+- 短時間のNavigation API抑止: 公式ルーター呼出し・loader処理そのものはNavigation APIのキャンセル対象ではない。履歴更新は後続の非同期処理に進む。今回のログの抑止0回は、ルーター入口を捕捉したことを意味しない。
+- 以前の強い伝播停止: ヘッダー外枠のonClickに原イベントが届かず、内部イベント発行も止まるため二重起動が出なかった。
+
+検索カードの共通リンクre/Vは入口でdefaultPreventedを検査する。ヘッダーはこの共通リンクを経由せず、別の内部イベント連携を経由する。見た目が同じリンクでも処理経路が異なる。
+
+### 保存コードを使った再現
+
+`node tools/research-follow-header-route.cjs <利用者提供HARへのパス>`
+
+正確なcallbackだけを抽出し、事前確認したSHA-256一致時だけ、閉じる処理・遷移関数を代替オブジェクトへ置き換えて実行。公式bundle全体は実行せず、通信しない。
+
+|入力|公式ルーター呼出し|
+|---|---|
+|通常クリック|あり|
+|すでにpreventDefaultされたクリック|あり|
+|Ctrlクリック|なし|
+|auxclick|なし|
+|target=_blank|なし|
+
+callbackの前にdefaultPreventedを確認するモデルでは、キャンセル済みクリックのルーター呼出しが0になることを確認。ただしこれは公式コードへ実際に修正を配布したという意味ではない。
+
+対象ファイル（HAR textをUTF-8として算出したSHA-256）:
+
+- CommonHeader 3.13.4: `3165b1845cf0bb84690f194114cbe10ae7d65e90a1c7aa00949af5c2759c9a84`
+- Layout-BxKlN5K9.js: `5a628a69f752d9c3e10a87c1d1568a84f8725d0f36b667108de2fae663a2b9cd`
+- Panel-QWHtNi15.js: `e04766b44974bc24610eae4e5f5f80e9e4e43de38060a0701dfb33534193a8d6`
+- Layout callback（文字offset 5793..5990）: `d1ac9e5dcb6dec2cc32dfc6ce6c1dc831b1c163755c907575a815c9bb9e300f4`
+
+次の設計対象は、ヘッダー内部イベントから公式ルーターへ渡すこの境界。タイマーの延長や全域window.open/history差替えを続ける根拠はない。CommonHeaderにはonがあるが個別offが公開されていないため、既存リスナーを安全に差し替えられると未確認のまま決めつけない。接続の登録時点・復元方法・未知版での動作を検証してから修正方式を選ぶ。ランキングNG専用API・属性の操作はしない。

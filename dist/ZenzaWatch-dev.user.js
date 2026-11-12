@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.399-task1025
+// @version        2.7.400-task1026
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 18:54Z 28fbb9a
+// build: 2026-11-12 19:03Z 4a9db3b
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.399-task1025';
+    var VER = '2.7.400-task1026';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 18:54Z 28fbb9a';
+    var BUILD = '2026-11-12 19:03Z 4a9db3b';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -65526,7 +65526,12 @@ VideoSearchForm.__css__ = (`
 			opacity: 0;
 		}
 		.zenzaVideoSearchPanel .searchInputHead {
-			display: none;
+			/* Reserve this row so hovering/focusing never pushes the input down. */
+			display: flex;
+			visibility: hidden;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 0.18s ease;
 			align-items: center;
 			justify-content: space-between;
 			gap: 6px;
@@ -65535,7 +65540,9 @@ VideoSearchForm.__css__ = (`
 		}
 		.zenzaVideoSearchPanel:focus-within .searchInputHead,
 		.zenzaVideoSearchPanel:hover .searchInputHead {
-			display: flex;
+			visibility: visible;
+			opacity: 1;
+			pointer-events: auto;
 		}
 		.zenzaVideoSearchPanel .searchModeRow {
 			display: flex;

@@ -22,8 +22,8 @@
 // @connect      dmc.nico
 // @sandbox      DOM
 // ==/UserScript==
-// build: 2026-11-12 18:54Z 28fbb9a
-// Shared runtime normalized SHA256: 451cfb3bece4d1f835255c99451da2cf9c158a3b900bb018a9a4ee854ee68fd0
+// build: 2026-11-12 19:03Z 4a9db3b
+// Shared runtime normalized SHA256: 810a0c4a6dbdd470023de5fb36e447fc5a02dfcc73b8ea3be7e1567ea11942e7
 
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";

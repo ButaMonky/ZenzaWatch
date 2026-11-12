@@ -3620,7 +3620,12 @@ VideoSearchForm.__css__ = (`
     }
 
     .zenzaVideoSearchPanel .searchInputHead {
-      display: none;
+      /* Reserve this row so hovering/focusing never pushes the input down. */
+      display: flex;
+      visibility: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease;
       align-items: center;
       justify-content: space-between;
       gap: 6px;
@@ -3629,7 +3634,9 @@ VideoSearchForm.__css__ = (`
     }
     .zenzaVideoSearchPanel:focus-within .searchInputHead,
     .zenzaVideoSearchPanel:hover .searchInputHead {
-      display: flex;
+      visibility: visible;
+      opacity: 1;
+      pointer-events: auto;
     }
     .zenzaVideoSearchPanel .searchModeRow {
       display: flex;

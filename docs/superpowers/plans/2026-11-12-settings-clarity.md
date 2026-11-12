@@ -7,11 +7,11 @@
 **Spec:** User-approved comparison in this conversation: preserve navy palette/navigation/search/save, compact related settings, inactive children with reason and retained values, suitable inputs, unavailable legacy controls clearly separated.
 
 ## Tasks
-- [ ] Add tested conditional availability and compact related controls to advanced settings TypeScript; regenerate JavaScript.
-- [ ] Update external site controls and short wildcard guidance; test disabled editing, retained entries, and current-site insertion.
-- [ ] Verify root and affected TypeScript/UI tests, build versioned normal release and rebased external trial, independently review changes.
-- [ ] Commit and push normal release and trial to public and private repositories. Verify remote heads.
-- [ ] Read original click-launch issues/comments, existing experiments and handlers. Analyze general event-ownership alternatives without adding script-specific exceptions or changing release click behavior.
+- [x] Add tested conditional availability and compact related controls to advanced settings TypeScript; regenerate JavaScript.
+- [x] Update external site controls and short wildcard guidance; test disabled editing, retained entries, and current-site insertion.
+- [x] Verify root and affected TypeScript/UI tests, build versioned normal release and rebased external trial, independently review changes.
+- [x] Commit and push normal release and trial to public and private repositories. Verify remote heads.
+- [x] Read original click-launch issues/comments, existing experiments and handlers. Analyze general event-ownership alternatives without adding script-specific exceptions or changing release click behavior.
 
 ## Review focus
 - Disabling a parent retains child values across save/reopen.

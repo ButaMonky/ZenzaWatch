@@ -11,7 +11,7 @@ const {stripTypeScriptTypes}=require('node:module');
 
 const {beginSection,extract}=require('../helpers/extractSource');
 const helper=beginSection('packages/zenza/src/menu/WatchClickNavigation.js');
-const hover=extract('experiments/click-area/ZenzaWatch-dev.user.js','HoverMenu');
+const hover=extract(process.env.ZENZA_TEST_BUNDLE || 'dist/ZenzaWatch-dev.user.js','HoverMenu');
 const nico=beginSection('packages/lib/src/nico/nicoUtil.js');
 const html=`<!doctype html><style>
 body{margin:20px}#card{position:relative;width:300px}#content{display:flex;flex-direction:column}

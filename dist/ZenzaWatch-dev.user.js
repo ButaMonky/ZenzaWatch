@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.394-task1020
+// @version        2.7.395-task1021
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 16:13Z 0e7ecf1
+// build: 2026-11-12 17:06Z e95fe30
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.394-task1020';
+    var VER = '2.7.395-task1021';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 16:13Z 0e7ecf1';
+    var BUILD = '2026-11-12 17:06Z e95fe30';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -70021,6 +70021,64 @@ class HoverMenu {
 				await this._getPlayer();
 				ZenzaWatch.external.send(watchId, Object.assign({ query: this._query }, params));
 		}
+		_isCardContentClick(card, e, watchId) {
+				const hit = e.composedPath().find((node) => typeof node?.matches === 'function');
+				if (!hit) {
+						return false;
+				}
+				const links = Array.from(card.querySelectorAll('a[href],a[data-href]'))
+						.filter(link => this._getWatchReference(link)?.watchId === watchId);
+				if (!links.length) {
+						return false;
+				}
+				const regions = new Set(links);
+				for (const date of Array.from(card.querySelectorAll('time[datetime]'))) {
+						let branch = date;
+						while (branch.parentElement && branch.parentElement !== card &&
+								!links.some(link => branch.parentElement.contains(link))) {
+								branch = branch.parentElement;
+						}
+						if (!branch.querySelector('a,button,input,select,textarea,[role="button"]') &&
+								!links.some(link => branch.contains(link))) {
+								regions.add(branch);
+						}
+				}
+				if (Array.from(regions).some(region => region.contains(hit))) {
+						return true;
+				}
+				const ancestors = new Set();
+				for (const region of regions) {
+						for (let parent = region.parentElement; parent && card.contains(parent); parent = parent.parentElement) {
+								ancestors.add(parent);
+								if (parent === card) {
+										break;
+								}
+						}
+				}
+				if (!ancestors.has(hit)) {
+						return false;
+				}
+				const rects = Array.from(regions).map(region => region.getBoundingClientRect())
+						.filter(rect => rect.width > 0 && rect.height > 0);
+				const inside = (left, top, right, bottom) => left <= right && top <= bottom &&
+						e.clientX >= left && e.clientX <= right && e.clientY >= top && e.clientY <= bottom;
+				if (rects.some(r => inside(r.left, r.top, r.right, r.bottom))) {
+						return true;
+				}
+				for (const a of rects) {
+						for (const b of rects) {
+								if (a.bottom <= b.top &&
+										inside(Math.max(a.left, b.left), a.bottom, Math.min(a.right, b.right), b.top)) {
+										return true;
+								}
+								if (a.right <= b.left &&
+										inside(a.right, Math.max(a.top, b.top), b.left, Math.min(a.bottom, b.bottom))) {
+										return true;
+								}
+						}
+				}
+				return false;
+		}
 		_resolveWatchClick(e) {
 				if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) {
 						return null;
@@ -70042,6 +70100,10 @@ class HoverMenu {
 				}
 				const ref = this._getWatchReference(target);
 				if (!ref || ref.url.searchParams.get('zenza_official') === '1') {
+						return null;
+				}
+				if (!target.matches('a') && target.matches('[data-group="true"][data-anchor-href]') &&
+						!this._isCardContentClick(target, e, ref.watchId)) {
 						return null;
 				}
 				return { target, ...ref };

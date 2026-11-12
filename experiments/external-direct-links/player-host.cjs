@@ -1,5 +1,6 @@
 'use strict';
 const {finishPlayerClose}=require('./generated/player-close.js');
+const {installPlayerBackground}=require('./generated/player-background.js');
 const {validVideoId}=require('./generated/targets.js');
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
 function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
@@ -45,7 +46,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
       frame=w.document.createElement('iframe');frame.name='ZenzaWatchExternalTrialPlayer';
       frame.setAttribute('data-zenza-player-host','');frame.title='ZenzaWatch';frame.allow='autoplay; fullscreen';frame.referrerPolicy='origin';
       frame.src='https://www.nicovideo.jp/robots.txt#'+token;
-      for(const [key,value] of Object.entries({all:'initial',position:'fixed',inset:'0',width:'100vw',height:'100vh',border:'0',margin:'0',padding:'0',display:'block',background:'#111','z-index':'2147483646'}))frame.style.setProperty(key,value,'important');
+      for(const [key,value] of Object.entries({all:'initial',position:'fixed',inset:'0',width:'100vw',height:'100vh',border:'0',margin:'0',padding:'0',display:'block',background:'transparent','z-index':'2147483646'}))frame.style.setProperty(key,value,'important');
       w.document.body.append(frame);
     });
   }
@@ -58,6 +59,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
     w.document.body.style.cssText='margin:0;background:#111;';
+    installPlayerBackground(w.document);
     const status=w.document.createElement('div');status.style.cssText='position:fixed;top:24px;left:24px;z-index:2147483647;color:#eee;background:#17212d;padding:16px;font:16px sans-serif';
     const labels={BOOT:'本体を準備しています',SETTINGS:'設定を接続しています',AUTH:'ログイン状態を確認しています',UI:'画面を準備しています',VIDEO:'動画を開いています'};
     status.textContent=labels.BOOT;w.document.body.append(status);

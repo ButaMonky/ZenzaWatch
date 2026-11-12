@@ -13,7 +13,7 @@ test('player lives in a separate Nico document; private messages open and close 
  let id;const child={document:childDom.window.document,location:childDom.window.location,name:frame.name,top:{},addEventListener(){}};
  const worker=createPlayerHost(child,gm,transport,{open:async value=>{id=value;}});
  assert.equal(worker.accept(),true);await opened;assert.equal(id,'sm9');assert.equal(child.document.querySelector('pre'),null);
- assert.equal(child.document.querySelector('style'),null);assert.equal(worker.accept(),false);
+ assert.equal(child.document.querySelectorAll('style').length,1);assert(child.document.querySelector('style[data-zenza-external-background]'));assert.equal(frame.style.background,'transparent');assert.equal(worker.accept(),false);
  let saved;const saving=new Promise(r=>saved=r);const closing=worker.close([saving]);
  await new Promise(r=>setImmediate(r));assert.equal(frame.style.display,'none');assert(frame.isConnected);
  saved();await closing;await new Promise(r=>setImmediate(r));assert.equal(parent.document.querySelector('iframe'),null);

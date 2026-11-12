@@ -130,8 +130,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.21.0-external-direct21'));
- assert.ok(code.includes("var VER = '2.7.389-external-direct.21'"));
+ assert.ok(header.includes('0.22.0-external-direct22'));
+ assert.ok(code.includes("var VER = '2.7.389-external-direct.22'"));
  assert.ok(code.includes('currentSite:externalSettingsHost'));
  assert.ok(code.includes('playerFrame?document.referrer:location.href'));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));

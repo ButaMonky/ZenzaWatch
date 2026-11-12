@@ -83,10 +83,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.389-task1014';","var VER = '2.7.389-external-direct.21';");
+ body=once(body,"var VER = '2.7.389-task1014';","var VER = '2.7.389-external-direct.22';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.21 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.22 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -142,21 +142,21 @@ function transform(source) {
    'if (externalTrial.isEnabledOrigin(u.origin)) { return true; }\n                if (localStorage.ZenzaWatch_whiteHost) {');
  return body;
 }
-const externalModuleNames=['site-rules','settings','targets','preflight','overlay','inline-buttons','settings-panel'];
-const externalModules="const externalModules=(()=>{const factories={"+externalModuleNames.map(name=>JSON.stringify('./'+name)+':(exports,require)=>{'+fs.readFileSync(path.join(__dirname,'generated',name+'.js'),'utf8')+'}').join(',')+"},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),preflight:require('./preflight'),panel:require('./settings-panel')};})();";
+const externalModuleNames=['site-rules','settings','targets','preflight','overlay','inline-buttons','settings-panel','player-background','official-settings'];
+const externalModules="const externalModules=(()=>{const factories={"+externalModuleNames.map(name=>JSON.stringify('./'+name)+':(exports,require)=>{'+fs.readFileSync(path.join(__dirname,'generated',name+'.js'),'utf8')+'}').join(',')+"},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),preflight:require('./preflight'),panel:require('./settings-panel'),background:require('./player-background'),officialSettings:require('./official-settings')};})();";
 const runtime=transform(base);
 const launcher=fs.readFileSync(path.join(__dirname,'launcher.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const network=fs.readFileSync(path.join(__dirname,'gm-network.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const closeModule=fs.readFileSync(path.join(__dirname,'generated/player-close.js'),'utf8');
 const closeRuntime='const {finishPlayerClose}=(()=>{const exports={};'+closeModule+';return exports;})();';
-const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace("const {finishPlayerClose}=require('./generated/player-close.js');",'').replace("const {validVideoId}=require('./generated/targets.js');",'const {validVideoId}=externalModules.targets;').replace(/^module\.exports=.*;$/m,'');
+const host=fs.readFileSync(path.join(__dirname,'player-host.cjs'),'utf8').replace("const {finishPlayerClose}=require('./generated/player-close.js');",'').replace("const {installPlayerBackground}=require('./generated/player-background.js');",'const {installPlayerBackground}=externalModules.background;').replace("const {validVideoId}=require('./generated/targets.js');",'const {validVideoId}=externalModules.targets;').replace(/^module\.exports=.*;$/m,'');
 const display=fs.readFileSync(path.join(__dirname,'display-settings.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const panelObserver=fs.readFileSync(path.join(__dirname,'panel-observer.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.21.0-external-direct21
+// @version      0.22.0-external-direct22
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -185,16 +185,18 @@ const entry=`
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
+ ${externalModules}
  ${display}
  ${panelObserver}
  const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},${JSON.stringify([...preferenceNames])});
  if (official && !loader && !playerFrame) {
+   const disconnectExternal=typeof GM_getValue === 'function' && typeof GM_addValueChangeListener === 'function' ? externalModules.officialSettings.connectOfficialExternalSettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:id=>GM_removeValueChangeListener(id)}) : ()=>{};
+   window.addEventListener('pagehide',disconnectExternal,{once:true});
    displaySettings.publish();
    window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
    return;
  }
  if (!loader && !playerFrame && window !== window.top) return;
- ${externalModules}
  ${launcher}
  ${transport}
  ${network}

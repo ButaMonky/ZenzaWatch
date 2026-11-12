@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.21.0-external-direct21
+// @version      0.22.0-external-direct22
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -29,105 +29,6 @@
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
     (location.hostname === 'ext.nicovideo.jp' && window.name.startsWith('thumbInfoZenzaWatchExternalTrialLoader')));
- 'use strict';
-// Only registered preferences cross partitions; never arbitrary storage/history.
-function createDisplaySettings(w, gm, registered=[]) {
-  const slot='settings-v2',savedSlot='trial-settings-v2',prefix='ZenzaWatchExternalTrial_';
-  const names=new Set([...registered,'screenMode','menuScale','videoHeader.position']);
-  const excluded=new Set(['debug','message','lastPlayerId','lastWatchId','videoSearch.word']);
-  const allowed=k=>!excluded.has(k)&&(names.has(k)||/^(?:ui\.|KEY_|PARAM_CUSTOM_SEEK_\d+$|commentHistory\.|video\.hls\.)/.test(k));
-  function valid(value,depth=0){
-    if(depth>12)return false;
-    if(value===null||typeof value==='boolean')return true;
-    if(typeof value==='number')return Number.isFinite(value);
-    if(typeof value==='string')return value.length<=32768;
-    if(Array.isArray(value))return value.length<=2000&&value.every(v=>valid(v,depth+1));
-    if(value&&typeof value==='object')return Object.keys(value).length<=2000&&Object.entries(value).every(([k,v])=>!['__proto__','constructor','prototype'].includes(k)&&valid(v,depth+1));
-    return false;
-  }
-  const clean=values=>Object.fromEntries(Object.entries(values||{}).filter(([k,v])=>allowed(k)&&valid(v)&&JSON.stringify(v).length<=131072));
-  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-  function read(storagePrefix){
-    const values={};
-    for(let i=0;i<w.localStorage.length;i++){
-      const key=w.localStorage.key(i);if(!key.startsWith(storagePrefix))continue;
-      const name=key.slice(storagePrefix.length);if(!allowed(name))continue;
-      try{values[name]=JSON.parse(w.localStorage.getItem(key));}catch(_){}
-    }
-    return clean(values);
-  }
-  function publish(){
-    if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
-    try{gm.set(slot,{version:2,publishedAt:Date.now(),values:read('ZenzaWatch_')});}catch(_){}
-  }
-  let official={},baseline={},publishOfficial=false,active=false,timer=null;
-  function apply(){
-    const snapshot=gm.get(slot),saved=gm.get(savedSlot);
-    official=clean(snapshot?.version===2?snapshot.values:saved?.official);
-    let values=saved?.version===2?clean(saved.values):read(prefix);
-    const previous=clean(saved?.official);
-    baseline=clean(saved?.values);publishOfficial=snapshot?.version===2;
-    // Unrelated official changes must not reset trial HLS/panel adjustments.
-    for(const key of new Set([...Object.keys(previous),...Object.keys(official)])){
-      if(!saved||!equal(previous[key],official[key])){
-        if(Object.hasOwn(official,key))values[key]=official[key];else delete values[key];
-      }
-    }
-    for(const key of Object.keys(w.localStorage))if(key.startsWith(prefix)&&allowed(key.slice(prefix.length)))w.localStorage.removeItem(key);
-    for(const [key,value] of Object.entries(values))w.localStorage.setItem(prefix+key,JSON.stringify(value));
-    active=true;save();return snapshot?.version===2;
-  }
-  const storageTiming={saveCount:0,totalSaveMs:0,maxSaveMs:0};
-  function save(){
-    if(!active)return;
-    const started=w.performance.now();
-    if(timer!==null){w.clearTimeout(timer);timer=null;}
-    const latest=gm.get(savedSlot),values=clean(latest?.values),local=read(prefix);
-    // Another external page may have saved since this player opened. Merge
-    // only local changes; closing a stale player must not revert them.
-    for(const key of new Set([...Object.keys(baseline),...Object.keys(local)])){
-      if(!equal(baseline[key],local[key])){
-        if(Object.hasOwn(local,key))values[key]=local[key];else delete values[key];
-      }
-    }
-    gm.set(savedSlot,{version:2,official:publishOfficial?official:clean(latest?.official),values});
-    baseline=local;publishOfficial=false;
-    const duration=w.performance.now()-started;storageTiming.saveCount++;storageTiming.totalSaveMs+=duration;storageTiming.maxSaveMs=Math.max(storageTiming.maxSaveMs,duration);
-  }
-  function scheduleSave(){
-    if(!active||timer!==null)return;
-    timer=w.setTimeout(()=>{timer=null;save();},250);
-  }
-  // Explicit player close also flushes: removed frames may skip pagehide.
-  w.addEventListener('pagehide',save);
-  function diagnostics(config){
-    const snapshot=gm.get(slot),values=read(prefix),runtimeMismatch=[];
-    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getStoredValue?config.getStoredValue(key):config.getValue(key)))runtimeMismatch.push(key);
-    return {sourceAvailable:snapshot?.version===2,sourceSettingCount:Object.keys(clean(snapshot?.values)).length,
-      sourceAgeSeconds:typeof snapshot?.publishedAt==='number'?Math.round((Date.now()-snapshot.publishedAt)/1000):null,
-      localSettingCount:Object.keys(values).length,runtimeMismatch,
-      officialDifferent:Object.keys(official).filter(key=>!equal(official[key],values[key])),
-      storageTiming:Object.fromEntries(Object.entries(storageTiming).map(([key,value])=>[key,Math.round(value*10)/10])),
-      playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
-  }
-  return {publish,apply,save,scheduleSave,diagnostics};
-}
-
-
- 'use strict';
-function frameTopologyChanged(records){
-  return records.some(record=>[...record.addedNodes,...record.removedNodes].some(node=>
-    node.nodeType===1&&(node.localName==='iframe'||!!node.querySelector('iframe'))));
-}
-
-
- const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode","externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight"]);
- if (official && !loader && !playerFrame) {
-   displaySettings.publish();
-   window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
-   return;
- }
- if (!loader && !playerFrame && window !== window.top) return;
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.siteRules = siteRules;
@@ -870,7 +771,172 @@ function openExternalSettings(d, values, save) {
     d.documentElement.append(host);
     inputs.get('externalLinks.enabled')[0].focus();
 }
-}},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),preflight:require('./preflight'),panel:require('./settings-panel')};})();
+},"./player-background":(exports,require)=>{"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.installPlayerBackground = installPlayerBackground;
+/** The isolated player document must not paint over the host in small mode. */
+function installPlayerBackground(document) {
+    const style = document.createElement('style');
+    style.dataset.zenzaExternalBackground = '';
+    style.textContent = `
+    html:has(body.zenzaScreenMode_small):not(:has(:fullscreen)),
+    body.zenzaScreenMode_small:not(:has(:fullscreen)) {
+      background: transparent !important;
+    }
+  `;
+    document.head.append(style);
+}
+},"./official-settings":(exports,require)=>{"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.connectOfficialExternalSettings = connectOfficialExternalSettings;
+const settings_1 = require("./settings");
+/** Synchronize only public external-launch preferences, never account/runtime data. */
+function connectOfficialExternalSettings(w, gm) {
+    const slot = 'external-links-v1', prefix = 'ZenzaWatch_', keys = Object.keys(settings_1.externalDefaults);
+    let syncing = false;
+    const readLocal = () => Object.fromEntries(keys.flatMap(key => { try {
+        const raw = w.localStorage.getItem(prefix + key);
+        return raw === null ? [] : [[key, JSON.parse(raw)]];
+    }
+    catch {
+        return [];
+    } }));
+    const publish = (changed) => {
+        const local = readLocal(), patch = Object.fromEntries(changed.filter(key => keys.includes(key) && Object.prototype.hasOwnProperty.call(local, key)).map(key => [key, local[key]]));
+        if (Object.keys(patch).length)
+            gm.set(slot, (0, settings_1.sanitizeExternal)({ ...(0, settings_1.sanitizeExternal)(gm.get(slot)), ...patch }));
+    };
+    const pull = () => {
+        if (syncing)
+            return;
+        syncing = true;
+        try {
+            if (!gm.get(slot))
+                publish(Object.keys(readLocal()));
+            const values = (0, settings_1.sanitizeExternal)(gm.get(slot));
+            for (const key of keys)
+                w.localStorage.setItem(prefix + key, JSON.stringify(values[key]));
+            w.dispatchEvent(new w.CustomEvent('ZenzaWatch-advanced-settings-saved', { detail: { keys } }));
+        }
+        finally {
+            syncing = false;
+        }
+    };
+    const onSave = (event) => {
+        if (syncing)
+            return;
+        const changed = event.detail?.keys;
+        if (Array.isArray(changed))
+            publish(changed.filter((key) => typeof key === 'string'));
+    };
+    w.addEventListener('ZenzaWatch-advanced-settings-saved', onSave);
+    const subscription = gm.listen?.(slot, pull);
+    pull();
+    return () => { w.removeEventListener('ZenzaWatch-advanced-settings-saved', onSave); if (subscription !== undefined)
+        gm.unlisten?.(subscription); };
+}
+}},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),preflight:require('./preflight'),panel:require('./settings-panel'),background:require('./player-background'),officialSettings:require('./official-settings')};})();
+ 'use strict';
+// Only registered preferences cross partitions; never arbitrary storage/history.
+function createDisplaySettings(w, gm, registered=[]) {
+  const slot='settings-v2',savedSlot='trial-settings-v2',prefix='ZenzaWatchExternalTrial_';
+  const names=new Set([...registered,'screenMode','menuScale','videoHeader.position']);
+  const excluded=new Set(['debug','message','lastPlayerId','lastWatchId','videoSearch.word']);
+  const allowed=k=>!excluded.has(k)&&(names.has(k)||/^(?:ui\.|KEY_|PARAM_CUSTOM_SEEK_\d+$|commentHistory\.|video\.hls\.)/.test(k));
+  function valid(value,depth=0){
+    if(depth>12)return false;
+    if(value===null||typeof value==='boolean')return true;
+    if(typeof value==='number')return Number.isFinite(value);
+    if(typeof value==='string')return value.length<=32768;
+    if(Array.isArray(value))return value.length<=2000&&value.every(v=>valid(v,depth+1));
+    if(value&&typeof value==='object')return Object.keys(value).length<=2000&&Object.entries(value).every(([k,v])=>!['__proto__','constructor','prototype'].includes(k)&&valid(v,depth+1));
+    return false;
+  }
+  const clean=values=>Object.fromEntries(Object.entries(values||{}).filter(([k,v])=>allowed(k)&&valid(v)&&JSON.stringify(v).length<=131072));
+  const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  function read(storagePrefix){
+    const values={};
+    for(let i=0;i<w.localStorage.length;i++){
+      const key=w.localStorage.key(i);if(!key.startsWith(storagePrefix))continue;
+      const name=key.slice(storagePrefix.length);if(!allowed(name))continue;
+      try{values[name]=JSON.parse(w.localStorage.getItem(key));}catch(_){}
+    }
+    return clean(values);
+  }
+  function publish(){
+    if(w!==w.top||w.location.origin!=='https://www.nicovideo.jp')return;
+    try{gm.set(slot,{version:2,publishedAt:Date.now(),values:read('ZenzaWatch_')});}catch(_){}
+  }
+  let official={},baseline={},publishOfficial=false,active=false,timer=null;
+  function apply(){
+    const snapshot=gm.get(slot),saved=gm.get(savedSlot);
+    official=clean(snapshot?.version===2?snapshot.values:saved?.official);
+    let values=saved?.version===2?clean(saved.values):read(prefix);
+    const previous=clean(saved?.official);
+    baseline=clean(saved?.values);publishOfficial=snapshot?.version===2;
+    // Unrelated official changes must not reset trial HLS/panel adjustments.
+    for(const key of new Set([...Object.keys(previous),...Object.keys(official)])){
+      if(!saved||!equal(previous[key],official[key])){
+        if(Object.hasOwn(official,key))values[key]=official[key];else delete values[key];
+      }
+    }
+    for(const key of Object.keys(w.localStorage))if(key.startsWith(prefix)&&allowed(key.slice(prefix.length)))w.localStorage.removeItem(key);
+    for(const [key,value] of Object.entries(values))w.localStorage.setItem(prefix+key,JSON.stringify(value));
+    active=true;save();return snapshot?.version===2;
+  }
+  const storageTiming={saveCount:0,totalSaveMs:0,maxSaveMs:0};
+  function save(){
+    if(!active)return;
+    const started=w.performance.now();
+    if(timer!==null){w.clearTimeout(timer);timer=null;}
+    const latest=gm.get(savedSlot),values=clean(latest?.values),local=read(prefix);
+    // Another external page may have saved since this player opened. Merge
+    // only local changes; closing a stale player must not revert them.
+    for(const key of new Set([...Object.keys(baseline),...Object.keys(local)])){
+      if(!equal(baseline[key],local[key])){
+        if(Object.hasOwn(local,key))values[key]=local[key];else delete values[key];
+      }
+    }
+    gm.set(savedSlot,{version:2,official:publishOfficial?official:clean(latest?.official),values});
+    baseline=local;publishOfficial=false;
+    const duration=w.performance.now()-started;storageTiming.saveCount++;storageTiming.totalSaveMs+=duration;storageTiming.maxSaveMs=Math.max(storageTiming.maxSaveMs,duration);
+  }
+  function scheduleSave(){
+    if(!active||timer!==null)return;
+    timer=w.setTimeout(()=>{timer=null;save();},250);
+  }
+  // Explicit player close also flushes: removed frames may skip pagehide.
+  w.addEventListener('pagehide',save);
+  function diagnostics(config){
+    const snapshot=gm.get(slot),values=read(prefix),runtimeMismatch=[];
+    if(config)for(const key of Object.keys(values))if(config.getKeys().includes(key)&&!equal(values[key],config.getStoredValue?config.getStoredValue(key):config.getValue(key)))runtimeMismatch.push(key);
+    return {sourceAvailable:snapshot?.version===2,sourceSettingCount:Object.keys(clean(snapshot?.values)).length,
+      sourceAgeSeconds:typeof snapshot?.publishedAt==='number'?Math.round((Date.now()-snapshot.publishedAt)/1000):null,
+      localSettingCount:Object.keys(values).length,runtimeMismatch,
+      officialDifferent:Object.keys(official).filter(key=>!equal(official[key],values[key])),
+      storageTiming:Object.fromEntries(Object.entries(storageTiming).map(([key,value])=>[key,Math.round(value*10)/10])),
+      playerCount:w.document.querySelectorAll('.zenzaPlayerContainer').length};
+  }
+  return {publish,apply,save,scheduleSave,diagnostics};
+}
+
+
+ 'use strict';
+function frameTopologyChanged(records){
+  return records.some(record=>[...record.addedNodes,...record.removedNodes].some(node=>
+    node.nodeType===1&&(node.localName==='iframe'||!!node.querySelector('iframe'))));
+}
+
+
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode","externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight"]);
+ if (official && !loader && !playerFrame) {
+   const disconnectExternal=typeof GM_getValue === 'function' && typeof GM_addValueChangeListener === 'function' ? externalModules.officialSettings.connectOfficialExternalSettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value),listen:(key,fn)=>GM_addValueChangeListener(key,fn),unlisten:id=>GM_removeValueChangeListener(id)}) : ()=>{};
+   window.addEventListener('pagehide',disconnectExternal,{once:true});
+   displaySettings.publish();
+   window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
+   return;
+ }
+ if (!loader && !playerFrame && window !== window.top) return;
  'use strict';
 
 function parseDirectLink(href, base) {
@@ -1180,6 +1246,7 @@ async function finishPlayerClose(pendingSaves, actions, timeoutMs = 2000) {
 ;return exports;})();
  'use strict';
 
+const {installPlayerBackground}=externalModules.background;
 const {validVideoId}=externalModules.targets;
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
 function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
@@ -1225,7 +1292,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
       frame=w.document.createElement('iframe');frame.name='ZenzaWatchExternalTrialPlayer';
       frame.setAttribute('data-zenza-player-host','');frame.title='ZenzaWatch';frame.allow='autoplay; fullscreen';frame.referrerPolicy='origin';
       frame.src='https://www.nicovideo.jp/robots.txt#'+token;
-      for(const [key,value] of Object.entries({all:'initial',position:'fixed',inset:'0',width:'100vw',height:'100vh',border:'0',margin:'0',padding:'0',display:'block',background:'#111','z-index':'2147483646'}))frame.style.setProperty(key,value,'important');
+      for(const [key,value] of Object.entries({all:'initial',position:'fixed',inset:'0',width:'100vw',height:'100vh',border:'0',margin:'0',padding:'0',display:'block',background:'transparent','z-index':'2147483646'}))frame.style.setProperty(key,value,'important');
       w.document.body.append(frame);
     });
   }
@@ -1238,6 +1305,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     w.document.head.replaceChildren();w.document.body.replaceChildren();
     w.document.documentElement.style.cssText='background:#111;color:#ddd;font:16px sans-serif;';
     w.document.body.style.cssText='margin:0;background:#111;';
+    installPlayerBackground(w.document);
     const status=w.document.createElement('div');status.style.cssText='position:fixed;top:24px;left:24px;z-index:2147483647;color:#eee;background:#17212d;padding:16px;font:16px sans-serif';
     const labels={BOOT:'本体を準備しています',SETTINGS:'設定を接続しています',AUTH:'ログイン状態を確認しています',UI:'画面を準備しています',VIDEO:'動画を開いています'};
     status.textContent=labels.BOOT;w.document.body.append(status);
@@ -1604,10 +1672,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.389-external-direct.21';
+    var VER = '2.7.389-external-direct.22';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.21 GM transport base c08dc4ac55b0';
+    var BUILD = 'external-direct.22 GM transport base c08dc4ac55b0';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,

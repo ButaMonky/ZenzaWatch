@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {JSDOM}=require('jsdom');
-const {parseDirectLink, verifyLogin, mountLauncher}=require('./launcher.cjs');
+const {parseDirectLink, verifyLogin}=require('./launcher.cjs');
 const {createRuntimeSession}=require('./launcher.cjs');
 
 test('synthetic player actions are blocked while unrelated page controls remain usable',()=>{
@@ -44,64 +44,4 @@ test('authentication checks actual response and does not accept anonymous HTML o
  for(const [status,body] of [[401,{}],[403,{}],[200,{meta:{status:401}}],[200,{}],[503,{}]])
   await assert.rejects(call(status,body));
  await assert.rejects(verifyLogin({fetch:async()=>({status:200,json:async()=>{throw Error('private');}})}),e=>!e.message.includes('private'));
-});
-test('buttons preserve links, open locally once, handle added and changed links',async()=>{
- const dom=new JSDOM('<a href="https://www.nicovideo.jp/watch/sm9">title</a>',{url:'https://example.org/'});
- const {window:w}=dom;let starts=0;const opened=[];
- const api=mountLauncher(w,{open:async id=>{starts++;opened.push(id);}});
- await new Promise(r=>w.setTimeout(r,30));
- const a=w.document.querySelector('a'),original=a.outerHTML;
- const button=w.document.querySelector('[data-zenza-direct-button]');assert.ok(button);button.click();
- await new Promise(r=>w.setTimeout(r,0));assert.deepEqual(opened,['sm9']);assert.equal(a.outerHTML,original);
- a.href='https://www.nicovideo.jp/watch/sm10';
- await new Promise(r=>w.setTimeout(r,30));button.click();await new Promise(r=>w.setTimeout(r,0));
- assert.deepEqual(opened,['sm9','sm10']);
- const b=a.cloneNode(true);w.document.body.append(b);
- await new Promise(r=>w.setTimeout(r,30));assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,2);
- a.href='https://example.org/watch/sm9';await new Promise(r=>w.setTimeout(r,30));
- assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,1);
- assert.equal(starts,2);api.dispose();w.close();
-});
-test('failed start gives safe retry UI, never raw authentication errors',async()=>{
- const dom=new JSDOM('<a href="https://www.nicovideo.jp/watch/sm9">title</a>',{url:'https://example.org/'});const w=dom.window;
- const api=mountLauncher(w,{open:async()=>{throw Error('secret cookie');}});
- await new Promise(r=>w.setTimeout(r,30));w.document.querySelector('[data-zenza-direct-button]').click();
- await new Promise(r=>w.setTimeout(r,0));assert.ok(w.document.querySelector('[role=status]'));
- assert.ok(!w.document.body.textContent.includes('secret cookie'));assert.ok(w.document.querySelector('a[href="https://account.nicovideo.jp/login"]'));
- api.dispose();w.close();
-});
-
-
-test('unrelated host updates do not rescan registered links or schedule work',async()=>{
- const w=new JSDOM('<main>'+Array.from({length:160},(_,i)=>`<a href="https://www.nicovideo.jp/watch/sm${i+1}">video</a>`).join('')+'</main><section></section>',{url:'https://example.org/'}).window;
- const api=mountLauncher(w,{open:async()=>{}});
- try {
-  for(let i=0;i<100 && w.document.querySelectorAll('[data-zenza-direct-button]').length<160;i++)await new Promise(r=>setTimeout(r,10));
-  assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,160);
-  await new Promise(r=>setTimeout(r,30));
-  let checks=0,timers=0;
-  const connected=Object.getOwnPropertyDescriptor(w.Node.prototype,'isConnected').get;
-  for(const a of w.document.querySelectorAll('a'))Object.defineProperty(a,'isConnected',{get(){checks++;return connected.call(this);}});
-  const timeout=w.setTimeout.bind(w);w.setTimeout=(...args)=>{timers++;return timeout(...args);};
-  for(let i=0;i<3;i++){
-   const span=w.document.createElement('span');span.textContent='unrelated';w.document.querySelector('section').replaceChildren(span);
-   await new Promise(r=>setTimeout(r,10));
-  }
-  assert.equal(checks,0);assert.equal(timers,0);
- } finally {api.dispose();w.close();}
-});
-
-test('removed links release buttons and moved links keep a single working button',async()=>{
- const w=new JSDOM('<main><div><a href="https://www.nicovideo.jp/watch/sm9">video</a></div></main><section></section>',{url:'https://example.org/'}).window;
- const api=mountLauncher(w,{open:async()=>{}});
- try {
-  await new Promise(r=>setTimeout(r,30));
-  const a=w.document.querySelector('a');
-  w.document.querySelector('section').append(a);
-  await new Promise(r=>setTimeout(r,30));
-  assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,1);
-  assert.equal(a.nextElementSibling?.textContent,'Zen');
-  a.remove();await new Promise(r=>setTimeout(r,30));
-  assert.equal(w.document.querySelectorAll('[data-zenza-direct-button]').length,0);
- } finally {api.dispose();w.close();}
 });

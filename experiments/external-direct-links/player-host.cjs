@@ -1,5 +1,6 @@
 'use strict';
 const {finishPlayerClose}=require('./generated/player-close.js');
+const {validVideoId}=require('./generated/targets.js');
 // A cross-origin document is the CSS boundary. Account capabilities stay there.
 function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
   let frame,port,ticketKey,pending,sequence=0,closing=false,closeTimer,closingTask;
@@ -13,7 +14,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
   };
   async function open(id,event) {
     if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');
-    if(!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(id))throw Error('INVALID_VIDEO_ID');
+    if(!validVideoId(id))throw Error('INVALID_VIDEO_ID');
     if(pending||closing)throw Error('PLAYER_BUSY');
     if(frame&&!frame.isConnected)stop();
     return new Promise((resolve,reject)=>{
@@ -63,7 +64,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
     session.setStageListener?.(stage=>{if(stage==='OPEN')status.remove();else status.textContent=labels[stage]||labels.BOOT;});
     let busy=false,last=0;
     port.addEventListener('message',async e=>{
-      const m=e.data;if(m?.type!=='open'||busy||!Number.isSafeInteger(m.requestId)||m.requestId<=last||!/^(?:(?:sm|nm|so)\d+|\d+)$/.test(m.id))return;
+      const m=e.data;if(m?.type!=='open'||busy||!Number.isSafeInteger(m.requestId)||m.requestId<=last||!validVideoId(m.id))return;
       busy=true;last=m.requestId;
       try{await session.open(m.id,{isTrusted:true});port.postMessage({type:'opened',requestId:m.requestId});}
       catch(error){w.console?.warn('[Zenza external trial] startup failed',error.stage||'BOOT',error.name||'Error');port.postMessage({type:'error',requestId:m.requestId,code:error.message,stage:error.stage});}

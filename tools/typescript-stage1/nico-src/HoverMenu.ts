@@ -211,25 +211,36 @@ class HoverMenu {
     await this._getPlayer();
     ZenzaWatch.external.send(watchId, Object.assign({query: this._query}, params));
   }
+  /** Resolve intent without canceling events, changing previews or opening a player. */
+  _resolveWatchClick(e: MouseEvent): {target: Element; watchId: string; url: URL} | null {
+    if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) { return null; }
+    const path = e.composedPath();
+    // A nested link owns its click even when it is not a video link. Skipping it
+    // would incorrectly fall through to the surrounding card's video route.
+    const target = path.find((node): node is Element =>
+      typeof (node as Element)?.matches === 'function' &&
+      (node as Element).matches('a[href],a[data-href],[data-anchor-href],.UadVideoItem-link'));
+    if (!target || target.classList.contains('noHoverMenu') ||
+      path.some(node => (node as Element)?.classList?.contains('zen-family')) ||
+      target.hasAttribute('download')) { return null; }
+    const action = path.find((node): node is Element =>
+      typeof (node as Element)?.matches === 'function' &&
+      (node as Element).matches('button,input,select,textarea,label,[role="button"],[contenteditable]:not([contenteditable="false"])'));
+    const primaryWatchButton = action?.matches('.VideoIntroductionPlayerContainer-watchPageButton');
+    if (action && !primaryWatchButton && action !== target &&
+      (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return null; }
+    const ref = this._getWatchReference(target);
+    if (!ref || ref.url.searchParams.get('zenza_official') === '1') { return null; }
+    return {target, ...ref};
+  }
   _overrideWatchLink () {
     // Task202 / issue #1: claim a real video click before page/React navigation.
     // Late mouseover-installed handlers can run after the official header handler.
     if (this._watchLinkClick) { return; }
     const onClick = this._watchLinkClick = (e: Loose) => {
-      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) { return; }
-      const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
-      const target = path.map((node: Loose) => this._closest(node)).find(Boolean);
-      if (!target || target.classList.contains('noHoverMenu') || target.closest('.zen-family') || target.hasAttribute('download')) { return; }
-      const action = path.find((node: Loose) => node?.matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'));
-      const primaryWatchButton = action?.matches?.('.VideoIntroductionPlayerContainer-watchPageButton');
-      if (action && !primaryWatchButton && action !== target && (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return; }
-      const ref = this._getWatchReference(target);
-      if (!ref) { return; }
-      const {watchId, url} = ref;
-      // A deliberate official-player link must bypass this capture-phase handler.
-      // Otherwise preventDefault blocks the native target=_blank navigation and
-      // the current Zenza player simply reopens the same video.
-      if (url.searchParams.get('zenza_official') === '1') { return; }
+      const intent = this._resolveWatchClick(e);
+      if (!intent) { return; }
+      const {target, watchId, url} = intent;
       // AUD-08 WONTFIX: never import thumbnail preview time into playback.
       // The existing preview guard only pauses page media; it does not seek Zenza.
       this._pagePreviewGuard?.claim(target);

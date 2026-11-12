@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.17.0-external-direct17
+// @version      0.18.0-external-direct18
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -155,7 +155,7 @@ exports.externalDescriptors = [
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
     { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'text', description: '例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。' }
-].map(d => ({ ...d, category: 'プレイリスト・検索', subcategory: '外部サイトからの再生', dependsOn: d.id === 'externalLinks.enabled' ? undefined : 'externalLinks.enabled' }));
+].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : 'externalLinks.enabled' }));
 const tokens = (v) => typeof v === 'string' ? v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean) : [];
 const domains = (v) => tokens(v).filter(x => /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/.test(x));
 function sanitizeExternal(values) {
@@ -1189,10 +1189,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.17';
+    var VER = '2.7.388-external-direct.18';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.17 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.18 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -71022,13 +71022,13 @@ class ModernAdvancedSettingsModel {
 				this._historyParams = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.filter(p => p && typeof p.key === 'string')
 						.map(p => [p.key, p]));
-				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"プレイリスト・検索","subcategory":"外部サイトからの再生"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象のドメイン","type":"text","description":"例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。","category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外するドメイン","type":"text","description":"除外を優先します。URLではなくドメインを入力してください。","category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.activation","label":"ボタンを表示するタイミング","type":"select","options":[{"value":"hover","label":"マウスを置いたとき・キーボードでフォーカスしたとき"},{"value":"selection","label":"文字を選択したとき"}],"category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"text","description":"例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。","category":"プレイリスト・検索","subcategory":"外部サイトからの再生","dependsOn":"externalLinks.enabled"}])
+				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象のドメイン","type":"text","description":"例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外するドメイン","type":"text","description":"除外を優先します。URLではなくドメインを入力してください。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.activation","label":"ボタンを表示するタイミング","type":"select","options":[{"value":"hover","label":"マウスを置いたとき・キーボードでフォーカスしたとき"},{"value":"selection","label":"文字を選択したとき"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"text","description":"例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}])
 						.map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
 				this._historyOrder = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.map((entry, index) => [entry.key, index + 1]));
 				this._screenOrder = new Map((Array.isArray(screenFilterParams) ? screenFilterParams : [])
 						.map((entry, index) => ['screenFilter.' + entry.key, index]));
-				this.categories = ModernAdvancedSettingsModel.CATEGORIES.slice();
+				this.categories = ModernAdvancedSettingsModel.CATEGORIES.concat('外部サイトからの再生');
 				this.descriptors = [];
 				this._byId = new Map();
 				const add = (descriptor) => {

@@ -26,7 +26,7 @@ exports.externalDescriptors = [
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
     { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'text', description: '例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。' }
-].map(d => ({ ...d, category: 'プレイリスト・検索', subcategory: '外部サイトからの再生', dependsOn: d.id === 'externalLinks.enabled' ? undefined : 'externalLinks.enabled' }));
+].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : 'externalLinks.enabled' }));
 const tokens = (v) => typeof v === 'string' ? v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean) : [];
 const domains = (v) => tokens(v).filter(x => /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/.test(x));
 function sanitizeExternal(values) {

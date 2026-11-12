@@ -29,6 +29,7 @@ function transform(source) {
  if(defaultAnchor<0)throw Error('Config defaults missing');
  const insertAt=defaultAnchor+'const DEFAULT_CONFIG = {'.length;
  body=body.slice(0,insertAt)+JSON.stringify(externalDefaults).slice(1,-1)+','+body.slice(insertAt);
+ body=once(body,'this.categories = ModernAdvancedSettingsModel.CATEGORIES.slice();', "this.categories = ModernAdvancedSettingsModel.CATEGORIES.concat('外部サイトからの再生');");
  body=once(body,'ModernAdvancedSettingsModel.visibleExtraSettings()', 'ModernAdvancedSettingsModel.visibleExtraSettings().concat('+JSON.stringify(externalDescriptors)+')');
  body=once(body,"if (window.top === window) {\n      window.ZenzaLib = { _ };", "if (true) {\n      window.ZenzaLib = { _ };");
  body=once(body,'return gate = {};','/* Trial player always creates the GM-backed gate. */');
@@ -83,10 +84,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.17';");
+ body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.18';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.17 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.18 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -156,7 +157,7 @@ const panelObserver=fs.readFileSync(path.join(__dirname,'panel-observer.cjs'),'u
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.17.0-external-direct17
+// @version      0.18.0-external-direct18
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end

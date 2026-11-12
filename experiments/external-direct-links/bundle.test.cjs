@@ -19,9 +19,10 @@ test('actual child frame receives userscript lexical dependencies before bootstr
    w.__configured.api.configBridge=()=>{throw Error('redundant bridge');};await w.__configured.connect();
    assert.equal(typeof w.__configured.testApi.openAdvancedSettings,'function');
    await w.__configured.testApi.openAdvancedSettings();assert.ok(w.document.querySelector('.zw-modern-root'));
-   w.document.querySelector('[data-zw-major="プレイリスト・検索"]').click();
+   assert.equal([...w.document.querySelectorAll('[data-zw-major]')].at(-1).dataset.zwMajor,'外部サイトからの再生');
+   w.document.querySelector('[data-zw-major="外部サイトからの再生"]').click();
    assert.ok(w.document.querySelector('.zw-modern-root').textContent.includes('外部サイトからの再生'));
-   w.document.querySelector('[data-zw-sub="プレイリスト・検索|外部サイトからの再生"]').click();
+   w.document.querySelector('[data-zw-sub="外部サイトからの再生|基本設定"]').click();
    assert.ok(w.document.querySelector('.zw-modern-root').textContent.includes('検出する動画IDの接頭辞'));
    w.__configured.testConfig.setValue('externalLinks.textIds',true);
    for(let i=0;i<100&&!store.get('external-links-v1');i++)await new Promise(r=>w.setTimeout(r,10));
@@ -127,8 +128,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.17.0-external-direct17'));
- assert.ok(code.includes("var VER = '2.7.388-external-direct.17'"));
+ assert.ok(header.includes('0.18.0-external-direct18'));
+ assert.ok(code.includes("var VER = '2.7.388-external-direct.18'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

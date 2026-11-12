@@ -10,11 +10,6 @@ function watchLegacyTrial(w, stop) {
         stopped = true;
         stop();
         observer.disconnect();
-        const notice = w.document.createElement('div');
-        notice.dataset.zenzaCompanionNotice = '';
-        notice.textContent = 'ZenzaBlogPartsButtonに外部再生を統合しました。Tampermonkeyで旧「外部直接リンク検証版」を無効にして、ページを再読み込みしてください。';
-        notice.style.cssText = 'position:fixed;bottom:16px;right:16px;max-width:380px;padding:16px;background:#17212d;color:white;z-index:2147483647;font:14px/1.6 sans-serif';
-        w.document.documentElement.append(notice);
     };
     const observer = new w.MutationObserver(check);
     observer.observe(w.document.documentElement, { childList: true, subtree: true });

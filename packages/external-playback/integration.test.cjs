@@ -15,11 +15,11 @@ test('embed bridge requires a matching frame and private trusted-click proof; co
  assert.equal(sendBlogClick(frame.contentWindow,gm,'sm9',{isTrusted:false}),false);
  dispose();w.close();
 });
-test('companion suspends when old trial appears, not for its own controls',async()=>{
+test('companion silently suspends when old trial appears, without migration notices',async()=>{
  const w=new JSDOM('<div data-zenza-external-overlay data-zenza-companion></div>').window;let stopped=0;
  const dispose=watchLegacyTrial(w,()=>stopped++);assert.equal(stopped,0);
  const old=w.document.createElement('div');old.dataset.zenzaExternalInline='';w.document.body.append(old);
- await new Promise(r=>w.setTimeout(r,0));assert.equal(stopped,1);assert(w.document.querySelector('[data-zenza-companion-notice]'));dispose();w.close();
+ await new Promise(r=>w.setTimeout(r,0));assert.equal(stopped,1);assert.equal(w.document.querySelector('[data-zenza-companion-notice]'),null);dispose();w.close();
 });
 test('ordinary official preferences migrate into a new companion store',()=>{
  const {connectOfficialExternalSettings}=require('./generated/official-settings');

@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.392-click1018.1
+// @version        2.7.392-click1018.2
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -358,7 +358,7 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.392-click1018.1';
+    var VER = '2.7.392-click1018.2';
     const ENV = 'DEV';
 
     var BUILD = '2026-11-12 12:38Z 9e19e21';
@@ -68231,6 +68231,77 @@ class PagePreviewGuard {
 				this.player.off('close', this.onClose);
 		}
 }
+/** Experiment only. No extension detection, synthetic clicks or saved state. */
+class ClickNavigationTrial {
+          static active = new WeakMap                    ();
+  static begin(w                            , event            , watchId        , launch            )       {
+    this.active.get(w)?.();
+    const path = event.composedPath();
+    const seen           = [];
+    const cleanups                    = [];
+    const report = {version: 'click1018.2', windowOpenBlocked: 0, navigationBlocked: 0,
+      navigationSupported: false, openGuardInstalled: false, bodyReached: false,
+      documentReached: false, stopped: false, launched: false, superseded: false, path: path.filter(n => n instanceof w.Element)
+        .slice(0, 12).map(n => { const el = n           ; return {tag: el.tagName,
+          role: el.getAttribute('role'), dataKeys: el.getAttributeNames().filter(k => k.startsWith('data-'))}; }), seen};
+    let active = true;
+    const matches = (raw         )          => {
+      if (typeof raw !== 'string' && !(raw instanceof w.URL)) return false;
+      try {
+        const url = new w.URL(String(raw), w.location.href);
+        return /^https?:$/.test(url.protocol) && url.hostname === 'www.nicovideo.jp' &&
+          url.pathname === '/watch/' + watchId;
+      } catch { return false; }
+    };
+    // Install only for this dispatch turn; restore before the player starts.
+    // No history, Event prototype, addEventListener or third-party APIs are patched.
+    const originalOpen = w.open;
+    const guardedOpen                = function(              url, target, features) {
+      if (active && matches(url)) { report.windowOpenBlocked++; return null; }
+      return Reflect.apply(originalOpen, this, [url, target, features]);
+    };
+    try { w.open = guardedOpen; report.openGuardInstalled = w.open === guardedOpen; } catch { /* diagnostic below */ }
+    cleanups.push(() => { if (w.open === guardedOpen) w.open = originalOpen; });
+    const navigation = (w                                         ).navigation;
+    if (navigation) {
+      report.navigationSupported = true;
+      const listener = (raw       ) => {
+        const e = raw                                        ;
+        if (active && e.cancelable && matches(e.destination.url)) {
+          e.preventDefault(); report.navigationBlocked++;
+        }
+      };
+      navigation.addEventListener('navigate', listener);
+      cleanups.push(() => navigation.removeEventListener('navigate', listener));
+    }
+    for (const [index, node] of path.entries()) {
+      if (!(node instanceof w.EventTarget)) continue;
+      const listener = (e       ) => {
+        if (e !== event) return;
+        seen.push(String(index));
+        if (node === w.document.body) report.bodyReached = true;
+        if (node === w.document) report.documentReached = true;
+        report.stopped ||= e.cancelBubble;
+      };
+      node.addEventListener('click', listener);
+      cleanups.push(() => node.removeEventListener('click', listener));
+    }
+    event.preventDefault();
+    const release = () => {
+      active = false;
+      for (const dispose of cleanups.splice(0)) dispose();
+      if (this.active.get(w) === release) this.active.delete(w);
+    };
+    this.active.set(w, release);
+    w.setTimeout(() => {
+      if (!active) { report.superseded = true; w.console.info('ZENZA_CLICK_TRIAL ' + JSON.stringify(report)); return; }
+      release();
+      try { launch(); report.launched = true; }
+      finally { w.console.info('ZENZA_CLICK_TRIAL ' + JSON.stringify(report)); }
+    }, 0);
+  }
+}
+
 class HoverMenu {
 		constructor(param) {
 				this.initialize(param);
@@ -68482,20 +68553,12 @@ class HoverMenu {
 								return;
 						}
 						const { target, watchId, url } = intent;
-						this._pagePreviewGuard?.claim(target);
-						e.preventDefault();
-						const propagate = true; // click-propagation1018: trial only; no saved-setting changes
-						if (!propagate) {
-								e.stopImmediatePropagation();
-						}
-						this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
-						if (e.shiftKey) {
-								this._send(watchId);
-						}
-						else {
-								this._open(watchId);
-						}
-						window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+						ClickNavigationTrial.begin(window, e, watchId, () => {
+    this._pagePreviewGuard?.claim(target);
+    this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
+    if (e.shiftKey) { this._send(watchId); } else { this._open(watchId); }
+    window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+  });
 				};
 				document.addEventListener('click', onClick, true);
 		}

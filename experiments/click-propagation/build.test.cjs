@@ -12,9 +12,9 @@ test('trial retains userscript identity, permissions and original saved defaults
     const pattern = new RegExp('^// @' + key + '\\s+.*$', 'gm');
     assert.deepEqual(trial.match(pattern), original.match(pattern));
   }
-  assert.match(trial, /const propagate = true;/);
+  assert.match(trial, /ClickNavigationTrial.begin\(window, e, watchId/);
   assert.match(trial, /'overrideWatchLink:allowPropagation': false/);
-  assert.match(trial, /if \(!propagate\) \{\s*e\.stopImmediatePropagation\(\);/);
+  assert.doesNotMatch(trial, /const propagate = this\._playerConfig/);
   assert.match(trial, /experiment\/click-propagation1018/);
   new vm.Script(trial);
 });

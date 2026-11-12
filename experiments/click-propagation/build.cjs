@@ -12,10 +12,21 @@ function once(source, pattern, replacement) {
   return source.replace(pattern, replacement);
 }
 function build(source) {
-  let result = once(source,
-    /const propagate = this\._playerConfig\?\.getValue\?\.\('overrideWatchLink:allowPropagation'\) \?\?\s*this\._playerConfig\?\.props\?\.\['overrideWatchLink:allowPropagation'\];/,
-    'const propagate = true; // click-propagation1018: trial only; no saved-setting changes');
-  result = once(result, /^\/\/ @version\s+.*$/m, '// @version        2.7.392-click1018.1');
+  const helper = require('node:module').stripTypeScriptTypes(fs.readFileSync(path.join(__dirname, 'ClickNavigationTrial.ts'), 'utf8'));
+  let result = once(source, /class HoverMenu \{/, helper + '\nclass HoverMenu {');
+  const start = result.indexOf('this._pagePreviewGuard?.claim(target);');
+  const tail = "window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);";
+  const end = result.indexOf(tail, start) + tail.length;
+  if (start < 0 || end < start || result.indexOf('this._pagePreviewGuard?.claim(target);', start + 1) !== -1) throw Error('Trial handler anchor changed');
+  const old = result.slice(start, end);
+  if (!old.includes('e.stopImmediatePropagation();') || !old.includes('const propagate =')) throw Error('Trial handler anchor changed');
+  result = result.slice(0, start) + `ClickNavigationTrial.begin(window, e, watchId, () => {
+    this._pagePreviewGuard?.claim(target);
+    this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
+    if (e.shiftKey) { this._send(watchId); } else { this._open(watchId); }
+    window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+  });` + result.slice(end);
+  result = once(result, /^\/\/ @version\s+.*$/m, '// @version        2.7.392-click1018.2');
   result = once(result, /^\/\/ @description\s+.*$/m, '// @description    クリック伝播の検証版。通常版の再インストールで元に戻せます。');
   for (const key of ['downloadURL', 'updateURL']) {
     result = once(result, new RegExp('^// @' + key + '\\s+.*$', 'm'), '// @' + key + '    ' + url);
@@ -23,7 +34,7 @@ function build(source) {
   result = once(result, /既読記録などの連携用。ONにすると、サイト側の処理によって公式プレイヤーも開く場合があります。通常はOFFで使用してください。/,
     'この検証版では、このスイッチの保存値にかかわらずクリックを伝播します。元に戻すには通常版を再インストールしてください。保存値は変更しません。');
   // Keep the visible player version aligned with the userscript metadata.
-  result = result.replaceAll('2.7.392-task1017', '2.7.392-click1018.1');
+  result = result.replaceAll('2.7.392-task1017', '2.7.392-click1018.2');
   return result;
 }
 if (require.main === module) {

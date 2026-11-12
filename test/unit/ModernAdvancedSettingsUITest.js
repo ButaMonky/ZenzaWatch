@@ -292,9 +292,9 @@ describe('Task318 full-viewport advanced-settings shell',()=>{
       assert(h.confirms()>=1);
     }finally{h.destroy();}
   });
-  it('renders seven major groups, sidebar width and persistent bottom actions',()=>{
+  it('renders eight major groups, sidebar width and persistent bottom actions',()=>{
     const h=boot();assert(h.q('.zw-modern-root'));
-    assert.strictEqual(h.all('[data-zw-major]').length,7);
+    assert.strictEqual(h.all('[data-zw-major]').length,8);
     assert(h.q('.zw-modern-root').getAttribute('style').includes('290px'));
     assert(h.q('[data-zw-save]'));assert(h.q('[data-zw-cancel]'));
     assert(h.panel.classList.contains('zw-modern-active'));
@@ -879,7 +879,7 @@ describe('Task318 comment history navigation migration',()=>{
     assert.strictEqual(h.ui.selected.category,'コメント表示');
     assert.strictEqual(h.ui.selected.subcategory,'追加取得');
     assert(h.ui.expanded.has('コメント表示'));
-    assert.strictEqual(h.all('[data-zw-major]').length,7);
+    assert.strictEqual(h.all('[data-zw-major]').length,8);
     assert(h.q('[data-zw-id="commentHistory.enabled"]'));
     assert.strictEqual(h.config.writes.length,0);
     h.destroy();
@@ -927,7 +927,7 @@ describe('Task318 unified related menu order editor',()=>{
     h.click('[data-zw-sub="プレイリスト・検索|関連メニュー › カスタムリンク"]');
   };
   const keys=h=>h.all('[data-zw-order-key]').map(el=>el.dataset.zwOrderKey);
-  it('shows all seven built-in actions with drag grips and up/down buttons',()=>{
+  it('shows all eight built-in actions with drag grips and up/down buttons',()=>{
     const h=boot();open(h);
     assert.deepStrictEqual(keys(h),[
       'builtin:official','builtin:ad','builtin:twitter','builtin:original',
@@ -1076,7 +1076,7 @@ describe('Task318 clear icon previews and safe container visibility',()=>{
       assert(style.textContent.includes('.zw-modern-visibility-icon.is-pair-glyph'));
     }finally{h.destroy();}
   });
-  it('renders exactly seven Task391 SVG additions without replacing the three Task390 glyphs',()=>{
+  it('renders exactly eight Task391 SVG additions without replacing the three Task390 glyphs',()=>{
     const h=boot();open(h);
     try{
       const originals=[

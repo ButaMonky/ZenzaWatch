@@ -74,9 +74,9 @@ describe('Task318 advanced settings descriptor and draft model',()=>{
     assert(volume.description.includes('作用しません'));
     dom.window.close();
   });
-  it('has exactly seven stable major categories, unique IDs, and documented related-menu entry',()=>{
+  it('has exactly eight stable major categories, unique IDs, and documented related-menu entry',()=>{
     const {model,dom}=setup();
-    assert.strictEqual(model.categories.length,7);
+    assert.strictEqual(model.categories.length,8);
     assert.strictEqual(new Set(model.descriptors.map(x=>x.id)).size,model.descriptors.length);
     assert(model.descriptors.some(x=>x.id==='relatedMenu.customLinks' &&
       x.category==='プレイリスト・検索' && x.subcategory.includes('カスタムリンク')));

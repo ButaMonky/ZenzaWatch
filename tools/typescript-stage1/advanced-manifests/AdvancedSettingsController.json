@@ -3,7 +3,7 @@
   "source": "tools/typescript-stage1/advanced-src/AdvancedSettingsController.ts",
   "emitted": "tools/typescript-stage1/.generated/advanced/AdvancedSettingsController.js",
   "runtime": "src/AdvancedSettingsController.js",
-  "sourceSha256": "31e49e5d5612c6c50cad3515546891f2bb40f58d4908062b98fe762d06b7260b",
-  "runtimeSha256": "2afe143459850dd46ac17c882a86b7d3595883d84a73952d5fa2e0338765db1f",
-  "semanticSha256": "41bac52de5a649e0e00bedcce3438490e13c81dff5144bb2ba2eecfe1401cddc"
+  "sourceSha256": "b69281002277f1075ccd2beb2a39b90a883f098a1f5a255df958ad56b59b0957",
+  "runtimeSha256": "4bb7701db4a39ad89fb4e11aab24bb324dbae5a819f64b886e749c316801ba01",
+  "semanticSha256": "3440c9c703987621cb27ebd4eed1f5d2f0bf4ca9f6527ccce9002327dc507813"
 }

@@ -28,6 +28,7 @@ const window = { console: console };
 //@require NgCompositeRules
 const Config = (() => {
     const DEFAULT_CONFIG = {
+        "externalLinks.enabled": true, "externalLinks.siteMode": "all", "externalLinks.sites": "", "externalLinks.excludedSites": "", "externalLinks.displayMode": "inline", "externalLinks.size": "small", "externalLinks.redirects": false, "externalLinks.textIds": false, "externalLinks.prefixes": "sm\nnm\nso\nss", "externalLinks.preflight": "off",
         debug: false,
         volume: 0.3,
         showComment: true,

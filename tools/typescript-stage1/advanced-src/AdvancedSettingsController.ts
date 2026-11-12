@@ -3,7 +3,7 @@ interface AdvancedPanel {
   hide(): void;
   dispose(): void;
 }
-interface AdvancedConfig { promise(event: string): Promise<unknown>; }
+interface AdvancedConfig { promise(event: string): Promise<unknown>; default?: Record<string, unknown>; refresh?(key: string): Promise<unknown>; }
 interface AdvancedSettingsOptions {
   config: AdvancedConfig;
   createPanel(config: AdvancedConfig): AdvancedPanel;
@@ -59,6 +59,11 @@ class AdvancedSettingsController {
       })().catch(error => { this.pending = undefined; throw error; });
     }
     await this.pending;
+    if (this.disposed) { return; }
+    // The companion may have updated public preferences through userscript storage.
+    for (const key of Object.keys(this.options.config.default || {}).filter(key => key.startsWith('externalLinks.'))) {
+      await this.options.config.refresh?.(key);
+    }
     if (this.disposed) { return; }
     try { this.panel?.show(); }
     catch (error) {

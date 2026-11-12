@@ -72,6 +72,13 @@ class AdvancedSettingsController {
         if (this.disposed) {
             return;
         }
+        // The companion may have updated public preferences through userscript storage.
+        for (const key of Object.keys(this.options.config.default || {}).filter(key => key.startsWith('externalLinks.'))) {
+            await this.options.config.refresh?.(key);
+        }
+        if (this.disposed) {
+            return;
+        }
         try {
             this.panel?.show();
         }

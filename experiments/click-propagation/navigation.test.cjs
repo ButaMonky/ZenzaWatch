@@ -1,49 +1,22 @@
-'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('fs'),path=require('path');
-const {stripTypeScriptTypes}=require('node:module');
-const {JSDOM}=require('jsdom');
+const {stripTypeScriptTypes}=require('node:module');const {JSDOM}=require('jsdom');
 const code=stripTypeScriptTypes(fs.readFileSync(path.join(__dirname,'ClickNavigationTrial.ts'),'utf8'));
-function setup(){
- const w=new JSDOM('<body><main><a href="/watch/sm9"><span id="hit">video</span></a></main></body>',{url:'https://www.nicovideo.jp/search/test',runScripts:'outside-only'}).window;
- const calls=[],logs=[],order=[];w.open=(...args)=>{calls.push(args);return 'original-result';};const original=w.open;
- w.navigation=new w.EventTarget();w.console.info=s=>logs.push(JSON.parse(s.slice('ZENZA_CLICK_TRIAL '.length)));
- w.eval(code+';window.Subject=ClickNavigationTrial;');
- w.document.addEventListener('click',e=>w.Subject.begin(w,e,'sm9',()=>{assert.equal(w.open,original);order.push('launch');}),true);
- w.document.body.addEventListener('click',()=>order.push('observer'));
- const click=()=>w.document.querySelector('#hit').dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true,composed:true}));
- const tick=()=>new Promise(r=>w.setTimeout(r,20));
- return {w,calls,logs,order,original,click,tick};
+function fixture({late=false,lazy=false}={}){
+ const w=new JSDOM('<div id="CommonHeader"></div><a id="ordinary" href="/watch/sm9">outside</a>',{url:'https://www.nicovideo.jp/',runScripts:'outside-only'}).window;
+ let routes=0,observed=0,launches=0;const logs=[],events=new Map();
+ class Header {on(name,fn){const a=events.get(name)||[];a.push(fn);events.set(name,a);}closePanel(){} emit(e){for(const fn of events.get('commonHeader:linkClick')||[])fn(e);}}
+ const root=w.document.querySelector('#CommonHeader');let api;
+ function mount(){api=new Header();root.innerHTML='<a id="hit" href="/watch/sm9"><span>video</span></a>';api.on('commonHeader:linkClick',e=>{e.nativeEvent.type!=='auxclick'&&(e.nativeEvent.ctrlKey||e.nativeEvent.metaKey||e.nativeEvent.target.closest('a')?.target!=='_blank'&&(e.nativeEvent.preventDefault(),api.closePanel(),routes++));});root.addEventListener('click',e=>api.emit({nativeEvent:e,href:'/watch/sm9'}));}
+ if(!lazy)w.CommonHeader={default:Header};if(late)mount();
+ w.console.info=s=>logs.push(JSON.parse(s.slice('ZENZA_CLICK_TRIAL '.length)));
+ w.eval(code+';window.Subject=ClickNavigationTrial;');w.Subject.install(w);
+ if(lazy){w.CommonHeader={default:Header};const script=w.document.createElement('script');script.addEventListener('load',mount);w.document.head.append(script);script.dispatchEvent(new w.Event('load'));}else if(!late)mount();
+ w.document.addEventListener('click',e=>{if(e.ctrlKey||e.button!==0||e.target.closest('a').pathname.startsWith('/user/'))return;w.Subject.begin(w,e,'sm9',()=>launches++);},true);
+ w.document.body.addEventListener('click',()=>observed++);
+ return {w,api,logs,click(id='hit',opts={}){w.document.getElementById(id).dispatchEvent(new w.MouseEvent('click',{bubbles:true,cancelable:true,composed:true,...opts}));},tick:()=>new Promise(r=>w.setTimeout(r,10)),counts:()=>({routes,observed,launches})};
 }
-test('original click reaches observers before launch; only matching video popup is blocked',async()=>{
- const f=setup();try{
-  f.w.document.querySelector('main').addEventListener('click',()=>{
-   assert.equal(f.w.open('/watch/sm9?ref=header','_blank'),null);
-   assert.equal(f.w.open('/user/9','_blank'),'original-result');
-   assert.equal(f.w.open('https://example.org/watch/sm9'),'original-result');
-  });
-  f.click();assert.deepEqual(f.order,['observer']);await f.tick();
-  assert.deepEqual(f.order,['observer','launch']);assert.equal(f.calls.length,2);
-  assert.equal(f.logs[0].windowOpenBlocked,1);assert.equal(f.logs[0].bodyReached,true);
-  assert.equal(f.w.open,f.original);f.w.open('/watch/sm9');assert.equal(f.calls.length,3);
- }finally{f.w.close();}
-});
-test('matching cancelable navigation is stopped; other destinations are untouched',async()=>{
- const f=setup();try{
-  f.w.document.querySelector('main').addEventListener('click',()=>{
-   for(const [url,blocked] of [['https://www.nicovideo.jp/watch/sm9',true],['https://www.nicovideo.jp/watch/sm99',false]]){
-    const e=new f.w.Event('navigate',{cancelable:true});e.destination={url};f.w.navigation.dispatchEvent(e);assert.equal(e.defaultPrevented,blocked);
-   }
-  });f.click();await f.tick();assert.equal(f.logs[0].navigationBlocked,1);
-  const e=new f.w.Event('navigate',{cancelable:true});e.destination={url:'https://www.nicovideo.jp/watch/sm9'};f.w.navigation.dispatchEvent(e);assert.equal(e.defaultPrevented,false);
- }finally{f.w.close();}
-});
-test('upstream propagation stop is diagnosed rather than replaying a synthetic click',async()=>{
- const f=setup();try{
-  f.w.document.querySelector('main').addEventListener('click',e=>e.stopPropagation());
-  f.click();await f.tick();assert.deepEqual(f.order,['launch']);assert.equal(f.logs[0].bodyReached,false);
-  assert.equal(f.logs[0].stopped,true);
- }finally{f.w.close();}
-});
-test('overlapping dispatches restore window.open without leaving wrappers behind',async()=>{
- const f=setup();try{f.click();f.click();await f.tick();assert.equal(f.w.open,f.original);assert.equal(f.logs.length,2);}finally{f.w.close();}
-});
+for(const lazy of [false,true])test('claimed original click reaches body without official routing; lazy='+lazy,async()=>{const f=fixture({lazy});try{const open=f.w.open;f.click();await f.tick();assert.deepEqual(f.counts(),{routes:0,observed:1,launches:1});assert.equal(f.logs[0].mode,'header-bridge');assert.equal(f.logs[0].headerCallbacksBlocked,1);assert.equal(f.w.open,open);}finally{f.w.close();}});
+test('late installation safely stops only header clicks',async()=>{const f=fixture({late:true});try{f.click();await f.tick();assert.deepEqual(f.counts(),{routes:0,observed:0,launches:1});assert.equal(f.logs[0].mode,'header-safe-fallback');f.click('ordinary');await f.tick();assert.deepEqual(f.counts(),{routes:0,observed:1,launches:2});}finally{f.w.close();}});
+test('non-video links retain official route',async()=>{const f=fixture();try{f.w.document.querySelector('#hit').href='/user/9';f.click();await f.tick();assert.deepEqual(f.counts(),{routes:1,observed:1,launches:0});}finally{f.w.close();}});
+test('Ctrl clicks keep their original treatment',async()=>{const f=fixture();try{f.click('hit',{ctrlKey:true});await f.tick();assert.deepEqual(f.counts(),{routes:0,observed:1,launches:0});}finally{f.w.close();}});
+test('unclaimed cancellation is not treated as a Zenza click',()=>{const f=fixture();try{const e={type:'click',ctrlKey:false,metaKey:false,target:f.w.document.querySelector('#hit'),defaultPrevented:true,preventDefault(){}};f.api.emit({nativeEvent:e,href:'/watch/sm9'});assert.equal(f.counts().routes,1);}finally{f.w.close();}});

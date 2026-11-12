@@ -215,3 +215,9 @@ callbackの前にdefaultPreventedを確認するモデルでは、キャンセ�
 - Layout callback（文字offset 5793..5990）: `d1ac9e5dcb6dec2cc32dfc6ce6c1dc831b1c163755c907575a815c9bb9e300f4`
 
 次の設計対象は、ヘッダー内部イベントから公式ルーターへ渡すこの境界。タイマーの延長や全域window.open/history差替えを続ける根拠はない。CommonHeaderにはonがあるが個別offが公開されていないため、既存リスナーを安全に差し替えられると未確認のまま決めつけない。接続の登録時点・復元方法・未知版での動作を検証してから修正方式を選ぶ。ランキングNG専用API・属性の操作はしない。
+
+## click1018.3
+
+CommonHeader.default.prototype.onの公開登録口でZenzaが扱う元のEventだけ配送を止める。defaultPreventedだけでは判定しない。動的scriptのloadをdocument captureで受け、公式loaderのインスタンス作成より先に接続。既にヘッダーがマウント済みなら既存登録解除口がないため、ヘッダー内のみ従来の伝播停止へ戻す。window.open/Navigation API差替え撤去。
+
+型チェック、単体・生成物9件、既存境界17件、localhost Chrome5ケースを確認。実サイトのユーザー確認待ち。ランキングNG専用処理なし。

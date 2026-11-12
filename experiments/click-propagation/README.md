@@ -1,10 +1,8 @@
-# クリック遷移の検証版 2.7.392-click1018.2
+# クリック遷移の検証版 2.7.392-click1018.3
 
-第1版でフォロー新着の二重再生が再発したため、第2版ではクリック伝播を許すだけでなく、同じ動画への window.open と Navigation API の遷移を、そのクリックの処理ターン中に限って抑えます。プレイヤー起動とプレビュー停止は後続のイベント処理が終わってから行います。抑止処理は起動前に解除します。
+提供HARで、フォロー新着はCommonHeader独自イベントから公式SPAルーターへ進み、defaultPreventedを確認しないことを確認しました。第3版は公開イベント登録口に接続し、Zenzaが扱う元のクリックだけ公式遷移へ渡しません。window.open・Navigation API差替えは撤去しました。
 
-ランキングNG等の検出・専用連携・合成クリック・URL書換えは追加しません。保存済み設定は変更しません。実サイトでの効果はユーザー確認待ちです。
-
-旧第1版は不採用です。検索の正常動作が新着にも成立するとは扱いません。
+ランキングNG専用処理、合成クリック、URL変更はありません。接続が間に合わない場合はヘッダー対象クリックだけ従来の伝播停止へ戻します。実サイトはユーザー確認待ちです。
 
 ## インストール
 
@@ -28,29 +26,16 @@
 
 [通常版をインストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js)して上書き（ダウングレードの確認が出たら承認）し、ニコニコのページを再読み込みしてください。設定やしおりを削除する必要はありません。今回の検証でクリック伝播の設定値は変更しないので、その値は検証前に戻ります。検証開始時に「動画リンクをZenzaWatchで開く」を変更した場合は必要に応じて戻してください。
 
-## 開発・再生成
+## 開発・検証
 
-`node experiments/click-propagation/build.cjs`
+再生成: `node experiments/click-propagation/build.cjs`
 
-`node --test experiments/click-propagation/build.test.cjs`
-
-TypeScriptのClickNavigationTrialを検証用配布物にだけ組み込みます。buildは既知の挿入箇所が1件でない場合に停止します。通常版dist・設定保存先・元の設定初期値は変更しません。
-
-
-## 問題が残る場合の診断
-
-F12 → Console を開き、`ZENZA_CLICK_TRIAL` で絞り込んでください。問題のクリック後に出るその1行をコピーして報告してください。動画名、URL、ID、Cookie、保存設定の値は記録しません。クリックがbodyまで届いたか、同じ動画の別窓・遷移を何回抑止したか、要素の種類とdata属性の名前だけを記録します。自動送信はしません。
-
-この診断はbodyの全リスナーの成功や、第三者スクリプトの保存成功を保証するものではありません。別のハンドラーが伝播を止めた場合は、その到達状況も確認できます。
-
-## 検証範囲・制限
-
-- 型チェック、生成物3件、ナビゲーション単体4件を確認。
-- localhostの隔離Chromeで通常リンク、window.open、location.assign、pushState、途中での伝播停止の5ケースを確認。実際の信頼されたマウス入力を使用。
-- pushStateをキャンセルしてもサイト側が別途DOMを書き換える副作用は取り消せません。遅延タイマーで開始される遷移、事前に保存されたwindow.openの参照、別フレーム経由の別窓処理は今回の抑止範囲外です。
-- 一時的なwindow.open差替えは検証用モジュールに限定。常設の差替えや個別スクリプトの補正は行いません。
-- 連続して同一ターンに複数起動が要求された場合は最後の要求だけを起動します。
-
-追加テスト: `node --test experiments/click-propagation/navigation.test.cjs`
+単体: `node --test experiments/click-propagation/build.test.cjs experiments/click-propagation/navigation.test.cjs`
 
 Chrome: `node test/browser/click-navigation-trial.cjs`
+
+型チェック、生成物・単体9件、既存クリック境界17件、localhost隔離Chrome5ケースを確認。早期接続・動的scriptロード・遅延接続の安全策・通常カード・対象外クリックを検証。実サイトの代替ではありません。
+
+ConsoleのZENZA_CLICK_TRIALは版、処理経路、公式コールバック抑止数、body到達だけを出力します。header-bridgeは接続成功、header-safe-fallbackは従来の伝播停止。body到達は第三者スクリプトの保存成功を保証しません。URL・動画ID・設定値は記録しません。
+
+通常版distと保存設定は未変更。CommonHeader公開API変更時は再検証が必要です。

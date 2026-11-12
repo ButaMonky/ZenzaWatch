@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.392-click1018.2
+// @version        2.7.392-click1018.3
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -358,7 +358,7 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.392-click1018.2';
+    var VER = '2.7.392-click1018.3';
     const ENV = 'DEV';
 
     var BUILD = '2026-11-12 12:38Z 9e19e21';
@@ -68231,77 +68231,90 @@ class PagePreviewGuard {
 				this.player.off('close', this.onClose);
 		}
 }
-/** Experiment only. No extension detection, synthetic clicks or saved state. */
-class ClickNavigationTrial {
-          static active = new WeakMap                    ();
-  static begin(w                            , event            , watchId        , launch            )       {
-    this.active.get(w)?.();
-    const path = event.composedPath();
-    const seen           = [];
-    const cleanups                    = [];
-    const report = {version: 'click1018.2', windowOpenBlocked: 0, navigationBlocked: 0,
-      navigationSupported: false, openGuardInstalled: false, bodyReached: false,
-      documentReached: false, stopped: false, launched: false, superseded: false, path: path.filter(n => n instanceof w.Element)
-        .slice(0, 12).map(n => { const el = n           ; return {tag: el.tagName,
-          role: el.getAttribute('role'), dataKeys: el.getAttributeNames().filter(k => k.startsWith('data-'))}; }), seen};
-    let active = true;
-    const matches = (raw         )          => {
-      if (typeof raw !== 'string' && !(raw instanceof w.URL)) return false;
-      try {
-        const url = new w.URL(String(raw), w.location.href);
-        return /^https?:$/.test(url.protocol) && url.hostname === 'www.nicovideo.jp' &&
-          url.pathname === '/watch/' + watchId;
-      } catch { return false; }
-    };
-    // Install only for this dispatch turn; restore before the player starts.
-    // No history, Event prototype, addEventListener or third-party APIs are patched.
-    const originalOpen = w.open;
-    const guardedOpen                = function(              url, target, features) {
-      if (active && matches(url)) { report.windowOpenBlocked++; return null; }
-      return Reflect.apply(originalOpen, this, [url, target, features]);
-    };
-    try { w.open = guardedOpen; report.openGuardInstalled = w.open === guardedOpen; } catch { /* diagnostic below */ }
-    cleanups.push(() => { if (w.open === guardedOpen) w.open = originalOpen; });
-    const navigation = (w                                         ).navigation;
-    if (navigation) {
-      report.navigationSupported = true;
-      const listener = (raw       ) => {
-        const e = raw                                        ;
-        if (active && e.cancelable && matches(e.destination.url)) {
-          e.preventDefault(); report.navigationBlocked++;
+/** Official CommonHeader public event adapter; no third-party script knowledge. */
+class OfficialHeaderClickBridge {
+          claimed = new WeakSet       ();
+          hooked = new WeakSet        ();
+          covered = false;
+          enabled = true;
+          blocked = 0;
+          w                            ;
+  constructor(w                            ) {
+    this.w = w;
+    this.install();
+    // The official loader constructs the header in the script's target load
+    // handler. Capture runs first, after the UMD export has been assigned.
+    w.document.addEventListener('load', this.onLoad, true);
+    w.addEventListener('pageshow', () => { this.enabled = true; w.document.addEventListener('load', this.onLoad, true); });
+    w.addEventListener('pagehide', () => {
+      this.enabled = false;
+      w.document.removeEventListener('load', this.onLoad, true);
+    });
+  }
+          onLoad = (e       )       => {
+    if (e.target instanceof this.w.HTMLScriptElement) this.install();
+  };
+          install()       {
+    const exported = (this.w                                                                         ).CommonHeader;
+    const proto = exported?.default?.prototype;
+    if (!proto || typeof proto.on !== 'function' || this.hooked.has(proto)) return;
+    // Existing registrations cannot be removed with the public API. Never
+    // claim coverage when the header was already mounted before interception.
+    if (this.w.document.querySelector('#CommonHeader')?.childElementCount) return;
+    const original = proto.on;
+    const bridge = this;
+    const wrapped = function(               name        , listener         , ...args           ) {
+      if (name !== 'commonHeader:linkClick' || typeof listener !== 'function') {
+        return Reflect.apply(original, this, [name, listener, ...args]);
+      }
+      const guarded = function(               payload                       , ...rest           ) {
+        if (bridge.enabled && payload?.nativeEvent && bridge.claimed.has(payload.nativeEvent)) {
+          bridge.blocked++;
+          return;
         }
+        return Reflect.apply(listener, this, [payload, ...rest]);
       };
-      navigation.addEventListener('navigate', listener);
-      cleanups.push(() => navigation.removeEventListener('navigate', listener));
-    }
-    for (const [index, node] of path.entries()) {
-      if (!(node instanceof w.EventTarget)) continue;
-      const listener = (e       ) => {
-        if (e !== event) return;
-        seen.push(String(index));
-        if (node === w.document.body) report.bodyReached = true;
-        if (node === w.document) report.documentReached = true;
-        report.stopped ||= e.cancelBubble;
-      };
-      node.addEventListener('click', listener);
-      cleanups.push(() => node.removeEventListener('click', listener));
-    }
-    event.preventDefault();
-    const release = () => {
-      active = false;
-      for (const dispose of cleanups.splice(0)) dispose();
-      if (this.active.get(w) === release) this.active.delete(w);
+      const result = Reflect.apply(original, this, [name, guarded, ...args]);
+      bridge.covered = true;
+      return result;
     };
-    this.active.set(w, release);
+    try { proto.on = wrapped; if (proto.on === wrapped) this.hooked.add(proto); } catch { /* fallback */ }
+  }
+  claim(event            )                                        {
+    const header = this.w.document.querySelector('#CommonHeader');
+    const inside = !!header && event.composedPath().includes(header);
+    if (!inside) return {mode: 'ordinary', blocked: () => 0};
+    if (this.enabled && this.covered) {
+      const before = this.blocked;
+      this.claimed.add(event);
+      return {mode: 'header-bridge', blocked: () => this.blocked - before};
+    }
+    event.stopImmediatePropagation();
+    return {mode: 'header-safe-fallback', blocked: () => 0};
+  }
+}
+class ClickNavigationTrial {
+          static bridges = new WeakMap                                   ();
+  static install(w                            )       {
+    if (!this.bridges.has(w)) this.bridges.set(w, new OfficialHeaderClickBridge(w));
+  }
+  static begin(w                            , event            , _watchId        , launch            )       {
+    this.install(w);
+    event.preventDefault();
+    const result = this.bridges.get(w) .claim(event);
+    let bodyReached = false;
+    const observe = (e       ) => { if (e === event) bodyReached = true; };
+    w.document.body.addEventListener('click', observe);
     w.setTimeout(() => {
-      if (!active) { report.superseded = true; w.console.info('ZENZA_CLICK_TRIAL ' + JSON.stringify(report)); return; }
-      release();
-      try { launch(); report.launched = true; }
-      finally { w.console.info('ZENZA_CLICK_TRIAL ' + JSON.stringify(report)); }
+      w.document.body.removeEventListener('click', observe);
+      launch();
+      w.console.info('ZENZA_CLICK_TRIAL ' + JSON.stringify({version: 'click1018.3',
+        mode: result.mode, headerCallbacksBlocked: result.blocked(), bodyReached}));
     }, 0);
   }
 }
 
+ClickNavigationTrial.install(window);
 class HoverMenu {
 		constructor(param) {
 				this.initialize(param);

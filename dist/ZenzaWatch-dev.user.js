@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.388-task1013
+// @version        2.7.389-task1014
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-11 18:53Z 392faf4
+// build: 2026-11-12 06:41Z ac05368
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-task1013';
+    var VER = '2.7.389-task1014';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-11 18:53Z 392faf4';
+    var BUILD = '2026-11-12 06:41Z ac05368';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -69730,18 +69730,18 @@ class ModernAdvancedSettingsModel {
 								['volume', '動画の音量', slider(0, 1)],
 								['mute', '動画をミュート']
 						]),
-						...group('再生・音声', '読み上げ', [
-								['speakLark', 'コメント読み上げ（現在は未対応）', {
+						...group('再生・音声', '旧設定・互換性', [
+								['speakLark', 'コメント読み上げ（現在は未対応）', { availability: 'unsupported', disabledReason: '現在のプレイヤーでは未対応です。保存値は互換性のため保持します。',
 												description: '旧設定ですが、現在のZenzaWatchには再生コメントを音声化する処理が接続されていません。ONにしても読み上げません。保存値は互換性のため保持します。'
 										}],
-								['speakLarkVolume', '読み上げ音量（現在は未対応）', {
+								['speakLarkVolume', '読み上げ音量（現在は未対応）', { availability: 'unsupported', disabledReason: '読み上げ機能が未対応のため変更できません。保存値は保持します。',
 												...slider(0, 1),
 												description: 'コメント読み上げ機能が未実装のため、この音量値も現在の再生には作用しません。'
 										}]
 						]),
 						...group('再生・音声', '動画の取得', [
 								['forceEconomy', 'エコノミー画質で取得'],
-								['autoDisableNew', '旧配信方式の画質を優先'],
+								['autoDisableNew', '旧配信方式の画質を優先', { description: '旧配信方式を利用できる動画で、画質が良いと判定された場合に優先します。新配信方式のみの動画には作用しません。' }],
 								['dmcVideoQuality', '旧配信方式の優先画質', select([
 												['auto', '自動'], ['veryhigh', '最高'], ['high', '高'],
 												['mid', '中'], ['low', '低']
@@ -70198,6 +70198,7 @@ class ModernAdvancedSettingsModel {
 						'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
 						'enableCommentPanelAutoScroll': 'enableCommentPanel',
 						'pipPageThumbnailSource': 'pipPageThumbnail',
+						'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',
 						'speakLarkVolume': 'speakLark'
 				};
 				return direct[key] || null;
@@ -70265,7 +70266,7 @@ class ModernAdvancedSettingsModel {
 						if (!this.categories.includes(descriptor.category)) {
 								throw new Error('未定義のカテゴリ: ' + descriptor.category);
 						}
-						const entry = { ...descriptor, dependsOn: ModernAdvancedSettingsModel.dependencyFor(descriptor.id) };
+						const entry = { ...descriptor, dependsOn: descriptor.dependsOn === undefined ? ModernAdvancedSettingsModel.dependencyFor(descriptor.id) : descriptor.dependsOn };
 						if (entry.id === 'commentHistory.enabled') {
 								entry.sortIndex = 0;
 								entry.label = '自動で増量';
@@ -70482,6 +70483,9 @@ class ModernAdvancedSettingsModel {
 				if (!d) {
 						throw new Error('不明な設定: ' + id);
 				}
+				if (d.availability === 'unsupported') {
+						return this;
+				}
 				if (typeof this.config.default[id] === 'number' && typeof value === 'string' &&
 						value.trim() !== '' && Number.isFinite(Number(value))) {
 						value = Number(value);
@@ -70499,14 +70503,42 @@ class ModernAdvancedSettingsModel {
 						.forEach(d => this.resetItem(d.id));
 				return this;
 		}
-		isEnabled(id) {
+		isEnabled(id) { return !this.disabledReason(id); }
+		disabledReason(id, visited = new Set()) {
+				const d = this.descriptor(id);
+				if (!d) {
+						return '';
+				}
+				if (visited.has(id)) {
+						return '依存する設定を確認できません。';
+				}
+				visited.add(id);
+				if (d.availability === 'unsupported') {
+						return d.disabledReason || '現在は未対応です。保存値は保持します。';
+				}
 				if (['sceneSearch.layout.fullscreen', 'sceneSearch.presentation.fullscreen'].includes(id) &&
 						this.get('sceneSearch.layout.linkFullscreen') === true) {
-						return false;
+						return '通常表示と連動中です。個別に変更するには連動をOFFにしてください。';
 				}
-				const d = this.descriptor(id);
-				return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
-						(!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
+				if (!d.dependsOn) {
+						return '';
+				}
+				const parent = this.descriptor(d.dependsOn);
+				if (!parent) {
+						return '';
+				}
+				const matched = Object.prototype.hasOwnProperty.call(d, 'dependsOnValue') ?
+						ModernAdvancedSettingsModel._same(this.draft[d.dependsOn], d.dependsOnValue) : !!this.draft[d.dependsOn];
+				const parentReason = this.disabledReason(d.dependsOn, visited);
+				if (parentReason) {
+						return parentReason;
+				}
+				if (!matched) {
+						const choice = parent.options?.find(option => ModernAdvancedSettingsModel._same(option.value, d.dependsOnValue));
+						return d.disabledReason || ('「' + parent.label + '」を' + (Object.prototype.hasOwnProperty.call(d, 'dependsOnValue') ?
+								'「' + (choice?.label ?? String(d.dependsOnValue)) + '」に変更' : 'ONに') + 'すると利用できます。値は保持しています。');
+				}
+				return '';
 		}
 		isDifferentFromDefault(id) {
 				return this._byId.has(id) && !ModernAdvancedSettingsModel._same(this.draft[id], this.config.default[id]);
@@ -70863,13 +70895,19 @@ class ModernAdvancedSettingsUI {
 						'.zw-modern-section-title { font-size:21px; line-height:1.4; margin:0 0 6px; font-weight:750; }',
 						'.zw-modern-section-subtitle { margin:0 0 15px; color:var(--zw-dark-muted); font-size:12px; }',
 						'.zw-modern-toolbar { display:flex; justify-content:flex-end; gap:7px; margin:0 0 14px; }',
-						'.zw-modern-card { background:var(--zw-dark-card); border:1px solid var(--zw-dark-border); border-radius:5px; padding:13px 15px; margin:0 0 10px; min-width:0; }',
+						'.zw-modern-card { background:var(--zw-dark-card); border:1px solid var(--zw-dark-border); border-radius:5px; padding:10px 13px; margin:0 0 5px; min-width:0; }',
 						'.zw-modern-card.is-inline { display:flex; align-items:center; flex-wrap:wrap; column-gap:15px; row-gap:6px; min-height:55px; }',
 						'.zw-modern-card.is-inline > .zw-modern-cardhead { min-width:0; flex:1 1 210px; }',
 						'.zw-modern-card.is-inline > .zw-modern-cardcontrols { flex:0 1 auto; margin:0; min-width:0; }',
 						'.zw-modern-card.is-inline > .zw-modern-note { flex-basis:100%; margin-top:2px; }',
 						'.zw-modern-card.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
-						'.zw-modern-card.is-disabled { opacity:.5; }',
+						'.zw-modern-card.is-disabled { background:var(--zw-dark-panel); }',
+						'.zw-modern-summary, .zw-modern-disabled-reason { flex-basis:100%; margin:5px 0 0; color:var(--zw-dark-muted); font-size:12px; line-height:1.5; }',
+						'.zw-modern-disabled-reason { color:#c4b48e; }',
+						'.zw-modern-disabled-reason[hidden] { display:none; }',
+						'.zw-modern-radios { display:flex; flex-wrap:wrap; gap:8px 16px; }',
+						'.zw-modern-radios label { display:flex; align-items:center; gap:5px; cursor:pointer; }',
+						'.zw-modern-radios input { accent-color:var(--zw-dark-accent); }',
 						'.zw-modern-card.is-child { margin-left:14px; border-left:2px solid #475e77; }',
 						'.zw-modern-cardhead { display:flex; align-items:center; gap:10px; }',
 						'.zw-modern-cardhead strong { font-size:13px; font-weight:650; flex:1; overflow-wrap:anywhere; }',
@@ -71637,7 +71675,7 @@ class ModernAdvancedSettingsUI {
 				card.dataset.zwId = descriptor.id;
 				const seekDescriptor = descriptor.type === 'shortcut' ?
 						this.model.descriptor('PARAM_' + descriptor.actionId) : null;
-				if (descriptor.type === 'boolean' ||
+				if (descriptor.type === 'boolean' || descriptor.inputPresentation === 'radio' ||
 						(descriptor.type === 'shortcut' && !seekDescriptor)) {
 						card.classList.add('is-inline');
 				}
@@ -71650,6 +71688,14 @@ class ModernAdvancedSettingsUI {
 				}
 				if (descriptor.dependsOn) {
 						card.classList.add('is-child');
+						let parent = this.model.descriptor(descriptor.dependsOn), depth = 1;
+						const ancestors = new Set([descriptor.id]);
+						while (parent?.dependsOn && !ancestors.has(parent.id)) {
+								ancestors.add(parent.id);
+								depth++;
+								parent = this.model.descriptor(parent.dependsOn);
+						}
+						card.style.marginLeft = String(Math.min(depth, 3) * 14) + 'px';
 				}
 				if (!this.model.isEnabled(descriptor.id)) {
 						card.classList.add('is-disabled');
@@ -71670,13 +71716,14 @@ class ModernAdvancedSettingsUI {
 						shared.title = descriptor.sharedWith + ' と同じ設定値です。';
 						head.append(shared);
 				}
-				if (descriptor.description) {
+				if (descriptor.descriptionDetails || descriptor.description) {
 						const help = this._button('?', 'data-zw-help', descriptor.id, 'zw-modern-plainbtn');
 						help.setAttribute('aria-label', descriptor.label + 'の説明を表示');
 						head.append(help);
 				}
 				const reset = this._button('↺', 'data-zw-reset-item', descriptor.id, 'zw-modern-plainbtn');
 				reset.title = 'この項目を初期値に戻す';
+				reset.disabled = descriptor.availability === 'unsupported';
 				head.append(reset);
 				card.append(head);
 				const controls = this.doc.createElement('div');
@@ -71874,6 +71921,29 @@ class ModernAdvancedSettingsUI {
 						}
 						controls.append(holder);
 				}
+				else if (descriptor.type === 'select' && descriptor.inputPresentation === 'radio') {
+						const group = this.doc.createElement('div');
+						group.className = 'zw-modern-radios';
+						group.setAttribute('role', 'radiogroup');
+						group.setAttribute('aria-label', descriptor.label);
+						const choices = [...(descriptor.options || [])];
+						const value = String(this.model.get(descriptor.id));
+						if (!choices.some(choice => String(choice.value) === value)) {
+								choices.push({ value, label: '従来の設定値：' + value });
+						}
+						for (const choice of choices) {
+								const label = this.doc.createElement('label'), radio = this.doc.createElement('input');
+								radio.type = 'radio';
+								radio.name = 'zw-setting-' + descriptor.id;
+								radio.dataset.settingName = descriptor.id;
+								radio.value = String(choice.value);
+								radio.checked = radio.value === value;
+								radio.disabled = !this.model.isEnabled(descriptor.id);
+								label.append(radio, this.doc.createTextNode(choice.label));
+								group.append(label);
+						}
+						controls.append(group);
+				}
 				else if (descriptor.type === 'select' && descriptor.presentation === 'dropdown') {
 						const select = this.doc.createElement('select');
 						select.dataset.settingName = descriptor.id;
@@ -72052,14 +72122,48 @@ class ModernAdvancedSettingsUI {
 				if (example) {
 						card.append(example);
 				}
-				if (descriptor.description) {
+				const summaryText = descriptor.descriptionDetails ? descriptor.description :
+						(descriptor.description || '').split(/\n|(?<=。)/)[0];
+				if (summaryText) {
+						const summary = this.doc.createElement('p');
+						summary.className = 'zw-modern-summary';
+						summary.textContent = summaryText.length > 120 ? summaryText.slice(0, 120) + '…' : summaryText;
+						card.append(summary);
+				}
+				if (descriptor.descriptionDetails || descriptor.description) {
 						const note = this.doc.createElement('p');
 						note.className = 'zw-modern-note';
-						note.textContent = descriptor.description;
+						note.textContent = descriptor.descriptionDetails || descriptor.description || '';
 						note.hidden = true;
 						card.append(note);
 				}
+				const reason = this.doc.createElement('p');
+				reason.className = 'zw-modern-disabled-reason';
+				reason.dataset.zwDisabledReason = '';
+				reason.id = 'zw-setting-reason-' + descriptor.id;
+				reason.textContent = this.model.disabledReason(descriptor.id);
+				reason.hidden = !reason.textContent;
+				card.append(reason);
+				card.querySelectorAll('[data-setting-name],[data-zw-choice]').forEach(control => control.setAttribute('aria-describedby', reason.id));
+				if (descriptor.addCurrentSite) {
+						const button = this._button('現在のサイトを追加', 'data-zw-add-current-site', descriptor.id, 'zw-modern-plainbtn');
+						button.disabled = !this.model.isEnabled(descriptor.id) || !this._currentSite(descriptor);
+						button.title = this._currentSite(descriptor) ? '現在のサイトのホスト名を下書きに追加します。' : '現在のサイトを確認できません。HTTPSページで利用できます。';
+						controls.append(button);
+				}
 				return card;
+		}
+		_currentSite(descriptor) {
+				if (descriptor.currentSite !== undefined) {
+						return descriptor.currentSite;
+				}
+				try {
+						const url = new URL(this.doc.URL);
+						return url.protocol === 'https:' ? url.hostname : '';
+				}
+				catch (_) {
+						return '';
+				}
 		}
 		_renderDataPanel() {
 				this.root.querySelector('[data-zw-title]').textContent = 'データ管理';
@@ -72826,7 +72930,18 @@ class ModernAdvancedSettingsUI {
 						shared: 'コメント・補助表示（元の設定画面と共通）'
 				};
 				let lastScope = null;
-				for (const d of visibleEntries.filter(item => !item.hidden && item.type !== 'related-visibility')) {
+				const ordered = [], groupedIds = new Set();
+				const visit = (entry) => {
+						if (groupedIds.has(entry.id)) {
+								return;
+						}
+						groupedIds.add(entry.id);
+						ordered.push(entry);
+						visibleEntries.filter(child => child.dependsOn === entry.id).forEach(visit);
+				};
+				visibleEntries.filter(entry => !visibleEntries.some(parent => parent.id === entry.dependsOn)).forEach(visit);
+				visibleEntries.forEach(visit);
+				for (const d of ordered.filter(item => !item.hidden && item.type !== 'related-visibility')) {
 						if (sceneSection && ['sceneSearch.layout.normal', 'sceneSearch.layout.fullscreen', 'sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen'].includes(d.id)) {
 								continue; // One canonical draft; the visual gallery replaces redundant select cards.
 						}
@@ -72963,9 +73078,20 @@ class ModernAdvancedSettingsUI {
 								(seek && this.model.isDifferentFromDefault(seek.id))));
 						const active = this.model.isEnabled(id);
 						card.classList.toggle('is-disabled', !active);
-						const input = card.querySelector('[data-setting-name]');
-						if (input) {
+						const reason = card.querySelector('[data-zw-disabled-reason]');
+						if (reason) {
+								reason.textContent = this.model.disabledReason(id);
+								reason.hidden = !reason.textContent;
+						}
+						card.querySelectorAll('[data-setting-name]').forEach(input => {
 								input.disabled = !active;
+								if (input instanceof this.doc.defaultView.HTMLInputElement && input.type === 'radio') {
+										input.checked = input.value === String(this.model.get(id));
+								}
+						});
+						const addSite = card.querySelector('[data-zw-add-current-site]');
+						if (addSite) {
+								addSite.disabled = !active || !this._currentSite(d);
 						}
 						if (id === 'commandFilter') {
 								const current = new Set(String(this.model.get(id) ?? '')
@@ -72975,7 +73101,8 @@ class ModernAdvancedSettingsUI {
 								});
 						}
 						card.querySelectorAll('[data-zw-choice]').forEach(button => {
-								button.disabled = !active;
+								button.disabled = !active || !d.options?.some(choice => String(choice.value) === button.dataset.zwValue);
+								button.classList.toggle('is-selected', String(this.model.get(id)) === button.dataset.zwValue);
 						});
 						if (d.type === 'regex-flags') {
 								const flags = String(this.model.get(id) || '');
@@ -73143,6 +73270,9 @@ class ModernAdvancedSettingsUI {
 						e.stopImmediatePropagation();
 				}
 				const key = el.dataset.settingName;
+				if (!this.model.isEnabled(key) || (el.type === 'radio' && !el.checked)) {
+						return true;
+				}
 				const value = el.type === 'checkbox' ? el.checked : el.value;
 				try {
 						this.model.set(key, key === 'userIdFilter' ?
@@ -73482,6 +73612,23 @@ class ModernAdvancedSettingsUI {
 						this.onClose();
 						return;
 				}
+				if (button.hasAttribute('data-zw-add-current-site')) {
+						const id = button.dataset.zwAddCurrentSite, descriptor = this.model.descriptor(id);
+						if (!descriptor || !this.model.isEnabled(id)) {
+								return;
+						}
+						const site = this._currentSite(descriptor), old = String(this.model.get(id) ?? '');
+						if (!site || old.split(/\r?\n/).some(line => line.trim().toLowerCase() === site.toLowerCase())) {
+								return;
+						}
+						this.model.set(id, old + (old && !/[\r\n]$/.test(old) ? '\n' : '') + site);
+						const field = button.closest('article')?.querySelector('[data-setting-name]');
+						if (field) {
+								field.value = String(this.model.get(id));
+						}
+						this._refreshCards();
+						return;
+				}
 				if (button.hasAttribute('data-zw-command-preset')) {
 						if (!this.model.isEnabled('commandFilter')) {
 								return;
@@ -73642,8 +73789,7 @@ class ModernAdvancedSettingsUI {
 				}
 				if (button.hasAttribute('data-zw-choice')) {
 						this.model.set(button.dataset.zwChoice, button.dataset.zwValue);
-						this._renderCards();
-						this._refreshFooter();
+						this._refreshCards();
 				}
 		}
 		openDrawer() { this.root.classList.add('is-drawer-open'); }

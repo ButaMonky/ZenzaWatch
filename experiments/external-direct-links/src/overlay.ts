@@ -1,9 +1,10 @@
+import type {CheckVideo} from './preflight';
 import {ExternalSettings,siteEnabled} from './settings';
 import {linkTargets,textTargets} from './targets';
 type BrowserWindow=Window & typeof globalThis;
 const excluded='input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"]';
-export function mountOverlay(w:BrowserWindow,s:ExternalSettings,open:(id:string,e:Event)=>Promise<unknown>):{dispose():void} {
- if(!siteEnabled(w.location.hostname,s))return {dispose(){}};
+export function mountOverlay(w:BrowserWindow,s:ExternalSettings,open:(id:string,e:Event)=>Promise<unknown>,check?:CheckVideo):{dispose():void} {
+ if(!siteEnabled(w.location.href,s))return {dispose(){}};
  const d=w.document,host=d.createElement('div');host.dataset.zenzaExternalOverlay='';
  host.style.cssText='all:initial!important;position:fixed!important;inset:auto!important;margin:0!important;padding:0!important;border:0!important;z-index:2147483647!important;display:none!important;';
  const shadow=host.attachShadow({mode:'closed'}),style=d.createElement('style');
@@ -11,9 +12,16 @@ export function mountOverlay(w:BrowserWindow,s:ExternalSettings,open:(id:string,
  style.textContent=`:host{color-scheme:dark}button{font:600 ${size}px/1.6 sans-serif;color:#e8f5f4;background:#243c47;border:1px solid #7acabc;border-radius:4px;padding:2px 7px;cursor:pointer}button:focus-visible{outline:2px solid #fff}p{font:13px/1.5 sans-serif;margin:0;padding:8px;color:#eee;background:#17212d;max-width:280px}`;
  const button=d.createElement('button');button.type='button';button.textContent='Zen';button.setAttribute('aria-label','この動画をZenzaWatchで開く');button.title='Alt+Enterでボタンへ移動';
  const status=d.createElement('p');status.setAttribute('role','status');status.hidden=true;shadow.append(style,button,status);d.documentElement.append(host);
+ let showSerial=0;
  let resolveTarget:(()=>string[])|null=null,busy=false,disposed=false,hideTimer:number|undefined;
- function hide(){if(busy)return;host.style.setProperty('display','none','important');resolveTarget=null;}
+ function hide(){if(busy)return;showSerial++;host.style.setProperty('display','none','important');resolveTarget=null;}
  function show(ids:()=>string[],rect:DOMRect){
+  w.clearTimeout(hideTimer);
+  const targetIds=ids();
+  if(check&&s.preflight==='display'&&targetIds.length===1){const serial=++showSerial;host.style.setProperty('display','none','important');resolveTarget=null;void check(targetIds[0]).then(result=>{if(disposed||serial!==showSerial||ids()[0]!==targetIds[0])return;if(result!=='unavailable')present(ids,rect);});return;}
+  present(ids,rect);
+ }
+ function present(ids:()=>string[],rect:DOMRect){
   if(busy||ids().length!==1){if(!busy)hide();return;}
   w.clearTimeout(hideTimer);resolveTarget=ids;status.hidden=true;host.style.setProperty('display','block','important');
   const width=host.getBoundingClientRect().width||60,height=host.getBoundingClientRect().height||30;
@@ -55,7 +63,7 @@ export function mountOverlay(w:BrowserWindow,s:ExternalSettings,open:(id:string,
   const ids=resolveTarget();if(ids.length!==1){hide();return;}
   e.preventDefault();e.stopPropagation();busy=true;button.disabled=true;status.hidden=false;status.textContent='起動しています…';
   try{await open(ids[0],e);busy=false;hide();}
-  catch{status.textContent='起動できませんでした。ニコニコのログイン状態と通信を確認してください。';}
+  catch(error){status.textContent=error instanceof Error&&error.message==='VIDEO_UNAVAILABLE'?'動画情報では削除・非公開などにより利用できない状態です。':'起動できませんでした。ニコニコのログイン状態と通信を確認してください。';}
   finally{busy=false;button.disabled=false;}
  });
  d.addEventListener('pointerover',target,true);d.addEventListener('focusin',target,true);d.addEventListener('selectionchange',selection);

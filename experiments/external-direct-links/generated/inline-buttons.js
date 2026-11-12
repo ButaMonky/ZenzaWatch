@@ -5,24 +5,35 @@ const settings_1 = require("./settings");
 const targets_1 = require("./targets");
 const excluded = 'input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"],svg';
 // Own only the inserted siblings. Never wrap, rewrite or replace source links.
-function mountInlineButtons(w, s, open) {
-    if (s.activation !== 'inline' || !(0, settings_1.siteEnabled)(w.location.hostname, s))
+function mountInlineButtons(w, s, open, check) {
+    if (s.activation !== 'inline' || !(0, settings_1.siteEnabled)(w.location.href, s))
         return { dispose() { } };
     const d = w.document, owned = new Map(), pending = new Set();
+    const observed = new Map();
+    const visible = typeof w.IntersectionObserver === 'function' ? new w.IntersectionObserver(entries => { for (const entry of entries)
+        if (entry.isIntersecting) {
+            visible.unobserve(entry.target);
+            const job = observed.get(entry.target);
+            observed.delete(entry.target);
+            job?.();
+        } }) : null;
     let disposed = false, timer, busy = false;
     const ids = (a) => a.isConnected && !a.closest(excluded) ? (0, targets_1.linkTargets)(a.getAttribute('href') || '', d.baseURI, s) : [];
     function update(a) {
         const old = owned.get(a);
         if (ids(a).length !== 1) {
             old?.remove();
+            visible?.unobserve(a);
+            observed.delete(a);
             owned.delete(a);
             return;
         }
-        if (old?.isConnected && old.previousSibling === a)
+        if (old?.isConnected && old.previousSibling === a && old.dataset.videoId === ids(a)[0])
             return;
         old?.remove();
         const host = d.createElement('span');
         host.dataset.zenzaExternalInline = '';
+        host.dataset.videoId = ids(a)[0];
         host.style.cssText = 'display:inline-block!important;margin:0 4px!important;vertical-align:middle!important;position:relative!important;';
         const root = host.attachShadow({ mode: 'closed' }), style = d.createElement('style'), button = d.createElement('button');
         const size = { small: 12, normal: 14, large: 17 }[s.size] || 12;
@@ -53,8 +64,8 @@ function mountInlineButtons(w, s, open) {
                 await open(current[0], e);
                 status.hidden = true;
             }
-            catch {
-                status.textContent = '起動できませんでした。ログイン状態と通信を確認してください。';
+            catch (error) {
+                status.textContent = error instanceof Error && error.message === 'VIDEO_UNAVAILABLE' ? '動画情報では削除・非公開などにより利用できない状態です。' : '起動できませんでした。ログイン状態と通信を確認してください。';
             }
             finally {
                 busy = false;
@@ -64,6 +75,19 @@ function mountInlineButtons(w, s, open) {
         root.append(style, button, status);
         a.after(host);
         owned.set(a, host);
+        if (check && s.preflight === 'display') {
+            host.style.setProperty('display', 'none', 'important');
+            const id = host.dataset.videoId;
+            const run = () => { void check(id).then(result => { if (disposed || owned.get(a) !== host || ids(a)[0] !== id)
+                return; if (result !== 'unavailable')
+                host.style.setProperty('display', 'inline-block', 'important'); }); };
+            if (visible) {
+                observed.set(a, run);
+                visible.observe(a);
+            }
+            else
+                run();
+        }
     }
     function flush() { timer = undefined; if (disposed)
         return; let count = 0; for (const a of pending) {
@@ -97,6 +121,8 @@ function mountInlineButtons(w, s, open) {
             for (const [a, host] of owned)
                 if (!a.isConnected) {
                     host.remove();
+                    visible?.unobserve(a);
+                    observed.delete(a);
                     owned.delete(a);
                 }
         if (pending.size && timer === undefined)
@@ -105,6 +131,6 @@ function mountInlineButtons(w, s, open) {
     enqueue(d.documentElement);
     flush();
     observer.observe(d.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
-    return { dispose() { disposed = true; observer.disconnect(); w.clearTimeout(timer); pending.clear(); for (const host of owned.values())
+    return { dispose() { disposed = true; observer.disconnect(); visible?.disconnect(); observed.clear(); w.clearTimeout(timer); pending.clear(); for (const host of owned.values())
             host.remove(); owned.clear(); } };
 }

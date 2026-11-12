@@ -21,7 +21,9 @@ test('site policies use domain boundaries, exclusion wins, invalid allow lists f
  const s=readExternal({'externalLinks.siteMode':'allow','externalLinks.sites':'example.org','externalLinks.excludedSites':'bad.example.org'});
  assert(siteEnabled('sub.example.org',s));assert(!siteEnabled('bad.example.org',s));assert(!siteEnabled('notexample.org',s));
  assert(!siteEnabled('example.org',readExternal({'externalLinks.enabled':false})));
- assert(!siteEnabled('example.org',readExternal({'externalLinks.siteMode':'allow','externalLinks.sites':'https://example.org/'})));
+ assert(siteEnabled('https://example.org/',readExternal({'externalLinks.siteMode':'allow','externalLinks.sites':'https://example.org/'})));
+ assert(!siteEnabled('https://example.org/private/x',readExternal({'externalLinks.siteMode':'allow','externalLinks.sites':'*://*.example.org/*','externalLinks.excludedSites':'https://example.org/private/*'})));
+ assert(!siteEnabled('https://example.org/',readExternal({'externalLinks.siteMode':'allow','externalLinks.sites':'/invalid/'})));
  assert.equal(sanitizeExternal({'externalLinks.size':'bad'})['externalLinks.size'],'small');
 });
 function fixture(){return new JSDOM('<main><a href="https://www.nicovideo.jp/watch/sm9">movie</a><p>ss123</p><code>sm4</code><textarea>sm5</textarea></main>',{url:base,pretendToBeVisual:true}).window;}
@@ -101,4 +103,26 @@ test('inline buttons follow added, changed and removed links without rewriting t
  a.remove();await tick();assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,0);
  api.dispose();second.href='https://www.nicovideo.jp/watch/sm9';await tick();assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,0);assert.equal(requests,0);
  const hover=mountInlineButtons(w,readExternal({'externalLinks.displayMode':'hover'}),async()=>{});assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,0);hover.dispose();w.close();
+});
+
+test('display preflight waits for visibility and suppresses only confirmed unavailable links',async()=>{
+ const {mountInlineButtons}=require('./generated/inline-buttons.js');const w=fixture(),d=w.document;let callback,checks=0,resolve;
+ w.IntersectionObserver=class {constructor(fn){callback=fn;}observe(){}unobserve(){}disconnect(){}};
+ const api=mountInlineButtons(w,readExternal({'externalLinks.preflight':'display'}),async()=>{},()=>{checks++;return new Promise(r=>resolve=r);});
+ const a=d.querySelector('a'),host=d.querySelector('[data-zenza-external-inline]');assert.equal(checks,0);assert.equal(host.style.display,'none');
+ callback([{target:a,isIntersecting:true}]);assert.equal(checks,1);resolve('unknown');await Promise.resolve();assert.equal(host.style.display,'inline-block');api.dispose();
+ const hidden=mountInlineButtons(w,readExternal({'externalLinks.preflight':'display'}),async()=>{},async()=>'unavailable');callback([{target:a,isIntersecting:true}]);await Promise.resolve();assert.equal(d.querySelector('[data-zenza-external-inline]').style.display,'none');hidden.dispose();w.close();
+});
+test('hover preflight ignores stale results after target disappears',async()=>{
+ const w=fixture(),d=w.document;let resolve;
+ const api=mountOverlay(w,readExternal({'externalLinks.displayMode':'hover','externalLinks.preflight':'display'}),async()=>{},()=>new Promise(r=>resolve=r));
+ d.querySelector('a').dispatchEvent(new w.Event('pointerover',{bubbles:true}));d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));resolve('available');await Promise.resolve();assert.equal(d.querySelector('[data-zenza-external-overlay]').style.display,'none');api.dispose();w.close();
+});
+
+test('hover preflight cancels the previous gap-hide timer while checking',async()=>{
+ const w=fixture(),d=w.document;
+ const api=mountOverlay(w,readExternal({'externalLinks.displayMode':'hover','externalLinks.preflight':'display'}),async()=>{},()=>new Promise(r=>w.setTimeout(()=>r('available'),300)));
+ d.querySelector('p').dispatchEvent(new w.Event('pointerover',{bubbles:true}));
+ d.querySelector('a').dispatchEvent(new w.Event('pointerover',{bubbles:true}));
+ await new Promise(r=>w.setTimeout(r,350));assert.equal(d.querySelector('[data-zenza-external-overlay]').style.display,'block');api.dispose();w.close();
 });

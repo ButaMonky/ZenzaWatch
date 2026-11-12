@@ -8,7 +8,7 @@ function openExternalSettings(d, values, save) {
     host.dataset.zenzaExternalSettings = '';
     host.style.cssText = 'all:initial!important;position:fixed!important;inset:24px!important;z-index:2147483647!important;display:block!important;';
     const shadow = host.attachShadow({ mode: 'closed' }), style = d.createElement('style');
-    style.textContent = 'section{font:14px/1.5 sans-serif;color:#eee;background:#17212d;border:1px solid #6c8296;border-radius:10px;padding:20px;max-width:620px;max-height:80vh;overflow:auto;margin:auto;color-scheme:dark}label{display:block;margin:12px 0}input:not([type=checkbox]),select{display:block;width:100%;box-sizing:border-box;padding:6px}small{display:block;color:#bbc6d0}button{padding:7px 14px;margin:8px;background:#243c47;color:#eee;border:1px solid #7acabc;border-radius:4px}';
+    style.textContent = 'section{font:14px/1.5 sans-serif;color:#eee;background:#17212d;border:1px solid #6c8296;border-radius:10px;padding:20px;max-width:620px;max-height:80vh;overflow:auto;margin:auto;color-scheme:dark}label{display:block;margin:12px 0}input:not([type=checkbox]),select,textarea{display:block;width:100%;box-sizing:border-box;padding:6px}small{display:block;color:#bbc6d0}button{padding:7px 14px;margin:8px;background:#243c47;color:#eee;border:1px solid #7acabc;border-radius:4px}';
     const section = d.createElement('section');
     section.setAttribute('role', 'dialog');
     section.setAttribute('aria-modal', 'true');
@@ -24,7 +24,7 @@ function openExternalSettings(d, values, save) {
     for (const descriptor of settings_1.externalDescriptors) {
         const label = d.createElement('label');
         label.append(descriptor.label);
-        const input = descriptor.options ? d.createElement('select') : d.createElement('input');
+        const input = descriptor.options ? d.createElement('select') : descriptor.type === 'textarea' ? d.createElement('textarea') : d.createElement('input');
         if (input.tagName === 'SELECT')
             for (const option of descriptor.options || []) {
                 const el = d.createElement('option');
@@ -32,12 +32,14 @@ function openExternalSettings(d, values, save) {
                 el.textContent = option.label;
                 input.append(el);
             }
-        else
+        else if (input.tagName === 'INPUT')
             input.type = typeof settings_1.externalDefaults[descriptor.id] === 'boolean' ? 'checkbox' : 'text';
         if (input.type === 'checkbox')
             input.checked = current[descriptor.id] === true;
         else
             input.value = String(current[descriptor.id]);
+        if (input.tagName === 'TEXTAREA')
+            input.rows = 4;
         input.dataset.key = descriptor.id;
         inputs.set(descriptor.id, input);
         label.append(input);

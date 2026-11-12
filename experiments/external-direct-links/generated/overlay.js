@@ -4,8 +4,8 @@ exports.mountOverlay = mountOverlay;
 const settings_1 = require("./settings");
 const targets_1 = require("./targets");
 const excluded = 'input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"]';
-function mountOverlay(w, s, open) {
-    if (!(0, settings_1.siteEnabled)(w.location.hostname, s))
+function mountOverlay(w, s, open, check) {
+    if (!(0, settings_1.siteEnabled)(w.location.href, s))
         return { dispose() { } };
     const d = w.document, host = d.createElement('div');
     host.dataset.zenzaExternalOverlay = '';
@@ -23,10 +23,25 @@ function mountOverlay(w, s, open) {
     status.hidden = true;
     shadow.append(style, button, status);
     d.documentElement.append(host);
+    let showSerial = 0;
     let resolveTarget = null, busy = false, disposed = false, hideTimer;
     function hide() { if (busy)
-        return; host.style.setProperty('display', 'none', 'important'); resolveTarget = null; }
+        return; showSerial++; host.style.setProperty('display', 'none', 'important'); resolveTarget = null; }
     function show(ids, rect) {
+        w.clearTimeout(hideTimer);
+        const targetIds = ids();
+        if (check && s.preflight === 'display' && targetIds.length === 1) {
+            const serial = ++showSerial;
+            host.style.setProperty('display', 'none', 'important');
+            resolveTarget = null;
+            void check(targetIds[0]).then(result => { if (disposed || serial !== showSerial || ids()[0] !== targetIds[0])
+                return; if (result !== 'unavailable')
+                present(ids, rect); });
+            return;
+        }
+        present(ids, rect);
+    }
+    function present(ids, rect) {
         if (busy || ids().length !== 1) {
             if (!busy)
                 hide();
@@ -126,8 +141,8 @@ function mountOverlay(w, s, open) {
             busy = false;
             hide();
         }
-        catch {
-            status.textContent = '起動できませんでした。ニコニコのログイン状態と通信を確認してください。';
+        catch (error) {
+            status.textContent = error instanceof Error && error.message === 'VIDEO_UNAVAILABLE' ? '動画情報では削除・非公開などにより利用できない状態です。' : '起動できませんでした。ニコニコのログイン状態と通信を確認してください。';
         }
         finally {
             busy = false;

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.19.0-external-direct19
+// @version      0.20.0-external-direct20
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -120,19 +120,87 @@ function frameTopologyChanged(records){
 }
 
 
- const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode","externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes"]);
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode","externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight"]);
  if (official && !loader && !playerFrame) {
    displaySettings.publish();
    window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
    return;
  }
  if (!loader && !playerFrame && window !== window.top) return;
- const externalModules=(()=>{const factories={"./settings":(exports,require)=>{"use strict";
+ const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.siteRules = siteRules;
+exports.matchesSiteRule = matchesSiteRule;
+// URL rules share @match-style boundaries; no requests and no arbitrary regex execution.
+function siteRules(value) {
+    if (typeof value !== 'string')
+        return [];
+    return value.split(/\r?\n/).flatMap(line => {
+        const clean = line.trim().replace(/^\/\/\s*(?=@)/, '').replace(/^@(match|include|exclude)\s+/, '');
+        if (!clean || clean.startsWith('//') || clean.startsWith('#'))
+            return [];
+        return clean.includes('://') || clean === '*' ? [clean] : clean.split(/[\s,]+/).filter(Boolean);
+    });
+}
+function glob(pattern, value) {
+    // Linear-space wildcard matcher; '*' is the only metacharacter.
+    const parts = pattern.split('*');
+    if (parts.length === 1)
+        return value === pattern;
+    if (!value.startsWith(parts[0]))
+        return false;
+    let pos = parts[0].length;
+    for (const part of parts.slice(1, -1)) {
+        const at = value.indexOf(part, pos);
+        if (at < 0)
+            return false;
+        pos = at + part.length;
+    }
+    const tail = parts[parts.length - 1];
+    return value.length - pos >= tail.length && value.endsWith(tail);
+}
+function matchesSiteRule(rule, address) {
+    let url;
+    try {
+        url = new URL(address.includes('://') ? address : 'https://' + address + '/');
+    }
+    catch {
+        return false;
+    }
+    if (!['https:', 'http:'].includes(url.protocol))
+        return false;
+    if (rule === '*')
+        return true;
+    if (!rule.includes('://')) {
+        const domain = rule.toLowerCase().replace(/^\*\./, '');
+        if (rule.includes('*') && !rule.startsWith('*.'))
+            return glob(rule, url.href.split('#')[0]);
+        if (!/^[a-z0-9-]+(?:\.[a-z0-9-]+)*$/.test(domain))
+            return false;
+        return url.hostname === domain || url.hostname.endsWith('.' + domain);
+    }
+    const match = /^(https?|http\*|\*):\/\/([^/]+)(\/[^#]*)?$/.exec(rule);
+    if (!match)
+        return false;
+    const [, scheme, authority] = match, path = match[3] || (authority.includes('*') ? '/*' : '/');
+    if (scheme !== '*' && scheme !== 'http*' && url.protocol !== scheme + ':')
+        return false;
+    const hostPort = /^([^:@]+)(?::(\d+|\*))?$/.exec(authority);
+    if (!hostPort)
+        return false;
+    const host = hostPort[1].toLowerCase(), port = hostPort[2];
+    if (port && port !== '*' && (url.port || (url.protocol === 'https:' ? '443' : '80')) !== port)
+        return false;
+    const matchesHost = host === '*' || (host.startsWith('*.') ? (url.hostname === host.slice(2) || url.hostname.endsWith('.' + host.slice(2))) : glob(host, url.hostname));
+    return matchesHost && glob(path, url.pathname + url.search);
+}
+},"./settings":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.externalDescriptors = exports.externalDefaults = void 0;
 exports.sanitizeExternal = sanitizeExternal;
 exports.readExternal = readExternal;
 exports.siteEnabled = siteEnabled;
+const site_rules_1 = require("./site-rules");
 exports.externalDefaults = {
     'externalLinks.enabled': true,
     'externalLinks.siteMode': 'all',
@@ -142,22 +210,23 @@ exports.externalDefaults = {
     'externalLinks.size': 'small',
     'externalLinks.redirects': false,
     'externalLinks.textIds': false,
-    'externalLinks.prefixes': 'sm nm so ss'
+    'externalLinks.prefixes': 'sm\nnm\nso\nss',
+    'externalLinks.preflight': 'off'
 };
 const choice = (items) => items.map(([value, label]) => ({ value, label }));
 exports.externalDescriptors = [
     { id: 'externalLinks.enabled', label: '外部サイトでZenボタンを使う', type: 'boolean' },
     { id: 'externalLinks.siteMode', label: '対象サイト', type: 'select', options: choice([['all', 'すべてのサイト'], ['allow', '指定したサイトのみ']]) },
-    { id: 'externalLinks.sites', label: '対象のドメイン', type: 'text', description: '例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。' },
-    { id: 'externalLinks.excludedSites', label: '除外するドメイン', type: 'text', description: '除外を優先します。URLではなくドメインを入力してください。' },
+    { id: 'externalLinks.sites', label: '対象サイトのURLパターン', type: 'textarea', description: '「指定したサイトのみ」のときに使用。1行に1件。例：*://*.nicochart.jp/* は本体とサブドメインの全ページ、https://nicolog.jp/watch/* はwatch配下だけ。* は任意の文字列です。Tampermonkeyの @match / @include のワイルドカード形式、// @match 付きの行も貼り付け可能。裸のドメイン指定も従来どおり使えます。正規表現・file:・<all_urls> は非対応。検証版の動作対象はHTTPSページです。URLの#以降は判定しません。変更後はページを再読み込みしてください。' },
+    { id: 'externalLinks.excludedSites', label: '除外サイトのURLパターン', type: 'textarea', description: '対象サイトと同じ書き方で1行に1件。例：https://example.com/private/* を指定すると、そのページ配下だけZenボタンを表示しません。対象・除外の両方に一致する場合は除外が優先です。「すべてのサイト」を選んだ場合も適用します。空欄なら除外なし。// @exclude 付きの行も使用できます。' },
     { id: 'externalLinks.displayMode', label: 'Zenボタンの表示方法', type: 'select', description: '「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。', options: choice([['inline', '常に表示（リンクの横に配置）'], ['hover', 'マウスを置いたときに表示'], ['selection', '文字を選択したときに表示']]) },
     { id: 'externalLinks.size', label: 'ボタンの大きさ', type: 'select', options: choice([['small', '小'], ['normal', '標準'], ['large', '大']]) },
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
-    { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'text', description: '例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。' }
+    { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'textarea', description: '1行に1種類。初期値はsm・nm・so・ssです。数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。' },
+    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) }
 ].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : 'externalLinks.enabled' }));
 const tokens = (v) => typeof v === 'string' ? v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean) : [];
-const domains = (v) => tokens(v).filter(x => /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]+$/.test(x));
 function sanitizeExternal(values) {
     const source = values && typeof values === 'object' ? values : {};
     const out = { ...exports.externalDefaults };
@@ -166,17 +235,17 @@ function sanitizeExternal(values) {
         if (typeof value === typeof out[key])
             out[key] = typeof value === 'string' ? value.slice(0, 4096) : value;
     }
-    for (const [key, valid] of [['externalLinks.siteMode', ['all', 'allow']], ['externalLinks.displayMode', ['inline', 'hover', 'selection']], ['externalLinks.size', ['small', 'normal', 'large']]])
+    for (const [key, valid] of [['externalLinks.preflight', ['off', 'click', 'display']], ['externalLinks.siteMode', ['all', 'allow']], ['externalLinks.displayMode', ['inline', 'hover', 'selection']], ['externalLinks.size', ['small', 'normal', 'large']]])
         if (!valid.includes(String(out[key])))
             out[key] = exports.externalDefaults[key];
     return out;
 }
 function readExternal(values) {
     const v = sanitizeExternal(values);
-    return { enabled: v['externalLinks.enabled'] === true, siteMode: String(v['externalLinks.siteMode']), sites: domains(v['externalLinks.sites']), excludedSites: domains(v['externalLinks.excludedSites']), activation: String(v['externalLinks.displayMode']), size: String(v['externalLinks.size']), redirects: v['externalLinks.redirects'] === true, textIds: v['externalLinks.textIds'] === true, prefixes: [...new Set(tokens(v['externalLinks.prefixes']).filter(x => /^[a-z]{2,8}$/.test(x)))] };
+    return { enabled: v['externalLinks.enabled'] === true, siteMode: String(v['externalLinks.siteMode']), sites: (0, site_rules_1.siteRules)(v['externalLinks.sites']), excludedSites: (0, site_rules_1.siteRules)(v['externalLinks.excludedSites']), preflight: String(v['externalLinks.preflight']), activation: String(v['externalLinks.displayMode']), size: String(v['externalLinks.size']), redirects: v['externalLinks.redirects'] === true, textIds: v['externalLinks.textIds'] === true, prefixes: [...new Set(tokens(v['externalLinks.prefixes']).filter(x => /^[a-z]{2,8}$/.test(x)))] };
 }
 function siteEnabled(host, s) {
-    const matches = (domain) => host === domain || host.endsWith('.' + domain);
+    const matches = (rule) => (0, site_rules_1.matchesSiteRule)(rule, host);
     return s.enabled && !s.excludedSites.some(matches) && (s.siteMode === 'all' || s.sites.some(matches));
 }
 },"./targets":(exports,require)=>{"use strict";
@@ -243,14 +312,94 @@ function textTargets(text, s) {
             ids.add(m[1]);
     return [...ids];
 }
+},"./preflight":(exports,require)=>{"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.classifyWatchPage = classifyWatchPage;
+exports.createPreflight = createPreflight;
+const targets_1 = require("./targets");
+// Keep only status + expiry. Never retain watch responses, auth keys or account data.
+function classifyWatchPage(html, status, Parser) {
+    if (status >= 500 || html.length > 5000000)
+        return 'unknown';
+    try {
+        const meta = html.match(/<meta\b[^>]*\bname\s*=\s*(["'])server-response\1[^>]*>/i)?.[0];
+        if (!meta)
+            return 'unknown';
+        const raw = new Parser().parseFromString(meta, 'text/html').querySelector('meta[name="server-response"]')?.getAttribute('content');
+        if (!raw)
+            return 'unknown';
+        const response = JSON.parse(raw)?.data?.response, data = response?.$watchV4?.data || response;
+        const code = response?.errorCode || data?.errorCode;
+        if (code === 'NOT_FOUND' || code === 'FORBIDDEN')
+            return 'unavailable';
+        if (code || !data?.video || !data?.client)
+            return 'unknown';
+        const media = data.media;
+        if (response?.$watchV4 ? media?.accessRightKey && Array.isArray(media?.contents?.videos) && media.contents.videos.length : media?.domand?.accessRightKey)
+            return 'available';
+    }
+    catch { }
+    return 'unknown';
+}
+function createPreflight(fetcher, Parser, now = Date.now) {
+    const cache = new Map(), pending = new Map();
+    const queue = [], controllers = new Set();
+    let active = 0, disposed = false;
+    function pump() {
+        while (!disposed && active < 2 && queue.length) {
+            const task = queue.shift(), controller = new AbortController();
+            active++;
+            controllers.add(controller);
+            void (async () => {
+                let result = 'unknown';
+                try {
+                    const r = await fetcher('https://www.nicovideo.jp/watch/' + encodeURIComponent(task.id), { credentials: 'include', timeout: 8000, signal: controller.signal });
+                    result = classifyWatchPage(await r.text(), r.status, Parser);
+                }
+                catch { }
+                controllers.delete(controller);
+                active--;
+                pending.delete(task.id);
+                if (!disposed) {
+                    cache.delete(task.id);
+                    cache.set(task.id, { result, until: now() + (result === 'unknown' ? 15000 : 300000) });
+                    while (cache.size > 100)
+                        cache.delete(cache.keys().next().value);
+                }
+                task.resolve(disposed ? 'unknown' : result);
+                pump();
+            })();
+        }
+    }
+    return { check(id) {
+            if (disposed || !(0, targets_1.validVideoId)(id))
+                return Promise.resolve('unknown');
+            const hit = cache.get(id);
+            if (hit && hit.until > now())
+                return Promise.resolve(hit.result);
+            const running = pending.get(id);
+            if (running)
+                return running;
+            if (pending.size >= 100)
+                return Promise.resolve('unknown');
+            let resolve;
+            const promise = new Promise(r => resolve = r);
+            pending.set(id, promise);
+            queue.push({ id, resolve });
+            pump();
+            return promise;
+        }, dispose() { disposed = true; for (const c of controllers)
+            c.abort(); for (const task of queue)
+            task.resolve('unknown'); queue.length = 0; pending.clear(); cache.clear(); } };
+}
 },"./overlay":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mountOverlay = mountOverlay;
 const settings_1 = require("./settings");
 const targets_1 = require("./targets");
 const excluded = 'input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"]';
-function mountOverlay(w, s, open) {
-    if (!(0, settings_1.siteEnabled)(w.location.hostname, s))
+function mountOverlay(w, s, open, check) {
+    if (!(0, settings_1.siteEnabled)(w.location.href, s))
         return { dispose() { } };
     const d = w.document, host = d.createElement('div');
     host.dataset.zenzaExternalOverlay = '';
@@ -268,10 +417,25 @@ function mountOverlay(w, s, open) {
     status.hidden = true;
     shadow.append(style, button, status);
     d.documentElement.append(host);
+    let showSerial = 0;
     let resolveTarget = null, busy = false, disposed = false, hideTimer;
     function hide() { if (busy)
-        return; host.style.setProperty('display', 'none', 'important'); resolveTarget = null; }
+        return; showSerial++; host.style.setProperty('display', 'none', 'important'); resolveTarget = null; }
     function show(ids, rect) {
+        w.clearTimeout(hideTimer);
+        const targetIds = ids();
+        if (check && s.preflight === 'display' && targetIds.length === 1) {
+            const serial = ++showSerial;
+            host.style.setProperty('display', 'none', 'important');
+            resolveTarget = null;
+            void check(targetIds[0]).then(result => { if (disposed || serial !== showSerial || ids()[0] !== targetIds[0])
+                return; if (result !== 'unavailable')
+                present(ids, rect); });
+            return;
+        }
+        present(ids, rect);
+    }
+    function present(ids, rect) {
         if (busy || ids().length !== 1) {
             if (!busy)
                 hide();
@@ -371,8 +535,8 @@ function mountOverlay(w, s, open) {
             busy = false;
             hide();
         }
-        catch {
-            status.textContent = '起動できませんでした。ニコニコのログイン状態と通信を確認してください。';
+        catch (error) {
+            status.textContent = error instanceof Error && error.message === 'VIDEO_UNAVAILABLE' ? '動画情報では削除・非公開などにより利用できない状態です。' : '起動できませんでした。ニコニコのログイン状態と通信を確認してください。';
         }
         finally {
             busy = false;
@@ -394,24 +558,35 @@ const settings_1 = require("./settings");
 const targets_1 = require("./targets");
 const excluded = 'input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"],svg';
 // Own only the inserted siblings. Never wrap, rewrite or replace source links.
-function mountInlineButtons(w, s, open) {
-    if (s.activation !== 'inline' || !(0, settings_1.siteEnabled)(w.location.hostname, s))
+function mountInlineButtons(w, s, open, check) {
+    if (s.activation !== 'inline' || !(0, settings_1.siteEnabled)(w.location.href, s))
         return { dispose() { } };
     const d = w.document, owned = new Map(), pending = new Set();
+    const observed = new Map();
+    const visible = typeof w.IntersectionObserver === 'function' ? new w.IntersectionObserver(entries => { for (const entry of entries)
+        if (entry.isIntersecting) {
+            visible.unobserve(entry.target);
+            const job = observed.get(entry.target);
+            observed.delete(entry.target);
+            job?.();
+        } }) : null;
     let disposed = false, timer, busy = false;
     const ids = (a) => a.isConnected && !a.closest(excluded) ? (0, targets_1.linkTargets)(a.getAttribute('href') || '', d.baseURI, s) : [];
     function update(a) {
         const old = owned.get(a);
         if (ids(a).length !== 1) {
             old?.remove();
+            visible?.unobserve(a);
+            observed.delete(a);
             owned.delete(a);
             return;
         }
-        if (old?.isConnected && old.previousSibling === a)
+        if (old?.isConnected && old.previousSibling === a && old.dataset.videoId === ids(a)[0])
             return;
         old?.remove();
         const host = d.createElement('span');
         host.dataset.zenzaExternalInline = '';
+        host.dataset.videoId = ids(a)[0];
         host.style.cssText = 'display:inline-block!important;margin:0 4px!important;vertical-align:middle!important;position:relative!important;';
         const root = host.attachShadow({ mode: 'closed' }), style = d.createElement('style'), button = d.createElement('button');
         const size = { small: 12, normal: 14, large: 17 }[s.size] || 12;
@@ -442,8 +617,8 @@ function mountInlineButtons(w, s, open) {
                 await open(current[0], e);
                 status.hidden = true;
             }
-            catch {
-                status.textContent = '起動できませんでした。ログイン状態と通信を確認してください。';
+            catch (error) {
+                status.textContent = error instanceof Error && error.message === 'VIDEO_UNAVAILABLE' ? '動画情報では削除・非公開などにより利用できない状態です。' : '起動できませんでした。ログイン状態と通信を確認してください。';
             }
             finally {
                 busy = false;
@@ -453,6 +628,19 @@ function mountInlineButtons(w, s, open) {
         root.append(style, button, status);
         a.after(host);
         owned.set(a, host);
+        if (check && s.preflight === 'display') {
+            host.style.setProperty('display', 'none', 'important');
+            const id = host.dataset.videoId;
+            const run = () => { void check(id).then(result => { if (disposed || owned.get(a) !== host || ids(a)[0] !== id)
+                return; if (result !== 'unavailable')
+                host.style.setProperty('display', 'inline-block', 'important'); }); };
+            if (visible) {
+                observed.set(a, run);
+                visible.observe(a);
+            }
+            else
+                run();
+        }
     }
     function flush() { timer = undefined; if (disposed)
         return; let count = 0; for (const a of pending) {
@@ -486,6 +674,8 @@ function mountInlineButtons(w, s, open) {
             for (const [a, host] of owned)
                 if (!a.isConnected) {
                     host.remove();
+                    visible?.unobserve(a);
+                    observed.delete(a);
                     owned.delete(a);
                 }
         if (pending.size && timer === undefined)
@@ -494,7 +684,7 @@ function mountInlineButtons(w, s, open) {
     enqueue(d.documentElement);
     flush();
     observer.observe(d.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
-    return { dispose() { disposed = true; observer.disconnect(); w.clearTimeout(timer); pending.clear(); for (const host of owned.values())
+    return { dispose() { disposed = true; observer.disconnect(); visible?.disconnect(); observed.clear(); w.clearTimeout(timer); pending.clear(); for (const host of owned.values())
             host.remove(); owned.clear(); } };
 }
 },"./settings-panel":(exports,require)=>{"use strict";
@@ -507,7 +697,7 @@ function openExternalSettings(d, values, save) {
     host.dataset.zenzaExternalSettings = '';
     host.style.cssText = 'all:initial!important;position:fixed!important;inset:24px!important;z-index:2147483647!important;display:block!important;';
     const shadow = host.attachShadow({ mode: 'closed' }), style = d.createElement('style');
-    style.textContent = 'section{font:14px/1.5 sans-serif;color:#eee;background:#17212d;border:1px solid #6c8296;border-radius:10px;padding:20px;max-width:620px;max-height:80vh;overflow:auto;margin:auto;color-scheme:dark}label{display:block;margin:12px 0}input:not([type=checkbox]),select{display:block;width:100%;box-sizing:border-box;padding:6px}small{display:block;color:#bbc6d0}button{padding:7px 14px;margin:8px;background:#243c47;color:#eee;border:1px solid #7acabc;border-radius:4px}';
+    style.textContent = 'section{font:14px/1.5 sans-serif;color:#eee;background:#17212d;border:1px solid #6c8296;border-radius:10px;padding:20px;max-width:620px;max-height:80vh;overflow:auto;margin:auto;color-scheme:dark}label{display:block;margin:12px 0}input:not([type=checkbox]),select,textarea{display:block;width:100%;box-sizing:border-box;padding:6px}small{display:block;color:#bbc6d0}button{padding:7px 14px;margin:8px;background:#243c47;color:#eee;border:1px solid #7acabc;border-radius:4px}';
     const section = d.createElement('section');
     section.setAttribute('role', 'dialog');
     section.setAttribute('aria-modal', 'true');
@@ -523,7 +713,7 @@ function openExternalSettings(d, values, save) {
     for (const descriptor of settings_1.externalDescriptors) {
         const label = d.createElement('label');
         label.append(descriptor.label);
-        const input = descriptor.options ? d.createElement('select') : d.createElement('input');
+        const input = descriptor.options ? d.createElement('select') : descriptor.type === 'textarea' ? d.createElement('textarea') : d.createElement('input');
         if (input.tagName === 'SELECT')
             for (const option of descriptor.options || []) {
                 const el = d.createElement('option');
@@ -531,12 +721,14 @@ function openExternalSettings(d, values, save) {
                 el.textContent = option.label;
                 input.append(el);
             }
-        else
+        else if (input.tagName === 'INPUT')
             input.type = typeof settings_1.externalDefaults[descriptor.id] === 'boolean' ? 'checkbox' : 'text';
         if (input.type === 'checkbox')
             input.checked = current[descriptor.id] === true;
         else
             input.value = String(current[descriptor.id]);
+        if (input.tagName === 'TEXTAREA')
+            input.rows = 4;
         input.dataset.key = descriptor.id;
         inputs.set(descriptor.id, input);
         label.append(input);
@@ -567,7 +759,7 @@ function openExternalSettings(d, values, save) {
     d.documentElement.append(host);
     inputs.get('externalLinks.enabled').focus();
 }
-}},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),panel:require('./settings-panel')};})();
+}},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),preflight:require('./preflight'),panel:require('./settings-panel')};})();
  'use strict';
 
 function parseDirectLink(href, base) {
@@ -1301,10 +1493,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.19';
+    var VER = '2.7.388-external-direct.20';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.19 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.20 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5143,7 +5335,7 @@ class NgCompositeRules {
 	}
 }
 const Config = (() => {
-		const DEFAULT_CONFIG = {"externalLinks.enabled":true,"externalLinks.siteMode":"all","externalLinks.sites":"","externalLinks.excludedSites":"","externalLinks.displayMode":"inline","externalLinks.size":"small","externalLinks.redirects":false,"externalLinks.textIds":false,"externalLinks.prefixes":"sm nm so ss",
+		const DEFAULT_CONFIG = {"externalLinks.enabled":true,"externalLinks.siteMode":"all","externalLinks.sites":"","externalLinks.excludedSites":"","externalLinks.displayMode":"inline","externalLinks.size":"small","externalLinks.redirects":false,"externalLinks.textIds":false,"externalLinks.prefixes":"sm\nnm\nso\nss","externalLinks.preflight":"off",
 				debug: false,
 				volume: 0.3,
 				showComment: true,
@@ -71134,7 +71326,7 @@ class ModernAdvancedSettingsModel {
 				this._historyParams = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.filter(p => p && typeof p.key === 'string')
 						.map(p => [p.key, p]));
-				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象のドメイン","type":"text","description":"例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外するドメイン","type":"text","description":"除外を優先します。URLではなくドメインを入力してください。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.displayMode","label":"Zenボタンの表示方法","type":"select","description":"「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。","options":[{"value":"inline","label":"常に表示（リンクの横に配置）"},{"value":"hover","label":"マウスを置いたときに表示"},{"value":"selection","label":"文字を選択したときに表示"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"text","description":"例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}])
+				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象サイトのURLパターン","type":"textarea","description":"「指定したサイトのみ」のときに使用。1行に1件。例：*://*.nicochart.jp/* は本体とサブドメインの全ページ、https://nicolog.jp/watch/* はwatch配下だけ。* は任意の文字列です。Tampermonkeyの @match / @include のワイルドカード形式、// @match 付きの行も貼り付け可能。裸のドメイン指定も従来どおり使えます。正規表現・file:・<all_urls> は非対応。検証版の動作対象はHTTPSページです。URLの#以降は判定しません。変更後はページを再読み込みしてください。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外サイトのURLパターン","type":"textarea","description":"対象サイトと同じ書き方で1行に1件。例：https://example.com/private/* を指定すると、そのページ配下だけZenボタンを表示しません。対象・除外の両方に一致する場合は除外が優先です。「すべてのサイト」を選んだ場合も適用します。空欄なら除外なし。// @exclude 付きの行も使用できます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.displayMode","label":"Zenボタンの表示方法","type":"select","description":"「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。","options":[{"value":"inline","label":"常に表示（リンクの横に配置）"},{"value":"hover","label":"マウスを置いたときに表示"},{"value":"selection","label":"文字を選択したときに表示"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"textarea","description":"1行に1種類。初期値はsm・nm・so・ssです。数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.preflight","label":"再生情報の事前確認","type":"select","description":"確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。","options":[{"value":"off","label":"確認しない（追加通信なし）"},{"value":"click","label":"Zenを押したときに確認"},{"value":"display","label":"ボタンを表示する前に確認"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}])
 						.map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
 				this._historyOrder = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.map((entry, index) => [entry.key, index + 1]));
@@ -80651,7 +80843,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
    let launcherHandle;
-   const mount=()=>{launcherHandle?.dispose();const settings=externalModules.settings.readExternal(readExternalValues()),open=(id,event)=>playerHost.open(id,event),overlay=externalModules.overlay.mountOverlay(window,settings,open),inline=externalModules.inline.mountInlineButtons(window,settings,open);launcherHandle={dispose(){overlay.dispose();inline.dispose();}};};
+   const mount=()=>{launcherHandle?.dispose();const settings=externalModules.settings.readExternal(readExternalValues()),preflight=externalModules.preflight.createPreflight(externalTrial.gm.fetch,DOMParser);let active=true;const open=async(id,event)=>{if(!event?.isTrusted)throw Error('USER_CLICK_REQUIRED');if(settings.preflight!=='off'&&await preflight.check(id)==='unavailable')throw Error('VIDEO_UNAVAILABLE');if(!active)throw Error('CLOSED');return playerHost.open(id,event);},overlay=externalModules.overlay.mountOverlay(window,settings,open,preflight.check),inline=externalModules.inline.mountInlineButtons(window,settings,open,preflight.check);launcherHandle={dispose(){active=false;preflight.dispose();overlay.dispose();inline.dispose();}};};
    mount();
    const settingListener=typeof GM_addValueChangeListener==='function'?GM_addValueChangeListener(externalSlot,()=>mount()):null;
    if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('外部サイトからの再生設定',()=>externalModules.panel.openExternalSettings(document,readExternalValues(),values=>{writeExternal(values);mount();}));

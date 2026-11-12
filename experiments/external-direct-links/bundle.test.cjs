@@ -24,6 +24,8 @@ test('actual child frame receives userscript lexical dependencies before bootstr
    assert.ok(w.document.querySelector('.zw-modern-root').textContent.includes('外部サイトからの再生'));
    w.document.querySelector('[data-zw-sub="外部サイトからの再生|基本設定"]').click();
    assert.ok(w.document.querySelector('.zw-modern-root').textContent.includes('検出する動画IDの接頭辞'));
+   assert.equal(w.document.querySelector('textarea[data-setting-name="externalLinks.prefixes"]').value,'sm\nnm\nso\nss');
+   assert.ok(w.document.querySelector('textarea[data-setting-name="externalLinks.sites"]'));
    w.__configured.testConfig.setValue('externalLinks.textIds',true);
    for(let i=0;i<100&&!store.get('external-links-v1');i++)await new Promise(r=>w.setTimeout(r,10));
    assert.equal(store.get('external-links-v1')['externalLinks.textIds'],true);
@@ -128,8 +130,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.19.0-external-direct19'));
- assert.ok(code.includes("var VER = '2.7.388-external-direct.19'"));
+ assert.ok(header.includes('0.20.0-external-direct20'));
+ assert.ok(code.includes("var VER = '2.7.388-external-direct.20'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

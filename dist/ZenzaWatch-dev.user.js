@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.389-task1014
+// @version        2.7.390-task1015
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 06:41Z ac05368
+// build: 2026-11-12 11:58Z 2032ad9
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.389-task1014';
+    var VER = '2.7.390-task1015';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 06:41Z ac05368';
+    var BUILD = '2026-11-12 11:58Z 2032ad9';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -68245,7 +68245,18 @@ class HoverMenu {
 				else {
 						this._onHoverEnd = _.debounce(this._onHoverEnd.bind(this), 500);
 						$view.on(location.host.includes('google') ? 'mouseup' : 'click', this._onClick.bind(this));
-						ZenzaWatch.emitter.on('hideHover', () => $view.removeClass('show'));
+						if (location.host.includes('google')) {
+								$view.on('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+						}
+						ZenzaWatch.emitter.on('hideHover', () => this._hideButton());
+						document.addEventListener('scroll', () => this._hideButton(), true);
+						window.addEventListener('resize', () => this._hideButton());
+						document.addEventListener('click', () => this._hideButton());
+						document.addEventListener('keydown', (e) => {
+								if (e.key === 'Escape') {
+										this._hideButton();
+								}
+						});
 						uq('body')
 								.on('mouseover', this._onHover.bind(this))
 								.on('mouseover', this._onHoverEnd)
@@ -68327,12 +68338,18 @@ class HoverMenu {
 				return null;
 		}
 		_onHover(e) {
+				if (this._$view[0]?.contains(e.target)) {
+						return;
+				}
 				const target = this._closest(e.target);
 				if (target) {
 						this._hoverElement = target;
 				}
 		}
 		_onMouseout(e) {
+				if (this._hoverElement?.contains(e.relatedTarget)) {
+						return;
+				}
 				if (this._hoverElement === this._closest(e.target)) {
 						this._hoverElement = null;
 				}
@@ -68355,23 +68372,48 @@ class HoverMenu {
 				this._query = nicoUtil.parseWatchQuery(ref.url.search.slice(1));
 				this._watchId = ref.watchId;
 				const offset = target.getBoundingClientRect();
+				const view = this._$view[0];
+				if (view) {
+						if (view.parentElement !== target) {
+								if (view.matches(':popover-open')) {
+										view.hidePopover?.();
+								}
+								target.appendChild(view);
+						}
+						view.setAttribute('popover', 'manual');
+						Object.assign(view.style, { position: 'fixed', inset: 'auto', margin: '0',
+								padding: '0', border: '0', background: 'transparent', overflow: 'visible',
+								transform: 'translate(-50%, -50%)', textAlign: 'center', textIndent: '0' });
+						const inner = view.querySelector('.ZenButtonInner');
+						if (inner) {
+								Object.assign(inner.style, { textAlign: 'center', textIndent: '0' });
+						}
+				}
 				this._$view.css({
-						top: cssUtil.px(offset.top + window.pageYOffset),
-						left: cssUtil.px(offset.left + window.pageXOffset)
+						top: cssUtil.px(offset.top + (view ? 0 : window.pageYOffset)),
+						left: cssUtil.px(offset.left + (view ? 0 : window.pageXOffset))
 				}).addClass('show');
-				if (!this._hidePending) {
-						this._hidePending = true;
-						document.body.addEventListener('click', () => {
-								this._hidePending = false;
-								this._$view.removeClass('show');
-						}, { once: true });
+				if (view?.isConnected && !view.matches(':popover-open')) {
+						view.showPopover?.();
 				}
 		}
+		_hideButton() {
+				this._onHoverEnd.cancel?.();
+				const view = this._$view[0];
+				if (view?.matches(':popover-open')) {
+						view.hidePopover?.();
+				}
+				this._$view.removeClass('show');
+				this._hoverElement = null;
+		}
 		_onClick(e) {
+				e.preventDefault();
+				e.stopPropagation();
 				const watchId = this._watchId;
-				if (e.ctrlKey) {
+				if (e.ctrlKey || e.metaKey || e.altKey || (e.button != null && e.button !== 0)) {
 						return;
 				}
+				this._hideButton();
 				if (e.shiftKey) {
 						this._send(watchId);
 				}
@@ -68404,32 +68446,41 @@ class HoverMenu {
 				await this._getPlayer();
 				ZenzaWatch.external.send(watchId, Object.assign({ query: this._query }, params));
 		}
+		_resolveWatchClick(e) {
+				if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) {
+						return null;
+				}
+				const path = e.composedPath();
+				const target = path.find((node) => typeof node?.matches === 'function' &&
+						node.matches('a[href],a[data-href],[data-anchor-href],.UadVideoItem-link'));
+				if (!target || target.classList.contains('noHoverMenu') ||
+						path.some(node => node?.classList?.contains('zen-family')) ||
+						target.hasAttribute('download')) {
+						return null;
+				}
+				const action = path.find((node) => typeof node?.matches === 'function' &&
+						node.matches('button,input,select,textarea,label,[role="button"],[contenteditable]:not([contenteditable="false"])'));
+				const primaryWatchButton = action?.matches('.VideoIntroductionPlayerContainer-watchPageButton');
+				if (action && !primaryWatchButton && action !== target &&
+						(target.contains(action) || path.indexOf(action) < path.indexOf(target))) {
+						return null;
+				}
+				const ref = this._getWatchReference(target);
+				if (!ref || ref.url.searchParams.get('zenza_official') === '1') {
+						return null;
+				}
+				return { target, ...ref };
+		}
 		_overrideWatchLink() {
 				if (this._watchLinkClick) {
 						return;
 				}
 				const onClick = this._watchLinkClick = (e) => {
-						if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) {
+						const intent = this._resolveWatchClick(e);
+						if (!intent) {
 								return;
 						}
-						const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
-						const target = path.map((node) => this._closest(node)).find(Boolean);
-						if (!target || target.classList.contains('noHoverMenu') || target.closest('.zen-family') || target.hasAttribute('download')) {
-								return;
-						}
-						const action = path.find((node) => node?.matches?.('button,input,select,textarea,[role="button"],[contenteditable="true"]'));
-						const primaryWatchButton = action?.matches?.('.VideoIntroductionPlayerContainer-watchPageButton');
-						if (action && !primaryWatchButton && action !== target && (target.contains(action) || path.indexOf(action) < path.indexOf(target))) {
-								return;
-						}
-						const ref = this._getWatchReference(target);
-						if (!ref) {
-								return;
-						}
-						const { watchId, url } = ref;
-						if (url.searchParams.get('zenza_official') === '1') {
-								return;
-						}
+						const { target, watchId, url } = intent;
 						this._pagePreviewGuard?.claim(target);
 						e.preventDefault();
 						const propagate = this._playerConfig?.getValue?.('overrideWatchLink:allowPropagation') ??

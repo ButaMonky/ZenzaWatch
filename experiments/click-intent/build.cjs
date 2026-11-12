@@ -12,7 +12,8 @@ code=code.replace(marker,`templates = [{src:'_template.js',dist:${JSON.stringify
 process.argv=['node',filename,'--dev'];
 const compiled=new Module(filename,module);compiled.filename=filename;compiled.paths=Module._nodeModulePaths(root);compiled._compile(code,filename);
 if(process.exitCode)throw Error('Production build failed');
-let result=fs.readFileSync(output,'utf8').replaceAll('2.7.389-task1014','2.7.390-click1015.2');
+const baseVersion=fs.readFileSync('src/_template.js','utf8').match(/^\/\/ @version\s+(\S+)/m)[1];
+let result=fs.readFileSync(output,'utf8').replaceAll(baseVersion,'2.7.390-click1015.2');
 const url='https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/fix/click-intent1015/'+output;
 result=result.replace(/^\/\/ @(downloadURL|updateURL)\s+.*$/mg,(_,key)=>'// @'+key+'    '+url);
 fs.writeFileSync(output,result);

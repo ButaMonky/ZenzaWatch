@@ -26,7 +26,7 @@
 // @exclude     *://dic.nicovideo.jp/p/*
 // @exclude     *://ext.nicovideo.jp/thumb/*
 // @exclude     *://ext.nicovideo.jp/thumb_channel/*
-// @version     0.5.89-task1013
+// @version     0.5.90-task1015
 // @grant       none
 // @author      segabito macmoto
 // @license     public domain
@@ -36,7 +36,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/MylistPocket.user.js
 // ==/UserScript==
-// build: 2026-11-11 18:53Z 392faf4
+// build: 2026-11-12 11:58Z 2032ad9
 /* eslint-disable */
 
 const AntiPrototypeJs = function () {
@@ -108,6 +108,28 @@ const ThumbnailSourcePolicy = (() => {
 	};
 	return {select, isDirectOriginalOgp, isKnownCompositedOgp};
 })();
+const PocketHoverSurface = {
+		hide(view) {
+				if (view.matches(':popover-open')) {
+						view.hidePopover?.();
+				}
+		},
+		attach(view, target) {
+				if (view.parentElement !== target) {
+						this.hide(view);
+						target.appendChild(view);
+				}
+				view.setAttribute('popover', 'manual');
+				Object.assign(view.style, { position: 'fixed', inset: 'auto', margin: '0', border: '0',
+						padding: '0', background: 'transparent', overflow: 'visible', textAlign: 'center', textIndent: '0' });
+				view.querySelectorAll('.mylistPocketButton').forEach(button => {
+						Object.assign(button.style, { textAlign: 'center', textIndent: '0' });
+				});
+				if (view.isConnected && !view.matches(':popover-open')) {
+						view.showPopover?.();
+				}
+		}
+};
 const PocketThumbnail = (() => {
 		const CACHE_MS = 5 * 60 * 1000;
 		const NEGATIVE_MS = 60 * 1000;
@@ -5623,6 +5645,13 @@ const MylistApiLoader = (() => {
         this._view = document.querySelector('.mylistPocketHoverMenu');
 
         this._view.addEventListener(location.host.includes('google') ? 'mouseup' : 'click', this._onClick.bind(this));
+        // The menu now belongs to the link; cancel Google's follow-up click too.
+        if (location.host.includes('google')) {
+          this._view.addEventListener('click', this._onClick.bind(this));
+        }
+        document.addEventListener('scroll', () => this.hide(), true);
+        window.addEventListener('resize', () => this.hide());
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') { this.hide(); } });
         this._view.addEventListener('mousedown', this._onMousedown.bind(this));
         this._view.addEventListener('contextmenu', this._onContextMenu.bind(this));
 
@@ -5665,6 +5694,8 @@ const MylistApiLoader = (() => {
       removeClass(className) { this.toggleClass(className, false); }
 
       hide() {
+        this._hoverElement = null;
+        PocketHoverSurface.hide(this._view);
         this.removeClass('is-show');
       }
 
@@ -5691,8 +5722,8 @@ const MylistApiLoader = (() => {
 
       _onMousedown(e) {
         const watchId = this._watchId;
-        const target = e.target.classList.contains('command') ?
-          e.target : e.target.closest('.command');
+        const target = e.target?.closest?.('.command');
+        if (!target || !this._view.contains(target)) { return; }
         const command = target.getAttribute('data-command');
         e.preventDefault();
         e.stopPropagation();
@@ -5724,6 +5755,7 @@ const MylistApiLoader = (() => {
       }
 
       _onHover(e) {
+        if (this._view.contains(e.target)) { return; }
         const target = this._isTargetElement(e);
         if (!target) { return; }
 
@@ -5739,25 +5771,22 @@ const MylistApiLoader = (() => {
         if (!ref) { return; }
         const watchId = target.dataset.nicoVideoId || ref.watchId;
         const offset = target.getBoundingClientRect();
-        //const bodyOffset = document.body.getBoundingClientRect();
-        const scrollTop  = document.documentElement.scrollTop  || document.body.scrollTop  || 0;
-        const scrollLeft = document.documentElement.scrollLeft || document.body.scrollLeft || 0;
-        const left = offset.left + scrollLeft;
-        const top  = offset.top  + scrollTop;
-
         if (target.classList.contains('noHoverMenu')) { return; }
         if (!watchId || !watchId.match(/^[a-z0-9]+$/)) { return; }
         if (watchId.indexOf('lv') === 0) { return; }
 
         this._watchId = watchId;
         this.show();
+        PocketHoverSurface.attach(this._view, target);
+        const bounds = this._view.getBoundingClientRect();
         this.moveTo(
-          left + target.offsetWidth  - this._view.offsetWidth / 2,
-          top  + target.offsetHeight / 2 - this._view.offsetHeight / 2
+          offset.right - bounds.width / 2,
+          offset.top + offset.height / 2 - bounds.height / 2
         );
       }
 
       _onMouseout(e) {
+        if (this._hoverElement?.contains(e.relatedTarget)) { return; }
         const target = this._isTargetElement(e);
         if (!target) { return; }
 
@@ -7291,7 +7320,7 @@ const MylistApiLoader = (() => {
     };
 
     const init = async () => {
-      window.console.log('%cMylistPocket 0.5.89-task1013', 'background: #ccf;');
+      window.console.log('%cMylistPocket 0.5.90-task1015', 'background: #ccf;');
       await config.promise('restore');
       initDom();
       initZenzaBridge();

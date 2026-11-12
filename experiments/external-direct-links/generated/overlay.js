@@ -43,7 +43,7 @@ function mountOverlay(w, s, open) {
         host.style.setProperty('top', y + 'px', 'important');
     }
     function target(e) {
-        if (disposed || busy || e.composedPath().includes(host) || s.activation !== 'hover')
+        if (disposed || busy || e.composedPath().includes(host) || s.activation === 'selection')
             return;
         const node = e.target;
         if (!(node instanceof w.Element) || node.closest(excluded)) {
@@ -51,6 +51,8 @@ function mountOverlay(w, s, open) {
             return;
         }
         const anchor = node.closest('a[href]');
+        if (anchor && s.activation === 'inline')
+            return;
         if (anchor) {
             const ids = () => anchor.isConnected && !anchor.closest(excluded) ? (0, targets_1.linkTargets)(anchor.getAttribute('href') || '', d.baseURI, s) : [];
             if (ids().length) {

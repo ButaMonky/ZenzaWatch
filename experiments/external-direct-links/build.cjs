@@ -84,10 +84,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.18';");
+ body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.19';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.18 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.19 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -143,8 +143,8 @@ function transform(source) {
    'if (externalTrial.isEnabledOrigin(u.origin)) { return true; }\n                if (localStorage.ZenzaWatch_whiteHost) {');
  return body;
 }
-const externalModuleNames=['settings','targets','overlay','settings-panel'];
-const externalModules="const externalModules=(()=>{const factories={"+externalModuleNames.map(name=>JSON.stringify('./'+name)+':(exports,require)=>{'+fs.readFileSync(path.join(__dirname,'generated',name+'.js'),'utf8')+'}').join(',')+"},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),panel:require('./settings-panel')};})();";
+const externalModuleNames=['settings','targets','overlay','inline-buttons','settings-panel'];
+const externalModules="const externalModules=(()=>{const factories={"+externalModuleNames.map(name=>JSON.stringify('./'+name)+':(exports,require)=>{'+fs.readFileSync(path.join(__dirname,'generated',name+'.js'),'utf8')+'}').join(',')+"},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),panel:require('./settings-panel')};})();";
 const runtime=transform(base);
 const launcher=fs.readFileSync(path.join(__dirname,'launcher.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
 const transport=fs.readFileSync(path.join(__dirname,'private-port.cjs'),'utf8').replace(/^module\.exports=.*;$/m,'');
@@ -157,7 +157,7 @@ const panelObserver=fs.readFileSync(path.join(__dirname,'panel-observer.cjs'),'u
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.18.0-external-direct18
+// @version      0.19.0-external-direct19
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -229,7 +229,7 @@ ${runtime}
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
    let launcherHandle;
-   const mount=()=>{launcherHandle?.dispose();launcherHandle=externalModules.overlay.mountOverlay(window,externalModules.settings.readExternal(readExternalValues()),(id,event)=>playerHost.open(id,event));};
+   const mount=()=>{launcherHandle?.dispose();const settings=externalModules.settings.readExternal(readExternalValues()),open=(id,event)=>playerHost.open(id,event),overlay=externalModules.overlay.mountOverlay(window,settings,open),inline=externalModules.inline.mountInlineButtons(window,settings,open);launcherHandle={dispose(){overlay.dispose();inline.dispose();}};};
    mount();
    const settingListener=typeof GM_addValueChangeListener==='function'?GM_addValueChangeListener(externalSlot,()=>mount()):null;
    if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('外部サイトからの再生設定',()=>externalModules.panel.openExternalSettings(document,readExternalValues(),values=>{writeExternal(values);mount();}));

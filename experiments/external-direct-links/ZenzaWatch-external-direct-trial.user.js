@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.18.0-external-direct18
+// @version      0.19.0-external-direct19
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -120,7 +120,7 @@ function frameTopologyChanged(records){
 }
 
 
- const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode","externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.activation","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes"]);
+ const displaySettings=createDisplaySettings(window,{get:key=>GM_getValue(key),set:(key,value)=>GM_setValue(key,value)},["volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode","externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes"]);
  if (official && !loader && !playerFrame) {
    displaySettings.publish();
    window.addEventListener('pagehide',()=>displaySettings.publish(),{once:true});
@@ -138,7 +138,7 @@ exports.externalDefaults = {
     'externalLinks.siteMode': 'all',
     'externalLinks.sites': '',
     'externalLinks.excludedSites': '',
-    'externalLinks.activation': 'hover',
+    'externalLinks.displayMode': 'inline',
     'externalLinks.size': 'small',
     'externalLinks.redirects': false,
     'externalLinks.textIds': false,
@@ -150,7 +150,7 @@ exports.externalDescriptors = [
     { id: 'externalLinks.siteMode', label: '対象サイト', type: 'select', options: choice([['all', 'すべてのサイト'], ['allow', '指定したサイトのみ']]) },
     { id: 'externalLinks.sites', label: '対象のドメイン', type: 'text', description: '例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。' },
     { id: 'externalLinks.excludedSites', label: '除外するドメイン', type: 'text', description: '除外を優先します。URLではなくドメインを入力してください。' },
-    { id: 'externalLinks.activation', label: 'ボタンを表示するタイミング', type: 'select', options: choice([['hover', 'マウスを置いたとき・キーボードでフォーカスしたとき'], ['selection', '文字を選択したとき']]) },
+    { id: 'externalLinks.displayMode', label: 'Zenボタンの表示方法', type: 'select', description: '「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。', options: choice([['inline', '常に表示（リンクの横に配置）'], ['hover', 'マウスを置いたときに表示'], ['selection', '文字を選択したときに表示']]) },
     { id: 'externalLinks.size', label: 'ボタンの大きさ', type: 'select', options: choice([['small', '小'], ['normal', '標準'], ['large', '大']]) },
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
@@ -166,14 +166,14 @@ function sanitizeExternal(values) {
         if (typeof value === typeof out[key])
             out[key] = typeof value === 'string' ? value.slice(0, 4096) : value;
     }
-    for (const [key, valid] of [['externalLinks.siteMode', ['all', 'allow']], ['externalLinks.activation', ['hover', 'selection']], ['externalLinks.size', ['small', 'normal', 'large']]])
+    for (const [key, valid] of [['externalLinks.siteMode', ['all', 'allow']], ['externalLinks.displayMode', ['inline', 'hover', 'selection']], ['externalLinks.size', ['small', 'normal', 'large']]])
         if (!valid.includes(String(out[key])))
             out[key] = exports.externalDefaults[key];
     return out;
 }
 function readExternal(values) {
     const v = sanitizeExternal(values);
-    return { enabled: v['externalLinks.enabled'] === true, siteMode: String(v['externalLinks.siteMode']), sites: domains(v['externalLinks.sites']), excludedSites: domains(v['externalLinks.excludedSites']), activation: String(v['externalLinks.activation']), size: String(v['externalLinks.size']), redirects: v['externalLinks.redirects'] === true, textIds: v['externalLinks.textIds'] === true, prefixes: [...new Set(tokens(v['externalLinks.prefixes']).filter(x => /^[a-z]{2,8}$/.test(x)))] };
+    return { enabled: v['externalLinks.enabled'] === true, siteMode: String(v['externalLinks.siteMode']), sites: domains(v['externalLinks.sites']), excludedSites: domains(v['externalLinks.excludedSites']), activation: String(v['externalLinks.displayMode']), size: String(v['externalLinks.size']), redirects: v['externalLinks.redirects'] === true, textIds: v['externalLinks.textIds'] === true, prefixes: [...new Set(tokens(v['externalLinks.prefixes']).filter(x => /^[a-z]{2,8}$/.test(x)))] };
 }
 function siteEnabled(host, s) {
     const matches = (domain) => host === domain || host.endsWith('.' + domain);
@@ -288,7 +288,7 @@ function mountOverlay(w, s, open) {
         host.style.setProperty('top', y + 'px', 'important');
     }
     function target(e) {
-        if (disposed || busy || e.composedPath().includes(host) || s.activation !== 'hover')
+        if (disposed || busy || e.composedPath().includes(host) || s.activation === 'selection')
             return;
         const node = e.target;
         if (!(node instanceof w.Element) || node.closest(excluded)) {
@@ -296,6 +296,8 @@ function mountOverlay(w, s, open) {
             return;
         }
         const anchor = node.closest('a[href]');
+        if (anchor && s.activation === 'inline')
+            return;
         if (anchor) {
             const ids = () => anchor.isConnected && !anchor.closest(excluded) ? (0, targets_1.linkTargets)(anchor.getAttribute('href') || '', d.baseURI, s) : [];
             if (ids().length) {
@@ -385,6 +387,116 @@ function mountOverlay(w, s, open) {
     w.addEventListener('resize', hide);
     return { dispose() { disposed = true; w.clearTimeout(hideTimer); d.removeEventListener('pointerover', target, true); d.removeEventListener('focusin', target, true); d.removeEventListener('selectionchange', selection); d.removeEventListener('keydown', keys, true); w.removeEventListener('scroll', hide, true); w.removeEventListener('resize', hide); host.remove(); } };
 }
+},"./inline-buttons":(exports,require)=>{"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.mountInlineButtons = mountInlineButtons;
+const settings_1 = require("./settings");
+const targets_1 = require("./targets");
+const excluded = 'input,textarea,select,button,pre,code,[contenteditable]:not([contenteditable="false"]),[role="textbox"],svg';
+// Own only the inserted siblings. Never wrap, rewrite or replace source links.
+function mountInlineButtons(w, s, open) {
+    if (s.activation !== 'inline' || !(0, settings_1.siteEnabled)(w.location.hostname, s))
+        return { dispose() { } };
+    const d = w.document, owned = new Map(), pending = new Set();
+    let disposed = false, timer, busy = false;
+    const ids = (a) => a.isConnected && !a.closest(excluded) ? (0, targets_1.linkTargets)(a.getAttribute('href') || '', d.baseURI, s) : [];
+    function update(a) {
+        const old = owned.get(a);
+        if (ids(a).length !== 1) {
+            old?.remove();
+            owned.delete(a);
+            return;
+        }
+        if (old?.isConnected && old.previousSibling === a)
+            return;
+        old?.remove();
+        const host = d.createElement('span');
+        host.dataset.zenzaExternalInline = '';
+        host.style.cssText = 'display:inline-block!important;margin:0 4px!important;vertical-align:middle!important;position:relative!important;';
+        const root = host.attachShadow({ mode: 'closed' }), style = d.createElement('style'), button = d.createElement('button');
+        const size = { small: 12, normal: 14, large: 17 }[s.size] || 12;
+        style.textContent = `button{font:600 ${size}px/1.6 sans-serif;color:#e8f5f4;background:#243c47;border:1px solid #7acabc;border-radius:4px;padding:2px 7px;cursor:pointer}button:focus-visible{outline:2px solid #7acabc}span{font:12px/1.5 sans-serif;color:#fff;background:#17212d;padding:4px}`;
+        button.type = 'button';
+        button.textContent = 'Zen';
+        button.setAttribute('aria-label', 'この動画をZenzaWatchで開く');
+        const status = d.createElement('span');
+        status.hidden = true;
+        status.setAttribute('role', 'status');
+        // Cards often handle bubbling clicks. Only our own button action is consumed.
+        host.addEventListener('click', e => e.stopPropagation());
+        button.addEventListener('click', async (e) => {
+            if (!e.isTrusted || busy || disposed)
+                return;
+            const current = ids(a);
+            if (current.length !== 1) {
+                update(a);
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            busy = true;
+            button.disabled = true;
+            status.hidden = false;
+            status.textContent = '起動中…';
+            try {
+                await open(current[0], e);
+                status.hidden = true;
+            }
+            catch {
+                status.textContent = '起動できませんでした。ログイン状態と通信を確認してください。';
+            }
+            finally {
+                busy = false;
+                button.disabled = false;
+            }
+        });
+        root.append(style, button, status);
+        a.after(host);
+        owned.set(a, host);
+    }
+    function flush() { timer = undefined; if (disposed)
+        return; let count = 0; for (const a of pending) {
+        pending.delete(a);
+        update(a);
+        if (++count >= 100)
+            break;
+    } if (pending.size)
+        timer = w.setTimeout(flush, 0); }
+    function enqueue(node) {
+        if (!(node instanceof w.Element) || node.hasAttribute('data-zenza-external-inline'))
+            return;
+        if (node.matches('a[href]'))
+            pending.add(node);
+        node.querySelectorAll('a[href]').forEach(a => pending.add(a));
+    }
+    const observer = new w.MutationObserver(records => {
+        if (disposed)
+            return;
+        let removed = false;
+        for (const record of records) {
+            if (record.type === 'attributes') {
+                pending.add(record.target);
+                continue;
+            }
+            record.addedNodes.forEach(enqueue);
+            if (Array.from(record.removedNodes).some(n => n instanceof w.Element && !n.hasAttribute('data-zenza-external-inline')))
+                removed = true;
+        }
+        if (removed)
+            for (const [a, host] of owned)
+                if (!a.isConnected) {
+                    host.remove();
+                    owned.delete(a);
+                }
+        if (pending.size && timer === undefined)
+            timer = w.setTimeout(flush, 0);
+    });
+    enqueue(d.documentElement);
+    flush();
+    observer.observe(d.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+    return { dispose() { disposed = true; observer.disconnect(); w.clearTimeout(timer); pending.clear(); for (const host of owned.values())
+            host.remove(); owned.clear(); } };
+}
 },"./settings-panel":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.openExternalSettings = openExternalSettings;
@@ -455,7 +567,7 @@ function openExternalSettings(d, values, save) {
     d.documentElement.append(host);
     inputs.get('externalLinks.enabled').focus();
 }
-}},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),panel:require('./settings-panel')};})();
+}},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),panel:require('./settings-panel')};})();
  'use strict';
 
 function parseDirectLink(href, base) {
@@ -1189,10 +1301,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.18';
+    var VER = '2.7.388-external-direct.19';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.18 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.19 GM transport base f278c0762d56';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5031,7 +5143,7 @@ class NgCompositeRules {
 	}
 }
 const Config = (() => {
-		const DEFAULT_CONFIG = {"externalLinks.enabled":true,"externalLinks.siteMode":"all","externalLinks.sites":"","externalLinks.excludedSites":"","externalLinks.activation":"hover","externalLinks.size":"small","externalLinks.redirects":false,"externalLinks.textIds":false,"externalLinks.prefixes":"sm nm so ss",
+		const DEFAULT_CONFIG = {"externalLinks.enabled":true,"externalLinks.siteMode":"all","externalLinks.sites":"","externalLinks.excludedSites":"","externalLinks.displayMode":"inline","externalLinks.size":"small","externalLinks.redirects":false,"externalLinks.textIds":false,"externalLinks.prefixes":"sm nm so ss",
 				debug: false,
 				volume: 0.3,
 				showComment: true,
@@ -71022,7 +71134,7 @@ class ModernAdvancedSettingsModel {
 				this._historyParams = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.filter(p => p && typeof p.key === 'string')
 						.map(p => [p.key, p]));
-				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象のドメイン","type":"text","description":"例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外するドメイン","type":"text","description":"除外を優先します。URLではなくドメインを入力してください。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.activation","label":"ボタンを表示するタイミング","type":"select","options":[{"value":"hover","label":"マウスを置いたとき・キーボードでフォーカスしたとき"},{"value":"selection","label":"文字を選択したとき"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"text","description":"例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}])
+				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象のドメイン","type":"text","description":"例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外するドメイン","type":"text","description":"除外を優先します。URLではなくドメインを入力してください。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.displayMode","label":"Zenボタンの表示方法","type":"select","description":"「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。","options":[{"value":"inline","label":"常に表示（リンクの横に配置）"},{"value":"hover","label":"マウスを置いたときに表示"},{"value":"selection","label":"文字を選択したときに表示"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"text","description":"例：sm nm so ss。英小文字2〜8文字を空白で区切ります。再生可能かの事前通信はしません。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}])
 						.map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
 				this._historyOrder = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.map((entry, index) => [entry.key, index + 1]));
@@ -80539,7 +80651,7 @@ const boot = async (monkey, PRODUCT, START_PAGE_QUERY) => {
    if(privateTransport.acceptFrame()) void startRuntime().catch(()=>console.warn('Zenza external trial: bridge unavailable'));
  } else {
    let launcherHandle;
-   const mount=()=>{launcherHandle?.dispose();launcherHandle=externalModules.overlay.mountOverlay(window,externalModules.settings.readExternal(readExternalValues()),(id,event)=>playerHost.open(id,event));};
+   const mount=()=>{launcherHandle?.dispose();const settings=externalModules.settings.readExternal(readExternalValues()),open=(id,event)=>playerHost.open(id,event),overlay=externalModules.overlay.mountOverlay(window,settings,open),inline=externalModules.inline.mountInlineButtons(window,settings,open);launcherHandle={dispose(){overlay.dispose();inline.dispose();}};};
    mount();
    const settingListener=typeof GM_addValueChangeListener==='function'?GM_addValueChangeListener(externalSlot,()=>mount()):null;
    if(typeof GM_registerMenuCommand==='function')GM_registerMenuCommand('外部サイトからの再生設定',()=>externalModules.panel.openExternalSettings(document,readExternalValues(),values=>{writeExternal(values);mount();}));

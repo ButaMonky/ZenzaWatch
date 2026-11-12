@@ -22,9 +22,10 @@ export function mountOverlay(w:BrowserWindow,s:ExternalSettings,open:(id:string,
   host.style.setProperty('left',x+'px','important');host.style.setProperty('top',y+'px','important');
  }
  function target(e:Event){
-  if(disposed||busy||e.composedPath().includes(host)||s.activation!=='hover')return;
+  if(disposed||busy||e.composedPath().includes(host)||s.activation==='selection')return;
   const node=e.target;if(!(node instanceof w.Element)||node.closest(excluded)){hide();return;}
   const anchor=node.closest('a[href]');
+  if(anchor&&s.activation==='inline')return;
   if(anchor){const ids=()=>anchor.isConnected&&!anchor.closest(excluded)?linkTargets(anchor.getAttribute('href')||'',d.baseURI,s):[];if(ids().length){show(ids,anchor.getBoundingClientRect());return;}}
   if(s.textIds){
    // Only inspect direct text at the interaction target, never walk the document.

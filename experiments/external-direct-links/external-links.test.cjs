@@ -29,7 +29,7 @@ test('one isolated overlay leaves original markup unchanged and does no scanning
  const w=fixture(),d=w.document,main=d.querySelector('main'),before=main.outerHTML;let requests=0,observers=0,opens=0;
  w.fetch=()=>requests++;w.MutationObserver=class{constructor(){observers++;}};
  let shadow;const attach=w.Element.prototype.attachShadow;w.Element.prototype.attachShadow=function(o){shadow=attach.call(this,o);return shadow;};
- const api=mountOverlay(w,readExternal({'externalLinks.textIds':true}),async()=>opens++);
+ const api=mountOverlay(w,readExternal({'externalLinks.textIds':true,'externalLinks.displayMode':'hover'}),async()=>opens++);
  const host=d.querySelector('[data-zenza-external-overlay]');
  const hover=el=>el.dispatchEvent(new w.Event('pointerover',{bubbles:true}));
  hover(d.querySelector('a'));assert.equal(host.style.display,'block');assert.equal(shadow.querySelector('button').textContent,'Zen');
@@ -40,7 +40,7 @@ test('one isolated overlay leaves original markup unchanged and does no scanning
 });
 test('disabled mode adds no DOM; live link changes and ambiguous text do not open stale targets',()=>{
  const w=fixture(),d=w.document;const disabled=mountOverlay(w,readExternal({'externalLinks.enabled':false}),async()=>{});assert(!d.querySelector('[data-zenza-external-overlay]'));disabled.dispose();
- const api=mountOverlay(w,readExternal({'externalLinks.textIds':true}),async()=>{}),host=d.querySelector('[data-zenza-external-overlay]');
+ const api=mountOverlay(w,readExternal({'externalLinks.textIds':true,'externalLinks.displayMode':'hover'}),async()=>{}),host=d.querySelector('[data-zenza-external-overlay]');
  const p=d.querySelector('p');p.textContent='sm1 ss2';p.dispatchEvent(new w.Event('pointerover',{bubbles:true}));assert.equal(host.style.display,'none');
  const a=d.querySelector('a');a.dispatchEvent(new w.Event('focusin',{bubbles:true}));assert.equal(host.style.display,'block');
  d.dispatchEvent(new w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(host.style.display,'none');api.dispose();w.close();
@@ -49,12 +49,12 @@ test('disabled mode adds no DOM; live link changes and ambiguous text do not ope
 test('selection detection excludes code and respects disabled text detection',()=>{
  const w=fixture(),d=w.document;
  w.Range.prototype.getBoundingClientRect=()=>({right:100,top:100});
- const api=mountOverlay(w,readExternal({'externalLinks.activation':'selection','externalLinks.textIds':true}),async()=>{});
+ const api=mountOverlay(w,readExternal({'externalLinks.displayMode':'selection','externalLinks.textIds':true}),async()=>{});
  const host=d.querySelector('[data-zenza-external-overlay]');
  function select(el){const r=d.createRange();r.selectNodeContents(el);w.getSelection().removeAllRanges();w.getSelection().addRange(r);d.dispatchEvent(new w.Event('selectionchange'));}
  select(d.querySelector('p'));assert.equal(host.style.display,'block');
  select(d.querySelector('code'));assert.equal(host.style.display,'none');
- api.dispose();const other=mountOverlay(w,readExternal({'externalLinks.activation':'selection'}),async()=>{});
+ api.dispose();const other=mountOverlay(w,readExternal({'externalLinks.displayMode':'selection'}),async()=>{});
  select(d.querySelector('p'));assert.equal(d.querySelector('[data-zenza-external-overlay]').style.display,'none');other.dispose();w.close();
 });
 
@@ -74,11 +74,31 @@ test('activation resolves replacement text instead of detached hover text',async
  const w=fixture(),d=w.document;let activate,opened;
  const add=w.HTMLButtonElement.prototype.addEventListener;
  w.HTMLButtonElement.prototype.addEventListener=function(type,fn,...rest){if(type==='click')activate=fn;return add.call(this,type,fn,...rest);};
- const api=mountOverlay(w,readExternal({'externalLinks.textIds':true}),async id=>{opened=id;});
+ const api=mountOverlay(w,readExternal({'externalLinks.textIds':true,'externalLinks.displayMode':'hover'}),async id=>{opened=id;});
  const p=d.querySelector('p');p.dispatchEvent(new w.Event('pointerover',{bubbles:true}));p.textContent='sm10';
  // Invoke the captured handler as a unit test; synthetic DOM clicks stay rejected separately.
  await activate({isTrusted:true,preventDefault(){},stopPropagation(){}});assert.equal(opened,'sm10');
  p.dispatchEvent(new w.Event('pointerover',{bubbles:true}));p.setAttribute('contenteditable','true');opened=null;
  await activate({isTrusted:true,preventDefault(){},stopPropagation(){}});assert.equal(opened,null);
  api.dispose();w.close();
+});
+
+test('inline mode is default for existing settings and preserves later user choice',()=>{
+ assert.equal(readExternal({}).activation,'inline');
+ assert.equal(readExternal({'externalLinks.activation':'hover'}).activation,'inline');
+ assert.equal(readExternal({'externalLinks.displayMode':'hover'}).activation,'hover');
+});
+
+test('inline buttons follow added, changed and removed links without rewriting them',async()=>{
+ const {mountInlineButtons}=require('./generated/inline-buttons.js');
+ const w=fixture(),d=w.document,a=d.querySelector('a'),original=a.outerHTML;let requests=0,opened=0;
+ w.fetch=()=>requests++;const shadows=[];const attach=w.Element.prototype.attachShadow;w.Element.prototype.attachShadow=function(o){const root=attach.call(this,o);shadows.push(root);return root;};
+ const api=mountInlineButtons(w,readExternal({}),async()=>opened++),tick=()=>new Promise(r=>w.setTimeout(r,25));
+ assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,1);assert.equal(a.outerHTML,original);
+ shadows[0].querySelector('button').click();assert.equal(opened,0);
+ const second=a.cloneNode(true);d.querySelector('main').append(second);await tick();assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,2);
+ second.href='https://example.org/other';await tick();assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,1);
+ a.remove();await tick();assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,0);
+ api.dispose();second.href='https://www.nicovideo.jp/watch/sm9';await tick();assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,0);assert.equal(requests,0);
+ const hover=mountInlineButtons(w,readExternal({'externalLinks.displayMode':'hover'}),async()=>{});assert.equal(d.querySelectorAll('[data-zenza-external-inline]').length,0);hover.dispose();w.close();
 });

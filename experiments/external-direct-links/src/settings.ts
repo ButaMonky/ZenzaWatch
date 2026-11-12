@@ -3,7 +3,7 @@ export const externalDefaults = {
   'externalLinks.siteMode': 'all',
   'externalLinks.sites': '',
   'externalLinks.excludedSites': '',
-  'externalLinks.activation': 'hover',
+  'externalLinks.displayMode': 'inline',
   'externalLinks.size': 'small',
   'externalLinks.redirects': false,
   'externalLinks.textIds': false,
@@ -18,7 +18,7 @@ export const externalDescriptors:Descriptor[] = [
  {id:'externalLinks.siteMode',label:'対象サイト',type:'select',options:choice([['all','すべてのサイト'],['allow','指定したサイトのみ']])},
  {id:'externalLinks.sites',label:'対象のドメイン',type:'text',description:'例：example.com。空白・改行・カンマで区切ります。サブドメインも含みます。'},
  {id:'externalLinks.excludedSites',label:'除外するドメイン',type:'text',description:'除外を優先します。URLではなくドメインを入力してください。'},
- {id:'externalLinks.activation',label:'ボタンを表示するタイミング',type:'select',options:choice([['hover','マウスを置いたとき・キーボードでフォーカスしたとき'],['selection','文字を選択したとき']])},
+ {id:'externalLinks.displayMode',label:'Zenボタンの表示方法',type:'select',description:'「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。',options:choice([['inline','常に表示（リンクの横に配置）'],['hover','マウスを置いたときに表示'],['selection','文字を選択したときに表示']])},
  {id:'externalLinks.size',label:'ボタンの大きさ',type:'select',options:choice([['small','小'],['normal','標準'],['large','大']])},
  {id:'externalLinks.redirects',label:'中継リンク内の動画URLも検出',type:'boolean',description:'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。'},
  {id:'externalLinks.textIds',label:'文章中の動画IDも検出',type:'boolean',description:'入力欄・編集中・コード欄は対象外です。'},
@@ -33,13 +33,13 @@ export function sanitizeExternal(values:unknown):Record<ExternalKey,string|boole
   const value=source[key];
   if(typeof value===typeof out[key])out[key]=typeof value==='string'?value.slice(0,4096):value as boolean;
  }
- for(const [key,valid] of [['externalLinks.siteMode',['all','allow']],['externalLinks.activation',['hover','selection']],['externalLinks.size',['small','normal','large']]] as [ExternalKey,string[]][])
+ for(const [key,valid] of [['externalLinks.siteMode',['all','allow']],['externalLinks.displayMode',['inline','hover','selection']],['externalLinks.size',['small','normal','large']]] as [ExternalKey,string[]][])
   if(!valid.includes(String(out[key])))out[key]=externalDefaults[key];
  return out;
 }
 export function readExternal(values:unknown):ExternalSettings {
  const v=sanitizeExternal(values);
- return {enabled:v['externalLinks.enabled']===true,siteMode:String(v['externalLinks.siteMode']),sites:domains(v['externalLinks.sites']),excludedSites:domains(v['externalLinks.excludedSites']),activation:String(v['externalLinks.activation']),size:String(v['externalLinks.size']),redirects:v['externalLinks.redirects']===true,textIds:v['externalLinks.textIds']===true,prefixes:[...new Set(tokens(v['externalLinks.prefixes']).filter(x=>/^[a-z]{2,8}$/.test(x)))]};
+ return {enabled:v['externalLinks.enabled']===true,siteMode:String(v['externalLinks.siteMode']),sites:domains(v['externalLinks.sites']),excludedSites:domains(v['externalLinks.excludedSites']),activation:String(v['externalLinks.displayMode']),size:String(v['externalLinks.size']),redirects:v['externalLinks.redirects']===true,textIds:v['externalLinks.textIds']===true,prefixes:[...new Set(tokens(v['externalLinks.prefixes']).filter(x=>/^[a-z]{2,8}$/.test(x)))]};
 }
 export function siteEnabled(host:string,s:ExternalSettings):boolean {
  const matches=(domain:string)=>host===domain||host.endsWith('.'+domain);

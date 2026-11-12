@@ -90,7 +90,7 @@ test('installing the bundle only mounts buttons: no network, workers, or player'
  w.eval(code);await new Promise(r=>w.setTimeout(r,35));
  assert.equal(w.document.querySelectorAll('[data-zenza-external-overlay]').length,1);
  w.document.querySelector('a').dispatchEvent(new w.Event('pointerover',{bubbles:true}));
- assert.equal(w.document.querySelector('[data-zenza-external-overlay]').style.display,'block');
+ assert.equal(w.document.querySelectorAll('[data-zenza-external-inline]').length,1);
  assert.equal(w.ZenzaWatch,undefined);assert.equal(requests,0);assert.equal(writes,0);
  await new Promise(r=>w.setTimeout(r,0));
  assert.equal(writes,0,'scripted clicks cannot enable authenticated bridging');
@@ -128,8 +128,8 @@ test('trial excludes old navigation interception and preserves original installa
  assert.ok(!code.includes("dispatchCustomEvent(document.body, 'ZenzaWatchInitialize'"));
  const header=code.slice(0,code.indexOf('// ==/UserScript=='));
  assert.ok(!header.includes('@updateURL'));assert.ok(!header.includes('@downloadURL'));
- assert.ok(header.includes('0.18.0-external-direct18'));
- assert.ok(code.includes("var VER = '2.7.388-external-direct.18'"));
+ assert.ok(header.includes('0.19.0-external-direct19'));
+ assert.ok(code.includes("var VER = '2.7.388-external-direct.19'"));
  assert.ok(code.includes('const response=await externalTrial.gm.fetch(url,options);'));
  assert.ok(code.includes('loader: externalTrial.gm.Loader, fLoader: externalTrial.gm.Loader, pLoader: externalTrial.gm.Loader'));
  assert.ok(code.includes("video.setAttribute('use-native-hls', 'no');"));

@@ -22,6 +22,8 @@ function createBuildSandbox(prefix = 'zenza-build-') {
   }
   // External companion build inputs include adapters and generated typed modules.
   fs.cpSync(path.join(REPO_ROOT,'packages/external-playback'),path.join(dir,'packages/external-playback'),{recursive:true});
+  fs.mkdirSync(path.join(dir,'tools'),{recursive:true});
+  fs.copyFileSync(path.join(REPO_ROOT,'tools/generate-watch-click-navigation.cjs'),path.join(dir,'tools/generate-watch-click-navigation.cjs'));
   const tools=path.join(dir,'tools/typescript-stage1');
   fs.mkdirSync(tools,{recursive:true});
   fs.cpSync(path.join(REPO_ROOT,'tools/typescript-stage1/advanced-src'),path.join(tools,'advanced-src'),{recursive:true});

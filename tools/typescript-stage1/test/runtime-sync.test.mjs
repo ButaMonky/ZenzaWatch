@@ -42,7 +42,7 @@ test('generator rejects suspicious output shapes instead of guessing',()=>{
     /UNEXPECTED_TS_EXPORT/);
   assert.throws(()=>renderLegacy(''),/UNEXPECTED_TS_EXPORT/);
 });
-test('compiled TS, actual runtime, and pre-migration original remain equivalent',()=>{
+test('compiled TS and runtime preserve original seek behavior without private marker',()=>{
   const original=legacyObject(snapshot);
   const emittedRuntime=legacyObject(runtime);
   const ids=['sm9','so1','nm42','a/b c','',0,null,undefined];
@@ -50,7 +50,9 @@ test('compiled TS, actual runtime, and pre-migration original remain equivalent'
     Infinity,NaN,'12','not a number',9007199254740992];
   let checked=0;
   for(const id of ids)for(const time of times){
-    const want=original.makeUrl(id,time);
+    const clean=new URL(original.makeUrl(id,time));
+    clean.searchParams.delete('zenza_official');
+    const want=clean.href;
     for(const route of [compiled,shipped,emittedRuntime]){
       assert.equal(route.makeUrl(id,time),want,'watch route parity');
     }

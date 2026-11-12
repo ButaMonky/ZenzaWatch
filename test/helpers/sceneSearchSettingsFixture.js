@@ -24,7 +24,7 @@ function fixture(storage={},dom=null){
     options:schema.options,storage,prefix:'SC_',readonly:false,
     props:Object.fromEntries(Object.keys(schema.default).map(k=>[k,null])),
     _ignoreExportKeys:schema.options.ignoreExportKeys,_changed:new Map(),_onChange(){},
-    on(){},off(){}});
+    on(){},off(){},emitAsync(){}});
   for(const key of ['hasStoredValue','persistSceneSearchSelection','resolveSceneSearch','import','export']) { if(schema[key]) config[key]=schema[key]; }
   const Model=loadClass('src/ModernAdvancedSettingsModel.js','ModernAdvancedSettingsModel',c);
   return {config,storage,context:c,model:new Model({config,actions:[]})};

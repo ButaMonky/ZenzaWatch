@@ -21,6 +21,9 @@ function beginSection(rel) {
   const body = parts[1].split('//===END===')[0];
   // Task478: ThreadLoader's isolated VM tests must execute the same production
   // posting transport code that the userscript imports (no test-only mock).
+  if (rel === 'packages/zenza/src/menu/HoverMenu.js') {
+    return beginSection('packages/zenza/src/menu/WatchClickNavigation.js') + '\n' + body;
+  }
   if (rel === 'packages/lib/src/nico/ThreadLoader.js') {
     return beginSection('packages/lib/src/nico/CommentPostWire.js') + '\n' +
       beginSection('packages/lib/src/nico/CommentReadAdapter.js') + '\n' + body;
@@ -115,6 +118,9 @@ function loadSearchDependencies(rel, context) {
 }
 
 function loadClass(rel, name, context) {
+  if (name === 'HoverMenu' && !context.WatchClickNavigation) {
+    run(beginSection('packages/zenza/src/menu/WatchClickNavigation.js') + '\nglobalThis.WatchClickNavigation = WatchClickNavigation;', context);
+  }
   // Class extraction skips the runtime dependency directives. Load the
   // production geometry module for the existing seekbar/legacy consumers.
   if (!context.TimelineGeometry &&

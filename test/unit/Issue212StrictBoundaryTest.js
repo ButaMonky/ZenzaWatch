@@ -30,18 +30,13 @@ describe('#212 strict entry null boundaries',()=>{
   it('missing SPA root does not create an observer or throw',async()=>{
     const {ctx,calls}=setup(null);
     await ctx.overrideGinza({}, {});
-    assert.deepEqual(calls,[['slayer']]);
+    assert.deepEqual(calls,[]);
   });
-  it('an existing root receives precisely the original mutation observer',async()=>{
+  it('a stored replacement preference never creates an observer, even with a mounted root',async()=>{
     const root={nodeType:1,id:'synthetic-root'};
     const {ctx,calls}=setup(root);
     await ctx.overrideGinza({}, {});
-    assert.equal(calls[0][0],'slayer');
-    assert.deepEqual(calls[1],['observer.construct']);
-    assert.equal(calls[2][0],'observe');
-    assert.equal(calls[2][1],root);
-    assert.equal(calls[2][2].childList,true);
-    assert.equal(calls[2][2].subtree,true);
+    assert.deepEqual(calls,[]); // Retired override creates no player or observer.
   });
   it('storage JSON parsing retains legacy null coercion and malformed input behavior',()=>{
     for(const value of [null,'null','0','false','""','{}','broken','']){

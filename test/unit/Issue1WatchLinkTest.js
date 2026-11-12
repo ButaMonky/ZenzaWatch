@@ -3,7 +3,7 @@ const assert = require('assert');
 const {JSDOM} = require('jsdom');
 const {beginSection, createContext, run} = require('../helpers/extractSource');
 function fixture(html='', url='https://www.nicovideo.jp/tag/test') {
- const dom=new JSDOM('<!doctype html><body>'+html+'</body>',{url}),win=dom.window,opens=[],sent=[];
+ const dom=new JSDOM('<!doctype html><body>'+html+'</body>',{url}),win=dom.window,opens=[],sent=[],tasks=[];win.setTimeout=(fn,ms=0)=>{if(ms===0)tasks.push(fn);return 0;};
  const uq=selector=>{const el=typeof selector==='string'?win.document.querySelector(selector):selector;return {on(name,fn){el.addEventListener(name,fn);return this;}};};
  const ctx=createContext({window:win,document:win.document,location:win.location,URL:win.URL,uq,
   textUtil:{parseQuery:q=>Object.fromEntries(new URLSearchParams(q))},ZenzaWatch:{emitter:{emit(){}}},cssUtil:{px:value=>value},setTimeout:()=>0});
@@ -11,9 +11,9 @@ function fixture(html='', url='https://www.nicovideo.jp/tag/test') {
  run(beginSection('packages/zenza/src/menu/HoverMenu.js')+';globalThis.Menu=HoverMenu;',ctx);
  const menu=Object.create(ctx.Menu.prototype);menu._playerConfig={props:{overrideWatchLink:true}};
  menu._open=id=>opens.push(id);menu._send=id=>sent.push(id);
- return {dom,win,ctx,menu,opens,sent};
+ return {dom,win,ctx,menu,opens,sent,flush(){while(tasks.length)tasks.shift()();}};
 }
-function click(f,a,options={}) {a.dispatchEvent(new f.win.MouseEvent('mouseover',{bubbles:true}));const e=new f.win.MouseEvent('click',{bubbles:true,cancelable:true,button:0,...options});a.dispatchEvent(e);return e;}
+function click(f,a,options={}) {a.dispatchEvent(new f.win.MouseEvent('mouseover',{bubbles:true}));const e=new f.win.MouseEvent('click',{bubbles:true,cancelable:true,button:0,...options});a.dispatchEvent(e);f.flush();return e;}
 describe('Issue1 exact video URL classification',()=>{
  for(const route of ['tag_shorts/test','search_shorts/test','tag_shorts/sm9','search_shorts/sm9','tag_shorts/watch/sm9','tag/test?next=/watch/sm9'])
   it('leaves listing navigation alone: '+route,()=>{const f=fixture();try{assert.strictEqual(f.ctx.nico.getWatchId('https://www.nicovideo.jp/'+route),null);}finally{f.dom.window.close();}});
@@ -68,7 +68,7 @@ describe('Issue1 link click ownership',()=>{
  it('keeps Shift sending to the other Zenza player',()=>{const f=fixture('<a href="/watch/sm9">video</a>');try{f.menu._overrideWatchLink();assert(click(f,f.win.document.querySelector('a'),{shiftKey:true}).defaultPrevented);assert.deepStrictEqual(f.sent,['sm9']);assert.deepStrictEqual(f.opens,[]);}finally{f.win.close();}});
  for(const html of ['<a class="noHoverMenu" href="/watch/sm9">skip</a>','<a href="https://other.example/watch/sm9">outside</a>','<a href="/watch/sm9"><button>other action</button></a>','<a href="/watch/lv123">live</a>'])
   it('leaves excluded links and nested actions alone: '+html,()=>{const f=fixture(html);try{f.menu._overrideWatchLink();const e=click(f,f.win.document.querySelector('button')||f.win.document.querySelector('a'));assert.strictEqual(e.defaultPrevented,false);assert.deepStrictEqual(f.opens,[]);}finally{f.win.close();}});
- it('opens a keyboard-activated or newly inserted link without prior mouseover',()=>{const f=fixture();try{f.menu._overrideWatchLink();f.win.document.body.innerHTML='<a href="/watch/sm9">video</a>';const e=new f.win.MouseEvent('click',{bubbles:true,cancelable:true,detail:0});f.win.document.querySelector('a').dispatchEvent(e);assert(e.defaultPrevented);assert.deepStrictEqual(f.opens,['sm9']);}finally{f.win.close();}});
+ it('opens a keyboard-activated or newly inserted link without prior mouseover',()=>{const f=fixture();try{f.menu._overrideWatchLink();f.win.document.body.innerHTML='<a href="/watch/sm9">video</a>';const e=new f.win.MouseEvent('click',{bubbles:true,cancelable:true,detail:0});f.win.document.querySelector('a').dispatchEvent(e);f.flush();assert(e.defaultPrevented);assert.deepStrictEqual(f.opens,['sm9']);}finally{f.win.close();}});
 });
 
 describe('Task203 preview claim integration',()=>{
@@ -107,7 +107,7 @@ describe('Task311 official React search-card click ownership', () => {
      const f=fixture(markup,'https://www.nicovideo.jp/search/test');
      try {
        let navigated=0;
-       f.win.document.querySelector('.videoCard').addEventListener('click',()=>navigated++);
+       f.win.document.querySelector('.videoCard').addEventListener('click',e=>{if(!e.defaultPrevented)navigated++;});
        f.menu._overrideWatchLink();
        const e=click(f,f.win.document.querySelector(selector));
        assert(e.defaultPrevented);

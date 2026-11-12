@@ -187,7 +187,7 @@ const Config = (() => {
     'commentLayer.easyCommentOpacity': 0.5, // かんたんコメントの透明度
     'commentLayer.aiCommentOpacity': 0.5, // かんたんコメントの透明度
 
-    overrideGinza: false,     // 動画視聴ページでもGinzaの代わりに起動する
+    overrideGinza: false,     // Retired compatibility storage; never triggers automatic launch.
     enableGinzaSlayer: false, // まだ実験中
     lastPlayerId: '',
     playbackRate: 1.0,

@@ -5427,7 +5427,7 @@ RelatedInfoMenu._shadow_ = (`
       <div class="RelatedInfoMenuBody">
         <ul class="relatedMenuItems customRelatedItems">
           <li class="ginzaMenu" data-related-order-key="builtin:official">
-            <a class="ginzaLink command" target="_blank"
+            <a class="ginzaLink command noHoverMenu" target="_blank"
               rel="noopener noreferrer">公式プレイヤーで開く</a>
           </li>
           <li class="uadMenu" data-related-order-key="builtin:ad">

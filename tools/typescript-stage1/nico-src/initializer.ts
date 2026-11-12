@@ -58,52 +58,9 @@ const {initialize} = (() => {
       return;
     }
 
-    if (!Config.props.overrideGinza) {
-      return
-    }
-
-    initializeGinzaSlayer(dialog, query);
-
-    await uq.complete();
-
-    // 再生を無理やり止める
-    const stopPlayer = (ev?: Loose) => {
-      if (!document.body.classList.contains('showNicoVideoPlayerDialog')) return;
-
-      // 画面モードが横か小のときには止めない
-      if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className)) return;
-
-      ev.target.pause();
-    };
-    const video = document.querySelector('.grid-area_\\[player\\] video');
-    if (video !== null) {
-      video.addEventListener('play', stopPlayer);
-      (video as Loose).pause();
-      return;
-    }
-
-    const root = document.getElementById('root');
-    // On SPA transitions the root can already have been detached.
-    if (!root) { return; }
-    new MutationObserver((records, observer) => {
-      for (const record of records) {
-        if(record.addedNodes.length === 0) {
-          continue;
-        }
-
-        const video = (record.target as Loose).querySelector('.grid-area_\\[player\\] video');
-        if (video === null) {
-          continue;
-        }
-
-        video.addEventListener('play', stopPlayer);
-        video.pause();
-        observer.disconnect();
-      }
-    }).observe(root, {
-      childList: true,
-      subtree: true,
-    });
+    // Retired: direct watch-page navigation belongs to the official player.
+    // Old stored overrideGinza=true must not revive automatic replacement.
+    return;
   };
 
   // Task175 (F02): the wait ends even if #root is missing or the SPA never mounts.
@@ -465,6 +422,8 @@ const {initialize} = (() => {
   };
 
   const initializeLastSession = (dialog?: Loose) => {
+    // Direct watch pages belong to the official player, including unavailable videos.
+    if (util.isGinzaWatchUrl()) { return; }
     window.addEventListener('beforeunload', () => {
       if (!dialog.isOpen) {
         return;

@@ -27,6 +27,8 @@ declare class PagePreviewGuard {
 }
 
 
+declare const WatchClickNavigation: {begin(w: Window & typeof globalThis, event: MouseEvent, watchId: string, launch: () => void): void};
+
 class HoverMenu {
   declare _$view: Loose;
   declare _hoverElement: Loose;
@@ -273,16 +275,12 @@ class HoverMenu {
       const {target, watchId, url} = intent;
       // AUD-08 WONTFIX: never import thumbnail preview time into playback.
       // The existing preview guard only pauses page media; it does not seek Zenza.
-      this._pagePreviewGuard?.claim(target);
-      e.preventDefault();
-      // Preserve navigation ownership by default. Cooperative scripts can opt
-      // into the original click; page routers must then respect defaultPrevented.
-      const propagate = this._playerConfig?.getValue?.('overrideWatchLink:allowPropagation') ??
-        this._playerConfig?.props?.['overrideWatchLink:allowPropagation'];
-      if (!propagate) { e.stopImmediatePropagation(); }
-      this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
-      if (e.shiftKey) { this._send(watchId); } else { this._open(watchId); }
-      window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+      WatchClickNavigation.begin(window, e, watchId, () => {
+        this._pagePreviewGuard?.claim(target);
+        this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
+        if (e.shiftKey) { this._send(watchId); } else { this._open(watchId); }
+        window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+      });
     };
     document.addEventListener('click', onClick, true);
   }

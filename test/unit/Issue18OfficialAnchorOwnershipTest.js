@@ -16,7 +16,7 @@ function fixture(artifact, html, url = 'https://www.nicovideo.jp/ranking') {
     url
   });
   const {window} = dom, opened = [], sent = [];
-  window.setTimeout = () => 0;
+  const tasks=[];window.setTimeout=(fn,ms=0)=>{if(ms===0)tasks.push(fn);return 0;};
   const context = createContext({
     window, document: window.document, location: window.location,
     ZenzaWatch: {emitter: {emit() {}}}
@@ -38,6 +38,7 @@ function fixture(artifact, html, url = 'https://www.nicovideo.jp/ranking') {
       bubbles: true, cancelable: true, ...options
     });
     target.dispatchEvent(event);
+    while(tasks.length)tasks.shift()();
     return event;
   }
   return {window, opened, sent, menu, target, click, close: () => window.close()};
@@ -45,6 +46,12 @@ function fixture(artifact, html, url = 'https://www.nicovideo.jp/ranking') {
 
 for (const artifact of artifacts) {
   describe('Issue #18 native official link ownership: ' + artifact, () => {
+    it('leaves a clean official anchor to the browser', () => {
+      const h=fixture(artifact,'<a id="target" class="noHoverMenu" href="/watch/sm9?from=42" target="_blank" rel="noopener">official</a>');
+      try { assert.equal(h.click().defaultPrevented,false); assert.deepStrictEqual(h.opened,[]); assert.equal(new URL(h.target.href).search,'?from=42'); }
+      finally {h.close();}
+    });
+
     it('keeps official href + from even when data-href points to a normal watch URL', () => {
       const h = fixture(artifact,
         '<a id="target" href="/watch/sm11?zenza_official=1&from=42" ' +

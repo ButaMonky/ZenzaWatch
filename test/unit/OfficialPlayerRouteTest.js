@@ -44,13 +44,13 @@ function loadGinzaOverride(){
 
 const squash = s => String(s).replace(/\s+/g, ''); // Task964: generated-from-TS formatting tolerant
 describe('Task350 official NicoNico player routing',()=>{
-  it('builds a watch URL with an explicit one-time official-player route marker',()=>{
+  it('builds a clean watch URL without a private route marker',()=>{
     const util=loadOfficialRoute();
     const result=util.makeUrl('sm9');
     const url=new URL(result);
     assert.strictEqual(url.origin,'https://www.nicovideo.jp');
     assert.strictEqual(url.pathname,'/watch/sm9');
-    assert.strictEqual(url.searchParams.get('zenza_official'),'1');
+    assert.strictEqual(url.searchParams.get('zenza_official'),null);
     assert.strictEqual(util.makeUrl('so123?x=1').includes('?x=1'),false);
   });
   it('skips Zenza replacement when marker is set even if window.name was lost',async()=>{
@@ -68,10 +68,10 @@ describe('Task350 official NicoNico player routing',()=>{
     assert(template.includes('*?*zenza_official=1*'));
     assert(template.includes("window.name === 'watchGinza'"));
   });
-  it('keeps replacing watch pages without the marker when enabled',async()=>{
+  it('does not replace watch pages even when the retired saved setting is true',async()=>{
     const test=loadGinzaOverride();
     await test.fn({}, {zenza_official:'0'});
-    assert.strictEqual(test.calls.length,1);
+    assert.strictEqual(test.calls.length,0);
   });
   it('preserves the existing watchGinza window-name fallback',async()=>{
     const test=loadGinzaOverride();
@@ -85,7 +85,7 @@ describe('Task350 official NicoNico player routing',()=>{
     const {loadClass}=require('../helpers/extractSource');
     const dom=new JSDOM('<!doctype html><html><body><details><summary>関連メニュー</summary>'+
       '<div class="RelatedInfoMenuBody"></div><ul class="relatedMenuItems">'+
-      '<li data-related-order-key="builtin:official"><a class="ginzaLink command" target="_blank" rel="noopener noreferrer">公式プレイヤーで開く</a></li>'+
+      '<li data-related-order-key="builtin:official"><a class="ginzaLink command noHoverMenu" target="_blank" rel="noopener noreferrer">公式プレイヤーで開く</a></li>'+
       '</ul></details></body></html>',{url:'https://www.nicovideo.jp/watch/sm9'});
     const root=dom.window.document.querySelector('details');
     let time=100.8,pauses=0,closed=0,wasPrevented=null;
@@ -119,7 +119,7 @@ describe('Task350 official NicoNico player routing',()=>{
     const uri=new URL(link.href);
     assert.strictEqual(wasPrevented,false);
     assert.strictEqual(uri.searchParams.get('from'),'100');
-    assert.strictEqual(uri.searchParams.get('zenza_official'),'1');
+    assert.strictEqual(uri.searchParams.get('zenza_official'),null);
     assert.strictEqual(link.target,'_blank');
     assert(link.rel.includes('noopener'));
     assert.strictEqual(pauses,1);
@@ -134,7 +134,7 @@ describe('Task350 official NicoNico player routing',()=>{
     assert(squash(dialog).includes(squash('option.includePosition===false?0:this.currentTime')));
     assert(squash(menu).includes(squash("this._openBuiltinUrl('official',officialUrl)")));
     assert(menu.includes('RelatedMenuOrder.openUrl('));
-    assert(menu.includes('class="ginzaLink command" target="_blank"'));
+    assert(menu.includes('class="ginzaLink command noHoverMenu" target="_blank"'));
     assert(!menu.includes('rel="noopener" data-command="watch-ginza"'));
     assert(squash(dialog).includes(squash("RelatedMenuOrder.openUrl('official',url,option")));
   });
@@ -167,7 +167,7 @@ describe('Task350 related menu actual command path',()=>{
       watchId:'sm9',videoId:'sm9',canOpenContentTree:false,
       isCommunityVideo:false,isMymemory:false
     });
-    assert.strictEqual(new URL(a.href).searchParams.get('zenza_official'),'1');
+    assert.strictEqual(new URL(a.href).searchParams.get('zenza_official'),null);
     Menu.prototype._onCommand.call(fake,'watch-ginza');
     assert.deepStrictEqual(opened,[[a.href,'_blank','noopener']]);
     assert.deepStrictEqual(otherCommands,['pause']);
@@ -176,10 +176,10 @@ describe('Task350 related menu actual command path',()=>{
 });
 
 describe('Task350 official seek seconds forwarding',()=>{
-  it('adds ?from=100 at 100.9 seconds and retains explicit Zenza bypass',()=>{
+  it('adds only official ?from=100 at 100.9 seconds',()=>{
     const uri=new URL(loadOfficialRoute().makeUrl('sm9',100.9));
     assert.strictEqual(uri.searchParams.get('from'),'100');
-    assert.strictEqual(uri.searchParams.get('zenza_official'),'1');
+    assert.strictEqual(uri.searchParams.get('zenza_official'),null);
     assert.strictEqual(uri.pathname,'/watch/sm9');
   });
   it('omits invalid and zero offsets to preserve existing behavior',()=>{
@@ -220,5 +220,25 @@ describe('Task350 official seek seconds forwarding',()=>{
     assert.strictEqual(new URL(out[1][0]).searchParams.get('from'),'109');
     assert.strictEqual(el.href,out[1][0]);
     assert.strictEqual(out[1][1],'_blank');
+  });
+});
+
+
+describe('direct watch page session ownership',()=>{
+  for (const isWatch of [true,false]) it('restores only list pages: watch='+isWatch,()=>{
+    const source=read('src/initializer.js');
+    let body;
+    traverse(parser.parse(source,{sourceType:'module'}),{VariableDeclarator(p){
+      if(p.node.id.name==='initializeLastSession') body=source.slice(p.node.init.start,p.node.init.end);
+    }});
+    let opened=0,restored=0;
+    const c=createContext({util:{isGinzaWatchUrl:()=>isWatch},window:{addEventListener(){}},
+      sessionStorage:{},location:{href:'https://www.nicovideo.jp/tag/test'},
+      Config:{props:{screenMode:'small',continueNextPage:true}},
+      PlayerSession:{init(){},restore(){restored++;return {playing:true,watchId:'sm9'};},clear(){}}});
+    run('this.restoreSession = '+body+';',c);
+    c.restoreSession({open(){opened++;}});
+    assert.strictEqual(opened,isWatch?0:1);
+    assert.strictEqual(restored,isWatch?0:1);
   });
 });

@@ -9,7 +9,7 @@ function subject(){
  const Player=loadClass('src/NicoVideoPlayer.js','NicoVideoPlayer',c);
  const player=Object.create(Player.prototype);
  player._videoPlayer={_body:{},currentTime:100,_isYouTube:false};
- player._playerConfig={props:{'supporterCredit.enable':true},onkey(key,fn){assert.strictEqual(key,'supporterCredit.enable');change=fn;}};
+ player._playerConfig={props:{'uaa.enable':true,'supporterCredit.enable':true},onkey(key,fn){assert(['supporterCredit.enable','uaa.enable'].includes(key));if(key==='supporterCredit.enable')change=fn;}};
  player._state={};player.emit=name=>events.push(name);player._initializeSupporterCredit();
  return {player,events,timers,off(){player._playerConfig.props['supporterCredit.enable']=false;change(false);}};
 }

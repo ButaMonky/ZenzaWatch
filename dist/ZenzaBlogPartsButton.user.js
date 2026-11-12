@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaBlogPartsButton
 // @namespace    https://github.com/segabito/
-// @version      1.0.0-task1017
+// @version      1.0.1-task1019
 // @description  ブログパーツや外部サイトの動画リンクから、そのページ上でZenzaWatchを開く
 // @match        https://*/*
 // @match        http://ext.nicovideo.jp/thumb/*
@@ -24,8 +24,8 @@
 // @require      https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @require      https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // ==/UserScript==
-// build: 2026-11-12 12:38Z 9e19e21
-// Shared runtime normalized SHA256: 720c7d05112063b072383fce15451eacebc4cab06b21a59bdabd855f458cd838
+// build: 2026-11-12 15:02Z 78fface
+// Shared runtime normalized SHA256: 17d813aac1d514a1cb455021b2f505febe78a0c37da6dc92e859608b1a830ed5
 
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
@@ -896,11 +896,6 @@ function watchLegacyTrial(w, stop) {
         stopped = true;
         stop();
         observer.disconnect();
-        const notice = w.document.createElement('div');
-        notice.dataset.zenzaCompanionNotice = '';
-        notice.textContent = 'ZenzaBlogPartsButtonに外部再生を統合しました。Tampermonkeyで旧「外部直接リンク検証版」を無効にして、ページを再読み込みしてください。';
-        notice.style.cssText = 'position:fixed;bottom:16px;right:16px;max-width:380px;padding:16px;background:#17212d;color:white;z-index:2147483647;font:14px/1.6 sans-serif';
-        w.document.documentElement.append(notice);
     };
     const observer = new w.MutationObserver(check);
     observer.observe(w.document.documentElement, { childList: true, subtree: true });
@@ -1876,10 +1871,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.392-task1017';
+    var VER = '2.7.393-task1019';
     const ENV = 'DEV';
 
-    var BUILD = 'external-playback GM transport base 720c7d051120';
+    var BUILD = 'external-playback GM transport base 17d813aac1d5';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -11723,14 +11718,6 @@ const { SettingPanelElement } = (() => {
 							data-setting-name="enableHeatMap"
 							.checked=${conf.enableHeatMap}>
 							コメントの盛り上がりをシークバーに表示
-					</label>
-				</div>
-				<div class="control">
-					<label>
-						<input type="checkbox" class="checkbox"
-							data-setting-name="overrideGinza"
-							.checked=${conf.overrideGinza}>
-							動画視聴ページでも公式プレイヤーの代わりに起動する
 					</label>
 				</div>
 				<div class="control">
@@ -45281,7 +45268,6 @@ const OfficialPlayerRoute = Object.freeze({
 		makeUrl(watchId, currentTime = 0) {
 				const url = new URL('https://www.nicovideo.jp/watch/' +
 						encodeURIComponent(String(watchId ?? '')));
-				url.searchParams.set(this.PARAM, '1');
 				const time = Number(currentTime);
 				if (Number.isFinite(time) && time > 0) {
 						const seconds = Math.floor(time);
@@ -67047,7 +67033,7 @@ RelatedInfoMenu._shadow_ = (`
 			<div class="RelatedInfoMenuBody">
 				<ul class="relatedMenuItems customRelatedItems">
 					<li class="ginzaMenu" data-related-order-key="builtin:official">
-						<a class="ginzaLink command" target="_blank"
+						<a class="ginzaLink command noHoverMenu" target="_blank"
 							rel="noopener noreferrer">公式プレイヤーで開く</a>
 					</li>
 					<li class="uadMenu" data-related-order-key="builtin:ad">
@@ -69724,6 +69710,76 @@ class PagePreviewGuard {
 				this.player.off('close', this.onClose);
 		}
 }
+class OfficialHeaderClickBridge {
+					claimed = new WeakSet       ();
+					hooked = new WeakSet        ();
+					covered = false;
+					enabled = true;
+					blocked = 0;
+					w                            ;
+	constructor(w                            ) {
+		this.w = w;
+		this.install();
+		w.document.addEventListener('load', this.onLoad, true);
+		w.addEventListener('pageshow', () => { this.enabled = true; w.document.addEventListener('load', this.onLoad, true); });
+		w.addEventListener('pagehide', () => {
+			this.enabled = false;
+			w.document.removeEventListener('load', this.onLoad, true);
+		});
+	}
+					onLoad = (e       )       => {
+		if (e.target instanceof this.w.HTMLScriptElement) this.install();
+	};
+					install()       {
+		const exported = (this.w                                                                         ).CommonHeader;
+		const proto = exported?.default?.prototype;
+		if (!proto || typeof proto.on !== 'function' || this.hooked.has(proto)) return;
+		if (this.w.document.querySelector('#CommonHeader')?.childElementCount) return;
+		const original = proto.on;
+		const bridge = this;
+		const wrapped = function(               name        , listener         , ...args           ) {
+			if (name !== 'commonHeader:linkClick' || typeof listener !== 'function') {
+				return Reflect.apply(original, this, [name, listener, ...args]);
+			}
+			const guarded = function(               payload                       , ...rest           ) {
+				if (bridge.enabled && payload?.nativeEvent && bridge.claimed.has(payload.nativeEvent)) {
+					bridge.blocked++;
+					return;
+				}
+				return Reflect.apply(listener, this, [payload, ...rest]);
+			};
+			const result = Reflect.apply(original, this, [name, guarded, ...args]);
+			bridge.covered = true;
+			return result;
+		};
+		try { proto.on = wrapped; if (proto.on === wrapped) this.hooked.add(proto); } catch { /* fallback */ }
+	}
+	claim(event            )                                        {
+		const header = this.w.document.querySelector('#CommonHeader');
+		const inside = !!header && event.composedPath().includes(header);
+		if (!inside) return {mode: 'ordinary', blocked: () => 0};
+		if (this.enabled && this.covered) {
+			const before = this.blocked;
+			this.claimed.add(event);
+			return {mode: 'header-bridge', blocked: () => this.blocked - before};
+		}
+		event.stopImmediatePropagation();
+		return {mode: 'header-safe-fallback', blocked: () => 0};
+	}
+}
+class WatchClickNavigation {
+					static bridges = new WeakMap                                   ();
+	static install(w                            )       {
+		if (!this.bridges.has(w)) this.bridges.set(w, new OfficialHeaderClickBridge(w));
+	}
+	static begin(w                            , event            , _watchId        , launch            )       {
+		this.install(w);
+		event.preventDefault();
+		this.bridges.get(w) .claim(event);
+		w.setTimeout(launch, 0);
+	}
+}
+WatchClickNavigation.install(window);
 class HoverMenu {
 		constructor(param) {
 				this.initialize(param);
@@ -69975,21 +70031,17 @@ class HoverMenu {
 								return;
 						}
 						const { target, watchId, url } = intent;
-						this._pagePreviewGuard?.claim(target);
-						e.preventDefault();
-						const propagate = this._playerConfig?.getValue?.('overrideWatchLink:allowPropagation') ??
-								this._playerConfig?.props?.['overrideWatchLink:allowPropagation'];
-						if (!propagate) {
-								e.stopImmediatePropagation();
-						}
-						this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
-						if (e.shiftKey) {
-								this._send(watchId);
-						}
-						else {
-								this._open(watchId);
-						}
-						window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+						WatchClickNavigation.begin(window, e, watchId, () => {
+								this._pagePreviewGuard?.claim(target);
+								this._query = nicoUtil.parseWatchQuery(url.search.substr(1));
+								if (e.shiftKey) {
+										this._send(watchId);
+								}
+								else {
+										this._open(watchId);
+								}
+								window.setTimeout(() => ZenzaWatch.emitter.emit('hideHover'), 1500);
+						});
 				};
 				document.addEventListener('click', onClick, true);
 		}
@@ -70002,45 +70054,7 @@ class HoverMenu {
 						}
 						return;
 				}
-				if (!Config.props.overrideGinza) {
-						return;
-				}
-				initializeGinzaSlayer(dialog, query);
-				await uq.complete();
-				const stopPlayer = (ev) => {
-						if (!document.body.classList.contains('showNicoVideoPlayerDialog'))
-								return;
-						if (/(^|[^\w])zenzaScreenMode_(small|sideView)([^\w]|$)/.test(document.body.className))
-								return;
-						ev.target.pause();
-				};
-				const video = document.querySelector('.grid-area_\\[player\\] video');
-				if (video !== null) {
-						video.addEventListener('play', stopPlayer);
-						video.pause();
-						return;
-				}
-				const root = document.getElementById('root');
-				if (!root) {
-						return;
-				}
-				new MutationObserver((records, observer) => {
-						for (const record of records) {
-								if (record.addedNodes.length === 0) {
-										continue;
-								}
-								const video = record.target.querySelector('.grid-area_\\[player\\] video');
-								if (video === null) {
-										continue;
-								}
-								video.addEventListener('play', stopPlayer);
-								video.pause();
-								observer.disconnect();
-						}
-				}).observe(root, {
-						childList: true,
-						subtree: true,
-				});
+				return;
 		};
 		const readyContent = (timeoutMs = 15000) => {
 				if (document.querySelector('[aria-label="nicovideo-content"]') != null) {
@@ -70513,6 +70527,9 @@ const replaceRedirectLinks = async () => {
 				}
 		};
 		const initializeLastSession = (dialog) => {
+				if (util.isGinzaWatchUrl()) {
+						return;
+				}
 				window.addEventListener('beforeunload', () => {
 						if (!dialog.isOpen) {
 								return;
@@ -71450,7 +71467,7 @@ class ModernAdvancedSettingsModel {
 										])]
 						]),
 						...group('再生・音声', '公式プレイヤー連携', [
-								['overrideGinza', '公式の視聴ページでZenzaWatchを優先']
+								['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { hidden: true }]
 						]),
 						...group('画面・映像', '画面フィルター', [
 								['screenFilter.showDescriptions', '画面フィルターの説明を表示'],
@@ -71784,7 +71801,7 @@ class ModernAdvancedSettingsModel {
 												description: 'ニコニコ動画内のリンクが対象です。外部サイトの直接クリック切替は非対応です。'
 										}],
 								['overrideWatchLink:allowPropagation', '動画リンクのクリックを他のスクリプトにも伝える', {
-												description: '既読記録などの連携用。ONにすると、サイト側の処理によって公式プレイヤーも開く場合があります。通常はOFFで使用してください。'
+												hidden: true, description: 'クリック伝播は自動で管理します。'
 										}],
 								['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く', { hidden: true }],
 								['enablePushState', 'ブラウザの履歴への反映を利用'],

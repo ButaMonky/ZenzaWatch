@@ -55,7 +55,10 @@ function buildInputs(root) {
       walk(path.join('packages', pkg, 'src'));
     }
   }
-  return files.sort();
+  walk('packages/external-playback');
+  walk('tools/typescript-stage1/advanced-src');
+  files.push('tools/generate-watch-click-navigation.cjs');
+  return [...new Set(files)].sort();
 }
 
 function hashFile(p) {
@@ -103,6 +106,8 @@ function main(argv) {
       fs.mkdirSync(path.dirname(dst), {recursive: true});
       fs.copyFileSync(path.join(sourceDir, rel), dst);
     }
+    fs.symlinkSync(path.join(sourceDir, 'tools/typescript-stage1/node_modules'),
+      path.join(work, 'tools/typescript-stage1/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
     fs.mkdirSync(path.join(work, 'dist'), {recursive: true});
 
     // The isolated build has no .git directory. Preserve the distribution

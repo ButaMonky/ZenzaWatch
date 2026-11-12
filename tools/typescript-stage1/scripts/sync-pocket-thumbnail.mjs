@@ -35,8 +35,8 @@ try {
   if(process.argv.length!==3||!['--write','--check'].includes(process.argv[2]))
     throw Error('POCKET_TS_MODE_INVALID');
   if(!existsSync(emitted)||!existsSync(source))throw Error('POCKET_TS_SOURCE_OR_EMIT_MISSING');
-  const next=render(readFileSync(emitted,'utf8'),readFileSync(source,'utf8'));
-  const current=existsSync(runtime)?readFileSync(runtime,'utf8'):'';
+  const next=render(readFileSync(emitted,'utf8'),readFileSync(source,'utf8').replace(/\r\n/g,'\n'));
+  const current=existsSync(runtime)?readFileSync(runtime,'utf8').replace(/\r\n/g,'\n'):'';
   if(process.argv[2]==='--check'){
     if(current!==next)throw Error('POCKET_TS_SOURCE_RUNTIME_MISMATCH');
   }else if(current!==next){

@@ -75,15 +75,6 @@ const { SettingPanelElement } = (() => {
         <div class="control">
           <label>
             <input type="checkbox" class="checkbox"
-              data-setting-name="overrideGinza"
-              .checked=${conf.overrideGinza}>
-              動画視聴ページでも公式プレイヤーの代わりに起動する
-          </label>
-        </div>
-
-        <div class="control">
-          <label>
-            <input type="checkbox" class="checkbox"
               data-setting-name="overrideWatchLink"
               .checked=${conf.overrideWatchLink}>
               [Zen]ボタンなしでZenzaWatchを開く(リロード後に反映)

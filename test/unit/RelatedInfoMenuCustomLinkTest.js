@@ -370,7 +370,7 @@ describe('Task396 related-menu builtin and browser-opening integration',()=>{
       const m=h.menu();m.update(video());
       const opened=[];h.win.open=(...args)=>{opened.push(args);return null;};
       m._onCommand('watch-ginza');
-      assert(opened[0][0].includes('zenza_official=1'));
+      assert(!new URL(opened[0][0]).searchParams.has('zenza_official'));
       assert(opened[0][2].includes('width=710'));
       m._onCommand('open-uad');
       assert(opened[1][0].includes('nicoad.nicovideo.jp'));

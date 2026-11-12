@@ -245,7 +245,7 @@ class ModernAdvancedSettingsModel {
                     ])]
             ]),
             ...group('再生・音声', '公式プレイヤー連携', [
-                ['overrideGinza', '公式の視聴ページでZenzaWatchを優先']
+                ['overrideGinza', '公式の視聴ページでZenzaWatchを優先', { hidden: true }]
             ]),
             ...group('画面・映像', '画面フィルター', [
                 ['screenFilter.showDescriptions', '画面フィルターの説明を表示'],
@@ -582,7 +582,7 @@ class ModernAdvancedSettingsModel {
                         description: 'ニコニコ動画内のリンクが対象です。外部サイトの直接クリック切替は非対応です。'
                     }],
                 ['overrideWatchLink:allowPropagation', '動画リンクのクリックを他のスクリプトにも伝える', {
-                        description: '既読記録などの連携用。ONにすると、サイト側の処理によって公式プレイヤーも開く場合があります。通常はOFFで使用してください。'
+                        hidden: true, description: 'クリック伝播は自動で管理します。'
                     }],
                 ['overrideWatchLink:others', '外部サイトの動画リンクをZenzaWatchで開く', { hidden: true }],
                 ['enablePushState', 'ブラウザの履歴への反映を利用'],

@@ -38,7 +38,8 @@ function fixture(path, singleton = false) {
     target.dispatchEvent(e);
     return e;
   };
-  const flush=async()=>{await new Promise(resolve=>setImmediate(resolve));
+  const flush=async()=>{await new Promise(resolve=>win.setTimeout(resolve,0));
+    await new Promise(resolve=>setImmediate(resolve));
     await new Promise(resolve=>setImmediate(resolve));};
   return {win,menu,video,opened,remote,sent,claims,click,flush,
     close:()=>dom.window.close()};

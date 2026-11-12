@@ -6,11 +6,11 @@ const {createContext,run,beginSection}=require('../helpers/extractSource');
 function fixture(inner,allowPropagation=false){
  const dom=new JSDOM('<body><div data-anchor-href="/watch/sm9" role="button">'+inner+'</div></body>',{url:'https://www.nicovideo.jp/search/test'});
  const win=dom.window,opens=[],ctx=createContext({window:win,document:win.document,location:win.location,ZenzaWatch:{emitter:{emit(){}}}});
- win.setTimeout=()=>0;run(beginSection('packages/lib/src/nico/nicoUtil.js'),ctx);
+ const tasks=[];win.setTimeout=(fn,ms=0)=>{if(ms===0)tasks.push(fn);return 0;};run(beginSection('packages/lib/src/nico/nicoUtil.js'),ctx);
  const source=stripTypeScriptTypes(fs.readFileSync(path.resolve(__dirname,'../../tools/typescript-stage1/nico-src/HoverMenu.ts'),'utf8')).replace(/^export\s*\{[^}]*\};?$/mg,'');
- run(source+';globalThis.Subject=HoverMenu;',ctx);
+ run(beginSection('packages/zenza/src/menu/WatchClickNavigation.js')+'\n'+source+';globalThis.Subject=HoverMenu;',ctx);
  const menu=Object.create(ctx.Subject.prototype);menu._playerConfig={props:{'overrideWatchLink:allowPropagation':allowPropagation}};menu._open=id=>opens.push(id);menu._send=id=>opens.push(id);menu._overrideWatchLink();
- return {win,opens,click(){const e=new win.MouseEvent('click',{bubbles:true,cancelable:true,composed:true,button:0});win.document.querySelector('#hit').dispatchEvent(e);return e;}};
+ return {win,opens,click(){const e=new win.MouseEvent('click',{bubbles:true,cancelable:true,composed:true,button:0});win.document.querySelector('#hit').dispatchEvent(e);while(tasks.length)tasks.shift()();return e;}};
 }
 describe('generic nested action boundaries in video cards',()=>{
  for(const inner of [
@@ -40,7 +40,7 @@ describe('watch click propagation ownership',()=>{
     f.win.document.body.addEventListener('click',()=>observed++);
     assert.equal(f.click().defaultPrevented,true);
     assert.deepStrictEqual(f.opens,['sm10']);
-    assert.equal(observed,allowPropagation?1:0);
+    assert.equal(observed,1);
    } finally {f.win.close();}
   });
   it('uncooperative delegated router, propagation='+allowPropagation,()=>{
@@ -51,8 +51,8 @@ describe('watch click propagation ownership',()=>{
     f.win.document.body.addEventListener('click',()=>observed++);
     assert.equal(f.click().defaultPrevented,true);
     assert.deepStrictEqual(f.opens,['sm10']);
-    assert.equal(routed,allowPropagation?1:0);
-    assert.equal(observed,allowPropagation?1:0);
+    assert.equal(routed,1);
+    assert.equal(observed,1);
    } finally {f.win.close();}
   });
  }

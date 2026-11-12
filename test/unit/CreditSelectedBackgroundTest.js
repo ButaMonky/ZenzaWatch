@@ -15,7 +15,7 @@ describe('Supporter credit selected background (Task171)',()=>{
  [0,56].forEach(sec=>it(`passes source and isolated capture to the credit at position ${sec}`,async()=>{
   const calls=[],record=data(sec),c=createContext({Emitter:class{},AbortController,SupporterCredit:{load:async()=>record},VideoCaptureUtil:{capture:async(...args)=>{calls.push(args);return {};}}});
   run(extract('src/NicoVideoPlayer.js','NicoVideoPlayer')+';this.Player=NicoVideoPlayer;',c);
-  const player=Object.create(c.Player.prototype);player._creditRequest={videoId:'sm9',tags:[]};player._playerConfig={props:{'supporterCredit.gift':true}};player._videoPlayer={src:'https://media.example.test/fixture.m3u8',currentTime:20};
+  const player=Object.create(c.Player.prototype);player._creditRequest={videoId:'sm9',tags:[]};player._playerConfig={props:{'uaa.enable':true,'supporterCredit.enable':true,'supporterCredit.gift':true}};player._videoPlayer={src:'https://media.example.test/fixture.m3u8',currentTime:20};
   player._supporterCredit={prepare:async(d,options)=>{assert.equal(d,record);assert.equal(options.signal,player._creditAbort.signal);await options.captureBackground(sec,options.signal);}};
   await player._kickSupporterCreditLoad();assert.equal(calls.length,1);assert.equal(calls[0][0],player._videoPlayer.src);assert.equal(calls[0][1],sec);assert.equal(calls[0][2].timeout,8000);assert.equal(player._videoPlayer.currentTime,20);assert.equal(player._creditData,record);
  }));

@@ -32,3 +32,5 @@ session/*
 /tools/qa/*
 !/tools/qa/scene-vcb-real-source.cjs
 !/tools/qa/scui-native-css-extractor.cjs
+
+!/tools/generate-watch-click-navigation.cjs

@@ -1,3 +1,4 @@
+require('./tools/generate-watch-click-navigation.cjs').generate();
 var srcDir = './src';
 var outFile = 'dist/ZenzaWatch.user.js';
 

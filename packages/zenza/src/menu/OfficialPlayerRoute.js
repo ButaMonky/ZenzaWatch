@@ -12,7 +12,7 @@ const OfficialPlayerRoute = Object.freeze({
     makeUrl(watchId, currentTime = 0) {
         const url = new URL('https://www.nicovideo.jp/watch/' +
             encodeURIComponent(String(watchId ?? '')));
-        url.searchParams.set(this.PARAM, '1');
+        // Ordinary official links need no Zenza-specific URL state.
         // NicoNico's official seek parameter is `from`, not `s`.
         // Use only a finite, positive whole-second position.
         const time = Number(currentTime);

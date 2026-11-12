@@ -14,12 +14,13 @@ describe('AUD cooperative watch link ownership',()=>{
  function fixture(){
   const dom=new JSDOM('<body><a href="/watch/sm9"><span>video</span></a></body>',{url:'https://www.nicovideo.jp/ranking'});
   const win=dom.window,opens=[],ctx=createContext({window:win,document:win.document,location:win.location,ZenzaWatch:{emitter:{emit(){}}}});
-  win.setTimeout=()=>0;
+  const tasks=[];win.setTimeout=(fn,ms=0)=>{if(ms===0)tasks.push(fn);return 0;};
+  run(beginSection('packages/zenza/src/menu/WatchClickNavigation.js'),ctx);
   run(beginSection('packages/lib/src/nico/nicoUtil.js'),ctx);
   const Menu=canonical('nico-src/HoverMenu.ts','HoverMenu',ctx),menu=Object.create(Menu.prototype);
   menu._playerConfig={props:{'overrideWatchLink:allowPropagation':true}};
   menu._open=id=>opens.push(id);menu._send=id=>opens.push(id);menu._overrideWatchLink();
-  return {win,opens,close:()=>win.close(),click:(options={})=>{const e=new win.MouseEvent('click',{bubbles:true,cancelable:true,...options});win.document.querySelector('span').dispatchEvent(e);return e;}};
+  return {win,opens,close:()=>win.close(),click:(options={})=>{const e=new win.MouseEvent('click',{bubbles:true,cancelable:true,...options});win.document.querySelector('span').dispatchEvent(e);while(tasks.length)tasks.shift()();return e;}};
  }
  it('lets body read markers observe the original claimed click and prevents cooperative navigation',()=>{
   const f=fixture();try{let read=0,navigated=0;
@@ -51,9 +52,9 @@ describe('AUD unsupported settings stay preserved without editable controls',()=
   const dom=new JSDOM('<label><input type="checkbox" data-setting-name="bestZenTube">quality</label>');
   try {
    const Model=canonical('advanced-src/ModernAdvancedSettingsModel.ts','ModernAdvancedSettingsModel',createContext());
-   const values={'overrideWatchLink:others':true,bestZenTube:true,overrideWatchLink:true,'overrideWatchLink:allowPropagation':false};
+   const values={'overrideWatchLink:others':true,bestZenTube:true,overrideGinza:true,overrideWatchLink:true,'overrideWatchLink:allowPropagation':false};
    const model=new Model({config:{default:values,getValue:key=>values[key],setValue(){throw new Error('must preserve saved values');}},legacyRoot:dom.window.document.body});
-   assert(!model.search('').some(d=>['overrideWatchLink:others','bestZenTube'].includes(d.id)));
+   assert(!model.search('').some(d=>['overrideWatchLink:others','bestZenTube','overrideGinza','overrideWatchLink:allowPropagation'].includes(d.id)));
    assert(model.descriptor('overrideWatchLink').description.includes('外部サイト'));
    assert(model.descriptor('overrideWatchLink:allowPropagation'));
    assert.strictEqual(values.bestZenTube,true);assert.strictEqual(values['overrideWatchLink:others'],true);

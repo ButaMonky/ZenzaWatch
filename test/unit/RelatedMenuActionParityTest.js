@@ -42,11 +42,11 @@ for(const kind of ['source','dist']){
       h.root.execCommand('open-twitter-hash');
       assert.strictEqual(h.opened[2][0],'https://twitter.com/hashtag/sm9');
     });
-    it('preserves the official marker and honors the position and window preferences',()=>{
+    it('omits the private marker and honors the position and window preferences',()=>{
       const h=setup(kind,{official:{includePosition:false,openMode:'new-window',popupWidth:810}});
       h.dialog._onCommand('openGinza');
       const url=new URL(h.opened[0][0]);
-      assert.strictEqual(url.searchParams.get('zenza_official'),'1');
+      assert.strictEqual(url.searchParams.get('zenza_official'),null);
       assert.strictEqual(url.searchParams.has('from'),false);
       assert(h.opened[0][2].includes('width=810'));
     });

@@ -26,10 +26,10 @@ test('route guard parity for null, string, and wrong-typed markers', () => {
       original.isOfficialRequest(query));
   }
 });
-test('neither implementation changes the default official route policy', () => {
+test('both implementations emit native official links', () => {
   const url = new URL(typed.makeUrl('sm9', 1.9));
   assert.equal(url.origin, 'https://www.nicovideo.jp');
-  assert.equal(url.searchParams.get('zenza_official'), '1');
+  assert.equal(url.searchParams.get('zenza_official'), null);
   assert.equal(url.searchParams.get('from'), '1');
   assert.equal(new URL(typed.makeUrl('sm9', 0)).searchParams.has('from'), false);
 });

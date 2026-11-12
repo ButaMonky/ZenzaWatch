@@ -50,6 +50,8 @@ function setup(rel = 'src/VideoInfoPanel.js') {
   };
 
   const view = Object.create(VideoSearchForm.prototype);
+  // These tests exercise the explicitly requested/hovered count path.
+  view._config = {props: {wordCountMode: 'on-demand'}};
   view._wordCountCache = new Map();
   view._form = {
     mode: {value: 'tag'},

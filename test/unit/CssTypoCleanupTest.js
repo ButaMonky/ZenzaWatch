@@ -40,7 +40,7 @@ describe('Task256 CSS typo cleanup', () => {
   it('keeps VideoSearchForm padding and width as separate declarations', () => {
     const source = fs.readFileSync(path.join(REPO_ROOT, 'src/VideoInfoPanel.js'), 'utf8');
     const dist = fs.readFileSync(path.join(REPO_ROOT, 'dist/ZenzaWatch-dev.user.js'), 'utf8');
-    const expected = /padding:\s*0 8px;\s*width:\s*248px;/;
+    const expected = /padding:\s*0 8px;\s*width:\s*320px;/;
 
     assert.ok(expected.test(source), 'source search panel CSS is malformed');
     assert.ok(expected.test(dist), 'dist search panel CSS is malformed');

@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.397-task1023
+// @version        2.7.398-task1024
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 17:59Z 7b41dc7
+// build: 2026-11-12 18:35Z 80e0452
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1222,7 +1222,7 @@ function createDisplaySettings(w, gm, registered=[]) {
   return {publish,apply,save,scheduleSave,diagnostics,migrate};
 }
 
- const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
+ const displaySettings=createDisplaySettings(window,gm,["externalLinks.enabled","externalLinks.siteMode","externalLinks.sites","externalLinks.excludedSites","externalLinks.displayMode","externalLinks.size","externalLinks.redirects","externalLinks.textIds","externalLinks.prefixes","externalLinks.preflight","volume","showComment","autoPlay","autoPlay:ginza","autoPlay:others","enableResume","resume.recordEnabled","resume.clearOnComplete","bookmark.showToolbarButton","bookmark.showVideoThumbnails","bookmark.showScenePreviews","bookmark.thumbnailWidth","bookmark.titleFontSize","bookmark.titleLines","abRepeat.enabled","loop","mute","screenMode","screenMode:ginza","screenMode:others","autoFullScreen","autoCloseFullScreen","continueNextPage","backComment","autoPauseCommentInput","sharedNgLevel","enablePushState","enableHeatMap","pipPageThumbnail","pipPageThumbnailSource","enableCommentPreview","enableAutoMylistComment","menuScale","enableTogglePlayOnClick","enableDblclickClose","smallModeOffsetX","smallModeOffsetY","smallModeWidth","smallModeHeight","smallModeAspectLock","enableFullScreenOnDoubleClick","storyboardCacheMaxMB","storyboardCacheDays","savedSceneFetch","enableStoryboard","enableStoryboardBar","popup.notifyColor","popup.alertColor","popup.warningColor","notificationHistory.enabled","notificationHistory.commentText","notificationHistory.level.info","notificationHistory.level.success","notificationHistory.level.warning","notificationHistory.level.error","notificationHistory.record.general","notificationHistory.record.player","notificationHistory.record.comment","notificationHistory.record.like","notificationHistory.record.mylist","notificationHistory.record.playlist","notificationHistory.record.search","notificationHistory.record.storyboard","notificationHistory.record.tags","notificationHistory.record.advertising","notificationHistory.record.related","notificationHistory.record.network","notificationHistory.record.system","popup.backgroundTransparency","videoInfoPanelTab","fullscreenControlBarMode","controlBar.showOnPause.small","controlBar.showOnPause.fullscreen","controlBar.hideAfterSeconds.small","controlBar.hideAfterSeconds.fullscreen","relatedMenu.customLinks","relatedMenu.order","relatedMenu.hiddenItems","relatedMenu.builtinOptions","forceEconomy","enableFilter","wordFilter","wordRegFilter","wordRegFilterFlags","userIdFilter","commandFilter","removeNgMatchedUser","ngComposite.rules","filter.fork0","filter.fork1","filter.fork2","filter.fork3","filter.defaultThread","filter.ownerThread","filter.communityThread","filter.nicosThread","filter.easyThread","filter.aiThread","filter.extraDefaultThread","filter.extraOwnerThread","filter.extraCommunityThread","filter.extraNicosThread","filter.extraEasyThread","videoTagFilter","videoOwnerFilter","enableCommentPanel","enableCommentPanelAutoScroll","commentSpeedRate","autoCommentSpeedRate","playlistLoop","playlist.maxItems","enableAdDecoration","debugCheckAdDecoration","commentLanguage","baseFontFamily","baseChatScale","baseFontBolder","cssFontWeight","allowOtherDomain","overrideWatchLink","overrideWatchLink:allowPropagation","overrideWatchLink:others","speakLark","speakLarkVolume","enableSingleton","loadLinkedChannelVideo","commentLayerOpacity","commentLayer.textShadowType","commentLayer.enableSlotLayoutEmulation","commentLayer.maxDisplayComment","commentLayer.protectCA","commentLayer.ownerCommentShadowColor","commentLayer.easyCommentOpacity","commentLayer.aiCommentOpacity","overrideGinza","enableGinzaSlayer","playbackRate","enableVideoSession","videoServerType","autoDisableNew","dmcVideoQuality","domandVideoQuality","video.hls.enableOnlyRequired","enableNicosJumpVideo","videoSearch.ownerOnly","videoSearch.mode","videoSearch.order","videoSearch.sort","videoSearch.f_range","videoSearch.l_range","videoSearch.genre","videoSearch.selectContentType","videoSearch.videoIdSuggestMode","videoSearch.wordCountMode","videoHeader.position","uaa.enable","audio.autoAdjust","supporterCredit.enable","supporterCredit.voice","supporterCredit.gift","supporterCredit.skipInPlaylist","screenFilter.enable","screenFilter.saved","screenFilter.bloom","screenFilter.bloomThreshold","screenFilter.bloomRadius","screenFilter.posterize","screenFilter.edge","screenFilter.edgeStyle","screenFilter.rgbShift","screenFilter.grain","screenFilter.grainSize","screenFilter.scanlines","screenFilter.scanlineSpacing","screenFilter.userPresets","screenFilter.showDescriptions","screenFilter.showAdjustments","screenFilter.renderQuality","screenFilter.changedOnly","screenFilter.splitPosition","screenFilter.presetOrder","screenFilter.brightness","screenFilter.contrast","screenFilter.saturate","screenFilter.sepia","screenFilter.hue","screenFilter.blur","screenFilter.invert","screenFilter.gamma","screenFilter.blackLevel","screenFilter.whiteLevel","screenFilter.sharpen","screenFilter.temperature","screenFilter.tint","screenFilter.autoLevels","screenFilter.vignette","screenFilter.colorize","screenFilter.flipH","screenFilter.flipV","screenFilter.applyToScreenshot","screenFilter.applyToCommentPip","screenshot.prefix","screenshot.filenameTemplate","search.limit","touch.enable","touch.tap2command","touch.tap3command","touch.tap4command","touch.tap5command","autoZenTube","bestZenTube","KEY_CLOSE","KEY_RE_OPEN","KEY_HOME","KEY_SEEK_LEFT","KEY_SEEK_RIGHT","KEY_SEEK_PREV_FRAME","KEY_SEEK_NEXT_FRAME","KEY_VOL_UP","KEY_VOL_DOWN","KEY_INPUT_COMMENT","KEY_FULLSCREEN","KEY_MUTE","KEY_TOGGLE_COMMENT","KEY_TOGGLE_LOOP","KEY_DEFLIST_ADD","KEY_DEFLIST_REMOVE","KEY_TOGGLE_PLAY","KEY_TOGGLE_PLAYLIST","KEY_SCREEN_MODE_1","KEY_SCREEN_MODE_2","KEY_SCREEN_MODE_3","KEY_SCREEN_MODE_4","KEY_SCREEN_MODE_5","KEY_SCREEN_MODE_6","KEY_SHIFT_RESET","KEY_SHIFT_DOWN","KEY_SHIFT_UP","KEY_NEXT_VIDEO","KEY_PREV_VIDEO","KEY_SCREEN_SHOT","KEY_SCREEN_SHOT_WITH_COMMENT","sceneSearch.presentation.normal","sceneSearch.presentation.fullscreen","sceneSearch.presentation.migrationAcknowledged","sceneSearch.layout.normal","sceneSearch.layout.fullscreen","sceneSearch.layout.linkFullscreen","sceneSearch.seekStepSeconds","sceneSearch.idleHideSeconds","sceneSearch.controlsReveal","sceneSearch.animation","sceneSearch.enabled","sceneSearch.commentListScale","sceneSearch.commentPreviewVisible","sceneSearch.miniCommentVisible","sceneSearch.commentListVisible","sceneSearch.commentListBackgroundOpacity","sceneSearch.thumbnailScale","sceneSearch.miniCommentMode"]);
 
  'use strict';
 
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.397-task1023';
+    var VER = '2.7.398-task1024';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 17:59Z 7b41dc7';
+    var BUILD = '2026-11-12 18:35Z 80e0452';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -5867,8 +5867,9 @@ const Config = (() => {
 				'videoSearch.f_range': 0,
 				'videoSearch.l_range': 0,
 				'videoSearch.genre': 'all',
+				'videoSearch.selectContentType': 'long',
 				'videoSearch.videoIdSuggestMode': 'merged',
-				'videoSearch.wordCountMode': 'on-demand',
+				'videoSearch.wordCountMode': 'auto',
 				'videoHeader.position': 'auto',
 				'uaa.enable': true,
 				'audio.autoAdjust': false, // 既定はOFF（ONにすると音が大きい動画だけ音量が下がる）
@@ -6111,7 +6112,8 @@ const Config = (() => {
 								pipPageThumbnailSource: ['smart', 'legacy'],
 								'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
 								'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
-								'videoSearch.wordCountMode': ['on-demand', 'auto', 'off']
+								'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
+								'videoSearch.selectContentType': ['long', 'short']
 						};
 						const name = key.startsWith('screenMode:') ? 'screenMode' : key;
 						if (Object.prototype.hasOwnProperty.call(choices, name)) {
@@ -19321,6 +19323,12 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 				static async search(word, params) {
 						const searchWord = (word && word.searchWord) ? word.searchWord : word;
 						const searchParams = (word && word.searchWord) ? word : (params || {});
+						if (searchParams.selectContentType === 'short') {
+								if (typeof searchWord !== 'string' || !NicoSearchNvapi.canHandle(searchParams)) {
+										throw new Error('ショート検索では投稿者・コメント数による絞り込みは利用できません');
+								}
+								return NicoSearchNvapi.search(searchWord, searchParams, 100);
+						}
 						if (!searchParams.useSnapshotSearch && typeof searchWord === 'string' && NicoSearchNvapi.canHandle(searchParams)) {
 								try {
 										return await NicoSearchNvapi.search(searchWord, searchParams, 100);
@@ -19430,6 +19438,12 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
 				}
 				static async searchMore(word, params, maxLimit = 300, isCurrent) {
 						ensureCurrent(isCurrent);
+						if (params?.selectContentType === 'short') {
+								if (!NicoSearchNvapi.canHandle(params)) {
+										throw new Error('ショート検索では投稿者・コメント数による絞り込みは利用できません');
+								}
+								return NicoSearchNvapi.search(word, params, maxLimit, isCurrent);
+						}
 						if (params && (params.userId || params.channelId)) {
 								return NicoSearchApiV2Loader.searchByOwner(word, params, maxLimit, isCurrent);
 						}
@@ -56406,7 +56420,11 @@ class NicoVideoPlayerDialog extends Emitter {
 				}
 				delete option.owner;
 				let query = this._videoWatchOptions.query;
+				const selectedContentType = option.selectContentType;
 				option = Object.assign(option, query);
+				if (selectedContentType === 'long' || selectedContentType === 'short') {
+						option.selectContentType = selectedContentType;
+				}
 				this._state.currentTab = 'playlist';
 				const searchLimit = this._playerConfig.props['search.limit'];
 				owner.playlist.loadSearchVideo(word, option, searchLimit, () => this._isCurrentPlaylistLoadOwner(owner)).then((result) => {
@@ -64352,6 +64370,13 @@ class VideoSearchForm extends Emitter {
 				this._applySortValue(config.props.sort);
 				form['f_range'].value = `${config.props.f_range || 0}`;
 				form['l_range'].value = `${config.props.l_range || 0}`;
+				form['selectContentType'].value = config.props.selectContentType === 'short' ? 'short' : 'long';
+				this._syncContentTypeControls();
+				config.on?.('selectContentType', (value) => {
+						form['selectContentType'].value = value === 'short' ? 'short' : 'long';
+						this._syncContentTypeControls();
+						this._refreshWordCountsAfterFilterChange();
+				});
 				form['genre'].value = config.props.genre || 'all';
 				if (!form['genre'].value) {
 						form['genre'].value = 'all';
@@ -64372,6 +64397,10 @@ class VideoSearchForm extends Emitter {
 								item.addEventListener('change', () => {
 										this._word.focus();
 										config.props[item.name] = this._form[item.name].value;
+										if (item.name === 'selectContentType') {
+												this._syncContentTypeControls();
+												this._refreshWordCountsAfterFilterChange();
+										}
 										submit();
 								});
 						}
@@ -64385,6 +64414,9 @@ class VideoSearchForm extends Emitter {
 						else {
 								item.addEventListener('change', () => {
 										config.props[item.name] = item.value;
+										if (item.name === 'selectContentType') {
+												this._syncContentTypeControls();
+										}
 										if (item.tagName === 'SELECT') {
 												submit();
 										}
@@ -64570,7 +64602,7 @@ class VideoSearchForm extends Emitter {
 		}
 		get wordCountMode() {
 				const mode = this._config?.props?.wordCountMode;
-				return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'on-demand';
+				return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'auto';
 		}
 		_applyVideoIdSuggestMode() {
 				const box = this._videoIdBox;
@@ -64600,6 +64632,7 @@ class VideoSearchForm extends Emitter {
 				if (key === this._videoIdKey && visible === this._videoIdBox.classList.contains('is-open')) {
 						return;
 				}
+				const reopening = visible && !this._videoIdBox.classList.contains('is-open');
 				const keyChanged = this._videoIdKey !== key;
 				this._videoIdKey = key;
 				this._videoIdBare = bare;
@@ -64611,6 +64644,7 @@ class VideoSearchForm extends Emitter {
 						this._videoIdNavKey = '';
 						window.clearTimeout(this._videoIdWaitTimer);
 						this._videoIdTagSeq++;
+						this._videoIdTagWord = ''; // A cancelled suggestion request must restart on reopening.
 						this._videoIdCleanupTimer = window.setTimeout(() => {
 								if (this._videoIdBox.classList.contains('is-open')) {
 										return;
@@ -64688,8 +64722,11 @@ class VideoSearchForm extends Emitter {
 						hint.textContent = ids.length > 1 ? '↑↓ 選択・Enter 再生・Esc 閉じる' : 'Enter 再生・Esc 閉じる';
 						hint.title = 'クリック/Enter: 再生　Shift+Enter: 次に再生　↑↓: 選択(複数の時)　Esc: 閉じる';
 				}
-				this._updateVideoIdSearchRow();
 				this._videoIdBox.classList.add('is-open');
+				this._updateVideoIdSearchRow(reopening);
+				if (reopening) {
+						this._scheduleAutomaticTagCounts();
+				}
 		}
 		_removeVideoCard(card) {
 				card.classList.add('is-leaving');
@@ -65377,9 +65414,19 @@ class VideoSearchForm extends Emitter {
 				const key = this._sortKey.value;
 				this._sortOrder.disabled = key === 'playlist' || VideoSearchForm.UNORDERABLE.includes(key);
 		}
+		_syncContentTypeControls() {
+				const input = this._ownerOnlyInput;
+				if (!input) {
+						return;
+				}
+				const shorts = this._form.elements.namedItem('selectContentType')?.value === 'short';
+				input.disabled = shorts;
+				input.closest('label')?.setAttribute('title', shorts ?
+						'ショート検索では投稿者による絞り込みは利用できません。通常動画に戻すと利用できます。' : '');
+		}
 		get filterOptions() {
 				const form = this._form;
-				const result = {};
+				const result = { selectContentType: form.elements?.namedItem('selectContentType')?.value === 'short' ? 'short' : 'long' };
 				const fRange = form['f_range'].value * 1;
 				const lRange = form['l_range'].value * 1;
 				const genre = form['genre'].value;
@@ -65426,18 +65473,23 @@ VideoSearchForm.__css__ = (`
 			top: 32px;
 			right: 8px;
 			padding: 0 8px;
-			width: 248px;
+			width: 320px;
+			max-width: calc(100% - 16px);
+			box-sizing: border-box;
 			z-index: 1000;
 		}
 		.zenzaScreenMode_normal .zenzaWatchVideoHeaderPanel.is-onscreen .zenzaVideoSearchPanel {
 			top: 36px;
-			right: -24px;
+			right: 8px;
 		}
 		.zenzaScreenMode_big    .zenzaWatchVideoHeaderPanel.is-onscreen .zenzaVideoSearchPanel,
 		.zenzaScreenMode_3D    .zenzaVideoSearchPanel,
 		.zenzaScreenMode_wide  .zenzaVideoSearchPanel,
 		.zenzaWatchVideoHeaderPanel.is-fullscreen .zenzaVideoSearchPanel {
 			top: 64px;
+		}
+		.zenzaVideoSearchPanel:has(.searchVideoIdResult.is-open.is-mode-side.is-bare:not(.is-word)) {
+			width: 560px;
 		}
 		.zenzaVideoSearchPanel:focus-within {
 			background: rgba(50, 50, 50, 0.8);
@@ -65446,23 +65498,35 @@ VideoSearchForm.__css__ = (`
 			opacity: 0;
 		}
 		.zenzaVideoSearchPanel .searchInputHead {
-			position: absolute;
-			opacity: 0;
-			pointer-events: none;
+			display: none;
 			padding: 4px;
-			transition: transform 0.2s ease, opacity 0.2s ease;
 		}
-		.zenzaVideoSearchPanel .searchInputHead:hover,
-		.zenzaVideoSearchPanel:focus-within .searchInputHead {
-			background: rgba(50, 50, 50, 0.8);
+		.zenzaVideoSearchPanel:focus-within .searchInputHead,
+		.zenzaVideoSearchPanel .searchInputHead:hover {
+			display: block;
 		}
-		.zenzaVideoSearchPanel           .searchInputHead:hover,
-		.zenzaVideoSearchPanel:focus-within .searchInputHead {
-			pointer-events: auto;
-			opacity: 1;
-			transform: translate3d(0, -100%, 0);
+		.zenzaVideoSearchPanel .searchModeRow {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			margin-bottom: 6px;
 		}
-			.zenzaVideoSearchPanel .searchMode {
+		.zenzaVideoSearchPanel .searchModeCaption {
+			color: #ccc;
+			font-size: 12px;
+			flex: 0 0 4em;
+		}
+		.zenzaVideoSearchPanel .searchModeRow .searchModeLabel {
+			flex: 1;
+			min-width: 0;
+			text-align: center;
+		}
+		.zenzaVideoSearchPanel .searchModeLabel input:focus-visible + span {
+			outline: 2px solid #8acbff;
+			outline-offset: 1px;
+		}
+			.zenzaVideoSearchPanel .searchMode,
+			.zenzaVideoSearchPanel .searchContentType {
 				position: absolute;
 				opacity: 0;
 			}
@@ -65473,7 +65537,7 @@ VideoSearchForm.__css__ = (`
 				display: inline-block;
 				padding: 4px 8px;
 				line-height: 1;
-				color: #666;
+				color: #bbb;
 				cursor: pointer;
 				border-radius: 8px;
 				border-color: transparent;
@@ -65490,7 +65554,9 @@ VideoSearchForm.__css__ = (`
 				cursor: default;
 			}
 		.zenzaVideoSearchPanel .searchWord {
-			white-space: nowrap;
+			display: flex;
+			align-items: center;
+			gap: 4px;
 			padding: 0 4px;
 			position: relative;
 		}
@@ -65507,8 +65573,8 @@ VideoSearchForm.__css__ = (`
 					transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
 					margin 0.32s ease;
 				pointer-events: none;
-				width: 280px;
-				max-width: calc(100vw - 48px);
+				width: auto;
+				max-width: 100%;
 				box-sizing: border-box;
 			}
 			.zenzaVideoSearchPanel:focus-within .searchVideoIdResult.is-open {
@@ -65605,7 +65671,7 @@ VideoSearchForm.__css__ = (`
 			}
 			/* B: 左右に並べる */
 			.zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side {
-				width: 560px;
+				width: auto;
 			}
 			.zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare .searchVideoIdResult-body {
 				flex-direction: row;
@@ -65660,6 +65726,7 @@ VideoSearchForm.__css__ = (`
 			.zenzaVideoSearchPanel .searchVideoIdResult-tagCount.is-counting {
 				display: inline-block;
 				width: 28px;
+				flex: 0 0 28px;
 				height: 15px;
 				background: linear-gradient(90deg, #444 0%, #666 50%, #444 100%);
 				background-size: 200% 100%;
@@ -66044,7 +66111,10 @@ VideoSearchForm.__css__ = (`
 				}
 			}
 			.zenzaVideoSearchPanel .searchWordInput {
-				width: 200px;
+				width: 0;
+				min-width: 0;
+				flex: 1 1 auto;
+				box-sizing: border-box;
 				margin: 0;
 				height: 24px;
 				line-height: 24px;
@@ -66071,6 +66141,7 @@ VideoSearchForm.__css__ = (`
 			}
 			.zenzaVideoSearchPanel .searchSubmit {
 				width: 34px;
+				flex: 0 0 34px;
 				margin: 0;
 				padding: 0;
 				font-size: 14px;
@@ -66099,6 +66170,7 @@ VideoSearchForm.__css__ = (`
 			.zenzaVideoSearchPanel .searchClear {
 				display: inline-block;
 				width: 28px;
+				flex: 0 0 28px;
 				margin: 0;
 				padding: 0;
 				font-size: 16px;
@@ -66125,8 +66197,11 @@ VideoSearchForm.__css__ = (`
 				transform: scale(1.2);
 			}
 		.zenzaVideoSearchPanel .searchInputFoot {
-			white-space: nowrap;
+			white-space: normal;
 			position: absolute;
+			left: 8px;
+			right: 8px;
+			box-sizing: border-box;
 			opacity: 0;
 			padding: 4px;
 			pointer-events: none;
@@ -66147,14 +66222,19 @@ VideoSearchForm.__css__ = (`
 			}
 			.zenzaVideoSearchPanel .ownerOnlyLabel {
 				cursor: pointer;
+				display: flex;
+				align-items: flex-start;
+				gap: 4px;
 			}
 			.zenzaVideoSearchPanel .searchOptionRow {
 				display: flex;
+				flex-wrap: wrap;
 				gap: 4px;
 				margin-bottom: 4px;
 			}
 			.zenzaVideoSearchPanel .searchOptionRow select {
-				max-width: 140px;
+				max-width: 100%;
+				min-width: 0;
 			}
 			.zenzaVideoSearchPanel .searchOrderSelect[disabled] {
 				opacity: 0.4;
@@ -66172,6 +66252,13 @@ VideoSearchForm.__tpl__ = (`
 		<div class="zenzaVideoSearchPanel" id="zenzaVideoSearchPanel">
 			<form action="javascript: void(0);">
 				<div class="searchInputHead">
+					<div class="searchModeRow" role="group" aria-label="検索対象">
+						<span class="searchModeCaption">検索対象</span>
+						<label class="searchModeLabel"><input type="radio" name="selectContentType" class="searchContentType" value="long" checked><span>動画</span></label>
+						<label class="searchModeLabel"><input type="radio" name="selectContentType" class="searchContentType" value="short"><span>ショート</span></label>
+					</div>
+					<div class="searchModeRow" role="group" aria-label="検索方法">
+					<span class="searchModeCaption">検索方法</span>
 					<label class="searchModeLabel">
 						<input type="radio" name="mode" class="searchMode" value="keyword">
 						<span>キーワード</span>
@@ -66181,6 +66268,7 @@ VideoSearchForm.__tpl__ = (`
 							id="zenzaVideoSearch-tag" checked="checked">
 							<span>タグ</span>
 					</label>
+					</div>
 				</div>
 				<div class="searchWord">
 					<button class="searchClear command"
@@ -71990,13 +72078,17 @@ class ModernAdvancedSettingsModel {
 								['enableAdDecoration', 'プレイリストで動画の装飾枠を表示']
 						]),
 						...group('プレイリスト・検索', '検索', [
+								['videoSearch.selectContentType', '検索対象', {
+												...select([['long', '通常動画'], ['short', 'ショート']]),
+												description: '検索欄の「検索対象」と共通の設定です。ショートではニコニコのショート動画だけを検索します。短い通常動画を検索する設定ではありません。ショート検索では「再生中の動画の投稿者の動画のみ」は利用できません。'
+										}],
 								['videoSearch.wordCountMode', '検索候補のヒット件数を取得するタイミング', {
 												...select([
-														['on-demand', '必要なときだけ（推奨・低通信量）'],
+														['on-demand', '必要なときだけ（低通信量）'],
 														['auto', '自動で表示（通信量が増える）'],
 														['off', '件数を表示しない（最も低通信量）']
 												]),
-												description: '検索行とタグ候補の件数を数える追加通信の設定です。「必要なときだけ」はマウスを乗せるか↑↓キーで選んだ候補のみ取得します。「自動」は検索語と表示中のタグ候補を順番に数えます。「表示しない」は件数の追加通信を行いません。通常の検索やタグ予測の通信には影響しません。'
+												description: '検索行とタグ候補の件数を数える追加通信の設定です。「必要なときだけ」はマウスを乗せるか↑↓キーで選んだ候補のみ取得します。初期設定の「自動」は検索語と表示中のタグ候補を順番に数えます。取得済みの件数は再利用します。「表示しない」は件数の追加通信を行いません。通常の検索やタグ予測の通信には影響しません。'
 										}],
 								['videoSearch.videoIdSuggestMode', '検索欄に表示する候補の配置', {
 												...select([

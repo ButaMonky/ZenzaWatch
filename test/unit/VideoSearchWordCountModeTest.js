@@ -52,7 +52,7 @@ function makeTag(word) {
 describe('Task318 search hit-count traffic policy',()=>{
   it('uses explicit on-demand, auto and off settings with safe fallback',()=>{
     const h=harness('unexpected');
-    assert.strictEqual(h.view.wordCountMode,'on-demand');
+    assert.strictEqual(h.view.wordCountMode,'auto');
     for(const m of ['on-demand','auto','off']) {
       h.view._config.props.wordCountMode=m;
       assert.strictEqual(h.view.wordCountMode,m);
@@ -169,3 +169,35 @@ describe('Task318 explicit selection and cancellation',()=>{
     assert.strictEqual(h.calls.length,0);
   });
 });
+ describe('Task1024 reopening automatic counts',()=>{
+  it('restarts cancelled counts when the same word is reopened before cleanup',async()=>{
+    const h=harness('auto');
+    h.Search.VIDEO_ID_REG=/^(sm|nm|so|ss)\d+$/i;
+    h.Search.VIDEO_ID_SUGGEST_MODES=['merged','side','delayed'];
+    h.view._view={classList:fakeClassList()};
+    h.view._videoIdCards=new Map();
+    h.view._videoIdList={};
+    h.view._videoIdKey='k:テスト';
+    h.view._videoIdTagWord='テスト';
+    h.view._videoIdTagSeq=0;
+    h.view._findVideoIdNavItem=()=>true;
+    h.view._updateVideoIdSelection=()=>{};
+    let tagRequests=0;
+    h.view._requestVideoIdTags=word=>{
+      if(word!==h.view._videoIdTagWord){tagRequests++;h.view._videoIdTagWord=word;}
+    };
+    const originalQuery=h.box.querySelector;
+    h.box.querySelector=s=>originalQuery(s)||{textContent:'',title:''};
+    h.tagItems.push(makeTag('候補'));
+    h.view._updateVideoIdSearchRow();
+    h.view._videoIdDismissedKey='k:テスト';
+    h.view._updateVideoIdPreview();
+    assert.strictEqual(h.box.classList.contains('is-open'),false);
+    h.view._videoIdDismissedKey='';
+    h.view._updateVideoIdPreview();
+    await h.tick();await h.tick();
+    assert.strictEqual(tagRequests,1,'cancelled tag request must be restarted');
+    assert(h.calls.some(c=>c.word==='テスト'),'same-label search row must resume');
+    assert(h.calls.some(c=>c.word==='候補'),'retained tag rows must resume');
+  });
+ });

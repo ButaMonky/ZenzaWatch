@@ -3892,7 +3892,12 @@ class NicoVideoPlayerDialog extends Emitter {
         }
         delete option.owner;
         let query = this._videoWatchOptions.query;
+        const selectedContentType = option.selectContentType;
         option = Object.assign(option, query);
+        // An explicit search-panel selection takes precedence over the opening URL.
+        if (selectedContentType === 'long' || selectedContentType === 'short') {
+            option.selectContentType = selectedContentType;
+        }
         this._state.currentTab = 'playlist';
         // Task 073: 以前は件数を渡しておらず、常に既定の300件だった。
         // 設定（search.limit、上級者向け設定で変更可）の件数を渡す。範囲外の値はPlayList側で丸める。

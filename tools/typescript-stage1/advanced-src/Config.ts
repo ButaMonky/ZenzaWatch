@@ -245,14 +245,15 @@ const Config = (() => {
     'videoSearch.f_range': 0,
     'videoSearch.l_range': 0,
     'videoSearch.genre': 'all',
+    'videoSearch.selectContentType': 'long',
     // Task 072: sm〜等の動画IDを入力した時の、タグ予測と動画カードの表示方式
     //   'merged'  … A: 1つの一覧に「検索行→タグ予測→動画カード」の順でまとめる
     //   'side'    … B: 左にタグ予測、右に動画カードを並べる
     //   'delayed' … C: まずタグ予測だけ出し、入力が止まってから動画カードを追加する
     'videoSearch.videoIdSuggestMode': 'merged',
-    // Search count policy: selected/hovered row by default, all visible suggestions on demand.
+    // Search count policy: automatically count visible suggestions by default; reuse cached totals.
     // 'auto' deliberately performs extra search API requests; 'off' never requests totals.
-    'videoSearch.wordCountMode': 'on-demand',
+    'videoSearch.wordCountMode': 'auto',
     // Task 072: 動画ヘッダー（タイトル・タグ欄）の表示位置（通常/大モード）
     //   'auto'            … 従来通り。動画の上に収まる時は外に、はみ出す時は動画に重ねて自動で隠す
     //   'outside'         … 常に動画の外（上）に表示。はみ出す時は画面上端に合わせてずらす（隠れない）
@@ -569,7 +570,8 @@ const Config = (() => {
           pipPageThumbnailSource: ['smart', 'legacy'],
           'videoHeader.position': ['auto', 'outside', 'overlay', 'overlay-visible'],
           'videoSearch.videoIdSuggestMode': ['merged', 'side', 'delayed'],
-          'videoSearch.wordCountMode': ['on-demand', 'auto', 'off']
+          'videoSearch.wordCountMode': ['on-demand', 'auto', 'off'],
+          'videoSearch.selectContentType': ['long', 'short']
         };
         const name = key.startsWith('screenMode:') ? 'screenMode' : key;
         if (Object.prototype.hasOwnProperty.call(choices, name)) {

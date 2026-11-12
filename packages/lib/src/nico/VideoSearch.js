@@ -678,6 +678,12 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
             // Task 067: 本家と同じ検索APIを優先し、失敗時・未対応の絞り込み時のみスナップショット検索
             const searchWord = (word && word.searchWord) ? word.searchWord : word;
             const searchParams = (word && word.searchWord) ? word : (params || {});
+            if (searchParams.selectContentType === 'short') {
+                if (typeof searchWord !== 'string' || !NicoSearchNvapi.canHandle(searchParams)) {
+                    throw new Error('ショート検索では投稿者・コメント数による絞り込みは利用できません');
+                }
+                return NicoSearchNvapi.search(searchWord, searchParams, 100);
+            }
             if (!searchParams.useSnapshotSearch && typeof searchWord === 'string' && NicoSearchNvapi.canHandle(searchParams)) {
                 try {
                     return await NicoSearchNvapi.search(searchWord, searchParams, 100);
@@ -804,6 +810,13 @@ const { NicoSearchApiV2Query, NicoSearchApiV2Loader } = (function () {
          */
         static async searchMore(word, params, maxLimit = 300, isCurrent) {
             ensureCurrent(isCurrent);
+            // Snapshot does not preserve the short-video scope: never substitute long videos.
+            if (params?.selectContentType === 'short') {
+                if (!NicoSearchNvapi.canHandle(params)) {
+                    throw new Error('ショート検索では投稿者・コメント数による絞り込みは利用できません');
+                }
+                return NicoSearchNvapi.search(word, params, maxLimit, isCurrent);
+            }
             // Task 074: 「再生中の動画の投稿者の動画のみ」。スナップショット検索の userId 絞り込みは
             // 廃止されており(400 QUERY_PARSE_ERROR)、本家検索API(nvapi)も userId を無視するため専用の方法で探す
             if (params && (params.userId || params.channelId)) {

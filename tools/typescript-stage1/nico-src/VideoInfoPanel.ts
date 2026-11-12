@@ -2404,6 +2404,13 @@ class VideoSearchForm extends Emitter {
     this._applySortValue(config.props.sort);
     form['f_range'].value = `${config.props.f_range || 0}`;
     form['l_range'].value = `${config.props.l_range || 0}`;
+    form['selectContentType'].value = config.props.selectContentType === 'short' ? 'short' : 'long';
+    this._syncContentTypeControls();
+    config.on?.('selectContentType', (value: Loose) => {
+      form['selectContentType'].value = value === 'short' ? 'short' : 'long';
+      this._syncContentTypeControls();
+      this._refreshWordCountsAfterFilterChange();
+    });
     form['genre'].value = config.props.genre || 'all';
     if (!form['genre'].value) { form['genre'].value = 'all'; }
 
@@ -2427,6 +2434,10 @@ class VideoSearchForm extends Emitter {
         (item as Loose).addEventListener('change', () => {
           this._word.focus();
           config.props[(item as Loose).name] = this._form[(item as Loose).name].value;
+          if ((item as Loose).name === 'selectContentType') {
+            this._syncContentTypeControls();
+            this._refreshWordCountsAfterFilterChange();
+          }
           submit();
         });
       } else if ((item as Loose).name === 'sortKey' || (item as Loose).name === 'sortOrder') {
@@ -2438,6 +2449,7 @@ class VideoSearchForm extends Emitter {
       } else {
         (item as Loose).addEventListener('change', () => {
           config.props[(item as Loose).name] = (item as Loose).value;
+          if ((item as Loose).name === 'selectContentType') { this._syncContentTypeControls(); }
           if ((item as Loose).tagName === 'SELECT') {
             submit();
           }
@@ -2639,7 +2651,7 @@ class VideoSearchForm extends Emitter {
 
   get wordCountMode() {
     const mode = this._config?.props?.wordCountMode;
-    return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'on-demand';
+    return ['on-demand', 'auto', 'off'].includes(mode) ? mode : 'auto';
   }
 
   _applyVideoIdSuggestMode() {
@@ -2672,6 +2684,7 @@ class VideoSearchForm extends Emitter {
     if (key === this._videoIdKey && visible === this._videoIdBox.classList.contains('is-open')) {
       return;
     }
+    const reopening = visible && !this._videoIdBox.classList.contains('is-open');
     const keyChanged = this._videoIdKey !== key;
     this._videoIdKey = key;
     this._videoIdBare = bare;
@@ -2683,6 +2696,7 @@ class VideoSearchForm extends Emitter {
       this._videoIdNavKey = '';
       window.clearTimeout(this._videoIdWaitTimer);
       this._videoIdTagSeq++;
+      this._videoIdTagWord = ''; // A cancelled suggestion request must restart on reopening.
       // 閉じるアニメーションの後にカードを片付ける（次に表示した時も登場アニメーションから始まるように）
       this._videoIdCleanupTimer = window.setTimeout(() => {
         if (this._videoIdBox.classList.contains('is-open')) { return; }
@@ -2759,8 +2773,9 @@ class VideoSearchForm extends Emitter {
       hint.textContent = ids.length > 1 ? '↑↓ 選択・Enter 再生・Esc 閉じる' : 'Enter 再生・Esc 閉じる';
       hint.title = 'クリック/Enter: 再生　Shift+Enter: 次に再生　↑↓: 選択(複数の時)　Esc: 閉じる';
     }
-    this._updateVideoIdSearchRow();
     this._videoIdBox.classList.add('is-open');
+    this._updateVideoIdSearchRow(reopening);
+    if (reopening) { this._scheduleAutomaticTagCounts(); }
   }
 
   _removeVideoCard(card?: Loose) {
@@ -3483,9 +3498,19 @@ class VideoSearchForm extends Emitter {
     this._sortOrder.disabled = key === 'playlist' || VideoSearchForm.UNORDERABLE.includes(key);
   }
 
+  _syncContentTypeControls() {
+    const input = this._ownerOnlyInput;
+    if (!input) { return; }
+    const shorts = this._form.elements.namedItem('selectContentType')?.value === 'short';
+    input.disabled = shorts;
+    input.closest('label')?.setAttribute('title', shorts ?
+      'ショート検索では投稿者による絞り込みは利用できません。通常動画に戻すと利用できます。' : '');
+  }
+
   get filterOptions() {
     const form = this._form;
-    const result = {};
+    const result = {selectContentType:
+      form.elements?.namedItem('selectContentType')?.value === 'short' ? 'short' : 'long'};
     const fRange = form['f_range'].value * 1;
     const lRange = form['l_range'].value * 1;
     const genre = form['genre'].value;
@@ -3537,19 +3562,25 @@ VideoSearchForm.__css__ = (`
       top: 32px;
       right: 8px;
       padding: 0 8px;
-      width: 248px;
+      width: 320px;
+      max-width: calc(100% - 16px);
+      box-sizing: border-box;
       z-index: 1000;
     }
 
     .zenzaScreenMode_normal .zenzaWatchVideoHeaderPanel.is-onscreen .zenzaVideoSearchPanel {
       top: 36px;
-      right: -24px;
+      right: 8px;
     }
     .zenzaScreenMode_big    .zenzaWatchVideoHeaderPanel.is-onscreen .zenzaVideoSearchPanel,
     .zenzaScreenMode_3D    .zenzaVideoSearchPanel,
     .zenzaScreenMode_wide  .zenzaVideoSearchPanel,
     .zenzaWatchVideoHeaderPanel.is-fullscreen .zenzaVideoSearchPanel {
       top: 64px;
+    }
+
+    .zenzaVideoSearchPanel:has(.searchVideoIdResult.is-open.is-mode-side.is-bare:not(.is-word)) {
+      width: 560px;
     }
 
     .zenzaVideoSearchPanel:focus-within {
@@ -3561,24 +3592,35 @@ VideoSearchForm.__css__ = (`
     }
 
     .zenzaVideoSearchPanel .searchInputHead {
-      position: absolute;
-      opacity: 0;
-      pointer-events: none;
+      display: none;
       padding: 4px;
-      transition: transform 0.2s ease, opacity 0.2s ease;
     }
-    .zenzaVideoSearchPanel .searchInputHead:hover,
-    .zenzaVideoSearchPanel:focus-within .searchInputHead {
-      background: rgba(50, 50, 50, 0.8);
+    .zenzaVideoSearchPanel:focus-within .searchInputHead,
+    .zenzaVideoSearchPanel .searchInputHead:hover {
+      display: block;
     }
-
-    .zenzaVideoSearchPanel           .searchInputHead:hover,
-    .zenzaVideoSearchPanel:focus-within .searchInputHead {
-      pointer-events: auto;
-      opacity: 1;
-      transform: translate3d(0, -100%, 0);
+    .zenzaVideoSearchPanel .searchModeRow {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 6px;
     }
-      .zenzaVideoSearchPanel .searchMode {
+    .zenzaVideoSearchPanel .searchModeCaption {
+      color: #ccc;
+      font-size: 12px;
+      flex: 0 0 4em;
+    }
+    .zenzaVideoSearchPanel .searchModeRow .searchModeLabel {
+      flex: 1;
+      min-width: 0;
+      text-align: center;
+    }
+    .zenzaVideoSearchPanel .searchModeLabel input:focus-visible + span {
+      outline: 2px solid #8acbff;
+      outline-offset: 1px;
+    }
+      .zenzaVideoSearchPanel .searchMode,
+      .zenzaVideoSearchPanel .searchContentType {
         position: absolute;
         opacity: 0;
       }
@@ -3591,7 +3633,7 @@ VideoSearchForm.__css__ = (`
         display: inline-block;
         padding: 4px 8px;
         line-height: 1;
-        color: #666;
+        color: #bbb;
         cursor: pointer;
         border-radius: 8px;
         border-color: transparent;
@@ -3609,7 +3651,9 @@ VideoSearchForm.__css__ = (`
       }
 
     .zenzaVideoSearchPanel .searchWord {
-      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 4px;
       padding: 0 4px;
       position: relative;
     }
@@ -3627,8 +3671,8 @@ VideoSearchForm.__css__ = (`
           transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1),
           margin 0.32s ease;
         pointer-events: none;
-        width: 280px;
-        max-width: calc(100vw - 48px);
+        width: auto;
+        max-width: 100%;
         box-sizing: border-box;
       }
       .zenzaVideoSearchPanel:focus-within .searchVideoIdResult.is-open {
@@ -3725,7 +3769,7 @@ VideoSearchForm.__css__ = (`
       }
       /* B: 左右に並べる */
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side {
-        width: 560px;
+        width: auto;
       }
       .zenzaVideoSearchPanel .searchVideoIdResult.is-mode-side.is-bare .searchVideoIdResult-body {
         flex-direction: row;
@@ -3780,6 +3824,7 @@ VideoSearchForm.__css__ = (`
       .zenzaVideoSearchPanel .searchVideoIdResult-tagCount.is-counting {
         display: inline-block;
         width: 28px;
+        flex: 0 0 28px;
         height: 15px;
         background: linear-gradient(90deg, #444 0%, #666 50%, #444 100%);
         background-size: 200% 100%;
@@ -4170,7 +4215,10 @@ VideoSearchForm.__css__ = (`
       }
 
       .zenzaVideoSearchPanel .searchWordInput {
-        width: 200px;
+        width: 0;
+        min-width: 0;
+        flex: 1 1 auto;
+        box-sizing: border-box;
         margin: 0;
         height: 24px;
         line-height: 24px;
@@ -4202,6 +4250,7 @@ VideoSearchForm.__css__ = (`
 
       .zenzaVideoSearchPanel .searchSubmit {
         width: 34px;
+        flex: 0 0 34px;
         margin: 0;
         padding: 0;
         font-size: 14px;
@@ -4234,6 +4283,7 @@ VideoSearchForm.__css__ = (`
       .zenzaVideoSearchPanel .searchClear {
         display: inline-block;
         width: 28px;
+        flex: 0 0 28px;
         margin: 0;
         padding: 0;
         font-size: 16px;
@@ -4265,8 +4315,11 @@ VideoSearchForm.__css__ = (`
 
 
     .zenzaVideoSearchPanel .searchInputFoot {
-      white-space: nowrap;
+      white-space: normal;
       position: absolute;
+      left: 8px;
+      right: 8px;
+      box-sizing: border-box;
       opacity: 0;
       padding: 4px;
       pointer-events: none;
@@ -4290,15 +4343,20 @@ VideoSearchForm.__css__ = (`
 
       .zenzaVideoSearchPanel .ownerOnlyLabel {
         cursor: pointer;
+        display: flex;
+        align-items: flex-start;
+        gap: 4px;
       }
 
       .zenzaVideoSearchPanel .searchOptionRow {
         display: flex;
+        flex-wrap: wrap;
         gap: 4px;
         margin-bottom: 4px;
       }
       .zenzaVideoSearchPanel .searchOptionRow select {
-        max-width: 140px;
+        max-width: 100%;
+        min-width: 0;
       }
       .zenzaVideoSearchPanel .searchOrderSelect[disabled] {
         opacity: 0.4;
@@ -4320,6 +4378,13 @@ VideoSearchForm.__tpl__ = (`
       <form action="javascript: void(0);">
 
         <div class="searchInputHead">
+          <div class="searchModeRow" role="group" aria-label="検索対象">
+            <span class="searchModeCaption">検索対象</span>
+            <label class="searchModeLabel"><input type="radio" name="selectContentType" class="searchContentType" value="long" checked><span>動画</span></label>
+            <label class="searchModeLabel"><input type="radio" name="selectContentType" class="searchContentType" value="short"><span>ショート</span></label>
+          </div>
+          <div class="searchModeRow" role="group" aria-label="検索方法">
+          <span class="searchModeCaption">検索方法</span>
           <label class="searchModeLabel">
             <input type="radio" name="mode" class="searchMode" value="keyword">
             <span>キーワード</span>
@@ -4330,6 +4395,7 @@ VideoSearchForm.__tpl__ = (`
               id="zenzaVideoSearch-tag" checked="checked">
               <span>タグ</span>
           </label>
+          </div>
         </div>
 
         <div class="searchWord">

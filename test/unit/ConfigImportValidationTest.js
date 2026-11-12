@@ -85,7 +85,7 @@ describe('Config import validation',()=>{
  it('allows only the three supported search count traffic modes',()=>{
   const {options,default:d}=configSchema();
   const key='videoSearch.wordCountMode';
-  assert.strictEqual(d[key],'on-demand');
+  assert.strictEqual(d[key],'auto');
   for(const mode of ['on-demand','auto','off'])assert.strictEqual(options.validateImport(key,mode),true,mode);
   for(const mode of [null,false,'always','hover',1])assert.strictEqual(options.validateImport(key,mode),false,String(mode));
  });

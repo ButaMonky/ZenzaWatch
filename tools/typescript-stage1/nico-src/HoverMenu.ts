@@ -243,6 +243,55 @@ class HoverMenu {
     await this._getPlayer();
     ZenzaWatch.external.send(watchId, Object.assign({query: this._query}, params));
   }
+  /**
+   * A card's delegated route is not permission to claim every descendant.
+   * Follow actual video-content branches; measure gaps only after the hit
+   * itself is known to be a structural ancestor, never an added control.
+   */
+  _isCardContentClick(card: Element, e: MouseEvent, watchId: string): boolean {
+    const hit = e.composedPath().find((node): node is Element => typeof (node as Element)?.matches === 'function');
+    if (!hit) { return false; }
+    const links = Array.from(card.querySelectorAll('a[href],a[data-href]'))
+      .filter(link => this._getWatchReference(link)?.watchId === watchId);
+    if (!links.length) { return false; }
+    const regions = new Set<Element>(links);
+    for (const date of Array.from(card.querySelectorAll('time[datetime]'))) {
+      let branch: Element = date;
+      while (branch.parentElement && branch.parentElement !== card &&
+        !links.some(link => branch.parentElement!.contains(link))) {
+        branch = branch.parentElement;
+      }
+      // Do not absorb an owner/action section or another whole card.
+      if (!branch.querySelector('a,button,input,select,textarea,[role="button"]') &&
+        !links.some(link => branch.contains(link))) { regions.add(branch); }
+    }
+    if (Array.from(regions).some(region => region.contains(hit))) { return true; }
+    const ancestors = new Set<Element>();
+    for (const region of regions) {
+      for (let parent = region.parentElement; parent && card.contains(parent); parent = parent.parentElement) {
+        ancestors.add(parent);
+        if (parent === card) { break; }
+      }
+    }
+    if (!ancestors.has(hit)) { return false; }
+    const rects = Array.from(regions).map(region => region.getBoundingClientRect())
+      .filter(rect => rect.width > 0 && rect.height > 0);
+    const inside = (left: number, top: number, right: number, bottom: number) =>
+      left <= right && top <= bottom &&
+      e.clientX >= left && e.clientX <= right && e.clientY >= top && e.clientY <= bottom;
+    if (rects.some(r => inside(r.left, r.top, r.right, r.bottom))) { return true; }
+    for (const a of rects) {
+      for (const b of rects) {
+        // Only the corridor between content boxes, not their bounding union:
+        // in a horizontal layout the latter would include the owner row.
+        if (a.bottom <= b.top &&
+          inside(Math.max(a.left, b.left), a.bottom, Math.min(a.right, b.right), b.top)) { return true; }
+        if (a.right <= b.left &&
+          inside(a.right, Math.max(a.top, b.top), b.left, Math.min(a.bottom, b.bottom))) { return true; }
+      }
+    }
+    return false;
+  }
   /** Resolve intent without canceling events, changing previews or opening a player. */
   _resolveWatchClick(e: MouseEvent): {target: Element; watchId: string; url: URL} | null {
     if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey) { return null; }
@@ -263,6 +312,8 @@ class HoverMenu {
       (target.contains(action) || path.indexOf(action) < path.indexOf(target))) { return null; }
     const ref = this._getWatchReference(target);
     if (!ref || ref.url.searchParams.get('zenza_official') === '1') { return null; }
+    if (!target.matches('a') && target.matches('[data-group="true"][data-anchor-href]') &&
+      !this._isCardContentClick(target, e, ref.watchId)) { return null; }
     return {target, ...ref};
   }
   _overrideWatchLink () {

@@ -47,7 +47,7 @@
 // @match          https://ext.nicovideo.jp/api/getthumbinfo/*
 // @require        https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // @author         segabito
-// @version        2.7.400-task1026
+// @version        2.7.401-task1027
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -55,7 +55,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 19:03Z 4a9db3b
+// build: 2026-11-12 19:12Z be164c1
 (() => {
  const externalModules=(()=>{const factories={"./site-rules":(exports,require)=>{"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1861,10 +1861,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.400-task1026';
+    var VER = '2.7.401-task1027';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 19:03Z 4a9db3b';
+    var BUILD = '2026-11-12 19:12Z be164c1';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -64448,7 +64448,11 @@ class VideoSearchForm extends Emitter {
 				}
 				const fitSearch = () => this._updateFocus();
 				this._view.addEventListener('focusin', fitSearch);
-				this._view.addEventListener('mouseenter', fitSearch);
+				this._view.querySelector('.searchInputHead').addEventListener('mousedown', (event) => {
+						if (event.button === 0 && event.target.closest('.searchModeLabel')) {
+								event.preventDefault();
+						}
+				});
 				window.addEventListener('resize', fitSearch);
 				window.visualViewport?.addEventListener('resize', fitSearch);
 				if (parentNode) {
@@ -65387,7 +65391,7 @@ class VideoSearchForm extends Emitter {
 		}
 		_updateFocus() {
 				const panel = this._view;
-				if (!panel?.isConnected || !panel.matches(':focus-within, :hover')) {
+				if (!panel?.isConnected || !panel.matches(':focus-within')) {
 						return;
 				}
 				const rect = panel.getBoundingClientRect();
@@ -65499,6 +65503,8 @@ VideoSearchForm.__css__ = (`
 			max-width: calc(100% - 16px);
 			box-sizing: border-box;
 			z-index: 1000;
+			--search-controls-height: 32px;
+			margin-top: calc(0px - var(--search-controls-height));
 			max-height: var(--search-available-height, calc(100dvh - 80px));
 			overflow-y: auto;
 			overflow-x: hidden;
@@ -65518,15 +65524,16 @@ VideoSearchForm.__css__ = (`
 		.zenzaVideoSearchPanel:has(.searchVideoIdResult.is-open.is-mode-side.is-bare:not(.is-word)) {
 			width: 560px;
 		}
-		.zenzaVideoSearchPanel:hover,
 		.zenzaVideoSearchPanel:focus-within {
 			background: rgba(50, 50, 50, 0.8);
 		}
-		.zenzaVideoSearchPanel:not(:focus-within):not(:hover) .focusOnly {
+		.zenzaVideoSearchPanel:not(:focus-within) .focusOnly {
 			opacity: 0;
 		}
 		.zenzaVideoSearchPanel .searchInputHead {
-			/* Reserve this row so hovering/focusing never pushes the input down. */
+			/* Reserve the controls above the original input position without layout jumps. */
+			height: var(--search-controls-height);
+			box-sizing: border-box;
 			display: flex;
 			visibility: hidden;
 			opacity: 0;
@@ -65538,8 +65545,7 @@ VideoSearchForm.__css__ = (`
 			padding: 4px 0;
 			font-size: 14px;
 		}
-		.zenzaVideoSearchPanel:focus-within .searchInputHead,
-		.zenzaVideoSearchPanel:hover .searchInputHead {
+		.zenzaVideoSearchPanel:focus-within .searchInputHead {
 			visibility: visible;
 			opacity: 1;
 			pointer-events: auto;
@@ -65616,7 +65622,6 @@ VideoSearchForm.__css__ = (`
 				max-width: 100%;
 				box-sizing: border-box;
 			}
-			.zenzaVideoSearchPanel:hover .searchVideoIdResult.is-open,
 			.zenzaVideoSearchPanel:focus-within .searchVideoIdResult.is-open {
 				grid-template-rows: 1fr;
 				opacity: 1;
@@ -66244,7 +66249,6 @@ VideoSearchForm.__css__ = (`
 			box-sizing: border-box;
 			padding: 4px;
 		}
-		.zenzaVideoSearchPanel:hover .searchInputFoot,
 		.zenzaVideoSearchPanel:focus-within .searchInputFoot {
 			display: block;
 			opacity: 1;

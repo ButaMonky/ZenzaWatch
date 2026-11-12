@@ -2358,7 +2358,13 @@ class VideoSearchForm extends Emitter {
         // Keep one viewport-bounded scroll container, including the filters.
         const fitSearch = () => this._updateFocus();
         this._view.addEventListener('focusin', fitSearch);
-        this._view.addEventListener('mouseenter', fitSearch);
+        // A label's mousedown normally blurs the input before activating its radio.
+        // Keep focus within the panel through that native click, without hover-opening it.
+        this._view.querySelector('.searchInputHead').addEventListener('mousedown', (event) => {
+            if (event.button === 0 && event.target.closest('.searchModeLabel')) {
+                event.preventDefault();
+            }
+        });
         window.addEventListener('resize', fitSearch);
         window.visualViewport?.addEventListener('resize', fitSearch);
         if (parentNode) {
@@ -3333,7 +3339,7 @@ class VideoSearchForm extends Emitter {
     }
     _updateFocus() {
         const panel = this._view;
-        if (!panel?.isConnected || !panel.matches(':focus-within, :hover')) {
+        if (!panel?.isConnected || !panel.matches(':focus-within')) {
             return;
         }
         const rect = panel.getBoundingClientRect();
@@ -3454,6 +3460,8 @@ VideoSearchForm.__css__ = (`
       max-width: calc(100% - 16px);
       box-sizing: border-box;
       z-index: 1000;
+      --search-controls-height: 32px;
+      margin-top: calc(0px - var(--search-controls-height));
       max-height: var(--search-available-height, calc(100dvh - 80px));
       overflow-y: auto;
       overflow-x: hidden;
@@ -3476,17 +3484,18 @@ VideoSearchForm.__css__ = (`
       width: 560px;
     }
 
-    .zenzaVideoSearchPanel:hover,
     .zenzaVideoSearchPanel:focus-within {
       background: rgba(50, 50, 50, 0.8);
     }
 
-    .zenzaVideoSearchPanel:not(:focus-within):not(:hover) .focusOnly {
+    .zenzaVideoSearchPanel:not(:focus-within) .focusOnly {
       opacity: 0;
     }
 
     .zenzaVideoSearchPanel .searchInputHead {
-      /* Reserve this row so hovering/focusing never pushes the input down. */
+      /* Reserve the controls above the original input position without layout jumps. */
+      height: var(--search-controls-height);
+      box-sizing: border-box;
       display: flex;
       visibility: hidden;
       opacity: 0;
@@ -3498,8 +3507,7 @@ VideoSearchForm.__css__ = (`
       padding: 4px 0;
       font-size: 14px;
     }
-    .zenzaVideoSearchPanel:focus-within .searchInputHead,
-    .zenzaVideoSearchPanel:hover .searchInputHead {
+    .zenzaVideoSearchPanel:focus-within .searchInputHead {
       visibility: visible;
       opacity: 1;
       pointer-events: auto;
@@ -3580,7 +3588,6 @@ VideoSearchForm.__css__ = (`
         max-width: 100%;
         box-sizing: border-box;
       }
-      .zenzaVideoSearchPanel:hover .searchVideoIdResult.is-open,
       .zenzaVideoSearchPanel:focus-within .searchVideoIdResult.is-open {
         grid-template-rows: 1fr;
         opacity: 1;
@@ -4228,7 +4235,6 @@ VideoSearchForm.__css__ = (`
       box-sizing: border-box;
       padding: 4px;
     }
-    .zenzaVideoSearchPanel:hover .searchInputFoot,
     .zenzaVideoSearchPanel:focus-within .searchInputFoot {
       display: block;
       opacity: 1;

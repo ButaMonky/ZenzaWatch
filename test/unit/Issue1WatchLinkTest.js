@@ -156,7 +156,8 @@ describe('Task311 Google results hover / playback bridge',()=>{
        f.menu._onHoverEnd({target:h3});
        assert.strictEqual(f.menu._watchId,'sm42');
        assert.strictEqual(displayed,1);
-       f.menu._onClick({ctrlKey:false,shiftKey:false});
+       f.menu._$view ||= {removeClass(){}};
+        f.menu._onClick(new f.win.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));
        assert.deepStrictEqual(f.opens,['sm42']);
      }finally{f.dom.window.close();}
    });

@@ -29,7 +29,6 @@ declare class PagePreviewGuard {
 
 class HoverMenu {
   declare _$view: Loose;
-  declare _hidePending: Loose;
   declare _hoverElement: Loose;
   declare _pagePreviewGuard: Loose;
   declare _player: Loose;
@@ -58,7 +57,17 @@ class HoverMenu {
       this._onHoverEnd = _.debounce(this._onHoverEnd.bind(this), 500);
       $view.on(
         location.host.includes('google') ? 'mouseup' : 'click', this._onClick.bind(this));
-      ZenzaWatch.emitter.on('hideHover', () => $view.removeClass('show'));
+      // Google opens on mouseup; also cancel its following anchor click.
+      if (location.host.includes('google')) {
+        $view.on('click', (e: MouseEvent) => { e.preventDefault(); e.stopPropagation(); });
+      }
+      ZenzaWatch.emitter.on('hideHover', () => this._hideButton());
+      document.addEventListener('scroll', () => this._hideButton(), true);
+      window.addEventListener('resize', () => this._hideButton());
+      document.addEventListener('click', () => this._hideButton());
+      document.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (e.key === 'Escape') { this._hideButton(); }
+      });
       uq('body')
         .on('mouseover', this._onHover.bind(this))
         .on('mouseover', this._onHoverEnd)
@@ -136,12 +145,14 @@ class HoverMenu {
     return null;
   }
   _onHover(e: Loose) {
+    if (this._$view[0]?.contains(e.target)) { return; }
     const target = this._closest(e.target);
     if (target) {
       this._hoverElement = target;
     }
   }
   _onMouseout(e: Loose) {
+    if (this._hoverElement?.contains(e.relatedTarget)) { return; }
     if (this._hoverElement === this._closest(e.target)) {
       this._hoverElement = null;
     }
@@ -161,23 +172,40 @@ class HoverMenu {
     this._watchId = ref.watchId;
 
     const offset = target.getBoundingClientRect();
-    this._$view.css({
-      top: cssUtil.px(offset.top + window.pageYOffset),
-      left: cssUtil.px(offset.left + window.pageXOffset)
-    }).addClass('show');
-    if (!this._hidePending) {
-      this._hidePending = true;
-      document.body.addEventListener('click', () => {
-        this._hidePending = false;
-        this._$view.removeClass('show');
-      }, {once: true});
+    const view = this._$view[0] as HTMLElement | undefined;
+    if (view) {
+      // Keep native mouse ancestry inside the link/dropdown. The top layer
+      // avoids clipping without moving the control outside that ancestry.
+      if (view.parentElement !== target) {
+        if (view.matches(':popover-open')) { view.hidePopover?.(); }
+        target.appendChild(view);
+      }
+      view.setAttribute('popover', 'manual');
+      Object.assign(view.style, {position: 'fixed', inset: 'auto', margin: '0',
+        padding: '0', border: '0', background: 'transparent', overflow: 'visible',
+        transform: 'none'});
     }
+    this._$view.css({
+      top: cssUtil.px(offset.top + (view ? 2 : window.pageYOffset)),
+      left: cssUtil.px(offset.left + (view ? 2 : window.pageXOffset))
+    }).addClass('show');
+    if (view?.isConnected && !view.matches(':popover-open')) { view.showPopover?.(); }
+  }
+  _hideButton() {
+    (this._onHoverEnd as typeof this._onHoverEnd & {cancel?: () => void}).cancel?.();
+    const view = this._$view[0];
+    if (view?.matches(':popover-open')) { view.hidePopover?.(); }
+    this._$view.removeClass('show');
+    this._hoverElement = null;
   }
   _onClick(e: Loose) {
+    e.preventDefault();
+    e.stopPropagation();
     const watchId = this._watchId;
-    if (e.ctrlKey) {
+    if (e.ctrlKey || e.metaKey || e.altKey || (e.button != null && e.button !== 0)) {
       return;
     }
+    this._hideButton();
     if (e.shiftKey) {
       // 秘密機能。最後にZenzaWatchを開いたウィンドウで開く
       this._send(watchId);

@@ -92,7 +92,8 @@ for(const source of ['packages/zenza/src/menu/HoverMenu.js',
       const f=fixture(source);
       try{
         f.menu._watchId='sm9';f.menu._hoverElement=f.win.document.querySelector('#a');
-        f.menu._onClick({ctrlKey:false,shiftKey:false});
+        f.menu._$view ||= {removeClass(){}};
+        f.menu._onClick(new f.win.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));
         await f.flush();
         assert.strictEqual(f.opened[0].params.currentTime,undefined);
       } finally{f.close();}

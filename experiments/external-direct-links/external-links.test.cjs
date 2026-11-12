@@ -60,7 +60,7 @@ test('selection detection excludes code and respects disabled text detection',()
  select(d.querySelector('p'));assert.equal(d.querySelector('[data-zenza-external-overlay]').style.display,'none');other.dispose();w.close();
 });
 
-test('settings remain editable while disabled and save through shared schema',()=>{
+test('settings can be re-enabled and explicitly saved through shared schema',()=>{
  const {openExternalSettings}=require('./generated/settings-panel.js');
  const w=fixture(),d=w.document;let shadow,saved;
  const attach=w.Element.prototype.attachShadow;w.Element.prototype.attachShadow=function(o){shadow=attach.call(this,o);return shadow;};
@@ -68,7 +68,9 @@ test('settings remain editable while disabled and save through shared schema',()
  const enabled=shadow.querySelector('[data-key="externalLinks.enabled"]'),prefix=shadow.querySelector('[data-key="externalLinks.prefixes"]');
  assert.equal(enabled.disabled,false);assert.equal(prefix.disabled,true);
  enabled.checked=true;enabled.dispatchEvent(new w.Event('change'));assert.equal(prefix.disabled,false);
- prefix.value='sm xyz';shadow.querySelector('button').click();assert.equal(saved['externalLinks.prefixes'],'sm xyz');assert.equal(saved['externalLinks.enabled'],true);
+ prefix.value='sm xyz';assert.equal(saved,undefined);
+ const saveButton=[...shadow.querySelectorAll('button')].find(button=>button.textContent==='保存');
+ assert(saveButton,'explicit save action is available');saveButton.click();assert.equal(saved['externalLinks.prefixes'],'sm xyz');assert.equal(saved['externalLinks.enabled'],true);
  assert(!d.querySelector('[data-zenza-external-settings]'));w.close();
 });
 

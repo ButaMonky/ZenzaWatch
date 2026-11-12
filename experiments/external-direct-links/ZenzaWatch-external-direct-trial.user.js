@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.20.0-external-direct20
+// @version      0.21.0-external-direct21
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -19,11 +19,12 @@
 // @require      https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @require      https://cdn.jsdelivr.net/npm/hls.js@1.7.3/dist/hls.min.js
 // ==/UserScript==
-// Shared runtime SHA256: f278c0762d5654de8863678d2cf7ae5a0a315cd7d96deb6e9574d7f91242433d
+// Shared runtime SHA256: c08dc4ac55b075b85d6e09994b56fbc7f0cc9f7a8bca05840528cba6e3b44d4a
 
 (() => {
  const official = /(^|\.)nicovideo\.jp$/.test(location.hostname);
  const playerFrame=window!==window.top && window.name==='ZenzaWatchExternalTrialPlayer' && location.hostname==='www.nicovideo.jp' && location.pathname==='/robots.txt';
+ const externalSettingsHost=(()=>{try{return new URL(playerFrame?document.referrer:location.href).hostname;}catch{return '';}})();
  const loader = window !== window.top &&
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||
@@ -216,16 +217,16 @@ exports.externalDefaults = {
 const choice = (items) => items.map(([value, label]) => ({ value, label }));
 exports.externalDescriptors = [
     { id: 'externalLinks.enabled', label: '外部サイトでZenボタンを使う', type: 'boolean' },
-    { id: 'externalLinks.siteMode', label: '対象サイト', type: 'select', options: choice([['all', 'すべてのサイト'], ['allow', '指定したサイトのみ']]) },
-    { id: 'externalLinks.sites', label: '対象サイトのURLパターン', type: 'textarea', description: '「指定したサイトのみ」のときに使用。1行に1件。例：*://*.nicochart.jp/* は本体とサブドメインの全ページ、https://nicolog.jp/watch/* はwatch配下だけ。* は任意の文字列です。Tampermonkeyの @match / @include のワイルドカード形式、// @match 付きの行も貼り付け可能。裸のドメイン指定も従来どおり使えます。正規表現・file:・<all_urls> は非対応。検証版の動作対象はHTTPSページです。URLの#以降は判定しません。変更後はページを再読み込みしてください。' },
-    { id: 'externalLinks.excludedSites', label: '除外サイトのURLパターン', type: 'textarea', description: '対象サイトと同じ書き方で1行に1件。例：https://example.com/private/* を指定すると、そのページ配下だけZenボタンを表示しません。対象・除外の両方に一致する場合は除外が優先です。「すべてのサイト」を選んだ場合も適用します。空欄なら除外なし。// @exclude 付きの行も使用できます。' },
-    { id: 'externalLinks.displayMode', label: 'Zenボタンの表示方法', type: 'select', description: '「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。', options: choice([['inline', '常に表示（リンクの横に配置）'], ['hover', 'マウスを置いたときに表示'], ['selection', '文字を選択したときに表示']]) },
+    { id: 'externalLinks.siteMode', label: '対象サイト', type: 'select', inputPresentation: 'radio', options: choice([['all', 'すべてのサイト'], ['allow', '指定したサイトのみ']]) },
+    { id: 'externalLinks.sites', label: '対象サイト', type: 'textarea', dependsOn: 'externalLinks.siteMode', dependsOnValue: 'allow', disabledReason: '「指定したサイトのみ」を選ぶと編集できます。', addCurrentSite: true, description: '1行に1件。ドメインを指定すると、そのサブドメインも対象になります。', descriptionDetails: '例：example.com は本体とサブドメインの全ページ。https://example.com/watch/* はそのURLのwatch配下だけ。* は任意の文字列です。HTTPSページで動作し、URLの#以降は判定しません。変更後はページを再読み込みしてください。' },
+    { id: 'externalLinks.excludedSites', label: '除外サイト', type: 'textarea', description: '対象サイトと同じ書き方で1行に1件。除外を優先します。', descriptionDetails: '「すべてのサイト」でも適用します。空欄なら除外なし。例：https://example.com/private/* を指定すると、そのURLの配下ではZenボタンを表示しません。' },
+    { id: 'externalLinks.displayMode', label: 'Zenボタンの表示方法', type: 'select', description: 'リンクの横・マウス・文字選択から選びます。', descriptionDetails: '「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。', options: choice([['inline', '常に表示（リンクの横に配置）'], ['hover', 'マウスを置いたときに表示'], ['selection', '文字を選択したときに表示']]) },
     { id: 'externalLinks.size', label: 'ボタンの大きさ', type: 'select', options: choice([['small', '小'], ['normal', '標準'], ['large', '大']]) },
     { id: 'externalLinks.redirects', label: '中継リンク内の動画URLも検出', type: 'boolean', description: 'リンクを開かず、埋め込まれたニコニコ動画URLを調べます。' },
     { id: 'externalLinks.textIds', label: '文章中の動画IDも検出', type: 'boolean', description: '入力欄・編集中・コード欄は対象外です。' },
-    { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'textarea', description: '1行に1種類。初期値はsm・nm・so・ssです。数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。' },
-    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) }
-].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : 'externalLinks.enabled' }));
+    { id: 'externalLinks.prefixes', label: '検出する動画IDの接頭辞', type: 'textarea', description: '1行に1種類。初期値はsm・nm・so・ssです。', descriptionDetails: '数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。' },
+    { id: 'externalLinks.preflight', label: '再生情報の事前確認', type: 'select', description: '既定は追加通信なし。確認するタイミングを選べます。', descriptionDetails: '確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。', options: choice([['off', '確認しない（追加通信なし）'], ['click', 'Zenを押したときに確認'], ['display', 'ボタンを表示する前に確認']]) }
+].map(d => ({ ...d, category: '外部サイトからの再生', subcategory: '基本設定', dependsOn: d.id === 'externalLinks.enabled' ? undefined : ('dependsOn' in d ? d.dependsOn : 'externalLinks.enabled') }));
 const tokens = (v) => typeof v === 'string' ? v.trim().toLowerCase().split(/[\s,]+/).filter(Boolean) : [];
 function sanitizeExternal(values) {
     const source = values && typeof values === 'object' ? values : {};
@@ -697,67 +698,177 @@ function openExternalSettings(d, values, save) {
     host.dataset.zenzaExternalSettings = '';
     host.style.cssText = 'all:initial!important;position:fixed!important;inset:24px!important;z-index:2147483647!important;display:block!important;';
     const shadow = host.attachShadow({ mode: 'closed' }), style = d.createElement('style');
-    style.textContent = 'section{font:14px/1.5 sans-serif;color:#eee;background:#17212d;border:1px solid #6c8296;border-radius:10px;padding:20px;max-width:620px;max-height:80vh;overflow:auto;margin:auto;color-scheme:dark}label{display:block;margin:12px 0}input:not([type=checkbox]),select,textarea{display:block;width:100%;box-sizing:border-box;padding:6px}small{display:block;color:#bbc6d0}button{padding:7px 14px;margin:8px;background:#243c47;color:#eee;border:1px solid #7acabc;border-radius:4px}';
+    style.textContent = `
+ section{font:14px/1.5 sans-serif;color:#eee;background:#17212d;border:1px solid #6c8296;border-radius:10px;padding:18px;max-width:680px;max-height:80vh;overflow:auto;margin:auto;color-scheme:dark}
+ h2{font-size:19px;margin:0 0 14px}.row{padding:10px 0;border-bottom:1px solid #344353}.field-label{display:block;font-weight:600;margin-bottom:5px}.child-group{margin-left:12px;padding-left:16px;border-left:2px solid #405064}.row[data-disabled=true]>.field{opacity:.48}
+ input:not([type=checkbox]):not([type=radio]),select,textarea{width:100%;box-sizing:border-box;padding:6px 8px;background:#101a25;color:#eee;border:1px solid #65778a;border-radius:4px}textarea{resize:vertical;min-height:62px}input{accent-color:#7acabc}input[type=checkbox]{margin-right:8px}.choices{display:flex;gap:6px 18px;flex-wrap:wrap}.choices label{display:flex;gap:5px;align-items:center}small,details{display:block;color:#bbc6d0;font-size:12px;margin-top:4px}summary{cursor:pointer;width:fit-content}.reason{color:#c8d3dd}.reason:empty{display:none}button{padding:6px 12px;background:#243c47;color:#eee;border:1px solid #7acabc;border-radius:4px;cursor:pointer}button:disabled{opacity:.45;cursor:default}.add-site{margin-top:6px}.actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}.actions button:first-child{margin-right:auto}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{outline:2px solid #a2e4d7;outline-offset:2px}
+ `;
     const section = d.createElement('section');
     section.setAttribute('role', 'dialog');
     section.setAttribute('aria-modal', 'true');
+    section.setAttribute('aria-label', '外部サイトからの再生');
     section.addEventListener('keydown', e => { if (e.key === 'Escape') {
         e.stopPropagation();
         host.remove();
     } });
-    section.setAttribute('aria-label', '外部サイトからの再生');
     const heading = d.createElement('h2');
     heading.textContent = '外部サイトからの再生';
     section.append(heading);
-    const current = (0, settings_1.sanitizeExternal)(values), inputs = new Map();
+    const current = (0, settings_1.sanitizeExternal)(values), inputs = new Map(), rows = new Map(), reasons = new Map(), addButtons = new Map(), groups = new Map();
+    const read = (key) => { const controls = inputs.get(key); const input = controls[0]; return input.type === 'checkbox' ? input.checked : input.type === 'radio' ? (controls.find(c => c.checked)?.value || '') : input.value; };
+    let currentHost = '';
+    try {
+        const url = new URL(d.URL);
+        if (url.protocol === 'https:')
+            currentHost = url.hostname;
+    }
+    catch { }
     for (const descriptor of settings_1.externalDescriptors) {
+        const row = d.createElement('div');
+        row.className = 'row';
+        row.dataset.setting = descriptor.id;
+        rows.set(descriptor.id, row);
+        const field = d.createElement('div');
+        field.className = 'field';
+        row.append(field);
         const label = d.createElement('label');
-        label.append(descriptor.label);
-        const input = descriptor.options ? d.createElement('select') : descriptor.type === 'textarea' ? d.createElement('textarea') : d.createElement('input');
-        if (input.tagName === 'SELECT')
-            for (const option of descriptor.options || []) {
-                const el = d.createElement('option');
-                el.value = option.value;
-                el.textContent = option.label;
-                input.append(el);
+        label.className = 'field-label';
+        label.textContent = descriptor.label;
+        field.append(label);
+        const controls = [];
+        const configure = (input, value) => { input.dataset.key = descriptor.id; input.id = descriptor.id + (value ? '-' + value : ''); input.setAttribute('aria-describedby', descriptor.id + '-help ' + descriptor.id + '-reason'); controls.push(input); };
+        if (descriptor.inputPresentation === 'radio' && descriptor.options) {
+            const choices = d.createElement('div');
+            choices.className = 'choices';
+            choices.setAttribute('role', 'radiogroup');
+            choices.setAttribute('aria-label', descriptor.label);
+            for (const option of descriptor.options) {
+                const item = d.createElement('label'), input = d.createElement('input');
+                input.type = 'radio';
+                input.name = descriptor.id;
+                input.value = option.value;
+                input.checked = current[descriptor.id] === option.value;
+                configure(input, option.value);
+                item.append(input, option.label);
+                choices.append(item);
             }
-        else if (input.tagName === 'INPUT')
-            input.type = typeof settings_1.externalDefaults[descriptor.id] === 'boolean' ? 'checkbox' : 'text';
-        if (input.type === 'checkbox')
-            input.checked = current[descriptor.id] === true;
-        else
-            input.value = String(current[descriptor.id]);
-        if (input.tagName === 'TEXTAREA')
-            input.rows = 4;
-        input.dataset.key = descriptor.id;
-        inputs.set(descriptor.id, input);
-        label.append(input);
+            field.append(choices);
+        }
+        else {
+            const input = descriptor.options ? d.createElement('select') : descriptor.type === 'textarea' ? d.createElement('textarea') : d.createElement('input');
+            if (input.tagName === 'SELECT')
+                for (const option of descriptor.options || []) {
+                    const el = d.createElement('option');
+                    el.value = option.value;
+                    el.textContent = option.label;
+                    input.append(el);
+                }
+            else if (input.tagName === 'INPUT')
+                input.type = descriptor.type === 'boolean' ? 'checkbox' : 'text';
+            if (input.type === 'checkbox')
+                input.checked = current[descriptor.id] === true;
+            else
+                input.value = String(current[descriptor.id]);
+            if (input.tagName === 'TEXTAREA')
+                input.rows = descriptor.id === 'externalLinks.prefixes' ? 4 : 3;
+            configure(input);
+            label.htmlFor = input.id;
+            if (input.type === 'checkbox')
+                label.prepend(input);
+            else
+                field.append(input);
+        }
+        inputs.set(descriptor.id, controls);
         if (descriptor.description) {
             const small = d.createElement('small');
+            small.id = descriptor.id + '-help';
             small.textContent = descriptor.description;
-            label.append(small);
+            field.append(small);
         }
-        section.append(label);
+        if (descriptor.descriptionDetails) {
+            const details = d.createElement('details'), summary = d.createElement('summary'), body = d.createElement('div');
+            summary.textContent = '詳しい説明';
+            body.textContent = descriptor.descriptionDetails;
+            details.append(summary, body);
+            field.append(details);
+        }
+        if (descriptor.addCurrentSite) {
+            const button = d.createElement('button');
+            button.type = 'button';
+            button.className = 'add-site';
+            button.textContent = '現在のサイトを追加';
+            button.onclick = () => { if (button.disabled || !currentHost)
+                return; const input = controls[0]; if (!input.value.split(/\r?\n/).some(line => line.trim().toLowerCase() === currentHost.toLowerCase()))
+                input.value += (input.value && !input.value.endsWith('\n') ? '\n' : '') + currentHost; };
+            field.append(button);
+            addButtons.set(descriptor.id, button);
+        }
+        const reason = d.createElement('small');
+        reason.id = descriptor.id + '-reason';
+        reason.className = 'reason';
+        row.append(reason);
+        reasons.set(descriptor.id, reason);
+        if (descriptor.dependsOn) {
+            let group = groups.get(descriptor.dependsOn);
+            if (!group) {
+                group = d.createElement('div');
+                group.className = 'child-group';
+                (rows.get(descriptor.dependsOn) || section).append(group);
+                groups.set(descriptor.dependsOn, group);
+            }
+            group.append(row);
+        }
+        else
+            section.append(row);
     }
-    const update = () => { const enabled = inputs.get('externalLinks.enabled').checked; for (const [key, input] of inputs) {
-        if (key === 'externalLinks.enabled')
-            continue;
-        input.disabled = !enabled;
-        input.parentElement.style.opacity = enabled ? '1' : '.45';
+    const disabledReason = (key) => {
+        const descriptor = settings_1.externalDescriptors.find(item => item.id === key);
+        if (!descriptor.dependsOn)
+            return '';
+        const parent = descriptor.dependsOn, ancestor = disabledReason(parent);
+        if (ancestor)
+            return ancestor;
+        if (descriptor.dependsOnValue !== undefined)
+            return read(parent) === descriptor.dependsOnValue ? '' : descriptor.disabledReason || '親の設定を変更すると編集できます。';
+        return read(parent) === true ? '' : '外部サイトでZenボタンを使うをONにすると編集できます。';
+    };
+    const update = () => { for (const [key, controls] of inputs) {
+        const reason = disabledReason(key);
+        controls.forEach(input => input.disabled = !!reason);
+        rows.get(key).dataset.disabled = String(!!reason);
+        const button = addButtons.get(key);
+        if (button)
+            button.disabled = !!reason || !currentHost;
+        reasons.get(key).textContent = reason || (button && !currentHost ? 'HTTPSページで現在のサイトを追加できます。' : '');
     } };
-    inputs.get('externalLinks.enabled').addEventListener('change', update);
+    for (const controls of inputs.values())
+        controls.forEach(input => input.addEventListener('change', update));
     update();
+    const actions = d.createElement('div');
+    actions.className = 'actions';
+    const reset = d.createElement('button');
+    reset.textContent = '初期値に戻す';
+    reset.onclick = () => { for (const [key, controls] of inputs)
+        for (const input of controls) {
+            if (input.type === 'checkbox')
+                input.checked = settings_1.externalDefaults[key] === true;
+            else if (input.type === 'radio')
+                input.checked = input.value === settings_1.externalDefaults[key];
+            else
+                input.value = String(settings_1.externalDefaults[key]);
+        } update(); };
     const commit = d.createElement('button');
     commit.textContent = '保存';
-    commit.onclick = () => { const next = { ...current }; for (const [key, input] of inputs)
-        next[key] = input.type === 'checkbox' ? input.checked : input.value; save((0, settings_1.sanitizeExternal)(next)); host.remove(); };
+    commit.onclick = () => { const next = { ...current }; for (const key of inputs.keys())
+        next[key] = read(key); save((0, settings_1.sanitizeExternal)(next)); host.remove(); };
     const cancel = d.createElement('button');
     cancel.textContent = 'キャンセル';
     cancel.onclick = () => host.remove();
-    section.append(commit, cancel);
+    actions.append(reset, commit, cancel);
+    section.append(actions);
     shadow.append(style, section);
     d.documentElement.append(host);
-    inputs.get('externalLinks.enabled').focus();
+    inputs.get('externalLinks.enabled')[0].focus();
 }
 }},cache={};const require=name=>{if(!cache[name]){const exports=cache[name]={};factories[name](exports,require);}return cache[name];};return {settings:require('./settings'),targets:require('./targets'),overlay:require('./overlay'),inline:require('./inline-buttons'),preflight:require('./preflight'),panel:require('./settings-panel')};})();
  'use strict';
@@ -1176,7 +1287,7 @@ function createPlayerHost(w,gm,transport,session,onStopped=()=>{}) {
  async function startRuntime(){
  if(playerFrame){displaySettings.apply();for(const [key,value] of Object.entries(readExternalValues()))localStorage.setItem('ZenzaWatchExternalTrial_'+key,JSON.stringify(value));}
 
-// build: 2026-11-11 18:53Z 392faf4
+// build: 2026-11-12 06:41Z ac05368
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -1493,10 +1604,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.388-external-direct.20';
+    var VER = '2.7.389-external-direct.21';
     const ENV = 'DEV';
 
-    var BUILD = 'external-direct.20 GM transport base f278c0762d56';
+    var BUILD = 'external-direct.21 GM transport base c08dc4ac55b0';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -70841,18 +70952,18 @@ class ModernAdvancedSettingsModel {
 								['volume', '動画の音量', slider(0, 1)],
 								['mute', '動画をミュート']
 						]),
-						...group('再生・音声', '読み上げ', [
-								['speakLark', 'コメント読み上げ（現在は未対応）', {
+						...group('再生・音声', '旧設定・互換性', [
+								['speakLark', 'コメント読み上げ（現在は未対応）', { availability: 'unsupported', disabledReason: '現在のプレイヤーでは未対応です。保存値は互換性のため保持します。',
 												description: '旧設定ですが、現在のZenzaWatchには再生コメントを音声化する処理が接続されていません。ONにしても読み上げません。保存値は互換性のため保持します。'
 										}],
-								['speakLarkVolume', '読み上げ音量（現在は未対応）', {
+								['speakLarkVolume', '読み上げ音量（現在は未対応）', { availability: 'unsupported', disabledReason: '読み上げ機能が未対応のため変更できません。保存値は保持します。',
 												...slider(0, 1),
 												description: 'コメント読み上げ機能が未実装のため、この音量値も現在の再生には作用しません。'
 										}]
 						]),
 						...group('再生・音声', '動画の取得', [
 								['forceEconomy', 'エコノミー画質で取得'],
-								['autoDisableNew', '旧配信方式の画質を優先'],
+								['autoDisableNew', '旧配信方式の画質を優先', { description: '旧配信方式を利用できる動画で、画質が良いと判定された場合に優先します。新配信方式のみの動画には作用しません。' }],
 								['dmcVideoQuality', '旧配信方式の優先画質', select([
 												['auto', '自動'], ['veryhigh', '最高'], ['high', '高'],
 												['mid', '中'], ['low', '低']
@@ -71309,6 +71420,7 @@ class ModernAdvancedSettingsModel {
 						'touch.tap4command': 'touch.enable', 'touch.tap5command': 'touch.enable',
 						'enableCommentPanelAutoScroll': 'enableCommentPanel',
 						'pipPageThumbnailSource': 'pipPageThumbnail',
+						'bookmark.thumbnailWidth': 'bookmark.showVideoThumbnails',
 						'speakLarkVolume': 'speakLark'
 				};
 				return direct[key] || null;
@@ -71326,7 +71438,7 @@ class ModernAdvancedSettingsModel {
 				this._historyParams = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.filter(p => p && typeof p.key === 'string')
 						.map(p => [p.key, p]));
-				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象サイトのURLパターン","type":"textarea","description":"「指定したサイトのみ」のときに使用。1行に1件。例：*://*.nicochart.jp/* は本体とサブドメインの全ページ、https://nicolog.jp/watch/* はwatch配下だけ。* は任意の文字列です。Tampermonkeyの @match / @include のワイルドカード形式、// @match 付きの行も貼り付け可能。裸のドメイン指定も従来どおり使えます。正規表現・file:・<all_urls> は非対応。検証版の動作対象はHTTPSページです。URLの#以降は判定しません。変更後はページを再読み込みしてください。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.excludedSites","label":"除外サイトのURLパターン","type":"textarea","description":"対象サイトと同じ書き方で1行に1件。例：https://example.com/private/* を指定すると、そのページ配下だけZenボタンを表示しません。対象・除外の両方に一致する場合は除外が優先です。「すべてのサイト」を選んだ場合も適用します。空欄なら除外なし。// @exclude 付きの行も使用できます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.displayMode","label":"Zenボタンの表示方法","type":"select","description":"「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。","options":[{"value":"inline","label":"常に表示（リンクの横に配置）"},{"value":"hover","label":"マウスを置いたときに表示"},{"value":"selection","label":"文字を選択したときに表示"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"textarea","description":"1行に1種類。初期値はsm・nm・so・ssです。数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.preflight","label":"再生情報の事前確認","type":"select","description":"確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。","options":[{"value":"off","label":"確認しない（追加通信なし）"},{"value":"click","label":"Zenを押したときに確認"},{"value":"display","label":"ボタンを表示する前に確認"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}])
+				this._publicSettings = new Map(ModernAdvancedSettingsModel.visibleExtraSettings().concat([{"id":"externalLinks.enabled","label":"外部サイトでZenボタンを使う","type":"boolean","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.siteMode","label":"対象サイト","type":"select","inputPresentation":"radio","options":[{"value":"all","label":"すべてのサイト"},{"value":"allow","label":"指定したサイトのみ"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.sites","label":"対象サイト","type":"textarea","dependsOn":"externalLinks.siteMode","dependsOnValue":"allow","disabledReason":"「指定したサイトのみ」を選ぶと編集できます。","addCurrentSite":true,"description":"1行に1件。ドメインを指定すると、そのサブドメインも対象になります。","descriptionDetails":"例：example.com は本体とサブドメインの全ページ。https://example.com/watch/* はそのURLのwatch配下だけ。* は任意の文字列です。HTTPSページで動作し、URLの#以降は判定しません。変更後はページを再読み込みしてください。","category":"外部サイトからの再生","subcategory":"基本設定"},{"id":"externalLinks.excludedSites","label":"除外サイト","type":"textarea","description":"対象サイトと同じ書き方で1行に1件。除外を優先します。","descriptionDetails":"「すべてのサイト」でも適用します。空欄なら除外なし。例：https://example.com/private/* を指定すると、そのURLの配下ではZenボタンを表示しません。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.displayMode","label":"Zenボタンの表示方法","type":"select","description":"リンクの横・マウス・文字選択から選びます。","descriptionDetails":"「常に表示」は対象リンクの横にボタンを配置します。サイトによっては改行や配置が変わるため、その場合は「マウスを置いたときに表示」を選んでください。文章中の動画IDはマウスを置くか、文字を選択すると表示します。","options":[{"value":"inline","label":"常に表示（リンクの横に配置）"},{"value":"hover","label":"マウスを置いたときに表示"},{"value":"selection","label":"文字を選択したときに表示"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.size","label":"ボタンの大きさ","type":"select","options":[{"value":"small","label":"小"},{"value":"normal","label":"標準"},{"value":"large","label":"大"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.redirects","label":"中継リンク内の動画URLも検出","type":"boolean","description":"リンクを開かず、埋め込まれたニコニコ動画URLを調べます。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.textIds","label":"文章中の動画IDも検出","type":"boolean","description":"入力欄・編集中・コード欄は対象外です。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.prefixes","label":"検出する動画IDの接頭辞","type":"textarea","description":"1行に1種類。初期値はsm・nm・so・ssです。","descriptionDetails":"数字やワイルドカードは付けず、英小文字2〜8文字だけを入力してください。例：smを登録するとsm12345を検出します。空白・カンマ区切りも使用できます。検出対象への追加は、本体での再生対応を保証するものではありません。事前通信は下の「再生情報の事前確認」で選択します。","category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"},{"id":"externalLinks.preflight","label":"再生情報の事前確認","type":"select","description":"既定は追加通信なし。確認するタイミングを選べます。","descriptionDetails":"確認しない：追加通信なし。Zenを押したとき：起動前に確認。ボタン表示前：見えている候補を順に確認（通信が増えます）。動画情報から判断するため、実際の再生成功までは保証しません。通信失敗や不明な応答では再生不可と決めつけず、通常の起動を試せます。結果は最大5分、100件まで一時保持し、同時確認は2件までです。","options":[{"value":"off","label":"確認しない（追加通信なし）"},{"value":"click","label":"Zenを押したときに確認"},{"value":"display","label":"ボタンを表示する前に確認"}],"category":"外部サイトからの再生","subcategory":"基本設定","dependsOn":"externalLinks.enabled"}].map(d=>d.addCurrentSite?{...d,currentSite:externalSettingsHost}:d))
 						.map((entry, index) => [entry.id, { ...entry, sortIndex: index }]));
 				this._historyOrder = new Map((Array.isArray(historySchema) ? historySchema : [])
 						.map((entry, index) => [entry.key, index + 1]));
@@ -71376,7 +71488,7 @@ class ModernAdvancedSettingsModel {
 						if (!this.categories.includes(descriptor.category)) {
 								throw new Error('未定義のカテゴリ: ' + descriptor.category);
 						}
-						const entry = { ...descriptor, dependsOn: descriptor.dependsOn || ModernAdvancedSettingsModel.dependencyFor(descriptor.id) };
+						const entry = { ...descriptor, dependsOn: descriptor.dependsOn === undefined ? ModernAdvancedSettingsModel.dependencyFor(descriptor.id) : descriptor.dependsOn };
 						if (entry.id === 'commentHistory.enabled') {
 								entry.sortIndex = 0;
 								entry.label = '自動で増量';
@@ -71593,6 +71705,9 @@ class ModernAdvancedSettingsModel {
 				if (!d) {
 						throw new Error('不明な設定: ' + id);
 				}
+				if (d.availability === 'unsupported') {
+						return this;
+				}
 				if (typeof this.config.default[id] === 'number' && typeof value === 'string' &&
 						value.trim() !== '' && Number.isFinite(Number(value))) {
 						value = Number(value);
@@ -71610,14 +71725,42 @@ class ModernAdvancedSettingsModel {
 						.forEach(d => this.resetItem(d.id));
 				return this;
 		}
-		isEnabled(id) {
+		isEnabled(id) { return !this.disabledReason(id); }
+		disabledReason(id, visited = new Set()) {
+				const d = this.descriptor(id);
+				if (!d) {
+						return '';
+				}
+				if (visited.has(id)) {
+						return '依存する設定を確認できません。';
+				}
+				visited.add(id);
+				if (d.availability === 'unsupported') {
+						return d.disabledReason || '現在は未対応です。保存値は保持します。';
+				}
 				if (['sceneSearch.layout.fullscreen', 'sceneSearch.presentation.fullscreen'].includes(id) &&
 						this.get('sceneSearch.layout.linkFullscreen') === true) {
-						return false;
+						return '通常表示と連動中です。個別に変更するには連動をOFFにしてください。';
 				}
-				const d = this.descriptor(id);
-				return !d || !d.dependsOn || !this._byId.has(d.dependsOn) ||
-						(!!this.draft[d.dependsOn] && this.isEnabled(d.dependsOn));
+				if (!d.dependsOn) {
+						return '';
+				}
+				const parent = this.descriptor(d.dependsOn);
+				if (!parent) {
+						return '';
+				}
+				const matched = Object.prototype.hasOwnProperty.call(d, 'dependsOnValue') ?
+						ModernAdvancedSettingsModel._same(this.draft[d.dependsOn], d.dependsOnValue) : !!this.draft[d.dependsOn];
+				const parentReason = this.disabledReason(d.dependsOn, visited);
+				if (parentReason) {
+						return parentReason;
+				}
+				if (!matched) {
+						const choice = parent.options?.find(option => ModernAdvancedSettingsModel._same(option.value, d.dependsOnValue));
+						return d.disabledReason || ('「' + parent.label + '」を' + (Object.prototype.hasOwnProperty.call(d, 'dependsOnValue') ?
+								'「' + (choice?.label ?? String(d.dependsOnValue)) + '」に変更' : 'ONに') + 'すると利用できます。値は保持しています。');
+				}
+				return '';
 		}
 		isDifferentFromDefault(id) {
 				return this._byId.has(id) && !ModernAdvancedSettingsModel._same(this.draft[id], this.config.default[id]);
@@ -71974,13 +72117,19 @@ class ModernAdvancedSettingsUI {
 						'.zw-modern-section-title { font-size:21px; line-height:1.4; margin:0 0 6px; font-weight:750; }',
 						'.zw-modern-section-subtitle { margin:0 0 15px; color:var(--zw-dark-muted); font-size:12px; }',
 						'.zw-modern-toolbar { display:flex; justify-content:flex-end; gap:7px; margin:0 0 14px; }',
-						'.zw-modern-card { background:var(--zw-dark-card); border:1px solid var(--zw-dark-border); border-radius:5px; padding:13px 15px; margin:0 0 10px; min-width:0; }',
+						'.zw-modern-card { background:var(--zw-dark-card); border:1px solid var(--zw-dark-border); border-radius:5px; padding:10px 13px; margin:0 0 5px; min-width:0; }',
 						'.zw-modern-card.is-inline { display:flex; align-items:center; flex-wrap:wrap; column-gap:15px; row-gap:6px; min-height:55px; }',
 						'.zw-modern-card.is-inline > .zw-modern-cardhead { min-width:0; flex:1 1 210px; }',
 						'.zw-modern-card.is-inline > .zw-modern-cardcontrols { flex:0 1 auto; margin:0; min-width:0; }',
 						'.zw-modern-card.is-inline > .zw-modern-note { flex-basis:100%; margin-top:2px; }',
 						'.zw-modern-card.is-modified { border-color:#528db7; box-shadow:0 0 0 1px #528db733,0 0 10px #82bfff22; }',
-						'.zw-modern-card.is-disabled { opacity:.5; }',
+						'.zw-modern-card.is-disabled { background:var(--zw-dark-panel); }',
+						'.zw-modern-summary, .zw-modern-disabled-reason { flex-basis:100%; margin:5px 0 0; color:var(--zw-dark-muted); font-size:12px; line-height:1.5; }',
+						'.zw-modern-disabled-reason { color:#c4b48e; }',
+						'.zw-modern-disabled-reason[hidden] { display:none; }',
+						'.zw-modern-radios { display:flex; flex-wrap:wrap; gap:8px 16px; }',
+						'.zw-modern-radios label { display:flex; align-items:center; gap:5px; cursor:pointer; }',
+						'.zw-modern-radios input { accent-color:var(--zw-dark-accent); }',
 						'.zw-modern-card.is-child { margin-left:14px; border-left:2px solid #475e77; }',
 						'.zw-modern-cardhead { display:flex; align-items:center; gap:10px; }',
 						'.zw-modern-cardhead strong { font-size:13px; font-weight:650; flex:1; overflow-wrap:anywhere; }',
@@ -72748,7 +72897,7 @@ class ModernAdvancedSettingsUI {
 				card.dataset.zwId = descriptor.id;
 				const seekDescriptor = descriptor.type === 'shortcut' ?
 						this.model.descriptor('PARAM_' + descriptor.actionId) : null;
-				if (descriptor.type === 'boolean' ||
+				if (descriptor.type === 'boolean' || descriptor.inputPresentation === 'radio' ||
 						(descriptor.type === 'shortcut' && !seekDescriptor)) {
 						card.classList.add('is-inline');
 				}
@@ -72761,6 +72910,14 @@ class ModernAdvancedSettingsUI {
 				}
 				if (descriptor.dependsOn) {
 						card.classList.add('is-child');
+						let parent = this.model.descriptor(descriptor.dependsOn), depth = 1;
+						const ancestors = new Set([descriptor.id]);
+						while (parent?.dependsOn && !ancestors.has(parent.id)) {
+								ancestors.add(parent.id);
+								depth++;
+								parent = this.model.descriptor(parent.dependsOn);
+						}
+						card.style.marginLeft = String(Math.min(depth, 3) * 14) + 'px';
 				}
 				if (!this.model.isEnabled(descriptor.id)) {
 						card.classList.add('is-disabled');
@@ -72781,13 +72938,14 @@ class ModernAdvancedSettingsUI {
 						shared.title = descriptor.sharedWith + ' と同じ設定値です。';
 						head.append(shared);
 				}
-				if (descriptor.description) {
+				if (descriptor.descriptionDetails || descriptor.description) {
 						const help = this._button('?', 'data-zw-help', descriptor.id, 'zw-modern-plainbtn');
 						help.setAttribute('aria-label', descriptor.label + 'の説明を表示');
 						head.append(help);
 				}
 				const reset = this._button('↺', 'data-zw-reset-item', descriptor.id, 'zw-modern-plainbtn');
 				reset.title = 'この項目を初期値に戻す';
+				reset.disabled = descriptor.availability === 'unsupported';
 				head.append(reset);
 				card.append(head);
 				const controls = this.doc.createElement('div');
@@ -72985,6 +73143,29 @@ class ModernAdvancedSettingsUI {
 						}
 						controls.append(holder);
 				}
+				else if (descriptor.type === 'select' && descriptor.inputPresentation === 'radio') {
+						const group = this.doc.createElement('div');
+						group.className = 'zw-modern-radios';
+						group.setAttribute('role', 'radiogroup');
+						group.setAttribute('aria-label', descriptor.label);
+						const choices = [...(descriptor.options || [])];
+						const value = String(this.model.get(descriptor.id));
+						if (!choices.some(choice => String(choice.value) === value)) {
+								choices.push({ value, label: '従来の設定値：' + value });
+						}
+						for (const choice of choices) {
+								const label = this.doc.createElement('label'), radio = this.doc.createElement('input');
+								radio.type = 'radio';
+								radio.name = 'zw-setting-' + descriptor.id;
+								radio.dataset.settingName = descriptor.id;
+								radio.value = String(choice.value);
+								radio.checked = radio.value === value;
+								radio.disabled = !this.model.isEnabled(descriptor.id);
+								label.append(radio, this.doc.createTextNode(choice.label));
+								group.append(label);
+						}
+						controls.append(group);
+				}
 				else if (descriptor.type === 'select' && descriptor.presentation === 'dropdown') {
 						const select = this.doc.createElement('select');
 						select.dataset.settingName = descriptor.id;
@@ -73163,14 +73344,48 @@ class ModernAdvancedSettingsUI {
 				if (example) {
 						card.append(example);
 				}
-				if (descriptor.description) {
+				const summaryText = descriptor.descriptionDetails ? descriptor.description :
+						(descriptor.description || '').split(/\n|(?<=。)/)[0];
+				if (summaryText) {
+						const summary = this.doc.createElement('p');
+						summary.className = 'zw-modern-summary';
+						summary.textContent = summaryText.length > 120 ? summaryText.slice(0, 120) + '…' : summaryText;
+						card.append(summary);
+				}
+				if (descriptor.descriptionDetails || descriptor.description) {
 						const note = this.doc.createElement('p');
 						note.className = 'zw-modern-note';
-						note.textContent = descriptor.description;
+						note.textContent = descriptor.descriptionDetails || descriptor.description || '';
 						note.hidden = true;
 						card.append(note);
 				}
+				const reason = this.doc.createElement('p');
+				reason.className = 'zw-modern-disabled-reason';
+				reason.dataset.zwDisabledReason = '';
+				reason.id = 'zw-setting-reason-' + descriptor.id;
+				reason.textContent = this.model.disabledReason(descriptor.id);
+				reason.hidden = !reason.textContent;
+				card.append(reason);
+				card.querySelectorAll('[data-setting-name],[data-zw-choice]').forEach(control => control.setAttribute('aria-describedby', reason.id));
+				if (descriptor.addCurrentSite) {
+						const button = this._button('現在のサイトを追加', 'data-zw-add-current-site', descriptor.id, 'zw-modern-plainbtn');
+						button.disabled = !this.model.isEnabled(descriptor.id) || !this._currentSite(descriptor);
+						button.title = this._currentSite(descriptor) ? '現在のサイトのホスト名を下書きに追加します。' : '現在のサイトを確認できません。HTTPSページで利用できます。';
+						controls.append(button);
+				}
 				return card;
+		}
+		_currentSite(descriptor) {
+				if (descriptor.currentSite !== undefined) {
+						return descriptor.currentSite;
+				}
+				try {
+						const url = new URL(this.doc.URL);
+						return url.protocol === 'https:' ? url.hostname : '';
+				}
+				catch (_) {
+						return '';
+				}
 		}
 		_renderDataPanel() {
 				this.root.querySelector('[data-zw-title]').textContent = 'データ管理';
@@ -73937,7 +74152,18 @@ class ModernAdvancedSettingsUI {
 						shared: 'コメント・補助表示（元の設定画面と共通）'
 				};
 				let lastScope = null;
-				for (const d of visibleEntries.filter(item => !item.hidden && item.type !== 'related-visibility')) {
+				const ordered = [], groupedIds = new Set();
+				const visit = (entry) => {
+						if (groupedIds.has(entry.id)) {
+								return;
+						}
+						groupedIds.add(entry.id);
+						ordered.push(entry);
+						visibleEntries.filter(child => child.dependsOn === entry.id).forEach(visit);
+				};
+				visibleEntries.filter(entry => !visibleEntries.some(parent => parent.id === entry.dependsOn)).forEach(visit);
+				visibleEntries.forEach(visit);
+				for (const d of ordered.filter(item => !item.hidden && item.type !== 'related-visibility')) {
 						if (sceneSection && ['sceneSearch.layout.normal', 'sceneSearch.layout.fullscreen', 'sceneSearch.presentation.normal', 'sceneSearch.presentation.fullscreen'].includes(d.id)) {
 								continue; // One canonical draft; the visual gallery replaces redundant select cards.
 						}
@@ -74074,9 +74300,20 @@ class ModernAdvancedSettingsUI {
 								(seek && this.model.isDifferentFromDefault(seek.id))));
 						const active = this.model.isEnabled(id);
 						card.classList.toggle('is-disabled', !active);
-						const input = card.querySelector('[data-setting-name]');
-						if (input) {
+						const reason = card.querySelector('[data-zw-disabled-reason]');
+						if (reason) {
+								reason.textContent = this.model.disabledReason(id);
+								reason.hidden = !reason.textContent;
+						}
+						card.querySelectorAll('[data-setting-name]').forEach(input => {
 								input.disabled = !active;
+								if (input instanceof this.doc.defaultView.HTMLInputElement && input.type === 'radio') {
+										input.checked = input.value === String(this.model.get(id));
+								}
+						});
+						const addSite = card.querySelector('[data-zw-add-current-site]');
+						if (addSite) {
+								addSite.disabled = !active || !this._currentSite(d);
 						}
 						if (id === 'commandFilter') {
 								const current = new Set(String(this.model.get(id) ?? '')
@@ -74086,7 +74323,8 @@ class ModernAdvancedSettingsUI {
 								});
 						}
 						card.querySelectorAll('[data-zw-choice]').forEach(button => {
-								button.disabled = !active;
+								button.disabled = !active || !d.options?.some(choice => String(choice.value) === button.dataset.zwValue);
+								button.classList.toggle('is-selected', String(this.model.get(id)) === button.dataset.zwValue);
 						});
 						if (d.type === 'regex-flags') {
 								const flags = String(this.model.get(id) || '');
@@ -74254,6 +74492,9 @@ class ModernAdvancedSettingsUI {
 						e.stopImmediatePropagation();
 				}
 				const key = el.dataset.settingName;
+				if (!this.model.isEnabled(key) || (el.type === 'radio' && !el.checked)) {
+						return true;
+				}
 				const value = el.type === 'checkbox' ? el.checked : el.value;
 				try {
 						this.model.set(key, key === 'userIdFilter' ?
@@ -74593,6 +74834,23 @@ class ModernAdvancedSettingsUI {
 						this.onClose();
 						return;
 				}
+				if (button.hasAttribute('data-zw-add-current-site')) {
+						const id = button.dataset.zwAddCurrentSite, descriptor = this.model.descriptor(id);
+						if (!descriptor || !this.model.isEnabled(id)) {
+								return;
+						}
+						const site = this._currentSite(descriptor), old = String(this.model.get(id) ?? '');
+						if (!site || old.split(/\r?\n/).some(line => line.trim().toLowerCase() === site.toLowerCase())) {
+								return;
+						}
+						this.model.set(id, old + (old && !/[\r\n]$/.test(old) ? '\n' : '') + site);
+						const field = button.closest('article')?.querySelector('[data-setting-name]');
+						if (field) {
+								field.value = String(this.model.get(id));
+						}
+						this._refreshCards();
+						return;
+				}
 				if (button.hasAttribute('data-zw-command-preset')) {
 						if (!this.model.isEnabled('commandFilter')) {
 								return;
@@ -74753,8 +75011,7 @@ class ModernAdvancedSettingsUI {
 				}
 				if (button.hasAttribute('data-zw-choice')) {
 						this.model.set(button.dataset.zwChoice, button.dataset.zwValue);
-						this._renderCards();
-						this._refreshFooter();
+						this._refreshCards();
 				}
 		}
 		openDrawer() { this.root.classList.add('is-drawer-open'); }

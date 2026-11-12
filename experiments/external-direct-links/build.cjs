@@ -4,7 +4,7 @@ require('node:child_process').execFileSync(process.execPath,[path.join(root,'too
 const {externalDefaults,externalDescriptors}=require('./generated/settings.js');
 const base=fs.readFileSync(path.join(root,'dist/ZenzaWatch-dev.user.js'),'utf8').replace(/\r\n/g,'\n');
 const sourceHash=crypto.createHash('sha256').update(base).digest('hex');
-if(!base.includes('// @version        2.7.388-task1013'))throw Error('Review runtime changes before rebasing this trial');
+if(!base.includes('// @version        2.7.389-task1014'))throw Error('Review runtime changes before rebasing this trial');
 // Derive stored preference names from the shared default declarations, rather
 // than maintaining a second UI or a presentation-only list.
 const configStart=base.indexOf('const Config = (() => {');
@@ -30,7 +30,7 @@ function transform(source) {
  const insertAt=defaultAnchor+'const DEFAULT_CONFIG = {'.length;
  body=body.slice(0,insertAt)+JSON.stringify(externalDefaults).slice(1,-1)+','+body.slice(insertAt);
  body=once(body,'this.categories = ModernAdvancedSettingsModel.CATEGORIES.slice();', "this.categories = ModernAdvancedSettingsModel.CATEGORIES.concat('外部サイトからの再生');");
- body=once(body,'ModernAdvancedSettingsModel.visibleExtraSettings()', 'ModernAdvancedSettingsModel.visibleExtraSettings().concat('+JSON.stringify(externalDescriptors)+')');
+ body=once(body,'ModernAdvancedSettingsModel.visibleExtraSettings()', 'ModernAdvancedSettingsModel.visibleExtraSettings().concat('+JSON.stringify(externalDescriptors)+'.map(d=>d.addCurrentSite?{...d,currentSite:externalSettingsHost}:d))');
  body=once(body,"if (window.top === window) {\n      window.ZenzaLib = { _ };", "if (true) {\n      window.ZenzaLib = { _ };");
  body=once(body,'return gate = {};','/* Trial player always creates the GM-backed gate. */');
  body=once(body,'if (url.startsWith(location.origin)) {','if (false) {');
@@ -53,7 +53,6 @@ function transform(source) {
  body=body.slice(0,workerRoute)+'if (true) '+body.slice(workerRouteEnd);
  body=once(body,'document.body.append($dialog[0]);','installInteractionGuard(window, container);\n        document.body.append($dialog[0]);');
  body=once(body,'hoverMenu.setPlayer(dialog);',"hoverMenu.setPlayer(dialog);\n dialog.on('close', () => externalTrial.closeOverlay?.([...dialog._playbackPositionSaves?.values() || []]));");
- body=once(body,'dependsOn: ModernAdvancedSettingsModel.dependencyFor(descriptor.id)', 'dependsOn: descriptor.dependsOn || ModernAdvancedSettingsModel.dependencyFor(descriptor.id)');
  const fetchBegin=body.indexOf('_fetch(url, options = {}) {');
  const fetchEnd=body.indexOf('async fetch(resource, options = {}) {',fetchBegin);
  if(fetchBegin<0||fetchEnd<0)throw Error('Gate fetch anchor missing');
@@ -84,10 +83,10 @@ function transform(source) {
  body=body.slice(0,commentStart)+comment+body.slice(commentEnd);
  body=once(body,'(function (window) {','return (async function (window) {');
  body=body.replaceAll("const PRODUCT = 'ZenzaWatch';","const PRODUCT = 'ZenzaWatchExternalTrial';");
- body=once(body,"var VER = '2.7.388-task1013';","var VER = '2.7.388-external-direct.20';");
+ body=once(body,"var VER = '2.7.389-task1014';","var VER = '2.7.389-external-direct.21';");
  const builds=[...body.matchAll(/var BUILD = '[^']*';/g)];
  if(builds.length!==1)throw Error('Runtime build marker changed');
- body=once(body,builds[0][0],"var BUILD = 'external-direct.20 GM transport base "+sourceHash.slice(0,12)+"';");
+ body=once(body,builds[0][0],"var BUILD = 'external-direct.21 GM transport base "+sourceHash.slice(0,12)+"';");
  const begin=body.indexOf('    uq.ready().then(() => initializeExternalSite({');
  const endMarker="    })).catch(err => window.console.warn('ZenzaWatch external initialization failed', err?.message || err));";
  const end=body.indexOf(endMarker,begin);
@@ -157,7 +156,7 @@ const panelObserver=fs.readFileSync(path.join(__dirname,'panel-observer.cjs'),'u
 const header=`// ==UserScript==
 // @name         ZenzaWatch 外部直接リンク検証版
 // @namespace    https://github.com/ButaMonky/ZenzaWatch/experiments
-// @version      0.20.0-external-direct20
+// @version      0.21.0-external-direct21
 // @description  ニコニコへの直接リンクから、このページ上でZenzaWatchを開く検証版
 // @match        https://*/*
 // @run-at       document-end
@@ -181,6 +180,7 @@ const entry=`
 (() => {
  const official = /(^|\\.)nicovideo\\.jp$/.test(location.hostname);
  const playerFrame=window!==window.top && window.name==='ZenzaWatchExternalTrialPlayer' && location.hostname==='www.nicovideo.jp' && location.pathname==='/robots.txt';
+ const externalSettingsHost=(()=>{try{return new URL(playerFrame?document.referrer:location.href).hostname;}catch{return '';}})();
  const loader = window !== window.top &&
    ((location.hostname === 'www.nicovideo.jp' && location.pathname === '/robots.txt' &&
      window.name.startsWith('nicovideoApiZenzaWatchExternalTrialLoader')) ||

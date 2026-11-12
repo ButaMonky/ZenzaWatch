@@ -20,6 +20,12 @@ function createBuildSandbox(prefix = 'zenza-build-') {
       fs.cpSync(src, path.join(dir, 'packages', pkg, 'src'), {recursive: true});
     }
   }
+  // External companion build inputs include adapters and generated typed modules.
+  fs.cpSync(path.join(REPO_ROOT,'packages/external-playback'),path.join(dir,'packages/external-playback'),{recursive:true});
+  const tools=path.join(dir,'tools/typescript-stage1');
+  fs.mkdirSync(tools,{recursive:true});
+  fs.cpSync(path.join(REPO_ROOT,'tools/typescript-stage1/advanced-src'),path.join(tools,'advanced-src'),{recursive:true});
+  fs.symlinkSync(path.join(REPO_ROOT,'tools/typescript-stage1/node_modules'),path.join(tools,'node_modules'),process.platform==='win32'?'junction':'dir');
   fs.mkdirSync(path.join(dir, 'dist'), {recursive: true});
   for (const f of fs.readdirSync(path.join(REPO_ROOT, 'dist'))) {
     if (f.endsWith('.user.js')) {

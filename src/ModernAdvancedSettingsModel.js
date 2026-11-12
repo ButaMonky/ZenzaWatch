@@ -26,9 +26,9 @@ class ModernAdvancedSettingsModel {
                 "id": "externalLinks.enabled",
                 "label": "外部サイトでZenボタンを使う",
                 "type": "boolean",
+                "description": "ZenzaBlogPartsButtonのインストールが必要です。変更後は外部ページを再読み込みしてください。",
                 "category": "外部サイトからの再生",
-                "subcategory": "基本設定",
-                "description": "外部サイト検証版のインストールが必要です。保存すると検証版へ反映します。"
+                "subcategory": "基本設定"
             },
             {
                 "id": "externalLinks.siteMode",

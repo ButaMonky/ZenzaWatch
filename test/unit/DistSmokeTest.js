@@ -29,7 +29,7 @@ const DISTS = {
 // 古い globals パッケージの一覧に無い、現在のブラウザの組み込み
 const MODERN_BROWSER_GLOBALS = [
   'globalThis', 'AbortController', 'Atomics', 'OffscreenCanvas', 'CSSStyleValue', 'CSSKeywordValue',
-  'AggregateError', 'arguments'
+  'AggregateError', 'arguments', 'GM_addValueChangeListener', 'GM_removeValueChangeListener'
 ];
 // Worker に文字列として渡すコードへ workerUtil が差し込む名前（Worker 側では定義される）
 const WORKER_INJECTED = ['PID', 'bcast', 'portMap', 'EmitterInitFunc'];
@@ -101,7 +101,7 @@ async function startupErrors(src, url, {hasLodash}) {
   w.URL.revokeObjectURL = () => {};
   w.unsafeWindow = w;
   w.GM_info = {script: {version: '0'}};
-  for (const g of ['GM_getValue', 'GM_setValue', 'GM_xmlhttpRequest', 'GM_addStyle']) { w[g] = () => undefined; }
+  for (const g of ['GM_getValue', 'GM_setValue', 'GM_deleteValue', 'GM_addValueChangeListener', 'GM_removeValueChangeListener', 'GM_registerMenuCommand', 'GM_xmlhttpRequest', 'GM_addStyle']) { w[g] = () => undefined; }
   if (hasLodash) {
     // 配布物は CDN の lodash を @require で読む。ここでは npm の lodash で代用する（版の違いは監査 ZW-010）
     w.eval(fs.readFileSync(require.resolve('lodash/lodash.min.js'), 'utf-8'));

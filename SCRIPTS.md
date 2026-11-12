@@ -4,12 +4,12 @@
 
 | 区分 | ファイル | 役割・版 |
 |---|---|---|
-| 本体 | `ZenzaWatch-dev.user.js` | HLS / domand再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定。`2.7.380-task1004` |
-| 任意追加 | `MylistPocket.user.js` | サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加。`0.5.88-task998` |
+| 本体 | `ZenzaWatch-dev.user.js` | HLS / domand再生、自動画質切り替え、コメント、プレイリスト、検索、画面フィルター、上級者設定。`2.7.392-task1017` |
+| 任意追加 | `MylistPocket.user.js` | サムネイル上の動画情報、とりマイ、Zenzaプレイリスト追加。`0.5.90-task1015` |
 | 任意追加 | `ZenzaGamePad.user.js` | ゲームパッド操作。`1.5.6-task966` |
 | 任意追加 | `HeatSync.user.js` | コメントの少ない部分の自動早送り。`0.0.24-task966qa` |
 | 任意追加 | `MaskedWatch.user.js` | 動画上の文字・顔を検出してコメントを透過。`0.3.8-task966` |
-| 任意追加 | `ZenzaBlogPartsButton.user.js` | 外部サイトの動画ブログパーツに起動ボタンを追加。`0.0.5-task928` |
+| 任意追加 | `ZenzaBlogPartsButton.user.js` | ブログパーツ・外部リンクからページ上で再生。`1.0.0-task1017` |
 | 任意追加 | `CapTube.user.js` | YouTubeのスクリーンショット撮影とZenzaWatchのキャプチャ連携。`0.0.24-task966qa` |
 | 任意追加（開発者向け） | `uQuery.user.js` | コンソールのデバッグ補助。通常利用では不要。`0.0.7-task966` |
 | 廃止案内 | `ZenzaHLS.user.js` | HLS本体統合に伴う削除案内のみ。新規インストール不要。`0.1.0-task997` |
@@ -40,7 +40,7 @@
 | `ZenzaGamePad.user.js` | `src/_gamepad.js` |
 | `HeatSync.user.js` | `src/_heatsync.js` |
 | `MaskedWatch.user.js` | `src/_shape.js` |
-| `ZenzaBlogPartsButton.user.js` | `src/_blog.js` |
+| `ZenzaBlogPartsButton.user.js` | `src/_blog.js`（既存埋め込み）＋ `packages/external-playback` ＋ 同時ビルドした本体 |
 | `CapTube.user.js` | `src/_captube.js` |
 | `uQuery.user.js` | `src/_uquery.js` |
 

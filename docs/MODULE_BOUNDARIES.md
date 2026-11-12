@@ -60,3 +60,7 @@ DB名・バージョン・最大保存件数・既存の呼び出しAPIは維持
 - `_settingsRetired.js`: 旧UserScriptの削除案内のみ。設定データへのアクセスなし。
 
 設定項目の自動生成や全機能の分割は今回の対象外です。内部モジュールを一つの本体配布物へまとめ、個別のUserscriptとしてインストールする必要をなくしました。
+
+## 外部サイト再生（Task1017）
+
+`packages/external-playback` に検出・設定・UI・終了処理を分離し、ZenzaBlogPartsButtonとして配布します。プレイヤーのコードは同時にビルドした本体から生成し、固定版の別実装は持ちません。通信アダプターと設定生成手順は [パッケージの説明](../packages/external-playback/README.md) を参照してください。

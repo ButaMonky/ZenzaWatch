@@ -19,7 +19,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 |---|---|
 | **ZenzaWatch 本体** | [**インストール**](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaWatch-dev.user.js) — 動画をZenzaWatchで再生します。 |
 | MylistPocket | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/MylistPocket.user.js) — サムネイルから動画情報の確認やマイリスト追加ができます。 |
-| ZenzaBlogPartsButton | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js) — 外部サイトのニコニコ動画ブログパーツにZenza起動ボタンを追加します。 |
+| ZenzaBlogPartsButton | [インストール](https://raw.githubusercontent.com/ButaMonky/ZenzaWatch/develop/dist/ZenzaBlogPartsButton.user.js) — ブログパーツや外部サイトの動画リンクから、そのページ上でZenzaWatchを開けます。 |
 | ~~ZenzaAdvancedSettings~~ | 本体に統合済み。インストール不要。 |
 | ~~ZenzaHLS（HLSサポート）~~ | 本体に統合済み。インストール不要。 |
 
@@ -44,7 +44,7 @@ TampermonkeyなどのUserscriptマネージャーをインストールした状�
 | 任意追加 | `ZenzaGamePad.user.js` | ゲームパッド操作 |
 | 任意追加 | `HeatSync.user.js` | コメントの少ない部分の自動早送り |
 | 任意追加 | `MaskedWatch.user.js` | 動画上の文字・顔を検出してコメントを透過 |
-| 任意追加 | `ZenzaBlogPartsButton.user.js` | 外部サイトの動画ブログパーツに起動ボタンを追加 |
+| 任意追加 | `ZenzaBlogPartsButton.user.js` | ブログパーツ・外部サイトの動画リンクから再生 |
 | 任意追加 | `CapTube.user.js` | YouTubeのスクリーンショット撮影とZenzaWatchのキャプチャ連携 |
 | 任意追加（開発者向け） | `uQuery.user.js` | コンソールのデバッグ補助。通常利用では不要 |
 | 廃止案内 | `ZenzaHLS.user.js` | HLS本体統合に伴う削除案内のみ |
@@ -87,6 +87,7 @@ Task391の公開前点検では、コメント送信の特定エラー、全画�
 
 ```
 npm ci          # package-lock.json どおりに依存を入れる
+npm ci --prefix tools/typescript-stage1  # 外部再生モジュールのTypeScriptコンパイラ
 npm test        # テスト
 npm run build   # dist/ の10個の配布物を作り直す（node ./build.js --dev と同じ）
 ```
@@ -153,3 +154,11 @@ The public [offline API lookup and source index](docs/research/README.md) docume
 開発時の機能の分け方は [モジュールの境界](docs/MODULE_BOUNDARIES.md) を参照してください。
 
 通知履歴に記録する通信・応答の範囲は [通信診断](docs/REQUEST_DIAGNOSTICS.md) を参照してください。
+
+### 外部サイトで再生する
+
+本体とZenzaBlogPartsButtonをインストールし、ニコニコでログインしてから一度ニコニコのページを再読み込みしてください。外部のHTTPSページでは、ニコニコ動画へのリンク横の「Zen」から開けます。設定は本体の **上級者設定 → 外部サイトからの再生** にあります。
+
+旧「外部直接リンク検証版」は不要です。設定を引き継ぐ場合は、旧検証版22が有効な状態でニコニコのページを一度開いてから、Tampermonkeyで旧検証版を無効にしてください。その後、本体とZenzaBlogPartsButtonを更新し、ニコニコと外部ページを再読み込みます。旧検証版のデータを削除する必要はありません。
+
+外部ページを開いている間も、ニコニコのログイン状態を利用して再生・コメント投稿・いいね・マイリストを操作します。サイトごとのCookie許可は不要です。動画IDの文字列や中継リンクの検出、対象サイト、再生可能かの事前確認は設定から選べます。

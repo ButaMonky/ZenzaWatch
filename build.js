@@ -35,6 +35,7 @@ var watchDirs = [
   './packages/lib/src',
   './packages/zenza/src',
   './packages/comment-history/src',
+  './packages/external-playback',
 ];
 // 今回のビルドで読んだ入力ファイル（監視対象から漏れていないかの確認用。Task 085）
 const BUILD_INPUTS = new Set();
@@ -468,6 +469,12 @@ function build(params) {
     }
   });
   if (!errors.length) {
+    try {
+      const main=outputs.find(x=>/ZenzaWatch(?:-dev)?\.user\.js$/.test(x.outFile));
+      const blog=outputs.find(x=>x.outFile.endsWith('/ZenzaBlogPartsButton.user.js'));
+      for(const key of Object.keys(require.cache))if(key.startsWith(path.resolve('packages/external-playback')+path.sep))delete require.cache[key];
+      blog.content=require('./packages/external-playback/build.cjs')(main.content,blog.content);
+    } catch(error) { errors.push('External playback: '+error.message); }
     errors.push(...checkSyntax(outputs));
   }
   if (!errors.length) {
@@ -491,6 +498,7 @@ const _build = debounce(build, 1000);
 function watch(srcDir, params) {
   var fs = require('fs');
   const onChange = async function(event, filename) {
+    if(srcDir.includes('external-playback') && /(^|[\\/])generated([\\/]|$)/.test(String(filename)))return;
     if (event === 'rename') { // Dropbox経由の更新など
       _build.cancel();
       await new Promise(res => setTimeout(res, Math.random() * 3000));

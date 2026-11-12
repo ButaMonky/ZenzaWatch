@@ -33,7 +33,7 @@
 // @exclude        *://ext.nicovideo.jp/thumb_channel/*
 // @grant          none
 // @author         segabito
-// @version        2.7.391-task1016
+// @version        2.7.392-task1017
 // @run-at         document-body
 // @require        https://cdn.jsdelivr.net/npm/lodash@4.18.1/lodash.min.js
 // @homepageURL    https://github.com/ButaMonky/ZenzaWatch
@@ -41,7 +41,7 @@
 // @downloadURL    https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // @updateURL      https://github.com/ButaMonky/ZenzaWatch/raw/develop/dist/ZenzaWatch-dev.user.js
 // ==/UserScript==
-// build: 2026-11-12 12:13Z 2e96dec
+// build: 2026-11-12 12:38Z 9e19e21
 /* eslint-disable */
 // import {SettingPanel} from './SettingPanel';
 const AntiPrototypeJs = function () {
@@ -358,10 +358,10 @@ const RequestDiagnostics = (() => {
     let {dimport, workerUtil, IndexedDbStorage, Handler, PromiseHandler, Emitter, parseThumbInfo, WatchInfoCacheDb, StoryboardCacheDb, VideoSessionWorker, RequestDiagnostics} = window.ZenzaLib;
     START_PAGE_QUERY = decodeURIComponent(START_PAGE_QUERY);
 
-    var VER = '2.7.391-task1016';
+    var VER = '2.7.392-task1017';
     const ENV = 'DEV';
 
-    var BUILD = '2026-11-12 12:13Z 2e96dec';
+    var BUILD = '2026-11-12 12:38Z 9e19e21';
 
     console.log(
       `%c${PRODUCT}@${ENV} v${VER}%c  (ﾟ∀ﾟ) ｾﾞﾝｻﾞ!  %cNicorü? %c田%c \n\nbuild: ${BUILD}\nplatform: ${navigator.platform}\nua: ${navigator.userAgent}`,
@@ -69737,9 +69737,9 @@ class ModernAdvancedSettingsModel {
 								"id": "externalLinks.enabled",
 								"label": "外部サイトでZenボタンを使う",
 								"type": "boolean",
+								"description": "ZenzaBlogPartsButtonのインストールが必要です。変更後は外部ページを再読み込みしてください。",
 								"category": "外部サイトからの再生",
-								"subcategory": "基本設定",
-								"description": "外部サイト検証版のインストールが必要です。保存すると検証版へ反映します。"
+								"subcategory": "基本設定"
 						},
 						{
 								"id": "externalLinks.siteMode",
